@@ -1,0 +1,50 @@
+{
+ "room_hum": {
+  "id": 671455,
+  "title": "Bedroom Room Tone Electric Lamp Hum",
+  "by": "",
+  "url": "https://freesound.org/s/671455/",
+  "license": "CC0 1.0",
+  "for": "the cold lamp's electric hum under the whole cell (Bedroom Room Tone Electric Lamp Hum)"
+ },
+ "cctv_hiss": {
+  "id": 443339,
+  "title": "TAPE HISS Sonab c500 B",
+  "by": "",
+  "url": "https://freesound.org/s/443339/",
+  "license": "CC0 1.0",
+  "for": "the CCTV feed's faint recording hiss, cut dead at the cut to the clean lens (TAPE HISS)"
+ },
+ "cut_pop": {
+  "id": 674713,
+  "title": "Turning Off Microphone Percussion 1",
+  "by": "",
+  "url": "https://freesound.org/s/674713/",
+  "license": "CC0 1.0",
+  "for": "the hiss cutting out at 00:03.5 (Turning Off Microphone)"
+ },
+ "rustle_hand": {
+  "id": 320144,
+  "title": "Blanket Movement 6",
+  "by": "",
+  "url": "https://freesound.org/s/320144/",
+  "license": "CC0 1.0",
+  "for": "his right hand twitching on the mattress at 00:02.8 (Blanket Movement 6)"
+ },
+ "rustle_head": {
+  "id": 556711,
+  "title": "Rustling fabric",
+  "by": "",
+  "url": "https://freesound.org/s/556711/",
+  "license": "CC0 1.0",
+  "for": "his collar on the mattress as his head turns at 00:06.6 (Rustling fabric)"
+ },
+ "breath": {
+  "id": 707832,
+  "title": "IN-BREATHS",
+  "by": "",
+  "url": "https://freesound.org/s/707832/",
+  "license": "CC0 1.0",
+  "for": "the short breath in as his eyes open at 00:03.7 (IN-BREATHS, first breath only, see breath_keep)"
+ }
+}

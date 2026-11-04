@@ -1,0 +1,19 @@
+{
+ "variants": {
+  "facing=north": {
+   "model": "gohans:block/computer"
+  },
+  "facing=east": {
+   "model": "gohans:block/computer",
+   "y": 90
+  },
+  "facing=south": {
+   "model": "gohans:block/computer",
+   "y": 180
+  },
+  "facing=west": {
+   "model": "gohans:block/computer",
+   "y": 270
+  }
+ }
+}

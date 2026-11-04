@@ -1,0 +1,312 @@
+{
+ "end": 27.0,
+ "voice": {
+  "lines": [
+   [
+    4.3,
+    5.155
+   ],
+   [
+    9.2,
+    11.065
+   ],
+   [
+    13.2,
+    16.701
+   ],
+   [
+    21.5,
+    24.177
+   ]
+  ],
+  "edits": {},
+  "warp": []
+ },
+ "takes": [
+  {
+   "id": "01",
+   "t": 4.3,
+   "text": "[low, quiet, waking up] He opens his eyes."
+  },
+  {
+   "id": "02",
+   "t": 9.2,
+   "text": "[uneasy, hushed] Bare concrete... on every side."
+  },
+  {
+   "id": "03",
+   "t": 13.2,
+   "text": "[slow, steady] Bolted to the floor... a steel desk. A black screen. One chair."
+  },
+  {
+   "id": "04",
+   "t": 21.5,
+   "text": "[low] And at the far end of the room... a heavy steel door."
+  }
+ ],
+ "beats": {},
+ "cuts": {},
+ "steve": {
+  "at": [
+   4.5,
+   0.5625,
+   6.3
+  ],
+  "yaw": 0,
+  "eyeFromNeck": 0.22,
+  "twitch": 2.8,
+  "eyesOpen": 3.7,
+  "pupil": {
+   "dark": 1.35,
+   "lit": 0.8,
+   "narrow": 0.5
+  }
+ },
+ "light": {
+  "fill": 0.04,
+  "key": 40,
+  "bounce": 1.5,
+  "rim": 1.2,
+  "fog": 0.03
+ },
+ "look": {
+  "saturation": -0.15
+ },
+ "cctv": {
+  "label": "CELL 0412",
+  "labelOpacity": 0.7,
+  "distortion": -0.035,
+  "grain": 0.12,
+  "saturation": -0.45,
+  "contrast": 0.1
+ },
+ "cam": [
+  {
+   "t": 0.0,
+   "p": [
+    8.6,
+    5.7,
+    0.4
+   ],
+   "l": [
+    3.4,
+    0.3,
+    7.0
+   ],
+   "fov": 80,
+   "wave": 0
+  },
+  {
+   "t": 3.5,
+   "cut": true,
+   "p": {
+    "eye": [
+     0,
+     0.34,
+     0.17
+    ]
+   },
+   "l": {
+    "eye": [
+     0,
+     0,
+     0
+    ]
+   },
+   "fov": 30,
+   "wave": 0.04
+  },
+  {
+   "t": 6.49,
+   "p": {
+    "eye": [
+     0,
+     0.31,
+     0.155
+    ]
+   },
+   "l": {
+    "eye": [
+     0,
+     0,
+     0
+    ]
+   },
+   "fov": 30,
+   "wave": 0.04
+  },
+  {
+   "t": 6.5,
+   "cut": true,
+   "p": {
+    "eye": [
+     0,
+     0.05,
+     0
+    ]
+   },
+   "l": {
+    "eye": [
+     -0.4,
+     3,
+     -0.6
+    ]
+   },
+   "fov": 62,
+   "wave": 0.6
+  },
+  {
+   "t": 9.2,
+   "p": {
+    "eye": [
+     0,
+     0.05,
+     0
+    ]
+   },
+   "l": [
+    0.0,
+    3.0,
+    3.0
+   ],
+   "fov": 62,
+   "wave": 0.6
+  },
+  {
+   "t": 11.6,
+   "p": {
+    "eye": [
+     0,
+     0.05,
+     0
+    ]
+   },
+   "l": [
+    0.0,
+    2.7,
+    3.6
+   ],
+   "fov": 62,
+   "wave": 0.6
+  },
+  {
+   "t": 13.2,
+   "p": {
+    "eye": [
+     0,
+     0.05,
+     0
+    ]
+   },
+   "l": [
+    0.6,
+    1.0,
+    8.6
+   ],
+   "fov": 46,
+   "wave": 0.6
+  },
+  {
+   "t": 18.2,
+   "p": {
+    "eye": [
+     0,
+     0.05,
+     0
+    ]
+   },
+   "l": [
+    0.6,
+    1.05,
+    8.7
+   ],
+   "fov": 44,
+   "wave": 0.6
+  },
+  {
+   "t": 21.3,
+   "p": {
+    "eye": [
+     0,
+     0.05,
+     0
+    ]
+   },
+   "l": [
+    4.5,
+    1.1,
+    12.0
+   ],
+   "fov": 62,
+   "wave": 0.6
+  },
+  {
+   "t": 27.0,
+   "p": {
+    "eye": [
+     0,
+     0.05,
+     0
+    ]
+   },
+   "l": [
+    4.5,
+    1.05,
+    12.0
+   ],
+   "fov": 62,
+   "wave": 0.6
+  }
+ ],
+ "audio": {
+  "voiceGain": 0,
+  "beds": [
+   {
+    "name": "room_hum",
+    "from": 0,
+    "to": 27,
+    "gain": 28,
+    "fadeIn": 0.05,
+    "fadeOut": 1.5,
+    "filters": [
+     "lowpass=f=1800:poles=2"
+    ]
+   },
+   {
+    "name": "cctv_hiss",
+    "from": 0,
+    "to": 3.5,
+    "gain": -14,
+    "fadeIn": 0.05,
+    "fadeOut": 0.01
+   }
+  ],
+  "sfx": [
+   {
+    "at": 2.8,
+    "name": "rustle_hand",
+    "gain": -2
+   },
+   {
+    "at": 3.5,
+    "name": "cut_pop",
+    "gain": -16
+   },
+   {
+    "at": 3.7,
+    "name": "breath",
+    "gain": -8,
+    "length": 0.35,
+    "fadeOut": 0.12
+   },
+   {
+    "at": 6.6,
+    "name": "rustle_head",
+    "gain": -5,
+    "fadeOut": 0.4,
+    "length": 1.6
+   }
+  ],
+  "lufs": -16
+ }
+}

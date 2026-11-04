@@ -1,0 +1,23 @@
+node_modules/
+renders/
+notes/
+.venv/
+__pycache__/
+.live_hosts
+# Links to E: (Mojang files and Chrome: never commit them)
+/tools
+/assets/public/mc
+/assets/public/mcasset
+/assets/public/rig
+/assets/public/vendor/
+/assets/public/block_model_renderer_bg.wasm
+voice/takes/*.mp3
+voice/try/
+sound/mix.wav
+sound/mix_raw.wav
+sound/music/
+sound/sfx/*.wav
+sound/sfx/raw/
+sound/.mix_graph.txt
+/assets/public/agent/
+/lab/out/
