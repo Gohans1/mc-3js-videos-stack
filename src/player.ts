@@ -9,6 +9,7 @@
 // bone, the way Minecraft animation rigs build faces. Mouth shapes are Rhubarb Lip Sync's A-H and X (this film's
 // narrator is off screen: Steve's mouth stays shut).
 import * as THREE from "three";
+import { clamp01, smooth } from "./ease";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 
@@ -17,8 +18,6 @@ const D = Math.PI / 180;
 const LEG = 6 * PX; // thigh and shin are each half of the 12 px leg
 // GLTFLoader strips ":" from node names (PropertyBinding.sanitizeNodeName), so "Arm:Left:Upper" is "ArmLeftUpper"
 const BONES = { root: "center", body: "Body", chest: "Chest", head: "Head", uaL: "ArmLeftUpper", laL: "ArmLeftLower", uaR: "ArmRightUpper", laR: "ArmRightLower", ulL: "LegLeftUpper", llL: "LegLeftLower", ulR: "LegRightUpper", llR: "LegRightLower" };
-const clamp01 = (x) => Math.min(1, Math.max(0, x));
-const smooth = (x) => { const u = clamp01(x); return u * u * (3 - 2 * u); };
 
 export const loadRig = async (url) => (await new GLTFLoader().loadAsync(url)).scene;
 
