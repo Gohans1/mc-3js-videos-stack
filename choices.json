@@ -1,0 +1,10 @@
+{
+ "room_hum": {
+  "set": "room_hum",
+  "gain": 1
+ },
+ "computer": {
+  "set": "computer_beige",
+  "gain": 1
+ }
+}

@@ -1,0 +1,10 @@
+{
+ "parent": "gohans:block/computer_keys",
+ "textures": {
+  "case": "minecraft:block/black_concrete",
+  "bezel": "minecraft:block/polished_blackstone",
+  "key": "minecraft:block/gray_concrete",
+  "tray": "minecraft:block/black_concrete",
+  "particle": "minecraft:block/black_concrete"
+ }
+}

@@ -264,6 +264,18 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   hand.position.set(-6 * PX, 12 * PX, 2 * PX); // vanilla: the right shoulder pivot (-5, 22, 0) px, then 10 down the arm, 2 forward, 1 out
   rig.add(hand);
   b.laR.attach(hand);
+  const handL = new THREE.Group();
+  handL.position.set(6 * PX, 12 * PX, 2 * PX);
+  rig.add(handL);
+  b.laL.attach(handL);
+  // Two-bone arm IK and head aim, measured from the rest pose: shoulder pivot to elbow, elbow to the end of the hand
+  const restAt = (bone) => bone.getWorldPosition(new THREE.Vector3());
+  const ARM = Object.fromEntries(["L", "R"].map((sd) => {
+    const S0 = restAt(b[`ua${sd}`]), E0 = restAt(b[`la${sd}`]);
+    const end = 12 * PX - 0.02; // the bottom of the arm box, just inside it, so a touch sinks the hand in by 2 cm and never floats
+    return [sd, { L1: S0.distanceTo(E0), L2: Math.max(0.05, E0.y - end) }];
+  }));
+  const parentRest = Object.fromEntries(["uaL", "uaR", "head"].map((k) => [k, b[k].parent.getWorldQuaternion(new THREE.Quaternion()).invert()]));
 
   const R = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3();
   const setPose = (pose) => {
@@ -282,5 +294,35 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     v.set(r.x ?? 0, r.y ?? 0, r.z ?? 0).applyMatrix3(rootIn);
     b.root.position.copy(rest.root.p).add(v);
   };
-  return { g, rig, bones: b, setPose, face, hand, skin: ctx };
+  // The joint's parent turn now, relative to its rest, as a world rotation (includes the character's yaw and lean)
+  const Q = new THREE.Quaternion(), Qi = new THREE.Quaternion(), S = new THREE.Vector3(), d = new THREE.Vector3();
+  const parentTurn = (k) => b[k].parent.getWorldQuaternion(Q).multiply(parentRest[k]);
+  // Call after setPose with everything but this arm, then g.updateMatrixWorld(true). Returns the arm's joints (degrees) that
+  // put the end of the hand on the world point: the elbow folds forward (it points back), the upper arm takes the rest
+  const armTo = (sd, target) => {
+    const { L1, L2 } = ARM[sd];
+    b[`ua${sd}`].getWorldPosition(S);
+    d.copy(target).sub(S).applyQuaternion(Qi.copy(parentTurn(`ua${sd}`)).invert());
+    const n = THREE.MathUtils.clamp(d.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
+    d.normalize();
+    const e = Math.PI - Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
+    // the hand's direction with the arm hanging and only the elbow bent, then the shoulder's out (z) and forward (x) turns
+    const wy = -(L1 + L2 * Math.cos(e)) / n, wz = (L2 * Math.sin(e)) / n;
+    const g = Math.asin(THREE.MathUtils.clamp(d.x / -wy, -1, 1));
+    const y = wy * Math.cos(g), z = wz;
+    // wrapped to +-180: a hand behind him comes out as -324 instead of +36, the same arm, but blending it with the pose's own
+    // arm (a hand key going to null) would swing it the long way round, over his head
+    const a = THREE.MathUtils.euclideanModulo(Math.atan2(d.z, d.y) - Math.atan2(z, y) + Math.PI, 2 * Math.PI) - Math.PI;
+    return { [`ua${sd}`]: [a / D, 0, g / D], [`la${sd}`]: [-e / D, 0, 0] };
+  };
+  // Head angles [down, to his left, 0] that turn the face to a world point, held inside a natural neck range
+  const headTo = (target) => {
+    b.head.getWorldPosition(S);
+    S.y += 4 * PX;
+    d.copy(target).sub(S).applyQuaternion(Qi.copy(parentTurn("head")).invert());
+    const yaw = THREE.MathUtils.clamp(Math.atan2(d.x, d.z) / D, -75, 75);
+    const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
+    return [down, yaw, 0];
+  };
+  return { g, rig, bones: b, setPose, face, hand, handL, armTo, headTo, skin: ctx };
 }

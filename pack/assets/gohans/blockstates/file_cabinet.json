@@ -1,0 +1,19 @@
+{
+ "variants": {
+  "facing=north": {
+   "model": "gohans:block/file_cabinet"
+  },
+  "facing=east": {
+   "model": "gohans:block/file_cabinet",
+   "y": 90
+  },
+  "facing=south": {
+   "model": "gohans:block/file_cabinet",
+   "y": 180
+  },
+  "facing=west": {
+   "model": "gohans:block/file_cabinet",
+   "y": 270
+  }
+ }
+}

@@ -77,17 +77,19 @@ def build(out, beds, sfx, voice=True, span=None):
 
     # Dialogue compression (4:1 above -30 dBFS, fast attack) and a voice limiter bring the hushed narration's peaks to
     # about 11 dB over its loudness, so the loudness pass below can stay linear
-    if voice:
+    if voice and A.get("voice", True):  # audio.voice false: no narration in the mix (the dev records it later)
         add(ROOT / "assets/public/agent/full_voice.wav", 0, A["voiceGain"], extra=["acompressor=threshold=0.03:ratio=4:attack=1:release=150:makeup=3", "alimiter=limit=0.35:level=false"])
     for b in beds:
         add(SFX / f"{b['name']}.wav", b["from"], b["gain"], 0, b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, extra=b.get("filters", []))
     for s in sfx:
         add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), 0, s.get("fadeOut", 0))
     graph = chains + [
+        # audio.drive dB into the limiter first: hits (a slam, a drawer) stand ~20 dB over the average, too far apart for the
+        # linear -14 LUFS pass below; the limiter trims them so the gap fits. Then the
         # safety limiter at about -7 dBFS. The loudness pass must stay linear: ffmpeg-normalize's dynamic fallback lifts
         # every quiet stretch (the CCTV hiss came up level with the voice). It falls back when target - true peak gap is
         # too small, so a quiet excerpt takes a lower target (edit.json audio.lufs)
-        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},atrim=duration={END},alimiter=limit=0.45:level=false"
+        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},atrim=duration={END},volume={A.get('drive', 0)}dB,alimiter=limit=0.45:level=false"
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
     ]
     script = out.with_name(out.name + ".graph.txt")

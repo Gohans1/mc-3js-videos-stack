@@ -1,5 +1,6 @@
 // Draft render: a few stills and the whole film as GPU-encoded 30 s chunks, joined into renders/draft_video.mp4 on C: (SSD).
 // node src/render.mjs [stills|clip]   (no argument does both)
+// NOLIST=1 AT=40,41 node src/render.mjs stills   stills without the review list
 // CHUNKS=3,4 node src/render.mjs clip   re-renders only those chunks (film seconds 90-150) and re-joins the rest as they are
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,6 +29,12 @@ const cfg = {
   stills: what === "clip" ? [] : (process.env.AT ?? "0.5,3,7.5,9.5,13").split(",").map(Number).map((s) => ({ name: `still_${s}s.jpg`, frame: Math.round(s * FPS) })),
   jobs: what === "stills" ? [] : pick.map((i) => ({ index: i, start: i * CHUNK * FPS, stop: Math.min(SECONDS, (i + 1) * CHUNK) * FPS - 1, samples: 1, out: chunkFile(i) })),
   webcodecs: { bitrate: 4e6, hardware: "prefer-hardware" },
+  list: !process.env.NOLIST, // NOLIST=1: stills without the review list, for judging the picture itself
+  view: process.env.VIEW, // lab/prop.ts: which set of spots to shoot from
+  looks: process.env.LOOKS, // lab/prop.ts: shoot every look of this variant (src/variants.ts) from the VIEW spots
+  // INSPECT=px,py,pz,lx,ly,lz,fov: stills from one fixed review camera (the studio's free camera) instead of the film's,
+  // to judge a move from a clear side; the lens's face fill is off with it
+  inspect: process.env.INSPECT?.split(",").map(Number),
   choices: existsSync(path("choices.json")) ? JSON.parse(readFileSync(path("choices.json"), "utf8")) : {},
 };
 writeFileSync(bundleDir + "/config.json", JSON.stringify(cfg));

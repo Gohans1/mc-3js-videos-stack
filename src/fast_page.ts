@@ -22,6 +22,7 @@ window.onunhandledrejection = (e) => { log("ERROR " + (e.reason?.stack ?? e.reas
   const render = await buildScene(canvas, cfg.W, cfg.H, cfg.draft, log);
   log(`scene built in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
   for (const v of render.variants ?? []) if (cfg.choices?.[v.id]?.set) v.set(cfg.choices[v.id].set); // what was picked in the studio
+  if (cfg.inspect) { const [px, py, pz, lx, ly, lz, fov] = cfg.inspect; Object.assign(render.tools.free, { on: true, fov }); render.tools.free.p.set(px, py, pz); render.tools.free.l.set(lx, ly, lz); }
 
   // The review list the studio shows top-left (draw.describe), drawn into every draft frame below the timestamp row: one
   // backed box per section, wrapped into a new column when it would run off the bottom. Colours are the studio's
@@ -84,7 +85,7 @@ window.onunhandledrejection = (e) => { log("ERROR " + (e.reason?.stack ?? e.reas
     ctx.font = "bold 26px Consolas, monospace"; ctx.textAlign = "right";
     ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(cfg.W - 162, 10, 152, 36);
     ctx.fillStyle = "#fff"; ctx.fillText(label, cfg.W - 18, 37);
-    if (render.describe) drawList(render.describe(t));
+    if (render.describe && cfg.list !== false) drawList(render.describe(t));
     return out;
   };
 
