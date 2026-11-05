@@ -50,7 +50,10 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const camera = new THREE.PerspectiveCamera(60, W / H, 0.02, 100);
   scene.add(camera);
 
-  const jar = new Uint8Array(await (await fetch("mc/client.jar")).arrayBuffer());
+  // client.jar without its Java code (slim_jar.py): a quarter of the download on every first visit, the same picture
+  const jarFile = await fetch("mc/client_assets.zip");
+  if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: run python slim_jar.py");
+  const jar = new Uint8Array(await jarFile.arrayBuffer());
   const world = await createScene([pack, jar], buildWorld(), { lighting: "scene", animate: false });
   world.group.scale.setScalar(S);
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
