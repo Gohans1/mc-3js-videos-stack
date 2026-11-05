@@ -35,6 +35,8 @@ const cfg = {
   // INSPECT=px,py,pz,lx,ly,lz,fov: stills from one fixed review camera (the studio's free camera) instead of the film's,
   // to judge a move from a clear side; the lens's face fill is off with it
   inspect: process.env.INSPECT?.split(",").map(Number),
+  trace: process.env.TRACE?.split(",").map(Number), // TRACE=from,to,step: print his soles and their planted targets (scene.ts soles)
+  slide: process.env.SLIDE?.split(",").map(Number), // SLIDE=from,to: print where his soles slide or sink (scene.ts feetCheck)
   choices: existsSync(path("choices.json")) ? JSON.parse(readFileSync(path("choices.json"), "utf8")) : {},
 };
 writeFileSync(bundleDir + "/config.json", JSON.stringify(cfg));

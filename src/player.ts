@@ -78,17 +78,25 @@ export const GESTURES = {
   sleep: () => merge(GESTURES.lie(), arm("L", 0, 12, 0, 10), arm("R", 0, 12, 0, 10)),
 };
 
-// Walk or run, phase from the distance walked so the feet don't slide: thighs swing, the knee folds while the leg swings
-// forward, the arms counter-swing with a little elbow, the chest twists against the hips and the body dips each step
+// One step is half a metre: on 12 px legs (0.70 m) a planted foot a quarter metre ahead of (or behind) the hips is reached
+// with the hips 8 cm down (3 cm all along, a planted leg is never quite straight). The thigh swing (21 degrees) carries the foot that far, so the pose's soles and the planted ones (src/feet.ts)
+// agree. At 1.05 m a step (34 degrees) every planted foot slid 25-43 cm and both feet left the floor together
+const STRIDE = 0.5;
+// The gait at a walked distance: phase (the left foot is on the floor while cos(ph) < 0, the right while cos(ph) > 0) and
+// how much of a walk it is (0 standing, 1 full pace)
+export const gaitOf = (dist, speed) => ({ ph: (dist * Math.PI) / STRIDE, w: clamp01(speed / 1.2) });
+// Walk or run, phase from the distance walked: thighs swing, the knee folds while the leg swings forward, the arms
+// counter-swing with a little elbow, the chest twists against the hips. The hips are lowest as one foot lands and the other
+// pushes off (both on the floor) and highest as one passes the other
 export const walkPose = (dist, speed) => {
-  const w = clamp01(speed / 1.2), run = clamp01((speed - 4) / 2);
+  const { ph, w } = gaitOf(dist, speed), run = clamp01((speed - 4) / 2);
   if (w < 0.01) return {};
-  const ph = dist * Math.PI * 0.95, s = Math.sin(ph), c = Math.cos(ph);
-  const A = (34 + 22 * run) * w, K = (38 + 50 * run) * w, B = (30 + 40 * run) * w;
+  const s = Math.sin(ph), c = Math.cos(ph);
+  const A = (21 + 22 * run) * w, K = (38 + 50 * run) * w, B = (24 + 40 * run) * w;
   return merge(
     leg("L", A * s, 3, K * Math.max(0, c) + 6 * w), leg("R", -A * s, 3, K * Math.max(0, -c) + 6 * w),
     arm("L", -B * s, 6, 0, 10 * w + 45 * run * w + 12 * w * Math.max(0, -s)), arm("R", B * s, 6, 0, 10 * w + 45 * run * w + 12 * w * Math.max(0, s)),
-    { chest: [6 * run, 8 * s * w, 0], body: [4 * w + 14 * run, 0, 0], head: [-6 * run, -6 * s * w, 0], root: { y: -0.035 * w * Math.abs(Math.cos(ph)) - 0.03 * run } },
+    { chest: [6 * run, 8 * s * w, 0], body: [4 * w + 14 * run, 0, 0], head: [-6 * run, -6 * s * w, 0], root: { y: -(0.03 + 0.05 * Math.abs(s)) * w - 0.03 * run } },
   );
 };
 
@@ -275,7 +283,13 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     const end = 12 * PX - 0.02; // the bottom of the arm box, just inside it, so a touch sinks the hand in by 2 cm and never floats
     return [sd, { L1: S0.distanceTo(E0), L2: Math.max(0.05, E0.y - end) }];
   }));
-  const parentRest = Object.fromEntries(["uaL", "uaR", "head"].map((k) => [k, b[k].parent.getWorldQuaternion(new THREE.Quaternion()).invert()]));
+  // Legs the same way: hip pivot to knee, knee to the middle of the sole (on the floor at rest), kept in the shin's own
+  // frame so soleAt finds it in any pose
+  const LEGS = Object.fromEntries(["L", "R"].map((sd) => {
+    const H0 = restAt(b[`ul${sd}`]), K0 = restAt(b[`ll${sd}`]);
+    return [sd, { L1: H0.distanceTo(K0), L2: K0.y, sole: b[`ll${sd}`].worldToLocal(new THREE.Vector3(K0.x, 0, K0.z)) }];
+  }));
+  const parentRest = Object.fromEntries(["uaL", "uaR", "ulL", "ulR", "head"].map((k) => [k, b[k].parent.getWorldQuaternion(new THREE.Quaternion()).invert()]));
 
   const R = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3();
   const setPose = (pose) => {
@@ -315,6 +329,21 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     const a = THREE.MathUtils.euclideanModulo(Math.atan2(d.z, d.y) - Math.atan2(z, y) + Math.PI, 2 * Math.PI) - Math.PI;
     return { [`ua${sd}`]: [a / D, 0, g / D], [`la${sd}`]: [-e / D, 0, 0] };
   };
+  // armTo for a leg: the knee folds back (the shin behind the thigh's line), the thigh takes the rest. A target past the
+  // leg's reach leaves it straight towards it
+  const legTo = (sd, target) => {
+    const { L1, L2 } = LEGS[sd];
+    b[`ul${sd}`].getWorldPosition(S);
+    d.copy(target).sub(S).applyQuaternion(Qi.copy(parentTurn(`ul${sd}`)).invert());
+    const n = THREE.MathUtils.clamp(d.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
+    d.normalize();
+    const e = Math.PI - Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
+    const wy = -(L1 + L2 * Math.cos(e)) / n, wz = -(L2 * Math.sin(e)) / n;
+    const g = Math.asin(THREE.MathUtils.clamp(d.x / -wy, -1, 1));
+    const a = THREE.MathUtils.euclideanModulo(Math.atan2(d.z, d.y) - Math.atan2(wz, wy * Math.cos(g)) + Math.PI, 2 * Math.PI) - Math.PI;
+    return { [`ul${sd}`]: [a / D, 0, g / D], [`ll${sd}`]: [e / D, 0, 0] };
+  };
+  const soleAt = (sd, out = new THREE.Vector3()) => b[`ll${sd}`].localToWorld(out.copy(LEGS[sd].sole));
   // Head angles [down, to his left, 0] that turn the face to a world point, held inside a natural neck range
   const headTo = (target) => {
     b.head.getWorldPosition(S);
@@ -324,5 +353,5 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
     return [down, yaw, 0];
   };
-  return { g, rig, bones: b, setPose, face, hand, handL, armTo, headTo, skin: ctx };
+  return { g, rig, bones: b, setPose, face, hand, handL, armTo, legTo, soleAt, legReach: LEGS.L.L1 + LEGS.L.L2, headTo, skin: ctx };
 }
