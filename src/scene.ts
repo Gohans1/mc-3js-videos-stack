@@ -14,6 +14,7 @@ import { EDIT, fromSource } from "./edit";
 import { buildWorld, BED, CABINET, LAMP, ROOM } from "./world";
 import { CHAIRS, buildProps } from "./props";
 import { bodyAt, blinkAt, moodAt, readLook, targetAt } from "./steve";
+import { makeFeet } from "./feet";
 import { pack } from "./pack";
 import { cameraAt } from "./camera";
 import { makeDescribe } from "./describe";
@@ -64,13 +65,13 @@ export const SHOTS = [
   { t: 74.4, size: "top-down (overhead)", what: "up, drawer shut, pages on the desk" }, // overhead: he gets up, knees the drawer shut, lays the pages down
   { t: 76.2, size: "insert, top-down", what: "TUTORIAL: his hand lifts it off the pile" }, // insert: the top page, TUTORIAL; his hand takes it, the next shows
   { t: 77.45, size: "medium close (MCU)", what: "eager, then useless, useless: anger" }, // he holds each page up: eager, useless, the next, useless
-  { t: 80.95, size: "medium (MS), from the screen", what: "he flings them all to the floor" }, // from behind the screen: he flings every page off the desk
+  { t: 80.95, size: "medium (MS), high on his left", what: "he flings them all to the floor" }, // high on his left: he flings every page off the desk, towards the lens
   { t: 82.9, size: "medium (MS), low along the cabinet front", what: "on one knee, he yanks the drawer open" }, // low along the cabinet front: one knee down, the drawer yanked out
-  { t: 84.5, size: "top-down (overhead), from his right", what: "he reads each folder, faster each time" }, // overhead from above his right (the view swaps sides every ~1.5 s): he reads a folder and throws it aside
-  { t: 86.0, size: "top-down (overhead), from his left", what: "he reads each folder, faster each time" }, // overhead from above his left (the view swaps sides every ~1.5 s): he reads a folder and throws it aside
-  { t: 87.5, size: "top-down (overhead), from his right", what: "he reads each folder, faster each time" }, // overhead from above his right (the view swaps sides every ~1.5 s): he reads a folder and throws it aside
-  { t: 89.0, size: "top-down (overhead), from his left", what: "he reads each folder, faster each time" }, // overhead from above his left (the view swaps sides every ~1.5 s): he reads a folder and throws it aside
-  { t: 90.5, size: "top-down (overhead), from his right", what: "he reads each folder, faster each time" }, // overhead from above his right (the view swaps sides every ~1.5 s): he reads a folder and throws it aside
+  { t: 84.5, size: "medium (MS), low from his front-right", what: "he reads each folder, faster each time" }, // at his face height from his front-right (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside
+  { t: 86.0, size: "medium (MS), low from his front-left", what: "he reads each folder, faster each time" }, // at his face height from his front-left (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside
+  { t: 87.5, size: "medium (MS), low from his front-right", what: "he reads each folder, faster each time" }, // at his face height from his front-right (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside
+  { t: 89.0, size: "medium (MS), low from his front-left", what: "he reads each folder, faster each time" }, // at his face height from his front-left (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside
+  { t: 90.5, size: "medium (MS), low from his front-right", what: "he reads each folder, faster each time" }, // at his face height from his front-right (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside
   { t: 92.0, size: "top-down (overhead), from his left", what: "he tears through the rest" }, // overhead from above his left (the view swaps sides every ~1.5 s): no more reading: he flings the rest
   { t: 93.5, size: "top-down (overhead), from his right", what: "he tears through the rest" }, // overhead from above his right (the view swaps sides every ~1.5 s): no more reading: he flings the rest
   { t: 94.52, size: "medium (MS), from behind him", what: "the drawer comes out: an empty slot" }, // he pulls the drawer right out: the slot is empty but for one scrap
@@ -257,8 +258,10 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     return f && props.anchors[f[1]] ? props.anchors[f[1]](t, +f[2]) : props.anchors[a](t);
   };
   const now = {};
+  const feetAt = makeFeet(steve, () => EDIT.end);
   const perform = (t) => {
     const L = EDIT.steve;
+    const feet = feetAt(L.moves, t);
     const B = bodyAt(L.moves, t);
     steve.g.position.set(...B.at);
     steve.g.rotation.y = B.yaw * THREE.MathUtils.DEG2RAD;
@@ -270,13 +273,14 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     steve.g.updateMatrixWorld(true);
     const R = targetAt(L.hands, "R", t, anchor), Lh = targetAt(L.hands, "L", t, anchor), look = targetAt(L.look, "at", t, anchor);
     const patch = [];
+    for (const sd of ["L", "R"]) if (feet[sd]) patch.push([steve.legTo(sd, feet[sd]), 1]);
     if (R) patch.push([steve.armTo("R", R.p), R.w]);
     if (Lh) patch.push([steve.armTo("L", Lh.p), Lh.w]);
     if (look) patch.push([{ head: steve.headTo(look.p) }, look.w]);
     for (const [p, w] of patch) pose = blendPose(pose, p, w);
     steve.setPose(pose);
     steve.g.updateMatrixWorld(true);
-    Object.assign(now, { B, R, Lh, look, twitch });
+    Object.assign(now, { B, R, Lh, look, twitch, feet });
   };
   // his grips at another moment (where he took or let go of something: props.ts grips), worked out once per edit; every
   // caller passes the same fn, the cache is keyed on the time alone
@@ -368,6 +372,31 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf,
     objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
     materials: [], composer, renderer,
+    // slide meter (SLIDE=from,to node src/render.mjs stills): every stretch where a sole flat on the stone (under 1.5 cm: a
+    // step lifts it higher) creeps over it by more than 2 cm, every sole sunk into the floor, and every planted sole the leg cannot reach. Stills
+    // cannot show any of them
+    // TRACE=from,to,step: his soles (world x y z) and their planted targets, one line per sample
+    soles: (t) => { perform(t); return ["L", "R"].map((sd) => `${sd} ${steve.soleAt(sd).toArray().map((v) => v.toFixed(3)).join(" ")} -> ${now.feet[sd]?.toArray().map((v) => v.toFixed(3)).join(" ") ?? "pose"} ${now.feet.mode(sd)}`).join(" | "); },
+    feetCheck: (from, to) => {
+      const out = [], q = new THREE.Vector3(), touch = {}, sunk = {}, short = {};
+      for (let t = from; t <= to; t += 1 / 60) {
+        perform(t);
+        for (const sd of ["L", "R"]) {
+          steve.soleAt(sd, q);
+          const k = touch[sd];
+          if (q.y < 0.015) {
+            if (!k) touch[sd] = { t, x: q.x, z: q.z, far: 0 };
+            else k.far = Math.max(k.far, Math.hypot(q.x - k.x, q.z - k.z));
+          } else if (k) { if (k.far > 0.02) out.push(`${k.t.toFixed(2)}-${t.toFixed(2)} ${sd} sole slides ${(k.far * 100).toFixed(0)} cm`); touch[sd] = null; }
+          const aim = now.feet[sd], miss = aim ? q.distanceTo(aim) : 0;
+          if (miss > 0.03 && !short[sd]) short[sd] = { t, miss }; else if (short[sd] && miss > 0.03) short[sd].miss = Math.max(short[sd].miss, miss);
+          else if (short[sd] && miss <= 0.03) { out.push(`${short[sd].t.toFixed(2)}-${t.toFixed(2)} ${sd} leg cannot reach its planted sole by ${(short[sd].miss * 100).toFixed(0)} cm`); short[sd] = null; }
+          if (q.y < -0.03 && !sunk[sd]) { sunk[sd] = t; } else if (q.y >= -0.03 && sunk[sd]) { out.push(`${sunk[sd].toFixed(2)}-${t.toFixed(2)} ${sd} sole under the floor`); sunk[sd] = 0; }
+        }
+      }
+      for (const sd of ["L", "R"]) if (touch[sd]?.far > 0.02) out.push(`${touch[sd].t.toFixed(2)}-end ${sd} sole slides ${(touch[sd].far * 100).toFixed(0)} cm`);
+      return out;
+    },
   };
   return draw;
 }

@@ -22,6 +22,8 @@ window.onunhandledrejection = (e) => { log("ERROR " + (e.reason?.stack ?? e.reas
   const render = await buildScene(canvas, cfg.W, cfg.H, cfg.draft, log);
   log(`scene built in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
   for (const v of render.variants ?? []) if (cfg.choices?.[v.id]?.set) v.set(cfg.choices[v.id].set); // what was picked in the studio
+  if (cfg.slide) { const t1 = performance.now(); for (const line of render.tools.feetCheck(...cfg.slide)) log(line); log(`feet checked in ${((performance.now() - t1) / 1000).toFixed(1)}s`); }
+  if (cfg.trace) { const [a, b, st] = cfg.trace; for (let t = a; t <= b + 1e-6; t += st) log(`${t.toFixed(3)} ${render.tools.soles(t)}`); }
   if (cfg.inspect) { const [px, py, pz, lx, ly, lz, fov] = cfg.inspect; Object.assign(render.tools.free, { on: true, fov }); render.tools.free.p.set(px, py, pz); render.tools.free.l.set(lx, ly, lz); }
 
   // The review list the studio shows top-left (draw.describe), drawn into every draft frame below the timestamp row: one

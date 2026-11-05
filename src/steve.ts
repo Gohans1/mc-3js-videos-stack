@@ -1,8 +1,10 @@
 // @ts-nocheck
 // Steve's performance as a function of film time, from edit.json `steve`:
 //   moves [{t, at, yaw, pose, walk?, via?, do}]  where he is and the body pose he holds from t on. Between two keys the
-//     pose blends and he slides (smoothstep); with walk: true on the later key he walks there instead (steps phased from
-//     the distance walked, so the feet keep pace). via: a pose that peaks halfway through the blend (rising from a seat).
+//     pose blends and the body shifts (smoothstep) over soles that stay planted (src/feet.ts steps them when it drifts
+//     too far); with walk: true on the later key he walks there (gait phased from the distance walked, every footfall
+//     planted). Keep a non-walk shift small (a weight shift, half a step): anything longer is a walk. via: a pose that
+//     peaks halfway through the blend (rising from a seat).
 //   hands [{t, R?, L?}]  a world point or a prop anchor name (src/props.ts) for the end of that hand, or null for the
 //     pose's own arm. Targets glide between keys; the arm IK (player.ts armTo) bends the elbow to reach them.
 //   look [{t, at}]  where he turns his head: a point, an anchor, or null for the pose's own head.
@@ -10,7 +12,7 @@
 //   read [[from, to]]  eyes run along lines of text: left to right, a quick sweep back, next line.
 // Every key holds until the next. Same t, same frame: nothing here remembers a previous frame.
 import * as THREE from "three";
-import { GESTURES, MOODS, PX, addPose, arm, leg, walkPose } from "./player";
+import { GESTURES, MOODS, PX, addPose, arm, gaitOf, leg, walkPose } from "./player";
 import { CHAIR } from "./world";
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -171,8 +173,9 @@ export function bodyAt(moves, t) {
   };
   const d = dist(t), speed = (dist(t + 0.05) - d) / 0.05;
   const standing = (n) => ["stand", "feel"].includes(n);
-  if (standing(a.pose) && standing(b.pose) || b.walk) pose = addPose(pose, walkPose(d, speed));
-  return { at, yaw, pose, key: i, act: b !== a && t < b.t ? b : a, moving: b !== a && t < b.t, speed };
+  const walking = standing(a.pose) && standing(b.pose) || b.walk;
+  if (walking) pose = addPose(pose, walkPose(d, speed));
+  return { at, yaw, pose, key: i, act: b !== a && t < b.t ? b : a, moving: b !== a && t < b.t, speed, gait: walking ? gaitOf(d, speed) : null };
 }
 
 // The target of one hand or the head between keys: null blends back to the pose's own arm
