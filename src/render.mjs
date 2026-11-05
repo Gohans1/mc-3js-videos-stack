@@ -28,6 +28,7 @@ const cfg = {
   stills: what === "clip" ? [] : (process.env.AT ?? "0.5,3,7.5,9.5,13").split(",").map(Number).map((s) => ({ name: `still_${s}s.jpg`, frame: Math.round(s * FPS) })),
   jobs: what === "stills" ? [] : pick.map((i) => ({ index: i, start: i * CHUNK * FPS, stop: Math.min(SECONDS, (i + 1) * CHUNK) * FPS - 1, samples: 1, out: chunkFile(i) })),
   webcodecs: { bitrate: 4e6, hardware: "prefer-hardware" },
+  choices: existsSync(path("choices.json")) ? JSON.parse(readFileSync(path("choices.json"), "utf8")) : {},
 };
 writeFileSync(bundleDir + "/config.json", JSON.stringify(cfg));
 const t0 = Date.now();

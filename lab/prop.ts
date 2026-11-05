@@ -18,10 +18,16 @@ window.onunhandledrejection = (e) => { post("/log", "ERROR " + (e.reason?.stack 
   const draw = await buildScene(c, cfg.W, cfg.H, false);
   const { free } = draw.tools;
   free.on = true;
-  for (const [i, v] of VIEWS.entries()) {
+  const shoot = async (name, v) => {
     free.p.set(...v.p); free.l.set(...v.l); free.fov = v.fov;
     draw(12);
-    await post(`/still/prop_${i}.jpg`, await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92)));
+    await post(`/still/${name}.jpg`, await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92)));
+  };
+  for (const [i, v] of VIEWS.entries()) await shoot(`prop_${i}`, v);
+  // every look of every prop with options (src/variants.ts), from the first two spots
+  for (const variant of draw.variants ?? []) {
+    for (const o of variant.options) { variant.set(o.id); for (const i of [0, 1]) await shoot(`prop_${variant.id}_${o.id}_${i}`, VIEWS[i]); }
+    variant.set(variant.options[0].id);
   }
   await post("/done", "");
 })();

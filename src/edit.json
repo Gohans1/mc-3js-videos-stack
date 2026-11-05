@@ -270,6 +270,11 @@
     "fadeOut": 1.5,
     "filters": [
      "lowpass=f=1800:poles=2"
+    ],
+    "try": [
+     "hum_lowfreq",
+     "hum_fluorescent",
+     "hum_backrooms"
     ]
    },
    {
@@ -290,7 +295,11 @@
    {
     "at": 3.5,
     "name": "cut_pop",
-    "gain": -16
+    "gain": -16,
+    "try": [
+     "pop_flick",
+     "pop_flashlight"
+    ]
    },
    {
     "at": 3.7,

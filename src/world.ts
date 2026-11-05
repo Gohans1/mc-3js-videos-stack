@@ -50,10 +50,9 @@ export function buildWorld() {
   // the small iron bed, the film's own model (pack/assets/gohans): one block at the head cell reaching into the foot cell
   put("gohans:iron_bed", BED.x, 0, BED.head, { facing: "north" });
 
-  // a steel desk bolted to the wall, a dead screen on it, one chair: iron trapdoors as the plate; the old CRT and its
-  // keyboard are the film's own block model (pack/assets/gohans, src/pack.ts)
+  // a steel desk bolted to the wall and one chair: iron trapdoors as the plate. The old CRT on it has looks to choose
+  // between, so it is built apart from the room (src/variants.ts)
   for (const dz of [0, 1]) put("iron_trapdoor", DESK.x, 0, DESK.z + dz, { facing: "east", half: "top", open: "false" });
-  put("gohans:computer", DESK.x, 1, DESK.z, { facing: "east" });
   put("polished_deepslate_stairs", DESK.x + 1, 0, DESK.z, { facing: "east", half: "bottom", shape: "straight" });
 
   // the door: iron in a polished-deepslate frame, set into the south wall

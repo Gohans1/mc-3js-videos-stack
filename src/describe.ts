@@ -13,25 +13,46 @@ const deg = THREE.MathUtils.radToDeg;
 // a 3D lens has no focal length: this is the full-frame (24 mm tall sensor) lens that sees the same vertical angle
 const mm = (fov) => Math.round(12 / Math.tan(THREE.MathUtils.degToRad(fov) / 2));
 const box = (a, b) => new THREE.Box3(new THREE.Vector3(...a), new THREE.Vector3(...b));
+const v = new THREE.Vector3();
+// Frustum.intersectsBox is conservative (a box past a frame corner still passes), so a point of a 3x3x3 grid over the
+// box must be in view
+const inView = (frustum, b) => {
+  for (let x = 0; x <= 2; x++) for (let y = 0; y <= 2; y++) for (let z = 0; z <= 2; z++) {
+    v.set(b.min.x + ((b.max.x - b.min.x) * x) / 2, b.min.y + ((b.max.y - b.min.y) * y) / 2, b.min.z + ((b.max.z - b.min.z) * z) / 2);
+    if (frustum.containsPoint(v)) return true;
+  }
+  return false;
+};
 
-export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, steveBody }) {
+// [[from, to], ...] film seconds when the box is on screen, the film's camera sampled every 0.1 s (the same way draw sets it)
+export function onScreenRanges(b, keys, end, aspect) {
+  const cam = new THREE.PerspectiveCamera(60, aspect, 0.02, 100), frustum = new THREE.Frustum(), m = new THREE.Matrix4();
+  const out = [];
+  let from = null;
+  for (let i = 0; i * 0.1 <= end + 1e-6; i++) {
+    const t = i * 0.1, c = cameraAt(t, keys);
+    cam.position.copy(c.p); cam.up.set(0, 1, 0); cam.lookAt(c.l); cam.rotateZ(c.roll);
+    cam.fov = c.fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+    const seen = inView(frustum.setFromProjectionMatrix(m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)), b);
+    if (seen && from === null) from = t;
+    if (!seen && from !== null) { out.push([+from.toFixed(1), +t.toFixed(1)]); from = null; }
+  }
+  if (from !== null) out.push([+from.toFixed(1), end]);
+  return out;
+}
+
+export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, steveBody, variants }) {
+  const computer = variants.find((x) => x.id === "computer");
   const PROPS = [
     ["Steve", steveBox, "MCprep player.glb (CC-BY)"],
     ["iron bed", box([BED.x, 0, BED.head], [BED.x + 1, 0.9, BED.head + 2]), "pack/iron_bed.json"],
-    ["CRT + keyboard", box([DESK.x, 1, DESK.z], [DESK.x + 1, 1.7, DESK.z + 1]), "pack/computer.json"],
+    ["CRT + keyboard", box([DESK.x, 1, DESK.z], [DESK.x + 1, 1.7, DESK.z + 1]), () => `${computer.pick.title} (pack/${computer.pick.id}.json, choices.json)`],
     ["steel desk + chair", box([DESK.x, 0, DESK.z], [DESK.x + 2, 1, DESK.z + 2]), "iron_trapdoor, deepslate stairs"],
     ["steel door", box([DOOR.x - 1, 0, DOOR.z], [DOOR.x + 2, 3, DOOR.z + 1]), "iron_door"],
     ["ceiling lamp", box([LAMP[0][0], LAMP[0][1], LAMP[0][2]], [LAMP[1][0] + 1, LAMP[1][1] + 1, LAMP[1][2] + 1]), "sea_lantern (own scene)"],
   ];
   const frustum = new THREE.Frustum(), m = new THREE.Matrix4();
-  const f0 = new THREE.Vector3(), f1 = new THREE.Vector3(), v = new THREE.Vector3();
-  const inView = (b) => {
-    for (let x = 0; x <= 2; x++) for (let y = 0; y <= 2; y++) for (let z = 0; z <= 2; z++) {
-      v.set(b.min.x + ((b.max.x - b.min.x) * x) / 2, b.min.y + ((b.max.y - b.min.y) * y) / 2, b.min.z + ((b.max.z - b.min.z) * z) / 2);
-      if (frustum.containsPoint(v)) return true;
-    }
-    return false;
-  };
+  const f0 = new THREE.Vector3(), f1 = new THREE.Vector3();
   const line = (text, since, t) => ({ text, fresh: since !== undefined && t >= since && t - since < FRESH });
 
   const cameraLines = (t, keys) => {
@@ -121,13 +142,12 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
 
     camera.updateMatrixWorld();
     frustum.setFromProjectionMatrix(m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-    // in his own view the lens sits inside his head, so only the body below the neck counts. Frustum.intersectsBox is
-    // conservative (a box past a frame corner still passes), so a point of a 3x3x3 grid over the box must be in view
-    const seen = PROPS.filter(([name, b]) => inView(name === "Steve" && i === 2 ? steveBody : b));
+    // in his own view the lens sits inside his head, so only the body below the neck counts
+    const seen = PROPS.filter(([name, b]) => inView(frustum, name === "Steve" && i === 2 ? steveBody : b));
     add("IN FRAME / STACK", [
       line("three.js r186 · room: block-model-renderer"),
       line("room block mix: pmndrs/math mulberry32"),
-      ...seen.map(([name, , how]) => line(`${name}: ${how}`)),
+      ...seen.map(([name, , how]) => line(`${name}: ${typeof how === "function" ? how() : how}`)),
     ]);
 
     const k0 = keys.reduce((n, k, j) => (k.t <= t ? j : n), 0);

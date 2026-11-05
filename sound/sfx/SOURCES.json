@@ -46,5 +46,45 @@
   "url": "https://freesound.org/s/707832/",
   "license": "CC0 1.0",
   "for": "the short breath in as his eyes open at 00:03.7 (IN-BREATHS, first breath only, see breath_keep)"
+ },
+ "hum_lowfreq": {
+  "id": 72091,
+  "title": "Low Frequency Humming Noise",
+  "by": "",
+  "url": "https://freesound.org/s/72091/",
+  "license": "CC0 1.0",
+  "for": "room hum option: a plain low-frequency hum (Low Frequency Humming Noise)"
+ },
+ "hum_fluorescent": {
+  "id": 784208,
+  "title": "1950s Flourescent Bathroom Lights (quiet room tone)",
+  "by": "",
+  "url": "https://freesound.org/s/784208/",
+  "license": "CC0 1.0",
+  "for": "room hum option: old fluorescent tubes in a quiet room (1950s Flourescent Bathroom Lights)"
+ },
+ "hum_backrooms": {
+  "id": 626096,
+  "title": "Backrooms Ambience",
+  "by": "",
+  "url": "https://freesound.org/s/626096/",
+  "license": "CC0 1.0",
+  "for": "room hum option: a buzzing fluorescent backrooms tone (Backrooms Ambience)"
+ },
+ "pop_flick": {
+  "id": 448394,
+  "title": "Fuze Switch Flick",
+  "by": "",
+  "url": "https://freesound.org/s/448394/",
+  "license": "CC0 1.0",
+  "for": "cut pop option: a fuse switch flicked off (Fuze Switch Flick)"
+ },
+ "pop_flashlight": {
+  "id": 758910,
+  "title": "Flashlight Off",
+  "by": "",
+  "url": "https://freesound.org/s/758910/",
+  "license": "CC0 1.0",
+  "for": "cut pop option: a flashlight clicked off (Flashlight Off)"
  }
 }

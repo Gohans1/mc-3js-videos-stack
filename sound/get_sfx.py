@@ -27,8 +27,14 @@ SFX = {
     "rustle_hand": (320144, None, "his right hand twitching on the mattress at 00:02.8 (Blanket Movement 6)"),
     "rustle_head": (556711, 1.6, "his collar on the mattress as his head turns at 00:06.6 (Rustling fabric)"),
     "breath": (707832, None, "the short breath in as his eyes open at 00:03.7 (IN-BREATHS; the mix keeps the first breath)"),
+    # Options the studio can switch to (edit.json `try` on a bed or sound effect)
+    "hum_lowfreq": (72091, None, "room hum option: a plain low-frequency hum (Low Frequency Humming Noise)"),
+    "hum_fluorescent": (784208, None, "room hum option: old fluorescent tubes in a quiet room (1950s Flourescent Bathroom Lights)"),
+    "hum_backrooms": (626096, None, "room hum option: a buzzing fluorescent backrooms tone (Backrooms Ambience)"),
+    "pop_flick": (448394, None, "cut pop option: a fuse switch flicked off (Fuze Switch Flick)"),
+    "pop_flashlight": (758910, None, "cut pop option: a flashlight clicked off (Flashlight Off)"),
 }
-BEDS = {"room_hum", "cctv_hiss"}
+BEDS = {"room_hum", "cctv_hiss", "hum_lowfreq", "hum_fluorescent", "hum_backrooms"}
 
 def get(url):
     return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30).read()

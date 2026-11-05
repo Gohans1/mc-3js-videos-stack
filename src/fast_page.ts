@@ -21,6 +21,7 @@ window.onunhandledrejection = (e) => { log("ERROR " + (e.reason?.stack ?? e.reas
   const t0 = performance.now();
   const render = await buildScene(canvas, cfg.W, cfg.H, cfg.draft, log);
   log(`scene built in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+  for (const v of render.variants ?? []) if (cfg.choices?.[v.id]?.set) v.set(cfg.choices[v.id].set); // what was picked in the studio
 
   // The review list the studio shows top-left (draw.describe), drawn into every draft frame below the timestamp row: one
   // backed box per section, wrapped into a new column when it would run off the bottom. Colours are the studio's

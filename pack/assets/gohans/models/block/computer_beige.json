@@ -1,0 +1,10 @@
+{
+ "parent": "gohans:block/computer",
+ "textures": {
+  "case": "minecraft:block/white_terracotta",
+  "bezel": "minecraft:block/light_gray_terracotta",
+  "key": "minecraft:block/white_terracotta",
+  "tray": "minecraft:block/light_gray_terracotta",
+  "particle": "minecraft:block/white_terracotta"
+ }
+}

@@ -13,6 +13,7 @@ import { buildWorld, BED, LAMP } from "./world";
 import { pack } from "./pack";
 import { cameraAt } from "./camera";
 import { makeDescribe } from "./describe";
+import { buildVariants } from "./variants";
 import { GESTURES, MOODS, PX, addPose, loadRig, makePlayer, mouthAt } from "./player";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -55,6 +56,12 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
   world.group.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
   scene.add(world.group);
+  const variants = await buildVariants([pack, jar], (g) => {
+    g.scale.setScalar(S);
+    g.position.copy(world.group.position);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+    scene.add(g);
+  }, (cam) => keysOf(cam), EDIT, W / H);
   const lamp = await createScene(jar, LAMP.map((pos) => ({ id: "sea_lantern", pos })), { lighting: "scene", animate: false });
   lamp.group.scale.setScalar(S);
   lamp.group.position.copy(world.group.position);
@@ -181,7 +188,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     renderer.clearDepth();
     renderer.render(hud, hudCam);
   };
-  draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody });
+  draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody, variants });
+  draw.variants = variants;
   draw.tools = {
     scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf,
     objects: [[world.group, "phòng"], [steve.g, "Steve"]],

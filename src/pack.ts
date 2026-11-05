@@ -4,12 +4,24 @@
 // into the page and served from memory as a block-model-renderer virtual handler, stacked above client.jar.
 import computerState from "../pack/assets/gohans/blockstates/computer.json";
 import computerModel from "../pack/assets/gohans/models/block/computer.json";
+import beigeState from "../pack/assets/gohans/blockstates/computer_beige.json";
+import beigeModel from "../pack/assets/gohans/models/block/computer_beige.json";
+import blackState from "../pack/assets/gohans/blockstates/computer_black.json";
+import blackModel from "../pack/assets/gohans/models/block/computer_black.json";
+import steelState from "../pack/assets/gohans/blockstates/computer_steel.json";
+import steelModel from "../pack/assets/gohans/models/block/computer_steel.json";
 import bedState from "../pack/assets/gohans/blockstates/iron_bed.json";
 import bedModel from "../pack/assets/gohans/models/block/iron_bed.json";
 
 const FILES = {
   "assets/gohans/blockstates/computer.json": computerState,
   "assets/gohans/models/block/computer.json": computerModel,
+  "assets/gohans/blockstates/computer_beige.json": beigeState,
+  "assets/gohans/models/block/computer_beige.json": beigeModel,
+  "assets/gohans/blockstates/computer_black.json": blackState,
+  "assets/gohans/models/block/computer_black.json": blackModel,
+  "assets/gohans/blockstates/computer_steel.json": steelState,
+  "assets/gohans/models/block/computer_steel.json": steelModel,
   "assets/gohans/blockstates/iron_bed.json": bedState,
   "assets/gohans/models/block/iron_bed.json": bedModel,
 };
