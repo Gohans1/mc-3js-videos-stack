@@ -12,15 +12,16 @@ import { EDIT, fromSource } from "./edit";
 import { buildWorld, BED, LAMP } from "./world";
 import { pack } from "./pack";
 import { cameraAt } from "./camera";
+import { makeDescribe } from "./describe";
 import { GESTURES, MOODS, PX, addPose, loadRig, makePlayer, mouthAt } from "./player";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
-// The studio reads each shot's name from the comment on its line
+// The studio reads each shot's name from the comment on its line; size and what are the review overlay's (src/describe.ts)
 export const SHOTS = [
-  { t: 0.0, zoom: 0, fov: 92 }, // CCTV CELL 0412 from the ceiling corner
-  { t: 3.5, zoom: 0, fov: 26 }, // close on his eyes as they open
-  { t: 6.5, zoom: 0, fov: 62 }, // his eyes: bare wall, desk, door
+  { t: 0.0, size: "high-angle wide (WS)", what: "CCTV feed" }, // CCTV CELL 0412 from the ceiling corner
+  { t: 3.5, size: "extreme close-up (ECU)", what: "his eyes" }, // close on his eyes as they open
+  { t: 6.5, size: "POV", what: "through his eyes" }, // his eyes: bare wall, desk, door
 ];
 export let DURATION = 0;
 export const SHOTS_OUT = [];
@@ -128,6 +129,10 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     eye.y += 4 * PX; // the face: half a head (8 px) above the neck pivot, lying face up
     eye.z -= L.eyeFromNeck; // the eyes sit this far up the head from the neck pivot
   }
+  // Steve's box lying down; his own view counts only what lies below the neck (the lens is inside his head)
+  const steveBox = new THREE.Box3().setFromObject(steve.rig);
+  const steveBody = steveBox.clone();
+  steveBody.min.z = steve.bones.head.getWorldPosition(V(0, 0, 0)).z + 0.05;
   const res = (v) => (Array.isArray(v) ? v : [eye.x + v.eye[0], eye.y + v.eye[1], eye.z + v.eye[2]]);
   const resolved = new WeakMap();
   const keysOf = (cam) => { if (!resolved.has(cam)) resolved.set(cam, cam.map((k) => ({ ...k, p: res(k.p), l: res(k.l) }))); return resolved.get(cam); };
@@ -176,6 +181,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     renderer.clearDepth();
     renderer.render(hud, hudCam);
   };
+  draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody });
   draw.tools = {
     scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf,
     objects: [[world.group, "phòng"], [steve.g, "Steve"]],
