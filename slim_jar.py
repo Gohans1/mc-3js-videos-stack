@@ -1,6 +1,7 @@
 """Writes assets/public/mc/client_assets.zip: client.jar without its Java code (.class, META-INF), 12 MB instead of 41 (about 7
 on the wire, the studio compresses it). The page downloads it on every first visit, phones over Tailscale too. Run it again after
-replacing client.jar. Mojang's files: stays on this PC, like the jar.
+replacing client.jar. Mojang's files: stays on this PC, like the jar. mc/ is a junction to E:/mc_vault/jar, so the zip lands
+in the vault beside the jar; mc-asset-browser reads it from there too.
 
 data/ stays although block-model-renderer never reads from it (logged every read and listing on 2026-11-05): without
 data/minecraft/structure, one wall edge at 18.5 s drew 1 px off (14 pixels, the same on every load). With it, every frame

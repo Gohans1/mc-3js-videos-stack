@@ -1,0 +1,10 @@
+{
+ "parent": "gohans:block/computer_keys",
+ "textures": {
+  "case": "minecraft:block/iron_block",
+  "bezel": "minecraft:block/smooth_stone",
+  "key": "minecraft:block/light_gray_concrete",
+  "tray": "minecraft:block/iron_block",
+  "particle": "minecraft:block/iron_block"
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "textures": {
+  "paper": "minecraft:block/stripped_birch_log",
+  "particle": "minecraft:block/stripped_birch_log"
+ },
+ "elements": [
+  {
+   "name": "sheet",
+   "from": [
+    0,
+    0,
+    0
+   ],
+   "to": [
+    3.6,
+    0.1,
+    4.6
+   ],
+   "faces": {
+    "north": {
+     "texture": "#paper"
+    },
+    "south": {
+     "texture": "#paper"
+    },
+    "east": {
+     "texture": "#paper"
+    },
+    "west": {
+     "texture": "#paper"
+    },
+    "up": {
+     "texture": "#paper"
+    },
+    "down": {
+     "texture": "#paper"
+    }
+   }
+  }
+ ]
+}
