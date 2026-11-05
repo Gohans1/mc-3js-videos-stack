@@ -12,11 +12,10 @@
 //   read [[from, to]]  eyes run along lines of text: left to right, a quick sweep back, next line.
 // Every key holds until the next. Same t, same frame: nothing here remembers a previous frame.
 import * as THREE from "three";
+import { clamp01, smooth } from "./ease";
 import { GESTURES, MOODS, PX, addPose, arm, gaitOf, leg, walkPose } from "./player";
 import { CHAIR } from "./world";
 
-const clamp01 = (x) => Math.min(1, Math.max(0, x));
-const smooth = (x) => { const u = clamp01(x); return u * u * (3 - 2 * u); };
 const D = Math.PI / 180;
 
 // Body poses by name, at local time s since the key. Arms here are where they hang when no hand target is set

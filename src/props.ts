@@ -31,6 +31,11 @@
 import * as THREE from "three";
 import { createScene } from "block-model-renderer";
 import { unzipSync } from "fflate";
+import { makeCarry } from "./carry";
+import { clamp01, smooth } from "./ease";
+import { loadFont } from "./gamefont";
+import { printProps } from "./ink";
+import { buildScreen } from "./screen";
 import { buildSilverfish } from "./silverfish";
 import { CABINET, CHAIR, DESK, DOME } from "./world";
 
@@ -48,8 +53,6 @@ export const CHAIRS = [
   { id: "hospitals:chair", title: "steel-leg plastic chair (Hospitals, MIT)", seat: 10, back: 15, top: 27 },
 ];
 const chairScale = (c) => (CHAIR.seat * 16) / c.seat;
-const clamp01 = (x) => Math.min(1, Math.max(0, x));
-const smooth = (x) => { const u = clamp01(x); return u * u * (3 - 2 * u); };
 const keyAt = (keys, t) => { let i = 0; while (i < keys.length - 1 && t >= keys[i + 1].t) i++; return i; };
 const track = (keys, f, t) => {
   const i = keyAt(keys, t), a = keys[i], b = keys[Math.min(i + 1, keys.length - 1)];
@@ -107,140 +110,16 @@ export async function buildProps(sources, scene, EDIT) {
   const scrap = holder(await block("gohans:paper_scrap"));
   scene.add(scrap);
 
-  const sheets =Array.from({ length: 40 }, () => { const h = holder(sheetLook.clone()); h.visible = false; scene.add(h); return h; });
+  const sheets = Array.from({ length: 40 }, () => { const h = holder(sheetLook.clone()); h.visible = false; scene.add(h); return h; });
 
-  // ---- the CRT picture: game font (ascii.png, 8 px cells, widths from the glyphs' own pixels) on a blue-grey glow ----
-  const font = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = "mcasset/1.21.11/assets/minecraft/textures/font/ascii.png"; });
-  const fc = document.createElement("canvas"); fc.width = fc.height = 128;
-  const fx = fc.getContext("2d", { willReadFrequently: true }); fx.drawImage(font, 0, 0);
-  const fpx = fx.getImageData(0, 0, 128, 128).data;
-  const width = (c) => { if (c === 32) return 4; const gx = (c % 16) * 8, gy = Math.floor(c / 16) * 8; for (let x = 7; x >= 0; x--) for (let y = 0; y < 8; y++) if (fpx[((gy + y) * 128 + gx + x) * 4 + 3] > 0) return x + 2; return 0; };
-  const W = 288, H = 224, SC = 2; // 9 x 7 model pixels of glass, 32 canvas pixels each
-  const screenCanvas = document.createElement("canvas"); screenCanvas.width = W; screenCanvas.height = H;
-  const sx = screenCanvas.getContext("2d");
-  const tint = document.createElement("canvas"); tint.width = tint.height = 128;
-  const tx = tint.getContext("2d");
-  tx.drawImage(font, 0, 0); tx.globalCompositeOperation = "source-in"; tx.fillStyle = "#b9d3df"; tx.fillRect(0, 0, 128, 128);
-  const text = (s, x, y) => { for (const ch of s) { const c = ch.charCodeAt(0); sx.drawImage(tint, (c % 16) * 8, Math.floor(c / 16) * 8, 8, 8, x, y, 8 * SC, 8 * SC); x += width(c) * SC; } return x; };
-  const keystrokes = () => {
-    const T = P().screen.typing, out = [];
-    for (const tr of T?.tries ?? []) {
-      for (let i = 0; i < tr.text.length; i++) out.push({ t: tr.t + i / tr.cps, hand: i % 2 ? "L" : "R", ch: tr.text[i] });
-      out.push({ t: tr.t + tr.text.length / tr.cps + T.enter, hand: "R", ch: "Enter" });
-    }
-    return out;
-  };
-  // the terminal at time t: the fixed lines, then each try as far as it is typed and its reply; it scrolls past 11 lines
-  const screenLines = (t) => {
-    const S = P().screen, T = S.typing;
-    if (!T) return S.lines;
-    const lines = S.lines.slice(0, -1); // the last line is the empty prompt the first try is typed on
-    let typing = false;
-    for (const tr of T.tries) {
-      if (t < tr.t) break;
-      lines.push("> " + tr.text.slice(0, Math.floor((t - tr.t) * tr.cps) + 1));
-      typing = t < tr.t + tr.text.length / tr.cps + T.enter + T.wait;
-      if (typing) break;
-      lines.push("  " + T.reply);
-    }
-    if (!typing) lines.push("> ");
-    return lines.slice(-11);
-  };
-  let drawn = null;
-  const paint = (lines, cursor) => {
-    const key = lines.join("|") + cursor;
-    if (drawn === key) return;
-    drawn = key;
-    const g = sx.createRadialGradient(W / 2, H / 2, 20, W / 2, H / 2, W * 0.7);
-    g.addColorStop(0, "#22394a"); g.addColorStop(1, "#0b141b");
-    sx.fillStyle = g; sx.fillRect(0, 0, W, H);
-    let y = 10, end = 0;
-    for (const line of lines) { end = text(line, 12, y); y += 9 * SC; }
-    if (cursor) { sx.fillStyle = "#b9d3df"; sx.fillRect(end + 2, y - 9 * SC + 14, 10, 3); }
-    sx.fillStyle = "rgba(0,0,0,.22)"; for (let r = 0; r < H; r += 4) sx.fillRect(0, r, W, 2); // scanlines
-    tex.needsUpdate = true;
-  };
-  const tex = new THREE.CanvasTexture(screenCanvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.LinearFilter;
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(9 * S, 7 * S), new THREE.MeshBasicMaterial({ map: tex }));
-  glass.material.color.setScalar(1.7); // brighter than paper white: the glow blooms a little, as a CRT in a dark room does
-  // the CRT faces east; its glass (model x 3.5..12.5, y 3.5..10.5, z 6.75) lands at x 0.578, z 8.22..8.78, y 1.22..1.66
-  glass.position.set(0.5785 + 0.002, 1 + 7 * S, DESK.z + 0.5);
-  glass.rotation.y = Math.PI / 2;
-
-  // ---- print on the paper (edit.json props.pages): useless beginner pages, so what he throws away reads as worthless ----
-  // A page is printed in the game's font, ink only (transparent elsewhere), on a plane a hair above the model's paper face;
-  // the folders carry the same titles on a cover label with their letters (A..Z, two a folder)
-  const inkFont = (color) => { const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d"); x.drawImage(font, 0, 0); x.globalCompositeOperation = "source-in"; x.fillStyle = color; x.fillRect(0, 0, 128, 128); return c; };
-  const INK = inkFont("#262626"), GREY = inkFont("#5d5d5d");
-  const lineW = (str) => [...str].reduce((w, ch) => w + width(ch.charCodeAt(0)), 0);
-  const print = (g, ink, str, x, y, sc) => { for (const ch of str) { const c = ch.charCodeAt(0); g.drawImage(ink, (c % 16) * 8, Math.floor(c / 16) * 8, 8, 8, x, y, 8 * sc, 8 * sc); x += width(c) * sc; } };
-  const inkMaterial = (canvas) => {
-    const map = new THREE.CanvasTexture(canvas);
-    map.colorSpace = THREE.SRGBColorSpace;
-    map.magFilter = THREE.NearestFilter;
-    map.anisotropy = 8;
-    return new THREE.MeshLambertMaterial({ map, transparent: true, alphaTest: 0.35, polygonOffset: true, polygonOffsetFactor: -2 });
-  };
-  // a printed page: big title fitted to the width, a rule under it, then the body lines
-  const pageInk = ({ title, lines }) => {
-    const c = document.createElement("canvas"); c.width = 152; c.height = 200;
-    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
-    const sc = Math.max(1, Math.min(4, Math.floor(136 / lineW(title))));
-    print(g, INK, title, (152 - lineW(title) * sc) / 2, 12, sc);
-    g.fillStyle = "#4a4a4a"; g.fillRect(12, 20 + 8 * sc, 128, 2);
-    lines.forEach((l, i) => print(g, GREY, l, 14, 34 + 8 * sc + i * 22, 2));
-    return inkMaterial(c);
-  };
-  const labelInk = (title, letters) => {
-    const c = document.createElement("canvas"); c.width = 96; c.height = 72;
-    const g = c.getContext("2d"); g.imageSmoothingEnabled = false;
-    g.fillStyle = "#e9e4d4"; g.fillRect(8, 8, 80, 42); g.fillStyle = "#3b3b3b"; g.fillRect(8, 8, 80, 1); g.fillRect(8, 49, 80, 1);
-    const sc = lineW(title) * 2 <= 72 ? 2 : 1;
-    print(g, INK, title, (96 - lineW(title) * sc) / 2, 12, sc);
-    print(g, INK, letters, (96 - lineW(letters) * 2) / 2, 32, 2);
-    return inkMaterial(c);
-  };
+  // the CRT's picture (src/screen.ts) and the print on the paper (src/ink.ts), both in the game's font (src/gamefont.ts)
+  const font = await loadFont();
+  const screen = buildScreen(font, P, EDIT), { glass, keystrokes } = screen;
   // holders still sit at the origin unturned here, so their boxes are the models' own extents
-  const PAGES = P().pages ?? [];
   const sb = new THREE.Box3().setFromObject(sheets[0]), ss = sb.getSize(new THREE.Vector3());
   const sheetMid = new THREE.Vector3((sb.min.x + sb.max.x) / 2, sb.min.y, (sb.min.z + sb.max.z) / 2);
-  const pageMats = PAGES.map(pageInk);
-  if (PAGES.length) {
-    sheets.forEach((h, i) => {
-      const ink = new THREE.Mesh(new THREE.PlaneGeometry(ss.x * 0.94, ss.z * 0.94), pageMats[i % pageMats.length]);
-      ink.position.set(sheetMid.x, sb.max.y + 0.0006, sheetMid.z);
-      ink.rotation.x = -Math.PI / 2;
-      h.add(ink);
-      h.userData.ink = ink;
-    });
-    // what the scrap says (props.note), small lines filling its face
-    const nb = new THREE.Box3().setFromObject(scrap), ns = nb.getSize(new THREE.Vector3());
-    const nc = document.createElement("canvas"); nc.width = 240; nc.height = 306;
-    const ng = nc.getContext("2d"); ng.imageSmoothingEnabled = false;
-    (P().note?.lines ?? []).forEach((l, i) => print(ng, INK, l, 12, 12 + i * 17, 2));
-    const noteInk = new THREE.Mesh(new THREE.PlaneGeometry(ns.x * 0.9, ns.z * 0.9), inkMaterial(nc));
-    noteInk.position.set((nb.min.x + nb.max.x) / 2, nb.max.y + 0.0006, (nb.min.z + nb.max.z) / 2);
-    noteInk.rotation.x = -Math.PI / 2;
-    scrap.add(noteInk);
-    const fb = new THREE.Box3().setFromObject(folders[0]), fs = fb.getSize(new THREE.Vector3());
-    const az = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    folders.forEach((h, j) => {
-      const mat = labelInk(PAGES[j % PAGES.length].title, `${az[2 * j]}-${az[Math.min(2 * j + 1, 25)]}`);
-      for (const side of [1, -1]) {
-        const label = new THREE.Mesh(new THREE.PlaneGeometry(fs.x * 0.8, fs.x * 0.6), mat);
-        label.position.set((fb.min.x + fb.max.x) / 2, fb.min.y + fs.y * 0.55, side > 0 ? fb.max.z + 0.0006 : fb.min.z - 0.0006);
-        if (side < 0) label.rotation.y = Math.PI;
-        h.add(label);
-      }
-    });
-  }
-  scene.add(glass);
-  const glow = new THREE.PointLight(0x9fc3da, 0, 4.5, 1.6); // the screen's light on his face and the desk
-  glow.position.set(0.95, 1.42, DESK.z + 0.5);
-  scene.add(glow);
-  paint(P().screen.lines, true);
+  const pageMats = printProps(font, { sheets, scrap, folders, pages: P().pages ?? [], note: P().note });
+  scene.add(glass, screen.glow);
 
   // the silverfish, its texture straight out of client.jar (the last source)
   const SF = "assets/minecraft/textures/entity/silverfish/silverfish.png";
@@ -325,87 +204,14 @@ export async function buildProps(sources, scene, EDIT) {
   const gripR = new THREE.Matrix4().compose(v(0.02, -0.03, 0.0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2, "YXZ")), v(1, 1, 1));
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
   const heldWith = (hand, g, out) => { hand.updateWorldMatrix(true, false); m.multiplyMatrices(hand.matrixWorld, g).decompose(p, q, sc); out.position.copy(p); out.quaternion.copy(q); };
-  // lying flat, its middle at (x, y, z), turned yaw
-  const flatAt = (o, x, y, z, yaw) => { o.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0, "YXZ")); o.position.set(x, y, z).sub(sheetMid.clone().applyQuaternion(o.quaternion)); };
   const scrapBox = new THREE.Box3().setFromObject(scrap);
   const scrapMid = new THREE.Vector3((scrapBox.min.x + scrapBox.max.x) / 2, scrapBox.min.y, (scrapBox.min.z + scrapBox.max.z) / 2);
   // a folder's middle, and the middle of the face it lands on when it falls on its side (model -z turns to the floor)
   const fb = new THREE.Box3().setFromObject(folders[0]), fs = fb.getSize(new THREE.Vector3());
   const folderMid = fb.getCenter(new THREE.Vector3()), folderBase = folderMid.clone().setZ(fb.min.z);
 
-  const ONE = v(1, 1, 1), UP = v(0, 1, 0);
-  const toMat = (o) => new THREE.Matrix4().compose(o.p, o.q, ONE);
-  const fromMat = (mat) => { const o = { p: v(0, 0, 0), q: new THREE.Quaternion() }; mat.decompose(o.p, o.q, v(0, 0, 0)); return o; };
-  const mixPose = (a, b, k) => (k <= 0 ? a : { p: a.p.clone().lerp(b.p, k), q: a.q.clone().slerp(b.q, k) });
-  // a throw: from a pose to lying at f.land [x, z] turned f.yaw (f.flat: a page face up; else a folder on its side), its
-  // f.mid on the spot, up in an arc of height f.h, tumbling as it goes; f.layer lifts it a hair so things landing on one
-  // spot don't flicker through each other
-  const fly = (from, f, u) => {
-    const e = clamp01(u);
-    const down = new THREE.Quaternion().setFromEuler(new THREE.Euler(f.flat ? 0 : -Math.PI / 2, f.yaw, 0, "YXZ"));
-    const land = v(f.land[0], FLOOR_Y + (f.layer % 8) * 0.0012, f.land[1]).sub(f.mid.clone().applyQuaternion(down));
-    const pos = from.p.clone().lerp(land, e);
-    pos.y += f.h * 4 * e * (1 - e);
-    const rot = from.q.clone().slerp(down, smooth(e));
-    if (e < 1) rot.multiply(new THREE.Quaternion().setFromAxisAngle(v(0.3, 1, 0.5).normalize(), f.spin * Math.sin(Math.PI * e)));
-    return { p: pos, q: rot };
-  };
-
-  // ---- carrying ----
-  // grips(tt): his two hands' grip groups (world matrices) and his eyes at film time tt. draw() sets the live ones for the
-  // frame it draws; any other moment comes from scene.ts handAt, which poses Steve at tt (cached per edit)
-  let live = { t: NaN, g: null }, handAtFn = null;
-  const gripsOf = (hR, hL, head) => {
-    hR.updateWorldMatrix(true, false); hL.updateWorldMatrix(true, false);
-    return { R: hR.matrixWorld.clone(), L: hL.matrixWorld.clone(), eyes: head.getWorldPosition(v(0, 0, 0)).add(v(0, 0.2, 0)) };
-  };
-  const grips = (tt) => (tt === live.t ? live.g : handAtFn(tt, gripsOf));
-  // How a held thing sits, by mode:
-  //   "hang"  a page pinched at its top edge, hanging from the hand in the plane of his side, so it clears his leg
-  //   "flat"  a page lying level under the hand, about to be put down
-  //   "face"  held up square to his eyes, pinched at its bottom edge, print upright: how anyone holds a page to read it
-  // slot stacks several pages in one hand a few millimetres apart
-  const HANG = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(v(0, 0, -1), v(1, 0, 0), v(0, -1, 0)));
-  const shapeOf = (kind, mode, g, hand, slot, yaw) => {
-    const H = g[hand], at = v(0, 0, 0).setFromMatrixPosition(H), page = kind === "page";
-    if (mode === "hang") {
-      const local = v(0.005 * slot, -(ss.z / 2 - 0.02), 0).sub(sheetMid.clone().applyQuaternion(HANG));
-      return fromMat(H.clone().multiply(new THREE.Matrix4().compose(local, HANG, ONE)));
-    }
-    if (mode === "flat") { flatAt(scratch, at.x, at.y - 0.012 - 0.003 * slot, at.z, yaw); return { p: scratch.position.clone(), q: scratch.quaternion.clone() }; }
-    // the page's printed face is its model +y with the print's top towards -z; a folder's label is on its +z side
-    const n = g.eyes.clone().sub(at).normalize(), up = UP.clone().addScaledVector(n, -n.y).normalize();
-    const rot = new THREE.Quaternion();
-    if (page) { const zAx = up.clone().negate(); rot.setFromRotationMatrix(new THREE.Matrix4().makeBasis(n.clone().cross(zAx), n, zAx)); }
-    else rot.setFromRotationMatrix(new THREE.Matrix4().makeBasis(up.clone().cross(n), up, n));
-    const half = page ? ss.z / 2 : fs.y / 2, mid = page ? sheetMid : folderMid;
-    const centre = at.clone().addScaledVector(up, half - 0.03).addScaledVector(n, 0.012 + 0.004 * slot);
-    return { p: centre.sub(mid.clone().applyQuaternion(rot)), q: rot };
-  };
-  // An item's story is a list of states, each holding from its t: {at(tt)} lying where it lies; {fly} thrown from wherever
-  // the state before left it; {lay} put down out of the hand onto a fixed pose over 0.3 s; {hand, kind, modes} in that hand.
-  // Taking it freezes its pose relative to the hand at that moment, so it leaves the floor (desk, drawer) from exactly where
-  // it lay and never jumps into the fingers; modes [[t, mode]] then turn it into a way of holding it, each over 0.35 s
-  const poseIn = (S, i, tt) => {
-    const s = S[i];
-    if (s.at) return s.at(tt);
-    if (s.fly) return fly(poseIn(S, i - 1, s.t), s.fly, (tt - s.t) / s.fly.dur);
-    if (s.lay) return mixPose(poseIn(S, i - 1, s.t), s.lay, smooth((tt - s.t) / 0.3));
-    const g0 = grips(s.t), g = grips(tt);
-    const rel = g0[s.hand].clone().invert().multiply(toMat(poseIn(S, i - 1, s.t)));
-    let pose = fromMat(g[s.hand].clone().multiply(rel));
-    for (const [tm, mode] of s.modes ?? []) if (tt > tm) pose = mixPose(pose, shapeOf(s.kind, mode, g, s.hand, s.slot ?? 0, s.yaw ?? 0), smooth((tt - tm) / 0.35));
-    return pose;
-  };
-  const show = (o, S, t) => {
-    let i = -1;
-    S.forEach((s, k) => { if (t >= s.t) i = k; });
-    if (i < 0) return;
-    const at = poseIn(S, i, t);
-    o.position.copy(at.p);
-    o.quaternion.copy(at.q);
-    o.visible = true;
-  };
+  // pages and folders in his hands, put down and thrown (src/carry.ts)
+  const carry = makeCarry({ sheetMid, sheetSize: ss, folderMid, folderSize: fs, floorY: FLOOR_Y }), { flatAt, poseIn, show } = carry;
   const inkIt = (o, page) => { const ink = o.userData.ink; if (ink && pageMats.length) ink.material = pageMats[page % pageMats.length]; };
 
   // The pages the silverfish spills: gathered off the floor, laid on the desk, taken up one by one and read, flung off.
@@ -473,8 +279,7 @@ export async function buildProps(sources, scene, EDIT) {
   // handAt(tt, fn) poses Steve at tt and gives fn(right grip, left grip, head bone) (scene.ts, cached per edit)
   const draw = (t, handNow, handAt, handL, head) => {
     const Pr = P();
-    handAtFn = handAt;
-    live = { t, g: gripsOf(handNow, handL, head) };
+    carry.frame(t, handNow, handL, head, handAt);
     const ta = trayAt(t);
     tray.position.set(ta.x, ta.y, ta.z);
     tray.rotation.y = ta.yaw;
@@ -501,10 +306,7 @@ export async function buildProps(sources, scene, EDIT) {
     }
     chair.position.x = CHAIR.x + chairDx(t);
     if (Pr.button) button.position.set(Pr.button.cell[0], Pr.button.cell[1], Pr.button.cell[2] + 0.0625 * buttonIn(t));
-    const on = t >= Pr.screen.on;
-    glass.visible = on;
-    glow.intensity = on ? EDIT.light.screen : 0;
-    if (on) paint(screenLines(t), Math.floor((t - Pr.screen.on) * 1.9) % 2 === 0);
+    screen.draw(t);
 
     sheets.forEach((s) => { s.visible = false; });
     silverfish.draw(Pr.silverfish, t);
@@ -520,8 +322,7 @@ export async function buildProps(sources, scene, EDIT) {
     keyboardAt,
     // the keys down at t: [{n, hand, ch, depth 0..1}], one per keystroke (n counts them), down for 0.09 s
     setCapAt: (f) => { capAt = f; },
-    // the lamp's level lv (scene.ts flickerAt): when it drops out the screen dies with it, as on one failing circuit
-    dim: (lv) => { const k = smooth(lv / 0.3); glow.intensity *= k; glass.material.color.setScalar(1.7 * (0.04 + 0.96 * k)); },
+    dim: screen.dim,
     keysDown: (t) => keystrokes().map((s, n) => ({ ...s, n, depth: t >= s.t && t < s.t + 0.09 ? Math.sin((Math.PI * (t - s.t)) / 0.09) : 0 })).filter((s) => s.depth > 0),
     draw, anchors, dome, glass, chair, tray, folders, sheets, scrap, silverfish: silverfish.g,
     // the chair's looks for the studio (src/variants.ts asVariant); setChair keeps chair_grip on the shown one
