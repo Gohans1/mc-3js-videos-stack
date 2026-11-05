@@ -15,6 +15,7 @@ scan the cell). One character: Steve. One voice: the off-screen narrator.
 - https://github.com/pmndrs/math (0.1): mulberry32 seeds the wall, floor and ceiling block mix (seed 412), so every build is the same cell.
 - https://github.com/Vanilagy/mediabunny (1.65): Hardware-encodes rendered frames straight from Chrome WebCodecs into 30-second H.264 MP4 chunks on the RTX 2060 GPU.
 - https://github.com/Gohans1/live-studio: Supplies the buildScene, draw(t), and src/edit.json timeline contract so any timestamp renders standalone; its bundler turns Node built-ins a library asks for but the browser lacks (MineRender's zlib/assert) into empty modules.
+- Studio rules: this film keeps to live-studio's film contract, node_modules/live-studio/docs/film-contract.md (schemas: node_modules/live-studio/src/contract.mjs). Read it before changing src/scene.ts, src/edit.json or anything else the studio reads; the studio checks the film against it on every start and save.
 - https://github.com/evanw/esbuild: src/render.mjs bundles src/fast_page.ts itself and aliases zlib and assert to src/shims/empty.js.
 - ElevenLabs v4 via genvoice.pro: the narrator, Seff Echo (voice id ZaZosYpkIGmSqOwAlfnk), the only voice (voice/gen.py).
 - https://github.com/m-bain/whisperX (large-v3 CUDA): Word-level timestamps of each take (voice/words.py) for placing it on the film clock, the studio's word map, and the pronunciation check: a take whose words come back wrong is regenerated.
