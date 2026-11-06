@@ -23,6 +23,7 @@ import { makeDescribe } from "./describe";
 import { asVariant, buildVariants } from "mc-assets/variants";
 import { VARIANTS } from "./variants";
 import { GESTURES, PX, addPose, blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
+import { slerpPose } from "mc-actor/mocap";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -281,13 +282,17 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     let pose = twitch ? addPose(B.pose, { laR: [-14 * twitch, 0, 0], uaR: [-4 * twitch, 0, 0] }) : B.pose;
     steve.setPose(pose);
     steve.g.updateMatrixWorld(true);
-    const R = targetAt(L.hands, "R", t, anchor), Lh = targetAt(L.hands, "L", t, anchor), look = targetAt(L.look, "at", t, anchor);
+    const shoulder = (sd) => ({ pivot: steve.bones[`ua${sd}`].getWorldPosition(new THREE.Vector3()) });
+    const R = targetAt(L.hands, "R", t, anchor, shoulder("R")), Lh = targetAt(L.hands, "L", t, anchor, shoulder("L"));
+    const look = targetAt(L.look, "at", t, anchor);
     const patch = [];
     for (const sd of ["L", "R"]) if (feet[sd]) patch.push([steve.legTo(sd, feet[sd]), 1]);
-    if (R) patch.push([steve.armTo("R", R.p), R.w]);
-    if (Lh) patch.push([steve.armTo("L", Lh.p), Lh.w]);
     if (look) patch.push([{ head: steve.headTo(look.p) }, look.w]);
+    // hand IK the film-kit way (AGENTS.md there): the elbow on a pole, down and out, and blended into the pose's own arm by
+    // quaternion slerp; twist-free with an Euler blend, a hand reaching low in front raised the elbow over his shoulder
+    const arms = [[R, "R", [-0.6, -1, -0.2]], [Lh, "L", [0.6, -1, -0.2]]].filter(([h]) => h).map(([h, sd, pole]) => [steve.armTo(sd, h.p, pole), h.w]);
     for (const [p, w] of patch) pose = blendPose(pose, p, w);
+    for (const [p, w] of arms) pose = slerpPose(pose, { ...pose, ...p, root: pose.root }, w);
     steve.setPose(pose);
     steve.g.updateMatrixWorld(true);
     Object.assign(now, { B, R, Lh, look, twitch, feet });

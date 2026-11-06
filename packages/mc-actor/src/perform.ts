@@ -14,7 +14,9 @@
 //     add: {joint: [x, y, z]} on any key adds those degrees on top of its pose (a head tilt on a clip, say; angle by
 //     angle, so keep it small on a joint turned past 90). A walk key can't follow a clip: key a pose where it leaves him.
 //   hands [{t, R?, L?}]  a world point or a prop anchor name (the film's props) for the end of that hand, or null for the
-//     pose's own arm. Targets glide between keys; the arm IK (player.ts armTo) bends the elbow to reach them.
+//     pose's own arm. Targets glide between keys; the arm IK (player.ts armTo) bends the elbow to reach them. Given the
+//     shoulder (targetAt's opts.pivot), a hand moves like a person's (film-kit): at its own Fitts pace with one speed bell
+//     and a small corrective end (reach.ts), on an arc round the shoulder instead of a straight slide (arc.ts).
 //   look [{t, at}]  where he turns his head: a point, an anchor, or null for the pose's own head.
 //   face [{t, mood}]  a MOODS name (player.ts) or one of the film's faces, blended over half a second.
 //   read [[from, to]]  eyes run along lines of text: left to right, a quick sweep back, next line.
@@ -23,6 +25,8 @@ import * as THREE from "three";
 import { clamp01, smooth } from "./ease";
 import { MOODS, addPose, gaitOf, walkPose } from "./player";
 import { slerpPose } from "./mocap";
+import { reachK } from "film-kit/reach";
+import { arc } from "film-kit/arc";
 
 const D = Math.PI / 180;
 
@@ -122,15 +126,16 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     return { at, yaw, pose, key: i, act: moving ? b : a, moving, speed, gait: walking ? gaitOf(d, speed) : null };
   }
 
-  // The target of one hand or the head between keys: null blends back to the pose's own arm
-  function targetAt(keys, field, t, anchor) {
+  // The target of one hand or the head between keys: null blends back to the pose's own arm. opts.pivot: the shoulder in
+  // the world at t (a THREE.Vector3), for hands; without it the target glides straight on a smoothstep (a head's look)
+  function targetAt(keys, field, t, anchor, { pivot = null } = {}) {
     const ks = keys.filter((k) => field in k);
     if (!ks.length) return null;
     const i = keyAt(ks, t), a = ks[i], b = ks[Math.min(i + 1, ks.length - 1)];
-    const x = b.t > a.t ? smooth((t - a.t) / (b.t - a.t)) : 0;
     const pa = a[field] == null ? null : anchor(a[field], t), pb = b[field] == null ? null : anchor(b[field], t);
+    const x = b.t <= a.t ? 0 : pivot && pa && pb ? reachK(t, a.t, b.t, { dist: pa.distanceTo(pb) }) : smooth((t - a.t) / (b.t - a.t));
     if (t < a.t) return null;
-    if (pa && pb) return { p: pa.clone().lerp(pb, x), w: 1 };
+    if (pa && pb) return { p: pivot ? new THREE.Vector3(...arc(pivot.toArray(), pa.toArray(), pb.toArray(), x)) : pa.clone().lerp(pb, x), w: 1 };
     if (pa) return { p: pa, w: 1 - x };
     if (pb) return { p: pb, w: x };
     return null;

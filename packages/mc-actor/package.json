@@ -15,6 +15,9 @@
     "./silverfish": "./src/silverfish.ts",
     "./checks": "./src/checks.ts"
   },
+  "dependencies": {
+    "film-kit": "workspace:*"
+  },
   "peerDependencies": {
     "three": "0.186.1"
   }

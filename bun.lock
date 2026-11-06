@@ -91,6 +91,9 @@
     "packages/mc-actor": {
       "name": "mc-actor",
       "version": "0.1.0",
+      "dependencies": {
+        "film-kit": "workspace:*",
+      },
       "peerDependencies": {
         "three": "0.186.1",
       },
