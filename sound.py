@@ -1,5 +1,5 @@
 """The studio's mix: python sound.py OUT.wav [--dry]. The same graph as the draft and final (sound/mix.py --raw), without
-the loudness pass, so a remix takes a moment. Sounds with options (edit.json `try`) are left out of it and written as one
+the loudness pass, so a remix takes a moment. Sounds with options (src/timeline/audio.json `try`) are left out of it and written as one
 stem per option plus trials.json beside OUT, which the page plays itself."""
 import subprocess
 import sys

@@ -1,0 +1,113 @@
+{
+ "chair": [
+  {"t": 0, "dx": 0},
+  {"t": 50.05, "dx": 0},
+  {"t": 50.4, "dx": 0.22},
+  {"t": 52.5, "dx": 0.22},
+  {"t": 52.9, "dx": 0},
+  {"t": 64.667, "dx": 0},
+  {"t": 65.167, "dx": 0.35}
+ ],
+ "drawer": [
+  {"t": 0, "open": 0},
+  {"t": 60.05, "open": 0},
+  {"t": 60.13, "open": 0.03},
+  {"t": 60.35, "open": 0},
+  {"t": 62.987, "open": 0},
+  {"t": 63.067, "open": 0.03},
+  {"t": 63.267, "open": 0},
+  {"t": 63.917, "open": 0},
+  {"t": 63.987, "open": 0.045},
+  {"t": 64.217, "open": 0},
+  {"t": 67.617, "open": 0},
+  {"t": 68.117, "open": 0.3},
+  {"t": 68.367, "open": 1, "ease": "yank"},
+  {"t": 74.75, "open": 1},
+  {"t": 75.0, "open": 0},
+  {"t": 83.8, "open": 0},
+  {"t": 84.1, "open": 1, "ease": "yank"}
+ ],
+ "screen": {
+  "on": 46.0,
+  "lines": [
+   "SECURITY TEST",
+   "TASK 412",
+   "",
+   "OBJECTIVE:",
+   "OPEN THE CELL DOOR.",
+   "USE ONLY THE TOOLS",
+   "YOU WERE GIVEN.",
+   "",
+   "> door.unlock()",
+   "  ACCESS DENIED",
+   "> "
+  ],
+  "typing": {
+   "tries": [{"t": 53.45, "text": "door.open()", "cps": 9}, {"t": 55.1, "text": "sudo door.unlock()", "cps": 20}],
+   "enter": 0.12,
+   "wait": 0.25,
+   "reply": "ACCESS DENIED",
+   "keys": {"R": [0.98, 1.07, 8.4], "L": [0.98, 1.07, 8.62]}
+  }
+ },
+ "pages": [
+  {"title": "TUTORIAL", "lines": ["STEP 1: READ", "STEP 2: READ", "STEP 3: READ"]},
+  {"title": "1+1=2", "lines": ["2+2=4", "3+3=6", "4+4=8"]},
+  {"title": "HOW TO", "lines": ["HOW TO SIT", "HOW TO STAND", "HOW TO READ"]},
+  {"title": "FIRST STEPS", "lines": ["THIS IS A PAGE.", "THIS IS A LINE."]},
+  {"title": "HELLO WORLD", "lines": ["print(\"hello\")", "print(\"hello\")"]},
+  {"title": "LESSON 1", "lines": ["A IS FOR APPLE", "B IS FOR BOOK"]},
+  {"title": "BASICS", "lines": ["1 x 1 = 1", "2 x 1 = 2", "3 x 1 = 3"]},
+  {"title": "INTRO", "lines": ["WELCOME!", "TURN THE PAGE."]}
+ ],
+ "silverfish": {
+  "scale": 1.0,
+  "path": [
+   {"t": 68.217, "at": [1.3, 0.42, 9.5]},
+   {"t": 68.287, "at": [1.45, 0.55, 9.5]},
+   {"t": 68.467, "at": [1.85, 0.95, 9.62], "hop": 0.2},
+   {"t": 68.717, "at": [2.15, 0, 10.3], "hop": 0.12},
+   {"t": 69.167, "at": [3.1, 0, 10.45]},
+   {"t": 69.667, "at": [4.2, 0, 10.1]},
+   {"t": 70.15, "at": [5.4, 0, 9.6]}
+  ]
+ },
+ "spill": {
+  "at": 68.287,
+  "sheets": [
+   {"page": 2, "land": [2.3, 9.92], "yaw": 15, "pick": 72.6, "hand": "L"},
+   {"page": 1, "land": [2.08, 9.98], "yaw": -30, "pick": 72.8, "hand": "L"},
+   {"page": 0, "land": [1.95, 9.88], "yaw": 65, "pick": 73.0, "hand": "L"}
+  ],
+  "carry": [[73.15, "face"], [75.45, "flat"]]
+ },
+ "desk": {"t": 75.85, "at": [0.6, 1.0, 9.6], "yaw": 90},
+ "out": {"t": 94.27, "dur": 0.6, "to": [2.05, 10.45], "yaw": -25},
+ "scrap": {"at": [0.82, 9.47], "yaw": 25, "grab": 98.82, "read": 99.72, "hold": [1.2, 0.95, 9.5], "face": [1.45, 1.32, 9.86]},
+ "note": {"lines": ["THE NOTE", "", "(TEXT LATER)"]},
+ "keyboard": [
+  {"t": 0, "yaw": 0, "dx": 0, "dz": 0, "lift": 0},
+  {"t": 57.11, "yaw": 0, "dx": 0, "dz": 0, "lift": 0},
+  {"t": 57.17, "yaw": -6, "dx": -0.01, "dz": 0.02, "lift": 0.03},
+  {"t": 57.32, "yaw": -17, "dx": -0.03, "dz": 0.06, "lift": 0, "ease": "yank"}
+ ],
+ "button": {"cell": [3, 1, 10], "presses": [42.85, 43.35, 43.75, 44.05, 44.3]},
+ "takes": [{"t": 76.95, "hand": "R", "face": 77.1}, {"t": 79.8, "hand": "L", "face": 79.95}],
+ "fling": {"t": 81.66, "lands": [[1.85, 10.45], [2.15, 10.72], [1.55, 10.62]]},
+ "files": [
+  {"hand": "R", "folder": 0, "grab": 84.72, "face": 84.8, "release": 86.12, "land": [3.201, 8.972], "yaw": 215, "sheets": 1},
+  {"hand": "L", "folder": 1, "grab": 86.36, "face": 86.44, "release": 87.51, "land": [2.494, 10.441], "yaw": 116, "sheets": 1},
+  {"hand": "R", "folder": 2, "grab": 87.75, "face": 87.83, "release": 88.7, "land": [3.19, 9.145], "yaw": 273, "sheets": 1},
+  {"hand": "L", "folder": 3, "grab": 88.94, "face": 89.02, "release": 89.74, "land": [2.967, 10.569], "yaw": 183, "sheets": 1},
+  {"hand": "R", "folder": 4, "grab": 89.98, "face": 90.06, "release": 90.68, "land": [3.178, 9.084], "yaw": 20, "sheets": 1},
+  {"hand": "L", "folder": 5, "grab": 90.92, "face": 91.0, "release": 91.54, "land": [2.906, 10.628], "yaw": 39, "sheets": 1},
+  {"hand": "R", "folder": 6, "grab": 91.7, "release": 91.86, "land": [3.264, 8.964], "yaw": 74, "sheets": 0},
+  {"hand": "L", "folder": 7, "grab": 91.98, "release": 92.14, "land": [2.46, 10.299], "yaw": 348, "sheets": 1},
+  {"hand": "R", "folder": 8, "grab": 92.26, "release": 92.42, "land": [3.143, 9.179], "yaw": 327, "sheets": 0},
+  {"hand": "L", "folder": 9, "grab": 92.54, "release": 92.7, "land": [3.146, 10.396], "yaw": 163, "sheets": 1},
+  {"hand": "R", "folder": 10, "grab": 92.82, "release": 92.98, "land": [2.915, 8.997], "yaw": 61, "sheets": 0},
+  {"hand": "L", "folder": 11, "grab": 93.1, "release": 93.26, "land": [3.21, 10.329], "yaw": 339, "sheets": 1},
+  {"hand": "R", "folder": 12, "grab": 93.38, "release": 93.54, "land": [3.092, 8.993], "yaw": 143, "sheets": 0},
+  {"hand": "L", "folder": 13, "grab": 93.66, "release": 93.82, "land": [2.625, 10.492], "yaw": 304, "sheets": 1}
+ ]
+}

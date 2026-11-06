@@ -1,5 +1,5 @@
 // @ts-nocheck
-// The first-person camera. Keys in edit.json `cam` are {t, p, l, fov?, roll?, wave?, bob?, cut?}: position, look point,
+// The first-person camera. Keys in src/timeline/cam.json are {t, p, l, fov?, roll?, wave?, bob?, cut?}: position, look point,
 // lens and how much the head sways. Between cuts the keys are one centripetal Catmull-Rom curve, so the camera never
 // stops gliding; a key with cut: true starts a new curve (a hard cut). On top ride a slow wave (the "breathing" float the
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.

@@ -1,5 +1,5 @@
 // @ts-nocheck
-// The CRT's picture (edit.json props.screen, documented in src/props.ts): a terminal in the game's font on a blue-grey
+// The CRT's picture (src/timeline/props.json screen, documented in src/props.ts): a terminal in the game's font on a blue-grey
 // glow with scanlines, the typing he does on it, and the screen's light on his face and the desk
 import * as THREE from "three";
 import { smooth } from "./ease";
@@ -22,9 +22,9 @@ export function buildScreen(font, P, EDIT) {
   };
   // the terminal at time t: the fixed lines, then each try as far as it is typed and its reply; it scrolls past 11 lines
   const screenLines = (t) => {
-    const S = P().screen, T = S.typing;
-    if (!T) return S.lines;
-    const lines = S.lines.slice(0, -1); // the last line is the empty prompt the first try is typed on
+    const Sc = P().screen, T = Sc.typing;
+    if (!T) return Sc.lines;
+    const lines = Sc.lines.slice(0, -1); // the last line is the empty prompt the first try is typed on
     let typing = false;
     for (const tr of T.tries) {
       if (t < tr.t) break;

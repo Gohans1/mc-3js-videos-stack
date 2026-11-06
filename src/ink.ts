@@ -1,5 +1,5 @@
 // @ts-nocheck
-// The print on the paper (edit.json props.pages and props.note): useless beginner pages, so what he throws away reads as
+// The print on the paper (src/timeline/props.json pages and note): useless beginner pages, so what he throws away reads as
 // worthless. A page is printed in the game's font (src/gamefont.ts), ink only (transparent elsewhere), on a plane a hair
 // above the model's paper face; the folders carry the same titles on a cover label with their letters (A..Z, two a folder)
 import * as THREE from "three";

@@ -10,7 +10,7 @@ const v = (x, y, z) => new THREE.Vector3(x, y, z);
 const ONE = v(1, 1, 1), UP = v(0, 1, 0);
 const toMat = (o) => new THREE.Matrix4().compose(o.p, o.q, ONE);
 const fromMat = (mat) => { const o = { p: v(0, 0, 0), q: new THREE.Quaternion() }; mat.decompose(o.p, o.q, v(0, 0, 0)); return o; };
-export const mixPose = (a, b, k) => (k <= 0 ? a : { p: a.p.clone().lerp(b.p, k), q: a.q.clone().slerp(b.q, k) });
+const mixPose = (a, b, k) => (k <= 0 ? a : { p: a.p.clone().lerp(b.p, k), q: a.q.clone().slerp(b.q, k) });
 
 // sheetMid/folderMid: the middle of the model's bottom face (a sheet) and of its body (a folder), in its own frame;
 // sheetSize/folderSize its extents; floorY the height things land at

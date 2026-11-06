@@ -1,5 +1,5 @@
 """Finds pops in a draft: frames that differ from the one before far more than the frames around them do (a mob
-teleporting, an item snapping, a camera jerk). Planned cuts in edit.json are listed separately.
+teleporting, an item snapping, a camera jerk). Planned cuts in src/timeline/cam.json are listed separately.
   python review/jumps.py renders/draft_video.mp4"""
 import json
 import re
@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 video = sys.argv[1]
-cuts = [k["t"] for k in json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))["cam"] if k.get("cut")]
+cuts = [k["t"] for k in json.loads((ROOT / "src/timeline/cam.json").read_text(encoding="utf8")) if k.get("cut")]
 # mean brightness of |frame - previous frame| on a small grey copy, one number per frame
 log = subprocess.run(["ffmpeg", "-v", "info", "-i", video, "-vf", "scale=160:90,format=gray,tblend=all_mode=difference,signalstats,metadata=print:key=lavfi.signalstats.YAVG",
                       "-f", "null", "-"], capture_output=True, text=True).stderr

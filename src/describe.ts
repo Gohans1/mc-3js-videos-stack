@@ -1,7 +1,7 @@
 // @ts-nocheck
 // What is going on at film time t, for the review overlay (the studio's top-left list and every draft frame): shot, camera,
-// Steve, light and look, voice, sound, which libraries draw what is in frame, and where in edit.json each part lives.
-// Read from the same edit.json and camera the picture is drawn from, never typed by hand, so it cannot disagree with the
+// Steve, light and look, voice, sound, which libraries draw what is in frame, and where in the timeline files each part lives.
+// Read from the same EDIT (src/edit.ts) and camera the picture is drawn from, never typed by hand, so it cannot disagree with the
 // frame. Call it right after draw(t): "in frame" tests use the camera draw(t) left behind.
 // Returns [{ head, lines: [{ text, fresh }] }]; fresh marks what started less than FRESH seconds ago.
 import * as THREE from "three";
@@ -158,7 +158,7 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
       if (t >= s.grab && t < s.release) pr.push(line(`folder ${s.folder} in his ${s.hand === "R" ? "right" : "left"} hand${s.face != null && t >= s.face ? ", held up to read" : ""}`, s.grab, t));
       if (t >= s.release && t < s.release + 1.2) pr.push(line(`folder ${s.folder} thrown: arc to [${s.land}], ${s.sheets} pages flutter out`, s.release, t));
     }
-    add("PROPS (edit.json props)", pr);
+    add("PROPS (src/timeline/props.json)", pr);
 
     const C = EDIT.light, K = EDIT.cctv;
     const look = [line("key: 1 cold spot from the ceiling lamp"), line(`fill ${C.fill} · bounce ${C.bounce} · rim ${C.rim} · fog ${C.fog}`)];
@@ -192,7 +192,7 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
       const lp = b.filters?.join(" ").match(/lowpass=f=(\d+)/)?.[1];
       sound.push(line(`bed: ${said(b.name)}${lp ? ` (low-pass ${lp} Hz)` : ""}`, b.from, t));
     }
-    // one-shots without a length in edit.json are listed for 1 s
+    // one-shots without a length in audio.json are listed for 1 s
     for (const s of A.sfx) if (t >= s.at && t < s.at + (s.length ?? 1)) sound.push(line(`sfx: ${said(s.name)}`, s.at, t));
     sound.push(line("CC0 Freesound · ffmpeg mix (sound/mix.py)"));
     add("SOUND", sound);
@@ -221,7 +221,7 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
     if (char.some((l) => /eyes snap|pupils narrowing/.test(l.text))) edit.push("steve.eyesOpen, steve.pupil");
     EDIT.takes.forEach((k, n) => { const [s, e] = EDIT.voice.lines[n] ?? []; if (t >= s && t < e + 0.3) edit.push(`takes[${n}]`); });
     A.sfx.forEach((s, n) => { if (t >= s.at && t < s.at + (s.length ?? 1)) edit.push(`audio.sfx[${n}]`); });
-    add("EDIT HERE (src/edit.json)", [line(edit.join(" · ")), line("light · look · audio.beds")]);
+    add("EDIT HERE (src/timeline/NAME.json)", [line(edit.join(" · ")), line("audio.beds · src/edit.json: light · look")]);
     return sections;
   };
 }
