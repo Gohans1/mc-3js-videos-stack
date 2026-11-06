@@ -1,25 +1,29 @@
 [
  {
-  "id": "js_furniture_mod:black_chair",
   "jar": "nhatjs-furniture-mod.jar",
+  "namespace": "js_furniture_mod",
+  "blocks": [
+   "black_chair"
+  ],
   "licence": "MIT",
   "page": "https://modrinth.com/mod/nhatjs-furniture-mod"
  },
  {
-  "id": "hospitals:chair",
   "jar": "hospitals.jar",
+  "namespace": "hospitals",
+  "blocks": [
+   "chair"
+  ],
   "licence": "MIT",
   "page": "https://modrinth.com/mod/hospitals"
  },
  {
-  "id": "modernfurniture:office_chair",
   "jar": "modern-furniture.jar",
-  "licence": "CC-BY-4.0 (credit the author)",
-  "page": "https://modrinth.com/mod/modern-furniture"
- },
- {
-  "id": "modernfurniture:wood_chair_b",
-  "jar": "modern-furniture.jar",
+  "namespace": "modernfurniture",
+  "blocks": [
+   "office_chair",
+   "wood_chair_b"
+  ],
   "licence": "CC-BY-4.0 (credit the author)",
   "page": "https://modrinth.com/mod/modern-furniture"
  }

@@ -1,8 +1,9 @@
 // @ts-nocheck
-// The film's own resource pack (pack/assets/gohans): props the game lacks, written as vanilla Java block models on the
-// game's own textures, so Blockbench opens them and block-model-renderer lights them like every other block. Bundled
-// into the page and served from memory as a block-model-renderer virtual handler, stacked above client.jar.
-// A new prop: its blockstate and model here (both bundlers need a plain import per file).
+// The shared props (pack/assets/gohans): things the game lacks, written as vanilla Java block models on the game's own
+// textures, so Blockbench opens them and block-model-renderer lights them like every other block. Bundled into the page
+// and served from memory as a block-model-renderer source, stacked above client.jar: createScene([props, ...film's, jar]).
+// A new prop for every film: its blockstate and model in pack/assets/gohans, imported here (both bundlers need a plain
+// import per file). A prop only one film needs: that film's own pack, the same way through packOf.
 import computerS from "../pack/assets/gohans/blockstates/computer.json";
 import computerM from "../pack/assets/gohans/models/block/computer.json";
 import beigeS from "../pack/assets/gohans/blockstates/computer_beige.json";
@@ -45,14 +46,18 @@ const MODELS = {
   folder_0: [folder0S, folder0M], folder_1: [folder1S, folder1M], folder_2: [folder2S, folder2M], sheet: [sheetS, sheetM],
   paper_scrap: [scrapS, scrapM], cctv_dome: [domeS, domeM],
 };
-const FILES = Object.fromEntries(Object.entries(MODELS).flatMap(([n, [s, m]]) => [
-  [`assets/gohans/blockstates/${n}.json`, s], [`assets/gohans/models/block/${n}.json`, m],
-]));
 
-export const pack = {
-  read: (path) => (path in FILES ? JSON.stringify(FILES[path]) : null),
-  list: (dir) => {
-    const at = dir.endsWith("/") ? dir : `${dir}/`;
-    return Object.keys(FILES).filter((p) => p.startsWith(at)).map((p) => p.slice(at.length)).filter((p) => !p.includes("/"));
-  },
-};
+/** A block-model-renderer source serving block models from memory: { "assets/<ns>/...json": parsed JSON }. */
+export function packOf(files) {
+  return {
+    read: (path) => (path in files ? JSON.stringify(files[path]) : null),
+    list: (dir) => {
+      const at = dir.endsWith("/") ? dir : `${dir}/`;
+      return Object.keys(files).filter((p) => p.startsWith(at)).map((p) => p.slice(at.length)).filter((p) => !p.includes("/"));
+    },
+  };
+}
+
+export const props = packOf(Object.fromEntries(Object.entries(MODELS).flatMap(([n, [s, m]]) => [
+  [`assets/gohans/blockstates/${n}.json`, s], [`assets/gohans/models/block/${n}.json`, m],
+])));

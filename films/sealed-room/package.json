@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node src/vendor.mjs",
+    "postinstall": "node ../../packages/mc-assets/vendor.mjs",
     "studio": "node node_modules/live-studio/src/live.mjs 4324",
     "notes": "python node_modules/live-studio/notes_report.py",
     "note": "node node_modules/live-studio/note.mjs",
@@ -16,6 +16,7 @@
     "live-studio": "link:live-studio",
     "math": "0.1.0",
     "mc-actor": "workspace:*",
+    "mc-assets": "workspace:*",
     "minerender": "2.1.0-beta.8",
     "n8ao": "2.0.1",
     "postprocessing": "6.39.6",
