@@ -1,10 +1,10 @@
 // @ts-nocheck
 // How a loose thing (a page, a folder) moves through its story: lying somewhere, taken into a hand and held a certain way,
-// put down, thrown. src/props.ts writes each item's story as a list of states (poseIn below); this works out where the
+// put down, thrown. a film's props code writes each item's story as a list of states (poseIn below); this works out where the
 // item is at any film time from Steve's hands alone, so nothing teleports into his fingers or out of them.
 // A pose here is {p: Vector3, q: Quaternion}: the item's holder in world space.
 import * as THREE from "three";
-import { clamp01, smooth } from "mc-actor/ease";
+import { clamp01, smooth } from "./ease";
 
 const v = (x, y, z) => new THREE.Vector3(x, y, z);
 const ONE = v(1, 1, 1), UP = v(0, 1, 0);

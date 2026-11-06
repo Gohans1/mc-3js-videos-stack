@@ -1,0 +1,13 @@
+{
+  "name": "film-stage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "three.js parts of a film's stage that any film shares: the keyed camera and when a box is on screen (camera)",
+  "exports": {
+    "./camera": "./src/camera.ts"
+  },
+  "peerDependencies": {
+    "three": "0.186.1"
+  }
+}

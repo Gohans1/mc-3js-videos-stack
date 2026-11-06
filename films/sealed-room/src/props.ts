@@ -1,5 +1,5 @@
 // @ts-nocheck
-// The props that move in section 1.2, all from the film's own block models (pack/assets/gohans) and all placed from film
+// The props that move in section 1.2, all from the shared block models (mc-assets pack/assets/gohans) and all placed from film
 // time alone (src/timeline/props.json):
 //   chair [{t, dx}]          the chair slides east by dx (he pulls it out at 0:50, scoots in as he sits, skids back at 1:10)
 //   drawer [{t, open, ease}]  the filing drawer under the desk, open 0..1 of its 0.62 m run; ease "yank" for the jerk at 1:12
@@ -15,12 +15,12 @@
 //   pages [{title, lines}]   what is printed on the loose sheets (and the folders' cover labels): useless beginner stuff
 //   spill {at, sheets: [{page, land: [x, z], yaw, pick, hand, stack?}], carry}  the burst: sheets fly out of the drawer
 //                            onto the floor; one is taken by `hand` at pick, a right-hand one passes to the left at stack;
-//                            carry [[t, mode]] is how the left hand holds the gathered pages from t (modes: see src/carry.ts shapeOf)
+//                            carry [[t, mode]] is how the left hand holds the gathered pages from t (modes: see mc-actor/carry.ts shapeOf)
 //   desk {t, at, yaw}        his left hand lays the pages on the desk at t, the last gathered on top
 //   takes [{t, hand, face}]  a hand takes the top page off the desk pile at t and holds it up to read from face
 //   fling {t, lands: [[x, z], ...]}  he flings every page he holds and sweeps the desk pile off with the same stroke:
 //                            the right hand's page, the left's, then the pile from the top, each to the next land
-//   silverfish               src/silverfish.ts
+//   silverfish               mc-actor/silverfish.ts
 //   button {cell: [x, y, z], presses: [t, ...]}  the stone button by the door (the game's own, on the south wall): his
 //                            finger goes in at each t; anchor "press_R" is his fingertip on it
 //   out {t, dur, to: [x, z], yaw}  he pulls the emptied drawer right out of the cabinet and sets it on the floor
@@ -31,17 +31,17 @@
 import * as THREE from "three";
 import { createScene } from "block-model-renderer";
 import { unzipSync } from "fflate";
-import { makeCarry } from "./carry";
+import { makeCarry } from "mc-actor/carry";
 import { clamp01, smooth } from "mc-actor/ease";
-import { loadFont } from "./gamefont";
-import { printProps } from "./ink";
-import { buildScreen } from "./screen";
-import { buildSilverfish } from "./silverfish";
+import { loadFont } from "mc-assets/gamefont";
+import { printProps } from "mc-assets/ink";
+import { buildScreen } from "mc-assets/screen";
+import { buildSilverfish } from "mc-actor/silverfish";
 import { CABINET, CHAIR, DESK, DOME } from "./world";
 
 const S = 1 / 16;
 
-// The chairs to choose between (studio variant "chair"), picked from the vetted packs by pack/pick.py; the first is the
+// The chairs to choose between (studio variant "chair"), picked from the vetted packs (pack/picks.json, mc-assets/pick.py); the first is the
 // film's own. seat: the seat's top, back: the backrest's front face (model z, facing north), top: the backrest's top, all
 // in the model's 16ths. Each is scaled so its seat stands CHAIR.seat high (the mods build theirs 0.6-0.7 m tall to the
 // block grid, which would lift his thighs into the desk) and hung from its backrest's front face, so every look seats him
@@ -112,9 +112,9 @@ export async function buildProps(sources, scene, EDIT) {
 
   const sheets = Array.from({ length: 40 }, () => { const h = holder(sheetLook.clone()); h.visible = false; scene.add(h); return h; });
 
-  // the CRT's picture (src/screen.ts) and the print on the paper (src/ink.ts), both in the game's font (src/gamefont.ts)
+  // the CRT's picture (mc-assets/screen.ts) and the print on the paper (mc-assets/ink.ts), both in the game's font (mc-assets/gamefont.ts)
   const font = await loadFont();
-  const screen = buildScreen(font, P, EDIT), { glass, keystrokes } = screen;
+  const screen = buildScreen(font, { at: [DESK.x, 1, DESK.z], keys: () => P().screen, power: () => EDIT.light.screen }), { glass, keystrokes } = screen;
   // holders still sit at the origin unturned here, so their boxes are the models' own extents
   const sb = new THREE.Box3().setFromObject(sheets[0]), ss = sb.getSize(new THREE.Vector3());
   const sheetMid = new THREE.Vector3((sb.min.x + sb.max.x) / 2, sb.min.y, (sb.min.z + sb.max.z) / 2);
@@ -211,7 +211,7 @@ export async function buildProps(sources, scene, EDIT) {
   const fb = new THREE.Box3().setFromObject(folders[0]), fs = fb.getSize(new THREE.Vector3());
   const folderMid = fb.getCenter(new THREE.Vector3()), folderBase = folderMid.clone().setZ(fb.min.z);
 
-  // pages and folders in his hands, put down and thrown (src/carry.ts)
+  // pages and folders in his hands, put down and thrown (mc-actor/carry.ts)
   const carry = makeCarry({ sheetMid, sheetSize: ss, folderMid, folderSize: fs, floorY: FLOOR_Y }), { flatAt, poseIn, show } = carry;
   const inkIt = (o, page) => { const ink = o.userData.ink; if (ink && pageMats.length) ink.material = pageMats[page % pageMats.length]; };
 
@@ -329,6 +329,6 @@ export async function buildProps(sources, scene, EDIT) {
     // the chair's looks for the studio (src/variants.ts asVariant); setChair keeps chair_grip on the shown one
     chairLooks, chairBox, setChair: (id) => { const i = CHAIRS.findIndex((c) => c.id === id); if (i >= 0) chairPick = i; },
     open, chairDx,
-    objects: [[button, "stone button (minecraft:stone_button)"], [chair, "chair (pack/pick.py, choices.json)"], [tray, "filing drawer (pack/file_drawer.json)"], [dome, "CCTV dome (pack/cctv_dome.json)"], [scrap, "folded scrap (pack/paper_scrap.json)"], [glass, "CRT picture (src/screen.ts, game font)"], [silverfish.g, "silverfish (src/silverfish.ts, game model)"]],
+    objects: [[button, "stone button (minecraft:stone_button)"], [chair, "chair (pack/picks.json, mc-assets/pick.py, choices.json)"], [tray, "filing drawer (mc-assets pack/file_drawer.json)"], [dome, "CCTV dome (mc-assets pack/cctv_dome.json)"], [scrap, "folded scrap (mc-assets pack/paper_scrap.json)"], [glass, "CRT picture (mc-assets/screen.ts, game font)"], [silverfish.g, "silverfish (mc-actor/silverfish.ts, game model)"]],
   };
 }

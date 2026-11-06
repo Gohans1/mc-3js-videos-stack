@@ -1,7 +1,7 @@
 // @ts-nocheck
-// The game's own font (textures/font/ascii.png from /mcasset: 16 x 16 glyphs in 8 px cells, each glyph as wide as its own
-// pixels plus one) for everything the film prints on a canvas: the CRT's terminal (src/screen.ts) and the pages, the scrap
-// and the folder labels (src/ink.ts)
+// The game's own font (textures/font/ascii.png from the film's mcasset/ link: 16 x 16 glyphs in 8 px cells, each glyph as
+// wide as its own pixels plus one) for everything a film prints on a canvas: the computer's terminal (screen.ts), the
+// pages, the scrap and the folder labels (ink.ts)
 export async function loadFont() {
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = "mcasset/1.21.11/assets/minecraft/textures/font/ascii.png"; });
   const fc = document.createElement("canvas"); fc.width = fc.height = 128;

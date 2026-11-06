@@ -1,7 +1,7 @@
 // @ts-nocheck
-// The print on the paper (src/timeline/props.json pages and note): useless beginner pages, so what he throws away reads as
-// worthless. A page is printed in the game's font (src/gamefont.ts), ink only (transparent elsewhere), on a plane a hair
-// above the model's paper face; the folders carry the same titles on a cover label with their letters (A..Z, two a folder)
+// Print on the props' paper (sheet, paper_scrap, folder_*): text in the game's font (gamefont.ts), ink only (transparent
+// elsewhere), on a plane a hair above the model's paper face; folders carry their titles on a cover label with their
+// letters (A..Z, two a folder). What is printed comes from the film (its props.json pages and note).
 import * as THREE from "three";
 
 // Prints onto the props as they stand at the origin unturned (their boxes are the models' own extents); returns one ink

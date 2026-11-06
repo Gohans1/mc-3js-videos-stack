@@ -1,6 +1,6 @@
 // @ts-nocheck
-// The first-person camera. Keys in src/timeline/cam.json are {t, p, l, fov?, roll?, wave?, bob?, cut?}: position, look point,
-// lens and how much the head sways. Between cuts the keys are one centripetal Catmull-Rom curve, so the camera never
+// A keyed camera (a film's src/timeline/cam.json): keys {t, p, l, fov?, roll?, wave?, bob?, cut?, ease?}: position, look
+// point, lens and how much the head sways. Between cuts the keys are one centripetal Catmull-Rom curve, so the camera never
 // stops gliding; a key with cut: true starts a new curve (a hard cut). On top ride a slow wave (the "breathing" float the
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import * as THREE from "three";
@@ -81,4 +81,32 @@ export function cameraAt(t, keys) {
   l.y += wave * 0.08 * Math.sin(t * 0.71 + 1.3);
   roll += wave * 0.012 * Math.sin(t * 0.53) + step * amt * 0.06;
   return { p, l, fov, roll, speed };
+}
+
+const pt = new THREE.Vector3();
+// Frustum.intersectsBox is conservative (a box past a frame corner still passes), so a point of a 3x3x3 grid over the
+// box must be in view
+export const inView = (frustum, b) => {
+  for (let x = 0; x <= 2; x++) for (let y = 0; y <= 2; y++) for (let z = 0; z <= 2; z++) {
+    pt.set(b.min.x + ((b.max.x - b.min.x) * x) / 2, b.min.y + ((b.max.y - b.min.y) * y) / 2, b.min.z + ((b.max.z - b.min.z) * z) / 2);
+    if (frustum.containsPoint(pt)) return true;
+  }
+  return false;
+};
+
+// [[from, to], ...] film seconds when the box is on screen, the film's camera sampled every 0.1 s (the same way draw sets it)
+export function onScreenRanges(b, keys, end, aspect) {
+  const cam = new THREE.PerspectiveCamera(60, aspect, 0.02, 100), frustum = new THREE.Frustum(), m = new THREE.Matrix4();
+  const out = [];
+  let from = null;
+  for (let i = 0; i * 0.1 <= end + 1e-6; i++) {
+    const t = i * 0.1, c = cameraAt(t, keys);
+    cam.position.copy(c.p); cam.up.set(0, 1, 0); cam.lookAt(c.l); cam.rotateZ(c.roll);
+    cam.fov = c.fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+    const seen = inView(frustum.setFromProjectionMatrix(m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)), b);
+    if (seen && from === null) from = t;
+    if (!seen && from !== null) { out.push([+from.toFixed(1), +t.toFixed(1)]); from = null; }
+  }
+  if (from !== null) out.push([+from.toFixed(1), end]);
+  return out;
 }

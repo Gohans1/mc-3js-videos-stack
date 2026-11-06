@@ -10,7 +10,6 @@
 // draw(t) holds no state between frames, so the film is run through once per edit (60 samples a second, the pose's soles
 // alone, under a second for the whole film) and draw(t) reads the result: same t, same feet.
 import * as THREE from "three";
-import { bodyAt } from "./steve";
 
 const HZ = 60;
 const DOWN = 0.05, UP = 0.08; // a sole the pose holds still counts as on the floor below 5 cm, off it above 8 (no flicker)
@@ -18,7 +17,8 @@ const DRIFT = 0.16, TURN = 35; // a planted sole steps when the pose wants it 16
 const MIN_STEP = 0.2, MAX_LOOK = 0.8, SETTLE = 0.45; // seconds: shortest step; how far ahead a landing is looked for
 const SINK = 0.08; // seconds to set a sole the pose holds a little above (or in) the floor down onto it
 
-export function makeFeet(steve, endOf, clips = {}) {
+// bodyAt: the performance's (perform.ts makePerformance), so the feet follow the same body the film draws
+export function makeFeet(steve, endOf, bodyAt, clips = {}) {
   const baked = new WeakMap();
   const tmp = new THREE.Vector3(), V = new THREE.Vector3();
   const bake = (moves) => {

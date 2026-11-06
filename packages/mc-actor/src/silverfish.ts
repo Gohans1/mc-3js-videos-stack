@@ -1,9 +1,8 @@
 // @ts-nocheck
-// The silverfish that bursts out of the drawer at 1:15 (src/timeline/props.json silverfish), built box by box from the game's
+// A silverfish, built box by box from the game's
 // own model (SilverfishModel: seven body segments and three fuzz layers, 64 x 32 texture from client.jar) and wiggled the
 // way the game wiggles it (setupAnim: each segment swings and sways more the further it is from the third).
-//   silverfish {scale, path: [{t, at: [x, y, z], hop?}]}  hidden before the first key and after the last (it runs into
-//   the wall); between keys it slides, hop lifts it in an arc of that height. It faces where it is going.
+//   keys {scale, path: [{t, at: [x, y, z], hop?}]} (a film's props.json silverfish)  hidden before the first key and after the last; between keys it slides, hop lifts it in an arc of that height. It faces where it is going.
 import * as THREE from "three";
 
 const SIZES = [[3, 2, 2], [4, 3, 2], [6, 4, 3], [3, 3, 3], [2, 2, 3], [2, 1, 2], [1, 1, 2]];
