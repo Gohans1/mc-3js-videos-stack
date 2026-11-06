@@ -23,7 +23,7 @@ if (!["all", "stills", "clip"].includes(what)) { console.log("usage: node node_m
 const PROJECT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 if (!existsSync(join(PROJECT, "src/scene.ts"))) { console.error(`${PROJECT} has no src/scene.ts: run this inside a film`); process.exit(1); }
 const FPS = 30, CHUNK = 30;
-const RENDERS = join(PROJECT, "renders"), CHUNKS = join(RENDERS, "chunks"), OUT = join(PROJECT, "node_modules/.vite/live-studio-render");
+const RENDERS = join(PROJECT, "renders"), CHUNKS = join(RENDERS, "chunks"), OUT = join(PROJECT, `node_modules/.vite/live-studio-render-${process.pid}`); // per run: two renders of one film must not share a build
 const pkg = existsSync(join(PROJECT, "package.json")) ? JSON.parse(readFileSync(join(PROJECT, "package.json"), "utf8")) : {};
 const CHROME = join(PROJECT, pkg["live-studio"]?.chrome ?? "tools/chrome-headless-shell/chrome-headless-shell.exe");
 if (!existsSync(CHROME)) { console.error(`no headless Chrome at ${CHROME}: name it in package.json "live-studio": { "chrome": "..." }`); process.exit(1); }
@@ -96,6 +96,7 @@ chrome.kill();
 server.close();
 server.closeAllConnections?.();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* Chrome may still hold it for a moment */ }
+rmSync(OUT, { recursive: true, force: true });
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
 // Every chunk starts on a keyframe with the same encoder settings, so the join is a lossless stream copy
