@@ -12,7 +12,8 @@
     "./perform": "./src/perform.ts",
     "./feet": "./src/feet.ts",
     "./carry": "./src/carry.ts",
-    "./silverfish": "./src/silverfish.ts"
+    "./silverfish": "./src/silverfish.ts",
+    "./checks": "./src/checks.ts"
   },
   "peerDependencies": {
     "three": "0.186.1"

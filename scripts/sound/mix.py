@@ -83,6 +83,9 @@ def build(out, beds, sfx, voice=True, span=None):
         add(SFX / f"{b['name']}.wav", b["from"], b["gain"], 0, b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, extra=b.get("filters", []))
     for s in sfx:
         add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), 0, s.get("fadeOut", 0))
+    if not chains:  # a film with no sound yet: silence as long as the film
+        inputs.extend(["-f", "lavfi", "-t", str(END), "-i", "anullsrc=r=48000:cl=stereo"])
+        chains.append("[0:a]anull[a0]")
     graph = chains + [
         # audio.drive dB into the limiter first: hits (a slam, a drawer) stand ~20 dB over the average, too far apart for the
         # linear -14 LUFS pass below; the limiter trims them so the gap fits. Then the

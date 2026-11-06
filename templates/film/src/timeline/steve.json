@@ -1,0 +1,13 @@
+{
+  "at": [3, 0, 2],
+  "yaw": 0,
+  "moves": [
+    { "t": 0, "at": [3, 0, 2], "yaw": 0, "pose": "stand", "do": "stands" },
+    { "t": 2, "at": [3, 0, 2], "yaw": 0, "pose": "stand", "do": "stands" },
+    { "t": 4.5, "at": [3, 0, 4.5], "yaw": 0, "pose": "stand", "walk": true, "do": "walks forward" }
+  ],
+  "hands": [],
+  "look": [],
+  "face": [{ "t": 0, "mood": "neutral" }],
+  "read": []
+}

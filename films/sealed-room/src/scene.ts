@@ -15,6 +15,7 @@ import { buildWorld, BED, CABINET, LAMP, ROOM } from "./world";
 import { CHAIRS, buildProps } from "./props";
 import { bodyAt, blinkAt, moodAt, readLook, targetAt } from "./steve";
 import { makeFeet } from "mc-actor/feet";
+import { footChecks } from "mc-actor/checks";
 import { loadClips } from "mc-actor/clips";
 import { props as pack } from "mc-assets/pack";
 import { cameraAt, onScreenRanges } from "film-stage/camera";
@@ -382,33 +383,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
     materials: [], composer, renderer,
   };
-  // What `CHECK=name:args` runs (node node_modules/live-studio/render.mjs stills); each returns lines to print
-  const soles = (t) => { perform(t); return ["L", "R"].map((sd) => `${sd} ${steve.soleAt(sd).toArray().map((v) => v.toFixed(3)).join(" ")} -> ${now.feet[sd]?.toArray().map((v) => v.toFixed(3)).join(" ") ?? "pose"} ${now.feet.mode(sd)}`).join(" | "); };
-  draw.checks = {
-    // slide:from,to: every stretch where a sole flat on the stone (under 1.5 cm: a step lifts it higher) creeps over it by
-    // more than 2 cm, every sole sunk into the floor, and every planted sole the leg cannot reach. Stills cannot show any of them
-    slide: (from, to) => {
-      const out = [], q = new THREE.Vector3(), touch = {}, sunk = {}, short = {};
-      for (let t = from; t <= to; t += 1 / 60) {
-        perform(t);
-        for (const sd of ["L", "R"]) {
-          steve.soleAt(sd, q);
-          const k = touch[sd];
-          if (q.y < 0.015) {
-            if (!k) touch[sd] = { t, x: q.x, z: q.z, far: 0 };
-            else k.far = Math.max(k.far, Math.hypot(q.x - k.x, q.z - k.z));
-          } else if (k) { if (k.far > 0.02) out.push(`${k.t.toFixed(2)}-${t.toFixed(2)} ${sd} sole slides ${(k.far * 100).toFixed(0)} cm`); touch[sd] = null; }
-          const aim = now.feet[sd], miss = aim ? q.distanceTo(aim) : 0;
-          if (miss > 0.03 && !short[sd]) short[sd] = { t, miss }; else if (short[sd] && miss > 0.03) short[sd].miss = Math.max(short[sd].miss, miss);
-          else if (short[sd] && miss <= 0.03) { out.push(`${short[sd].t.toFixed(2)}-${t.toFixed(2)} ${sd} leg cannot reach its planted sole by ${(short[sd].miss * 100).toFixed(0)} cm`); short[sd] = null; }
-          if (q.y < -0.03 && !sunk[sd]) { sunk[sd] = t; } else if (q.y >= -0.03 && sunk[sd]) { out.push(`${sunk[sd].toFixed(2)}-${t.toFixed(2)} ${sd} sole under the floor`); sunk[sd] = 0; }
-        }
-      }
-      for (const sd of ["L", "R"]) if (touch[sd]?.far > 0.02) out.push(`${touch[sd].t.toFixed(2)}-end ${sd} sole slides ${(touch[sd].far * 100).toFixed(0)} cm`);
-      return out;
-    },
-    // trace:from,to,step: his soles (world x y z) and their planted targets, one line per sample
-    trace: (from, to, step) => { const out = []; for (let t = from; t <= to + 1e-6; t += step) out.push(`${t.toFixed(3)} ${soles(t)}`); return out; },
-  };
+  // What `CHECK=name:args` runs (node node_modules/live-studio/render.mjs stills): slide and trace for his feet
+  draw.checks = footChecks({ perform, steve, now });
   return draw;
 }

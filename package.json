@@ -7,6 +7,7 @@
     "films/*"
   ],
   "scripts": {
-    "link": "bun scripts/link.ts"
+    "link": "bun scripts/link.ts",
+    "new-film": "bun scripts/new_film.ts"
   }
 }
