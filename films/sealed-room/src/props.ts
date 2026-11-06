@@ -32,7 +32,7 @@ import * as THREE from "three";
 import { createScene } from "block-model-renderer";
 import { unzipSync } from "fflate";
 import { makeCarry } from "./carry";
-import { clamp01, smooth } from "./ease";
+import { clamp01, smooth } from "mc-actor/ease";
 import { loadFont } from "./gamefont";
 import { printProps } from "./ink";
 import { buildScreen } from "./screen";

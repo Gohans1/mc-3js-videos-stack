@@ -15,12 +15,12 @@ import { buildWorld, BED, CABINET, LAMP, ROOM } from "./world";
 import { CHAIRS, buildProps } from "./props";
 import { bodyAt, blinkAt, moodAt, readLook, targetAt } from "./steve";
 import { makeFeet } from "./feet";
-import { loadClips } from "./clips";
+import { loadClips } from "mc-actor/clips";
 import { pack } from "./pack";
 import { cameraAt } from "./camera";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants, VARIANTS } from "./variants";
-import { GESTURES, PX, addPose, blendPose, loadRig, makePlayer, mouthAt } from "./player";
+import { GESTURES, PX, addPose, blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks

@@ -6,7 +6,7 @@
 // (the arms keep the pose's own) and props (each anchor is a fixed point where that prop is). IDLE below is made from
 // the film's poses but is not a scene of it.
 import * as THREE from "three";
-import { MOODS, PX, addPose, arm, leg } from "./player";
+import { MOODS, PX, addPose, arm, leg } from "mc-actor/player";
 
 export const POSES = {
   stand: (s) => addPose(arm("L", 0, 5 + 1.2 * Math.sin(s * 1.3), 0, 6), arm("R", 0, 5 + 1.2 * Math.sin(s * 1.3 + 1), 0, 6), { chest: [-1.5 * Math.sin(s * 1.7), 0, 0] }),

@@ -21,11 +21,11 @@
 // URL: ?scene=dig|idle|walk|reach|scare|wake|mocap|life|mc|lifeMocap  ?t=<seconds> stops there  ?view=both|side|face|faceOld  ?off=<layer>,...
 //      ?mood=tense|tired (Laban Effort on the layered Steve)
 import * as THREE from "three";
-import { addPose as addRigPose, blendPose, loadRig, makePlayer, MOODS, mouthAt, PX, walkPose } from "./film/player";
+import { addPose as addRigPose, blendPose, loadRig, makePlayer, MOODS, mouthAt, PX, walkPose } from "mc-actor/player";
 import { blinkAt, DIG, FACES, IDLE, moodAt, POSES } from "./film/dig";
 import { CLIP_A, CLIP_B, CLIP_C, mocapScene, REACH, SCARE, WAKE, WALK } from "./film/extra";
-import { loadClips } from "./film/clips";
-import { slerpPose } from "./film/mocap";
+import { loadClips } from "mc-actor/clips";
+import { slerpPose } from "mc-actor/mocap";
 import { through } from "../src/curve";
 import { canonical, mask, scalePose, throughPose } from "../src/pose";
 import { overlap } from "../src/overlap";

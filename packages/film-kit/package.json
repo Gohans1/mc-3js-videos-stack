@@ -54,6 +54,7 @@
   "devDependencies": {
     "@types/three": "^0.187.0",
     "fflate": "^0.8.3",
+    "mc-actor": "workspace:*",
     "three": "0.186.1",
     "vite": "^8.3.6"
   }

@@ -8,7 +8,7 @@
 import * as THREE from "three";
 import { EDIT } from "../src/edit";
 import { buildScene } from "../src/scene";
-import { loadSource } from "../src/clips";
+import { loadSource } from "mc-actor/clips";
 import { canvas, config, done, log, still } from "live-studio/lab";
 
 (async () => {

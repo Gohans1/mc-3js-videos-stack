@@ -4,7 +4,7 @@
 // item is at any film time from Steve's hands alone, so nothing teleports into his fingers or out of them.
 // A pose here is {p: Vector3, q: Quaternion}: the item's holder in world space.
 import * as THREE from "three";
-import { clamp01, smooth } from "./ease";
+import { clamp01, smooth } from "mc-actor/ease";
 
 const v = (x, y, z) => new THREE.Vector3(x, y, z);
 const ONE = v(1, 1, 1), UP = v(0, 1, 0);

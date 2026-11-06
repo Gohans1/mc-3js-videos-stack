@@ -309,6 +309,7 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   };
   // The joint's parent turn now, relative to its rest, as a world rotation (includes the character's yaw and lean)
   const Q = new THREE.Quaternion(), Qi = new THREE.Quaternion(), S = new THREE.Vector3(), d = new THREE.Vector3();
+  const pole = new THREE.Vector3(), tx = new THREE.Vector3(), ty = new THREE.Vector3(), tz = new THREE.Vector3(), M = new THREE.Matrix4(), e2 = new THREE.Euler();
   const parentTurn = (k) => b[k].parent.getWorldQuaternion(Q).multiply(parentRest[k]);
   // Call after setPose with everything but this arm, then g.updateMatrixWorld(true). Returns the arm's joints (degrees) that
   // put the end of the hand on the world point: the elbow folds forward (it points back), the upper arm takes the rest
@@ -354,19 +355,34 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     PE.setFromQuaternion(PQ, "YXZ");
     return { [`ua${sd}`]: [PE.x / D, PE.y / D, PE.z / D], [`la${sd}`]: [-e / D, 0, 0] };
   };
-  // armTo for a leg: the knee folds back (the shin behind the thigh's line), the thigh takes the rest. A target past the
-  // leg's reach leaves it straight towards it
+  // Call after setPose with the pose to keep, then g.updateMatrixWorld(true). Returns the leg's joints (degrees) that put
+  // the sole on the world point, the knee pointing where the pose's knee points (the pole of two-bone IK in game engines),
+  // so a kneel, a crossed leg or a turned-out knee keeps its plane. A target past the leg's reach leaves it straight towards it.
+  // Apply it at full weight: its angles are read off a turn, and an angle-by-angle blend of them can flip a thigh near 90
   const legTo = (sd, target) => {
-    const { L1, L2 } = LEGS[sd];
-    b[`ul${sd}`].getWorldPosition(S);
-    d.copy(target).sub(S).applyQuaternion(Qi.copy(parentTurn(`ul${sd}`)).invert());
+    const { L1, L2 } = LEGS[sd], k = `ul${sd}`;
+    b[k].getWorldPosition(S);
+    Qi.copy(parentTurn(k)).invert();
+    d.copy(target).sub(S).applyQuaternion(Qi);
+    // the knee's hinge axis in the pose (its thigh turn in the character's axes, setPose: world = parentTurn * R * C), swung
+    // with the leg from the pose's own hip-to-sole line onto the line to the target: the knee front is that line x the axis
+    R.copy(Qi).multiply(b[k].getWorldQuaternion(Q)).multiply(rest[k].Ci);
+    tx.set(1, 0, 0).applyQuaternion(R);
+    soleAt(sd, ty).sub(S).applyQuaternion(Qi).normalize();
+    tx.applyQuaternion(R.setFromUnitVectors(ty, tz.copy(d).normalize()));
     const n = THREE.MathUtils.clamp(d.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
     d.normalize();
     const e = Math.PI - Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
-    const wy = -(L1 + L2 * Math.cos(e)) / n, wz = -(L2 * Math.sin(e)) / n;
-    const g = Math.asin(THREE.MathUtils.clamp(d.x / -wy, -1, 1));
-    const a = THREE.MathUtils.euclideanModulo(Math.atan2(d.z, d.y) - Math.atan2(wz, wy * Math.cos(g)) + Math.PI, 2 * Math.PI) - Math.PI;
-    return { [`ul${sd}`]: [a / D, 0, g / D], [`ll${sd}`]: [e / D, 0, 0] };
+    const al = Math.acos(THREE.MathUtils.clamp((L1 * L1 + n * n - L2 * L2) / (2 * L1 * n), -1, 1)); // thigh off the hip-sole line
+    pole.crossVectors(d, tx);
+    if (pole.lengthSq() < 1e-6) pole.set(0, 0, 1).addScaledVector(d, -d.z); // the axis points at the sole: knee forward
+    pole.normalize();
+    // the thigh's axes: down the thigh is -y, the knee's front +z (the shin folds back from it about x, as ll's turn does)
+    ty.copy(d).multiplyScalar(-Math.cos(al)).addScaledVector(pole, -Math.sin(al));
+    tz.copy(pole).multiplyScalar(Math.cos(al)).addScaledVector(d, -Math.sin(al));
+    tx.crossVectors(ty, tz);
+    e2.setFromRotationMatrix(M.makeBasis(tx, ty, tz), "YXZ");
+    return { [k]: [e2.x / D, e2.y / D, e2.z / D], [`ll${sd}`]: [e / D, 0, 0] };
   };
   const soleAt = (sd, out = new THREE.Vector3()) => b[`ll${sd}`].localToWorld(out.copy(LEGS[sd].sole));
   // Head angles [down, to his left, 0] that turn the face to a world point, held inside a natural neck range

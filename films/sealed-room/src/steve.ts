@@ -19,10 +19,10 @@
 //   read [[from, to]]  eyes run along lines of text: left to right, a quick sweep back, next line.
 // Every key holds until the next. Same t, same frame: nothing here remembers a previous frame.
 import * as THREE from "three";
-import { clamp01, smooth } from "./ease";
-import { GESTURES, MOODS, PX, addPose, arm, gaitOf, leg, walkPose } from "./player";
+import { clamp01, smooth } from "mc-actor/ease";
+import { GESTURES, MOODS, PX, addPose, arm, gaitOf, leg, walkPose } from "mc-actor/player";
 import { CHAIR } from "./world";
-import { slerpPose } from "./mocap";
+import { slerpPose } from "mc-actor/mocap";
 
 const D = Math.PI / 180;
 

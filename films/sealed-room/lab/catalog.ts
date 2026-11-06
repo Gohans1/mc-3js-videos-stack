@@ -12,9 +12,9 @@
 import * as THREE from "three";
 import { unzipSync } from "fflate";
 import { config, done, log } from "live-studio/lab";
-import { loadRig, makePlayer } from "../src/player";
-import { clipNames, loadClip } from "../src/clips";
-import { bodyBoxes } from "../src/mocap";
+import { loadRig, makePlayer } from "mc-actor/player";
+import { clipNames, loadClip } from "mc-actor/clips";
+import { bodyBoxes } from "mc-actor/mocap";
 
 const D = 180 / Math.PI, FPS = 30, RUN = 0.3;
 

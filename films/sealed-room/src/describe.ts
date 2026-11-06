@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { cameraAt } from "./camera";
 import { BED, CABINET, CHAIR, DESK, DOOR, DOME, LAMP } from "./world";
 import { FACES } from "./steve";
-import { MOODS } from "./player";
+import { MOODS } from "mc-actor/player";
 
 const FRESH = 1;
 const deg = THREE.MathUtils.radToDeg;

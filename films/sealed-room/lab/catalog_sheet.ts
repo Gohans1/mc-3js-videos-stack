@@ -8,8 +8,8 @@
 import * as THREE from "three";
 import { unzipSync } from "fflate";
 import { canvas, config, done, log, still } from "live-studio/lab";
-import { loadRig, makePlayer } from "../src/player";
-import { loadClip } from "../src/clips";
+import { loadRig, makePlayer } from "mc-actor/player";
+import { loadClip } from "mc-actor/clips";
 
 (async () => {
   const cfg = await config();
