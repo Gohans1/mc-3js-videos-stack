@@ -1,8 +1,8 @@
 """CC0 sound effects from Freesound without an API key (its public search page and preview CDN), adapted from the
 Minecraft worktree's get_sfx.py. Each sound is a Freesound id picked from `find` (most downloaded CC0 first) and
 pinned in SFX; title, author and link are kept in sound/sfx/SOURCES.json.
-  python sound/get_sfx.py                 fetch every missing sound in SFX
-  python sound/get_sfx.py find "cat meow" [max seconds]
+  python ../../scripts/sound/get_sfx.py                 fetch every missing sound in SFX
+  python ../../scripts/sound/get_sfx.py find "cat meow" [max seconds]
 A sound is used only if its own page still says Creative Commons 0. Already fetched sounds are skipped."""
 import html
 import json
@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path.cwd() / "sound"  # run from the film folder: its sound/sfx
 OUT = ROOT / "sfx"
 RAW = OUT / "raw"
 SOURCES = OUT / "SOURCES.json"

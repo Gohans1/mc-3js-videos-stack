@@ -10,7 +10,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-MC = Path(__file__).parent / "assets/public/mc"
+MC = Path.cwd() / "assets/public/mc"  # run from the film folder
 JAR, OUT = MC / "client.jar", MC / "client_assets.zip"
 
 if OUT.exists() and OUT.stat().st_mtime >= JAR.stat().st_mtime and "--force" not in sys.argv:

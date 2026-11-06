@@ -1,11 +1,11 @@
 """Lays the narration takes on the film's clock: each take's first word lands on its `t` in src/edit.json, and
 voice.lines becomes the spoken span of each take. Writes assets/public/agent/full_voice.wav (what the studio plays and
-sound.py mixes). Run after voice/words.py:  python voice/assemble.py"""
+sound.py mixes). Run after voice/words.py:  python ../../scripts/voice/assemble.py"""
 import json
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path.cwd()  # the film's folder: run from films/<name>/ (python ../../scripts/...)
 EDIT = ROOT / "src/edit.json"
 E = json.loads(EDIT.read_text(encoding="utf8"))
 OUT = ROOT / "assets/public/agent/full_voice.wav"
