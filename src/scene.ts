@@ -372,12 +372,13 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf,
     objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
     materials: [], composer, renderer,
-    // slide meter (SLIDE=from,to node src/render.mjs stills): every stretch where a sole flat on the stone (under 1.5 cm: a
-    // step lifts it higher) creeps over it by more than 2 cm, every sole sunk into the floor, and every planted sole the leg cannot reach. Stills
-    // cannot show any of them
-    // TRACE=from,to,step: his soles (world x y z) and their planted targets, one line per sample
-    soles: (t) => { perform(t); return ["L", "R"].map((sd) => `${sd} ${steve.soleAt(sd).toArray().map((v) => v.toFixed(3)).join(" ")} -> ${now.feet[sd]?.toArray().map((v) => v.toFixed(3)).join(" ") ?? "pose"} ${now.feet.mode(sd)}`).join(" | "); },
-    feetCheck: (from, to) => {
+  };
+  // What `CHECK=name:args` runs (node node_modules/live-studio/render.mjs stills); each returns lines to print
+  const soles = (t) => { perform(t); return ["L", "R"].map((sd) => `${sd} ${steve.soleAt(sd).toArray().map((v) => v.toFixed(3)).join(" ")} -> ${now.feet[sd]?.toArray().map((v) => v.toFixed(3)).join(" ") ?? "pose"} ${now.feet.mode(sd)}`).join(" | "); };
+  draw.checks = {
+    // slide:from,to: every stretch where a sole flat on the stone (under 1.5 cm: a step lifts it higher) creeps over it by
+    // more than 2 cm, every sole sunk into the floor, and every planted sole the leg cannot reach. Stills cannot show any of them
+    slide: (from, to) => {
       const out = [], q = new THREE.Vector3(), touch = {}, sunk = {}, short = {};
       for (let t = from; t <= to; t += 1 / 60) {
         perform(t);
@@ -397,6 +398,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
       for (const sd of ["L", "R"]) if (touch[sd]?.far > 0.02) out.push(`${touch[sd].t.toFixed(2)}-end ${sd} sole slides ${(touch[sd].far * 100).toFixed(0)} cm`);
       return out;
     },
+    // trace:from,to,step: his soles (world x y z) and their planted targets, one line per sample
+    trace: (from, to, step) => { const out = []; for (let t = from; t <= to + 1e-6; t += step) out.push(`${t.toFixed(3)} ${soles(t)}`); return out; },
   };
   return draw;
 }

@@ -1,8 +1,9 @@
 // @ts-nocheck
 // Lab: one build of the film, then free-camera stills of props from fixed spots (renders/prop_N.jpg), for judging a
-// new block model up close without touching the film's cameras. VIEW=desk picks a set; AT is the film second drawn.
-// ENTRY=lab/prop.ts AT=72.6 VIEW=desk node src/render.mjs stills  (LOOKS=chair: each chair look from those spots)
+// new block model up close without touching the film's cameras. LAB_VIEW=desk picks a set; AT is the film second drawn.
+// ENTRY=lab/prop.ts AT=72.6 LAB_VIEW=desk bun run render stills  (LAB_LOOKS=chair: each chair look from those spots)
 import { buildScene } from "../src/scene";
+import { canvas, config, done, still } from "live-studio/lab";
 
 const SETS = {
   room: [
@@ -55,13 +56,10 @@ const SETS = {
   ],
   dome: [{ p: [6.0, 3.8, 3.0], l: [8.7, 5.8, 0.3], fov: 35 }],
 };
-const post = (url, body) => fetch(url, { method: "POST", body });
-window.onerror = (m) => { post("/log", "ERROR " + m); };
-window.onunhandledrejection = (e) => { post("/log", "ERROR " + (e.reason?.stack ?? e.reason)); };
 (async () => {
-  const cfg = await (await fetch("/config")).json();
-  const VIEWS = SETS[cfg.view ?? "room"] ?? SETS.room;
-  const c = document.getElementById("gl");
+  const cfg = await config();
+  const VIEWS = SETS[cfg.lab.view ?? "room"] ?? SETS.room;
+  const c = canvas();
   const draw = await buildScene(c, cfg.W, cfg.H, false);
   const { free } = draw.tools;
   free.on = true;
@@ -69,16 +67,16 @@ window.onunhandledrejection = (e) => { post("/log", "ERROR " + (e.reason?.stack 
   const shoot = async (name, v) => {
     free.p.set(...v.p); free.l.set(...v.l); free.fov = v.fov;
     draw(at);
-    await post(`/still/${name}.jpg`, await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92)));
+    await still(`${name}.jpg`, c);
   };
-  // LOOKS=chair: every look of that variant from every spot of the set (prop_<look>_<spot>.jpg)
-  const only = (draw.variants ?? []).find((x) => x.id === cfg.looks);
+  // LAB_LOOKS=chair: every look of that variant from every spot of the set (prop_<look>_<spot>.jpg)
+  const only = (draw.variants ?? []).find((x) => x.id === cfg.lab.looks);
   if (only) for (const o of only.options) { only.set(o.id); for (const [i, v] of VIEWS.entries()) await shoot(`prop_${o.id.replace(":", "_")}_${i}`, v); }
   else for (const [i, v] of VIEWS.entries()) await shoot(`prop_${i}`, v);
   // every look of every prop with options (src/variants.ts), from the first two spots
-  if (!cfg.view) for (const variant of draw.variants ?? []) {
+  if (!cfg.lab.view) for (const variant of draw.variants ?? []) {
     for (const o of variant.options) { variant.set(o.id); for (const i of [0, 1]) await shoot(`prop_${variant.id}_${o.id}_${i}`, VIEWS[Math.min(i, VIEWS.length - 1)]); }
     variant.set(variant.options[0].id);
   }
-  await post("/done", "");
+  await done();
 })();

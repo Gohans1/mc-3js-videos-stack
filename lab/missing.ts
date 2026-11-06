@@ -1,15 +1,13 @@
 // @ts-nocheck
 // Lab: lists every mesh whose texture is block-model-renderer's magenta/black "missing" checker, by object, so a prop
-// with a wrong texture or model name is caught before a still shows it. ENTRY=lab/missing.ts AT=1 node src/render.mjs stills
+// with a wrong texture or model name is caught before a still shows it. ENTRY=lab/missing.ts AT=1 bun run render stills
 import * as THREE from "three";
 import { buildScene } from "../src/scene";
+import { canvas, config, done, log } from "live-studio/lab";
 
-const post = (url, body) => fetch(url, { method: "POST", body });
-window.onerror = (m) => { post("/log", "ERROR " + m); };
-window.onunhandledrejection = (e) => { post("/log", "ERROR " + (e.reason?.stack ?? e.reason)); };
 (async () => {
-  const cfg = await (await fetch("/config")).json();
-  const draw = await buildScene(document.getElementById("gl"), cfg.W, cfg.H, true);
+  const cfg = await config();
+  const draw = await buildScene(canvas(), cfg.W, cfg.H, true);
   draw(80);
   const c = document.createElement("canvas"), x = c.getContext("2d", { willReadFrequently: true });
   const bad = new Map();
@@ -33,6 +31,6 @@ window.onunhandledrejection = (e) => { post("/log", "ERROR " + (e.reason?.stack 
       }
     }
   });
-  await post("/log", bad.size ? [...bad.keys()].join("\n") : "no missing textures");
-  await post("/done", "");
+  await log(bad.size ? [...bad.keys()].join("\n") : "no missing textures");
+  await done();
 })();

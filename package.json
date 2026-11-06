@@ -4,15 +4,13 @@
   "scripts": {
     "postinstall": "node src/vendor.mjs",
     "studio": "node src/live.mjs",
-    "render": "node src/render.mjs"
+    "render": "node node_modules/live-studio/render.mjs"
   },
   "dependencies": {
     "block-model-renderer": "2.20.0",
-    "esbuild": "0.28.1",
     "fflate": "0.8.3",
     "live-studio": "link:live-studio",
     "math": "0.1.0",
-    "mediabunny": "1.65.1",
     "minerender": "2.1.0-beta.8",
     "n8ao": "2.0.1",
     "postprocessing": "6.39.6",
