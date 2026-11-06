@@ -3,7 +3,9 @@
   "type": "module",
   "scripts": {
     "postinstall": "node src/vendor.mjs",
-    "studio": "node src/live.mjs",
+    "studio": "node node_modules/live-studio/src/live.mjs 4324",
+    "notes": "python node_modules/live-studio/notes_report.py",
+    "note": "node node_modules/live-studio/note.mjs",
     "render": "node node_modules/live-studio/render.mjs"
   },
   "dependencies": {
