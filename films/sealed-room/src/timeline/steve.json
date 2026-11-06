@@ -102,7 +102,14 @@
   {"t": 90.75, "at": [1.88, 0, 9.55], "yaw": -90, "pose": "digReach", "do": "bends in for folder 5"},
   {"t": 91.17, "at": [1.88, 0, 9.55], "yaw": -90, "pose": "digRead", "do": "up on his knees to read it"},
   {"t": 91.46, "at": [1.88, 0, 9.55], "yaw": -90, "pose": "tossL", "do": "throws it aside"},
-  {"t": 91.56, "at": [1.88, 0, 9.55], "yaw": -90, "pose": "frenzy", "do": "tears through the rest with both hands, no longer reading"},
+  {
+   "t": 91.85,
+   "at": [1.8, 0, 9.55],
+   "yaw": -90,
+   "do": "tears through the rest with both hands, no longer reading (Mixamo: Looking Through A File Cabinet Low)",
+   "clip": "mixamo/Male_Looking_Through_A_File_Cabinet_Low_c9ca04b6",
+   "from": 3.6
+  },
   {"t": 94.12, "at": [1.81, 0, 9.5], "yaw": -90, "pose": "pull", "do": "takes hold of the emptied drawer"},
   {"t": 94.92, "at": [1.81, 0, 9.5], "yaw": -90, "pose": "hold", "do": "pulls it right out and sets it down"},
   {"t": 95.42, "at": [1.81, 0, 9.5], "yaw": -90, "pose": "hold", "do": "stares at the empty slot"},
