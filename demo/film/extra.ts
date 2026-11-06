@@ -17,7 +17,9 @@
 //     the idle clip something moves to his left (a glance over the clip), then the bang and a freeze; the button clip's
 //     reach is found in the clip's own hand path and the eyes go to the button first (eyes only: the clip's head does
 //     its own). The hand-keyed Steve just stands through the button clip. The press is unsure: the clip's reach is
-//     stretched (hesitate.ts) and his hands shake from the bang on (tremor over the clips).
+//     stretched (hesitate.ts) and his hands shake from the bang on (tremor over the clips). His eyes scan the place
+//     at the start and again once the freeze lets go (explore: eyes only, so on over the clips too).
+//   WAKE: see below. SCARE also looks around at the start and when the freeze ends.
 import { stretch } from "../../src/hesitate";
 
 const AT = [1.88, 0, 9.55];
@@ -76,7 +78,18 @@ export const SCARE = {
   sights: [{ t: 13.2, at: DESK }, { t: 15.4, at: DESK }],
   // the head follows the silverfish a quarter second behind (the eyes lead it), fading in as it starts and out after
   target: (t) => (t < 1.4 || t > 6.2 ? null : { at: bugAt(t - 0.25), w: ease((t - 1.4) / 0.4) * (1 - ease((t - 5.8) / 0.4)) }),
-  shifts: [1.4],
+  shifts: [1.4], explore: [0, 10.5],
+};
+
+// he stands dozing, eyes shut; they open slowly and heavy, sink shut again for a moment, open again and stay heavy
+// (drowsy blinks, low lids) while his eyes scan the place (explore); a bang wakes him fully (surprise comes on fast, then fear), he sinks into sadness (slow onset)
+// and calms (slow offset); then he looks around again (a new event: explore)
+const WAKE_BANG = { t: 11, k: 0.8, at: DOOR };
+export const WAKE = {
+  name: "wake", from: 0, to: 22, blinksFrom: 0, moves: [ST(0, "stand"), ST(22, "stand")],
+  look: [{ t: 0, at: null }, ...orientKeys(WAKE_BANG, DOOR)], bangs: [WAKE_BANG],
+  asleep: [[0, 2], [3.6, 4.5]], drowsy: [{ t: 0, k: 1 }, { t: 2, k: 1 }, { t: 10.9, k: 0.5 }, { t: 11.3, k: 0 }], explore: [2.1, 17.5],
+  face: [{ t: 0, mood: "neutral" }, { t: 11.05, mood: "surprised" }, { t: 11.7, mood: "scared" }, { t: 14.3, mood: "sad" }, { t: 18, mood: "neutral" }],
 };
 
 export const CLIP_A = "mixamo/Being_Surprised_And_Looking_Right_c9c8214a", CLIP_B = "mixamo/Breathing_Idle_c9c6d0d5", CLIP_C = "mixamo/Pushing_A_Button_With_The_Right_Hand_c9c8f267";
@@ -90,7 +103,7 @@ export const mocapScene = (dur) => {
   // a bang behind him in the middle of the breathing clip: the clip can't know about it, the startle layer adds the flinch
   const bang = { t: b0 + 2.5, k: 0.8, at: DOOR };
   return {
-    bangs: [bang], freeze: [{ t: bang.t + 0.3, until: b1 }], stretch: st, tremble: [{ t: bang.t + 0.3, until: c1 + x, k: 0.7 }], sights: [{ t: b0 + 0.8, at: [AT[0] - 1.2, 1.1, AT[2] + 1.6] }],
+    bangs: [bang], explore: [0, b1 + 0.6], freeze: [{ t: bang.t + 0.3, until: b1 }], stretch: st, tremble: [{ t: bang.t + 0.3, until: c1 + x, k: 0.7 }], sights: [{ t: b0 + 0.8, at: [AT[0] - 1.2, 1.1, AT[2] + 1.6] }],
     name: "mocap", from: 0, to: end + x, blinksFrom: 0,
     // a clip key plays from its time; the same clip keyed again where it ends (from: that far in) holds it whole, then
     // the next key blends out of it, as in the film's steve.ts

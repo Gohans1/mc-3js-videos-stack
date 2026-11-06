@@ -33,7 +33,10 @@
     "./notice": "./src/notice.ts",
     "./reach": "./src/reach.ts",
     "./hesitate": "./src/hesitate.ts",
-    "./tremor": "./src/tremor.ts"
+    "./tremor": "./src/tremor.ts",
+    "./explore": "./src/explore.ts",
+    "./drowsy": "./src/drowsy.ts",
+    "./express": "./src/express.ts"
   },
   "scripts": {
     "test": "bun test",

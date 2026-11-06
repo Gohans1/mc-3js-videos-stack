@@ -64,7 +64,7 @@ export const IDLE = {
   face: [{ t: 0, mood: "neutral" }, { t: 5.15, mood: "surprised" }, { t: 6.6, mood: "uneasy" }, { t: 9, mood: "restless" }, { t: 11.5, mood: "seething" }, { t: 14, mood: "annoyed" }],
 };
 
-const FACES = {
+export const FACES = {
   uneasy: { y: 0.15, tilt: 14, open: 0.9, squint: 0, pupil: 0.95, smile: -0.25 },
   annoyed: { y: 0, tilt: -6, open: 0.85, squint: 0.15, pupil: 1, smile: -0.3 },
   restless: { y: 0, tilt: -10, open: 0.9, squint: 0.25, pupil: 1, smile: -0.55 },

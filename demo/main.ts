@@ -13,12 +13,14 @@
 // Round 3: blinks that follow what he is doing (fewer while his eyes are busy, at the breaks after), eyes on what his
 // hand goes for before it moves (handeye: found in the hand's own path, keys or clip; over a clip the eyes only),
 // freezing in fear after a bang, and a glance at something that moves at the edge of his view (notice).
-// URL: ?scene=dig|idle|walk|reach|scare|mocap  ?t=<seconds> stops there  ?view=both|side|face|faceOld  ?off=<layer>,...
+// Round 5: quick wide looks around after a scene or event starts (explore), sleepy eyes while he wakes (drowsy: wake
+// scene), and a face that changes at each emotion's own pace (express).
+// URL: ?scene=dig|idle|walk|reach|scare|wake|mocap  ?t=<seconds> stops there  ?view=both|side|face|faceOld  ?off=<layer>,...
 //      ?mood=tense|tired (Laban Effort on the layered Steve)
 import * as THREE from "three";
-import { addPose as addRigPose, blendPose, loadRig, makePlayer, mouthAt, PX, walkPose } from "./film/player";
-import { blinkAt, DIG, IDLE, moodAt, POSES } from "./film/dig";
-import { CLIP_A, CLIP_B, CLIP_C, mocapScene, REACH, SCARE, WALK } from "./film/extra";
+import { addPose as addRigPose, blendPose, loadRig, makePlayer, MOODS, mouthAt, PX, walkPose } from "./film/player";
+import { blinkAt, DIG, FACES, IDLE, moodAt, POSES } from "./film/dig";
+import { CLIP_A, CLIP_B, CLIP_C, mocapScene, REACH, SCARE, WAKE, WALK } from "./film/extra";
 import { loadClips } from "./film/clips";
 import { slerpPose } from "./film/mocap";
 import { through } from "../src/curve";
@@ -43,13 +45,16 @@ import { notice } from "../src/notice";
 import { fitts, reachK } from "../src/reach";
 import { hesitation } from "../src/hesitate";
 import { tremor } from "../src/tremor";
+import { explore } from "../src/explore";
+import { DROWSY, drowsiness } from "../src/drowsy";
+import { changeTime, express, KIND } from "../src/express";
 
 const q = new URLSearchParams(location.search);
-const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "startle", "gasp", "pursuit", "think", "steer", "balance", "blinks", "handeye", "freeze", "notice", "reach", "hesitate", "tremor", "mask"];
+const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "startle", "gasp", "pursuit", "think", "steer", "balance", "blinks", "handeye", "freeze", "notice", "reach", "hesitate", "tremor", "explore", "drowsy", "express", "mask"];
 const on = Object.fromEntries(LAYERS.map((k) => [k, !(q.get("off") ?? "").split(",").includes(k)]));
 const MOODNAME = MOOD[q.get("mood")] ? q.get("mood") : "calm";
 const FX = effort(MOOD[MOODNAME]);
-const SCENES = { dig: DIG, idle: IDLE, walk: WALK, reach: REACH, scare: SCARE };
+const SCENES = { dig: DIG, idle: IDLE, walk: WALK, reach: REACH, scare: SCARE, wake: WAKE };
 const D = Math.PI / 180;
 
 const smooth = (x) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
@@ -255,11 +260,16 @@ function actor({ moves, look, layered, dz, masked }) {
   const pursuit = on.pursuit ? SC.pursuit ?? [] : [];
   const busy = (t) => pursuit.some(([a, b]) => t >= a && t <= b) || still(t) > 0.5 || R.some((r) => t >= r.start - HANDEYE.lead && t <= r.arrive);
   const breaks = [...shifts, ...handShifts, ...pursuit.map(([, b]) => b), ...(SC.freeze ?? []).map((f) => f.until + 0.5), ...life.stops.map((s) => s.t), ...R.map((r) => r.arrive), ...glance.events.filter((g) => g.looks).map((g) => g.off)];
-  const lids = blinks(END, { rate: (t) => (busy(t) ? BLINKS.rate.focus : BLINKS.rate.rest), breaks });
+  // sleepy blinks and lids while he wakes; quick wide looks around just after a scene or event starts
+  const sleepy = drowsiness(on.drowsy ? SC.drowsy ?? [] : []);
+  const lids = blinks(END, { rate: (t) => (busy(t) ? BLINKS.rate.focus : BLINKS.rate.rest), breaks, drowsy: sleepy, asleep: on.drowsy ? SC.asleep ?? [] : [] });
+  const amb = explore(on.explore ? SC.explore ?? [] : []);
   const filmBlinks = (t) => [...Array(16)].some((_, i) => blinkAt(t - i / 30, SC.blinksFrom) > 0);
-  const eyesAt = gaze([...shifts, ...handShifts, ...glance.shifts, ...(SC.shifts ?? [])], END, { mean: FX.gaze.mean, wander: FX.gaze.wander, blinkedNear: on.blinks ? (t) => lids.near(t) : filmBlinks, pursuit, think: thinking, freeze: still });
+  const eyesAt = gaze([...shifts, ...handShifts, ...glance.shifts, ...(SC.shifts ?? [])], END, { mean: (t) => FX.gaze.mean * amb.mean(t), wander: (t) => FX.gaze.wander * amb.wander(t), slow: (t) => 1 + DROWSY.slow * sleepy(t), blinkedNear: on.blinks ? (t) => lids.near(t) : filmBlinks, pursuit, think: thinking, freeze: still });
   const nextKey = (x) => [...keyed, ...HK].map((k) => k.t).filter((k) => k > x).sort((a, b) => a - b)[0];
-  return Object.assign(A, { w, lagOf, toon, life, tilt, jolt, bal, chain, trunkPose, steadyHead, drift, eyesAt, nextKey, still, lids, glance, reaches: R, busy, handPath, fear, shake, clock });
+  // the face changes at each emotion's own pace (surprise fast, sadness slow, leaving slower than coming)
+  const faceAt = on.express ? express(SC.face, { ...MOODS, ...FACES }) : (t) => moodAt(SC.face, t);
+  return Object.assign(A, { w, lagOf, toon, life, tilt, jolt, bal, chain, trunkPose, steadyHead, drift, eyesAt, nextKey, still, lids, glance, reaches: R, busy, handPath, fear, shake, clock, sleepy, amb, faceAt });
 }
 
 const Q = new THREE.Quaternion(), E = new THREE.Vector3(), V = new THREE.Vector3(), M4 = new THREE.Matrix4();
@@ -344,6 +354,12 @@ const gazeTo = (c, p) => {
   c.s.bones.head.getWorldPosition(E).add(V.set(0, 4 * PX, 4 * PX).applyQuaternion(Q));
   return anglesOf(V.copy(p).sub(E).applyQuaternion(Q.invert()).toArray());
 };
+// the same from his body's front at time f, head straight, eyes at standing height: steady while the head turns
+const EYE_Y = 1.62;
+const bodyTo = (c, p, f) => {
+  const P = placeOf(f), e = new THREE.Vector3(P.x, EYE_Y, P.z).add(offsetOf(c.dz));
+  return anglesOf(new THREE.Vector3().copy(p).sub(e).applyAxisAngle(new THREE.Vector3(0, 1, 0), -P.yaw * D).toArray());
+};
 const soles = { L: new THREE.Vector3(), R: new THREE.Vector3() };
 const perform = (c, t) => {
   const A = c.act;
@@ -398,9 +414,10 @@ const perform = (c, t) => {
   let eyes = [0, -0.15], extra = 0, lid = 0;
   if (A.layered && on.gaze) {
     // a pursuit reads the silverfish where it is at f; a thinking look-away is added in full, wander near a target a third
-    const g = A.eyesAt(t, (f, o, mode) => {
+    const g = A.eyesAt(t, (f, o, mode, body) => {
       const L = mode === "pursue" && SC.bug ? { p: new THREE.Vector3(...SC.bug(f)), w: 1 } : A.lookAt(eyeTime(f, A.nextKey));
-      const a = L && L.w > 0.5 && gazeTo(c, (L.eye ?? L.p).clone().add(shift)), s = mode === "avert" ? 1 : 1 / 3;
+      const p = L && L.w > 0.5 && (L.eye ?? L.p).clone().add(shift);
+      const a = p && (body ? bodyTo(c, p, f) : gazeTo(c, p)), s = mode === "avert" ? 1 : 1 / 3;
       return a ? [a[0] + o[0] * s, a[1] + o[1] * s] : [o[0], REST_PITCH + o[1]];
     });
     eyes = g.look;
@@ -415,8 +432,8 @@ const perform = (c, t) => {
   if (c.sight.visible) c.sight.position.fromArray((SC.sights ?? []).find((g) => t >= g.t && t < g.t + 0.5).at).add(shift);
   if (c.bug) { c.bug.visible = !!SC.bug && t > 1 && t < 6.5; if (SC.bug) c.bug.position.fromArray(SC.bug(t)).add(shift); }
   const blink = Math.max(A.layered && on.blinks ? 0 : blinkAt(t, SC.blinksFrom), extra);
-  const mood = moodAt(SC.face, t);
-  mood.open = Math.min(1, Math.max(0, mood.open + lidOpen(lid)));
+  const mood = A.layered ? A.faceAt(t) : moodAt(SC.face, t);
+  mood.open = Math.min(1, Math.max(0, mood.open + lidOpen(lid) - (A.layered && on.drowsy ? A.lids.droop(t) : 0)));
   c.s.face(mood, mouthAt([], 0), blink, eyes);
   Object.assign(c, { eyes, blink, lid, look, stand, k });
 };
@@ -478,6 +495,13 @@ const status = (t) => {
     if (G2) lines.push(G2.looks ? `notices something at the edge of view (pull ${(G2.pull * 100).toFixed(0)}%)` : `something moves; no glance this time (pull ${(G2.pull * 100).toFixed(0)}%: seen it before)`);
     const RR = A.reaches.find((r) => t >= r.start - 0.8 && t <= r.arrive + 0.5);
     if (on.handeye && RR) lines.push(`${t < RR.start ? "eyes on the target before the hand moves" : t < RR.arrive - 0.16 ? "hand travels, eyes stay on the target" : "eyes leave just before the hand lands"}${A.w(t) < 0.5 ? " (clip: eyes only)" : ""}`);
+    const am = on.explore ? A.amb(t) : 0;
+    if (am > 0.02) lines.push(`looking around a new place ${(am * 100).toFixed(0)}%: quick, wide eye jumps (ambient), settling on things (focal)`);
+    const dz2 = on.drowsy ? A.sleepy(t) : 0, asleep = on.drowsy && (SC.asleep ?? []).some(([a, b]) => t >= a && t < b);
+    if (asleep) lines.push("asleep: lids shut");
+    else if (dz2 > 0.02) { const S = A.lids.shapes[A.lids.times.findLastIndex((b) => b <= t)]; lines.push(`drowsy ${(dz2 * 100).toFixed(0)}%: lids low, slow eye jumps${S && c.blink > 0.05 ? `, ${S.shut >= 0.5 ? "long closure" : S.depth < 1 ? "partial blink" : "slow blink"} (${(S.down + S.shut + S.up).toFixed(2)} s)` : ""}`); }
+    const FK = SC.face ?? [], fi = FK.findLastIndex((f) => f.t <= t);
+    if (on.express && fi > 0) { const T = changeTime(FK[fi - 1].mood, FK[fi].mood, KIND); if (t < FK[fi].t + T) lines.push(`face ${FK[fi - 1].mood} -> ${FK[fi].mood} over ${T.toFixed(2)} s (${KIND[FK[fi].mood] ? `${KIND[FK[fi].mood]} onset` : KIND[FK[fi - 1].mood] ? `${KIND[FK[fi - 1].mood]} offset` : "calm"})${KIND[FK[fi].mood] === "fear" ? ": brows, then mouth, then eyes" : ""}`); }
     if (on.blinks) lines.push(`blink rate ${A.busy(t) ? `${BLINKS.rate.focus}/min (eyes busy)` : `${BLINKS.rate.rest}/min`}`);
     if (c.thinking) lines.push("thinking: eyes look away");
     const bz = A.bal(t).root;
