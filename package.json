@@ -36,7 +36,13 @@
     "./tremor": "./src/tremor.ts",
     "./explore": "./src/explore.ts",
     "./drowsy": "./src/drowsy.ts",
-    "./express": "./src/express.ts"
+    "./express": "./src/express.ts",
+    "./mcmotion": "./src/mcmotion.ts",
+    "./steps": "./src/steps.ts",
+    "./yawn": "./src/yawn.ts",
+    "./sigh": "./src/sigh.ts",
+    "./posture": "./src/posture.ts",
+    "./touch": "./src/touch.ts"
   },
   "scripts": {
     "test": "bun test",

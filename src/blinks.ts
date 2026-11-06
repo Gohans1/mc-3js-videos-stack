@@ -9,7 +9,8 @@
 //   blink = max(blink, lids(t))   (0 open .. 1 shut, the face's blink);   gaze(..., { blinkedNear: lids.near })
 // rate(t): blinks a minute; breaks: times something ends (the blink lands 0.4-0.6 s later, `chance` of the time).
 // drowsy(t) 0..1 and asleep spans: sleepy blinks and the lids shut while asleep (drowsy.ts); lids.droop(t) is how much
-// openness the face loses between blinks.
+// openness the face loses between blinks. quiet spans: no blink starts in them (a yawn's own lids close and open the
+// eyes: a blink on top would flicker them).
 import { drowsyBlink, DROWSY, type BlinkShape } from "./drowsy";
 
 export const BLINKS = {
@@ -29,7 +30,7 @@ export const lidShut = (u: number, { down, shut, up, depth = 1 }: { down: number
 
 const HZ = 60;
 type Span = [number, number];
-export function blinks(end: number, { rate = (_t: number) => BLINKS.rate.rest, breaks = [] as number[], seed = 17, drowsy = (_t: number) => 0, asleep = [] as Span[] } = {}) {
+export function blinks(end: number, { rate = (_t: number) => BLINKS.rate.rest, breaks = [] as number[], seed = 17, drowsy = (_t: number) => 0, asleep = [] as Span[], quiet = [] as Span[] } = {}) {
   const due = breaks.map((b, i) => ({ t: b + BLINKS.after[0] + (BLINKS.after[1] - BLINKS.after[0]) * hash(i, seed + 3), go: hash(i, seed + 4) < BLINKS.chance }))
     .filter((d) => d.go).sort((a, b) => a.t - b.t);
   const sleeping = (t: number) => asleep.some(([a, b]) => t >= a && t < b);
@@ -44,7 +45,7 @@ export function blinks(end: number, { rate = (_t: number) => BLINKS.rate.rest, b
     ph += rate(t) / 60 / HZ;
     while (d < due.length && due[d].t < t - 0.5) d++;
     const breakNow = d < due.length && due[d].t <= t;
-    if ((ph >= th || breakNow) && t >= free && !sinking(t)) {
+    if ((ph >= th || breakNow) && t >= free && !sinking(t) && !quiet.some(([a, b]) => t >= a && t < b)) {
       const s = drowsyBlink(BLINKS, drowsy(t), [hash(n, seed + 5), hash(n, seed + 6), hash(n, seed + 7)]);
       times.push(t); shapes.push(s); ph = 0; th = need(++n);
       // never closer than `gap`, and not before this one is open again

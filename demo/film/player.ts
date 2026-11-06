@@ -312,10 +312,14 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   const parentTurn = (k) => b[k].parent.getWorldQuaternion(Q).multiply(parentRest[k]);
   // Call after setPose with everything but this arm, then g.updateMatrixWorld(true). Returns the arm's joints (degrees) that
   // put the end of the hand on the world point: the elbow folds forward (it points back), the upper arm takes the rest
-  const armTo = (sd, target) => {
+  // pole [x, y, z] (his left, up, forward, in the chest's axes): where the elbow should point. Without one the upper arm
+  // never twists, which puts a hand near his own face on an elbow raised sideways at shoulder height; with one the arm
+  // takes the twist too (a full 3-joint upper arm), so a hand to the chin comes up on an elbow hanging down and out
+  const armTo = (sd, target, pole = null) => {
     const { L1, L2 } = ARM[sd];
     b[`ua${sd}`].getWorldPosition(S);
     d.copy(target).sub(S).applyQuaternion(Qi.copy(parentTurn(`ua${sd}`)).invert());
+    if (pole) return armPole(sd, d, pole, L1, L2);
     const n = THREE.MathUtils.clamp(d.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
     d.normalize();
     const e = Math.PI - Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
@@ -327,6 +331,28 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     // arm (a hand key going to null) would swing it the long way round, over his head
     const a = THREE.MathUtils.euclideanModulo(Math.atan2(d.z, d.y) - Math.atan2(z, y) + Math.PI, 2 * Math.PI) - Math.PI;
     return { [`ua${sd}`]: [a / D, 0, g / D], [`la${sd}`]: [-e / D, 0, 0] };
+  };
+  const U = new THREE.Vector3(), B = new THREE.Vector3(), F = new THREE.Vector3(), P = new THREE.Vector3(), M0 = new THREE.Matrix4(), M1 = new THREE.Matrix4();
+  const HANG = new THREE.Vector3(0, -1, 0), FWD = new THREE.Vector3(0, 0, 1), SIDE = new THREE.Vector3().crossVectors(HANG, FWD);
+  const PQ = new THREE.Quaternion(), PE = new THREE.Euler();
+  M0.makeBasis(HANG, FWD, SIDE);
+  const armPole = (sd, dd, pole, L1, L2) => {
+    const n = THREE.MathUtils.clamp(dd.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
+    const dh = dd.clone().normalize();
+    // the elbow on the circle of possible elbows, on the pole's side of the shoulder-hand line
+    P.set(...pole).addScaledVector(dh, -P.set(...pole).dot(dh)).normalize();
+    const cosA = THREE.MathUtils.clamp((L1 * L1 + n * n - L2 * L2) / (2 * L1 * n), -1, 1);
+    U.copy(dh).multiplyScalar(cosA).addScaledVector(P, Math.sqrt(1 - cosA * cosA));
+    const e = Math.PI - Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
+    // the forearm's way from the elbow; the upper arm turns so its own forward (where the elbow folds) points along it
+    F.copy(dh).multiplyScalar(n).addScaledVector(U, -L1).normalize();
+    B.copy(F).addScaledVector(U, -F.dot(U));
+    if (B.lengthSq() < 1e-8) B.copy(P).addScaledVector(U, -P.dot(U)).negate();
+    B.normalize();
+    M1.makeBasis(U, B, new THREE.Vector3().crossVectors(U, B));
+    PQ.setFromRotationMatrix(M1.multiply(M0.clone().transpose()));
+    PE.setFromQuaternion(PQ, "YXZ");
+    return { [`ua${sd}`]: [PE.x / D, PE.y / D, PE.z / D], [`la${sd}`]: [-e / D, 0, 0] };
   };
   // armTo for a leg: the knee folds back (the shin behind the thigh's line), the thigh takes the rest. A target past the
   // leg's reach leaves it straight towards it
@@ -352,5 +378,7 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
     return [down, yaw, 0];
   };
-  return { g, rig, bones: b, setPose, face, hand, handL, armTo, legTo, soleAt, legReach: LEGS.L.L1 + LEGS.L.L2, headTo, skin: ctx };
+  // Minecraft's hurt overlay: the skin goes red while hurt or dying (on/off, as in the game)
+  const red = (on) => { for (const m of [inner, outer]) { m.color.setRGB(1, on ? 0.45 : 1, on ? 0.45 : 1); m.emissive.setRGB(1, on ? 0.3 : 1, on ? 0.3 : 1); } };
+  return { g, rig, bones: b, setPose, face, hand, handL, armTo, legTo, soleAt, legReach: LEGS.L.L1 + LEGS.L.L2, headTo, skin: ctx, red };
 }

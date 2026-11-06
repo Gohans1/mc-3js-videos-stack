@@ -14,6 +14,9 @@
 //     sharp inhale in a jump-scare), then lets it go in a long relief exhale that sinks the chest and drops the shoulders
 //     below rest, and breathing starts again from empty, a little faster (Animator Notebook, "Action Analysis: Breathing";
 //     Playdead's INSIDE stops the boy's breath on a jump and restarts it with an exhale on landing, Schmid 2016).
+//   sighs and yawns (src/sigh.ts, src/yawn.ts): their own breaths, sequenced with the gasps so two never run at once: a
+//     gasp wins over a yawn, a yawn over a sigh, and the one that loses is dropped whole. life.events lists each breath
+//     event's sound cues; life.breath(t) names the one running.
 //   freeze: opts.freeze(t) 0..1 (src/freeze.ts) takes most of the sway away while he is frozen in fear.
 //   settle: when a fast move stops (and stays stopped: not a swing turning back), the body gives under its own momentum:
 //     the chest dips and the hips sink a little, once, over ~0.9 s, scaled by how fast it was moving.
@@ -24,8 +27,11 @@
 // standing(t): 0..1, how much the character stands on both feet (sway and the hips' sink are scaled by it).
 import { FREEZE } from "./freeze";
 import { canonical, unwrap, type Pose } from "./pose";
+import { SIGH, sighLength, sighLungs } from "./sigh";
+import type { Yawns } from "./yawn";
 
 const HZ = 60;
+const SIGH_OUT = SIGH.first + SIGH.second + SIGH.hold;
 const UPPER = ["body", "chest", "head", "uaL", "uaR", "laL", "laR"];
 // share of the work a degree a second of each part costs (roughly its mass about the hips; the arms swing nearly free)
 const MASS: Record<string, number> = { body: 1, chest: 0.8, head: 0.3, uaL: 0.15, uaR: 0.15, laL: 0.08, laR: 0.08 };
@@ -38,9 +44,9 @@ export const SWAY = { every: 4.2, over: 1.1, hip: 0.035, tilt: 2.5, drop: 0.008 
 export const GASP = { start: 0.05, inhale: 0.3, peak: [1.25, 1.6], hold: [0.8, 2.5], relief: [1.2, 2], sigh: 0.3, back: 0.6, arousal: 0.3 }; // s, s, lungs (1 = a normal breath) weak..full, s, s, lungs below rest, s, effort left after a full one
 export const SETTLE = { over: 0.9, chest: 3, sink: 0.012, fast: 400 }; // s, deg, m, deg/s that counts as a full-speed move
 
-export type IdleOpts = { standing?: (t: number) => number; breath?: number; sway?: number; settle?: number; seed?: number; gasps?: { t: number; k?: number }[]; freeze?: (t: number) => number };
+export type IdleOpts = { standing?: (t: number) => number; breath?: number; sway?: number; settle?: number; seed?: number; gasps?: { t: number; k?: number }[]; sighs?: { t: number; k?: number }[]; yawns?: Yawns | null; freeze?: (t: number) => number };
 
-export function idle(poseAt: (t: number) => Pose, end: number, { standing = () => 0, breath = 1, sway = 1, settle = 1, seed = 7, gasps = [], freeze = () => 0 }: IdleOpts = {}) {
+export function idle(poseAt: (t: number) => Pose, end: number, { standing = () => 0, breath = 1, sway = 1, settle = 1, seed = 7, gasps = [], sighs = [], yawns = null, freeze = () => 0 }: IdleOpts = {}) {
   const n = Math.ceil(end * HZ) + 2;
   // how fast the upper body turns, degrees a second (all its joints together: one fast joint counts in full)
   const act = new Float32Array(n), work = new Float32Array(n);
@@ -58,13 +64,22 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
   }
   // one breath as 0..1: in over the first 40% of the cycle, out over the rest
   const lungs = (p: number) => { const u = p - Math.floor(p); return u < 0.4 ? 0.5 - 0.5 * Math.cos((Math.PI * u) / 0.4) : 0.5 + 0.5 * Math.cos((Math.PI * (u - 0.4)) / 0.6); };
-  // each gasp's window: in, held, let go, back to empty
+  // each breath event's window. A gasp: in, held, let go, back to empty
   const G = GASP, mix = ([a, b]: number[], k: number) => a + (b - a) * k;
-  const wins = gasps.map((g) => {
-    const k = clamp01(g.k ?? 1), t0 = g.t + G.start, held = t0 + G.inhale, out = held + mix(G.hold, k), low = out + mix(G.relief, k);
-    return { k, t0, held, out, low, end: low + G.back, peak: mix(G.peak, k) };
-  }).sort((a, b) => a.t0 - b.t0);
-  const gaspAt = (t: number) => { let w = null; for (const x of wins) if (x.t0 <= t && t < x.end) w = x; return w; };
+  type Win = { kind: "gasp" | "yawn" | "sigh"; rank: number; k: number; t0: number; end: number; held: number; out: number; low: number; peak: number };
+  const all: Win[] = [
+    ...gasps.map((g) => {
+      const k = clamp01(g.k ?? 1), t0 = g.t + G.start, held = t0 + G.inhale, out = held + mix(G.hold, k), low = out + mix(G.relief, k);
+      return { kind: "gasp" as const, rank: 3, k, t0, held, out, low, end: low + G.back, peak: mix(G.peak, k) };
+    }),
+    ...(yawns?.spans ?? []).map(([a, b]) => ({ kind: "yawn" as const, rank: 2, k: 1, t0: a, end: b, held: 0, out: 0, low: 0, peak: 0 })),
+    ...sighs.map((g) => ({ kind: "sigh" as const, rank: 1, k: clamp01(g.k ?? 1), t0: g.t, end: g.t + sighLength(), held: 0, out: 0, low: 0, peak: 0 })),
+  ];
+  // the stronger kind first; one that overlaps a window already kept is dropped
+  const wins: Win[] = [];
+  for (const w of all.sort((a, b) => b.rank - a.rank || a.t0 - b.t0)) if (!wins.some((x) => w.t0 < x.end && x.t0 < w.end)) wins.push(w);
+  wins.sort((a, b) => a.t0 - b.t0);
+  const gaspAt = (t: number) => { let w: Win | null = null; for (const x of wins) if (x.t0 <= t && t < x.end) w = x; return w; };
   // effort heads for the work level (averaged over a second): up in `rise` seconds, back down in `recover`; the lungs
   // follow a phase that integrates the breathing rate, frozen through a gasp, which restarts it on an empty breath
   const effort = new Float32Array(n), lung = new Float32Array(n), still = new Float32Array(n);
@@ -76,11 +91,16 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
     const t = i / HZ, w = gaspAt(t);
     if (w !== cur) {
       if (w) from = i > 0 ? lung[i - 1] : 0;
-      else { ph = Math.ceil(ph); e = Math.max(e, G.arousal * (cur?.k ?? 0)); }
+      else { ph = Math.ceil(ph); if (cur?.kind === "gasp") e = Math.max(e, G.arousal * cur.k); }
       cur = w;
     }
     effort[i] = e;
-    if (w) {
+    if (w?.kind === "sigh") lung[i] = sighLungs(t - w.t0, from, w.k);
+    else if (w?.kind === "yawn") {
+      // the yawn's own breath, from where the breath was when it began (its inhale assumes a normal breath's top)
+      const y = yawns!(t);
+      lung[i] = (y?.lungs ?? 0) + (from - 1) * (1 - smooth((t - w.t0) / 0.8));
+    } else if (w) {
       const s = -G.sigh * w.k;
       lung[i] = t < w.held ? from + (w.peak - from) * smooth((t - w.t0) / G.inhale)
         : t < w.out ? w.peak * (1 - 0.04 * (t - w.held) / (w.out - w.held))
@@ -152,6 +172,11 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
     return out;
   };
   // what the breath is doing at t: "in" (the gasp), "held", "relief", or null (breathing)
-  const gasp = (t: number) => { const w = gaspAt(t); return !w ? null : t < w.held ? "in" : t < w.out ? "held" : "relief"; };
-  return Object.assign(life, { effort: (t: number) => read(effort, t), activity: (t: number) => read(act, t), stops, weight: weightAt, gasp, lungs: (t: number) => read(lung, t) });
+  const gasp = (t: number) => { const w = gaspAt(t); return !w || w.kind !== "gasp" ? null : t < w.held ? "in" : t < w.out ? "held" : "relief"; };
+  // which breath event runs at t: "gasp", "yawn", "sigh", or null
+  const breathOf = (t: number) => gaspAt(t)?.kind ?? null;
+  // sound cues: a gasp's sharp breath in and its relief out, a sigh's long breath out, a yawn's in and its "aah"
+  const events = wins.flatMap((w) => w.kind === "gasp" ? [{ t: w.t0, kind: "gasp-in" }, { t: w.out, kind: "relief-out" }]
+    : w.kind === "sigh" ? [{ t: w.t0 + SIGH_OUT, kind: "sigh-out" }] : (yawns?.events ?? []).filter((e) => e.t >= w.t0 && e.t < w.end));
+  return Object.assign(life, { effort: (t: number) => read(effort, t), activity: (t: number) => read(act, t), stops, weight: weightAt, gasp, breath: breathOf, events, windows: wins.map((w) => ({ kind: w.kind, t: w.t0, end: w.end })), lungs: (t: number) => read(lung, t) });
 }
