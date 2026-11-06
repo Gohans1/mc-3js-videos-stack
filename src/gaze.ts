@@ -14,7 +14,21 @@
 // lid: where the upper lids sit, in the same units as look[1]: they follow the eye's pitch about one to one but slower,
 // as damped oscillations (Malbouisson et al., IOVS 2005: ~0.4 s down with a small overshoot, ~0.6 s up; Steptoe et al.,
 // "Eyelid kinematics for virtual characters", 2010). lidOpen(lid) turns it into how much more open a face's lids are.
+// opts.pursuit: spans [from, to] when the target moves (a crawling silverfish). Eyes can glide only then (smooth
+// pursuit): ~0.15 s after it starts moving a saccade lands on it, then the eyes slide with it ~0.1 s behind at a gain
+// under 1 (0.98 at 10 deg/s down to 0.75 at 60, Schalén 1980), and small catch-up saccades every 0.3-0.6 s take up the
+// slip (de Brouwer et al. 2002). aim(f, off, "pursue") must return the target where it is at time f, not at eyeTime.
+// opts.think(t) 0..1: thinking, the eyes look away from the target: up 39%, down 29%, to the side 31% of the time
+// (cognitive gaze aversions, Andrist, Mutlu & Gleicher 2013); aim(f, off, "avert") adds those offsets in full.
 const SACCADE = 0.05, LEAD = 0.06;
+export const PURSUIT = { start: 0.15, lag: 0.1, catchup: [0.3, 0.6] };
+const gainOf = (degPerS: number) => Math.min(0.98, Math.max(0.7, 0.98 - 0.0046 * (degPerS - 10)));
+// a thinking look-away: up, down or to the side, in degrees [to his left, up]
+const avertOf = (i: number): [number, number] => {
+  const h = hash(i, 5), s = hash(i, 6) < 0.5 ? -1 : 1, a = hash(i, 7);
+  if (hash(i, 8) < 0.2) return [0, 0];
+  return h < 0.39 ? [s * (2 + 6 * a), 10 + 8 * a] : h < 0.68 ? [s * (2 + 6 * a), -(8 + 6 * a)] : [s * (12 + 8 * a), -2 + 4 * a];
+};
 export const EYE = { yaw: 40, pitch: 30 };
 export const REST_PITCH = -4.5;
 
@@ -23,10 +37,15 @@ const offsetOf = (i: number, k = 1): [number, number] => (hash(i, 1) < 0.35 ? [0
 const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
 const clamp1 = (x: number) => Math.max(-1, Math.min(1, x));
 
-export function fixations(shifts: number[], end: number, { seed = 412, mean = 0.75, min = 0.25 } = {}) {
-  const times: number[] = [];
+type Span = [number, number];
+const inSpan = (spans: Span[], t: number, pad = 0) => spans.some(([a, b]) => t >= a && t <= b + pad);
+export function fixations(shifts: number[], end: number, { seed = 412, mean = 0.75, min = 0.25, pursuit = [] as Span[] } = {}) {
+  let times: number[] = [];
   for (let t = 0, i = 1; t < end + 5; i++) { times.push(t); t += min - (mean - min) * Math.log(1 - hash(i, seed)); }
-  for (const s of shifts) {
+  // inside a pursuit the catch-up saccades are the only jumps
+  times = times.filter((t) => !inSpan(pursuit, t, PURSUIT.lag));
+  pursuit.forEach(([a, b], n) => { for (let t = a + PURSUIT.start, i = 0; t <= b; i++) { times.push(t); t += PURSUIT.catchup[0] + (PURSUIT.catchup[1] - PURSUIT.catchup[0]) * hash(i, 31 + n); } });
+  for (const s of shifts.filter((x) => !inSpan(pursuit, x, PURSUIT.lag))) {
     for (let k = times.length - 1; k > 0; k--) if (Math.abs(times[k] - (s - LEAD)) < 0.2) times.splice(k, 1);
     times.push(s - LEAD);
   }
@@ -52,26 +71,36 @@ const lidStep = (u: number, down: boolean) => (u <= 0 ? 0 : u >= LID.up ? 1 : ra
 export const lidOpen = (lid: number) => (lid < 0 ? LID.open * lid : LID.raise * lid);
 
 // wander scales how far fixations stray from the target (Laban's indirect space > 1, direct < 1; src/effort.ts)
-type GazeOpts = { seed?: number; mean?: number; min?: number; wander?: number; blinkedNear?: (t: number) => boolean };
+type GazeOpts = { seed?: number; mean?: number; min?: number; wander?: number; blinkedNear?: (t: number) => boolean; pursuit?: Span[]; think?: (t: number) => number };
+export type Aim = (f: number, off: [number, number], mode?: "pursue" | "avert") => [number, number];
 export function gaze(shifts: number[], end: number, opts: GazeOpts = {}) {
-  const quiet = opts.blinkedNear ?? (() => false);
+  const quiet = opts.blinkedNear ?? (() => false), pursuit = opts.pursuit ?? [], think = opts.think ?? (() => 0);
   const times = fixations(shifts, end, opts);
   const wander = opts.wander ?? 1;
-  const aimOf = (aim: (f: number, off: [number, number]) => [number, number], i: number) => aim(times[Math.max(0, i)], offsetOf(Math.max(0, i), wander));
-  return (t: number, aim: (f: number, off: [number, number]) => [number, number]): { look: [number, number]; blink: number; lid: number } => {
+  const chase = times.map((f) => inSpan(pursuit, f - PURSUIT.start + 1e-6, PURSUIT.lag) && pursuit.some(([a]) => f >= a + PURSUIT.start - 1e-6));
+  // where fixation i points at time t: a held point, or on a pursuit the target sliding on from where the saccade put it
+  const eyeOf = (aim: Aim, i: number, t: number): [number, number] => {
+    i = Math.max(0, i);
+    const f = times[i];
+    if (!chase[i]) return think(f) > 0.5 ? aim(f, avertOf(i), "avert") : aim(f, offsetOf(i, wander));
+    const L = PURSUIT.lag, z: [number, number] = [0, 0], base = aim(f - L, z, "pursue"), cur = aim(t - L, z, "pursue"), back = aim(t - L - 0.05, z, "pursue");
+    const g = gainOf(Math.hypot(cur[0] - back[0], cur[1] - back[1]) / 0.05);
+    return [base[0] + g * (cur[0] - base[0]), base[1] + g * (cur[1] - base[1])];
+  };
+  return (t: number, aim: Aim): { look: [number, number]; blink: number; lid: number; pursuing: boolean; thinking: boolean } => {
     let lo = 0, hi = times.length - 1;
     while (lo < hi) { const m = (lo + hi + 1) >> 1; if (times[m] <= t) lo = m; else hi = m - 1; }
-    const u = t - times[lo], k = smooth(u / SACCADE), now = aimOf(aim, lo);
-    const was = u < BLINK ? aimOf(aim, lo - 1) : now;
+    const u = t - times[lo], k = smooth(u / SACCADE), now = eyeOf(aim, lo, t);
+    const was = u < BLINK ? eyeOf(aim, lo - 1, t) : now;
     const jump = Math.hypot(now[0] - was[0], now[1] - was[1]);
     const blink = u < BLINK && lo > 0 && hash(lo, 9) < blinkChance(jump) && !quiet(times[lo]) ? Math.sin((Math.PI * u) / BLINK) : 0;
     // every eye jump in the last LID.up seconds adds its own lid step (fixations can come faster than the lids settle)
-    const y = (i: number) => (i === lo ? now[1] : aimOf(aim, i)[1]) / EYE.pitch;
+    const y = (i: number) => (i === lo ? now[1] : eyeOf(aim, i, t)[1]) / EYE.pitch;
     let j = lo;
     while (j > 0 && times[j] > t - LID.up) j--;
     let lid = clamp1(y(j)), prev = lid;
     for (let i = j + 1; i <= lo; i++) { const yi = clamp1(y(i)); lid += (yi - prev) * lidStep(t - times[i], yi < prev); prev = yi; }
-    return { look: [clamp1((was[0] + (now[0] - was[0]) * k) / EYE.yaw), clamp1((was[1] + (now[1] - was[1]) * k) / EYE.pitch)], blink, lid };
+    return { look: [clamp1((was[0] + (now[0] - was[0]) * k) / EYE.yaw), clamp1((was[1] + (now[1] - was[1]) * k) / EYE.pitch)], blink, lid, pursuing: chase[lo], thinking: !chase[lo] && think(times[lo]) > 0.5 };
   };
 }
 

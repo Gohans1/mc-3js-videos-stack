@@ -23,7 +23,10 @@
     "./lean": "./src/lean.ts",
     "./micro": "./src/micro.ts",
     "./arc": "./src/arc.ts",
-    "./effort": "./src/effort.ts"
+    "./effort": "./src/effort.ts",
+    "./startle": "./src/startle.ts",
+    "./steer": "./src/steer.ts",
+    "./balance": "./src/balance.ts"
   },
   "scripts": {
     "test": "bun test",

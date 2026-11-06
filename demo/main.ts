@@ -7,12 +7,15 @@
 // Layer order on the body pose: through keys, + overlap, + cartoon, + idle, + lean, + mood posture, + attention (chest and
 // waist join the look), then foot pin, head IK, + steady head, + drift, hand IK (on arcs); face: gaze, blinks, lids.
 // The layered Steve's poses are read at their first instant, so their written-in breathing is gone and breath replaces it.
-// URL: ?scene=dig|idle|walk|reach|mocap  ?t=<seconds> stops there  ?view=both|side|face|faceOld  ?off=<layer>,...
+// Also on him: a startle at each bang (not faded over clips: a clip can't know about the bang), the breath held through
+// it, eyes gliding after the silverfish (pursuit), looking away while thinking, the head on the path ahead while walking
+// (steer), and hips that counter where the upper body's mass goes (balance, measured on the rig by Winter's masses).
+// URL: ?scene=dig|idle|walk|reach|scare|mocap  ?t=<seconds> stops there  ?view=both|side|face|faceOld  ?off=<layer>,...
 //      ?mood=tense|tired (Laban Effort on the layered Steve)
 import * as THREE from "three";
 import { addPose as addRigPose, blendPose, loadRig, makePlayer, mouthAt, PX, walkPose } from "./film/player";
 import { blinkAt, DIG, IDLE, moodAt, POSES } from "./film/dig";
-import { CLIP_A, CLIP_B, mocapScene, REACH, WALK } from "./film/extra";
+import { CLIP_A, CLIP_B, mocapScene, REACH, SCARE, WALK } from "./film/extra";
 import { loadClips } from "./film/clips";
 import { slerpPose } from "./film/mocap";
 import { through } from "../src/curve";
@@ -27,13 +30,16 @@ import { lean } from "../src/lean";
 import { micro } from "../src/micro";
 import { arc } from "../src/arc";
 import { effort, MOOD, phrase } from "../src/effort";
+import { startle } from "../src/startle";
+import { steer } from "../src/steer";
+import { balance, WINTER } from "../src/balance";
 
 const q = new URLSearchParams(location.search);
-const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "mask"];
+const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "startle", "gasp", "pursuit", "think", "steer", "balance", "mask"];
 const on = Object.fromEntries(LAYERS.map((k) => [k, !(q.get("off") ?? "").split(",").includes(k)]));
 const MOODNAME = MOOD[q.get("mood")] ? q.get("mood") : "calm";
 const FX = effort(MOOD[MOODNAME]);
-const SCENES = { dig: DIG, idle: IDLE, walk: WALK, reach: REACH };
+const SCENES = { dig: DIG, idle: IDLE, walk: WALK, reach: REACH, scare: SCARE };
 const D = Math.PI / 180;
 
 const smooth = (x) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
@@ -119,7 +125,7 @@ function actor({ moves, look, layered, dz, masked }) {
     return s * (1 - Math.min(1, placeOf(t).speed / 1.2));
   };
   // the head's look point and weight (null keys: the pose's own head), smoothstep or through the keys
-  const lookAt = (t) => {
+  const keyLook = (t) => {
     if (!look.length || t < look[0].t) return null;
     const i = keyAt(look, t), a = look[i], b = look[Math.min(i + 1, look.length - 1)];
     const x = b === a ? 0 : smooth((t - a.t) / (b.t - a.t));
@@ -130,23 +136,46 @@ function actor({ moves, look, layered, dz, masked }) {
     const v = [0, 1, 2].map((c) => (layered && on.through ? through(p ? p.at[c] : null, a.at[c], b.at[c], n ? n.at[c] : null, p?.t ?? 0, a.t, b.t, n?.t ?? 0, t) : THREE.MathUtils.lerp(a.at[c], b.at[c], x)));
     return { p: new THREE.Vector3(...v), w: 1 };
   };
+  const ahead = layered && on.steer && SC.path && !look.length ? steer(placeOf) : null;
+  const lookAt = (t) => {
+    const T = SC.target?.(t);
+    if (T && T.w > 0) return { p: new THREE.Vector3(...T.at), w: T.w };
+    const A = ahead?.(t);
+    return A ? { p: new THREE.Vector3(...A.head), eye: new THREE.Vector3(...A.at), w: A.w } : keyLook(t);
+  };
   const A = { bodyAt, standingAt, lookAt, layered, dz, look };
   if (!layered) return A;
 
   const w = masked && on.mask && SC.clips ? mask(SC.clips) : () => 1;
   const lagOf = overlap(bodyAt, END, FX.overlap);
   const toon = cartoon(bodyAt, END, FX.cartoon);
-  const life = idle(bodyAt, END, { standing: standingAt, breath: +on.breath, sway: on.sway ? FX.idle.sway : 0, settle: on.settle ? FX.idle.settle : 0 });
+  const bangs = SC.bangs ?? [];
+  const life = idle(bodyAt, END, { standing: standingAt, breath: +on.breath, sway: on.sway ? FX.idle.sway : 0, settle: on.settle ? FX.idle.settle : 0, gasps: on.gasp ? bangs : [] });
   const tilt = lean((t) => placeOf(t), END);
-  const prePose = (t) => {
+  const jolt = startle(on.startle ? bangs : []);
+  const unbalanced = (t) => {
     const k = w(t);
     let p = bodyAt(t);
     if (on.overlap) p = addRigPose(p, scalePose(lagOf(t), k));
     if (on.cartoon) p = addRigPose(p, scalePose(toon(t), k));
     p = addRigPose(p, scalePose(life(t), k));
     if (on.lean) p = addRigPose(p, tilt(t));
-    return addRigPose(p, scalePose(FX.posture, k));
+    p = addRigPose(p, scalePose(FX.posture, k));
+    return addRigPose(p, jolt(t).pose);
   };
+  // where the joints put his centre of mass, hips held still (sway and sink are meant to move it), the reaching hand on
+  // its target, against the rest pose's
+  const comAt = (t) => {
+    placeAt(probe, dz, t);
+    const p = unbalanced(t);
+    place(probe, { ...p, root: { ...p.root, x: 0, y: 0, z: 0 } });
+    const h = SC.hands && handLocal(t, on.arcs);
+    if (h) place(probe, blendPose(p, probe.armTo("R", new THREE.Vector3(...h.p).applyMatrix4(probe.g.matrixWorld)), h.w));
+    const c = comOf(probe);
+    return [c.x - COM0.x, c.z - COM0.z];
+  };
+  const bal = on.balance ? balance(comAt, END, { standing: standingAt }) : () => ({ root: {} });
+  const prePose = (t) => addRigPose(unbalanced(t), scalePose(bal(t), w(t)));
   // the turn the head would need from the trunk as it is, measured on the rig, for the trunk to take its share of
   const chain = attention((t) => {
     const L = lookAt(t);
@@ -160,31 +189,12 @@ function actor({ moves, look, layered, dz, masked }) {
   const steadyHead = steady(trunkPose, END);
   const drift = micro({ amount: FX.micro.amount });
   const shifts = look.slice(0, -1).filter((k, i) => JSON.stringify(k.at) !== JSON.stringify(look[i + 1].at)).map((k) => k.t);
-  const eyesAt = gaze(shifts, END, { mean: FX.gaze.mean, wander: FX.gaze.wander, blinkedNear: (t) => [...Array(16)].some((_, i) => blinkAt(t - i / 30, SC.blinksFrom) > 0) });
-  return Object.assign(A, { w, lagOf, toon, life, tilt, chain, trunkPose, steadyHead, drift, eyesAt, nextKey: (x) => look.find((k) => k.t > x)?.t });
+  const thinking = (t) => (on.think && (SC.think ?? []).some(([a, b]) => t >= a && t <= b) ? 1 : 0);
+  const eyesAt = gaze([...shifts, ...(SC.shifts ?? [])], END, { mean: FX.gaze.mean, wander: FX.gaze.wander, blinkedNear: (t) => [...Array(16)].some((_, i) => blinkAt(t - i / 30, SC.blinksFrom) > 0), pursuit: on.pursuit ? SC.pursuit ?? [] : [], think: thinking });
+  return Object.assign(A, { w, lagOf, toon, life, tilt, jolt, bal, chain, trunkPose, steadyHead, drift, eyesAt, nextKey: (x) => look.find((k) => k.t > x)?.t });
 }
 
-// ---- cast ----
-const SIDE = 0.8;
-const MOCAP = NAME === "mocap";
-const cast = [];
-for (const [name, dz] of [["old", -SIDE], ["new", SIDE]]) {
-  const s = await makePlayer(rig, "vendor/steve.png", { glow: 0.05 });
-  scene.add(s.g);
-  place(s, {});
-  const restHead = s.bones.head.getWorldQuaternion(new THREE.Quaternion()).invert();
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.03), new THREE.MeshBasicMaterial({ color: name === "old" ? 0xff8060 : 0x60e0a0 }));
-  scene.add(dot);
-  const trail = new THREE.InstancedMesh(new THREE.SphereGeometry(0.012), new THREE.MeshBasicMaterial({ color: name === "old" ? 0xff8060 : 0x60e0a0 }), 46);
-  scene.add(trail);
-  const spec = MOCAP
-    ? name === "old" ? { moves: SC.authored.moves, look: SC.authored.look, layered: true } : { moves: SC.moves, look: SC.look, layered: true, masked: true }
-    : { moves: SC.moves, look: SC.look, layered: name === "new" };
-  cast.push({ name, s, dz, restHead, dot, trail, act: actor({ ...spec, dz }) });
-}
-document.getElementById("old").textContent = MOCAP ? "Left: hand-made keys + film-kit layers (no Mixamo)" : "Before: the film now (smoothstep keys, breathing per pose, eyes fixed)";
-document.getElementById("new").textContent = MOCAP ? `Right: Mixamo clips (layers ${on.mask ? "fade out over each clip" : "NOT faded: doubled"})` : `After: film-kit layers${MOODNAME === "calm" ? "" : `, mood ${MOODNAME}`}`;
-
+const Q = new THREE.Quaternion(), E = new THREE.Vector3(), V = new THREE.Vector3(), M4 = new THREE.Matrix4();
 // right hand targets in his own axes; "rest" is where the end of the hand hangs (armTo puts that end on the target:
 // 12 px up from the feet, under the elbow); the arc pivots on his right shoulder as it is posed at that moment
 place(probe, {});
@@ -205,7 +215,52 @@ const handLocal = (t, arcs) => {
   return { p: arcs ? arc(SHOULDER_R, pa, pb, k, { bend: [0, 0, 1] }) : pa.map((v, j) => v + (pb[j] - v) * k), w: 1 };
 };
 
-const Q = new THREE.Quaternion(), E = new THREE.Vector3(), V = new THREE.Vector3(), M4 = new THREE.Matrix4();
+// the body's centre of mass on a posed rig, in its own axes: Winter's segment masses at each segment's middle
+const P1 = new THREE.Vector3(), P2 = new THREE.Vector3(), C = new THREE.Vector3();
+function comOf(s) {
+  const b = s.bones, at = (bone, v = P1) => s.g.worldToLocal(bone.getWorldPosition(v));
+  C.set(0, 0, 0);
+  const add = (v, m) => C.addScaledVector(v, m);
+  add(at(b.head).add(V.set(0, 4 * PX, 0)), WINTER.head);
+  add(at(b.body).add(at(b.head, P2)).multiplyScalar(0.5), WINTER.trunk);
+  for (const sd of ["L", "R"]) {
+    add(at(b[`ua${sd}`]).add(at(b[`la${sd}`], P2)).multiplyScalar(0.5), WINTER.upperArm);
+    add(at(b[`la${sd}`]).add(s.g.worldToLocal(b[`la${sd}`].localToWorld(P2.copy(HAND_END[sd])))).multiplyScalar(0.5), WINTER.forearmHand);
+    add(at(b[`ul${sd}`]).add(at(b[`ll${sd}`], P2)).multiplyScalar(0.5), WINTER.thigh);
+    add(at(b[`ll${sd}`]).add(s.g.worldToLocal(s.soleAt(sd, P2))).multiplyScalar(0.5), WINTER.legFoot);
+  }
+  return C.clone();
+}
+place(probe, {});
+probe.g.position.set(0, 0, 0); probe.g.rotation.y = 0; probe.g.updateMatrixWorld(true);
+// the end of each hand at rest (12 px up from the feet, under the elbow), in its forearm's frame
+const HAND_END = Object.fromEntries(["L", "R"].map((sd) => { const e = probe.bones[`la${sd}`].getWorldPosition(new THREE.Vector3()); return [sd, probe.bones[`la${sd}`].worldToLocal(new THREE.Vector3(e.x, 12 * PX - 0.02, e.z))]; }));
+const COM0 = comOf(probe);
+
+// ---- cast ----
+const SIDE = 0.8;
+const MOCAP = NAME === "mocap";
+const cast = [];
+for (const [name, dz] of [["old", -SIDE], ["new", SIDE]]) {
+  const s = await makePlayer(rig, "vendor/steve.png", { glow: 0.05 });
+  scene.add(s.g);
+  place(s, {});
+  const restHead = s.bones.head.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.03), new THREE.MeshBasicMaterial({ color: name === "old" ? 0xff8060 : 0x60e0a0 }));
+  scene.add(dot);
+  const trail = new THREE.InstancedMesh(new THREE.SphereGeometry(0.012), new THREE.MeshBasicMaterial({ color: name === "old" ? 0xff8060 : 0x60e0a0 }), 46);
+  scene.add(trail);
+  const spec = MOCAP
+    ? name === "old" ? { moves: SC.authored.moves, look: SC.authored.look, layered: true } : { moves: SC.moves, look: SC.look, layered: true, masked: true }
+    : { moves: SC.moves, look: SC.look, layered: name === "new" };
+  const bug = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.1), new THREE.MeshStandardMaterial({ color: 0x8c8f93, roughness: 0.9 }));
+  bug.visible = false;
+  scene.add(bug);
+  cast.push({ name, s, dz, restHead, dot, trail, bug, act: actor({ ...spec, dz }) });
+}
+document.getElementById("old").textContent = MOCAP ? "Left: hand-made keys + film-kit layers (no Mixamo)" : "Before: the film now (smoothstep keys, breathing per pose, eyes fixed)";
+document.getElementById("new").textContent = MOCAP ? `Right: Mixamo clips (layers ${on.mask ? "fade out over each clip" : "NOT faded: doubled"})` : `After: film-kit layers${MOODNAME === "calm" ? "" : `, mood ${MOODNAME}`}`;
+
 // a world point from his eyes, in the posed head's own axes
 const gazeTo = (c, p) => {
   c.s.bones.head.getWorldQuaternion(Q).multiply(c.restHead);
@@ -254,15 +309,20 @@ const perform = (c, t) => {
   // face: eyes on fixations that lead the head, blinks, lids that follow the eyes
   let eyes = [0, -0.15], extra = 0, lid = 0;
   if (A.layered && on.gaze) {
-    const g = A.eyesAt(t, (f, o) => {
-      const L = A.lookAt(eyeTime(f, A.nextKey));
-      const a = L && L.w > 0.5 && gazeTo(c, L.p.clone().add(shift));
-      return a ? [a[0] + o[0] / 3, a[1] + o[1] / 3] : [o[0], REST_PITCH + o[1]];
+    // a pursuit reads the silverfish where it is at f; a thinking look-away is added in full, wander near a target a third
+    const g = A.eyesAt(t, (f, o, mode) => {
+      const L = mode === "pursue" && SC.bug ? { p: new THREE.Vector3(...SC.bug(f)), w: 1 } : A.lookAt(eyeTime(f, A.nextKey));
+      const a = L && L.w > 0.5 && gazeTo(c, (L.eye ?? L.p).clone().add(shift)), s = mode === "avert" ? 1 : 1 / 3;
+      return a ? [a[0] + o[0] * s, a[1] + o[1] * s] : [o[0], REST_PITCH + o[1]];
     });
     eyes = g.look;
     extra = g.blink;
     lid = on.lids ? g.lid : 0;
+    c.pursuing = g.pursuing;
+    c.thinking = g.thinking;
   }
+  if (A.layered) extra = Math.max(extra, A.jolt(t).blink);
+  if (c.bug) { c.bug.visible = !!SC.bug && t > 1 && t < 6.5; if (SC.bug) c.bug.position.fromArray(SC.bug(t)).add(shift); }
   const blink = Math.max(blinkAt(t, SC.blinksFrom), extra);
   const mood = moodAt(SC.face, t);
   mood.open = Math.min(1, Math.max(0, mood.open + lidOpen(lid)));
@@ -316,6 +376,14 @@ const status = (t) => {
     const ch = A.chain(t).chest;
     if (on.attention && Math.hypot(ch[0], ch[1]) > 0.3) lines.push(`chest joins the look: ${ch[1].toFixed(1)}° turn, ${ch[0].toFixed(1)}° down`);
     if (on.steady && Math.hypot(...c.steadyNow) > 0.3) lines.push(`head steadies ${c.steadyNow[0].toFixed(1)}° pitch, ${c.steadyNow[1].toFixed(1)}° roll`);
+    const J = A.jolt.events.find((e) => t >= e.t && t < e.t + 1.5);
+    if (J) lines.push(`startle ${(t - J.t).toFixed(2)} s in: ${t - J.t < 0.09 ? "eyes shut" : t - J.t < 0.14 ? "head jerks" : t - J.t < 0.2 ? "arms pull in" : "trunk and knees give"}${J.body < J.k * 0.99 ? `, body ${((J.body / J.k) * 100).toFixed(0)}% (repeat)` : ""}`);
+    const G = A.life.gasp(t);
+    if (G && on.gasp && k > 0.01) lines.push(G === "in" ? "gasp: sharp breath in" : G === "held" ? "breath held" : "relief: long breath out, shoulders drop");
+    if (c.pursuing) lines.push("eyes glide after the silverfish (pursuit)");
+    if (c.thinking) lines.push("thinking: eyes look away");
+    const bz = A.bal(t).root;
+    if (on.balance && Math.hypot(bz.x ?? 0, bz.z ?? 0) > 0.005) lines.push(`hips counter the mass: ${((bz.z ?? 0) * 100).toFixed(1)} cm ${(bz.z ?? 0) < 0 ? "back" : "forward"}, ${((bz.x ?? 0) * 100).toFixed(1)} cm left`);
     if (on.gaze && c.blink > 0.05) lines.push("blink");
     if (on.gaze) lines.push(`eyes ${c.eyes.map((v) => v.toFixed(2)).join(" ")}${on.lids ? `, lids ${c.lid.toFixed(2)}` : ""}`);
     if (c.handErr != null) lines.push(`hand ${(c.handErr * 100).toFixed(1)} cm off its target`);

@@ -10,6 +10,10 @@
 //   sway: standing still, the weight shifts from one leg to the other every ~4 s over ~1.1 s (Reelwright's idle
 //     layer): hips slide over the weight leg and tilt, spine and head counter so the head stays over the feet. Needs
 //     planted feet (leg IK holding the soles) or the feet slide with the hips.
+//   gasps: a fright (src/startle.ts events) takes a sharp breath in, holds it (apnea: a full stop of breathing after a
+//     sharp inhale in a jump-scare), then lets it go in a long relief exhale that sinks the chest and drops the shoulders
+//     below rest, and breathing starts again from empty, a little faster (Animator Notebook, "Action Analysis: Breathing";
+//     Playdead's INSIDE stops the boy's breath on a jump and restarts it with an exhale on landing, Schmid 2016).
 //   settle: when a fast move stops (and stays stopped: not a swing turning back), the body gives under its own momentum:
 //     the chest dips and the hips sink a little, once, over ~0.9 s, scaled by how fast it was moving.
 // Effort, stillness and stops are measured from the pose itself (how fast its joints turn), so nothing is keyed. The pose
@@ -29,11 +33,12 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
 export const BREATH = { rest: 0.25, hard: 0.67, depth: 1.2, pant: 3.5, recover: 25, rise: 2, work: 160 }; // Hz, Hz, deg, deg, s, s, mass-weighted deg/s that is all-out effort
 export const SWAY = { every: 4.2, over: 1.1, hip: 0.035, tilt: 2.5, drop: 0.008 }; // s, s, m, deg, m
+export const GASP = { start: 0.05, inhale: 0.3, peak: [1.25, 1.6], hold: [0.8, 2.5], relief: [1.2, 2], sigh: 0.3, back: 0.6, arousal: 0.3 }; // s, s, lungs (1 = a normal breath) weak..full, s, s, lungs below rest, s, effort left after a full one
 export const SETTLE = { over: 0.9, chest: 3, sink: 0.012, fast: 400 }; // s, deg, m, deg/s that counts as a full-speed move
 
-export type IdleOpts = { standing?: (t: number) => number; breath?: number; sway?: number; settle?: number; seed?: number };
+export type IdleOpts = { standing?: (t: number) => number; breath?: number; sway?: number; settle?: number; seed?: number; gasps?: { t: number; k?: number }[] };
 
-export function idle(poseAt: (t: number) => Pose, end: number, { standing = () => 0, breath = 1, sway = 1, settle = 1, seed = 7 }: IdleOpts = {}) {
+export function idle(poseAt: (t: number) => Pose, end: number, { standing = () => 0, breath = 1, sway = 1, settle = 1, seed = 7, gasps = [] }: IdleOpts = {}) {
   const n = Math.ceil(end * HZ) + 2;
   // how fast the upper body turns, degrees a second (all its joints together: one fast joint counts in full)
   const act = new Float32Array(n), work = new Float32Array(n);
@@ -49,17 +54,40 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
     work[i] = Math.sqrt(m) * HZ;
     prev = p;
   }
-  // effort heads for the work level (averaged over a second): up in `rise` seconds, back down in `recover`; breathing
-  // phase integrates its rate
-  const effort = new Float32Array(n), phase = new Float64Array(n), still = new Float32Array(n);
-  let e = 0, ph = 0, st = 0, level = 0;
+  // one breath as 0..1: in over the first 40% of the cycle, out over the rest
+  const lungs = (p: number) => { const u = p - Math.floor(p); return u < 0.4 ? 0.5 - 0.5 * Math.cos((Math.PI * u) / 0.4) : 0.5 + 0.5 * Math.cos((Math.PI * (u - 0.4)) / 0.6); };
+  // each gasp's window: in, held, let go, back to empty
+  const G = GASP, mix = ([a, b]: number[], k: number) => a + (b - a) * k;
+  const wins = gasps.map((g) => {
+    const k = clamp01(g.k ?? 1), t0 = g.t + G.start, held = t0 + G.inhale, out = held + mix(G.hold, k), low = out + mix(G.relief, k);
+    return { k, t0, held, out, low, end: low + G.back, peak: mix(G.peak, k) };
+  }).sort((a, b) => a.t0 - b.t0);
+  const gaspAt = (t: number) => { let w = null; for (const x of wins) if (x.t0 <= t && t < x.end) w = x; return w; };
+  // effort heads for the work level (averaged over a second): up in `rise` seconds, back down in `recover`; the lungs
+  // follow a phase that integrates the breathing rate, frozen through a gasp, which restarts it on an empty breath
+  const effort = new Float32Array(n), lung = new Float32Array(n), still = new Float32Array(n);
+  let e = 0, ph = 0, st = 0, level = 0, cur: ReturnType<typeof gaspAt> = null, from = 0;
   for (let i = 0; i < n; i++) {
     level += (work[i] - level) / HZ;
     const goal = clamp01(level / BREATH.work);
     e += ((goal - e) / (goal > e ? BREATH.rise : BREATH.recover)) / HZ;
+    const t = i / HZ, w = gaspAt(t);
+    if (w !== cur) {
+      if (w) from = i > 0 ? lung[i - 1] : 0;
+      else { ph = Math.ceil(ph); e = Math.max(e, G.arousal * (cur?.k ?? 0)); }
+      cur = w;
+    }
     effort[i] = e;
-    phase[i] = ph;
-    ph += (BREATH.rest + (BREATH.hard - BREATH.rest) * e) / HZ;
+    if (w) {
+      const s = -G.sigh * w.k;
+      lung[i] = t < w.held ? from + (w.peak - from) * smooth((t - w.t0) / G.inhale)
+        : t < w.out ? w.peak * (1 - 0.04 * (t - w.held) / (w.out - w.held))
+        : t < w.low ? 0.96 * w.peak + (s - 0.96 * w.peak) * (1 - (1 - (t - w.out) / (w.low - w.out)) ** 2)
+        : s * (1 - smooth((t - w.low) / G.back));
+    } else {
+      lung[i] = lungs(ph);
+      ph += (BREATH.rest + (BREATH.hard - BREATH.rest) * e) / HZ;
+    }
     // still: under 40 deg/s; it takes half a second of stillness to count, and goes at once
     st = act[i] > 40 ? 0 : Math.min(1, st + 2 / HZ);
     still[i] = smooth(st);
@@ -75,8 +103,6 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
     if (act[i] < 30) peak = 0;
   }
   const read = (arr: ArrayLike<number>, t: number) => { const x = Math.min(Math.max(t * HZ, 0), n - 1.001), i = Math.floor(x); return arr[i] + (arr[i + 1] - arr[i]) * (x - i); };
-  // one breath as 0..1: in over the first 40% of the cycle, out over the rest
-  const lungs = (p: number) => { const u = p - Math.floor(p); return u < 0.4 ? 0.5 - 0.5 * Math.cos((Math.PI * u) / 0.4) : 0.5 + 0.5 * Math.cos((Math.PI * (u - 0.4)) / 0.6); };
   // weight shifts: each starts at a seeded time ~every 4 s, goes to a side (mostly the other one) by 55-100%
   const shifts: { t: number; to: number }[] = [];
   for (let t = 1, i = 0, side = 1; t < end + SWAY.every; i++) {
@@ -93,9 +119,10 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
   };
 
   const life = (t: number): Pose => {
-    const e = read(effort, t), p = read(phase, t), stand = clamp01(standing(t));
+    const e = read(effort, t), stand = clamp01(standing(t));
     const amp = breath * (BREATH.depth + BREATH.pant * e);
-    const b = lungs(p), late = lungs(p - 0.08);
+    // arms and head a beat after the chest: 8% of a breath
+    const b = read(lung, t), late = read(lung, t - 0.08 / (BREATH.rest + (BREATH.hard - BREATH.rest) * e));
     const out: Pose = {
       root: {},
       body: [-0.4 * e * amp * b, 0, 0],
@@ -122,5 +149,7 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
     out.root!.y -= SETTLE.sink * dip * stand;
     return out;
   };
-  return Object.assign(life, { effort: (t: number) => read(effort, t), activity: (t: number) => read(act, t), stops, weight: weightAt });
+  // what the breath is doing at t: "in" (the gasp), "held", "relief", or null (breathing)
+  const gasp = (t: number) => { const w = gaspAt(t); return !w ? null : t < w.held ? "in" : t < w.out ? "held" : "relief"; };
+  return Object.assign(life, { effort: (t: number) => read(effort, t), activity: (t: number) => read(act, t), stops, weight: weightAt, gasp, lungs: (t: number) => read(lung, t) });
 }
