@@ -3,14 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Motion building blocks for films drawn with draw(t): every function is pure in film time, so any frame renders on its own",
+  "description": "Motion and camera building blocks for films drawn with draw(t): pure functions of film time, plus a cinematography lint",
   "license": "MIT",
   "exports": {
     "./curve": "./src/curve.ts",
     "./spring": "./src/spring.ts",
     "./transition": "./src/transition.ts",
-    "./shake": "./src/shake.ts"
+    "./shake": "./src/shake.ts",
+    "./lens": "./src/lens.ts",
+    "./shotcheck": "./src/shotcheck.ts",
+    "./handheld": "./src/handheld.ts",
+    "./safe": "./src/safe.ts"
   },
-  "scripts": { "test": "bun test" },
-  "dependencies": { "math": "0.1.0" }
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "math": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "three": "0.186.1"
+  }
 }
