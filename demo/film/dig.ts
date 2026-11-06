@@ -3,7 +3,8 @@
 // the pages flung off the desk, then the dig through the drawer), so the motion layers can be watched on a real scene.
 // Keys and poses are copied from that film's src/timeline/steve.json and src/steve.ts (not linked: the film is never
 // touched from here). Left out: the walk at 1:23.35 (no planted feet here, so he kneels where he stands), hand targets
-// (the arms keep the pose's own) and props (each anchor is a fixed point where that prop is).
+// (the arms keep the pose's own) and props (each anchor is a fixed point where that prop is). IDLE below is made from
+// the film's poses but is not a scene of it.
 import * as THREE from "three";
 import { MOODS, PX, addPose, arm, leg } from "./player";
 
@@ -21,6 +22,7 @@ export const POSES = {
   tossR: (s) => addPose(POSES.kneel(s, 8), { chest: [0, -24, 0], body: [0, -10, 0] }),
   tossL: (s) => addPose(POSES.kneel(s, 8), { chest: [0, 24, 0], body: [0, 10, 0] }),
   frenzy: (s) => addPose(POSES.kneel(s, 40), { chest: [3 * Math.sin(s * 9.4), 6 * Math.sin(s * 4.7), 0] }),
+  gasp: (s) => addPose(POSES.stand(s), arm("L", 75, 30, 0, 80), arm("R", 75, 30, 0, 80), { body: [-14, 0, 0], head: [-16, 0, 0] }),
   oneKnee: (s, lean = 0) => addPose(leg("R", 0, 3, 90), leg("L", 70, 3, 70), { root: { y: -4 * PX }, body: [lean, 0, 0], chest: [lean * 0.15 + 1.2 * Math.sin(s * 1.7), 0, 0] }),
   kneelPull: (s) => POSES.oneKnee(s, 45),
   kneelBack: (s) => POSES.oneKnee(s, 12),
@@ -47,18 +49,32 @@ export const LOOK = [
   [91.59, [2.6, 0.3, 10.0]], [94.12, "handle"],
 ].map(([t, at]) => ({ t, at: P(at) }));
 
-export const FROM = 81.3, TO = 94.6;
+const FACE = [[80.6, "restless"], [81.15, "seething"], [84.2, "curious"], [85.57, "unimpressed"], [86.61, "curious"], [87.06, "unimpressed"], [89.43, "restless"], [90.41, "seething"]].map(([t, mood]) => ({ t, mood }));
+export const DIG = { name: "dig", from: 81.3, to: 94.6, moves: MOVES, look: LOOK, face: FACE, blinksFrom: 27 };
+
+// Not in the film: the film's own poses arranged so the standing life shows. He stands idle (breath, weight shifts),
+// starts at something up to his right (gasp: arms up, leaning back), recovers, then a burst of flinging (effort), pants
+// and stands idle again. Look keys: null is the pose's own head.
+const ST = (t, pose) => ({ t, pose, at: AT, yaw: -90 });
+export const IDLE = {
+  name: "idle", from: 0, to: 22, blinksFrom: 0,
+  moves: [ST(0, "stand"), ST(5, "stand"), ST(5.2, "gasp"), ST(6.2, "gasp"), ST(6.9, "stand"), ST(9, "stand"), ST(9.3, "fling"), ST(9.6, "readUp"),
+    ST(9.9, "fling"), ST(10.2, "readUp"), ST(10.5, "fling"), ST(10.8, "desk"), ST(11.1, "fling"), ST(11.5, "pant"), ST(12.6, "stand"), ST(22, "stand")],
+  look: [{ t: 0, at: null }, { t: 5, at: null }, { t: 5.15, at: [0.6, 2.1, 8.4] }, { t: 6.6, at: [0.6, 2.1, 8.4] }, { t: 7.2, at: null }],
+  face: [{ t: 0, mood: "neutral" }, { t: 5.15, mood: "surprised" }, { t: 6.6, mood: "uneasy" }, { t: 9, mood: "restless" }, { t: 11.5, mood: "seething" }, { t: 14, mood: "annoyed" }],
+};
 
 const FACES = {
+  uneasy: { y: 0.15, tilt: 14, open: 0.9, squint: 0, pupil: 0.95, smile: -0.25 },
+  annoyed: { y: 0, tilt: -6, open: 0.85, squint: 0.15, pupil: 1, smile: -0.3 },
   restless: { y: 0, tilt: -10, open: 0.9, squint: 0.25, pupil: 1, smile: -0.55 },
   seething: { y: 0.05, tilt: -14, open: 0.95, squint: 0.2, pupil: 0.9, smile: -0.7 },
   curious: { y: 0.3, tilt: 4, open: 1, squint: 0, pupil: 0.85, smile: 0.1 },
   unimpressed: { y: -0.1, tilt: 6, open: 0.55, squint: 0.15, pupil: 1, smile: -0.4 },
 };
-const FACE = [[80.6, "restless"], [81.15, "seething"], [84.2, "curious"], [85.57, "unimpressed"], [86.61, "curious"], [87.06, "unimpressed"], [89.43, "restless"], [90.41, "seething"]].map(([t, mood]) => ({ t, mood }));
 const moodOf = (n) => FACES[n] ?? MOODS[n] ?? MOODS.neutral;
 const smooth = (x) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
-export function moodAt(t) {
+export function moodAt(FACE, t) {
   let i = 0; while (i < FACE.length - 1 && t >= FACE[i + 1].t) i++;
   const a = moodOf(FACE[i].mood), prev = i > 0 ? moodOf(FACE[i - 1].mood) : a, k = t < FACE[i].t ? 0 : smooth((t - FACE[i].t) / 0.5);
   return Object.fromEntries(Object.keys(MOODS.neutral).map((f) => [f, THREE.MathUtils.lerp(prev[f] ?? 0, a[f] ?? 0, k)]));
