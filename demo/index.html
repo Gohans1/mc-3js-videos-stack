@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>film-kit: Steve before / after</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #15191c; color: #e8ecef; font: 14px/1.4 system-ui, sans-serif; }
+  canvas { display: block; }
+  .tag { position: fixed; top: 12px; padding: 4px 8px; background: #000a; border-radius: 4px; }
+  #old { left: 12px; } #new { right: 12px; }
+  #clock { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); font-variant-numeric: tabular-nums; background: #000a; padding: 4px 8px; border-radius: 4px; }
+  #ui { position: fixed; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #ui button { background: #2a3035; color: inherit; border: 1px solid #4a5258; border-radius: 4px; padding: 6px 10px; min-height: 36px; }
+  #t { flex: 1 1 240px; min-height: 36px; }
+</style>
+</head>
+<body>
+<div class="tag" id="old">Before: the film now (smoothstep keys, eyes fixed)</div>
+<div class="tag" id="new">After: through + overlap + gaze</div>
+<div id="clock">01:21.300</div>
+<div id="ui">
+  <button id="play">Play / pause</button>
+  <button data-speed="0.25">0.25x</button><button data-speed="0.5">0.5x</button><button data-speed="1">1x</button>
+  <button data-view="both">Both</button><button data-view="side">Side</button><button data-view="face">Face after</button><button data-view="faceOld">Face before</button>
+  <input id="t" type="range" aria-label="Film time">
+</div>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

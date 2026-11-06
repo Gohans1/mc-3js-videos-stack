@@ -4,12 +4,31 @@
 //   const x = curve([{ t: 0, v: 0 }, { t: 1, v: 2 }, { t: 2, v: 3, stop: true }]);  x(1.5), x.vel(1.5)
 // Per key: stop (arrives and leaves at rest), hold (keeps its value until the next key, then jumps), linear (straight to the
 // next key). v may be a number or an array (each component on its own). angle: true unwraps degrees so 350 -> 10 turns +20.
+// through(...) is one segment of the same curve for keys whose values move (src/pose.ts blends whole poses with it).
 
 export type Value = number | number[];
 export type Key = { t: number; v: Value; stop?: boolean; hold?: boolean; linear?: boolean };
 export type Curve = ((t: number) => Value) & { vel: (t: number) => Value; keys: Key[] };
 
 const arr = (v: Value) => (Array.isArray(v) ? v : [v]);
+// PCHIP tangent at a key between segments of length h0, h1 and slopes s0, s1
+const pchip = (h0: number, h1: number, s0: number, s1: number) => (s0 * s1 <= 0 ? 0 : (3 * (h0 + h1)) / ((2 * h1 + h0) / s0 + (h1 + 2 * h0) / s1));
+const hermite = (p0: number, p1: number, m0: number, m1: number, u: number) => {
+  const u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
+};
+
+// One segment of such a curve when the key values are themselves moving (each key a pose still breathing): va at ta to
+// vb at tb, with the keys either side (vp at tp, vn at tn; null for none, which arrives or leaves at rest). With no
+// neighbours, or flat ones, it is exactly smoothstep.
+export function through(vp: number | null, va: number, vb: number, vn: number | null, tp: number, ta: number, tb: number, tn: number, t: number) {
+  const h = tb - ta;
+  if (!(h > 0)) return t < ta ? va : vb;
+  const u = Math.min(1, Math.max(0, (t - ta) / h)), s = (vb - va) / h;
+  const m0 = vp == null || !(ta > tp) ? 0 : pchip(ta - tp, h, (va - vp) / (ta - tp), s);
+  const m1 = vn == null || !(tn > tb) ? 0 : pchip(h, tn - tb, s, (vn - vb) / (tn - tb));
+  return hermite(va, vb, m0 * h, m1 * h, u);
+}
 
 export function curve(input: Key[], { angle = false } = {}): Curve {
   if (!input.length) throw new Error("curve: no keys");
@@ -28,9 +47,7 @@ export function curve(input: Key[], { angle = false } = {}): Curve {
     const s0 = S[i - 1][d], s1 = S[i][d];
     if (keys[i - 1].linear) return s0;
     if (k.linear) return s1;
-    if (s0 * s1 <= 0) return 0;
-    const h0 = T[i] - T[i - 1], h1 = T[i + 1] - T[i];
-    return (3 * (h0 + h1)) / ((2 * h1 + h0) / s0 + (h1 + 2 * h0) / s1);
+    return pchip(T[i] - T[i - 1], T[i + 1] - T[i], s0, s1);
   }));
 
   const find = (t: number) => {
@@ -45,11 +62,10 @@ export function curve(input: Key[], { angle = false } = {}): Curve {
     const i = find(t), k = keys[i], h = T[i + 1] - T[i], u = (t - T[i]) / h;
     if (k.hold) return out(V[i].map((v) => (deriv ? 0 : v)));
     if (k.linear) return out(V[i].map((v, d) => (deriv ? S[i][d] : v + S[i][d] * (t - T[i]))));
-    // cubic Hermite basis and its derivative
-    const u2 = u * u, u3 = u2 * u;
+    const u2 = u * u;
     return out(V[i].map((p0, d) => {
       const p1 = V[i + 1][d], m0 = M[i][d] * h, m1 = M[i + 1][d] * h;
-      if (!deriv) return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
+      if (!deriv) return hermite(p0, p1, m0, m1, u);
       return ((6 * u2 - 6 * u) * p0 + (3 * u2 - 4 * u + 1) * m0 + (-6 * u2 + 6 * u) * p1 + (3 * u2 - 2 * u) * m1) / h;
     }));
   };
