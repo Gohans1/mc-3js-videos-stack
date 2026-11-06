@@ -6,7 +6,7 @@
   "description": "The motion clip catalogue (Mixamo, UAL) measured on Steve, eye-reviewed, searched with filters or ranked by Jev (jev.py); data in vault/motion/catalog. Run from a film folder: its pages render through the film's studio.",
   "dependencies": {
     "fflate": "0.8.3",
-    "live-studio": "link:live-studio",
+    "live-studio": "workspace:*",
     "mc-actor": "workspace:*"
   },
   "peerDependencies": {

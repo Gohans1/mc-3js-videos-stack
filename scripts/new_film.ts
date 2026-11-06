@@ -1,10 +1,9 @@
 // A new film from templates/film: bun run new-film <name> [studio port]
-// Copies the template into films/<name>, connects it to the studio the studio's own way (live-studio/init.mjs: its
+// Copies the template into films/<name>, connects it to the studio the studio's own way (packages/live-studio/init.mjs: its
 // package.json link and scripts, bun install; it adds nothing the template holds already), links the vault into it
 // (scripts/link.ts) and writes its picks zip (pack/picks.json, empty to start). Then: cd films/<name> && bun run studio.
 import { spawnSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -13,10 +12,7 @@ const [name, portArg] = process.argv.slice(2);
 if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) { console.error("usage: bun run new-film <name, lowercase-with-dashes> [studio port]"); process.exit(2); }
 const film = join(FILMS, name);
 if (existsSync(film)) { console.error(`films/${name} exists already`); process.exit(1); }
-// `bun link` in the studio's own folder registers it by name; init.mjs lives there
-const link = join(homedir(), ".bun/install/global/node_modules/live-studio");
-if (!existsSync(link)) { console.error("live-studio is not linked: clone https://github.com/Gohans1/live-studio, then bun link in it"); process.exit(1); }
-const studio = realpathSync(link);
+const studio = join(ROOT, "packages/live-studio");
 
 const films = readdirSync(FILMS).filter((f) => existsSync(join(FILMS, f, "package.json")));
 const used = films.map((f) => Number(/live\.mjs (\d+)/.exec(JSON.parse(readFileSync(join(FILMS, f, "package.json"), "utf8")).scripts?.studio ?? "")?.[1])).filter(Boolean);
