@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A Minecraft player as a film actor: MCprep's rig, poses and IK (player), mocap clips retargeted onto it (mocap, clips)",
+  "description": "Minecraft actors for films: MCprep's player rig, poses and IK (player), mocap clips retargeted onto it (mocap, clips), the performance keys (perform), planted feet (feet), things carried in the hands (carry), mobs (silverfish)",
   "exports": {
     "./player": "./src/player.ts",
     "./mocap": "./src/mocap.ts",
     "./clips": "./src/clips.ts",
-    "./ease": "./src/ease.ts"
+    "./ease": "./src/ease.ts",
+    "./perform": "./src/perform.ts",
+    "./feet": "./src/feet.ts",
+    "./carry": "./src/carry.ts",
+    "./silverfish": "./src/silverfish.ts"
   },
   "peerDependencies": {
     "three": "0.186.1"

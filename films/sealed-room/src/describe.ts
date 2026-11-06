@@ -5,7 +5,7 @@
 // frame. Call it right after draw(t): "in frame" tests use the camera draw(t) left behind.
 // Returns [{ head, lines: [{ text, fresh }] }]; fresh marks what started less than FRESH seconds ago.
 import * as THREE from "three";
-import { cameraAt } from "./camera";
+import { cameraAt, inView } from "film-stage/camera";
 import { BED, CABINET, CHAIR, DESK, DOOR, DOME, LAMP } from "./world";
 import { FACES } from "./steve";
 import { MOODS } from "mc-actor/player";
@@ -16,33 +16,6 @@ const deg = THREE.MathUtils.radToDeg;
 const mm = (fov) => Math.round(12 / Math.tan(THREE.MathUtils.degToRad(fov) / 2));
 const box = (a, b) => new THREE.Box3(new THREE.Vector3(...a), new THREE.Vector3(...b));
 const v = new THREE.Vector3();
-// Frustum.intersectsBox is conservative (a box past a frame corner still passes), so a point of a 3x3x3 grid over the
-// box must be in view
-const inView = (frustum, b) => {
-  for (let x = 0; x <= 2; x++) for (let y = 0; y <= 2; y++) for (let z = 0; z <= 2; z++) {
-    v.set(b.min.x + ((b.max.x - b.min.x) * x) / 2, b.min.y + ((b.max.y - b.min.y) * y) / 2, b.min.z + ((b.max.z - b.min.z) * z) / 2);
-    if (frustum.containsPoint(v)) return true;
-  }
-  return false;
-};
-
-// [[from, to], ...] film seconds when the box is on screen, the film's camera sampled every 0.1 s (the same way draw sets it)
-export function onScreenRanges(b, keys, end, aspect) {
-  const cam = new THREE.PerspectiveCamera(60, aspect, 0.02, 100), frustum = new THREE.Frustum(), m = new THREE.Matrix4();
-  const out = [];
-  let from = null;
-  for (let i = 0; i * 0.1 <= end + 1e-6; i++) {
-    const t = i * 0.1, c = cameraAt(t, keys);
-    cam.position.copy(c.p); cam.up.set(0, 1, 0); cam.lookAt(c.l); cam.rotateZ(c.roll);
-    cam.fov = c.fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
-    const seen = inView(frustum.setFromProjectionMatrix(m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)), b);
-    if (seen && from === null) from = t;
-    if (!seen && from !== null) { out.push([+from.toFixed(1), +t.toFixed(1)]); from = null; }
-  }
-  if (from !== null) out.push([+from.toFixed(1), end]);
-  return out;
-}
-
 export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, steveBody, variants, steve, now, props }) {
   const computer = variants.find((x) => x.id === "computer");
   // Steve's box now, from his joints (a skinned mesh's own box stays in the rest pose)
@@ -52,14 +25,14 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
   const PROPS = [
     ["Steve", null, "MCprep player.glb (CC-BY)"],
     ["black bed", box([BED.x, 0, BED.head], [BED.x + 1, 0.5625, BED.head + 2]), "black_bed (client.jar)"],
-    ["CRT + keyboard", box([DESK.x, 1, DESK.z], [DESK.x + 1, 1.7, DESK.z + 1]), () => `${computer.pick.title} (pack/${computer.pick.id}.json, choices.json)`],
+    ["CRT + keyboard", box([DESK.x, 1, DESK.z], [DESK.x + 1, 1.7, DESK.z + 1]), () => `${computer.pick.title} (mc-assets pack/${computer.pick.id}.json, choices.json)`],
     ["steel desk", box([DESK.x, 0, DESK.z], [DESK.x + 1, 1, DESK.z + 2]), "iron_trapdoor"],
-    ["filing cabinet", box([CABINET.x, 0, CABINET.z], [CABINET.x + 1, 0.8, CABINET.z + 1]), "pack/file_cabinet.json (block-model-renderer)"],
-    ["filing drawer", () => objBox(props.tray), () => `pack/file_drawer.json, open ${Math.round((props.open(lastT) / 0.5) * 100)}%`],
-    ["chair", () => objBox(props.chair), () => { const c = variants.find((x) => x.id === "chair")?.pick; return `${c?.title} (pack/pick.py, choices.json), seat ${CHAIR.seat} m`; }],
+    ["filing cabinet", box([CABINET.x, 0, CABINET.z], [CABINET.x + 1, 0.8, CABINET.z + 1]), "mc-assets pack/file_cabinet.json (block-model-renderer)"],
+    ["filing drawer", () => objBox(props.tray), () => `mc-assets pack/file_drawer.json, open ${Math.round((props.open(lastT) / 0.5) * 100)}%`],
+    ["chair", () => objBox(props.chair), () => { const c = variants.find((x) => x.id === "chair")?.pick; return `${c?.title} (pack/picks.json, mc-assets/pick.py, choices.json), seat ${CHAIR.seat} m`; }],
     ["CRT picture", () => (props.glass.visible ? objBox(props.glass) : null), "props.ts canvas, game font ascii.png"],
-    ["CCTV dome", () => (props.dome.visible ? box(DOME, [DOME[0] + 1, DOME[1] + 1, DOME[2] + 1]) : null), "pack/cctv_dome.json"],
-    ["folded scrap", () => objBox(props.scrap), "pack/paper_scrap.json"],
+    ["CCTV dome", () => (props.dome.visible ? box(DOME, [DOME[0] + 1, DOME[1] + 1, DOME[2] + 1]) : null), "mc-assets pack/cctv_dome.json"],
+    ["folded scrap", () => objBox(props.scrap), "mc-assets pack/paper_scrap.json"],
     ["steel door", box([DOOR.x - 1, 0, DOOR.z], [DOOR.x + 2, 3, DOOR.z + 1]), "iron_door"],
     ["ceiling lamp", box([LAMP[0][0], LAMP[0][1], LAMP[0][2]], [LAMP[1][0] + 1, LAMP[1][1] + 1, LAMP[1][2] + 1]), "sea_lantern (own scene)"],
   ];
@@ -93,7 +66,7 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
     if (moves.length && next) out.push(`ease: ${next.ease ?? "smooth"} into key at ${next.t}s`);
     const wave = keys.reduce((w, k) => (k.t <= t ? k.wave ?? 1 : w), keys[0].wave ?? 1);
     if (wave > 0) out.push(`sway: breathing float x${wave}`);
-    out.push("path: Catmull-Rom spline (camera.ts)");
+    out.push("path: Catmull-Rom spline (film-stage/camera.ts)");
     return out;
   };
 
@@ -127,7 +100,7 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
     if (B?.act?.do && t >= 27) char.push(line(B.act.do, L.moves[B.key].t, t)); // fresh from the start of this move
     if (B) {
       const k = L.moves[B.key], n = L.moves[Math.min(B.key + 1, L.moves.length - 1)];
-      const name = (m) => (m.clip ? `mocap ${m.clip} (src/clips.ts, baked 60 Hz, slerp blends)` : m.pose);
+      const name = (m) => (m.clip ? `mocap ${m.clip} (mc-actor/clips.ts, baked 60 Hz, slerp blends)` : m.pose);
       char.push(line(B.moving && n !== k ? `pose: ${name(k)} -> ${name(n)}${n.walk ? " (walking, steps from distance)" : ""}${n.via ? ` via ${n.via}` : ""}` : `pose: ${name(k)}`));
       if (B.speed > 0.05) char.push(line(`moving ${B.speed.toFixed(2)} m/s`));
     }
@@ -210,7 +183,7 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
       line("three.js r186 · room: block-model-renderer"),
       line("room block mix: pmndrs/math mulberry32"),
       ...seen.map(([name, , how]) => line(`${name}: ${typeof how === "function" ? how() : how}`)),
-      ...(papers ? [line(`${papers} folders/pages: pack/folder_0..2.json, sheet.json`)] : []),
+      ...(papers ? [line(`${papers} folders/pages: mc-assets pack/folder_0..2.json, sheet.json`)] : []),
     ]);
 
     const k0 = keys.reduce((n, k, j) => (k.t <= t ? j : n), 0);

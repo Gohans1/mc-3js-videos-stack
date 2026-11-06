@@ -3,11 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Minecraft assets every film shares: the props pack (pack/assets/gohans, src/pack.ts), block-model-renderer's runtime files (vendor.mjs, a film's postinstall), blocks cherry-picked from the vault's mod packs (pick.py). The game itself, the rig and the clips stay in the vault (vault.json, bun run link).",
+  "description": "Minecraft assets every film shares: the props pack (pack/assets/gohans, pack.ts) and what makes props work (gamefont, ink, screen, variants for the studio), block-model-renderer's runtime files (vendor.mjs, a film's postinstall), blocks cherry-picked from the vault's mod packs (pick.py). The game itself, the rig and the clips stay in the vault (vault.json, bun run link).",
   "exports": {
-    "./pack": "./src/pack.ts"
+    "./pack": "./src/pack.ts",
+    "./gamefont": "./src/gamefont.ts",
+    "./ink": "./src/ink.ts",
+    "./screen": "./src/screen.ts",
+    "./variants": "./src/variants.ts"
   },
   "dependencies": {
-    "block-model-renderer": "2.20.0"
+    "block-model-renderer": "2.20.0",
+    "mc-actor": "workspace:*"
+  },
+  "peerDependencies": {
+    "three": "0.186.1"
   }
 }

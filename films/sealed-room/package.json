@@ -13,6 +13,7 @@
     "block-model-renderer": "2.20.0",
     "fflate": "0.8.3",
     "film-kit": "workspace:*",
+    "film-stage": "workspace:*",
     "live-studio": "link:live-studio",
     "math": "0.1.0",
     "mc-actor": "workspace:*",

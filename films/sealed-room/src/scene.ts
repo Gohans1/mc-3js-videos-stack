@@ -1,7 +1,7 @@
 // @ts-nocheck
 // "The Sealed Room" (OpenAI / Hugging Face incident, SCRIPT.md), parts 1.1 and 1.2: Steve wakes in CELL 0412, tries the
 // door, stalls at the screen and tears through the filing drawer. Blocks are the game's
-// own models (block-model-renderer), Steve is MCprep's rigged player (src/player.ts), the CCTV caption is MineRender GUI
+// own models (block-model-renderer), Steve is MCprep's rigged player (mc-actor/player.ts), the CCTV caption is MineRender GUI
 // text. draw(t) draws any moment straight away, so the studio, stills and the renderer all seek. Every time and camera key
 // lives in EDIT (src/edit.ts: src/edit.json and src/timeline/*.json, film seconds). Mojang files come from assets/public/mc and /mcasset (links to E:, never committed).
 import * as THREE from "three";
@@ -14,12 +14,13 @@ import { EDIT, fromSource } from "./edit";
 import { buildWorld, BED, CABINET, LAMP, ROOM } from "./world";
 import { CHAIRS, buildProps } from "./props";
 import { bodyAt, blinkAt, moodAt, readLook, targetAt } from "./steve";
-import { makeFeet } from "./feet";
+import { makeFeet } from "mc-actor/feet";
 import { loadClips } from "mc-actor/clips";
 import { props as pack } from "mc-assets/pack";
-import { cameraAt } from "./camera";
+import { cameraAt, onScreenRanges } from "film-stage/camera";
 import { makeDescribe } from "./describe";
-import { asVariant, buildVariants, VARIANTS } from "./variants";
+import { asVariant, buildVariants } from "mc-assets/variants";
+import { VARIANTS } from "./variants";
 import { GESTURES, PX, addPose, blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -117,12 +118,17 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
   world.group.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
   scene.add(world.group);
-  const variants = await buildVariants(sources, (g) => {
+  // film seconds a box is on screen, worked out again whenever the camera keys change (the studio's variant chips)
+  const rangesOf = (box) => {
+    let at = null, r = null;
+    return () => { const k = keysOf(EDIT.cam); if (at !== k) { r = onScreenRanges(box, k, EDIT.end, W / H); at = k; } return r; };
+  };
+  const variants = await buildVariants(VARIANTS, sources, (g) => {
     g.scale.setScalar(S);
     g.position.copy(world.group.position);
     g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
     scene.add(g);
-  }, (cam) => keysOf(cam), EDIT, W / H);
+  }, rangesOf);
   const props = await buildProps(sources, scene, EDIT);
   const keyboard = variants.find((v) => v.id === "computer").loose, keyboardHome = VARIANTS.find((v) => v.id === "computer").loose.pivot;
   // every look's key caps with their resting height, dealt to the hand that types them: his right hand is on the -z half
@@ -146,7 +152,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const capFor = (s) => { const pick = (s.ch === " " ? capsOf.space : s.ch === "Enter" ? capsOf.enter : capsOf[s.hand])[0]; return pick[nth(s.n, pick.length)][0]; };
   const capHome = new Map(keyCaps.map(([o]) => [o, capTop(o)]));
   props.setCapAt((s) => capHome.get(capFor(s)).clone());
-  const chairs = asVariant({ id: "chair", title: "chair", options: CHAIRS }, props.chairLooks, props.chairBox, (cam) => keysOf(cam), EDIT, W / H);
+  const chairs = asVariant({ id: "chair", title: "chair", options: CHAIRS }, props.chairLooks, props.chairBox, rangesOf(props.chairBox));
   variants.push({
     id: chairs.id, title: chairs.title, options: chairs.options, box: chairs.box,
     set: (id) => { chairs.set(id); props.setChair(id); }, // chair_grip follows the shown chair's backrest
@@ -253,7 +259,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const resolved = new WeakMap();
   const keysOf = (cam) => { if (!resolved.has(cam)) resolved.set(cam, cam.map((k) => ({ ...k, p: res(k.p), l: res(k.l) }))); return resolved.get(cam); };
 
-  // Steve at time t (src/steve.ts): body from the move keys, then each hand reaches its target and the head turns to its
+  // Steve at time t (mc-actor/perform.ts, poses in src/steve.ts): body from the move keys, then each hand reaches its target and the head turns to its
   // look point; both are worked out on the body pose so the arms and neck follow wherever he leans
   const anchor = (a, t) => {
     if (Array.isArray(a)) return V(...a);
@@ -261,7 +267,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     return f && props.anchors[f[1]] ? props.anchors[f[1]](t, +f[2]) : props.anchors[a](t);
   };
   const now = {};
-  const feetAt = makeFeet(steve, () => EDIT.end, clips);
+  const feetAt = makeFeet(steve, () => EDIT.end, bodyAt, clips);
   const perform = (t) => {
     const L = EDIT.steve;
     const feet = feetAt(L.moves, t);
