@@ -7,7 +7,7 @@
 // to planted-foot IK).
 //   const toon = cartoon((t) => bodyPose(t), filmEnd, { amount: 0.25 });   pose = addPose(bodyPose(t), toon(t))
 // amount: A in units of sigma squared (0.25 winds a 0.3 s smoothstep move about 5% back first and carries it ~5% past).
-import type { Pose } from "./pose";
+import { canonical, unwrap, type Pose } from "./pose";
 
 const HZ = 60;
 export const JOINTS = ["body", "chest", "head", "uaL", "uaR", "laL", "laR"];
@@ -16,8 +16,8 @@ export function cartoon(poseAt: (t: number) => Pose, end: number, { amount = 0.2
   const n = Math.ceil(end * HZ) + 2;
   const raw = joints.map(() => new Float32Array(n * 3));
   for (let i = 0; i < n; i++) {
-    const p = poseAt(i / HZ);
-    joints.forEach((j, k) => raw[k].set(((p[j] as number[] | undefined) ?? [0, 0, 0]).slice(0, 3), i * 3));
+    const p = canonical(poseAt(i / HZ));
+    joints.forEach((j, k) => { const a = (p[j] as number[] | undefined) ?? [0, 0, 0]; for (let c = 0; c < 3; c++) raw[k][i * 3 + c] = i ? unwrap(a[c] ?? 0, raw[k][(i - 1) * 3 + c]) : (a[c] ?? 0); });
   }
   // the second derivative of a unit-area Gaussian, sampled; convolving with it is the smoothed acceleration
   const s = sigma * HZ, R = Math.ceil(4 * s), K = new Float64Array(2 * R + 1);

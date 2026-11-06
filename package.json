@@ -17,7 +17,13 @@
     "./overlap": "./src/overlap.ts",
     "./gaze": "./src/gaze.ts",
     "./idle": "./src/idle.ts",
-    "./cartoon": "./src/cartoon.ts"
+    "./cartoon": "./src/cartoon.ts",
+    "./attention": "./src/attention.ts",
+    "./steady": "./src/steady.ts",
+    "./lean": "./src/lean.ts",
+    "./micro": "./src/micro.ts",
+    "./arc": "./src/arc.ts",
+    "./effort": "./src/effort.ts"
   },
   "scripts": {
     "test": "bun test",

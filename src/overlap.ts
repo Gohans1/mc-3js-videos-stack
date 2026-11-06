@@ -8,7 +8,7 @@
 //   const lagOf = overlap((t) => bodyPose(t), filmEnd);   pose = addPose(bodyPose(t), lagOf(t))   (src/pose.ts)
 // lag: frames of delay at 30 fps per joint (MCprep player joint names by default); damping 0.6 swings ~10% past a sudden
 // stop and less past an eased one; amount scales the whole effect (0 = off).
-import type { Pose } from "./pose";
+import { canonical, unwrap, type Pose } from "./pose";
 
 const HZ = 60, SUB = 4;
 export const LAG: Record<string, number> = { chest: 1, head: 2, uaL: 2, uaR: 2, laL: 3, laR: 3 };
@@ -17,8 +17,8 @@ export function overlap(poseAt: (t: number) => Pose, end: number, { lag = LAG, d
   const n = Math.ceil(end * HZ) + 2, joints = Object.keys(lag);
   const raw = joints.map(() => new Float32Array(n * 3));
   for (let i = 0; i < n; i++) {
-    const p = poseAt(i / HZ);
-    joints.forEach((j, k) => raw[k].set(((p[j] as number[] | undefined) ?? [0, 0, 0]).slice(0, 3), i * 3));
+    const p = canonical(poseAt(i / HZ));
+    joints.forEach((j, k) => { const a = (p[j] as number[] | undefined) ?? [0, 0, 0]; for (let c = 0; c < 3; c++) raw[k][i * 3 + c] = i ? unwrap(a[c] ?? 0, raw[k][(i - 1) * 3 + c]) : (a[c] ?? 0); });
   }
   const dt = 1 / HZ / SUB;
   const off = joints.map((j, k) => {

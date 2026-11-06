@@ -3,25 +3,31 @@
 //     counter-turning so the eyes stay level, arms and head a beat after the chest (offset up the chain, the AAA idle
 //     recipe in AnimSchool / AnimotionX). Rest is ~15 breaths a minute; effort raises rate and depth (to ~40 a minute,
 //     panting), and they fall back on a ~25 s time constant (respiration recovery after exercise measures ~28 s).
+//     Effort is how hard the body works, not how much it moves: each part's turning speed is weighted by its mass
+//     (trunk heavy, arms light, so a walk's arm swing is cheap and flinging the trunk about is hard), smoothed over a
+//     second, and effort rises toward that level in ~2 s and falls back in ~25 s, so a steady walk breathes a little
+//     faster (~25 a minute) and holds there instead of piling up to panting.
 //   sway: standing still, the weight shifts from one leg to the other every ~4 s over ~1.1 s (Reelwright's idle
 //     layer): hips slide over the weight leg and tilt, spine and head counter so the head stays over the feet. Needs
 //     planted feet (leg IK holding the soles) or the feet slide with the hips.
-//   settle: when a fast move stops, the body gives under its own momentum: the chest dips and the hips sink a little,
-//     once, over ~0.9 s, scaled by how fast it was moving.
+//   settle: when a fast move stops (and stays stopped: not a swing turning back), the body gives under its own momentum:
+//     the chest dips and the hips sink a little, once, over ~0.9 s, scaled by how fast it was moving.
 // Effort, stillness and stops are measured from the pose itself (how fast its joints turn), so nothing is keyed. The pose
 // function is run through once (60 samples a second); the result is a pose offset to add (src/pose.ts addPose) before
 // hand, head and leg IK.
 //   const life = idle((t) => bodyPose(t), filmEnd, { standing: (t) => 1 });   pose = addPose(bodyPose(t), life(t))
 // standing(t): 0..1, how much the character stands on both feet (sway and the hips' sink are scaled by it).
-import type { Pose } from "./pose";
+import { canonical, unwrap, type Pose } from "./pose";
 
 const HZ = 60;
 const UPPER = ["body", "chest", "head", "uaL", "uaR", "laL", "laR"];
+// share of the work a degree a second of each part costs (roughly its mass about the hips; the arms swing nearly free)
+const MASS: Record<string, number> = { body: 1, chest: 0.8, head: 0.3, uaL: 0.15, uaR: 0.15, laL: 0.08, laR: 0.08 };
 const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
-export const BREATH = { rest: 0.25, hard: 0.67, depth: 1.2, pant: 3.5, recover: 25, fill: 0.5 }; // Hz, Hz, deg, deg, s, effort per second of full motion
+export const BREATH = { rest: 0.25, hard: 0.67, depth: 1.2, pant: 3.5, recover: 25, rise: 2, work: 160 }; // Hz, Hz, deg, deg, s, s, mass-weighted deg/s that is all-out effort
 export const SWAY = { every: 4.2, over: 1.1, hip: 0.035, tilt: 2.5, drop: 0.008 }; // s, s, m, deg, m
 export const SETTLE = { over: 0.9, chest: 3, sink: 0.012, fast: 400 }; // s, deg, m, deg/s that counts as a full-speed move
 
@@ -30,21 +36,27 @@ export type IdleOpts = { standing?: (t: number) => number; breath?: number; sway
 export function idle(poseAt: (t: number) => Pose, end: number, { standing = () => 0, breath = 1, sway = 1, settle = 1, seed = 7 }: IdleOpts = {}) {
   const n = Math.ceil(end * HZ) + 2;
   // how fast the upper body turns, degrees a second (all its joints together: one fast joint counts in full)
-  const act = new Float32Array(n);
-  let prev = poseAt(0);
+  const act = new Float32Array(n), work = new Float32Array(n);
+  let prev = canonical(poseAt(0));
   for (let i = 1; i < n; i++) {
-    const p = poseAt(i / HZ);
-    let s = 0;
-    for (const j of UPPER) { const a = (p[j] as number[] | undefined) ?? [0, 0, 0], b = (prev[j] as number[] | undefined) ?? [0, 0, 0]; for (let c = 0; c < 3; c++) s += ((a[c] ?? 0) - (b[c] ?? 0)) ** 2; }
+    const p = canonical(poseAt(i / HZ));
+    let s = 0, m = 0;
+    for (const j of UPPER) {
+      const a = (p[j] as number[] | undefined) ?? [0, 0, 0], b = (prev[j] as number[] | undefined) ?? [0, 0, 0];
+      for (let c = 0; c < 3; c++) { const d = unwrap((a[c] ?? 0) - (b[c] ?? 0), 0) ** 2; s += d; m += MASS[j] ** 2 * d; }
+    }
     act[i] = Math.sqrt(s) * HZ;
+    work[i] = Math.sqrt(m) * HZ;
     prev = p;
   }
-  // effort fills while moving and drains on the recovery time constant; breathing phase integrates its rate
+  // effort heads for the work level (averaged over a second): up in `rise` seconds, back down in `recover`; breathing
+  // phase integrates its rate
   const effort = new Float32Array(n), phase = new Float64Array(n), still = new Float32Array(n);
-  let e = 0, ph = 0, st = 0;
+  let e = 0, ph = 0, st = 0, level = 0;
   for (let i = 0; i < n; i++) {
-    const a = clamp01(act[i] / SETTLE.fast);
-    e = Math.min(1, e + (BREATH.fill * a - e / BREATH.recover) / HZ);
+    level += (work[i] - level) / HZ;
+    const goal = clamp01(level / BREATH.work);
+    e += ((goal - e) / (goal > e ? BREATH.rise : BREATH.recover)) / HZ;
     effort[i] = e;
     phase[i] = ph;
     ph += (BREATH.rest + (BREATH.hard - BREATH.rest) * e) / HZ;
@@ -52,12 +64,14 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
     st = act[i] > 40 ? 0 : Math.min(1, st + 2 / HZ);
     still[i] = smooth(st);
   }
-  // stops: a move over 120 deg/s that falls under 30 deg/s; its peak speed sizes the settle
+  // stops: a move over 120 deg/s that falls under 30 deg/s and stays under 40 for a quarter second (a swing turning back
+  // also passes through zero: a walk's arms would dip the chest every stride); its peak speed sizes the settle
   const stops: { t: number; k: number }[] = [];
+  const holds = (i: number) => { for (let k = i; k < Math.min(n, i + HZ / 4); k++) if (act[k] > 40) return false; return true; };
   let peak = 0;
   for (let i = 0; i < n; i++) {
     peak = Math.max(peak, act[i]);
-    if (act[i] < 30 && peak > 120) { stops.push({ t: i / HZ, k: clamp01(peak / SETTLE.fast) }); peak = 0; }
+    if (act[i] < 30 && peak > 120 && holds(i)) { stops.push({ t: i / HZ, k: clamp01(peak / SETTLE.fast) }); peak = 0; }
     if (act[i] < 30) peak = 0;
   }
   const read = (arr: ArrayLike<number>, t: number) => { const x = Math.min(Math.max(t * HZ, 0), n - 1.001), i = Math.floor(x); return arr[i] + (arr[i + 1] - arr[i]) * (x - i); };
