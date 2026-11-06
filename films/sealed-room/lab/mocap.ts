@@ -14,9 +14,9 @@
 import * as THREE from "three";
 import { unzipSync } from "fflate";
 import { canvas, config, done, log, still } from "live-studio/lab";
-import { MOODS, loadRig, makePlayer } from "../src/player";
-import { retargeter, skeletonSource } from "../src/mocap";
-import { clipNames, loadSource } from "../src/clips";
+import { MOODS, loadRig, makePlayer } from "mc-actor/player";
+import { retargeter, skeletonSource } from "mc-actor/mocap";
+import { clipNames, loadSource } from "mc-actor/clips";
 
 const D = 180 / Math.PI;
 const PXM = 1.875 / 32;

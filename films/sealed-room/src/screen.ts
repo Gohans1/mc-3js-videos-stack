@@ -2,7 +2,7 @@
 // The CRT's picture (src/timeline/props.json screen, documented in src/props.ts): a terminal in the game's font on a blue-grey
 // glow with scanlines, the typing he does on it, and the screen's light on his face and the desk
 import * as THREE from "three";
-import { smooth } from "./ease";
+import { smooth } from "mc-actor/ease";
 import { DESK } from "./world";
 
 const S = 1 / 16;
