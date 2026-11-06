@@ -1,7 +1,7 @@
 """Generates the narration takes listed in src/edit.json `takes` with ElevenLabs v4 through GenVoice, Seff Echo voice.
-  python voice/gen.py            all missing takes
-  python voice/gen.py 02 03      redo just these
-  python voice/gen.py 02 --try   a candidate take in voice/try/02_N.mp3, keeping the current one
+  python ../../scripts/voice/gen.py            all missing takes
+  python ../../scripts/voice/gen.py 02 03      redo just these
+  python ../../scripts/voice/gen.py 02 --try   a candidate take in voice/try/02_N.mp3, keeping the current one
 Takes land in voice/takes/NN.mp3; existing ones are skipped unless named, so a stopped run picks up where it was."""
 import json
 import sys
@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path.home() / "Desktop/huggingfaceopenaiincident/scripts"))
 from genvoice import tts  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path.cwd() / "voice"  # run from the film folder: its voice/takes
 NARRATOR = "ZaZosYpkIGmSqOwAlfnk"  # Seff Echo - Cinematic Storyteller (the stack's first-choice third-person narrator)
 TAKES, TRY = ROOT / "takes", ROOT / "try"
 TAKES.mkdir(exist_ok=True)

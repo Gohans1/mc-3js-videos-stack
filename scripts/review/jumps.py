@@ -1,13 +1,13 @@
 """Finds pops in a draft: frames that differ from the one before far more than the frames around them do (a mob
 teleporting, an item snapping, a camera jerk). Planned cuts in src/timeline/cam.json are listed separately.
-  python review/jumps.py renders/draft_video.mp4"""
+  python ../../scripts/review/jumps.py renders/draft_video.mp4"""
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path.cwd()  # the film's folder: run from films/<name>/ (python ../../scripts/...)
 video = sys.argv[1]
 cuts = [k["t"] for k in json.loads((ROOT / "src/timeline/cam.json").read_text(encoding="utf8")) if k.get("cut")]
 # mean brightness of |frame - previous frame| on a small grey copy, one number per frame

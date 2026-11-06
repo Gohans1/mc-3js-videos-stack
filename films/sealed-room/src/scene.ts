@@ -105,9 +105,9 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const camera = new THREE.PerspectiveCamera(60, W / H, 0.02, 100);
   scene.add(camera);
 
-  // client.jar without its Java code (slim_jar.py): a quarter of the download on every first visit, the same picture
+  // client.jar without its Java code (scripts/mc/slim_jar.py): a quarter of the download on every first visit, the same picture
   const jarFile = await fetch("mc/client_assets.zip");
-  if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: run python slim_jar.py");
+  if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: run python ../../scripts/mc/slim_jar.py");
   const jar = new Uint8Array(await jarFile.arrayBuffer());
   // blocks picked from the vetted packs in E:/mc_vault/packs (pack/pick.py), stacked between the film's own pack and the game
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());

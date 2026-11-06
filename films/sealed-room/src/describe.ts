@@ -195,7 +195,7 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
     }
     // one-shots without a length in audio.json are listed for 1 s
     for (const s of A.sfx) if (t >= s.at && t < s.at + (s.length ?? 1)) sound.push(line(`sfx: ${said(s.name)}`, s.at, t));
-    sound.push(line("CC0 Freesound · ffmpeg mix (sound/mix.py)"));
+    sound.push(line("CC0 Freesound · ffmpeg mix (scripts/sound/mix.py)"));
     add("SOUND", sound);
 
     camera.updateMatrixWorld();

@@ -1,11 +1,11 @@
 """The one way to write src/timeline/*.json (Steve's keys, camera keys, props, audio), so they stay short to read and their
 diffs show only what changed: every object or list that fits in 140 columns sits on one line, longer ones open up one level.
-python timeline_fmt.py            rewrites every src/timeline/*.json in this format (content unchanged)
+python ../../scripts/timeline_fmt.py            rewrites every src/timeline/*.json in this format (content unchanged)
 from timeline_fmt import save     save("steve", data) from another script"""
 import json
 from pathlib import Path
 
-DIR = Path(__file__).resolve().parent / "src/timeline"
+DIR = Path.cwd() / "src/timeline"  # run from the film folder
 WIDTH = 140
 
 

@@ -3,10 +3,10 @@ already placed on the film clock by voice/assemble.py and the studio's voice edi
 one-shot sound effects (sound/sfx, CC0, sound/get_sfx.py). A limiter catches peaks, then ffmpeg-normalize (two-pass EBU
 R128, linear) brings it to audio.json lufs / -1 dBTP, and pyloudnorm measures the result independently. -14 LUFS
 is what YouTube plays at; the 27 s cold open alone is mostly quiet room tone and stays linear only at -16.
-  python sound/mix.py --raw OUT.wav      the studio's mix (sound.py): no loudness pass, and without the sounds that have
+  python ../../scripts/sound/mix.py --raw OUT.wav      the studio's mix (sound.py): no loudness pass, and without the sounds that have
                                          options to try; those go out as one stem per option, which the page plays itself
-  python sound/mix.py                    -> sound/mix.wav (48 kHz stereo, film length)
-  python sound/mix.py renders/draft_video.mp4   also muxes it -> renders/draft.mp4"""
+  python ../../scripts/sound/mix.py                    -> sound/mix.wav (48 kHz stereo, film length)
+  python ../../scripts/sound/mix.py renders/draft_video.mp4   also muxes it -> renders/draft.mp4"""
 import json
 import math
 import re
@@ -16,7 +16,7 @@ import sys
 from functools import cache
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path.cwd()  # the film's folder: run from films/<name>/ (python ../../scripts/...)
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
 A = json.loads((ROOT / "src/timeline/audio.json").read_text(encoding="utf8"))
 END = E["end"]
