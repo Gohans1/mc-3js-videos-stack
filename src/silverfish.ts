@@ -1,5 +1,5 @@
 // @ts-nocheck
-// The silverfish that bursts out of the drawer at 1:15 (edit.json props.silverfish), built box by box from the game's
+// The silverfish that bursts out of the drawer at 1:15 (src/timeline/props.json silverfish), built box by box from the game's
 // own model (SilverfishModel: seven body segments and three fuzz layers, 64 x 32 texture from client.jar) and wiggled the
 // way the game wiggles it (setupAnim: each segment swings and sways more the further it is from the third).
 //   silverfish {scale, path: [{t, at: [x, y, z], hop?}]}  hidden before the first key and after the last (it runs into

@@ -1,7 +1,7 @@
-"""The film's soundtrack from src/edit.json `audio` in one ffmpeg graph: the narration (assets/public/agent/full_voice.wav,
+"""The film's soundtrack from src/timeline/audio.json in one ffmpeg graph: the narration (assets/public/agent/full_voice.wav,
 already placed on the film clock by voice/assemble.py and the studio's voice edits), beds (room hum, CCTV hiss) and
 one-shot sound effects (sound/sfx, CC0, sound/get_sfx.py). A limiter catches peaks, then ffmpeg-normalize (two-pass EBU
-R128, linear) brings it to edit.json audio.lufs / -1 dBTP, and pyloudnorm measures the result independently. -14 LUFS
+R128, linear) brings it to audio.json lufs / -1 dBTP, and pyloudnorm measures the result independently. -14 LUFS
 is what YouTube plays at; the 27 s cold open alone is mostly quiet room tone and stays linear only at -16.
   python sound/mix.py --raw OUT.wav      the studio's mix (sound.py): no loudness pass, and without the sounds that have
                                          options to try; those go out as one stem per option, which the page plays itself
@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
-A = E["audio"]
+A = json.loads((ROOT / "src/timeline/audio.json").read_text(encoding="utf8"))
 END = E["end"]
 VENV = Path("E:/threejs_lab/py/venv/Scripts")  # has ffmpeg-normalize and pyloudnorm
 SFX = ROOT / "sound/sfx"
@@ -88,7 +88,7 @@ def build(out, beds, sfx, voice=True, span=None):
         # linear -14 LUFS pass below; the limiter trims them so the gap fits. Then the
         # safety limiter at about -7 dBFS. The loudness pass must stay linear: ffmpeg-normalize's dynamic fallback lifts
         # every quiet stretch (the CCTV hiss came up level with the voice). It falls back when target - true peak gap is
-        # too small, so a quiet excerpt takes a lower target (edit.json audio.lufs)
+        # too small, so a quiet excerpt takes a lower target (src/timeline/audio.json lufs)
         f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},atrim=duration={END},volume={A.get('drive', 0)}dB,alimiter=limit=0.45:level=false"
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
     ]

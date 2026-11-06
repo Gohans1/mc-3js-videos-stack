@@ -1,5 +1,5 @@
 // @ts-nocheck
-// Steve's performance as a function of film time, from edit.json `steve`:
+// Steve's performance as a function of film time, from src/timeline/steve.json:
 //   moves [{t, at, yaw, pose, walk?, via?, do}]  where he is and the body pose he holds from t on. Between two keys the
 //     pose blends and the body shifts (smoothstep) over soles that stay planted (src/feet.ts steps them when it drifts
 //     too far); with walk: true on the later key he walks there (gait phased from the distance walked, every footfall
@@ -48,7 +48,7 @@ export const POSES = {
   reach: (s) => POSES.kneel(s, 50),
   pull: (s) => POSES.kneel(s, 18),
   hold: (s) => POSES.kneel(s, 10),
-  // the dig (edit.json props.files): bent in over the drawer for the next folder, upright on his knees to read it, then a
+  // the dig (src/timeline/props.json files): bent in over the drawer for the next folder, upright on his knees to read it, then a
   // half turn of the chest to the side the folder is thrown to (his right: tossR), so it leaves the hand away from his body
   digReach: (s) => POSES.kneel(s, 42),
   digRead: (s) => addPose(POSES.kneel(s, 4), { head: [4, 0, 0] }),
@@ -138,7 +138,7 @@ const mixPose = (a, b, k) => {
 const keyAt = (keys, t) => { let i = 0; while (i < keys.length - 1 && t >= keys[i + 1].t) i++; return i; };
 const yawLerp = (a, b, k) => a + (((b - a + 540) % 360) - 180) * k;
 
-// Distances along the walked path at every move key, computed once per edit (the studio swaps EDIT.steve on save)
+// Distances along the walked path at every move key, computed once per moves array
 const paths = new WeakMap();
 const pathOf = (moves) => {
   if (paths.has(moves)) return paths.get(moves);

@@ -9,9 +9,9 @@
 // bone, the way Minecraft animation rigs build faces. Mouth shapes are Rhubarb Lip Sync's A-H and X (this film's
 // narrator is off screen: Steve's mouth stays shut).
 import * as THREE from "three";
-import { clamp01, smooth } from "./ease";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { clamp01, smooth } from "./ease";
 
 export const PX = 1.875 / 32; // one skin pixel at the size the game draws a player
 const D = Math.PI / 180;

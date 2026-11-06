@@ -27,7 +27,7 @@ SFX = {
     "rustle_hand": (320144, None, "his right hand twitching on the mattress at 00:02.8 (Blanket Movement 6)"),
     "rustle_head": (556711, 1.6, "his collar on the mattress as his head turns at 00:06.6 (Rustling fabric)"),
     "breath": (707832, None, "the short breath in as his eyes open at 00:03.7 (IN-BREATHS; the mix keeps the first breath)"),
-    # Options the studio can switch to (edit.json `try` on a bed or sound effect)
+    # Options the studio can switch to (src/timeline/audio.json `try` on a bed or sound effect)
     "hum_lowfreq": (72091, None, "room hum option: a plain low-frequency hum (Low Frequency Humming Noise)"),
     "hum_fluorescent": (784208, None, "room hum option: old fluorescent tubes in a quiet room (1950s Flourescent Bathroom Lights)"),
     "hum_backrooms": (626096, None, "room hum option: a buzzing fluorescent backrooms tone (Backrooms Ambience)"),

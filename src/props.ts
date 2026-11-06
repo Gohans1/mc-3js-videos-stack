@@ -1,6 +1,6 @@
 // @ts-nocheck
 // The props that move in section 1.2, all from the film's own block models (pack/assets/gohans) and all placed from film
-// time alone (edit.json `props`):
+// time alone (src/timeline/props.json):
 //   chair [{t, dx}]          the chair slides east by dx (he pulls it out at 0:50, scoots in as he sits, skids back at 1:10)
 //   drawer [{t, open, ease}]  the filing drawer under the desk, open 0..1 of its 0.62 m run; ease "yank" for the jerk at 1:12
 //   screen {on, lines, typing?}  the CRT's picture switches on (text in the game's own font, the cursor blinks).
@@ -15,7 +15,7 @@
 //   pages [{title, lines}]   what is printed on the loose sheets (and the folders' cover labels): useless beginner stuff
 //   spill {at, sheets: [{page, land: [x, z], yaw, pick, hand, stack?}], carry}  the burst: sheets fly out of the drawer
 //                            onto the floor; one is taken by `hand` at pick, a right-hand one passes to the left at stack;
-//                            carry [[t, mode]] is how the left hand holds the gathered pages from t (modes: see shapeOf)
+//                            carry [[t, mode]] is how the left hand holds the gathered pages from t (modes: see src/carry.ts shapeOf)
 //   desk {t, at, yaw}        his left hand lays the pages on the desk at t, the last gathered on top
 //   takes [{t, hand, face}]  a hand takes the top page off the desk pile at t and holds it up to read from face
 //   fling {t, lands: [[x, z], ...]}  he flings every page he holds and sweeps the desk pile off with the same stroke:
@@ -207,6 +207,7 @@ export async function buildProps(sources, scene, EDIT) {
   const scrapBox = new THREE.Box3().setFromObject(scrap);
   const scrapMid = new THREE.Vector3((scrapBox.min.x + scrapBox.max.x) / 2, scrapBox.min.y, (scrapBox.min.z + scrapBox.max.z) / 2);
   // a folder's middle, and the middle of the face it lands on when it falls on its side (model -z turns to the floor)
+  // measured after printProps put the labels on: a folder lands on its label's face
   const fb = new THREE.Box3().setFromObject(folders[0]), fs = fb.getSize(new THREE.Vector3());
   const folderMid = fb.getCenter(new THREE.Vector3()), folderBase = folderMid.clone().setZ(fb.min.z);
 
@@ -215,7 +216,7 @@ export async function buildProps(sources, scene, EDIT) {
   const inkIt = (o, page) => { const ink = o.userData.ink; if (ink && pageMats.length) ink.material = pageMats[page % pageMats.length]; };
 
   // The pages the silverfish spills: gathered off the floor, laid on the desk, taken up one by one and read, flung off.
-  // Every page's states come from edit.json alone (props.spill, desk, takes, fling); returns the next free sheet
+  // Every page's states come from props.json alone (spill, desk, takes, fling); returns the next free sheet
   const pagesAt = (t) => {
     const Pr = P(), Sp = Pr.spill, D = Pr.desk;
     if (!Sp) return 0;
@@ -328,6 +329,6 @@ export async function buildProps(sources, scene, EDIT) {
     // the chair's looks for the studio (src/variants.ts asVariant); setChair keeps chair_grip on the shown one
     chairLooks, chairBox, setChair: (id) => { const i = CHAIRS.findIndex((c) => c.id === id); if (i >= 0) chairPick = i; },
     open, chairDx,
-    objects: [[button, "stone button (minecraft:stone_button)"], [chair, "chair (pack/pick.py, choices.json)"], [tray, "filing drawer (pack/file_drawer.json)"], [dome, "CCTV dome (pack/cctv_dome.json)"], [scrap, "folded scrap (pack/paper_scrap.json)"], [glass, "CRT picture (props.ts, game font)"], [silverfish.g, "silverfish (src/silverfish.ts, game model)"]],
+    objects: [[button, "stone button (minecraft:stone_button)"], [chair, "chair (pack/pick.py, choices.json)"], [tray, "filing drawer (pack/file_drawer.json)"], [dome, "CCTV dome (pack/cctv_dome.json)"], [scrap, "folded scrap (pack/paper_scrap.json)"], [glass, "CRT picture (src/screen.ts, game font)"], [silverfish.g, "silverfish (src/silverfish.ts, game model)"]],
   };
 }

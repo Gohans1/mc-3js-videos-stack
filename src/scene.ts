@@ -3,7 +3,7 @@
 // door, stalls at the screen and tears through the filing drawer. Blocks are the game's
 // own models (block-model-renderer), Steve is MCprep's rigged player (src/player.ts), the CCTV caption is MineRender GUI
 // text. draw(t) draws any moment straight away, so the studio, stills and the renderer all seek. Every time and camera key
-// lives in edit.json (film seconds). Mojang files come from assets/public/mc and /mcasset (links to E:, never committed).
+// lives in EDIT (src/edit.ts: src/edit.json and src/timeline/*.json, film seconds). Mojang files come from assets/public/mc and /mcasset (links to E:, never committed).
 import * as THREE from "three";
 import { unzipSync } from "fflate";
 import { BloomEffect, BlendFunction, BrightnessContrastEffect, EffectComposer, EffectPass, HueSaturationEffect, LensDistortionEffect, NoiseEffect, RenderPass, SMAAEffect, ToneMappingEffect, ToneMappingMode, VignetteEffect } from "postprocessing";
@@ -76,7 +76,7 @@ export const SHOTS = [
   { t: 93.5, size: "top-down (overhead), from his right", what: "he tears through the rest" }, // overhead from above his right (the view swaps sides every ~1.5 s): no more reading: he flings the rest
   { t: 94.52, size: "medium (MS), from behind him", what: "the drawer comes out: an empty slot" }, // he pulls the drawer right out: the slot is empty but for one scrap
   { t: 96.12, size: "POV from inside the slot", what: "his face peers in, his hand reaches", fill: true }, // from inside the slot: his face, then his hand
-  { t: 100.353, size: "ECU push-in, over his eyes", what: "the note", noHead: true }, // push in on the note (its text: edit.json props.note)
+  { t: 100.353, size: "ECU push-in, over his eyes", what: "the note", noHead: true }, // push in on the note (its text: src/timeline/props.json note)
 ];
 export let DURATION = 0;
 export const SHOTS_OUT = [];
