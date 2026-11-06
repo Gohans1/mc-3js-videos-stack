@@ -1,16 +1,14 @@
 // @ts-nocheck
 // Lab: one build of the film; prints where Steve's joints, hands and the props are at moments, for placing Steve, the
-// camera and the props by numbers. AT=40,58 ENTRY=lab/diag.ts node src/render.mjs stills
+// camera and the props by numbers. AT=40,58 ENTRY=lab/diag.ts bun run render stills
 import * as THREE from "three";
 import { buildScene } from "../src/scene";
+import { canvas, config, done, log } from "live-studio/lab";
 
-const post = (url, body) => fetch(url, { method: "POST", body });
-window.onerror = (m) => { post("/log", "ERROR " + m); };
-window.onunhandledrejection = (e) => { post("/log", "ERROR " + (e.reason?.stack ?? e.reason)); };
 const f = (v) => v.toArray().map((n) => n.toFixed(2)).join(",");
 (async () => {
-  const cfg = await (await fetch("/config")).json();
-  const draw = await buildScene(document.getElementById("gl"), cfg.W, cfg.H, true);
+  const cfg = await config();
+  const draw = await buildScene(canvas(), cfg.W, cfg.H, true);
   const { bones, objects } = draw.tools;
   const v = new THREE.Vector3();
   for (const s of cfg.stills) {
@@ -27,7 +25,7 @@ const f = (v) => v.toArray().map((n) => n.toFixed(2)).join(",");
     }
     out.push(`camera ${f(draw.tools.camera.position)}`);
     for (const [o, name] of objects.slice(2)) out.push(`${name.split(" (")[0]} ${f(new THREE.Box3().setFromObject(o).min)}..${f(new THREE.Box3().setFromObject(o).max)}`);
-    await post("/log", out.join(" | "));
+    await log(out.join(" | "));
   }
-  await post("/done", "");
+  await done();
 })();
