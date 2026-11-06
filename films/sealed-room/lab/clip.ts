@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Lab: a mocap clip played in the film itself (bodyAt, feet.ts foot lock, legTo, the cell's light): standing, half a
 // second's blend into the clip, the clip (held 2 s at least), its crossfade into standing where it left him, seen from
-// his front and his left: renders/clip_<n>_<front|left>.jpg (python lab/sheet_clip.py: contact sheets). Logs where the
+// his front and his left: renders/clip_<n>_<front|left>.jpg (python ../../packages/clip-catalog/sheet_clip.py: contact sheets). Logs where the
 // clip leaves him, for the next key's at and yaw.
 // LAB_CLIP=mixamo/Kneeling_Idle_c9cd9c47 ENTRY=lab/clip.ts bun run render stills  (LAB_AT=x,z floor spot, LAB_FPS=4,
 // LAB_T0=film second it starts at: the cell's light is the film's at that time, dark in the first half minute)

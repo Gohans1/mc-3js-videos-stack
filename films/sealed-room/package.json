@@ -28,6 +28,7 @@
       "../../scripts/sound/mix.py",
       "sound/sfx",
       "src/timeline/audio.json"
-    ]
+    ],
+    "chrome": "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe"
   }
 }

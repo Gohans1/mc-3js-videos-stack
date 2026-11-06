@@ -1,0 +1,9 @@
+{
+  "root": "E:/mc_vault",
+  "film_links": {
+    "mc": "jar",
+    "mcasset": "mcasset",
+    "rig": "mcprep",
+    "motion": "motion"
+  }
+}

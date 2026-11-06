@@ -2,5 +2,11 @@
   "name": "mc-films",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "films/*"]
+  "workspaces": [
+    "packages/*",
+    "films/*"
+  ],
+  "scripts": {
+    "link": "bun scripts/link.ts"
+  }
 }

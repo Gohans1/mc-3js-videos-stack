@@ -1,8 +1,8 @@
 // @ts-nocheck
-// Lab: tags for a clip library, measured on Steve himself (each clip retargeted and baked as the film does, src/clips.ts,
-// at 30 fps): one "ROW {json}" line per clip, which lab/catalog.sh appends to E:/mc_vault/motion/catalog/<lib>.jsonl and
-// lab/catalog.py searches. No stills.
-// ENTRY=lab/catalog.ts LAB_LIB=mixamo LAB_CLIPS=a,b,c bun run render stills
+// Lab: tags for a clip library, measured on Steve himself (each clip retargeted and baked as the film does, mc-actor/clips,
+// at 30 fps): one "ROW {json}" line per clip, which clip-catalog/catalog.sh appends to vault/motion/catalog/<lib>.jsonl and
+// clip-catalog/catalog.py searches. No stills.
+// ENTRY=../../packages/clip-catalog/catalog.ts LAB_LIB=mixamo LAB_CLIPS=a,b,c bun run render stills
 // Fields: dur s; start/end posture and the posture runs (POSTURE below, each run at least RUN s); travel (end x, z in his
 // frame, m: x his left, z his front), reach (furthest from the start, m), turn (end ry, deg to his left); loop (first
 // against last frame: worst joint deg, hips cm); energy (mean joint turn speed, deg/s); look (head twist on the neck,
@@ -38,7 +38,7 @@ const smooth = (a, w) => a.map((_, i) => { let s = 0, n = 0; for (let j = Math.m
 const unwrap = (a) => a.reduce((o, x) => { o.push(o.length ? o.at(-1) + THREE.MathUtils.euclideanModulo(x - a[o.length - 1] + 180, 360) - 180 : x); return o; }, []);
 const t1 = (i) => +(i / FPS).toFixed(1);
 
-// The clip as timed segments per channel, measured (what lab/catalog.py hands Jev next to the eye-checked notes): body
+// The clip as timed segments per channel, measured (what clip-catalog/catalog.py hands Jev next to the eye-checked notes): body
 // posture, travel (direction in his own frame, distance), body turns, gaze (head direction: up / down past 20 deg, far down
 // past 50, left / right of his chest past 35), each hand (where: on the floor / low / hip / chest / face height / at his
 // head / above it; reaching forward past 0.3 m or out to the side past 0.45 m from the chest; how fast it moves against

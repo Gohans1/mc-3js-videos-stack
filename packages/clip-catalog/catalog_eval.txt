@@ -1,4 +1,4 @@
-# Scenes for judging the clip catalogue's search (python lab/catalog_eval.py): one plain-English scene per line, the kind
+# Scenes for judging the clip catalogue's search (python ../../packages/clip-catalog/catalog_eval.py): one plain-English scene per line, the kind
 # any film asks for, not one film's script. Rerun after changing what Jev reads (catalog.py describe) or the notes, and
 # compare the picks. A scene with no fitting clip is kept on purpose: the right answer there is a near miss, not nonsense.
 lying on his back, completely still, then one hand twitches slightly

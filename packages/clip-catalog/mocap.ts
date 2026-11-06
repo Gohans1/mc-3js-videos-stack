@@ -1,7 +1,7 @@
 // @ts-nocheck
-// Lab: a human clip onto Steve (src/mocap.ts), judged from every side and by numbers. Quaternius UAL1/UAL2 (CC0) or
-// Mixamo FBX, in E:/mc_vault/motion, served as motion/.
-//   ENTRY=lab/mocap.ts LAB_CLIP=Interact bun run render stills
+// Lab: a human clip onto Steve (mc-actor/mocap), judged from every side and by numbers. Quaternius UAL1/UAL2 (CC0) or
+// Mixamo FBX, in the vault's motion/ (bun run link), served to the page as motion/.
+//   ENTRY=../../packages/clip-catalog/mocap.ts LAB_CLIP=Interact bun run render stills
 //     renders/mocap_<clip>_NNN.jpg, 4 x 2 panels that follow the hips: top row source and Steve from the front, source and
 //     Steve from their left; bottom row Steve from behind, his right, above, the floor. Then the numbers (CHECKS below),
 //     worst frame of each
@@ -115,7 +115,7 @@ const POINTS = (sd) => [
       const m = rt.measure();
       if (JSON.stringify(p, (k, x) => (typeof x === "number" && !Number.isFinite(x) ? "BAD" : x)).includes("BAD")) worst("not a number", 1, t);
       for (const [k, e] of Object.entries(m.dir)) worst(`direction error ${k}`, e, t);
-      // bent, the source's own hinge plane against the one its upper bone's roll gives (src/mocap.ts hinge): far apart,
+      // bent, the source's own hinge plane against the one its upper bone's roll gives (mc-actor/mocap hinge): far apart,
       // a limb rolls between them as it straightens
       for (const [k, g] of Object.entries(m.gap)) (gaps[k] ??= []).push(g);
       worst("float (Steve's lowest point above where it should be)", m.float * 100, t);

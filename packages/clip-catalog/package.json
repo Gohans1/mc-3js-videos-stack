@@ -1,0 +1,15 @@
+{
+  "name": "clip-catalog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The motion clip catalogue (Mixamo, UAL) measured on Steve, eye-reviewed, searched with filters or ranked by Jev (jev.py); data in vault/motion/catalog. Run from a film folder: its pages render through the film's studio.",
+  "dependencies": {
+    "fflate": "0.8.3",
+    "live-studio": "link:live-studio",
+    "mc-actor": "workspace:*"
+  },
+  "peerDependencies": {
+    "three": "0.186.1"
+  }
+}
