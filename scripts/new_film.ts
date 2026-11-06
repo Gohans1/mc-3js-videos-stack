@@ -1,7 +1,7 @@
 // A new film from templates/film: bun run new-film <name> [studio port]
 // Copies the template into films/<name>, connects it to the studio the studio's own way (packages/live-studio/init.mjs: its
 // package.json link and scripts, bun install; it adds nothing the template holds already), links the vault into it
-// (scripts/link.ts) and writes its picks zip (pack/picks.json, empty to start). Then: cd films/<name> && bun run studio.
+// and builds its picks zip from pack/picks.json, empty to start (scripts/link.ts). Then: cd films/<name> && bun run studio.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -32,7 +32,6 @@ const run = (cmd: string, args: string[], cwd: string) => {
 };
 run("node", [join(studio, "init.mjs"), film], ROOT);
 run("bun", ["scripts/link.ts", name], ROOT);
-run("python", [join(ROOT, "packages/mc-assets/pick.py")], film);
 console.log(`\nfilms/${name} is ready (studio port ${port}).
   cd films/${name} && bun run studio            the studio prints both "film contract ... ok" lines
   NOLIST=1 AT=1,4 bun run render stills          a first look, renders/still_*.jpg
