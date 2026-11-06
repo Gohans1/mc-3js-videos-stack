@@ -1,10 +1,10 @@
 // @ts-nocheck
 // Lab: one still per clip for checking the catalogue by eye: 8 moments of the clip on Steve (baked as the film does,
-// src/clips.ts), spread evenly from its first to its last frame, each from his front-left at 3/4 over a floor grid (1 m
+// mc-actor/clips), spread evenly from its first to its last frame, each from his front-left at 3/4 over a floor grid (1 m
 // squares), framed on his body, so posture, floor contact and hands read at a glance. renders/sheet_<lib>__<clip>.jpg;
-// lab/catalog_review.py captions them with their tags and stacks them into review pages. Many clips per run (one build):
-// lab/catalog_review.sh.
-// ENTRY=lab/catalog_sheet.ts LAB_LIB=mixamo LAB_CLIPS=a,b,c bun run render stills
+// clip-catalog/catalog_review.py captions them with their tags and stacks them into review pages. Many clips per run (one build):
+// clip-catalog/catalog_review.sh.
+// ENTRY=../../packages/clip-catalog/catalog_sheet.ts LAB_LIB=mixamo LAB_CLIPS=a,b,c bun run render stills
 import * as THREE from "three";
 import { unzipSync } from "fflate";
 import { canvas, config, done, log, still } from "live-studio/lab";

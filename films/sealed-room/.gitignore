@@ -4,8 +4,7 @@ notes/
 .venv/
 __pycache__/
 .live_hosts
-# Links to E: (Mojang files and Chrome: never commit them)
-/tools
+# Links into the vault (bun run link at the repo root): Mojang files, never commit them
 /assets/public/mc
 /assets/public/mcasset
 /assets/public/rig

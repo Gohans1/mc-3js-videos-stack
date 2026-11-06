@@ -1,25 +1,27 @@
-"""Search the clip catalogue (E:/mc_vault/motion/catalog/<lib>.jsonl, written by lab/catalog.sh) for a scene's move.
+"""Search the clip catalogue (vault/motion/catalog/<lib>.jsonl, written by clip-catalog/catalog.sh) for a scene's move.
 
-python lab/catalog.py kneel pray --to stand          words match the clip's name, its Mixamo search keywords and
+python ../../packages/clip-catalog/catalog.py kneel pray --to stand          words match the clip's name, its Mixamo search keywords and
                                                      the description written when someone checked it by eye
-python lab/catalog.py --from stand --to sitFloor --still --dur 1-6
-python lab/catalog.py scared --head                  a hand at his head for a while
-python lab/catalog.py --jev "he searches the floor with his hands for something hidden"
+python ../../packages/clip-catalog/catalog.py --from stand --to sitFloor --still --dur 1-6
+python ../../packages/clip-catalog/catalog.py scared --head                  a hand at his head for a while
+python ../../packages/clip-catalog/catalog.py --jev "he searches the floor with his hands for something hidden"
                                                      Jev reads every clip's description and ranks them by how well
                                                      each acts the scene out (rerank, below); start here, unfiltered,
                                                      so a wrong filter word can't hide the right clip; add filters
                                                      (--has kneel ...) only to narrow a second pass
 
-Postures (lab/catalog.ts POSTURE): stand crouch kneel sitSeat sitFloor allFours lie. Weapons and fights are left out unless
+Postures (clip-catalog/catalog.ts POSTURE): stand crouch kneel sitSeat sitFloor allFours lie. Weapons and fights are left out unless
 --fights. Each line: ref, seconds, posture runs, travel (m to his left, m ahead), turn, hands, look, a loop mark. Tags
-checked by eye (lab/catalog_review.py) override the measured ones; "(unchecked)": nobody has looked yet. Then preview
-the picks in the cell: LAB_CLIP=<ref> ENTRY=lab/clip.ts bun run render stills && python lab/sheet_clip.py
+checked by eye (clip-catalog/catalog_review.py) override the measured ones; "(unchecked)": nobody has looked yet. Then preview
+the picks in the cell: LAB_CLIP=<ref> ENTRY=lab/clip.ts bun run render stills && python ../../packages/clip-catalog/sheet_clip.py
 """
-import argparse, json, os, random, re, sys, threading, time, urllib.error, urllib.request
+import argparse, json, random, re, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-ROOT = Path("E:/mc_vault/motion")
+from jev import Jev
+
+ROOT = Path(__file__).resolve().parents[2] / "vault/motion"  # the repo's vault link (bun run link)
 FIGHT = re.compile(r"gun|rifle|pistol|sword|shoot|shot|aim|reload|punch|kick|boxing|fight|attack|block|arrow|archer|"
                    r"blade|knife|axe|katana|grenade|magic|spell|zombie|mutant|sniper|stab|slash|combo|"
                    r"strike|uppercut|jab|hook|melee|weapon|dodge|parry|hit_reaction|martial|capoeira|kata", re.I)
@@ -48,7 +50,7 @@ TL = {"body": "body", "moves": "travel", "turns": "body turns", "gaze": "gaze", 
 def describe(r, full=False):
     """What Jev reads for a clip: the eye-checked note (what it is, mood, what it implies he touches, style, flaw), else
     the clip's name. `full` adds the measured facts (length, start and end, travel, turn, loop) and the timeline
-    (lab/catalog.ts `tl`: when each posture, step, turn, gaze, hand position and tempo happens), ~5x the tokens of the
+    (clip-catalog/catalog.ts `tl`: when each posture, step, turn, gaze, hand position and tempo happens), ~5x the tokens of the
     note alone, so Jev's free daily quota runs out ~5x sooner; the note alone ranked well enough. A body sequence
     corrected by eye replaces the measured body channel."""
     if r.get("desc"):
@@ -69,57 +71,8 @@ def describe(r, full=False):
     return " | ".join([head, facts, *tl])
 
 
-def secret(env, file):
-    f = Path.home() / ".secrets" / file
-    return os.environ.get(env) or (f.read_text().split("=", 1)[1].strip() if f.exists() else None)
-
-
-# Jev routes, tried in order: OpenCode Zen's free one (a daily quota: 429 FreeUsageLimitError, back in hours), then
-# OpenRouter's paid one ($0.042 per million input tokens: a whole-catalogue search ~$0.002, ~$0.01 with --timeline).
-# Keys live in ~/.secrets/<file> or the env var, never in the repo. Inputs may be kept by the provider: scene words only.
-ROUTES = [("OpenCode Zen free", "https://opencode.ai/zen/v1/systemone", "jev-1.13-free", "OPENCODE_API_KEY", "opencode_zen.env"),
-          ("OpenRouter (paid)", "https://openrouter.ai/api/v1/systemone", "typesafe/jev-1.14", "OPENROUTER_API_KEY", "openrouter.env")]
-SPEND_CAP = 0.05  # USD per run on a paid route: a run past it stops, as a runaway loop would
 HEAT, KEEP, SEED, FIT_N = 200, 20, 1, 5  # rerank heats; fits checks the first FIT_N shown
 
-
-class Jev:
-    """Calls Jev (TypeSafe System One, docs.typesafe.ai) on the first route in ROUTES that still has quota, adding up
-    what the paid route costs. Thread-safe: the heats run in parallel."""
-
-    def __init__(self):
-        self.routes = [r for r in ROUTES if secret(*r[3:])]
-        self.spent, self.lock = 0.0, threading.Lock()
-
-    def ask(self, state, questions):
-        while self.routes:
-            route = self.routes[0]
-            name, url, model, env, file = route
-            # Cloudflare in front of Zen refuses Python's default User-Agent (error 1010)
-            req = urllib.request.Request(url, data=json.dumps({"model": model, "state": state, "questions": questions}).encode(),
-                headers={"Authorization": f"Bearer {secret(env, file)}", "Content-Type": "application/json", "User-Agent": "clip-catalog/1"})
-            # 429 with a short Retry-After is a burst limit: wait it out; with hours (the free quota spent): next route
-            for wait in [5, 10, 20, 40, 80, 160, 0]:
-                try:
-                    res = json.load(urllib.request.urlopen(req, timeout=120))
-                    with self.lock:
-                        self.spent += res.get("usage", {}).get("cost") or 0
-                        if self.spent > SPEND_CAP:
-                            sys.exit(f"Jev: stopped at ${self.spent:.4f}, past SPEND_CAP ${SPEND_CAP}")
-                        self.used = name
-                    return res["answers"]
-                except urllib.error.HTTPError as e:
-                    after = float(e.headers.get("Retry-After") or wait)
-                    if e.code != 429 or not wait:
-                        raise
-                    if after > 300:
-                        with self.lock:
-                            if self.routes and self.routes[0] is route:
-                                print(f"Jev: {name} quota spent, back in {after / 3600:.1f} h", file=sys.stderr)
-                                self.routes.pop(0)
-                        break
-                    time.sleep(after)
-        sys.exit("Jev: no route left (keys in ~/.secrets: opencode_zen.env, openrouter.env); search with filters, no --jev")
 
 
 def rerank(jev, scene, hits, full=False):
@@ -156,7 +109,7 @@ def fits(jev, scene, shown, full=False):
 
 
 def rows(libs):
-    # measured tags, with the fixes recorded by eye (lab/catalog_review.py) over them; `seen`: someone has checked the clip
+    # measured tags, with the fixes recorded by eye (clip-catalog/catalog_review.py) over them; `seen`: someone has checked the clip
     rp = ROOT / "catalog" / "review.json"
     review = json.loads(rp.read_text(encoding="utf-8")) if rp.exists() else {}
     for lib in libs:
@@ -187,9 +140,9 @@ def main():
     ap.add_argument("--bend", action="store_true", help="bends over on his feet (picking up, putting down)")
     ap.add_argument("--air", choices=["no", "yes"], help="off the floor (a jump, or lying or sitting on furniture): never / a while")
     ap.add_argument("--look", type=float, help="head turns on the neck at least this many degrees")
-    ap.add_argument("--mood", help="checked clips only: one of lab/catalog_review.py MOODS (scared, tired, curious...)")
-    ap.add_argument("--prop", help="checked clips only: one of lab/catalog_review.py PROPS (floor, door, table...)")
-    ap.add_argument("--style", help="checked clips only: one of lab/catalog_review.py STYLES (natural, cartoonish...)")
+    ap.add_argument("--mood", help="checked clips only: one of clip-catalog/catalog_review.py MOODS (scared, tired, curious...)")
+    ap.add_argument("--prop", help="checked clips only: one of clip-catalog/catalog_review.py PROPS (floor, door, table...)")
+    ap.add_argument("--style", help="checked clips only: one of clip-catalog/catalog_review.py STYLES (natural, cartoonish...)")
     ap.add_argument("--fights", action="store_true", help="keep weapons and fights")
     ap.add_argument("--jev", metavar="SCENE", help="rank what the filters leave by how well it acts out SCENE (rerank)")
     ap.add_argument("--timeline", action="store_true", help="Jev also reads the measured facts and timeline (~5x the quota)")

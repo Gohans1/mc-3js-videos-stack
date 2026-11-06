@@ -20,6 +20,18 @@
         "three": "0.186.1",
       },
     },
+    "packages/clip-catalog": {
+      "name": "clip-catalog",
+      "version": "0.1.0",
+      "dependencies": {
+        "fflate": "0.8.3",
+        "live-studio": "link:live-studio",
+        "mc-actor": "workspace:*",
+      },
+      "peerDependencies": {
+        "three": "0.186.1",
+      },
+    },
     "packages/film-kit": {
       "name": "film-kit",
       "version": "0.1.0",
@@ -192,6 +204,8 @@
     "chownr": ["chownr@2.0.0", "", {}, "sha512-bIomtDF5KGpdogkLd9VspvFzk9KfpyyGlS8YFVZl7TGPBHL5snIOnxeshwVgPteQ9b4Eydl+pVbIyE1DcvCWgQ=="],
 
     "clean-stack": ["clean-stack@2.2.0", "", {}, "sha512-4diC9HaTE+KRAMWhDhrGOECgWZxoevMc5TlkObMqNSsVU62PYzXZ/SMTjzyGAFF1YusgxGcSWTEXBhp0CPwQ1A=="],
+
+    "clip-catalog": ["clip-catalog@workspace:packages/clip-catalog"],
 
     "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ=="],
 

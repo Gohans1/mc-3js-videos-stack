@@ -1,9 +1,11 @@
 """Checks the catalogue's tags against what the clips' own names say (a clip named Kneeling must kneel somewhere, one named
-Sitting must sit...): run after `bash lab/catalog.sh`, above all after a change to lab/catalog.ts. Prints every clip that
+Sitting must sit...): run after `bash ../../packages/clip-catalog/catalog.sh`, above all after a change to clip-catalog/catalog.ts. Prints every clip that
 disagrees, for a look with lab/clip.ts: a name can be wrong too (Kneeling_To_Holding_Down... ends lying), so judge by eye.
-python lab/catalog_check.py
+python ../../packages/clip-catalog/catalog_check.py
 """
 import glob, json, re
+
+from catalog import ROOT
 
 FIGHT = re.compile(r"gun|rifle|pistol|sword|shoot|aim|reload|punch|kick|boxing|fight|attack|block|arrow|bow|zombie|mutant|sniper|grenade|flip", re.I)
 # name word -> postures of which one must show up in the clip (None: a check of its own below)
@@ -19,7 +21,7 @@ RULES = [
 
 
 def main():
-    rows = [json.loads(l) for f in sorted(glob.glob("E:/mc_vault/motion/catalog/*.jsonl")) for l in open(f, encoding="utf-8") if l.strip()]
+    rows = [json.loads(l) for f in sorted(glob.glob(str(ROOT / "catalog/*.jsonl"))) for l in open(f, encoding="utf-8") if l.strip()]
     errors = [r for r in rows if "error" in r]
     rows = [r for r in rows if "error" not in r and not FIGHT.search(r["ref"])]
     total = bad_total = 0

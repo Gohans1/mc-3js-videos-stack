@@ -1,31 +1,31 @@
-"""Review pages for checking every catalogue tag by eye: each clip's sheet (lab/catalog_review.sh) captioned with its tags,
-8 clips a page, renders/catalog_review/page_NNN.jpg, plus pages.json (the refs on each page, in order).
+"""Review pages for checking every catalogue tag by eye: each clip's sheet (clip-catalog/catalog_review.sh) captioned with its tags,
+8 clips a page, vault/motion/catalog/review_pages/page_NNN.jpg, plus pages.json (the refs on each page, in order).
 
-The verdicts go in E:/mc_vault/motion/catalog/review.json, one entry per clip someone has looked at:
+The verdicts go in vault/motion/catalog/review.json, one entry per clip someone has looked at:
   desc  what he does on screen, plain English, in order, with the words a scene would be searched by ("stands, kneels on
-        his right knee, sweeps both hands over the floor, stands back up"); lab/catalog.py searches it with the name
+        his right knee, sweeps both hands over the floor, stands back up"); clip-catalog/catalog.py searches it with the name
   mood  1-3 of MOODS below, how it reads (fixed words, so a filter or a decision model like Jev matches them exactly)
   prop  1-2 of PROPS below: what the move implies he touches or faces ("none" when nothing)
   style 1-2 of STYLES below: how it is acted, so a film can keep one tone (a feminine walk or a cartoon double take
         looks wrong in a grim drama, a naturalistic shrug reads too small in a comedy)
   flaw  what looks wrong on Steve, if anything ("right hand passes through his head at the end")
   any measured field that is wrong, with its right value ("seq": ["stand", "kneel"], "end": "kneel")
-lab/catalog.py applies them over the measured tags and marks clips nobody has looked at yet. Pages skip clips already in
+clip-catalog/catalog.py applies them over the measured tags and marks clips nobody has looked at yet. Pages skip clips already in
 review.json.
 
-python lab/catalog_review.py              make the pages
-python lab/catalog_review.py --missing style    pages of reviewed clips without that field, captioned with their notes
+python ../../packages/clip-catalog/catalog_review.py              make the pages
+python ../../packages/clip-catalog/catalog_review.py --missing style    pages of reviewed clips without that field, captioned with their notes
                                           (a field added to the notes later), then --page N as usual
-python lab/catalog_review.py --page 3 < notes.json    a page's verdicts: {"1": {"desc": ...}, ..., "8": {...}}, every slot
-python lab/catalog_review.py --fix mixamo/X '{"seq": ["stand"], "start": "stand"}'    one clip, merged into its entry
+python ../../packages/clip-catalog/catalog_review.py --page 3 < notes.json    a page's verdicts: {"1": {"desc": ...}, ..., "8": {...}}, every slot
+python ../../packages/clip-catalog/catalog_review.py --fix mixamo/X '{"seq": ["stand"], "start": "stand"}'    one clip, merged into its entry
 """
 import argparse, json, sys
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
-from catalog import has
+from catalog import ROOT, has
 
-CAT = Path("E:/mc_vault/motion/catalog")
-REVIEW, SHEETS, OUT = CAT / "review.json", Path("renders/catalog_sheets"), Path("renders/catalog_review")
+CAT = ROOT / "catalog"
+REVIEW, SHEETS, OUT = CAT / "review.json", CAT / "sheets", CAT / "review_pages"
 PER = 8
 MOODS = {"neutral", "calm", "happy", "excited", "proud", "sad", "tired", "scared", "nervous", "angry", "surprised",
          "confused", "curious", "thinking", "pain", "sick", "drunk", "playful", "bored", "relieved"}
