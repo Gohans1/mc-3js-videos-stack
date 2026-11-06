@@ -20,6 +20,7 @@ import { cameraAt } from "./camera";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants, VARIANTS } from "./variants";
 import { GESTURES, PX, addPose, blendPose, loadRig, makePlayer, mouthAt } from "./player";
+import { shotcheck, shotlist } from "film-kit/shotcheck";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -233,7 +234,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   stage("light, lens, hud");
 
   // His eyes on the pillow, measured from the rig once lying: the close-up and his own view hang off this point
-  const eye = V(0, 0, 0);
+  const eye = V(0, 0, 0), eyeRest = V(0, 0, 0);
   {
     steve.setPose(GESTURES.sleep());
     steve.g.updateMatrixWorld(true);
@@ -241,6 +242,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     head.getWorldPosition(eye);
     eye.y += 4 * PX; // the face: half a head (8 px) above the neck pivot, lying face up
     eye.z -= L.eyeFromNeck; // the eyes sit this far up the head from the neck pivot
+    eyeRest.copy(head.getWorldPosition(V(0, 0, 0)));
   }
   // Steve's box lying down; his own view counts only what lies below the neck (the lens is inside his head)
   const steveBox = new THREE.Box3().setFromObject(steve.rig);
@@ -373,6 +375,35 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
     materials: [], composer, renderer,
   };
+  // Steve as film-kit's shotcheck sees him: eyes and head top fixed in the head bone (taken from the eye point above), knees,
+  // soles and elbows as the joints a frame edge must not slice; hidden in his own-view shots
+  const eyeLocal = V(0, 0, 0), topLocal = V(0, 0, 0);
+  {
+    steve.setPose(GESTURES.sleep());
+    steve.g.updateMatrixWorld(true);
+    const head = steve.bones.head, neck = head.getWorldPosition(V(0, 0, 0));
+    eyeLocal.copy(head.worldToLocal(neck.clone().add(eye).sub(eyeRest)));
+    topLocal.copy(head.worldToLocal(neck.clone().add(V(0, 0, -8 * PX)))); // lying head north: up the head is -z
+  }
+  const cine = (from, to) => ({
+    from, to, aspect: W / H,
+    cuts: keysOf(EDIT.cam).filter((k) => k.cut).map((k) => k.t),
+    camera: (t) => { const c = cameraAt(t, keysOf(EDIT.cam)); return { ...c, roll: THREE.MathUtils.radToDeg(c.roll) }; },
+    subjects: (t) => {
+      const shot = SHOTS_OUT[shotAt(t)];
+      if (shot.pov || shot.noHead) return { steve: null };
+      for (const k of ["head", "uaL", "uaR"]) steve.bones[k].scale.setScalar(1);
+      perform(t);
+      const at = (bone) => steve.bones[bone].getWorldPosition(V(0, 0, 0));
+      return { steve: {
+        eye: steve.bones.head.localToWorld(eyeLocal.clone()),
+        at: steve.g.position.clone(),
+        top: steve.bones.head.localToWorld(topLocal.clone()),
+        look: now.look && now.look.w > 0.5 ? now.look.p.clone() : undefined,
+        joints: { kneeL: at("llL"), kneeR: at("llR"), soleL: steve.soleAt("L"), soleR: steve.soleAt("R"), elbowL: at("laL"), elbowR: at("laR") },
+      } };
+    },
+  });
   // What `CHECK=name:args` runs (node node_modules/live-studio/render.mjs stills); each returns lines to print
   const soles = (t) => { perform(t); return ["L", "R"].map((sd) => `${sd} ${steve.soleAt(sd).toArray().map((v) => v.toFixed(3)).join(" ")} -> ${now.feet[sd]?.toArray().map((v) => v.toFixed(3)).join(" ") ?? "pose"} ${now.feet.mode(sd)}`).join(" | "); };
   draw.checks = {
@@ -400,6 +431,10 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     },
     // trace:from,to,step: his soles (world x y z) and their planted targets, one line per sample
     trace: (from, to, step) => { const out = []; for (let t = from; t <= to + 1e-6; t += step) out.push(`${t.toFixed(3)} ${soles(t)}`); return out; },
+    // shots:from,to: film-kit's cinematography lint (jump cuts, the 180-degree line, pans, framing...), silent when clean;
+    // shotlist:from,to: one line per shot with its lens and where his eyes sit
+    shots: (from, to) => shotcheck(cine(from, to)),
+    shotlist: (from, to) => shotlist(cine(from, to)),
   };
   return draw;
 }
