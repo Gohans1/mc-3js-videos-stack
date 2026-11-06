@@ -1,0 +1,16 @@
+{
+  "name": "film-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Motion building blocks for films drawn with draw(t): every function is pure in film time, so any frame renders on its own",
+  "license": "MIT",
+  "exports": {
+    "./curve": "./src/curve.ts",
+    "./spring": "./src/spring.ts",
+    "./transition": "./src/transition.ts",
+    "./shake": "./src/shake.ts"
+  },
+  "scripts": { "test": "bun test" },
+  "dependencies": { "math": "0.1.0" }
+}
