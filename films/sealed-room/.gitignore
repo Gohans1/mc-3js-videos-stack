@@ -11,6 +11,8 @@ __pycache__/
 /assets/public/motion
 /assets/public/vendor/
 /assets/public/block_model_renderer_bg.wasm
+# Built from the vault's mod jars by bun run link (mc-assets/pick.py): their licences, not ours to republish
+/assets/public/picked.zip
 voice/takes/*.mp3
 voice/try/
 sound/mix.wav
