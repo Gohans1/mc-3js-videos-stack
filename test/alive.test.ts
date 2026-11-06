@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { cartoon } from "../src/cartoon";
 import { through } from "../src/curve";
 import { idle } from "../src/idle";
-import { anglesOf, EYE, eyeTime, fixations, gaze } from "../src/gaze";
+import { BLINKS } from "../src/blinks";
+import { anglesOf, BLINK, EYE, eyeTime, fixations, gaze } from "../src/gaze";
 import { overlap } from "../src/overlap";
 import { addPose, throughPose, type Pose } from "../src/pose";
 
@@ -84,14 +85,15 @@ test("gaze: a jump over 33 degrees always brings a blink that starts with it; un
   for (let i = 1; i < f.length - 1 && f[i] < 190; i++) {
     const turn = (fx: number) => [(fx >= f[i] ? 40 : 0), 0] as [number, number];
     const nudge = (fx: number) => [(fx >= f[i] ? 10 : 0), 0] as [number, number];
-    if (eyes(f[i] + 0.075, turn).blink > 0.9) bigBlinks++;
-    if (eyes(f[i] + 0.075, nudge).blink > 0) smallBlinks++;
-    expect(eyes(f[i] + 0.2, turn).blink).toBe(0);
+    // shut at the end of the fast down phase, open again after the slow up phase
+    if (eyes(f[i] + BLINKS.down + 0.01, turn).blink > 0.9) bigBlinks++;
+    if (eyes(f[i] + BLINKS.down + 0.01, nudge).blink > 0) smallBlinks++;
+    if (f[i + 1] > f[i] + BLINK + 0.02) expect(eyes(f[i] + BLINK + 0.01, turn).blink).toBe(0);
   }
   expect(bigBlinks).toBe(f.filter((t) => t > 0 && t < 190).length);
   expect(smallBlinks).toBe(0);
   const justBlinked = gaze([], 200, { blinkedNear: () => true });
-  expect(justBlinked(f[3] + 0.075, (fx) => [(fx >= f[3] ? 40 : 0), 0]).blink).toBe(0);
+  expect(justBlinked(f[3] + BLINKS.down, (fx) => [(fx >= f[3] ? 40 : 0), 0]).blink).toBe(0);
 });
 
 // a 40-degree chest bend over 0.3 s at t 2, held, then back at t 5

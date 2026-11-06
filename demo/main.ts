@@ -10,12 +10,15 @@
 // Also on him: a startle at each bang (not faded over clips: a clip can't know about the bang), the breath held through
 // it, eyes gliding after the silverfish (pursuit), looking away while thinking, the head on the path ahead while walking
 // (steer), and hips that counter where the upper body's mass goes (balance, measured on the rig by Winter's masses).
+// Round 3: blinks that follow what he is doing (fewer while his eyes are busy, at the breaks after), eyes on what his
+// hand goes for before it moves (handeye: found in the hand's own path, keys or clip; over a clip the eyes only),
+// freezing in fear after a bang, and a glance at something that moves at the edge of his view (notice).
 // URL: ?scene=dig|idle|walk|reach|scare|mocap  ?t=<seconds> stops there  ?view=both|side|face|faceOld  ?off=<layer>,...
 //      ?mood=tense|tired (Laban Effort on the layered Steve)
 import * as THREE from "three";
 import { addPose as addRigPose, blendPose, loadRig, makePlayer, mouthAt, PX, walkPose } from "./film/player";
 import { blinkAt, DIG, IDLE, moodAt, POSES } from "./film/dig";
-import { CLIP_A, CLIP_B, mocapScene, REACH, SCARE, WALK } from "./film/extra";
+import { CLIP_A, CLIP_B, CLIP_C, mocapScene, REACH, SCARE, WALK } from "./film/extra";
 import { loadClips } from "./film/clips";
 import { slerpPose } from "./film/mocap";
 import { through } from "../src/curve";
@@ -23,7 +26,7 @@ import { canonical, mask, scalePose, throughPose } from "../src/pose";
 import { overlap } from "../src/overlap";
 import { cartoon } from "../src/cartoon";
 import { idle } from "../src/idle";
-import { anglesOf, eyeTime, gaze, lidOpen, REST_PITCH } from "../src/gaze";
+import { anglesOf, EYE, eyeTime, gaze, lidOpen, REST_PITCH } from "../src/gaze";
 import { attention } from "../src/attention";
 import { steady } from "../src/steady";
 import { lean } from "../src/lean";
@@ -33,9 +36,13 @@ import { effort, MOOD, phrase } from "../src/effort";
 import { startle } from "../src/startle";
 import { steer } from "../src/steer";
 import { balance, WINTER } from "../src/balance";
+import { BLINKS, blinks } from "../src/blinks";
+import { HANDEYE, handEye, reaches } from "../src/handeye";
+import { FREEZE, freeze } from "../src/freeze";
+import { notice } from "../src/notice";
 
 const q = new URLSearchParams(location.search);
-const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "startle", "gasp", "pursuit", "think", "steer", "balance", "mask"];
+const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "startle", "gasp", "pursuit", "think", "steer", "balance", "blinks", "handeye", "freeze", "notice", "mask"];
 const on = Object.fromEntries(LAYERS.map((k) => [k, !(q.get("off") ?? "").split(",").includes(k)]));
 const MOODNAME = MOOD[q.get("mood")] ? q.get("mood") : "calm";
 const FX = effort(MOOD[MOODNAME]);
@@ -78,7 +85,7 @@ const probe = await makePlayer(rig, "vendor/steve.png"); // never shown: measure
 const NAME = q.get("scene") === "mocap" || SCENES[q.get("scene")] ? q.get("scene") : "dig";
 let SC, CLIPS = {};
 if (NAME === "mocap") {
-  CLIPS = await loadClips([CLIP_A, CLIP_B], probe);
+  CLIPS = await loadClips([CLIP_A, CLIP_B, CLIP_C], probe);
   SC = mocapScene(Object.fromEntries(Object.entries(CLIPS).map(([k, c]) => [k, c.duration])));
 } else SC = SCENES[NAME];
 const { from: FROM, to: TO } = SC, END = TO + 1;
@@ -137,20 +144,60 @@ function actor({ moves, look, layered, dz, masked }) {
     return { p: new THREE.Vector3(...v), w: 1 };
   };
   const ahead = layered && on.steer && SC.path && !look.length ? steer(placeOf) : null;
-  const lookAt = (t) => {
+  const glance = notice(layered && on.notice ? SC.sights ?? [] : []);
+  // set once the layers are baked: keys found from the hand's path (handeye), and how much of a look the head takes
+  let handLook = () => null, headShare = () => 1;
+  const under = (t) => {
     const T = SC.target?.(t);
     if (T && T.w > 0) return { p: new THREE.Vector3(...T.at), w: T.w };
     const A = ahead?.(t);
-    return A ? { p: new THREE.Vector3(...A.head), eye: new THREE.Vector3(...A.at), w: A.w } : keyLook(t);
+    if (A) return { p: new THREE.Vector3(...A.head), eye: new THREE.Vector3(...A.at), w: A.w };
+    // the reach scene's right Steve has no look keys: all of his comes from his hand
+    const K = SC.handLooks && layered && on.handeye ? null : keyLook(t);
+    if (K) return K;
+    const H = handLook(t);
+    return H && { ...H, hw: H.w * headShare(t) };
+  };
+  // a glance blends over whatever else he looks at
+  const lookAt = (t) => {
+    const U = under(t), N = glance(t);
+    if (!N || N.w <= 0) return U;
+    const p = new THREE.Vector3(...N.at);
+    if (!U) return { p, w: N.w };
+    const hw = U.hw ?? U.w;
+    return { p: U.p.clone().lerp(p, N.w), eye: (U.eye ?? U.p).clone().lerp(p, N.w), w: U.w + (1 - U.w) * N.w, hw: hw + (1 - hw) * N.w };
   };
   const A = { bodyAt, standingAt, lookAt, layered, dz, look };
   if (!layered) return A;
 
   const w = masked && on.mask && SC.clips ? mask(SC.clips) : () => 1;
+  // the eyes go for what the hand goes for, found in the hand's own path (IK keys or a clip): over a clip the actor's
+  // head already does it, so there the keys move the eyes only. The path: the end of each hand in his own axes, posed by
+  // the body and the right hand's IK target
+  const handPath = (t, sd) => {
+    placeAt(probe, 0, t);
+    const p = bodyAt(t);
+    place(probe, p);
+    const h = sd === "R" && SC.hands && handLocal(t, on.arcs);
+    if (h) place(probe, blendPose(p, probe.armTo("R", new THREE.Vector3(...h.p).applyMatrix4(probe.g.matrixWorld)), h.w));
+    return probe.g.worldToLocal(probe.bones[`la${sd}`].localToWorld(new THREE.Vector3().copy(HAND_END[sd]))).toArray();
+  };
+  const worldOf = (p, t) => { placeAt(probe, 0, t); return new THREE.Vector3(...p).applyMatrix4(probe.g.matrixWorld).toArray(); };
+  const R = on.handeye ? ["L", "R"].flatMap((sd) => reaches((t) => handPath(t, sd), END, { rest: REST_END[sd], spans: SC.hands ? null : SC.reachClips ?? [] }).map((r) => ({ ...r, at: worldOf(r.at, r.arrive) }))).sort((a, b) => a.start - b.start) : [];
+  const HK = handEye(R);
+  handLook = (t) => {
+    if (!HK.length || t < HK[0].t) return null;
+    const i = keyAt(HK, t), a = HK[i], b = HK[Math.min(i + 1, HK.length - 1)], x = b === a ? 0 : smooth((t - a.t) / (b.t - a.t));
+    if (!a.at && !b.at) return null;
+    if (!a.at || !b.at) return { p: new THREE.Vector3(...(a.at ?? b.at)), w: a.at ? 1 - x : x };
+    return { p: new THREE.Vector3(...a.at).lerp(new THREE.Vector3(...b.at), x), w: 1 };
+  };
+  headShare = w;
+  const still = freeze(on.freeze ? SC.freeze ?? [] : []);
   const lagOf = overlap(bodyAt, END, FX.overlap);
   const toon = cartoon(bodyAt, END, FX.cartoon);
   const bangs = SC.bangs ?? [];
-  const life = idle(bodyAt, END, { standing: standingAt, breath: +on.breath, sway: on.sway ? FX.idle.sway : 0, settle: on.settle ? FX.idle.settle : 0, gasps: on.gasp ? bangs : [] });
+  const life = idle(bodyAt, END, { standing: standingAt, breath: +on.breath, sway: on.sway ? FX.idle.sway : 0, settle: on.settle ? FX.idle.settle : 0, gasps: on.gasp ? bangs : [], freeze: still });
   const tilt = lean((t) => placeOf(t), END);
   const jolt = startle(on.startle ? bangs : []);
   const unbalanced = (t) => {
@@ -183,15 +230,26 @@ function actor({ moves, look, layered, dz, masked }) {
     placeAt(probe, dz, t);
     place(probe, prePose(t));
     const [down, yaw] = probe.headTo(L.p.clone().add(offsetOf(dz)));
-    return { down, yaw, w: L.w };
+    return { down, yaw, w: L.hw ?? L.w };
   }, END);
   const trunkPose = (t) => (on.attention ? addRigPose(prePose(t), chain(t)) : prePose(t));
   const steadyHead = steady(trunkPose, END);
   const drift = micro({ amount: FX.micro.amount });
-  const shifts = look.slice(0, -1).filter((k, i) => JSON.stringify(k.at) !== JSON.stringify(look[i + 1].at)).map((k) => k.t);
-  const thinking = (t) => (on.think && (SC.think ?? []).some(([a, b]) => t >= a && t <= b) ? 1 : 0);
-  const eyesAt = gaze([...shifts, ...(SC.shifts ?? [])], END, { mean: FX.gaze.mean, wander: FX.gaze.wander, blinkedNear: (t) => [...Array(16)].some((_, i) => blinkAt(t - i / 30, SC.blinksFrom) > 0), pursuit: on.pursuit ? SC.pursuit ?? [] : [], think: thinking });
-  return Object.assign(A, { w, lagOf, toon, life, tilt, jolt, bal, chain, trunkPose, steadyHead, drift, eyesAt, nextKey: (x) => look.find((k) => k.t > x)?.t });
+  const keyed = SC.handLooks && on.handeye ? [] : look;
+  const shifts = keyed.slice(0, -1).filter((k, i) => JSON.stringify(k.at) !== JSON.stringify(keyed[i + 1].at)).map((k) => k.t);
+  const handShifts = HK.slice(0, -1).filter((k, i) => JSON.stringify(k.at) !== JSON.stringify(HK[i + 1].at)).map((k) => k.t);
+  // a glance at something sudden wins over looking away to think
+  const glancing = (t) => glance.events.some((g) => g.looks && t >= g.t && t <= g.off + 0.45);
+  const thinking = (t) => (on.think && !glancing(t) && (SC.think ?? []).some(([a, b]) => t >= a && t <= b) ? 1 : 0);
+  // blinks: few while his eyes are busy (the silverfish, a reach, frozen on a threat), more at the breaks after
+  const pursuit = on.pursuit ? SC.pursuit ?? [] : [];
+  const busy = (t) => pursuit.some(([a, b]) => t >= a && t <= b) || still(t) > 0.5 || R.some((r) => t >= r.start - HANDEYE.lead && t <= r.arrive);
+  const breaks = [...shifts, ...handShifts, ...pursuit.map(([, b]) => b), ...(SC.freeze ?? []).map((f) => f.until + 0.5), ...life.stops.map((s) => s.t), ...R.map((r) => r.arrive), ...glance.events.filter((g) => g.looks).map((g) => g.off)];
+  const lids = blinks(END, { rate: (t) => (busy(t) ? BLINKS.rate.focus : BLINKS.rate.rest), breaks });
+  const filmBlinks = (t) => [...Array(16)].some((_, i) => blinkAt(t - i / 30, SC.blinksFrom) > 0);
+  const eyesAt = gaze([...shifts, ...handShifts, ...glance.shifts, ...(SC.shifts ?? [])], END, { mean: FX.gaze.mean, wander: FX.gaze.wander, blinkedNear: on.blinks ? (t) => lids.near(t) : filmBlinks, pursuit, think: thinking, freeze: still });
+  const nextKey = (x) => [...keyed, ...HK].map((k) => k.t).filter((k) => k > x).sort((a, b) => a - b)[0];
+  return Object.assign(A, { w, lagOf, toon, life, tilt, jolt, bal, chain, trunkPose, steadyHead, drift, eyesAt, nextKey, still, lids, glance, reaches: R, busy, handPath });
 }
 
 const Q = new THREE.Quaternion(), E = new THREE.Vector3(), V = new THREE.Vector3(), M4 = new THREE.Matrix4();
@@ -236,6 +294,8 @@ probe.g.position.set(0, 0, 0); probe.g.rotation.y = 0; probe.g.updateMatrixWorld
 // the end of each hand at rest (12 px up from the feet, under the elbow), in its forearm's frame
 const HAND_END = Object.fromEntries(["L", "R"].map((sd) => { const e = probe.bones[`la${sd}`].getWorldPosition(new THREE.Vector3()); return [sd, probe.bones[`la${sd}`].worldToLocal(new THREE.Vector3(e.x, 12 * PX - 0.02, e.z))]; }));
 const COM0 = comOf(probe);
+// where each hand's end hangs at rest, in his own axes (a reach ends away from here)
+const REST_END = Object.fromEntries(["L", "R"].map((sd) => [sd, probe.g.worldToLocal(probe.bones[`la${sd}`].localToWorld(HAND_END[sd].clone())).toArray()]));
 
 // ---- cast ----
 const SIDE = 0.8;
@@ -256,7 +316,10 @@ for (const [name, dz] of [["old", -SIDE], ["new", SIDE]]) {
   const bug = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.1), new THREE.MeshStandardMaterial({ color: 0x8c8f93, roughness: 0.9 }));
   bug.visible = false;
   scene.add(bug);
-  cast.push({ name, s, dz, restHead, dot, trail, bug, act: actor({ ...spec, dz }) });
+  const sight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshStandardMaterial({ color: 0xd8c27a, emissive: 0x4a3c10 }));
+  sight.visible = false;
+  scene.add(sight);
+  cast.push({ name, s, dz, restHead, dot, trail, bug, sight, act: actor({ ...spec, dz }) });
 }
 document.getElementById("old").textContent = MOCAP ? "Left: hand-made keys + film-kit layers (no Mixamo)" : "Before: the film now (smoothstep keys, breathing per pose, eyes fixed)";
 document.getElementById("new").textContent = MOCAP ? `Right: Mixamo clips (layers ${on.mask ? "fade out over each clip" : "NOT faded: doubled"})` : `After: film-kit layers${MOODNAME === "calm" ? "" : `, mood ${MOODNAME}`}`;
@@ -279,14 +342,23 @@ const perform = (c, t) => {
   if (stand > 0) { for (const sd of ["L", "R"]) pose = blendPose(pose, c.s.legTo(sd, soles[sd]), stand); place(c.s, pose); }
   const shift = offsetOf(c.dz);
   const look = A.lookAt(t);
-  if (look) { pose = blendPose(pose, { head: c.s.headTo(look.p.clone().add(shift)) }, look.w); place(c.s, pose); }
+  if (look) {
+    // a look given to the eyes only (a clip's own head) still turns the head by what the eyes can't cover
+    let hw = look.hw ?? look.w;
+    if (hw < look.w) {
+      const a = gazeTo(c, (look.eye ?? look.p).clone().add(shift));
+      if (a) hw = Math.max(hw, look.w * Math.max(0, 1 - (0.6 * EYE.yaw) / Math.max(1e-6, Math.abs(a[0])), 1 - (0.6 * EYE.pitch) / Math.max(1e-6, Math.abs(a[1] - REST_PITCH))));
+    }
+    pose = blendPose(pose, { head: c.s.headTo(look.p.clone().add(shift)) }, hw);
+    place(c.s, pose);
+  }
   c.dot.visible = !!look && look.w > 0.5 && !view().startsWith("face");
   if (look) c.dot.position.copy(look.p).add(shift);
   const k = A.layered ? A.w(t) : 0;
   c.steadyNow = [0, 0];
   if (A.layered) {
     if (on.steady) { const h = A.steadyHead(t).head; c.steadyNow = [h[0] * (1 - (look?.w ?? 0)) * k, h[2] * k]; pose = addRigPose(pose, { head: [c.steadyNow[0], 0, c.steadyNow[1]] }); }
-    if (on.noise) pose = addRigPose(pose, scalePose(A.drift(t), k));
+    if (on.noise) pose = addRigPose(pose, scalePose(A.drift(t), k * (1 - FREEZE.drift * A.still(t))));
     place(c.s, pose);
   }
   // the right hand on its target, straight or on its arc; the target's path over the last 1.5 s as dots
@@ -321,9 +393,12 @@ const perform = (c, t) => {
     c.pursuing = g.pursuing;
     c.thinking = g.thinking;
   }
-  if (A.layered) extra = Math.max(extra, A.jolt(t).blink);
+  if (A.layered) extra = Math.max(extra, A.jolt(t).blink, on.blinks ? A.lids(t) : 0);
+  // what he may notice: a small block that pops up for a moment where each sight is
+  c.sight.visible = !!(SC.sights ?? []).find((g) => t >= g.t && t < g.t + 0.5);
+  if (c.sight.visible) c.sight.position.fromArray((SC.sights ?? []).find((g) => t >= g.t && t < g.t + 0.5).at).add(shift);
   if (c.bug) { c.bug.visible = !!SC.bug && t > 1 && t < 6.5; if (SC.bug) c.bug.position.fromArray(SC.bug(t)).add(shift); }
-  const blink = Math.max(blinkAt(t, SC.blinksFrom), extra);
+  const blink = Math.max(A.layered && on.blinks ? 0 : blinkAt(t, SC.blinksFrom), extra);
   const mood = moodAt(SC.face, t);
   mood.open = Math.min(1, Math.max(0, mood.open + lidOpen(lid)));
   c.s.face(mood, mouthAt([], 0), blink, eyes);
@@ -381,6 +456,13 @@ const status = (t) => {
     const G = A.life.gasp(t);
     if (G && on.gasp && k > 0.01) lines.push(G === "in" ? "gasp: sharp breath in" : G === "held" ? "breath held" : "relief: long breath out, shoulders drop");
     if (c.pursuing) lines.push("eyes glide after the silverfish (pursuit)");
+    const fz = A.still(t);
+    if (fz > 0.05) lines.push(`frozen in fear ${(fz * 100).toFixed(0)}%: sway and drift down, eyes held`);
+    const G2 = A.glance.events.find((g) => t >= g.t && t < g.off + 0.45);
+    if (G2) lines.push(G2.looks ? `notices something at the edge of view (pull ${(G2.pull * 100).toFixed(0)}%)` : `something moves; no glance this time (pull ${(G2.pull * 100).toFixed(0)}%: seen it before)`);
+    const RR = A.reaches.find((r) => t >= r.start - 0.8 && t <= r.arrive + 0.5);
+    if (on.handeye && RR) lines.push(`${t < RR.start ? "eyes on the target before the hand moves" : t < RR.arrive - 0.16 ? "hand travels, eyes stay on the target" : "eyes leave just before the hand lands"}${A.w(t) < 0.5 ? " (clip: eyes only)" : ""}`);
+    if (on.blinks) lines.push(`blink rate ${A.busy(t) ? `${BLINKS.rate.focus}/min (eyes busy)` : `${BLINKS.rate.rest}/min`}`);
     if (c.thinking) lines.push("thinking: eyes look away");
     const bz = A.bal(t).root;
     if (on.balance && Math.hypot(bz.x ?? 0, bz.z ?? 0) > 0.005) lines.push(`hips counter the mass: ${((bz.z ?? 0) * 100).toFixed(1)} cm ${(bz.z ?? 0) < 0 ? "back" : "forward"}, ${((bz.x ?? 0) * 100).toFixed(1)} cm left`);

@@ -26,7 +26,11 @@
     "./effort": "./src/effort.ts",
     "./startle": "./src/startle.ts",
     "./steer": "./src/steer.ts",
-    "./balance": "./src/balance.ts"
+    "./balance": "./src/balance.ts",
+    "./blinks": "./src/blinks.ts",
+    "./handeye": "./src/handeye.ts",
+    "./freeze": "./src/freeze.ts",
+    "./notice": "./src/notice.ts"
   },
   "scripts": {
     "test": "bun test",

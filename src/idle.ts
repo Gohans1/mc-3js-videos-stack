@@ -14,6 +14,7 @@
 //     sharp inhale in a jump-scare), then lets it go in a long relief exhale that sinks the chest and drops the shoulders
 //     below rest, and breathing starts again from empty, a little faster (Animator Notebook, "Action Analysis: Breathing";
 //     Playdead's INSIDE stops the boy's breath on a jump and restarts it with an exhale on landing, Schmid 2016).
+//   freeze: opts.freeze(t) 0..1 (src/freeze.ts) takes most of the sway away while he is frozen in fear.
 //   settle: when a fast move stops (and stays stopped: not a swing turning back), the body gives under its own momentum:
 //     the chest dips and the hips sink a little, once, over ~0.9 s, scaled by how fast it was moving.
 // Effort, stillness and stops are measured from the pose itself (how fast its joints turn), so nothing is keyed. The pose
@@ -21,6 +22,7 @@
 // hand, head and leg IK.
 //   const life = idle((t) => bodyPose(t), filmEnd, { standing: (t) => 1 });   pose = addPose(bodyPose(t), life(t))
 // standing(t): 0..1, how much the character stands on both feet (sway and the hips' sink are scaled by it).
+import { FREEZE } from "./freeze";
 import { canonical, unwrap, type Pose } from "./pose";
 
 const HZ = 60;
@@ -36,9 +38,9 @@ export const SWAY = { every: 4.2, over: 1.1, hip: 0.035, tilt: 2.5, drop: 0.008 
 export const GASP = { start: 0.05, inhale: 0.3, peak: [1.25, 1.6], hold: [0.8, 2.5], relief: [1.2, 2], sigh: 0.3, back: 0.6, arousal: 0.3 }; // s, s, lungs (1 = a normal breath) weak..full, s, s, lungs below rest, s, effort left after a full one
 export const SETTLE = { over: 0.9, chest: 3, sink: 0.012, fast: 400 }; // s, deg, m, deg/s that counts as a full-speed move
 
-export type IdleOpts = { standing?: (t: number) => number; breath?: number; sway?: number; settle?: number; seed?: number; gasps?: { t: number; k?: number }[] };
+export type IdleOpts = { standing?: (t: number) => number; breath?: number; sway?: number; settle?: number; seed?: number; gasps?: { t: number; k?: number }[]; freeze?: (t: number) => number };
 
-export function idle(poseAt: (t: number) => Pose, end: number, { standing = () => 0, breath = 1, sway = 1, settle = 1, seed = 7, gasps = [] }: IdleOpts = {}) {
+export function idle(poseAt: (t: number) => Pose, end: number, { standing = () => 0, breath = 1, sway = 1, settle = 1, seed = 7, gasps = [], freeze = () => 0 }: IdleOpts = {}) {
   const n = Math.ceil(end * HZ) + 2;
   // how fast the upper body turns, degrees a second (all its joints together: one fast joint counts in full)
   const act = new Float32Array(n), work = new Float32Array(n);
@@ -132,7 +134,7 @@ export function idle(poseAt: (t: number) => Pose, end: number, { standing = () =
       uaR: [0, 0, -0.35 * amp * late],
     };
     // sway: + puts the weight on his left leg (hips to his left, the left hip up)
-    const w = sway * stand * read(still, t) * weightAt(t);
+    const w = sway * stand * read(still, t) * weightAt(t) * (1 - FREEZE.sway * freeze(t));
     // (rz > 0 lifts his left side; the counter-bends add back to zero, so the head ends level). The weight leg is already
     // straight, so the hips drop as much as its side rises (and the free knee bends): otherwise that sole leaves the floor
     out.root!.x = SWAY.hip * w;
