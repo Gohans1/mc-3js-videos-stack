@@ -72,8 +72,10 @@ export const POSES = {
   desk: (s) => addPose(POSES.stand(s), { body: [16, 0, 0], head: [18, 0, 0] }),
   // standing tall to read what he holds up: here it is, let's see
   readUp: (s) => addPose(POSES.stand(s), { body: [4, 0, 0], chest: [-3, 0, 0] }),
+  // the wind-up before the fling: hands pressed on the desk, shoulders turned to his right over the pile (anticipation)
+  windup: (s) => addPose(POSES.stand(s), { body: [18, -8, 0], chest: [4, -12, 0], head: [14, 0, 0] }),
   // the fling: the whole body swings to his left after the pages (body and chest turn the same way, leaning into it)
-  fling: (s) => addPose(POSES.stand(s), { body: [14, 26, 0], chest: [4, 16, 0] }),
+  fling: (s) => addPose(POSES.stand(s), { body: [16, 30, 0], chest: [6, 22, 0] }),
   // stood still after it, breathing hard: the chest heaves
   pant: (s) => addPose(POSES.stand(s), { body: [6, 0, 0], chest: [-2 + 3 * Math.sin(s * 6.5), 0, 0] }),
   // down on one knee (the dev: never flat on the floor to look into a cabinet): right knee and shin on the stone, left foot

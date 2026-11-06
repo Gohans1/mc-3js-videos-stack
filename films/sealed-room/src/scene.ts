@@ -24,6 +24,8 @@ import { asVariant, buildVariants } from "mc-assets/variants";
 import { VARIANTS } from "./variants";
 import { GESTURES, PX, addPose, blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
 import { slerpPose } from "mc-actor/mocap";
+import { overlap } from "film-kit/overlap";
+import { mask, scalePose } from "film-kit/pose";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -270,6 +272,18 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   };
   const now = {};
   const feetAt = makeFeet(steve, () => EDIT.end, bodyAt, clips);
+  // film-kit overlap: chest, head and arms trail the body's own moves and settle past a stop (follow-through). Baked over
+  // the whole film once per edit; faded out over mocap clips, which already carry their own (film-kit AGENTS.md)
+  let lagFor = null, lagOf = null, offClips = null;
+  const lagAt = (t) => {
+    if (lagFor !== EDIT.steve) {
+      const m = EDIT.steve.moves;
+      lagOf = overlap((s) => bodyAt(m, s, clips).pose, EDIT.end);
+      offClips = mask(m.flatMap((k, i) => (k.clip ? [[k.t, m[i + 1]?.t ?? EDIT.end]] : [])));
+      lagFor = EDIT.steve;
+    }
+    return scalePose(lagOf(t), offClips(t));
+  };
   const perform = (t) => {
     const L = EDIT.steve;
     const feet = feetAt(L.moves, t);
@@ -279,7 +293,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     // asleep until his right hand twitches (1.1)
     const tw = t - L.twitch;
     const twitch = tw > 0 && tw < 0.35 ? Math.sin((tw / 0.35) * Math.PI) : 0;
-    let pose = twitch ? addPose(B.pose, { laR: [-14 * twitch, 0, 0], uaR: [-4 * twitch, 0, 0] }) : B.pose;
+    let pose = addPose(B.pose, lagAt(t));
+    if (twitch) pose = addPose(pose, { laR: [-14 * twitch, 0, 0], uaR: [-4 * twitch, 0, 0] });
     steve.setPose(pose);
     steve.g.updateMatrixWorld(true);
     const shoulder = (sd) => ({ pivot: steve.bones[`ua${sd}`].getWorldPosition(new THREE.Vector3()) });
