@@ -15,6 +15,7 @@ import { buildWorld, BED, CABINET, LAMP, ROOM } from "./world";
 import { CHAIRS, buildProps } from "./props";
 import { bodyAt, blinkAt, moodAt, readLook, targetAt } from "./steve";
 import { makeFeet } from "./feet";
+import { loadClips } from "./clips";
 import { pack } from "./pack";
 import { cameraAt } from "./camera";
 import { makeDescribe } from "./describe";
@@ -167,6 +168,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   URL.revokeObjectURL(skinUrl);
   scene.add(steve.g);
   const L = EDIT.steve;
+  // mocap clips the moves name, baked once here: draw(t) only reads them
+  const clips = await loadClips(L.moves.filter((m) => m.clip).map((m) => m.clip), steve);
   steve.g.position.set(...L.at); // lying on his back on the bed, head on the pillow (north), feet south
   steve.g.rotation.y = L.yaw * THREE.MathUtils.DEG2RAD;
   stage("steve");
@@ -258,11 +261,11 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     return f && props.anchors[f[1]] ? props.anchors[f[1]](t, +f[2]) : props.anchors[a](t);
   };
   const now = {};
-  const feetAt = makeFeet(steve, () => EDIT.end);
+  const feetAt = makeFeet(steve, () => EDIT.end, clips);
   const perform = (t) => {
     const L = EDIT.steve;
     const feet = feetAt(L.moves, t);
-    const B = bodyAt(L.moves, t);
+    const B = bodyAt(L.moves, t, clips);
     steve.g.position.set(...B.at);
     steve.g.rotation.y = B.yaw * THREE.MathUtils.DEG2RAD;
     // asleep until his right hand twitches (1.1)
@@ -369,7 +372,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody, variants, steve, now, props });
   draw.variants = variants;
   draw.tools = {
-    scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf,
+    clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf,
     objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
     materials: [], composer, renderer,
   };

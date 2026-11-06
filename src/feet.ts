@@ -18,7 +18,7 @@ const DRIFT = 0.16, TURN = 35; // a planted sole steps when the pose wants it 16
 const MIN_STEP = 0.2, MAX_LOOK = 0.8, SETTLE = 0.45; // seconds: shortest step; how far ahead a landing is looked for
 const SINK = 0.08; // seconds to set a sole the pose holds a little above (or in) the floor down onto it
 
-export function makeFeet(steve, endOf) {
+export function makeFeet(steve, endOf, clips = {}) {
   const baked = new WeakMap();
   const tmp = new THREE.Vector3(), V = new THREE.Vector3();
   const bake = (moves) => {
@@ -26,7 +26,7 @@ export function makeFeet(steve, endOf) {
     const want = { L: new Float32Array(n * 3), R: new Float32Array(n * 3) }, hips = { L: new Float32Array(n * 3), R: new Float32Array(n * 3) };
     const yaw = new Float32Array(n), gait = new Float32Array(n).fill(NaN);
     for (let i = 0; i < n; i++) {
-      const B = bodyAt(moves, i / HZ);
+      const B = bodyAt(moves, i / HZ, clips);
       steve.g.position.set(...B.at);
       steve.g.rotation.y = B.yaw * THREE.MathUtils.DEG2RAD;
       steve.setPose(B.pose);

@@ -9,6 +9,7 @@ __pycache__/
 /assets/public/mc
 /assets/public/mcasset
 /assets/public/rig
+/assets/public/motion
 /assets/public/vendor/
 /assets/public/block_model_renderer_bg.wasm
 voice/takes/*.mp3
