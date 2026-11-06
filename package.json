@@ -15,7 +15,9 @@
     "./safe": "./src/safe.ts",
     "./pose": "./src/pose.ts",
     "./overlap": "./src/overlap.ts",
-    "./gaze": "./src/gaze.ts"
+    "./gaze": "./src/gaze.ts",
+    "./idle": "./src/idle.ts",
+    "./cartoon": "./src/cartoon.ts"
   },
   "scripts": {
     "test": "bun test",
