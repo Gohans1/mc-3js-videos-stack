@@ -40,9 +40,12 @@ import { BLINKS, blinks } from "../src/blinks";
 import { HANDEYE, handEye, reaches } from "../src/handeye";
 import { FREEZE, freeze } from "../src/freeze";
 import { notice } from "../src/notice";
+import { fitts, reachK } from "../src/reach";
+import { hesitation } from "../src/hesitate";
+import { tremor } from "../src/tremor";
 
 const q = new URLSearchParams(location.search);
-const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "startle", "gasp", "pursuit", "think", "steer", "balance", "blinks", "handeye", "freeze", "notice", "mask"];
+const LAYERS = ["through", "overlap", "cartoon", "breath", "sway", "settle", "gaze", "lids", "attention", "steady", "lean", "noise", "arcs", "startle", "gasp", "pursuit", "think", "steer", "balance", "blinks", "handeye", "freeze", "notice", "reach", "hesitate", "tremor", "mask"];
 const on = Object.fromEntries(LAYERS.map((k) => [k, !(q.get("off") ?? "").split(",").includes(k)]));
 const MOODNAME = MOOD[q.get("mood")] ? q.get("mood") : "calm";
 const FX = effort(MOOD[MOODNAME]);
@@ -102,11 +105,14 @@ const place = (s, pose) => { s.setPose(pose); s.g.updateMatrixWorld(true); };
 // One performance: its keys (moves, look), whether film-kit's layers drive it, and every layer baked from its body pose
 function actor({ moves, look, layered, dz, masked }) {
   const M = layered && FX.hold > 0 ? phrase(moves, FX.hold) : moves;
+  // a hesitant reach inside a clip: the clip (and every key after it) plays on a stretched clock (hesitate.ts stretch)
+  const clock = masked && on.hesitate && SC.stretch ? SC.stretch.time : (t) => t;
   const poseOf = (key, s) => {
     if (key.clip) { const c = CLIPS[key.clip], x = (key.from ?? 0) + Math.max(0, s) * (key.rate ?? 1); return c.at(key.loop ? THREE.MathUtils.euclideanModulo(x, c.duration) : x); }
     return POSES[key.pose](layered && on.breath && key.pose !== "frenzy" ? 0 : Math.max(0, s));
   };
-  const bodyAt = (t) => {
+  const bodyAt = (tf) => {
+    const t = clock(tf);
     const i = keyAt(M, t), a = M[i], b = M[Math.min(i + 1, M.length - 1)];
     let pose;
     const A = poseOf(a, t - a.t);
@@ -121,15 +127,16 @@ function actor({ moves, look, layered, dz, masked }) {
         pose = throughPose(ok(p) ? poseOf(p, t - p.t) : null, A, B, ok(n) ? poseOf(n, 0) : null, [p?.t ?? 0, a.t, b.t, n?.t ?? 0], t);
       }
     }
-    const P = placeOf(t);
+    const P = placeOf(tf);
     // layers add their offsets to this pose, so it is spelled the way they read it
     return canonical(P.speed > 0 ? addRigPose(pose, walkPose(P.dist, P.speed)) : pose);
   };
-  const standingAt = (t) => {
+  const standingAt = (tf) => {
+    const t = clock(tf);
     const i = keyAt(M, t), a = M[i], b = M[Math.min(i + 1, M.length - 1)];
     const k = b === a ? 0 : smooth((t - a.t) / (b.t - a.t));
     const s = (STANDING.has(a.pose) ? 1 - k : 0) + (STANDING.has(b.pose) ? k : 0);
-    return s * (1 - Math.min(1, placeOf(t).speed / 1.2));
+    return s * (1 - Math.min(1, placeOf(tf).speed / 1.2));
   };
   // the head's look point and weight (null keys: the pose's own head), smoothstep or through the keys
   const keyLook = (t) => {
@@ -178,7 +185,7 @@ function actor({ moves, look, layered, dz, masked }) {
     placeAt(probe, 0, t);
     const p = bodyAt(t);
     place(probe, p);
-    const h = sd === "R" && SC.hands && handLocal(t, on.arcs);
+    const h = sd === "R" && SC.hands && handLocal(t, on.arcs, on.reach);
     if (h) place(probe, blendPose(p, probe.armTo("R", new THREE.Vector3(...h.p).applyMatrix4(probe.g.matrixWorld)), h.w));
     return probe.g.worldToLocal(probe.bones[`la${sd}`].localToWorld(new THREE.Vector3().copy(HAND_END[sd]))).toArray();
   };
@@ -194,6 +201,9 @@ function actor({ moves, look, layered, dz, masked }) {
   };
   headShare = w;
   const still = freeze(on.freeze ? SC.freeze ?? [] : []);
+  // fear's level for the tremor: the same rise and let-go as a freeze, over the scene's `tremble` spans
+  const fear = freeze(on.tremor ? SC.tremble ?? [] : []);
+  const shake = tremor(fear);
   const lagOf = overlap(bodyAt, END, FX.overlap);
   const toon = cartoon(bodyAt, END, FX.cartoon);
   const bangs = SC.bangs ?? [];
@@ -216,7 +226,7 @@ function actor({ moves, look, layered, dz, masked }) {
     placeAt(probe, dz, t);
     const p = unbalanced(t);
     place(probe, { ...p, root: { ...p.root, x: 0, y: 0, z: 0 } });
-    const h = SC.hands && handLocal(t, on.arcs);
+    const h = SC.hands && handLocal(t, on.arcs, on.reach);
     if (h) place(probe, blendPose(p, probe.armTo("R", new THREE.Vector3(...h.p).applyMatrix4(probe.g.matrixWorld)), h.w));
     const c = comOf(probe);
     return [c.x - COM0.x, c.z - COM0.z];
@@ -249,7 +259,7 @@ function actor({ moves, look, layered, dz, masked }) {
   const filmBlinks = (t) => [...Array(16)].some((_, i) => blinkAt(t - i / 30, SC.blinksFrom) > 0);
   const eyesAt = gaze([...shifts, ...handShifts, ...glance.shifts, ...(SC.shifts ?? [])], END, { mean: FX.gaze.mean, wander: FX.gaze.wander, blinkedNear: on.blinks ? (t) => lids.near(t) : filmBlinks, pursuit, think: thinking, freeze: still });
   const nextKey = (x) => [...keyed, ...HK].map((k) => k.t).filter((k) => k > x).sort((a, b) => a - b)[0];
-  return Object.assign(A, { w, lagOf, toon, life, tilt, jolt, bal, chain, trunkPose, steadyHead, drift, eyesAt, nextKey, still, lids, glance, reaches: R, busy, handPath });
+  return Object.assign(A, { w, lagOf, toon, life, tilt, jolt, bal, chain, trunkPose, steadyHead, drift, eyesAt, nextKey, still, lids, glance, reaches: R, busy, handPath, fear, shake, clock });
 }
 
 const Q = new THREE.Quaternion(), E = new THREE.Vector3(), V = new THREE.Vector3(), M4 = new THREE.Matrix4();
@@ -261,11 +271,15 @@ const elbow0 = probe.bones.laR.getWorldPosition(new THREE.Vector3());
 const REST_HAND = [elbow0.x, 12 * PX - 0.02, elbow0.z];
 const handEnd = probe.bones.laR.worldToLocal(new THREE.Vector3(...REST_HAND)); // in the forearm's own frame
 let SHOULDER_R = probe.bones.uaR.getWorldPosition(new THREE.Vector3()).toArray();
-const handLocal = (t, arcs) => {
+// human: film-kit's reach timing (a bell at the hand's own pace, a small corrective move) and, on a key with `doubt`,
+// hesitation; otherwise the film's smoothstep across the whole gap
+const handLocal = (t, arcs, human = false) => {
   const HK = SC.hands ?? [];
   if (!HK.length || t < HK[0].t) return null;
-  const i = keyAt(HK, t), a = HK[i], b = HK[Math.min(i + 1, HK.length - 1)];
-  const k = b === a ? 0 : smooth((t - a.t) / (b.t - a.t)), P = (r) => (r === "rest" ? REST_HAND : r);
+  const i = keyAt(HK, t), a = HK[i], b = HK[Math.min(i + 1, HK.length - 1)], P = (r) => (r === "rest" ? REST_HAND : r);
+  const dist = a.R && b.R ? Math.hypot(...P(a.R).map((v, j) => v - P(b.R)[j])) : 0;
+  const k = b === a ? 0 : !human || !a.R || !b.R ? smooth((t - a.t) / (b.t - a.t))
+    : b.doubt && on.hesitate ? hesitation(b.t - a.t, b.doubt)(t - a.t) : reachK(t, a.t, b.t, { dist });
   if (!a.R && !b.R) return null;
   if (a.R && (!b.R || b === a)) return { p: P(a.R), w: b === a ? 1 : 1 - k };
   if (!a.R) return { p: P(b.R), w: k };
@@ -364,7 +378,7 @@ const perform = (c, t) => {
   // the right hand on its target, straight or on its arc; the target's path over the last 1.5 s as dots
   const arcs = A.layered && on.arcs;
   SHOULDER_R = c.s.g.worldToLocal(c.s.bones.uaR.getWorldPosition(V)).toArray();
-  const hand = handLocal(t, arcs);
+  const hand = handLocal(t, arcs, A.layered && on.reach);
   c.handErr = null;
   if (hand) {
     const target = new THREE.Vector3(...hand.p).applyMatrix4(c.s.g.matrixWorld);
@@ -372,9 +386,11 @@ const perform = (c, t) => {
     place(c.s, pose);
     c.handErr = c.s.bones.laR.localToWorld(V.copy(handEnd)).distanceTo(target) * (hand.w > 0.99 ? 1 : 0);
   }
+  // fear's tremor last, on top of keyed arms, IK hands and clips alike
+  if (A.layered && on.tremor && A.fear(t) > 0) { pose = addRigPose(pose, A.shake(t)); place(c.s, pose); }
   c.trail.visible = !!SC.hands;
   if (SC.hands) for (let i = 0; i < 46; i++) {
-    const h = handLocal(t - i / 30, arcs), p = h ? new THREE.Vector3(...h.p).applyMatrix4(c.s.g.matrixWorld) : new THREE.Vector3(0, -10, 0);
+    const h = handLocal(t - i / 30, arcs, A.layered && on.reach), p = h ? new THREE.Vector3(...h.p).applyMatrix4(c.s.g.matrixWorld) : new THREE.Vector3(0, -10, 0);
     c.trail.setMatrixAt(i, M4.makeTranslation(p.x, p.y, p.z));
   }
   c.trail.instanceMatrix.needsUpdate = true;
@@ -468,6 +484,15 @@ const status = (t) => {
     if (on.balance && Math.hypot(bz.x ?? 0, bz.z ?? 0) > 0.005) lines.push(`hips counter the mass: ${((bz.z ?? 0) * 100).toFixed(1)} cm ${(bz.z ?? 0) < 0 ? "back" : "forward"}, ${((bz.x ?? 0) * 100).toFixed(1)} cm left`);
     if (on.gaze && c.blink > 0.05) lines.push("blink");
     if (on.gaze) lines.push(`eyes ${c.eyes.map((v) => v.toFixed(2)).join(" ")}${on.lids ? `, lids ${c.lid.toFixed(2)}` : ""}`);
+    const tr = on.tremor ? A.fear(t) : 0;
+    if (tr > 0.05) lines.push(`hands tremble with fear ${(tr * 100).toFixed(0)}% (8-9 Hz, in runs)`);
+    const HKs = SC.hands ?? [], hi = HKs.findIndex((h, i) => i > 0 && h.t > t);
+    if (c.name === "new" && !MOCAP && on.reach && hi > 0 && HKs[hi].R && HKs[hi - 1].R) {
+      const a = HKs[hi - 1], b = HKs[hi], P = (r) => (r === "rest" ? REST_HAND : r);
+      const d = Math.hypot(...P(a.R).map((v, j) => v - P(b.R)[j]));
+      if (d > 0.02) lines.push(b.doubt && on.hesitate ? `hesitant reach (doubt ${b.doubt}): late start, stops part way, draws back, commits` : `reach at his own pace: ${fitts(d).toFixed(2)} s for ${(d * 100).toFixed(0)} cm (Fitts), one bell + a small correction`);
+    }
+    if (MOCAP && c.name === "new" && on.hesitate && SC.stretch && t > SC.stretch.start && t < SC.stretch.end) lines.push(`hesitant press: the clip slows, stops, draws back, then goes (+${SC.stretch.extra.toFixed(2)} s)`);
     if (c.handErr != null) lines.push(`hand ${(c.handErr * 100).toFixed(1)} cm off its target`);
   }
   if (!MOCAP && cast[0].handErr != null) lines.push(`(left hand ${(cast[0].handErr * 100).toFixed(1)} cm off)`);

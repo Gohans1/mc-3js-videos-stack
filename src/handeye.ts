@@ -18,6 +18,7 @@ export const HANDEYE = {
   dwell: 0.5, next: 1.5, // s: with nothing next, stay this long after it lands; a next reach this soon pulls the eyes on
   move: 0.15, still: 0.1, rest: 0.25, // m, m/s, m: a reach moves this far, has stopped under this speed, ends this far from the hanging hand
   slow: 0.3, // a move also ends where it slows under this share of its peak speed, at a low point
+  pause: 0.9, // s: a move that goes on the same way (or barely moves) after a stop this short is the same reach
 };
 // where a reaching hand ends, in his own axes (x his left, y up, z forward, metres from his feet)
 export const OUT = { front: 0.25, low: 0.45, high: 1.95, side: 0.6 };
@@ -36,16 +37,33 @@ export function reaches(handAt: (t: number) => V3, end: number, { rest = null as
   const lowest = (i: number) => v.slice(Math.max(1, i - w), i + w + 1).every((x) => x >= v[i]);
   // where one move ends and the next may start: stopped, or a hard slow-down at a speed minimum
   const cut = v.map((x, i) => i === 0 || i === n || x < still || (lowest(i) && x < HANDEYE.slow * peakNear(i)));
-  const out: Reach[] = [];
+  const moves: [number, number][] = [];
   let a = 0;
   for (let b = 1; b <= n; b++) {
     if (!cut[b]) continue;
-    if (b - a > 1 && Math.max(...v.slice(a + 1, b + 1)) > 2 * still) {
-      const to = P[b];
-      const inside = !spans || spans.some(([s, e]) => a / HZ >= s - 0.7 && a / HZ <= e);
-      if (inside && dist(P[a], to) > move && away(to) && !(rest && dist(to, rest) < HANDEYE.rest)) out.push({ start: a / HZ, arrive: b / HZ, at: to });
-    }
+    if (b - a > 1 && Math.max(...v.slice(a + 1, b + 1)) > 2 * still) moves.push([a, b]);
     a = b;
+  }
+  // one reach in several goes (a small corrective move at the end, or a hesitant one that stops, draws back and goes
+  // on: hesitate.ts) is still one reach to where it ends
+  const dir = ([i, j]: [number, number]) => { const d = P[j].map((x, k) => x - P[i][k]), l = Math.hypot(...d) || 1; return d.map((x) => x / l); };
+  const merged: [number, number][] = [];
+  for (const m of moves) {
+    const last = merged[merged.length - 1];
+    if (last && (m[0] - last[1]) / HZ < HANDEYE.pause) {
+      const small = dist(P[m[0]], P[m[1]]) < move, d1 = dir(last), d2 = dir(m);
+      const same = d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2] > 0.5;
+      const next = moves[moves.indexOf(m) + 1];
+      // a small move back is part of it only if the reach goes on after it
+      if (same || (small && next && (next[0] - m[1]) / HZ < HANDEYE.pause)) { last[1] = m[1]; continue; }
+    }
+    merged.push([...m]);
+  }
+  const out: Reach[] = [];
+  for (const [i, j] of merged) {
+    const to = P[j];
+    const inside = !spans || spans.some(([s, e]) => i / HZ >= s - 0.7 && i / HZ <= e);
+    if (inside && dist(P[i], to) > move && away(to) && !(rest && dist(to, rest) < HANDEYE.rest)) out.push({ start: i / HZ, arrive: j / HZ, at: to });
   }
   return out;
 }

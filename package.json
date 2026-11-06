@@ -30,7 +30,10 @@
     "./blinks": "./src/blinks.ts",
     "./handeye": "./src/handeye.ts",
     "./freeze": "./src/freeze.ts",
-    "./notice": "./src/notice.ts"
+    "./notice": "./src/notice.ts",
+    "./reach": "./src/reach.ts",
+    "./hesitate": "./src/hesitate.ts",
+    "./tremor": "./src/tremor.ts"
   },
   "scripts": {
     "test": "bun test",
