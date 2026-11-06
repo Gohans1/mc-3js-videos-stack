@@ -8,7 +8,7 @@ Dùng symlink nối kho gốc với project (nhớ gitignore)
 - <vault_path>/jar     -> assets/public/mc
 - <vault_path>/mcasset -> assets/public/mcasset
 - <vault_path>/mcprep  -> assets/public/rig
-- <vault_path>/motion  -> assets/public/motion (động tác người: UAL1, UAL2)
+- <vault_path>/motion  -> assets/public/motion
 - <vault_path>/packs: kho gói mod/resource pack đã lọc (không symlink vào project; chỉ cherry-pick file cần dùng vào `pack/`)
 
 - Nếu đã setup thì có thể bỏ qua bước này
