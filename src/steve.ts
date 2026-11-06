@@ -5,6 +5,13 @@
 //     too far); with walk: true on the later key he walks there (gait phased from the distance walked, every footfall
 //     planted). Keep a non-walk shift small (a weight shift, half a step): anything longer is a walk. via: a pose that
 //     peaks halfway through the blend (rising from a seat).
+//     clip: "<lib>/<clip>" instead of pose plays a mocap clip (src/clips.ts) from the key on, its first frame's hips at
+//     `at`; from: seconds into the clip to start at, rate: its speed, loop: true repeats it (in-place clips only: each lap
+//     starts back at `at`), else it holds its last frame. It plays at full weight until `blend` seconds (default 0.4)
+//     before the next key, then crossfades into it. Its hips travel inside the pose, so the next key's at goes where the
+//     clip leaves him (at + its end offset turned by yaw: lab/clip.ts prints it) or he slides back over the crossfade.
+//     add: {joint: [x, y, z]} on any key adds those degrees on top of its pose (a head tilt on a clip, say; angle by
+//     angle, so keep it small on a joint turned past 90). A walk key can't follow a clip: key a pose where it leaves him.
 //   hands [{t, R?, L?}]  a world point or a prop anchor name (src/props.ts) for the end of that hand, or null for the
 //     pose's own arm. Targets glide between keys; the arm IK (player.ts armTo) bends the elbow to reach them.
 //   look [{t, at}]  where he turns his head: a point, an anchor, or null for the pose's own head.
@@ -15,6 +22,7 @@ import * as THREE from "three";
 import { clamp01, smooth } from "./ease";
 import { GESTURES, MOODS, PX, addPose, arm, gaitOf, leg, walkPose } from "./player";
 import { CHAIR } from "./world";
+import { slerpPose } from "./mocap";
 
 const D = Math.PI / 180;
 
@@ -153,28 +161,65 @@ const pathOf = (moves) => {
 // a walk speeds up over its first half metre and slows into its last: mostly constant pace
 const walkEase = (x) => x * x * (3 - 2 * x) * 0.5 + x * 0.5;
 
+// A key's body pose s seconds after it; clips: loadClips' result
+const poseOf = (key, s, clips) => {
+  let pose;
+  if (key.clip) {
+    const c = clips[key.clip];
+    if (!c) throw new Error(`mocap clip ${key.clip} is not loaded`);
+    const x = (key.from ?? 0) + s * (key.rate ?? 1);
+    pose = c.at(key.loop ? THREE.MathUtils.euclideanModulo(x, c.duration) : x);
+  } else pose = POSES[key.pose](s);
+  return key.add ? addPose(pose, key.add) : pose;
+};
+// How far from key a to key b at t (0..1): a hand-made pose blends over the whole span, a clip plays on and crossfades
+// only over the span's last `blend` seconds, as game engines crossfade clips
+const progress = (a, b, t) => {
+  if (b === a || b.t <= a.t) return 0;
+  const w = a.clip ? Math.min(a.blend ?? 0.4, b.t - a.t) : b.t - a.t;
+  return clamp01((t - (b.t - w)) / w);
+};
+
 // Where he is, which way he faces and the body pose at time t (no hand targets, no head aim yet)
-export function bodyAt(moves, t) {
+export function bodyAt(moves, t, clips = {}) {
   const i = keyAt(moves, t), a = moves[i], b = moves[Math.min(i + 1, moves.length - 1)];
-  const span = b.t - a.t, x = span > 0 ? clamp01((t - a.t) / span) : 0;
+  const x = progress(a, b, t);
   const cum = pathOf(moves);
   const k = b.walk ? walkEase(x) : smooth(x);
   const at = a.at.map((v, j) => THREE.MathUtils.lerp(v, b.at[j], k));
   const yaw = yawLerp(a.yaw, b.yaw, b.walk ? smooth(x / 0.25) : k);
   const sa = t - a.t, sb = Math.max(0, t - b.t);
-  let pose = b === a ? POSES[a.pose](sa) : mixPose(POSES[a.pose](sa), POSES[b.pose](sb), b.walk ? smooth((x - 0.8) / 0.2) : k);
+  if (a.clip && b.walk && b !== a) throw new Error(`steve.moves at ${b.t}: a walk can't start out of a clip; put a key where the clip leaves him first`);
+  const w = b.walk ? smooth((x - 0.8) / 0.2) : k; // a walk keeps its own body until its last fifth
+  let pose;
+  if (b === a) pose = poseOf(a, sa, clips);
+  else if (a.clip || b.clip) {
+    // mocap turns are measured, not authored angle by angle: they blend as turns (an Euler lerp of two can swing the long
+    // way). Each side's hips are where its own key's place and yaw put them, blended in the world: turned into the yaw
+    // between, a clip that walks and turns would swing them sideways and back over the crossfade
+    const pa = poseOf(a, sa, clips), pb = poseOf(b, sb, clips);
+    pose = slerpPose(pa, pb, w);
+    const hips = (p, w, dy) => {
+      const c = Math.cos(dy * D), s = Math.sin(dy * D), x0 = p.root?.x ?? 0, z0 = p.root?.z ?? 0;
+      return [w * (x0 * c + z0 * s), w * (z0 * c - x0 * s)];
+    };
+    const [ax, az] = hips(pa, 1 - w, a.yaw - yaw), [bx, bz] = hips(pb, w, b.yaw - yaw);
+    pose.root.x = ax + bx;
+    pose.root.z = az + bz;
+  } else pose = mixPose(poseOf(a, sa, clips), poseOf(b, sb, clips), w);
   if (b.via && b !== a) pose = addPose(pose, mixPose({}, POSES[b.via](sa), Math.sin(Math.PI * x)));
   // steps: walking, or shuffling round on the spot while turning; the gait fades in and out with the speed
   const dist = (tt) => {
     const j = keyAt(moves, tt), p = moves[j], q = moves[Math.min(j + 1, moves.length - 1)];
-    const xx = q.t > p.t ? clamp01((tt - p.t) / (q.t - p.t)) : 0;
+    const xx = progress(p, q, tt);
     return cum[j] + (cum[Math.min(j + 1, cum.length - 1)] - cum[j]) * (q.walk ? walkEase(xx) : smooth(xx));
   };
   const d = dist(t), speed = (dist(t + 0.05) - d) / 0.05;
   const standing = (n) => ["stand", "feel"].includes(n);
   const walking = standing(a.pose) && standing(b.pose) || b.walk;
   if (walking) pose = addPose(pose, walkPose(d, speed));
-  return { at, yaw, pose, key: i, act: b !== a && t < b.t ? b : a, moving: b !== a && t < b.t, speed, gait: walking ? gaitOf(d, speed) : null };
+  const moving = b !== a && t < b.t && (!a.clip || x > 0);
+  return { at, yaw, pose, key: i, act: moving ? b : a, moving, speed, gait: walking ? gaitOf(d, speed) : null };
 }
 
 // The target of one hand or the head between keys: null blends back to the pose's own arm

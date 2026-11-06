@@ -1,0 +1,61 @@
+# Scenes for judging the clip catalogue's search (python lab/catalog_eval.py): one plain-English scene per line, the kind
+# any film asks for, not one film's script. Rerun after changing what Jev reads (catalog.py describe) or the notes, and
+# compare the picks. A scene with no fitting clip is kept on purpose: the right answer there is a near miss, not nonsense.
+lying on his back, completely still, then one hand twitches slightly
+lying on his back, turns only his head slowly to one side to look around, body stays still
+lying down, pushes up with both hands and sits up slowly
+sitting on the edge of a bed or chair, stands up slowly
+walks slowly across a room, cautious
+walks up to a door, tries the handle, it will not open
+stands at a wall and runs his hand along it, searching for something
+turns his back and walks away
+sits down on a chair
+sits at a desk staring hard at a screen, thinking, frustrated
+seated, leans back and exhales tiredly, hands drop onto his thighs
+gets up from a chair, kneels down and searches through a low drawer
+pulls papers out, flips through them carelessly and tosses them away
+digs through a pile of things frantically with both hands
+his searching hand freezes, then slowly touches something small and holds still
+slowly looks up at something high above him, afraid
+glances nervously over his shoulder as if being watched
+backs away slowly from something terrifying in front of him
+hides crouched behind cover, peeks out, ducks back
+trembles with fear, hugging himself
+jumps back startled by a sudden noise
+runs away in panic
+picks up a small object from a table and looks at it closely
+picks something up off the floor
+drinks from a cup
+reads a book or paper held in both hands
+talks on a phone
+waves to someone far away to get their attention
+argues angrily with someone in front of him
+celebrates a win, fists in the air
+laughs hard
+cries, face in his hands
+comforts someone, a hand on their shoulder
+facepalm, embarrassed
+shrugs, I don't know
+nods yes
+shakes his head no
+thinks hard, hand on his chin
+yawns and stretches after waking up
+exhausted, drops to his knees
+collapses to the floor, unconscious
+gets hit and falls backward
+slips and falls
+stands up from lying on the floor
+crawls on hands and knees
+climbs up onto a ledge
+jumps over a gap
+sneaks forward quietly in a crouch
+pushes a heavy box
+opens a chest and looks inside
+knocks on a door
+points at something to his side
+claps
+salutes
+dances happily
+sits on the floor hugging his knees, sad
+sleeps on his side
+stands idle bored, shifting his weight

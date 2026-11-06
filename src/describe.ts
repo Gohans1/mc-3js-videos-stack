@@ -127,7 +127,8 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
     if (B?.act?.do && t >= 27) char.push(line(B.act.do, L.moves[B.key].t, t)); // fresh from the start of this move
     if (B) {
       const k = L.moves[B.key], n = L.moves[Math.min(B.key + 1, L.moves.length - 1)];
-      char.push(line(B.moving && n !== k ? `pose: ${k.pose} -> ${n.pose}${n.walk ? " (walking, steps from distance)" : ""}${n.via ? ` via ${n.via}` : ""}` : `pose: ${k.pose}`));
+      const name = (m) => (m.clip ? `mocap ${m.clip} (src/clips.ts, baked 60 Hz, slerp blends)` : m.pose);
+      char.push(line(B.moving && n !== k ? `pose: ${name(k)} -> ${name(n)}${n.walk ? " (walking, steps from distance)" : ""}${n.via ? ` via ${n.via}` : ""}` : `pose: ${name(k)}`));
       if (B.speed > 0.05) char.push(line(`moving ${B.speed.toFixed(2)} m/s`));
     }
     const tw = t - L.twitch;
