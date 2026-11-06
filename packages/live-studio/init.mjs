@@ -51,7 +51,9 @@ for (const [f, text] of Object.entries(OLD_POINTERS)) {
 // Windows fails a link: given as a path ("failed linking dependency"), and file: copies the folder
 const pkgFile = inProject("package.json");
 const pkg = existsSync(pkgFile) ? JSON.parse(readFileSync(pkgFile, "utf8")) : { private: true, type: "module", dependencies: { three: "0.187.0" } };
-pkg.dependencies = { ...pkg.dependencies, "live-studio": "link:live-studio" };
+// A film inside a monorepo that holds the studio as a workspace package keeps its "workspace:*"
+const spec = pkg.dependencies?.["live-studio"]?.startsWith("workspace:") ? pkg.dependencies["live-studio"] : "link:live-studio";
+pkg.dependencies = { ...pkg.dependencies, "live-studio": spec };
 const SCRIPTS = {
   studio: "node node_modules/live-studio/src/live.mjs", // add the film's port, e.g. 4324
   notes: "python node_modules/live-studio/notes_report.py",
@@ -61,7 +63,7 @@ const SCRIPTS = {
 // A script that only opened the old pointer files goes; one a film wrote its own way stays
 const old = { studio: /^node src\/live\.mjs/, notes: /notes_report\.py/ };
 pkg.scripts = { ...SCRIPTS, ...Object.fromEntries(Object.entries(pkg.scripts ?? {}).filter(([k, v]) => !old[k]?.test(v))) };
-say("linked", "live-studio -> link:live-studio");
+say("linked", `live-studio -> ${spec}`);
 write("package.json", JSON.stringify(pkg, null, 2) + "\n");
 if (!dry) { run("bun link", HERE); run("bun install", PROJECT); }
 console.log(dry ? "nothing changed" : "done: bun run studio");
