@@ -1,0 +1,60 @@
+{
+  "name": "film-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Motion and camera building blocks for films drawn with draw(t): pure functions of film time",
+  "license": "MIT",
+  "exports": {
+    "./curve": "./src/curve.ts",
+    "./spring": "./src/spring.ts",
+    "./transition": "./src/transition.ts",
+    "./shake": "./src/shake.ts",
+    "./lens": "./src/lens.ts",
+    "./handheld": "./src/handheld.ts",
+    "./safe": "./src/safe.ts",
+    "./pose": "./src/pose.ts",
+    "./overlap": "./src/overlap.ts",
+    "./gaze": "./src/gaze.ts",
+    "./idle": "./src/idle.ts",
+    "./cartoon": "./src/cartoon.ts",
+    "./attention": "./src/attention.ts",
+    "./steady": "./src/steady.ts",
+    "./lean": "./src/lean.ts",
+    "./micro": "./src/micro.ts",
+    "./arc": "./src/arc.ts",
+    "./effort": "./src/effort.ts",
+    "./startle": "./src/startle.ts",
+    "./steer": "./src/steer.ts",
+    "./balance": "./src/balance.ts",
+    "./blinks": "./src/blinks.ts",
+    "./handeye": "./src/handeye.ts",
+    "./freeze": "./src/freeze.ts",
+    "./notice": "./src/notice.ts",
+    "./reach": "./src/reach.ts",
+    "./hesitate": "./src/hesitate.ts",
+    "./tremor": "./src/tremor.ts",
+    "./explore": "./src/explore.ts",
+    "./drowsy": "./src/drowsy.ts",
+    "./express": "./src/express.ts",
+    "./mcmotion": "./src/mcmotion.ts",
+    "./steps": "./src/steps.ts",
+    "./yawn": "./src/yawn.ts",
+    "./sigh": "./src/sigh.ts",
+    "./posture": "./src/posture.ts",
+    "./touch": "./src/touch.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "demo": "bun demo/setup.ts && vite"
+  },
+  "dependencies": {
+    "math": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "fflate": "^0.8.3",
+    "three": "0.186.1",
+    "vite": "^8.3.6"
+  }
+}
