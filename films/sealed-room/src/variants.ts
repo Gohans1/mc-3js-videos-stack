@@ -2,7 +2,7 @@
 // Props with looks to choose between in the studio (draw.variants). Every look is its own small block-model-renderer
 // scene, all built once and all but one hidden, so a switch shows on the very next frame. The first option is the
 // film's own; a pick made in the studio ("Chốt") lands in choices.json, which draft and final renders apply too.
-// A new prop: a vanilla block model per look in pack/assets/gohans (src/pack.ts), then an entry here.
+// A new prop: a vanilla block model per look in mc-assets (pack/assets/gohans, src/pack.ts), then an entry here.
 import * as THREE from "three";
 import { createScene, loadModel, parseBlockstate, prepareAssets, resolveModelData } from "block-model-renderer";
 import { DESK } from "./world";

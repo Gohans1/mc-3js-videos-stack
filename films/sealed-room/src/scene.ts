@@ -16,7 +16,7 @@ import { CHAIRS, buildProps } from "./props";
 import { bodyAt, blinkAt, moodAt, readLook, targetAt } from "./steve";
 import { makeFeet } from "./feet";
 import { loadClips } from "mc-actor/clips";
-import { pack } from "./pack";
+import { props as pack } from "mc-assets/pack";
 import { cameraAt } from "./camera";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants, VARIANTS } from "./variants";
@@ -109,7 +109,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const jarFile = await fetch("mc/client_assets.zip");
   if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: run python ../../scripts/mc/slim_jar.py");
   const jar = new Uint8Array(await jarFile.arrayBuffer());
-  // blocks picked from the vetted packs in E:/mc_vault/packs (pack/pick.py), stacked between the film's own pack and the game
+  // blocks picked from the vault's vetted mod packs (pack/picks.json, mc-assets/pick.py), stacked between the props and the game
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
   const sources = [pack, picked, jar];
   const world = await createScene(sources, buildWorld(), { lighting: "scene", animate: false });
@@ -161,7 +161,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   lamp.group.traverse((o) => { if (o.isMesh) for (const m of [o.material].flat()) lampMats.push([m, m.emissiveIntensity ?? 1, m.color.clone()]); });
   stage("room");
 
-  // Steve's skin comes out of the same zip, so mc/ needs nothing but client_assets.zip (E:/mc_vault/jar)
+  // Steve's skin comes out of the same zip, so mc/ needs nothing but client_assets.zip (the vault's jar/)
   const SKIN = "assets/minecraft/textures/entity/player/wide/steve.png";
   const skinUrl = URL.createObjectURL(new Blob([unzipSync(jar, { filter: (f) => f.name === SKIN })[SKIN]], { type: "image/png" }));
   const steve = await makePlayer(await loadRig("rig/player.glb"), skinUrl, { glow: 0.03 });

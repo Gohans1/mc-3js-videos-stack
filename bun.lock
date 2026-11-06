@@ -14,6 +14,7 @@
         "live-studio": "link:live-studio",
         "math": "0.1.0",
         "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
         "minerender": "2.1.0-beta.8",
         "n8ao": "2.0.1",
         "postprocessing": "6.39.6",
@@ -51,6 +52,13 @@
       "version": "0.1.0",
       "peerDependencies": {
         "three": "0.186.1",
+      },
+    },
+    "packages/mc-assets": {
+      "name": "mc-assets",
+      "version": "0.1.0",
+      "dependencies": {
+        "block-model-renderer": "2.20.0",
       },
     },
   },
@@ -360,6 +368,8 @@
     "math": ["math@0.1.0", "", {}, "sha512-hq5KkLblFiR8OO8ZYqPK02mBqrXuxJ6hwvhL3ZM9OFkAR82/20n4H768SWl4yVVrufh8VijEm42D4V9N8hDa2g=="],
 
     "mc-actor": ["mc-actor@workspace:packages/mc-actor"],
+
+    "mc-assets": ["mc-assets@workspace:packages/mc-assets"],
 
     "meshoptimizer": ["meshoptimizer@1.1.1", "", {}, "sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g=="],
 
