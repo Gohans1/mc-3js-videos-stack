@@ -12,6 +12,12 @@ export const snapTo = (s: number, pts: number[], perPx: number, off: boolean, fr
   for (const p of pts) { const e = Math.abs(p - s); if (e < d) { d = e; best = p; } }
   return best;
 };
+// Where a clip of length len carried to from lands: by whichever end is in reach of a mark, the nearer when both are
+export const snapSpan = (from: number, len: number, pts: number[], perPx: number, off: boolean) => {
+  const gap = (s: number) => (off ? Infinity : Math.min(Infinity, ...pts.map((p) => Math.abs(p - s)).filter((d) => d < SNAP_PX * perPx)));
+  const g0 = gap(from), g1 = gap(from + len);
+  return g0 === Infinity && g1 === Infinity ? from : g0 <= g1 ? snapTo(from, pts, perPx, off) : snapTo(from + len, pts, perPx, off) - len;
+};
 
 // Times as people read them: 01:05.250 on the clock, 1:05.3 in a list
 export const pad = (n: number, w = 2) => String(n).padStart(w, "0");

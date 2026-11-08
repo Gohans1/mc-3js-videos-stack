@@ -23,6 +23,7 @@ import { cameraAt, EASES, onScreenRanges } from "film-stage/camera";
 import { flickerAt } from "film-stage/flicker";
 import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
+import { makeTitles } from "film-stage/titles";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants } from "mc-assets/variants";
 import { VARIANTS } from "./variants";
@@ -200,6 +201,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   hud.add(cell);
   renderer.autoClear = false;
   const fade = makeFade(renderer);
+  const titles = makeTitles(renderer, W, H); // the titles, arrows and circles of src/timeline/text.json, over everything
+  await titles.ready;
   stage("light, lens, hud");
 
   // His eyes on the pillow, measured from the rig once lying: the close-up and his own view hang off this point
@@ -360,13 +363,14 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     renderer.clearDepth();
     renderer.render(hud, hudCam);
     if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
+    if (!free.on) titles(EDIT.text.items, t, camera);
   };
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.anims = ANIMS; // the studio's Animation tab lists these
   draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody, variants, steve, now, props });
   draw.variants = variants;
   draw.tools = {
-    clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf, anchor,
+    titles, clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf, anchor,
     objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
     materials: [], composer, renderer, placed,
   };

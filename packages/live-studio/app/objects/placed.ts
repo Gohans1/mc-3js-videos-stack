@@ -1,6 +1,6 @@
 // Objects the creator drops into the scene (the film's tools.placed, mc-assets/placed.ts), the way Unreal drops an asset from the
 // Content Browser into the level: the Objects library adds one where the pointer lets go or in front of the camera, a click on
-// the picture selects one (in the Select tool, setTool below), and the gizmo (three's TransformControls) moves, turns and sizes it. As with Unreal's Auto Key, a
+// the picture selects one (picture/pointer.ts; the right button pins a note), and the gizmo (three's TransformControls) moves, turns and sizes it. As with Unreal's Auto Key, a
 // gizmo edit keys the object at the playhead: the key there, or a new one. The objects live in one of the film's key files, so
 // undo, saving and an agent's edits are keys.ts and doc.ts's, and each object's keys are an ordinary key row.
 import * as THREE from "three";
@@ -170,7 +170,7 @@ let gizmo: TransformControls | null = null;
 const overlay = new THREE.Scene();
 const box = new THREE.BoxHelper(new THREE.Object3D(), 0xec8b49);
 box.visible = false;
-// What a click would pick, under the pointer in the Select tool
+// What a click would pick, under the mouse
 const hoverBox = new THREE.BoxHelper(new THREE.Object3D(), 0xec8b49);
 Object.assign(hoverBox.material, { transparent: true, opacity: 0.45 });
 hoverBox.visible = false;
@@ -214,32 +214,23 @@ export const setSnap = (on: boolean) => { set({ snap: on }); applySnap(); };
 export const setGizmo = (mode: GizmoMode) => { set({ gizmo: mode }); gizmo?.setMode(mode); S.dirty = true; };
 export const gizmoBusy = () => !!gizmo && (gizmo.dragging || gizmo.axis !== null);
 
-export const select = (name: string | null) => set(name ? { object: name, side: "objects", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, keyPicks: [] } : { object: null });
+export const select = (name: string | null) => set(name ? { object: name, side: "objects", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [] } : { object: null });
 
-// What a click on the picture does, as Figma's comment tool against its move tool and Frame.io's pin: Note pins a note, Select
-// picks a dropped-in object and shows its gizmo; one never does the other's job. The Objects tab brings Select, any other tab
-// Note (Unreal's editor modes: the panel and the viewport change together); V or the Select button switch by hand
-export const setTool = (tool: "note" | "select") => { set({ tool }); hover(null); };
-studio.subscribe((s, was) => {
-  const to = s.lib !== was.lib ? s.lib : s.side !== was.side ? s.side : null;
-  if (to && s.placed) setTool(to === "objects" ? "select" : "note");
-});
-studio.subscribe((s, was) => { if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev || s.tool !== was.tool) attach(); });
-// Re-points the gizmo whenever the selection or the built objects change (a rename or an undo builds a new one). In the Note
-// tool the selection keeps its box but the gizmo goes, so no drag on the picture moves an object there
+studio.subscribe((s, was) => { if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev) attach(); });
+// Re-points the gizmo whenever the selection or the built objects change (a rename or an undo builds a new one)
 export const attach = () => {
   const name = get().object;
   if (name && files.length && !placedData()[name]) { set({ object: null }); return; } // undone, or an agent took it out
   const o = name ? tools()?.objectOf(name) : null;
   box.visible = !!o;
   S.dirty = true;
-  if (!o || get().tool !== "select") { gizmo?.detach(); return; }
+  if (!o) { gizmo?.detach(); return; }
   const g = ensureGizmo();
   if (!g) return;
   if (g.object !== o) g.attach(o);
   g.setMode(get().gizmo);
 };
-// The object under the pointer in the Select tool, outlined faintly; the canvas takes the hand cursor over it
+// The object under the mouse, outlined faintly; the canvas takes the hand cursor over it
 export const hover = (name: string | null) => {
   if (name === hovered) return;
   hovered = name;

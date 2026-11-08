@@ -1,4 +1,4 @@
-// CapCut's preview axis (S, or the timeline bar): with the mouse over the ruler or the rows under it, a yellow line follows it
+// CapCut's preview axis (Shift+P, or the timeline bar): with the mouse over the ruler or the rows under it, a yellow line follows it
 // and the picture shows the frame there, the clock its time in yellow; the playhead stays. Pins and drawn strokes belong to
 // the playhead's frame, so they hide meanwhile. Only a mouse with no button down: touch has no hover, and a press drags or
 // scrubs. Off while playing, writing a note, drawing or flying the free camera, where the picture must stay on the playhead.

@@ -22,6 +22,7 @@ import { makePlaced } from "mc-assets/placed";
 import { cameraAt, EASES } from "film-stage/camera";
 import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
+import { makeTitles } from "film-stage/titles";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -86,6 +87,8 @@ export async function buildScene(canvas, W, H, draft = false) {
 
   const composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 4 }); // N8AO followed by a pass goes black without multisampling
   const fade = makeFade(renderer);
+  const titles = makeTitles(renderer, W, H); // the titles, arrows and circles of src/timeline/text.json, over everything
+  await titles.ready;
   composer.addPass(new RenderPass(scene, camera));
   const ao = new N8AOPostPass(scene, camera, W, H);
   Object.assign(ao.configuration, { aoRadius: 1.0, distanceFalloff: 1.0, intensity: 2.0, halfRes: draft });
@@ -153,6 +156,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     tone.saturation = EDIT.look.saturation;
     composer.render(0);
     if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
+    if (!free.on) titles(EDIT.text.items, t, camera);
   };
 
   // A draft frame's list (LIST=1): what is going on at t and which file holds it
@@ -173,7 +177,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     ];
   };
   draw.tools = {
-    clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones,
+    titles, clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones,
     objects: [[world.group, "room"], [steve.g, "Steve"]], materials: [], composer, renderer, placed,
   };
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these

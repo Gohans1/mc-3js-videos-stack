@@ -20,10 +20,10 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Ctrl+Alt+C/V: copy/paste attributes (animation của shot, âm lượng và fade của clip, ống kính và ease của khoá camera). Lệch: Ctrl+Alt thay Ctrl+Shift vì Chrome giành Ctrl+Shift+C.
 - Timeline zoom, fit, preview axis: CÓ.
   - Ctrl+lăn chuột hoặc = và - để zoom timeline; Ctrl+ và Ctrl- để zoom trang như trình duyệt.
-  - Shift+Z vừa cả phim; Alt+lăn hoặc Shift+lăn trượt ngang.
-  - S bật/tắt preview axis: rê chuột trên timeline xem khung đó, playhead đứng yên, đồng hồ chuyển vàng.
+  - Shift+Z (nút kính lúp) vừa cả phim; thanh trượt zoom giữa nút - và + như CapCut; Alt+lăn hoặc Shift+lăn trượt ngang.
+  - Shift+P bật/tắt preview axis (phím của CapCut 9.7): rê chuột trên timeline xem khung đó, playhead đứng yên, đồng hồ chuyển vàng.
   - Shift+S thêm tiếng (như "video and audio" của CapCut): rê chuột hay kéo playhead thì nghe vài khung tiếng ở đó, cả lời dẫn lẫn các track. Mặc định tắt.
-- Auto snapping (N): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác; giữ Shift khi kéo để tắt tạm.
+- Auto snapping (S, phím của CapCut 9.7): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác, bằng đầu nào của clip gần hơn; giữ Shift khi kéo để tắt tạm. Kéo đè lên clip khác quá tầm hít thì clip xuống track mới, như CapCut.
 - Track lock, hide, mute, solo:
   - Mute, Lock ở đầu mỗi track âm thanh: CÓ. Mute áp cả bản render final (mix.py bỏ track đó).
   - Solo: CÓ, nút tai nghe ở đầu track (khi trang tự phát các track), lời dẫn cũng im theo. Chỉ trong trang, không lưu, không ảnh hưởng bản render.
@@ -65,7 +65,12 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Enhance voice, noise reduction: BỎ, giọng ElevenLabs đã sạch.
 - Text, captions, callouts, TTS:
   - Captions: CÓ trong studio (⋯ Settings > View), hiện câu thoại đang nói dưới hình.
-  - Text titles (địa danh, năm) kèm mũi tên và vòng khoanh: SẮP LÀM, ưu tiên 1, film-stage vẽ để render cũng có.
+  - Text: CÓ. Tab Text bên trái có Default text, Place and time (đánh máy góc dưới kiểu phim tài liệu), Chapter title, Big number; bấm ô là thêm tại playhead.
+  - Hàng Text trên hàng Camera như text track của CapCut: kéo để dời hoặc đổi track, kéo mép để gọt, Alt+kéo tạo bản sao, chọn bằng khung cùng các hàng khác, Delete, Ctrl+C/V.
+  - Tab Text bên phải: chữ, font (Inter, Plex Mono, Source Serif), cỡ, đậm, nghiêng, viết hoa, màu, giãn chữ, giãn dòng, căn lề, độ mờ, Stroke, Background, Shadow, Scale, Position, Rotate. Chọn nhiều thì sửa cả nhóm.
+  - Tab Animation: In và Out (Fade, Typewriter, Slide, Zoom, Blur) kèm độ dài. Lệch: ô chưa có hình động thử trước như CapCut.
+  - Trên hình: bấm chữ là chọn, kéo để dời, hít vào đường giữa (Shift: không hít). film-stage/titles.ts vẽ nên render final giống hệt.
+  - Text bám theo vật 3D (trường at trong text.json) đã chạy ở film-stage nhưng chưa có nút trong studio. Split chữ (Ctrl+B): chưa.
   - TTS: ngoài studio (scripts/voice/gen.py qua GenVoice).
 - Speed, reverse, freeze frame:
   - Tab Speed: CÓ, chỉnh tốc độ máy quay giữa hai khoá bằng preset vẽ đường vàng như CapCut Curve. Lệch: không có Standard (nhân tốc độ) vì camera không có tốc độ gốc.
@@ -77,7 +82,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Overlay / picture-in-picture: BỎ, vật minh hoạ đặt thẳng vào cảnh 3D.
 - Remove BG, chroma key: BỎ, cùng lý do.
 - Video effects, arrows, opacity, blend:
-  - Mũi tên, vòng khoanh: SẮP LÀM cùng Text titles. Grain, vignette: SẮP LÀM trong Adjust theo shot.
+  - Mũi tên, vòng khoanh: CÓ ở tab Text > Shapes, nét tự vẽ ra (Draw on), màu, độ dày, cỡ, xoay. Grain, vignette: SẮP LÀM trong Adjust theo shot.
   - Night vision (nút mặt trăng): CÓ, hiệu ứng riêng của studio. Opacity, blend modes: BỎ lúc này.
 - Filters, LUTs, color adjust: SẮP LÀM dạng Adjust theo shot (exposure, contrast, saturation, temperature, vignette, grain). Soi màu thì đã CÓ Color oscilloscope.
 - Work area In/Out: CÓ.
@@ -106,7 +111,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 ## CapCut có, file 95% không ghi, studio đã làm
 
 - Color oscilloscope: RGB parade, RGB waveform, vectorscope ở ⋯ Settings > Heavy.
-- Giao diện: tab đang mở chữ xanh ngọc kèm gạch mỏng (gạch là dev chọn, CapCut không có); thứ đang chọn viền trắng trên mọi hàng (clip, khối shot, kim cương).
+- Giao diện: tab đang mở chữ xanh ngọc kèm gạch mỏng (gạch là dev chọn, CapCut không có); thứ đang chọn viền trắng trên mọi hàng (clip, khối shot, kim cương); nền các hàng phẳng một màu như CapCut, không sọc.
 - Hàng Shots gộp vào hàng Camera: tên shot nằm trên khối camera như clip của CapCut, dưới thước giờ chỉ còn dải mỏng cho vạch đỏ (cảnh đứng yên quá 6 s) và note. Phim không có hàng Camera vẫn giữ hàng Shots.
 - Track âm thanh: bấm tên track chọn mọi clip của nó, nhấp đúp (F2) đổi tên, thả clip vào dải dưới cùng tạo track mới, track rỗng tự mất.
 - Chọn clip: Ctrl+A chọn mọi clip, [ và ] chọn mọi clip bên trái/phải playhead, chuột phải clip có menu.
@@ -116,7 +121,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 
 ## Riêng của studio (CapCut không có)
 
-- Note ghim lên hình và vẽ tay (D), danh sách note kiểu Frame.io, AI đọc rồi sửa phim.
+- Note ghim lên hình bằng chuột phải (điện thoại: chạm) và vẽ tay (D), danh sách note kiểu Frame.io, AI đọc rồi sửa phim. Chuột trái trên hình là chọn (đồ vật, chữ) như CapCut.
 - Free camera kiểu Minecraft (F), Shift+K lưu khoá từ góc đó, Alt+C copy góc camera thành một dòng chữ để dán vào note.
 - Chụp hình so sánh (Shift+\, giữ \ để xem lại), chip phương án A/B/C/D.
 - Các lệnh tự kiểm (CHECK=motion, seen, touch, slide; framecheck) ghi trong AGENTS.md gốc của monorepo.

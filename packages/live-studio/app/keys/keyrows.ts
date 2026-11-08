@@ -13,13 +13,13 @@ import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { type KeyRef } from "./slice";
 import { together } from "../core/doc";
-import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
+import { alongWith, type Along, inBox, NONE, pickAcross, picked } from "../timeline/across";
 import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { seek, setPlaying } from "../playback/transport";
 
-const COLOR = { bg: "#100F0F", band: ["#151413", "#121110"], lit: "#1C2C2A", head: "#1C1B1A", line: "#878580", hold: "#403E3C", key: "#E6E4D9", text: "#B7B5AC", cut: "#2A2928" };
+const COLOR = { bg: "#100F0F", lit: "#1C2C2A", head: "#1C1B1A", line: "#878580", hold: "#403E3C", key: "#E6E4D9", text: "#B7B5AC", cut: "#2A2928" };
 const R = 4.5;
 
 
@@ -39,12 +39,11 @@ export const drawKeyRows = () => {
   g.fillStyle = COLOR.bg; g.fillRect(0, 0, w, h);
   g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
   spots = [];
-  let band = 0;
   const lit = litRow();
   for (const l of lines()) {
-    if (l.kind === "file") { g.fillStyle = COLOR.head; g.fillRect(0, l.y, w, HEAD_H); band = 0; continue; }
-    g.fillStyle = l.row.id === lit ? COLOR.lit : COLOR.band[band % 2]; g.fillRect(0, l.y, w, ROW_H);
-    band++;
+    // Flat rows as CapCut's tracks; the file's heading in the label column's colour (KeyHeads.tsx bg-card)
+    if (l.kind === "file") { g.fillStyle = COLOR.head; g.fillRect(0, l.y, w, HEAD_H); continue; }
+    if (l.row.id === lit) { g.fillStyle = COLOR.lit; g.fillRect(0, l.y, w, ROW_H); }
     const ks = keysOf(l.row.f, l.row.path), y = l.y + ROW_H / 2;
     // What happens between keys first, so the diamonds sit on top
     for (let i = 1; i < ks.length; i++) {
@@ -152,7 +151,7 @@ export const attachKeyRows = () => {
     if (box) {
       const { add } = box;
       box = null;
-      if (!boxEnd() && !add) pickAcross({ cam: [], keys: [], clips: [] });
+      if (!boxEnd() && !add) pickAcross(NONE);
       return;
     }
     if (!drag) return;

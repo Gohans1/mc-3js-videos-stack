@@ -20,7 +20,7 @@ export function KeyHeads() {
   return (
     <ul ref={list} aria-label="Keyframe tracks" className="bg-background">
       {lines().map((l) => l.kind === "file" ? (
-        <li key={`f${l.f}`} style={{ height: HEAD_H }} className="bg-raised-2/40">
+        <li key={`f${l.f}`} style={{ height: HEAD_H }} className="bg-card">
           <button
             type="button"
             aria-expanded={!isFolded(l.f)}

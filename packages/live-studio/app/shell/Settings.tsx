@@ -104,12 +104,11 @@ function Options() {
 }
 
 const KEYS: [ReactNode, ReactNode][] = [
-  ["Click the picture", "pin a note there: the Draw tools open above the pin, or just type or talk (with Select on or in the free camera: pick an object)"],
-  ["Right-click the picture", "pin a note there, in any tool and in the free camera"],
-  [<Kbd>V</Kbd>, "Select: a click on the picture picks an object. On by itself in the Objects tab"],
+  ["Click the picture", "pick an object or a title there; a click beside them picks nothing"],
+  ["Right-click the picture", "pin a note there: the Draw tools open above the pin, or just type or talk. On a phone, a tap pins it"],
   [<><Kbd>J</Kbd><Kbd>K</Kbd><Kbd>L</Kbd></>, "play backward, stop, play forward; J or L again goes faster (2×, 4×, 8×)"],
   [<Kbd>M</Kbd>, "add a note here (CapCut's marker)"],
-  [<Kbd>S</Kbd>, "preview axis on or off: pointing at the timeline shows that frame, the playhead stays"],
+  [<Kbd>Shift+P</Kbd>, "preview axis on or off: pointing at the timeline shows that frame, the playhead stays (Shift+S adds its sound)"],
   [<><Kbd>I</Kbd><Kbd>O</Kbd></>, "In and Out points at the playhead: a note written between them is about the whole stretch, and played from inside it loops"],
   [<Kbd>Shift+X</Kbd>, "In and Out round the picked sound clips, or the shot"],
   [<Kbd>Alt+X</Kbd>, "clear In and Out"],
@@ -146,7 +145,7 @@ const KEYS: [ReactNode, ReactNode][] = [
   [<><Kbd>Alt</Kbd>+scroll</>, "slide the timeline along the film (Shift+scroll too)"],
   [<><Kbd>=</Kbd><Kbd>-</Kbd></>, "zoom the timeline in, out (Ctrl+ and Ctrl- zoom the page)"],
   [<><Kbd>Shift</Kbd><Kbd>Z</Kbd></>, "show the whole film on the timeline"],
-  [<Kbd>N</Kbd>, "snapping on, off"],
+  [<Kbd>S</Kbd>, "auto snapping on, off (hold Shift while dragging to skip it once)"],
   [<><Kbd>Ctrl</Kbd><Kbd>;</Kbd></>, "guides: thirds and safe areas"],
   [<><Kbd>Ctrl</Kbd><Kbd>Shift</Kbd><Kbd>F</Kbd></>, "full screen preview (Esc leaves)"],
   [<><Kbd>Shift</Kbd><Kbd>\</Kbd></>, "snapshot the picture; hold \\ to compare after a change"],

@@ -5,6 +5,7 @@ import { together } from "../core/doc";
 import { removeKeys } from "../keys/keys";
 import { removeObject } from "../objects/placed";
 import { allClips, locked, removeClips, setClips, span, splitClips } from "../sound/sound";
+import { removeTexts } from "../text/text";
 import { S } from "../core/state";
 import { get, say } from "../core/store";
 import { SAME } from "../core/time";
@@ -29,15 +30,16 @@ export const selectSide = (d: -1 | 1) => {
   say(cs.length ? `${cs.length} clip${cs.length > 1 ? "s" : ""} ${d < 0 ? "left" : "right"} of the playhead selected` : `No sound clips ${d < 0 ? "left" : "right"} of the playhead`);
 };
 
-// Delete and the toolbar's bin: whatever is picked, every kind of it in one undo step (sound clips, camera keyframes, keys; a
-// pick may hold all three, timeline/across.ts), or else the dropped-in object picked
-export const canDelete = () => { const s = get(); return s.clips.length > 0 || s.camKey !== null || s.camPicks.length > 0 || s.keyPicks.length > 0 || s.object !== null; };
+// Delete and the toolbar's bin: whatever is picked, every kind of it in one undo step (text, sound clips, camera keyframes, keys;
+// a pick may hold them all, timeline/across.ts), or else the dropped-in object picked
+export const canDelete = () => { const s = get(); return s.textPicks.length > 0 || s.clips.length > 0 || s.camKey !== null || s.camPicks.length > 0 || s.keyPicks.length > 0 || s.object !== null; };
 export const deleteSelected = () => {
-  const { clips, camKey, camPicks, keyPicks, object } = get();
-  if (!clips.length && camKey === null && !camPicks.length && !keyPicks.length) { if (object) removeObject(object); return; }
+  const { clips, camKey, camPicks, keyPicks, object, textPicks } = get();
+  if (!clips.length && camKey === null && !camPicks.length && !keyPicks.length && !textPicks.length) { if (object) removeObject(object); return; }
   together(() => {
     if (clips.length) removeClips(clips);
     if (camKey !== null) removeKey(camKey); else if (camPicks.length) removeCamKeys(camPicks);
     if (keyPicks.length) removeKeys(keyPicks);
+    if (textPicks.length) removeTexts(textPicks);
   });
 };

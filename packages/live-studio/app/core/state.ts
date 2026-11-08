@@ -11,7 +11,7 @@ export interface VoiceMap { step: number; peaks: number[]; lines: Line[] }
 export interface Elements {
   view: HTMLElement; stage: HTMLElement; canvas: HTMLCanvasElement; final: HTMLCanvasElement; audio: HTMLAudioElement;
   clock: HTMLElement; caption: HTMLElement; pins: HTMLElement; chips: HTMLElement; ink: HTMLCanvasElement;
-  filmview: HTMLCanvasElement; over: HTMLCanvasElement; ruler: HTMLCanvasElement; detail: HTMLCanvasElement; lanes: HTMLCanvasElement; camrow: HTMLCanvasElement; keyrows: HTMLCanvasElement; timeline: HTMLElement; rowbox: HTMLElement; peek: HTMLElement;
+  filmview: HTMLCanvasElement; over: HTMLCanvasElement; ruler: HTMLCanvasElement; detail: HTMLCanvasElement; lanes: HTMLCanvasElement; camrow: HTMLCanvasElement; keyrows: HTMLCanvasElement; textrow: HTMLCanvasElement; textsel: HTMLElement; timeline: HTMLElement; rowbox: HTMLElement; peek: HTMLElement;
   scopes: HTMLElement; parade: HTMLCanvasElement; wave: HTMLCanvasElement; vector: HTMLCanvasElement;
 }
 // How a component hands its element over: ref={bind("canvas")}

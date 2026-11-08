@@ -19,7 +19,7 @@ import { r3, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { bladeLine } from "../timeline/blade";
 import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
-import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
+import { alongWith, type Along, inBox, NONE, pickAcross, picked } from "../timeline/across";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { animOf, lenOf, pickShot, shotSpan } from "./anim";
@@ -224,7 +224,7 @@ export const attachCamRow = () => {
       const { shot, add } = press;
       press = null;
       if (boxEnd()) return;
-      if (!add) { pickAcross({ cam: [], keys: [], clips: [] }); pickShot(shot < 0 ? null : shot); }
+      if (!add) { pickAcross(NONE); pickShot(shot < 0 ? null : shot); }
       return;
     }
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }

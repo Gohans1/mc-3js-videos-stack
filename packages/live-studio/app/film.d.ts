@@ -20,6 +20,15 @@ declare module "film/scene" {
     head?: THREE.Vector3;
     CELL?: number;
     placed?: Placed;
+    titles?: Titles;
+  }
+  // film-stage/titles.ts makeTitles: draws text.json's items over the frame, and tells the studio where each one is
+  export interface TitleFx { id: string; title: string; len: number }
+  export interface Titles {
+    (list: unknown[], t: number, camera?: THREE.Camera): void;
+    boxes(list: unknown[], t: number, camera?: THREE.Camera): { i: number; box: [number, number, number, number] }[];
+    fonts: { id: string; title: string; css: string }[];
+    anims: { text: { in: TitleFx[]; out: TitleFx[] }; shape: { in: TitleFx[]; out: TitleFx[] } };
   }
   // mc-assets/placed.ts: objects dropped in from the Objects library, stored in the keyFiles entry whose EDIT key is `key`
   export interface Placed {

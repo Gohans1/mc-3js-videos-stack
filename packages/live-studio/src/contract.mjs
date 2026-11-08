@@ -105,6 +105,14 @@ const Anim = z.looseObject({ in: AnimFx.optional(), out: AnimFx.optional(), comb
 export const ShotsTimeline = z.array(z.looseObject({ t: time, name: z.string().optional(), anim: Anim.optional() })).min(1)
   .refine((s) => s.every((x, i) => i === 0 || x.t > s[i - 1].t), "shots must start in order of time, each after the one before");
 
+// ---------- Words and shapes over the picture (package.json "live-studio".textTimeline), which the studio also writes: CapCut's
+// Text and Shapes, drawn by film-stage/titles.ts. Each item is on screen from `from` to `to` (the seconds draw(t) gets) on a text
+// track (0 is the one just over the camera row); x, y its anchor in the frame (0 to 1); `at` a world point it follows instead.
+// Anything else on an item (size, font, colour, stroke, background, in, out) is the drawer's
+const TextItem = z.looseObject({ kind: z.enum(["text", "arrow", "circle"]), from: secs, to: secs, track: z.number().int().nonnegative().optional(), text: z.string().optional(), x: z.number().optional(), y: z.number().optional(), at: z.tuple([z.number(), z.number(), z.number()]).optional() })
+  .refine((it) => it.to > it.from, "to must come after from");
+export const TextTimeline = z.looseObject({ items: z.array(TextItem) });
+
 // ---------- Key files (package.json "live-studio".keyFiles: { file: the EDIT key the film reads it from }): every list of
 // {t, ...} in the file, at any depth through objects, is a row of keys the studio shows and retimes (Steve's moves, a drawer's
 // opening); the studio may write anything else on a key it was given. Each row stays in time order

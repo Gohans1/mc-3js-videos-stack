@@ -5,7 +5,7 @@ import { execFile, spawn } from "node:child_process";
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch as fsWatch, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CamTimeline, checkFiles, Choices, DOC, Edit, KeyFile, problems, ShotsTimeline, SoundTimeline, StudioConfig, Trials } from "./contract.mjs";
+import { CamTimeline, checkFiles, Choices, DOC, Edit, KeyFile, problems, ShotsTimeline, SoundTimeline, StudioConfig, TextTimeline, Trials } from "./contract.mjs";
 import { ratioOf } from "./frame.mjs";
 import { createNotes } from "./notes.mjs";
 import { openSound } from "./sound.mjs";
@@ -53,8 +53,10 @@ export const openFilm = (projectDir, { send }) => {
   const keyFiles = Object.entries(pkg["live-studio"]?.keyFiles ?? {}).map(([rel, edit]) => ({ rel, edit, ...openTimelineFile(PROJECT, rel, KeyFile) }));
   // "live-studio": { shotsTimeline: file }: SHOTS as data (the film reads them from EDIT.shots), so a cut can be moved by hand
   const shotsRel = pkg["live-studio"]?.shotsTimeline, shots = shotsRel ? openTimelineFile(PROJECT, shotsRel, ShotsTimeline) : null;
-  const ownWrites = () => [sound, cam, shots, ...keyFiles].filter((f) => f?.ownWrite()).map((f) => f.FILE); // files whose last change was the studio's own save
-  const handEdited = [sound, cam, shots, ...keyFiles].filter(Boolean).map((f) => f.FILE); // the page loads these itself on every change (/api)
+  // "live-studio": { textTimeline: file }: titles, arrows and circles over the picture (EDIT.text, drawn by film-stage/titles.ts)
+  const textRel = pkg["live-studio"]?.textTimeline, text = textRel ? openTimelineFile(PROJECT, textRel, TextTimeline) : null;
+  const ownWrites = () => [sound, cam, shots, text, ...keyFiles].filter((f) => f?.ownWrite()).map((f) => f.FILE); // files whose last change was the studio's own save
+  const handEdited = [sound, cam, shots, text, ...keyFiles].filter(Boolean).map((f) => f.FILE); // the page loads these itself on every change (/api)
   // "live-studio": { liveLanes: true }: the page plays the lanes itself and the film's sound.py, given --live-lanes, leaves them
   // out of the mix, so a lane edit is heard at once. A mix made before the switch still holds them: the marker says it was remade
   const LIVE = !!(sound && pkg["live-studio"]?.liveLanes);
@@ -78,6 +80,7 @@ export const openFilm = (projectDir, { send }) => {
       ...(sound && { [pkg["live-studio"].soundTimeline]: [SoundTimeline, textOf(sound.FILE)] }),
       ...(cam && { [camRel]: [CamTimeline, textOf(cam.FILE)] }),
       ...(shots && { [shotsRel]: [ShotsTimeline, textOf(shots.FILE)] }),
+      ...(text && { [textRel]: [TextTimeline, textOf(text.FILE)] }),
       ...Object.fromEntries(keyFiles.map((k) => [k.rel, [KeyFile, textOf(k.FILE)]])),
     });
     if (JSON.stringify(now) === JSON.stringify(fileProblems)) return;
@@ -214,6 +217,10 @@ export const openFilm = (projectDir, { send }) => {
       let shotsSeen = textOf(shots.FILE);
       watch(shots.FILE, debounce(() => { const now = textOf(shots.FILE); if (now !== undefined && now !== shotsSeen) { shotsSeen = now; checkContract(); send("shots"); } }, 150));
     }
+    if (text && existsSync(text.FILE)) {
+      let textSeen = textOf(text.FILE);
+      watch(text.FILE, debounce(() => { const now = textOf(text.FILE); if (now !== undefined && now !== textSeen) { textSeen = now; checkContract(); send("text"); } }, 150));
+    }
     keyFiles.forEach((k, i) => {
       if (!existsSync(k.FILE)) return;
       let seen = textOf(k.FILE);
@@ -266,7 +273,7 @@ export const openFilm = (projectDir, { send }) => {
   return {
     PROJECT, NAME, SRC, PUBLIC, WORK, MIX, MIX_SMALL, LITE, EDIT, VOICE_MAP, hosts, threeFrom, smallSfx,
     liveLanes: () => LIVE && mixIsLive(),
-    notes, readChoices, choose, ratio, setRatio, trials, shotComments, stamp, sound, cam, shots, keyFiles, ownWrites, handEdited,
+    notes, readChoices, choose, ratio, setRatio, trials, shotComments, stamp, sound, cam, shots, text, keyFiles, ownWrites, handEdited,
     contract: () => ({ files: fileProblems }), pageSays,
     openRead, smallMix, start, stop: () => watchers.splice(0).forEach((w) => w.close()),
   };

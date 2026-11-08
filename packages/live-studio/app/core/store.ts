@@ -10,6 +10,7 @@ import { type OptionsSlice, optionsSlice } from "../options/slice";
 import { type PictureSlice, pictureSlice } from "../picture/slice";
 import { type PlaybackSlice, playbackSlice } from "../playback/slice";
 import { type SoundSlice, soundSlice } from "../sound/slice";
+import { type TextSlice, textSlice } from "../text/slice";
 import { type TimelineSlice, timelineSlice } from "../timeline/slice";
 import type { Favorites } from "./favorites";
 import { type Prefs, readPrefs, savePref } from "./prefs";
@@ -25,15 +26,15 @@ interface PageSlice {
   contract: string[];
   shot: string;
   perf: string;
-  side: "notes" | "sound" | "objects" | "cam" | "speed" | "anim" | "keys";
-  lib: "notes" | "sound" | "objects"; // on a wide screen: the left column's tab (side then picks the right column's)
+  side: "notes" | "sound" | "objects" | "cam" | "speed" | "anim" | "keys" | "text" | "textAnim";
+  lib: "notes" | "sound" | "objects" | "text"; // on a wide screen: the left column's tab (side then picks the right column's)
   favorites: Favorites; // core/favorites.ts
 }
-export type StudioState = PageSlice & PlaybackSlice & PictureSlice & NotesSlice & OptionsSlice & SoundSlice & CameraSlice & KeysSlice & ObjectsSlice & TimelineSlice;
+export type StudioState = PageSlice & PlaybackSlice & PictureSlice & NotesSlice & OptionsSlice & SoundSlice & CameraSlice & KeysSlice & ObjectsSlice & TextSlice & TimelineSlice;
 
 export const studio = createStore<StudioState>(() => ({
   ready: false, newBuild: false, loading: "Loading the scene…", error: null, status: "", settingsOpen: false, contract: [], shot: "", perf: "", side: "notes", lib: "notes", favorites: { sounds: [], effects: [] },
-  ...playbackSlice, ...pictureSlice, ...notesSlice, ...optionsSlice, ...soundSlice, ...cameraSlice, ...keysSlice, ...objectsSlice, ...timelineSlice,
+  ...playbackSlice, ...pictureSlice, ...notesSlice, ...optionsSlice, ...soundSlice, ...cameraSlice, ...keysSlice, ...objectsSlice, ...textSlice, ...timelineSlice,
   ...readPrefs(),
 }));
 

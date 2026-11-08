@@ -24,7 +24,7 @@ import { togglePreviewAudio, togglePreviewAxis } from "../timeline/peek";
 import { clearInOut, inOutByClip, setIn, setOut } from "../timeline/inout";
 import { redo, undo } from "../core/doc";
 import { pickKeys } from "../keys/keys";
-import { select, setGizmo, setTool } from "../objects/placed";
+import { select, setGizmo } from "../objects/placed";
 import { toggleFullscreen } from "./fullscreen";
 import { allClips, locked, setClips, trimClips } from "../sound/sound";
 import { get, say, set, setPref, useStudio } from "../core/store";
@@ -51,8 +51,8 @@ export function useStudioHotkeys() {
   const ink = useStudio((s) => s.ink), picks = useStudio((s) => s.clips.length), sound = useStudio((s) => s.sound);
   const camKey = useStudio((s) => s.camKey), camPicks = useStudio((s) => s.camPicks.length), cam = useStudio((s) => s.cam), keyPicks = useStudio((s) => s.keyPicks.length), free = useStudio((s) => s.free);
   const object = useStudio((s) => s.object), shots = useStudio((s) => s.shots), blade = useStudio((s) => s.blade);
-  const placed = useStudio((s) => s.placed), tool = useStudio((s) => s.tool);
-  const anyPick = picks > 0 || camKey !== null || camPicks > 0 || keyPicks > 0;
+  const textPicks = useStudio((s) => s.textPicks.length);
+  const anyPick = picks > 0 || camKey !== null || camPicks > 0 || keyPicks > 0 || textPicks > 0;
   const keys: UseHotkeyDefinition[] = [
     // ---- CapCut's own
     // In the free camera Space flies up (picture/flight.ts), as in Minecraft
@@ -89,12 +89,13 @@ export function useStudioHotkeys() {
     // Every kind picked at once (a box across the rows picks clips, camera keys and keys together; timeline/across.ts)
     { hotkey: "Delete", callback: deleteSelected, options: { enabled: anyPick || object !== null } },
     { hotkey: "Backspace", callback: deleteSelected, options: { enabled: anyPick || object !== null } },
-    { hotkey: "N", callback: fresh(toggleMagnet) },
     { hotkey: "I", callback: setIn },
     { hotkey: "O", callback: setOut },
     { hotkey: "Shift+X", callback: inOutByClip },
     { hotkey: "Alt+X", callback: clearInOut },
-    { hotkey: "S", callback: fresh(togglePreviewAxis), options: { enabled: !free } }, // in the free camera S flies back
+    // CapCut 9.7's own keys (its tooltips): S auto snapping, Shift+P the preview axis. In the free camera S flies back
+    { hotkey: "S", callback: fresh(toggleMagnet), options: { enabled: !free } },
+    { hotkey: "Shift+P", callback: fresh(togglePreviewAxis) },
     { hotkey: "Shift+S", callback: fresh(togglePreviewAudio), options: { enabled: !free } },
     // CapCut's marker is the studio's note: one at the playhead, and the next or previous one
     { hotkey: "M", callback: () => openNote(null) },
@@ -105,8 +106,6 @@ export function useStudioHotkeys() {
     { hotkey: "Shift+Z", callback: zoomToFit },
     { hotkey: "Mod+;", callback: fresh(() => setPref("guides", !get().guides)) },
     { hotkey: "Mod+Shift+F", callback: fresh(toggleFullscreen) },
-    // Figma's move tool key: a click on the picture picks an object; again, it pins notes
-    { hotkey: "V", callback: fresh(() => setTool(get().tool === "select" ? "note" : "select")), options: { enabled: placed } },
     // ---- The studio's own
     // D also flies the free camera right (W A S D), so there only the Draw button draws
     { hotkey: "D", callback: fresh(() => setInk(get().ink ? null : "pen")), options: { enabled: !free } },
@@ -131,7 +130,6 @@ export function useStudioHotkeys() {
     { hotkey: "Escape", callback: () => setKey(null), options: { enabled: !settingsOpen && !ink && !blade && (camKey !== null || camPicks > 0) } },
     { hotkey: "Escape", callback: () => pickKeys([]), options: { enabled: !settingsOpen && !ink && !blade && keyPicks > 0 } },
     { hotkey: "Escape", callback: () => select(null), options: { enabled: !settingsOpen && !ink && !blade && object !== null } },
-    { hotkey: "Escape", callback: () => setTool("note"), options: { enabled: !settingsOpen && !ink && !blade && picks === 0 && camKey === null && camPicks === 0 && keyPicks === 0 && object === null && tool === "select" } },
     ...Array.from({ length: 10 }, (_, i) => ({ hotkey: String(i), callback: () => chooseInGroup(i) }) as UseHotkeyDefinition),
     // W A S D, Space, Shift, Q and E fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts
   ];

@@ -9,15 +9,15 @@
 // A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
 // In split mode (blade.ts) a click on a clip cuts it there instead.
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-import { FPS, snapTo, stamp } from "../core/time";
+import { FPS, r3, snapSpan, snapTo, stamp } from "../core/time";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
 import { get, noSnap, say } from "../core/store";
 import { BLADE_CURSOR } from "../components/cursor";
 import { bladeLine } from "../timeline/blade";
-import { addClip, allClips, clipOf, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips, usesOf } from "./sound";
+import { addClip, allClips, clipOf, cutBefore, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips, usesOf } from "./sound";
 import { together } from "../core/doc";
-import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
+import { alongWith, type Along, inBox, NONE, pickAcross, picked as across } from "../timeline/across";
 import { PICK, sized, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -27,7 +27,7 @@ import { seek, setPlaying } from "../playback/transport";
 // sound/TrackHeads.tsx lays its rows out on these
 export const TRACK_H = 28, TOP = 2, ADD_H = 24;
 const CLIP_H = 24;
-const COLOR = { beds: "#403170", sfx: "#5E409D", wave: "rgba(214,204,240,.55)", text: "#E6E4D9", band: ["#151413", "#121110"], drop: "#3AA99F", tried: "#D0A215", lit: "#FFFCF0" };
+const COLOR = { beds: "#403170", sfx: "#5E409D", wave: "rgba(214,204,240,.55)", text: "#E6E4D9", drop: "#3AA99F", tried: "#D0A215", lit: "#FFFCF0" };
 const EDGE = 6, KNOB = 7; // KNOB: how near a fade handle the pointer must be, in px
 
 type Box = { ref: ClipRef; x0: number; x1: number; y0: number; y1: number };
@@ -51,7 +51,7 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   const p = peaksOf(c.name), [from, to] = span(ref), px = (x1 - x0) / Math.max(1e-3, to - from);
   if (p && x1 - x0 > 6) {
     g.fillStyle = COLOR.wave;
-    const k = Math.min(4, 10 ** (c.gain / 20)), start = ref.list === "sfx" ? ((c as { start?: number }).start ?? 0) : 0, file = p.peaks.length * p.step;
+    const k = Math.min(4, 10 ** (c.gain / 20)), start = (c as { start?: number }).start ?? 0, file = p.peaks.length * p.step;
     for (let x = Math.max(cx0, 0); x < cx1; x++) {
       let s = (x - x0) / px + start;
       if (ref.list === "beds") s %= Math.max(file, 1e-3); // a bed loops its file
@@ -85,7 +85,6 @@ export const drawLanes = () => {
   if (!c.width) return;
   const { a, v } = view(), X = (s: number) => ((s - a) / v) * w, ts = tracks();
   g.fillStyle = "#100F0F"; g.fillRect(0, 0, w, h);
-  ts.forEach((_, k) => { g.fillStyle = COLOR.band[k % 2]; g.fillRect(0, rowY(k), w, TRACK_H); });
   // Cuts, faint, so a sound can be put on one by eye
   g.fillStyle = "#2A2928";
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
@@ -253,8 +252,7 @@ export const attachLanes = () => {
         // Copies of the pick go at the ends of their lists, the same each time the drag is redrawn from its snapshot
         const moving = drag!.moving = drag!.copy ? group.map((r): ClipRef => { const list = l[r.list] as unknown[]; list.push(structuredClone(list[r.i])); return { list: r.list, i: list.length - 1 }; }) : group;
         // The clip under the pointer snaps, by whichever end lands nearer a snap point; the rest of the pick moves as far
-        const s0 = snapTo(from + d, pts, perPx, off), s1 = snapTo(to + d, pts, perPx, off) - (to - from);
-        let shift = (Math.abs(s0 - (from + d)) <= Math.abs(s1 - (from + d)) ? s0 : s1) - from;
+        let shift = snapSpan(from + d, to - from, pts, perPx, off) - from;
         const starts = moving.map((r) => span(r)[0]);
         const room = drag!.along?.room ?? [-Infinity, Infinity];
         shift = Math.max(-Math.min(...starts), room[0], Math.min(DURATION - 0.05 - Math.max(...starts), room[1], shift));
@@ -265,22 +263,22 @@ export const attachLanes = () => {
         const fresh = rows.some((k) => k + dk === n) ? addTrack(l, ref.list).id : "";
         moving.forEach((r, k) => {
           const e = l[r.list][r.i] as { from?: number; to?: number; at?: number; track?: string };
-          if (r.list === "beds") { const len = e.to! - e.from!; e.from = e.from! + shift; e.to = e.from + len; } else e.at = e.at! + shift;
+          if (r.list === "beds") { const len = e.to! - e.from!; e.from = r3(e.from! + shift); e.to = r3(e.from + len); } else e.at = r3(e.at! + shift);
           if (dk) e.track = rows[k] + dk === n ? fresh : l.tracks[rows[k] + dk].id;
         });
         resolve(l, moving, span);
       } else if (drag!.mode === "end") {
         const file = ref.list === "sfx" ? seconds(clipOf(ref)!.name) : Infinity, e2 = Math.max(from + 1 / FPS, snapTo(to + d, pts, perPx, off));
-        if (ref.list === "beds") l.beds[ref.i].to = e2;
-        else { const s = l.sfx[ref.i]; s.length = Math.min(e2 - from, file - (s.start ?? 0)); }
+        if (ref.list === "beds") l.beds[ref.i].to = r3(e2);
+        else { const s = l.sfx[ref.i]; s.length = r3(Math.min(e2 - from, file - (s.start ?? 0))); }
         resolve(l, [ref], span);
       } else {
         const s0 = Math.max(0, Math.min(to - 1 / FPS, snapTo(from + d, pts, perPx, off)));
-        if (ref.list === "beds") l.beds[ref.i].from = s0;
+        if (ref.list === "beds") cutBefore(l.beds[ref.i], "beds", s0);
         else {
           // A one-shot trimmed at its head starts later in its file, so what's left stays where it was
-          const s = l.sfx[ref.i], into = Math.max(0, (s.start ?? 0) + (s0 - from));
-          s.at = from + (into - (s.start ?? 0)); s.start = into; s.length = to - s.at;
+          const s = l.sfx[ref.i], into = r3(Math.max(0, (s.start ?? 0) + (s0 - from)));
+          s.at = r3(from + (into - (s.start ?? 0))); s.start = into; s.length = r3(to - s.at);
         }
         resolve(l, [ref], span);
       }
@@ -296,7 +294,7 @@ export const attachLanes = () => {
     if (box) {
       const { add } = box;
       box = null;
-      if (!boxEnd() && !add) pickAcross({ cam: [], keys: [], clips: [] });
+      if (!boxEnd() && !add) pickAcross(NONE);
       return;
     }
     if (!drag) return;

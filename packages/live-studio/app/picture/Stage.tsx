@@ -3,7 +3,6 @@
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import type { Bind } from "../core/state";
-import { NOTE_CURSOR } from "../components/cursor";
 import { reloadNow } from "../playback/transport";
 import { set, useStudio } from "../core/store";
 import { CompareOverlay } from "./Compare";
@@ -14,9 +13,6 @@ import { OptionChips } from "../options/OptionChips";
 import { PinTools } from "../notes/PinTools";
 import { Oscilloscope } from "./Oscilloscope";
 import { Tip } from "../components/Tip";
-
-// The Note tool's cursor, for the class below; the Select tool takes the pointer, and the hand over an object (placed.ts hover)
-document.documentElement.style.setProperty("--note-cursor", NOTE_CURSOR);
 
 function Badges() {
   const free = useStudio((s) => s.free), final = useStudio((s) => s.final), night = useStudio((s) => s.nightVision);
@@ -36,7 +32,7 @@ function Badges() {
 
 export function Stage({ bind }: { bind: Bind }) {
   const free = useStudio((s) => s.free), loading = useStudio((s) => s.loading), error = useStudio((s) => s.error);
-  const ink = useStudio((s) => s.ink), tool = useStudio((s) => s.tool);
+  const ink = useStudio((s) => s.ink);
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
     // it alone), then CapCut's Color oscilloscope under it when on
@@ -44,11 +40,13 @@ export function Stage({ bind }: { bind: Bind }) {
       <div ref={bind("view")} className="relative flex min-h-0 w-full flex-1 items-center justify-center bg-black">
         {/* The frame itself and what is pinned or drawn on it */}
         <div ref={bind("stage")} className="relative overflow-hidden bg-black">
-          <canvas ref={bind("canvas")} className={cn("absolute inset-0 block size-full touch-none", free ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-(--note-cursor)")} />
+          <canvas ref={bind("canvas")} className={cn("absolute inset-0 block size-full touch-none", free ? "cursor-grab" : "cursor-default")} />
           <canvas ref={bind("final")} hidden className="pointer-events-none absolute inset-0 block size-full" />
           <Guides />
           <CompareOverlay />
           {/* Above the chips: a passed note shows for 3 s only, and it lets taps through to them */}
+          {/* The picked text items' outlines, where the film draws them (text/onpicture.ts) */}
+          <div ref={bind("textsel")} aria-hidden className="pointer-events-none absolute inset-0 z-3 *:absolute *:border *:border-white/90 *:shadow-[0_0_0_1px_rgb(0_0_0/0.45)]" />
           <div ref={bind("pins")} className="pointer-events-none absolute inset-0 z-4 overflow-hidden" />
           {/* Strokes (notes/ink.ts): drawn on while a tool is in hand, and otherwise lets every tap through */}
           <canvas ref={bind("ink")} className={cn("absolute inset-0 z-5 block size-full touch-none", ink ? "cursor-crosshair" : "pointer-events-none")} />

@@ -27,8 +27,7 @@ let boxes: Box[] = [];
 let selected: { type: "beat"; id: string } | { type: "line"; i: number } | null = null;
 let stuck: [number, number][] = [];
 let overBg: HTMLCanvasElement | null = null, overMarks: unknown = null;
-let span = Number(stored.get("span", sessionStorage)) || Infinity; // the whole film until zoomed in
-export const shown = () => Math.min(span, DURATION); // seconds the detail timeline shows
+export const shown = () => Math.min(get().span, DURATION); // seconds the detail timeline shows
 let frozenCentre: number | null = null;
 // Where Alt+wheel slid the stretch (c), and the playhead then (t): it stays while the playhead stays or moves inside it, and
 // goes once playing or a jump takes the playhead out of it, so the stretch follows the playhead again
@@ -41,6 +40,7 @@ export const marks = {
   lanes: () => {}, // sound/lanes.ts draws its canvas whenever these do
   cam: () => {}, // and camera/camrow.ts its own
   keys: () => {}, // and keys/keyrows.ts the key rows
+  text: () => {}, // and text/textrow.ts the text tracks
 };
 
 export const paceOf = (i: number) => {
@@ -286,11 +286,14 @@ const drawNow = (g: CanvasRenderingContext2D, x: number, h: number, head: boolea
   g.fillStyle = NOW; g.fill(); g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
 };
 
-export const drawTimelines = () => { if (!S.el) return; drawOverview(); drawRuler(); drawDetail(); marks.cam(); marks.keys(); marks.lanes(); };
-export const zoomSpan = (k: number) => { span = Math.max(6, Math.min(DURATION, shown() * k)); stored.set("span", String(span), sessionStorage); drawTimelines(); };
-export const zoomToFit = () => zoomSpan(Infinity); // the whole film
-// The magnet (N, or the toolbar): drags stick to the playhead, words, cuts and edges
-export const toggleMagnet = () => { const on = !get().magnet; setPref("magnet", on); say(on ? "Snapping on" : "Snapping off"); };
+export const drawTimelines = () => { if (!S.el) return; drawOverview(); drawRuler(); drawDetail(); marks.text(); marks.cam(); marks.keys(); marks.lanes(); };
+// Shows s seconds (6 at the closest, the whole film at the farthest), as CapCut's zoom slider; zoomSpan scales what is shown
+export const ZOOM_MIN = 6;
+export const zoomTo = (s: number) => { const span = Math.max(ZOOM_MIN, Math.min(DURATION, s)); set({ span }); stored.set("span", String(span), sessionStorage); drawTimelines(); };
+export const zoomSpan = (k: number) => zoomTo(shown() * k);
+export const zoomToFit = () => zoomTo(DURATION); // the whole film
+// Auto snapping (S, or the toolbar): drags stick to the playhead, words, cuts and edges
+export const toggleMagnet = () => { const on = !get().magnet; setPref("magnet", on); say(on ? "Auto snapping on" : "Auto snapping off"); };
 // The wheel over any timeline row, as CapCut's: plain scrolls the rows up and down (the browser's own scroll), Ctrl+wheel zooms,
 // Alt+wheel slides the stretch along the film without moving the playhead (Shift+wheel too, as in Premiere, and a sideways swipe)
 export const timelineWheel = (e: WheelEvent) => {

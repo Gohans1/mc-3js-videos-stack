@@ -15,11 +15,12 @@ import { TimelineBar } from "./TimelineBar";
 import { TrackHeads } from "../sound/TrackHeads";
 import { ClipMenu } from "../sound/ClipMenu";
 import { AudioMeter } from "../sound/AudioMeter";
+import { ROW_H } from "../text/textrow";
 
 // size: the height the creator dragged it to (App), null for the default. As in CapCut only the head stays put (the tools, the
 // whole film, the ruler); every row under the ruler (shots, voice, action, camera, keys, sound tracks) scrolls as one list
 export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null }) {
-  const sound = useStudio((s) => s.sound), cam = useStudio((s) => s.cam), keys = useStudio((s) => !!s.keyFiles?.length);
+  const sound = useStudio((s) => s.sound), text = useStudio((s) => s.text), cam = useStudio((s) => s.cam), keys = useStudio((s) => !!s.keyFiles?.length);
   const [shotsH, setShotsH] = useStoredSize("studio.row.shots"), [voiceH, setVoiceH] = useStoredSize("studio.row.voice"), [actionH, setActionH] = useStoredSize("studio.row.action");
   const L = rowLayout({ shots: shotsH, voice: voiceH, action: actionH }, sound, cam);
   useLayoutEffect(() => { setRowLayout(L); drawTimelines(); }, [L.shots, L.voice, L.action, L.height]);
@@ -55,7 +56,12 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
           ))}
         </div>
         <canvas ref={bind("detail")} title="Around the playhead: drag the playhead line to scrub, click the ruler to jump, Ctrl+scroll to zoom" aria-label="Around the playhead: drag the playhead line to scrub, click the ruler to jump, Ctrl+scroll to zoom" style={{ height: L.height }} className="block w-full touch-none" />
-        {/* Both always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}
+        {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them.
+            CapCut's text tracks sit over its main track, as here over the camera row */}
+        <div className={cn("col-span-2 grid grid-cols-subgrid border-t border-black", !text && "hidden")}>
+          <span style={{ lineHeight: `${ROW_H}px` }} className="self-end bg-background ps-1.5 text-[13px] font-medium text-label">Text</span>
+          <canvas ref={bind("textrow")} aria-label="Text tracks: click an item to edit it, drag to move or retime it, drag its edges to trim, drag on empty space to select several" className="block w-full touch-none" />
+        </div>
         <span className={cn("self-center border-t border-black bg-background ps-1.5 text-[13px] leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
         <CameraTrack bind={bind} shown={cam} />
         <div className={cn("col-span-2 grid grid-cols-subgrid border-t border-black", !keys && "hidden")}>

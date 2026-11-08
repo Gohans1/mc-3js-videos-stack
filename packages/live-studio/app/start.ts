@@ -32,6 +32,8 @@ import { drawFinal, render } from "./picture/render";
 import { measureScopes } from "./picture/scopes";
 import { loadMix, loadWholeMix, MIX_URL, restoreVolume, seek, setPlaying, tick } from "./playback/transport";
 import { attachLanes } from "./sound/lanes";
+import { loadText } from "./text/text";
+import { attachTextRow } from "./text/textrow";
 import { loadSound } from "./sound/sound";
 import { attachTimeline, drawTimelines, loadVoice, marks, refreshTimes } from "./timeline/timeline";
 import { attachPreviewAxis, peekTime } from "./timeline/peek";
@@ -73,6 +75,7 @@ const listen = () => {
   onEvent("cam", loadCam); // an agent edited the camera keys: the picture takes them now, no new build to load
   onEvent("keys", (i) => loadKeys(Number(i))); // the same for one key file (Steve, props): which one it names
   onEvent("shots", loadShots);
+  onEvent("text", loadText); // an agent edited the titles: the picture takes them now
   onEvent("notes", loadNotes);
   onEvent("voice", loadVoice);
   onEvent("contract", loadContract);
@@ -82,7 +85,7 @@ const listen = () => {
   onHello((current, reconnect) => {
     if (!current) codeChanged();
     // Not the mix: that is the whole WAV again on every phone unlock. The rest answers "unchanged" for a few bytes
-    if (reconnect) { loadNotes(); loadVoice(); loadContract(); loadTrials(); loadSound(); loadCam(); loadKeys(); loadShots(); loadFavorites(); }
+    if (reconnect) { loadNotes(); loadVoice(); loadContract(); loadTrials(); loadSound(); loadCam(); loadKeys(); loadShots(); loadText(); loadFavorites(); }
   });
 };
 
@@ -103,6 +106,7 @@ export const start = async (el: Elements) => {
   attachLanes();
   attachCamRow();
   attachKeyRows();
+  attachTextRow();
   attachAcross();
   attachInk({ look: lookAtClick, begin: ensureNote, pause: () => { if (S.playing) setPlaying(false); } });
   fit();
@@ -139,7 +143,7 @@ export const start = async (el: Elements) => {
   loadContract();
   set({ loading: "", ready: true });
   say(`Loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-  const extras = Promise.all([timeline, loadTrials(), loadSounds(), loadSound(), loadCam(), loadKeys(), loadShots(), loadFavorites()]).then(() => { refreshTimes(); S.dirty = true; });
+  const extras = Promise.all([timeline, loadTrials(), loadSounds(), loadSound(), loadCam(), loadKeys(), loadShots(), loadText(), loadFavorites()]).then(() => { refreshTimes(); S.dirty = true; });
   refreshTimes();
   seek(S.t);
   loop();

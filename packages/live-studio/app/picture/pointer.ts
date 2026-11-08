@@ -1,8 +1,10 @@
-// The picture's size, and what the mouse and keys do on it: a click pins a note there, or in the Select tool and the free
-// camera picks an object; the right button pins a note in any tool; dragging and the flying keys move the free camera
+// The picture's size, and what the mouse and keys do on it, as in a 3D editor's viewport: a click picks an object (or a title,
+// text/onpicture.ts), the right button pins a note; a tap on a phone, which has no right button, pins the note. Dragging and the
+// flying keys move the free camera
 import { S } from "../core/state";
 import { get } from "../core/store";
 import { openNote } from "../notes/notes";
+import { textPress } from "../text/onpicture";
 import { gizmoBusy, hover, pickAt, select } from "../objects/placed";
 import { setPlaying } from "../playback/transport";
 import { frameSize } from "./frame";
@@ -18,16 +20,17 @@ export const attachPicture = () => {
   const { canvas } = S.el;
   new ResizeObserver(fit).observe(S.el.view);
   let downAt: [number, number] | null = null, camDrag: { x: number; y: number; mode: "look" | "orbit" | "slide" } | null = null;
+  const frac = (e: MouseEvent) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const; };
   canvas.addEventListener("pointerdown", (e) => {
     if (gizmoBusy()) { downAt = null; return; } // the gizmo's handle under the pointer takes this drag
+    if (!S.tools?.free.on && textPress(e, frac(e))) { downAt = null; return; } // a title on the picture: picked and dragged
     downAt = [e.clientX, e.clientY];
     if (!S.tools?.free.on) return;
     canvas.setPointerCapture(e.pointerId);
     camDrag = { x: e.clientX, y: e.clientY, mode: e.button !== 0 ? "slide" : e.shiftKey ? "orbit" : "look" };
   });
-  const frac = (e: MouseEvent) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const; };
   canvas.addEventListener("pointermove", (e) => {
-    if (!camDrag && (get().tool === "select" || S.tools?.free.on) && e.pointerType === "mouse" && !gizmoBusy()) hover(pickAt(...frac(e)));
+    if (!camDrag && e.pointerType === "mouse" && !gizmoBusy()) hover(pickAt(...frac(e)));
     if (!camDrag || !S.tools) return;
     const f = S.tools.free, dx = e.clientX - camDrag.x, dy = e.clientY - camDrag.y;
     camDrag.x = e.clientX; camDrag.y = e.clientY;
@@ -65,13 +68,12 @@ export const attachPicture = () => {
   };
   // A note box opened mid-flight takes no focus, or the W still held would type into it
   const pinNote = (x: number, y: number) => openNote({ x: +x.toFixed(4), y: +y.toFixed(4), ...lookAtClick(x, y) }, !flight.flying());
-  // On click, not pointerup: a phone only lets the note box take focus and raise its keyboard from a click. In the free camera a
-  // click picks, as in a 3D editor's viewport; the right button pins the note there, in any tool
+  // On click, not pointerup: a phone only lets the note box take focus and raise its keyboard from a click
   canvas.addEventListener("click", (e) => {
     if (e.button !== 0) return;
     const at = tapped(e);
     if (!at) return;
-    if (get().tool === "select" || S.tools?.free.on) select(pickAt(...at)); // beside every object: nothing selected
+    if (e.pointerType === "mouse") select(pickAt(...at)); // beside every object: nothing selected
     else pinNote(...at);
   });
   canvas.addEventListener("pointerup", (e) => {

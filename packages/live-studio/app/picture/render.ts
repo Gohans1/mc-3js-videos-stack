@@ -10,9 +10,10 @@ import { setPlaying } from "../playback/transport";
 import { drawFilmView } from "./filmcam";
 import { frameSize } from "./frame";
 import { nightVision } from "./nightvision";
+import { drawTextSel } from "../text/onpicture";
 
 // The gizmo goes on top only of the frame on screen, not of frames drawn for a still or a look-ahead
-export const render = (x: number) => { if (x === S.t) drawFilmView(); nightVision(true); S.render?.(x); nightVision(false); if (x === S.t) { drawCamPath(); drawGizmo(); } };
+export const render = (x: number) => { if (x === S.t) drawFilmView(); nightVision(true); S.render?.(x); nightVision(false); if (x === S.t) { drawCamPath(); drawGizmo(); drawTextSel(); } };
 
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
 // The final renderer is built the first time Final quality or Export still frame asks for it, once however often they ask

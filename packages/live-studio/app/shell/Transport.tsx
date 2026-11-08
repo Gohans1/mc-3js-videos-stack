@@ -1,18 +1,17 @@
-// The buttons that matter, play, note and draw, then what a click on the picture does, the free camera, the sound, full screen
+// The buttons that matter, play, note and draw, then the free camera, the sound, full screen
 // and the settings (playback speed lives there: rarely touched). Settings open in a panel over the page, so the notes and the
 // sound lanes beside the picture never give way to them. As the bar narrows (a narrow window, the page zoomed in, a phone) labels
 // go first, then whole buttons, least needed first, each still on its key: the volume slider (Ctrl+↑ ↓), the snapshot (Shift+\), night
 // vision and the key from view while flying (Shift+K; night vision in Settings), the free camera (F, and in Settings; kept
-// while on), Select (V); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
+// while on); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
 // Settings). Play, Note, Draw, full screen and the settings never go. The widths are the bar's inside at a phone's larger text
-import { Brush, Ellipsis, Grid3x3, Maximize, Minimize, MoonStar, MousePointer2, Move3d, Pause, Pencil, Play, Save, Volume2, VolumeX } from "lucide-react";
+import { Brush, Ellipsis, Grid3x3, Maximize, Minimize, MoonStar, Move3d, Pause, Pencil, Play, Save, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { saveView } from "../camera/cam";
 import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 import { setInk } from "../notes/ink";
-import { setTool } from "../objects/placed";
 import { openNote } from "../notes/notes";
 import { setFree } from "../picture/freecam";
 import { setVolume, togglePlay, toggleMute } from "../playback/transport";
@@ -28,7 +27,7 @@ const toggle = `${big} px-3 text-muted-foreground hover:text-foreground aria-pre
 export function Transport() {
   const playing = useStudio((s) => s.playing), muted = useStudio((s) => s.muted), volume = useStudio((s) => s.volume);
   const settingsOpen = useStudio((s) => s.settingsOpen), free = useStudio((s) => s.free), ink = useStudio((s) => s.ink), cam = useStudio((s) => s.cam);
-  const guides = useStudio((s) => s.guides), ratio = useStudio((s) => s.ratio), night = useStudio((s) => s.nightVision), placed = useStudio((s) => s.placed), tool = useStudio((s) => s.tool), full = useFullscreen();
+  const guides = useStudio((s) => s.guides), ratio = useStudio((s) => s.ratio), night = useStudio((s) => s.nightVision), full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
     <div className="@container col-start-1 row-start-2 in-data-wide:col-start-2 flex min-w-0 items-center gap-2 px-3 py-2.5 upright:flex-none upright:py-2 sideways:py-1.5">
@@ -46,14 +45,6 @@ export function Transport() {
           <span className="@max-[700px]:hidden">Draw</span>
         </Button>
       </Tip>
-      {placed && (
-        <Tip label={tool === "select" ? "Select is on (V): a click on the picture picks an object. Click to pin notes again" : "Select (V): a click on the picture picks an object instead of pinning a note"}>
-          <Button variant="ghost" className={`${toggle} pointer-coarse:hidden ${free ? "@max-[560px]:hidden" : "@max-[440px]:hidden"}`} aria-label="Select objects on the picture" aria-pressed={tool === "select"} onClick={() => setTool(tool === "select" ? "note" : "select")}>
-            <MousePointer2 data-icon="inline-start" />
-            <span className="@max-[860px]:hidden">Select</span>
-          </Button>
-        </Tip>
-      )}
       {/* Walking the camera needs a mouse and keys, as in Settings */}
       <Tip label="Free camera (F): drag to look, W A S D to fly, Space up, Shift down">
         <Button variant="ghost" className={`${toggle} pointer-coarse:hidden ${free ? "" : "@max-[520px]:hidden"}`} aria-label="Free camera" aria-pressed={free} onClick={() => setFree(!free)}>

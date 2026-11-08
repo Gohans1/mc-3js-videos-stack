@@ -35,13 +35,13 @@ export const holds = (a: CamKey, b: CamKey) => JSON.stringify([a.p, a.l, a.fov])
 // The keys a key may move between: its shot's cut (or the film's start) and the next cut, never past its neighbours
 export const room = (i: number): [number, number] => [i > 0 ? keys[i - 1].t + SAME : 0, i + 1 < keys.length ? keys[i + 1].t - SAME : Infinity];
 export const movable = (i: number) => i > 0 && !keys[i]?.cut;
-export const setKey = (i: number | null) => { set(i === null ? { camKey: null, camPicks: [] } : { camKey: i, camPicks: [], side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], object: null }); S.dirty = true; };
+export const setKey = (i: number | null) => { set(i === null ? { camKey: null, camPicks: [] } : { camKey: i, camPicks: [], side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], object: null }); S.dirty = true; };
 // Several keys picked at once (a box dragged on the camera row), moved or deleted together. Only keys inside a shot: a shot's
 // first key is its cut, which moves by rolling the cut alone
 export const pickCamKeys = (is: number[]) => {
   const ok = [...new Set(is)].filter(movable).sort((a, b) => a - b);
   if (ok.length < 2) { setKey(ok[0] ?? null); return; }
-  set({ camPicks: ok, camKey: null, side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], object: null });
+  set({ camPicks: ok, camKey: null, side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], object: null });
   S.dirty = true;
 };
 // How far the picked keys may move together: until the first of them meets a key left out

@@ -70,7 +70,7 @@ export const loadSound = async () => {
 export const edit = doc.edit, preview = doc.preview, snapshot = doc.snapshot, restore = doc.restore;
 
 // ---------- What the lanes and the panel ask for
-export const setClips = (cs: ClipRef[]) => { set(cs.length ? { clips: cs, clip: cs.length === 1 ? cs[0] : null, side: "sound", camKey: null, camPicks: [], shotPick: null, keyPicks: [], object: null } : { clips: [], clip: null }); S.dirty = true; };
+export const setClips = (cs: ClipRef[]) => { set(cs.length ? { clips: cs, clip: cs.length === 1 ? cs[0] : null, side: "sound", camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [], object: null } : { clips: [], clip: null }); S.dirty = true; };
 export const setClip = (c: ClipRef | null) => setClips(c ? [c] : []);
 // Solo, as in Premiere and Resolve: only the soloed tracks sound, heard at once; this page only, never saved or rendered
 export const setSolo = (id: string, on: boolean) => {
@@ -201,9 +201,9 @@ const crossing = (cs: ClipRef[], t: number, what: string) => {
   if (!hit.length) say(cs.length ? `The playhead isn't inside a picked clip on an unlocked track: move it over the clip to ${what}` : `Pick a sound clip first, then ${what} it at the playhead`);
   return hit;
 };
-const into = (start: number | undefined, d: number, name: string, loop: boolean) => { const v = (start ?? 0) + d; return r3(loop ? v % seconds(name) : v); };
-// Moves a clip's left edge to t, its sound staying where it was in the film
-const cutBefore = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
+const into = (start: number | undefined, d: number, name: string, loop: boolean) => { const v = (start ?? 0) + d, f = seconds(name); return r3(loop ? ((v % f) + f) % f : v); };
+// Moves a clip's left edge to t, its sound staying where it was in the film (lanes.ts trims a bed's head with it too)
+export const cutBefore = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
   if (list === "beds") { const b = x as Bed; b.start = into(b.start, t - b.from, b.name, true); b.from = r3(t); return; }
   const o = x as OneShot, d = t - o.at;
   o.start = into(o.start, d, o.name, false);

@@ -34,6 +34,7 @@
     ],
     "soundTimeline": "src/timeline/audio.json",
     "camTimeline": "src/timeline/cam.json",
+    "textTimeline": "src/timeline/text.json",
     "shotsTimeline": "src/timeline/shots.json",
     "keyFiles": { "src/timeline/steve.json": "steve", "src/timeline/props.json": "props", "src/timeline/placed.json": "placed", "src/timeline/fx.json": "fx" },
     "sfx": "sound/sfx",
