@@ -14,12 +14,3 @@ export const sized = (c: HTMLCanvasElement) => {
   g.setTransform(d, 0, 0, d, 0, 0);
   return { g, w: r.width, h: r.height };
 };
-
-// A box dragged over empty space to pick everything it touches (CapCut's marquee): from where the press began to the pointer
-export type Marquee = { x0: number; y0: number; x1: number; y1: number };
-export const marqueeRect = (m: Marquee) => ({ x0: Math.min(m.x0, m.x1), x1: Math.max(m.x0, m.x1), y0: Math.min(m.y0, m.y1), y1: Math.max(m.y0, m.y1) });
-export const drawMarquee = (g: CanvasRenderingContext2D, m: Marquee) => {
-  const { x0, x1, y0, y1 } = marqueeRect(m);
-  g.fillStyle = "rgba(58,169,159,.14)"; g.fillRect(x0, y0, x1 - x0, y1 - y0);
-  g.strokeStyle = PICK; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0, y1 - y0);
-};

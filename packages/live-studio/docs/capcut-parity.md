@@ -91,7 +91,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Kéo, chọn nhiều, xoá kim cương ngay trên hàng Camera và các hàng keyframe Steve, đạo cụ.
   - Motion blur: BỎ ở studio, thuộc bước render final.
 - Adjustment layer: SẮP LÀM dạng Adjust theo shot; lớp phủ ngang nhiều shot thì chưa.
-- Group, compound clip: BỎ, phim ít clip. Chọn nhiều bằng khung rồi kéo chung: CÓ trên từng hàng; khung đi xuyên hàng Camera, keyframe và âm thanh: SẮP LÀM.
+- Group, compound clip: BỎ, phim ít clip. Chọn nhiều bằng khung (kéo từ chỗ trống, Ctrl hoặc Shift để thêm): CÓ, một khung đi xuyên hàng Camera, keyframe và âm thanh. Kéo một thứ đã chọn thì mọi thứ đã chọn ở các hàng khác chạy theo; Delete, Ctrl+C và Ctrl+V cũng làm cho cả nhóm, một lần undo.
 
 ## Tầng 5: Nâng cao
 

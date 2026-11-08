@@ -13,20 +13,20 @@ import { jumpShot, nudgeVolume, seek, setPlaying, shuttleOn, togglePlay } from "
 import { setFinal } from "../picture/render";
 import { setFov, setFree } from "../picture/freecam";
 import { S } from "../core/state";
-import { removeCamKeys, removeKey, saveView, setKey } from "../camera/cam";
+import { saveView, setKey } from "../camera/cam";
 import { copyCam } from "../camera/camline";
 import { copy, cut, hasCopy, paste } from "../timeline/clipboard";
 import { askPaste, copyAttrs } from "../timeline/attributes";
-import { selectSide, splitAll, splitHere } from "../timeline/cut";
+import { deleteSelected, selectSide, splitAll, splitHere } from "../timeline/cut";
 import { setBlade } from "../timeline/blade";
 import { toggleMagnet, zoomSpan, zoomToFit } from "../timeline/timeline";
 import { togglePreviewAudio, togglePreviewAxis } from "../timeline/peek";
 import { clearInOut, inOutByClip, setIn, setOut } from "../timeline/inout";
 import { redo, undo } from "../core/doc";
-import { pickKeys, removeKeys } from "../keys/keys";
-import { removeObject, select, setGizmo, setTool } from "../objects/placed";
+import { pickKeys } from "../keys/keys";
+import { select, setGizmo, setTool } from "../objects/placed";
 import { toggleFullscreen } from "./fullscreen";
-import { allClips, locked, removeClips, setClips, trimClips } from "../sound/sound";
+import { allClips, locked, setClips, trimClips } from "../sound/sound";
 import { get, say, set, setPref, useStudio } from "../core/store";
 
 // The keyboard walking a list (the ones marked data-arrow-scroll: notes, settings) scrolls it with Up and Down; everywhere else
@@ -86,16 +86,9 @@ export function useStudioHotkeys() {
     { hotkey: "Mod+Z", callback: () => { if (!(get().ink && undoInk())) undo(); } },
     { hotkey: "Mod+Shift+Z", callback: redo },
     { hotkey: "Mod+Y", callback: redo },
-    { hotkey: "Delete", callback: () => removeClips(get().clips), options: { enabled: picks > 0 } },
-    { hotkey: "Backspace", callback: () => removeClips(get().clips), options: { enabled: picks > 0 } },
-    { hotkey: "Delete", callback: () => removeKey(camKey!), options: { enabled: camKey !== null } },
-    { hotkey: "Backspace", callback: () => removeKey(camKey!), options: { enabled: camKey !== null } },
-    { hotkey: "Delete", callback: () => removeCamKeys(get().camPicks), options: { enabled: camPicks > 0 } },
-    { hotkey: "Backspace", callback: () => removeCamKeys(get().camPicks), options: { enabled: camPicks > 0 } },
-    { hotkey: "Delete", callback: () => removeKeys(get().keyPicks), options: { enabled: keyPicks > 0 } },
-    { hotkey: "Backspace", callback: () => removeKeys(get().keyPicks), options: { enabled: keyPicks > 0 } },
-    { hotkey: "Delete", callback: () => removeObject(object!), options: { enabled: object !== null } },
-    { hotkey: "Backspace", callback: () => removeObject(object!), options: { enabled: object !== null } },
+    // Every kind picked at once (a box across the rows picks clips, camera keys and keys together; timeline/across.ts)
+    { hotkey: "Delete", callback: deleteSelected, options: { enabled: anyPick || object !== null } },
+    { hotkey: "Backspace", callback: deleteSelected, options: { enabled: anyPick || object !== null } },
     { hotkey: "N", callback: fresh(toggleMagnet) },
     { hotkey: "I", callback: setIn },
     { hotkey: "O", callback: setOut },

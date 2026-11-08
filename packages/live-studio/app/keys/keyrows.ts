@@ -2,7 +2,8 @@
 // of keys in it (keys/keys.ts), names in the column beside (keys/KeyHeads.tsx). A diamond per key, labelled with what it says
 // ("sits up", "tense"); a solid line between two keys that differ (something changes there), a dotted one where the row holds.
 // Dragging a diamond retimes it (and every key picked with it), never past a key of its row that stays, snapping to frames,
-// the playhead, words and cuts (Shift: no snap). A box dragged over empty space picks every key it touches (Shift/Ctrl add);
+// the playhead, words and cuts (Shift: no snap). A box dragged over empty space picks every key it touches (Shift/Ctrl add), on
+// these rows and the others it crosses (timeline/rowbox.ts, across.ts), and a drag on a picked key moves all of it;
 // a click on a key seeks there, one on empty space only drops the pick (the playhead moves from the ruler or by its own line,
 // the dev's call); a touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
@@ -11,7 +12,10 @@ import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, li
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { type KeyRef } from "./slice";
-import { drawMarquee, keyReach, type Marquee, marqueeRect, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
+import { together } from "../core/doc";
+import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
+import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
+import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { seek, setPlaying } from "../playback/transport";
 
@@ -21,7 +25,6 @@ const R = 4.5;
 
 type Spot = { ref: KeyRef; x: number; y: number };
 let spots: Spot[] = [];
-let marquee: Marquee | null = null;
 
 const diamond = (g: CanvasRenderingContext2D, x: number, y: number, r: number) => { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath(); };
 
@@ -69,7 +72,6 @@ export const drawKeyRows = () => {
   // Cuts, faint, over everything: a key is often put on one by eye
   g.fillStyle = COLOR.cut;
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
-  if (marquee) drawMarquee(g, marquee);
   const t = X(S.t);
   g.fillStyle = "#000"; g.fillRect(t - 2, 0, 4, h);
   g.fillStyle = "#EC8B49"; g.fillRect(t - 1, 0, 2, h);
@@ -89,18 +91,20 @@ const spotAt = (x: number, y: number, touch: boolean) => {
   for (const s of spots) { if (Math.abs(s.y - y) > ROW_H / 2) continue; const e = Math.abs(s.x - x); if (e <= d) { d = e; best = s; } }
   return best;
 };
-const inBox = (m: NonNullable<typeof marquee>) => {
-  const { x0, x1, y0, y1 } = marqueeRect(m);
-  return spots.filter((s) => s.x >= x0 - R && s.x <= x1 + R && s.y >= y0 - R && s.y <= y1 + R).map((s) => s.ref);
+const keysInBox = (b: { x0: number; x1: number; y0: number; y1: number }) => {
+  const r = S.el.keyrows.getBoundingClientRect();
+  if (!r.height) return [];
+  return spots.filter((s) => r.left + s.x >= b.x0 - R && r.left + s.x <= b.x1 + R && r.top + s.y >= b.y0 - R && r.top + s.y <= b.y1 + R).map((s) => s.ref);
 };
 
 export const attachKeyRows = () => {
   const c = S.el.keyrows;
   marks.keys = drawKeyRows;
+  inBox.keys = keysInBox;
   const local = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width }; };
-  let drag: { ref: KeyRef; group: KeyRef[]; x: number; t: number; snap: string[]; moved: boolean; alone: boolean } | null = null;
+  let drag: { ref: KeyRef; group: KeyRef[]; along: Along | null; x: number; t: number; snap: string[]; moved: boolean; alone: boolean } | null = null;
   let scrub: { resume: boolean } | null = null;
-  let box: { x: number; y: number; base: KeyRef[]; moved: boolean } | null = null;
+  let box: { add: boolean } | null = null;
 
   c.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
@@ -115,33 +119,20 @@ export const attachKeyRows = () => {
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
-      } else box = { x, y, base: add ? get().keyPicks : [], moved: false };
+      } else { box = { add }; boxStart(e, add); }
       return;
     }
-    if (add) { pickKeys(isPicked(s.ref) ? get().keyPicks.filter((p) => !sameKey(p, s.ref)) : [...get().keyPicks, s.ref]); return; }
+    if (add) { const p = picked(); pickAcross({ ...p, keys: isPicked(s.ref) ? p.keys.filter((q) => !sameKey(q, s.ref)) : [...p.keys, s.ref] }); return; }
     const was = isPicked(s.ref);
     if (!was) pickKeys([s.ref]);
-    drag = { ref: s.ref, group: get().keyPicks, x, t: keyOf(s.ref).t, snap: snapshot(), moved: false, alone: was && get().keyPicks.length > 1 };
+    const along = was ? alongWith("keys") : null;
+    drag = { ref: s.ref, group: get().keyPicks, along, x, t: keyOf(s.ref).t, snap: snapshot(), moved: false, alone: was && (get().keyPicks.length > 1 || !!along) };
   });
-  const edgeScroll = (e: PointerEvent) => {
-    const el = c.closest<HTMLElement>("[data-tracks-scroll]"), r = el?.getBoundingClientRect();
-    if (!el || !r) return;
-    if (e.clientY > r.bottom - 18) el.scrollTop += 10; else if (e.clientY < r.top + 18) el.scrollTop -= 10;
-  };
   c.addEventListener("pointermove", (e) => {
     const { x, y, w } = local(e), { v } = view(), perPx = v / w;
     if (scrub) { seek(timeAt(x, w)); return; }
     if (get().blade && !drag && !box) { c.style.cursor = "not-allowed"; return; }
-    if (box) {
-      if (!box.moved && Math.hypot(x - box.x, y - box.y) < 4) return;
-      box.moved = true;
-      edgeScroll(e);
-      marquee = { x0: box.x, y0: box.y, x1: x, y1: y };
-      const inside = inBox(marquee);
-      pickKeys([...box.base.filter((p) => !inside.some((r) => sameKey(r, p))), ...inside]);
-      drawKeyRows();
-      return;
-    }
+    if (box) { boxMove(e); return; }
     if (!drag) { c.style.cursor = keyUnder(x, y, w, false) ? "grab" : onPlayhead(x, w, false) ? "ew-resize" : "crosshair"; return; }
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     if (!drag.moved) hold(true);
@@ -149,31 +140,35 @@ export const attachKeyRows = () => {
     c.style.cursor = "grabbing";
     // The key under the pointer snaps; the rest of the pick moves as far, none past a key of its row that stays
     restore(drag.snap);
-    const [lo, hi] = room(drag.group), want = snapped(drag.t + (x - drag.x) * perPx, perPx, noSnap(e)) - drag.t, d = Math.max(lo, Math.min(hi, want));
+    const { along } = drag, [lo, hi] = room(drag.group), want = snapped(drag.t + (x - drag.x) * perPx, perPx, noSnap(e)) - drag.t;
+    const d = Math.max(lo, along?.room[0] ?? lo, Math.min(hi, along?.room[1] ?? hi, want));
     preview(drag.group, (r, ks) => { ks[r.i].t = Math.round((ks[r.i].t + d) * 1000) / 1000; });
-    const many = drag.group.length > 1 ? ` + ${drag.group.length - 1} key` : "";
+    along?.preview(d);
+    const others = drag.group.length - 1 + (along?.count ?? 0), many = others ? ` + ${others} more` : "";
     say(`${drag.ref.path.join(".")}${many}: ${stamp(drag.t)} → ${stamp(drag.t + d)}${d !== want ? " (stopped by its neighbour)" : noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
   });
   const up = () => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (box) {
-      const { moved, base } = box;
-      box = null; marquee = null;
-      if (!moved) { if (!base.length) pickKeys([]); }
-      else if (get().keyPicks.length > 1) say(`${get().keyPicks.length} keyframes selected. Drag one to move them all`);
-      drawKeyRows();
+      const { add } = box;
+      box = null;
+      if (!boxEnd() && !add) pickAcross({ cam: [], keys: [], clips: [] });
       return;
     }
     if (!drag) return;
-    const { snap, moved, alone, ref, group } = drag;
+    const { snap, moved, alone, ref, group, along, t: was } = drag;
     drag = null;
     c.style.cursor = "";
     // A plain click also brings the picture to the key, so the Key tab and the frame show the same moment
     if (!moved) { if (alone) pickKeys([ref]); seek(keyOf(ref).t); return; }
-    const after = group.map((r) => keyOf(r).t);
+    const after = group.map((r) => keyOf(r).t), d = Math.round((keyOf(ref).t - was) * 1000) / 1000;
     restore(snap);
     hold(false);
-    editKeys(group, (r, ks) => { ks[r.i].t = after[group.findIndex((g) => sameKey(g, r))]; });
+    along?.restore();
+    together(() => {
+      editKeys(group, (r, ks) => { ks[r.i].t = after[group.findIndex((g) => sameKey(g, r))]; });
+      along?.commit(d);
+    });
   };
   c.addEventListener("pointerup", up);
   c.addEventListener("pointercancel", up);

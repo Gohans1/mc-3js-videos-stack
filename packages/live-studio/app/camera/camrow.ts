@@ -4,7 +4,8 @@
 // show as bands at the foot of its block, a Combo as a band the whole way. A click picks a shot (its Camera and Animation tabs)
 // and leaves the playhead where it is; the playhead moves only when grabbed by its line (a touch drag scrubs anywhere). A mouse
 // drag draws the box over the rows (timeline/rowbox.ts) that picks the keys it covers, Shift/Ctrl+click adds or drops one;
-// dragging a picked key moves them all (cam.ts groupRoom), Delete removes them. A diamond is dragged to retime it inside its
+// dragging a picked key moves them all (cam.ts groupRoom) with whatever else the box picked on other rows (timeline/across.ts),
+// Delete removes them. A diamond is dragged to retime it inside its
 // shot, snapping to frames, the playhead and words (Shift: no snap); a click on one brings the playhead to it. The gap between two blocks is the cut: it drags too when the film keeps its shots as data (cam.ts
 // rollCut), the shots on both sides giving and taking. Right-click a block for its menu (CameraTrack.tsx).
 // In split mode (blade.ts) a click splits the shot there: the playhead goes to it, so the new shot's first frame shows.
@@ -18,10 +19,12 @@ import { r3, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { bladeLine } from "../timeline/blade";
 import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
-import { boxEnd, boxMove, boxPick, boxStart } from "../timeline/rowbox";
+import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
+import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { animOf, lenOf, pickShot, shotSpan } from "./anim";
-import { type CamKey, DEFAULT_EASE, edit, groupRoom, holds, keys, movable, pickCamKeys, preview, previewRoll, restore, rollable, rollCut, rollRoom, room, setKey, shiftCamKeys, snapshot, splitShot } from "./cam";
+import { together } from "../core/doc";
+import { type CamKey, DEFAULT_EASE, edit, groupRoom, holds, keys, movable, preview, previewRoll, restore, rollable, rollCut, rollRoom, room, setKey, shiftCamKeys, snapshot, splitShot } from "./cam";
 import { shotsDoc } from "./shots";
 
 const COLOR = {
@@ -138,22 +141,19 @@ export const shotAtPointer = (e: { clientX: number }) => {
 
 // The box over the rows (rowbox.ts) picks the keys under it once it reaches this row; R: a diamond it only grazes counts
 const R = 5;
-const pickInBox = (r: { x0: number; x1: number; y0: number; y1: number }, base: number[]) => {
-  const c = S.el.camrow.getBoundingClientRect(), reaches = r.y1 >= c.top && r.y0 <= c.bottom;
-  const inside = reaches ? xs.flatMap((x, k) => (c.left + x >= r.x0 - R && c.left + x <= r.x1 + R ? [k] : [])) : [];
-  pickCamKeys([...base.filter((k) => !inside.includes(k)), ...inside]);
-  drawCamRow();
+const keysInBox = (r: { x0: number; x1: number; y0: number; y1: number }) => {
+  const c = S.el.camrow.getBoundingClientRect();
+  if (!c.height || r.y1 < c.top || r.y0 > c.bottom) return [];
+  return xs.flatMap((x, k) => (c.left + x >= r.x0 - R && c.left + x <= r.x1 + R ? [k] : []));
 };
 
 export const attachCamRow = () => {
   const c = S.el.camrow;
   marks.cam = drawCamRow;
-  boxPick.cam = pickInBox;
-  boxPick.picked = picks;
-  boxPick.done = () => { if (picks().length > 1) say(`${picks().length} keyframes selected. Drag one to move them all`); };
+  inBox.cam = keysInBox;
   const local = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height }; };
   // group: the picked keys that move with the one held (just it when it is alone)
-  let drag: { i: number; group: number[]; x: number; t: number; snap: string; shots: string; roll: boolean; moved: boolean } | null = null;
+  let drag: { i: number; group: number[]; along: Along | null; x: number; t: number; snap: string; shots: string; roll: boolean; moved: boolean } | null = null;
   let scrub: { resume: boolean } | null = null;
   // A press on a block: a click picks the shot, a mouse drag draws the box over the rows (rowbox.ts), a touch drag scrubs
   let press: { x: number; y: number; touch: boolean; shot: number; add: boolean } | null = null;
@@ -175,10 +175,10 @@ export const attachCamRow = () => {
       if (!touch) boxStart(e, add);
       return;
     }
-    if (add) { const was = picks(); pickCamKeys(was.includes(i) ? was.filter((k) => k !== i) : [...was, i]); return; }
-    const group = picks().length > 1 && picks().includes(i) ? picks() : [i];
-    if (group.length === 1) setKey(i);
-    if (movable(i) || rollable(i)) drag = { i, group, x, t: keys[i].t, snap: snapshot(), shots: shotsDoc.snapshot(), roll: !movable(i), moved: false };
+    if (add) { const p = picked(); pickAcross({ ...p, cam: p.cam.includes(i) ? p.cam.filter((k) => k !== i) : [...p.cam, i] }); return; }
+    const along = movable(i) && picks().includes(i) ? alongWith("cam") : null, group = (picks().length > 1 || along) && picks().includes(i) ? picks() : [i];
+    if (group.length === 1 && !along) setKey(i);
+    if (movable(i) || rollable(i)) drag = { i, group, along, x, t: keys[i].t, snap: snapshot(), shots: shotsDoc.snapshot(), roll: !movable(i), moved: false };
     else { seek(keys[i].t); say(i === 0 ? "The film's first keyframe stays at 0" : "This film keeps its shots in code (no shotsTimeline). Ask the AI to move the cut"); }
   });
   c.addEventListener("pointermove", (e) => {
@@ -207,10 +207,11 @@ export const attachCamRow = () => {
     restore(drag.snap);
     shotsDoc.restore(drag.shots);
     const i = drag.i, to = snapped(drag.t + ((x - drag.x) / w) * v, v / w, noSnap(e));
-    if (drag.group.length > 1) {
-      const [lo, hi] = groupRoom(drag.group), d = Math.max(lo, Math.min(hi, to - drag.t));
+    if (drag.group.length > 1 || drag.along) {
+      const [lo, hi] = groupRoom(drag.group), { along } = drag, d = Math.max(lo, along?.room[0] ?? lo, Math.min(hi, along?.room[1] ?? hi, to - drag.t));
       shiftCamKeys(drag.group, d, preview);
-      say(`${drag.group.length} keyframes ${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2)} s${noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
+      along?.preview(d);
+      say(`${drag.group.length + (along?.count ?? 0)} ${along ? "picks" : "keyframes"} ${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2)} s${noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
       return;
     }
     const [lo, hi] = drag.roll ? rollRoom(i) : room(i), t = Math.max(lo, Math.min(hi, to));
@@ -223,21 +224,23 @@ export const attachCamRow = () => {
       const { shot, add } = press;
       press = null;
       if (boxEnd()) return;
-      if (!add) { setKey(null); pickShot(shot < 0 ? null : shot); }
+      if (!add) { pickAcross({ cam: [], keys: [], clips: [] }); pickShot(shot < 0 ? null : shot); }
       return;
     }
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (!drag) return;
-    const { snap, shots, roll, moved, i, group, t: was } = drag;
+    const { snap, shots, roll, moved, i, group, along, t: was } = drag;
     drag = null;
     c.style.cursor = "";
     // A plain click brings the picture to the key, so the Camera tab and the frame show the same moment; on a picked group it
     // picks that key alone, as CapCut does
-    if (!moved) { if (group.length > 1) setKey(i); seek(keys[i].t); return; }
+    if (!moved) { if (group.length > 1 || along) setKey(i); seek(keys[i].t); return; }
     const t = keys[i].t;
     restore(snap);
     shotsDoc.restore(shots);
-    if (group.length > 1) shiftCamKeys(group, r3(t - was));
+    along?.restore();
+    if (along) together(() => { shiftCamKeys(group, r3(t - was)); along.commit(r3(t - was)); });
+    else if (group.length > 1) shiftCamKeys(group, r3(t - was));
     else if (roll) rollCut(i, t);
     else edit((ks) => { ks[i].t = t; });
   };

@@ -17,6 +17,7 @@ import { stored } from "./core/storage";
 import { get, say, set, showError } from "./core/store";
 import { stamp } from "./core/time";
 import { attachKeyRows } from "./keys/keyrows";
+import { attachAcross } from "./timeline/across";
 import { loadKeys } from "./keys/keys";
 import { attachInk, drawInk } from "./notes/ink";
 import { drawnNotes, drawPins, ensureNote, flushNotes, followNotes, loadNotes, noteMarks, restoreDraft } from "./notes/notes";
@@ -102,6 +103,7 @@ export const start = async (el: Elements) => {
   attachLanes();
   attachCamRow();
   attachKeyRows();
+  attachAcross();
   attachInk({ look: lookAtClick, begin: ensureNote, pause: () => { if (S.playing) setPlaying(false); } });
   fit();
   if (!AWAY) el.audio.src = MIX_URL; // on a phone line the room comes first, or the sound eats the bandwidth while the picture stays black

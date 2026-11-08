@@ -3,8 +3,8 @@
 // A clip is dragged to move (up or down onto another track, or below the last one for a new track), by an edge to trim, and
 // snaps to the playhead, cuts, words and other clips' edges (Shift: no snap). The handle on each top corner of the clip under the
 // pointer or picked drags its fade in or out, as in CapCut and Premiere. A box dragged over empty space picks every clip
-// it touches (Shift/Ctrl add to the pick); dragging one picked clip moves them all, and with Alt held copies of them (CapCut's
-// drag to duplicate). A click on empty space only drops the pick, the playhead stays (it moves from the ruler or by its own
+// it touches (Shift/Ctrl add to the pick), and the keys of the other rows it crosses (timeline/rowbox.ts, across.ts); dragging
+// one picked clip moves all of it, and with Alt held copies of the clips alone (CapCut's drag to duplicate). A click on empty space only drops the pick, the playhead stays (it moves from the ruler or by its own
 // line); a touch dragged over empty space scrubs instead.
 // A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
 // In split mode (blade.ts) a click on a clip cuts it there instead.
@@ -16,7 +16,10 @@ import { get, noSnap, say } from "../core/store";
 import { BLADE_CURSOR } from "../components/cursor";
 import { bladeLine } from "../timeline/blade";
 import { addClip, allClips, clipOf, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips, usesOf } from "./sound";
-import { drawMarquee, type Marquee, marqueeRect, PICK, sized, UI_FONT } from "../timeline/canvas";
+import { together } from "../core/doc";
+import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
+import { PICK, sized, UI_FONT } from "../timeline/canvas";
+import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { addTrack, resolve, same } from "./tracks";
 import { seek, setPlaying } from "../playback/transport";
@@ -30,7 +33,6 @@ const EDGE = 6, KNOB = 7; // KNOB: how near a fade handle the pointer must be, i
 type Box = { ref: ClipRef; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
 let drop: { row: number; at: number } | null = null; // row = tracks.length: below the last track, a new one
-let marquee: Marquee | null = null;
 let hover: ClipRef | null = null;
 
 const tracks = () => lanes?.tracks ?? [];
@@ -112,7 +114,6 @@ export const drawLanes = () => {
     g.fillStyle = "rgba(58,169,159,.18)"; g.fillRect(0, y, w, hh);
     g.fillStyle = COLOR.drop; g.fillRect(x - 1, y, 2, hh);
   }
-  if (marquee) drawMarquee(g, marquee);
   if (get().blade && bladeLine.row === "lanes") {
     const x = Math.round(X(bladeLine.t));
     g.fillStyle = "#000"; g.fillRect(x - 1, bladeLine.y0 - 3, 3, bladeLine.y1 - bladeLine.y0 + 6);
@@ -147,8 +148,10 @@ const knobAt = (b: Box, x: number, y: number, touch: boolean): "fadeIn" | "fadeO
   const di = Math.abs(x - (b.x0 + (c.fadeIn ?? 0) * px)), dout = Math.abs(x - (b.x1 - (c.fadeOut ?? 0) * px));
   return Math.min(di, dout) > r ? null : di <= dout ? "fadeIn" : "fadeOut";
 };
-const inBox = (m: NonNullable<typeof marquee>) => {
-  const { x0, x1, y0, y1 } = marqueeRect(m);
+const clipsInBox = (m: { x0: number; x1: number; y0: number; y1: number }) => {
+  const r = S.el.lanes.getBoundingClientRect();
+  if (!r.height) return [];
+  const x0 = m.x0 - r.left, x1 = m.x1 - r.left, y0 = m.y0 - r.top, y1 = m.y1 - r.top;
   return boxes.filter((b) => b.x1 >= x0 && b.x0 <= x1 && b.y1 >= y0 && b.y0 <= y1 && !locked(b.ref)).map((b) => b.ref);
 };
 
@@ -157,16 +160,18 @@ type Drag = {
   from: number; to: number; pts: number[]; moved: boolean; alone: boolean; x0: number; x1: number;
   copy: boolean; // CapCut's drag to duplicate (Alt held as the drag starts): copies move, the clips stay
   moving: ClipRef[]; // the clips the drag moves: the pick, or its copies
+  along: Along | null; shift: number; // the other rows' picks moving with the clips (timeline/across.ts), and by how much
 };
 
 export const attachLanes = () => {
   const c = S.el.lanes;
   marks.lanes = drawLanes;
+  inBox.clips = clipsInBox;
   marks.lit = () => { const n = get().soundLit; return n ? usesOf(n).map(span) : []; };
   const local = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width }; };
   let drag: Drag | null = null;
   let scrub: { resume: boolean } | null = null;
-  let box: { x: number; y: number; base: ClipRef[]; moved: boolean } | null = null;
+  let box: { add: boolean } | null = null;
   // The playhead line over a clip's body is the playhead's; its trim edges and fade knobs stay the clip's
   const playheadGrab = (b: Box | null, x: number, y: number, w: number, touch: boolean) =>
     onPlayhead(x, w, touch) && (!b || (x > b.x0 + EDGE && x < b.x1 - EDGE && !knobAt(b, x, y, touch)));
@@ -190,18 +195,18 @@ export const attachLanes = () => {
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
-      } else box = { x, y, base: add ? get().clips : [], moved: false };
+      } else { box = { add }; boxStart(e, add); }
       return;
     }
-    if (add) { setClips(picked(b.ref) ? get().clips.filter((p) => !same(p, b.ref)) : [...get().clips, b.ref]); return; }
+    if (add) { const p = across(); pickAcross({ ...p, clips: picked(b.ref) ? p.clips.filter((q) => !same(q, b.ref)) : [...p.clips, b.ref] }); return; }
     if (locked(b.ref)) { setClips([b.ref]); say("This track is locked. Unlock it in the track header to edit"); return; }
     const was = picked(b.ref);
     if (!was) setClips([b.ref]);
-    const group = get().clips.filter((r) => !locked(r));
-    const edge = touch ? 10 : EDGE, wide = b.x1 - b.x0 > edge * 3, knob = group.length > 1 ? null : knobAt(b, x, y, touch);
-    const mode = knob ?? (group.length > 1 || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : "move");
+    const group = get().clips.filter((r) => !locked(r)), along = was ? alongWith("clips") : null, many = group.length > 1 || !!along;
+    const edge = touch ? 10 : EDGE, wide = b.x1 - b.x0 > edge * 3, knob = many ? null : knobAt(b, x, y, touch);
+    const mode = knob ?? (many || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : "move");
     const [from, to] = span(b.ref);
-    drag = { ref: b.ref, group, mode, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && group.length > 1, x0: b.x0, x1: b.x1, copy: false, moving: group };
+    drag = { ref: b.ref, group, mode, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && many, x0: b.x0, x1: b.x1, copy: false, moving: group, along, shift: 0 };
   });
 
   // A drag near the top or bottom of the tracks' box scrolls it, so a clip can be taken to a track out of sight
@@ -213,16 +218,8 @@ export const attachLanes = () => {
   c.addEventListener("pointermove", (e) => {
     const { x, y, w } = local(e), { v } = view(), perPx = v / w;
     if (scrub) { seek(timeAt(x, w)); return; }
-    if (box?.moved || drag?.moved) edgeScroll(e);
-    if (box) {
-      if (!box.moved && Math.hypot(x - box.x, y - box.y) < 4) return;
-      box.moved = true;
-      marquee = { x0: box.x, y0: box.y, x1: x, y1: y };
-      const inside = inBox(marquee);
-      setClips([...box.base.filter((p) => !inside.some((r) => same(r, p))), ...inside]);
-      drawLanes();
-      return;
-    }
+    if (box) { boxMove(e); return; }
+    if (drag?.moved) edgeScroll(e);
     if (!drag && get().blade) {
       const b = hit(x, y, false);
       c.style.cursor = !b ? "default" : locked(b.ref) ? "not-allowed" : BLADE_CURSOR;
@@ -239,7 +236,7 @@ export const attachLanes = () => {
       return;
     }
     if (!drag.moved && Math.abs(x - drag.x) < 3 && Math.abs(y - drag.y) < 6) return;
-    if (!drag.moved) drag.copy = e.altKey && drag.mode === "move";
+    if (!drag.moved) drag.copy = e.altKey && drag.mode === "move" && !drag.along;
     drag.moved = true;
     c.style.cursor = drag.copy ? "copy" : drag.mode === "move" ? "grabbing" : drag.mode.startsWith("fade") ? "ew-resize" : "col-resize";
     const d = (x - drag.x) * perPx, off = noSnap(e), { ref, group, from, to, pts } = drag;
@@ -259,7 +256,9 @@ export const attachLanes = () => {
         const s0 = snapTo(from + d, pts, perPx, off), s1 = snapTo(to + d, pts, perPx, off) - (to - from);
         let shift = (Math.abs(s0 - (from + d)) <= Math.abs(s1 - (from + d)) ? s0 : s1) - from;
         const starts = moving.map((r) => span(r)[0]);
-        shift = Math.max(-Math.min(...starts), Math.min(DURATION - 0.05 - Math.max(...starts), shift));
+        const room = drag!.along?.room ?? [-Infinity, Infinity];
+        shift = Math.max(-Math.min(...starts), room[0], Math.min(DURATION - 0.05 - Math.max(...starts), room[1], shift));
+        drag!.shift = shift;
         // Up or down by as many rows as the pointer went, the whole pick together, none past the strip for a new track
         const rows = moving.map(rowOf), n = l.tracks.length;
         const dk = Math.max(-Math.min(...rows), Math.min(n - Math.max(...rows), rowAt(y) - rowAt(drag!.y)));
@@ -286,28 +285,32 @@ export const attachLanes = () => {
         resolve(l, [ref], span);
       }
     });
-    const [a0, a1] = span(drag.moving[group.indexOf(ref)] ?? ref), many = group.length > 1 && drag.mode === "move" ? ` + ${group.length - 1} clip` : "";
+    if (drag.mode === "move") drag.along?.preview(drag.shift);
+    const others = drag.mode === "move" ? group.length - 1 + (drag.along?.count ?? 0) : 0;
+    const [a0, a1] = span(drag.moving[group.indexOf(ref)] ?? ref), many = others ? ` + ${others} more` : "";
     say(`${drag.copy ? "Copy of " : ""}${clipOf(ref)!.name}${many}: ${stamp(a0)} → ${stamp(a1)}${off ? "" : " (Shift: no snapping)"}`, 1500);
   });
 
   const up = (e: PointerEvent) => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (box) {
-      const { moved, base } = box;
-      box = null; marquee = null;
-      if (!moved) { if (!base.length) setClips([]); }
-      else if (get().clips.length > 1) say(`${get().clips.length} clips selected. Drag one to move them all`);
-      drawLanes();
+      const { add } = box;
+      box = null;
+      if (!boxEnd() && !add) pickAcross({ cam: [], keys: [], clips: [] });
       return;
     }
     if (!drag) return;
-    const { snap, moved, alone, ref, copy, moving } = drag;
+    const { snap, moved, alone, ref, copy, moving, along, shift } = drag;
     drag = null;
     c.style.cursor = "";
     if (!moved) { if (alone && e.type === "pointerup") setClips([ref]); return; }
     const after = snapshot();
     restore(snap);
-    edit((l) => { const now: typeof l = JSON.parse(after); l.beds = now.beds; l.sfx = now.sfx; l.tracks = now.tracks; });
+    along?.restore();
+    together(() => {
+      edit((l) => { const now: typeof l = JSON.parse(after); l.beds = now.beds; l.sfx = now.sfx; l.tracks = now.tracks; });
+      along?.commit(Math.round(shift * 1000) / 1000);
+    });
     if (copy) setClips(moving); // as in CapCut, the copies are what is picked after
   };
   c.addEventListener("pointerup", up);

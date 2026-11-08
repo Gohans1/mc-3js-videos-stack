@@ -29,13 +29,15 @@ export const selectSide = (d: -1 | 1) => {
   say(cs.length ? `${cs.length} clip${cs.length > 1 ? "s" : ""} ${d < 0 ? "left" : "right"} of the playhead selected` : `No sound clips ${d < 0 ? "left" : "right"} of the playhead`);
 };
 
-// The toolbar's bin: whatever is picked, as Delete does (sound clips, camera keyframes, keys, a dropped-in object)
+// Delete and the toolbar's bin: whatever is picked, every kind of it in one undo step (sound clips, camera keyframes, keys; a
+// pick may hold all three, timeline/across.ts), or else the dropped-in object picked
 export const canDelete = () => { const s = get(); return s.clips.length > 0 || s.camKey !== null || s.camPicks.length > 0 || s.keyPicks.length > 0 || s.object !== null; };
 export const deleteSelected = () => {
-  const s = get();
-  if (s.clips.length) removeClips(s.clips);
-  else if (s.camKey !== null) removeKey(s.camKey);
-  else if (s.camPicks.length) removeCamKeys(s.camPicks);
-  else if (s.keyPicks.length) removeKeys(s.keyPicks);
-  else if (s.object) removeObject(s.object);
+  const { clips, camKey, camPicks, keyPicks, object } = get();
+  if (!clips.length && camKey === null && !camPicks.length && !keyPicks.length) { if (object) removeObject(object); return; }
+  together(() => {
+    if (clips.length) removeClips(clips);
+    if (camKey !== null) removeKey(camKey); else if (camPicks.length) removeCamKeys(camPicks);
+    if (keyPicks.length) removeKeys(keyPicks);
+  });
 };

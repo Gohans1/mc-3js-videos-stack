@@ -48,12 +48,12 @@ test("a save made on an old version is refused, a bad one is named, a good one i
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
   wav(join(dir, "sound/sfx/tap.wav"));
-  writeFileSync(join(dir, "sound/sfx/SOURCES.json"), JSON.stringify({ tap: { title: "A tap", license: "CC0 1.0", kind: "bgm" } }));
+  writeFileSync(join(dir, "sound/sfx/SOURCES.json"), JSON.stringify({ tap: { title: "A tap", license: "CC0 1.0", kind: "bgm", role: "whoosh" } }));
   const file = join(dir, "src/timeline/audio.json");
   writeFileSync(file, JSON.stringify({ voiceGain: 0, beds: [], sfx: [{ at: 1, name: "tap", gain: 0, try: ["knock"] }] }));
   const s = openSound(dir, { soundTimeline: "src/timeline/audio.json", sfx: "sound/sfx" });
   const { version, data } = s.read();
-  assert.deepEqual(s.library(), [{ name: "tap", seconds: 2, title: "A tap", license: "CC0 1.0", url: undefined, for: undefined, kind: "bgm" }]);
+  assert.deepEqual(s.library(), [{ name: "tap", seconds: 2, title: "A tap", license: "CC0 1.0", url: undefined, for: undefined, kind: "bgm", role: "whoosh" }]);
   assert.match(s.write(version, { ...data, sfx: [{ at: -1, name: "tap", gain: 0 }] }).problems.join(), /sfx/);
   data.sfx[0].at = 2.5;
   const ok = s.write(version, data);
