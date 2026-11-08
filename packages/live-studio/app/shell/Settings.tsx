@@ -153,6 +153,7 @@ const KEYS: [ReactNode, ReactNode][] = [
   [<Kbd>F</Kbd>, <>free camera: click to pick an object, right-click to pin a note, drag to look, scroll to move in, right-drag to pan, Shift+drag to orbit, <Kbd>-</Kbd><Kbd>=</Kbd> lens there. Flies like Minecraft: hold <Kbd>W</Kbd><Kbd>A</Kbd><Kbd>S</Kbd><Kbd>D</Kbd>, <Kbd>Space</Kbd> up, <Kbd>Shift</Kbd> down (or <Kbd>E</Kbd> <Kbd>Q</Kbd>), press <Kbd>W</Kbd> twice to sprint</>],
   [<Kbd>G</Kbd>, "final quality"],
   [<><Kbd>Shift</Kbd><Kbd>K</Kbd></>, "add a camera keyframe from the free camera"],
+  [<Kbd>Alt+C</Kbd>, "copy the camera angle as text, to paste into a note"],
   [<><Kbd>0</Kbd>–<Kbd>9</Kbd></>, "pick an alternative"],
   [<Kbd>Esc</Kbd>, "close, stop drawing, deselect"],
 ];
@@ -250,7 +251,7 @@ export function Settings() {
           <Row>
             <span className="flex min-w-0 flex-1 items-center gap-1.5">
               <span className="text-sm">Camera angle</span>
-              <HelpTip label="Copy camera angle">Copies the camera's position and direction as one line of text. Paste it into a note to have the AI frame the shot exactly so.</HelpTip>
+              <HelpTip label="Copy camera angle">Copies the camera's position and direction as one line of text. Paste it into a note to have the AI frame the shot exactly so. Shortcut: Alt+C.</HelpTip>
             </span>
             <Button variant="secondary" size="lg" aria-label="Copy camera angle" onClick={copyCam}>Copy</Button>
           </Row>

@@ -14,6 +14,7 @@ import { setFinal } from "../picture/render";
 import { setFov, setFree } from "../picture/freecam";
 import { S } from "../core/state";
 import { removeCamKeys, removeKey, saveView, setKey } from "../camera/cam";
+import { copyCam } from "../camera/camline";
 import { copy, cut, hasCopy, paste } from "../timeline/clipboard";
 import { askPaste, copyAttrs } from "../timeline/attributes";
 import { selectSide, splitAll, splitHere } from "../timeline/cut";
@@ -120,6 +121,7 @@ export function useStudioHotkeys() {
     { hotkey: "K", callback: () => { if (S.playing) setPlaying(false); } },
     { hotkey: "L", callback: () => shuttleOn(1) },
     { hotkey: "Shift+K", callback: () => saveView(), options: { enabled: cam } },
+    { hotkey: "Alt+C", callback: copyCam },
     { hotkey: "G", callback: fresh(() => setFinal(!get().final)), options: { enabled: !AWAY } },
     { hotkey: "Mod+ArrowUp", callback: () => nudgeVolume(true) },
     { hotkey: "Mod+ArrowDown", callback: () => nudgeVolume(false) },
