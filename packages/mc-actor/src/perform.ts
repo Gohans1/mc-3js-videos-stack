@@ -23,6 +23,7 @@
 // Every key holds until the next. Same t, same frame: nothing here remembers a previous frame.
 import * as THREE from "three";
 import { clamp01, smooth, walkEase } from "./ease";
+import { checkFaces, checkMoves, checkTargets } from "./keys";
 import { MOODS, addPose, gaitOf, walkPose } from "./player";
 import { slerpPose } from "./mocap";
 import { reachK } from "film-kit/reach";
@@ -63,6 +64,9 @@ const pathOf = (moves) => {
 // he can walk between without a walk key (he shuffles round on the spot while turning)
 export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
   const moodOf = (n) => faces[n] ?? MOODS[n] ?? MOODS.neutral;
+  // each list of keys is checked whole the first time it is read (keys.ts); the studio hands over a fresh copy on every edit
+  const seen = new WeakMap();
+  const once = (keys, tag, fn) => { const s = seen.get(keys) ?? new Set(); if (!s.has(tag)) { fn(); s.add(tag); seen.set(keys, s); } };
 
   // A key's body pose s seconds after it; clips: loadClips' result
   const poseOf = (key, s, clips) => {
@@ -84,7 +88,9 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
   };
 
   // Where he is, which way he faces and the body pose at time t (no hand targets, no head aim yet)
-  function bodyAt(moves, t, clips = {}) {
+  function bodyAt(moves, t, clips) {
+    once(moves, clips ? "clips" : "moves", () => checkMoves(moves, poses, clips ?? null));
+    clips ??= {};
     const i = keyAt(moves, t), a = moves[i], b = moves[Math.min(i + 1, moves.length - 1)];
     const x = progress(a, b, t);
     const cum = pathOf(moves);
@@ -92,7 +98,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     const at = a.at.map((v, j) => THREE.MathUtils.lerp(v, b.at[j], k));
     const yaw = yawLerp(a.yaw, b.yaw, b.walk ? smooth(x / 0.25) : k);
     const sa = t - a.t, sb = Math.max(0, t - b.t);
-    if (a.clip && b.walk && b !== a) throw new Error(`steve.moves at ${b.t}: a walk can't start out of a clip; put a key where the clip leaves him first`);
     const w = b.walk ? smooth((x - 0.8) / 0.2) : k; // a walk keeps its own body until its last fifth
     let pose;
     if (b === a) pose = poseOf(a, sa, clips);
@@ -127,6 +132,7 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
   // The target of one hand or the head between keys: null blends back to the pose's own arm. opts.pivot: the shoulder in
   // the world at t (a THREE.Vector3), for hands; without it the target glides straight on a smoothstep (a head's look)
   function targetAt(keys, field, t, anchor, { pivot = null } = {}) {
+    once(keys, "targets", () => checkTargets(keys, field === "at" ? "look" : "hands"));
     const ks = keys.filter((k) => field in k);
     if (!ks.length) return null;
     const i = keyAt(ks, t), a = ks[i], b = ks[Math.min(i + 1, ks.length - 1)];
@@ -140,6 +146,7 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
   }
 
   function moodAt(keys, t) {
+    once(keys, "faces", () => checkFaces(keys, { ...MOODS, ...faces }));
     const i = keyAt(keys, t), a = keys[i];
     const prev = i > 0 ? moodOf(keys[i - 1].mood) : moodOf(a.mood);
     return mixMood(prev, moodOf(a.mood), t < a.t ? 0 : smooth((t - a.t) / 0.5));
