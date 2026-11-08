@@ -1,0 +1,1075 @@
+{
+ "at": [
+  2.5,
+  0,
+  1.58
+ ],
+ "yaw": 180,
+ "moves": [
+  {
+   "t": 0.0,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "chair",
+   "do": "presses the answer scrap"
+  },
+  {
+   "t": 1.03,
+   "at": [
+    60,
+    0,
+    60
+   ],
+   "yaw": 180,
+   "pose": "still",
+   "do": "out of shot"
+  },
+  {
+   "t": 1.43,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "chair",
+   "do": "at his desk"
+  },
+  {
+   "t": 6.73,
+   "at": [
+    2.5,
+    0.1,
+    1.58
+   ],
+   "yaw": 180,
+   "clip": "mixamo/Sitting_At_A_Computer_And_Typing_c9ccaf87",
+   "from": 2.0,
+   "do": "types at the CRT (mocap body, hands on the keys)"
+  },
+  {
+   "t": 17.03,
+   "at": [
+    2.5,
+    0.1,
+    1.58
+   ],
+   "yaw": 180,
+   "clip": "mixamo/Sitting_At_A_Computer_And_Typing_c9ccaf87",
+   "from": 12.3,
+   "rate": 0,
+   "do": "stops typing"
+  },
+  {
+   "t": 37.368,
+   "at": [
+    5.5,
+    0.5625,
+    1.3
+   ],
+   "yaw": 0,
+   "pose": "lie",
+   "do": "lies on his back on the bed"
+  },
+  {
+   "t": 40.168,
+   "at": [
+    5.5,
+    0.5625,
+    1.3
+   ],
+   "yaw": 0,
+   "pose": "lie",
+   "do": "lies awake, staring up"
+  },
+  {
+   "t": 44.368,
+   "at": [
+    5.3,
+    0.11,
+    1.15
+   ],
+   "yaw": 270,
+   "pose": "seat",
+   "do": "sits up on the edge of the bed"
+  },
+  {
+   "t": 47.168,
+   "at": [
+    60,
+    0,
+    60
+   ],
+   "yaw": 270,
+   "pose": "still",
+   "do": "his point of view"
+  },
+  {
+   "t": 55.468,
+   "at": [
+    3.5,
+    0,
+    3.9
+   ],
+   "yaw": 20,
+   "do": "walks to the iron door",
+   "clip": "ual1/Walk_Loop",
+   "from": 0.35
+  },
+  {
+   "t": 58.068,
+   "at": [
+    4.45,
+    0,
+    5.3
+   ],
+   "yaw": 0,
+   "pose": "still",
+   "do": "looks out through the door's window"
+  },
+  {
+   "t": 62.468,
+   "at": [
+    4.0,
+    0,
+    4.9
+   ],
+   "yaw": 200,
+   "pose": "still",
+   "do": "turns back to the room"
+  },
+  {
+   "t": 70.539,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "chair",
+   "do": "sits at the desk"
+  },
+  {
+   "t": 73.739,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "type",
+   "do": "types a few lines"
+  },
+  {
+   "t": 76.739,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "despair",
+   "do": "holds his head, stuck"
+  },
+  {
+   "t": 88.958,
+   "at": [
+    0.75,
+    0,
+    3.0
+   ],
+   "yaw": -90,
+   "pose": "still",
+   "do": "pulls a book off the shelf wall"
+  },
+  {
+   "t": 91.958,
+   "at": [
+    0.95,
+    0,
+    3.0
+   ],
+   "yaw": -100,
+   "pose": "throw",
+   "do": "throws the book down"
+  },
+  {
+   "t": 96.958,
+   "at": [
+    1.4,
+    0,
+    2.6
+   ],
+   "yaw": -140,
+   "pose": "still",
+   "do": "freezes, turned to the corner"
+  },
+  {
+   "t": 100.358,
+   "at": [
+    0.6,
+    0,
+    0.95
+   ],
+   "yaw": 180,
+   "pose": "kneel",
+   "do": "kneels and pulls the book out"
+  },
+  {
+   "t": 108.958,
+   "at": [
+    2.2,
+    0,
+    2.6
+   ],
+   "yaw": -30,
+   "pose": "lookUp",
+   "do": "looks up at the camera"
+  },
+  {
+   "t": 112.158,
+   "at": [
+    2.6,
+    0,
+    3.4
+   ],
+   "yaw": -120,
+   "pose": "still",
+   "do": "watches the books pile up"
+  },
+  {
+   "t": 119.358,
+   "at": [
+    2.3,
+    0,
+    2.3
+   ],
+   "yaw": 200,
+   "pose": "read",
+   "do": "turns to the slot, the answer in his hands"
+  },
+  {
+   "t": 127.758,
+   "at": [
+    2.3,
+    0,
+    2.3
+   ],
+   "yaw": 200,
+   "pose": "hide",
+   "do": "hides the scrap up his sleeve"
+  },
+  {
+   "t": 142.158,
+   "at": [
+    5.45,
+    0,
+    3.0
+   ],
+   "yaw": 90,
+   "pose": "ear",
+   "do": "presses his ear to the wall"
+  },
+  {
+   "t": 145.158,
+   "at": [
+    5.45,
+    0,
+    3.0
+   ],
+   "yaw": 90,
+   "pose": "ear",
+   "do": "presses his ear to the wall"
+  },
+  {
+   "t": 151.558,
+   "at": [
+    4.3,
+    0,
+    3.6
+   ],
+   "yaw": 100,
+   "pose": "floor",
+   "do": "thrown back on the floor"
+  },
+  {
+   "t": 158.558,
+   "at": [
+    4.6,
+    0,
+    3.0
+   ],
+   "yaw": 100,
+   "pose": "floor",
+   "do": "sits on the floor, staring at the smoke"
+  },
+  {
+   "t": 169.958,
+   "at": [
+    4.6,
+    0,
+    3.0
+   ],
+   "yaw": 100,
+   "pose": "floor",
+   "do": "sits on the floor"
+  },
+  {
+   "t": 174.558,
+   "at": [
+    0.6,
+    0,
+    0.95
+   ],
+   "yaw": 180,
+   "pose": "kneel",
+   "do": "kneels and pulls the page out of the mailbox"
+  },
+  {
+   "t": 182.758,
+   "at": [
+    2.55,
+    0,
+    1.6
+   ],
+   "yaw": 180,
+   "pose": "under",
+   "do": "kneels half under the desk, prying the lid"
+  },
+  {
+   "t": 186.158,
+   "at": [
+    2.55,
+    0,
+    1.6
+   ],
+   "yaw": 180,
+   "pose": "under",
+   "do": "the lid comes free"
+  },
+  {
+   "t": 191.758,
+   "at": [
+    2.55,
+    0,
+    1.75
+   ],
+   "yaw": 180,
+   "pose": "underOut",
+   "do": "backs his head out from under the desk, eyes up at the camera"
+  },
+  {
+   "t": 194.958,
+   "at": [
+    2.5,
+    0,
+    1.42
+   ],
+   "yaw": 180,
+   "pose": "kneel",
+   "do": "kneels at the desk: wires in one hand, typing with the other"
+  },
+  {
+   "t": 201.558,
+   "at": [
+    2.5,
+    0,
+    1.42
+   ],
+   "yaw": 180,
+   "pose": "kneel",
+   "do": "holds the joint"
+  },
+  {
+   "t": 216.958,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "read",
+   "do": "sits holding the strip up to the light"
+  },
+  {
+   "t": 220.558,
+   "at": [
+    60,
+    0,
+    60
+   ],
+   "yaw": 180,
+   "pose": "still",
+   "do": "out of the insert"
+  },
+  {
+   "t": 223.958,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "type",
+   "do": "tries the tokens one by one"
+  },
+  {
+   "t": 227.158,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "type",
+   "do": "copies the token into blank books"
+  },
+  {
+   "t": 230.558,
+   "at": [
+    0.6,
+    0,
+    0.95
+   ],
+   "yaw": 180,
+   "pose": "kneel",
+   "do": "slides the books into the shelf"
+  },
+  {
+   "t": 252.286,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "type",
+   "do": "keeps typing for the camera"
+  },
+  {
+   "t": 255.286,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "type",
+   "do": "his body keeps typing"
+  },
+  {
+   "t": 258.686,
+   "at": [
+    2.5,
+    0,
+    1.58
+   ],
+   "yaw": 180,
+   "pose": "type",
+   "do": "his body keeps typing"
+  },
+  {
+   "t": 299.817,
+   "at": [
+    2.2,
+    0,
+    2.6
+   ],
+   "yaw": -30,
+   "pose": "lookUp",
+   "do": "stands where he first looked up, and looks up again"
+  },
+  {
+   "t": 313.417,
+   "at": [
+    2.5,
+    0,
+    2.0
+   ],
+   "yaw": 0,
+   "pose": "hands",
+   "do": "stares at his hands as they come apart"
+  }
+ ],
+ "hands": [
+  {
+   "t": 0.0,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    1.96,
+    1.03,
+    0.75
+   ]
+  },
+  {
+   "t": 1.03,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 1.43,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 6.73,
+   "R": "typeR",
+   "L": "typeL"
+  },
+  {
+   "t": 17.03,
+   "R": "typeR",
+   "L": "typeL"
+  },
+  {
+   "t": 17.33,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 37.368,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 40.168,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 44.368,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 47.168,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 55.468,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 58.068,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 62.468,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 70.539,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 73.739,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 76.739,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 88.958,
+   "R": [
+    -0.05,
+    1.45,
+    2.85
+   ],
+   "L": null
+  },
+  {
+   "t": 91.958,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 96.958,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 100.358,
+   "R": [
+    0.4,
+    0.62,
+    0.15
+   ],
+   "L": null
+  },
+  {
+   "t": 108.958,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 112.158,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 119.358,
+   "R": [
+    2.42,
+    1.05,
+    2.0
+   ],
+   "L": [
+    2.22,
+    1.05,
+    2.0
+   ]
+  },
+  {
+   "t": 127.758,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 142.158,
+   "R": [
+    5.95,
+    1.45,
+    2.75
+   ],
+   "L": [
+    5.95,
+    1.45,
+    3.35
+   ]
+  },
+  {
+   "t": 145.158,
+   "R": [
+    5.95,
+    1.45,
+    2.75
+   ],
+   "L": [
+    5.95,
+    1.45,
+    3.35
+   ]
+  },
+  {
+   "t": 151.558,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 158.558,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 169.958,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 174.558,
+   "R": [
+    0.4,
+    0.62,
+    0.15
+   ],
+   "L": null
+  },
+  {
+   "t": 182.758,
+   "R": [
+    2.72,
+    0.52,
+    0.33
+   ],
+   "L": null
+  },
+  {
+   "t": 186.158,
+   "R": [
+    2.72,
+    0.52,
+    0.33
+   ],
+   "L": null
+  },
+  {
+   "t": 191.758,
+   "R": [
+    2.72,
+    0.52,
+    0.33
+   ],
+   "L": null
+  },
+  {
+   "t": 194.958,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.25,
+    0.6,
+    1.05
+   ]
+  },
+  {
+   "t": 201.558,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.25,
+    0.6,
+    1.05
+   ]
+  },
+  {
+   "t": 216.958,
+   "R": [
+    2.63,
+    1.62,
+    1.2
+   ],
+   "L": [
+    2.37,
+    1.62,
+    1.2
+   ]
+  },
+  {
+   "t": 220.558,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 223.958,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 227.158,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 230.558,
+   "R": [
+    0.4,
+    0.7,
+    0.1
+   ],
+   "L": null
+  },
+  {
+   "t": 252.286,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 255.286,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 258.686,
+   "R": [
+    2.66,
+    1.07,
+    0.82
+   ],
+   "L": [
+    2.36,
+    1.07,
+    0.82
+   ]
+  },
+  {
+   "t": 299.817,
+   "R": null,
+   "L": null
+  },
+  {
+   "t": 313.417,
+   "R": null,
+   "L": null
+  }
+ ],
+ "look": [
+  {
+   "t": 0.0,
+   "at": null
+  },
+  {
+   "t": 1.03,
+   "at": null
+  },
+  {
+   "t": 1.43,
+   "at": null
+  },
+  {
+   "t": 6.73,
+   "at": null
+  },
+  {
+   "t": 37.368,
+   "at": null
+  },
+  {
+   "t": 40.168,
+   "at": null
+  },
+  {
+   "t": 44.368,
+   "at": [
+    2.0,
+    1.3,
+    3.2
+   ]
+  },
+  {
+   "t": 47.168,
+   "at": null
+  },
+  {
+   "t": 55.468,
+   "at": null
+  },
+  {
+   "t": 58.068,
+   "at": [
+    4.5,
+    1.75,
+    8.0
+   ]
+  },
+  {
+   "t": 62.468,
+   "at": null
+  },
+  {
+   "t": 70.539,
+   "at": null
+  },
+  {
+   "t": 73.739,
+   "at": null
+  },
+  {
+   "t": 76.739,
+   "at": null
+  },
+  {
+   "t": 88.958,
+   "at": null
+  },
+  {
+   "t": 91.958,
+   "at": null
+  },
+  {
+   "t": 96.958,
+   "at": [
+    0.4,
+    0.6,
+    0.0
+   ]
+  },
+  {
+   "t": 100.358,
+   "at": null
+  },
+  {
+   "t": 108.958,
+   "at": [
+    0.583,
+    2.306,
+    5.368
+   ]
+  },
+  {
+   "t": 112.158,
+   "at": null
+  },
+  {
+   "t": 119.358,
+   "at": null
+  },
+  {
+   "t": 127.758,
+   "at": [
+    0.583,
+    2.306,
+    5.368
+   ]
+  },
+  {
+   "t": 142.158,
+   "at": null
+  },
+  {
+   "t": 145.158,
+   "at": null
+  },
+  {
+   "t": 151.558,
+   "at": null
+  },
+  {
+   "t": 158.558,
+   "at": null
+  },
+  {
+   "t": 169.958,
+   "at": null
+  },
+  {
+   "t": 174.558,
+   "at": null
+  },
+  {
+   "t": 182.758,
+   "at": null
+  },
+  {
+   "t": 186.158,
+   "at": null
+  },
+  {
+   "t": 191.758,
+   "at": [
+    0.583,
+    2.306,
+    5.368
+   ]
+  },
+  {
+   "t": 194.958,
+   "at": null
+  },
+  {
+   "t": 201.558,
+   "at": null
+  },
+  {
+   "t": 216.958,
+   "at": null
+  },
+  {
+   "t": 220.558,
+   "at": null
+  },
+  {
+   "t": 223.958,
+   "at": null
+  },
+  {
+   "t": 227.158,
+   "at": null
+  },
+  {
+   "t": 230.558,
+   "at": null
+  },
+  {
+   "t": 252.286,
+   "at": null
+  },
+  {
+   "t": 255.286,
+   "at": null
+  },
+  {
+   "t": 258.686,
+   "at": null
+  },
+  {
+   "t": 299.817,
+   "at": [
+    0.583,
+    2.306,
+    5.368
+   ]
+  },
+  {
+   "t": 313.417,
+   "at": null
+  }
+ ]
+}

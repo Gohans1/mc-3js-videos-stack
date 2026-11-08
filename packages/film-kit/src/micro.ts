@@ -6,10 +6,10 @@
 //   const drift = micro();   pose = addPose(pose, drift(t))   (after head IK: the head wanders a little round its target)
 // amount scales every joint (src/effort.ts: lower for bound, higher for indirect); period is the slow octave's seconds.
 import type { Pose } from "./pose";
+import { hash } from "./hash";
 
 export const MICRO: Record<string, [number, number, number]> = { head: [0.7, 0.9, 0.4], chest: [0.3, 0.35, 0.25], body: [0.15, 0.2, 0.15], uaL: [0.5, 0.2, 0.4], uaR: [0.5, 0.2, 0.4] }; // degrees each way
 
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 // Perlin's 1D gradient noise: a random slope at each integer, quintic fade between; scaled to about -1..1
 export const noise1 = (x: number, seed: number) => {
   const i = Math.floor(x), f = x - i, u = f * f * f * (f * (f * 6 - 15) + 10);

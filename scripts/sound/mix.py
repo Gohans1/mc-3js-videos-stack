@@ -5,6 +5,8 @@ R128, linear) brings it to audio.json lufs / -1 dBTP, and pyloudnorm measures th
 is what YouTube plays at; the 27 s cold open alone is mostly quiet room tone and stays linear only at -16.
   python ../../scripts/sound/mix.py --raw OUT.wav      the studio's mix (sound.py): no loudness pass, and without the sounds that have
                                          options to try; those go out as one stem per option, which the page plays itself
+  python ../../scripts/sound/mix.py --raw OUT.wav --live-lanes   the narration only, without the drive and limiter: the studio
+                                         plays audio.json's beds and one-shots itself and puts the limiter over the sum
   python ../../scripts/sound/mix.py                    -> sound/mix.wav (48 kHz stereo, film length)
   python ../../scripts/sound/mix.py renders/draft_video.mp4   also muxes it -> renders/draft.mp4"""
 import json
@@ -19,6 +21,9 @@ from pathlib import Path
 ROOT = Path.cwd()  # the film's folder: run from films/<name>/ (python ../../scripts/...)
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
 A = json.loads((ROOT / "src/timeline/audio.json").read_text(encoding="utf8"))
+# A track muted in the studio (audio.json "tracks", mute) is left out of every mix
+MUTED = {t["id"] for t in A.get("tracks", []) if t.get("mute")}
+A["beds"], A["sfx"] = ([e for e in A[k] if e.get("track") not in MUTED] for k in ("beds", "sfx"))
 END = E["end"]
 VENV = Path("E:/threejs_lab/py/venv/Scripts")  # has ffmpeg-normalize and pyloudnorm
 SFX = ROOT / "sound/sfx"
@@ -55,11 +60,14 @@ def as_option(e, name, gain=1.0):
 
 
 def chosen(e):
+    """None when the studio's Tắt was picked (set "off"): the sound is left out of the mix."""
     c = (json.loads(CHOICES.read_text(encoding="utf8")) if CHOICES.exists() else {}).get(e["name"]) or {}
+    if c.get("set") == "off":
+        return None
     return as_option(e, c["set"] if c.get("set") in options(e) else e["name"], c.get("gain", 1.0))
 
 
-def build(out, beds, sfx, voice=True, span=None):
+def build(out, beds, sfx, voice=True, span=None, master=True):
     inputs, chains = [], []
 
     def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=()):
@@ -82,7 +90,7 @@ def build(out, beds, sfx, voice=True, span=None):
     for b in beds:
         add(SFX / f"{b['name']}.wav", b["from"], b["gain"], 0, b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, extra=b.get("filters", []))
     for s in sfx:
-        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), 0, s.get("fadeOut", 0))
+        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), 0, s.get("fadeOut", 0), extra=s.get("filters", []))
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(END), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
@@ -92,7 +100,8 @@ def build(out, beds, sfx, voice=True, span=None):
         # safety limiter at about -7 dBFS. The loudness pass must stay linear: ffmpeg-normalize's dynamic fallback lifts
         # every quiet stretch (the CCTV hiss came up level with the voice). It falls back when target - true peak gap is
         # too small, so a quiet excerpt takes a lower target (src/timeline/audio.json lufs)
-        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},atrim=duration={END},volume={A.get('drive', 0)}dB,alimiter=limit=0.45:level=false"
+        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},atrim=duration={END}"
+        + (f",volume={A.get('drive', 0)}dB,alimiter=limit=0.45:level=false" if master else "")
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
     ]
     script = out.with_name(out.name + ".graph.txt")
@@ -130,10 +139,15 @@ def studio(out):
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--raw"]:
-        studio(Path(sys.argv[2]))
+        if "--live-lanes" in sys.argv:
+            build(Path(sys.argv[2]), [], [], master=False)
+            shutil.rmtree(STEMS, ignore_errors=True)
+            Path(sys.argv[2]).with_name("trials.json").write_text("{}", encoding="utf8")
+        else:
+            studio(Path(sys.argv[2]))
         raise SystemExit
     raw = ROOT / "sound/mix_raw.wav"
-    build(raw, [chosen(b) for b in A["beds"]], [chosen(s) for s in A["sfx"]])
+    build(raw, [c for b in A["beds"] if (c := chosen(b))], [c for s in A["sfx"] if (c := chosen(s))])
     out = ROOT / "sound/mix.wav"
     subprocess.run([str(VENV / "ffmpeg-normalize"), str(raw), "-o", str(out), "-f", "-nt", "ebu", "-t", str(A["lufs"]), "-tp", "-1", "-lrt", "11", "--keep-lra-above-loudness-range-target", "-ar", "48000", "-c:a", "pcm_s16le"], check=True)
     check = "import soundfile as sf, pyloudnorm as pl, numpy as np, sys; d, r = sf.read(sys.argv[1]); print(f'pyloudnorm: {pl.Meter(r).integrated_loudness(d):.2f} LUFS, peak {20*np.log10(np.abs(d).max()):.2f} dBFS')"

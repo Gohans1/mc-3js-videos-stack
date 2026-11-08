@@ -1,6 +1,7 @@
 """CC0 sound effects from Freesound without an API key (its public search page and preview CDN), adapted from the
 Minecraft worktree's get_sfx.py. Each sound is a Freesound id picked from `find` (most downloaded CC0 first) and
-pinned in SFX; title, author and link are kept in sound/sfx/SOURCES.json.
+pinned in SFX, or in the film's own sound/sfx_list.json when it has one ({name: {id, keep, for, bed, music}}, which then
+replaces SFX); title, author and link are kept in sound/sfx/SOURCES.json.
   python ../../scripts/sound/get_sfx.py                 fetch every missing sound in SFX
   python ../../scripts/sound/get_sfx.py find "cat meow" [max seconds]
 A sound is used only if its own page still says Creative Commons 0. Already fetched sounds are skipped."""
@@ -87,6 +88,12 @@ SFX = {
 BEDS = {"room_hum", "cctv_hiss", "hum_lowfreq", "hum_fluorescent", "hum_backrooms", "lamp_flicker", "heartbeat", "dig_papers",
         "bgm_thriller", "bgm_museum", "bgm_drone", "bgm_suspense"}
 MUSIC = {"bgm_thriller", "bgm_museum", "bgm_drone", "bgm_suspense"}  # kept stereo; every other sound is mono
+LIST = ROOT / "sfx_list.json"
+if LIST.exists():
+    own = json.loads(LIST.read_text(encoding="utf8"))
+    SFX = {k: (v["id"], v.get("keep"), v["for"]) for k, v in own.items()}
+    BEDS = {k for k, v in own.items() if v.get("bed") or v.get("music")}
+    MUSIC = {k for k, v in own.items() if v.get("music")}
 
 def get(url):
     return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30).read()

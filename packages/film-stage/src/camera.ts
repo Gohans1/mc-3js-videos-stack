@@ -3,6 +3,7 @@
 // point, lens and how much the head sways. Between cuts the keys are one centripetal Catmull-Rom curve, so the camera never
 // stops gliding; a key with cut: true starts a new curve (a hard cut). On top ride a slow wave (the "breathing" float the
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
+import BezierEasing from "bezier-easing";
 import * as THREE from "three";
 
 const curves = new WeakMap();
@@ -28,17 +29,51 @@ const segments = (keys) => {
   return built;
 };
 
+// How a span between two keys spends its time (the later key's `ease`), each with a job (docs/film-grammar.md):
+//   smooth   the default: mostly constant speed, softened at each key
+//   linear   constant: the inner legs of a flight, where a slow-down would read as a stop
+//   out      starts at speed, settles (lands): an arrival the audience should take in
+//   in       starts at rest, ends at speed: a move that leaves on its way to a cut
+//   inout    sine slow-fast-slow: a whole move from rest to rest
+//   expo     exponential: each second covers ~5x the last, the pull-back that turns a room into a speck
+export const EASES = {
+  smooth: (x) => x * x * (3 - 2 * x) * 0.6 + x * 0.4,
+  linear: (x) => x,
+  out: (x) => 1 - Math.pow(1 - x, 2.2),
+  in: (x) => Math.pow(x, 2.2),
+  inout: (x) => 0.5 - 0.5 * Math.cos(Math.PI * x),
+  expo: (x) => (Math.pow(2, 7 * x) - 1) / 127,
+};
+// A key's ease may also be a CSS cubic-bezier [x1, y1, x2, y2] (the studio's curve editor writes these)
+const beziers = new WeakMap();
+export const easeOf = (e) => {
+  if (!Array.isArray(e)) return EASES[e] ?? EASES.smooth;
+  if (!beziers.has(e)) beziers.set(e, BezierEasing(...e));
+  return beziers.get(e);
+};
 // Key times are not evenly spread along the curve: map film time to the curve parameter piecewise, eased inside each span
 const paramAt = (ks, t) => {
   if (t <= ks[0].t) return 0;
   const n = ks.length - 1;
   for (let i = 0; i < n; i++) if (t <= ks[i + 1].t) {
     const x = (t - ks[i].t) / (ks[i + 1].t - ks[i].t);
-    const ease = ks[i + 1].ease ?? "smooth";
-    const e = ease === "linear" ? x : x * x * (3 - 2 * x) * 0.6 + x * 0.4; // mostly constant speed, softened at each key
-    return (i + e) / n;
+    return (i + easeOf(ks[i + 1].ease)(x)) / n;
   }
   return 1;
+};
+// Camera shake for impacts only: [{t, d, amp}] (amp in metres, roll in radians x 0.1). Decorrelated x/y/roll noise that
+// starts at full and decays to nothing over d; keep d <= ~0.6 s and match amp to the hit (a door kick 0.02, a blast 0.06)
+export const shakeAt = (events, t) => {
+  const out = { x: 0, y: 0, roll: 0 };
+  for (const e of events ?? []) {
+    const dt = t - e.t;
+    if (dt < 0 || dt > e.d) continue;
+    const k = e.amp * Math.pow(1 - dt / e.d, 2);
+    out.x += k * (Math.sin(dt * 71.3) * 0.6 + Math.sin(dt * 37.9 + 1.7) * 0.4);
+    out.y += k * (Math.sin(dt * 59.1 + 0.6) * 0.6 + Math.sin(dt * 23.3 + 2.9) * 0.4);
+    out.roll += k * 1.5 * Math.sin(dt * 43.7 + 0.3);
+  }
+  return out;
 };
 
 const lerpKey = (ks, t, f, d) => {

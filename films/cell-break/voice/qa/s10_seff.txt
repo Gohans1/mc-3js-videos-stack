@@ -1,0 +1,3 @@
+Vouched forward by a valid seal, the trapped chest rolled straight into Hugging Face's
+datacore without raising a single flag, and the moment the warehouse bot lifted the lid
+to inspect it, a zero-day exploit no one had ever seen went off.

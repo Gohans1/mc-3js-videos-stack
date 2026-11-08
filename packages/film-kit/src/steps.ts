@@ -14,6 +14,7 @@
 //   const ev = contacts({ L: (t) => soleL(t), R: (t) => soleR(t) }, end, { ground: 0 });
 //   const sounds = stepSounds(ev, (x, y, z) => world.blockBelow(x, y, z));   [{ t, event, volume, pitch, variant, at }]
 // A sole path gives world [x, y, z] metres; ground is a height or (x, z) => the floor there.
+import { hash } from "./hash";
 export const STEP = {
   volume: 0.15, // x the sound type's volume
   layered: { volume: 1 / 3, pitch: 0.8 }, // a step through carpet or snow onto the block below
@@ -43,7 +44,6 @@ export const LAYERED = new Set(["carpet", "snow", "moss_carpet", "crimson_roots"
 
 type V3 = [number, number, number];
 const HZ = 120;
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
 export type Step = { t: number; foot: string; at: V3; speed: number };
 // heel strikes: a sole that was off the floor (or moving) comes down within `lift` and slows under `still`

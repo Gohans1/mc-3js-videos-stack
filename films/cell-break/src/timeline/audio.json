@@ -1,0 +1,85 @@
+{
+ "voice": false,
+ "voiceGain": 0,
+ "beds": [
+  {
+   "name": "bgm_trailer",
+   "from": 6.73,
+   "to": 30.068,
+   "gain": -4.9,
+   "fadeIn": 2.0,
+   "fadeOut": 0.3,
+   "music": true,
+   "try": [
+    "bgm_drone",
+    "bgm_tension"
+   ]
+  },
+  {
+   "name": "bgm_drone",
+   "from": 71.539,
+   "to": 93.908,
+   "gain": -20.8,
+   "fadeIn": 4,
+   "fadeOut": 0.4,
+   "music": true
+  },
+  {
+   "name": "bgm_drone",
+   "from": 112.158,
+   "to": 149.558,
+   "gain": -18.8,
+   "fadeIn": 2,
+   "fadeOut": 0.4,
+   "music": true
+  },
+  {
+   "name": "bgm_drone",
+   "from": 158.558,
+   "to": 194.958,
+   "gain": -20.8,
+   "fadeIn": 3,
+   "fadeOut": 2,
+   "music": true
+  },
+  {
+   "name": "bgm_trailer",
+   "from": 194.958,
+   "to": 251.886,
+   "gain": -6.9,
+   "fadeIn": 2,
+   "fadeOut": 0.4,
+   "music": true
+  },
+  {
+   "name": "bgm_trailer",
+   "from": 252.286,
+   "to": 265.62,
+   "gain": -6.9,
+   "fadeIn": 1.2,
+   "fadeOut": 1.5,
+   "music": true
+  },
+  {
+   "name": "bgm_tension",
+   "from": 265.62,
+   "to": 303.317,
+   "gain": -11.2,
+   "fadeIn": 2,
+   "fadeOut": 0.5,
+   "music": true
+  },
+  {
+   "name": "bgm_drone",
+   "from": 323.588,
+   "to": 344.646,
+   "gain": -22.8,
+   "fadeIn": 5,
+   "fadeOut": 3,
+   "music": true
+  }
+ ],
+ "sfx": [],
+ "lufs": -14,
+ "drive": 0
+}

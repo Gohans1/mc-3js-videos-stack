@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Minecraft actors for films: MCprep's player rig, poses and IK (player), mocap clips retargeted onto it (mocap, clips), the performance keys (perform), planted feet (feet), things carried in the hands (carry), mobs, any of the game's 209 through MineRender (mob)",
   "scripts": {
     "test": "bun test"
   },
-  "description": "Minecraft actors for films: MCprep's player rig, poses and IK (player), mocap clips retargeted onto it (mocap, clips), the performance keys (perform), planted feet (feet), things carried in the hands (carry), mobs (silverfish)",
   "exports": {
     "./player": "./src/player.ts",
     "./mocap": "./src/mocap.ts",
@@ -15,11 +15,12 @@
     "./perform": "./src/perform.ts",
     "./feet": "./src/feet.ts",
     "./carry": "./src/carry.ts",
-    "./silverfish": "./src/silverfish.ts",
+    "./mob": "./src/mob.ts",
     "./checks": "./src/checks.ts"
   },
   "dependencies": {
-    "film-kit": "workspace:*"
+    "film-kit": "workspace:*",
+    "minerender": "2.1.0-beta.8"
   },
   "peerDependencies": {
     "three": "0.186.1"

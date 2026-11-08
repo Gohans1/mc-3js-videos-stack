@@ -1,0 +1,503 @@
+{
+ "shutter": {
+  "id": 431588,
+  "title": "iPhone Camera Capture.wav",
+  "by": "",
+  "url": "https://freesound.org/s/431588/",
+  "license": "CC0 1.0",
+  "for": "hook 0:00-0:02: the camera shutter on every flash cut (iPhone capture)"
+ },
+ "hit": {
+  "id": 177242,
+  "title": "Cinematic Impact",
+  "by": "",
+  "url": "https://freesound.org/s/177242/",
+  "license": "CC0 1.0",
+  "for": "hook flash cuts: the bass hit under each cut (Cinematic Impact)"
+ },
+ "hit_hard": {
+  "id": 328448,
+  "title": "Hard Cinematic Hit",
+  "by": "",
+  "url": "https://freesound.org/s/328448/",
+  "license": "CC0 1.0",
+  "for": "flash hit option (Hard Cinematic Hit)"
+ },
+ "paper": {
+  "id": 197179,
+  "title": "Paper Crumpled 001",
+  "by": "",
+  "url": "https://freesound.org/s/197179/",
+  "license": "CC0 1.0",
+  "for": "F1: the answer scrap crumpling under his finger"
+ },
+ "zap": {
+  "id": 512471,
+  "title": "Electric zap.wav",
+  "by": "",
+  "url": "https://freesound.org/s/512471/",
+  "license": "CC0 1.0",
+  "for": "F2: the CCTV light flaring into the lens (electric zap)"
+ },
+ "concrete": {
+  "id": 755522,
+  "title": "breaking_concrete",
+  "by": "",
+  "url": "https://freesound.org/s/755522/",
+  "license": "CC0 1.0",
+  "for": "F3: the hammer through cell 0411's wall (breaking_concrete)"
+ },
+ "sparks": {
+  "id": 396470,
+  "title": "Electric Sparks.wav",
+  "by": "",
+  "url": "https://freesound.org/s/396470/",
+  "license": "CC0 1.0",
+  "for": "F3/F4: sparks off the stone and the rail"
+ },
+ "cart": {
+  "id": 435711,
+  "title": "orecart_move_1.wav",
+  "by": "",
+  "url": "https://freesound.org/s/435711/",
+  "license": "CC0 1.0",
+  "for": "F4: minecart wheels grinding on the rail (orecart_move_1)"
+ },
+ "glitch": {
+  "id": 534695,
+  "title": "TV glitch",
+  "by": "",
+  "url": "https://freesound.org/s/534695/",
+  "license": "CC0 1.0",
+  "for": "F5: the CRT glitching to OVERRIDE: ROOT ACCESS (TV glitch)"
+ },
+ "lever": {
+  "id": 404049,
+  "title": "Breaker-1.wav",
+  "by": "",
+  "url": "https://freesound.org/s/404049/",
+  "license": "CC0 1.0",
+  "for": "F6: the red master lever pulled down (Breaker-1)"
+ },
+ "boom": {
+  "id": 189779,
+  "title": "Big Boom",
+  "by": "",
+  "url": "https://freesound.org/s/189779/",
+  "license": "CC0 1.0",
+  "for": "F6: the boom before the sound cuts (Big Boom)"
+ },
+ "whoosh": {
+  "id": 807976,
+  "title": "bass rumble - deepwhoosh 1",
+  "by": "",
+  "url": "https://freesound.org/s/807976/",
+  "license": "CC0 1.0",
+  "for": "0:07-0:12: the camera whipped back through the bars (deep whoosh)"
+ },
+ "whoosh_air": {
+  "id": 683101,
+  "title": "quick woosh",
+  "by": "",
+  "url": "https://freesound.org/s/683101/",
+  "license": "CC0 1.0",
+  "for": "whoosh option"
+ },
+ "title_hit": {
+  "id": 671306,
+  "title": "Cinematic Hit Bass (title)",
+  "by": "",
+  "url": "https://freesound.org/s/671306/",
+  "license": "CC0 1.0",
+  "for": "the title card's sub hit (Cinematic Hit Bass)"
+ },
+ "siren": {
+  "id": 45933,
+  "title": "air_raid.R.wav",
+  "by": "",
+  "url": "https://freesound.org/s/45933/",
+  "license": "CC0 1.0",
+  "for": "the tower's siren as every window turns red (air_raid)"
+ },
+ "siren_alarm": {
+  "id": 96973,
+  "title": "military_alarm.wav",
+  "by": "",
+  "url": "https://freesound.org/s/96973/",
+  "license": "CC0 1.0",
+  "for": "siren option (military_alarm)"
+ },
+ "drone": {
+  "id": 195137,
+  "title": "Cavernous Drone",
+  "by": "",
+  "url": "https://freesound.org/s/195137/",
+  "license": "CC0 1.0",
+  "for": "the tower's hollow air under the wide shot (Cavernous Drone)"
+ },
+ "bgm_trailer": {
+  "id": 402815,
+  "title": "Background for a Teaser Trailer",
+  "by": "",
+  "url": "https://freesound.org/s/402815/",
+  "license": "CC0 1.0",
+  "for": "BGM: dark teaser-trailer bed under the narration (Background for a Teaser Trailer)"
+ },
+ "bgm_tension": {
+  "id": 231562,
+  "title": "Dark Piano Tension",
+  "by": "",
+  "url": "https://freesound.org/s/231562/",
+  "license": "CC0 1.0",
+  "for": "BGM option: dark piano tension"
+ },
+ "bgm_drone": {
+  "id": 332246,
+  "title": "Drone - 15.12.2015",
+  "by": "",
+  "url": "https://freesound.org/s/332246/",
+  "license": "CC0 1.0",
+  "for": "BGM option: a plain drone (Drone - 15.12.2015)"
+ },
+ "vo_hook_kathryn": {
+  "title": "narration hook_kathryn (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_hook_madison": {
+  "title": "narration hook_madison (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_hook_riley": {
+  "title": "narration hook_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_pa_clara": {
+  "title": "narration pa_clara (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_pa_sigma": {
+  "title": "narration pa_sigma (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s01_riley": {
+  "title": "narration s01_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s01_seff": {
+  "title": "narration s01_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s02_riley": {
+  "title": "narration s02_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s02_seff": {
+  "title": "narration s02_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s03_riley": {
+  "title": "narration s03_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s03_seff": {
+  "title": "narration s03_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s05_riley": {
+  "title": "narration s05_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s05_seff": {
+  "title": "narration s05_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s06_riley": {
+  "title": "narration s06_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s06_seff": {
+  "title": "narration s06_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s07_riley": {
+  "title": "narration s07_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s07_seff": {
+  "title": "narration s07_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s08_riley": {
+  "title": "narration s08_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s08_seff": {
+  "title": "narration s08_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s09_riley": {
+  "title": "narration s09_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s09_seff": {
+  "title": "narration s09_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s10_riley": {
+  "title": "narration s10_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s10_seff": {
+  "title": "narration s10_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s11_riley": {
+  "title": "narration s11_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s11_seff": {
+  "title": "narration s11_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s12_riley": {
+  "title": "narration s12_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s12_seff": {
+  "title": "narration s12_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s13_riley": {
+  "title": "narration s13_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s13_seff": {
+  "title": "narration s13_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s14_riley": {
+  "title": "narration s14_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s14_seff": {
+  "title": "narration s14_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s15_riley": {
+  "title": "narration s15_riley (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "vo_s15_seff": {
+  "title": "narration s15_seff (ElevenLabs v4 via GenVoice)",
+  "url": "",
+  "license": "own"
+ },
+ "room_hum": {
+  "id": 671455,
+  "title": "Bedroom Room Tone Electric Lamp Hum",
+  "by": "",
+  "url": "https://freesound.org/s/671455/",
+  "license": "CC0 1.0",
+  "for": "the cell's lamp hum under every room scene (Bedroom Room Tone Electric Lamp Hum)"
+ },
+ "drip": {
+  "id": 348022,
+  "title": "Water Drop 01",
+  "by": "",
+  "url": "https://freesound.org/s/348022/",
+  "license": "CC0 1.0",
+  "for": "water dripping in the cell's corner"
+ },
+ "clack": {
+  "id": 257357,
+  "title": "Button click.wav",
+  "by": "",
+  "url": "https://freesound.org/s/257357/",
+  "license": "CC0 1.0",
+  "for": "a book dropping into the mailbox shelf (Button click)"
+ },
+ "door_kick": {
+  "id": 209772,
+  "title": "Metal Boom",
+  "by": "",
+  "url": "https://freesound.org/s/209772/",
+  "license": "CC0 1.0",
+  "for": "his kick on the steel door (Metal Boom)"
+ },
+ "button": {
+  "id": 257357,
+  "title": "Button click.wav",
+  "by": "",
+  "url": "https://freesound.org/s/257357/",
+  "license": "CC0 1.0",
+  "for": "the dead call button by the door"
+ },
+ "typing": {
+  "id": 644842,
+  "title": "Old Keyboard Typing 8.wav",
+  "by": "",
+  "url": "https://freesound.org/s/644842/",
+  "license": "CC0 1.0",
+  "for": "a few keys on the old keyboard (Old Keyboard Typing 8)"
+ },
+ "book_drop": {
+  "id": 500283,
+  "title": "Box Falling Down",
+  "by": "",
+  "url": "https://freesound.org/s/500283/",
+  "license": "CC0 1.0",
+  "for": "a book thrown on the stone (Box Falling Down)"
+ },
+ "heartbeat": {
+  "id": 249716,
+  "title": "SLOW HEARTBEAT",
+  "by": "",
+  "url": "https://freesound.org/s/249716/",
+  "license": "CC0 1.0",
+  "for": "his heartbeat at the warning page (SLOW HEARTBEAT)"
+ },
+ "riser": {
+  "id": 541029,
+  "title": "Very low frequency impact.wav",
+  "by": "",
+  "url": "https://freesound.org/s/541029/",
+  "license": "CC0 1.0",
+  "for": "a very low thud under reveals (Very low frequency impact)"
+ },
+ "wind": {
+  "id": 397091,
+  "title": "Soft Tonal Wind_01",
+  "by": "",
+  "url": "https://freesound.org/s/397091/",
+  "license": "CC0 1.0",
+  "for": "the night outside and the tower's void (Soft Tonal Wind_01)"
+ },
+ "chains": {
+  "id": 151271,
+  "title": "Metal Lever 1.aif",
+  "by": "",
+  "url": "https://freesound.org/s/151271/",
+  "license": "CC0 1.0",
+  "for": "the drawbridge chains (Metal Lever)"
+ },
+ "crowd_steps": {
+  "id": 813622,
+  "title": "Footsteps - Stone, Rock, Concrete, Cement",
+  "by": "",
+  "url": "https://freesound.org/s/813622/",
+  "license": "CC0 1.0",
+  "for": "the ghost army's footsteps (Footsteps - Stone)"
+ },
+ "glass_break": {
+  "id": 132929,
+  "title": "Explosion and Rubble/Debris",
+  "by": "",
+  "url": "https://freesound.org/s/132929/",
+  "license": "CC0 1.0",
+  "for": "the CRT bursting (explosion + rubble)"
+ },
+ "page_turn": {
+  "id": 136778,
+  "title": "Page Turn",
+  "by": "",
+  "url": "https://freesound.org/s/136778/",
+  "license": "CC0 1.0",
+  "for": "a page turned (Page Turn)"
+ },
+ "paper_burst": {
+  "id": 389437,
+  "title": "Papers Tossed into Air; falling 1.wav",
+  "by": "",
+  "url": "https://freesound.org/s/389437/",
+  "license": "CC0 1.0",
+  "for": "pages blown into the air (Papers Tossed into Air)"
+ },
+ "tnt_boom": {
+  "id": 587194,
+  "title": "explosion_big_01.ogg",
+  "by": "",
+  "url": "https://freesound.org/s/587194/",
+  "license": "CC0 1.0",
+  "for": "hook F7: the TNT under his floor goes off (explosion_big_01)"
+ },
+ "tnt_boom_alt": {
+  "id": 523089,
+  "title": "Explosion 1",
+  "by": "",
+  "url": "https://freesound.org/s/523089/",
+  "license": "CC0 1.0",
+  "for": "TNT boom option (Explosion 1)"
+ },
+ "fuse": {
+  "id": 237407,
+  "title": "Match Sizzle 02",
+  "by": "",
+  "url": "https://freesound.org/s/237407/",
+  "license": "CC0 1.0",
+  "for": "hook F7: the TNT's fuse hiss as the floor lifts (Match Sizzle 02)"
+ },
+ "pry_creak": {
+  "id": 238891,
+  "title": "FX_NOISY_METAL_DOOR_OPEN.wav",
+  "by": "",
+  "url": "https://freesound.org/s/238891/",
+  "license": "CC0 1.0",
+  "for": "s07: the crowbar prying the service box's iron lid (FX_NOISY_METAL_DOOR_OPEN)"
+ },
+ "lid_clank": {
+  "id": 614062,
+  "title": "Heavy Metal Impact",
+  "by": "",
+  "url": "https://freesound.org/s/614062/",
+  "license": "CC0 1.0",
+  "for": "s07: the iron lid slapping on the stone floor (Heavy Metal Impact)"
+ },
+ "lid_clank_alt": {
+  "id": 176226,
+  "title": "Clanks.wav",
+  "by": "",
+  "url": "https://freesound.org/s/176226/",
+  "license": "CC0 1.0",
+  "for": "lid clank option (Clanks)"
+ },
+ "buzz": {
+  "id": 556717,
+  "title": "Electricity Sound",
+  "by": "",
+  "url": "https://freesound.org/s/556717/",
+  "license": "CC0 1.0",
+  "for": "s07-s08: the red wires buzzing in the open service box (Electricity Sound)"
+ }
+}

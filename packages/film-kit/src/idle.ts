@@ -29,13 +29,13 @@ import { FREEZE } from "./freeze";
 import { canonical, unwrap, type Pose } from "./pose";
 import { SIGH, sighLength, sighLungs } from "./sigh";
 import type { Yawns } from "./yawn";
+import { hash } from "./hash";
 
 const HZ = 60;
 const SIGH_OUT = SIGH.first + SIGH.second + SIGH.hold;
 const UPPER = ["body", "chest", "head", "uaL", "uaR", "laL", "laR"];
 // share of the work a degree a second of each part costs (roughly its mass about the hips; the arms swing nearly free)
 const MASS: Record<string, number> = { body: 1, chest: 0.8, head: 0.3, uaL: 0.15, uaR: 0.15, laL: 0.08, laR: 0.08 };
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 

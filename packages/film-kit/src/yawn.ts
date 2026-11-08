@@ -11,6 +11,7 @@
 //   yawnTimes(end, drowsy) places yawns by themselves while he is sleepy
 // Over a mocap clip that is itself a yawn (Mixamo's Big_Yawn_While_Standing), mask yawnPose and keep the face only.
 import { GASP } from "./idle";
+import { hash } from "./hash";
 
 // how long a fright's breath (idle.ts gasp: in, held, let go, back) takes at strength k
 const gaspLength = (k: number) => { const m = ([a, b]: number[]) => a + (b - a) * Math.min(1, Math.max(0, k)); return GASP.start + GASP.inhale + m(GASP.hold) + m(GASP.relief) + GASP.back; };
@@ -70,7 +71,6 @@ export function yawnPose(y: YawnState | null) {
   return { root: {}, head: [-y.neck, 0, 0], chest: [-0.25 * y.neck, 0, 0] };
 }
 
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 // yawns that come by themselves while he is sleepy (drowsy(t) over 0.3): ~68 s apart, uneven; none while busy(t)
 export function yawnTimes(end: number, drowsy: (t: number) => number, { seed = 5, from = 0, busy = (_t: number) => false } = {}) {
   const out: { t: number; k: number }[] = [];

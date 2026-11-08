@@ -38,13 +38,30 @@ import scrapS from "../pack/assets/gohans/blockstates/paper_scrap.json";
 import scrapM from "../pack/assets/gohans/models/block/paper_scrap.json";
 import domeS from "../pack/assets/gohans/blockstates/cctv_dome.json";
 import domeM from "../pack/assets/gohans/models/block/cctv_dome.json";
+import ccS from "../pack/assets/gohans/blockstates/cctv_camera.json";
+import ccM from "../pack/assets/gohans/models/block/cctv_camera.json";
+import cmS from "../pack/assets/gohans/blockstates/cctv_mount.json";
+import cmM from "../pack/assets/gohans/models/block/cctv_mount.json";
+import tcS from "../pack/assets/gohans/blockstates/trapped_chest.json";
+import tcM from "../pack/assets/gohans/models/block/trapped_chest.json";
+import tlS from "../pack/assets/gohans/blockstates/trapped_chest_lid.json";
+import tlM from "../pack/assets/gohans/models/block/trapped_chest_lid.json";
+import cartS from "../pack/assets/gohans/blockstates/chest_minecart.json";
+import cartM from "../pack/assets/gohans/models/block/chest_minecart.json";
+import slotS from "../pack/assets/gohans/blockstates/submit_slot.json";
+import slotM from "../pack/assets/gohans/models/block/submit_slot.json";
+import printerS from "../pack/assets/gohans/blockstates/trace_printer.json";
+import printerM from "../pack/assets/gohans/models/block/trace_printer.json";
+import booksS from "../pack/assets/gohans/blockstates/book_pulled.json";
+import booksM from "../pack/assets/gohans/models/block/book_pulled.json";
 
 const MODELS = {
   computer: [computerS, computerM], computer_beige: [beigeS, beigeM], computer_black: [blackS, blackM], computer_steel: [steelS, steelM],
   computer_keys: [computerKS, computerKM], computer_beige_keys: [beigeKS, beigeKM], computer_black_keys: [blackKS, blackKM], computer_steel_keys: [steelKS, steelKM],
   iron_bed: [bedS, bedM], file_cabinet: [cabinetS, cabinetM], file_drawer: [drawerS, drawerM],
   folder_0: [folder0S, folder0M], folder_1: [folder1S, folder1M], folder_2: [folder2S, folder2M], sheet: [sheetS, sheetM],
-  paper_scrap: [scrapS, scrapM], cctv_dome: [domeS, domeM],
+  paper_scrap: [scrapS, scrapM], cctv_dome: [domeS, domeM], cctv_camera: [ccS, ccM], cctv_mount: [cmS, cmM], trapped_chest: [tcS, tcM], trapped_chest_lid: [tlS, tlM], chest_minecart: [cartS, cartM],
+  submit_slot: [slotS, slotM], trace_printer: [printerS, printerM], book_pulled: [booksS, booksM],
 };
 
 /** A block-model-renderer source serving block models from memory: { "assets/<ns>/...json": parsed JSON }. */

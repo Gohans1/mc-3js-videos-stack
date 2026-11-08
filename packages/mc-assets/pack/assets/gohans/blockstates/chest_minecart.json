@@ -1,0 +1,19 @@
+{
+ "variants": {
+  "facing=north": {
+   "model": "gohans:block/chest_minecart"
+  },
+  "facing=east": {
+   "model": "gohans:block/chest_minecart",
+   "y": 90
+  },
+  "facing=south": {
+   "model": "gohans:block/chest_minecart",
+   "y": 180
+  },
+  "facing=west": {
+   "model": "gohans:block/chest_minecart",
+   "y": 270
+  }
+ }
+}

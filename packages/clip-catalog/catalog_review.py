@@ -61,7 +61,7 @@ def caption(r):
 def pages(missing=None):
     """the pages: clips nobody has reviewed, captioned with their measured tags; or, with `missing`, reviewed clips whose
     notes lack that field, captioned with the notes so far"""
-    rows = {json.loads(l)["ref"]: json.loads(l) for f in sorted(CAT.glob("*.jsonl")) for l in f.read_text(encoding="utf-8").splitlines() if l.strip()}
+    rows = {json.loads(l)["ref"]: json.loads(l) for f in sorted(CAT.glob("*.jsonl")) if not f.name.startswith("sweep_") for l in f.read_text(encoding="utf-8").splitlines() if l.strip()}
     seen = load_review()
     want = (lambda ref: ref in seen and missing not in seen[ref]) if missing else (lambda ref: ref not in seen)
     refs = [ref for ref in rows if want(ref) and (SHEETS / f"{ref.replace('/', '__')}.jpg").exists()]

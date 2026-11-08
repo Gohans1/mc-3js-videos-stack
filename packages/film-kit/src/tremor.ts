@@ -7,6 +7,7 @@
 //   const shake = tremor((t) => fear level 0..1);   pose = addPose(pose, shake(t)) after the arm IK, last
 // It adds small turns to the upper arms and forearms, so it works the same over keyed arms, IK hands and mocap clips.
 // At 30 fps an 8-10 Hz shake is sampled 3-4 times a cycle and reads as a jitter: that is also how a camera sees one.
+import { hash } from "./hash";
 export const TREMOR = {
   forearm: 1.4, arm: 0.6, // deg at full fear, roughly the peak swing
   fine: [6.3, 7.4, 8.2, 8.9, 9.7, 11.3, 12.6], // Hz, weighted to a hump at 8-9
@@ -15,7 +16,6 @@ export const TREMOR = {
 };
 const WEIGHT = [0.5, 0.75, 1, 1, 0.8, 0.5, 0.35];
 
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
 type Pose = Record<string, number[]>;
 export function tremor(level: (t: number) => number, { seed = 3 } = {}) {

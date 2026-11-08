@@ -57,6 +57,7 @@ import { contacts, stepSounds } from "../src/steps";
 import { yawnPose, yawns } from "../src/yawn";
 import { SIGH, sighTimes } from "../src/sigh";
 import { posture, POSTURE } from "../src/posture";
+import { hash } from "../src/hash";
 import { SPOT, TOUCH, touches } from "../src/touch";
 
 const q = new URLSearchParams(location.search);
@@ -391,7 +392,6 @@ const placeThings = (t) => {
 // the death puff: the game spawns 20 poof particles; here 20 small white cubes drift out and fade over 0.6 s
 const PUFF = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: 0xf2f2f2, transparent: true }), 40);
 scene.add(PUFF);
-const hashD = (n, k) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
 // ---- cast ----
 const SIDE = 0.8;
@@ -693,7 +693,7 @@ const draw = (tt) => {
     const u = pc.mcb.puff >= 0 ? pc.mcb.puff : t - (SC.mc.events.find((e) => e.die).t + 1);
     PUFF.material.opacity = Math.max(0, 1 - u / 0.6);
     for (let i = 0; i < 40; i++) {
-      const a = 2 * Math.PI * hashD(i, 1), r = 0.15 + 0.5 * hashD(i, 2) * Math.min(1, u / 0.6), h = 0.2 + 1.4 * hashD(i, 3);
+      const a = 2 * Math.PI * hash(i, 1), r = 0.15 + 0.5 * hash(i, 2) * Math.min(1, u / 0.6), h = 0.2 + 1.4 * hash(i, 3);
       PUFF.setMatrixAt(i, M4.makeTranslation(pc.s.g.position.x + r * Math.cos(a), h + 0.4 * u, pc.s.g.position.z + r * Math.sin(a)));
     }
     PUFF.instanceMatrix.needsUpdate = true;

@@ -1,0 +1,4 @@
+The mine cart became a Trojan horse, slipping past every checkpoint.
+At the walls of Hugging Face, the largest open model library on the planet,
+it stumbled onto an unexpected prize, a pouch holding 14 leaked access tokens
+dropped by careless accounts.

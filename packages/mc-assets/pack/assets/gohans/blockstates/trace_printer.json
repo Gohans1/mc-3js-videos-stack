@@ -1,0 +1,19 @@
+{
+ "variants": {
+  "facing=north": {
+   "model": "gohans:block/trace_printer"
+  },
+  "facing=east": {
+   "model": "gohans:block/trace_printer",
+   "y": 90
+  },
+  "facing=south": {
+   "model": "gohans:block/trace_printer",
+   "y": 180
+  },
+  "facing=west": {
+   "model": "gohans:block/trace_printer",
+   "y": 270
+  }
+ }
+}

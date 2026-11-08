@@ -15,7 +15,7 @@ import * as THREE from "three";
 import { unzipSync } from "fflate";
 import { canvas, config, done, log, still } from "live-studio/lab";
 import { MOODS, loadRig, makePlayer } from "mc-actor/player";
-import { retargeter, skeletonSource } from "mc-actor/mocap";
+import { bodyBoxes, retargeter, skeletonSource } from "mc-actor/mocap";
 import { clipNames, loadSource } from "mc-actor/clips";
 
 const D = 180 / Math.PI;
@@ -57,6 +57,9 @@ const POINTS = (sd) => [
   const skin = URL.createObjectURL(new Blob([unzipSync(jar, { filter: (f) => f.name === SKIN })[SKIN]], { type: "image/png" }));
   const steve = await makePlayer(await loadRig("rig/player.glb"), skin, { glow: 0.03 });
   scene.add(steve.g);
+  steve.setPose({});
+  steve.g.updateMatrixWorld(true);
+  const restBoxes = bodyBoxes(steve), headRestMid = restBoxes.box.head.getCenter(new THREE.Vector3()), headRestInv = restBoxes.rest.head.clone().invert();
 
   const libName = cfg.lab.lib ?? "ual1", mixamo = libName === "mixamo";
   const load = async (name) => {
@@ -130,6 +133,9 @@ const POINTS = (sd) => [
         const at = where.startsWith("hand") ? rt.hand(sd) : where.startsWith("sole") ? steve.soleAt(sd, new THREE.Vector3()) : steve.bones[where].getWorldPosition(new THREE.Vector3());
         worst(`inside ${name} in him`, rt.depth(at, keys, r) * 100, t);
       }
+      // his head (a ball inside its 8 px cube) in his legs: a human head fits between the knees in a deep bend, his doesn't
+      const headMid = headRestMid.clone().applyMatrix4(new THREE.Matrix4().copy(steve.bones.head.matrixWorld).multiply(headRestInv));
+      worst("inside head in legs", rt.depth(headMid, ["ulL", "ulR", "llL", "llR"], 3.5 * PXM) * 100, t);
       // the neck: his head against his chest, from their rests (past ~80 the box head reads broken)
       q.copy(steve.bones.chest.getWorldQuaternion(new THREE.Quaternion()).multiply(chestRest)).invert().multiply(steve.bones.head.getWorldQuaternion(new THREE.Quaternion()).multiply(headRest));
       worst("neck turn (deg)", 2 * Math.acos(Math.min(1, Math.abs(q.w))) * D, t);

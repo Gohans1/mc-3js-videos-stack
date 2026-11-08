@@ -1,0 +1,11 @@
+[
+ {
+  "jar": "nhatjs-furniture-mod.jar",
+  "namespace": "js_furniture_mod",
+  "blocks": [
+   "black_chair"
+  ],
+  "licence": "MIT",
+  "page": "https://modrinth.com/mod/nhatjs-furniture-mod"
+ }
+]

@@ -1,4 +1,5 @@
-"""Generates the narration takes listed in src/edit.json `takes` with ElevenLabs v4 through GenVoice, Seff Echo voice.
+"""Generates the narration takes listed in src/edit.json `takes` with ElevenLabs v4 through GenVoice: Seff Echo unless a take
+names its own `voice` (a voice id) and `stability`.
   python ../../scripts/voice/gen.py            all missing takes
   python ../../scripts/voice/gen.py 02 03      redo just these
   python ../../scripts/voice/gen.py 02 --try   a candidate take in voice/try/02_N.mp3, keeping the current one
@@ -16,7 +17,7 @@ NARRATOR = "ZaZosYpkIGmSqOwAlfnk"  # Seff Echo - Cinematic Storyteller (the stac
 TAKES, TRY = ROOT / "takes", ROOT / "try"
 TAKES.mkdir(exist_ok=True)
 TRY.mkdir(exist_ok=True)
-takes = {k["id"]: k["text"] for k in json.loads((ROOT.parent / "src/edit.json").read_text(encoding="utf8"))["takes"]}
+takes = {k["id"]: k for k in json.loads((ROOT.parent / "src/edit.json").read_text(encoding="utf8"))["takes"]}
 trying = "--try" in sys.argv
 names = [a for a in sys.argv[1:] if not a.startswith("--")]
 want = names or [k for k in takes if not (TAKES / f"{k}.mp3").exists()]
@@ -32,7 +33,8 @@ def out(k):
 
 
 def one(k):
-    return k, tts(NARRATOR, takes[k], str(out(k)), "eleven_v4", 1.0, 0.5)
+    t = takes[k]
+    return k, tts(t.get("voice", NARRATOR), t["text"], str(out(k)), "eleven_v4", 1.0, t.get("stability", 0.5))
 
 
 with ThreadPoolExecutor(4) as pool:

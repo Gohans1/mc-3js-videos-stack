@@ -1,0 +1,243 @@
+{
+ "textures": {
+  "iron": "minecraft:block/iron_block",
+  "dark": "minecraft:block/black_concrete",
+  "bezel": "minecraft:block/gray_concrete",
+  "green": "minecraft:block/lime_concrete",
+  "red": "minecraft:block/red_concrete",
+  "particle": "minecraft:block/iron_block"
+ },
+ "elements": [
+  {
+   "name": "body",
+   "from": [
+    3,
+    0,
+    5
+   ],
+   "to": [
+    13,
+    7,
+    14
+   ],
+   "faces": {
+    "north": {
+     "texture": "#iron"
+    },
+    "south": {
+     "texture": "#iron"
+    },
+    "east": {
+     "texture": "#iron"
+    },
+    "west": {
+     "texture": "#iron"
+    },
+    "up": {
+     "texture": "#iron"
+    },
+    "down": {
+     "texture": "#iron"
+    }
+   }
+  },
+  {
+   "name": "lip",
+   "from": [
+    4,
+    3.2,
+    4.2
+   ],
+   "to": [
+    12,
+    3.6,
+    5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#iron"
+    },
+    "south": {
+     "texture": "#iron"
+    },
+    "east": {
+     "texture": "#iron"
+    },
+    "west": {
+     "texture": "#iron"
+    },
+    "up": {
+     "texture": "#iron"
+    },
+    "down": {
+     "texture": "#iron"
+    }
+   }
+  },
+  {
+   "name": "slit",
+   "from": [
+    4.5,
+    3.6,
+    4.9
+   ],
+   "to": [
+    11.5,
+    4.3,
+    5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#dark"
+    },
+    "south": {
+     "texture": "#dark"
+    },
+    "east": {
+     "texture": "#dark"
+    },
+    "west": {
+     "texture": "#dark"
+    },
+    "up": {
+     "texture": "#dark"
+    },
+    "down": {
+     "texture": "#dark"
+    }
+   }
+  },
+  {
+   "name": "green_bezel",
+   "from": [
+    4,
+    7,
+    5.5
+   ],
+   "to": [
+    7,
+    7.4,
+    8.5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#bezel"
+    },
+    "south": {
+     "texture": "#bezel"
+    },
+    "east": {
+     "texture": "#bezel"
+    },
+    "west": {
+     "texture": "#bezel"
+    },
+    "up": {
+     "texture": "#bezel"
+    },
+    "down": {
+     "texture": "#bezel"
+    }
+   }
+  },
+  {
+   "name": "green_lamp",
+   "from": [
+    4.5,
+    7.4,
+    6
+   ],
+   "to": [
+    6.5,
+    8.4,
+    8
+   ],
+   "faces": {
+    "north": {
+     "texture": "#green"
+    },
+    "south": {
+     "texture": "#green"
+    },
+    "east": {
+     "texture": "#green"
+    },
+    "west": {
+     "texture": "#green"
+    },
+    "up": {
+     "texture": "#green"
+    },
+    "down": {
+     "texture": "#green"
+    }
+   }
+  },
+  {
+   "name": "red_bezel",
+   "from": [
+    9,
+    7,
+    5.5
+   ],
+   "to": [
+    12,
+    7.4,
+    8.5
+   ],
+   "faces": {
+    "north": {
+     "texture": "#bezel"
+    },
+    "south": {
+     "texture": "#bezel"
+    },
+    "east": {
+     "texture": "#bezel"
+    },
+    "west": {
+     "texture": "#bezel"
+    },
+    "up": {
+     "texture": "#bezel"
+    },
+    "down": {
+     "texture": "#bezel"
+    }
+   }
+  },
+  {
+   "name": "red_lamp",
+   "from": [
+    9.5,
+    7.4,
+    6
+   ],
+   "to": [
+    11.5,
+    8.4,
+    8
+   ],
+   "faces": {
+    "north": {
+     "texture": "#red"
+    },
+    "south": {
+     "texture": "#red"
+    },
+    "east": {
+     "texture": "#red"
+    },
+    "west": {
+     "texture": "#red"
+    },
+    "up": {
+     "texture": "#red"
+    },
+    "down": {
+     "texture": "#red"
+    }
+   }
+  }
+ ]
+}

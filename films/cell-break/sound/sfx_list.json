@@ -1,0 +1,190 @@
+{
+ "shutter": {
+  "id": 431588,
+  "for": "hook 0:00-0:02: the camera shutter on every flash cut (iPhone capture)"
+ },
+ "hit": {
+  "id": 177242,
+  "keep": 3.0,
+  "for": "hook flash cuts: the bass hit under each cut (Cinematic Impact)"
+ },
+ "hit_hard": {
+  "id": 328448,
+  "for": "flash hit option (Hard Cinematic Hit)"
+ },
+ "paper": {
+  "id": 197179,
+  "for": "F1: the answer scrap crumpling under his finger"
+ },
+ "zap": {
+  "id": 512471,
+  "for": "F2: the CCTV light flaring into the lens (electric zap)"
+ },
+ "concrete": {
+  "id": 755522,
+  "keep": 2.0,
+  "for": "F3: the hammer through cell 0411's wall (breaking_concrete)"
+ },
+ "sparks": {
+  "id": 396470,
+  "keep": 2.0,
+  "for": "F3/F4: sparks off the stone and the rail"
+ },
+ "cart": {
+  "id": 435711,
+  "for": "F4: minecart wheels grinding on the rail (orecart_move_1)"
+ },
+ "glitch": {
+  "id": 534695,
+  "keep": 1.5,
+  "for": "F5: the CRT glitching to OVERRIDE: ROOT ACCESS (TV glitch)"
+ },
+ "lever": {
+  "id": 404049,
+  "for": "F6: the red master lever pulled down (Breaker-1)"
+ },
+ "boom": {
+  "id": 189779,
+  "for": "F6: the boom before the sound cuts (Big Boom)"
+ },
+ "whoosh": {
+  "id": 807976,
+  "for": "0:07-0:12: the camera whipped back through the bars (deep whoosh)"
+ },
+ "whoosh_air": {
+  "id": 683101,
+  "for": "whoosh option"
+ },
+ "title_hit": {
+  "id": 671306,
+  "for": "the title card's sub hit (Cinematic Hit Bass)"
+ },
+ "siren": {
+  "id": 45933,
+  "keep": 12.0,
+  "bed": true,
+  "for": "the tower's siren as every window turns red (air_raid)"
+ },
+ "siren_alarm": {
+  "id": 96973,
+  "bed": true,
+  "for": "siren option (military_alarm)"
+ },
+ "drone": {
+  "id": 195137,
+  "keep": 40.0,
+  "bed": true,
+  "for": "the tower's hollow air under the wide shot (Cavernous Drone)"
+ },
+ "bgm_trailer": {
+  "id": 402815,
+  "music": true,
+  "for": "BGM: dark teaser-trailer bed under the narration (Background for a Teaser Trailer)"
+ },
+ "bgm_tension": {
+  "id": 231562,
+  "music": true,
+  "for": "BGM option: dark piano tension",
+  "keep": null
+ },
+ "bgm_drone": {
+  "id": 332246,
+  "keep": 60.0,
+  "music": true,
+  "for": "BGM option: a plain drone (Drone - 15.12.2015)"
+ },
+ "room_hum": {
+  "id": 671455,
+  "keep": 30.0,
+  "bed": true,
+  "for": "the cell's lamp hum under every room scene (Bedroom Room Tone Electric Lamp Hum)"
+ },
+ "drip": {
+  "id": 348022,
+  "for": "water dripping in the cell's corner"
+ },
+ "clack": {
+  "id": 257357,
+  "for": "a book dropping into the mailbox shelf (Button click)"
+ },
+ "door_kick": {
+  "id": 209772,
+  "for": "his kick on the steel door (Metal Boom)"
+ },
+ "button": {
+  "id": 257357,
+  "for": "the dead call button by the door"
+ },
+ "typing": {
+  "id": 644842,
+  "for": "a few keys on the old keyboard (Old Keyboard Typing 8)"
+ },
+ "book_drop": {
+  "id": 500283,
+  "for": "a book thrown on the stone (Box Falling Down)"
+ },
+ "heartbeat": {
+  "id": 249716,
+  "bed": true,
+  "for": "his heartbeat at the warning page (SLOW HEARTBEAT)"
+ },
+ "riser": {
+  "id": 541029,
+  "for": "a very low thud under reveals (Very low frequency impact)"
+ },
+ "wind": {
+  "id": 397091,
+  "keep": 59.0,
+  "bed": true,
+  "for": "the night outside and the tower's void (Soft Tonal Wind_01)"
+ },
+ "chains": {
+  "id": 151271,
+  "for": "the drawbridge chains (Metal Lever)"
+ },
+ "crowd_steps": {
+  "id": 813622,
+  "for": "the ghost army's footsteps (Footsteps - Stone)"
+ },
+ "glass_break": {
+  "id": 132929,
+  "for": "the CRT bursting (explosion + rubble)"
+ },
+ "page_turn": {
+  "id": 136778,
+  "for": "a page turned (Page Turn)"
+ },
+ "paper_burst": {
+  "id": 389437,
+  "for": "pages blown into the air (Papers Tossed into Air)"
+ },
+ "tnt_boom": {
+  "id": 587194,
+  "for": "hook F7: the TNT under his floor goes off (explosion_big_01)"
+ },
+ "tnt_boom_alt": {
+  "id": 523089,
+  "for": "TNT boom option (Explosion 1)"
+ },
+ "fuse": {
+  "id": 237407,
+  "keep": 1.2,
+  "for": "hook F7: the TNT's fuse hiss as the floor lifts (Match Sizzle 02)"
+ },
+ "pry_creak": {
+  "id": 238891,
+  "for": "s07: the crowbar prying the service box's iron lid (FX_NOISY_METAL_DOOR_OPEN)"
+ },
+ "lid_clank": {
+  "id": 614062,
+  "for": "s07: the iron lid slapping on the stone floor (Heavy Metal Impact)"
+ },
+ "lid_clank_alt": {
+  "id": 176226,
+  "for": "lid clank option (Clanks)"
+ },
+ "buzz": {
+  "id": 556717,
+  "for": "s07-s08: the red wires buzzing in the open service box (Electricity Sound)"
+ }
+}

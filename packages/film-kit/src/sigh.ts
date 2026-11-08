@@ -8,6 +8,7 @@
 //   life.breath(t) === "sigh" while one runs; life.events: the sigh's breath out, for a sound
 // Breath only (chest, shoulders), so it rides on top of a mocap clip's body only where idle's breath is on (faded over
 // clips, as idle is); over a clip that is a sigh (Mixamo's Sighing_In_Relief) leave it out.
+import { hash } from "./hash";
 export const SIGH = {
   first: 1.4, // s, the normal breath in
   second: 0.7, // s, the breath on top of it
@@ -33,7 +34,6 @@ export function sighLungs(u: number, from: number, k = 1, o = SIGH) {
 }
 export const sighLength = (o = SIGH) => o.first + o.second + o.hold + o.out + o.pause;
 
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 // sighs that come by themselves: rate(t) an hour (SIGH.rate.rest, .relief), gaps uneven (exponential), never closer
 // than 20 s; none while busy(t)
 export function sighTimes(end: number, rate: (t: number) => number, { seed = 9, from = 0, busy = (_t: number) => false } = {}) {

@@ -4,6 +4,7 @@ disagrees, for a look with lab/clip.ts: a name can be wrong too (Kneeling_To_Hol
 python ../../packages/clip-catalog/catalog_check.py
 """
 import glob, json, re
+from pathlib import Path
 
 from catalog import ROOT
 
@@ -21,7 +22,7 @@ RULES = [
 
 
 def main():
-    rows = [json.loads(l) for f in sorted(glob.glob(str(ROOT / "catalog/*.jsonl"))) for l in open(f, encoding="utf-8") if l.strip()]
+    rows = [json.loads(l) for f in sorted(glob.glob(str(ROOT / "catalog/*.jsonl"))) if not Path(f).name.startswith("sweep_") for l in open(f, encoding="utf-8") if l.strip()]
     errors = [r for r in rows if "error" in r]
     rows = [r for r in rows if "error" not in r and not FIGHT.search(r["ref"])]
     total = bad_total = 0

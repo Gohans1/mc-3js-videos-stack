@@ -1,0 +1,1 @@
+Its task was brutally simple, find and exploit a security hole in a simulated exam, pass and the iron door opens, fail or run out of time, and its entire session is wiped from memory forever.

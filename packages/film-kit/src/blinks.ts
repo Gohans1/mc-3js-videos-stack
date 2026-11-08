@@ -12,6 +12,7 @@
 // openness the face loses between blinks. quiet spans: no blink starts in them (a yawn's own lids close and open the
 // eyes: a blink on top would flicker them).
 import { drowsyBlink, DROWSY, type BlinkShape } from "./drowsy";
+import { hash } from "./hash";
 
 export const BLINKS = {
   rate: { rest: 17, focus: 4.5, talk: 26 }, // a minute
@@ -21,7 +22,6 @@ export const BLINKS = {
   down: 0.1, shut: 0.03, up: 0.22, // s
 };
 
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
 
 // how shut the lids are u seconds into a blink

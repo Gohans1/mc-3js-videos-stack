@@ -104,6 +104,12 @@ const FIX_SPEED = 1; // m/s, see pose()
 const HEAD_SPEED = Math.PI; // rad/s, see pose()
 const TWIST_SPEED = 2 * Math.PI; // rad/s, see limb()
 const DEAD = 0.03; // the source counts as touching the floor below this much (its body's height is only estimated)
+const HAND_REACH = 0.1; // how far the source's hand reaches past its wrist, as a share of its leg (as REACH)
+// how much the source's hands bear its weight (0..1), from its lowest body point (sl) and its lowest hand (hl): the hand
+// well below everything else and near the floor. A wide ramp, the lift (up to ~40 cm) coming in over the hand's plant: a
+// narrow one (5-20 cm) took the body up 21 cm in a frame. Tried and worse: rate-limiting the lift (the body hung in the
+// air after the hand left), counting only a still hand (mocap hand speed is noisy: the lift flickered on and off)
+const CARRY = (sl, hl) => THREE.MathUtils.smoothstep(sl - hl, 0.03, 0.35) * (1 - THREE.MathUtils.smoothstep(hl, 0.1, 0.3));
 // how far the source's body reaches past each joint, as a share of its leg (hip to ankle): its lowest point is estimated
 // from these, the source being a skeleton. Body and legs only, the same parts as his (see lowest)
 const REACH = { hips: 0.12, waist: 0.12, neck: 0.08, shoulderL: 0.07, shoulderR: 0.07, elbowL: 0.05, elbowR: 0.05, hipL: 0.1, hipR: 0.1, kneeL: 0.06, kneeR: 0.06, ankleL: 0.1, ankleR: 0.1, toeL: 0.035, toeR: 0.035 };
@@ -305,6 +311,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     return y;
   };
   const srcLowest = () => Math.min(...Object.entries(REACH).map(([r, f]) => src.at(r).y - f * srcLeg));
+  const srcHandLow = () => Math.min(src.at("wristL").y, src.at("wristR").y) - HAND_REACH * srcLeg;
   // a world point into joint `key`'s rest world, and back
   const toRest = (key, p) => p.applyMatrix4(M.copy(body.rest[key]).multiply(M2.copy(b[key].matrixWorld).invert()));
   const fromRest = (key, p) => p.applyMatrix4(M.copy(b[key].matrixWorld).multiply(M2.copy(body.rest[key]).invert()));
@@ -457,6 +464,14 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     // feet is lowest there can change at another moment than the source's (a step up a ladder bumped him 4 cm)
     const sl = srcLowest(), near = 1 - THREE.MathUtils.smoothstep(sl, 0.1, 0.3);
     if (floor) p.root.y += near * (k * Math.max(0, sl - DEAD) - lowest());
+    // hands bearing his weight (a handstand, a kip-up, a vault: the source's hand on the floor well below the rest of it)
+    // lift the body until they rest on it; else his long arms reach 40 cm into the floor and fold double there, the elbow
+    // flipping side to side. A hand on the floor while feet or knees are down too (crawl, push-up) bears no lift
+    const hl = srcHandLow(), carry = CARRY(sl, hl);
+    if (floor && carry > 0) {
+      place();
+      p.root.y += carry * Math.max(0, k * Math.max(0, hl - DEAD) - lowest(["laL", "laR"]));
+    }
     if (floor) {
       // the head out of the floor: turned about the neck, away from it, at most HEAD_TURN, less the more his chest hangs
       // upside down (on his head in a roll no turn gets it out, and the corner it chased flipped side to side 118 degrees a
@@ -617,7 +632,8 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     dir["head facing"] = ang(fwd("head", headRestQ), new THREE.Vector3(0, 0, 1).applyQuaternion(src.head()));
     dir["hips facing"] = ang(fwd("root", rootRestQ), new THREE.Vector3(0, 0, 1).applyQuaternion(frame(between("hips", "waist"), between("hipR", "hipL"))));
     dir["chest"] = ang(new THREE.Vector3(0, 1, 0).applyQuaternion(b.chest.getWorldQuaternion(new THREE.Quaternion()).multiply(chestRest)), between("waist", "neck"));
-    const low = lowest(), sl = srcLowest(), want = k * Math.max(0, sl - DEAD), near = 1 - THREE.MathUtils.smoothstep(sl, 0.1, 0.3);
+    const low = lowest(), sl = srcLowest(), want = k * Math.max(0, sl - DEAD);
+    const near = (1 - THREE.MathUtils.smoothstep(sl, 0.1, 0.3)) * (1 - CARRY(sl, srcHandLow())); // carried on his hands, his body is meant to be up
     const inside = {};
     for (const sd of ["L", "R"]) inside[`hand ${sd} in head/body/legs/floor`] = pushOut(handAt(sd, new THREE.Vector3()));
     const part = lowestPart;

@@ -199,8 +199,9 @@ const makeFace = (root, head, skin) => {
     at(o, o.userData.p0, x, -(y - 6));
   };
   const rot = new THREE.Quaternion(), fwdAxis = new THREE.Vector3();
+  const meshes = [...eyes.flatMap((e) => [e.white, e.iris, e.pupil, e.top, e.low]), ...brows.map((b) => b.m), hole, teeth, tongue, line, ...corners];
   // mood: blended mood values; m: mouth [w, h, teeth, tongue]; blink 0..1; look [x, y] in -1..1
-  return (mood, m, blink, look) => {
+  return Object.assign((mood, m, blink, look) => {
     for (const e of eyes) {
       const sd = e.side < 0 ? "R" : "L", o = { ...mood, ...(mood[sd] ?? {}) };
       const gx = Math.max(-1, Math.min(1, look[0])), gy = Math.max(-1, Math.min(1, look[1]));
@@ -230,7 +231,54 @@ const makeFace = (root, head, skin) => {
     rect(line, 0, 6.55, shut && Math.abs(smile) > 0.15 ? lw : 0, 0.35);
     const cw = Math.max(w, lw) / 2 + 0.25;
     corners.forEach((c, i) => rect(c, (i ? 1 : -1) * cw, 6.55 - smile * 0.45, Math.abs(smile) > 0.15 ? 0.5 : 0, 0.5));
+  }, { meshes });
+};
+
+// ---- faces without eyes ----
+// For a film that carries every feeling in its narrator: the skin's own face, lit as ever, with no eyes to read and
+// nothing moving. "closed" is the floating face held once with its lids shut and mouth closed (the look the clip
+// catalogue's sheets have, minus their open mouth); the others hide the floating face and each repaints pixels of the head's front in the skin (8 x 8 px from
+// (8, 8); row 4 holds the eyes); colour(x, y) gives a pixel as a multiple of the skin's own tone (its cheek), or null to
+// keep the skin's pixel, so any skin keeps its colour. "game" is the floating expressive face above, and a player's face
+// until setFace picks another.
+const EYE = (x, y) => y === 4 && (x === 1 || x === 2 || x === 5 || x === 6);
+export const FACES = [
+  // the eyes painted over with the skin round them (row 4 is a shade darker than the cheek)
+  { id: "noeyes", title: "no eyes, skin over them", colour: (x, y) => EYE(x, y) ? 0.95 : null },
+  { id: "closed", title: "eyes shut, mouth shut", hold: [MOODS.neutral, [0, 0, 0, 0], 1, [0, 0]] },
+  // the eyes cut out as black holes
+  { id: "holes", title: "no eyes, black holes", colour: (x, y) => EYE(x, y) ? 0.03 : null },
+  { id: "game", title: "game face (eyes, brows, mouth)" },
+];
+// one skin canvas with face f painted on
+const paintFace = (src, f) => {
+  const c = document.createElement("canvas");
+  c.width = src.canvas.width; c.height = src.canvas.height;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(src.canvas, 0, 0);
+  if (!f.colour) return c;
+  const d = src.getImageData(9, 11, 1, 1).data; // the cheek, face pixel (1, 3)
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const k = f.colour(x, y);
+    if (k == null) continue;
+    ctx.fillStyle = `rgb(${(d[0] * k) | 0},${(d[1] * k) | 0},${(d[2] * k) | 0})`;
+    ctx.fillRect(8 + x, 8 + y, 1, 1);
+  }
+  return c;
+};
+
+// Skin UVs sampled inside their own triangle. Under MSAA (films render with multisampling 4 for N8AO) an edge pixel's
+// UV is extrapolated past the face into the next skin texel: the outer layer's jacket top drew a 1 px shirt-coloured line
+// under the chin in close-ups. GLSL "centroid" is the hardware fix; three.js has no switch for it, so it is patched in.
+// Any box model on a skin atlas wants it (silverfish.ts).
+export const centroidUv = (m) => {
+  const cen = (c) => c.replace(/varying vec2 (vMapUv|vEmissiveMapUv)/g, "centroid varying vec2 $1");
+  m.onBeforeCompile = (s) => {
+    s.vertexShader = s.vertexShader.replace("#include <uv_pars_vertex>", cen(THREE.ShaderChunk.uv_pars_vertex));
+    s.fragmentShader = s.fragmentShader.replace("#include <uv_pars_fragment>", cen(THREE.ShaderChunk.uv_pars_fragment));
   };
+  m.customProgramCacheKey = () => "centroid-uv";
+  return m;
 };
 
 // ---- one character ----
@@ -247,8 +295,8 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   map.colorSpace = THREE.SRGBColorSpace;
   // a touch of self light from the skin itself, so faces still read under the night's single sodium lamp
   const look = { map, roughness: 0.9, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: glow };
-  const inner = new THREE.MeshStandardMaterial(look);
-  const outer = new THREE.MeshStandardMaterial({ ...look, alphaTest: 0.5, side: THREE.DoubleSide });
+  const inner = centroidUv(new THREE.MeshStandardMaterial(look));
+  const outer = centroidUv(new THREE.MeshStandardMaterial({ ...look, alphaTest: 0.5, side: THREE.DoubleSide }));
 
   const rig = cloneSkinned(template);
   rig.traverse((o) => { if (o.isSkinnedMesh) { o.material = /Layer2/.test(o.name) ? outer : inner; o.castShadow = o.receiveShadow = true; o.frustumCulled = false; } });
@@ -267,7 +315,20 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   // the hips' parent is rotated and scaled: a move in character metres becomes this in its own units
   b.root.parent.updateWorldMatrix(true, false);
   const rootIn = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert());
-  const face = makeFace(rig, b.head, ctx);
+  const gameFace = makeFace(rig, b.head, ctx);
+  // the faces to switch between, one texture each (FACES); a blank one hides the floating face and ignores face()
+  const skinTex = (c) => { const t = new THREE.CanvasTexture(c); Object.assign(t, { flipY: false, magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter, generateMipmaps: false, colorSpace: THREE.SRGBColorSpace }); return t; };
+  const faceTex = Object.fromEntries(FACES.map((f) => [f.id, f.colour ? skinTex(paintFace(ctx, f)) : map]));
+  let faceId = "game";
+  const setFace = (id) => {
+    if (!faceTex[id]) throw new Error(`no face "${id}" (FACES: ${FACES.map((f) => f.id).join(", ")})`);
+    faceId = id;
+    for (const m of [inner, outer]) { m.map = m.emissiveMap = faceTex[id]; m.needsUpdate = true; }
+    const f = FACES.find((x) => x.id === id);
+    for (const o of gameFace.meshes) o.visible = id === "game" || !!f.hold; // the next face() call shuts what should be shut
+    if (f.hold) gameFace(...f.hold);
+  };
+  const face = (...a) => { if (faceId === "game") gameFace(...a); };
   const hand = new THREE.Group(); // the right hand's grip, for held items
   hand.name = "handR"; // so live-studio's CHECK=motion:handR,from,to finds it
   hand.position.set(-6 * PX, 12 * PX, 2 * PX); // vanilla: the right shoulder pivot (-5, 22, 0) px, then 10 down the arm, 2 forward, 1 out
@@ -399,5 +460,5 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   };
   // Minecraft's hurt overlay: the skin goes red while hurt or dying (on/off, as in the game)
   const red = (on) => { for (const m of [inner, outer]) { m.color.setRGB(1, on ? 0.45 : 1, on ? 0.45 : 1); m.emissive.setRGB(1, on ? 0.3 : 1, on ? 0.3 : 1); } };
-  return { g, rig, bones: b, setPose, face, hand, handL, armTo, legTo, soleAt, legReach: LEGS.L.L1 + LEGS.L.L2, headTo, skin: ctx, red };
+  return { g, rig, bones: b, setPose, face, hand, handL, armTo, legTo, soleAt, legReach: LEGS.L.L1 + LEGS.L.L2, headTo, skin: ctx, red, setFace };
 }

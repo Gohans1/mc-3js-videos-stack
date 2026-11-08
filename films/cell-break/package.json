@@ -1,0 +1,37 @@
+{
+  "name": "cell-break",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "node node_modules/live-studio/src/live.mjs 4325",
+    "notes": "python node_modules/live-studio/notes_report.py",
+    "note": "node node_modules/live-studio/note.mjs",
+    "render": "node node_modules/live-studio/render.mjs",
+    "framecheck": "node node_modules/live-studio/framecheck.mjs",
+    "postinstall": "node ../../packages/mc-assets/vendor.mjs"
+  },
+  "dependencies": {
+    "block-model-renderer": "2.20.0",
+    "fflate": "0.8.3",
+    "film-kit": "workspace:*",
+    "film-stage": "workspace:*",
+    "live-studio": "workspace:*",
+    "math": "0.1.0",
+    "mc-actor": "workspace:*",
+    "mc-assets": "workspace:*",
+    "n8ao": "2.0.1",
+    "postprocessing": "6.39.6",
+    "three": "0.186.1"
+  },
+  "live-studio": {
+    "sound": [
+      "sound.py",
+      "../../scripts/sound/mix.py",
+      "sound/sfx",
+      "src/timeline/audio.json"
+    ],
+    "soundTimeline": "src/timeline/audio.json",
+    "sfx": "sound/sfx",
+    "chrome": "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe"
+  }
+}

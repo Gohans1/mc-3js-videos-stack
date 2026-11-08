@@ -9,6 +9,7 @@
 //   T(t) -> { spot, side, w, at } or null;   hand IK to SPOT[spot] in the head's own frame, blended by w
 // SPOT: points on a Minecraft player's head in skin pixels from the neck pivot (x his left, y up, z forward; the face is
 // at z = 4), so they scale with any rig drawn at the game's proportions.
+import { hash } from "./hash";
 export const TOUCH = {
   rate: 23, // an hour
   stress: 2.5, // x the rate while stressed or thinking hard (chosen; Grunwald 2014 measured a rise, not this ratio)
@@ -23,7 +24,6 @@ export const SPOT: Record<string, [number, number, number]> = {
 const AUTO = ["chin", "cheek", "nose", "mouth", "eye", "forehead", "temple", "hair"];
 
 const minJerk = (u: number) => { const x = Math.min(1, Math.max(0, u)); return x * x * x * (10 + x * (-15 + 6 * x)); };
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
 export type Touch = { t: number; spot: string; side: "L" | "R"; hold?: number };
 // rate(t) touches an hour; free(t, side) whether that hand may go at t; keys: touches the film wants where it wants them

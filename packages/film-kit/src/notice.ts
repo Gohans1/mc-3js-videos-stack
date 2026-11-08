@@ -5,6 +5,7 @@
 // less each time (capture fades with repeats, Theeuwes 2008: ~28% on the surprise trial when busy, less after).
 //   const glance = notice([{ t: 14, at: [x, y, z] }]);   look = glance(t) blended over the look   gaze shifts += glance.shifts
 // k: 0..1, how much it stands out and how free his attention is (1: idle and it's sudden; 0.3: busy with something).
+import { hash } from "./hash";
 export const NOTICE = {
   latency: 0.2, turn: 0.25, hold: [0.6, 1.1], back: 0.45, // s
   repeat: 0.55, near: 1, memory: 60, // each earlier one within `near` m and `memory` s multiplies the pull by this
@@ -14,7 +15,6 @@ export type Event = { t: number; at: [number, number, number]; k?: number; kind?
 
 // gaze.ts fires the saccade this long before a shift: the head starts after the eyes are there
 const EYES_FIRST = 0.06;
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
 const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 

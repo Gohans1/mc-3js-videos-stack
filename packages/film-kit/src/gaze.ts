@@ -26,6 +26,7 @@
 // stretches each saccade (drowsy.ts: sleepy eyes move slower).
 import { BLINKS, lidShut } from "./blinks";
 import { FREEZE } from "./freeze";
+import { hash } from "./hash";
 
 const SACCADE = 0.05, LEAD = 0.06;
 export const PURSUIT = { start: 0.15, lag: 0.1, catchup: [0.3, 0.6] };
@@ -39,7 +40,6 @@ const avertOf = (i: number): [number, number] => {
 export const EYE = { yaw: 40, pitch: 30 };
 export const REST_PITCH = -4.5;
 
-const hash = (n: number, k: number) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 const offsetOf = (i: number, k = 1): [number, number] => (hash(i, 1) < 0.35 ? [0, 0] : [k * (hash(i, 2) < 0.5 ? -1 : 1) * (3 + 9 * hash(i, 3)), k * (-5 + 8 * hash(i, 4))]);
 const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
 const clamp1 = (x: number) => Math.max(-1, Math.min(1, x));

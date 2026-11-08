@@ -22,9 +22,11 @@ from pathlib import Path
 from jev import Jev
 
 ROOT = Path(__file__).resolve().parents[2] / "vault/motion"  # the repo's vault link (bun run link)
-FIGHT = re.compile(r"gun|rifle|pistol|sword|shoot|shot|aim|reload|punch|kick|boxing|fight|attack|block|arrow|archer|"
+# matched at a word's start in the name (after _ or a camel hump): inside a word, Wheelbarrow read as arrow, Relaxed as axe
+FIGHT = re.compile(r"(?:(?<![a-z])|(?<=(?-i:[a-z]))(?=(?-i:[A-Z])))(?:"
+                   r"gun|rifle|pistol|sword|shoot|shot|aim|reload|punch|kick|boxing|fight|attack|block|arrow|archer|"
                    r"blade|knife|axe|katana|grenade|magic|spell|zombie|mutant|sniper|stab|slash|combo|"
-                   r"strike|uppercut|jab|hook|melee|weapon|dodge|parry|hit_reaction|martial|capoeira|kata", re.I)
+                   r"strike|uppercut|jab|hook|melee|weapon|dodge|parry|hit_reaction|martial|capoeira|kata|sidekick|powershot)", re.I)
 LOOP_DEG, LOOP_CM, STILL_M, HAND_S = 15, 5, 0.3, 0.3
 
 
@@ -56,7 +58,7 @@ def describe(r, full=False):
     if r.get("desc"):
         head = f"{r['desc']} [mood: {', '.join(r.get('mood', []))}; touches: {', '.join(r.get('prop', []))}" + (f"; acted: {', '.join(r['style'])}" if r.get("style") else "") + (f"; flaw: {r['flaw']}" if r.get("flaw") else "") + "]"
     else:
-        head = f"{r['ref'].split('/', 1)[1].rsplit('_', 1)[0].replace('_', ' ')} (not checked by eye)"
+        head = f"{r['ref'].split('/', 1)[1].rsplit('_', 1)[0].replace('_', ' ')} (not checked by eye)" + (f" [flaw: {r['flaw']}]" if r.get("flaw") else "")
     loop = r["loop"][0] < LOOP_DEG and r["loop"][1] < LOOP_CM
     facts = (f"{r['dur']} s; starts {r['start']}, ends {r['end']}; ends {r['reach']} m from the start, facing {abs(r['turn'])} deg "
              f"{'left' if r['turn'] > 0 else 'right'} of his first facing; {'loops seamlessly' if loop else 'does not loop'}")
@@ -108,18 +110,47 @@ def fits(jev, scene, shown, full=False):
     return [ans[f"fit_{k + 1}"]["noul"] for k in range(len(shown))]
 
 
+# Retarget breaks that read on screen (clip-catalog/sweep.sh numbers; milder ones are the box body meeting itself and pass
+# by eye; a hand catching a fall jumps ~15 cm in a frame and reads right): check name start -> (limit, what a viewer sees)
+BROKEN = {"spin": (45, "a limb flips round"), "jump": (20, "a limb pops"), "direction error upper arm": (90, "an arm points the wrong way"),
+          "direction error forearm": (90, "an arm points the wrong way"), "sink": (10, "sinks into the floor"),
+          "arm below the floor": (10, "an arm goes into the floor"), "float": (20, "hangs above the floor")}
+
+
+def broken(lib):
+    """ref -> 'retarget breaks on Steve: <what> at <s> s; ...' for clips whose sweep crosses a BROKEN limit"""
+    p = ROOT / "catalog" / f"sweep_{lib}.jsonl"
+    out = {}
+    if p.exists():
+        for line in p.read_text(encoding="utf-8").splitlines():
+            r = json.loads(line) if line.strip() else {}
+            seen = {}
+            for k, (v, t) in r.get("s", {}).items():
+                for check, (limit, what) in BROKEN.items():
+                    if k.startswith(check) and v > limit and what not in seen:
+                        seen[what] = t
+            if seen:
+                out[f"{lib}/{r['clip']}"] = "retarget breaks on Steve: " + "; ".join(f"{w} at {t} s" for w, t in sorted(seen.items(), key=lambda x: x[1]))
+    return out
+
+
 def rows(libs):
-    # measured tags, with the fixes recorded by eye (clip-catalog/catalog_review.py) over them; `seen`: someone has checked the clip
+    # measured tags, with the fixes recorded by eye (clip-catalog/catalog_review.py) over them; `seen`: someone has checked
+    # the clip. A sweep break joins the clip's flaw, so the finder shows it and Jev weighs it
     rp = ROOT / "catalog" / "review.json"
     review = json.loads(rp.read_text(encoding="utf-8")) if rp.exists() else {}
     for lib in libs:
         p = ROOT / "catalog" / f"{lib}.jsonl"
+        brk = broken(lib)
         if p.exists():
             for line in p.read_text(encoding="utf-8").splitlines():
                 if line.strip():
                     r = json.loads(line)
                     rv = review.get(r["ref"], {})
-                    yield {**r, **rv, "seen": r["ref"] in review, "fix": set(rv)}
+                    row = {**r, **rv, "seen": r["ref"] in review, "fix": set(rv)}
+                    if r["ref"] in brk:
+                        row["flaw"] = "; ".join(x for x in [rv.get("flaw"), brk[r["ref"]]] if x)
+                    yield row
 
 
 def main():
