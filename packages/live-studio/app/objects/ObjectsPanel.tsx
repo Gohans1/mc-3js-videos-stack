@@ -3,12 +3,11 @@
 // and mobs first, as Minecraft's creative tabs put them, and every custom block (the shared props, the mod picks) in one tab. A library row is dragged onto the picture, or + puts it in the middle of the view. Every edit keys the object at the
 // playhead (objects/placed.ts) and is one undo step (Ctrl+Z)
 import { cn } from "cn";
-import { Box, ChevronLeft, ChevronRight, Diamond, Eye, EyeOff, Magnet, Move3d, Plus, Redo2, Rotate3d, RotateCcw, Scale3d, Trash2, Undo2, Squirrel } from "lucide-react";
+import { Box, ChevronLeft, ChevronRight, Diamond, Eye, EyeOff, Magnet, Move3d, Plus, Rotate3d, RotateCcw, Scale3d, Trash2, Squirrel } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { canRedo, canUndo, redo, undo } from "../core/doc";
 import { matcher } from "../core/search";
 import { FPS, stamp } from "../core/time";
 import { keyNav } from "../keys/keynav";
@@ -333,10 +332,6 @@ export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "libr
   );
   return (
     <div data-arrow-scroll className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto overscroll-contain px-3 pt-1 pb-3 scroll-fade *:shrink-0">
-      {part !== "library" && <div className="flex items-center justify-end gap-1">
-        <Tip label="Undo (Ctrl+Z)"><Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label="Undo" disabled={!canUndo()} onClick={undo}><Undo2 /></Button></Tip>
-        <Tip label="Redo (Ctrl+Y)"><Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label="Redo" disabled={!canRedo()} onClick={redo}><Redo2 /></Button></Tip>
-      </div>}
       {part !== "library" && <ObjectInspector />}
       {part !== "object" && <InFilm />}
       {part !== "object" && <ObjectLibrary side={part === "library"} />}
