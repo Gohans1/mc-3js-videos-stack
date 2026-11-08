@@ -1,5 +1,5 @@
 import { Slider as SliderPrimitive } from "@base-ui/react/slider"
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 
 // origin: a two-way value (pan, roll) fills from it to the thumb, so its centre reads as nothing rather than half
 function Slider({
@@ -36,7 +36,7 @@ function Slider({
           className="relative grow overflow-hidden rounded-md bg-slider select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
         >
           {fill ? (
-            <div data-slot="slider-range" className="absolute inset-y-0 bg-slider-fill" style={{ left: fill[0], width: `calc(${fill[1]} - ${fill[0]})` }} />
+            <div data-slot="slider-range" className="absolute inset-y-0 left-(--fill-left) w-(--fill-w) bg-slider-fill" style={{ "--fill-left": fill[0], "--fill-w": `calc(${fill[1]} - ${fill[0]})` }} />
           ) : (
             <SliderPrimitive.Indicator
               data-slot="slider-range"

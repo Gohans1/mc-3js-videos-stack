@@ -1,7 +1,7 @@
 // The edges the creator drags to share the screen between the picture, the timeline and the right column (CapCut's panel
 // edges), as the WAI-ARIA window splitter: arrows move it, Enter folds the pane away and back, a double click puts it back to
 // its own size. The pane it sizes sits after it (below, or to the right) unless before is set, and this browser remembers the size
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 export const useStoredSize = (key: string) => {

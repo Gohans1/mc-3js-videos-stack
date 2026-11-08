@@ -1,7 +1,7 @@
 // A number box as CapCut's and OpenCut's: type a value or a sum (2*3, 90/4, 1.5+0.25), or drag sideways across it to change
 // the value live (Shift: 10 times finer). Enter or leaving the box saves, Escape puts the old value back; empty clears the field
 // when the caller allows it. While dragging the caller hears every step (live) and saves once on release (onSave)
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 
 // + - * / ( ) and decimals only, so nothing but arithmetic is ever evaluated
@@ -35,7 +35,7 @@ export function NumberField({ value, onSave, live, name, step = 1, digits = 3, p
     <input
       type="text" inputMode="decimal" aria-label={name} value={text} placeholder={placeholder} spellCheck={false}
       title="Type a value or a sum, or drag sideways (Shift: finer)"
-      className={cn("h-8 w-full min-w-0 cursor-ew-resize rounded-md border border-input bg-input px-2 text-[13px] text-foreground tabular-nums outline-none focus:cursor-text focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base", className)}
+      className={cn("h-8 w-full min-w-0 cursor-ew-resize rounded-md border border-input bg-input px-2 text-ui text-foreground tabular-nums outline-none focus:cursor-text focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base", className)}
       onPointerDown={(e) => {
         if (document.activeElement === e.currentTarget || e.button !== 0 || e.pointerType === "touch") return;
         e.preventDefault(); // focus waits for the release: a drag never puts a caret in the box

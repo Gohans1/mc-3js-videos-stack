@@ -17,7 +17,7 @@ export function SpeedPanel() {
   const i = shownKey(S.t), k = keys[i];
   if (!k || i === 0 || k.cut) {
     return (
-      <div className="px-3 pt-1 text-[13px]">
+      <div className="px-3 pt-1 text-ui">
         <p className="font-medium">{!k ? "No keyframe picked" : "A shot starts here"}</p>
         <p className="text-muted-foreground">{!k ? "Click a diamond on the Camera track, or put the playhead on one: this sets how the camera travels into it." : "Nothing eases into the first keyframe of a shot. Pick a later one."}</p>
       </div>
@@ -26,7 +26,7 @@ export function SpeedPanel() {
   const curve = Array.isArray(k.ease) ? k.ease : null;
   return (
     <div data-arrow-scroll className="flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 scroll-fade *:shrink-0">
-      <p className="px-3 pb-2 text-[13px]">
+      <p className="px-3 pb-2 text-ui">
         <span className="font-medium">Into keyframe {i + 1}</span> <span className="text-muted-foreground tabular-nums">{stamp(keys[i - 1].t)} → {stamp(k.t)}</span>
       </p>
       <div className="flex flex-col gap-2 px-3 pb-3">

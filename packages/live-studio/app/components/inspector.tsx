@@ -2,7 +2,7 @@
 // changer, In | Out | Combo), Section (a header with an optional checkbox, the title and its ▲, then reset and ◁◇▷ on the right,
 // over a thin line), SliderRow (the label, then on one line the slider, the value box, its ▲▼ and ◁◇▷), FieldRow (the label on
 // the left, boxes after it), KeyNav (◁◇▷), Reset and Footer (buttons at the bottom right)
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Diamond, RotateCcw } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,9 +30,9 @@ export function Segmented<T extends string>({ value, items, onChange, label, cla
           }}
           tabIndex={value === x.id ? 0 : -1}
           className={cn(
-            "flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground outline-none not-aria-checked:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-checked:bg-raised-3",
+            "flex min-w-0 items-center gap-1.5 text-ui text-muted-foreground outline-none not-aria-checked:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-checked:bg-raised-3",
             vertical ? "h-8 justify-start rounded-md px-2.5 aria-checked:text-primary pointer-coarse:h-10" : "aria-checked:text-foreground",
-            vertical ? "" : "flex-1 justify-center rounded-[5px] px-2 pointer-coarse:h-10",
+            vertical ? "" : "flex-1 justify-center rounded-sm px-2 pointer-coarse:h-10",
           )}
         >
           {x.title}
@@ -53,7 +53,7 @@ export function Section({ title, on, onCheck, right, children, closed = false, c
         {onCheck && (
           <input type="checkbox" checked={!!on} onChange={(e) => onCheck(e.target.checked)} aria-label={`${title} on`} className="size-4 flex-none accent-primary" />
         )}
-        <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} className="flex min-w-0 items-center gap-1 rounded-sm text-[13px] font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} className="flex min-w-0 items-center gap-1 rounded-sm text-ui font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <span className="truncate">{title}</span>
           {open ? <ChevronUp aria-hidden className="size-3.5 text-muted-foreground" /> : <ChevronDown aria-hidden className="size-3.5 text-muted-foreground" />}
         </button>
@@ -65,12 +65,12 @@ export function Section({ title, on, onCheck, right, children, closed = false, c
   );
 }
 
-const iconBtn = "size-7 text-muted-foreground hover:text-foreground disabled:opacity-35 pointer-coarse:size-10";
+const iconBtn = "pointer-coarse:size-10";
 
 export function Reset({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <Tip label={label}>
-      <Button variant="ghost" size="icon" className={iconBtn} aria-label={label} disabled={disabled} onClick={onClick}><RotateCcw /></Button>
+      <Button variant="quiet" size="icon" className={iconBtn} aria-label={label} disabled={disabled} onClick={onClick}><RotateCcw /></Button>
     </Tip>
   );
 }
@@ -82,15 +82,15 @@ export function KeyNav({ what, prev, next, here, onPrev, onNext, onToggle, addTi
   return (
     <span className="flex flex-none items-center">
       <Tip label={`Previous ${what} keyframe`}>
-        <Button variant="ghost" size="icon" className={cn(iconBtn, "w-4")} aria-label={`Previous ${what} keyframe`} disabled={!prev} onClick={onPrev}><ChevronLeft /></Button>
+        <Button variant="quiet" size="icon" className={cn(iconBtn, "w-4")} aria-label={`Previous ${what} keyframe`} disabled={!prev} onClick={onPrev}><ChevronLeft /></Button>
       </Tip>
       <Tip label={here ? (removeTip ?? `Delete this ${what} keyframe`) : (addTip ?? `Add a ${what} keyframe at the playhead`)}>
-        <Button variant="ghost" size="icon" className={cn(iconBtn, "w-5", here && "text-primary hover:text-primary")} aria-label={here ? `Delete ${what} keyframe` : `Add ${what} keyframe`} onClick={onToggle}>
+        <Button variant={here ? "lit" : "quiet"} size="icon" className={cn(iconBtn, "w-5")} aria-label={here ? `Delete ${what} keyframe` : `Add ${what} keyframe`} onClick={onToggle}>
           <Diamond className={cn("size-3.5", here && "fill-current")} />
         </Button>
       </Tip>
       <Tip label={`Next ${what} keyframe`}>
-        <Button variant="ghost" size="icon" className={cn(iconBtn, "w-4")} aria-label={`Next ${what} keyframe`} disabled={!next} onClick={onNext}><ChevronRight /></Button>
+        <Button variant="quiet" size="icon" className={cn(iconBtn, "w-4")} aria-label={`Next ${what} keyframe`} disabled={!next} onClick={onNext}><ChevronRight /></Button>
       </Tip>
     </span>
   );
@@ -129,7 +129,7 @@ export function SliderRow({ label, value, min, max, step, digits = 1, unit, doc,
   const start = useRef<string | null>(null);
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[13px] text-foreground/90">{label}</span>
+      <span className="text-ui text-foreground/90">{label}</span>
       <div className="flex items-center gap-2">
         <div className="flex h-7 min-w-0 flex-1 items-center pe-1">
           <Slider
@@ -150,7 +150,7 @@ export function SliderRow({ label, value, min, max, step, digits = 1, unit, doc,
 export function FieldRow({ label, children, nav }: { label: string; children: ReactNode; nav?: ReactNode }) {
   return (
     <div className="flex min-h-7 items-center gap-2">
-      <span className="w-16 flex-none text-[13px] text-foreground/90">{label}</span>
+      <span className="w-16 flex-none text-ui text-foreground/90">{label}</span>
       <div className="flex min-w-0 flex-1 items-center gap-1.5">{children}</div>
       {nav}
     </div>

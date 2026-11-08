@@ -2,7 +2,7 @@
 // tracks, the voice and action rows, the film's other keys (Steve, props) and the sound tracks the creator edits by hand.
 // timeline/timeline.ts draws the ruler and the voice and action rows and handles scrubbing, picking and zoom; camera/camrow.ts the camera row (its canvas and menu in CameraTrack.tsx); keys/keyrows.ts the key rows (names in KeyHeads); sound/lanes.ts the tracks (their right-click menu in ClipMenu.tsx), whose names, mute and lock sit in the column on the left (TrackHeads). That column
 // runs the whole height so every row shares one time axis. At the right, the master meter (sound/AudioMeter.tsx)
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { useLayoutEffect } from "react";
 import type { Bind } from "../core/state";
 import { ROW_MAX, ROW_MIN, RULER_H, rowLayout, setRowLayout, WORDS_H } from "./rows";
@@ -42,31 +42,31 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
     >
       <TimelineBar />
       <span aria-hidden className="rounded-tl-md bg-background sideways:hidden" />
-      <canvas ref={bind("ruler")} title="Time: click or drag to jump, Ctrl+scroll to zoom" aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom" style={{ height: RULER_H }} className="block w-full cursor-ew-resize touch-none rounded-tr-md sideways:rounded-md" />
+      <canvas ref={bind("ruler")} title="Time: click or drag to jump, Ctrl+scroll to zoom" aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom" style={{ "--ruler-h": `${RULER_H}px` }} className="block h-(--ruler-h) w-full cursor-ew-resize touch-none rounded-tr-md sideways:rounded-md" />
       <div
         data-tracks-scroll
         onPointerDown={(e) => { if (e.button === 0 && !(e.target as Element).closest("button, input, canvas, [role=separator]")) boxPick.clear(); }}
         className="relative col-span-2 grid min-h-0 grid-cols-subgrid content-start overflow-x-hidden overflow-y-auto overscroll-contain rounded-b-md sideways:hidden upright:max-h-86"
       >
-        <span className={cn("self-stretch border-e border-track-line bg-track-head ps-1.5 text-[13px] leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
+        <span className={cn("self-stretch border-e border-track-line bg-track-head ps-1.5 text-ui leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
         <CameraTrack bind={bind} shown={cam} />
         {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}
         <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !text && "hidden")}>
-          <span style={{ lineHeight: `${ROW_H}px` }} className="flex items-end border-e border-track-line bg-track-head ps-1.5 text-[13px] font-medium text-label">Text</span>
+          <span style={{ "--row-h": `${ROW_H}px` }} className="flex items-end border-e border-track-line bg-track-head ps-1.5 text-ui leading-(--row-h) font-medium text-label">Text</span>
           <canvas ref={bind("textrow")} aria-label="Text tracks: click an item to edit it, drag to move or retime it, drag its edges to trim, drag on empty space to select several" className="block w-full touch-none" />
         </div>
         <div className={cn("col-span-2 grid grid-cols-subgrid", (cam || text) && "mt-1")}>
-          <div className="relative border-e border-track-line bg-track-head text-[13px] font-medium text-label">
+          <div className="relative border-e border-track-line bg-track-head text-ui font-medium text-label">
             {rows.map((r) => (
               <div key={r.label}>
-                <span aria-hidden style={{ top: r.y }} className="absolute -translate-y-1/2 ps-1.5">{r.label}</span>
-                <div style={{ top: r.edge }} className="absolute inset-x-0">
+                <span aria-hidden style={{ "--y": `${r.y}px` }} className="absolute top-(--y) -translate-y-1/2 ps-1.5">{r.label}</span>
+                <div style={{ "--y": `${r.edge}px` }} className="absolute inset-x-0 top-(--y)">
                   <Splitter label={`${r.label} row height`} across before fold={false} step={4} size={r.size} measure={() => r.now} min={() => r.min} max={() => r.max} set={r.set} lineClassName="right-auto w-[200vw]" />
                 </div>
               </div>
             ))}
           </div>
-          <canvas ref={bind("detail")} title="Voice and action: click empty space to move the playhead there, drag to select, Ctrl+scroll to zoom" aria-label="Voice and action rows: click empty space to move the playhead there, drag the playhead line to scrub, Ctrl+scroll to zoom" style={{ height: L.height }} className="block w-full touch-none" />
+          <canvas ref={bind("detail")} title="Voice and action: click empty space to move the playhead there, drag to select, Ctrl+scroll to zoom" aria-label="Voice and action rows: click empty space to move the playhead there, drag the playhead line to scrub, Ctrl+scroll to zoom" style={{ "--h": `${L.height}px` }} className="block h-(--h) w-full touch-none" />
         </div>
         <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !keys && "hidden")}>
           <KeyHeads />
@@ -85,7 +85,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
       </div>
       <AudioMeter />
       {/* CapCut's preview axis, from the ruler down the rows (peek.ts) */}
-      <div ref={bind("peek")} aria-hidden hidden className="pointer-events-none absolute left-0 z-3 w-px -translate-x-px bg-peek shadow-[0_0_0_1px_#000]" />
+      <div ref={bind("peek")} aria-hidden hidden className="pointer-events-none absolute left-0 z-3 w-px -translate-x-px bg-peek ring-1 ring-black" />
     </div>
   );
 }

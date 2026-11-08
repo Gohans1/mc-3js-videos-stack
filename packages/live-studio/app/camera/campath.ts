@@ -22,7 +22,8 @@ const DOTS = new THREE.PointsMaterial({ color: 0xffffff, size: 6, sizeAttenuatio
 let builtFor: unknown = null, posedRev = -1;
 const isPoint = (p: unknown): p is [number, number, number] => Array.isArray(p) && p.length === 3;
 const build = () => {
-  for (const c of [...paths.children]) { paths.remove(c); (c as THREE.Line).geometry.dispose(); }
+  for (const c of paths.children) (c as THREE.Line).geometry.dispose();
+  paths.clear();
   let seg: THREE.Vector3[] = [], segStart = 0;
   const shotOfNow = (t0: number, t1: number) => S.t >= t0 - 1e-3 && S.t < t1;
   const flush = (t1: number) => {

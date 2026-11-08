@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
-import { cn } from "cn"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils"
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -10,8 +11,15 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
+// flush: a panel that lays itself out (Settings), with no padding or gap of the popover's own
+const popoverContentVariants = cva(
+  "z-50 flex w-72 origin-(--transform-origin) flex-col rounded-lg bg-popover text-ui/normal text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+  { variants: { variant: { default: "gap-4 p-2.5", flush: "gap-0 overflow-hidden p-0" } }, defaultVariants: { variant: "default" } }
+)
+
 function PopoverContent({
   className,
+  variant = "default",
   align = "center",
   alignOffset = 0,
   side = "bottom",
@@ -21,7 +29,7 @@ function PopoverContent({
   Pick<
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
-  >) {
+  > & VariantProps<typeof popoverContentVariants>) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -35,10 +43,7 @@ function PopoverContent({
           // Focus goes back to the trigger only after a keyboard close: after a click Space must play the film, not reopen this
           finalFocus={(closedBy) => closedBy === "keyboard"}
           data-slot="popover-content"
-          className={cn(
-            "z-50 flex w-72 origin-(--transform-origin) flex-col gap-4 rounded-lg bg-popover p-2.5 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-            className
-          )}
+          className={cn(popoverContentVariants({ variant }), className)}
           {...props}
         />
       </PopoverPrimitive.Positioner>

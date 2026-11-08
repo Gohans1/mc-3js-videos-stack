@@ -2,7 +2,7 @@
 // a clip's menu does in CapCut: rename, split at the playhead, merge with the shot before, copy and paste its attributes (its
 // animations, timeline/attributes.ts), its In / Out / Combo, go to its start.
 // Each also sits in the Camera and Animation tabs, which is where a keyboard reaches them
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { DURATION, SHOTS_OUT } from "film/scene";
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -45,8 +45,10 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
         {shot < 0 || !SHOTS_OUT[shot] ? <ContextMenuGroup><ContextMenuLabel>No shot here</ContextMenuLabel></ContextMenuGroup> : (
           <>
             <ContextMenuGroup>
-              <ContextMenuLabel className="truncate">Shot {shot}{S.comments[shot] ? ` · ${S.comments[shot]}` : ""}</ContextMenuLabel>
-              {!data && <ContextMenuLabel className="pt-0">This film keeps its shots in code: ask the AI in a note to change them</ContextMenuLabel>}
+              <ContextMenuLabel>
+                <span className="block truncate">Shot {shot}{S.comments[shot] ? ` · ${S.comments[shot]}` : ""}</span>
+                {!data && <span className="block">This film keeps its shots in code: ask the AI in a note to change them</span>}
+              </ContextMenuLabel>
             </ContextMenuGroup>
             <ContextMenuItem disabled={!data} onClick={() => { openTab(shot, "cam"); requestAnimationFrame(() => { const el = document.getElementById(SHOT_NAME_ID) as HTMLInputElement | null; el?.focus(); el?.select(); }); }}>Rename</ContextMenuItem>
             <ContextMenuItem disabled={!data || !inside} onClick={splitShot}>Split at playhead<ContextMenuShortcut>Ctrl+B</ContextMenuShortcut></ContextMenuItem>

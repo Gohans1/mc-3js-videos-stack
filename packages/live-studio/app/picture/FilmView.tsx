@@ -1,6 +1,6 @@
 // The film camera's picture in the picture's corner while the free camera is on, to compare the two (picture/filmcam.ts draws
 // it). Only its bar takes the pointer: a drag over the picture still turns the free camera
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { Minus, PictureInPicture2, Scaling } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Bind } from "../core/state";
@@ -17,23 +17,23 @@ export function FilmView({ bind }: { bind: Bind }) {
   const corner = "absolute right-2.5 bottom-2.5 z-3 upright:right-1.5 upright:bottom-1.5 sideways:right-1.5 sideways:bottom-1.5";
   return (
     <div hidden={!free} className={cn(corner, "pointer-events-none", size && WIDTH[size])}>
-      <figure hidden={!size} aria-label="Film camera" className="relative m-0 overflow-hidden rounded-md bg-black shadow-[0_4px_16px_rgb(0_0_0/0.5)] ring-1 ring-white/30">
+      <figure hidden={!size} aria-label="Film camera" className="relative m-0 overflow-hidden rounded-md bg-black shadow-float ring-1 ring-white/30">
         <canvas ref={bind("filmview")} className="block aspect-(--frame) w-full" />
         <figcaption className="pointer-events-auto absolute inset-x-0 top-0 flex items-center gap-0.5 bg-black/65 ps-2 pe-0.5 text-xs font-semibold text-picture">
           <span className="min-w-0 flex-1 truncate">Film camera</span>
           {size && (
             <Tip label={`Size: ${NAME[size]}. Click for ${NAME[NEXT[size]]}`}>
-              <Button variant="ghost" size="icon-sm" className="text-picture hover:bg-white/15 pointer-coarse:size-8" aria-label={`Film camera size: ${NAME[size]}`} onClick={() => setPref("filmView", NEXT[size])}><Scaling /></Button>
+              <Button variant="picture" size="icon-sm" className="pointer-coarse:size-8" aria-label={`Film camera size: ${NAME[size]}`} onClick={() => setPref("filmView", NEXT[size])}><Scaling /></Button>
             </Tip>
           )}
           <Tip label="Hide the film camera">
-            <Button variant="ghost" size="icon-sm" className="text-picture hover:bg-white/15 pointer-coarse:size-8" aria-label="Hide the film camera" onClick={() => setPref("filmView", "off")}><Minus /></Button>
+            <Button variant="picture" size="icon-sm" className="pointer-coarse:size-8" aria-label="Hide the film camera" onClick={() => setPref("filmView", "off")}><Minus /></Button>
           </Tip>
         </figcaption>
       </figure>
       {!size && (
         <Tip label="Show the film's own camera beside the free camera, to compare">
-          <Button size="sm" className="pointer-events-auto h-7 gap-1.5 bg-black/70 px-2 text-xs text-picture hover:bg-black/85" onClick={() => setPref("filmView", "m")}><PictureInPicture2 data-icon="inline-start" />Film camera</Button>
+          <Button variant="scrim" size="sm" className="pointer-events-auto h-7" onClick={() => setPref("filmView", "m")}><PictureInPicture2 data-icon="inline-start" />Film camera</Button>
         </Tip>
       )}
     </div>

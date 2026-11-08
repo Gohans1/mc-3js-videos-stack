@@ -20,7 +20,7 @@ export function KeyHeads() {
   return (
     <ul ref={list} aria-label="Keyframe tracks" className="border-e border-track-line bg-track-head">
       {lines().map((l) => l.kind === "file" ? (
-        <li key={`f${l.f}`} style={{ height: HEAD_H }} className="bg-card">
+        <li key={`f${l.f}`} style={{ "--row-h": `${HEAD_H}px` }} className="h-(--row-h) bg-card">
           <button
             type="button"
             aria-expanded={!isFolded(l.f)}
@@ -32,7 +32,7 @@ export function KeyHeads() {
           </button>
         </li>
       ) : l.row.f === placedFile && l.row.path.at(-1) === "keys" ? (
-        <li key={l.row.id} data-lit={l.row.id === lit} style={{ height: ROW_H }} className="group data-[lit=true]:bg-tint">
+        <li key={l.row.id} data-lit={l.row.id === lit} style={{ "--row-h": `${ROW_H}px` }} className="group h-(--row-h) data-[lit=true]:bg-tint">
           <button
             type="button"
             title={`${l.row.label}: click to select it on the picture`}
@@ -43,7 +43,7 @@ export function KeyHeads() {
           </button>
         </li>
       ) : (
-        <li key={l.row.id} style={{ height: ROW_H }} title={l.row.label} className="flex items-center truncate ps-4 text-xs text-label">
+        <li key={l.row.id} style={{ "--row-h": `${ROW_H}px` }} title={l.row.label} className="flex h-(--row-h) items-center truncate ps-4 text-xs text-label">
           {shortLabel(l.row)}
         </li>
       ))}

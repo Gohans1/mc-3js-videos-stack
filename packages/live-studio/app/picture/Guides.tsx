@@ -26,9 +26,9 @@ export function Guides() {
   );
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden className="pointer-events-none absolute inset-0 z-3 size-full [&_*]:[vector-effect:non-scaling-stroke]">
-      {tall && <path d={`M0 0H${W}V${H}H0Z${clear}`} fillRule="evenodd" fill="black" fillOpacity={0.35} />}
-      <g stroke="black" strokeOpacity={0.45} strokeWidth={3} fill="none">{lines}</g>
-      <g stroke="white" strokeOpacity={0.6} strokeWidth={1} fill="none">{lines}</g>
+      {tall && <path d={`M0 0H${W}V${H}H0Z${clear}`} fillRule="evenodd" fillOpacity={0.35} className="fill-black" />}
+      <g strokeOpacity={0.45} strokeWidth={3} fill="none" className="stroke-black">{lines}</g>
+      <g strokeOpacity={0.6} strokeWidth={1} fill="none" className="stroke-white">{lines}</g>
     </svg>
   );
 }

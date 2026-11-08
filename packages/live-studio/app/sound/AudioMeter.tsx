@@ -89,7 +89,7 @@ export function AudioMeter() {
     : live ? "Measuring the film's loudness…" : "The page plays this film's last mix, before the final loudness pass, so these are the page's levels, not the video's.";
   const clear = () => { clipped.current = [null, null]; };
   return (
-    <div className="col-start-3 row-span-2 row-start-2 ms-2 grid w-16 grid-rows-[auto_minmax(0,1fr)_auto] gap-1 text-[11px] leading-none text-muted-foreground tabular-nums">
+    <div className="col-start-3 row-span-2 row-start-2 ms-2 grid w-16 grid-rows-[auto_minmax(0,1fr)_auto] gap-1 text-tag leading-none text-muted-foreground tabular-nums">
       <Tip side="left" label={<span className="block max-w-64 leading-normal">Short-term loudness (3 s), in LUFS. Target {loudness?.target ?? -14}. {about}</span>}>
         <span tabIndex={0} className="flex items-center justify-between gap-0.5 rounded-sm px-0.5 py-0.5 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <span ref={short}>−∞</span>

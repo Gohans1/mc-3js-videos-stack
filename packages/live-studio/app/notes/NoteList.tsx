@@ -4,8 +4,8 @@
 // notes plays as smoothly as one with none. In film order the list keeps the note at the playhead in view, unless a finger or
 // wheel moved it in the last few seconds or a note is being edited
 import { defaultRangeExtractor, type Range, useVirtualizer } from "@tanstack/react-virtual";
-import { cn } from "cn";
-import { ListFilter, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ChevronRight, ListFilter, X } from "lucide-react";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -19,12 +19,11 @@ import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 
 const HOLD_LIST = 4000;
-const card = "rounded-[10px] border border-transparent bg-card px-2.5 pt-1.5 pb-2.5";
-const timeButton = "min-h-7.5 bg-tint px-2 font-mono text-sm font-semibold text-primary tabular-nums hover:bg-tint-hover pointer-coarse:px-2.5";
+const card = "rounded-xl border border-transparent bg-card px-2.5 pt-1.5 pb-2.5";
 const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 const FixLine = ({ fix }: { fix: Fix }) => (
-  <div className="mt-1.5 text-[13px] text-ok">Fixed: {fix.what} ({fix.checkpoint}, {day.format(new Date(fix.at))})</div>
+  <div className="mt-1.5 text-ui text-ok">Fixed: {fix.what} ({fix.checkpoint}, {day.format(new Date(fix.at))})</div>
 );
 const Empty = ({ children }: { children: ReactNode }) => <div className="px-0.5 py-2 text-muted-foreground">{children}</div>;
 const Drawn = ({ note }: { note: Note }) => {
@@ -42,10 +41,10 @@ const NoteCard = memo(function NoteCard({ p: { n, t }, near, editing }: { p: Pla
       onClick={() => editOldNote(n)}
     >
       <div className="flex min-h-9 items-center gap-2 pointer-coarse:min-h-11">
-        <Tip label="Jump here"><Button className={timeButton} onClick={(e) => { e.stopPropagation(); goToNote(n); }}>{stamp(t)}</Button></Tip>
+        <Tip label="Jump here"><Button variant="time" size="md" onClick={(e) => { e.stopPropagation(); goToNote(n); }}>{stamp(t)}</Button></Tip>
         {/* text-label, not muted: muted fails 4.5:1 on the card's near (tint) and hover backgrounds */}
         <span className="min-w-0 flex-1 truncate text-xs text-label" title={where}>{where}</span>
-        <Button variant="ghost" size="icon" className="-me-1.5 size-8 text-muted-foreground pointer-coarse:size-11" title="Delete note" aria-label={`Delete note at ${stamp(t)}`} onClick={(e) => { e.stopPropagation(); removeNote(n); }}>
+        <Button variant="quiet" size="icon-lg" className="-me-1.5 pointer-coarse:size-10" title="Delete note" aria-label={`Delete note at ${stamp(t)}`} onClick={(e) => { e.stopPropagation(); removeNote(n); }}>
           <X />
         </Button>
       </div>
@@ -65,9 +64,9 @@ const DoneCard = memo(function DoneCard({ p: { n, t } }: { p: Placed }) {
   return (
     <article className={card}>
       <div className="flex min-h-9 items-center gap-2 pointer-coarse:min-h-11">
-        <Tip label="Jump here"><Button className={timeButton} onClick={() => goToNote(n)}>{stamp(t)}</Button></Tip>
+        <Tip label="Jump here"><Button variant="time" size="md" onClick={() => goToNote(n)}>{stamp(t)}</Button></Tip>
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">shot {n.shot}</span>
-        <Button variant="secondary" size="lg" className="text-[13px]" onClick={() => reopenNote(n)}>Reopen</Button>
+        <Button variant="secondary" size="md" onClick={() => reopenNote(n)}>Reopen</Button>
       </div>
       {/* Sized up front, or the list would jump as pictures arrive; a Shorts frame as tall as a wide one is wide, not the card's width */}
       {n.img && <img src={`/api/note-img/${n.id}.jpg`} loading="lazy" width={w} height={h} alt="" className={cn("mt-1.5 mb-1 block rounded-md outline-1 -outline-offset-1 outline-white/10", h > w ? "mx-auto h-60 w-auto" : "h-auto w-full")} />}
@@ -86,7 +85,7 @@ function ShowMenu() {
   return (
     <DropdownMenu>
       <Tip label={label}>
-        <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={label} className={cn("relative size-8 flex-none text-muted-foreground pointer-coarse:size-10", changed && "text-primary")} />}>
+        <DropdownMenuTrigger render={<Button variant={changed ? "lit" : "quiet"} size="icon-lg" aria-label={label} className="relative flex-none pointer-coarse:size-10" />}>
           <ListFilter />
           {changed && <span aria-hidden className="absolute top-1 right-1 size-1.5 rounded-full bg-primary" />}
         </DropdownMenuTrigger>
@@ -95,14 +94,14 @@ function ShowMenu() {
         <DropdownMenuGroup>
           <DropdownMenuLabel>Show</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={show} onValueChange={(v) => set({ noteShow: v as NoteShow })}>
-            {SHOWS.map((x) => <DropdownMenuRadioItem key={x.value} value={x.value} className="text-[13px]">{x.title}</DropdownMenuRadioItem>)}
+            {SHOWS.map((x) => <DropdownMenuRadioItem key={x.value} value={x.value}>{x.title}</DropdownMenuRadioItem>)}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>Sort notes to fix</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={sort} onValueChange={(v) => set({ noteSort: v as NoteSort })}>
-            {SORTS.map((x) => <DropdownMenuRadioItem key={x.value} value={x.value} className="text-[13px]">{x.title}</DropdownMenuRadioItem>)}
+            {SORTS.map((x) => <DropdownMenuRadioItem key={x.value} value={x.value}>{x.title}</DropdownMenuRadioItem>)}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
       </DropdownMenuContent>
@@ -150,14 +149,14 @@ export function NoteList() {
     if (r.kind === "open") return <NoteCard p={r.p} near={r.p.n.id === nearNote} editing={r.p.n.id === editing} />;
     if (r.kind === "done") return <DoneCard p={r.p} />;
     if (r.kind === "none") {
-      if (narrowed && ix.open.length) return <Empty>No {show === "drawn" ? "drawn notes" : "notes"} to fix{show === "shot" ? " in this shot" : ""}{q.trim() ? ` match “${q.trim()}”` : ""}. <Button variant="link" className="h-auto p-0 text-[13px]" onClick={clear}>Show all notes</Button></Empty>;
+      if (narrowed && ix.open.length) return <Empty>No {show === "drawn" ? "drawn notes" : "notes"} to fix{show === "shot" ? " in this shot" : ""}{q.trim() ? ` match “${q.trim()}”` : ""}. <Button variant="link" size="inline" onClick={clear}>Show all notes</Button></Empty>;
       return <Empty>{ix.done.length ? "Nothing left to fix" : "No notes yet. Click the picture or press M to add one"}</Empty>;
     }
-    if (r.kind === "noneDone") return <p className="px-2.5 text-[13px] text-muted-foreground">{narrowed && ix.done.length ? "No fixed notes match." : "Notes the AI fixes move here."}</p>;
+    if (r.kind === "noneDone") return <p className="px-2.5 text-ui text-muted-foreground">{narrowed && ix.done.length ? "No fixed notes match." : "Notes the AI fixes move here."}</p>;
     // Folded by default: they are answered, and the list is for what still needs doing. Shown at 0 too, so the creator knows where fixed notes will go
     return (
-      <button type="button" aria-expanded={doneOpen} onClick={() => setDoneOpen(!doneOpen)} className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-[10px] px-2.5 text-[13px] font-semibold text-muted-foreground outline-none hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-        <span aria-hidden className={cn("mx-0.5 size-1.5 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-current", doneOpen && "rotate-45")} />
+      <button type="button" aria-expanded={doneOpen} onClick={() => setDoneOpen(!doneOpen)} className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-ui font-semibold text-muted-foreground outline-none hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+        <ChevronRight aria-hidden className={cn("size-3.5 transition-transform", doneOpen && "rotate-90")} />
         Done ({narrowed ? `${done.length} of ${ix.done.length}` : ix.done.length})
       </button>
     );
@@ -167,7 +166,7 @@ export function NoteList() {
   return (
     <section aria-label="Notes" className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-wrap items-center gap-x-1 px-3 pt-2.5 pb-2 upright:py-1.5 sideways:py-1">
-        <h2 className="flex h-8 items-center px-0.5 text-[13px] font-semibold tabular-nums pointer-coarse:h-10 sideways:h-9">To fix ({narrowed ? `${open.length} of ${ix.open.length}` : ix.open.length})</h2>
+        <h2 className="flex h-8 items-center px-0.5 text-ui font-semibold tabular-nums pointer-coarse:h-10 sideways:h-9">To fix ({narrowed ? `${open.length} of ${ix.open.length}` : ix.open.length})</h2>
         <span role="status" className={cn("flex-1 text-end text-xs whitespace-nowrap text-ok", saved === "busy" && "text-muted-foreground", saved === "fail" && "font-semibold whitespace-normal text-warn")}>{savedText}</span>
       </div>
       {notes.length > 0 && (
@@ -184,14 +183,14 @@ export function NoteList() {
         onWheel={() => { touched.current = performance.now(); }}
         onTouchMove={() => { touched.current = performance.now(); }}
       >
-        <div className="relative w-full" style={{ height: v.getTotalSize() }}>
+        <div className="relative h-(--total) w-full" style={{ "--total": `${v.getTotalSize()}px` }}>
           {v.getVirtualItems().map((it) => (
             <div
               key={it.key}
               data-index={it.index}
               ref={v.measureElement}
-              className="absolute inset-x-0 top-0"
-              style={{ transform: `translateY(${it.start}px)` }}
+              className="absolute inset-x-0 top-0 translate-y-(--start)"
+              style={{ "--start": `${it.start}px` }}
               onFocus={() => { focused.current = rows[it.index].key; }}
               onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focused.current = null; }}
             >

@@ -1,7 +1,7 @@
 // The sound tab: the clip picked on the lanes (its level, fades, length, which file), then every sound in the film's sfx folder,
 // in BGM, SFX and starred tabs. A library row is dragged onto a lane, or + puts it at the playhead; ▶ plays it alone; pointing
 // at it lights its clips, clicking it selects them. Each change is one undo step (Ctrl+Z)
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { Pause, Play, Plus, Redo2, Star, Trash2, Undo2 } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -45,8 +45,8 @@ function Inspector({ clip }: { clip: ClipRef }) {
     <div key={`${clip.list}${clip.i}`} aria-label="Selected clip" role="group" className="flex flex-col">
       <div className="flex items-center gap-2 px-3 pb-1">
         <Badge variant="audio">{bed ? "BED" : "SFX"}</Badge>
-        <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground" title={item?.title}>{item?.title ?? c.name}</span>
-        <Tip label="Delete clip (Delete)"><Button variant="ghost" size="icon" className="-me-1 size-8 text-muted-foreground hover:text-destructive pointer-coarse:size-11" aria-label={`Delete ${c.name}`} onClick={() => removeClip(clip)}><Trash2 /></Button></Tip>
+        <span className="min-w-0 flex-1 truncate text-ui text-muted-foreground" title={item?.title}>{item?.title ?? c.name}</span>
+        <Tip label="Delete clip (Delete)"><Button variant="remove" size="icon-lg" className="-me-1 pointer-coarse:size-10" aria-label={`Delete ${c.name}`} onClick={() => removeClip(clip)}><Trash2 /></Button></Tip>
       </div>
       <Section title="Basic" right={<Reset label="Reset volume, pan and fades" disabled={!c.gain && !c.pan && !fi && !fo} onClick={() => resetBasic(clip)} />}>
         {row("Volume", "gain", c.gain, Math.min(-40, c.gain), Math.max(20, c.gain), 0.1, "dB", 1)}
@@ -71,7 +71,7 @@ function Inspector({ clip }: { clip: ClipRef }) {
           </Select>
         </FieldRow>
         <FieldRow label="Runs">
-          <span className="min-w-0 flex-1 text-[13px] tabular-nums">{stamp(from)} – {stamp(to)}</span>
+          <span className="min-w-0 flex-1 text-ui tabular-nums">{stamp(from)} – {stamp(to)}</span>
         </FieldRow>
         <div className="flex gap-2">
           <Tip label="Move the clip's start to the playhead"><Button variant="secondary" size="sm" className="h-8 flex-1" onClick={() => moveTo(clip, S.t)}>Move to playhead</Button></Tip>
@@ -145,24 +145,24 @@ function Library({ side }: { side: boolean }) {
                 onFocus={() => lightSound(x.name)} onBlur={() => lightSound(null)}
                 className="group flex min-h-11 cursor-grab touch-none items-center select-none gap-1 rounded-lg px-1 hover:bg-card active:cursor-grabbing"
               >
-                <Button variant="ghost" size="icon" className={cn("size-8 flex-none text-muted-foreground hover:text-foreground pointer-coarse:size-10", now === x.name && "text-primary")} aria-label={`${now === x.name ? "Stop" : "Preview"} ${x.name}`} onClick={() => listen(x.name)}>
+                <Button variant={now === x.name ? "lit" : "quiet"} size="icon-lg" className="flex-none pointer-coarse:size-10" aria-label={`${now === x.name ? "Stop" : "Preview"} ${x.name}`} onClick={() => listen(x.name)}>
                   {now === x.name ? <Pause /> : <Play />}
                 </Button>
                 <span className="flex min-w-0 flex-1 flex-col py-1">
-                  <span translate="no" className="truncate text-[13px]">{x.name}</span>
+                  <span translate="no" className="truncate text-ui">{x.name}</span>
                   {x.title && <span className="truncate text-xs text-muted-foreground" title={x.for ?? x.title}>{x.title}</span>}
                 </span>
                 {uses > 0 && (
                   <Tip label={uses > 1 ? `Select its ${uses} clips on the tracks` : "Select its clip on the tracks"}>
-                    <Button variant="ghost" size="sm" className="h-7 flex-none px-1.5 text-xs text-muted-foreground tabular-nums hover:text-foreground" aria-label={`Select the ${uses > 1 ? `${uses} clips` : "clip"} of ${x.name}`} onClick={() => pickUses(x.name)}>
-                      {uses}×
+                    <Button variant="quiet" size="sm" className="h-7 flex-none" aria-label={`Select the ${uses > 1 ? `${uses} clips` : "clip"} of ${x.name}`} onClick={() => pickUses(x.name)}>
+                      <span className="tabular-nums">{uses}×</span>
                     </Button>
                   </Tip>
                 )}
                 <span className="w-11 flex-none text-end text-xs text-muted-foreground tabular-nums">{secs(x.seconds)}</span>
-                <FavoriteStar kind="sounds" id={x.name} name={x.name} className={cn(!favs.includes(x.name) && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100")} />
+                <FavoriteStar kind="sounds" id={x.name} name={x.name} reveal={!favs.includes(x.name)} />
                 <Tip label="Add at the playhead, on the first free track">
-                  <Button variant="ghost" size="icon" className="size-8 flex-none text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label={`Add ${x.name} at the playhead`} onClick={() => addClip(x.name, S.t)}>
+                  <Button variant="quiet" size="icon-lg" className="flex-none pointer-coarse:size-10" aria-label={`Add ${x.name} at the playhead`} onClick={() => addClip(x.name, S.t)}>
                     <Plus />
                   </Button>
                 </Tip>
@@ -170,9 +170,9 @@ function Library({ side }: { side: boolean }) {
             );
           })}
           {!shown.length && (
-            <li className="flex flex-col items-start gap-1.5 px-1 py-2 text-[13px] text-muted-foreground">
+            <li className="flex flex-col items-start gap-1.5 px-1 py-2 text-ui text-muted-foreground">
               {!library.length ? "The film's sound folder is empty" : typed ? `No ${meta.one}s match "${q.trim()}"` : tab === "fav" ? "No favorite sounds yet. Click the star on a sound to keep it here, for every film." : `This film has no ${meta.one}s`}
-              {elsewhere.map((t) => <Button key={t.id} variant="secondary" size="sm" className="h-8 text-[13px]" onClick={() => setTab(t.id)}>{found[t.id].length} in {t.title}</Button>)}
+              {elsewhere.map((t) => <Button key={t.id} variant="secondary" size="md" onClick={() => setTab(t.id)}>{found[t.id].length} in {t.title}</Button>)}
             </li>
           )}
         </ul>
@@ -192,17 +192,17 @@ export function SoundPanel({ part = "all" }: { part?: "all" | "clip" | "library"
         <p role="status" className={cn("min-w-0 flex-1 px-0.5 text-xs text-muted-foreground", saved === "fail" && "font-semibold text-warn")}>
           {saved === "busy" ? "Saving…" : saved === "fail" ? "Not saved. Retrying…" : "All changes saved"}
         </p>
-        <Tip label="Select the clip playing at the playhead; click again for the next one there"><Button variant="ghost" size="sm" className="h-8 text-[13px] text-muted-foreground hover:text-foreground" onClick={() => pickAt(S.t)}>At playhead</Button></Tip>
-        <Tip label="Undo (Ctrl+Z)"><Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label="Undo" disabled={!canUndo()} onClick={undo}><Undo2 /></Button></Tip>
-        <Tip label="Redo (Ctrl+Y)"><Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label="Redo" disabled={!canRedo()} onClick={redo}><Redo2 /></Button></Tip>
+        <Tip label="Select the clip playing at the playhead; click again for the next one there"><Button variant="quiet" size="md" onClick={() => pickAt(S.t)}>At playhead</Button></Tip>
+        <Tip label="Undo (Ctrl+Z)"><Button variant="quiet" size="icon-lg" className="pointer-coarse:size-10" aria-label="Undo" disabled={!canUndo()} onClick={undo}><Undo2 /></Button></Tip>
+        <Tip label="Redo (Ctrl+Y)"><Button variant="quiet" size="icon-lg" className="pointer-coarse:size-10" aria-label="Redo" disabled={!canRedo()} onClick={redo}><Redo2 /></Button></Tip>
       </div>
       {clip ? <Inspector clip={clip} /> : clips.length > 1 ? (
         <section aria-label="Selected clips" className="mx-3 flex items-center gap-2 rounded-xl bg-card p-3">
-          <p className="min-w-0 flex-1 text-[13px]">{clips.length} clips selected<span className="block text-xs text-muted-foreground">Drag one to move them all</span></p>
+          <p className="min-w-0 flex-1 text-ui">{clips.length} clips selected<span className="block text-xs text-muted-foreground">Drag one to move them all</span></p>
           <Button variant="ghost" size="sm" className="h-8" onClick={() => setClips([])}>Deselect</Button>
-          <Tip label="Delete selected clips (Delete)"><Button variant="ghost" size="icon" className="-me-1 size-8 text-muted-foreground hover:text-destructive pointer-coarse:size-11" aria-label={`Delete ${clips.length} selected clips`} onClick={() => removeClips(clips)}><Trash2 /></Button></Tip>
+          <Tip label="Delete selected clips (Delete)"><Button variant="remove" size="icon-lg" className="-me-1 pointer-coarse:size-10" aria-label={`Delete ${clips.length} selected clips`} onClick={() => removeClips(clips)}><Trash2 /></Button></Tip>
         </section>
-      ) : <div className="mx-3 rounded-xl bg-card p-3 text-[13px]">
+      ) : <div className="mx-3 rounded-xl bg-card p-3 text-ui">
           <p className="font-medium">No clip selected</p>
           <p className="text-muted-foreground">Click a clip on an audio track to change its volume, fades and duration.</p>
         </div>}

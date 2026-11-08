@@ -1,7 +1,6 @@
 // The bar over the timeline, as CapCut's: the pointer's mode (select, or split where clicked), undo and redo, then the cuts at the
 // playhead (split, delete left, delete right, delete), and on the right auto snapping, the preview axis and the zoom (to the whole
 // film, out, CapCut's slider, in). Each does what its key does, so a beginner can see the tools before learning them
-import { cn } from "cn";
 import { ArrowLeftToLine, ArrowRightToLine, FoldHorizontal, MousePointer2, ScanSearch, Redo2, Scissors, ScissorsLineDashed, SeparatorVertical, Trash2, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
 import type { ComponentType } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,8 +23,7 @@ function Tool({ label, icon: Icon, onClick, disabled, pressed }: { label: string
   return (
     <Tip label={label}>
       <Button
-        variant="ghost" size="icon" aria-label={name} aria-pressed={pressed} disabled={disabled} onClick={onClick}
-        className={cn("size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10", pressed && "bg-tint text-primary hover:text-primary")}
+        variant="quiet" size="icon-lg" aria-label={name} aria-pressed={pressed} disabled={disabled} onClick={onClick} className="pointer-coarse:size-10"
       >
         <Icon className="size-4" />
       </Button>
@@ -69,7 +67,7 @@ export function TimelineBar() {
       {/* The In to Out stretch (inout.ts), named while there is one: blue as on the ruler, and the way to clear it */}
       {inOut && (
         <Tip label="In to Out (I, O): a note written inside it is about the whole stretch, and played from inside it loops. Clear it (Alt+X)">
-          <Button variant="ghost" size="sm" aria-label={`Clear In and Out, ${rangeText(inOut)}`} onClick={clearInOut} className="ms-1.5 h-7 gap-1 rounded-md bg-in-out/18 px-2 text-xs text-in-out-text tabular-nums hover:bg-in-out/30 hover:text-foreground pointer-coarse:h-10">
+          <Button variant="in-out" size="sm" aria-label={`Clear In and Out, ${rangeText(inOut)}`} onClick={clearInOut} className="ms-1.5 h-7 pointer-coarse:h-10">
             {rangeText(inOut)}<X className="size-3.5" />
           </Button>
         </Tip>

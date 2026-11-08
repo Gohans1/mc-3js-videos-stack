@@ -1,6 +1,7 @@
 // Settings, in the panel the "…" button opens (Transport.tsx), so the notes and the sound beside the picture stay put. Heavy or
 // slow options sit in their own warned section; every option whose name doesn't explain itself has a "?"
-import { X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
@@ -36,16 +37,16 @@ const Keys = ({ keys }: { keys: string[] }) => (
 // Each part's name sits above one box holding all of its controls, so a control never reads as part of the next section.
 // rows: one setting per line with a rule between them; otherwise the box holds a block (a list, buttons, text)
 const Section = ({ title, help, children, rows, warn, className }: { title: ReactNode; help?: [string, string]; children: ReactNode; rows?: boolean; warn?: boolean; className?: string }) => (
-  <section className={`flex flex-col gap-2 ${className ?? ""}`}>
-    <h3 className={`flex min-h-5 items-center gap-1.5 px-1 text-[13px] font-semibold ${warn ? "text-warn" : ""}`}>{title}{help && <HelpTip label={help[0]}>{help[1]}</HelpTip>}</h3>
-    <div className={`rounded-xl ${warn ? "bg-warn-bg" : "bg-card"} ${rows ? "divide-y divide-border px-3" : "flex flex-col gap-2 p-3"}`}>{children}</div>
+  <section className={cn("flex flex-col gap-2", className)}>
+    <h3 className={cn("flex min-h-5 items-center gap-1.5 px-1 text-ui font-semibold", warn && "text-warn")}>{title}{help && <HelpTip label={help[0]}>{help[1]}</HelpTip>}</h3>
+    <div className={cn("rounded-xl", warn ? "bg-warn-bg" : "bg-card", rows ? "divide-y divide-border px-3" : "flex flex-col gap-2 p-3")}>{children}</div>
   </section>
 );
 function SwitchRow({ id, label, keys, help, checked, onChange }: { id: string; label: string; keys?: string[]; help?: string; checked: boolean; onChange: (on: boolean) => void }) {
   return (
-    <Field orientation="horizontal" className="min-h-10 justify-between gap-3">
+    <Field orientation="horizontal" className="min-h-10 justify-between">
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        <FieldLabel htmlFor={id} className="min-h-10 cursor-pointer text-sm font-normal">{label}{keys && <Keys keys={keys} />}</FieldLabel>
+        <FieldLabel htmlFor={id} variant="row" className="min-h-10 cursor-pointer">{label}{keys && <Keys keys={keys} />}</FieldLabel>
         {help && <HelpTip label={label}>{help}</HelpTip>}
       </span>
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
@@ -77,10 +78,10 @@ function Options() {
         {g.options.map((o, i) => (
           <Button
             key={o.id}
-            variant="secondary"
+            variant="choice"
+            size="row"
             aria-pressed={o.id === g.pick}
             title={o.source}
-            className="h-auto min-h-9 justify-between gap-2 text-left text-sm font-normal whitespace-normal aria-pressed:bg-tint aria-pressed:text-primary"
             onClick={() => choose(g.name, i)}
           >
             <span>{i} {o.off ? "Off" : o.title}</span>
@@ -179,10 +180,10 @@ export function Settings() {
   })));
   const step = (d: number) => seek(S.t + d);
   return (
-    <div id="settings" className="flex min-h-0 flex-1 flex-col">
+    <div id="settings" className="flex min-h-0 flex-1 flex-col text-sm">
       <div className="flex flex-none items-center justify-between py-2 pr-1.5 pl-3">
-        <h2 id="settings-title" className="text-[15px] font-semibold">Settings</h2>
-        <Tip label="Esc"><Button variant="ghost" size="icon" className="size-10 text-muted-foreground" aria-label="Close settings" onClick={() => set({ settingsOpen: false })}><X /></Button></Tip>
+        <h2 id="settings-title" className="text-title font-semibold">Settings</h2>
+        <Tip label="Esc"><Button variant="quiet" size="icon-lg" className="size-10" aria-label="Close settings" onClick={() => set({ settingsOpen: false })}><X /></Button></Tip>
       </div>
       <div data-arrow-scroll className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto overscroll-contain px-3 pt-1 pb-3 scroll-fade">
         {s.contract.length > 0 && (
@@ -205,7 +206,7 @@ export function Settings() {
         <Section title="View" rows>
           <Row>
             <span className="text-sm whitespace-nowrap">Speed</span>
-            <Speed className="bg-background" item="h-8 pointer-coarse:h-10" />
+            <Speed />
           </Row>
           <SwitchRow id="captions" label="Captions" checked={s.captions} onChange={(on) => setPref("captions", on)} />
           {/* Also under the picture, but that button gives way first on the narrowest phones (Transport.tsx) */}
@@ -231,9 +232,9 @@ export function Settings() {
               Aspect ratio
               <HelpTip label="Aspect ratio">16:9 for YouTube videos, 9:16 for Shorts. It belongs to the film (its package.json, "live-studio" ratio): the picture here, the drafts and the checks all take it. Changing it reloads the studio at this second.</HelpTip>
             </span>
-            <ToggleGroup value={[s.ratio]} onValueChange={(v: string[]) => { if (v[0]) setRatio(v[0] as Ratio); }} aria-label="Aspect ratio" spacing={0.5} className="rounded-[10px] bg-background p-0.5">
+            <ToggleGroup value={[s.ratio]} onValueChange={(v: string[]) => { if (v[0]) setRatio(v[0] as Ratio); }} aria-label="Aspect ratio" spacing={0.5} variant="segment" size="lg">
               {RATIOS.map((r) => (
-                <ToggleGroupItem key={r} value={r} className="h-8 px-2.5 text-sm text-muted-foreground tabular-nums aria-pressed:bg-raised-3 aria-pressed:font-semibold aria-pressed:text-foreground pointer-coarse:h-10">{r}</ToggleGroupItem>
+                <ToggleGroupItem key={r} value={r} className="pointer-coarse:h-10">{r}</ToggleGroupItem>
               ))}
             </ToggleGroup>
           </Row>
@@ -269,7 +270,7 @@ export function Settings() {
           </Row>
         </Section>
         <Section title="Timeline" help={["Timeline", "Click a block on the timeline (a sentence or an action) to see its second and word here."]}>
-          <div className="flex flex-col gap-0.5 text-[13px] text-muted-foreground first:*:text-foreground">
+          <div className="flex flex-col gap-0.5 text-ui text-muted-foreground first:*:text-foreground">
             {s.selection.map((line) => <div key={line}>{line}</div>)}
           </div>
         </Section>
@@ -288,11 +289,11 @@ export function Settings() {
           </Section>
         )}
         <details className="group pointer-coarse:hidden">
-          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 px-1 text-[13px] font-semibold [&::-webkit-details-marker]:hidden">
-            <span aria-hidden className="mx-0.5 size-1.5 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-current group-open:rotate-45" />
+          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 px-1 text-ui font-semibold [&::-webkit-details-marker]:hidden">
+            <ChevronRight aria-hidden className="size-3.5 transition-transform group-open:rotate-90" />
             Shortcuts
           </summary>
-          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 rounded-xl bg-card p-3 text-[13px]">
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 rounded-xl bg-card p-3 text-ui">
             {KEYS.map(([k, v], i) => (
               <div key={i} className="contents">
                 <dt className="flex flex-wrap items-center gap-0.5">{k}</dt>

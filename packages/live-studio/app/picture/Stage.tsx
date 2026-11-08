@@ -1,6 +1,6 @@
 // The picture and what sits on it. The engine draws the frame, the clock, the caption and the pins straight
 // into these elements every frame; React only draws what changes rarely (badges, option chips, loading, errors)
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Bind } from "../core/state";
 import { reloadNow } from "../playback/transport";
@@ -24,7 +24,7 @@ function Badges() {
       {free && night && <b className={badge}>NIGHT VISION</b>}
       {final && <b className={badge}>FINAL QUALITY</b>}
       {contract > 0 && <b className={badge}>FILM CONTRACT ERRORS ({contract})</b>}
-      {newBuild && <Tip label="The film's code changed. Reloads at this second; your draft note stays"><Button size="sm" className="pointer-events-auto h-7 rounded-md px-2.5 text-xs font-semibold" onClick={reloadNow}>New version · Reload</Button></Tip>}
+      {newBuild && <Tip label="The film's code changed. Reloads at this second; your draft note stays"><Button size="md" className="pointer-events-auto h-7" onClick={reloadNow}>New version · Reload</Button></Tip>}
       <span role="status" className="max-w-full truncate rounded-md bg-black/72 px-2 py-px text-xs empty:hidden">{status}</span>
     </div>
   );
@@ -46,7 +46,7 @@ export function Stage({ bind }: { bind: Bind }) {
           <CompareOverlay />
           {/* Above the chips: a passed note shows for 3 s only, and it lets taps through to them */}
           {/* The picked text items' outlines, where the film draws them (text/onpicture.ts) */}
-          <div ref={bind("textsel")} aria-hidden className="pointer-events-none absolute inset-0 z-3 *:absolute *:border *:border-white/90 *:shadow-[0_0_0_1px_rgb(0_0_0/0.45)]" />
+          <div ref={bind("textsel")} aria-hidden className="pointer-events-none absolute inset-0 z-3 *:absolute *:border *:border-white/90 *:ring-1 *:ring-black/45" />
           <div ref={bind("pins")} className="pointer-events-none absolute inset-0 z-4 overflow-hidden" />
           {/* Strokes (notes/ink.ts): drawn on while a tool is in hand, and otherwise lets every tap through */}
           <canvas ref={bind("ink")} className={cn("absolute inset-0 z-5 block size-full touch-none", ink ? "cursor-crosshair" : "pointer-events-none")} />

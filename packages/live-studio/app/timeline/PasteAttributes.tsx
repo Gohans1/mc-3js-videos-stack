@@ -11,7 +11,7 @@ export function PasteAttributes() {
   const open = useStudio((s) => s.pasteAsk), go = useRef<HTMLButtonElement>(null);
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) set({ pasteAsk: false }); }}>
-      <DialogContent initialFocus={go} className="gap-4 text-[13px]">
+      <DialogContent initialFocus={go}>
         <Body go={go} />
       </DialogContent>
     </Dialog>
@@ -26,8 +26,8 @@ function Body({ go }: { go: RefObject<HTMLButtonElement | null> }) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); pasteAttrs(on.map((c) => c.id)); }} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle className="text-[15px] font-semibold">Paste attributes?</DialogTitle>
-        <DialogDescription className="text-[13px]">{where}</DialogDescription>
+        <DialogTitle>Paste attributes?</DialogTitle>
+        <DialogDescription>{where}</DialogDescription>
       </DialogHeader>
       <fieldset className="-mx-2 flex flex-col">
         <legend className="sr-only">Attributes to paste</legend>

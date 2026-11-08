@@ -31,9 +31,9 @@ export function Oscilloscope({ bind }: { bind: Bind }) {
       className="grid h-[clamp(7rem,22%,10rem)] w-full flex-none grid-cols-3 gap-1 border-t border-black bg-black p-1 upright:hidden sideways:hidden"
     >
       {PANES.map((p) => (
-        <figure key={p.key} title={p.tip} className="relative m-0 min-w-0 overflow-hidden rounded-sm bg-[#0B0B0B]">
+        <figure key={p.key} title={p.tip} className="relative m-0 min-w-0 overflow-hidden rounded-sm bg-black">
           <canvas ref={bind(p.key)} role="img" aria-label={`${p.title}. ${p.tip}`} className="absolute inset-0 block size-full" />
-          <figcaption className="pointer-events-none absolute top-1 right-1.5 text-[11px] text-white/45">{p.title}</figcaption>
+          <figcaption className="pointer-events-none absolute top-1 right-1.5 text-tag text-white/45">{p.title}</figcaption>
         </figure>
       ))}
     </div>

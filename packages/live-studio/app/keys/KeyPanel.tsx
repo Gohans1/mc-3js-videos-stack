@@ -1,7 +1,7 @@
 // The Key tab: the keys picked on the key rows (keys/keyrows.ts). One key: its time and every field it carries, each with the
 // control its value calls for (a number, a word the row already uses, on/off, a short list of numbers); a film needs no setup
 // for this. Several: move or delete them together. Each change is one undo step (Ctrl+Z), shared with the sound and camera
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,8 +15,8 @@ import { get, say, useStudio } from "../core/store";
 import { type KeyRef } from "./slice";
 import { Tip } from "../components/Tip";
 
-const label = "text-[13px] text-muted-foreground";
-const box = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-2 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base";
+const label = "text-ui text-muted-foreground";
+const box = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-2 text-ui text-foreground outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base";
 // A name the row repeats (a pose, a mood: no spaces) is picked from the ones it uses, since a new one needs the film's code; a
 // sentence is typed
 const MAX_CHOICES = 80;
@@ -49,19 +49,19 @@ function Field({ r, k, field, optional }: { r: KeyRef; k: Key; field: string; op
     const names = used.length < row.filter((x) => typeof x[field] === "string").length && used.every((u) => !/\s/.test(u));
     control = names && used.length <= MAX_CHOICES ? (
       <Select items={used.map((u) => ({ value: u, label: u }))} value={v} onValueChange={(x) => { if (x !== v) save(x); }}>
-        <SelectTrigger className="h-8 w-full min-w-0 text-[13px]" aria-label={field}><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-8 w-full min-w-0" aria-label={field}><SelectValue /></SelectTrigger>
         <SelectContent>{used.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
       </Select>
     ) : <Typed name={field} value={v} onSave={(s) => save(s)} />;
   } else if (Array.isArray(v) && v.length <= 4 && v.every((x) => typeof x === "number")) {
     control = (
-      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${v.length}, minmax(0, 1fr))` }}>
+      <div className="grid auto-cols-fr grid-flow-col gap-1">
         {v.map((x, j) => <Typed key={j} tight name={`${field} ${j + 1}`} number value={x} onSave={(s) => { const n = Number(s); if (!Number.isFinite(n) || s.trim() === "") return say(`${field} needs a number`); save(v.map((y, m) => (m === j ? n : y))); }} />)}
       </div>
     );
   } else if (v === null && row.some((x) => x[field] != null)) {
     // Off on this key (a hand let go, no gaze target): turned on with the value the nearest key before had
-    const was = [...row.slice(0, r.i)].reverse().find((x) => x[field] != null)?.[field] ?? row.find((x) => x[field] != null)![field];
+    const was = row.slice(0, r.i).findLast((x) => x[field] != null)?.[field] ?? row.find((x) => x[field] != null)![field];
     control = <Button variant="secondary" size="sm" className="h-8 justify-start" onClick={() => save(structuredClone(was))}><Plus data-icon="inline-start" />Turn on (off here)</Button>;
   } else control = <code translate="no" className="block truncate rounded-md bg-background px-2 py-1.5 text-xs text-muted-foreground">{JSON.stringify(v)}</code>;
   return (
@@ -70,11 +70,11 @@ function Field({ r, k, field, optional }: { r: KeyRef; k: Key; field: string; op
       {control}
       {v !== null && row.some((x) => x[field] === null) ? (
         <Tip label={`Turn ${field} off on this keyframe (null), as on some others in this track`}>
-          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label={`Turn off ${field}`} onClick={() => save(null)}><X /></Button>
+          <Button variant="quiet" size="icon" className="pointer-coarse:size-10" aria-label={`Turn off ${field}`} onClick={() => save(null)}><X /></Button>
         </Tip>
       ) : optional ? (
         <Tip label={`Remove ${field} from this keyframe (some others in this track don't have it)`}>
-          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label={`Remove ${field}`} onClick={() => save(undefined)}><X /></Button>
+          <Button variant="quiet" size="icon" className="pointer-coarse:size-10" aria-label={`Remove ${field}`} onClick={() => save(undefined)}><X /></Button>
         </Tip>
       ) : <span className="size-7 pointer-coarse:size-10" />}
       {field === "clip" && <p className="col-span-3 text-xs text-muted-foreground">Clips load with the page. Reload to see a new one.</p>}
@@ -94,12 +94,12 @@ function One({ r }: { r: KeyRef }) {
     <section aria-label="Selected keyframe" className="flex flex-col gap-3 rounded-xl bg-card p-3">
       <div className="flex items-center gap-1">
         <Tip label="Previous keyframe in this track"><Button variant="ghost" size="icon" className="size-8 pointer-coarse:size-10" aria-label="Previous keyframe" disabled={r.i === 0} onClick={() => go(r.i - 1)}><ChevronLeft /></Button></Tip>
-        <p className="min-w-0 flex-1 text-center text-[13px] tabular-nums">
+        <p className="min-w-0 flex-1 text-center text-ui tabular-nums">
           <span translate="no" className="font-semibold">{r.path.join(".")}</span> {stamp(k.t)}
           <span className="block truncate text-xs text-muted-foreground">{r.i + 1} of {ks.length}{nameOf(k) ? `: ${nameOf(k)}` : ""}</span>
         </p>
         <Tip label="Next keyframe in this track"><Button variant="ghost" size="icon" className="size-8 pointer-coarse:size-10" aria-label="Next keyframe" disabled={r.i === ks.length - 1} onClick={() => go(r.i + 1)}><ChevronRight /></Button></Tip>
-        <Tip label="Delete keyframe (Delete)"><Button variant="ghost" size="icon" aria-label="Delete keyframe" className="size-8 text-muted-foreground hover:text-destructive pointer-coarse:size-10" onClick={() => removeKeys([r])}><Trash2 /></Button></Tip>
+        <Tip label="Delete keyframe (Delete)"><Button variant="remove" size="icon-lg" aria-label="Delete keyframe" className="pointer-coarse:size-10" onClick={() => removeKeys([r])}><Trash2 /></Button></Tip>
       </div>
       <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2">
         <span className={label}>Time (s)</span>
@@ -114,7 +114,7 @@ function One({ r }: { r: KeyRef }) {
           <span className="text-xs text-muted-foreground">Add:</span>
           {missing.map((f) => (
             <Tip key={f} label={`Add ${f}, copied from the nearest keyframe before that has it`}>
-              <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setField(r, f, structuredClone(lastWith(f)))}><Plus data-icon="inline-start" /><span translate="no">{f}</span></Button>
+              <Button variant="secondary" onClick={() => setField(r, f, structuredClone(lastWith(f)))}><Plus data-icon="inline-start" /><span translate="no">{f}</span></Button>
             </Tip>
           ))}
         </div>
@@ -138,14 +138,14 @@ function Many({ refs }: { refs: KeyRef[] }) {
   const ts = refs.map((r) => keyOf(r).t), names = [...new Set(refs.map((r) => r.path.join(".")))];
   return (
     <section aria-label="Selected keyframes" className="flex flex-col gap-3 rounded-xl bg-card p-3">
-      <p className="text-[13px]">
+      <p className="text-ui">
         <span className="font-semibold tabular-nums">{refs.length} keyframes</span>, {stamp(Math.min(...ts))} → {stamp(Math.max(...ts))}
         <span translate="no" className="block text-xs text-muted-foreground">{names.join(", ")}</span>
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         <Nudge refs={refs} />
         <Button variant="secondary" size="sm" className="h-8" onClick={() => removeKeys(refs)}><Trash2 data-icon="inline-start" />Delete {refs.length} keyframes</Button>
-        <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={() => pickKeys([])}>Deselect</Button>
+        <Button variant="quiet" size="sm" className="h-8" onClick={() => pickKeys([])}>Deselect</Button>
       </div>
       <p className="text-xs text-muted-foreground">Drag one to move them all.</p>
     </section>
@@ -167,7 +167,7 @@ function AtPlayhead({ add }: { add?: boolean }) {
   const what = add ? "Add a keyframe at the playhead to…" : "Select the keyframe nearest the playhead in…";
   return (
     <Select items={rows.map((r) => ({ value: r.id, label: r.label }))} value={null} onValueChange={(v) => v && run(v as string)}>
-      <SelectTrigger className="h-9 w-full min-w-0 text-[13px]" aria-label={what}><SelectValue placeholder={what} /></SelectTrigger>
+      <SelectTrigger className="h-9 w-full min-w-0" aria-label={what}><SelectValue placeholder={what} /></SelectTrigger>
       <SelectContent>{rows.map((r) => <SelectItem key={r.id} value={r.id}><span translate="no">{files[r.f].file.split("/").pop()} › {r.label}</span></SelectItem>)}</SelectContent>
     </Select>
   );
@@ -183,13 +183,13 @@ export function KeyPanel() {
         <p role="status" className={cn("min-w-0 flex-1 px-0.5 text-xs text-muted-foreground", saved === "fail" && "font-semibold text-warn")}>
           {saved === "busy" ? "Saving…" : saved === "fail" ? "Not saved. Retrying…" : "All changes saved"}
         </p>
-        <Tip label="Undo (Ctrl+Z)"><Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label="Undo" disabled={!canUndo()} onClick={undo}><Undo2 /></Button></Tip>
-        <Tip label="Redo (Ctrl+Y)"><Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label="Redo" disabled={!canRedo()} onClick={redo}><Redo2 /></Button></Tip>
+        <Tip label="Undo (Ctrl+Z)"><Button variant="quiet" size="icon-lg" className="pointer-coarse:size-10" aria-label="Undo" disabled={!canUndo()} onClick={undo}><Undo2 /></Button></Tip>
+        <Tip label="Redo (Ctrl+Y)"><Button variant="quiet" size="icon-lg" className="pointer-coarse:size-10" aria-label="Redo" disabled={!canRedo()} onClick={redo}><Redo2 /></Button></Tip>
       </div>
       <AtPlayhead />
       <AtPlayhead add />
       {live.length === 1 ? <One key={`${live[0].f}:${live[0].path.join(".")}:${live[0].i}`} r={live[0]} /> : live.length > 1 ? <Many refs={live} /> : (
-        <div className="rounded-xl bg-card p-3 text-[13px]">
+        <div className="rounded-xl bg-card p-3 text-ui">
           <p className="font-medium">No keyframe selected</p>
           <p className="text-muted-foreground">Click a diamond on a keyframe track to edit a pose, a face, a position or a prop.</p>
         </div>

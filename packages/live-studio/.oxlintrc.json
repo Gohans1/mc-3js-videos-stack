@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["@shadcn/lint"],
+  "ignorePatterns": ["demo/**", "test/fixtures/**"],
+  "rules": {
+    "shadcn/no-raw-colors": "error",
+    "shadcn/no-arbitrary-values": ["error", { "allow": ["layout"] }],
+    "shadcn/no-unknown-classes": "error",
+    "shadcn/require-static-classes": "error",
+    "shadcn/no-restyle": ["error", { "allow": ["layout"] }],
+    "shadcn/no-inline-styles": "error"
+  },
+  "overrides": [
+    {
+      "files": ["app/components/ui/**"],
+      "rules": { "shadcn/no-restyle": "off", "shadcn/no-arbitrary-values": "off" }
+    }
+  ]
+}

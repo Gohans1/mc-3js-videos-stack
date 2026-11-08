@@ -2,6 +2,7 @@
 // the first text track with room by a click on its tile (text.ts addPreset). Each tile shows the look it adds, in the film's own
 // fonts (the film loads them with film-stage/titles.ts)
 import { Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Tip } from "../components/Tip";
 import { S } from "../core/state";
 import { addPreset, type Preset, PRESETS, SHAPES } from "./text";
@@ -10,14 +11,18 @@ const familyOf = (font?: string) => S.tools?.titles?.fonts.find((f) => f.id === 
 
 function Look({ p }: { p: Preset }) {
   const it = p.item;
-  if (it.kind === "arrow") return <svg aria-hidden viewBox="0 0 64 36" className="h-9 text-[#E5484D]"><path d="M14 26 L46 12 M38 10 L47 12 L42 20" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-  if (it.kind === "circle") return <svg aria-hidden viewBox="0 0 64 36" className="h-9 text-[#E5484D]"><ellipse cx="32" cy="18" rx="22" ry="13" fill="none" stroke="currentColor" strokeWidth="3" /></svg>;
+  if (it.kind === "arrow") return <svg aria-hidden viewBox="0 0 64 36" className="h-9 text-destructive"><path d="M14 26 L46 12 M38 10 L47 12 L42 20" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (it.kind === "circle") return <svg aria-hidden viewBox="0 0 64 36" className="h-9 text-destructive"><ellipse cx="32" cy="18" rx="22" ry="13" fill="none" stroke="currentColor" strokeWidth="3" /></svg>;
   const line = (it.text ?? "").split("\n")[0];
   return (
     <span
       aria-hidden
-      style={{ fontFamily: familyOf(it.font), fontWeight: it.bold ? 700 : it.font === "mono" ? 400 : 500, letterSpacing: `${it.spacing ?? 0}em` }}
-      className={it.align === "left" ? "self-end justify-self-start ps-2 pb-1.5 text-[11px] text-white" : "text-[15px] text-white"}
+      style={{ "--font": familyOf(it.font), "--tracking": `${it.spacing ?? 0}em` }}
+      className={cn(
+        "font-(family-name:--font) tracking-(--tracking) text-white",
+        it.bold ? "font-bold" : it.font === "mono" ? "font-normal" : "font-medium",
+        it.align === "left" ? "self-end justify-self-start ps-2 pb-1.5 text-tag" : "text-title",
+      )}
     >
       {line}
     </span>
@@ -48,7 +53,7 @@ export function TextLibrary() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-3 pb-3 scroll-fade">
       {([["Text", PRESETS], ["Shapes", SHAPES]] as const).map(([title, list]) => (
         <section key={title} aria-label={title} className="flex flex-col gap-2">
-          <h3 className="text-[13px] font-semibold">{title}</h3>
+          <h3 className="text-ui font-semibold">{title}</h3>
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-x-2.5 gap-y-3">{list.map((p) => <Tile key={p.id} p={p} />)}</ul>
         </section>
       ))}

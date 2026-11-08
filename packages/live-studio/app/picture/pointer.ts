@@ -3,7 +3,6 @@
 // no right button, pins the note. Dragging and the flying keys move the free camera, and a left drag on the film's own view turns
 // the free camera on from that view, turning
 import { S } from "../core/state";
-import { get } from "../core/store";
 import { sketch } from "../notes/ink";
 import { openNote } from "../notes/notes";
 import { textPress } from "../text/onpicture";

@@ -1,5 +1,6 @@
 // The snapshot over the picture while \ or the Compare button is held (picture/snapshot.ts), labelled so it never passes for now
 import { Camera, SquareSplitHorizontal } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { stamp } from "../core/time";
@@ -40,11 +41,11 @@ export function SnapshotButtons({ className }: { className: string }) {
   return (
     <>
       <Tip label="Snapshot (Shift+\): keep this picture to compare with after a change">
-        <Button variant="ghost" className={className} aria-label="Take snapshot" onClick={takeSnapshot}><Camera /></Button>
+        <Button variant="quiet" size="icon-lg" className={cn("pointer-coarse:size-10", className)} aria-label="Take snapshot" onClick={takeSnapshot}><Camera /></Button>
       </Tip>
       {still && (
         <Tip label="Hold to show the snapshot over the picture (hold \)">
-          <Button variant="ghost" className={`${className} select-none aria-pressed:bg-tint aria-pressed:text-primary`} aria-label="Compare with snapshot" aria-pressed={comparing}
+          <Button variant="quiet" size="icon-lg" className={cn("select-none pointer-coarse:size-10", className)} aria-label="Compare with snapshot" aria-pressed={comparing}
             onPointerDown={(e) => { e.preventDefault(); compare(true); }} onPointerUp={hold(false)} onPointerLeave={hold(false)} onPointerCancel={hold(false)}
             onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); compare(true); } }} onKeyUp={hold(false)}>
             <SquareSplitHorizontal />

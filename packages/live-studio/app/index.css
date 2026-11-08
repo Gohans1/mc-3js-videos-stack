@@ -89,6 +89,16 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* CapCut 9.7's type steps (px, so a phone's larger rem leaves them be) and the studio's floating surfaces. A name added
+   here goes in lib/utils.ts too, or cn() takes text-ui for a colour and drops it beside text-primary */
+@theme {
+    --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
+    --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
+    --text-title: 15px; /* a panel's or dialog's heading */
+    --shadow-float: 0 4px 16px rgb(0 0 0 / 0.5); /* a bar over the picture */
+    --shadow-sheet: 0 8px 20px rgb(0 0 0 / 0.6); /* the note sheet over the picture on a phone */
+}
+
 /* The film's frame shape, until picture/frame.ts sets it from the film */
 :root {
     --frame: 16 / 9;

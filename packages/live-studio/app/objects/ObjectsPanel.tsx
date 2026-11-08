@@ -2,7 +2,7 @@
 // the playhead, its clip if it's a mob), then what is in the film already, then everything it can take: the game's own blocks
 // and mobs first, as Minecraft's creative tabs put them, and every custom block (the shared props, the mod picks) in one tab. A library row is dragged onto the picture, or + puts it in the middle of the view. Every edit keys the object at the
 // playhead (objects/placed.ts) and is one undo step (Ctrl+Z)
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { Box, ChevronLeft, ChevronRight, Diamond, Eye, EyeOff, Magnet, Move3d, Plus, Rotate3d, RotateCcw, Scale3d, Trash2, Squirrel } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -40,8 +40,8 @@ const iconOf = (what: string) => {
 
 const r = (x: number, d: number) => +x.toFixed(d);
 const STILL = "none"; // mc-assets/placed.ts plays no clip it doesn't know
-const label = "text-[13px] text-muted-foreground";
-const field = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-1.5 text-[13px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring";
+const label = "text-ui text-muted-foreground";
+const field = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-1.5 text-ui tabular-nums outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring";
 
 // A number typed and saved on Enter or on leaving the box; Escape puts the shown value back
 function Num({ value, onSave, live, name, step = 0.0625 }: { value: number; onSave: (v: number) => void; live?: (v: number) => void; name: string; step?: number }) {
@@ -71,7 +71,7 @@ function Inspector({ name }: { name: string }) {
   if (!o) return null;
   const mob = o.what.startsWith("mob:"), clips = tools()?.clipsOf(name) ?? [];
   const nav = keyNav(o.keys.map((k) => k.t), S.t, 0.5 / FPS), keyNear = nav.here >= 0;
-  const iconBtn = "size-8 text-muted-foreground hover:text-foreground pointer-coarse:size-10";
+  const iconBtn = "pointer-coarse:size-10";
   let visible = true;
   for (const k of o.keys) if (k.t <= S.t + 0.5 / FPS && k.visible !== undefined) visible = k.visible;
   const at = shown?.at ?? o.keys[0].at, rot = shown?.rot ?? o.keys[0].rot ?? [0, 0, 0], scale = shown?.scale ?? o.keys[0].scale ?? 1;
@@ -91,38 +91,38 @@ function Inspector({ name }: { name: string }) {
           onBlur={() => { if (rename.trim() && rename.trim() !== name) renameObject(name, rename); else setRename(name); }}
           onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setRename(name); }}
         />
-        <Tip label="Delete object (Delete)"><Button variant="ghost" size="icon" className="-me-1 size-8 text-muted-foreground hover:text-destructive pointer-coarse:size-11" aria-label={`Delete ${name}`} onClick={() => removeObject(name)}><Trash2 /></Button></Tip>
+        <Tip label="Delete object (Delete)"><Button variant="remove" size="icon-lg" className="-me-1 pointer-coarse:size-10" aria-label={`Delete ${name}`} onClick={() => removeObject(name)}><Trash2 /></Button></Tip>
       </div>
       <p translate="no" className="-mt-1 truncate text-xs text-muted-foreground" title={o.what}>{o.what}</p>
       <div className="flex items-center gap-1.5">
         <ToggleGroup value={[gizmo]} onValueChange={(v: string[]) => v[0] && setGizmo(v[0] as GizmoMode)} spacing={1} className="flex-1" aria-label="Gizmo">
           {modes.map((m) => (
             <Tip key={m.id} label={`${m.title} (${m.key})`}>
-              <ToggleGroupItem value={m.id} aria-label={m.title} className="h-8 flex-1 gap-1.5 border border-transparent px-2 text-[13px] aria-pressed:border-primary aria-pressed:bg-tint">
+              <ToggleGroupItem value={m.id} aria-label={m.title} variant="pick" size="lg" className="flex-1">
                 <m.icon className="size-4" />{m.title}
               </ToggleGroupItem>
             </Tip>
           ))}
         </ToggleGroup>
         <Tip label={snap ? "Snap is on: 1 game pixel, 15°. Click to move freely" : "Snap is off. Click to move by 1 game pixel and 15°"}>
-          <Button variant="ghost" size="icon" aria-pressed={snap} aria-label="Snap" className={cn("size-8 text-muted-foreground hover:text-foreground", snap && "bg-tint text-primary")} onClick={() => setSnap(!snap)}><Magnet /></Button>
+          <Button variant="quiet" size="icon-lg" aria-pressed={snap} aria-label="Snap" onClick={() => setSnap(!snap)}><Magnet /></Button>
         </Tip>
       </div>
       <div className="-mb-1 flex items-center gap-0.5">
-        <span className="flex-1 text-[13px] font-medium">Transform</span>
+        <span className="flex-1 text-ui font-medium">Transform</span>
         <Tip label="Previous keyframe">
-          <Button variant="ghost" size="icon" className={iconBtn} aria-label="Previous keyframe" disabled={nav.prev === null} onClick={() => nav.prev !== null && seek(nav.prev)}><ChevronLeft /></Button>
+          <Button variant="quiet" size="icon-lg" className={iconBtn} aria-label="Previous keyframe" disabled={nav.prev === null} onClick={() => nav.prev !== null && seek(nav.prev)}><ChevronLeft /></Button>
         </Tip>
         <Tip label={keyNear ? "Delete this keyframe" : "Add a keyframe here, keeping the object where it is"}>
-          <Button variant="ghost" size="icon" className={cn(iconBtn, keyNear && "text-primary hover:text-primary")} aria-label={keyNear ? `Delete keyframe at ${stamp(S.t)}` : `Add keyframe at ${stamp(S.t)}`} onClick={() => toggleKey(name)}>
+          <Button variant={keyNear ? "lit" : "quiet"} size="icon-lg" className={iconBtn} aria-label={keyNear ? `Delete keyframe at ${stamp(S.t)}` : `Add keyframe at ${stamp(S.t)}`} onClick={() => toggleKey(name)}>
             <Diamond className={cn(keyNear && "fill-current")} />
           </Button>
         </Tip>
         <Tip label="Next keyframe">
-          <Button variant="ghost" size="icon" className={iconBtn} aria-label="Next keyframe" disabled={nav.next === null} onClick={() => nav.next !== null && seek(nav.next)}><ChevronRight /></Button>
+          <Button variant="quiet" size="icon-lg" className={iconBtn} aria-label="Next keyframe" disabled={nav.next === null} onClick={() => nav.next !== null && seek(nav.next)}><ChevronRight /></Button>
         </Tip>
         <Tip label="Reset rotation and scale at the playhead">
-          <Button variant="ghost" size="icon" className={iconBtn} aria-label="Reset rotation and scale" onClick={() => resetTransform(name)}><RotateCcw /></Button>
+          <Button variant="quiet" size="icon-lg" className={iconBtn} aria-label="Reset rotation and scale" onClick={() => resetTransform(name)}><RotateCcw /></Button>
         </Tip>
       </div>
       <div className="grid grid-cols-[4.5rem_repeat(3,minmax(0,1fr))] items-center gap-1.5">
@@ -136,12 +136,12 @@ function Inspector({ name }: { name: string }) {
       </div>
       {mob && clips.length > 0 && <ClipRow name={name} clips={clips} />}
       {nav.here > 0 && <EaseRow name={name} i={nav.here} />}
-      <div className="flex items-center gap-2 text-[13px]">
+      <div className="flex items-center gap-2 text-ui">
         <span className="min-w-0 flex-1 text-muted-foreground">
           {keyNear ? <>Keyframe at <span className="tabular-nums">{stamp(S.t)}</span></> : <>{o.keys.length} keyframe{o.keys.length === 1 ? "" : "s"}. An edit here adds one at <span className="tabular-nums">{stamp(S.t)}</span></>}
         </span>
         <Tip label={visible ? "Hide from the playhead on" : "Show from the playhead on"}>
-          <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={() => setVisible(name, !visible)}>{visible ? <EyeOff /> : <Eye />}{visible ? "Hide" : "Show"}</Button>
+          <Button variant="secondary" size="md" onClick={() => setVisible(name, !visible)}>{visible ? <EyeOff /> : <Eye />}{visible ? "Hide" : "Show"}</Button>
         </Tip>
       </div>
       <div className="flex flex-wrap gap-1">
@@ -158,7 +158,7 @@ function EaseRow({ name, i }: { name: string; i: number }) {
   const o = placedData()[name], k = o.keys[i], curve = Array.isArray(k.ease) ? k.ease : null;
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[13px]">
+      <p className="text-ui">
         <span className="font-medium">Speed</span> <span className="text-muted-foreground tabular-nums">{stamp(o.keys[i - 1].t)} → {stamp(k.t)}</span>
       </p>
       <EaseTiles value={k.ease} fallback={OBJECT_EASE} onPick={(v) => setKeyEase(name, i, v)} className="grid grid-cols-[repeat(auto-fill,minmax(3.75rem,1fr))] gap-x-2 gap-y-2.5" />
@@ -186,7 +186,7 @@ function ClipRow({ name, clips }: { name: string; clips: string[] }) {
         </Select>
         <Num name="Animation speed" step={0.1} value={run?.rate ?? 1} onSave={(v) => setClipRate(name, v, now)} />
       </div>
-      <p className="ps-[calc(4.5rem+0.375rem)] text-xs text-muted-foreground">
+      <p className="ps-19.5 text-xs text-muted-foreground">
         {here ? <>Starts at this keyframe. <button type="button" className={link} onClick={() => clearClip(name)}>Remove</button></>
           : by ? <>Started by the keyframe at <button type="button" className={cn(link, "tabular-nums")} onClick={() => seek(by.t)}>{stamp(by.t)}</button>. Another one starts here.</>
           : <>Pick one to start it at the playhead.</>}
@@ -230,7 +230,7 @@ function InFilm() {
       <h3 className="px-0.5 text-xs font-semibold text-label">In this film ({names.length})</h3>
       <div className="flex flex-wrap gap-1">
         {names.map((n) => (
-          <button key={n} type="button" aria-pressed={object === n} onClick={() => select(n)} className="h-7 max-w-full truncate rounded-md bg-card px-2 text-[13px] text-label hover:bg-raised-2 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary">
+          <button key={n} type="button" aria-pressed={object === n} onClick={() => select(n)} className="h-7 max-w-full truncate rounded-md bg-card px-2 text-ui text-label hover:bg-raised-2 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary">
             {n}
           </button>
         ))}
@@ -286,11 +286,11 @@ export function ObjectLibrary({ side = false }: { side?: boolean }) {
             <li key={x.what} onPointerDown={press(x.what)} onDragStart={(e) => e.preventDefault()} className="group flex min-h-11 cursor-grab touch-none items-center gap-2 rounded-lg px-1 select-none hover:bg-card active:cursor-grabbing">
               <Icon item={x} />
               <span className="flex min-w-0 flex-1 flex-col py-1">
-                <span className="truncate text-[13px] first-letter:uppercase">{x.title}</span>
+                <span className="truncate text-ui first-letter:uppercase">{x.title}</span>
                 <span translate="no" className="truncate text-xs text-muted-foreground">{x.what}</span>
               </span>
               <Tip label="Add in the middle of the view">
-                <Button variant="ghost" size="icon" className="size-8 flex-none text-muted-foreground hover:text-foreground pointer-coarse:size-10" aria-label={`Add ${titleOf(x.what)}`} onClick={() => addInFront(x.what, lookAtClick)}>
+                <Button variant="quiet" size="icon-lg" className="flex-none pointer-coarse:size-10" aria-label={`Add ${titleOf(x.what)}`} onClick={() => addInFront(x.what, lookAtClick)}>
                   <Plus />
                 </Button>
               </Tip>
@@ -298,9 +298,9 @@ export function ObjectLibrary({ side = false }: { side?: boolean }) {
           ))}
           {items && shown.length > CAP && <li className="px-1 py-2 text-xs text-muted-foreground">Showing {CAP} of {shown.length}. Type to narrow it down.</li>}
           {items && !shown.length && (
-            <li className="flex flex-col items-start gap-1.5 px-1 py-2 text-[13px] text-muted-foreground">
+            <li className="flex flex-col items-start gap-1.5 px-1 py-2 text-ui text-muted-foreground">
               {!items.length ? "Couldn't list the film's blocks and mobs" : typed ? `No ${meta.one}s match "${q.trim()}"` : `This film has no ${meta.one}s`}
-              {elsewhere.map((k) => <Button key={k.id} variant="secondary" size="sm" className="h-8 text-[13px]" onClick={() => setKind(k.id)}>{found[k.id].length} in {k.title}</Button>)}
+              {elsewhere.map((k) => <Button key={k.id} variant="secondary" size="md" onClick={() => setKind(k.id)}>{found[k.id].length} in {k.title}</Button>)}
             </li>
           )}
         </ul>
@@ -313,7 +313,7 @@ export function ObjectInspector() {
   const object = useStudio((s) => s.object);
   useStudio((s) => s.keysRev);
   return object && placedData()[object] ? <Inspector name={object} /> : (
-    <div className="rounded-xl bg-card p-3 text-[13px]">
+    <div className="rounded-xl bg-card p-3 text-ui">
       <p className="font-medium">No object selected</p>
       <p className="text-muted-foreground">Click an object on the picture, or drag one in from the list below.</p>
     </div>
@@ -326,7 +326,7 @@ export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "libr
   const loaded = useStudio((s) => s.keyFiles !== null);
   if (!loaded) return null;
   if (!canPlace()) return (
-    <div className="m-3 rounded-xl bg-card p-3 text-[13px]">
+    <div className="m-3 rounded-xl bg-card p-3 text-ui">
       <p className="font-medium">This film can't take objects yet</p>
       <p className="text-muted-foreground">It needs a placed key file and makePlaced in its scene (docs/film-contract.md).</p>
     </div>

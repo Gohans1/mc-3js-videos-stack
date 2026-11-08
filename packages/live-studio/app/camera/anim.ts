@@ -41,7 +41,7 @@ export const roomFor = (i: number, slot: "in" | "out") => {
 export const lenOf = (i: number, slot: "in" | "out") => { const a = animOf(i)[slot]; return a ? Math.min(a.len ?? fxOf(slot, a.fx)?.len ?? 0.5, roomFor(i, slot)) : 0; };
 
 const put = (d: ShotRow[], i: number, slot: Slot, v: AnimSet | null) => {
-  const a: ShotAnim = { ...((d[i].anim as ShotAnim | undefined) ?? {}) };
+  const a: ShotAnim = { ...(d[i].anim as ShotAnim | undefined) };
   if (v) a[slot] = v; else delete a[slot];
   if (Object.keys(a).length) d[i].anim = a; else delete d[i].anim;
 };

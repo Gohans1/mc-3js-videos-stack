@@ -34,7 +34,7 @@ export function App() {
   const sideCell = useRef<HTMLDivElement>(null), libCell = useRef<HTMLDivElement>(null);
   const editable = useEditable(), wide = useWide() && editable; // three columns only when there is something to show details of
   const px = (n: number | null) => (n === null ? undefined : `${n}px`);
-  const room = { "--side-w": px(sideW), "--lib-w": px(libW), "--edit-h": px(editH) } as CSSProperties;
+  const room: CSSProperties = { "--side-w": px(sideW), "--lib-w": px(libW), "--edit-h": px(editH) };
   useEffect(() => {
     if (started) return;
     started = true;

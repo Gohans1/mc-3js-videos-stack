@@ -3,9 +3,9 @@
 // puts everything back on leaving; a click keeps it (camera/anim.ts). The shot is the block picked on the camera row, else the
 // one at the playhead.
 import type { AnimFx } from "film/scene";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { Ban, ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { Segmented, SliderRow } from "../components/inspector";
@@ -38,19 +38,19 @@ const FAR: Record<string, Far> = {
   roll: (s) => [`rotate(${16 * s}deg)`],
 };
 type Fx = AnimFx & { move?: string; a?: number; loop?: string; jolt?: boolean };
-const motion = (slot: Slot, fx: Fx): { kind: string; style?: CSSProperties } => {
+const motion = (slot: Slot, fx: Fx): { kind: string; far?: string; near?: string } => {
   if (fx.black) return { kind: slot === "out" ? "fade-out" : "fade-in" };
   if (fx.jolt) return { kind: "jolt" };
   if (fx.loop) return { kind: fx.loop };
   const f = fx.move ? FAR[fx.move] : undefined;
   if (!f) return { kind: "none" };
   const [far, near] = f((slot === "in" ? -1 : 1) * (fx.a ?? 1));
-  return { kind: slot, style: { "--fx": far, ...(near && { "--fx-near": near }) } as CSSProperties };
+  return { kind: slot, far, near };
 };
 function Scene({ slot, fx }: { slot: Slot; fx: Fx }) {
   const m = motion(slot, fx);
   return (
-    <svg aria-hidden viewBox="0 0 48 48" className={cn("absolute inset-0 size-full bg-raised-2", `fx-${m.kind}`)} style={m.style}>
+    <svg aria-hidden viewBox="0 0 48 48" className={cn("absolute inset-0 size-full bg-raised-2", `fx-${m.kind}`)} style={{ "--fx": m.far, "--fx-near": m.near }}>
       <g className="fx-far">
         <rect x="-70" y="30" width="190" height="50" className="fx-ground" />
         <circle cx="37" cy="10" r="3.5" className="fx-sun" />
@@ -81,8 +81,8 @@ function Tile({ slot, fx, on, onPick, onTry, onLeave, shot }: { slot: Slot; fx: 
       </Tip>
       {fx && (
         <FavoriteStar
-          kind="effects" id={`${slot}:${fx.id}`} name={`${SLOT_NAMES[slot]} ${title}`}
-          className={cn("absolute top-[calc(100%-2.6rem)] left-0.5 size-6 rounded-full bg-black/55 text-white/90 hover:bg-black/70 [&_svg]:size-3.5 pointer-coarse:size-8", !fav && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100")}
+          kind="effects" id={`${slot}:${fx.id}`} name={`${SLOT_NAMES[slot]} ${title}`} onTile reveal={!fav}
+          className="absolute top-[calc(100%-2.6rem)] left-0.5"
         />
       )}
       <span className={cn("w-full truncate text-center text-xs", on ? "text-primary" : "text-foreground/85")}>{title}</span>
@@ -153,7 +153,7 @@ export function AnimPanel() {
   const [from, to] = shotSpan(shot), name = S.comments[shot] ?? "";
   if (!anims()) {
     return (
-      <div className="px-3 pt-2 text-[13px]">
+      <div className="px-3 pt-2 text-ui">
         <p className="font-medium">This film draws no shot animations yet</p>
         <p className="text-muted-foreground">Add film-stage/animate to its draw and set draw.anims (docs/film-contract.md), or ask the AI in a note.</p>
       </div>
@@ -168,12 +168,12 @@ export function AnimPanel() {
           items={SLOTS.map((s) => ({ id: s.id, title: <>{s.title}{animOf(shot)[s.id] && <><span aria-hidden className="size-1.5 rounded-full bg-primary" /><span className="sr-only">(set)</span></>}</> }))}
         />
         <div className="flex items-center gap-1">
-          <Tip label="Shot before"><Button variant="ghost" size="icon" className="size-7 text-muted-foreground pointer-coarse:size-10" aria-label="Shot before" disabled={shot === 0} onClick={() => go(-1)}><ChevronLeft /></Button></Tip>
-          <p className="min-w-0 flex-1 truncate text-center text-[13px]" title={name}>
+          <Tip label="Shot before"><Button variant="quiet" size="icon" className="pointer-coarse:size-10" aria-label="Shot before" disabled={shot === 0} onClick={() => go(-1)}><ChevronLeft /></Button></Tip>
+          <p className="min-w-0 flex-1 truncate text-center text-ui" title={name}>
             <span className="font-semibold">Shot {shot}</span> <span className="text-muted-foreground">{name}</span>
             <span className="block text-xs text-muted-foreground tabular-nums">{stamp(from)} – {stamp(to)}{picked === null ? " · at the playhead" : ""}</span>
           </p>
-          <Tip label="Shot after"><Button variant="ghost" size="icon" className="size-7 text-muted-foreground pointer-coarse:size-10" aria-label="Shot after" disabled={shot >= SHOTS_OUT.length - 1} onClick={() => go(1)}><ChevronRight /></Button></Tip>
+          <Tip label="Shot after"><Button variant="quiet" size="icon" className="pointer-coarse:size-10" aria-label="Shot after" disabled={shot >= SHOTS_OUT.length - 1} onClick={() => go(1)}><ChevronRight /></Button></Tip>
         </div>
         <SearchBox name="anim-search" value={q} onChange={setQ} label={`Search ${SLOT_NAMES[slot]} animations`} placeholder={`Search ${list.length} ${SLOT_NAMES[slot]} animations…`} />
         <div role="radiogroup" aria-label="Category" className="-mx-3 flex gap-1.5 overflow-x-auto px-3 [scrollbar-width:none]">
@@ -191,7 +191,7 @@ export function AnimPanel() {
         {none && <Tile slot={slot} fx={null} on={!now} shot={shot} onPick={() => pick(null)} onTry={() => tryOn(null)} onLeave={leave} />}
         {shown.map((fx) => <Tile key={fx.id} slot={slot} fx={fx} on={now === fx.id} shot={shot} onPick={() => pick(fx.id)} onTry={() => tryOn(fx.id)} onLeave={leave} />)}
         {!shown.length && (
-          <li className="col-span-full py-2 text-[13px] text-muted-foreground">
+          <li className="col-span-full py-2 text-ui text-muted-foreground">
             {cat === FAV && !q.trim() ? `No favorite ${SLOT_NAMES[slot]} animations yet. Point at one and click its star.` : `No ${SLOT_NAMES[slot]} animations match "${q.trim()}".`}
           </li>
         )}

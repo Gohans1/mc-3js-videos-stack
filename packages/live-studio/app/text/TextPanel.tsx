@@ -36,7 +36,7 @@ function Colors({ label, value, put }: { label: string; value: string; put: (c: 
     <FieldRow label={label}>
       {SWATCHES.map((c) => (
         <Tip key={c} label={c}>
-          <button type="button" aria-label={`${label} ${c}`} aria-pressed={value.toUpperCase() === c} onClick={() => put(c)} style={{ background: c }} className="size-6 flex-none rounded-full ring-1 ring-white/20 outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:ring-2 aria-pressed:ring-primary" />
+          <button type="button" aria-label={`${label} ${c}`} aria-pressed={value.toUpperCase() === c} onClick={() => put(c)} style={{ "--swatch": c }} className="size-6 flex-none rounded-full bg-(--swatch) ring-1 ring-white/20 outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:ring-2 aria-pressed:ring-primary" />
         </Tip>
       ))}
       <input type="color" aria-label={`${label}: any colour`} value={value} onChange={(e) => put(e.target.value.toUpperCase())} className="h-6 w-8 flex-none cursor-pointer rounded-sm bg-transparent" />
@@ -49,7 +49,7 @@ function Words({ it }: { it: TextItem }) {
   const snap = useRef<string | null>(null);
   return (
     <Textarea
-      aria-label="Text" value={it.text ?? ""} rows={2} className="text-[13px]"
+      aria-label="Text" value={it.text ?? ""} rows={2}
       onFocus={() => { snap.current = snapshot(); }}
       onChange={(e) => editPicked((x) => { x.text = e.target.value; }, true)}
       onBlur={(e) => { const v = e.target.value; if (snap.current) restore(snap.current); snap.current = null; editPicked((x) => { x.text = v; }); }}
@@ -82,7 +82,7 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
     <>
       <Section title="Basic">
         {one && <Words it={it} />}
-        <Segmented label="Font" value={byId(it.font)?.id ?? "sans"} onChange={(v) => editPicked((x) => { x.font = v; })} items={fonts.map((f) => ({ id: f.id, title: <span className="truncate" style={{ fontFamily: f.css }}>{f.title}</span> }))} />
+        <Segmented label="Font" value={byId(it.font)?.id ?? "sans"} onChange={(v) => editPicked((x) => { x.font = v; })} items={fonts.map((f) => ({ id: f.id, title: <span className="truncate font-(family-name:--font)" style={{ "--font": f.css }}>{f.title}</span> }))} />
         <Slide label="Font size" get={(x) => x.size ?? 56} put={(x, v) => { x.size = Math.round(v); }} min={12} max={300} step={1} />
         <FieldRow label="Pattern">
           {flag("bold", "Bold", <Bold />)}
@@ -158,7 +158,7 @@ function Anim({ it }: { it: TextItem }) {
               type="button" aria-pressed={now === x.id} onClick={() => pick(x.id)}
               className="flex w-full flex-col items-center gap-1 rounded-md text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground"
             >
-              <span aria-hidden className="grid aspect-square w-full place-items-center rounded-md bg-backdrop text-[15px] font-semibold text-white ring-1 ring-white/6 in-aria-pressed:ring-2 in-aria-pressed:ring-primary">{x.id ? "Aa" : "∅"}</span>
+              <span aria-hidden className="grid aspect-square w-full place-items-center rounded-md bg-backdrop text-title font-semibold text-white ring-1 ring-white/6 in-aria-pressed:ring-2 in-aria-pressed:ring-primary">{x.id ? "Aa" : "∅"}</span>
               <span className="w-full truncate text-center">{x.title}</span>
             </button>
           </li>
@@ -177,7 +177,7 @@ export function TextPanel({ part }: { part: "text" | "textAnim" }) {
   const picks = useStudio((s) => s.textPicks);
   useStudio((s) => s.textRev);
   const it = items[picks[0]];
-  if (!it) return <p className="px-3 pt-2 text-[13px] text-muted-foreground">Pick a text item on the Text row or the picture to edit it, or add one from the Text library.</p>;
+  if (!it) return <p className="px-3 pt-2 text-ui text-muted-foreground">Pick a text item on the Text row or the picture to edit it, or add one from the Text library.</p>;
   const shapes = picks.every((i) => items[i] && isShape(items[i])), mixed = !shapes && picks.some((i) => items[i] && isShape(items[i]));
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -185,7 +185,7 @@ export function TextPanel({ part }: { part: "text" | "textAnim" }) {
         {picks.length > 1 ? `${picks.length} picked: changes go to all of them` : `${nameOf(it)} · ${stamp(it.from)} – ${stamp(it.to)}`}
       </p>
       {part === "textAnim" ? <Anim it={it} />
-        : mixed ? <p className="px-3 pt-2 text-[13px] text-muted-foreground">Texts and shapes are picked together: pick only one kind to edit its look.</p>
+        : mixed ? <p className="px-3 pt-2 text-ui text-muted-foreground">Texts and shapes are picked together: pick only one kind to edit its look.</p>
         : <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{shapes ? <Shape it={it} /> : <Basic it={it} one={picks.length === 1} />}</div>}
     </div>
   );

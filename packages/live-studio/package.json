@@ -9,6 +9,7 @@
   },
   "scripts": {
     "demo": "cd demo && node ../src/live.mjs",
+    "lint": "oxlint app",
     "test": "node --test",
     "typecheck": "tsc --noEmit -p ."
   },
@@ -41,11 +42,13 @@
     "zustand": "5.0.16"
   },
   "devDependencies": {
+    "@shadcn/lint": "0.2.5",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.187.0",
     "@webgpu/types": "0.1.74",
+    "oxlint": "1.92.0",
     "typescript": "7.0.2"
   }
 }
