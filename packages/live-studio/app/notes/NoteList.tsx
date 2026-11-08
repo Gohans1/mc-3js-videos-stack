@@ -156,7 +156,7 @@ export function NoteList() {
     // Folded by default: they are answered, and the list is for what still needs doing. Shown at 0 too, so the creator knows where fixed notes will go
     return (
       <button type="button" aria-expanded={doneOpen} onClick={() => setDoneOpen(!doneOpen)} className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-xl px-2.5 text-ui font-semibold text-muted-foreground outline-none hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-        <ChevronRight aria-hidden className={cn("size-3.5 transition-transform", doneOpen && "rotate-90")} />
+        <ChevronRight aria-hidden className={cn("size-3.5 motion-safe:transition-transform", doneOpen && "rotate-90")} />
         Done ({narrowed ? `${done.length} of ${ix.done.length}` : ix.done.length})
       </button>
     );

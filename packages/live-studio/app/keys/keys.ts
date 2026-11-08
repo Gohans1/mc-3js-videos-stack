@@ -37,14 +37,14 @@ let folded = new Set<number>(JSON.parse(stored.get(FOLD) ?? "[]"));
 export const isFolded = (f: number) => folded.has(f);
 export const fold = (f: number, on: boolean) => { folded = new Set(folded); if (on) folded.add(f); else folded.delete(f); stored.set(FOLD, JSON.stringify([...folded])); bump(); };
 // The rows as laid out top to bottom: each file's heading, then its rows unless folded (keys/KeyHeads.tsx draws the same list)
-export const HEAD_H = 20, ROW_H = 22;
+export const HEAD_H = 26, ROW_H = 22;
 export type Line = { kind: "file"; f: number; y: number } | { kind: "row"; row: Row; y: number };
 export const lines = (): Line[] => {
   const out: Line[] = [];
   let y = 0;
   files.forEach((_, f) => {
     out.push({ kind: "file", f, y }); y += HEAD_H;
-    if (!folded.has(f)) for (const row of rows.filter((r) => r.f === f)) { out.push({ kind: "row", row, y }); y += ROW_H; }
+    if (!folded.has(f)) for (const row of rowsOf(f)) { out.push({ kind: "row", row, y }); y += ROW_H; }
   });
   return out;
 };
@@ -53,8 +53,16 @@ export const litRow = () => {
   const p = S.tools?.placed, name = get().object, f = p ? files.findIndex((x) => x.edit === p.key) : -1;
   return name && f >= 0 ? rowId(f, [name, "keys"]) : null;
 };
-// A row's name in the heads column: its last two steps, a placed object's by its own name
-export const shortLabel = (r: Row) => (r.path.length > 1 && r.path.at(-1) === "keys" ? r.path.slice(0, -1) : r.path).slice(-2).join(".");
+export const rowsOf = (f: number) => rows.filter((r) => r.f === f);
+// A row's name in the heads column: its last two steps (["typing", "tries"]), a placed object's by its own name
+export const labelSteps = (r: Row) => (r.path.length > 1 && r.path.at(-1) === "keys" ? r.path.slice(0, -1) : r.path).slice(-2);
+// A key file's name there: the dropped-in objects' file is the Objects tab's, any other its file name in words ("steve.json"
+// Steve, "fx.json" FX); the file itself shows on hover
+export const fileTitle = (f: number) => {
+  if (files[f]?.edit === S.tools?.placed?.key) return "Objects";
+  const base = (files[f]?.file.split("/").pop() ?? "").replace(/\.[^.]+$/, "");
+  return base.split(/[-_.\s]+|(?<=[a-z])(?=[A-Z])/).filter(Boolean).map((w) => (w.length <= 2 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))).join(" ");
+};
 export const linesHeight = () => { const l = lines(), last = l[l.length - 1]; return last ? last.y + (last.kind === "file" ? HEAD_H : ROW_H) : 0; };
 
 const bump = () => { S.dirty = true; set({ keysRev: get().keysRev + 1 }); };

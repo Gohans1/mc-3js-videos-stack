@@ -290,7 +290,7 @@ export function Settings() {
         )}
         <details className="group pointer-coarse:hidden">
           <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 px-1 text-ui font-semibold [&::-webkit-details-marker]:hidden">
-            <ChevronRight aria-hidden className="size-3.5 transition-transform group-open:rotate-90" />
+            <ChevronRight aria-hidden className="size-3.5 motion-safe:transition-transform group-open:rotate-90" />
             Shortcuts
           </summary>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 rounded-xl bg-card p-3 text-ui">

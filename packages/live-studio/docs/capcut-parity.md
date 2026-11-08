@@ -95,6 +95,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Property keyframes, auto-key: CÓ.
   - Nút ◁◇▷ cạnh thuộc tính ở tab Camera và tab đồ vật; đã có khoá thì sửa giá trị là tự thêm khoá tại playhead.
   - Kéo, chọn nhiều, xoá kim cương ngay trên hàng Camera và các hàng keyframe Steve, đạo cụ.
+  - Mỗi file keyframe là một nhóm gập được, tên dễ đọc (Steve, Props, Objects) kèm số hàng; hàng nhóm hiện gộp mọi kim cương của nhóm như dope sheet của Blender và Theatre.js, gập lại vẫn thấy chỗ đổi.
   - Motion blur: BỎ ở studio, thuộc bước render final.
 - Adjustment layer: SẮP LÀM dạng Adjust theo shot; lớp phủ ngang nhiều shot thì chưa.
 - Group, compound clip: BỎ, phim ít clip. Chọn nhiều bằng khung (kéo từ chỗ trống, Ctrl hoặc Shift để thêm): CÓ, một khung đi xuyên hàng Camera, keyframe và âm thanh; trên hàng Camera khung chọn nguyên khối shot nó chạm (cùng mọi kim cương trong khối) như CapCut chọn clip, bấm từng kim cương để chọn lẻ. Kéo một thứ đã chọn thì mọi thứ đã chọn ở các hàng khác chạy theo; Delete, Ctrl+C và Ctrl+V cũng làm cho cả nhóm, một lần undo.

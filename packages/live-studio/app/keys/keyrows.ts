@@ -8,7 +8,7 @@
 // 2026-11-09); a touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
 import { snapTo, stamp } from "../core/time";
-import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, same, sameKey, snapshot } from "./keys";
+import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, rowsOf, same, sameKey, snapshot } from "./keys";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { type KeyRef } from "./slice";
@@ -40,8 +40,19 @@ export const drawKeyRows = () => {
   spots = [];
   const lit = litRow();
   for (const l of lines()) {
-    // Flat rows as CapCut's tracks; the file's heading in the label column's colour (KeyHeads.tsx bg-card)
-    if (l.kind === "file") { g.fillStyle = tone("card"); g.fillRect(0, l.y, w, HEAD_H); continue; }
+    // Flat rows as CapCut's tracks; the file's heading in the label column's colour (KeyHeads.tsx bg-card), every key of the
+    // file on it as Blender's summary row and Theatre.js's aggregate rows show them, so a folded file still shows where it changes
+    if (l.kind === "file") {
+      g.fillStyle = tone("card"); g.fillRect(0, l.y, w, HEAD_H);
+      const y = l.y + HEAD_H / 2, drawn = new Set<number>();
+      g.fillStyle = tone("muted-foreground");
+      for (const r of rowsOf(l.f)) for (const k of keysOf(r.f, r.path)) {
+        const x = Math.round(X(k.t));
+        if (x < -R || x > w + R || drawn.has(x)) continue;
+        drawn.add(x); diamond(g, x, y, R - 1); g.fill();
+      }
+      continue;
+    }
     if (l.row.id === lit) { g.fillStyle = tone("tint"); g.fillRect(0, l.y, w, ROW_H); }
     const ks = keysOf(l.row.f, l.row.path), y = l.y + ROW_H / 2;
     // What happens between keys first, so the diamonds sit on top
