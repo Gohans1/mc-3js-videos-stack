@@ -37,8 +37,8 @@ export const createNotes = (project) => {
   const savePicture = (name, dataUrl) => writeFileSync(join(img, `${name}.jpg`), Buffer.from(dataUrl.split(",")[1], "base64"));
 
   // A new note, with up to three pictures (data URLs). What has been done to a note is the server's to say
-  const add = ({ note, img: picture, crop, strip }, stamp) => {
-    for (const k of ["crop", "strip", "fixes", "edits", "done"]) delete note[k];
+  const add = ({ note, img: picture, crop, strip, frames }, stamp) => {
+    for (const k of ["crop", "strip", "frames", "fixes", "edits", "done"]) delete note[k];
     note.img = picture ? `notes/img/${note.id}.jpg` : undefined;
     if (picture) savePicture(note.id, picture);
     for (const [kind, pic] of [["crop", crop], ["strip", strip]]) {
@@ -46,6 +46,11 @@ export const createNotes = (project) => {
       note[kind] = `notes/img/${note.id}_${kind}.jpg`;
       savePicture(`${note.id}_${kind}`, pic);
     }
+    if (frames?.length) note.frames = frames.flatMap((f, i) => {
+      if (!f.img) return [];
+      savePicture(`${note.id}_f${i}`, f.img);
+      return [{ t: f.t, img: `notes/img/${note.id}_f${i}.jpg` }];
+    });
     Object.assign(note, stamp);
     const all = read();
     if (!all.some((n) => n.id === note.id)) write([...all, note]); // a retry after a lost answer isn't a second note

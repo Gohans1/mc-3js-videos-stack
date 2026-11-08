@@ -15,6 +15,8 @@ export const ASSETS = "_studio"; // the page's own files, under a name no film f
 // How long a build's files outlive it. A page that loaded the last build's index.html still fetches its code (and App later, on
 // its own), and a page left open asks for its source maps when it throws
 const KEEP = 3600e3;
+// A file's path as a pattern that matches however a module id writes it (either slash, any case of the drive letter)
+export const pathPattern = (f) => new RegExp(`^${f.split(/[\\/]/).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\\\/]")}$`, "i");
 
 export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}) => new Promise((ready, fail) => {
   // One per film, since several films run this studio at once
@@ -50,10 +52,15 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
       },
       reportCompressedSize: false,
       chunkSizeWarningLimit: Infinity,
-      watch: {},
+      // A save of a file the page loads itself (camera keys, Steve's keys...) builds nothing: a build takes ~3 s of the machine
+      // the film plays on, which the creator felt as a second of lag after every edit
+      watch: { exclude: film.handEdited.map(pathPattern) },
     },
   }).then((watcher) => {
     page.watcher = watcher;
+    // Which files this build is for, so the studio can tell its own save of the sound lanes from new code
+    let changed = [];
+    watcher.on("change", (id) => { changed.push(id); });
     watcher.on("event", (e) => {
       e.result?.close?.();
       if (e.code === "ERROR") {
@@ -65,11 +72,12 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
         const next = readFileSync(join(dir, "index.html"), "utf8");
         // File names carry a hash of their contents and of what they import, so the same index.html is the same page. A page
         // that saw an error needs the fixed build even when it came out the same as before
-        const changed = next !== html || error !== null;
+        const differs = next !== html || error !== null;
         html = next;
         error = null;
         clearOld();
-        if (started && changed) onChange();
+        if (started && differs) onChange(changed);
+        changed = [];
         start();
       }
     });

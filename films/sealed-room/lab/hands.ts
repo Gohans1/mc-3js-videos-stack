@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Lab: the film's own draw(t) seen from fixed side cameras, to judge hands and arms where the film's cameras hide them:
 // renders/hands_<n>_<view>.jpg every 1/LAB_FPS s from LAB_T0 to LAB_T1 (film seconds), views from behind his left and right shoulders
-// (the drawer is in front of him, walls close at his sides).
+// (the drawer is in front of him, walls close at his sides); LAB_SIDE=1 adds a low view square from his left, for knees and feet.
 // LAB_T0=91.4 LAB_T1=94.4 LAB_FPS=10 ENTRY=lab/hands.ts bun run render stills
 import * as THREE from "three";
 import { buildScene } from "../src/scene";
@@ -13,7 +13,7 @@ import { canvas, config, done, still } from "live-studio/lab";
   const draw = await buildScene(canvas(), cfg.W, cfg.H, true);
   const { free, bones, objects } = draw.tools;
   const steve = objects.find(([, n]) => n === "Steve")[0];
-  const p = new THREE.Vector3(), hd = new THREE.Vector3(), f = new THREE.Vector3(), s = new THREE.Vector3(), r = new THREE.Vector3();
+  const p = new THREE.Vector3(), hd = new THREE.Vector3(), f = new THREE.Vector3(), s = new THREE.Vector3(), r = new THREE.Vector3(), side = new THREE.Vector3();
   for (let i = 0, t = t0; t <= t1 + 1e-6; i++, t = t0 + i / fps) {
     free.on = false; draw(t);
     bones.root.getWorldPosition(p);
@@ -21,9 +21,11 @@ import { canvas, config, done, still } from "live-studio/lab";
     f.set(0, 0, 1).applyQuaternion(steve.quaternion); // his forward
     s.set(1, 0, 0).applyQuaternion(steve.quaternion).multiplyScalar(0.8).sub(f).normalize(); // behind his left shoulder
     r.set(-1, 0, 0).applyQuaternion(steve.quaternion).multiplyScalar(0.8).sub(f).normalize();
-    for (const [view, dir] of [["left", s], ["right", r]]) {
-      free.on = true; free.fov = 50;
-      free.p.set(p.x + 1.7 * dir.x, hd.y + 0.5, p.z + 1.7 * dir.z);
+    side.set(1, 0, 0).applyQuaternion(steve.quaternion);
+    const views = [["left", s, 1.7, hd.y + 0.5, 50], ["right", r, 1.7, hd.y + 0.5, 50], ...(cfg.lab.side ? [["side", side, 1.25, hd.y * 0.75, 85]] : [])];
+    for (const [view, dir, dist, y, fov] of views) {
+      free.on = true; free.fov = fov;
+      free.p.set(p.x + dist * dir.x, y, p.z + dist * dir.z);
       free.l.set(p.x + 0.3 * f.x, hd.y * 0.6, p.z + 0.3 * f.z);
       draw(t);
       await still(`hands_${String(i).padStart(3, "0")}_${view}.jpg`, canvas());

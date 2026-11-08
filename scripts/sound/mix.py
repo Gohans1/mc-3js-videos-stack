@@ -67,6 +67,51 @@ def chosen(e):
     return as_option(e, c["set"] if c.get("set") in options(e) else e["name"], c.get("gain", 1.0))
 
 
+# Ducking (a bed's "duck": N dB under the narration): the same shape as the studio's app/sound/duck.ts, change both together
+ATTACK, RELEASE = 0.3, 0.8
+
+
+def warped(x):
+    """A source second as heard, through the voice edit's warp (live-studio src/edit.ts map)."""
+    w = E["voice"].get("warp") or []
+    if len(w) < 2:
+        return x
+    if x <= w[0][0]:
+        return x - w[0][0] + w[0][1]
+    if x >= w[-1][0]:
+        return x - w[-1][0] + w[-1][1]
+    i = max(k for k in range(len(w) - 1) if w[k][0] <= x)
+    return w[i][1] + (x - w[i][0]) / (w[i + 1][0] - w[i][0]) * (w[i + 1][1] - w[i][1])
+
+
+def duck_windows():
+    out = []
+    for s0, e0 in sorted([warped(a), warped(b)] for a, b in E["voice"].get("lines", [])):
+        if out and s0 - out[-1][1] < ATTACK + RELEASE:
+            out[-1][1] = max(out[-1][1], e0)
+        else:
+            out.append([s0, e0])
+    return out
+
+
+def duck_expr(start_at, end_at, db):
+    """volume filter expression on a bed's own clock (t 0 at start_at): one trapezoid per window, which never overlap."""
+    g = 10 ** (-db / 20)
+    parts = [f"clip(min((t+{start_at - a + ATTACK:.4f})/{ATTACK},({b + RELEASE - start_at:.4f}-t)/{RELEASE}),0,1)"
+             for a, b in duck_windows() if b + RELEASE > start_at and a - ATTACK < end_at]
+    return f"volume='1-{1 - g:.6f}*({'+'.join(parts)})':eval=frame" if parts else None
+
+
+def pan_filter(p):
+    """audio.json pan (-1 left .. 1 right) as Web Audio's StereoPannerNode moves a stereo signal (equal power), the way the
+    studio's live mix plays it (live-studio app/sound/mixer.ts), so both agree."""
+    if p <= 0:
+        x = (p + 1) * math.pi / 2
+        return f"pan=stereo|c0=c0+{math.cos(x):.6f}*c1|c1={math.sin(x):.6f}*c1"
+    x = p * math.pi / 2
+    return f"pan=stereo|c0={math.cos(x):.6f}*c0|c1=c1+{math.sin(x):.6f}*c0"
+
+
 def build(out, beds, sfx, voice=True, span=None, master=True):
     inputs, chains = [], []
 
@@ -88,9 +133,10 @@ def build(out, beds, sfx, voice=True, span=None, master=True):
     if voice and A.get("voice", True):  # audio.voice false: no narration in the mix (the dev records it later)
         add(ROOT / "assets/public/agent/full_voice.wav", 0, A["voiceGain"], extra=["acompressor=threshold=0.03:ratio=4:attack=1:release=150:makeup=3", "alimiter=limit=0.35:level=false"])
     for b in beds:
-        add(SFX / f"{b['name']}.wav", b["from"], b["gain"], 0, b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, extra=b.get("filters", []))
+        duck = duck_expr(b["from"], b["to"], b["duck"]) if b.get("duck") and A.get("voice", True) else None
+        add(SFX / f"{b['name']}.wav", b["from"], b["gain"], b.get("start", 0), b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, extra=[*b.get("filters", []), *([duck] if duck else []), *([pan_filter(b["pan"])] if b.get("pan") else [])])
     for s in sfx:
-        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), 0, s.get("fadeOut", 0), extra=s.get("filters", []))
+        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(END), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")

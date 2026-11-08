@@ -5,9 +5,9 @@
 //     second), its path drawn over them coloured by speed (blue slow, red fast), a dot every 0.1 s and the time every 0.5 s:
 //     dots bunched up = slow, spread out = fast; POP and STOP marks where it jumps or stops dead
 //   motion_<target>_<from>-<to>_speed.jpg  speed over time (m/s), each move's peak and how it is eased, the faults marked
-// and prints the numbers (src/motion.mjs). target: see target.ts; "cam" gives the graph only.
+// and prints the numbers (checks/motion.mjs). target: see target.ts; "cam" gives the graph only.
 import * as THREE from "three";
-import { measure, report } from "../src/motion.mjs";
+import { measure, report } from "../checks/motion.mjs";
 import { canvas } from "./lab";
 import { chart, findTarget, hue, label, mark, targetHelp } from "./target";
 

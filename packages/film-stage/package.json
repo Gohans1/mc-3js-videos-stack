@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "three.js parts of a film's stage that any film shares: the keyed camera with named eases and impact shake, and when a box is on screen (camera), a flickering lamp's level (flicker); docs/film-grammar.md: why each cut, move and sound",
+  "description": "three.js parts of a film's stage that any film shares: the keyed camera with named eases and impact shake, and when a box is on screen (camera), a flickering lamp's level (flicker), fades to and from black over the whole frame (fade); a shot's In, Out and Combo animations on the camera (animate); docs/film-grammar.md: why each cut, move and sound",
   "exports": {
     "./camera": "./src/camera.ts",
-    "./flicker": "./src/flicker.ts"
+    "./flicker": "./src/flicker.ts",
+    "./fade": "./src/fade.ts",
+    "./animate": "./src/animate.ts"
+  },
+  "scripts": {
+    "test": "bun test"
   },
   "peerDependencies": {
     "three": "0.186.1"

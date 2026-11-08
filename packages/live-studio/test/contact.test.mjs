@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { gap, surface } from "../src/contact.mjs";
+import { gap, surface } from "../checks/contact.mjs";
 
 const at = (g, x, y, z) => g.applyMatrix4(new THREE.Matrix4().makeTranslation(x, y, z));
 const box = (w, h, d, x = 0, y = 0, z = 0) => at(new THREE.BoxGeometry(w, h, d).toNonIndexed(), x, y, z);

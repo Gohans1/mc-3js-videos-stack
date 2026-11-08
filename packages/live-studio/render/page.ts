@@ -28,7 +28,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   await post("/still/cuts.json", JSON.stringify(SHOTS.slice(1).map((s) => s.t))); // framecheck.mjs: a cut is not a jump
   // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
   // an item { still, canvas } is written as renders/<still>
-  const builtin = { motion: motionCheck(render, cfg, SHOTS.map((s) => s.t)), seen: seenCheck(render), touch: touchCheck(render) };
+  const builtin = { motion: motionCheck(render, cfg, SHOTS.map((s) => s.t)), seen: seenCheck(render, cfg), touch: touchCheck(render) };
   for (const [name, args] of cfg.checks ?? []) {
     const fn = render.checks?.[name] ?? builtin[name];
     if (!fn) { log(`ERROR no draw.checks.${name} (the film has: ${Object.keys(render.checks ?? {}).join(", ") || "none"}; built in: ${Object.keys(builtin).join(", ")})`); return; }
@@ -41,7 +41,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   }
   if (cfg.inspect) { const [px, py, pz, lx, ly, lz, fov] = cfg.inspect; Object.assign(render.tools.free, { on: true, fov }); render.tools.free.p.set(px, py, pz); render.tools.free.l.set(lx, ly, lz); }
 
-  // The list the studio shows top left (draw.describe), over the picture of a draft with LIST=1: one backed box per section,
+  // The film's list of what is going on (draw.describe), over the picture of a draft with LIST=1: one backed box per section,
   // wrapped into a new column when it would run off the bottom. Colours are the studio's
   const S = Math.max(10, Math.round(cfg.H * 0.019)), LH = Math.round(S * 1.35), PAD = Math.round(S * 0.6), GAP = 3, TOP = 12;
   const MONO = `${S}px Consolas, monospace`, HEAD = `bold ${Math.round(S * 0.9)}px "Segoe UI", sans-serif`, TAG = `bold ${Math.round(S * 0.8)}px "Segoe UI", sans-serif`;

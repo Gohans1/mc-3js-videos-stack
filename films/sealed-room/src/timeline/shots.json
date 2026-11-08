@@ -1,0 +1,152 @@
+[
+ {"t": 0, "name": "CCTV CELL 0412 from the ceiling corner", "size": "high-angle wide (WS)", "what": "CCTV feed"},
+ {"t": 3.5, "name": "close on his eyes as they open", "size": "extreme close-up (ECU)", "what": "his eyes"},
+ {"t": 6.5, "name": "his eyes: bare wall, desk, door", "size": "POV", "what": "through his eyes", "pov": true},
+ {"t": 27, "name": "side of the bed: up, and to the door", "size": "medium side (MS)", "what": "he gets up and walks to the door"},
+ {"t": 40, "name": "his hand along the door's seam", "size": "close-up (CU)", "what": "his hand on the door seam"},
+ {
+  "t": 42.5,
+  "name": "the button by the door: he jabs it again and again, nothing",
+  "size": "medium (MS), over his right shoulder",
+  "what": "he jabs the stone button"
+ },
+ {"t": 44.6, "name": "he steps back and kicks the steel door", "size": "medium wide, from behind his right", "what": "he kicks the door"},
+ {"t": 46, "name": "wide: from the door back to the desk", "size": "wide (WS)", "what": "back to the lit desk"},
+ {
+  "t": 52.03,
+  "name": "over his shoulder: the screen, his hands on the keys",
+  "size": "over-the-shoulder insert",
+  "what": "the screen: he types"
+ },
+ {"t": 54.95, "name": "his face in the screen's glow, typing harder", "size": "close-up (CU)", "what": "his strained face"},
+ {"t": 55.75, "name": "over his shoulder again: the last try, denied", "size": "over-the-shoulder insert", "what": "ACCESS DENIED"},
+ {
+  "t": 56.667,
+  "name": "three-quarter front: he slams the keyboard askew, slumps back; a rustle",
+  "size": "medium three-quarter (MS)",
+  "what": "he slams the keys, slumps back"
+ },
+ {
+  "t": 62.067,
+  "name": "dazed in the chair: something stirs in the cabinet",
+  "size": "medium three-quarter (MS)",
+  "what": "a rustle in the cabinet"
+ },
+ {"t": 63.767, "name": "insert: the drawer front jolts", "size": "insert (CU)", "what": "the drawer jolts"},
+ {
+  "t": 64.567,
+  "name": "he scoots the chair back, stands, turns and walks straight to the cabinet",
+  "size": "medium (MS)",
+  "what": "chair back, up, to the drawer"
+ },
+ {
+  "t": 67.267,
+  "name": "from the north: he bends to the drawer and eases it open",
+  "size": "medium profile (MS), from the north",
+  "what": "he bends and eases the drawer open"
+ },
+ {
+  "t": 68.217,
+  "name": "overhead: the burst, he falls back and pants on the stone, the silverfish runs off",
+  "size": "top-down (overhead)",
+  "what": "the silverfish bursts out; he falls, panting"
+ },
+ {
+  "t": 72.167,
+  "name": "from his front-left: up on one hand, the other sweeps up the three pages",
+  "size": "medium (MS), from his front-left",
+  "what": "sitting up, he gathers the spilt pages"
+ },
+ {
+  "t": 74.4,
+  "name": "overhead: he gets up, knees the drawer shut, lays the pages down",
+  "size": "top-down (overhead)",
+  "what": "up, drawer shut, pages on the desk"
+ },
+ {
+  "t": 76.2,
+  "name": "insert: the top page, TUTORIAL; his hand takes it, the next shows",
+  "size": "insert, top-down",
+  "what": "TUTORIAL: his hand lifts it off the pile"
+ },
+ {
+  "t": 77.45,
+  "name": "he holds each page up: eager, useless, the next, useless",
+  "size": "medium close (MCU)",
+  "what": "eager, then useless, useless: anger"
+ },
+ {
+  "t": 80.95,
+  "name": "high on his left: he flings every page off the desk, towards the lens",
+  "size": "medium (MS), high on his left",
+  "what": "he flings them all to the floor"
+ },
+ {
+  "t": 82.9,
+  "name": "low along the cabinet front: one knee down, the drawer yanked out",
+  "size": "medium (MS), low along the cabinet front",
+  "what": "on one knee, he yanks the drawer open"
+ },
+ {
+  "t": 84.5,
+  "name": "at his face height from his front-right (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside",
+  "size": "medium (MS), low from his front-right",
+  "what": "he reads each folder, faster each time"
+ },
+ {
+  "t": 86,
+  "name": "at his face height from his front-left (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside",
+  "size": "medium (MS), low from his front-left",
+  "what": "he reads each folder, faster each time"
+ },
+ {
+  "t": 87.5,
+  "name": "at his face height from his front-right (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside",
+  "size": "medium (MS), low from his front-right",
+  "what": "he reads each folder, faster each time"
+ },
+ {
+  "t": 89,
+  "name": "at his face height from his front-left (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside",
+  "size": "medium (MS), low from his front-left",
+  "what": "he reads each folder, faster each time"
+ },
+ {
+  "t": 90.5,
+  "name": "at his face height from his front-right (the view swaps sides every ~1.5 s): he reads a folder, sees it is junk, throws it aside",
+  "size": "medium (MS), low from his front-right",
+  "what": "he reads each folder, faster each time"
+ },
+ {
+  "t": 92,
+  "name": "overhead from above his left (the view swaps sides every ~1.5 s): no more reading: he flings the rest",
+  "size": "top-down (overhead), from his left",
+  "what": "he tears through the rest"
+ },
+ {
+  "t": 93.5,
+  "name": "overhead from above his right (the view swaps sides every ~1.5 s): no more reading: he flings the rest",
+  "size": "top-down (overhead), from his right",
+  "what": "he tears through the rest"
+ },
+ {
+  "t": 94.52,
+  "name": "he pulls the drawer right out: the slot is empty but for one scrap",
+  "size": "medium (MS), from behind him",
+  "what": "the drawer comes out: an empty slot"
+ },
+ {
+  "t": 96.12,
+  "name": "from inside the slot: his face, then his hand",
+  "size": "POV from inside the slot",
+  "what": "his face peers in, his hand reaches",
+  "fill": true
+ },
+ {
+  "t": 100.353,
+  "name": "push in on the note (its text: src/timeline/props.json note)",
+  "size": "ECU push-in, over his eyes",
+  "what": "the note",
+  "noHead": true
+ }
+]

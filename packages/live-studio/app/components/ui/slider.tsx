@@ -1,18 +1,23 @@
 import { Slider as SliderPrimitive } from "@base-ui/react/slider"
 import { cn } from "cn"
 
+// origin: a two-way value (pan, roll) fills from it to the thumb, so its centre reads as nothing rather than half
 function Slider({
   className,
   defaultValue,
   value,
   min = 0,
   max = 100,
+  origin,
   "aria-label": ariaLabel,
   ...props
-}: SliderPrimitive.Root.Props) {
+}: SliderPrimitive.Root.Props & { origin?: number }) {
   // A single number is one thumb; only an empty slider shows a range
   const _values = [value, defaultValue].find((v) => v != null) ?? [min, max]
   const thumbs = Array.isArray(_values) ? _values.length : 1
+  // Where a thumb's centre sits, in the track: thumbAlignment "edge" keeps the 12px thumb inside it
+  const at = (v: number) => { const p = ((v - min) / (max - min)) * 100; return `calc(${p}% + ${6 - p * 0.12}px)` }
+  const fill = origin !== undefined && typeof _values === "number" ? [at(Math.min(origin, _values)), at(Math.max(origin, _values))] : null
 
   return (
     <SliderPrimitive.Root
@@ -28,12 +33,16 @@ function Slider({
       <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
         <SliderPrimitive.Track
           data-slot="slider-track"
-          className="relative grow overflow-hidden rounded-md bg-muted select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
+          className="relative grow overflow-hidden rounded-md bg-input select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
         >
-          <SliderPrimitive.Indicator
-            data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
-          />
+          {fill ? (
+            <div data-slot="slider-range" className="absolute inset-y-0 bg-primary" style={{ left: fill[0], width: `calc(${fill[1]} - ${fill[0]})` }} />
+          ) : (
+            <SliderPrimitive.Indicator
+              data-slot="slider-range"
+              className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
+            />
+          )}
         </SliderPrimitive.Track>
         {Array.from({ length: thumbs }, (_, index) => (
           <SliderPrimitive.Thumb

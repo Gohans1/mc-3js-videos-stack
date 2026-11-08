@@ -9,7 +9,7 @@ export const log = (m) => (said = said.then(() => post("/log", String(m))));
 window.onerror = (m, s, l, c, e) => { log("ERROR " + (e?.stack ?? m)); };
 window.onunhandledrejection = (e) => { log("ERROR " + (e.reason?.stack ?? e.reason)); };
 
-// { W, H, draft, quality, stills: [{ name, frame }], clip, list, inspect, checks, choices, lab }: see render.mjs
+// { W, H, ratio, draft, quality, stills: [{ name, frame }], clip, list, inspect, checks, choices, lab }: see render.mjs
 export const config = async () => (await fetch("/config")).json();
 export const canvas = () => document.getElementById("gl");
 // Written as renders/NAME

@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "@webgpu/types"],
     "paths": { "@/*": ["./app/*"] }
   },
   "include": ["app", "vite.config.ts"]

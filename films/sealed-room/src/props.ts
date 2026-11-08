@@ -20,7 +20,7 @@
 //   takes [{t, hand, face}]  a hand takes the top page off the desk pile at t and holds it up to read from face
 //   fling {t, lands: [[x, z], ...]}  he flings every page he holds and sweeps the desk pile off with the same stroke:
 //                            the right hand's page, the left's, then the pile from the top, each to the next land
-//   silverfish               mc-actor/silverfish.ts
+//   silverfish               mc-actor/mob.ts keys (rate 2: it scurries at twice its idle wiggle)
 //   button {cell: [x, y, z], presses: [t, ...]}  the stone button by the door (the game's own, on the south wall): his
 //                            finger goes in at each t; anchor "press_R" is his fingertip on it
 //   out {t, dur, to: [x, z], yaw}  he pulls the emptied drawer right out of the cabinet and sets it on the floor
@@ -30,13 +30,12 @@
 // "folder_N", "spill_N", "desk_page", "scrap", "screen", "keys_R", "keys_L".
 import * as THREE from "three";
 import { createScene } from "block-model-renderer";
-import { unzipSync } from "fflate";
 import { makeCarry } from "mc-actor/carry";
 import { clamp01, smooth } from "mc-actor/ease";
 import { loadFont } from "mc-assets/gamefont";
 import { printProps } from "mc-assets/ink";
 import { buildScreen } from "mc-assets/screen";
-import { buildSilverfish } from "mc-actor/silverfish";
+import { loadMob } from "mc-actor/mob";
 import { CABINET, CHAIR, DESK, DOME } from "./world";
 
 const S = 1 / 16;
@@ -121,11 +120,7 @@ export async function buildProps(sources, scene, EDIT) {
   const pageMats = printProps(font, { sheets, scrap, folders, pages: P().pages ?? [], note: P().note });
   scene.add(glass, screen.glow);
 
-  // the silverfish, its texture straight out of client.jar (the last source)
-  const SF = "assets/minecraft/textures/entity/silverfish/silverfish.png";
-  const sfUrl = URL.createObjectURL(new Blob([unzipSync(sources[sources.length - 1], { filter: (f) => f.name === SF })[SF]], { type: "image/png" }));
-  const silverfish = await buildSilverfish(sfUrl);
-  URL.revokeObjectURL(sfUrl);
+  const silverfish = await loadMob("silverfish");
   scene.add(silverfish.g);
 
   const open = (t) => track(P().drawer, "open", t) * RUN;
@@ -329,6 +324,6 @@ export async function buildProps(sources, scene, EDIT) {
     // the chair's looks for the studio (src/variants.ts asVariant); setChair keeps chair_grip on the shown one
     chairLooks, chairBox, setChair: (id) => { const i = CHAIRS.findIndex((c) => c.id === id); if (i >= 0) chairPick = i; },
     open, chairDx,
-    objects: [[button, "stone button (minecraft:stone_button)"], [chair, "chair (pack/picks.json, mc-assets/pick.py, choices.json)"], [tray, "filing drawer (mc-assets pack/file_drawer.json)"], [dome, "CCTV dome (mc-assets pack/cctv_dome.json)"], [scrap, "folded scrap (mc-assets pack/paper_scrap.json)"], [glass, "CRT picture (mc-assets/screen.ts, game font)"], [silverfish.g, "silverfish (mc-actor/silverfish.ts, game model)"]],
+    objects: [[button, "stone button (minecraft:stone_button)"], [chair, "chair (pack/picks.json, mc-assets/pick.py, choices.json)"], [tray, "filing drawer (mc-assets pack/file_drawer.json)"], [dome, "CCTV dome (mc-assets pack/cctv_dome.json)"], [scrap, "folded scrap (mc-assets pack/paper_scrap.json)"], [glass, "CRT picture (mc-assets/screen.ts, game font)"], [silverfish.g, "silverfish (mc-actor/mob.ts, MineRender: the game's model and clip)"]],
   };
 }

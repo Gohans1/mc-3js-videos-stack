@@ -18,12 +18,15 @@ import { loadClips } from "mc-actor/clips";
 import { blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
 import { slerpPose } from "mc-actor/mocap";
 import { props as pack } from "mc-assets/pack";
+import { makePlaced } from "mc-assets/placed";
 import { cameraAt, EASES } from "film-stage/camera";
+import { animate, ANIMS } from "film-stage/animate";
+import { blackAt, makeFade } from "film-stage/fade";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
 
-// The studio reads each shot's name from the comment on its line; size and what feed the review list (draw.describe)
+// The studio reads each shot's name from the comment on its line; size and what feed a draft's list (draw.describe, LIST=1)
 export const SHOTS = [
   { t: 0, size: "wide (WS)", what: "the room" }, // wide: Steve in the room
 ];
@@ -52,7 +55,8 @@ export async function buildScene(canvas, W, H, draft = false) {
   if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: bun run link at the repo root (python ../../scripts/mc/slim_jar.py if the vault lacks it)");
   const jar = new Uint8Array(await jarFile.arrayBuffer());
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
-  const world = await createScene([pack, picked, jar], buildWorld(), { lighting: "scene", animate: false });
+  const sources = [pack, picked, jar];
+  const world = await createScene(sources, buildWorld(), { lighting: "scene", animate: false });
   world.group.scale.setScalar(S);
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
   world.group.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
@@ -64,6 +68,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const steve = await makePlayer(await loadRig("rig/player.glb"), skinUrl, { glow: 0.03 });
   URL.revokeObjectURL(skinUrl);
   scene.add(steve.g);
+  const placed = await makePlaced(scene, sources, EDIT, "placed"); // what the creator drops in from the studio's Objects tab
   // mocap clips the moves name, baked once here: draw(t) only reads them
   const clips = await loadClips(EDIT.steve.moves.filter((m) => m.clip).map((m) => m.clip), steve);
 
@@ -80,6 +85,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   scene.add(hemi, key, key.target);
 
   const composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: 4 }); // N8AO followed by a pass goes black without multisampling
+  const fade = makeFade(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const ao = new N8AOPostPass(scene, camera, W, H);
   Object.assign(ao.configuration, { aoRadius: 1.0, distanceFalloff: 1.0, intensity: 2.0, halfRes: draft });
@@ -123,6 +129,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const lookAt = V(0, 0, 0), head = V(0, 0, 0);
   const draw = (t) => {
     const cam = cameraAt(t, EDIT.cam);
+    const animBlack = animate(cam, t, SHOTS_OUT, DURATION); // the shot's In / Out / Combo (shots.json anim) on top of the keys
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
     camera.fov = cam.fov;
@@ -136,6 +143,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     Object.assign(now, { cam });
 
     perform(t);
+    placed.draw(t);
     const mood = moodAt(EDIT.steve.face, t);
     steve.face(mood, mouthAt([], 0), blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
     now.mood = mood;
@@ -144,9 +152,10 @@ export async function buildScene(canvas, W, H, draft = false) {
     key.intensity = EDIT.light.key;
     tone.saturation = EDIT.look.saturation;
     composer.render(0);
+    if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
   };
 
-  // The studio's list top left (key I) and every draft frame: what is going on at t and which file holds it
+  // A draft frame's list (LIST=1): what is going on at t and which file holds it
   const mm = (fov) => Math.round(12 / Math.tan(THREE.MathUtils.degToRad(fov) / 2));
   draw.describe = (t) => {
     const s = SHOTS_OUT[shotAt(t)], m = now.B?.act ?? EDIT.steve.moves[0];
@@ -165,9 +174,10 @@ export async function buildScene(canvas, W, H, draft = false) {
   };
   draw.tools = {
     clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones,
-    objects: [[world.group, "room"], [steve.g, "Steve"]], materials: [], composer, renderer,
+    objects: [[world.group, "room"], [steve.g, "Steve"]], materials: [], composer, renderer, placed,
   };
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
+  draw.anims = ANIMS; // the studio's Animation tab lists these
   draw.checks = footChecks({ perform, steve, now });
   return draw;
 }

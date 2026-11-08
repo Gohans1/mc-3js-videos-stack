@@ -1,15 +1,16 @@
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toast";
-import { start } from "./engine/player";
-import type { Elements } from "./engine/state";
-import { set, showError } from "./engine/store";
-import { Side } from "./ui/Side";
-import { Stage } from "./ui/Stage";
-import { Timeline } from "./ui/Timeline";
-import { Transport } from "./ui/Transport";
-import { useStudioHotkeys } from "./ui/useStudioHotkeys";
-
-export type Bind = <K extends keyof Elements>(key: K) => (node: Elements[K] | null) => void;
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { start } from "./start";
+import type { Bind, Elements } from "./core/state";
+import { set, showError } from "./core/store";
+import { Library, Side, useEditable, useWide } from "./shell/Side";
+import { Splitter, useStoredSize } from "./components/Splitter";
+import { Stage } from "./picture/Stage";
+import { TimelinePanel } from "./timeline/TimelinePanel";
+import { PasteAttributes } from "./timeline/PasteAttributes";
+import { Transport } from "./shell/Transport";
+import { useStudioHotkeys } from "./shell/useStudioHotkeys";
 
 let started = false;
 
@@ -29,6 +30,11 @@ export function App() {
   const el = useRef({} as Elements);
   const bind: Bind = (key) => (node) => { if (node) el.current[key] = node; };
   useStudioHotkeys();
+  const [sideW, setSideW] = useStoredSize("studio.sideWidth"), [editH, setEditH] = useStoredSize("studio.timelineHeight"), [libW, setLibW] = useStoredSize("studio.libWidth");
+  const sideCell = useRef<HTMLDivElement>(null), libCell = useRef<HTMLDivElement>(null);
+  const editable = useEditable(), wide = useWide() && editable; // three columns only when there is something to show details of
+  const px = (n: number | null) => (n === null ? undefined : `${n}px`);
+  const room = { "--side-w": px(sideW), "--lib-w": px(libW), "--edit-h": px(editH) } as CSSProperties;
   useEffect(() => {
     if (started) return;
     started = true;
@@ -42,13 +48,63 @@ export function App() {
   }, []);
   return (
     <Toaster limit={3}>
-      <div className="grid h-dvh grid-cols-[minmax(0,1fr)_360px] grid-rows-[minmax(0,1fr)_auto_auto] text-sm upright:flex upright:flex-col sideways:grid-cols-[minmax(0,1fr)_min(36%,320px)]">
+      <TooltipProvider delay={500}>
+      <div
+        style={room}
+        data-side-folded={sideW === 0 || undefined}
+        data-lib-folded={(wide && libW === 0) || undefined}
+        data-wide={wide || undefined}
+        className="grid h-dvh grid-cols-[minmax(0,1fr)_var(--side-w,360px)] grid-rows-[minmax(0,1fr)_auto_auto] text-sm upright:flex upright:flex-col sideways:grid-cols-[minmax(0,1fr)_min(36%,320px)] data-wide:grid-cols-[var(--lib-w,400px)_minmax(0,1fr)_var(--side-w,340px)]"
+      >
         <Stage bind={bind} />
         <Transport />
-        <Timeline bind={bind} />
-        <Side />
+        <TimelinePanel bind={bind} size={editH} />
+        {wide && <Library />}
+        <Side wide={wide} />
+        <PasteAttributes />
+        {/* CapCut's layout: picture and its controls with the details column beside them, the timeline across the whole width */}
+        <div className="pointer-events-none relative col-[1/-1] row-start-3 upright:hidden sideways:hidden">
+          <Splitter
+            label="Timeline height"
+            across
+            size={editH}
+            measure={() => el.current.timeline?.getBoundingClientRect().height ?? 0}
+            min={() => { const t = el.current.timeline, list = t?.querySelector<HTMLElement>("[data-tracks-scroll]"); return t && list ? list.getBoundingClientRect().top - t.getBoundingClientRect().top + 64 + 12 : 300; }} // the head that stays put and two rows
+            max={() => innerHeight - 220}
+            set={setEditH}
+            className="pointer-events-auto"
+          />
+        </div>
+        {wide && (
+          <div ref={libCell} className="pointer-events-none relative col-start-1 row-span-2 row-start-1">
+            <Splitter
+              label="Library width"
+              across={false}
+              before
+              size={libW}
+              measure={() => libCell.current?.offsetWidth ?? 400}
+              min={() => 260}
+              max={() => Math.min(640, innerWidth * 0.35)}
+              set={setLibW}
+              className="pointer-events-auto"
+            />
+          </div>
+        )}
+        <div ref={sideCell} className="pointer-events-none relative col-start-2 row-span-2 row-start-1 upright:hidden sideways:hidden in-data-wide:col-start-3">
+          <Splitter
+            label="Panel width"
+            across={false}
+            size={sideW}
+            measure={() => sideCell.current?.offsetWidth ?? 360}
+            min={() => 260}
+            max={() => Math.min(900, innerWidth * 0.6)}
+            set={setSideW}
+            className="pointer-events-auto"
+          />
+        </div>
       </div>
       <audio ref={bind("audio")} preload="auto" />
+      </TooltipProvider>
     </Toaster>
   );
 }

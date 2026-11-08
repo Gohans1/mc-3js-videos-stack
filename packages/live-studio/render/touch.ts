@@ -7,12 +7,12 @@
 // measured against: the actor the target belongs to (its draw.tools.objects entry, so no self-contact), see-through
 // materials (opacity under 0.5), skinned meshes as surfaces, double-sided faces as "inside".
 // Real geometry, not a verdict: over a whole film it lists every limb clip a blocky walk makes (6-10 cm, the game's own do
-// too), so run it on the shot or move in question. Prints the numbers and faults (src/touch.mjs), writes
+// too), so run it on the shot or move in question. Prints the numbers and faults (checks/touch.mjs), writes
 //   touch_<target>_<from>-<to>.jpg  the gap to the nearest surface over time in cm (under 0: inside it)
 //   touch_<target>_<from>-<to>_worst.jpg  the worst frame of each fault, the point circled
 import * as THREE from "three";
-import { gap, surface } from "../src/contact.mjs";
-import { summarize } from "../src/touch.mjs";
+import { gap, surface } from "../checks/contact.mjs";
+import { summarize } from "../checks/touch.mjs";
 import { canvas } from "./lab";
 import { chart, findTarget, inside, label, labelOf, mark, targetHelp } from "./target";
 

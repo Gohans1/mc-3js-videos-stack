@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { measure, report } from "../src/motion.mjs";
+import { measure, report } from "../checks/motion.mjs";
 
 const DT = 1 / 60;
 const track = (from, to, x) => { const out = []; for (let t = from; t <= to + 1e-9; t += DT) out.push({ t, p: [x(t), 1, 0] }); return out; };

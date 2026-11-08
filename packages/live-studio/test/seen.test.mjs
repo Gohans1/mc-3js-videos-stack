@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { stretches, summarize } from "../src/seen.mjs";
+import { stretches, summarize } from "../checks/seen.mjs";
 
 const DT = 1 / 30;
 const frames = (n, at) => Array.from({ length: n }, (_, i) => ({ t: i * DT, share: 0.1, hidden: 0, cut: 0, luma: 0.3, frameLuma: 0.25, alone: 1, by: {}, ...at(i * DT) }));

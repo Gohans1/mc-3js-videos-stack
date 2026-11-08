@@ -37,12 +37,13 @@ export const POSES = {
   reach: (s) => POSES.kneel(s, 50),
   pull: (s) => POSES.kneel(s, 18),
   hold: (s) => POSES.kneel(s, 10),
-  // the dig (src/timeline/props.json files): bent in over the drawer for the next folder, upright on his knees to read it, then a
-  // half turn of the chest to the side the folder is thrown to (his right: tossR), so it leaves the hand away from his body
-  digReach: (s) => POSES.kneel(s, 42),
-  digRead: (s) => addPose(POSES.kneel(s, 4), { head: [4, 0, 0] }),
-  tossR: (s) => addPose(POSES.kneel(s, 8), { chest: [0, -24, 0], body: [0, -10, 0] }),
-  tossL: (s) => addPose(POSES.kneel(s, 8), { chest: [0, 24, 0], body: [0, 10, 0] }),
+  // the dig (src/timeline/props.json files), on one knee like the yank before it (the dev: never on both knees, it looks
+  // nothing like a person): the left foot planted out beside the drawer (25 degrees, past its side wall at z 9.74), bent in
+  // for the next folder, upright to read it, then a half turn of the chest to the side it is thrown to (tossR: his right)
+  digReach: (s) => POSES.oneKnee(s, 34, 25), // 34, not deeper: his head stays out of the drawer; his arm still reaches the back folder
+  digRead: (s) => addPose(POSES.oneKnee(s, 4, 25), { head: [4, 0, 0] }),
+  tossR: (s) => addPose(POSES.oneKnee(s, 8, 25), { chest: [0, -24, 0], body: [0, -10, 0] }),
+  tossL: (s) => addPose(POSES.oneKnee(s, 8, 25), { chest: [0, 24, 0], body: [0, 10, 0] }),
   // the frenzy at the end: bent over the drawer, both hands flinging, the chest rocking with each throw
   frenzy: (s) => addPose(POSES.kneel(s, 40), { chest: [3 * Math.sin(s * 9.4), 6 * Math.sin(s * 4.7), 0] }),
   // scene 6 (1:10-1:44): curious on the chair, the recoil when the silverfish bursts out, sitting on the floor panting,
@@ -80,7 +81,7 @@ export const POSES = {
   pant: (s) => addPose(POSES.stand(s), { body: [6, 0, 0], chest: [-2 + 3 * Math.sin(s * 6.5), 0, 0] }),
   // down on one knee (the dev: never flat on the floor to look into a cabinet): right knee and shin on the stone, left foot
   // planted ahead (thigh 70 degrees forward, shin straight down to the floor from the 8 px kneeling hip); lean bends him over it
-  oneKnee: (s, lean = 0) => addPose(leg("R", 0, 3, 90), leg("L", 70, 3, 70), { root: { y: -4 * PX }, body: [lean, 0, 0], chest: [lean * 0.15 + 1.2 * Math.sin(s * 1.7), 0, 0] }),
+  oneKnee: (s, lean = 0, out = 3) => addPose(leg("R", 0, 3, 90), leg("L", 70, out, 70), { root: { y: -4 * PX }, body: [lean, 0, 0], chest: [lean * 0.15 + 1.2 * Math.sin(s * 1.7), 0, 0] }),
   // up on one knee on the way to his feet
   kneelUp: (s) => POSES.oneKnee(s, 20),
   // the yank: bent to the drawer's pull on one knee, then thrown back against it

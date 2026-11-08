@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { meter } from "../src/frames.mjs";
+import { meter } from "../checks/frames.mjs";
 
 const W = 16, H = 9;
 // frame(i): a grey picture, with a gradient that slides one pixel per frame so frames always differ a little

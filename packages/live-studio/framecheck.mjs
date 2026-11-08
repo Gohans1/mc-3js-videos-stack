@@ -1,5 +1,5 @@
 // The last check before a video goes out, on the encoded file itself (what the audience gets, after the encoder and the
-// chunk joins): black frames, one-frame flashes, jumps away from cuts, shimmering, frozen stretches (src/frames.mjs).
+// chunk joins): black frames, one-frame flashes, jumps away from cuts, shimmering, frozen stretches (checks/frames.mjs).
 //   node node_modules/live-studio/framecheck.mjs [video]   inside a film; default renders/draft_video.mp4
 //   START=60 node ... renders/chunks/c02.mp4   a part of the film: the second of the film it starts at, for times and cuts
 // Prints the faults and writes renders/frames_<KIND>_<s>.jpg for each (up to 12): the frame before, the frame, the frame
@@ -9,7 +9,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { meter } from "./src/frames.mjs";
+import { meter } from "./checks/frames.mjs";
 
 const PROJECT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 const RENDERS = join(PROJECT, "renders");

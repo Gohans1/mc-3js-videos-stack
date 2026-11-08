@@ -13,6 +13,7 @@ Mỗi cú cắt, chuyển động, âm thanh phải trả lời được: khán 
 - J-cut / L-cut: âm thanh của cảnh sau vào trước hình, hoặc âm thanh cảnh trước kéo sang hình sau. Giúp cắt trơn, nên ưu tiên hơn dissolve.
 - Dissolve (hòa hình): thời gian trôi hoặc ký ức. Dùng hiếm để giữ nghĩa.
 - Fade đen: đóng hoặc mở một chương, không dùng làm keo nối giữa các shot.
+- Độ dài fade: dip dưới 0.5 s là một nhịp ngắt, khoảng 1 s đóng một cảnh, 2-3 s đóng một chương, trên 3 s chỉ để kết phim. Hình fade thì tiếng cũng fade theo (Fade out của nhạc nền), hình tối dần mà tiếng cắt cụt là lỗi hay gặp.
 
 ## Nhịp (Fern-style 3D documentary, ReelPantry teardown 2026)
 - Hook: shot 1.8-2.5 s. Thân bài: 3.5-5 s. Giữ lâu nhất khoảng 8 s cho shot đắt giá.
@@ -56,3 +57,4 @@ Mỗi cú cắt, chuyển động, âm thanh phải trả lời được: khán 
 - Zoom nhanh/chậm: premiumbeat.com/blog/mastering-zoom-and-punch-in, dfirentals.com/news/what-is-a-crash-zoom, hookova.com/blog/crash-zoom
 - Thời lượng giữ shot, push 1-4 s: faviovazquez.github.io/showtime/docs/motion-craft.html
 - Nhạc làm dấu câu, im lặng trước cú lộ: transom.org, newdocediting, kenjosephmusic
+- Độ dài fade, fade bằng keyframe opacity có ease: zooop.ai/glossary/editing/fade-to-black, filmit.io/blog/fade-to-black

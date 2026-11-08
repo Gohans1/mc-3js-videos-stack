@@ -1,5 +1,5 @@
 // A note fixed, from the AI's side. Run inside the film (docs/film-contract.md, "Notes"):
-//   bun run note done ID "what changed"   (node node_modules/live-studio/note.mjs) the note folds away under "Đã xong" in the studio, with these words
+//   bun run note done ID "what changed"   (node node_modules/live-studio/note.mjs) the note folds away under "Done" in the studio, with these words
 import { markDone } from "./src/note-cli.mjs";
 
 const project = process.env.LIVE_PROJECT ?? process.cwd();

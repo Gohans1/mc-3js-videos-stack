@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { summarize } from "../src/touch.mjs";
+import { summarize } from "../checks/touch.mjs";
 
 const DT = 1 / 30;
 const frames = (n, at) => Array.from({ length: n }, (_, i) => ({ t: i * DT, d: Infinity, part: "laR", surface: "desk", speed: 0, p: [0, 0, 0], ...at(i * DT) }));

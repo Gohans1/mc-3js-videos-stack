@@ -1,11 +1,11 @@
 // The studio for one film: bun run studio inside the film (node node_modules/live-studio/src/live.mjs [port] [--lan]; the
-// film is the folder it runs in, or LIVE_PROJECT), then open http://localhost:4321 or the Tailscale link it prints. Saving the film's code offers "Có bản mới" on the page, never reloading it unasked; saving sound.py
+// film is the folder it runs in, or LIVE_PROJECT), then open http://localhost:4321 or the Tailscale link it prints. Saving the film's code offers "New version" on the page, never reloading it unasked; saving sound.py
 // or anything the film's package.json lists under "live-studio".sound remixes.
 import { execFile } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { getRequestListener } from "@hono/node-server";
 import { createApi } from "./api.mjs";
 import { openFilm } from "./film.mjs";
@@ -29,7 +29,9 @@ try {
 } catch { /* none recorded, or it no longer answers */ }
 
 const page = await buildPage(film, {
-  onChange: () => send("code"),
+  // A build made only because the studio saved the sound lanes or the camera keys is no new code for the creator to load: the
+  // page has them already
+  onChange: (files) => { const own = film.ownWrites(); send("code", files.length && files.every((f) => own.includes(resolve(f))) ? "own" : ""); },
   onError: (message) => send("build-error", message), // Vite prints it in this terminal itself
 });
 
@@ -44,7 +46,7 @@ const fromElsewhere = (req) => {
   try { return !!req.headers.origin && new URL(req.headers.origin).host !== req.headers.host; } catch { return true; }
 };
 
-const api = getRequestListener(createApi(film, { page, events }).fetch);
+const api = getRequestListener(createApi(film, { page, events, send }).fetch);
 const http = createServer((req, res) => {
   if (!knownHost(req.headers.host) || fromElsewhere(req)) { res.statusCode = 403; res.end(); return; }
   try { decodeURI(req.url); } catch { res.statusCode = 400; res.end(); return; } // a path no file can have, before Hono trips on it

@@ -106,7 +106,9 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
     }
     const tw = t - L.twitch;
     if (tw >= 0 && tw < 0.35) char.push(line("right hand twitches", L.twitch, t));
-    if (t < L.eyesOpen) char.push(line("eyes closed"));
+    const faceLook = variants.find((x) => x.id === "face")?.pick, game = !faceLook || faceLook.id === "game";
+    if (!game) char.push(line(`face: ${faceLook.title}, never moves (mc-actor FACES, choices.json)`));
+    else if (t < L.eyesOpen) char.push(line("eyes closed"));
     else if (t < L.eyesOpen + 0.1) char.push(line("eyes snap open (0.09 s)", L.eyesOpen, t));
     else if (t < L.eyesOpen + 0.1 + L.pupil.narrow) char.push(line("pupils narrowing under the lamp", L.eyesOpen + 0.1, t));
     const hk = (f) => { const ks = L.hands.filter((h) => f in h && h.t <= t); return ks.length ? ks[ks.length - 1] : null; };
@@ -115,10 +117,10 @@ export function makeDescribe({ EDIT, SHOTS, shotAt, keysOf, camera, steveBox, st
       if (tgt && k) char.push(line(`${name} hand IK -> ${where(k[f]) || "letting go"}${tgt.w < 0.99 ? ` (${Math.round(tgt.w * 100)}%)` : ""}`, k.t, t));
     }
     if (now.look) { const ks = L.look.filter((h) => h.t <= t); const k = ks[ks.length - 1]; char.push(line(`head aims at ${where(k?.at) || "(returning)"}`, k?.t, t)); }
-    if (t >= 27 && now.mood) char.push(line(`face: ${moodName(now.mood)} (brows thin, never over the eyes)`));
-    if ((L.read ?? []).some(([a, b]) => t >= a && t < b)) char.push(line("eyes: reading, saccades left to right"));
-    if (now.blink > 0.05 && t > L.eyesOpen + 1) char.push(line("blink", t));
-    if (t >= L.exhale && t < L.exhale + 1.2) char.push(line("heavy breath out, lips part", L.exhale, t));
+    if (game && t >= 27 && now.mood) char.push(line(`face: ${moodName(now.mood)} (brows thin, never over the eyes)`));
+    if (game && (L.read ?? []).some(([a, b]) => t >= a && t < b)) char.push(line("eyes: reading, saccades left to right"));
+    if (game && now.blink > 0.05 && t > L.eyesOpen + 1) char.push(line("blink", t));
+    if (game && t >= L.exhale && t < L.exhale + 1.2) char.push(line("heavy breath out, lips part", L.exhale, t));
     add("STEVE", char);
 
     const Pr = EDIT.props, pr = [];

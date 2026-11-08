@@ -74,5 +74,16 @@ export async function loadMob(name, { root = `${location.origin}/mcasset/1.21.11
       mob.setAnimationTime((walked(path, t) * 4) / 20);
     } else mob.setAnimationTime(t * (S.rate ?? 1));
   };
-  return { g, mob, clips: Object.keys(clipsByName), draw, where };
+  // One clip at a given time in seconds, where nothing walks it along a path (mc-assets/placed.ts: mobs dropped in from the studio)
+  const animate = (name, time, weight = 1) => {
+    const clip = clipsByName[name];
+    if (!clip) return;
+    if (playing !== name) { mob.playAnimation(clip); playing = name; }
+    mob.setAnimationWeights([weight]);
+    mob.setAnimationTime(time);
+  };
+  // The model's own pose again: a one-shot clip that ended open (a chest's "open") must not stay open when the film goes back
+  // before the key that started it
+  const still = () => { if (playing === null) return; mob.stopAnimation(); playing = null; };
+  return { g, mob, clips: Object.keys(clipsByName), draw, where, animate, still };
 }

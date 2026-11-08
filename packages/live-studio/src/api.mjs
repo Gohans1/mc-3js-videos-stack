@@ -14,6 +14,8 @@ import { html } from "hono/html";
 import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
+import { FavoriteChange, openFavorites } from "./favorites.mjs";
+import { RATIOS } from "./frame.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
 const MIME = { ".gltf": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".png": "image/png", ".bin": "application/octet-stream", ".js": "text/javascript", ".json": "application/json", ".wav": "audio/wav", ".webm": "audio/webm", ".jar": "application/java-archive" };
@@ -22,10 +24,19 @@ const jpeg = z.string().startsWith("data:image/jpeg;base64,/9j/").nullish();
 const NoteIn = z.object({
   note: z.looseObject({ id: z.string().regex(/^[a-z0-9]+$/), t: z.number().refine(Number.isFinite), text: z.string() }),
   img: jpeg, crop: jpeg, strip: jpeg,
+  // A drawn note spans moments: one picture per moment it was drawn at, with what was drawn there
+  frames: z.array(z.object({ t: z.number().refine(Number.isFinite), img: jpeg })).max(8).optional(),
 });
 const NoteChange = z.object({ text: z.string().optional(), remove: z.boolean().optional(), restore: z.boolean().optional(), done: z.boolean().optional(), fix: z.looseObject({}).optional() });
 const Choose = z.object({ group: z.string().min(1), set: z.string(), gain: z.number().optional() });
+const FilmChange = z.object({ ratio: z.enum(RATIOS) });
 const PageProblems = z.object({ problems: z.array(z.string()) });
+const SoundSave = z.object({ base: z.string(), data: z.looseObject({}) });
+const CamSave = z.object({ base: z.string(), data: z.array(z.looseObject({})) });
+const ShotsSave = CamSave;
+const TogetherSave = z.object({ files: z.array(z.object({ name: z.string(), base: z.string(), data: z.unknown() })).min(2)
+  .refine((fs) => new Set(fs.map((f) => f.name)).size === fs.length, "each file once") });
+const KeySave = z.object({ base: z.string(), data: z.union([z.looseObject({}), z.array(z.unknown())]) });
 const PageWeight = z.object({ files: z.array(z.object({ path: z.string().max(1000), bytes: z.number().nonnegative() })).max(5000) });
 
 // Formats that are compressed inside already: trying them again only costs time on a first visit
@@ -33,7 +44,7 @@ const PACKED = /\.(png|jpe?g|webp|avif|gif|webm|mp3|mp4|m4a|ogg|opus|flac|woff2|
 const PACK_MAX = 16 * 1024 * 1024; // bigger is held in memory per version: slim it in the film instead
 const inside = (root, file) => { const r = relative(root, file); return r && !r.startsWith("..") && !isAbsolute(r); };
 
-export const createApi = (film, { page, events }) => {
+export const createApi = (film, { page, events, send }) => {
   // Text and geometry shrink a lot and pictures don't. Squeezed once per version, so the next visit costs nothing here either;
   // what barely shrinks (a zip of pictures) is remembered as not worth it and goes out as it is
   // Off the main thread (a few MB takes a second), and kept as the promise so a second visit meanwhile waits for the same work
@@ -99,7 +110,7 @@ export const createApi = (film, { page, events }) => {
     c.header("cache-control", "no-cache");
     const built = page.html();
     // No page yet: the first build failed. Shown until a save fixes it
-    if (!built) return c.html(html`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="3"><title>Studio</title><pre style="white-space:pre-wrap">Code lỗi, chưa dựng được trang. Sửa xong là trang tự tải lại.<br><br>${page.error() ?? ""}</pre>`, 503);
+    if (!built) return c.html(html`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="3"><title>Studio</title><pre style="white-space:pre-wrap">The film's code has an error, so the page can't be built yet. It reloads once it's fixed.<br><br>${page.error() ?? ""}</pre>`, 503);
     return c.html(built.replace("</head>", `<meta name="live-build" content="${build()}"></head>`));
   });
   app.get("/_studio/*", serveStatic({ root: page.dir, precompressed: true, onFound: (_, c) => c.header("cache-control", "public, max-age=31536000, immutable") }));
@@ -128,7 +139,7 @@ export const createApi = (film, { page, events }) => {
     film.notes.change(c.req.param("id"), c.req.valid("json"));
     return c.text("ok");
   });
-  app.get("/api/note-img/:name{[a-z0-9]+(_crop|_strip)?\\.jpg}", (c) => {
+  app.get("/api/note-img/:name{[a-z0-9]+(_crop|_strip|_f\\d)?\\.jpg}", (c) => {
     const pic = film.notes.picture(c.req.param("name").slice(0, -4));
     if (!pic) return c.body(null, 404);
     c.header("content-type", "image/jpeg");
@@ -143,7 +154,15 @@ export const createApi = (film, { page, events }) => {
   app.get("/api/choices.json", (c) => text(c, Buffer.from(JSON.stringify(film.readChoices()))));
   app.post("/api/choose", zValidator("json", Choose), (c) => (film.choose(c.req.valid("json")) ? c.text("ok") : c.body(null, 400)));
   app.get("/api/contract.json", (c) => fresh(c, film.contract()));
+  // The film's frame shape (frame.mjs), which the page needs before it builds the scene; Settings change it
+  app.get("/api/film.json", (c) => fresh(c, { name: film.NAME, ratio: film.ratio() }));
+  app.post("/api/film", zValidator("json", FilmChange), (c) => { film.setRatio(c.req.valid("json").ratio); return c.text("ok"); });
   app.post("/api/contract", zValidator("json", PageProblems), (c) => { film.pageSays(c.req.valid("json").problems); return c.text("ok"); });
+
+  // The creator's stars, kept for every film (src/favorites.mjs); every open page of this studio hears a change
+  const favorites = openFavorites();
+  app.get("/api/favorites", (c) => fresh(c, favorites.shown()));
+  app.post("/api/favorites", zValidator("json", FavoriteChange), (c) => { const all = favorites.set(c.req.valid("json")); send("favorites"); return c.json(all); });
 
   let weighed = null; // the heavy files last named, so each reload doesn't say it again
   app.post("/api/weight", zValidator("json", PageWeight), (c) => {
@@ -154,6 +173,53 @@ export const createApi = (film, { page, events }) => {
     }
     return c.text("ok");
   });
+
+  // The sound lanes, when the film names them (src/sound.mjs). A save names the version it was made on: 409 means the file
+  // changed meanwhile (an agent fixing a note), and the page loads that one instead of writing over it
+  const noSound = (c) => c.body(null, 404);
+  app.get("/api/sound", (c) => { const s = film.sound?.read(); return s ? fresh(c, { ...s, library: film.sound.library(), live: film.liveLanes() }) : noSound(c); });
+  app.post("/api/sound", zValidator("json", SoundSave), (c) => {
+    if (!film.sound) return noSound(c);
+    const { base, data } = c.req.valid("json"), r = film.sound.write(base, data);
+    return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
+  // The camera keys, the same way (package.json "live-studio".camTimeline)
+  app.get("/api/cam", (c) => { const s = film.cam?.read(); return s ? fresh(c, s) : noSound(c); });
+  app.post("/api/cam", zValidator("json", CamSave), (c) => {
+    if (!film.cam) return noSound(c);
+    const { base, data } = c.req.valid("json"), r = film.cam.write(base, data);
+    return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
+  // The shots, the same way (package.json "live-studio".shotsTimeline)
+  app.get("/api/shots", (c) => { const s = film.shots?.read(); return s ? fresh(c, s) : noSound(c); });
+  app.post("/api/shots", zValidator("json", ShotsSave), (c) => {
+    if (!film.shots) return noSound(c);
+    const { base, data } = c.req.valid("json"), r = film.shots.write(base, data);
+    return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
+  // The key files (package.json "live-studio".keyFiles), each the same way, by its place in that list
+  app.get("/api/keys", (c) => fresh(c, film.keyFiles.map((k) => ({ file: k.rel, edit: k.edit }))));
+  app.get("/api/keys/:i{[0-9]+}", (c) => { const s = film.keyFiles[+c.req.param("i")]?.read(); return s ? fresh(c, s) : noSound(c); });
+  app.post("/api/keys/:i{[0-9]+}", zValidator("json", KeySave), (c) => {
+    const k = film.keyFiles[+c.req.param("i")];
+    if (!k) return noSound(c);
+    const { base, data } = c.req.valid("json"), r = k.write(base, data);
+    return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
+  // Files edited in one go (a cut moved on the camera row changes cam.json and shots.json), named as their own routes name them:
+  // every one is checked before any is written, so a 409 on one never leaves the others half saved
+  const named = (name) => new Map([["sound", film.sound], ["cam", film.cam], ["shots", film.shots], ...film.keyFiles.map((k, i) => [`keys/${i}`, k])]).get(name);
+  app.post("/api/together", zValidator("json", TogetherSave), (c) => {
+    const files = c.req.valid("json").files.map((f) => ({ ...f, file: named(f.name) }));
+    if (files.some((f) => !f.file)) return noSound(c);
+    const nos = files.map((f) => f.file.check(f.base, f.data));
+    if (nos.some((no) => no?.conflict)) return c.body(null, 409);
+    if (nos.some(Boolean)) return c.json({ problems: nos.flatMap((no) => no?.problems ?? []) }, 400);
+    return c.json({ versions: Object.fromEntries(files.map((f) => [f.name, f.file.write(f.base, f.data).version])) });
+  });
+  app.get("/api/sfx/:name{[A-Za-z0-9_.-]+}/peaks", (c) => { const f = film.sound?.fileOf(c.req.param("name")); return f ? text(c, Buffer.from(JSON.stringify(film.sound.peaks(c.req.param("name"))))) : noSound(c); });
+  app.get("/api/sfx/:name{[A-Za-z0-9_.-]+[.]wav}", (c) => { const f = film.sound?.fileOf(c.req.param("name").slice(0, -4)); return f ? sendFile(c, f) : noSound(c); });
+  app.get("/api/sfx/:name{[A-Za-z0-9_.-]+[.]webm}", async (c) => { const f = await film.smallSfx(c.req.param("name").slice(0, -5)); return f ? sendFile(c, f) : noSound(c); });
 
   app.get("/api/mix.wav", (c) => (existsSync(film.MIX) ? sendFile(c, film.MIX, { store: true }) : c.body(null, 404)));
   app.get("/api/mix_small.webm", async (c) => { if (!existsSync(film.MIX)) return c.body(null, 404); await film.smallMix(); return existsSync(film.MIX_SMALL) ? sendFile(c, film.MIX_SMALL) : c.body(null, 404); }); // no ffmpeg, no small copy: the page plays the full mix

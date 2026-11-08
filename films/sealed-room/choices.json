@@ -6,5 +6,9 @@
  "computer": {
   "set": "computer_beige",
   "gain": 1
+ },
+ "face": {
+  "set": "noeyes",
+  "gain": 1
  }
 }

@@ -12,6 +12,8 @@ one ("this", "still", "no, rather"), so read them in that order before fixing an
 changes. Read the index first, then open the notes you're about to fix. Open the pictures named there:
 "seconds around" first, it's the cheapest way to see the moment; the words alone don't say what was being looked at.
 Notes from before context was saved get their words and actions worked out from today's edit, marked "(today's edit)".
+Strokes drawn on the picture are listed with the second each was drawn at; a path is one point per second, the creator's way of
+saying "from here at A to there at B". Open "drawn at" pictures: each is the film at one of those seconds with every stroke on it.
 """
 import argparse
 import json
@@ -66,11 +68,29 @@ def film_now():
     return described or "(not in git)"
 
 
+def where(pt, hit):
+    return f"({pt[0] * 100:.0f}%, {pt[1] * 100:.0f}%) on \"{(hit or {}).get('what', '?')}\"" + (f" world {hit['world']}" if hit and hit.get("world") else "")
+
+
+def drawn(m):
+    hits = m.get("hits") or []
+    hit = lambda i: hits[i] if i < len(hits) else None
+    if m["kind"] == "path":
+        return "path " + " -> ".join(f"{t}s {where(pt, hit(i))}" for i, (t, pt) in enumerate(zip(m["ts"], m["pts"])))
+    if m["kind"] == "box":
+        (x0, y0), (x1, y1) = m["pts"][0], m["pts"][-1]
+        return f"box at {m['t']}s: {min(x0, x1) * 100:.0f}-{max(x0, x1) * 100:.0f}% across, {min(y0, y1) * 100:.0f}-{max(y0, y1) * 100:.0f}% down, middle " + where(((x0 + x1) / 2, (y0 + y1) / 2), hit(0))
+    ends = {"pen": ("from", "to"), "arrow": ("tail", "head")}[m["kind"]]
+    return f"{m['kind']} at {m['t']}s: {ends[0]} {where(m['pts'][0], hit(0))}, {ends[1]} {where(m['pts'][-1], hit(1))}"
+
+
 def one_line(n):
     pin = n.get("pin")
     tags = []
     if pin:
         tags.append(f"tap {pin.get('what')}")
+    if n.get("marks"):
+        tags.append(f"drew {len(n['marks'])}" + (f" over {n['range'][0]}-{n['range'][1]}s" if n.get("range") else ""))
     if (n.get("context") or {}).get("playing"):
         tags.append("while playing")
     if n.get("fixes"):
@@ -96,8 +116,14 @@ def detail(n, cam):
     pin = n.get("pin")
     if pin:
         print(f"tap: {pin['x'] * 100:.0f}% across, {pin['y'] * 100:.0f}% down, on \"{pin.get('what')}\"" + (f", world {pin['world']}" if pin.get("world") else ""))
+    elif n.get("marks"):
+        print("tap: none, it was drawn on")
     else:
         print("tap: none (note button), about the moment as a whole")
+    if n.get("range"):
+        print(f"about {n['range'][0]}-{n['range'][1]}s, not one moment")
+    for m in n.get("marks", []):
+        print(f"drawn: {drawn(m)}")
     if c:
         s = c["shot"]
         print(f"in shot: {s['into']}s of {s['from']}-{s['to']}s")
@@ -132,6 +158,8 @@ def detail(n, cam):
     for label, key in (("seconds around (-2 -1 0 +1)", "strip"), ("frame", "img"), ("under the tap", "crop")):
         if n.get(key):
             print(f"{label}: {(ROOT / n[key]).as_posix()}")
+    for f in n.get("frames", []):
+        print(f"drawn at {f['t']}s: {(ROOT / f['img']).as_posix()}")
 
 
 def main():

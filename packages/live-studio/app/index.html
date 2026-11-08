@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi" class="dark">
+<html lang="en" class="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -8,7 +8,7 @@
 <link rel="icon" href="data:,">
 <script>
 // A phone on a bad line can miss the page's own code: say so, instead of a blank page
-addEventListener("error", (e) => { if (e.target instanceof HTMLScriptElement && e.target.type === "module") document.getElementById("root").innerHTML = '<p style="margin:12px;color:#CECDC3;font:16px system-ui">Không tải được trang. Kiểm tra mạng rồi tải lại.</p>'; }, true);
+addEventListener("error", (e) => { if (e.target instanceof HTMLScriptElement && e.target.type === "module") document.getElementById("root").innerHTML = '<p style="margin:12px;color:#CECDC3;font:16px system-ui">Couldn’t load the studio. Check your connection, then reload.</p>'; }, true);
 </script>
 </head>
 <body>

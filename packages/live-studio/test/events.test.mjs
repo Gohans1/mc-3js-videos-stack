@@ -1,4 +1,4 @@
-// The page's live events (app/events.ts) against a stand-in EventSource: Node runs the TypeScript as it is
+// The page's live events (app/core/events.ts) against a stand-in EventSource: Node runs the TypeScript as it is
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -10,7 +10,7 @@ globalThis.EventSource = class extends EventTarget {
   say(event, data) { this.dispatchEvent(new MessageEvent(event, { data })); }
 };
 globalThis.document = { querySelector: () => ({ content: "build-1" }) };
-const { onHello } = await import("../app/events.ts");
+const { onHello } = await import("../app/core/events.ts");
 const stream = () => streams.at(-1);
 
 test("a part of the page that listens late still tells the stream's first hello from a reconnect", () => {

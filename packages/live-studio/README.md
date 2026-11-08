@@ -1,6 +1,6 @@
 # Live Studio
 
-A review room for Three.js films: the creator watches on a PC or phone and pins notes to a moment and a spot, an AI agent reads them and changes the film, and nothing in the studio can edit the film itself.
+A review room and timeline editor for Three.js films: the creator watches on a PC or phone and pins notes to a moment and a spot, an AI agent reads them and changes the film's code. The creator can also edit the timeline CapCut-style (sound clips, camera keys and eases, cuts, placed objects, fades); those edits go into the film's timeline files, and its code stays the agent's.
 
 <img src="docs/studio.png" width="320" alt="The studio on a phone: the picture with a pin on the tapped ball, big play and note buttons, the timeline with words and actions, and the notes below.">
 
@@ -26,8 +26,10 @@ What a film must provide and every rule an agent follows: [docs/film-contract.md
 
 ## Working on the studio
 
-`app/` is the React page (shadcn/ui on Base UI, Tailwind, Zustand) that Vite rebuilds with the film on every save (`src/page.mjs`), `src/` is the server (restart each studio after changing it), `render/` the draft renderer, and `bun run test` the tests.
+- `app/` is the React page (shadcn/ui on Base UI, Tailwind, Zustand) that Vite rebuilds with the film on every save (`src/page.mjs`). One folder per part of the page, each with its state (`slice.ts`), its logic and its panels: `picture/`, `playback/`, `notes/`, `timeline/`, `sound/`, `camera/`, `keys/`, `objects/`, `options/`. `core/` is what they share (the store, saved settings in `prefs.ts`, film time), `shell/` the frame around them (side bar, transport, settings, hotkeys), `start.ts` the start and the frame loop.
+- `src/` is the server (restart each studio after changing it), `render/` the draft renderer and its checks, `checks/` the numbers those checks and framecheck compute (pure, tested in node).
+- `bun run test` runs the tests, `bun run typecheck` the types.
 
 ## License
 
-MIT; built on three.js, Vite, React, shadcn/ui, Base UI, Tailwind CSS, Hono, Zustand, TanStack Hotkeys, Zod, vite-plugin-compression2 (all MIT) and Lucide (ISC).
+MIT; built on three.js, three-mesh-bvh, Vite, React, shadcn/ui, Base UI, Tailwind CSS, Hono, Zustand, TanStack Hotkeys, Zod, bezier-easing, bezier-easing-editor, vite-plugin-compression2 (all MIT), class-variance-authority (Apache-2.0), Lucide (ISC) and Mediabunny (MPL-2.0, unmodified).

@@ -5,18 +5,19 @@
 // through the film's camera with its view widened 3x, so what falls outside the real frame is counted too (beyond 3x: not). Counting
 // colours gives how much of the frame it fills, how much of it is behind something (and behind what), how much is cut off
 // by the frame edge; the film's real frame gives how bright it is. Textures keep their cut-outs (leaves, bars, glass),
-// see-through materials (opacity under 0.5) never hide anything. Prints the numbers and faults (src/seen.mjs), writes
+// see-through materials (opacity under 0.5) never hide anything. Prints the numbers and faults (checks/seen.mjs), writes
 //   seen_<target>_<from>-<to>.jpg  the chart: frame share, hidden, cut off, brightness over time
 //   seen_<target>_<from>-<to>_worst.jpg  the worst frame of each fault: green outline = seen, red = hidden, with what it is
 import * as THREE from "three";
-import { summarize } from "../src/seen.mjs";
+import { summarize } from "../checks/seen.mjs";
+import { sizeOf } from "../src/frame.mjs";
 import { canvas } from "./lab";
 import { chart, findTarget, inside, label, labelOf, mark, targetHelp } from "./target";
 
-const WIDE = 3, W2 = 960, H2 = 540, FW = W2 / WIDE, FH = H2 / WIDE, X0 = (W2 - FW) / 2, Y0 = (H2 - FH) / 2; // the real frame: FW x FH at X0, Y0
-const TARGET = 1, OTHER = 4095;
+const WIDE = 3, TARGET = 1, OTHER = 4095;
 
-export const seenCheck = (render) => {
+export const seenCheck = (render, cfg) => {
+  const [W2, H2] = sizeOf(cfg.ratio, 960), FW = W2 / WIDE, FH = H2 / WIDE, X0 = (W2 - FW) / 2, Y0 = (H2 - FH) / 2; // the real frame: FW x FH at X0, Y0
   let gl2, rt, buf, small;
   const idMats = new Map(), hide = new THREE.MeshBasicMaterial({ visible: false });
   const idMat = (src, id) => {

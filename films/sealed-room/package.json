@@ -32,6 +32,12 @@
       "sound/sfx",
       "src/timeline/audio.json"
     ],
+    "soundTimeline": "src/timeline/audio.json",
+    "camTimeline": "src/timeline/cam.json",
+    "shotsTimeline": "src/timeline/shots.json",
+    "keyFiles": { "src/timeline/steve.json": "steve", "src/timeline/props.json": "props", "src/timeline/placed.json": "placed", "src/timeline/fx.json": "fx" },
+    "sfx": "sound/sfx",
+    "liveLanes": true,
     "chrome": "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe"
   }
 }

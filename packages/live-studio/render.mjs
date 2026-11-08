@@ -15,6 +15,7 @@
 //                                      question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)
 //   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
 // The film's package.json "live-studio": { "chrome": path } names its headless Chrome (default tools/chrome-headless-shell/...).
+// And { "ratio": "9:16" } makes a Shorts film: drafts at 720x1280 instead of 1280x720 (src/frame.mjs).
 import { spawn, spawnSync } from "node:child_process";
 import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -22,6 +23,7 @@ import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
 import { build } from "vite";
 import { STUDIO, threeFromOf } from "./src/film.mjs";
+import { ratioOf, sizeOf } from "./src/frame.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
 
 const what = process.argv[2] ?? "all";
@@ -37,8 +39,9 @@ const numbers = (s) => s.split(",").map(Number);
 const env = process.env;
 const choicesFile = ["choices.json", "sound_choices.json"].map((f) => join(PROJECT, f)).find(existsSync);
 
+const ratio = ratioOf(pkg), [W, H] = sizeOf(ratio, 1280); // package.json "live-studio".ratio: 16:9, or 9:16 for Shorts
 const cfg = {
-  W: 1280, H: 720, draft: true, quality: 0.9,
+  W, H, ratio, draft: true, quality: 0.9,
   stills: what === "clip" ? [] : numbers(env.AT ?? "1").map((s) => ({ name: `still_${s}s.jpg`, frame: Math.round(s * FPS) })),
   clip: what === "stills" ? null : { chunk: CHUNK, only: env.CHUNKS ? numbers(env.CHUNKS) : null, samples: 1, bitrate: 4e6 },
   list: env.LIST === "1",
