@@ -22,8 +22,8 @@ import { SoundPanel } from "../sound/SoundPanel";
 type SideTab = StudioState["side"];
 type Lib = StudioState["lib"];
 
-// CapCut's text tabs: the open one in the accent, with a bar under it
-const tab = "relative flex h-10 flex-none items-center gap-1.5 rounded-sm text-[13px] font-medium text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary pointer-coarse:h-11";
+// CapCut's text tabs: the open one in the accent. The bar under it is ours (dev's call): the color alone is hard to see at a glance
+const tab = "relative flex h-10 flex-none items-center gap-1.5 rounded-sm text-[13px] font-medium text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary data-active:after:absolute data-active:after:inset-x-0 data-active:after:bottom-0 data-active:after:h-0.5 data-active:after:rounded-full data-active:after:bg-primary pointer-coarse:h-11";
 const tabs = "flex flex-none items-center gap-5 border-b px-3";
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
 
@@ -49,7 +49,7 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "sound", title: "Audio", icon: Music2 },
   { id: "objects", title: "Objects", icon: Boxes },
 ];
-const tool = "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary [&_svg]:size-5";
+const tool = "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary data-active:after:absolute data-active:after:inset-x-3 data-active:after:-bottom-1 data-active:after:h-0.5 data-active:after:rounded-full data-active:after:bg-primary [&_svg]:size-5";
 export function Library() {
   const { sound, placed, open } = useParts(), lib = useStudio((s) => s.lib);
   const shown = LIBS.filter((l) => l.id === "notes" || (l.id === "sound" ? sound : placed));
