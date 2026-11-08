@@ -29,6 +29,7 @@ What a film must provide and every rule an agent follows: [docs/film-contract.md
 - `app/` is the React page (shadcn/ui on Base UI, Tailwind, Zustand) that Vite rebuilds with the film on every save (`src/page.mjs`). One folder per part of the page, each with its state (`slice.ts`), its logic and its panels: `picture/`, `playback/`, `notes/`, `timeline/`, `sound/`, `camera/`, `keys/`, `objects/`, `options/`. `core/` is what they share (the store, saved settings in `prefs.ts`, film time), `shell/` the frame around them (side bar, transport, settings, hotkeys), `start.ts` the start and the frame loop.
 - `src/` is the server (restart each studio after changing it), `render/` the draft renderer and its checks, `checks/` the numbers those checks and framecheck compute (pure, tested in node).
 - `bun run test` runs the tests, `bun run typecheck` the types.
+- [docs/capcut-parity.md](docs/capcut-parity.md) is the creator's list of what the studio has of CapCut, feature by feature (in Vietnamese): change a feature's line in the same commit as the feature.
 
 ## License
 
