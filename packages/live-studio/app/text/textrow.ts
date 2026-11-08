@@ -10,14 +10,15 @@ import { get, noSnap, say } from "../core/store";
 import { FPS, r3, snapSpan, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
-import { PICK, sized, UI_FONT } from "../timeline/canvas";
+import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { edit, isShape, items, nameOf, pickText, preview, restore, settle, snapshot, tracksUsed } from "./text";
 
 export const ROW_H = 28;
 const CLIP_H = 24, EDGE = 6;
-const COLOR = { text: "#7A5230", shape: "#6B3F58", label: "#F2F0E5", anim: "rgba(0,0,0,.28)", hint: "#878580" };
+// A shape has no CapCut clip to copy: plum, apart from the text clips' orange-brown (index.css --clip-text)
+const COLOR = { shape: "#6B3F58", shapeTag: "#7D5069", anim: "rgba(0,0,0,.28)" };
 
 type Box = { i: number; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
@@ -37,16 +38,16 @@ export const drawTextRow = () => {
   const { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(), X = (s: number) => ((s - a) / v) * w, picks = get().textPicks;
-  g.fillStyle = "#100F0F"; g.fillRect(0, 0, w, h);
-  g.fillStyle = "#2A2928";
+  g.fillStyle = tone("track"); g.fillRect(0, 0, w, h);
+  g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
   g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
   boxes = [];
-  if (!items.length) { g.fillStyle = COLOR.hint; g.fillText("Add text, an arrow or a circle from the Text tab", 8, ROW_H / 2); }
+  if (!items.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Add text, an arrow or a circle from the Text tab", 8, ROW_H / 2); }
   items.forEach((it, i) => {
     if (it.to < a || it.from > a + v) return;
     const x0 = X(it.from), x1 = Math.max(x0 + 4, X(it.to)), y = yOf(it.track ?? 0) + (ROW_H - CLIP_H) / 2, cx0 = Math.max(-2, x0), cx1 = Math.min(w + 2, x1);
-    g.fillStyle = isShape(it) ? COLOR.shape : COLOR.text;
+    g.fillStyle = isShape(it) ? COLOR.shape : tone("clip-text");
     g.beginPath(); g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 3); g.fill();
     // The In and Out as a darker stretch at each end, as long as they run
     const px = (x1 - x0) / Math.max(1e-3, it.to - it.from), span = it.to - it.from;
@@ -55,18 +56,19 @@ export const drawTextRow = () => {
     if (ai) g.fillRect(x0, y + CLIP_H - 5, ai * k * px, 5);
     if (ao) g.fillRect(x1 - ao * k * px, y + CLIP_H - 5, ao * k * px, 5);
     g.save(); g.beginPath(); g.rect(cx0, y, cx1 - cx0 - 2, CLIP_H); g.clip();
-    g.fillStyle = COLOR.label;
-    const lx = Math.max(x0, 0) + 5;
-    g.font = `600 12px ${UI_FONT}`; g.fillText(it.kind === "arrow" ? "↗" : it.kind === "circle" ? "◯" : "T", lx, y + CLIP_H / 2 - 1);
-    g.font = `12px ${UI_FONT}`; g.fillText(nameOf(it), lx + 13, y + CLIP_H / 2 - 1);
+    const lx = Math.max(x0, 0) + 3, mid = y + CLIP_H / 2;
+    g.font = `11px ${UI_FONT}`;
+    const tw = g.measureText(nameOf(it)).width + 13;
+    g.fillStyle = isShape(it) ? COLOR.shapeTag : tone("clip-text-tag"); g.beginPath(); g.roundRect(lx, y + 3, tw + 8, CLIP_H - 6, 3); g.fill();
+    g.fillStyle = tone("clip-label");
+    g.font = `600 11px ${UI_FONT}`; g.fillText(it.kind === "arrow" ? "↗" : it.kind === "circle" ? "◯" : "T", lx + 4, mid);
+    g.font = `11px ${UI_FONT}`; g.fillText(nameOf(it), lx + 17, mid);
     g.restore();
-    if (picks.includes(i)) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
-    else if (hover === i) { g.strokeStyle = "rgba(255,252,240,.35)"; g.lineWidth = 1; g.beginPath(); g.roundRect(cx0 - 0.5, y - 0.5, cx1 - cx0 + 1, CLIP_H + 1, 3.5); g.stroke(); }
+    if (picks.includes(i)) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
+    else if (hover === i) { g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 1; g.beginPath(); g.roundRect(cx0 - 0.5, y - 0.5, cx1 - cx0 + 1, CLIP_H + 1, 3.5); g.stroke(); }
     boxes.push({ i, x0, x1, y0: y, y1: y + CLIP_H });
   });
-  const t = X(S.t);
-  g.fillStyle = "#000"; g.fillRect(t - 2, 0, 4, h);
-  g.fillStyle = "#EC8B49"; g.fillRect(t - 1, 0, 2, h);
+  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = (skip: number[]) => {

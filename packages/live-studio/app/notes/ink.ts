@@ -3,6 +3,7 @@
 // seconds of the same note stay faintly visible with their time (onion skin), and a path shows where it says things should be now.
 // A note keeps its strokes; while the film plays, an open note's strokes come up around their seconds as its pin does.
 import { PHONE } from "../core/device";
+import { tone } from "../timeline/canvas";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, say, set, ui } from "../core/store";
@@ -11,7 +12,6 @@ import { pinFade } from "./pinfade";
 import { shapeOf } from "./shape";
 import { type Hit, type InkKind, type Mark, type Note } from "./slice";
 
-export const INK = "#CE5D97", SAVED_INK = "#4385BE";
 export let inkMarks: Mark[] = [];
 export const inkHooks = { changed: () => {} }; // notes.ts: the note being written is kept on the device with its strokes
 // A path point added at a new second changes what is said without adding a stroke, so the count alone can't drive the note box
@@ -75,7 +75,7 @@ const words = (g: CanvasRenderingContext2D, text: string, [x, y]: [number, numbe
   const most = 240 * scale;
   if (g.measureText(s).width > most) { while (s && g.measureText(`${s}…`).width > most) s = s.slice(0, -1); s = `${s.trimEnd()}…`; }
   const lw = g.measureText(s).width + 6 * scale;
-  label(g, s, Math.max(4, Math.min(w - lw - 4, x * w - lw / 2)), y * h + (y > 0.88 ? -18 : 18) * scale, "#CECDC3", scale);
+  label(g, s, Math.max(4, Math.min(w - lw - 4, x * w - lw / 2)), y * h + (y > 0.88 ? -18 : 18) * scale, tone("foreground"), scale);
 };
 // One mark as seen at film second `now`: solid on its own frame, faint with its time elsewhere
 export const drawMark = (g: CanvasRenderingContext2D, m: Mark, now: number, w: number, h: number, color: string, scale = 1, alpha = 1) => {
@@ -107,12 +107,12 @@ export const drawMark = (g: CanvasRenderingContext2D, m: Mark, now: number, w: n
       g.beginPath(); g.arc(x, y, (on ? 6 : 4.5) * scale, 0, 7);
       g.fillStyle = on ? color : "#000"; g.fill();
       g.lineWidth = 2 * scale; g.strokeStyle = color; g.stroke();
-      label(g, `${i + 1} · ${stamp(ts[i]).slice(3)}`, x + 9 * scale, y - 10 * scale, on ? "#FFFCF0" : color, scale);
+      label(g, `${i + 1} · ${stamp(ts[i]).slice(3)}`, x + 9 * scale, y - 10 * scale, on ? tone("pick") : color, scale);
     });
     const k = ts.findIndex((t, i) => i < ts.length - 1 && now > t + SAME && now < ts[i + 1] - SAME);
     if (k >= 0) {
       const u = (now - ts[k]) / (ts[k + 1] - ts[k]), x = P[k][0] + (P[k + 1][0] - P[k][0]) * u, y = P[k][1] + (P[k + 1][1] - P[k][1]) * u;
-      g.beginPath(); g.arc(x, y, 9 * scale, 0, 7); g.lineWidth = 2.5 * scale; g.strokeStyle = "#FFFCF0"; g.stroke();
+      g.beginPath(); g.arc(x, y, 9 * scale, 0, 7); g.lineWidth = 2.5 * scale; g.strokeStyle = tone("pick"); g.stroke();
     }
   }
   if (!here && m.kind !== "path") label(g, stamp(m.t).slice(3), P[0][0] + 6 * scale, P[0][1] - 12 * scale, color, scale);
@@ -139,11 +139,11 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
       if (!sp) continue;
       const fade = S.t >= sp[0] && S.t <= sp[1] ? 1 : Math.max(pinFade(sp[0], S.t, rate), pinFade(sp[1], S.t, rate));
       if (fade <= 0) continue;
-      for (const m of marks) drawMark(g, m, S.t, w, h, SAVED_INK, scale, fade);
+      for (const m of marks) drawMark(g, m, S.t, w, h, tone("ink-saved"), scale, fade);
       if (!n.pin && n.text) { g.globalAlpha = fade; words(g, n.text, marks[0].pts[0], w, h, scale); g.globalAlpha = 1; }
     }
   }
-  for (const m of inkMarks) drawMark(g, m, S.t, w, h, INK, scale);
+  for (const m of inkMarks) drawMark(g, m, S.t, w, h, tone("ink"), scale);
   const { compose, draft } = get();
   if (inkMarks.length && compose && !compose.pin && draft.trim()) words(g, draft, inkMarks[0].pts[0], w, h, scale);
 };

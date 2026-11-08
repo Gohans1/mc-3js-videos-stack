@@ -158,7 +158,7 @@ function Anim({ it }: { it: TextItem }) {
               type="button" aria-pressed={now === x.id} onClick={() => pick(x.id)}
               className="flex w-full flex-col items-center gap-1 rounded-md text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground"
             >
-              <span aria-hidden className="grid aspect-square w-full place-items-center rounded-md bg-[#1C1B1A] text-[15px] font-semibold text-white ring-1 ring-white/6 in-aria-pressed:ring-2 in-aria-pressed:ring-primary">{x.id ? "Aa" : "∅"}</span>
+              <span aria-hidden className="grid aspect-square w-full place-items-center rounded-md bg-backdrop text-[15px] font-semibold text-white ring-1 ring-white/6 in-aria-pressed:ring-2 in-aria-pressed:ring-primary">{x.id ? "Aa" : "∅"}</span>
               <span className="w-full truncate text-center">{x.title}</span>
             </button>
           </li>

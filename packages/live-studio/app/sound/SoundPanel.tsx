@@ -4,6 +4,7 @@
 import { cn } from "cn";
 import { Pause, Play, Plus, Redo2, Star, Trash2, Undo2 } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { matcher } from "../core/search";
@@ -43,7 +44,7 @@ function Inspector({ clip }: { clip: ClipRef }) {
   return (
     <div key={`${clip.list}${clip.i}`} aria-label="Selected clip" role="group" className="flex flex-col">
       <div className="flex items-center gap-2 px-3 pb-1">
-        <span className="rounded-md bg-[#274569] px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-[#DCE3EA]">{bed ? "BED" : "SFX"}</span>
+        <Badge variant="audio">{bed ? "BED" : "SFX"}</Badge>
         <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground" title={item?.title}>{item?.title ?? c.name}</span>
         <Tip label="Delete clip (Delete)"><Button variant="ghost" size="icon" className="-me-1 size-8 text-muted-foreground hover:text-destructive pointer-coarse:size-11" aria-label={`Delete ${c.name}`} onClick={() => removeClip(clip)}><Trash2 /></Button></Tip>
       </div>

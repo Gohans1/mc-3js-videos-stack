@@ -54,7 +54,7 @@ export function App() {
         data-side-folded={sideW === 0 || undefined}
         data-lib-folded={(wide && libW === 0) || undefined}
         data-wide={wide || undefined}
-        className="grid h-dvh grid-cols-[minmax(0,1fr)_var(--side-w,360px)] grid-rows-[minmax(0,1fr)_auto_auto] text-sm upright:flex upright:flex-col sideways:grid-cols-[minmax(0,1fr)_min(36%,320px)] data-wide:grid-cols-[var(--lib-w,400px)_minmax(0,1fr)_var(--side-w,340px)]"
+        className="grid h-dvh grid-cols-[minmax(0,1fr)_var(--side-w,360px)] grid-rows-[minmax(0,1fr)_auto_auto] gap-x-1.5 bg-backdrop p-1.5 text-sm upright:gap-0 upright:bg-background upright:p-0 sideways:gap-0 sideways:bg-background sideways:p-0 upright:flex upright:flex-col sideways:grid-cols-[minmax(0,1fr)_min(36%,320px)] data-wide:grid-cols-[var(--lib-w,400px)_minmax(0,1fr)_var(--side-w,340px)]"
       >
         <Stage bind={bind} />
         <Transport />
@@ -72,7 +72,7 @@ export function App() {
             min={() => { const t = el.current.timeline, list = t?.querySelector<HTMLElement>("[data-tracks-scroll]"); return t && list ? list.getBoundingClientRect().top - t.getBoundingClientRect().top + 64 + 12 : 300; }} // the head that stays put and two rows
             max={() => innerHeight - 220}
             set={setEditH}
-            className="pointer-events-auto"
+            className="pointer-events-auto -top-px" // the middle of the gap over the timeline
           />
         </div>
         {wide && (
@@ -86,7 +86,7 @@ export function App() {
               min={() => 260}
               max={() => Math.min(640, innerWidth * 0.35)}
               set={setLibW}
-              className="pointer-events-auto"
+              className="pointer-events-auto -right-[7px]"
             />
           </div>
         )}
@@ -99,7 +99,7 @@ export function App() {
             min={() => 260}
             max={() => Math.min(900, innerWidth * 0.6)}
             set={setSideW}
-            className="pointer-events-auto"
+            className="pointer-events-auto -left-[7px]"
           />
         </div>
       </div>

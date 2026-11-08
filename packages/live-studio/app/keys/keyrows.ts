@@ -14,12 +14,12 @@ import { get, noSnap, say } from "../core/store";
 import { type KeyRef } from "./slice";
 import { together } from "../core/doc";
 import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
-import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
+import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { seek, setPlaying } from "../playback/transport";
 
-const COLOR = { bg: "#100F0F", lit: "#1C2C2A", head: "#1C1B1A", line: "#878580", hold: "#403E3C", key: "#E6E4D9", text: "#B7B5AC", cut: "#2A2928" };
+const HOLD = "#4F4F4F"; // the dotted line where a row holds still; every other colour is an index.css token
 const R = 4.5;
 
 
@@ -36,21 +36,21 @@ export const drawKeyRows = () => {
   const { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(), X = (s: number) => ((s - a) / v) * w;
-  g.fillStyle = COLOR.bg; g.fillRect(0, 0, w, h);
+  g.fillStyle = tone("track"); g.fillRect(0, 0, w, h);
   g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
   spots = [];
   const lit = litRow();
   for (const l of lines()) {
     // Flat rows as CapCut's tracks; the file's heading in the label column's colour (KeyHeads.tsx bg-card)
-    if (l.kind === "file") { g.fillStyle = COLOR.head; g.fillRect(0, l.y, w, HEAD_H); continue; }
-    if (l.row.id === lit) { g.fillStyle = COLOR.lit; g.fillRect(0, l.y, w, ROW_H); }
+    if (l.kind === "file") { g.fillStyle = tone("card"); g.fillRect(0, l.y, w, HEAD_H); continue; }
+    if (l.row.id === lit) { g.fillStyle = tone("tint"); g.fillRect(0, l.y, w, ROW_H); }
     const ks = keysOf(l.row.f, l.row.path), y = l.y + ROW_H / 2;
     // What happens between keys first, so the diamonds sit on top
     for (let i = 1; i < ks.length; i++) {
       const x0 = X(ks[i - 1].t), x1 = X(ks[i].t);
       if (x1 < 0 || x0 > w || x1 - x0 < 1) continue;
-      if (same(ks[i - 1], ks[i])) { g.fillStyle = COLOR.hold; for (let x = Math.max(0, x0); x < Math.min(w, x1); x += 4) g.fillRect(x, y, 2, 1); }
-      else { g.fillStyle = COLOR.line; g.fillRect(Math.max(0, x0), y, Math.min(w, x1) - Math.max(0, x0), 1); }
+      if (same(ks[i - 1], ks[i])) { g.fillStyle = HOLD; for (let x = Math.max(0, x0); x < Math.min(w, x1); x += 4) g.fillRect(x, y, 2, 1); }
+      else { g.fillStyle = tone("muted-foreground"); g.fillRect(Math.max(0, x0), y, Math.min(w, x1) - Math.max(0, x0), 1); }
     }
     ks.forEach((k, i) => {
       const x = X(k.t);
@@ -60,20 +60,18 @@ export const drawKeyRows = () => {
       const name = nameOf(k), room = (i + 1 < ks.length ? X(ks[i + 1].t) : w) - x - 10;
       if (name && room > 24) {
         g.save(); g.beginPath(); g.rect(x + 7, l.y, room, ROW_H); g.clip();
-        g.fillStyle = COLOR.bg; g.fillRect(x + 6, y - 7, Math.min(room, g.measureText(name).width + 4), 14);
-        g.fillStyle = COLOR.text; g.fillText(name, x + 8, y);
+        g.fillStyle = l.row.id === lit ? tone("tint") : tone("track"); g.fillRect(x + 6, y - 7, Math.min(room, g.measureText(name).width + 4), 14);
+        g.fillStyle = tone("label"); g.fillText(name, x + 8, y);
         g.restore();
       }
-      diamond(g, x, y, R); g.fillStyle = COLOR.key; g.fill();
-      if (isPicked(ref)) { diamond(g, x, y, R + 3); g.strokeStyle = PICK; g.lineWidth = 2; g.stroke(); }
+      diamond(g, x, y, R); g.fillStyle = tone("foreground"); g.fill();
+      if (isPicked(ref)) { diamond(g, x, y, R + 3); g.strokeStyle = tone("pick"); g.lineWidth = 2; g.stroke(); }
     });
   }
   // Cuts, faint, over everything: a key is often put on one by eye
-  g.fillStyle = COLOR.cut;
+  g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
-  const t = X(S.t);
-  g.fillStyle = "#000"; g.fillRect(t - 2, 0, 4, h);
-  g.fillStyle = "#EC8B49"; g.fillRect(t - 1, 0, 2, h);
+  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = () => [S.t, ...SHOTS.map((s) => s.t), ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];

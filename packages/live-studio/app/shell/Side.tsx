@@ -26,7 +26,7 @@ type Lib = StudioState["lib"];
 
 // CapCut's text tabs: the open one in the accent. The bar under it is ours (dev's call): the color alone is hard to see at a glance
 const tab = "relative flex h-10 flex-none items-center gap-1.5 rounded-sm text-[13px] font-medium text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary data-active:after:absolute data-active:after:inset-x-0 data-active:after:bottom-0 data-active:after:h-0.5 data-active:after:rounded-full data-active:after:bg-primary pointer-coarse:h-11";
-const tabs = "flex flex-none items-center gap-5 border-b px-3";
+const tabs = "flex flex-none items-center gap-5 bg-card px-3"; // CapCut's panel head: a lighter bar, no line under it
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
 
 const WIDE = matchMedia("(min-width: 1280px) and (min-height: 640px)");
@@ -57,10 +57,10 @@ export function Library() {
   const { sound, text, placed, open } = useParts(), lib = useStudio((s) => s.lib);
   const shown = LIBS.filter((l) => l.id === "notes" || (l.id === "sound" ? sound : l.id === "text" ? text : placed));
   return (
-    <aside aria-label="Library" className="col-start-1 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain border-e in-data-lib-folded:hidden">
+    <aside aria-label="Library" className="col-start-1 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg bg-background in-data-lib-folded:hidden">
       <Compose />
       <Tabs.Root value={lib} onValueChange={(v) => set({ lib: v as Lib })} className="flex min-h-0 flex-1 flex-col">
-        <Tabs.List aria-label="Libraries" className="flex flex-none gap-1 border-b px-2 pt-1 pb-1">
+        <Tabs.List aria-label="Libraries" className="flex flex-none gap-1 bg-card px-2 pt-1 pb-1">
           {shown.map((l) => (
             <Tabs.Tab key={l.id} value={l.id} className={tool}>
               <l.icon aria-hidden />
@@ -93,7 +93,7 @@ function Details() {
   const picked = useStudio(groupOf), group = has[picked] ? picked : (Object.keys(has) as Group[]).find((g) => has[g])!;
   const list = GROUPS[group], value = list.some((x) => x.id === side) ? side : list[0].id;
   return (
-    <aside aria-label="Details" className="col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain border-s in-data-side-folded:hidden">
+    <aside aria-label="Details" className="col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg bg-background in-data-side-folded:hidden">
       <Tabs.Root value={value} onValueChange={(v) => set({ side: v as SideTab })} className="flex min-h-0 flex-1 flex-col">
         <Tabs.List aria-label="Details" className={tabs}>
           {list.map((x) => <Tabs.Tab key={x.id} value={x.id} className={tab}>{x.title}</Tabs.Tab>)}
@@ -133,13 +133,13 @@ export function Side({ wide }: { wide: boolean }) {
   if (wide) return <Details />;
   const value = side === "anim" || side === "speed" ? "cam" : side === "textAnim" ? "text" : side;
   return (
-    <aside className="col-start-2 row-span-2 row-start-1 flex sideways:row-span-3 min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain border-s in-data-side-folded:hidden upright:flex-1 upright:border-s-0">
+    <aside className="col-start-2 row-span-2 row-start-1 flex sideways:row-span-3 min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg bg-background in-data-side-folded:hidden upright:flex-1 upright:rounded-none sideways:rounded-none">
       <Compose />
       {sound || text || cam || keys || placed ? (
         <Tabs.Root value={value} onValueChange={(v) => set({ side: v as SideTab })} className="flex min-h-0 flex-1 flex-col">
           {/* Too many for the narrow column beside a phone's picture, the tabs scroll sideways as the timeline tools do; the
               line under them stays out of the fade, and the padding keeps the focus ring inside what the scroll clips */}
-          <div className="flex-none border-b">
+          <div className="flex-none bg-card">
             <Tabs.List aria-label="Panels" className={cn(tabs, "justify-between gap-2 overflow-x-auto overscroll-x-contain border-b-0 py-0.5 [scrollbar-width:none] scroll-fade-x")}>
               <Tabs.Tab value="notes" className={tab}>Notes<NotesCount open={open} /></Tabs.Tab>
               {sound && <Tabs.Tab value="sound" className={tab}>Audio</Tabs.Tab>}

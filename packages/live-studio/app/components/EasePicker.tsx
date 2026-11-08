@@ -2,6 +2,7 @@
 // when the film shares none, and a custom curve with its editor (bezier-easing-editor, a CSS cubic-bezier). The camera's Speed
 // tab and an object's keyframe both use it (camera/SpeedPanel.tsx, objects/ObjectsPanel.tsx); each keeps its own undo step.
 import BezierEditor, { type BezierValue } from "bezier-easing-editor";
+import { tone } from "../timeline/canvas";
 import { SlidersHorizontal } from "lucide-react";
 import { useRef } from "react";
 import { type Bezier, type Ease, easeFn, easeNames, easeTitle } from "../core/ease";
@@ -37,7 +38,7 @@ function Graph({ f }: { f: ((x: number) => number) | null }) {
   return (
     <svg aria-hidden viewBox="0 0 48 48" className="absolute inset-0 size-full bg-raised-2">
       <path d={`M4 ${42 - 36 / top}H44`} className="stroke-raised-4" strokeWidth="1" strokeDasharray="2 2" fill="none" />
-      {f && <polyline points={pts} fill="none" stroke="#D0A215" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
+      {f && <polyline points={pts} fill="none" stroke={tone("warn")} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
     </svg>
   );
 }
@@ -46,7 +47,7 @@ function Tile({ title, tip, f, on, onPick, mono }: { title: string; tip: string;
     <li className="flex min-w-0 flex-col items-center gap-1">
       <Tip label={tip}>
         <button type="button" aria-pressed={on} aria-label={`${title}: ${tip}`} onClick={onPick} className="relative block aspect-square w-full overflow-hidden rounded-md text-foreground/80 outline-none ring-2 ring-transparent hover:ring-border focus-visible:ring-ring aria-pressed:text-primary aria-pressed:ring-primary">
-          {f ? <Graph f={f} /> : <span className="absolute inset-0 grid place-items-center bg-raised-2 text-[#D0A215]"><SlidersHorizontal className="size-6" /></span>}
+          {f ? <Graph f={f} /> : <span className="absolute inset-0 grid place-items-center bg-raised-2 text-warn"><SlidersHorizontal className="size-6" /></span>}
         </button>
       </Tip>
       <span translate={mono ? "no" : undefined} className={on ? "w-full truncate text-center text-xs text-primary" : "w-full truncate text-center text-xs text-foreground/85"}>{title}</span>
@@ -97,11 +98,11 @@ export function CurveEditor({ value, preview, doc, onSave }: { value: Bezier; pr
           width={220}
           height={220}
           background="transparent"
-          gridColor="#282726"
-          curveColor="#E6E4D9"
-          handleColor="#3AA99F"
-          progressColor="#403E3C"
-          textStyle={{ fill: "#878580", fontSize: 11, fontFamily: "inherit" }}
+          gridColor={tone("card")}
+          curveColor={tone("foreground")}
+          handleColor={tone("primary")}
+          progressColor={tone("slider")}
+          textStyle={{ fill: tone("muted-foreground"), fontSize: 11, fontFamily: "inherit" }}
         />
       </div>
       {/* The same four numbers by keyboard: a drag is never the only way. Saved on Enter or leaving the box, one undo step */}

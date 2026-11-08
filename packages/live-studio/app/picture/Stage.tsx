@@ -36,8 +36,8 @@ export function Stage({ bind }: { bind: Bind }) {
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
     // it alone), then CapCut's Color oscilloscope under it when on
-    <div className="relative col-start-1 row-start-1 in-data-wide:col-start-2 flex min-h-0 min-w-0 flex-col bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none">
-      <div ref={bind("view")} className="relative flex min-h-0 w-full flex-1 items-center justify-center bg-black">
+    <div className="relative col-start-1 row-start-1 in-data-wide:col-start-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none">
+      <div ref={bind("view")} className="relative flex min-h-0 w-full flex-1 items-center justify-center">
         {/* The frame itself and what is pinned or drawn on it */}
         <div ref={bind("stage")} className="relative overflow-hidden bg-black">
           <canvas ref={bind("canvas")} className={cn("absolute inset-0 block size-full touch-none", free ? "cursor-grab" : "cursor-default")} />

@@ -31,12 +31,23 @@
     --color-warn-bg: var(--warn-bg);
     --color-favorite: var(--favorite);
     --color-peek: var(--peek);
+    --color-ink: var(--ink);
     --color-in-out: var(--in-out);
     --color-in-out-text: var(--in-out-text);
     --color-picture: var(--picture);
     --color-alarm: var(--alarm);
     --color-alarm-bg: var(--alarm-bg);
     --color-raised-4: var(--raised-4);
+    --color-backdrop: var(--backdrop);
+    --color-tooltip: var(--tooltip);
+    --color-track: var(--track);
+    --color-track-head: var(--track-head);
+    --color-main-track: var(--main-track);
+    --color-track-line: var(--track-line);
+    --color-clip-audio-tag: var(--clip-audio-tag);
+    --color-clip-label: var(--clip-label);
+    --color-slider: var(--slider);
+    --color-slider-fill: var(--slider-fill);
     --color-label: var(--label);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -83,46 +94,49 @@
     --frame: 16 / 9;
 }
 
-/* Flexoki dark, the studio's palette since before shadcn. One theme: the studio is only ever used dark, next to a moving picture */
+/* CapCut 9.7 desktop's dark theme, measured pixel by pixel off the dev's screenshots of it (2026-11-09): one theme, as the
+   studio sits beside a moving picture. Where CapCut shows no such thing (a popover, a red), the nearest of its own greys */
 :root {
-    --background: #100F0F;
-    --foreground: #CECDC3;
-    --card: #1C1B1A;
-    --card-foreground: #CECDC3;
-    --popover: #282726;
-    --popover-foreground: #CECDC3;
-    --primary: #3AA99F;
-    --primary-foreground: #100F0F;
-    --secondary: #282726;
-    --secondary-foreground: #CECDC3;
-    --muted: #1C1B1A;
-    --muted-foreground: #878580;
-    --accent: #343331;
-    --accent-foreground: #CECDC3;
-    --destructive: #D14D41;
-    --border: #343331;
-    --input: #343331;
-    --ring: #3AA99F;
-    --chart-1: #3AA99F;
+    --backdrop: #1C1C1C; /* the window behind the panels: CapCut's title bar, the gaps between panels, inputs and wells */
+    --background: #262626; /* a panel, and the timeline's empty space */
+    --foreground: #DFDFDF;
+    --card: #303030; /* a panel's head and foot bars, and a card raised on a panel */
+    --card-foreground: #DFDFDF;
+    --popover: #303030;
+    --popover-foreground: #DFDFDF;
+    --primary: #00C1CD; /* CapCut's cyan: the open tab, Export, a picked tile's ring */
+    --primary-foreground: #FFFFFF; /* white on the cyan, as on CapCut's Export: only 2.2:1, kept to look as CapCut does */
+    --secondary: #3B3B3B; /* a raised control: Import, Cover, the picked segment */
+    --secondary-foreground: #DFDFDF;
+    --muted: #3B3B3B;
+    --muted-foreground: #929292; /* a section's name, a hint: 4.9:1 on a panel */
+    --accent: #3B3B3B;
+    --accent-foreground: #DFDFDF;
+    --destructive: #E5484D;
+    --border: #373737; /* a divider inside a panel */
+    --input: #1C1C1C; /* a field's well, filled as CapCut's search and number boxes */
+    --ring: #00C1CD;
+    --chart-1: #00C1CD;
     --chart-2: #D0A215;
     --chart-3: #879A39;
     --chart-4: #4385BE;
     --chart-5: #CE5D97;
     --radius: 0.5rem;
-    --sidebar: #1C1B1A;
-    --sidebar-foreground: #CECDC3;
-    --sidebar-primary: #3AA99F;
-    --sidebar-primary-foreground: #100F0F;
-    --sidebar-accent: #282726;
-    --sidebar-accent-foreground: #CECDC3;
-    --sidebar-border: #343331;
-    --sidebar-ring: #3AA99F;
+    --sidebar: #262626;
+    --sidebar-foreground: #DFDFDF;
+    --sidebar-primary: #00C1CD;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #3B3B3B;
+    --sidebar-accent-foreground: #DFDFDF;
+    --sidebar-border: #373737;
+    --sidebar-ring: #00C1CD;
     /* The studio's own, beyond shadcn's set */
-    --raised-2: #282726;
-    --raised-3: #343331;
-    --accent-hover: #4DBAB0;
-    --tint: #1C2C2A;
-    --tint-hover: #243B38;
+    --raised-2: #303030;
+    --raised-3: #3B3B3B;
+    --raised-4: #4F4F4F; /* a button on a head or foot bar: Modify, Apply to all, Share */
+    --accent-hover: #33CDD7;
+    --tint: #1C1C1C; /* a toggle that is on: CapCut sinks it to the window's grey and lights its icon cyan */
+    --tint-hover: #141414;
     --ok: #879A39;
     --warn: #D0A215;
     --warn-bg: #2A2410;
@@ -130,12 +144,35 @@
     --peek: #D0A215; /* the preview axis and the time it shows (timeline/peek.ts), yellow as CapCut draws it */
     --in-out: #4385BE; /* the In to Out stretch (timeline/inout.ts; the ruler draws it in the same blue) */
     --in-out-text: #92BFDB;
-    --picture: #FFFCF0;
+    --ink: #CE5D97; /* a note's drawing while it is drawn, and the words that name it */
+    --ink-saved: #4385BE; /* a note's drawing once the note holds it */
+    --picture: #FFFFFF; /* words over the picture */
     --alarm: #AF3029;
     --alarm-bg: #2E1513;
-    --raised-4: #403E3C;
-    /* Names that label a row or a field: brighter than muted hints (9:1 on the background), quieter than content */
-    --label: #B7B5AC;
+    /* Names that label a row or a field, as CapCut's Temp and Exposure: a step under content, far over hints */
+    --label: #D2D2D2;
+    --tooltip: #141414; /* CapCut's tooltip, its words in --label */
+    /* The timeline, drawn on canvases that read these (timeline/canvas.ts tone) */
+    --track: #292929; /* a row that holds clips */
+    --track-head: #2A2A2A; /* its name and buttons in the column beside it */
+    --main-track: #2F2F2F; /* the Camera row, CapCut's main track */
+    --track-line: #141414; /* the line between the name column and the rows */
+    --grid: #303030; /* a cut, faint across the rows */
+    --ruler-text: #6C6C6C; /* CapCut keeps the seconds dim, so the clips under them lead */
+    --ruler-tick: #4C4C4C;
+    --ruler-dot: #3C3C3C;
+    --playhead: rgb(255 255 255 / 0.5); /* half white, as CapCut's: grey on the empty rows, tinted over a clip */
+    --pick: #FFFFFF; /* what is picked, on every row: outlined white */
+    --clip-video: #004D52; /* a shot on the Camera row, as CapCut's video clip */
+    --clip-video-tag: #1A5F64;
+    --clip-text: #9C4937;
+    --clip-text-tag: #A65C4B;
+    --clip-audio: #0E3058;
+    --clip-audio-tag: #274569;
+    --clip-wave: #0E81B3;
+    --clip-label: #D2D6D9; /* the words on a clip's tag */
+    --slider: #404040;
+    --slider-fill: #E0E0E0;
     color-scheme: dark;
 }
 
@@ -160,7 +197,7 @@
   }
   :root {
     caret-color: var(--primary);
-    scrollbar-color: #575653 transparent; /* Flexoki base-700: a thumb that shows there is more */
+    scrollbar-color: #404040 transparent; /* CapCut's scrollbar thumb */
     -webkit-tap-highlight-color: transparent;
     }
 }

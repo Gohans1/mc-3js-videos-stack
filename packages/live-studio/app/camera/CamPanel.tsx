@@ -23,7 +23,7 @@ import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 // The shot name field, which the camera row's Rename (CameraTrack.tsx) focuses
 export const SHOT_NAME_ID = "shot-name";
 const camDoc = { snapshot, restore };
-const box = "h-7 w-full min-w-0 rounded-md border border-input bg-background px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:h-10 pointer-coarse:text-base";
+const box = "h-7 w-full min-w-0 rounded-md border border-input bg-input px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:h-10 pointer-coarse:text-base";
 
 function Saved() {
   const saved = useStudio((s) => s.camSaved);

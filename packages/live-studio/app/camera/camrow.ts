@@ -18,7 +18,7 @@ import { get, noSnap, say } from "../core/store";
 import { r3, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { bladeLine } from "../timeline/blade";
-import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
+import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { alongWith, type Along, inBox, NONE, pickAcross, picked } from "../timeline/across";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -27,10 +27,8 @@ import { together } from "../core/doc";
 import { type CamKey, DEFAULT_EASE, edit, groupRoom, holds, keys, movable, preview, previewRoll, restore, rollable, rollCut, rollRoom, room, setKey, shiftCamKeys, snapshot, splitShot } from "./cam";
 import { shotsDoc } from "./shots";
 
-const COLOR = {
-  bg: "#100F0F", block: "#164F4A", hover: "#1A5A54", head: "#123E3A", text: "#E6E4D9", dim: "#9FBDB8",
-  speed: "rgba(208,162,21,.32)", speedLine: "#D0A215", key: "#E6E4D9", cut: "#878580", anim: "rgba(255,252,240,.55)",
-};
+// A shot is CapCut's video clip: its teal, a lighter tag holding its name, its other words dimmer on the clip (index.css tokens)
+const COLOR = { hover: "#0A5A60", dim: "#8FB3B5", speed: "rgba(208,162,21,.32)", anim: "rgba(255,255,255,.55)" };
 const PAD = 2, HEAD = 15, BAND = 4, FOOT = 3; // FOOT: room under the bands for the picked outline
 
 let xs: number[] = []; // each key's x as last drawn, for the pointer
@@ -52,7 +50,7 @@ const drawSpeed = (g: CanvasRenderingContext2D, x0: number, x1: number, ease: Ca
   g.lineTo(x1, floor); g.closePath();
   g.fillStyle = COLOR.speed; g.fill();
   g.beginPath(); speed.forEach((s, j) => (j ? g.lineTo : g.moveTo).call(g, x0 + (j / n) * (x1 - x0), y(s)));
-  g.strokeStyle = COLOR.speedLine; g.lineWidth = 1; g.stroke();
+  g.strokeStyle = tone("warn"); g.lineWidth = 1; g.stroke();
 };
 
 const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => number, w: number, h: number, on: boolean) => {
@@ -61,13 +59,14 @@ const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => num
   const y0 = PAD, y1 = h - PAD, cx0 = Math.max(-4, x0), cx1 = Math.min(w + 4, x1), bw = cx1 - cx0;
   g.save();
   g.beginPath(); g.roundRect(cx0, y0, bw, y1 - y0, 4); g.clip();
-  g.fillStyle = hover === i ? COLOR.hover : COLOR.block; g.fillRect(cx0, y0, bw, y1 - y0);
-  g.fillStyle = COLOR.head; g.fillRect(cx0, y0, bw, HEAD);
+  g.fillStyle = hover === i ? COLOR.hover : tone("clip-video"); g.fillRect(cx0, y0, bw, y1 - y0);
   if (bw > 24) {
-    const name = S.comments[i] || `Shot ${i}`, left = Math.max(x0, 0) + 5, mid = y0 + HEAD / 2 + 0.5;
-    g.font = `500 11px ${UI_FONT}`; g.fillStyle = COLOR.text; g.fillText(`${i}  ${name}`, left, mid);
-    const nw = g.measureText(`${i}  ${name}`).width;
-    g.font = `11px ${UI_FONT}`; g.fillStyle = COLOR.dim; g.fillText(`${(e - s).toFixed(1)}s`, left + nw + 8, mid);
+    const name = `${i}  ${S.comments[i] || `Shot ${i}`}`, left = Math.max(x0, 0) + 3, mid = y0 + HEAD / 2 + 1;
+    g.font = `11px ${UI_FONT}`;
+    const nw = g.measureText(name).width;
+    g.fillStyle = tone("clip-video-tag"); g.beginPath(); g.roundRect(left, y0 + 2, nw + 8, HEAD - 2, 3); g.fill();
+    g.fillStyle = tone("clip-label"); g.fillText(name, left + 4, mid);
+    g.fillStyle = COLOR.dim; g.fillText(`${(e - s).toFixed(1)}s`, left + nw + 14, mid);
   }
   // The camera's speed between this shot's keys
   const top = y0 + HEAD + 3, foot = y1 - FOOT - BAND, floor = foot - 2;
@@ -77,7 +76,7 @@ const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => num
     const a = X(k0.t), b = X(k1.t);
     if (b < 0 || a > w) continue;
     if (holds(k0, k1)) {
-      g.fillStyle = COLOR.cut; g.fillRect(Math.max(cx0, a), floor - 1, Math.min(cx1, b) - Math.max(cx0, a), 1);
+      g.fillStyle = tone("muted-foreground"); g.fillRect(Math.max(cx0, a), floor - 1, Math.min(cx1, b) - Math.max(cx0, a), 1);
       if (b - a > 70) { g.font = `11px ${UI_FONT}`; g.fillStyle = COLOR.dim; g.fillText("hold", Math.max(cx0, a) + 10, (top + floor) / 2); }
       continue;
     }
@@ -90,7 +89,7 @@ const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => num
   if (an.in) g.fillRect(x0, foot, Math.max(3, X(s + lenOf(i, "in")) - x0), BAND);
   if (an.out) { const a = X(e - lenOf(i, "out")); g.fillRect(a, foot, Math.max(3, x1 - a), BAND); }
   g.restore();
-  if (on || get().shotPick === i) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 + 1, y0 + 1, bw - 2, y1 - y0 - 2, 3); g.stroke(); }
+  if (on || get().shotPick === i) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 + 1, y0 + 1, bw - 2, y1 - y0 - 2, 3); g.stroke(); }
 };
 
 export const drawCamRow = () => {
@@ -99,7 +98,7 @@ export const drawCamRow = () => {
   const { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(), X = (s: number) => ((s - a) / v) * w, picked = new Set(picks());
-  g.fillStyle = COLOR.bg; g.fillRect(0, 0, w, h);
+  g.fillStyle = tone("main-track"); g.fillRect(0, 0, w, h);
   g.textBaseline = "middle";
   // A block is picked when all its keys that move are: what the box picks, as CapCut's box picks whole clips
   const all = SHOTS_OUT.map(() => true), any = SHOTS_OUT.map(() => false);
@@ -111,17 +110,15 @@ export const drawCamRow = () => {
     const x = xs[i];
     if (x < -REACH || x > w + REACH) return;
     g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath();
-    g.fillStyle = k.cut || i === 0 ? COLOR.cut : COLOR.key; g.fill();
-    if (picked.has(i)) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - r - 3); g.lineTo(x + r + 3, y); g.lineTo(x, y + r + 3); g.lineTo(x - r - 3, y); g.closePath(); g.stroke(); }
+    g.fillStyle = k.cut || i === 0 ? tone("muted-foreground") : tone("foreground"); g.fill();
+    if (picked.has(i)) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - r - 3); g.lineTo(x + r + 3, y); g.lineTo(x, y + r + 3); g.lineTo(x - r - 3, y); g.closePath(); g.stroke(); }
   });
   if (get().blade && bladeLine.row === "cam") {
     const x = Math.round(X(bladeLine.t));
     g.fillStyle = "#000"; g.fillRect(x - 1, 0, 3, h);
-    g.fillStyle = "#FFFCF0"; g.fillRect(x, 0, 1, h);
+    g.fillStyle = tone("pick"); g.fillRect(x, 0, 1, h);
   }
-  const t = X(S.t);
-  g.fillStyle = "#000"; g.fillRect(t - 2, 0, 4, h);
-  g.fillStyle = "#EC8B49"; g.fillRect(t - 1, 0, 2, h);
+  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = () => [S.t, ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];

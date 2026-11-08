@@ -16,7 +16,7 @@ import { type KeyRef } from "./slice";
 import { Tip } from "../components/Tip";
 
 const label = "text-[13px] text-muted-foreground";
-const box = "h-8 w-full min-w-0 rounded-md border border-input bg-background px-2 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base";
+const box = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-2 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base";
 // A name the row repeats (a pose, a mood: no spaces) is picked from the ones it uses, since a new one needs the film's code; a
 // sentence is typed
 const MAX_CHOICES = 80;

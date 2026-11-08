@@ -18,7 +18,7 @@ export function KeyHeads() {
     list.current?.querySelector('[data-lit="true"]')?.scrollIntoView({ block: "nearest" });
   }, [object, lit, placedFile >= 0 && isFolded(placedFile)]);
   return (
-    <ul ref={list} aria-label="Keyframe tracks" className="bg-background">
+    <ul ref={list} aria-label="Keyframe tracks" className="border-e border-track-line bg-track-head">
       {lines().map((l) => l.kind === "file" ? (
         <li key={`f${l.f}`} style={{ height: HEAD_H }} className="bg-card">
           <button

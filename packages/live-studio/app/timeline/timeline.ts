@@ -1,5 +1,5 @@
-// The two timelines, drawn on canvases: the whole film above (shots, voice, notes, the stretch shown below) and the
-// stretch around the playhead below (shot names, each sentence's pace, the words, actions and sounds in lanes, option ranges).
+// The ruler and the stretch around the playhead under it, drawn on canvases: shot names (with no Camera row), each sentence's
+// pace, the words, actions and sounds in lanes, option ranges and notes.
 // Custom canvas on purpose: the waveform is drawn through the voice edit's time warp and the rows come from edit.json, which no
 // waveform or timeline library models. The studio only reads this timeline; changes are made from notes, in edit.json. The sound
 // lanes under it (sound/lanes.ts) are the one part the creator edits by hand, on the same seconds as the stretch drawn here.
@@ -9,7 +9,7 @@ import { shotEnd, shotIndex } from "../core/film";
 import { getFile } from "../core/net";
 import { pad, stamp } from "../core/time";
 import { stored } from "../core/storage";
-import { PICK, sized, UI_FONT } from "./canvas";
+import { drawPlayhead, sized, tone, UI_FONT } from "./canvas";
 import { boxEnd, boxMove, boxPick, boxStart } from "./rowbox";
 import { LANE_H, rows, SHOTS_STRIP, WORDS_H } from "./rows";
 import { S } from "../core/state";
@@ -19,7 +19,6 @@ import { skimSound } from "../sound/skim";
 
 const SLOW_WPM = 130, FAST_WPM = 280, STILL = 6; // a sentence outside these reads as off pace; this long with nothing moving reads as stuck
 const HOLDS = new Set(["zz", "note1", "code", "typing"]); // these say when something is shown, not that it moves
-const SHADES = ["#1C1B1A", "#282726"];
 
 
 type Box = { type: "beat"; id: string; x0: number; x1: number; y0: number; y1: number } | { type: "line" | "gap"; i: number; x0: number; x1: number; y0: number; y1: number };
@@ -96,7 +95,7 @@ export const refreshTimes = () => {
 const drawWave = (g: CanvasRenderingContext2D, a: number, b: number, w: number, y: number, h: number) => {
   const { peaks, step } = S.voice;
   if (!peaks.length) return;
-  g.fillStyle = "#878580";
+  g.fillStyle = tone("muted-foreground");
   for (let x = 0; x < w; x++) {
     const i0 = Math.floor(toSource(a + (x / w) * (b - a)) / step), i1 = Math.max(i0 + 1, Math.floor(toSource(a + ((x + 1) / w) * (b - a)) / step));
     let p = 0;
@@ -123,7 +122,7 @@ const drawDetail = () => {
   const { a, v } = view(), b = a + v, t = S.t;
   const X = (s: number) => ((s - a) / v) * w;
   const { shots: SH, voiceY: VY, actionY: AY } = rows, VH = rows.voice - WORDS_H; // VH: the wave's height, the words go under it
-  g.fillStyle = "#100F0F"; g.fillRect(0, 0, w, h);
+  g.fillStyle = tone("track"); g.fillRect(0, 0, w, h);
   g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
   const named = SH > SHOTS_STRIP; // no Camera row: the shots' names are here
   SHOTS.forEach((s, i) => {
@@ -131,13 +130,13 @@ const drawDetail = () => {
     if (e < a || s.t > b) return;
     const x0 = Math.max(0, X(s.t)), x1 = Math.min(w, X(e));
     if (named) {
-      g.fillStyle = i === shotIndex(t) ? "#403E3C" : SHADES[i % 2];
+      g.fillStyle = i === shotIndex(t) ? "#404040" : i % 2 ? tone("card") : tone("main-track");
       g.fillRect(x0, 0, x1 - x0 - 1, SH);
       g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0 - 3, SH); g.clip();
-      g.fillStyle = "#CECDC3"; g.fillText(`${i} ${S.comments[i] ?? ""}`, x0 + 4, SH / 2);
+      g.fillStyle = tone("foreground"); g.fillText(`${i} ${S.comments[i] ?? ""}`, x0 + 4, SH / 2);
       g.restore();
     }
-    g.fillStyle = "#343331"; g.fillRect(X(s.t), SH, 1, h - SH);
+    g.fillStyle = tone("grid"); g.fillRect(X(s.t), SH, 1, h - SH);
   });
   boxes = [];
   g.fillStyle = "#D14D41";
@@ -148,10 +147,10 @@ const drawDetail = () => {
     if (n && n.s > a && l.e < b && X(n.s) - X(l.e) > 4) boxes.push({ type: "gap", i, x0: X(l.e), x1: X(n.s), y0: VY, y1: VY + VH });
     if (l.e < a || l.s > b) return;
     const pace = paceOf(i), on = selected?.type === "line" && selected.i === i;
-    g.fillStyle = on ? "#333D12" : pace && pace > FAST_WPM ? "#3A1C19" : pace && pace < SLOW_WPM ? "#152A40" : "#1C1B1A";
+    g.fillStyle = on ? "#3D4A16" : pace && pace > FAST_WPM ? "#4A2622" : pace && pace < SLOW_WPM ? "#1E3550" : "#323232";
     g.fillRect(X(l.s), VY, X(l.e) - X(l.s), VH);
     boxes.push({ type: "line", i, x0: X(l.s), x1: X(l.e), y0: VY, y1: VY + VH });
-    if (EDIT.voice.edits[i]) { g.fillStyle = "#3AA99F"; g.fillRect(X(l.s), VY, X(l.e) - X(l.s), 2); }
+    if (EDIT.voice.edits[i]) { g.fillStyle = tone("primary"); g.fillRect(X(l.s), VY, X(l.e) - X(l.s), 2); }
   });
   drawWave(g, a, b, w, VY, VH);
   // Actions and sounds, in lanes so they don't cover each other; as many lanes as the Action row's height holds, 3 to 2
@@ -168,18 +167,18 @@ const drawDetail = () => {
     const label = HOLDS.has(id) ? x0 + 6 : x1;
     row[lane] = Math.max(x1, x0 + (m.title.length * 5.6 + 8));
     const y = BASE[m.kind] + lane * LANE_H, on = selected?.type === "beat" && selected.id === id;
-    g.fillStyle = m.kind === "sound" ? "#0E81B3" : HOLDS.has(id) ? "#4A5A12" : m.curve === "snap" ? "#BC5215" : "#205EA6";
+    g.fillStyle = m.kind === "sound" ? tone("clip-wave") : HOLDS.has(id) ? "#4A5A12" : m.curve === "snap" ? "#BC5215" : "#205EA6";
     g.fillRect(x0, y, x1 - x0, 13);
-    if (on) { g.strokeStyle = PICK; g.lineWidth = 2; g.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, 11); }
-    g.fillStyle = "#E6E4D9"; g.fillText(m.title, x0 + 3, y + 7);
-    g.fillStyle = "#3AA99F";
+    if (on) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, 11); }
+    g.fillStyle = tone("foreground"); g.fillText(m.title, x0 + 3, y + 7);
+    g.fillStyle = tone("primary");
     for (const [off] of m.sounds) if (m.kind === "motion") g.fillRect(X(fromSource(m.at + off)), y + 10, 2, 3);
     boxes.unshift({ type: "beat", id, x0, x1: Math.min(x1, label + 60), y0: y, y1: y + 13 });
   }
-  g.fillStyle = "#D0A215";
+  g.fillStyle = tone("warn");
   for (const [s0, s1] of marks.optionRanges()) if (s1 >= a && s0 <= b) g.fillRect(X(s0), h - 5, Math.max(1, X(s1) - X(s0)), 4);
   // Words, as many as fit
-  g.font = `12px ${UI_FONT}`; g.fillStyle = "#CECDC3";
+  g.font = `12px ${UI_FONT}`;
   let right = -1;
   for (const l of S.voiceOut) {
     if (l.e < a || l.s > b) continue;
@@ -188,18 +187,18 @@ const drawDetail = () => {
       if (x < -40 || x > w) continue;
       const wd = g.measureText(word.w).width;
       if (x <= right + 3) continue;
-      g.fillStyle = t >= word.s && t <= word.e ? "#3AA99F" : "#CECDC3";
+      g.fillStyle = t >= word.s && t <= word.e ? tone("primary") : tone("foreground");
       g.fillText(word.w, x, VY + VH + 11);
       right = x + wd;
     }
   }
-  if (!S.voice.lines.length) { g.fillStyle = "#878580"; g.fillText("Reading the voice track…", 8, VY + VH + 11); }
+  if (!S.voice.lines.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Reading the voice track…", 8, VY + VH + 11); }
   // Notes: a marker each, their lines faint so many of them don't drown the playhead; a done note keeps only a dim marker.
   // Markers under 2 px apart are drawn once and touching lines as one, so thousands of notes stay a few hundred shapes for the
   // GPU (which, drawing every one, held a 3000-note film to 23 fps). marks.notes() comes in film order
   const open = new Path2D(), done = new Path2D(), runs: [number, number][] = [];
   let lastOpen = -1e9, lastDone = -1e9;
-  g.fillStyle = "#3AA99F";
+  g.fillStyle = tone("primary");
   for (const n of marks.notes()) {
     if ((n.to ?? n.t) < a || n.t > b) continue;
     const x = X(n.t);
@@ -213,30 +212,42 @@ const drawDetail = () => {
     const px = Math.floor(x), run = runs.at(-1);
     if (run && px <= run[1] + 1) run[1] = Math.max(run[1], px); else runs.push([px, px]);
   }
-  g.fillStyle = "#575653"; g.fill(done);
-  g.fillStyle = "#3AA99F"; g.fill(open);
+  g.fillStyle = "#5A5A5A"; g.fill(done);
+  g.fillStyle = tone("primary"); g.fill(open);
   g.globalAlpha = 0.4;
   for (const [x0, x1] of runs) g.fillRect(x0, SH + 10, x1 - x0 + 1, h - SH - 10);
   g.globalAlpha = 1;
-  drawNow(g, X(t), h, false);
+  drawPlayhead(g, X(t), h);
 };
 
-// The seconds over every row, as CapCut's ruler: it stays put while the rows under it scroll, and carries the playhead's head
+// The seconds over every row, as CapCut 9.7's ruler measured off the dev's screenshot: a dark line along its top, the ticks
+// hanging from just under it (long at each label, short between, dimmer still), the seconds dim beside each long one so the
+// clips under them lead. It stays put while the rows under it scroll, and carries the playhead's head
 const drawRuler = () => {
   const c = S.el.ruler, { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(), b = a + v, X = (s: number) => ((s - a) / v) * w;
-  g.fillStyle = "#100F0F"; g.fillRect(0, 0, w, h);
-  g.fillStyle = "#B7B5AC"; g.font = "11px Consolas,monospace"; g.textBaseline = "middle";
-  // Room for each label whatever the screen; five small ticks to a label
-  const tick = [1, 2, 5, 10, 30, 60].find((n) => (n / v) * w >= 56) ?? 60, minor = tick / 5;
-  for (let s = Math.max(0, Math.ceil(a / minor) * minor); s <= b; s += minor) g.fillRect(Math.round(X(s)), h - 3, 1, 3);
-  for (let s = Math.max(0, Math.ceil(a / tick) * tick); s <= b; s += tick) { g.fillRect(Math.round(X(s)), h - 8, 1, 8); g.fillText(`${pad(Math.floor(s / 60))}:${pad(s % 60)}`, X(s) + 3, h / 2 - 1); }
+  g.fillStyle = tone("background"); g.fillRect(0, 0, w, h);
+  g.fillStyle = tone("backdrop"); g.fillRect(0, 0, w, 1);
+  // Room for each label whatever the screen; ten short ticks to a label when they stand apart, as CapCut's, else five
+  const tick = [1, 2, 5, 10, 30, 60].find((n) => (n / v) * w >= 72) ?? 60, apart = (tick / v) * w, minor = tick / (apart >= 150 ? 10 : 5);
+  g.fillStyle = tone("ruler-dot");
+  for (let s = Math.max(0, Math.ceil(a / minor) * minor); s <= b; s += minor) g.fillRect(Math.round(X(s)), 4, 1, 6);
+  g.font = `11px ${UI_FONT}`; g.textBaseline = "middle";
+  for (let s = Math.max(0, Math.ceil(a / tick) * tick); s <= b; s += tick) {
+    const x = Math.round(X(s));
+    g.fillStyle = tone("ruler-tick"); g.fillRect(x, 4, 1, 11);
+    g.fillStyle = tone("ruler-text"); g.fillText(`${pad(Math.floor(s / 60))}:${pad(s % 60)}`, x + 4, 10);
+  }
   drawInOut(g, X, w, h);
-  drawNow(g, X(S.t), h, true);
+  const t = X(S.t);
+  drawPlayhead(g, t, h);
+  // CapCut's handle: a hollow white shield from the top edge down, the ruler showing through it
+  g.beginPath(); g.moveTo(t - 4.5, 1.5); g.lineTo(t + 4.5, 1.5); g.lineTo(t + 4.5, 9); g.quadraticCurveTo(t + 4.5, 11.5, t, 14); g.quadraticCurveTo(t - 4.5, 11.5, t - 4.5, 9); g.closePath();
+  g.fillStyle = tone("background"); g.fill();
+  g.strokeStyle = tone("pick"); g.lineWidth = 1.5; g.lineJoin = "round"; g.stroke();
 };
 // CapCut's In to Out stretch (inout.ts): the film outside it dimmed, its ends bracketed in blue
-const IN_OUT = "#4385BE"; // index.css --in-out
 const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: number, h: number) => {
   const r = get().inOut;
   if (!r) return;
@@ -244,19 +255,9 @@ const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: num
   g.fillStyle = "rgba(0,0,0,.55)";
   if (x0 > 0) g.fillRect(0, 0, x0, h);
   if (x1 < w) g.fillRect(x1, 0, w - x1, h);
-  g.fillStyle = IN_OUT;
+  g.fillStyle = tone("in-out");
   g.fillRect(x0, 0, Math.max(1, x1 - x0), 2);
   g.fillRect(x0, 0, 2, h); g.fillRect(x1 - 2, 0, 2, h);
-};
-
-// The playhead, the one line to find at a glance: a dark edge so no colour behind it hides it, and on the detail a head
-const NOW = "#EC8B49";
-const drawNow = (g: CanvasRenderingContext2D, x: number, h: number, head: boolean) => {
-  g.fillStyle = "#000"; g.fillRect(x - 2, 0, 4, h);
-  g.fillStyle = NOW; g.fillRect(x - 1, 0, 2, h);
-  if (!head) return;
-  g.beginPath(); g.moveTo(x - 7, 0); g.lineTo(x + 7, 0); g.lineTo(x + 7, 10); g.lineTo(x, 17); g.lineTo(x - 7, 10); g.closePath();
-  g.fillStyle = NOW; g.fill(); g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
 };
 
 export const drawTimelines = () => { if (!S.el) return; drawRuler(); drawDetail(); marks.text(); marks.cam(); marks.keys(); marks.lanes(); };

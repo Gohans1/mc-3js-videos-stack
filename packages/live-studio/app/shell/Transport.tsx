@@ -31,7 +31,7 @@ export function Transport() {
   const guides = useStudio((s) => s.guides), ratio = useStudio((s) => s.ratio), night = useStudio((s) => s.nightVision), full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="@container col-start-1 row-start-2 in-data-wide:col-start-2 flex min-w-0 items-center gap-1.5 px-3 py-1 upright:flex-none">
+    <div className="@container col-start-1 row-start-2 in-data-wide:col-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg bg-background px-3 py-1 upright:flex-none upright:rounded-none sideways:rounded-none">
       <Button variant="secondary" className={`${big} min-w-19 bg-raised-3 hover:bg-raised-4 @max-[440px]:min-w-0`} aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>
         {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
         <span className="@max-[440px]:hidden">{playing ? "Pause" : "Play"}</span>

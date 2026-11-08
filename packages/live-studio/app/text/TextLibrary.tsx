@@ -32,7 +32,7 @@ function Tile({ p }: { p: Preset }) {
           type="button" aria-label={`Add ${p.title} at the playhead`} onClick={() => addPreset(p)}
           className="group/tile flex w-full flex-col gap-1.5 rounded-md text-start outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-md bg-[#1C1B1A] ring-1 ring-white/6 group-hover/tile:ring-white/20">
+          <span className="relative grid aspect-video w-full place-items-center overflow-hidden rounded-md bg-backdrop ring-1 ring-white/6 group-hover/tile:ring-white/20">
             <Look p={p} />
             <span aria-hidden className="absolute end-1 bottom-1 grid size-5 place-items-center rounded-sm bg-primary text-primary-foreground opacity-0 transition-opacity duration-150 group-hover/tile:opacity-100 group-focus-visible/tile:opacity-100 pointer-coarse:opacity-100"><Plus className="size-3.5" /></span>
           </span>

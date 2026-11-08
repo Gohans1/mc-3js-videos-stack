@@ -29,7 +29,7 @@ const FixLine = ({ fix }: { fix: Fix }) => (
 const Empty = ({ children }: { children: ReactNode }) => <div className="px-0.5 py-2 text-muted-foreground">{children}</div>;
 const Drawn = ({ note }: { note: Note }) => {
   const marks = note.marks as Mark[] | undefined;
-  return marks?.length ? <div className="mt-1 text-xs wrap-anywhere text-[#CE5D97]">Drawn: {inkWords(marks)}</div> : null;
+  return marks?.length ? <div className="mt-1 text-xs wrap-anywhere text-ink">Drawn: {inkWords(marks)}</div> : null;
 };
 
 const NoteCard = memo(function NoteCard({ p: { n, t }, near, editing }: { p: Placed; near: boolean; editing: boolean }) {

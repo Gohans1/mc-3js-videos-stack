@@ -35,8 +35,8 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
     <div
       ref={bind("timeline")}
       className={cn(
-        "relative col-[1/-1] row-start-3 grid h-[var(--edit-h,max(20rem,42dvh))] min-w-0 select-none grid-cols-[7.5rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden border-t px-3 pt-2 pb-3",
-        "upright:h-auto upright:flex-none upright:grid-cols-[5.5rem_minmax(0,1fr)] upright:grid-rows-none upright:overflow-visible upright:border-t-0 upright:pt-0 sideways:col-[1] sideways:block sideways:h-auto sideways:border-t-0 sideways:pt-0 sideways:pb-1.5",
+        "relative col-[1/-1] row-start-3 grid h-[var(--edit-h,max(20rem,42dvh))] min-w-0 select-none grid-cols-[7.5rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden mt-1.5 rounded-lg bg-background px-3 pt-2 pb-3 upright:mt-0 sideways:mt-0",
+        "upright:h-auto upright:flex-none upright:grid-cols-[5.5rem_minmax(0,1fr)] upright:grid-rows-none upright:overflow-visible upright:rounded-none upright:pt-0 sideways:col-[1] sideways:block sideways:h-auto sideways:rounded-none sideways:pt-0 sideways:pb-1.5",
         size === 0 ? "pb-0" : "min-h-72 upright:min-h-0 sideways:min-h-0",
       )}
     >
@@ -48,15 +48,15 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
         onPointerDown={(e) => { if (e.button === 0 && !(e.target as Element).closest("button, input, canvas, [role=separator]")) boxPick.clear(); }}
         className="relative col-span-2 grid min-h-0 grid-cols-subgrid content-start overflow-x-hidden overflow-y-auto overscroll-contain rounded-b-md sideways:hidden upright:max-h-86"
       >
-        <span className={cn("self-center bg-background ps-1.5 text-[13px] leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
+        <span className={cn("self-stretch border-e border-track-line bg-track-head ps-1.5 text-[13px] leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
         <CameraTrack bind={bind} shown={cam} />
         {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}
-        <div className={cn("col-span-2 grid grid-cols-subgrid border-t border-black", !text && "hidden")}>
-          <span style={{ lineHeight: `${ROW_H}px` }} className="self-end bg-background ps-1.5 text-[13px] font-medium text-label">Text</span>
+        <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !text && "hidden")}>
+          <span style={{ lineHeight: `${ROW_H}px` }} className="flex items-end border-e border-track-line bg-track-head ps-1.5 text-[13px] font-medium text-label">Text</span>
           <canvas ref={bind("textrow")} aria-label="Text tracks: click an item to edit it, drag to move or retime it, drag its edges to trim, drag on empty space to select several" className="block w-full touch-none" />
         </div>
-        <div className={cn("col-span-2 grid grid-cols-subgrid", (cam || text) && "border-t border-black")}>
-          <div className="relative bg-background text-[13px] font-medium text-label">
+        <div className={cn("col-span-2 grid grid-cols-subgrid", (cam || text) && "mt-1")}>
+          <div className="relative border-e border-track-line bg-track-head text-[13px] font-medium text-label">
             {rows.map((r) => (
               <div key={r.label}>
                 <span aria-hidden style={{ top: r.y }} className="absolute -translate-y-1/2 ps-1.5">{r.label}</span>
@@ -68,7 +68,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
           </div>
           <canvas ref={bind("detail")} title="Voice and action: click empty space to move the playhead there, drag to select, Ctrl+scroll to zoom" aria-label="Voice and action rows: click empty space to move the playhead there, drag the playhead line to scrub, Ctrl+scroll to zoom" style={{ height: L.height }} className="block w-full touch-none" />
         </div>
-        <div className={cn("col-span-2 grid grid-cols-subgrid border-t border-black", !keys && "hidden")}>
+        <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !keys && "hidden")}>
           <KeyHeads />
           <canvas
             ref={bind("keyrows")}
@@ -76,7 +76,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
             className="block w-full touch-none"
           />
         </div>
-        <div className={cn("col-span-2 grid grid-cols-subgrid border-t border-black", !sound && "hidden")}>
+        <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !sound && "hidden")}>
           <TrackHeads />
           <ClipMenu bind={bind} />
         </div>

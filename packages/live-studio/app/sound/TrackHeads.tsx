@@ -16,7 +16,7 @@ function Head({ t }: { t: Track }) {
   const pickAll = () => setClips(allClips().filter((r) => clipOf(r)?.track === t.id));
   const done = (name: string | null) => { setNaming(false); if (name?.trim() && name.trim() !== t.name) setTrack(t.id, { name: name.trim() }); };
   return (
-    <li style={{ height: TRACK_H }} className={cn("flex items-center gap-0.5 ps-1.5 pe-0.5", t.mute && "text-muted-foreground")}>
+    <li style={{ height: TRACK_H }} className={cn("flex items-center gap-0.5 bg-track-head ps-1.5 pe-0.5", t.mute && "text-muted-foreground")}>
       {naming ? (
         <input
           autoFocus
@@ -26,7 +26,7 @@ function Head({ t }: { t: Track }) {
           onFocus={(e) => e.currentTarget.select()}
           onBlur={(e) => done(e.currentTarget.value)}
           onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") done(null); }}
-          className="h-6 min-w-0 flex-1 rounded-sm border border-ring bg-background px-1 text-xs outline-none pointer-coarse:text-base"
+          className="h-6 min-w-0 flex-1 rounded-sm border border-ring bg-input px-1 text-xs outline-none pointer-coarse:text-base"
         />
       ) : (
         <Tip side="right" label={<>{t.name}: click to select its clips, double-click (F2) to rename</>}>
@@ -65,7 +65,7 @@ function Head({ t }: { t: Track }) {
 export function TrackHeads() {
   useStudio((s) => s.soundRev);
   return (
-    <ul aria-label="Audio tracks" style={{ paddingTop: TOP, paddingBottom: ADD_H }} className="bg-background">
+    <ul aria-label="Audio tracks" style={{ paddingTop: TOP, paddingBottom: ADD_H }} className="border-e border-track-line bg-background">
       {(lanes?.tracks ?? []).map((t) => <Head key={t.id} t={t} />)}
     </ul>
   );

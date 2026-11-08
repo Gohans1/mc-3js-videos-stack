@@ -33,14 +33,14 @@ function Slider({
       <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
         <SliderPrimitive.Track
           data-slot="slider-track"
-          className="relative grow overflow-hidden rounded-md bg-input select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
+          className="relative grow overflow-hidden rounded-md bg-slider select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
         >
           {fill ? (
-            <div data-slot="slider-range" className="absolute inset-y-0 bg-primary" style={{ left: fill[0], width: `calc(${fill[1]} - ${fill[0]})` }} />
+            <div data-slot="slider-range" className="absolute inset-y-0 bg-slider-fill" style={{ left: fill[0], width: `calc(${fill[1]} - ${fill[0]})` }} />
           ) : (
             <SliderPrimitive.Indicator
               data-slot="slider-range"
-              className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
+              className="bg-slider-fill select-none data-horizontal:h-full data-vertical:w-full"
             />
           )}
         </SliderPrimitive.Track>
@@ -50,7 +50,7 @@ function Slider({
             key={index}
             // The name belongs on the thumb: its <input type="range"> is what a screen reader lands on
             aria-label={ariaLabel}
-            className="relative block size-3 shrink-0 rounded-md border border-ring bg-white ring-ring/30 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-2 focus-visible:ring-2 focus-visible:outline-hidden active:ring-2 disabled:pointer-events-none disabled:opacity-50"
+            className="relative block size-3 shrink-0 rounded-full border border-white bg-white ring-ring/30 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-2 focus-visible:ring-2 focus-visible:outline-hidden active:ring-2 disabled:pointer-events-none disabled:opacity-50"
           />
         ))}
       </SliderPrimitive.Control>

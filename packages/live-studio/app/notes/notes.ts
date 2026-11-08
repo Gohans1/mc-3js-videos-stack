@@ -8,7 +8,7 @@ import { PHONE } from "../core/device";
 import { FPS, stamp } from "../core/time";
 import { stored } from "../core/storage";
 import { NOTE_FADE, pinFade } from "./pinfade";
-import { clearInk, drawInk, drawMark, INK, inkHooks, inkMarks, inkSpan, inkTimes, inkWords, restoreInk } from "./ink";
+import { clearInk, drawInk, drawMark, inkHooks, inkMarks, inkSpan, inkTimes, inkWords, restoreInk } from "./ink";
 import { camLine } from "../camera/camline";
 import { captionAt } from "../picture/captions";
 import { frameSize } from "../picture/frame";
@@ -18,6 +18,7 @@ import { S } from "../core/state";
 import { type Compose, type Mark, type Note, type Pin } from "./slice";
 import { get, say, set, ui } from "../core/store";
 import { shotEnd, shotIndex } from "../core/film";
+import { tone } from "../timeline/canvas";
 import { wordNear } from "../timeline/timeline";
 import { inOutAt } from "../timeline/inout";
 import { matcher } from "../core/search";
@@ -74,8 +75,8 @@ const snapshot = (pin: Pin | null | undefined, at: number, marks: Mark[] = []) =
   c.width = w; c.height = h;
   const g = c.getContext("2d")!;
   g.drawImage(finalCanvas() ?? shownAt(at), 0, 0, w, h);
-  for (const m of marks) drawMark(g, m, at, w, h, INK);
-  if (pin) { g.strokeStyle = "#3AA99F"; g.lineWidth = 3; g.beginPath(); g.arc(pin.x * w, pin.y * h, 14, 0, 7); g.stroke(); g.strokeStyle = "#000"; g.lineWidth = 1; g.beginPath(); g.arc(pin.x * w, pin.y * h, 16, 0, 7); g.stroke(); }
+  for (const m of marks) drawMark(g, m, at, w, h, tone("ink"));
+  if (pin) { g.strokeStyle = tone("primary"); g.lineWidth = 3; g.beginPath(); g.arc(pin.x * w, pin.y * h, 14, 0, 7); g.stroke(); g.strokeStyle = "#000"; g.lineWidth = 1; g.beginPath(); g.arc(pin.x * w, pin.y * h, 16, 0, 7); g.stroke(); }
   g.font = "bold 24px Consolas,monospace"; g.textAlign = "right"; g.fillStyle = "rgba(0,0,0,.7)"; g.fillRect(w - 170, 8, 162, 34); g.fillStyle = "#fff"; g.fillText(stamp(at), w - 16, 33);
   return c.toDataURL("image/jpeg", 0.85);
 };
@@ -97,7 +98,7 @@ const momentStrip = (at: number) => {
     const x = Math.min(Math.max(0, at + d), DURATION - 0.02);
     g.drawImage(shownAt(x), i * w, 0, w, h);
     g.fillStyle = "rgba(0,0,0,.7)"; g.fillRect(i * w + 4, 4, 128, 28);
-    g.fillStyle = d === 0 ? "#3AA99F" : "#fff"; g.fillText(stamp(x), i * w + 8, 25);
+    g.fillStyle = d === 0 ? tone("primary") : "#fff"; g.fillText(stamp(x), i * w + 8, 25);
     g.fillStyle = "#000"; g.fillRect(i * w, 0, 2, h);
   });
   return c.toDataURL("image/jpeg", 0.8);

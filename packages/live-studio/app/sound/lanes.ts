@@ -18,7 +18,7 @@ import { bladeLine } from "../timeline/blade";
 import { addClip, allClips, clipOf, cutBefore, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips } from "./sound";
 import { together } from "../core/doc";
 import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
-import { PICK, sized, UI_FONT } from "../timeline/canvas";
+import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { addTrack, resolve, same } from "./tracks";
@@ -27,10 +27,10 @@ import { seek, setPlaying } from "../playback/transport";
 // sound/TrackHeads.tsx lays its rows out on these
 export const TRACK_H = 50, TOP = 2, ADD_H = 24;
 const CLIP_H = 46, LABEL_H = 16;
-// CapCut 9.7's audio clip, measured off the dev's screenshot: a navy clip, its level in 1 px cyan bars from the bottom, the name
-// on a lighter tab. A bar within 1 dB of full scale gets an orange cap and one past it a red tip, Final Cut Pro's documented
-// warning, which CapCut's look follows
-const COLOR = { clip: "#0E3058", wave: "#0E81B3", near: "#F08A34", over: "#EA3223", tab: "#274569", text: "#DCE3EA", handle: "#E6E4D9", drop: "#3AA99F", tried: "#D0A215", lit: "#FFFCF0" };
+// CapCut 9.7's audio clip, measured off the dev's screenshot (index.css --clip-audio and the rest): a navy clip, its level in
+// 1 px cyan bars from the bottom, the name on a lighter tag. A bar within 1 dB of full scale gets an orange cap and one past it a
+// red tip, Final Cut Pro's documented warning, which CapCut's look follows
+const COLOR = { near: "#F08A34", over: "#EA3223" };
 const NEAR = 10 ** (-1 / 20);
 const EDGE = 6, KNOB = 7; // KNOB: how near a fade handle the pointer must be, in px
 
@@ -49,7 +49,7 @@ const rowOf = (c: ClipRef) => tracks().findIndex((t) => t.id === clipOf(c)?.trac
 const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: number, y: number, w: number) => {
   const c = clipOf(ref)!, on = picked(ref);
   const cx0 = Math.max(-2, x0), cx1 = Math.min(w + 2, x1);
-  g.fillStyle = COLOR.clip;
+  g.fillStyle = tone("clip-audio");
   g.beginPath(); g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 4); g.fill();
   // The file's level, scaled by the clip's gain so a quiet clip looks quiet: each bar the loudest peak of the 2 px it stands for
   const p = peaksOf(c.name), [from, to] = span(ref), px = (x1 - x0) / Math.max(1e-3, to - from);
@@ -63,7 +63,7 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
       v *= k;
       if (v < 0.02) continue;
       const bar = Math.max(1, Math.min(1, v) * room);
-      g.fillStyle = COLOR.wave; g.fillRect(x, base - bar, 1, bar);
+      g.fillStyle = tone("clip-wave"); g.fillRect(x, base - bar, 1, bar);
       if (v >= NEAR) { g.fillStyle = COLOR.near; g.fillRect(x, base - bar, 1, 2); }
       if (v > 1) { g.fillStyle = COLOR.over; g.fillRect(x, base - bar - 1, 1, 1); }
     }
@@ -74,17 +74,17 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   if (fi > 0) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + fi * px, y); g.lineTo(x0, y + CLIP_H); g.fill(); }
   if (fo > 0) { g.beginPath(); g.moveTo(x1, y); g.lineTo(x1 - fo * px, y); g.lineTo(x1, y + CLIP_H); g.fill(); }
   if ((on || (hover && same(hover, ref))) && x1 - x0 > KNOB * 4 && !locked(ref)) {
-    g.fillStyle = COLOR.handle; g.strokeStyle = "#100F0F"; g.lineWidth = 1;
+    g.fillStyle = tone("foreground"); g.strokeStyle = tone("backdrop"); g.lineWidth = 1;
     for (const hx of [x0 + fi * px, x1 - fo * px]) { g.beginPath(); g.arc(hx, y + 4, 3.5, 0, Math.PI * 2); g.fill(); g.stroke(); }
   }
-  if (c.try) { g.fillStyle = COLOR.tried; g.fillRect(cx0, y + CLIP_H - 2, Math.min(10, cx1 - cx0), 2); }
+  if (c.try) { g.fillStyle = tone("warn"); g.fillRect(cx0, y + CLIP_H - 2, Math.min(10, cx1 - cx0), 2); }
   g.save(); g.beginPath(); g.rect(cx0, y, cx1 - cx0 - 2, CLIP_H); g.clip();
   const lx = Math.max(x0, 0) + 3, tw = g.measureText(c.name).width;
-  g.fillStyle = COLOR.tab; g.beginPath(); g.roundRect(lx, y + 2, tw + 8, LABEL_H - 2, 3); g.fill();
-  g.fillStyle = COLOR.text; g.fillText(c.name, lx + 4, y + 1 + LABEL_H / 2);
+  g.fillStyle = tone("clip-audio-tag"); g.beginPath(); g.roundRect(lx, y + 2, tw + 8, LABEL_H - 2, 3); g.fill();
+  g.fillStyle = tone("clip-label"); g.fillText(c.name, lx + 4, y + 1 + LABEL_H / 2);
   g.restore();
   // Outside the clip, on the dark track, so the clip's own edge and fade handles stay seen
-  if (on) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
+  if (on) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
 };
 
 export const drawLanes = () => {
@@ -95,9 +95,11 @@ export const drawLanes = () => {
   const { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(), X = (s: number) => ((s - a) / v) * w, ts = tracks();
-  g.fillStyle = "#100F0F"; g.fillRect(0, 0, w, h);
+  // Each track's row a step lighter than the empty space under the last, as CapCut's
+  g.fillStyle = tone("background"); g.fillRect(0, 0, w, h);
+  g.fillStyle = tone("track"); g.fillRect(0, 0, w, TOP + ts.length * TRACK_H);
   // Cuts, faint, so a sound can be put on one by eye
-  g.fillStyle = "#2A2928";
+  g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
   g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
   boxes = [];
@@ -110,25 +112,23 @@ export const drawLanes = () => {
     g.globalAlpha = t.mute || (solo.length && !solo.includes(t.id)) || (lit !== null && !shine) ? 0.35 : 1;
     drawClip(g, ref, x0, x1, y, w);
     g.globalAlpha = 1;
-    if (shine) { g.strokeStyle = COLOR.lit; g.lineWidth = 1.5; g.beginPath(); g.roundRect(Math.max(-2, x0) - 1.5, y - 1.5, Math.min(w + 2, x1) - Math.max(-2, x0) + 3, CLIP_H + 3, 4); g.stroke(); }
+    if (shine) { g.strokeStyle = tone("pick"); g.lineWidth = 1.5; g.beginPath(); g.roundRect(Math.max(-2, x0) - 1.5, y - 1.5, Math.min(w + 2, x1) - Math.max(-2, x0) + 3, CLIP_H + 3, 4); g.stroke(); }
     boxes.push({ ref, x0, x1, y0: y, y1: y + CLIP_H });
   }
   // The strip under the last track takes a dropped clip as a new track. As in CapCut it stays blank and lights only under a drag;
   // words show only while there is no track at all, as CapCut's empty timeline asks for its first clip
-  if (!ts.length) { g.fillStyle = "#878580"; g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2); }
+  if (!ts.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2); }
   if (drop) {
     const x = X(drop.at), y = rowY(drop.row), hh = drop.row === ts.length ? ADD_H : TRACK_H;
-    g.fillStyle = "rgba(58,169,159,.18)"; g.fillRect(0, y, w, hh);
-    g.fillStyle = COLOR.drop; g.fillRect(x - 1, y, 2, hh);
+    g.fillStyle = "rgba(0,193,205,.18)"; g.fillRect(0, y, w, hh);
+    g.fillStyle = tone("primary"); g.fillRect(x - 1, y, 2, hh);
   }
   if (get().blade && bladeLine.row === "lanes") {
     const x = Math.round(X(bladeLine.t));
     g.fillStyle = "#000"; g.fillRect(x - 1, bladeLine.y0 - 3, 3, bladeLine.y1 - bladeLine.y0 + 6);
-    g.fillStyle = "#FFFCF0"; g.fillRect(x, bladeLine.y0 - 2, 1, bladeLine.y1 - bladeLine.y0 + 4);
+    g.fillStyle = tone("pick"); g.fillRect(x, bladeLine.y0 - 2, 1, bladeLine.y1 - bladeLine.y0 + 4);
   }
-  const t = X(S.t);
-  g.fillStyle = "#000"; g.fillRect(t - 2, 0, 4, h);
-  g.fillStyle = "#EC8B49"; g.fillRect(t - 1, 0, 2, h);
+  drawPlayhead(g, X(S.t), h);
 };
 
 // ---------- Snapping: the playhead, cuts, word starts and the edges of every clip not being moved

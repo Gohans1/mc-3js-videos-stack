@@ -41,7 +41,7 @@ export function Compose() {
   return (
     <div className="flex-none bg-card p-3 upright:fixed upright:inset-x-0 upright:top-[min(56.25vw,62vh)] upright:z-5 upright:shadow-[0_8px_20px_rgb(0_0_0/0.6)] sideways:px-3 sideways:py-2">
       <div className="mb-2 text-[13px] wrap-anywhere text-primary sideways:mb-1">{where}</div>
-      {drawn && <div className="mb-2 text-[13px] text-[#CE5D97] tabular-nums">{drawn}</div>}
+      {drawn && <div className="mb-2 text-[13px] text-ink tabular-nums">{drawn}</div>}
       {!drawn && !compose.editing && inOutAt(compose.t) && <div className="mb-2 text-[13px] text-in-out-text tabular-nums">About {rangeText(inOutAt(compose.t)!)}, the In to Out stretch</div>}
       {compose.editing && (
         <div className="mb-2 flex items-center gap-2 rounded-lg bg-warn-bg px-2.5 py-1.5 text-[13px] text-warn">

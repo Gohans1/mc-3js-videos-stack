@@ -35,7 +35,7 @@ export function NumberField({ value, onSave, live, name, step = 1, digits = 3, p
     <input
       type="text" inputMode="decimal" aria-label={name} value={text} placeholder={placeholder} spellCheck={false}
       title="Type a value or a sum, or drag sideways (Shift: finer)"
-      className={cn("h-8 w-full min-w-0 cursor-ew-resize rounded-md border border-input bg-background px-2 text-[13px] text-foreground tabular-nums outline-none focus:cursor-text focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base", className)}
+      className={cn("h-8 w-full min-w-0 cursor-ew-resize rounded-md border border-input bg-input px-2 text-[13px] text-foreground tabular-nums outline-none focus:cursor-text focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base", className)}
       onPointerDown={(e) => {
         if (document.activeElement === e.currentTarget || e.button !== 0 || e.pointerType === "touch") return;
         e.preventDefault(); // focus waits for the release: a drag never puts a caret in the box

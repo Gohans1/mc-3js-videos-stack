@@ -5,6 +5,7 @@
 import { cn } from "cn";
 import { Box, ChevronLeft, ChevronRight, Diamond, Eye, EyeOff, Magnet, Move3d, Plus, Rotate3d, RotateCcw, Scale3d, Trash2, Squirrel } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -40,7 +41,7 @@ const iconOf = (what: string) => {
 const r = (x: number, d: number) => +x.toFixed(d);
 const STILL = "none"; // mc-assets/placed.ts plays no clip it doesn't know
 const label = "text-[13px] text-muted-foreground";
-const field = "h-8 w-full min-w-0 rounded-md border border-input bg-background px-1.5 text-[13px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring";
+const field = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-1.5 text-[13px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring";
 
 // A number typed and saved on Enter or on leaving the box; Escape puts the shown value back
 function Num({ value, onSave, live, name, step = 0.0625 }: { value: number; onSave: (v: number) => void; live?: (v: number) => void; name: string; step?: number }) {
@@ -83,7 +84,7 @@ function Inspector({ name }: { name: string }) {
   return (
     <section aria-label="Selected object" className="flex flex-col gap-2.5 rounded-xl bg-card p-3">
       <div className="flex items-center gap-2">
-        <span className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wide", mob ? "bg-[#66800B]" : "bg-[#205EA6]")}>{mob ? "MOB" : "BLOCK"}</span>
+        <Badge variant="secondary">{mob ? "MOB" : "BLOCK"}</Badge>
         <input
           aria-label="Object name" value={rename} spellCheck={false} className={cn(field, "h-8 flex-1 font-semibold")}
           onChange={(e) => setRename(e.target.value)}
