@@ -61,7 +61,7 @@
         "three": "0.186.1",
       },
     },
-    "packages/film-kit/demo": {
+    "packages/film-kit-demo": {
       "name": "film-kit-demo",
       "dependencies": {
         "film-kit": "workspace:*",
@@ -637,7 +637,7 @@
 
     "film-kit": ["film-kit@workspace:packages/film-kit"],
 
-    "film-kit-demo": ["film-kit-demo@workspace:packages/film-kit/demo"],
+    "film-kit-demo": ["film-kit-demo@workspace:packages/film-kit-demo"],
 
     "film-stage": ["film-stage@workspace:packages/film-stage"],
 

@@ -1,6 +1,6 @@
-// Puts the demo's outside files in place, all gitignored: in demo/public/vendor Steve's skin out of the game's client jar
+// Puts the demo's outside files in place, all gitignored: in public/vendor Steve's skin out of the game's client jar
 // (Mojang's: never commit or publish it) and MCprep's player rig (CC-BY 3.0, BoxScape Studios + TheDuckCow); in
-// demo/public/motion/mixamo the Mixamo clips the mocap scene plays (free to use in a film, never to redistribute as files).
+// public/motion/mixamo the Mixamo clips the mocap scene plays (free to use in a film, never to redistribute as files).
 // Paths: env JAR, RIG, MOTION.
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { unzipSync } from "fflate";
@@ -16,4 +16,4 @@ copyFileSync(RIG, new URL("player.glb", out));
 const mix = new URL("./public/motion/mixamo/", import.meta.url);
 mkdirSync(mix, { recursive: true });
 for (const c of CLIPS) copyFileSync(`${MOTION}/mixamo/${c}.fbx`, new URL(`${c}.fbx`, mix));
-console.log(`demo/public/vendor: steve.png, player.glb; demo/public/motion/mixamo: ${CLIPS.length} clips`);
+console.log(`public/vendor: steve.png, player.glb; public/motion/mixamo: ${CLIPS.length} clips`);

@@ -42,11 +42,12 @@
     "./yawn": "./src/yawn.ts",
     "./sigh": "./src/sigh.ts",
     "./posture": "./src/posture.ts",
-    "./touch": "./src/touch.ts"
+    "./touch": "./src/touch.ts",
+    "./hash": "./src/hash.ts"
   },
   "scripts": {
     "test": "bun test",
-    "demo": "cd demo && bun run demo"
+    "demo": "cd ../film-kit-demo && bun run demo"
   },
   "dependencies": {
     "math": "0.1.0"

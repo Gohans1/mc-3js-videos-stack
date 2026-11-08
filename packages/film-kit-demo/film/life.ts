@@ -9,8 +9,8 @@
 //     with smoothsteps.
 //   LIFE_MOCAP: the same yawn, sigh and thinking played by Mixamo clips on the right (film-kit adds only the face, eyes
 //     and timing; posture and touches stand back over the clips), keyed with film-kit's body layers on the left.
-import { SIGH } from "../../src/sigh";
-import { YAWN } from "../../src/yawn";
+import { SIGH } from "film-kit/sigh";
+import { YAWN } from "film-kit/yawn";
 
 const AT = [1.88, 0, 9.55];
 const ST = (t, pose) => ({ t, pose, at: AT, yaw: -90 });

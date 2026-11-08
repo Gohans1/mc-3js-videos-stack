@@ -20,7 +20,7 @@
 //     stretched (hesitate.ts) and his hands shake from the bang on (tremor over the clips). His eyes scan the place
 //     at the start and again once the freeze lets go (explore: eyes only, so on over the clips too).
 //   WAKE: see below. SCARE also looks around at the start and when the freeze ends.
-import { stretch } from "../../src/hesitate";
+import { stretch } from "film-kit/hesitate";
 
 const AT = [1.88, 0, 9.55];
 const ST = (t, pose) => ({ t, pose, at: AT, yaw: -90 });
