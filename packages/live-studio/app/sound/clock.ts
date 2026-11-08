@@ -5,6 +5,16 @@ import { S } from "../core/state";
 export const audioCtx = new AudioContext();
 export const master = audioCtx.createGain();
 master.connect(audioCtx.destination);
+// Read as a stereo file is: a mono sound comes out of both sides, as ffmpeg makes it stereo in the final mix
+export const STEREO = { channelCount: 2, channelCountMode: "explicit", channelInterpretation: "speakers" } as const;
+// An AudioWorklet module (loaded by URL) added to a context once
+const added = new WeakMap<BaseAudioContext, Map<string, Promise<void>>>();
+export const addModule = (ctx: BaseAudioContext, url: string) => {
+  const mine = added.get(ctx) ?? new Map<string, Promise<void>>();
+  added.set(ctx, mine);
+  if (!mine.has(url)) mine.set(url, ctx.audioWorklet.addModule(url));
+  return mine.get(url)!;
+};
 
 export interface Window {
   now: number; speed: number; until: number;

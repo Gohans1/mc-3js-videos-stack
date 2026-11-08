@@ -2,9 +2,10 @@
 // mixes without them, and this plays every bed and one-shot of the timeline file on the mix's clock the way the film's
 // scripts/sound/mix.py builds them: a bed looped from..to, a one-shot from start for length, gains in dB, fades (envelope.ts),
 // lowpass/highpass filters, and an option picked in its place at the level of the sound it stands in for. All of it goes
-// through the mix's master stage: audio.drive dB into a limiter at 0.45, with the mix (the narration) summed in before it.
+// through the mix's master stage: audio.drive dB into mix.py's limiter at 0.45 (brickwall.ts), with the narration summed in before it.
 // A drag is heard on the next tick, nothing is remixed. The final render still comes from mix.py.
-import { addPlayer, audioCtx, master, track, type Window } from "./clock";
+import { addModule, addPlayer, audioCtx, master, STEREO, track, type Window } from "./clock";
+import brickwall from "./brickwall.worklet.ts?worker&url";
 import { AWAY } from "../core/device";
 import { getFile } from "../core/net";
 import { duckCorners, duckGain, duckWindows } from "./duck";
@@ -19,18 +20,12 @@ interface Source { lanes: () => Lanes | null; library: () => LibraryItem[]; span
 interface Clip { key: string; name: string; t0: number; t1: number; start: number; length?: number; loop: boolean; db: number; fadeIn: number; fadeOut: number; duck: number; pan: number; filters: string[] }
 interface Sound { buf: AudioBuffer; mean: number }
 
-const LIMIT = 0.45, LIMIT_DB = 20 * Math.log10(LIMIT), RATIO = 20;
-// Web Audio's compressor adds makeup gain of its own (the spec: the curve's gain at 0 dB, inverted, to the power 0.6); a
-// limiter must not lift anything, so it is taken back out after. It is no brickwall: against mix.py's render of sealed-room
-// (window.__lanesRender) every half second came within 0.6 dB RMS, but the hardest hits peak at 0.6 where alimiter holds 0.45
-const MAKEUP_DB = -0.6 * LIMIT_DB * (1 - 1 / RATIO);
+// Silent until the limiter's module has loaded (a moment after the page opens): an offline render waits for `ready`
 const stage = (ctx: BaseAudioContext, out: AudioNode) => {
-  const bus = ctx.createGain(), drive = ctx.createGain(), limiter = ctx.createDynamicsCompressor(), after = ctx.createGain();
-  limiter.threshold.value = LIMIT_DB; limiter.knee.value = 0; limiter.ratio.value = RATIO;
-  limiter.attack.value = 0.001; limiter.release.value = 0.05;
-  after.gain.value = 10 ** (-MAKEUP_DB / 20);
-  bus.connect(drive).connect(limiter).connect(after).connect(out);
-  return { bus, drive };
+  const bus = ctx.createGain(), drive = ctx.createGain();
+  bus.connect(drive);
+  const ready = addModule(ctx, brickwall).then(() => { drive.connect(new AudioWorkletNode(ctx, "brickwall", { ...STEREO, outputChannelCount: [2] })).connect(out); });
+  return { bus, drive, ready };
 };
 const live = stage(audioCtx, master);
 
@@ -227,6 +222,7 @@ window.__lanesRender = async (from: number, to: number) => {
   await Promise.all(clips(l).map((c) => load(c.name)));
   const rate = 48000, ctx = new OfflineAudioContext(2, Math.ceil((to - from) * rate), rate), st = stage(ctx, ctx.destination);
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+  await st.ready;
   const w = { speed: 1, ctxAt: (t: number) => t - from, when: (t: number) => Math.max(0, t - from) };
   for (const c of clips(l)) { const s = ready.get(c.name); if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w); }
   const out = await ctx.startRendering(), hop = rate / 2, rms: number[] = [];
