@@ -206,7 +206,7 @@ export function Settings() {
           </Row>
           <SwitchRow id="captions" label="Captions" checked={s.captions} onChange={(on) => setPref("captions", on)} />
           {/* Also under the picture, but that button gives way first on the narrowest phones (Transport.tsx) */}
-          <SwitchRow id="guides" label="Guides" keys={["Ctrl", ";"]} checked={s.guides} onChange={(on) => setPref("guides", on)} help="Over the picture: the thirds, the middle, and the safe areas that text and action stay inside. Kept in this browser." />
+          <SwitchRow id="guides" label="Guides" keys={["Ctrl", ";"]} checked={s.guides} onChange={(on) => setPref("guides", on)} help="Over the picture: the thirds, the middle, and the safe areas that text and action stay inside. On a 9:16 film the shaded edges are what the YouTube Shorts and TikTok buttons and captions cover. Kept in this browser." />
           {/* CapCut's Player menu > Color oscilloscope: a strip under the picture, too big for a phone (picture/Oscilloscope.tsx) */}
           <div className="contents upright:hidden sideways:hidden">
             <SwitchRow id="scopes" label="Color oscilloscope" checked={s.scopes} onChange={(on) => setPref("scopes", on)} help="Under the picture, as CapCut shows it: RGB parade, RGB waveform and vectorscope of the frame on screen. For a dark scene: a trace flat on the 0 line is pure black with no detail left, and the waveform's corner says how much of the picture is. Kept in this browser." />

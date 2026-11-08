@@ -28,7 +28,7 @@ const toggle = `${big} px-3 text-muted-foreground hover:text-foreground aria-pre
 export function Transport() {
   const playing = useStudio((s) => s.playing), muted = useStudio((s) => s.muted), volume = useStudio((s) => s.volume);
   const settingsOpen = useStudio((s) => s.settingsOpen), free = useStudio((s) => s.free), ink = useStudio((s) => s.ink), cam = useStudio((s) => s.cam);
-  const guides = useStudio((s) => s.guides), night = useStudio((s) => s.nightVision), placed = useStudio((s) => s.placed), tool = useStudio((s) => s.tool), full = useFullscreen();
+  const guides = useStudio((s) => s.guides), ratio = useStudio((s) => s.ratio), night = useStudio((s) => s.nightVision), placed = useStudio((s) => s.placed), tool = useStudio((s) => s.tool), full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
     <div className="@container col-start-1 row-start-2 in-data-wide:col-start-2 flex min-w-0 items-center gap-2 px-3 py-2.5 upright:flex-none upright:py-2 sideways:py-1.5">
@@ -79,7 +79,7 @@ export function Transport() {
       )}
       <div className="ml-auto flex items-center gap-1 upright:ml-0 sideways:ml-0">
         <SnapshotButtons className={`${square} pointer-coarse:hidden @max-[600px]:hidden`} />
-        <Tip label="Guides (Ctrl+;): thirds, middle, and the safe areas text and action stay inside">
+        <Tip label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}>
           <Button variant="ghost" className={`${square} aria-pressed:bg-tint aria-pressed:text-primary @max-[330px]:hidden`} aria-label="Guides" aria-pressed={guides} onClick={() => setPref("guides", !guides)}>
             <Grid3x3 />
           </Button>
