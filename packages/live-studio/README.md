@@ -5,17 +5,21 @@ A review room for Three.js films: the creator watches on a PC or phone and pins 
 <img src="docs/studio.png" width="320" alt="The studio on a phone: the picture with a pin on the tapped ball, big play and note buttons, the timeline with words and actions, and the notes below.">
 
 ```bash
-bun install && bun run demo -- 4321     # http://localhost:4321 (Vietnamese UI: Phát = play, Ghi chú = note); needs Node 22+, Bun, Python 3, ffmpeg
+bun run demo -- 4321     # the demo film at http://localhost:4321; needs Node 22+, Bun, Python 3, ffmpeg
 ```
 
 Local only and without a password: reach it from a phone through `tailscale serve` with the host name in the film's `.live_hosts` (any other name gets 403), never from the open internet.
 
 ## On your film
 
+Every film in this monorepo shares this one studio (`"live-studio": "workspace:*"`); never copy it into a film.
+
 ```bash
-git clone https://github.com/Gohans1/live-studio ../live-studio && bun install --cwd ../live-studio
-node ../live-studio/init.mjs .          # bun link + four scripts + missing parts from demo/, never overwrites (--dry to preview)
-bun run studio                          # prints the creator's link (Tailscale) or what is missing; then: bun run notes [ID], bun run note done ID "...", bun run render stills|clip
+bun run new-film <name>                 # at the monorepo root: copies templates/film, runs init.mjs, links the vault
+cd films/<name> && bun run studio       # prints the creator's link (Tailscale) or what is missing
+bun run notes [ID]                      # the creator's notes; bun run note done ID "..." when one is fixed
+bun run render stills|clip              # draft stills or the draft video; options and checks in the header of render.mjs
+bun run framecheck                      # faults in a rendered video
 ```
 
 What a film must provide and every rule an agent follows: [docs/film-contract.md](docs/film-contract.md).

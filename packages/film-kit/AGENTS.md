@@ -43,7 +43,7 @@ Reusable modules for draw(t) films (live-studio); each file's header gives the m
 | src/effort.ts | One mood knob (Laban Effort: space, weight, time, flow, plus sink) that sets every layer's options. | `const fx = effort(MOOD.tense)`; pass `fx.overlap`, `fx.cartoon`, `fx.idle`, `fx.gaze`, `fx.micro`; `phrase(keys, fx.hold)`; `addPose(pose, fx.posture)` |
 | demo/ | Watching every character layer on scenes from a film, before and after side by side, each layer switchable. | `bun run demo`, open localhost:4350 (`?scene=dig|idle|walk|reach|scare|mocap|life|mc|lifeMocap`, `?mood=tense|tired`, `?t=`, `?view=both|side|bust|face`, `?off=gaze,cartoon`) |
 
-- Link into a film like live-studio: `bun link` here once, `"film-kit": "link:film-kit"` in the film; import `film-kit/<name>`.
+- In a film of this monorepo: `"film-kit": "workspace:*"` in its package.json (templates/film has it), then import `film-kit/<name>`.
 - Every module stays a pure function of film time (or bakes once); no three.js import outside tests.
 - `bun test` must pass after any change; a new rule gets a test that fails without it.
 - data/shakify.json is Camera Shakify's CC0 data (licence beside it); their GPL code is not used.
