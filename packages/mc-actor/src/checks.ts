@@ -26,8 +26,13 @@ export function footChecks({ perform, steve, now }) {
           if (q.y < -0.03 && !sunk[sd]) { sunk[sd] = t; } else if (q.y >= -0.03 && sunk[sd]) { out.push(`${sunk[sd].toFixed(2)}-${t.toFixed(2)} ${sd} sole under the floor`); sunk[sd] = 0; }
         }
       }
-      for (const sd of ["L", "R"]) if (touch[sd]?.far > 0.02) out.push(`${touch[sd].t.toFixed(2)}-end ${sd} sole slides ${(touch[sd].far * 100).toFixed(0)} cm`);
-      return out;
+      // a fault still going at `to` is reported too, and a clean stretch says so: silence would read as "check didn't run"
+      for (const sd of ["L", "R"]) {
+        if (touch[sd]?.far > 0.02) out.push(`${touch[sd].t.toFixed(2)}-end ${sd} sole slides ${(touch[sd].far * 100).toFixed(0)} cm`);
+        if (short[sd]) out.push(`${short[sd].t.toFixed(2)}-end ${sd} leg cannot reach its planted sole by ${(short[sd].miss * 100).toFixed(0)} cm`);
+        if (sunk[sd]) out.push(`${sunk[sd].toFixed(2)}-end ${sd} sole under the floor`);
+      }
+      return out.length ? out : [`${from}-${to}: no sliding, sunk or unreachable sole`];
     },
     // trace:from,to,step: the soles (world x y z) and their planted targets, one line per sample
     trace: (from, to, step) => { const out = []; for (let t = from; t <= to + 1e-6; t += step) out.push(`${t.toFixed(3)} ${soles(t)}`); return out; },
