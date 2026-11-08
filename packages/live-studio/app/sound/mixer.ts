@@ -57,6 +57,14 @@ const load = (name: string) => {
 export const forgetSounds = () => { sounds.clear(); ready.clear(); };
 // A library sound decoded, as the lanes play it (sweeten.ts reads where its moment is)
 export const decoded = (name: string) => load(name).then((s) => s?.buf ?? null);
+// The mix element's own sound decoded, kept until a remix changes its URL: the meter's render and the skims play it
+let mixDecoded: { url: string; buf: Promise<AudioBuffer | null> } | null = null;
+const mixBuffer = () => {
+  const url = S.el.audio?.currentSrc;
+  if (!url) return Promise.resolve(null);
+  if (mixDecoded?.url !== url) mixDecoded = { url, buf: getFile(url).then((r) => r.arrayBuffer()).then((b) => audioCtx.decodeAudioData(b)).catch(() => null) };
+  return mixDecoded.buf;
+};
 
 // ---------- mix.py's ffmpeg filters, the two the films use: lowpass/highpass=f=..:poles=1|2[:w=Q]
 const warned = new Set<string>();
@@ -208,6 +216,39 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
   return out;
 };
 
+// ---------- A skim (timeline/peek.ts): the next len seconds from film second t, everything as playback sounds there, each
+// one cutting the last off, as audio scrubbing in an editor does
+let skim: { out: GainNode; srcs: AudioScheduledSourceNode[] } | null = null, skims = 0;
+const endSkim = (at: number) => {
+  if (!skim) return;
+  skim.out.gain.cancelScheduledValues(at); skim.out.gain.setTargetAtTime(0, at, 0.003);
+  for (const s of skim.srcs) { try { s.stop(at + 0.02); } catch {} }
+  skim = null;
+};
+export const playSlice = async (t: number, len: number) => {
+  const mine = ++skims, mix = await mixBuffer();
+  if (mine !== skims) return;
+  const t0 = audioCtx.currentTime + 0.01, end = t0 + len, out = audioCtx.createGain(), srcs: AudioScheduledSourceNode[] = [];
+  endSkim(t0);
+  out.gain.setValueAtTime(0, t0); out.gain.linearRampToValueAtTime(1, t0 + 0.004);
+  out.gain.setValueAtTime(1, end - 0.012); out.gain.linearRampToValueAtTime(0, end);
+  out.connect(on ? live.bus : master);
+  if (mix && !get().solo.length && t < mix.duration) { const s = audioCtx.createBufferSource(); s.buffer = mix; s.connect(out); s.start(t0, t); srcs.push(s); }
+  const l = on && source?.lanes();
+  if (l) {
+    const w = { speed: 1, ctxAt: (x: number) => t0 + x - t, when: (x: number) => Math.max(t0, t0 + x - t) };
+    for (const c of clips(l)) {
+      if (!(c.t0 <= t && t < c.t1)) continue;
+      const s = ready.get(c.name);
+      if (!s) { load(c.name); continue; }
+      const v = play(audioCtx, out, c, s, t, w);
+      if (v) srcs.push(v.src);
+    }
+  }
+  for (const s of srcs) s.stop(end); // the last stop called is the one kept
+  skim = { out, srcs };
+};
+
 // ---------- On and off, from the server's word (GET /api/sound live)
 export const setLive = (live_: boolean, src: Source) => {
   source = src;
@@ -247,13 +288,10 @@ window.__lanesRender = async (from: number, to: number) => {
 // gain that pass will add (meter.ts). Gives the lanes it built from, or null when the page doesn't play the lanes, so it can't
 // build the film's sound itself
 export const renderFilm = async (into: (ctx: OfflineAudioContext) => Promise<AudioNode>): Promise<Lanes | null> => {
-  const l = source?.lanes(), url = S.el.audio?.currentSrc;
+  const l = source?.lanes();
   if (!on || !l) return null;
   const all = clips(l, true);
-  const [voice] = await Promise.all([
-    url ? getFile(url).then((r) => r.arrayBuffer()).then((b) => audioCtx.decodeAudioData(b)).catch(() => null) : null,
-    ...all.map((c) => load(c.name)),
-  ]);
+  const [voice] = await Promise.all([mixBuffer(), ...all.map((c) => load(c.name))]);
   // One channel out: the measuring node hears the stereo sum, and the rendered buffer nobody reads stays half the size
   const rate = 48000, ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate), st = stage(ctx, await into(ctx));
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);

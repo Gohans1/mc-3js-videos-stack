@@ -15,6 +15,7 @@ import { LANE_H, rows, WORDS_H } from "./rows";
 import { S } from "../core/state";
 import { get, say, set, setPref } from "../core/store";
 import { seek, setPlaying } from "../playback/transport";
+import { skimSound } from "../sound/skim";
 
 const SLOW_WPM = 130, FAST_WPM = 280, STILL = 6; // a sentence outside these reads as off pace; this long with nothing moving reads as stuck
 const HOLDS = new Set(["zz", "note1", "code", "typing"]); // these say when something is shown, not that it moves
@@ -328,6 +329,7 @@ export const attachTimeline = () => {
       if (S.playing) setPlaying(false);
       if (c !== over) frozenCentre = viewCentre();
       seek(toTime(e));
+      skimSound(S.t);
     };
     const down = (e: PointerEvent) => {
       if (e.button !== 0) return;
@@ -340,7 +342,7 @@ export const attachTimeline = () => {
     const move = (e: PointerEvent) => {
       if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) >= 4) { press = null; start(e); return; }
       if (!S.dragging) { if (e.pointerType === "mouse" && !e.buttons) c.style.cursor = grab(e) ? "ew-resize" : ""; return; }
-      if (!(e.buttons & 1)) up(); else seek(toTime(e));
+      if (!(e.buttons & 1)) up(); else { seek(toTime(e)); skimSound(S.t); }
     };
     c.addEventListener("pointerdown", down);
     c.addEventListener("pointermove", move);

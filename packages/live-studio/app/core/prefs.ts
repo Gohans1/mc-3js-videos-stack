@@ -21,6 +21,7 @@ const PREFS = {
   guides: flag("guides", false),
   magnet: flag("timelineSnap", true),
   previewAxis: flag("previewAxis", true), // CapCut's, on as there (timeline/peek.ts)
+  previewAudio: flag("previewAudio", false), // the preview axis plays the sound under the pointer too (Shift+S; timeline/peek.ts)
   nightVision: flag("nightVision", false),
   scopes: flag("scopes", false), // CapCut's Color oscilloscope under the picture (picture/Oscilloscope.tsx)
   meter: flag("audioMeter", true), // the master meter beside the timeline (sound/AudioMeter.tsx)

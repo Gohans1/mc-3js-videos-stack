@@ -33,7 +33,7 @@ function Tool({ label, icon: Icon, onClick, disabled, pressed }: { label: string
 export function TimelineBar() {
   // Every edit and pick changes the store: this redraws the bar then, so undo and the picks below are read fresh
   useStudio(() => `${canUndo()}${canRedo()}${canSplit()}${canDelete()}`);
-  const magnet = useStudio((s) => s.magnet), previewAxis = useStudio((s) => s.previewAxis), inOut = useStudio((s) => s.inOut), picks = useStudio((s) => s.clips.length > 0), blade = useStudio((s) => s.blade);
+  const magnet = useStudio((s) => s.magnet), previewAxis = useStudio((s) => s.previewAxis), previewAudio = useStudio((s) => s.previewAudio), inOut = useStudio((s) => s.inOut), picks = useStudio((s) => s.clips.length > 0), blade = useStudio((s) => s.blade);
   return (
     // Too long for a phone, the bar scrolls sideways under the finger, as CapCut's phone toolbar does, and fades at an end with
     // more beyond it (shadcn's scroll-fade-x), rather than holding the page wider than the screen. Its padding keeps the focus
@@ -59,7 +59,7 @@ export function TimelineBar() {
       )}
       <span className="flex-1" />
       <Tool label={magnet ? "Snapping on (N): drags stick to the playhead, words, cuts and edges. Hold Shift to skip it once" : "Snapping off (N): drags move freely"} icon={Magnet} pressed={magnet} onClick={toggleMagnet} />
-      <Tool label={previewAxis ? "Preview axis on (S): pointing at the timeline shows that frame, the playhead stays. Click to turn it off" : "Preview axis off (S): click so pointing at the timeline shows that frame"} icon={SeparatorVertical} pressed={previewAxis} onClick={togglePreviewAxis} />
+      <Tool label={previewAxis ? `Preview axis on (S): pointing at the timeline shows that frame${previewAudio ? " and plays its sound (Shift+S for picture only)" : ", the playhead stays (Shift+S adds its sound)"}. Click to turn it off` : "Preview axis off (S): click so pointing at the timeline shows that frame"} icon={SeparatorVertical} pressed={previewAxis} onClick={togglePreviewAxis} />
       <span aria-hidden className="mx-1.5 h-5 w-px bg-border" />
       <Tool label="Zoom out (-)" icon={ZoomOut} onClick={() => zoomSpan(1.5)} />
       <Tool label="Zoom in (=)" icon={ZoomIn} onClick={() => zoomSpan(1 / 1.5)} />

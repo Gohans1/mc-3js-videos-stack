@@ -20,7 +20,7 @@ import { askPaste, copyAttrs } from "../timeline/attributes";
 import { selectSide, splitAll, splitHere } from "../timeline/cut";
 import { setBlade } from "../timeline/blade";
 import { toggleMagnet, zoomSpan, zoomToFit } from "../timeline/timeline";
-import { togglePreviewAxis } from "../timeline/peek";
+import { togglePreviewAudio, togglePreviewAxis } from "../timeline/peek";
 import { clearInOut, inOutByClip, setIn, setOut } from "../timeline/inout";
 import { redo, undo } from "../core/doc";
 import { pickKeys, removeKeys } from "../keys/keys";
@@ -102,6 +102,7 @@ export function useStudioHotkeys() {
     { hotkey: "Shift+X", callback: inOutByClip },
     { hotkey: "Alt+X", callback: clearInOut },
     { hotkey: "S", callback: fresh(togglePreviewAxis), options: { enabled: !free } }, // in the free camera S flies back
+    { hotkey: "Shift+S", callback: fresh(togglePreviewAudio), options: { enabled: !free } },
     // CapCut's marker is the studio's note: one at the playhead, and the next or previous one
     { hotkey: "M", callback: () => openNote(null) },
     { hotkey: "Shift+M", callback: noteKey(1) },

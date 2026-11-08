@@ -21,7 +21,8 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Timeline zoom, fit, preview axis: CÓ.
   - Ctrl+lăn chuột hoặc = và - để zoom timeline; Ctrl+ và Ctrl- để zoom trang như trình duyệt.
   - Shift+Z vừa cả phim; Alt+lăn hoặc Shift+lăn trượt ngang.
-  - S bật/tắt preview axis: rê chuột trên timeline xem khung đó, playhead đứng yên, đồng hồ chuyển vàng. Nghe tiếng khi rê (Shift+S): SẮP LÀM.
+  - S bật/tắt preview axis: rê chuột trên timeline xem khung đó, playhead đứng yên, đồng hồ chuyển vàng.
+  - Shift+S thêm tiếng (như "video and audio" của CapCut): rê chuột hay kéo playhead thì nghe vài khung tiếng ở đó, cả lời dẫn lẫn các track. Mặc định tắt.
 - Auto snapping (N): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác; giữ Shift khi kéo để tắt tạm.
 - Track lock, hide, mute, solo:
   - Mute, Lock ở đầu mỗi track âm thanh: CÓ. Mute áp cả bản render final (mix.py bỏ track đó).
