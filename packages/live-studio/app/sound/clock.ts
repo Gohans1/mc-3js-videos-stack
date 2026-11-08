@@ -3,8 +3,10 @@
 import { S } from "../core/state";
 
 export const audioCtx = new AudioContext();
+// Everything the page plays sums here at the film's own level, where the meter reads it (meter.ts); the volume slider comes after
 export const master = audioCtx.createGain();
-master.connect(audioCtx.destination);
+const monitor = audioCtx.createGain();
+master.connect(monitor).connect(audioCtx.destination);
 // Read as a stereo file is: a mono sound comes out of both sides, as ffmpeg makes it stereo in the final mix
 export const STEREO = { channelCount: 2, channelCountMode: "explicit", channelInterpretation: "speakers" } as const;
 // An AudioWorklet module (loaded by URL) added to a context once
@@ -37,7 +39,7 @@ const tick = () => {
   const audio = S.el?.audio;
   if (!audio) return;
   const level = audio.muted ? 0 : audio.volume;
-  if (masterLevel !== level) { masterLevel = level; master.gain.setTargetAtTime(level, audioCtx.currentTime, 0.015); } // eased, or a slider drag clicks
+  if (masterLevel !== level) { masterLevel = level; monitor.gain.setTargetAtTime(level, audioCtx.currentTime, 0.015); } // eased, or a slider drag clicks
   if (!S.playing || audio.paused || audio.readyState < 3) { if (anchor) silence(); return; }
   const now = audio.currentTime, speed = audio.playbackRate, base = audioCtx.currentTime - now / speed;
   // A seek shows up as a jump in the sound's clock; small wobble in that clock is ignored, so the rhythm of the presses stays even

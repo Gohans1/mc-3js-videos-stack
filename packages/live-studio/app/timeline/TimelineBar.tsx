@@ -38,7 +38,7 @@ export function TimelineBar() {
     // Too long for a phone, the bar scrolls sideways under the finger, as CapCut's phone toolbar does, and fades at an end with
     // more beyond it (shadcn's scroll-fade-x), rather than holding the page wider than the screen. Its padding keeps the focus
     // rings inside what the scroll clips
-    <div role="toolbar" aria-label="Timeline tools" className="col-span-2 -m-0.5 mb-1 flex min-w-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain p-0.5 [scrollbar-width:none] scroll-fade-x *:shrink-0 sideways:hidden">
+    <div role="toolbar" aria-label="Timeline tools" className="col-span-full -m-0.5 mb-1 flex min-w-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain p-0.5 [scrollbar-width:none] scroll-fade-x *:shrink-0 sideways:hidden">
       <Tool label="Select (A)" icon={MousePointer2} pressed={!blade} onClick={() => setBlade(false)} />
       <Tool label="Split mode (B or C): click a sound clip or the camera row to cut it there" icon={ScissorsLineDashed} pressed={blade} onClick={() => setBlade(!blade)} />
       <span aria-hidden className="mx-1.5 h-5 w-px bg-border" />

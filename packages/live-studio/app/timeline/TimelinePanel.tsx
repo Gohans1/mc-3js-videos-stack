@@ -1,7 +1,7 @@
 // The timeline canvases: the whole film, the stretch around the playhead, and under it the camera keys, the film's other keys
 // (Steve, props) and the sound tracks the creator edits by hand. timeline/timeline.ts draws the first two and handles scrubbing,
 // picking and zoom; camera/camrow.ts the camera row (its canvas and menu in CameraTrack.tsx); keys/keyrows.ts the key rows (names in KeyHeads); sound/lanes.ts the tracks (their right-click menu in ClipMenu.tsx), whose names, mute and lock sit in the column on the left (TrackHeads). That column
-// runs the whole height so every row shares one time axis
+// runs the whole height so every row shares one time axis. At the right, the master meter (sound/AudioMeter.tsx)
 import { cn } from "cn";
 import { useLayoutEffect } from "react";
 import type { Bind } from "../core/state";
@@ -14,6 +14,7 @@ import { Splitter, useStoredSize } from "../components/Splitter";
 import { TimelineBar } from "./TimelineBar";
 import { TrackHeads } from "../sound/TrackHeads";
 import { ClipMenu } from "../sound/ClipMenu";
+import { AudioMeter } from "../sound/AudioMeter";
 
 // size: the height the creator dragged it to (App), null for the default. As in CapCut only the head stays put (the tools, the
 // whole film, the ruler); every row under the ruler (shots, voice, action, camera, keys, sound tracks) scrolls as one list
@@ -32,7 +33,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
     <div
       ref={bind("timeline")}
       className={cn(
-        "relative col-[1/-1] row-start-3 grid h-[var(--edit-h,max(20rem,42dvh))] min-w-0 select-none grid-cols-[7.5rem_minmax(0,1fr)] grid-rows-[auto_auto_auto_minmax(0,1fr)] overflow-hidden border-t px-3 pt-2 pb-3",
+        "relative col-[1/-1] row-start-3 grid h-[var(--edit-h,max(20rem,42dvh))] min-w-0 select-none grid-cols-[7.5rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_auto_minmax(0,1fr)] overflow-hidden border-t px-3 pt-2 pb-3",
         "upright:h-auto upright:flex-none upright:grid-cols-[5.5rem_minmax(0,1fr)] upright:grid-rows-none upright:overflow-visible upright:border-t-0 upright:pt-0 sideways:col-[1] sideways:block sideways:h-auto sideways:border-t-0 sideways:pt-0 sideways:pb-1.5",
         size === 0 ? "pb-0" : "min-h-72 upright:min-h-0 sideways:min-h-0",
       )}
@@ -72,6 +73,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
         {/* The box dragged from the Shots row down to the Camera row (rowbox.ts), drawn as the rows' own boxes are */}
         <div ref={bind("rowbox")} aria-hidden className="pointer-events-none absolute hidden border border-primary bg-primary/14" />
       </div>
+      <AudioMeter />
       {/* CapCut's preview axis, from the ruler down the rows (peek.ts) */}
       <div ref={bind("peek")} aria-hidden hidden className="pointer-events-none absolute left-0 z-3 w-px -translate-x-px bg-peek shadow-[0_0_0_1px_#000]" />
     </div>

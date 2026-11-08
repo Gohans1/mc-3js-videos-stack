@@ -50,7 +50,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Volume, waveform, fade handles: CÓ.
   - Chọn clip thì tab Audio bên phải có Volume -40 đến +20 dB, Pan trái/phải, Fade in/out; sóng âm vẽ trên clip.
   - Kéo nút ở hai góc trên của clip để fade như CapCut.
-  - Báo đỏ khi vỡ tiếng: ĐANG LÀM bằng đồng hồ âm thanh tổng (đỉnh dB đỏ ở 0 dB, LUFS so với -14).
+  - Báo đỏ khi vỡ tiếng: CÓ, đồng hồ tổng bên phải timeline: đỉnh trái/phải (vàng từ -12, đỏ từ -1 dB), đèn đỏ trên cùng khi vỡ 0 dB (bấm để xoá), cột LUFS với vạch đích. Mọi số là của bản render final; tắt ở ⋯ Settings > View > Audio meter, điện thoại không có.
 - Voiceover, separate audio, vocal isolation, replace clip:
   - Separate audio: CÓ sẵn, tiếng là track riêng nên J-cut/L-cut làm ngay.
   - Replace clip: CÓ dạng Alternatives, chip A/B/C/D trên hình hoặc ⋯ Settings > Alternatives (phím 0-9), giữ nguyên chỗ, độ dài và mức âm.
@@ -59,7 +59,8 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Clip animations In/Out/Combo: CÓ cho shot ở tab Animation, rê chuột lên ô để thử ngay, chuột phải khối shot để gắn nhanh. Lệch: là chuyển động máy quay 3D thật (đẩy, xoay, rung), không phải biến hình 2D.
 - Ducking, loudness normalization, enhance voice, noise reduction:
   - Ducking: CÓ, nhạc nền tự hạ khi có giọng đọc, trang nghe giống hệt mix.py.
-  - Chuẩn hoá LUFS: mix.py đưa cả phim về audio.json lufs (-14) và -1 dBTP lúc render; đồng hồ LUFS trong trang: ĐANG LÀM.
+  - Chuẩn hoá LUFS: mix.py đưa cả phim về audio.json lufs (-14) và -1 dBTP lúc render.
+  - Đồng hồ LUFS: CÓ, số S (3 giây gần nhất) và I (từ lúc bấm Play). Rê chuột lên số để xem mix.py sẽ tăng cả phim bao nhiêu dB, kèm ⚠ và mức lufs nên đặt khi đỉnh sau đó vượt -1 dBTP (mix.py sẽ nén méo cả phim).
   - Enhance voice, noise reduction: BỎ, giọng ElevenLabs đã sạch.
 - Text, captions, callouts, TTS:
   - Captions: CÓ trong studio (⋯ Settings > View), hiện câu thoại đang nói dưới hình.
@@ -117,3 +118,4 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Free camera kiểu Minecraft (F), Shift+K lưu khoá từ góc đó, Alt+C copy góc camera thành một dòng chữ để dán vào note.
 - Chụp hình so sánh (Shift+\, giữ \ để xem lại), chip phương án A/B/C/D.
 - Các lệnh tự kiểm (CHECK=motion, seen, touch, slide; framecheck) ghi trong AGENTS.md gốc của monorepo.
+- Trang phát tiếng qua cùng kiểu limiter với mix.py (app/sound/brickwall.ts), nên tai nghe và đồng hồ khớp bản final: đo sealed-room lệch ffmpeg 0.1 LUFS, đỉnh 0.2 dB.

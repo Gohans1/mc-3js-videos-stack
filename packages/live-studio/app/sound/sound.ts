@@ -4,6 +4,7 @@
 import { createDoc } from "../core/doc";
 import { getFile } from "../core/net";
 import { r3, stamp } from "../core/time";
+import { measureFinal } from "./meter";
 import { forgetSounds, replan, setLive } from "./mixer";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
@@ -26,6 +27,7 @@ const changed = () => {
   set({ soundRev: get().soundRev + 1, ...(solo.length !== get().solo.length && { solo }) });
   S.dirty = true;
   replan();
+  measureFinal();
   if (get().clips.some((c) => !clipOf(c))) setClips([]);
 };
 const doc = createDoc<Lanes>("sound", {

@@ -23,6 +23,7 @@ const PREFS = {
   previewAxis: flag("previewAxis", true), // CapCut's, on as there (timeline/peek.ts)
   nightVision: flag("nightVision", false),
   scopes: flag("scopes", false), // CapCut's Color oscilloscope under the picture (picture/Oscilloscope.tsx)
+  meter: flag("audioMeter", true), // the master meter beside the timeline (sound/AudioMeter.tsx)
   filmView: oneOf("filmView", FILM_VIEW_SIZES, "m"),
   flySpeed: within("flySpeed", FLY_SPEED.min, FLY_SPEED.max, FLY_SPEED.start),
 };

@@ -1,4 +1,5 @@
 // The sound lanes' part of the page state (core/store.ts)
+import type { Loudness } from "./meter";
 // A clip on the sound lanes (sound.ts): which list in the film's timeline file, and its place there
 export interface ClipRef { list: "beds" | "sfx"; i: number }
 
@@ -11,5 +12,7 @@ export interface SoundSlice {
   soundLit: string | null; // the library sound under the pointer: its clips stand out on the lanes and the overview
   liveLanes: boolean; // the page plays the lanes itself (mixer.ts), so a track can be soloed
   solo: string[]; // the tracks soloed: only they sound, the narration too goes quiet. This page only, never saved or rendered
+  meter: boolean; // the master meter shown (a setting, core/prefs.ts)
+  loudness: Loudness | null; // what the final render's loudness pass does to the whole film (meter.ts); null until measured
 }
-export const soundSlice: SoundSlice = { sound: false, clip: null, clips: [], soundSaved: null, soundRev: 0, soundLit: null, liveLanes: false, solo: [] };
+export const soundSlice: Omit<SoundSlice, "meter"> = { sound: false, clip: null, clips: [], soundSaved: null, soundRev: 0, soundLit: null, liveLanes: false, solo: [], loudness: null };

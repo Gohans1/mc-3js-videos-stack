@@ -172,7 +172,7 @@ function Footer() {
 export function Settings() {
   const s = useStudio(useShallow((x) => ({
     contract: x.contract, captions: x.captions, guides: x.guides, tryOn: x.tryOn,
-    free: x.free, flySpeed: x.flySpeed, nightVision: x.nightVision, final: x.final, selection: x.selection, scopes: x.scopes, ratio: x.ratio,
+    free: x.free, flySpeed: x.flySpeed, nightVision: x.nightVision, final: x.final, selection: x.selection, scopes: x.scopes, meter: x.meter, ratio: x.ratio,
   })));
   const step = (d: number) => seek(S.t + d);
   return (
@@ -210,6 +210,9 @@ export function Settings() {
           {/* CapCut's Player menu > Color oscilloscope: a strip under the picture, too big for a phone (picture/Oscilloscope.tsx) */}
           <div className="contents upright:hidden sideways:hidden">
             <SwitchRow id="scopes" label="Color oscilloscope" checked={s.scopes} onChange={(on) => setPref("scopes", on)} help="Under the picture, as CapCut shows it: RGB parade, RGB waveform and vectorscope of the frame on screen. For a dark scene: a trace flat on the 0 line is pure black with no detail left, and the waveform's corner says how much of the picture is. Kept in this browser." />
+          </div>
+          <div className="contents upright:hidden sideways:hidden">
+            <SwitchRow id="audio-meter" label="Audio meter" checked={s.meter} onChange={(on) => setPref("meter", on)} help="At the right of the timeline: the left and right peaks, the short-term loudness against the film's target (-14 LUFS for YouTube) and a red light when the sound clips. Every number is the final video's, after its loudness pass. Kept in this browser." />
           </div>
           <SwitchRow id="try-on" label="Show alternatives on the picture" checked={s.tryOn} onChange={(on) => setPref("tryOn", on)} help="Near a prop or sound with several versions, chips show at the top right of the picture. Click A, B, C… to switch, Use to keep one." />
           <Row>

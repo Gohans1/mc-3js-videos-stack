@@ -25,6 +25,7 @@
     "class-variance-authority": "0.7.1",
     "cn": "0.5.2",
     "hono": "4.13.16",
+    "loudness-worklet": "2.1.0",
     "lucide-react": "1.69.0",
     "mediabunny": "1.65.1",
     "react": "19.3.1",

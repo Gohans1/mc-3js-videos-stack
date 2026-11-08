@@ -4,6 +4,7 @@
 // lowpass/highpass filters, and an option picked in its place at the level of the sound it stands in for. All of it goes
 // through the mix's master stage: audio.drive dB into mix.py's limiter at 0.45 (brickwall.ts), with the narration summed in before it.
 // A drag is heard on the next tick, nothing is remixed. The final render still comes from mix.py.
+import { DURATION } from "film/scene";
 import { addModule, addPlayer, audioCtx, master, STEREO, track, type Window } from "./clock";
 import brickwall from "./brickwall.worklet.ts?worker&url";
 import { AWAY } from "../core/device";
@@ -31,8 +32,8 @@ const live = stage(audioCtx, master);
 
 let source: Source | null = null, on = false, routed: MediaElementAudioSourceNode | null = null;
 const fromMix = audioCtx.createGain();
-// The mix element's own volume is applied before it reaches here, and master applies it again: undone, so it counts once.
-// A soloed track silences the narration as it does every other track
+// The mix element's own volume is applied before it reaches here, and the volume after master applies it again: undone, so it
+// counts once. A soloed track silences the narration as it does every other track
 const levelMix = () => { const a = S.el.audio, v = a.muted ? 0 : a.volume; fromMix.gain.value = v > 0 && !get().solo.length ? 1 / v : 0; };
 
 // ---------- The lanes' sound files, decoded once, with ffmpeg volumedetect's mean_volume for an option's level
@@ -74,10 +75,10 @@ const filterNode = (ctx: BaseAudioContext, spec: string): AudioNode | null => {
   return ctx.createIIRFilter(kind === "lowpass" ? [b0, 0] : [b0, -b0], [1, a1]);
 };
 
-// ---------- What sounds where: mix.py's build() over the lanes, with the studio's picks (mix.py chosen/as_option) and its muted
-// tracks; in the page also its soloed ones
-const clips = (l: Lanes): Clip[] => {
-  const out: Clip[] = [], muted = new Set((l.tracks ?? []).filter((t) => t.mute).map((t) => t.id)), solo = get().solo;
+// ---------- What sounds where: mix.py's build() over the lanes, with the studio's picks (mix.py chosen/as_option) and its muted tracks;
+// in the page also its soloed ones, unless `all` (the meter's render of the film as mix.py makes it)
+const clips = (l: Lanes, all = false): Clip[] => {
+  const out: Clip[] = [], muted = new Set((l.tracks ?? []).filter((t) => t.mute).map((t) => t.id)), solo = all ? [] : get().solo;
   const pick = (e: { name: string; gain: number; track?: string; try?: string[] }) => {
     if (e.track && muted.has(e.track)) return null;
     if (solo.length && !solo.includes(e.track ?? "")) return null;
@@ -145,9 +146,9 @@ const hush = (list: Voice[]) => {
 addPlayer({
   reset: () => { started.clear(); voices = []; },
   tick: (w) => {
+    if (routed) levelMix(); // the mix plays through the graph whether or not the lanes do
     const l = on && source?.lanes();
     if (!l) return;
-    levelMix();
     for (const c of clips(l)) {
       if (started.has(c.key) || !(c.t0 < w.until && w.now < c.t1)) continue;
       const s = ready.get(c.name);
@@ -208,7 +209,8 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
 // ---------- On and off, from the server's word (GET /api/sound live)
 export const setLive = (live_: boolean, src: Source) => {
   source = src;
-  if (live_ && !routed) { routed = audioCtx.createMediaElementSource(S.el.audio); routed.connect(fromMix); }
+  // Through the page's own graph either way, so the meter hears the mix (meter.ts)
+  if (!routed) { routed = audioCtx.createMediaElementSource(S.el.audio); routed.connect(fromMix); }
   // The mix goes through the master stage only while the lanes are summed with it; otherwise it already went through mix.py's
   fromMix.disconnect();
   fromMix.connect(live_ ? live.bus : master);
@@ -236,4 +238,27 @@ window.__lanesRender = async (from: number, to: number) => {
     rms.push(+(10 * Math.log10(sum / n || 1e-12)).toFixed(2));
   }
   return { rms, peak: +peak.toFixed(4) };
+};
+
+// The film's whole sound as mix.py builds it before its loudness pass (narration, beds and one-shots into the drive and the
+// limiter; every track but the muted ones, soloed or not), rendered offline into the node `into` makes: the meter measures the
+// gain that pass will add (meter.ts). Gives the lanes it built from, or null when the page doesn't play the lanes, so it can't
+// build the film's sound itself
+export const renderFilm = async (into: (ctx: OfflineAudioContext) => Promise<AudioNode>): Promise<Lanes | null> => {
+  const l = source?.lanes(), url = S.el.audio?.currentSrc;
+  if (!on || !l) return null;
+  const all = clips(l, true);
+  const [voice] = await Promise.all([
+    url ? getFile(url).then((r) => r.arrayBuffer()).then((b) => audioCtx.decodeAudioData(b)).catch(() => null) : null,
+    ...all.map((c) => load(c.name)),
+  ]);
+  // One channel out: the measuring node hears the stereo sum, and the rendered buffer nobody reads stays half the size
+  const rate = 48000, ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate), st = stage(ctx, await into(ctx));
+  st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+  await st.ready;
+  if (voice) { const v = ctx.createBufferSource(); v.buffer = voice; v.connect(st.bus); v.start(0); }
+  const w = { speed: 1, ctxAt: (t: number) => t, when: (t: number) => Math.max(0, t) };
+  for (const c of all) { const s = ready.get(c.name); if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w); }
+  await ctx.startRendering();
+  return l;
 };
