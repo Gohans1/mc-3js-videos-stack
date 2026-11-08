@@ -4,11 +4,10 @@
 - không tải trực tiếp các folder/file nặng như .jar, full modpack,etc... vào thẳng project. Lưu bọn minecraft assets nặng gốc đã tải về ở khu riêng biệt trong máy để các project dùng chung
 - Khi Project cần đạo cụ/assets/ảnh/nhân vật/sự vật/mô hình/etc... Cụ thể nào trong đống đó thì hãy chỉ kéo riêng mình nó về dùng vào `pack/` 
 
-Trong monorepo đã tự động: kho khai ở `vault.json`, `bun run new-film <tên>` (hoặc `bun run link`) nối jar, mcasset, mcprep (rig), motion vào phim. Không nối tay.
-- <vault_path>/packs: kho gói mod/resource pack đã lọc (không nối vào phim; chỉ cherry-pick file cần dùng bằng `packages/mc-assets/pick.py`)
+- <vault_path>/packs: kho gói mod/resource pack đã lọc (không nối vào phim, chỉ cherry-pick file cần dùng)
 
 ## Using
-- Tìm và cho dev xem mẫu 3-6 variants mà m cho là hợp lý nhất (đổi qua lại trong studio: `packages/mc-assets/src/variants.ts`)
+- Tìm và cho dev xem mẫu 3-6 variants mà m cho là hợp lý nhất
 
 ## Repo
 
@@ -21,13 +20,12 @@ Trong monorepo đã tự động: kho khai ở `vault.json`, `bun run new-film <
 - Điểm mạnh:
   - GuiObject: In chữ pixel chuẩn game (ví dụ nhãn camera an ninh, phụ đề, mã phòng) và các bảng giao diện hotbar, thanh máu lên lớp phủ 2D.
   - EntityObject: Chứa sẵn toàn bộ mô hình sinh vật trích xuất từ Java code kèm xương và hoạt ảnh bước chân (walk cycle) tự nhiên khớp với trục thời gian.
-  - Trong monorepo: `packages/mc-actor/src/mob.ts` loadMob(tên), 209 con, đã có đèn. Cấm dựng mob từng khối.
 
 ### [MCprep](https://github.com/Moo-Ack-Productions/MCprep) (player.glb)
 - Vai trò: Diễn viên người chơi chính (Steve, Alex hoặc skin tùy biến).
 - Điểm mạnh: Khớp uốn cong khuỷu tay và đầu gối 90 độ mượt mà không rách lưới. Rig chỉ có 13 khớp thân, không có xương mặt hay ngón tay: mắt, mày, miệng là mảnh nổi trên đầu do `packages/mc-actor/src/player.ts` vẽ.
 - Ghi nhận quyền tác giả: BoxScape Studios và TheDuckCow theo giấy phép CC-BY 3.0.
-- Cử động người thật: lấy clip UAL1/UAL2 (thiếu thì Mixamo), chép sang Steve theo VỊ TRÍ khớp (không chép góc xoay từ tư thế gốc: ra gù, xoắn chân), rồi cho qua khoá chân + IK; không dùng video -> chuyển động. Trong monorepo đã có sẵn: `packages/mc-actor` (mocap, clips, perform, feet).
+- Cử động người thật: lấy clip UAL1/UAL2 (thiếu thì Mixamo), chép sang Steve theo VỊ TRÍ khớp (không chép góc xoay từ tư thế gốc: ra gù, xoắn chân), rồi cho qua khoá chân + IK; không dùng video -> chuyển động.
 
 ### Modrinth API
 - Vai trò: Tìm kiếm và tải tài nguyên tự động, sạch bản quyền.
