@@ -21,11 +21,11 @@ import { AudioMeter } from "../sound/AudioMeter";
 export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null }) {
   const sound = useStudio((s) => s.sound), cam = useStudio((s) => s.cam), keys = useStudio((s) => !!s.keyFiles?.length);
   const [shotsH, setShotsH] = useStoredSize("studio.row.shots"), [voiceH, setVoiceH] = useStoredSize("studio.row.voice"), [actionH, setActionH] = useStoredSize("studio.row.action");
-  const L = rowLayout({ shots: shotsH, voice: voiceH, action: actionH }, sound);
+  const L = rowLayout({ shots: shotsH, voice: voiceH, action: actionH }, sound, cam);
   useLayoutEffect(() => { setRowLayout(L); drawTimelines(); }, [L.shots, L.voice, L.action, L.height]);
   // Each row's bottom edge in the name column sizes it, as a track's edge does in CapCut
   const rows = [
-    { label: "Shots", y: L.shots / 2, edge: L.shots + 1, size: shotsH, now: L.shots, set: setShotsH, min: ROW_MIN.shots, max: ROW_MAX.shots },
+    ...cam ? [] : [{ label: "Shots", y: L.shots / 2, edge: L.shots + 1, size: shotsH, now: L.shots, set: setShotsH, min: ROW_MIN.shots, max: ROW_MAX.shots }],
     { label: "Voice", y: L.voiceY + (L.voice - WORDS_H) / 2, edge: L.actionY - 1, size: voiceH, now: L.voice, set: setVoiceH, min: ROW_MIN.voice, max: ROW_MAX.voice },
     { label: "Action", y: L.actionY + 7, edge: L.actionY + L.action, size: actionH, now: L.action, set: setActionH, min: ROW_MIN.action, max: ROW_MAX.action },
   ];

@@ -107,6 +107,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 
 - Color oscilloscope: RGB parade, RGB waveform, vectorscope ở ⋯ Settings > Heavy.
 - Giao diện: tab đang mở chữ xanh ngọc kèm gạch mỏng (gạch là dev chọn, CapCut không có); thứ đang chọn viền trắng trên mọi hàng (clip, khối shot, kim cương).
+- Hàng Shots gộp vào hàng Camera: tên shot nằm trên khối camera như clip của CapCut, dưới thước giờ chỉ còn dải mỏng cho vạch đỏ (cảnh đứng yên quá 6 s) và note. Phim không có hàng Camera vẫn giữ hàng Shots.
 - Track âm thanh: bấm tên track chọn mọi clip của nó, nhấp đúp (F2) đổi tên, thả clip vào dải dưới cùng tạo track mới, track rỗng tự mất.
 - Chọn clip: Ctrl+A chọn mọi clip, [ và ] chọn mọi clip bên trái/phải playhead, chuột phải clip có menu.
 - Bấm chỗ trống ở hàng keyframe và hàng âm thanh chỉ bỏ chọn, playhead đứng yên (chỉ thước giờ hoặc vạch playhead mới dời được).

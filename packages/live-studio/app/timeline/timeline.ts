@@ -11,7 +11,7 @@ import { pad, stamp } from "../core/time";
 import { stored } from "../core/storage";
 import { PICK, sized, UI_FONT } from "./canvas";
 import { boxEnd, boxMove, boxStart } from "./rowbox";
-import { LANE_H, rows, WORDS_H } from "./rows";
+import { LANE_H, rows, SHOTS_STRIP, WORDS_H } from "./rows";
 import { S } from "../core/state";
 import { get, say, set, setPref } from "../core/store";
 import { seek, setPlaying } from "../playback/transport";
@@ -22,7 +22,7 @@ const HOLDS = new Set(["zz", "note1", "code", "typing"]); // these say when some
 const SHADES = ["#1C1B1A", "#282726"];
 
 
-type Box = { type: "beat"; id: string; x0: number; x1: number; y0: number; y1: number } | { type: "line" | "gap" | "cut"; i: number; x0: number; x1: number; y0: number; y1: number };
+type Box = { type: "beat"; id: string; x0: number; x1: number; y0: number; y1: number } | { type: "line" | "gap"; i: number; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
 let selected: { type: "beat"; id: string } | { type: "line"; i: number } | null = null;
 let stuck: [number, number][] = [];
@@ -152,19 +152,21 @@ const drawDetail = () => {
   const { shots: SH, voiceY: VY, actionY: AY } = rows, VH = rows.voice - WORDS_H; // VH: the wave's height, the words go under it
   g.fillStyle = "#100F0F"; g.fillRect(0, 0, w, h);
   g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
+  const named = SH > SHOTS_STRIP; // no Camera row: the shots' names are here
   SHOTS.forEach((s, i) => {
     const e = shotEnd(i);
     if (e < a || s.t > b) return;
     const x0 = Math.max(0, X(s.t)), x1 = Math.min(w, X(e));
-    g.fillStyle = i === shotIndex(t) ? "#403E3C" : SHADES[i % 2];
-    g.fillRect(x0, 0, x1 - x0 - 1, SH);
-    g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0 - 3, SH); g.clip();
-    g.fillStyle = "#CECDC3"; g.fillText(`${i} ${S.comments[i] ?? ""}`, x0 + 4, SH / 2);
-    g.restore();
+    if (named) {
+      g.fillStyle = i === shotIndex(t) ? "#403E3C" : SHADES[i % 2];
+      g.fillRect(x0, 0, x1 - x0 - 1, SH);
+      g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0 - 3, SH); g.clip();
+      g.fillStyle = "#CECDC3"; g.fillText(`${i} ${S.comments[i] ?? ""}`, x0 + 4, SH / 2);
+      g.restore();
+    }
     g.fillStyle = "#343331"; g.fillRect(X(s.t), SH, 1, h - SH);
   });
   boxes = [];
-  SHOTS.forEach((s, i) => { if (i && s.t >= a && s.t <= b) boxes.push({ type: "cut", i, x0: X(s.t) - 4, x1: X(s.t) + 4, y0: 0, y1: SH }); });
   g.fillStyle = "#D14D41";
   for (const [x, y] of stuck) if (y > a && x < b) g.fillRect(X(x), SH - 2, X(y) - X(x), 3);
   // Voice: each sentence's pace behind the wave
