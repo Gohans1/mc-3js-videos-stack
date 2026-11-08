@@ -8,6 +8,7 @@ import { stored } from "../core/storage";
 import { get, say, set, ui } from "../core/store";
 import { SAME, stamp } from "../core/time";
 import { pinFade } from "./pinfade";
+import { shapeOf } from "./shape";
 import { type Hit, type InkKind, type Mark, type Note } from "./slice";
 
 export const INK = "#CE5D97", SAVED_INK = "#4385BE";
@@ -29,6 +30,11 @@ export const setInk = (tool: InkKind | null) => {
   S.dirty = true;
   if (!tool && get().compose && !PHONE) ui.focusNote();
 };
+
+// The drawing tools are on screen: one in hand (InkBar), or a note's pin just placed (PinTools). Then 1 to 4 pick them in this order
+export const INK_KEYS: InkKind[] = ["pen", "arrow", "box", "path"];
+export const toolsOpen = (s: { ink: InkKind | null; compose: { pin: unknown; editing?: string } | null; playing: boolean }) =>
+  !!s.ink || !!(s.compose?.pin && !s.compose.editing && !s.playing);
 
 // Every second a note's strokes were drawn at, first to last
 export const inkTimes = (marks: Mark[]) => {
@@ -61,6 +67,15 @@ const label = (g: CanvasRenderingContext2D, text: string, x: number, y: number, 
   const tw = g.measureText(text).width, pad = 3 * scale, hh = 15 * scale;
   g.fillStyle = "rgba(0,0,0,.78)"; g.fillRect(x, y - hh / 2, tw + pad * 2, hh);
   g.fillStyle = color; g.fillText(text, x + pad, y + 0.5);
+};
+// A note's words under where its drawing starts, as a pin's (studio.css .pin i): one line cut with an ellipsis, inside the picture
+const words = (g: CanvasRenderingContext2D, text: string, [x, y]: [number, number], w: number, h: number, scale: number) => {
+  g.font = `600 ${Math.round(11 * scale)}px system-ui,Segoe UI,sans-serif`;
+  let s = text.replace(/\s+/g, " ").trim();
+  const most = 240 * scale;
+  if (g.measureText(s).width > most) { while (s && g.measureText(`${s}…`).width > most) s = s.slice(0, -1); s = `${s.trimEnd()}…`; }
+  const lw = g.measureText(s).width + 6 * scale;
+  label(g, s, Math.max(4, Math.min(w - lw - 4, x * w - lw / 2)), y * h + (y > 0.88 ? -18 : 18) * scale, "#CECDC3", scale);
 };
 // One mark as seen at film second `now`: solid on its own frame, faint with its time elsewhere
 export const drawMark = (g: CanvasRenderingContext2D, m: Mark, now: number, w: number, h: number, color: string, scale = 1, alpha = 1) => {
@@ -125,48 +140,95 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
       const fade = S.t >= sp[0] && S.t <= sp[1] ? 1 : Math.max(pinFade(sp[0], S.t, rate), pinFade(sp[1], S.t, rate));
       if (fade <= 0) continue;
       for (const m of marks) drawMark(g, m, S.t, w, h, SAVED_INK, scale, fade);
-      if (!n.pin && n.text) { const [x, y] = marks[0].pts[0]; g.globalAlpha = fade; label(g, n.text.length > 60 ? `${n.text.slice(0, 58)}…` : n.text, x * w + 10, y * h + 16, "#CECDC3", scale); g.globalAlpha = 1; }
+      if (!n.pin && n.text) { g.globalAlpha = fade; words(g, n.text, marks[0].pts[0], w, h, scale); g.globalAlpha = 1; }
     }
   }
   for (const m of inkMarks) drawMark(g, m, S.t, w, h, INK, scale);
+  const { compose, draft } = get();
+  if (inkMarks.length && compose && !compose.pin && draft.trim()) words(g, draft, inkMarks[0].pts[0], w, h, scale);
 };
 
 // ---------- Drawing with the pointer. look(x, y) names what is under a point at the current frame, as a pin's tap does
-export const attachInk = (opts: { look: (x: number, y: number) => Hit; begin: () => void; pause: () => void }) => {
+let hooks = { look: (_x: number, _y: number): Hit => ({ what: "" }), begin: () => {}, pause: () => {} };
+let live: Mark | null = null, sketching = false;
+const at = (e: PointerEvent): [number, number] => {
+  const r = S.el.ink.getBoundingClientRect();
+  return [+Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)).toFixed(4), +Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)).toFixed(4)];
+};
+const startStroke = (kind: "pen" | "arrow" | "box", p: [number, number]) => {
+  hooks.pause();
+  hooks.begin();
+  live = { kind, t: +S.t.toFixed(3), pts: kind === "pen" ? [p] : [p, p] };
+  inkMarks.push(live);
+  S.dirty = true;
+};
+const moveStroke = (e: PointerEvent) => {
+  if (!live) return;
+  const p = at(e);
+  if (live.kind === "pen") {
+    const [x, y] = live.pts.at(-1)!, r = S.el.ink.getBoundingClientRect();
+    if (Math.hypot((p[0] - x) * r.width, (p[1] - y) * r.height) >= 2) live.pts.push(p);
+  } else live.pts[1] = p;
+  S.dirty = true;
+};
+const NAMES = { pen: "Pen stroke", arrow: "Arrow", box: "Box" } as const;
+const endStroke = () => {
+  const m = live, smart = sketching;
+  live = null; sketching = false;
+  if (!m) return;
+  const r = S.el.ink.getBoundingClientRect(), [a, b] = [m.pts[0], m.pts.at(-1)!];
+  const big = Math.hypot((b[0] - a[0]) * r.width, (b[1] - a[1]) * r.height) >= 8 || (m.kind === "pen" && m.pts.length > 3);
+  if (!big) { inkMarks.pop(); S.dirty = true; return; }
+  if (smart) {
+    const kind = shapeOf(m.pts.map(([x, y]) => [x * r.width, y * r.height]));
+    const xs = m.pts.map((p) => p[0]), ys = m.pts.map((p) => p[1]);
+    if (kind === "arrow") m.pts = [a, b];
+    if (kind === "box") m.pts = [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]];
+    m.kind = kind;
+    say(`${NAMES[kind]} · Ctrl+Z takes it back`, 2500);
+  }
+  const [p, q] = [m.pts[0], m.pts.at(-1)!];
+  m.hits = m.kind === "box" ? [hooks.look((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)] : [hooks.look(...p), hooks.look(...q)];
+  keep();
+};
+const dropStroke = () => { if (live) { inkMarks.pop(); live = null; S.dirty = true; } sketching = false; };
+// A drag with the right mouse button, a tool in hand or not (picture/pointer.ts on the picture): drawn as a pen stroke, then on
+// release made the arrow, box or pen stroke its shape reads as (shape.ts)
+export const sketch = {
+  start: (e: PointerEvent, from: PointerEvent) => { sketching = true; startStroke("pen", at(from)); moveStroke(e); },
+  move: moveStroke,
+  end: endStroke,
+  drop: dropStroke,
+  on: () => sketching,
+};
+export const attachInk = (opts: typeof hooks) => {
   const c = S.el.ink;
-  let live: Mark | null = null, down: [number, number] | null = null;
-  const at = (e: PointerEvent): [number, number] => {
-    const r = c.getBoundingClientRect();
-    return [+Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)).toFixed(4), +Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)).toFixed(4)];
-  };
+  hooks = opts;
+  let down: [number, number] | null = null, right: PointerEvent | null = null;
+  c.addEventListener("contextmenu", (e) => e.preventDefault());
   c.addEventListener("pointerdown", (e) => {
     const tool = get().ink;
-    if (!tool || e.button !== 0) return;
+    if (!tool || (e.button !== 0 && e.button !== 2)) return;
     e.preventDefault();
     c.setPointerCapture(e.pointerId);
-    opts.pause();
-    opts.begin();
+    if (e.button === 2) { right = e; return; }
     const p = at(e);
     down = p;
-    if (tool !== "path") { live = { kind: tool, t: +S.t.toFixed(3), pts: tool === "pen" ? [p] : [p, p] }; inkMarks.push(live); S.dirty = true; }
+    if (tool === "path") { hooks.pause(); hooks.begin(); } else startStroke(tool, p);
   });
   c.addEventListener("pointermove", (e) => {
-    if (!live) return;
-    const p = at(e);
-    if (live.kind === "pen") {
-      const [x, y] = live.pts.at(-1)!, r = c.getBoundingClientRect();
-      if (Math.hypot((p[0] - x) * r.width, (p[1] - y) * r.height) >= 2) live.pts.push(p);
-    } else live.pts[1] = p;
-    S.dirty = true;
+    if (right && !sketching && Math.hypot(e.clientX - right.clientX, e.clientY - right.clientY) > 4) sketch.start(e, right);
+    else moveStroke(e);
   });
   const up = (e: PointerEvent) => {
     const tool = get().ink;
+    if (right) { right = null; endStroke(); return; }
     if (tool === "path" && down) {
       const p = at(e);
       down = null;
       let m = inkMarks.find((x) => x.kind === "path");
       if (!m) { m = { kind: "path", t: +S.t.toFixed(3), pts: [], ts: [], hits: [] }; inkMarks.push(m); }
-      const hit = opts.look(...p), same = m.ts!.findIndex((t) => Math.abs(t - S.t) <= SAME);
+      const hit = hooks.look(...p), same = m.ts!.findIndex((t) => Math.abs(t - S.t) <= SAME);
       if (same >= 0) { m.pts[same] = p; m.hits![same] = hit; } // the same moment again moves its point
       else {
         const i = m.ts!.findIndex((t) => t > S.t), k = i < 0 ? m.ts!.length : i;
@@ -177,17 +239,11 @@ export const attachInk = (opts: { look: (x: number, y: number) => Hit; begin: ()
       say(m.pts.length === 1 ? "Point 1. Now jump to another second and click the next point" : `Point ${m.pts.length} at ${stamp(S.t)}`, 4000);
       return;
     }
-    const m = live;
-    live = null; down = null;
-    if (!m) return;
-    const r = c.getBoundingClientRect(), [a, b] = [m.pts[0], m.pts.at(-1)!];
-    const big = Math.hypot((b[0] - a[0]) * r.width, (b[1] - a[1]) * r.height) >= 8 || (m.kind === "pen" && m.pts.length > 3);
-    if (!big) { inkMarks.pop(); S.dirty = true; return; }
-    m.hits = m.kind === "box" ? [opts.look((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)] : [opts.look(...a), opts.look(...b)];
-    keep();
+    down = null;
+    endStroke();
   };
   c.addEventListener("pointerup", up);
-  c.addEventListener("pointercancel", () => { if (live) { inkMarks.pop(); live = null; S.dirty = true; } down = null; });
+  c.addEventListener("pointercancel", () => { dropStroke(); down = right = null; });
 };
 
 // What a note's strokes say, in words, for the note list and the copied text

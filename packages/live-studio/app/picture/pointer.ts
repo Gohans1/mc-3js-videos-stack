@@ -1,8 +1,10 @@
 // The picture's size, and what the mouse and keys do on it, as in a 3D editor's viewport: a click picks an object (or a title,
-// text/onpicture.ts), the right button pins a note; a tap on a phone, which has no right button, pins the note. Dragging and the
-// flying keys move the free camera, and a left drag on the film's own view turns the free camera on from that view, turning
+// text/onpicture.ts), the right button pins a note and a right drag draws one (notes/ink.ts sketch); a tap on a phone, which has
+// no right button, pins the note. Dragging and the flying keys move the free camera, and a left drag on the film's own view turns
+// the free camera on from that view, turning
 import { S } from "../core/state";
 import { get } from "../core/store";
+import { sketch } from "../notes/ink";
 import { openNote } from "../notes/notes";
 import { textPress } from "../text/onpicture";
 import { gizmoBusy, hover, pickAt, select } from "../objects/placed";
@@ -21,16 +23,28 @@ export const attachPicture = () => {
   new ResizeObserver(fit).observe(S.el.view);
   let downAt: [number, number] | null = null, camDrag: { x: number; y: number; mode: "look" | "orbit" | "slide" } | null = null;
   let wake: { x: number; y: number; id: number; orbit: boolean } | null = null; // a left press on the film's view, a drag once it moves
+  let right: PointerEvent | null = null; // a right press on the film's view: a note pinned, or a drawing once it moves
   const frac = (e: MouseEvent) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const; };
   canvas.addEventListener("pointerdown", (e) => {
     if (gizmoBusy()) { downAt = null; return; } // the gizmo's handle under the pointer takes this drag
     if (!S.tools?.free.on && textPress(e, frac(e))) { downAt = null; return; } // a title on the picture: picked and dragged
     downAt = [e.clientX, e.clientY];
-    if (!S.tools?.free.on) { if (e.pointerType === "mouse" && e.button === 0) wake = { x: e.clientX, y: e.clientY, id: e.pointerId, orbit: e.shiftKey }; return; }
+    if (!S.tools?.free.on) {
+      if (e.pointerType === "mouse" && e.button === 0) wake = { x: e.clientX, y: e.clientY, id: e.pointerId, orbit: e.shiftKey };
+      if (e.pointerType === "mouse" && e.button === 2) right = e;
+      return;
+    }
     canvas.setPointerCapture(e.pointerId);
     camDrag = { x: e.clientX, y: e.clientY, mode: e.button !== 0 ? "slide" : e.shiftKey ? "orbit" : "look" };
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (right && !sketch.on() && Math.hypot(e.clientX - right.clientX, e.clientY - right.clientY) > 4) {
+      canvas.setPointerCapture(right.pointerId);
+      sketch.start(e, right);
+      downAt = null;
+      hover(null);
+    }
+    if (sketch.on()) { sketch.move(e); return; }
     if (wake && Math.hypot(e.clientX - wake.x, e.clientY - wake.y) > 4 && S.tools) {
       setFree(true, true);
       canvas.setPointerCapture(wake.id);
@@ -47,7 +61,8 @@ export const attachPicture = () => {
     else { const s = f.p.distanceTo(f.l) * 0.0012; moveCam(0, -dx * s, dy * s); }
     S.viewMoved = true;
   });
-  addEventListener("pointerup", () => { camDrag = wake = null; });
+  addEventListener("pointerup", () => { camDrag = wake = right = null; });
+  canvas.addEventListener("pointercancel", () => { sketch.drop(); right = null; });
   canvas.addEventListener("pointerleave", () => hover(null));
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   // Flying keys, by their place on the keyboard (any layout). Typing a note or a shortcut with Ctrl never flies. Any other key,
@@ -86,6 +101,7 @@ export const attachPicture = () => {
   });
   canvas.addEventListener("pointerup", (e) => {
     if (e.button !== 2 || e.pointerType !== "mouse") return;
+    if (sketch.on()) { sketch.end(); return; }
     const at = tapped(e);
     if (at) pinNote(...at);
   });

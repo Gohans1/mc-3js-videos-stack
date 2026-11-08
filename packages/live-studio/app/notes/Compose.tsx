@@ -1,15 +1,16 @@
 // The note being written. Every keystroke is kept on the device (notes/notes.ts setDraft), so a reload never loses it.
 // On an upright phone it sits right under the picture, so the keyboard can't cover it and a tap still lands on the picture
 import { TriangleAlert } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PHONE } from "../core/device";
 import { rangeText, stamp } from "../core/time";
 import { inOutAt } from "../timeline/inout";
+import { INK_KEYS, setInk, toolsOpen } from "./ink";
 import { cancelNote, saveNote, setDraft } from "./notes";
-import { ui, useStudio } from "../core/store";
+import { get, ui, useStudio } from "../core/store";
 
 export function Compose() {
   const compose = useStudio((s) => s.compose), draft = useStudio((s) => s.draft), drawn = useStudio((s) => s.inkSaid);
@@ -20,6 +21,10 @@ export function Compose() {
     ui.blurNote = () => text.current?.blur();
   }, []);
   const open = !!compose;
+  // A pin just placed gives the box the keys and shows the drawing tools: until a word is typed or the box is clicked, 1 to 4
+  // pick a tool here as they do anywhere else. Click the box first to start a note with a digit
+  const [drawKeys, setDrawKeys] = useState(false), pin = compose?.pin;
+  useEffect(() => setDrawKeys(!!pin && !compose?.editing), [pin, compose?.editing]);
   // A phone keyboard doesn't report which key it pressed: its Enter only shows up as a line break arriving. Listened to on the
   // element itself: React's onBeforeInput is its own event, built from keypress and textInput, and never says insertLineBreak
   useEffect(() => {
@@ -48,13 +53,15 @@ export function Compose() {
         ref={text}
         name="note"
         aria-label="Note"
-        placeholder="Type or dictate…"
+        placeholder={drawKeys ? "Type or dictate… or press 1–4 to draw" : "Type or dictate…"}
         enterKeyHint="done"
         autoComplete="off"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        onPointerDown={() => setDrawKeys(false)}
         onKeyDown={(e) => {
           e.stopPropagation();
+          if (drawKeys && !draft && /^[1-4]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey && toolsOpen(get())) { e.preventDefault(); setInk(INK_KEYS[+e.key - 1]); return; }
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveNote(); }
           else if (e.key === "Escape") { e.preventDefault(); cancelNote(); }
         }}

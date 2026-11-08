@@ -13,9 +13,13 @@
   .stage-caption-text { background: rgb(0 0 0 / 0.62); padding: 3px 10px; border-radius: 6px; color: var(--picture); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
   .pin { position: absolute; width: 18px; height: 18px; margin: -11px 0 0 -11px; border: 2px solid var(--primary); border-radius: 50%; box-shadow: 0 0 0 1px #000; }
   .pin.saved { border-color: #4385BE; width: 12px; height: 12px; margin: -8px 0 0 -8px; }
-  .pin i { position: absolute; left: 24px; top: -3px; background: rgb(0 0 0 / 0.8); color: var(--foreground); padding: 1px 6px; font-style: normal; white-space: nowrap; border-radius: 4px; font-size: 12px; }
-  .pin.saved i { left: 18px; top: -5px; width: max-content; max-width: 260px; white-space: normal; line-height: 1.35; padding: 3px 7px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-  .pin.saved i.left { left: auto; right: 18px; }
+  /* A pin's words, one line under it (over it near the bottom edge), cut with an ellipsis; the note list has the whole text.
+     notes.ts drawPins slides it sideways to stay inside the picture */
+  .pin i {
+    position: absolute; left: 50%; top: calc(100% + 6px); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 2px 7px; border-radius: 4px; background: rgb(0 0 0 / 0.8); color: var(--foreground); font: 500 12px/1.35 var(--font-sans); font-style: normal;
+  }
+  .pin i.up { top: auto; bottom: calc(100% + 6px); }
   /* A sound carried from the library to a lane (sound/lanes.ts) */
   .carry {
     position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; padding: 3px 8px; border-radius: 6px;

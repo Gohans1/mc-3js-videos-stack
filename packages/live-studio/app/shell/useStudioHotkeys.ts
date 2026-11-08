@@ -7,7 +7,7 @@ import { DURATION } from "film/scene";
 import { AWAY } from "../core/device";
 import { FPS } from "../core/time";
 import { nextNoteTime, openNote } from "../notes/notes";
-import { setInk, undoInk } from "../notes/ink";
+import { INK_KEYS, setInk, toolsOpen, undoInk } from "../notes/ink";
 import { chooseInGroup } from "../options/options";
 import { jumpShot, nudgeVolume, seek, setPlaying, shuttleOn, togglePlay } from "../playback/transport";
 import { setFinal } from "../picture/render";
@@ -83,7 +83,7 @@ export function useStudioHotkeys() {
     // CapCut's Copy attributes and Paste attributes: one pick's settings onto other picks of its kind (timeline/attributes.ts)
     { hotkey: "Mod+Alt+C", callback: clip(copyAttrs), options: clipKey },
     { hotkey: "Mod+Alt+V", callback: clip(askPaste), options: clipKey },
-    { hotkey: "Mod+Z", callback: () => { if (!(get().ink && undoInk())) undo(); } },
+    { hotkey: "Mod+Z", callback: () => { if (!((get().ink || get().inkSaid) && undoInk())) undo(); } }, // a note's strokes first
     { hotkey: "Mod+Shift+Z", callback: redo },
     { hotkey: "Mod+Y", callback: redo },
     // Every kind picked at once (a box across the rows picks clips, camera keys and keys together; timeline/across.ts)
@@ -130,7 +130,8 @@ export function useStudioHotkeys() {
     { hotkey: "Escape", callback: () => setKey(null), options: { enabled: !settingsOpen && !ink && !blade && (camKey !== null || camPicks > 0) } },
     { hotkey: "Escape", callback: () => pickKeys([]), options: { enabled: !settingsOpen && !ink && !blade && keyPicks > 0 } },
     { hotkey: "Escape", callback: () => select(null), options: { enabled: !settingsOpen && !ink && !blade && object !== null } },
-    ...Array.from({ length: 10 }, (_, i) => ({ hotkey: String(i), callback: () => chooseInGroup(i) }) as UseHotkeyDefinition),
+    // 1 to 4 pick a drawing tool while the tools are on screen, else every digit picks an alternative
+    ...Array.from({ length: 10 }, (_, i) => ({ hotkey: String(i), callback: () => (i >= 1 && i <= 4 && toolsOpen(get()) ? setInk(INK_KEYS[i - 1]) : chooseInGroup(i)) }) as UseHotkeyDefinition),
     // W A S D, Space, Shift, Q and E fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts
   ];
   // A box open over the page (Paste attributes?) takes the keys: Delete or Space must not reach the timeline under it

@@ -8,7 +8,7 @@ import { PHONE } from "../core/device";
 import { FPS, stamp } from "../core/time";
 import { stored } from "../core/storage";
 import { NOTE_FADE, pinFade } from "./pinfade";
-import { clearInk, drawMark, INK, inkHooks, inkMarks, inkSpan, inkTimes, inkWords, restoreInk } from "./ink";
+import { clearInk, drawInk, drawMark, INK, inkHooks, inkMarks, inkSpan, inkTimes, inkWords, restoreInk } from "./ink";
 import { camLine } from "../camera/camline";
 import { captionAt } from "../picture/captions";
 import { frameSize } from "../picture/frame";
@@ -210,6 +210,8 @@ const showUndo = (title: string, undo: () => void) => {
 // What's being typed is on the device from the first letter: a reload or a killed tab brings it back
 export const setDraft = (words: string) => {
   set({ draft: words });
+  drawPins(); // the words show on the picture as they are typed
+  drawInk(drawnNotes);
   const { compose } = get();
   if (compose && (words.trim() || inkMarks.length)) stored.set("noteDraft", JSON.stringify({ compose, words }));
   else stored.remove("noteDraft");
@@ -371,24 +373,31 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) flus
 // ---------- The pins on the picture: saved notes on their frame, fading as the film plays on, and the one being written. Each
 // keeps its element from frame to frame, only its fade changing; the one being written stays on top
 const pinEls = new Map<string, HTMLDivElement>();
+export const pinWordsUp = (y: number) => y > 0.88; // PinTools keeps clear of them
 export const drawPins = () => {
   const box = S.el?.pins;
   if (!box) return;
   const own = get().compose?.pin, want = pinsHere().map((p) => ({ ...p, saved: true }));
-  if (own) want.push({ id: "", pin: own, text: own.what, fade: 1, saved: false });
+  if (own) want.push({ id: "", pin: own, text: get().draft.trim() || own.what, fade: 1, saved: false });
   const now = new Set<string>();
   for (const p of want) {
     const key = `${p.id}|${p.pin.x}|${p.pin.y}|${p.text}`;
     now.add(key);
     let d = pinEls.get(key);
-    // A saved note shows its words, the one being written what was tapped; past 60% across the words go on the left to stay in frame
+    // A note shows its words, the one being written what was tapped until words come; each stays inside the picture's edges
     if (!d) {
       d = document.createElement("div");
       d.className = p.saved ? "pin saved" : "pin";
       d.style.left = `${p.pin.x * 100}%`; d.style.top = `${p.pin.y * 100}%`;
-      if (p.text) { const i = document.createElement("i"); i.textContent = p.text; if (p.pin.x > 0.6) i.className = "left"; d.append(i); }
+      if (p.text) { const i = document.createElement("i"); i.textContent = p.text; if (pinWordsUp(p.pin.y)) i.className = "up"; d.append(i); }
       pinEls.set(key, d);
       box.append(d);
+    }
+    const words = d.firstElementChild as HTMLElement | null, bw = box.clientWidth;
+    if (words && bw && d.dataset.w !== String(bw)) {
+      d.dataset.w = String(bw);
+      const x = p.pin.x * bw, lw = words.offsetWidth;
+      words.style.translate = `${Math.max(4 - x, Math.min(bw - 4 - lw - x, -lw / 2))}px 0`;
     }
     const fade = p.fade < 1 ? String(p.fade) : "";
     if (d.style.opacity !== fade) d.style.opacity = fade;
