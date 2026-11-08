@@ -17,7 +17,7 @@ import { get, noSnap, say } from "../core/store";
 import { r3, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { bladeLine } from "../timeline/blade";
-import { keyReach, REACH, sized, UI_FONT } from "../timeline/canvas";
+import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxPick, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { animOf, lenOf, pickShot, shotSpan } from "./anim";
@@ -26,7 +26,7 @@ import { shotsDoc } from "./shots";
 
 const COLOR = {
   bg: "#100F0F", block: "#164F4A", hover: "#1A5A54", head: "#123E3A", text: "#E6E4D9", dim: "#9FBDB8",
-  speed: "rgba(208,162,21,.32)", speedLine: "#D0A215", key: "#E6E4D9", cut: "#878580", pick: "#3AA99F", picked: "#FFFCF0", anim: "rgba(255,252,240,.55)",
+  speed: "rgba(208,162,21,.32)", speedLine: "#D0A215", key: "#E6E4D9", cut: "#878580", anim: "rgba(255,252,240,.55)",
 };
 const PAD = 2, HEAD = 15, BAND = 4, FOOT = 3; // FOOT: room under the bands for the picked outline
 
@@ -85,7 +85,7 @@ const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => num
   if (an.in) g.fillRect(x0, foot, Math.max(3, X(s + lenOf(i, "in")) - x0), BAND);
   if (an.out) { const a = X(e - lenOf(i, "out")); g.fillRect(a, foot, Math.max(3, x1 - a), BAND); }
   g.restore();
-  if (get().shotPick === i) { g.strokeStyle = COLOR.picked; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 + 1, y0 + 1, bw - 2, y1 - y0 - 2, 3); g.stroke(); }
+  if (get().shotPick === i) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 + 1, y0 + 1, bw - 2, y1 - y0 - 2, 3); g.stroke(); }
 };
 
 export const drawCamRow = () => {
@@ -104,7 +104,7 @@ export const drawCamRow = () => {
     if (x < -REACH || x > w + REACH) return;
     g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath();
     g.fillStyle = k.cut || i === 0 ? COLOR.cut : COLOR.key; g.fill();
-    if (picked.has(i)) { g.strokeStyle = COLOR.pick; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - r - 3); g.lineTo(x + r + 3, y); g.lineTo(x, y + r + 3); g.lineTo(x - r - 3, y); g.closePath(); g.stroke(); }
+    if (picked.has(i)) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - r - 3); g.lineTo(x + r + 3, y); g.lineTo(x, y + r + 3); g.lineTo(x - r - 3, y); g.closePath(); g.stroke(); }
   });
   if (get().blade && bladeLine.row === "cam") {
     const x = Math.round(X(bladeLine.t));

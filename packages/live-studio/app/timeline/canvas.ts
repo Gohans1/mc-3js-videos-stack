@@ -1,7 +1,7 @@
 // What every timeline canvas draws and answers the pointer with (the stretch and the overview in timeline.ts, sound/lanes.ts,
 // camera/camrow.ts, keys/keyrows.ts), kept once so the rows look and behave alike
 export const UI_FONT = "system-ui,Segoe UI,Roboto,sans-serif";
-export const PICK = "#3AA99F"; // what is picked, on every row
+export const PICK = "#FFFCF0"; // what is picked, on every row: outlined white, as CapCut outlines a picked clip
 // How near a key the pointer must come to take it, in CSS pixels: a finger is less exact than a mouse
 export const REACH = 7;
 export const keyReach = (touch: boolean) => (touch ? REACH * 2 : REACH);

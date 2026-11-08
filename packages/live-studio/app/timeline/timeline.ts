@@ -9,7 +9,7 @@ import { shotEnd, shotIndex } from "../core/film";
 import { getFile } from "../core/net";
 import { pad, stamp } from "../core/time";
 import { stored } from "../core/storage";
-import { sized, UI_FONT } from "./canvas";
+import { PICK, sized, UI_FONT } from "./canvas";
 import { boxEnd, boxMove, boxStart } from "./rowbox";
 import { LANE_H, rows, WORDS_H } from "./rows";
 import { S } from "../core/state";
@@ -194,7 +194,7 @@ const drawDetail = () => {
     const y = BASE[m.kind] + lane * LANE_H, on = selected?.type === "beat" && selected.id === id;
     g.fillStyle = m.kind === "sound" ? "#5E409D" : HOLDS.has(id) ? "#4A5A12" : m.curve === "snap" ? "#BC5215" : "#205EA6";
     g.fillRect(x0, y, x1 - x0, 13);
-    if (on) { g.strokeStyle = "#3AA99F"; g.lineWidth = 2; g.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, 11); }
+    if (on) { g.strokeStyle = PICK; g.lineWidth = 2; g.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, 11); }
     g.fillStyle = "#E6E4D9"; g.fillText(m.title, x0 + 3, y + 7);
     g.fillStyle = "#3AA99F";
     for (const [off] of m.sounds) if (m.kind === "motion") g.fillRect(X(fromSource(m.at + off)), y + 10, 2, 3);

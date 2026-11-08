@@ -15,7 +15,7 @@ import { get, noSnap, say } from "../core/store";
 import { BLADE_CURSOR } from "../components/cursor";
 import { bladeLine } from "../timeline/blade";
 import { addClip, allClips, clipOf, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips, usesOf } from "./sound";
-import { drawMarquee, type Marquee, marqueeRect, sized, UI_FONT } from "../timeline/canvas";
+import { drawMarquee, type Marquee, marqueeRect, PICK, sized, UI_FONT } from "../timeline/canvas";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { addTrack, resolve, same } from "./tracks";
 import { seek, setPlaying } from "../playback/transport";
@@ -23,7 +23,7 @@ import { seek, setPlaying } from "../playback/transport";
 // sound/TrackHeads.tsx lays its rows out on these
 export const TRACK_H = 28, TOP = 2, ADD_H = 24;
 const CLIP_H = 24;
-const COLOR = { beds: "#403170", sfx: "#5E409D", wave: "rgba(214,204,240,.55)", text: "#E6E4D9", band: ["#151413", "#121110"], pick: "#3AA99F", tried: "#D0A215", lit: "#FFFCF0" };
+const COLOR = { beds: "#403170", sfx: "#5E409D", wave: "rgba(214,204,240,.55)", text: "#E6E4D9", band: ["#151413", "#121110"], drop: "#3AA99F", tried: "#D0A215", lit: "#FFFCF0" };
 const EDGE = 6, KNOB = 7; // KNOB: how near a fade handle the pointer must be, in px
 
 type Box = { ref: ClipRef; x0: number; x1: number; y0: number; y1: number };
@@ -69,8 +69,8 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   g.save(); g.beginPath(); g.rect(cx0, y, cx1 - cx0 - 2, CLIP_H); g.clip();
   g.fillStyle = COLOR.text; g.fillText(c.name, Math.max(x0, 0) + 4, y + 8);
   g.restore();
-  // Outside the clip, on the dark track (6.7:1); on the clip's own purple the ring would be 2.7:1
-  if (on) { g.strokeStyle = COLOR.pick; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
+  // Outside the clip, on the dark track, so the clip's own edge and fade handles stay seen
+  if (on) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
 };
 
 export const drawLanes = () => {
@@ -102,14 +102,14 @@ export const drawLanes = () => {
   }
   // The strip under the last track: where a clip is dropped to start a new one
   const addY = rowY(ts.length), active = drop?.row === ts.length;
-  g.strokeStyle = active ? COLOR.pick : "#343331"; g.setLineDash([4, 4]); g.lineWidth = 1;
+  g.strokeStyle = active ? COLOR.drop : "#343331"; g.setLineDash([4, 4]); g.lineWidth = 1;
   g.strokeRect(0.5, addY + 3.5, w - 1, ADD_H - 7); g.setLineDash([]);
-  g.fillStyle = active ? COLOR.pick : "#878580"; g.font = `12px ${UI_FONT}`;
+  g.fillStyle = active ? COLOR.drop : "#878580"; g.font = `12px ${UI_FONT}`;
   g.fillText(ts.length ? "Drop a clip here for a new track" : "Drag a sound here from the Audio tab", 8, addY + ADD_H / 2);
   if (drop) {
     const x = X(drop.at), y = rowY(drop.row), hh = drop.row === ts.length ? ADD_H : TRACK_H;
     g.fillStyle = "rgba(58,169,159,.18)"; g.fillRect(0, y, w, hh);
-    g.fillStyle = COLOR.pick; g.fillRect(x - 1, y, 2, hh);
+    g.fillStyle = COLOR.drop; g.fillRect(x - 1, y, 2, hh);
   }
   if (marquee) drawMarquee(g, marquee);
   if (get().blade && bladeLine.row === "lanes") {

@@ -10,11 +10,11 @@ import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, li
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { type KeyRef } from "./slice";
-import { drawMarquee, keyReach, type Marquee, marqueeRect, REACH, sized, UI_FONT } from "../timeline/canvas";
+import { drawMarquee, keyReach, type Marquee, marqueeRect, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { seek, setPlaying } from "../playback/transport";
 
-const COLOR = { bg: "#100F0F", band: ["#151413", "#121110"], lit: "#1C2C2A", head: "#1C1B1A", line: "#878580", hold: "#403E3C", key: "#E6E4D9", text: "#B7B5AC", pick: "#3AA99F", cut: "#2A2928" };
+const COLOR = { bg: "#100F0F", band: ["#151413", "#121110"], lit: "#1C2C2A", head: "#1C1B1A", line: "#878580", hold: "#403E3C", key: "#E6E4D9", text: "#B7B5AC", cut: "#2A2928" };
 const R = 4.5;
 
 
@@ -62,7 +62,7 @@ export const drawKeyRows = () => {
         g.restore();
       }
       diamond(g, x, y, R); g.fillStyle = COLOR.key; g.fill();
-      if (isPicked(ref)) { diamond(g, x, y, R + 3); g.strokeStyle = COLOR.pick; g.lineWidth = 2; g.stroke(); }
+      if (isPicked(ref)) { diamond(g, x, y, R + 3); g.strokeStyle = PICK; g.lineWidth = 2; g.stroke(); }
     });
   }
   // Cuts, faint, over everything: a key is often put on one by eye
