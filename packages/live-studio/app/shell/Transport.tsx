@@ -20,9 +20,10 @@ import { SnapshotButtons } from "../picture/Compare";
 import { Settings } from "./Settings";
 import { Tip } from "../components/Tip";
 
-const big = "h-12 gap-2 rounded-[10px] text-base font-semibold [&_svg:not([class*='size-'])]:size-5 upright:h-11 sideways:h-11";
-const square = `${big} w-12 px-0 text-muted-foreground hover:text-foreground upright:w-11 sideways:w-11`;
-const toggle = `${big} px-3 text-muted-foreground hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary`;
+// CapCut's player bar is one slim row under the picture: 32 px controls with a mouse, 40 px under a finger
+const big = "h-8 gap-1.5 px-2.5 text-[13px] pointer-coarse:h-10 pointer-coarse:text-sm";
+const square = `${big} w-8 px-0 text-muted-foreground hover:text-foreground pointer-coarse:w-10`;
+const toggle = `${big} text-muted-foreground hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary`;
 
 export function Transport() {
   const playing = useStudio((s) => s.playing), muted = useStudio((s) => s.muted), volume = useStudio((s) => s.volume);
@@ -30,12 +31,12 @@ export function Transport() {
   const guides = useStudio((s) => s.guides), ratio = useStudio((s) => s.ratio), night = useStudio((s) => s.nightVision), full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="@container col-start-1 row-start-2 in-data-wide:col-start-2 flex min-w-0 items-center gap-2 px-3 py-2.5 upright:flex-none upright:py-2 sideways:py-1.5">
-      <Button variant="secondary" className={`${big} min-w-32 bg-raised-3 hover:bg-raised-4 @max-[820px]:min-w-0 @max-[820px]:px-3.5`} aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>
+    <div className="@container col-start-1 row-start-2 in-data-wide:col-start-2 flex min-w-0 items-center gap-1.5 px-3 py-1 upright:flex-none">
+      <Button variant="secondary" className={`${big} min-w-19 bg-raised-3 hover:bg-raised-4 @max-[440px]:min-w-0`} aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>
         {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
         <span className="@max-[440px]:hidden">{playing ? "Pause" : "Play"}</span>
       </Button>
-      <Button className={`${big} min-w-fit flex-[0_1_200px] @max-[820px]:flex-auto upright:flex-1 sideways:flex-1`} onClick={() => openNote(null)} aria-label="Add note">
+      <Button className={`${big} px-3 upright:flex-1 sideways:flex-1`} onClick={() => openNote(null)} aria-label="Add note">
         <Pencil data-icon="inline-start" />
         <span className="@max-[420px]:hidden">Note</span>
       </Button>
@@ -68,7 +69,7 @@ export function Transport() {
           </Button>
         </Tip>
       )}
-      <div className="ml-auto flex items-center gap-1 upright:ml-0 sideways:ml-0">
+      <div className="ml-auto flex items-center gap-0.5 upright:ml-0 sideways:ml-0">
         <SnapshotButtons className={`${square} pointer-coarse:hidden @max-[600px]:hidden`} />
         <Tip label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}>
           <Button variant="ghost" className={`${square} aria-pressed:bg-tint aria-pressed:text-primary @max-[330px]:hidden`} aria-label="Guides" aria-pressed={guides} onClick={() => setPref("guides", !guides)}>
@@ -88,7 +89,7 @@ export function Transport() {
           </Button>
         </Tip>
         {/* Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes */}
-        <div className="flex h-10 w-26 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden upright:hidden sideways:hidden" title="Volume (Ctrl+↑ ↓)">
+        <div className="ms-1 flex h-8 w-24 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden upright:hidden sideways:hidden" title="Volume (Ctrl+↑ ↓)">
           <Slider
             min={0}
             max={1}

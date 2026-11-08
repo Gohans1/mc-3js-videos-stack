@@ -2,7 +2,7 @@
 // one above drawn over it on the picture. An item is dragged to move (up or down onto another track, above the top one for a new
 // track), by an edge to trim, with Alt held for a copy, and snaps to the playhead, cuts, words and other items' edges (Shift: no
 // snap). A box dragged over empty space picks what it touches here and on the rows below (timeline/rowbox.ts, across.ts); a click
-// on empty space only drops the pick, the playhead stays. Items are added from the Text library (TextLibrary.tsx).
+// on empty space drops the pick and moves the playhead there. Items are added from the Text library (TextLibrary.tsx).
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { together } from "../core/doc";
 import { S } from "../core/state";

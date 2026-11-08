@@ -4,8 +4,8 @@
 // snaps to the playhead, cuts, words and other clips' edges (Shift: no snap). The handle on each top corner of the clip under the
 // pointer or picked drags its fade in or out, as in CapCut and Premiere. A box dragged over empty space picks every clip
 // it touches (Shift/Ctrl add to the pick), and the keys of the other rows it crosses (timeline/rowbox.ts, across.ts); dragging
-// one picked clip moves all of it, and with Alt held copies of the clips alone (CapCut's drag to duplicate). A click on empty space only drops the pick, the playhead stays (it moves from the ruler or by its own
-// line); a touch dragged over empty space scrubs instead.
+// one picked clip moves all of it, and with Alt held copies of the clips alone (CapCut's drag to duplicate). A click on empty space
+// drops the pick and moves the playhead there (rowbox.ts boxEnd); a touch dragged over empty space scrubs instead.
 // A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
 // In split mode (blade.ts) a click on a clip cuts it there instead.
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
@@ -113,12 +113,9 @@ export const drawLanes = () => {
     if (shine) { g.strokeStyle = COLOR.lit; g.lineWidth = 1.5; g.beginPath(); g.roundRect(Math.max(-2, x0) - 1.5, y - 1.5, Math.min(w + 2, x1) - Math.max(-2, x0) + 3, CLIP_H + 3, 4); g.stroke(); }
     boxes.push({ ref, x0, x1, y0: y, y1: y + CLIP_H });
   }
-  // The strip under the last track: where a clip is dropped to start a new one
-  const addY = rowY(ts.length), active = drop?.row === ts.length;
-  g.strokeStyle = active ? COLOR.drop : "#343331"; g.setLineDash([4, 4]); g.lineWidth = 1;
-  g.strokeRect(0.5, addY + 3.5, w - 1, ADD_H - 7); g.setLineDash([]);
-  g.fillStyle = active ? COLOR.drop : "#878580"; g.font = `12px ${UI_FONT}`;
-  g.fillText(ts.length ? "Drop a clip here for a new track" : "Drag a sound here from the Audio tab", 8, addY + ADD_H / 2);
+  // The strip under the last track takes a dropped clip as a new track. As in CapCut it stays blank and lights only under a drag;
+  // words show only while there is no track at all, as CapCut's empty timeline asks for its first clip
+  if (!ts.length) { g.fillStyle = "#878580"; g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2); }
   if (drop) {
     const x = X(drop.at), y = rowY(drop.row), hh = drop.row === ts.length ? ADD_H : TRACK_H;
     g.fillStyle = "rgba(58,169,159,.18)"; g.fillRect(0, y, w, hh);

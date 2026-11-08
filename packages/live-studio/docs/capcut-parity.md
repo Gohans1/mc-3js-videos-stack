@@ -21,7 +21,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Timeline zoom, fit, preview axis: CÓ.
   - Ctrl+lăn chuột hoặc = và - để zoom timeline; Ctrl+ và Ctrl- để zoom trang như trình duyệt.
   - Shift+Z (nút kính lúp) vừa cả phim; thanh trượt zoom giữa nút - và + như CapCut; Alt+lăn hoặc Shift+lăn trượt ngang.
-  - Shift+P bật/tắt preview axis (phím của CapCut 9.7): rê chuột trên timeline xem khung đó, playhead đứng yên, đồng hồ chuyển vàng.
+  - Shift+P bật/tắt preview axis (phím của CapCut 9.7): rê chuột trên mọi hàng timeline xem khung đó, vạch vàng chạy từ thước giờ xuống đáy, playhead đứng yên, đồng hồ chuyển vàng.
   - Shift+S thêm tiếng (như "video and audio" của CapCut): rê chuột hay kéo playhead thì nghe vài khung tiếng ở đó, cả lời dẫn lẫn các track. Mặc định tắt.
 - Auto snapping (S, phím của CapCut 9.7): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác, bằng đầu nào của clip gần hơn; giữ Shift khi kéo để tắt tạm. Kéo đè lên clip khác quá tầm hít thì clip xuống track mới, như CapCut.
 - Track lock, hide, mute, solo:
@@ -112,10 +112,11 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 ## CapCut có, file 95% không ghi, studio đã làm
 
 - Color oscilloscope: RGB parade, RGB waveform, vectorscope ở ⋯ Settings > Heavy.
+- Thanh dưới hình mỏng như player bar của CapCut: nút cao 32 px với chuột, 40 px trên điện thoại.
 - Giao diện: tab đang mở chữ xanh ngọc kèm gạch mỏng (gạch là dev chọn, CapCut không có); thứ đang chọn viền trắng trên mọi hàng (clip, khối shot, kim cương); nền các hàng phẳng một màu như CapCut, không sọc.
 - Thanh Overview (cả phim) đã BỎ vì CapCut không có; điện thoại nằm ngang dùng thước giờ thay. Hàng Camera nằm trên cùng, dưới thước giờ (dev chọn), rồi Text, Voice, Action, keyframe, âm thanh.
 - Hàng Shots gộp vào hàng Camera: tên shot nằm trên khối camera như clip của CapCut, dưới thước giờ chỉ còn dải mỏng cho vạch đỏ (cảnh đứng yên quá 6 s) và note. Phim không có hàng Camera vẫn giữ hàng Shots.
-- Track âm thanh: bấm tên track chọn mọi clip của nó, nhấp đúp (F2) đổi tên, thả clip vào dải dưới cùng tạo track mới, track rỗng tự mất.
+- Track âm thanh: bấm tên track chọn mọi clip của nó, nhấp đúp (F2) đổi tên, thả clip vào dải trống dưới cùng tạo track mới (dải để trơn như CapCut, chỉ sáng khi đang kéo), track rỗng tự mất.
 - Chọn clip: Ctrl+A chọn mọi clip, [ và ] chọn mọi clip bên trái/phải playhead, chuột phải clip có menu.
 - Bấm chỗ trống ở bất kì hàng nào: playhead nhảy tới đó và bỏ chọn mọi thứ, như CapCut (Shift hoặc Ctrl: giữ chọn). Bấm khoảng trống cột tên track cũng bỏ chọn; bấm đúng vạch playhead là kéo nó.
 - Toàn màn hình: Ctrl+Shift+F, Esc thoát.

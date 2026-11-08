@@ -37,9 +37,9 @@ export const togglePreviewAudio = () => {
 };
 
 export const attachPreviewAxis = () => {
-  const { timeline, ruler, detail, camrow, keyrows, lanes, peek: line } = S.el;
-  const rows = [ruler, detail, camrow, keyrows, lanes];
-  const scroller = detail.parentElement!; // the rows' scroll box, under the ruler
+  const { timeline, ruler, detail, camrow, textrow, keyrows, lanes, peek: line } = S.el;
+  const rows = [ruler, camrow, textrow, detail, keyrows, lanes];
+  const scroller = detail.closest<HTMLElement>("[data-tracks-scroll]")!; // the rows' scroll box under the ruler, which the line runs down to its foot
   timeline.addEventListener("pointermove", (e) => {
     const c = rows.find((r) => r === e.target);
     if (!c || e.pointerType !== "mouse" || e.buttons || !allowed()) return end();

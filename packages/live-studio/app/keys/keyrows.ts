@@ -4,8 +4,8 @@
 // Dragging a diamond retimes it (and every key picked with it), never past a key of its row that stays, snapping to frames,
 // the playhead, words and cuts (Shift: no snap). A box dragged over empty space picks every key it touches (Shift/Ctrl add), on
 // these rows and the others it crosses (timeline/rowbox.ts, across.ts), and a drag on a picked key moves all of it;
-// a click on a key seeks there, one on empty space only drops the pick (the playhead moves from the ruler or by its own line,
-// the dev's call); a touch dragged over empty space scrubs.
+// a click on a key seeks there, one on empty space drops the pick and moves the playhead there (CapCut, the dev's call
+// 2026-11-09); a touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
 import { snapTo, stamp } from "../core/time";
 import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, same, sameKey, snapshot } from "./keys";
