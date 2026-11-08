@@ -2,7 +2,7 @@
 // another clip moves on to a new track below rather than hiding under it
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addTrack, normalize, resolve, tidy } from "../app/sound/tracks.ts";
+import { addTrack, freeTrack, normalize, resolve, tidy } from "../app/sound/tracks.ts";
 
 const spanOf = (l) => (r) => (r.list === "beds" ? [l.beds[r.i].from, l.beds[r.i].to] : [l.sfx[r.i].at, l.sfx[r.i].at + l.sfx[r.i].length]);
 const bed = (from, to) => ({ name: "hum", from, to, gain: 0, fadeIn: 0, fadeOut: 0 });
@@ -68,4 +68,29 @@ test("a new track takes the first number its kind has free, so no two tracks sha
   const l = { beds: [], sfx: [], tracks: [{ id: "t1", name: "SFX" }, { id: "t2", name: "SFX 3" }] };
   assert.equal(addTrack(l, "sfx").name, "SFX 2");
   assert.equal(addTrack(l, "sfx").name, "SFX 4");
+});
+
+test("a pasted clip stays on the track it came from while that has room", () => {
+  const l = { beds: [], sfx: [{ ...hit(0), track: "t1" }], tracks: [{ id: "t1", name: "SFX" }] };
+  assert.equal(freeTrack(l, "sfx", [3, 4], spanOf(l), "t1"), "t1");
+});
+
+test("a pasted clip that doesn't fit its track takes the nearest free track of its kind, below before above", () => {
+  const l = {
+    beds: [],
+    sfx: [{ ...hit(9), track: "t1" }, { ...hit(0), track: "t2" }, { ...hit(9), track: "t3" }],
+    tracks: [{ id: "t1", name: "SFX" }, { id: "t2", name: "SFX 2" }, { id: "t3", name: "SFX 3" }],
+  };
+  assert.equal(freeTrack(l, "sfx", [0, 1], spanOf(l), "t2"), "t3");
+  assert.equal(l.tracks.length, 3, "no new track");
+});
+
+test("a pasted clip gets a new track just below its own only when no track of its kind is free, a bed track never counts", () => {
+  const l = {
+    beds: [{ ...bed(10, 20), track: "t2" }],
+    sfx: [{ ...hit(0), track: "t1" }, { ...hit(0), track: "t3" }],
+    tracks: [{ id: "t1", name: "SFX" }, { id: "t2", name: "Bed" }, { id: "t3", name: "SFX 2" }],
+  };
+  const id = freeTrack(l, "sfx", [0, 1], spanOf(l), "t1");
+  assert.deepEqual(l.tracks.map((t) => t.id), ["t1", id, "t2", "t3"]);
 });

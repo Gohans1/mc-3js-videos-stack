@@ -37,6 +37,17 @@ export const fits = (l: Tracked, id: string, [s, e]: [number, number], spanOf: S
     return e <= a + TOUCH || s >= b - TOUCH;
   });
 
+// Where a pasted clip goes: the track it came from while that has room, else the nearest free one of its kind (below, then
+// above), so a paste fills a track that is there before it adds one (the dev's call); a new one just below only when none is
+export const freeTrack = (l: Tracked, kind: List, sp: [number, number], spanOf: SpanOf, from: string) => {
+  l.tracks ??= [];
+  const ts = l.tracks, at = ts.findIndex((t) => t.id === from);
+  const own = new Set(refs(l).filter((r) => r.list === kind).map((r) => entry(l, r).track));
+  const near = [ts[at], ...ts.slice(at + 1), ...ts.slice(0, Math.max(0, at)).reverse()];
+  const t = near.find((t) => t && (t.id === from || own.has(t.id)) && !t.lock && fits(l, t.id, sp, spanOf));
+  return t ? t.id : addTrack(l, kind, at < 0 ? undefined : at + 1).id;
+};
+
 // Every clip on a track that exists; returns whether anything was given one
 export const normalize = (l: Tracked, spanOf: SpanOf) => {
   l.tracks ??= [];

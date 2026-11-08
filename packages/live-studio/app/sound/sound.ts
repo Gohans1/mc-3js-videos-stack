@@ -8,7 +8,7 @@ import { forgetSounds, replan, setLive } from "./mixer";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
 import { get, say, set } from "../core/store";
-import { addTrack, fits, normalize, refs, resolve, same, tidy, type Track, trackOf } from "./tracks";
+import { addTrack, fits, freeTrack, normalize, refs, resolve, same, tidy, type Track, trackOf } from "./tracks";
 
 export interface Bed { name: string; from: number; to: number; gain: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface OneShot { at: number; name: string; gain: number; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
@@ -112,8 +112,8 @@ export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?:
   setClip(ref);
   say(`${name} added at ${stamp(at)}`);
 };
-// Copies of clips (timeline/clipboard.ts), d seconds later: each on the track it came from while that is there, unlocked and
-// free, else on one that is or a new one below it (onto), the copies picked after; one undo step
+// Copies of clips (timeline/clipboard.ts), d seconds later: each on the track it came from while that has room, else the
+// nearest free track of its kind (freeTrack), the copies picked after; one undo step
 export type CopiedClip = { list: ClipRef["list"]; x: Bed | OneShot };
 export const pasteClips = (items: CopiedClip[], d: number) => {
   const made: { list: ClipRef["list"]; x: Bed | OneShot }[] = [];
@@ -123,12 +123,12 @@ export const pasteClips = (items: CopiedClip[], d: number) => {
       if (list === "beds") {
         const b = c as Bed, len = b.to - b.from;
         b.from = r3(Math.max(0, b.from + d)); b.to = r3(b.from + len);
-        b.track = onto(l, list, b.from, b.to, b.track);
+        b.track = freeTrack(l, list, [b.from, b.to], span, b.track ?? "");
         l.beds.push(b);
       } else {
         const o = c as OneShot, len = (o.length ?? Math.max(0.05, seconds(o.name) - (o.start ?? 0)));
         o.at = r3(Math.max(0, o.at + d));
-        o.track = onto(l, list, o.at, o.at + len, o.track);
+        o.track = freeTrack(l, list, [o.at, o.at + len], span, o.track ?? "");
         // In time order, as addClip keeps the list
         const i = l.sfx.findIndex((s) => s.at > o.at);
         l.sfx.splice(i < 0 ? l.sfx.length : i, 0, o);
