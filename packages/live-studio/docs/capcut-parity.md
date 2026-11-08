@@ -127,3 +127,36 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Các lệnh tự kiểm (CHECK=motion, seen, touch, slide; framecheck) ghi trong AGENTS.md gốc của monorepo.
 - Trang phát tiếng qua cùng kiểu limiter với mix.py (app/sound/brickwall.ts), nên tai nghe và đồng hồ khớp bản final: đo sealed-room lệch ffmpeg 0.1 LUFS, đỉnh 0.2 dB.
 - Âm ở vết cắt: chuột phải khối shot > Sound at the cut (hoặc tab Camera > Cut sound), 5 combo riser, whoosh, impact, downlifter đặt theo điểm nhấn của chính file: riser tắt đúng vết cắt, whoosh to nhất ở đó, impact rơi vào khung đầu shot mới. Một Ctrl+Z gỡ cả combo; bộ âm CC0 lấy bằng get_sfx.py sweeteners.
+
+## Panel bên phải và thanh timeline của CapCut 9.7 (ảnh dev chụp 9/11/2026)
+
+Từng mục dev chụp trên máy, AI tự chọn làm hay bỏ theo lời dev.
+
+### Chọn clip âm thanh (Basic | Voice changer | Speed)
+
+- Volume, Fade in, Fade out: CÓ. Keyframe ◁◇▷ cho Volume (tăng giảm âm lượng theo thời gian trong một clip): SẮP LÀM, mix.py cũng phải theo.
+- Normalize loudness (đưa clip về một mức chuẩn): SẮP LÀM, một nút đo file rồi đặt Volume.
+- Enhance voice, Reduce noise, Isolate voice, Video translator: BỎ, giọng ElevenLabs đã sạch và không có video quay.
+- Fill channel: BỎ, đã có Pan và file mono vốn ra cả hai bên.
+- Voice changer: SẮP LÀM (quyết định 7).
+- Speed của clip (tốc độ, độ dài, Change audio pitch): SẮP LÀM, để làm chậm tiếng cọt kẹt hay tiếng bước chân cho nặng.
+
+### Chọn shot (CapCut gọi là clip video: Video | Audio | Speed | Animation | Adjust | AI stylize)
+
+- Video > Basic (Transform, Blend, Stabilize, Enhance quality, Reduce image noise, Optical flow, AI remove, AI expand, AI remix, Eye contact, Lip sync, Relight), Remove BG, Mask, Retouch: BỎ, cảnh 3D để máy quay quyết khung, tab Camera thay Transform.
+- Audio của shot: BỎ, shot không mang tiếng, tiếng là các track riêng.
+- Speed: Curve CÓ dạng tab Speed của camera; Standard (nhân tốc độ) và Velocity effects: SẮP LÀM cùng speed ramp và freeze frame.
+- Animation In/Out/Combo: CÓ.
+- Adjust > Basic: SẮP LÀM, ưu tiên 3 (Adjust theo shot), đúng bộ thanh của CapCut: Temp, Tint, Saturation; Exposure, Contrast, Highlight, Shadow, Whites, Blacks, Brilliance; Sharpen, Clarity, Particles, Fade, Vignette. Kèm LUT và nút Save as preset, Apply to all.
+- Adjust > Auto adjust, Color match, Color correction: BỎ, là AI trả phí của CapCut.
+- Adjust > HSL (8 màu, Hue, Saturation, Brightness), Curves (Luma, R, G, B), Color wheel (Primary): SẮP LÀM sau Adjust Basic.
+- Adjust > Mask, AI stylize: BỎ.
+
+### Thanh timeline
+
+- Select và Split mode, Undo, Redo, Split, Delete left, Delete right, Delete: CÓ.
+- Auto snapping (S), Preview axis (Shift+P), Zoom to fit, Zoom out, thanh trượt zoom, Zoom in: CÓ.
+- Main track magnet (Shift+Backspace), Linkage (Ctrl+L): SẮP LÀM cùng Ripple (quyết định 4).
+- Record voiceover (micro): BỎ, giọng đọc làm bằng ElevenLabs.
+- Các nút còn lại sau Delete trong ảnh (6 biểu tượng): chưa xác minh tên, dev chụp tooltip thì AI xếp tiếp.
+- Đầu track video của CapCut (khoá, ẩn, tắt tiếng, Cover): track âm thanh đã có Mute, Solo, Lock; hàng Text chưa có Lock và Hide (SẮP LÀM); Cover: BỎ, thumbnail làm ngoài studio.
