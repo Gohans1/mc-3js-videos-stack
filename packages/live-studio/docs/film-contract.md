@@ -19,7 +19,7 @@ What the studio reads from a film: the schemas in [`src/contract.mjs`](../src/co
 ## Optional hooks
 
 - `draw.describe(t)`: the list top left (key `I`, and in draft renders); name every technique and its source file, `fresh` shows NEW.
-- `draw.checks`: `{ name(...numbers) → lines }`, printed by `CHECK=name:args bun run render`, for what a picture cannot show (feet sliding).
+- `draw.checks`: `{ name(...args) → lines }`, printed by `CHECK=name:args bun run render`, for what a picture cannot show (feet sliding). Built in for every film, target `cam`, a bone, an object name or label: `CHECK=motion:handR,81,83` (speed graph, onion skin, pops, dead stops), `seen:Steve,0,108` (in frame, hidden behind what, cut off, too dark), `touch:Steve,40,45` (sinks into or hovers off surfaces; for one shot in question, a whole film lists every small limb clip). The encoded video: `bun run framecheck` (black, flash, jump, shimmer, frozen).
 - `draw.variants`: looks to switch (build all once, `set(id)` toggles, chip near `ranges`); **Chốt** writes `choices.json`, which the film's own renders and final mix must apply.
 - `renders/live/trials.json` (from `sound.py`): sound options per group, each one stem at film level, the film's own first; picked into `choices.json` the same way.
 

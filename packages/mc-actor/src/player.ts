@@ -86,15 +86,16 @@ const STRIDE = 0.5;
 export const gaitOf = (dist, speed) => ({ ph: (dist * Math.PI) / STRIDE, w: clamp01(speed / 1.2) });
 // Walk or run, phase from the distance walked: thighs swing, the knee folds while the leg swings forward, the arms
 // counter-swing with a little elbow, the chest twists against the hips. The hips are lowest as one foot lands and the other
-// pushes off (both on the floor) and highest as one passes the other
+// pushes off (both on the floor) and highest as one passes the other. Everything scales with the gait's weight w, the
+// splay too, so a walk grows out of standing and settles back into it without a jump
 export const walkPose = (dist, speed) => {
   const { ph, w } = gaitOf(dist, speed), run = clamp01((speed - 4) / 2);
   if (w < 0.01) return {};
   const s = Math.sin(ph), c = Math.cos(ph);
   const A = (21 + 22 * run) * w, K = (38 + 50 * run) * w, B = (24 + 40 * run) * w;
   return merge(
-    leg("L", A * s, 3, K * Math.max(0, c) + 6 * w), leg("R", -A * s, 3, K * Math.max(0, -c) + 6 * w),
-    arm("L", -B * s, 6, 0, 10 * w + 45 * run * w + 12 * w * Math.max(0, -s)), arm("R", B * s, 6, 0, 10 * w + 45 * run * w + 12 * w * Math.max(0, s)),
+    leg("L", A * s, 3 * w, K * Math.max(0, c) + 6 * w), leg("R", -A * s, 3 * w, K * Math.max(0, -c) + 6 * w),
+    arm("L", -B * s, 6 * w, 0, 10 * w + 45 * run * w + 12 * w * Math.max(0, -s)), arm("R", B * s, 6 * w, 0, 10 * w + 45 * run * w + 12 * w * Math.max(0, s)),
     { chest: [6 * run, 8 * s * w, 0], body: [4 * w + 14 * run, 0, 0], head: [-6 * run, -6 * s * w, 0], root: { y: -(0.03 + 0.05 * Math.abs(s)) * w - 0.03 * run } },
   );
 };
@@ -268,10 +269,12 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   const rootIn = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert());
   const face = makeFace(rig, b.head, ctx);
   const hand = new THREE.Group(); // the right hand's grip, for held items
+  hand.name = "handR"; // so live-studio's CHECK=motion:handR,from,to finds it
   hand.position.set(-6 * PX, 12 * PX, 2 * PX); // vanilla: the right shoulder pivot (-5, 22, 0) px, then 10 down the arm, 2 forward, 1 out
   rig.add(hand);
   b.laR.attach(hand);
   const handL = new THREE.Group();
+  handL.name = "handL";
   handL.position.set(6 * PX, 12 * PX, 2 * PX);
   rig.add(handL);
   b.laL.attach(handL);

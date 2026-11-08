@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
   "description": "Minecraft actors for films: MCprep's player rig, poses and IK (player), mocap clips retargeted onto it (mocap, clips), the performance keys (perform), planted feet (feet), things carried in the hands (carry), mobs (silverfish)",
   "exports": {
     "./player": "./src/player.ts",

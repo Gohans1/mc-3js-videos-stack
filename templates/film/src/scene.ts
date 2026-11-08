@@ -18,7 +18,7 @@ import { loadClips } from "mc-actor/clips";
 import { blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
 import { slerpPose } from "mc-actor/mocap";
 import { props as pack } from "mc-assets/pack";
-import { cameraAt } from "film-stage/camera";
+import { cameraAt, EASES } from "film-stage/camera";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -167,6 +167,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones,
     objects: [[world.group, "room"], [steve.g, "Steve"]], materials: [], composer, renderer,
   };
+  draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.checks = footChecks({ perform, steve, now });
   return draw;
 }

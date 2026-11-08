@@ -7,6 +7,11 @@
 //   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
 //   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
 //   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
+//   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label):
+//                              motion  speed graph, onion skin + speed-coloured path, pops, dead stops (render/motion.ts)
+//                              seen    how much of the frame it fills, hidden behind what, cut off, too dark (render/seen.ts)
+//                              touch   sinking into things, hanging just off them (render/touch.ts): for one shot or move in
+//                                      question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)
 //   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
 // The film's package.json "live-studio": { "chrome": path } names its headless Chrome (default tools/chrome-headless-shell/...).
 import { spawn, spawnSync } from "node:child_process";
@@ -37,7 +42,7 @@ const cfg = {
   clip: what === "stills" ? null : { chunk: CHUNK, only: env.CHUNKS ? numbers(env.CHUNKS) : null, samples: 1, bitrate: 4e6 },
   list: !env.NOLIST,
   inspect: env.INSPECT ? numbers(env.INSPECT) : null,
-  checks: (env.CHECK ?? "").split(";").filter(Boolean).map((c) => { const [name, args = ""] = c.split(":"); return [name.trim(), args ? numbers(args) : []]; }),
+  checks: (env.CHECK ?? "").split(";").filter(Boolean).map((c) => { const [name, args = ""] = c.split(":"); return [name.trim(), args ? args.split(",").map((a) => (a.trim() !== "" && !isNaN(+a) ? +a : a.trim())) : []]; }),
   choices: choicesFile ? JSON.parse(readFileSync(choicesFile, "utf8")) : {},
   lab: Object.fromEntries(Object.entries(env).filter(([k]) => k.startsWith("LAB_")).map(([k, v]) => [k.slice(4).toLowerCase(), v])),
 };
@@ -57,6 +62,8 @@ await build({
   },
 });
 console.log(`built in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+// stills alone cannot show motion, contact or flicker: say what can, where every render prints
+if (!cfg.checks.length) console.log("checks: CHECK=motion|seen|touch:<target>,<from s>,<to s> (render.mjs header); after a clip: bun run framecheck");
 
 // ---------- Serve it to a headless Chrome and keep what it posts back
 mkdirSync(CHUNKS, { recursive: true });

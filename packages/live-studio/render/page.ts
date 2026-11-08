@@ -4,6 +4,9 @@
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
+import { motionCheck } from "./motion";
+import { seenCheck } from "./seen";
+import { touchCheck } from "./touch";
 
 const FPS = 30;
 const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
@@ -19,12 +22,18 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   const render = await buildScene(canvas, cfg.W, cfg.H, cfg.draft, log);
   log(`scene built in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
   for (const v of render.variants ?? []) if (cfg.choices?.[v.id]?.set) v.set(cfg.choices[v.id].set); // what was picked in the studio
-  // CHECK=name:args;name:args runs the film's draw.checks[name](...args) and prints the lines it returns
+  await post("/still/cuts.json", JSON.stringify(SHOTS.slice(1).map((s) => s.t))); // framecheck.mjs: a cut is not a jump
+  // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
+  // an item { still, canvas } is written as renders/<still>
+  const builtin = { motion: motionCheck(render, cfg, SHOTS.map((s) => s.t)), seen: seenCheck(render), touch: touchCheck(render) };
   for (const [name, args] of cfg.checks ?? []) {
-    const fn = render.checks?.[name];
-    if (!fn) { log(`ERROR no draw.checks.${name} (the film has: ${Object.keys(render.checks ?? {}).join(", ") || "none"})`); return; }
+    const fn = render.checks?.[name] ?? builtin[name];
+    if (!fn) { log(`ERROR no draw.checks.${name} (the film has: ${Object.keys(render.checks ?? {}).join(", ") || "none"}; built in: ${Object.keys(builtin).join(", ")})`); return; }
     const t1 = performance.now();
-    for (const line of [fn(...args)].flat()) log(line);
+    for (const item of [await fn(...args)].flat()) {
+      if (typeof item === "string") log(item);
+      else { await still(item.still, item.canvas, cfg.quality); log(`wrote renders/${item.still}`); }
+    }
     log(`${name} done in ${((performance.now() - t1) / 1000).toFixed(1)}s`);
   }
   if (cfg.inspect) { const [px, py, pz, lx, ly, lz, fov] = cfg.inspect; Object.assign(render.tools.free, { on: true, fov }); render.tools.free.p.set(px, py, pz); render.tools.free.l.set(lx, ly, lz); }

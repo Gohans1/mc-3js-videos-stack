@@ -22,7 +22,7 @@
 //   read [[from, to]]  eyes run along lines of text: left to right, a quick sweep back, next line.
 // Every key holds until the next. Same t, same frame: nothing here remembers a previous frame.
 import * as THREE from "three";
-import { clamp01, smooth } from "./ease";
+import { clamp01, smooth, walkEase } from "./ease";
 import { MOODS, addPose, gaitOf, walkPose } from "./player";
 import { slerpPose } from "./mocap";
 import { reachK } from "film-kit/reach";
@@ -58,8 +58,6 @@ const pathOf = (moves) => {
   paths.set(moves, cum);
   return cum;
 };
-// a walk speeds up over its first half metre and slows into its last: mostly constant pace
-const walkEase = (x) => x * x * (3 - 2 * x) * 0.5 + x * 0.5;
 
 // poses: {name: (s) => pose}, the body poses keys name; faces: {name: mood}, faces MOODS lacks; standing: the pose names
 // he can walk between without a walk key (he shuffles round on the spot while turning)
@@ -90,7 +88,7 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     const i = keyAt(moves, t), a = moves[i], b = moves[Math.min(i + 1, moves.length - 1)];
     const x = progress(a, b, t);
     const cum = pathOf(moves);
-    const k = b.walk ? walkEase(x) : smooth(x);
+    const k = b.walk ? walkEase(x, b.t - a.t) : smooth(x);
     const at = a.at.map((v, j) => THREE.MathUtils.lerp(v, b.at[j], k));
     const yaw = yawLerp(a.yaw, b.yaw, b.walk ? smooth(x / 0.25) : k);
     const sa = t - a.t, sb = Math.max(0, t - b.t);
@@ -117,7 +115,7 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     const dist = (tt) => {
       const j = keyAt(moves, tt), p = moves[j], q = moves[Math.min(j + 1, moves.length - 1)];
       const xx = progress(p, q, tt);
-      return cum[j] + (cum[Math.min(j + 1, cum.length - 1)] - cum[j]) * (q.walk ? walkEase(xx) : smooth(xx));
+      return cum[j] + (cum[Math.min(j + 1, cum.length - 1)] - cum[j]) * (q.walk ? walkEase(xx, q.t - p.t) : smooth(xx));
     };
     const d = dist(t), speed = (dist(t + 0.05) - d) / 0.05;
     const walking = standing.includes(a.pose) && standing.includes(b.pose) || b.walk;

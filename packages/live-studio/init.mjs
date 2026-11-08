@@ -59,6 +59,7 @@ const SCRIPTS = {
   notes: "python node_modules/live-studio/notes_report.py",
   note: "node node_modules/live-studio/note.mjs",
   render: "node node_modules/live-studio/render.mjs",
+  framecheck: "node node_modules/live-studio/framecheck.mjs",
 };
 // A script that only opened the old pointer files goes; one a film wrote its own way stays
 const old = { studio: /^node src\/live\.mjs/, notes: /notes_report\.py/ };
