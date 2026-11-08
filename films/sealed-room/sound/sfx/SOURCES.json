@@ -462,5 +462,75 @@
   "url": "https://freesound.org/s/411694/",
   "license": "CC0 1.0",
   "for": "door kick option: a drier thud (DoorKick2)"
+ },
+ "sweet_riser": {
+  "id": 685256,
+  "title": "Riser sound effect short.wav",
+  "by": "syntheffects",
+  "url": "https://freesound.org/s/685256/",
+  "license": "CC0 1.0",
+  "for": "a short riser that stops dead on the cut (Riser sound effect short)",
+  "role": "riser",
+  "kind": "sfx"
+ },
+ "sweet_swell": {
+  "id": 110218,
+  "title": "reverse crash.wav",
+  "by": "genocidalguitar",
+  "url": "https://freesound.org/s/110218/",
+  "license": "CC0 1.0",
+  "for": "a reversed crash swelling into the cut (reverse crash)",
+  "role": "riser",
+  "kind": "sfx"
+ },
+ "sweet_whoosh": {
+  "id": 243400,
+  "title": "woosh.wav",
+  "by": "freakinbehemoth",
+  "url": "https://freesound.org/s/243400/",
+  "license": "CC0 1.0",
+  "for": "a whoosh across the cut, loudest on it (woosh)",
+  "role": "whoosh",
+  "kind": "sfx"
+ },
+ "sweet_whoosh_short": {
+  "id": 60013,
+  "title": "Whoosh",
+  "by": "qubodup",
+  "url": "https://freesound.org/s/60013/",
+  "license": "CC0 1.0",
+  "for": "a quick whoosh for a fast cut (Whoosh)",
+  "role": "whoosh",
+  "kind": "sfx"
+ },
+ "sweet_impact": {
+  "id": 430977,
+  "title": "Big impact.wav",
+  "by": "AudioPapkin",
+  "url": "https://freesound.org/s/430977/",
+  "license": "CC0 1.0",
+  "for": "a big hit on the new shot's first frame, ringing out over 4 s (Big impact)",
+  "role": "impact",
+  "kind": "sfx"
+ },
+ "sweet_impact_low": {
+  "id": 430978,
+  "title": "Low impact.wav",
+  "by": "AudioPapkin",
+  "url": "https://freesound.org/s/430978/",
+  "license": "CC0 1.0",
+  "for": "a lower, softer hit (Low impact)",
+  "role": "impact",
+  "kind": "sfx"
+ },
+ "sweet_downlifter": {
+  "id": 482146,
+  "title": "downlifter 2.wav",
+  "by": "reathance",
+  "url": "https://freesound.org/s/482146/",
+  "license": "CC0 1.0",
+  "for": "a sweep falling away after the cut (downlifter 2)",
+  "role": "downlifter",
+  "kind": "sfx"
  }
 }

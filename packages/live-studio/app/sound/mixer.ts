@@ -55,6 +55,8 @@ const load = (name: string) => {
 };
 // A file changed on disk (a new download): its old decode goes
 export const forgetSounds = () => { sounds.clear(); ready.clear(); };
+// A library sound decoded, as the lanes play it (sweeten.ts reads where its moment is)
+export const decoded = (name: string) => load(name).then((s) => s?.buf ?? null);
 
 // ---------- mix.py's ffmpeg filters, the two the films use: lowpass/highpass=f=..:poles=1|2[:w=Q]
 const warned = new Set<string>();

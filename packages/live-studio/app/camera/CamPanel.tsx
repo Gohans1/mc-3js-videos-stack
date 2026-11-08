@@ -3,8 +3,9 @@
 // camera gets into a key is the Speed tab (SpeedPanel.tsx), a shot's In / Out / Combo the Animation tab. Each change is one undo
 // step (Ctrl+Z), shared with the sound
 import { cn } from "cn";
-import { Hourglass, Scissors, Trash2, Video } from "lucide-react";
+import { AudioLines, Hourglass, Scissors, Trash2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FieldRow, KeyNav, Reset, Section, SliderRow } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
 import { Tip } from "../components/Tip";
@@ -17,6 +18,7 @@ import { seek } from "../playback/transport";
 import { shotSpan, shownShot } from "./anim";
 import { addKeyHere, holdAfter, keyAt, keys, movable, preview, removeCamKeys, removeKey, resetLens, restore, retime, rollable, rollCut, saveView, setKey, setLens, shotOfCut, shownKey, snapshot, splitShot } from "./cam";
 import { renameShot } from "./shots";
+import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 
 // The shot name field, which the camera row's Rename (CameraTrack.tsx) focuses
 export const SHOT_NAME_ID = "shot-name";
@@ -31,7 +33,7 @@ function Saved() {
 
 function ShotSection({ shot }: { shot: number }) {
   useStudio((s) => s.shotsRev);
-  const shots = useStudio((s) => s.shots), free = useStudio((s) => s.free);
+  const shots = useStudio((s) => s.shots), free = useStudio((s) => s.free), sound = useStudio((s) => s.sound);
   const [a, b] = shotSpan(shot), name = S.comments[shot] ?? "";
   return (
     <Section
@@ -55,6 +57,17 @@ function ShotSection({ shot }: { shot: number }) {
         <span className="text-[13px] tabular-nums">{stamp(a)} – {stamp(b)}</span>
         <span className="text-xs text-muted-foreground tabular-nums">{(b - a).toFixed(1)} s</span>
       </FieldRow>
+      {sound && shot > 0 && (
+        <FieldRow label="Cut sound">
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="h-7 gap-1.5 px-2 text-[13px]" />}><AudioLines data-icon="inline-start" />Add at {stamp(a)}…</DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-auto min-w-48">
+              {hasSweeteners() ? SWEETS.map((p, i) => <DropdownMenuItem key={p.label} className="text-[13px]" onClick={() => sweeten(a, i)}>{p.label}</DropdownMenuItem>)
+                : <DropdownMenuGroup><DropdownMenuLabel className="max-w-56">This film has no cut sounds yet: ask the AI in a note to fetch the cut sweeteners</DropdownMenuLabel></DropdownMenuGroup>}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </FieldRow>
+      )}
     </Section>
   );
 }

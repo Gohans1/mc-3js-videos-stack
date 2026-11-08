@@ -73,13 +73,14 @@ export const openSound = (project, conf = {}) => {
     return fresh;
   };
   const NAME = /^[\w.-]+$/;
+  const ROLES = ["riser", "whoosh", "impact", "downlifter"]; // a cut sweetener's part (get_sfx.py sweeteners; app/sound/hit.ts)
   const fileOf = (name) => (NAME.test(name) && existsSync(join(DIR, `${name}.wav`)) ? join(DIR, `${name}.wav`) : null);
   const library = () => {
     if (!existsSync(DIR)) return [];
     const sources = existsSync(join(DIR, "SOURCES.json")) ? JSON.parse(readFileSync(join(DIR, "SOURCES.json"), "utf8")) : {};
     return readdirSync(DIR).filter((f) => f.endsWith(".wav")).map((f) => basename(f, ".wav")).filter((n) => NAME.test(n)).sort().map((name) => {
       const s = sources[name] ?? {};
-      return { name, seconds: +(info(name).wav?.seconds ?? 0).toFixed(3), title: s.title, license: s.license, url: s.url, for: s.for, kind: ["bgm", "sfx"].includes(s.kind) ? s.kind : undefined };
+      return { name, seconds: +(info(name).wav?.seconds ?? 0).toFixed(3), title: s.title, license: s.license, url: s.url, for: s.for, kind: ["bgm", "sfx"].includes(s.kind) ? s.kind : undefined, role: ROLES.includes(s.role) ? s.role : undefined };
     });
   };
   const peaks = (name) => { const i = info(name); return (i.peaks ??= wavPeaks(join(DIR, `${name}.wav`))); };

@@ -5,7 +5,7 @@
 import { cn } from "cn";
 import { useState } from "react";
 import { DURATION, SHOTS_OUT } from "film/scene";
-import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { Bind } from "../core/state";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
@@ -16,6 +16,7 @@ import { animOf, clearAnims, pickShot, type Slot, SLOT_NAMES, shotSpan } from ".
 import { keys, removeKey, setKey, splitShot } from "./cam";
 import { shotAtPointer } from "./camrow";
 import { askPaste, copyAttrs, hasAttrs } from "../timeline/attributes";
+import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 
 const openTab = (i: number, side: "cam" | "anim", slot?: Slot) => {
   pickShot(i);
@@ -23,7 +24,7 @@ const openTab = (i: number, side: "cam" | "anim", slot?: Slot) => {
 };
 
 export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
-  const data = useStudio((s) => s.shots);
+  const data = useStudio((s) => s.shots), sound = useStudio((s) => s.sound);
   const [shot, setShot] = useState(-1);
   const [a, b] = shot >= 0 ? shotSpan(shot) : [0, DURATION];
   const cut = shot > 0 ? keys.findIndex((k) => k.cut && Math.abs(k.t - a) < SAME) : -1;
@@ -63,6 +64,14 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
               ))}
               <ContextMenuItem disabled={!anim} onClick={() => clearAnims(shot)}>Remove animations</ContextMenuItem>
             </ContextMenuGroup>
+            <ContextMenuSeparator />
+            <ContextMenuSub>
+              <ContextMenuSubTrigger disabled={shot < 1 || !sound}>Sound at the cut</ContextMenuSubTrigger>
+              <ContextMenuSubContent className="min-w-48">
+                {hasSweeteners() ? SWEETS.map((p, i) => <ContextMenuItem key={p.label} onClick={() => sweeten(a, i)}>{p.label}</ContextMenuItem>)
+                  : <ContextMenuGroup><ContextMenuLabel className="max-w-56">This film has no cut sounds yet: ask the AI in a note to fetch the cut sweeteners</ContextMenuLabel></ContextMenuGroup>}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => seek(a)}>Go to shot start</ContextMenuItem>
           </>

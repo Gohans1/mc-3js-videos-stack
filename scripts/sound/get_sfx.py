@@ -4,6 +4,7 @@ pinned in SFX, or in the film's own sound/sfx_list.json when it has one ({name: 
 replaces SFX); title, author and link are kept in sound/sfx/SOURCES.json.
   python ../../scripts/sound/get_sfx.py                 fetch every missing sound in SFX
   python ../../scripts/sound/get_sfx.py find "cat meow" [max seconds]
+  python ../../scripts/sound/get_sfx.py sweeteners      fetch the cut sweeteners every film shares (SWEETENERS)
 A sound is used only if its own page still says Creative Commons 0. Already fetched sounds are skipped."""
 import html
 import json
@@ -88,6 +89,18 @@ SFX = {
 BEDS = {"room_hum", "cctv_hiss", "hum_lowfreq", "hum_fluorescent", "hum_backrooms", "lamp_flicker", "heartbeat", "dig_papers",
         "bgm_thriller", "bgm_museum", "bgm_drone", "bgm_suspense"}
 MUSIC = {"bgm_thriller", "bgm_museum", "bgm_drone", "bgm_suspense"}  # kept stereo; every other sound is mono
+# Cut sweeteners, the same set in every film: the studio's Sound at the cut (live-studio app/sound/sweeten.ts) finds them by
+# role and lines each one's hit up with the cut: a riser ends on it, a whoosh is loudest on it, an impact starts on it, a
+# downlifter falls away from it. name: (Freesound id, keep s or None, role, what it is)
+SWEETENERS = {
+    "sweet_riser": (685256, None, "riser", "a short riser that stops dead on the cut (Riser sound effect short)"),
+    "sweet_swell": (110218, None, "riser", "a reversed crash swelling into the cut (reverse crash)"),
+    "sweet_whoosh": (243400, None, "whoosh", "a whoosh across the cut, loudest on it (woosh)"),
+    "sweet_whoosh_short": (60013, None, "whoosh", "a quick whoosh for a fast cut (Whoosh)"),
+    "sweet_impact": (430977, None, "impact", "a big hit on the new shot's first frame, ringing out over 4 s (Big impact)"),
+    "sweet_impact_low": (430978, None, "impact", "a lower, softer hit (Low impact)"),
+    "sweet_downlifter": (482146, None, "downlifter", "a sweep falling away after the cut (downlifter 2)"),
+}
 LIST = ROOT / "sfx_list.json"
 if LIST.exists():
     own = json.loads(LIST.read_text(encoding="utf8"))
@@ -117,7 +130,7 @@ def fetch(name, sid, keep):
         raise ValueError(f"{name}: sound {sid} is not CC0")
     mp3 = re.search(r'data-mp3="(https://cdn\.freesound\.org/previews/[^"]+)-lq\.mp3"', page).group(1) + "-hq.mp3"
     title = html.unescape(re.search(r'data-title="([^"]*)"', page).group(1))
-    user = re.search(r'data-username="([^"]*)"', page).group(1)
+    user = html.unescape(re.search(r'og:audio:artist" content="([^"]*)"', page).group(1))  # data-username is the viewer, not the author
     raw = RAW / f"{sid}.mp3"
     if not raw.exists():
         raw.write_bytes(get(mp3))
@@ -138,9 +151,10 @@ if __name__ == "__main__":
         raise SystemExit
     OUT.mkdir(parents=True, exist_ok=True)
     known = json.loads(SOURCES.read_text(encoding="utf8")) if SOURCES.exists() else {}
-    for name, (sid, keep, why) in SFX.items():
+    wanted = {k: (sid, keep, why, role) for k, (sid, keep, role, why) in SWEETENERS.items()} if sys.argv[1:2] == ["sweeteners"] else {k: (*v, None) for k, v in SFX.items()}
+    for name, (sid, keep, why, role) in wanted.items():
         if name in known and known[name]["id"] == sid and (OUT / f"{name}.wav").exists():
             continue
-        known[name] = {**fetch(name, sid, keep), "for": why}
+        known[name] = {**fetch(name, sid, keep), "for": why, **({"role": role, "kind": "sfx"} if role else {})}
         SOURCES.write_text(json.dumps(known, indent=1, ensure_ascii=False), encoding="utf8")
         print("got", name, known[name]["title"])

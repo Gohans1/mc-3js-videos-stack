@@ -119,3 +119,4 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Chụp hình so sánh (Shift+\, giữ \ để xem lại), chip phương án A/B/C/D.
 - Các lệnh tự kiểm (CHECK=motion, seen, touch, slide; framecheck) ghi trong AGENTS.md gốc của monorepo.
 - Trang phát tiếng qua cùng kiểu limiter với mix.py (app/sound/brickwall.ts), nên tai nghe và đồng hồ khớp bản final: đo sealed-room lệch ffmpeg 0.1 LUFS, đỉnh 0.2 dB.
+- Âm ở vết cắt: chuột phải khối shot > Sound at the cut (hoặc tab Camera > Cut sound), 5 combo riser, whoosh, impact, downlifter đặt theo điểm nhấn của chính file: riser tắt đúng vết cắt, whoosh to nhất ở đó, impact rơi vào khung đầu shot mới. Một Ctrl+Z gỡ cả combo; bộ âm CC0 lấy bằng get_sfx.py sweeteners.

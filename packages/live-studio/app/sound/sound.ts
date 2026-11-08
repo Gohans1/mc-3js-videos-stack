@@ -7,6 +7,7 @@ import { r3, stamp } from "../core/time";
 import { measureFinal } from "./meter";
 import { forgetSounds, replan, setLive } from "./mixer";
 import { S } from "../core/state";
+import type { Role } from "./hit";
 import { type ClipRef } from "./slice";
 import { get, say, set } from "../core/store";
 import { addTrack, fits, freeTrack, normalize, refs, resolve, same, tidy, type Track, trackOf } from "./tracks";
@@ -14,7 +15,7 @@ import { addTrack, fits, freeTrack, normalize, refs, resolve, same, tidy, type T
 export interface Bed { name: string; from: number; to: number; gain: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface OneShot { at: number; name: string; gain: number; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface Lanes { beds: Bed[]; sfx: OneShot[]; tracks: Track[]; [k: string]: unknown }
-export interface LibraryItem { name: string; seconds: number; title?: string; license?: string; url?: string; for?: string; kind?: "bgm" | "sfx" }
+export interface LibraryItem { name: string; seconds: number; title?: string; license?: string; url?: string; for?: string; kind?: "bgm" | "sfx"; role?: Role }
 export interface Peaks { step: number; peaks: number[] }
 
 export let lanes: Lanes | null = null;
@@ -128,6 +129,23 @@ export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?:
   });
   setClip(ref);
   say(`${name} added at ${stamp(at)}`);
+};
+// Several one-shots at once (sweeten.ts), each on the first sound-effects track with room as addClip puts one; one undo step,
+// all picked after
+export interface NewShot { name: string; at: number; gain: number; start?: number; length?: number; fadeOut?: number }
+export const addShots = (shots: NewShot[]) => {
+  const made: OneShot[] = [];
+  edit((l) => {
+    for (const x of shots) {
+      const at = r3(x.at), len = x.length ?? Math.max(0.05, seconds(x.name) - (x.start ?? 0));
+      const o: OneShot = { at, name: x.name, gain: x.gain, ...(x.start && { start: r3(x.start) }), ...(x.length && { length: r3(x.length) }), ...(x.fadeOut && { fadeOut: x.fadeOut }) };
+      o.track = onto(l, "sfx", at, at + len);
+      const i = l.sfx.findIndex((s) => s.at > at);
+      l.sfx.splice(i < 0 ? l.sfx.length : i, 0, o);
+      made.push(o);
+    }
+  });
+  setClips(made.map((x) => ({ list: "sfx" as const, i: lanes!.sfx.indexOf(x) })).filter((r) => r.i >= 0));
 };
 // Copies of clips (timeline/clipboard.ts), d seconds later: each on the track it came from while that has room, else the
 // nearest free track of its kind (freeTrack), the copies picked after; one undo step
