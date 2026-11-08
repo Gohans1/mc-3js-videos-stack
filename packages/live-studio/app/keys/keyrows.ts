@@ -3,7 +3,8 @@
 // ("sits up", "tense"); a solid line between two keys that differ (something changes there), a dotted one where the row holds.
 // Dragging a diamond retimes it (and every key picked with it), never past a key of its row that stays, snapping to frames,
 // the playhead, words and cuts (Shift: no snap). A box dragged over empty space picks every key it touches (Shift/Ctrl add);
-// a click on a key or on empty space seeks there; a touch on empty space scrubs.
+// a click on a key seeks there, one on empty space only drops the pick (the playhead moves from the ruler or by its own line,
+// the dev's call); a touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
 import { snapTo, stamp } from "../core/time";
 import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, same, sameKey, snapshot } from "./keys";
@@ -110,7 +111,7 @@ export const attachKeyRows = () => {
     if (!s) {
       const grab = onPlayhead(x, w, touch);
       if (touch || grab) {
-        if (!grab) { pickKeys([]); seek(timeAt(x, w)); }
+        if (!grab) pickKeys([]);
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
@@ -156,9 +157,9 @@ export const attachKeyRows = () => {
   const up = () => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (box) {
-      const { moved, base, x } = box;
+      const { moved, base } = box;
       box = null; marquee = null;
-      if (!moved) { if (!base.length) pickKeys([]); seek(timeAt(x, c.getBoundingClientRect().width)); }
+      if (!moved) { if (!base.length) pickKeys([]); }
       else if (get().keyPicks.length > 1) say(`${get().keyPicks.length} keyframes selected. Drag one to move them all`);
       drawKeyRows();
       return;

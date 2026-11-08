@@ -4,7 +4,8 @@
 // snaps to the playhead, cuts, words and other clips' edges (Shift: no snap). The handle on each top corner of the clip under the
 // pointer or picked drags its fade in or out, as in CapCut and Premiere. A box dragged over empty space picks every clip
 // it touches (Shift/Ctrl add to the pick); dragging one picked clip moves them all, and with Alt held copies of them (CapCut's
-// drag to duplicate). A touch on empty space scrubs instead.
+// drag to duplicate). A click on empty space only drops the pick, the playhead stays (it moves from the ruler or by its own
+// line); a touch dragged over empty space scrubs instead.
 // A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
 // In split mode (blade.ts) a click on a clip cuts it there instead.
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
@@ -185,7 +186,7 @@ export const attachLanes = () => {
     const grab = playheadGrab(b, x, y, w, touch);
     if (!b || grab) {
       if (touch || grab) {
-        if (!grab) { setClips([]); seek(timeAt(x, w)); }
+        if (!grab) setClips([]);
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
@@ -294,7 +295,7 @@ export const attachLanes = () => {
     if (box) {
       const { moved, base } = box;
       box = null; marquee = null;
-      if (!moved) { const { x, w } = local(e); if (!base.length) setClips([]); seek(timeAt(x, w)); }
+      if (!moved) { if (!base.length) setClips([]); }
       else if (get().clips.length > 1) say(`${get().clips.length} clips selected. Drag one to move them all`);
       drawLanes();
       return;
