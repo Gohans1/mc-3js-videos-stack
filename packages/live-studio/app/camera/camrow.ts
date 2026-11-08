@@ -37,6 +37,8 @@ let xs: number[] = []; // each key's x as last drawn, for the pointer
 let hover = -1; // the block under the pointer
 const picks = () => { const { camKey: k, camPicks: ps } = get(); return ps.length ? ps : k !== null ? [k] : []; };
 
+// The block a key belongs to: a cut opens its shot, any other key on a cut's second is the last of the shot before
+const owner = (i: number) => shotIndex(Math.max(0, keys[i].cut ? keys[i].t : keys[i].t - 1e-4));
 const shotAtX = (x: number, w: number) => { const t = timeAt(x, w); return t < 0 || t > DURATION || !SHOTS_OUT.length ? -1 : shotIndex(t); };
 
 const drawSpeed = (g: CanvasRenderingContext2D, x0: number, x1: number, ease: CamKey["ease"], top: number, floor: number) => {
@@ -53,7 +55,7 @@ const drawSpeed = (g: CanvasRenderingContext2D, x0: number, x1: number, ease: Ca
   g.strokeStyle = COLOR.speedLine; g.lineWidth = 1; g.stroke();
 };
 
-const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => number, w: number, h: number) => {
+const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => number, w: number, h: number, on: boolean) => {
   const [s, e] = shotSpan(i), x0 = X(s) + 1, x1 = X(e) - 1;
   if (x1 < 0 || x0 > w || x1 - x0 < 1) return;
   const y0 = PAD, y1 = h - PAD, cx0 = Math.max(-4, x0), cx1 = Math.min(w + 4, x1), bw = cx1 - cx0;
@@ -88,7 +90,7 @@ const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => num
   if (an.in) g.fillRect(x0, foot, Math.max(3, X(s + lenOf(i, "in")) - x0), BAND);
   if (an.out) { const a = X(e - lenOf(i, "out")); g.fillRect(a, foot, Math.max(3, x1 - a), BAND); }
   g.restore();
-  if (get().shotPick === i) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 + 1, y0 + 1, bw - 2, y1 - y0 - 2, 3); g.stroke(); }
+  if (on || get().shotPick === i) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 + 1, y0 + 1, bw - 2, y1 - y0 - 2, 3); g.stroke(); }
 };
 
 export const drawCamRow = () => {
@@ -99,7 +101,10 @@ export const drawCamRow = () => {
   const { a, v } = view(), X = (s: number) => ((s - a) / v) * w, picked = new Set(picks());
   g.fillStyle = COLOR.bg; g.fillRect(0, 0, w, h);
   g.textBaseline = "middle";
-  SHOTS_OUT.forEach((_, i) => drawBlock(g, i, X, w, h));
+  // A block is picked when all its keys that move are: what the box picks, as CapCut's box picks whole clips
+  const all = SHOTS_OUT.map(() => true), any = SHOTS_OUT.map(() => false);
+  keys.forEach((_, i) => { if (!movable(i)) return; const j = owner(i); any[j] = true; if (!picked.has(i)) all[j] = false; });
+  SHOTS_OUT.forEach((_, i) => drawBlock(g, i, X, w, h, any[i] && all[i]));
   xs = keys.map((k) => X(k.t));
   const y = PAD + HEAD + (h - PAD * 2 - HEAD - BAND - FOOT) / 2, r = 5;
   keys.forEach((k, i) => {
@@ -139,12 +144,15 @@ export const shotAtPointer = (e: { clientX: number }) => {
   return shotAtX(e.clientX - r.left, r.width);
 };
 
-// The box over the rows (rowbox.ts) picks the keys under it once it reaches this row; R: a diamond it only grazes counts
-const R = 5;
+// The box over the rows (rowbox.ts), once it reaches this row, picks every block it touches with all its keys, as CapCut's box
+// picks every clip it touches; a click on a diamond (Shift or Ctrl adds) picks one key
 const keysInBox = (r: { x0: number; x1: number; y0: number; y1: number }) => {
   const c = S.el.camrow.getBoundingClientRect();
-  if (!c.height || r.y1 < c.top || r.y0 > c.bottom) return [];
-  return xs.flatMap((x, k) => (c.left + x >= r.x0 - R && c.left + x <= r.x1 + R ? [k] : []));
+  if (!c.height || r.y1 < c.top || r.y0 > c.bottom || !SHOTS_OUT.length) return [];
+  const t0 = timeAt(r.x0 - c.left, c.width), t1 = timeAt(r.x1 - c.left, c.width);
+  if (t1 < 0 || t0 > DURATION) return [];
+  const a = shotIndex(Math.max(0, t0)), b = shotIndex(Math.min(DURATION - 1e-3, t1));
+  return keys.flatMap((_, i) => { const j = owner(i); return j >= a && j <= b ? [i] : []; });
 };
 
 export const attachCamRow = () => {

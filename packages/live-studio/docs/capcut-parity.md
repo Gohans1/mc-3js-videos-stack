@@ -50,6 +50,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 
 - Volume, waveform, fade handles: CÓ.
   - Chọn clip thì tab Audio bên phải có Volume -40 đến +20 dB, Pan trái/phải, Fade in/out; sóng âm vẽ trên clip.
+  - Clip âm thanh đúng màu CapCut 9.7 đo từ ảnh dev: nền navy, sóng cột 1 px xanh cyan mọc từ đáy, tên trên tab sáng hơn, track cao 50 px. Đỉnh cam khi gần 0 dB, đỏ khi vượt: quy ước Final Cut Pro, CapCut không ghi tài liệu. Đường âm lượng kéo được trên clip: SẮP LÀM cùng Volume keyframe.
   - Kéo nút ở hai góc trên của clip để fade như CapCut.
   - Báo đỏ khi vỡ tiếng: CÓ, đồng hồ tổng bên phải timeline: đỉnh trái/phải (vàng từ -12, đỏ từ -1 dB), đèn đỏ trên cùng khi vỡ 0 dB (bấm để xoá), cột LUFS với vạch đích. Mọi số là của bản render final; tắt ở ⋯ Settings > View > Audio meter, điện thoại không có.
 - Voiceover, separate audio, vocal isolation, replace clip:
@@ -96,7 +97,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Kéo, chọn nhiều, xoá kim cương ngay trên hàng Camera và các hàng keyframe Steve, đạo cụ.
   - Motion blur: BỎ ở studio, thuộc bước render final.
 - Adjustment layer: SẮP LÀM dạng Adjust theo shot; lớp phủ ngang nhiều shot thì chưa.
-- Group, compound clip: BỎ, phim ít clip. Chọn nhiều bằng khung (kéo từ chỗ trống, Ctrl hoặc Shift để thêm): CÓ, một khung đi xuyên hàng Camera, keyframe và âm thanh. Kéo một thứ đã chọn thì mọi thứ đã chọn ở các hàng khác chạy theo; Delete, Ctrl+C và Ctrl+V cũng làm cho cả nhóm, một lần undo.
+- Group, compound clip: BỎ, phim ít clip. Chọn nhiều bằng khung (kéo từ chỗ trống, Ctrl hoặc Shift để thêm): CÓ, một khung đi xuyên hàng Camera, keyframe và âm thanh; trên hàng Camera khung chọn nguyên khối shot nó chạm (cùng mọi kim cương trong khối) như CapCut chọn clip, bấm từng kim cương để chọn lẻ. Kéo một thứ đã chọn thì mọi thứ đã chọn ở các hàng khác chạy theo; Delete, Ctrl+C và Ctrl+V cũng làm cho cả nhóm, một lần undo.
 
 ## Tầng 5: Nâng cao
 
@@ -112,10 +113,11 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 
 - Color oscilloscope: RGB parade, RGB waveform, vectorscope ở ⋯ Settings > Heavy.
 - Giao diện: tab đang mở chữ xanh ngọc kèm gạch mỏng (gạch là dev chọn, CapCut không có); thứ đang chọn viền trắng trên mọi hàng (clip, khối shot, kim cương); nền các hàng phẳng một màu như CapCut, không sọc.
+- Thanh Overview (cả phim) đã BỎ vì CapCut không có; điện thoại nằm ngang dùng thước giờ thay. Hàng Camera nằm trên cùng, dưới thước giờ (dev chọn), rồi Text, Voice, Action, keyframe, âm thanh.
 - Hàng Shots gộp vào hàng Camera: tên shot nằm trên khối camera như clip của CapCut, dưới thước giờ chỉ còn dải mỏng cho vạch đỏ (cảnh đứng yên quá 6 s) và note. Phim không có hàng Camera vẫn giữ hàng Shots.
 - Track âm thanh: bấm tên track chọn mọi clip của nó, nhấp đúp (F2) đổi tên, thả clip vào dải dưới cùng tạo track mới, track rỗng tự mất.
 - Chọn clip: Ctrl+A chọn mọi clip, [ và ] chọn mọi clip bên trái/phải playhead, chuột phải clip có menu.
-- Bấm chỗ trống ở hàng keyframe và hàng âm thanh chỉ bỏ chọn, playhead đứng yên (chỉ thước giờ hoặc vạch playhead mới dời được).
+- Bấm chỗ trống ở bất kì hàng nào: playhead nhảy tới đó và bỏ chọn mọi thứ, như CapCut (Shift hoặc Ctrl: giữ chọn). Bấm khoảng trống cột tên track cũng bỏ chọn; bấm đúng vạch playhead là kéo nó.
 - Toàn màn hình: Ctrl+Shift+F, Esc thoát.
 - Trên điện thoại: thanh công cụ và hàng tab cuộn ngang như CapCut mobile.
 

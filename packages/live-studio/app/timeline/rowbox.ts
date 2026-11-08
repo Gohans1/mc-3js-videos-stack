@@ -5,17 +5,20 @@ import { S } from "../core/state";
 
 export type ClientRect = { x0: number; x1: number; y0: number; y1: number };
 // pick: what the box covers, joined to base; picked: what is picked now (the base when Shift/Ctrl adds); none: an empty base;
-// done: the box let go
-export const boxPick = { pick: (_r: ClientRect, _base: unknown) => {}, picked: (): unknown => null, none: (): unknown => null, done: () => {} };
+// done: the box let go; clear: nothing picked on any row; seek: the playhead to the second at a page x
+export const boxPick = {
+  pick: (_r: ClientRect, _base: unknown) => {}, picked: (): unknown => null, none: (): unknown => null, done: () => {},
+  clear: () => {}, seek: (_x: number) => {},
+};
 
 // From the press, in the rows' scrolled content, so the box keeps its start while the rows scroll under it
-let box: { x: number; y: number; base: unknown; moved: boolean } | null = null;
+let box: { x: number; y: number; base: unknown; moved: boolean; add: boolean } | null = null;
 const scroller = () => S.el.rowbox.parentElement!;
 
 // add (Shift/Ctrl held): what the box picks joins what was picked before
 export const boxStart = (e: PointerEvent, add: boolean) => {
   const s = scroller(), r = s.getBoundingClientRect();
-  box = { x: e.clientX - r.left, y: e.clientY - r.top + s.scrollTop, base: add ? boxPick.picked() : boxPick.none(), moved: false };
+  box = { x: e.clientX - r.left, y: e.clientY - r.top + s.scrollTop, base: add ? boxPick.picked() : boxPick.none(), moved: false, add };
 };
 export const boxOn = () => box !== null;
 
@@ -34,11 +37,13 @@ export const boxMove = (e: PointerEvent) => {
   return true;
 };
 
-// Ends the box; true when one was dragged (so the release is not a click)
-export const boxEnd = () => {
-  const was = box?.moved ?? false;
+// Ends the box; true when one was dragged (so the release is not a click). Given the release, a click on a row's empty space is
+// CapCut's: the playhead goes there and, unless Shift or Ctrl add, nothing stays picked
+export const boxEnd = (e?: PointerEvent) => {
+  const b = box;
   box = null;
   S.el.rowbox.style.display = "";
-  if (was) boxPick.done();
-  return was;
+  if (b?.moved) { boxPick.done(); return true; }
+  if (b && e?.type === "pointerup") { if (!b.add) boxPick.clear(); boxPick.seek(e.clientX); }
+  return false;
 };

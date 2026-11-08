@@ -9,7 +9,7 @@ import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { FPS, r3, snapSpan, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
-import { alongWith, type Along, inBox, NONE, pickAcross, picked as across } from "../timeline/across";
+import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
 import { PICK, sized, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -159,7 +159,7 @@ export const attachTextRow = () => {
 
   const up = (e: PointerEvent) => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
-    if (box) { const { add } = box; box = null; if (!boxEnd() && !add) pickAcross(NONE); return; }
+    if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
     const { snap, moved, alone, i, copy, moving, along, shift } = drag;
     drag = null;

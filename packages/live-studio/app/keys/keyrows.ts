@@ -13,7 +13,7 @@ import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { type KeyRef } from "./slice";
 import { together } from "../core/doc";
-import { alongWith, type Along, inBox, NONE, pickAcross, picked } from "../timeline/across";
+import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
 import { keyReach, PICK, REACH, sized, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -146,14 +146,9 @@ export const attachKeyRows = () => {
     const others = drag.group.length - 1 + (along?.count ?? 0), many = others ? ` + ${others} more` : "";
     say(`${drag.ref.path.join(".")}${many}: ${stamp(drag.t)} → ${stamp(drag.t + d)}${d !== want ? " (stopped by its neighbour)" : noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
   });
-  const up = () => {
+  const up = (e: PointerEvent) => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
-    if (box) {
-      const { add } = box;
-      box = null;
-      if (!boxEnd() && !add) pickAcross(NONE);
-      return;
-    }
+    if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
     const { snap, moved, alone, ref, group, along, t: was } = drag;
     drag = null;

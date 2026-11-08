@@ -45,6 +45,7 @@ export const attachAcross = () => {
     });
   };
   boxPick.none = () => NONE;
+  boxPick.clear = () => { pickAcross(NONE); set({ shotPick: null, object: null }); };
   boxPick.done = () => { const n = count(picked()); if (n > 1) say(`${n} selected. Drag one to move them all`); };
 };
 

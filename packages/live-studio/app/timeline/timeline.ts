@@ -10,7 +10,7 @@ import { getFile } from "../core/net";
 import { pad, stamp } from "../core/time";
 import { stored } from "../core/storage";
 import { PICK, sized, UI_FONT } from "./canvas";
-import { boxEnd, boxMove, boxStart } from "./rowbox";
+import { boxEnd, boxMove, boxPick, boxStart } from "./rowbox";
 import { LANE_H, rows, SHOTS_STRIP, WORDS_H } from "./rows";
 import { S } from "../core/state";
 import { get, say, set, setPref } from "../core/store";
@@ -26,7 +26,6 @@ type Box = { type: "beat"; id: string; x0: number; x1: number; y0: number; y1: n
 let boxes: Box[] = [];
 let selected: { type: "beat"; id: string } | { type: "line"; i: number } | null = null;
 let stuck: [number, number][] = [];
-let overBg: HTMLCanvasElement | null = null, overMarks: unknown = null;
 export const shown = () => Math.min(get().span, DURATION); // seconds the detail timeline shows
 let frozenCentre: number | null = null;
 // Where Alt+wheel slid the stretch (c), and the playhead then (t): it stays while the playhead stays or moves inside it, and
@@ -36,7 +35,6 @@ let slid: { c: number; t: number } | null = null;
 export const marks = {
   notes: () => [] as { t: number; to?: number; done: boolean }[],
   optionRanges: () => [] as [number, number][],
-  lit: () => [] as [number, number][], // the clips of the library sound under the pointer (sound/lanes.ts)
   lanes: () => {}, // sound/lanes.ts draws its canvas whenever these do
   cam: () => {}, // and camera/camrow.ts its own
   keys: () => {}, // and keys/keyrows.ts the key rows
@@ -89,7 +87,6 @@ export const refreshTimes = () => {
   applyEdit();
   S.timesRev++;
   S.voiceOut = S.voice.lines.map((l) => ({ ...l, s: fromSource(l.s), e: fromSource(l.e), words: l.words.map((w) => ({ ...w, s: fromSource(w.s), e: fromSource(w.e) })) }));
-  overBg = null;
   S.dirty = true;
   stuck = findStuck();
   describeSelection();
@@ -120,30 +117,6 @@ export const onPlayhead = (x: number, w: number, touch: boolean) => { const { a,
 export const view = () => { const v = shown(); return { a: viewCentre() - v / 2, v }; };
 export const timeAt = (x: number, w: number) => { const { a, v } = view(); return a + (x / w) * v; };
 export const holdView = (on: boolean) => { frozenCentre = on ? viewCentre() : null; S.dirty = true; };
-
-const drawOverview = () => {
-  const c = S.el.over, { g, w, h } = sized(c);
-  if (!c.width || !c.height) return; // a page loaded out of sight has no size yet; the resize observer draws it once it has
-  // The shots, the wave and the open notes' ticks change rarely: drawn once into overBg, a film's thousands of notes included
-  if (!overBg || overBg.width !== c.width || overMarks !== marks.notes()) {
-    overMarks = marks.notes();
-    overBg = document.createElement("canvas"); overBg.width = c.width; overBg.height = c.height;
-    const b = overBg.getContext("2d")!, d = c.width / w;
-    b.scale(d, d);
-    SHOTS.forEach((s, i) => { b.fillStyle = SHADES[i % 2]; b.fillRect((s.t / DURATION) * w, 0, ((shotEnd(i) - s.t) / DURATION) * w + 1, h); });
-    drawWave(b, 0, DURATION, w, 2, h - 4);
-    const ticks = new Path2D();
-    for (const n of marks.notes()) if (!n.done) ticks.rect((n.t / DURATION) * w - 1, 0, 2, 7);
-    b.fillStyle = "#3AA99F"; b.fill(ticks);
-  }
-  g.drawImage(overBg, 0, 0, w, h);
-  g.fillStyle = "#FFFCF0";
-  for (const [s, e] of marks.lit()) g.fillRect((s / DURATION) * w - 1, h - 4, Math.max(2, ((e - s) / DURATION) * w), 4);
-  const { a } = view();
-  g.fillStyle = "rgba(255,255,255,.1)"; g.fillRect((a / DURATION) * w, 0, (shown() / DURATION) * w, h);
-  drawInOut(g, (s) => (s / DURATION) * w, w, h);
-  drawNow(g, (S.t / DURATION) * w, h, false);
-};
 
 const drawDetail = () => {
   const { g, w, h } = sized(S.el.detail);
@@ -195,7 +168,7 @@ const drawDetail = () => {
     const label = HOLDS.has(id) ? x0 + 6 : x1;
     row[lane] = Math.max(x1, x0 + (m.title.length * 5.6 + 8));
     const y = BASE[m.kind] + lane * LANE_H, on = selected?.type === "beat" && selected.id === id;
-    g.fillStyle = m.kind === "sound" ? "#5E409D" : HOLDS.has(id) ? "#4A5A12" : m.curve === "snap" ? "#BC5215" : "#205EA6";
+    g.fillStyle = m.kind === "sound" ? "#0E81B3" : HOLDS.has(id) ? "#4A5A12" : m.curve === "snap" ? "#BC5215" : "#205EA6";
     g.fillRect(x0, y, x1 - x0, 13);
     if (on) { g.strokeStyle = PICK; g.lineWidth = 2; g.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, 11); }
     g.fillStyle = "#E6E4D9"; g.fillText(m.title, x0 + 3, y + 7);
@@ -286,7 +259,7 @@ const drawNow = (g: CanvasRenderingContext2D, x: number, h: number, head: boolea
   g.fillStyle = NOW; g.fill(); g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
 };
 
-export const drawTimelines = () => { if (!S.el) return; drawOverview(); drawRuler(); drawDetail(); marks.text(); marks.cam(); marks.keys(); marks.lanes(); };
+export const drawTimelines = () => { if (!S.el) return; drawRuler(); drawDetail(); marks.text(); marks.cam(); marks.keys(); marks.lanes(); };
 // Shows s seconds (6 at the closest, the whole film at the farthest), as CapCut's zoom slider; zoomSpan scales what is shown
 export const ZOOM_MIN = 6;
 export const zoomTo = (s: number) => { const span = Math.max(ZOOM_MIN, Math.min(DURATION, s)); set({ span }); stored.set("span", String(span), sessionStorage); drawTimelines(); };
@@ -321,18 +294,18 @@ const boxAt = (e: PointerEvent) => {
   return best;
 };
 
-// Scrubbing, as in CapCut: a press on the overview or the ruler seeks there and drags; on the rows below (detail) only the
-// playhead line itself drags, so a click there picks what the panel describes and leaves the playhead where it is, and a mouse
-// drag draws the box that picks camera keys (rowbox.ts). A touch drag scrubs from anywhere, a fingertip being too wide for the
-// line. The stretch below holds still while it drags
+// Scrubbing, as in CapCut: a press on the ruler seeks there and drags; on the rows below (detail) only the playhead line itself
+// drags, a click on a word or a beat picks what the panel describes, a click on empty space puts the playhead there and a mouse
+// drag draws the box over the rows (rowbox.ts). A touch drag scrubs from anywhere, a fingertip being too wide for the line. The
+// stretch below holds still while it drags
 export const attachTimeline = () => {
-  const { over, ruler, detail } = S.el;
+  const { ruler, detail } = S.el;
   const scrub = (c: HTMLCanvasElement, toTime: (e: PointerEvent) => number, grab: (e: PointerEvent) => boolean = () => true) => {
     let press: { x: number; y: number } | null = null; // a touch that has not moved yet
     const start = (e: PointerEvent) => {
       S.dragging = { resume: S.playing };
       if (S.playing) setPlaying(false);
-      if (c !== over) frozenCentre = viewCentre();
+      frozenCentre = viewCentre();
       seek(toTime(e));
       skimSound(S.t);
     };
@@ -353,22 +326,24 @@ export const attachTimeline = () => {
     c.addEventListener("pointermove", move);
     for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) c.addEventListener(t, up);
   };
+  let onThing = false; // the press was on a word or a beat, which it picks: its release is no click on empty space
   detail.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     const b = boxAt(e);
+    onThing = !!b;
     selected = b?.type === "beat" ? { type: "beat", id: b.id } : b && (b.type === "line" || b.type === "gap") ? { type: "line", i: b.i } : null;
     describeSelection();
     const r = detail.getBoundingClientRect();
     if (e.pointerType !== "touch" && !onPlayhead(e.clientX - r.left, r.width, false)) boxStart(e, e.shiftKey || e.ctrlKey || e.metaKey);
   });
   detail.addEventListener("pointermove", boxMove);
-  for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) detail.addEventListener(t, boxEnd);
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) detail.addEventListener(t, (e) => boxEnd(onThing ? undefined : (e as PointerEvent)));
+  boxPick.seek = (x) => { const r = detail.getBoundingClientRect(); if (r.width) seek(Math.max(0, Math.min(DURATION, timeAt(x - r.left, r.width)))); };
   const local = (c: HTMLCanvasElement, e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, w: r.width }; };
-  scrub(over, (e) => { const r = over.getBoundingClientRect(); return ((e.clientX - r.left) / r.width) * DURATION; });
   scrub(ruler, (e) => { const { x, w } = local(ruler, e); return timeAt(x, w); });
   scrub(detail, (e) => { const { x, w } = local(detail, e); return timeAt(x, w); }, (e) => { const { x, w } = local(detail, e); return onPlayhead(x, w, e.pointerType === "touch"); });
   for (const c of [ruler, detail]) c.addEventListener("wheel", timelineWheel, { passive: false });
-  new ResizeObserver(() => { overBg = null; drawTimelines(); }).observe(S.el.timeline);
+  new ResizeObserver(drawTimelines).observe(S.el.timeline);
   window.__editor ??= { boxes: () => boxes, seek, duration: () => DURATION, clear: () => { selected = null; describeSelection(); }, words: () => S.voice.lines.flatMap((l) => l.words.map((w) => w.s)) };
 };
 

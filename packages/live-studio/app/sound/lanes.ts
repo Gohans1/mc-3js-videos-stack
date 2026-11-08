@@ -15,9 +15,9 @@ import { type ClipRef } from "./slice";
 import { get, noSnap, say } from "../core/store";
 import { BLADE_CURSOR } from "../components/cursor";
 import { bladeLine } from "../timeline/blade";
-import { addClip, allClips, clipOf, cutBefore, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips, usesOf } from "./sound";
+import { addClip, allClips, clipOf, cutBefore, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips } from "./sound";
 import { together } from "../core/doc";
-import { alongWith, type Along, inBox, NONE, pickAcross, picked as across } from "../timeline/across";
+import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
 import { PICK, sized, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -25,9 +25,13 @@ import { addTrack, resolve, same } from "./tracks";
 import { seek, setPlaying } from "../playback/transport";
 
 // sound/TrackHeads.tsx lays its rows out on these
-export const TRACK_H = 28, TOP = 2, ADD_H = 24;
-const CLIP_H = 24;
-const COLOR = { beds: "#403170", sfx: "#5E409D", wave: "rgba(214,204,240,.55)", text: "#E6E4D9", drop: "#3AA99F", tried: "#D0A215", lit: "#FFFCF0" };
+export const TRACK_H = 50, TOP = 2, ADD_H = 24;
+const CLIP_H = 46, LABEL_H = 16;
+// CapCut 9.7's audio clip, measured off the dev's screenshot: a navy clip, its level in 1 px cyan bars from the bottom, the name
+// on a lighter tab. A bar within 1 dB of full scale gets an orange cap and one past it a red tip, Final Cut Pro's documented
+// warning, which CapCut's look follows
+const COLOR = { clip: "#0E3058", wave: "#0E81B3", near: "#F08A34", over: "#EA3223", tab: "#274569", text: "#DCE3EA", handle: "#E6E4D9", drop: "#3AA99F", tried: "#D0A215", lit: "#FFFCF0" };
+const NEAR = 10 ** (-1 / 20);
 const EDGE = 6, KNOB = 7; // KNOB: how near a fade handle the pointer must be, in px
 
 type Box = { ref: ClipRef; x0: number; x1: number; y0: number; y1: number };
@@ -45,18 +49,23 @@ const rowOf = (c: ClipRef) => tracks().findIndex((t) => t.id === clipOf(c)?.trac
 const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: number, y: number, w: number) => {
   const c = clipOf(ref)!, on = picked(ref);
   const cx0 = Math.max(-2, x0), cx1 = Math.min(w + 2, x1);
-  g.fillStyle = COLOR[ref.list];
-  g.beginPath(); g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 3); g.fill();
-  // The file's level curve, scaled by the clip's gain, so a quiet clip looks quiet
+  g.fillStyle = COLOR.clip;
+  g.beginPath(); g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 4); g.fill();
+  // The file's level, scaled by the clip's gain so a quiet clip looks quiet: each bar the loudest peak of the 2 px it stands for
   const p = peaksOf(c.name), [from, to] = span(ref), px = (x1 - x0) / Math.max(1e-3, to - from);
   if (p && x1 - x0 > 6) {
-    g.fillStyle = COLOR.wave;
-    const k = Math.min(4, 10 ** (c.gain / 20)), start = (c as { start?: number }).start ?? 0, file = p.peaks.length * p.step;
-    for (let x = Math.max(cx0, 0); x < cx1; x++) {
-      let s = (x - x0) / px + start;
-      if (ref.list === "beds") s %= Math.max(file, 1e-3); // a bed loops its file
-      const v = Math.min(1, (p.peaks[Math.floor(s / p.step)] ?? 0) * k);
-      if (v > 0.02) { const d = (v * (CLIP_H - 4)) / 2; g.fillRect(x, y + CLIP_H / 2 + 2 - d, 1, Math.max(1, d * 2)); }
+    const k = Math.min(4, 10 ** (c.gain / 20)), start = (c as { start?: number }).start ?? 0, n = p.peaks.length, room = CLIP_H - LABEL_H - 3, base = y + CLIP_H - 1;
+    const at = (x: number) => { const s = (x - x0) / px + start; return Math.floor((ref.list === "beds" ? ((s % (n * p.step)) + n * p.step) % (n * p.step) : s) / p.step); }; // a bed loops its file
+    for (let x = Math.max(Math.ceil(cx0) + 1, 1); x < cx1 - 1; x += 2) {
+      const i0 = at(x), i1 = Math.max(i0, at(x + 2) - 1);
+      let v = 0;
+      for (let i = i0; i <= i1 && i < n; i++) if (i >= 0 && p.peaks[i] > v) v = p.peaks[i];
+      v *= k;
+      if (v < 0.02) continue;
+      const bar = Math.max(1, Math.min(1, v) * room);
+      g.fillStyle = COLOR.wave; g.fillRect(x, base - bar, 1, bar);
+      if (v >= NEAR) { g.fillStyle = COLOR.near; g.fillRect(x, base - bar, 1, 2); }
+      if (v > 1) { g.fillStyle = COLOR.over; g.fillRect(x, base - bar - 1, 1, 1); }
     }
   }
   // Fades as a darkened corner, with their handles on the clip the pointer is over or that is picked
@@ -65,12 +74,14 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   if (fi > 0) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + fi * px, y); g.lineTo(x0, y + CLIP_H); g.fill(); }
   if (fo > 0) { g.beginPath(); g.moveTo(x1, y); g.lineTo(x1 - fo * px, y); g.lineTo(x1, y + CLIP_H); g.fill(); }
   if ((on || (hover && same(hover, ref))) && x1 - x0 > KNOB * 4 && !locked(ref)) {
-    g.fillStyle = COLOR.text; g.strokeStyle = "#100F0F"; g.lineWidth = 1;
+    g.fillStyle = COLOR.handle; g.strokeStyle = "#100F0F"; g.lineWidth = 1;
     for (const hx of [x0 + fi * px, x1 - fo * px]) { g.beginPath(); g.arc(hx, y + 4, 3.5, 0, Math.PI * 2); g.fill(); g.stroke(); }
   }
   if (c.try) { g.fillStyle = COLOR.tried; g.fillRect(cx0, y + CLIP_H - 2, Math.min(10, cx1 - cx0), 2); }
   g.save(); g.beginPath(); g.rect(cx0, y, cx1 - cx0 - 2, CLIP_H); g.clip();
-  g.fillStyle = COLOR.text; g.fillText(c.name, Math.max(x0, 0) + 4, y + 8);
+  const lx = Math.max(x0, 0) + 3, tw = g.measureText(c.name).width;
+  g.fillStyle = COLOR.tab; g.beginPath(); g.roundRect(lx, y + 2, tw + 8, LABEL_H - 2, 3); g.fill();
+  g.fillStyle = COLOR.text; g.fillText(c.name, lx + 4, y + 1 + LABEL_H / 2);
   g.restore();
   // Outside the clip, on the dark track, so the clip's own edge and fade handles stay seen
   if (on) { g.strokeStyle = PICK; g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
@@ -166,7 +177,6 @@ export const attachLanes = () => {
   const c = S.el.lanes;
   marks.lanes = drawLanes;
   inBox.clips = clipsInBox;
-  marks.lit = () => { const n = get().soundLit; return n ? usesOf(n).map(span) : []; };
   const local = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width }; };
   let drag: Drag | null = null;
   let scrub: { resume: boolean } | null = null;
@@ -291,12 +301,7 @@ export const attachLanes = () => {
 
   const up = (e: PointerEvent) => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
-    if (box) {
-      const { add } = box;
-      box = null;
-      if (!boxEnd() && !add) pickAcross(NONE);
-      return;
-    }
+    if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
     const { snap, moved, alone, ref, copy, moving, along, shift } = drag;
     drag = null;

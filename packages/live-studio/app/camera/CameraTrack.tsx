@@ -32,7 +32,7 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger
-        className={cn("border-t border-black", !shown && "hidden")}
+        className={cn(!shown && "hidden")}
         onContextMenu={(e) => { const s = shotAtPointer(e); setShot(s); if (s >= 0) { setKey(null); pickShot(s); } }}
       >
         <canvas
