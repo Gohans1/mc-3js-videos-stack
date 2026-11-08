@@ -46,16 +46,13 @@
   },
   "scripts": {
     "test": "bun test",
-    "demo": "bun demo/setup.ts && vite"
+    "demo": "cd demo && bun run demo"
   },
   "dependencies": {
     "math": "0.1.0"
   },
   "devDependencies": {
     "@types/three": "^0.187.0",
-    "fflate": "^0.8.3",
-    "mc-actor": "workspace:*",
-    "three": "0.186.1",
-    "vite": "^8.3.6"
+    "three": "0.186.1"
   }
 }

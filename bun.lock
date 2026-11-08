@@ -58,9 +58,19 @@
       },
       "devDependencies": {
         "@types/three": "^0.187.0",
-        "fflate": "^0.8.3",
+        "three": "0.186.1",
+      },
+    },
+    "packages/film-kit/demo": {
+      "name": "film-kit-demo",
+      "dependencies": {
+        "film-kit": "workspace:*",
         "mc-actor": "workspace:*",
         "three": "0.186.1",
+      },
+      "devDependencies": {
+        "@types/three": "^0.187.0",
+        "fflate": "^0.8.3",
         "vite": "^8.3.6",
       },
     },
@@ -626,6 +636,8 @@
     "fill-range": ["fill-range@7.1.1", "", { "dependencies": { "to-regex-range": "^5.0.1" } }, "sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg=="],
 
     "film-kit": ["film-kit@workspace:packages/film-kit"],
+
+    "film-kit-demo": ["film-kit-demo@workspace:packages/film-kit/demo"],
 
     "film-stage": ["film-stage@workspace:packages/film-stage"],
 

@@ -4,6 +4,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
+    "packages/film-kit/demo",
     "films/*"
   ],
   "scripts": {
