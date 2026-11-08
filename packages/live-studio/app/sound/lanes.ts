@@ -30,7 +30,6 @@ const CLIP_H = 46, LABEL_H = 16;
 // CapCut 9.7's audio clip, measured off the dev's screenshot (index.css --clip-audio and the rest): a navy clip, its level in
 // 1 px cyan bars from the bottom, the name on a lighter tag. A bar within 1 dB of full scale gets an orange cap and one past it a
 // red tip, Final Cut Pro's documented warning, which CapCut's look follows
-const COLOR = { near: "#F08A34", over: "#EA3223" };
 const NEAR = 10 ** (-1 / 20);
 const EDGE = 6, KNOB = 7; // KNOB: how near a fade handle the pointer must be, in px
 
@@ -64,8 +63,8 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
       if (v < 0.02) continue;
       const bar = Math.max(1, Math.min(1, v) * room);
       g.fillStyle = tone("clip-wave"); g.fillRect(x, base - bar, 1, bar);
-      if (v >= NEAR) { g.fillStyle = COLOR.near; g.fillRect(x, base - bar, 1, 2); }
-      if (v > 1) { g.fillStyle = COLOR.over; g.fillRect(x, base - bar - 1, 1, 1); }
+      if (v >= NEAR) { g.fillStyle = tone("level-near"); g.fillRect(x, base - bar, 1, 2); }
+      if (v > 1) { g.fillStyle = tone("level-over"); g.fillRect(x, base - bar - 1, 1, 1); }
     }
   }
   // Fades as a darkened corner, with their handles on the clip the pointer is over or that is picked
@@ -120,7 +119,7 @@ export const drawLanes = () => {
   if (!ts.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2); }
   if (drop) {
     const x = X(drop.at), y = rowY(drop.row), hh = drop.row === ts.length ? ADD_H : TRACK_H;
-    g.fillStyle = "rgba(0,193,205,.18)"; g.fillRect(0, y, w, hh);
+    g.globalAlpha = 0.18; g.fillStyle = tone("primary"); g.fillRect(0, y, w, hh); g.globalAlpha = 1;
     g.fillStyle = tone("primary"); g.fillRect(x - 1, y, 2, hh);
   }
   if (get().blade && bladeLine.row === "lanes") {

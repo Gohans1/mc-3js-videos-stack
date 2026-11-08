@@ -19,7 +19,6 @@ import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { seek, setPlaying } from "../playback/transport";
 
-const HOLD = "#4F4F4F"; // the dotted line where a row holds still; every other colour is an index.css token
 const R = 4.5;
 
 
@@ -49,7 +48,7 @@ export const drawKeyRows = () => {
     for (let i = 1; i < ks.length; i++) {
       const x0 = X(ks[i - 1].t), x1 = X(ks[i].t);
       if (x1 < 0 || x0 > w || x1 - x0 < 1) continue;
-      if (same(ks[i - 1], ks[i])) { g.fillStyle = HOLD; for (let x = Math.max(0, x0); x < Math.min(w, x1); x += 4) g.fillRect(x, y, 2, 1); }
+      if (same(ks[i - 1], ks[i])) { g.fillStyle = tone("key-hold"); for (let x = Math.max(0, x0); x < Math.min(w, x1); x += 4) g.fillRect(x, y, 2, 1); }
       else { g.fillStyle = tone("muted-foreground"); g.fillRect(Math.max(0, x0), y, Math.min(w, x1) - Math.max(0, x0), 1); }
     }
     ks.forEach((k, i) => {

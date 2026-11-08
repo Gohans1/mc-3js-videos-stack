@@ -9,7 +9,7 @@ import { S } from "../core/state";
 import { get, say, useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { Tip } from "../components/Tip";
-import { sized } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { measureFinal, readMeter, resetLoudness, startMeter, stopMeter } from "./meter";
 
 const FLOOR = -60, TOP = 0;
@@ -28,8 +28,7 @@ export function AudioMeter() {
     if (!on) return;
     void startMeter();
     measureFinal();
-    const css = getComputedStyle(document.documentElement), color = (n: string) => css.getPropertyValue(n).trim();
-    const C = { ok: color("--ok"), warn: color("--warn"), red: color("--destructive"), loud: color("--primary"), track: color("--raised-2"), text: color("--muted-foreground"), mark: color("--foreground") };
+    const C = { ok: tone("ok"), warn: tone("warn"), red: tone("destructive"), loud: tone("primary"), track: tone("raised-2"), text: tone("muted-foreground"), mark: tone("foreground") };
     const shown = [FLOOR, FLOOR], held = [FLOOR, FLOOR], heldAt = [0, 0];
     let raf = 0, last = performance.now(), wasPlaying = false;
     const frame = () => {
@@ -73,7 +72,7 @@ export function AudioMeter() {
       if (r.shortTerm > FLOOR) { g.fillStyle = C.loud; g.fillRect(x, y(r.shortTerm), bar, y1 - y(r.shortTerm)); }
       g.fillStyle = C.mark; g.fillRect(x - 2, Math.round(y(target)), bar + 4, 1);
       // The scale
-      g.font = "10px system-ui,Segoe UI,Roboto,sans-serif"; g.textAlign = "right"; g.textBaseline = "middle"; g.fillStyle = C.text;
+      g.font = `10px ${UI_FONT}`; g.textAlign = "right"; g.textBaseline = "middle"; g.fillStyle = C.text;
       for (const d of SCALE) g.fillText(String(Math.abs(d)), w - 1, Math.min(y1 - 4, Math.max(y0 + 4, y(d))));
     };
     raf = requestAnimationFrame(frame);

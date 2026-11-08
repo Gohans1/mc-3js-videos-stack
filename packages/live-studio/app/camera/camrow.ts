@@ -28,7 +28,7 @@ import { type CamKey, DEFAULT_EASE, edit, groupRoom, holds, keys, movable, previ
 import { shotsDoc } from "./shots";
 
 // A shot is CapCut's video clip: its teal, a lighter tag holding its name, its other words dimmer on the clip (index.css tokens)
-const COLOR = { hover: "#0A5A60", dim: "#8FB3B5", speed: "rgba(208,162,21,.32)", anim: "rgba(255,255,255,.55)" };
+const ANIM_LIGHT = "rgba(255,255,255,.55)"; // the band under a shot that animates in or out
 const PAD = 2, HEAD = 15, BAND = 4, FOOT = 3; // FOOT: room under the bands for the picked outline
 
 let xs: number[] = []; // each key's x as last drawn, for the pointer
@@ -48,7 +48,7 @@ const drawSpeed = (g: CanvasRenderingContext2D, x0: number, x1: number, ease: Ca
   g.beginPath(); g.moveTo(x0, floor);
   speed.forEach((s, j) => g.lineTo(x0 + (j / n) * (x1 - x0), y(s)));
   g.lineTo(x1, floor); g.closePath();
-  g.fillStyle = COLOR.speed; g.fill();
+  g.globalAlpha = 0.32; g.fillStyle = tone("warn"); g.fill(); g.globalAlpha = 1;
   g.beginPath(); speed.forEach((s, j) => (j ? g.lineTo : g.moveTo).call(g, x0 + (j / n) * (x1 - x0), y(s)));
   g.strokeStyle = tone("warn"); g.lineWidth = 1; g.stroke();
 };
@@ -59,14 +59,14 @@ const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => num
   const y0 = PAD, y1 = h - PAD, cx0 = Math.max(-4, x0), cx1 = Math.min(w + 4, x1), bw = cx1 - cx0;
   g.save();
   g.beginPath(); g.roundRect(cx0, y0, bw, y1 - y0, 4); g.clip();
-  g.fillStyle = hover === i ? COLOR.hover : tone("clip-video"); g.fillRect(cx0, y0, bw, y1 - y0);
+  g.fillStyle = tone(hover === i ? "clip-video-hover" : "clip-video"); g.fillRect(cx0, y0, bw, y1 - y0);
   if (bw > 24) {
     const name = `${i}  ${S.comments[i] || `Shot ${i}`}`, left = Math.max(x0, 0) + 3, mid = y0 + HEAD / 2 + 1;
     g.font = `11px ${UI_FONT}`;
     const nw = g.measureText(name).width;
     g.fillStyle = tone("clip-video-tag"); g.beginPath(); g.roundRect(left, y0 + 2, nw + 8, HEAD - 2, 3); g.fill();
     g.fillStyle = tone("clip-label"); g.fillText(name, left + 4, mid);
-    g.fillStyle = COLOR.dim; g.fillText(`${(e - s).toFixed(1)}s`, left + nw + 14, mid);
+    g.fillStyle = tone("clip-video-text"); g.fillText(`${(e - s).toFixed(1)}s`, left + nw + 14, mid);
   }
   // The camera's speed between this shot's keys
   const top = y0 + HEAD + 3, foot = y1 - FOOT - BAND, floor = foot - 2;
@@ -77,15 +77,15 @@ const drawBlock = (g: CanvasRenderingContext2D, i: number, X: (s: number) => num
     if (b < 0 || a > w) continue;
     if (holds(k0, k1)) {
       g.fillStyle = tone("muted-foreground"); g.fillRect(Math.max(cx0, a), floor - 1, Math.min(cx1, b) - Math.max(cx0, a), 1);
-      if (b - a > 70) { g.font = `11px ${UI_FONT}`; g.fillStyle = COLOR.dim; g.fillText("hold", Math.max(cx0, a) + 10, (top + floor) / 2); }
+      if (b - a > 70) { g.font = `11px ${UI_FONT}`; g.fillStyle = tone("clip-video-text"); g.fillText("hold", Math.max(cx0, a) + 10, (top + floor) / 2); }
       continue;
     }
     drawSpeed(g, a, b, k1.ease, top, floor);
   }
   // In, Out, Combo at the foot of the block, each as long as it runs
   const an = animOf(i);
-  g.fillStyle = COLOR.anim;
-  if (an.combo) { g.setLineDash([3, 3]); g.strokeStyle = COLOR.anim; g.lineWidth = BAND; g.beginPath(); g.moveTo(cx0, foot + BAND / 2); g.lineTo(cx1, foot + BAND / 2); g.stroke(); g.setLineDash([]); }
+  g.fillStyle = ANIM_LIGHT;
+  if (an.combo) { g.setLineDash([3, 3]); g.strokeStyle = ANIM_LIGHT; g.lineWidth = BAND; g.beginPath(); g.moveTo(cx0, foot + BAND / 2); g.lineTo(cx1, foot + BAND / 2); g.stroke(); g.setLineDash([]); }
   if (an.in) g.fillRect(x0, foot, Math.max(3, X(s + lenOf(i, "in")) - x0), BAND);
   if (an.out) { const a = X(e - lenOf(i, "out")); g.fillRect(a, foot, Math.max(3, x1 - a), BAND); }
   g.restore();

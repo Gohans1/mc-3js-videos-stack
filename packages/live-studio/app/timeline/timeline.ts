@@ -130,7 +130,7 @@ const drawDetail = () => {
     if (e < a || s.t > b) return;
     const x0 = Math.max(0, X(s.t)), x1 = Math.min(w, X(e));
     if (named) {
-      g.fillStyle = i === shotIndex(t) ? "#404040" : i % 2 ? tone("card") : tone("main-track");
+      g.fillStyle = i === shotIndex(t) ? tone("shot-now") : i % 2 ? tone("card") : tone("main-track");
       g.fillRect(x0, 0, x1 - x0 - 1, SH);
       g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0 - 3, SH); g.clip();
       g.fillStyle = tone("foreground"); g.fillText(`${i} ${S.comments[i] ?? ""}`, x0 + 4, SH / 2);
@@ -139,7 +139,7 @@ const drawDetail = () => {
     g.fillStyle = tone("grid"); g.fillRect(X(s.t), SH, 1, h - SH);
   });
   boxes = [];
-  g.fillStyle = "#D14D41";
+  g.fillStyle = tone("stuck");
   for (const [x, y] of stuck) if (y > a && x < b) g.fillRect(X(x), SH - 2, X(y) - X(x), 3);
   // Voice: each sentence's pace behind the wave
   S.voiceOut.forEach((l, i) => {
@@ -147,7 +147,7 @@ const drawDetail = () => {
     if (n && n.s > a && l.e < b && X(n.s) - X(l.e) > 4) boxes.push({ type: "gap", i, x0: X(l.e), x1: X(n.s), y0: VY, y1: VY + VH });
     if (l.e < a || l.s > b) return;
     const pace = paceOf(i), on = selected?.type === "line" && selected.i === i;
-    g.fillStyle = on ? "#3D4A16" : pace && pace > FAST_WPM ? "#4A2622" : pace && pace < SLOW_WPM ? "#1E3550" : "#323232";
+    g.fillStyle = tone(on ? "pace-pick" : pace && pace > FAST_WPM ? "pace-fast" : pace && pace < SLOW_WPM ? "pace-slow" : "pace");
     g.fillRect(X(l.s), VY, X(l.e) - X(l.s), VH);
     boxes.push({ type: "line", i, x0: X(l.s), x1: X(l.e), y0: VY, y1: VY + VH });
     if (EDIT.voice.edits[i]) { g.fillStyle = tone("primary"); g.fillRect(X(l.s), VY, X(l.e) - X(l.s), 2); }
@@ -167,7 +167,7 @@ const drawDetail = () => {
     const label = HOLDS.has(id) ? x0 + 6 : x1;
     row[lane] = Math.max(x1, x0 + (m.title.length * 5.6 + 8));
     const y = BASE[m.kind] + lane * LANE_H, on = selected?.type === "beat" && selected.id === id;
-    g.fillStyle = m.kind === "sound" ? tone("clip-wave") : HOLDS.has(id) ? "#4A5A12" : m.curve === "snap" ? "#BC5215" : "#205EA6";
+    g.fillStyle = tone(m.kind === "sound" ? "clip-wave" : HOLDS.has(id) ? "beat-hold" : m.curve === "snap" ? "beat-snap" : "beat-move");
     g.fillRect(x0, y, x1 - x0, 13);
     if (on) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.strokeRect(x0 + 1, y + 1, x1 - x0 - 2, 11); }
     g.fillStyle = tone("foreground"); g.fillText(m.title, x0 + 3, y + 7);
@@ -212,7 +212,7 @@ const drawDetail = () => {
     const px = Math.floor(x), run = runs.at(-1);
     if (run && px <= run[1] + 1) run[1] = Math.max(run[1], px); else runs.push([px, px]);
   }
-  g.fillStyle = "#5A5A5A"; g.fill(done);
+  g.fillStyle = tone("note-done"); g.fill(done);
   g.fillStyle = tone("primary"); g.fill(open);
   g.globalAlpha = 0.4;
   for (const [x0, x1] of runs) g.fillRect(x0, SH + 10, x1 - x0 + 1, h - SH - 10);

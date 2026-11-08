@@ -18,7 +18,7 @@ import { edit, isShape, items, nameOf, pickText, preview, restore, settle, snaps
 export const ROW_H = 28;
 const CLIP_H = 24, EDGE = 6;
 // A shape has no CapCut clip to copy: plum, apart from the text clips' orange-brown (index.css --clip-text)
-const COLOR = { shape: "#6B3F58", shapeTag: "#7D5069", anim: "rgba(0,0,0,.28)" };
+const ANIM_SHADE = "rgba(0,0,0,.28)"; // over the stretch an item animates in or out
 
 type Box = { i: number; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
@@ -47,19 +47,19 @@ export const drawTextRow = () => {
   items.forEach((it, i) => {
     if (it.to < a || it.from > a + v) return;
     const x0 = X(it.from), x1 = Math.max(x0 + 4, X(it.to)), y = yOf(it.track ?? 0) + (ROW_H - CLIP_H) / 2, cx0 = Math.max(-2, x0), cx1 = Math.min(w + 2, x1);
-    g.fillStyle = isShape(it) ? COLOR.shape : tone("clip-text");
+    g.fillStyle = tone(isShape(it) ? "clip-shape" : "clip-text");
     g.beginPath(); g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 3); g.fill();
     // The In and Out as a darker stretch at each end, as long as they run
     const px = (x1 - x0) / Math.max(1e-3, it.to - it.from), span = it.to - it.from;
     const ai = it.in?.fx ? it.in.len ?? 0.5 : 0, ao = it.out?.fx ? it.out.len ?? 0.5 : 0, k = ai + ao > span ? span / (ai + ao) : 1;
-    g.fillStyle = COLOR.anim;
+    g.fillStyle = ANIM_SHADE;
     if (ai) g.fillRect(x0, y + CLIP_H - 5, ai * k * px, 5);
     if (ao) g.fillRect(x1 - ao * k * px, y + CLIP_H - 5, ao * k * px, 5);
     g.save(); g.beginPath(); g.rect(cx0, y, cx1 - cx0 - 2, CLIP_H); g.clip();
     const lx = Math.max(x0, 0) + 3, mid = y + CLIP_H / 2;
     g.font = `11px ${UI_FONT}`;
     const tw = g.measureText(nameOf(it)).width + 13;
-    g.fillStyle = isShape(it) ? COLOR.shapeTag : tone("clip-text-tag"); g.beginPath(); g.roundRect(lx, y + 3, tw + 8, CLIP_H - 6, 3); g.fill();
+    g.fillStyle = tone(isShape(it) ? "clip-shape-tag" : "clip-text-tag"); g.beginPath(); g.roundRect(lx, y + 3, tw + 8, CLIP_H - 6, 3); g.fill();
     g.fillStyle = tone("clip-label");
     g.font = `600 11px ${UI_FONT}`; g.fillText(it.kind === "arrow" ? "↗" : it.kind === "circle" ? "◯" : "T", lx + 4, mid);
     g.font = `11px ${UI_FONT}`; g.fillText(nameOf(it), lx + 17, mid);

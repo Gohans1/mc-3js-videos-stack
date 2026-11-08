@@ -4,6 +4,7 @@
 // and vectorscope (hue round the circle, saturation out from the middle). Levels read 0 to 1023 as CapCut and DaVinci label
 // them. The frame is read small (W x H)
 import { S } from "../core/state";
+import { tone } from "../timeline/canvas";
 import { get } from "../core/store";
 
 const W = 256, H = 144, LEVELS = 256;
@@ -175,9 +176,9 @@ const paint = (pane: HTMLCanvasElement, from: HTMLCanvasElement, kind: "parade" 
     x.fillStyle = "rgba(0,0,0,0.78)";
     x.fillRect(w - 12 * dpr - bw - ww, y - 8 * dpr, bw + ww + 8 * dpr, 16 * dpr);
     x.textAlign = "right";
-    x.fillStyle = clipped.black > 0.02 ? "#D0A215" : LABEL;
+    x.fillStyle = clipped.black > 0.02 ? tone("warn") : LABEL;
     x.fillText(black, w - 8 * dpr, y);
-    x.fillStyle = clipped.white > 0.02 ? "#D0A215" : LABEL;
+    x.fillStyle = clipped.white > 0.02 ? tone("warn") : LABEL;
     x.fillText(white, w - 8 * dpr - bw, y);
   }
 };

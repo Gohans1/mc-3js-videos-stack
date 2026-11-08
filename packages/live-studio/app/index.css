@@ -181,6 +181,23 @@
     --clip-audio-tag: #274569;
     --clip-wave: #0E81B3;
     --clip-label: #D2D6D9; /* the words on a clip's tag */
+    --clip-video-hover: #0A5A60;
+    --clip-video-text: #8FB3B5; /* a shot's length and "hold", dim on its clip */
+    --clip-shape: #6B3F58; /* an arrow or a circle on the Text row */
+    --clip-shape-tag: #7D5069;
+    --shot-now: #404040; /* the shot under the playhead, on the strip that names shots when a film has no Camera row */
+    --stuck: #D14D41; /* a stretch held still past 6 s, under the ruler */
+    --pace: #323232; /* a voice line behind its wave, at an easy pace */
+    --pace-fast: #4A2622;
+    --pace-slow: #1E3550;
+    --pace-pick: #3D4A16; /* the line picked */
+    --beat-move: #205EA6; /* an action on the Action row, eased */
+    --beat-snap: #BC5215; /* one that snaps */
+    --beat-hold: #4A5A12; /* one that holds still */
+    --note-done: #5A5A5A; /* a done note's mark on the ruler */
+    --key-hold: #4F4F4F; /* the dotted line where a keyframe row holds still */
+    --level-near: #F08A34; /* an audio level within 1 dB of full scale: its cap, Final Cut Pro's warning */
+    --level-over: #EA3223; /* one past it: its tip */
     --slider: #404040;
     --slider-fill: #E0E0E0;
     color-scheme: dark;
