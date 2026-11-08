@@ -105,6 +105,7 @@ function Options() {
 
 const KEYS: [ReactNode, ReactNode][] = [
   ["Click the picture", "pick an object or a title there; a click beside them picks nothing"],
+  ["Drag the picture", "the free camera comes on from the view you see and turns with the drag (Shift+drag: orbit); F leaves it"],
   ["Right-click the picture", "pin a note there: the Draw tools open above the pin, or just type or talk. On a phone, a tap pins it"],
   [<><Kbd>J</Kbd><Kbd>K</Kbd><Kbd>L</Kbd></>, "play backward, stop, play forward; J or L again goes faster (2×, 4×, 8×)"],
   [<Kbd>M</Kbd>, "add a note here (CapCut's marker)"],

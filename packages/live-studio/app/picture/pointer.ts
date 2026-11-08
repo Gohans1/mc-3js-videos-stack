@@ -1,6 +1,6 @@
 // The picture's size, and what the mouse and keys do on it, as in a 3D editor's viewport: a click picks an object (or a title,
 // text/onpicture.ts), the right button pins a note; a tap on a phone, which has no right button, pins the note. Dragging and the
-// flying keys move the free camera
+// flying keys move the free camera, and a left drag on the film's own view turns the free camera on from that view, turning
 import { S } from "../core/state";
 import { get } from "../core/store";
 import { openNote } from "../notes/notes";
@@ -8,7 +8,7 @@ import { textPress } from "../text/onpicture";
 import { gizmoBusy, hover, pickAt, select } from "../objects/placed";
 import { setPlaying } from "../playback/transport";
 import { frameSize } from "./frame";
-import { flight, flyCam, moveCam, turnAbout } from "./freecam";
+import { flight, flyCam, moveCam, setFree, turnAbout } from "./freecam";
 import { lookAtClick } from "./look";
 import { render } from "./render";
 
@@ -20,16 +20,24 @@ export const attachPicture = () => {
   const { canvas } = S.el;
   new ResizeObserver(fit).observe(S.el.view);
   let downAt: [number, number] | null = null, camDrag: { x: number; y: number; mode: "look" | "orbit" | "slide" } | null = null;
+  let wake: { x: number; y: number; id: number; orbit: boolean } | null = null; // a left press on the film's view, a drag once it moves
   const frac = (e: MouseEvent) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const; };
   canvas.addEventListener("pointerdown", (e) => {
     if (gizmoBusy()) { downAt = null; return; } // the gizmo's handle under the pointer takes this drag
     if (!S.tools?.free.on && textPress(e, frac(e))) { downAt = null; return; } // a title on the picture: picked and dragged
     downAt = [e.clientX, e.clientY];
-    if (!S.tools?.free.on) return;
+    if (!S.tools?.free.on) { if (e.pointerType === "mouse" && e.button === 0) wake = { x: e.clientX, y: e.clientY, id: e.pointerId, orbit: e.shiftKey }; return; }
     canvas.setPointerCapture(e.pointerId);
     camDrag = { x: e.clientX, y: e.clientY, mode: e.button !== 0 ? "slide" : e.shiftKey ? "orbit" : "look" };
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (wake && Math.hypot(e.clientX - wake.x, e.clientY - wake.y) > 4 && S.tools) {
+      setFree(true, true);
+      canvas.setPointerCapture(wake.id);
+      camDrag = { x: wake.x, y: wake.y, mode: wake.orbit ? "orbit" : "look" };
+      downAt = wake = null;
+      hover(null);
+    }
     if (!camDrag && e.pointerType === "mouse" && !gizmoBusy()) hover(pickAt(...frac(e)));
     if (!camDrag || !S.tools) return;
     const f = S.tools.free, dx = e.clientX - camDrag.x, dy = e.clientY - camDrag.y;
@@ -39,7 +47,7 @@ export const attachPicture = () => {
     else { const s = f.p.distanceTo(f.l) * 0.0012; moveCam(0, -dx * s, dy * s); }
     S.viewMoved = true;
   });
-  addEventListener("pointerup", () => { camDrag = null; });
+  addEventListener("pointerup", () => { camDrag = wake = null; });
   canvas.addEventListener("pointerleave", () => hover(null));
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   // Flying keys, by their place on the keyboard (any layout). Typing a note or a shortcut with Ctrl never flies. Any other key,

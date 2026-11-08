@@ -122,7 +122,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 ## Riêng của studio (CapCut không có)
 
 - Note ghim lên hình bằng chuột phải (điện thoại: chạm) và vẽ tay (D), danh sách note kiểu Frame.io, AI đọc rồi sửa phim. Chuột trái trên hình là chọn (đồ vật, chữ) như CapCut.
-- Free camera kiểu Minecraft (F), Shift+K lưu khoá từ góc đó, Alt+C copy góc camera thành một dòng chữ để dán vào note.
+- Free camera kiểu Minecraft (F), hoặc giữ chuột trái kéo trên hình là vào free camera và xoay luôn từ đúng góc đang nhìn; Shift+K lưu khoá từ góc đó, Alt+C copy góc camera thành một dòng chữ để dán vào note.
 - Chụp hình so sánh (Shift+\, giữ \ để xem lại), chip phương án A/B/C/D.
 - Các lệnh tự kiểm (CHECK=motion, seen, touch, slide; framecheck) ghi trong AGENTS.md gốc của monorepo.
 - Trang phát tiếng qua cùng kiểu limiter với mix.py (app/sound/brickwall.ts), nên tai nghe và đồng hồ khớp bản final: đo sealed-room lệch ffmpeg 0.1 LUFS, đỉnh 0.2 dB.

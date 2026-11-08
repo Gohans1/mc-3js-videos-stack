@@ -34,12 +34,13 @@ export const flyCam = (forward: number, right: number, up: number) => {
   S.viewMoved = true;
 };
 // The first free camera after a page load starts at the film's home spot (tools.home), so a reload never leaves the
-// creator wherever the playhead happened to be; later ones start from the shot's own camera
+// creator wherever the playhead happened to be; later ones start from the shot's own camera, and so does one a drag on the
+// picture turns on (here), which must turn the view seen
 let homed = false;
-export const setFree = (on: boolean) => {
+export const setFree = (on: boolean, here = false) => {
   const tools = S.tools;
   if (!tools) return;
-  const f = tools.free, home = !homed && tools.home;
+  const f = tools.free, home = !homed && !here && tools.home;
   if (on && home) { f.p.set(...home.p); f.l.set(...home.l); f.fov = home.fov ?? tools.camera.fov; }
   else if (on) { f.p.copy(tools.camera.position); f.l.copy(tools.look); f.fov = tools.camera.fov; }
   if (on) homed = true;
