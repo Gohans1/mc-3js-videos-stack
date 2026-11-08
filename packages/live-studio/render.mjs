@@ -3,7 +3,8 @@
 // headless Chrome on the GPU, and writes what the page sends back: stills to renders/, the film as 30 s H.264 chunks to
 // renders/chunks/, joined losslessly into renders/draft_video.mp4. Nothing is written on any other drive.
 //   AT=40,41.5                 stills at these heard seconds (default 1), named still_<s>s.jpg
-//   NOLIST=1                   without the list of what is going on (draw.describe), to judge the picture itself
+//   LIST=1                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
+//                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot
 //   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
 //   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
 //   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
@@ -40,7 +41,7 @@ const cfg = {
   W: 1280, H: 720, draft: true, quality: 0.9,
   stills: what === "clip" ? [] : numbers(env.AT ?? "1").map((s) => ({ name: `still_${s}s.jpg`, frame: Math.round(s * FPS) })),
   clip: what === "stills" ? null : { chunk: CHUNK, only: env.CHUNKS ? numbers(env.CHUNKS) : null, samples: 1, bitrate: 4e6 },
-  list: !env.NOLIST,
+  list: env.LIST === "1",
   inspect: env.INSPECT ? numbers(env.INSPECT) : null,
   checks: (env.CHECK ?? "").split(";").filter(Boolean).map((c) => { const [name, args = ""] = c.split(":"); return [name.trim(), args ? args.split(",").map((a) => (a.trim() !== "" && !isNaN(+a) ? +a : a.trim())) : []]; }),
   choices: choicesFile ? JSON.parse(readFileSync(choicesFile, "utf8")) : {},

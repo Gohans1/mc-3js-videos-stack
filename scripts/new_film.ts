@@ -34,5 +34,5 @@ run("node", [join(studio, "init.mjs"), film], ROOT);
 run("bun", ["scripts/link.ts", name], ROOT);
 console.log(`\nfilms/${name} is ready (studio port ${port}).
   cd films/${name} && bun run studio            the studio prints both "film contract ... ok" lines
-  NOLIST=1 AT=1,4 bun run render stills          a first look, renders/still_*.jpg
+  AT=1,4 bun run render stills                   a first look, renders/still_*.jpg
   tailscale serve --bg --https=<free port> http://127.0.0.1:${port}   to watch it from the phone`);
