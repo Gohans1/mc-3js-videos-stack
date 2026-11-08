@@ -1,17 +1,18 @@
-// The column beside the sound tracks (sound/lanes.ts draws the tracks): each track's name, mute and lock, row for row.
+// The column beside the sound tracks (sound/lanes.ts draws the tracks): each track's name, mute, solo and lock, row for row.
 // A press on the name picks every clip on that track; a double press (or F2) renames it
 import { cn } from "cn";
-import { Lock, LockOpen, Volume2, VolumeX } from "lucide-react";
+import { Headphones, Lock, LockOpen, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 import { Tip } from "../components/Tip";
 import { Toggle } from "@/components/ui/toggle";
 import { ADD_H, TOP, TRACK_H } from "./lanes";
-import { allClips, clipOf, lanes, setClips, setTrack } from "./sound";
+import { allClips, clipOf, lanes, setClips, setSolo, setTrack } from "./sound";
 import type { Track } from "./tracks";
 import { useStudio } from "../core/store";
 
 function Head({ t }: { t: Track }) {
   const [naming, setNaming] = useState(false);
+  const live = useStudio((s) => s.liveLanes), solo = useStudio((s) => s.solo.includes(t.id));
   const pickAll = () => setClips(allClips().filter((r) => clipOf(r)?.track === t.id));
   const done = (name: string | null) => { setNaming(false); if (name?.trim() && name.trim() !== t.name) setTrack(t.id, { name: name.trim() }); };
   return (
@@ -45,6 +46,13 @@ function Head({ t }: { t: Track }) {
           {t.mute ? <VolumeX /> : <Volume2 />}
         </Toggle>
       </Tip>
+      {live && (
+        <Tip label={solo ? "Stop soloing this track" : "Solo: hear only this track (and other soloed ones), in this page only"}>
+          <Toggle size="sm" className="size-6 px-0 text-muted-foreground aria-pressed:text-primary" pressed={solo} onPressedChange={(on) => setSolo(t.id, on)} aria-label={`Solo ${t.name}`}>
+            <Headphones />
+          </Toggle>
+        </Tip>
+      )}
       <Tip label={t.lock ? "Unlock track" : "Lock track, so its clips can't be moved, trimmed or deleted"}>
         <Toggle size="sm" className="size-6 px-0 text-muted-foreground aria-pressed:text-foreground upright:hidden" pressed={!!t.lock} onPressedChange={(on) => setTrack(t.id, { lock: on || undefined })} aria-label={`Lock ${t.name}`}>
           {t.lock ? <Lock /> : <LockOpen />}

@@ -90,12 +90,12 @@ export const drawLanes = () => {
   g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
   boxes = [];
   // A library sound under the pointer: its clips stay bright and ringed, the rest step back
-  const lit = get().soundLit;
+  const lit = get().soundLit, solo = get().solo;
   for (const ref of allClips()) {
     const [s, e] = span(ref), k = rowOf(ref);
     if (k < 0 || e < a || s > a + v) continue;
     const x0 = X(s), x1 = Math.max(x0 + 4, X(e)), y = rowY(k) + (TRACK_H - CLIP_H) / 2, t = ts[k], shine = lit !== null && clipOf(ref)!.name === lit;
-    g.globalAlpha = t.mute || (lit !== null && !shine) ? 0.35 : 1;
+    g.globalAlpha = t.mute || (solo.length && !solo.includes(t.id)) || (lit !== null && !shine) ? 0.35 : 1;
     drawClip(g, ref, x0, x1, y, w);
     g.globalAlpha = 1;
     if (shine) { g.strokeStyle = COLOR.lit; g.lineWidth = 1.5; g.beginPath(); g.roundRect(Math.max(-2, x0) - 1.5, y - 1.5, Math.min(w + 2, x1) - Math.max(-2, x0) + 3, CLIP_H + 3, 4); g.stroke(); }

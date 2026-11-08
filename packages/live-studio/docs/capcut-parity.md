@@ -25,7 +25,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Auto snapping (N): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác; giữ Shift khi kéo để tắt tạm.
 - Track lock, hide, mute, solo:
   - Mute, Lock ở đầu mỗi track âm thanh: CÓ. Mute áp cả bản render final (mix.py bỏ track đó).
-  - Solo: ĐANG LÀM (chỉ trong trang, không lưu vào phim).
+  - Solo: CÓ, nút tai nghe ở đầu track (khi trang tự phát các track), lời dẫn cũng im theo. Chỉ trong trang, không lưu, không ảnh hưởng bản render.
   - Hide: BỎ, studio không có track hình hay chữ; ẩn một đạo cụ thì chọn Off ở chip phương án.
 - Transform, stabilize, apply to all:
   - Đồ vật đặt thêm: CÓ, kéo thả từ tab Objects, W/E/R đổi tay cầm di chuyển/xoay/phóng.

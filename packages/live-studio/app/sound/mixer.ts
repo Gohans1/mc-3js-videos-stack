@@ -14,7 +14,7 @@ import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
 import type { Lanes, LibraryItem } from "./sound";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
-import { say } from "../core/store";
+import { get, say } from "../core/store";
 
 interface Source { lanes: () => Lanes | null; library: () => LibraryItem[]; span: (c: ClipRef) => [number, number] }
 interface Clip { key: string; name: string; t0: number; t1: number; start: number; length?: number; loop: boolean; db: number; fadeIn: number; fadeOut: number; duck: number; pan: number; filters: string[] }
@@ -31,8 +31,9 @@ const live = stage(audioCtx, master);
 
 let source: Source | null = null, on = false, routed: MediaElementAudioSourceNode | null = null;
 const fromMix = audioCtx.createGain();
-// The mix element's own volume is applied before it reaches here, and master applies it again: undone, so it counts once
-const levelMix = () => { const a = S.el.audio, v = a.muted ? 0 : a.volume; fromMix.gain.value = v > 0 ? 1 / v : 0; };
+// The mix element's own volume is applied before it reaches here, and master applies it again: undone, so it counts once.
+// A soloed track silences the narration as it does every other track
+const levelMix = () => { const a = S.el.audio, v = a.muted ? 0 : a.volume; fromMix.gain.value = v > 0 && !get().solo.length ? 1 / v : 0; };
 
 // ---------- The lanes' sound files, decoded once, with ffmpeg volumedetect's mean_volume for an option's level
 const sounds = new Map<string, Promise<Sound | null>>(), ready = new Map<string, Sound>();
@@ -73,11 +74,13 @@ const filterNode = (ctx: BaseAudioContext, spec: string): AudioNode | null => {
   return ctx.createIIRFilter(kind === "lowpass" ? [b0, 0] : [b0, -b0], [1, a1]);
 };
 
-// ---------- What sounds where: mix.py's build() over the lanes, with the studio's picks (mix.py chosen/as_option) and its muted tracks
+// ---------- What sounds where: mix.py's build() over the lanes, with the studio's picks (mix.py chosen/as_option) and its muted
+// tracks; in the page also its soloed ones
 const clips = (l: Lanes): Clip[] => {
-  const out: Clip[] = [], muted = new Set((l.tracks ?? []).filter((t) => t.mute).map((t) => t.id));
+  const out: Clip[] = [], muted = new Set((l.tracks ?? []).filter((t) => t.mute).map((t) => t.id)), solo = get().solo;
   const pick = (e: { name: string; gain: number; track?: string; try?: string[] }) => {
     if (e.track && muted.has(e.track)) return null;
+    if (solo.length && !solo.includes(e.track ?? "")) return null;
     const p = e.try?.length ? lanePick(e.name) : null;
     if (p?.set === "off") return null;
     const name = p && [e.name, ...e.try!].includes(p.set) ? p.set : e.name, gain = p?.gain ?? 1;

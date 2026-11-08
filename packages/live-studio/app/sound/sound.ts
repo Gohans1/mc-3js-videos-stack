@@ -19,7 +19,15 @@ export interface Peaks { step: number; peaks: number[] }
 export let lanes: Lanes | null = null;
 export let library: LibraryItem[] = [];
 
-const changed = () => { lanes = doc.data; set({ soundRev: get().soundRev + 1 }); S.dirty = true; replan(); if (get().clips.some((c) => !clipOf(c))) setClips([]); };
+// A soloed track that went (emptied, undone) lets go of its solo, or the page would stay silent with no button to undo it
+const changed = () => {
+  lanes = doc.data;
+  const ids = new Set(lanes?.tracks?.map((t) => t.id)), solo = get().solo.filter((t) => ids.has(t));
+  set({ soundRev: get().soundRev + 1, ...(solo.length !== get().solo.length && { solo }) });
+  S.dirty = true;
+  replan();
+  if (get().clips.some((c) => !clipOf(c))) setClips([]);
+};
 const doc = createDoc<Lanes>("sound", {
   label: "audio",
   changed,
@@ -50,7 +58,7 @@ export const loadSound = async () => {
   const got: { library: LibraryItem[]; live?: boolean } = await r.json();
   if (library.length && JSON.stringify(got.library) !== JSON.stringify(library)) forgetSounds();
   library = got.library;
-  set({ sound: true });
+  set({ sound: true, liveLanes: !!got.live });
   setLive(!!got.live, { lanes: () => lanes, library: () => library, span });
   changed();
 };
@@ -61,6 +69,13 @@ export const edit = doc.edit, preview = doc.preview, snapshot = doc.snapshot, re
 // ---------- What the lanes and the panel ask for
 export const setClips = (cs: ClipRef[]) => { set(cs.length ? { clips: cs, clip: cs.length === 1 ? cs[0] : null, side: "sound", camKey: null, camPicks: [], shotPick: null, keyPicks: [], object: null } : { clips: [], clip: null }); S.dirty = true; };
 export const setClip = (c: ClipRef | null) => setClips(c ? [c] : []);
+// Solo, as in Premiere and Resolve: only the soloed tracks sound, heard at once; this page only, never saved or rendered
+export const setSolo = (id: string, on: boolean) => {
+  const solo = get().solo.filter((t) => t !== id);
+  set({ solo: on ? [...solo, id] : solo });
+  S.dirty = true;
+  replan();
+};
 export const picked = (c: ClipRef) => get().clips.some((p) => same(p, c));
 export const locked = (c: ClipRef) => !!(lanes && trackOf(lanes, c)?.lock);
 export const allClips = (): ClipRef[] => (lanes ? refs(lanes) : []);
