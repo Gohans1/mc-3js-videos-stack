@@ -42,3 +42,11 @@ export const scheduleGain = (param: AudioParam, c: GainClip, from: number, to: n
   param.setValueAtTime(10 ** (points[0].gain / 20), when(from));
   for (const k of points.slice(1)) param.exponentialRampToValueAtTime(10 ** (k.gain / 20), when(k.t));
 };
+
+export const normalizationDelta = (measured: number, target: number, peak: number): number | null =>
+  [measured, target, peak].every(Number.isFinite) ? Math.min(target - measured, -1 - peak) : null;
+
+export const offsetGain = (c: GainClip, delta: number) => {
+  c.gain = Math.round((c.gain + delta) * 1000) / 1000;
+  if (c.gainKeys) for (const k of c.gainKeys) k.gain = Math.round((k.gain + delta) * 1000) / 1000;
+};

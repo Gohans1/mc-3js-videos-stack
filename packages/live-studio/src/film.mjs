@@ -272,8 +272,18 @@ export const openFilm = (projectDir, { send }) => {
     return makingSmall.get(name);
   };
 
+  const measureSound = (list, i, data) => new Promise((done, fail) => {
+    const script = resolve(STUDIO, "../../scripts/sound/mix.py");
+    const child = execFile(PYTHON, [script, "--measure", list, String(i)], { cwd: PROJECT, windowsHide: true, timeout: 250000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) { fail(new Error(stderr.trim().split("\n").at(-1) || error.message)); return; }
+      try { done(JSON.parse(stdout)); } catch (e) { fail(e); }
+    });
+    child.stdin.on("error", () => {});
+    child.stdin.end(JSON.stringify(data));
+  });
+
   return {
-    PROJECT, NAME, SRC, PUBLIC, WORK, MIX, MIX_SMALL, LITE, EDIT, VOICE_MAP, hosts, threeFrom, smallSfx,
+    PROJECT, NAME, SRC, PUBLIC, WORK, MIX, MIX_SMALL, LITE, EDIT, VOICE_MAP, hosts, threeFrom, smallSfx, measureSound,
     liveLanes: () => LIVE && mixIsLive(),
     notes, readChoices, choose, ratio, setRatio, trials, shotComments, stamp, sound, cam, shots, text, keyFiles, ownWrites, handEdited,
     contract: () => ({ files: fileProblems }), pageSays,

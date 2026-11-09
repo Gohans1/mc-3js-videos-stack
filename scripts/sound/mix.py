@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from functools import cache
 from pathlib import Path
 
@@ -124,8 +125,9 @@ def gain_filter(keys, base):
     return f"aeval='val(ch)*pow(10,({expression})/20)':c=same"
 
 
-def build(out, beds, sfx, voice=True, span=None, master=True):
+def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None):
     inputs, chains = [], []
+    end = END if end is None else end
 
     def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None):
         i = len(chains)  # one chain per input file, so this is the input's index
@@ -153,7 +155,7 @@ def build(out, beds, sfx, voice=True, span=None, master=True):
     for s in sfx:
         add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), gain_keys=s.get("gainKeys"), extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
     if not chains:  # a film with no sound yet: silence as long as the film
-        inputs.extend(["-f", "lavfi", "-t", str(END), "-i", "anullsrc=r=48000:cl=stereo"])
+        inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
     graph = chains + [
         # audio.drive dB into the limiter first: hits (a slam, a drawer) stand ~20 dB over the average, too far apart for the
@@ -161,15 +163,32 @@ def build(out, beds, sfx, voice=True, span=None, master=True):
         # safety limiter at about -7 dBFS. The loudness pass must stay linear: ffmpeg-normalize's dynamic fallback lifts
         # every quiet stretch (the CCTV hiss came up level with the voice). It falls back when target - true peak gap is
         # too small, so a quiet excerpt takes a lower target (src/timeline/audio.json lufs)
-        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},asetpts=N/SR/TB,atrim=duration={END}"
+        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={end},asetpts=N/SR/TB,atrim=duration={end}"
         + (f",volume={A.get('drive', 0)}dB,alimiter=limit=0.45:level=false" if master else "")
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
     ]
     script = out.with_name(out.name + ".graph.txt")
     script.write_text(";\n".join(graph), encoding="utf8")
-    codec = ["-c:a", "libopus", "-b:a", "96k"] if out.suffix == ".webm" else ["-c:a", "pcm_s16le"]
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex_script", str(script), "-map", "[out]", "-ar", "48000", *codec, str(out)], check=True)
+    codec = ["-c:a", "libopus", "-b:a", "96k"] if out.suffix == ".webm" else ["-c:a", "pcm_f32le" if float_output else "pcm_s16le"]
+    subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex_script", str(script), "-map", "[out]", "-ar", "48000", *codec, str(out)], check=True, timeout=120 if float_output else None)
     script.unlink()
+
+
+def measure_clip(kind, index):
+    c = chosen(A[kind][index])
+    if c is None:
+        raise ValueError("Choose an audible sound option before normalizing")
+    start = c["from"] if kind == "beds" else c["at"]
+    length = c["to"] - start if kind == "beds" else c.get("length", seconds(c["name"]) - c.get("start", 0))
+    if length < 0.4:
+        raise ValueError("Loudness needs at least 0.4 seconds of audio")
+    with tempfile.TemporaryDirectory(prefix="studio-loudness-") as folder:
+        out = Path(folder) / "clip.wav"
+        build(out, [c] if kind == "beds" else [], [c] if kind == "sfx" else [], voice=False, span=(start, start + length), master=False, float_output=True, end=start + length)
+        r = subprocess.run(["ffmpeg", "-v", "info", "-i", str(out), "-af", "loudnorm=I=-14:TP=-1:LRA=11:print_format=json", "-f", "null", "-"], capture_output=True, text=True, check=True, timeout=120)
+        stats, _ = json.JSONDecoder().raw_decode(r.stderr[r.stderr.rfind("{"):])
+        finite = lambda key: float(stats[key]) if math.isfinite(float(stats[key])) else None
+        return {"loudness": finite("input_i"), "peak": finite("input_tp")}
 
 
 def studio(out):
@@ -199,6 +218,10 @@ def studio(out):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--measure"]:
+        A = json.load(sys.stdin)
+        print(json.dumps(measure_clip(sys.argv[2], int(sys.argv[3]))))
+        raise SystemExit
     if sys.argv[1:2] == ["--raw"]:
         if "--live-lanes" in sys.argv:
             build(Path(sys.argv[2]), [], [], master=False)

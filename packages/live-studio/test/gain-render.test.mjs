@@ -31,6 +31,36 @@ test("the real FFmpeg mixer renders volume keys per sample on trimmed one-shots 
         const expected = .25 * Math.SQRT1_2 * 10 ** (db / 20);
         assert.ok(Math.abs(samples.readFloatLE(Math.round(t * 48000) * 8) - expected) < .00004, `${bed ? "bed" : "sfx"} at ${t}: expected ${db} dB`);
       }
+      const measured = run("python", ["-c", "import importlib.util,json,sys; s=importlib.util.spec_from_file_location('mix',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); c=json.loads(sys.argv[2]); m.A['beds' if 'from' in c else 'sfx']=[c]; print(json.dumps(m.measure_clip('beds' if 'from' in c else 'sfx',0)))", source, JSON.stringify(clip)]);
+      const metrics = JSON.parse(measured.stdout);
+      assert.equal(typeof metrics.peak, "number");
+      assert.ok(metrics.peak < -10, "the clip's measured true peak includes its gain envelope");
     }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the normalization command measures an unsaved clip snapshot without clipping floating-point peaks or changing the project", () => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-normalize-"));
+  const run = (exe, args, input) => {
+    const r = spawnSync(exe, args, { cwd: dir, encoding: "utf8", input, timeout: 20000 });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout;
+  };
+  try {
+    mkdirSync(join(dir, "src/timeline"), { recursive: true }); mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+    writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 1, voice: { warp: [], lines: [] } }));
+    const original = JSON.stringify({ beds: [], sfx: [], voice: false });
+    writeFileSync(join(dir, "src/timeline/audio.json"), original);
+    run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration=2", "sound/sfx/tone.wav"]);
+    const data = { beds: [{ name: "tone", from: 2, to: 4, gain: 24, fadeIn: 0, fadeOut: 0 }], sfx: [], voice: false };
+    const command = [resolve("../../scripts/sound/mix.py"), "--measure", "beds", "0"];
+    const before = JSON.parse(run("python", command, JSON.stringify(data)));
+    assert.ok(Math.abs(before.loudness - 2.9) < .15, JSON.stringify(before));
+    assert.ok(before.peak > 2.8, "float WAV must preserve peaks above zero before gain is corrected");
+    data.beds[0].gain += -14 - before.loudness;
+    const after = JSON.parse(run("python", command, JSON.stringify(data)));
+    // FFmpeg ebur128.c uses 0.1 LU histogram bins; two measurements can differ by one bin.
+    assert.ok(Math.abs(after.loudness + 14) <= .1, JSON.stringify(after));
+    assert.equal(readFileSync(join(dir, "src/timeline/audio.json"), "utf8"), original);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

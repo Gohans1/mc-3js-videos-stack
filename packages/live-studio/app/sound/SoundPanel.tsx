@@ -26,6 +26,7 @@ import { FavoriteStar } from "../components/FavoriteStar";
 import { FieldRow, KeyNav, Reset, Section, Segmented, SliderRow } from "../components/inspector";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
+import { NormalizeClip } from "./NormalizeClip";
 
 // The picked clip as CapCut's Audio tab: its Basic section (volume, pan, fades, and here ducking or length), then what the app adds
 // (which file, which track, where it runs). A drag previews and saves once, when let go: one undo step
@@ -67,6 +68,7 @@ function Inspector({ clip }: { clip: ClipRef }) {
         {bed && lanes?.voice === false && <p className="text-xs text-muted-foreground">This film has no narration in its mix yet, so nothing ducks until it does.</p>}
         {!bed && row("Duration", "length", to - from, 1 / 30, Math.max(1 / 30, file - ((c as { start?: number }).start ?? 0)), 0.01, "s", 2)}
       </Section>
+      <NormalizeClip key={`${clip.list}:${clip.i}`} clip={clip} />
       <Section title="Clip">
         <FieldRow label="Sound">
           <Select items={names} value={c.name} onValueChange={(v) => v && swapSound(clip, v as string)}>

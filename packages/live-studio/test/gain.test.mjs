@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { gainAt, gainPoints, shiftGainTime, toggleGainKey, writeGain } from "../app/sound/gain.ts";
+import { gainAt, gainPoints, normalizationDelta, offsetGain, shiftGainTime, toggleGainKey, writeGain } from "../app/sound/gain.ts";
 import { SoundTimeline } from "../src/contract.mjs";
 
 test("volume automation holds endpoints and interpolates in dB, including a seek inside a ramp", () => {
@@ -37,4 +37,17 @@ test("audio files reject duplicate or unordered volume keys and non-finite level
   const parse = (gainKeys) => SoundTimeline.safeParse({ beds: [], sfx: [{ name: "tap", at: 0, gain: 0, gainKeys }] }).success;
   assert.equal(parse([{ t: -2, gain: -20 }, { t: 3, gain: 0 }]), true);
   for (const keys of [[{ t: 0, gain: Infinity }], [{ t: 0, gain: 0 }, { t: 0, gain: 1 }], [{ t: 2, gain: 0 }, { t: 1, gain: 0 }]]) assert.equal(parse(keys), false);
+});
+
+test("normalization reaches the loudness target when headroom permits and caps gain before true-peak clipping", () => {
+  assert.equal(normalizationDelta(-24, -14, -20), 10);
+  assert.equal(normalizationDelta(-24, -14, -3), 2);
+  assert.equal(normalizationDelta(-10, -14, 0), -4);
+  assert.equal(normalizationDelta(-Infinity, -14, -Infinity), null);
+});
+
+test("normalizing an animated clip preserves the differences between its volume keys", () => {
+  const c = { gain: -12, gainKeys: [{ t: -1, gain: -20 }, { t: 3, gain: -6 }] };
+  offsetGain(c, 4);
+  assert.deepEqual(c, { gain: -8, gainKeys: [{ t: -1, gain: -16 }, { t: 3, gain: -2 }] });
 });

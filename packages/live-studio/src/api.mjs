@@ -18,6 +18,7 @@ import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
 import { RATIOS } from "./frame.mjs";
 import { weighFirstVisit } from "./weight.mjs";
+import { SoundTimeline } from "./contract.mjs";
 
 const MIME = { ".gltf": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".png": "image/png", ".bin": "application/octet-stream", ".js": "text/javascript", ".json": "application/json", ".wav": "audio/wav", ".webm": "audio/webm", ".jar": "application/java-archive" };
 // The page sends null for a picture it could not make (no pin, no crop): the words still count
@@ -33,6 +34,7 @@ const Choose = z.object({ group: z.string().min(1), set: z.string(), gain: z.num
 const FilmChange = z.object({ ratio: z.enum(RATIOS) });
 const PageProblems = z.object({ problems: z.array(z.string()) });
 const SoundSave = z.object({ base: z.string(), data: z.looseObject({}) });
+const SoundMeasure = z.object({ list: z.enum(["beds", "sfx"]), i: z.number().int().nonnegative(), data: SoundTimeline });
 const CamSave = z.object({ base: z.string(), data: z.array(z.looseObject({})) });
 const ShotsSave = CamSave;
 const TextSave = SoundSave;
@@ -191,6 +193,13 @@ export const createApi = (film, { page, events, send }) => {
     if (!film.sound) return noSound(c);
     const { base, data } = c.req.valid("json"), r = film.sound.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
+  app.post("/api/sound/measure", zValidator("json", SoundMeasure), async (c) => {
+    if (!film.sound) return noSound(c);
+    const { list, i, data } = c.req.valid("json"), clip = data[list][i];
+    if (!clip || !film.sound.fileOf(clip.name)) return c.json({ error: "This sound file is unavailable" }, 404);
+    try { return c.json(await film.measureSound(list, i, data)); }
+    catch (e) { return c.json({ error: e.message }, 422); }
   });
   // The camera keys, the same way (package.json "live-studio".camTimeline)
   app.get("/api/cam", (c) => { const s = film.cam?.read(); return s ? fresh(c, s) : noSound(c); });
