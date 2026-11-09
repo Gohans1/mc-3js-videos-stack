@@ -46,7 +46,7 @@ export function Stage({ bind }: { bind: Bind }) {
           <CompareOverlay />
           {/* Above the chips: a passed note shows for 3 s only, and it lets taps through to them */}
           {/* The picked text items' outlines, where the film draws them (text/onpicture.ts) */}
-          <div ref={bind("textsel")} aria-hidden className="pointer-events-none absolute inset-0 z-3 *:absolute *:border *:border-white/90 *:ring-1 *:ring-black/45" />
+          <div ref={bind("textsel")} data-text-selection aria-hidden className="pointer-events-none absolute inset-0 z-3 *:absolute *:inset-0 *:size-full *:overflow-visible" />
           <div ref={bind("pins")} className="pointer-events-none absolute inset-0 z-4 overflow-hidden" />
           {/* Strokes (notes/ink.ts): drawn on while a tool is in hand, and otherwise lets every tap through */}
           <canvas ref={bind("ink")} className={cn("absolute inset-0 z-5 block size-full touch-none", ink ? "cursor-crosshair" : "pointer-events-none")} />

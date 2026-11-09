@@ -216,6 +216,15 @@ export function makeTitles(renderer, W, H) {
   draw.fonts = FONTS;
   draw.anims = { text: { in: TEXT_IN, out: TEXT_OUT }, shape: { in: SHAPE_IN, out: SHAPE_OUT } };
   // Each item on screen at t: its place in the list and its box (x0, y0, x1, y1 in 0 to 1 of the frame), top-most last
-  draw.boxes = (list, t, camera, tracks) => onScreen(g, list, t, W, H, camera, tracks).map(({ i, m }) => ({ i, box: [m.x0 / W, m.y0 / H, (m.x0 + m.w) / W, (m.y0 + m.h) / H] }));
+  draw.boxes = (list, t, camera, tracks) => onScreen(g, list, t, W, H, camera, tracks).flatMap(({ i, it, ph, m }) => {
+    const lk = look(it, ph);
+    if (lk.alpha * (it.opacity ?? 1) <= .001 || lk.show <= 0) return [];
+    const transform = new DOMMatrix().translate(m.cx, m.cy + lk.dy * (m.px ?? m.h)).rotate(it.rotate ?? 0).scale(lk.scale).translate(-m.cx, -m.cy);
+    const corners = [[m.x0, m.y0], [m.x0 + m.w, m.y0], [m.x0 + m.w, m.y0 + m.h], [m.x0, m.y0 + m.h]].map(([x, y]) => {
+      const p = transform.transformPoint({ x, y }); return [p.x / W, p.y / H];
+    });
+    const xs = corners.map((p) => p[0]), ys = corners.map((p) => p[1]);
+    return [{ i, corners, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] }];
+  });
   return draw;
 }

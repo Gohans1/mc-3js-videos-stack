@@ -21,16 +21,36 @@ export const drawTextSel = () => {
   const el = S.el?.textsel;
   if (!el) return;
   const picks = get().textPicks, shown = picks.length ? boxesNow().filter((b) => picks.includes(b.i)) : [];
-  while (el.children.length < shown.length) el.append(document.createElement("div"));
+  const w = el.clientWidth, h = el.clientHeight;
+  const svg = (tag: string) => document.createElementNS("http://www.w3.org/2000/svg", tag);
+  while (el.children.length < shown.length) {
+    const frame = svg("svg");
+    for (const [color, width] of [["#00000099", "3"], ["#e8e8e8", "1"]]) {
+      const line = svg("polygon"); line.setAttribute("fill", "none"); line.setAttribute("stroke", color); line.setAttribute("stroke-width", width); frame.append(line);
+    }
+    for (let i = 0; i < 4; i++) { const dot = svg("circle"); dot.setAttribute("r", "3.5"); dot.setAttribute("fill", "#e8e8e8"); dot.setAttribute("stroke", "#00000066"); frame.append(dot); }
+    el.append(frame);
+  }
   [...el.children].forEach((d, k) => {
-    const b = shown[k]?.box, s = (d as HTMLElement).style;
-    s.display = b ? "" : "none";
-    if (b) Object.assign(s, { left: `${b[0] * 100}%`, top: `${b[1] * 100}%`, width: `${(b[2] - b[0]) * 100}%`, height: `${(b[3] - b[1]) * 100}%` });
+    const b = shown[k], frame = d as SVGSVGElement;
+    frame.style.display = b ? "" : "none";
+    if (!b) return;
+    frame.dataset.textIndex = String(b.i);
+    frame.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    const points = (b.corners ?? [[b.box[0], b.box[1]], [b.box[2], b.box[1]], [b.box[2], b.box[3]], [b.box[0], b.box[3]]]).map(([x, y]) => [x * w, y * h]);
+    const path = points.map((p) => p.join(",")).join(" ");
+    frame.children[0].setAttribute("points", path); frame.children[1].setAttribute("points", path);
+    points.forEach(([x, y], i) => { frame.children[i + 2].setAttribute("cx", String(x)); frame.children[i + 2].setAttribute("cy", String(y)); });
   });
 };
 
 // The item under a point of the frame (0 to 1 each way), the top-most; -1 for none
-export const textAt = (x: number, y: number) => boxesNow().findLast(({ box: [x0, y0, x1, y1] }) => x >= x0 && x <= x1 && y >= y0 && y <= y1)?.i ?? -1;
+const hitContext = document.createElement("canvas").getContext("2d")!;
+export const textAt = (x: number, y: number) => boxesNow().findLast(({ corners, box: [x0, y0, x1, y1] }) => {
+  if (!corners) return x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const path = new Path2D(); corners.forEach(([px, py], i) => i ? path.lineTo(px, py) : path.moveTo(px, py)); path.closePath();
+  return hitContext.isPointInPath(path, x, y);
+})?.i ?? -1;
 
 // A press on the picture: true when it took it (any item under the mouse; on a phone, whose tap pins a note, a picked one)
 export const textPress = (e: PointerEvent, at: readonly [number, number]) => {
