@@ -10,7 +10,11 @@ import tempfile
 def filters(settings):
     rate = settings.get("rate", 1)
     duration, start = settings["duration"], settings.get("start", 0)
-    chain = [f"atrim=start={start}:duration={duration * rate}", "asetpts=PTS-STARTPTS", "aformat=sample_fmts=flt:sample_rates=48000:channel_layouts=stereo"]
+    chain = ["aformat=sample_fmts=flt:sample_rates=48000:channel_layouts=stereo"]
+    if settings.get("dialogue"):
+        # Process before trimming so a split retains the original compressor envelope and limiter delay.
+        chain += ["acompressor=threshold=0.03:ratio=4:attack=1:release=150:makeup=3", "alimiter=limit=0.35:level=false"]
+    chain += [f"atrim=start={start}:duration={duration * rate}", "asetpts=PTS-STARTPTS"]
     if settings.get("reverse"):
         chain.append("areverse")
     return chain

@@ -122,7 +122,7 @@ Báo đỏ khi vỡ tiếng: CÓ, đồng hồ tổng bên phải timeline: đ�
 
 ### Voiceover, separate audio, vocal isolation, replace clip
 
-
+Voice trong sealed-room là clip audio thường: sóng, trim/split, fade, Volume, Speed, mute/lock và Undo dùng chung với SFX. Phụ đề/ducking theo vị trí clip; [cấu hình và kiểm chứng](narration-clips.md).
 
 Separate audio: CÓ sẵn, tiếng là track riêng nên J-cut/L-cut làm ngay.
 
@@ -160,7 +160,7 @@ Captions: CÓ trong studio (⋯ Settings > View), hiện câu thoại đang nói
 
 Text: CÓ. Tab Text bên trái có Default text, Place and time (đánh máy góc dưới kiểu phim tài liệu), Chapter title, Big number; bấm ô là thêm tại playhead.
 
-Hàng Text dưới Camera theo yêu cầu dev: kéo để dời hoặc đổi track, kéo mép để gọt, Alt+kéo tạo bản sao, chọn bằng khung, Delete, Ctrl+C/V. Mỗi hàng có đường chia và nút chọn, Lock, Hide riêng.
+Hàng Text trên Camera như ảnh CapCut dev gửi: kéo để dời hoặc đổi track, kéo mép để gọt, Alt+kéo tạo bản sao, chọn bằng khung, Delete, Ctrl+C/V. Mỗi hàng có đường chia và nút chọn, Lock, Hide riêng.
 
 Tab Text bên phải: chữ, font (Inter, Plex Mono, Source Serif), cỡ, đậm, nghiêng, viết hoa, màu, giãn chữ, giãn dòng, căn lề, độ mờ, Stroke, Background, Shadow, Scale, Position, Rotate. Chọn nhiều thì sửa cả nhóm.
 
@@ -280,7 +280,7 @@ tab đang mở chữ xanh ngọc kèm gạch mỏng (gạch là dev chọn, CapC
 
 mọi màu là token trong app/index.css, canvas đọc qua tone() ở timeline/canvas.ts. Khung bo góc tách nhau 6 px trên nền xám tối, thước giờ mờ với đầu kim rỗng, clip camera xanh lục lam, Text nâu đỏ, âm thanh navy, tooltip gần đen, thanh trượt xám nút trắng; điện thoại giữ khung sát mép. Cỡ chữ CapCut 11/13/15 px là token text-tag/ui/title, nút và ô theo variant shadcn; lệnh bun run lint chặn màu, cỡ chữ và style viết cứng.
 
-Thanh Overview (cả phim) đã BỎ vì CapCut không có; điện thoại nằm ngang dùng thước giờ thay. Lớp Adjust nằm dưới thước giờ, trên Camera; sau Camera là Text, Voice, Action, keyframe và âm thanh.
+Thanh Overview (cả phim) đã BỎ vì CapCut không có; điện thoại nằm ngang dùng thước giờ thay. Thứ tự là Adjust, Text, Camera, Action, keyframe, âm thanh; phim chưa chuyển lời dẫn sang clip vẫn có hàng Voice cũ trước Action.
 
 ### Hàng Shots gộp vào hàng Camera
 

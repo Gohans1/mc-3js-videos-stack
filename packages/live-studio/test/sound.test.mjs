@@ -41,6 +41,22 @@ test("waveform peaks include right-channel transients between sampled positions"
   assert.equal(wavPeaks(f).peaks[0], .75);
 });
 
+test("narration uses the same library, waveform and source lookup as ordinary audio clips", () => {
+  const project = mkdtempSync(join(dir, "narration-"));
+  mkdirSync(join(project, "sound/sfx"), { recursive: true });
+  mkdirSync(join(project, "assets/voice"), { recursive: true });
+  wav(join(project, "assets/voice/take.wav"));
+  writeFileSync(join(project, "audio.json"), JSON.stringify({ beds: [], sfx: [] }));
+  const sound = openSound(project, {
+    soundTimeline: "audio.json", sfx: "sound/sfx",
+    soundSources: { narration: "assets/voice/take.wav" },
+  });
+  assert.equal(sound.fileOf("narration"), join(project, "assets/voice/take.wav"));
+  assert.equal(sound.library().find((s) => s.name === "narration").seconds, 2);
+  assert.equal(sound.peaks("narration").peaks.at(-1), .5);
+  assert.equal(sound.fileOf("../assets/voice/take"), null);
+});
+
 test("the studio writes the lanes as the films' timeline writer does: short entries on one line", () => {
   const data = { beds: [{ name: "hum", from: 0, to: 9, gain: 2, fadeIn: 0.5, fadeOut: 1 }], sfx: Array.from({ length: 3 }, (_, i) => ({ at: i, name: "tap", gain: -3 })) };
   assert.equal(compactJson({ sfx: data.sfx.slice(0, 1) }), '{"sfx": [{"at": 0, "name": "tap", "gain": -3}]}');

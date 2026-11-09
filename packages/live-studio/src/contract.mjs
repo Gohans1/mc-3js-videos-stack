@@ -83,23 +83,23 @@ export const Trials = z.record(z.string(), z.union([StemGroup, CueGroup]));
 export const Choices = z.record(z.string(), z.looseObject({ set: z.string(), gain: z.number().positive().optional() }));
 
 // ---------- package.json "live-studio": the paths in it are checked where they are opened (film.mjs); here what has a shape
-export const StudioConfig = z.looseObject({ ratio: z.enum(RATIOS).optional() });
+export const StudioConfig = z.looseObject({ ratio: z.enum(RATIOS).optional(), soundSources: z.record(z.string().regex(/^[\w.-]+$/), z.string().min(1)).optional() });
 
 // ---------- The sound lanes (package.json "live-studio".soundTimeline), which the studio also writes: beds loop from..to, a
 // one-shot plays from at for length seconds or to its end. Gains in dB. Anything else on an entry (filters, try) is the film's
-const name = z.string().regex(/^[\w.-]+$/, "a file name in the sfx folder, without .wav");
+const name = z.string().regex(/^[\w.-]+$/, "an audio source name, without .wav");
 const secs = time.refine((v) => v >= 0, "expected seconds from the film's start, 0 or more");
 const track = z.string().min(1).optional();
 const dB = z.number().refine(Number.isFinite, "expected a finite number of dB");
 const gainKeys = z.array(z.object({ t: time, gain: dB })).refine((keys) => keys.every((k, i) => i === 0 || k.t > keys[i - 1].t), "volume keys must increase in time").optional();
-const processing = { rate: z.number().min(.1).max(10).optional(), pitch: z.number().min(-24).max(24).optional(), changePitch: z.boolean().optional(), reverse: z.boolean().optional(), voiceFilter: z.enum(["none", "telephone", "walkieTalkie", "megaphone"]).optional(), voiceStrength: z.number().min(0).max(100).optional() };
+const processing = { rate: z.number().min(.1).max(10).optional(), pitch: z.number().min(-24).max(24).optional(), changePitch: z.boolean().optional(), reverse: z.boolean().optional(), voiceFilter: z.enum(["none", "telephone", "walkieTalkie", "megaphone"]).optional(), voiceStrength: z.number().min(0).max(100).optional(), dialogue: z.boolean().optional() };
 export const SoundProcess = z.object({ name, start: secs, duration: z.number().positive(), loop: z.boolean(), ...processing });
 const beatMarkers = { beats: z.array(time).refine((ts) => ts.every((t, i) => i === 0 || t > ts[i - 1]), "beats must increase in time").optional(), beatMode: z.union([z.literal(1), z.literal(2)]).optional(), bpm: z.number().nonnegative().optional(), beatSource: name.optional() };
 const Bed = z.looseObject({ name, from: secs, to: secs, gain: dB, gainKeys, ...processing, ...beatMarkers, fadeIn: z.number().nonnegative(), fadeOut: z.number().nonnegative(), start: z.number().nonnegative().optional(), duck: z.number().nonnegative().optional(), track }).refine((b) => b.to > b.from, "to must come after from");
 const Shot1 = z.looseObject({ at: secs, name, gain: dB, gainKeys, ...processing, ...beatMarkers, start: z.number().nonnegative().optional(), length: z.number().positive().optional(), fadeIn: z.number().nonnegative().optional(), fadeOut: z.number().nonnegative().optional(), track });
 // tracks (top to bottom) and each entry's track: app/sound/tracks.ts. Optional, the page adds them; mute leaves a track out of the mix
 const Track = z.looseObject({ id: z.string().min(1), name: z.string(), mute: z.boolean().optional(), lock: z.boolean().optional() });
-export const SoundTimeline = z.looseObject({ beds: z.array(Bed), sfx: z.array(Shot1), tracks: z.array(Track).optional() })
+export const SoundTimeline = z.looseObject({ beds: z.array(Bed), sfx: z.array(Shot1), tracks: z.array(Track).optional(), narration: name.optional() })
   .refine((l) => !l.tracks || unique(l.tracks.map((t) => t.id)), "track ids must differ")
   .refine((l) => !l.tracks || [...l.beds, ...l.sfx].every((e) => !e.track || l.tracks.some((t) => t.id === e.track)), "an entry names a track that isn't in tracks");
 

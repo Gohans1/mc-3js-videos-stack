@@ -17,6 +17,7 @@ import type { Lanes, LibraryItem } from "./sound";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
 import { get, say } from "../core/store";
+import { narrationLines } from "../../src/narration.mjs";
 import { clearProcessed, loadProcessed, needsProcessing, processed, processSpec, retainProcessed, type ProcessSpec } from "./processed";
 
 interface Source { lanes: () => Lanes | null; library: () => LibraryItem[]; span: (c: ClipRef) => [number, number] }
@@ -102,7 +103,7 @@ const clips = (l: Lanes, all = false): Clip[] => {
     if (!a || !b) { load(e.name); load(name); return null; }
     return { name, db: e.gain + a.mean - b.mean + 20 * Math.log10(gain), own: name === e.name };
   };
-  const narrated = l.voice !== false; // audio.json voice false: no narration in the mix yet, so mix.py ducks nothing either
+  const narrated = !!l.narration || l.voice !== false;
   l.beds.forEach((b, i) => {
     const p = pick(b);
     if (p) out.push({ key: `beds:${i}`, name: p.name, t0: b.from, t1: b.to, start: p.own ? b.start ?? 0 : 0, length: b.to - b.from, loop: true, db: p.db, gainKeys: b.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - b.gain })), fadeIn: b.fadeIn, fadeOut: b.fadeOut, duck: narrated ? (b.duck as number | undefined) ?? 0 : 0, pan: b.pan ?? 0, filters: (b.filters as string[]) ?? [] });
@@ -143,7 +144,9 @@ const play = (ctx: BaseAudioContext, bus: AudioNode, c: Clip, s: Sound, at: numb
   src.buffer = s.buf; src.loop = c.loop; src.playbackRate.value = w.speed;
   let pts = envelopePoints(u0, c.t1 - c.t0, c.fadeIn, c.fadeOut, c.length);
   if (c.duck > 0) {
-    const w = duckWindows(S.voiceOut.map((l) => [l.s, l.e]));
+    const lanes = source?.lanes();
+    const lines = lanes?.narration ? narrationLines(S.voiceBase, lanes, source?.library().find((x) => x.name === lanes.narration)?.seconds ?? 0, true) : S.voiceOut;
+    const w = duckWindows(lines.map((l) => [l.s, l.e]));
     const us = [...new Set([...pts.map((p) => p[0]), ...duckCorners(c.t0 + u0, c.t1, w).map((t) => t - c.t0)])].sort((a, b) => a - b);
     pts = us.map((u) => [u, envelope(u, c.fadeIn, c.fadeOut, c.length) * duckGain(c.t0 + u, w, c.duck)]);
   }

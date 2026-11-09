@@ -2,7 +2,7 @@ import type { GainClip } from "./gain";
 import type { BeatMarkers } from "./beat-marks";
 
 export type VoiceFilter = "none" | "telephone" | "walkieTalkie" | "megaphone";
-export interface AudioProcessing { rate?: number; pitch?: number; changePitch?: boolean; reverse?: boolean; voiceFilter?: VoiceFilter; voiceStrength?: number }
+export interface AudioProcessing { rate?: number; pitch?: number; changePitch?: boolean; reverse?: boolean; voiceFilter?: VoiceFilter; voiceStrength?: number; dialogue?: boolean }
 type Timed = GainClip & AudioProcessing & BeatMarkers & { start?: number; fadeIn?: number; fadeOut?: number };
 
 export const sourceTime = (c: AudioProcessing & { start?: number }, length: number, u: number) =>

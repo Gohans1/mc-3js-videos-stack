@@ -6,10 +6,10 @@ export const ROW_MIN = { shots: 14, voice: 40, action: 28 }, ROW_MAX = { shots: 
 export const WORDS_H = 22, LANE_H = 14, RULER_H = 20, BOTTOM_H = 6; // BOTTOM_H: under Action, the bars of where alternatives show
 
 export const SHOTS_STRIP = 4;
-export const rowLayout = (r: RowSizes, sound: boolean, cam: boolean) => {
+export const rowLayout = (r: RowSizes, sound: boolean, cam: boolean, showVoice = true) => {
   // With sound tracks below, Action starts with 2 lanes for moves and 1 for sounds; without, 3 and 2
-  const shots = cam ? SHOTS_STRIP : r.shots ?? 20, voice = r.voice ?? 66, action = r.action ?? (sound ? 42 : 70);
-  const voiceY = shots + 2, actionY = voiceY + voice + 2;
+  const shots = cam ? SHOTS_STRIP : r.shots ?? 20, voice = showVoice ? r.voice ?? 66 : 0, action = r.action ?? (sound ? 42 : 70);
+  const voiceY = shots + 2, actionY = voiceY + voice + (voice ? 2 : 0);
   return { shots, voice, action, voiceY, actionY, height: actionY + action + BOTTOM_H };
 };
 export type RowLayout = ReturnType<typeof rowLayout>;

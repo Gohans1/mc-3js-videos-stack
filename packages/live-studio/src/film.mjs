@@ -47,7 +47,7 @@ export const openFilm = (projectDir, { send }) => {
   const readPkg = () => (existsSync(PKG) ? JSON.parse(readFileSync(PKG, "utf8")) : {});
   const pkg = readPkg();
   const NAME = pkg.name ?? basename(PROJECT); // the page's title and a still frame's file name
-  const SOUND_INPUTS = (pkg["live-studio"]?.sound ?? ["sound.py", "src/timing.ts", "assets/public/agent/sfx2", "assets/public/agent/sfx_try"]).map((f) => join(PROJECT, f));
+  const SOUND_INPUTS = [...new Set([...(pkg["live-studio"]?.sound ?? ["sound.py", "src/timing.ts", "assets/public/agent/sfx2", "assets/public/agent/sfx_try"]), ...Object.values(pkg["live-studio"]?.soundSources ?? {})])].map((f) => join(PROJECT, f));
   const has = (script) => existsSync(join(PROJECT, script)); // voice_edit.py, voice_map.py and make_lite.py are optional
   const sound = openSound(PROJECT, pkg["live-studio"]); // null: the film has no sound lanes for the studio to edit
   // "live-studio": { camTimeline: file }: the camera keys, which the film also puts in EDIT.cam (the page previews edits there)

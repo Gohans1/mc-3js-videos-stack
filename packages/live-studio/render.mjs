@@ -24,6 +24,8 @@ import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
 import { build } from "vite";
 import { cues, srt } from "./src/captions.mjs";
+import { narrationLines } from "./src/narration.mjs";
+import { wavInfo } from "./src/sound.mjs";
 import { STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { ratioOf, sizeOf } from "./src/frame.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
@@ -41,7 +43,14 @@ const writeCaptions = () => {
   const map = voiceMapOf(PROJECT), edit = join(PROJECT, "src/edit.json");
   if (!existsSync(map)) { console.log("no captions: the studio writes renders/live/voice_map.json when it first opens this film"); return; }
   const w = (existsSync(edit) ? JSON.parse(readFileSync(edit, "utf8")).voice?.warp : null) ?? [];
-  const list = cues(JSON.parse(readFileSync(map, "utf8")).lines ?? [], (s) => warp(w, s, 0, 1));
+  const heard = (s) => warp(w, s, 0, 1);
+  const lines = (JSON.parse(readFileSync(map, "utf8")).lines ?? []).map((l) => ({ ...l, s: heard(l.s), e: heard(l.e), words: l.words.map((v) => ({ ...v, s: heard(v.s), e: heard(v.e) })) }));
+  const packageFile = join(PROJECT, "package.json");
+  const conf = (existsSync(packageFile) ? JSON.parse(readFileSync(packageFile, "utf8"))["live-studio"] : null) ?? {};
+  const audio = conf.soundTimeline && existsSync(join(PROJECT, conf.soundTimeline)) ? JSON.parse(readFileSync(join(PROJECT, conf.soundTimeline), "utf8")) : null;
+  const source = audio?.narration && conf.soundSources?.[audio.narration];
+  const duration = source && existsSync(join(PROJECT, source)) ? wavInfo(join(PROJECT, source))?.seconds ?? 0 : 0;
+  const list = cues(narrationLines(lines, audio, duration));
   mkdirSync(RENDERS, { recursive: true });
   writeFileSync(join(RENDERS, "draft_video.srt"), srt(list));
   console.log(`wrote renders/draft_video.srt (${list.length} captions)`);

@@ -62,27 +62,31 @@ export const wavPeaks = (file) => {
 export const openSound = (project, conf = {}) => {
   if (!conf.soundTimeline || !conf.sfx) return null;
   const DIR = join(project, conf.sfx), timeline = openTimelineFile(project, conf.soundTimeline, SoundTimeline);
+  const NAME = /^[\w.-]+$/;
+  const fileOf = (name) => {
+    if (!NAME.test(name)) return null;
+    const source = Object.hasOwn(conf.soundSources ?? {}, name) ? conf.soundSources[name] : null, file = source ? join(project, source) : join(DIR, `${name}.wav`);
+    return existsSync(file) ? file : null;
+  };
 
   const infos = new Map();
   const info = (name) => {
-    const file = join(DIR, `${name}.wav`), { mtimeMs } = statSync(file), have = infos.get(name);
+    const file = fileOf(name), { mtimeMs } = statSync(file), have = infos.get(name);
     if (have?.mtimeMs === mtimeMs) return have;
     const fresh = { mtimeMs, wav: wavInfo(file), peaks: null };
     infos.set(name, fresh);
     return fresh;
   };
-  const NAME = /^[\w.-]+$/;
   const ROLES = ["riser", "whoosh", "impact", "downlifter"]; // a cut sweetener's part (get_sfx.py sweeteners; app/sound/hit.ts)
-  const fileOf = (name) => (NAME.test(name) && existsSync(join(DIR, `${name}.wav`)) ? join(DIR, `${name}.wav`) : null);
   const library = () => {
-    if (!existsSync(DIR)) return [];
     const sources = existsSync(join(DIR, "SOURCES.json")) ? JSON.parse(readFileSync(join(DIR, "SOURCES.json"), "utf8")) : {};
-    return readdirSync(DIR).filter((f) => f.endsWith(".wav")).map((f) => basename(f, ".wav")).filter((n) => NAME.test(n)).sort().map((name) => {
+    const names = [...new Set([...(existsSync(DIR) ? readdirSync(DIR).filter((f) => f.endsWith(".wav")).map((f) => basename(f, ".wav")) : []), ...Object.keys(conf.soundSources ?? {})])];
+    return names.filter((n) => fileOf(n)).sort().map((name) => {
       const s = sources[name] ?? {};
       return { name, seconds: +(info(name).wav?.seconds ?? 0).toFixed(3), title: s.title, license: s.license, url: s.url, for: s.for, kind: ["bgm", "sfx"].includes(s.kind) ? s.kind : undefined, role: ROLES.includes(s.role) ? s.role : undefined };
     });
   };
-  const peaks = (name) => { const i = info(name); return (i.peaks ??= wavPeaks(join(DIR, `${name}.wav`))); };
+  const peaks = (name) => { const i = info(name); return (i.peaks ??= wavPeaks(fileOf(name))); };
 
   return { ...timeline, DIR, library, peaks, fileOf };
 };

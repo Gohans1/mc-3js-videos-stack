@@ -12,7 +12,7 @@ import { stored } from "../core/storage";
 import { drawPlayhead, sized, tone, UI_FONT } from "./canvas";
 import { boxEnd, boxMove, boxPick, boxStart } from "./rowbox";
 import { LANE_H, rows, SHOTS_STRIP, WORDS_H } from "./rows";
-import { S } from "../core/state";
+import { S, type Line } from "../core/state";
 import { get, say, set, setPref } from "../core/store";
 import { seek, setPlaying } from "../playback/transport";
 import { skimSound } from "../sound/skim";
@@ -32,6 +32,7 @@ let frozenCentre: number | null = null;
 let slid: { c: number; t: number } | null = null;
 // What else the timelines mark, set by the parts that own it
 export const marks = {
+  voice: (lines: Line[]) => lines,
   notes: () => [] as { t: number; to?: number; done: boolean }[],
   optionRanges: () => [] as [number, number][],
   lanes: () => {}, // sound/lanes.ts draws its canvas whenever these do
@@ -83,10 +84,14 @@ const describeSelection = () => {
 };
 
 // Every time the edit or the voice map changes: the heard seconds of everything move
+export const refreshVoiceTimes = () => {
+  S.voiceBase = S.voice.lines.map((l) => ({ ...l, s: fromSource(l.s), e: fromSource(l.e), words: l.words.map((w) => ({ ...w, s: fromSource(w.s), e: fromSource(w.e) })) }));
+  S.voiceOut = marks.voice(S.voiceBase);
+};
 export const refreshTimes = () => {
   applyEdit();
   S.timesRev++;
-  S.voiceOut = S.voice.lines.map((l) => ({ ...l, s: fromSource(l.s), e: fromSource(l.e), words: l.words.map((w) => ({ ...w, s: fromSource(w.s), e: fromSource(w.e) })) }));
+  refreshVoiceTimes();
   S.dirty = true;
   stuck = findStuck();
   describeSelection();
@@ -143,7 +148,7 @@ const drawDetail = () => {
   g.fillStyle = tone("stuck");
   for (const [x, y] of stuck) if (y > a && x < b) g.fillRect(X(x), SH - 2, X(y) - X(x), 3);
   // Voice: each sentence's pace behind the wave
-  S.voiceOut.forEach((l, i) => {
+  if (rows.voice) S.voiceOut.forEach((l, i) => {
     const n = S.voiceOut[i + 1];
     if (n && n.s > a && l.e < b && X(n.s) - X(l.e) > 4) boxes.push({ type: "gap", i, x0: X(l.e), x1: X(n.s), y0: VY, y1: VY + VH });
     if (l.e < a || l.s > b) return;
@@ -153,7 +158,7 @@ const drawDetail = () => {
     boxes.push({ type: "line", i, x0: X(l.s), x1: X(l.e), y0: VY, y1: VY + VH });
     if (EDIT.voice.edits[i]) { g.fillStyle = tone("primary"); g.fillRect(X(l.s), VY, X(l.e) - X(l.s), 2); }
   });
-  drawWave(g, a, b, w, VY, VH);
+  if (rows.voice) drawWave(g, a, b, w, VY, VH);
   // Actions and sounds, in lanes so they don't cover each other; as many lanes as the Action row's height holds, 3 to 2
   const count = Math.max(2, Math.floor(rows.action / LANE_H)), moves = Math.max(1, Math.round(count * 0.6));
   const lanes: Record<string, number[]> = { motion: Array(moves).fill(-1e9), sound: Array(Math.max(1, count - moves)).fill(-1e9) };
@@ -181,7 +186,7 @@ const drawDetail = () => {
   // Words, as many as fit
   g.font = `12px ${UI_FONT}`;
   let right = -1;
-  for (const l of S.voiceOut) {
+  for (const l of rows.voice ? S.voiceOut : []) {
     if (l.e < a || l.s > b) continue;
     for (const word of l.words) {
       const x = X(word.s);
@@ -193,7 +198,7 @@ const drawDetail = () => {
       right = x + wd;
     }
   }
-  if (!S.voice.lines.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Reading the voice track…", 8, VY + VH + 11); }
+  if (rows.voice && !S.voice.lines.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Reading the voice track…", 8, VY + VH + 11); }
   // Notes: a marker each, their lines faint so many of them don't drown the playhead; a done note keeps only a dim marker.
   // Markers under 2 px apart are drawn once and touching lines as one, so thousands of notes stay a few hundred shapes for the
   // GPU (which, drawing every one, held a 3000-note film to 23 fps). marks.notes() comes in film order

@@ -1,5 +1,4 @@
-// The timeline canvases under the ruler: the camera row first (the film's main track, as the dev wants it on top), the text
-// tracks, the voice and action rows, the film's other keys (Steve, props) and the sound tracks the creator edits by hand.
+// The timeline canvases share one time axis and scroll container; overlays sit above the main Camera track.
 // timeline/timeline.ts draws the ruler and the voice and action rows and handles scrubbing, picking and zoom; camera/camrow.ts the camera row (its canvas and menu in CameraTrack.tsx); keys/keyrows.ts the key rows (names in KeyHeads); sound/lanes.ts the tracks (their right-click menu in ClipMenu.tsx), whose names, mute and lock sit in the column on the left (TrackHeads). That column
 // runs the whole height so every row shares one time axis. At the right, the master meter (sound/AudioMeter.tsx)
 import { cn } from "@/lib/utils";
@@ -23,13 +22,14 @@ import { TextHeads } from "../text/TextHeads";
 // ruler); every row under the ruler scrolls as one list, and a press on its empty space picks nothing (rowbox.ts clear)
 export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null }) {
   const sound = useStudio((s) => s.sound), text = useStudio((s) => s.text), cam = useStudio((s) => s.cam), keys = useStudio((s) => !!s.keyFiles?.length);
+  const voiceClips = useStudio((s) => s.voiceClips);
   const [shotsH, setShotsH] = useStoredSize("studio.row.shots"), [voiceH, setVoiceH] = useStoredSize("studio.row.voice"), [actionH, setActionH] = useStoredSize("studio.row.action");
-  const L = rowLayout({ shots: shotsH, voice: voiceH, action: actionH }, sound, cam);
+  const L = rowLayout({ shots: shotsH, voice: voiceH, action: actionH }, sound, cam, !voiceClips);
   useLayoutEffect(() => { setRowLayout(L); drawTimelines(); }, [L.shots, L.voice, L.action, L.height]);
   // Each row's bottom edge in the name column sizes it, as a track's edge does in CapCut
   const rows = [
     ...cam ? [] : [{ label: "Shots", y: L.shots / 2, edge: L.shots + 1, size: shotsH, now: L.shots, set: setShotsH, min: ROW_MIN.shots, max: ROW_MAX.shots }],
-    { label: "Voice", y: L.voiceY + L.voice / 2, edge: L.actionY - 1, size: voiceH, now: L.voice, set: setVoiceH, min: ROW_MIN.voice, max: ROW_MAX.voice },
+    ...voiceClips ? [] : [{ label: "Voice", y: L.voiceY + L.voice / 2, edge: L.actionY - 1, size: voiceH, now: L.voice, set: setVoiceH, min: ROW_MIN.voice, max: ROW_MAX.voice }],
     { label: "Action", y: L.actionY + L.action / 2, edge: L.actionY + L.action, size: actionH, now: L.action, set: setActionH, min: ROW_MIN.action, max: ROW_MAX.action },
   ];
   return (
@@ -50,12 +50,14 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
         className="relative col-span-2 grid min-h-0 grid-cols-subgrid content-start overflow-x-hidden overflow-y-auto overscroll-contain rounded-b-md sideways:hidden upright:max-h-86"
       >
         <LayerTrack />
-        <span className={cn("self-stretch border-e border-track-line bg-track-head ps-1.5 text-ui leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
-        <CameraTrack bind={bind} shown={cam} />
         {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}
         <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !text && "hidden")}>
           <TextHeads />
           <canvas ref={bind("textrow")} aria-label="Text tracks: click an item to edit it, drag to move or retime it, drag its edges to trim, drag on empty space to select several" className="block w-full touch-none" />
+        </div>
+        <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !cam && "hidden")}>
+          <span className="self-stretch border-e border-track-line bg-track-head ps-1.5 text-ui leading-12 font-medium text-label">Camera</span>
+          <CameraTrack bind={bind} shown={cam} />
         </div>
         <div className={cn("col-span-2 grid grid-cols-subgrid", (cam || text) && "mt-1")}>
           <div className="relative border-e border-track-line bg-track-head text-ui font-medium text-label">
@@ -68,7 +70,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
               </div>
             ))}
           </div>
-          <canvas ref={bind("detail")} title="Voice and action: click empty space to move the playhead there, drag to select, Ctrl+scroll to zoom" aria-label="Voice and action rows: click empty space to move the playhead there, drag the playhead line to scrub, Ctrl+scroll to zoom" style={{ "--h": `${L.height}px` }} className="block h-(--h) w-full touch-none" />
+          <canvas ref={bind("detail")} title={`${voiceClips ? "Action" : "Voice and action"}: click empty space to move the playhead there, drag to select, Ctrl+scroll to zoom`} aria-label={`${voiceClips ? "Action row" : "Voice and action rows"}: click empty space to move the playhead there, drag the playhead line to scrub, Ctrl+scroll to zoom`} style={{ "--h": `${L.height}px` }} className="block h-(--h) w-full touch-none" />
         </div>
         <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !keys && "hidden")}>
           <KeyHeads />

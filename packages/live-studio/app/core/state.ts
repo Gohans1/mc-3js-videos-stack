@@ -31,6 +31,7 @@ export const S = {
   comments: [] as string[],
   voice: { step: 0.04, peaks: [], lines: [] } as VoiceMap,
   voiceOut: [] as Line[],
+  voiceBase: [] as Line[],
   clockStart: 0,
   dragging: null as { resume: boolean } | null,
   failedFile: "",

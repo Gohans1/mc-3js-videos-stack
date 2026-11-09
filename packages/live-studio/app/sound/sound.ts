@@ -15,11 +15,13 @@ import { lanePick } from "../options/options";
 import { type ClipRef } from "./slice";
 import { retime, trimSource, type AudioProcessing } from "./retime";
 import { get, say, set } from "../core/store";
+import { narrationLines } from "../../src/narration.mjs";
+import { marks, refreshVoiceTimes } from "../timeline/timeline";
 import { addTrack, fits, freeTrack, normalize, refs, placeShift, same, tidy, type Track, trackOf } from "./tracks";
 
 export interface Bed extends GainClip, AudioProcessing, BeatMarkers { name: string; from: number; to: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface OneShot extends GainClip, AudioProcessing, BeatMarkers { at: number; name: string; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
-export interface Lanes { beds: Bed[]; sfx: OneShot[]; tracks: Track[]; [k: string]: unknown }
+export interface Lanes { beds: Bed[]; sfx: OneShot[]; tracks: Track[]; narration?: string; [k: string]: unknown }
 export interface LibraryItem { name: string; seconds: number; title?: string; license?: string; url?: string; for?: string; kind?: "bgm" | "sfx"; role?: Role }
 export interface Peaks { step: number; peaks: number[] }
 
@@ -30,8 +32,9 @@ export let library: LibraryItem[] = [];
 const changed = () => {
   lanes = doc.data;
   const ids = new Set(lanes?.tracks?.map((t) => t.id)), solo = get().solo.filter((t) => ids.has(t));
-  set({ soundRev: get().soundRev + 1, ...(solo.length !== get().solo.length && { solo }) });
+  set({ soundRev: get().soundRev + 1, voiceClips: !!lanes?.narration, ...(solo.length !== get().solo.length && { solo }) });
   S.dirty = true;
+  refreshVoiceTimes();
   replan();
   measureFinal();
   if (get().clips.some((c) => !clipOf(c))) setClips([]);
@@ -47,7 +50,7 @@ export const seconds = (name: string) => library.find((x) => x.name === name)?.s
 // Which library tab a sound sits in (CapCut's Music and Sound effects) and which lane + puts it on: what SOURCES.json says,
 // else its length, since music and room tone run long and a hit is short
 const LONG = 10;
-export const kindOf = (x: LibraryItem): "bgm" | "sfx" => x.kind ?? (x.seconds >= LONG ? "bgm" : "sfx");
+export const kindOf = (x: LibraryItem): "bgm" | "sfx" => x.name === lanes?.narration ? "sfx" : x.kind ?? (x.seconds >= LONG ? "bgm" : "sfx");
 
 // Where a clip sounds, in film seconds. A one-shot without a length rings to the end of its file
 export const span = (c: ClipRef): [number, number] => {
@@ -63,6 +66,7 @@ export const clipTitle = (c: ClipRef) => { const x = clipOf(c)!; return `${x.nam
 
 // ---------- Loading: on start, after any remix and when an agent edits the file (the "lanes" event)
 export const loadSound = async () => {
+  marks.voice = (lines) => narrationLines(lines, lanes, seconds(lanes?.narration ?? ""));
   const r = await doc.load();
   if (!r) { set({ sound: false }); return; }
   const got: { library: LibraryItem[]; live?: boolean } = await r.json();

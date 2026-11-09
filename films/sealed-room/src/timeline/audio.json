@@ -27,7 +27,9 @@
   {"name": "dig_papers", "from": 89.2, "to": 94.12, "gain": 2.7, "fadeIn": 0.2, "fadeOut": 0.3, "track": "t4"},
   {"name": "heartbeat", "from": 94.4, "to": 107.52, "gain": -0.2, "fadeIn": 1.5, "fadeOut": 1.5, "track": "t4"}
  ],
+ "narration": "narration",
  "sfx": [
+  {"at": 0, "name": "narration", "gain": 0, "length": 107.52, "dialogue": true, "track": "voice"},
   {"at": 1.7, "name": "typing_fast_short", "gain": 0, "track": "t8"},
   {"at": 1.7, "name": "typing_fast_short", "gain": 0, "track": "t9"},
   {"at": 1.7, "name": "typing_fast_short", "gain": 0, "track": "t10"},
@@ -153,6 +155,7 @@
  "voice": false,
  "drive": 9,
  "tracks": [
+  {"id": "voice", "name": "Voice", "mute": true},
   {"id": "t1", "name": "Bed"},
   {"id": "t2", "name": "Bed 2"},
   {"id": "t3", "name": "Bed 3"},

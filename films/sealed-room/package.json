@@ -32,6 +32,7 @@
       "sound/sfx",
       "src/timeline/audio.json"
     ],
+    "soundSources": {"narration": "assets/public/agent/full_voice.wav"},
     "soundTimeline": "src/timeline/audio.json",
     "camTimeline": "src/timeline/cam.json",
     "textTimeline": "src/timeline/text.json",

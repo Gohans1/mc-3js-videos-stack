@@ -5,6 +5,30 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+test("narration clips export at their edited position without also mixing the legacy voice", () => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-voice-clip-"));
+  const run = (exe, args) => {
+    const r = spawnSync(exe, args, { cwd: dir, encoding: "utf8", timeout: 20000 });
+    assert.equal(r.status, 0, r.stderr);
+  };
+  try {
+    mkdirSync(join(dir, "src/timeline"), { recursive: true });
+    mkdirSync(join(dir, "assets/public/agent"), { recursive: true });
+    writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 1.5, voice: { warp: [], lines: [] } }));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": { soundSources: { narration: "assets/public/agent/full_voice.wav" } } }));
+    writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: [], sfx: [{ name: "narration", at: .25, start: .1, length: .5, gain: 0 }], voice: true, voiceGain: 0, narration: "narration" }));
+    run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "aevalsrc=0.25:s=48000:d=1", "assets/public/agent/full_voice.wav"]);
+    const code = "import importlib.util,sys; from pathlib import Path; sys.path.insert(0,str(Path(sys.argv[1]).parent)); s=importlib.util.spec_from_file_location('mix',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.build(Path('out.wav'),m.A['beds'],m.A['sfx'],master=False,float_output=True)";
+    run("python", ["-c", code, resolve("../../scripts/sound/mix.py")]);
+    run("ffmpeg", ["-v", "error", "-i", "out.wav", "-f", "f32le", "out.raw"]);
+    const samples = readFileSync(join(dir, "out.raw"));
+    const at = (t) => samples.readFloatLE(Math.round(t * 48000) * 8);
+    assert.equal(at(.1), 0);
+    assert.ok(Math.abs(at(.4) - .25 * Math.SQRT1_2) < 1e-6);
+    assert.equal(at(.9), 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("the mixer places sub-millisecond clip starts on the nearest 48 kHz sample", () => {
   const dir = mkdtempSync(join(tmpdir(), "studio-sample-time-"));
   const run = (exe, args) => {

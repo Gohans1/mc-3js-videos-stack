@@ -13,9 +13,9 @@ let revision = 0;
 const changed = () => { revision++; for (const fn of listeners) fn(); };
 export const subscribeProcessed = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
 export const processedRevision = () => revision;
-export const needsProcessing = (c: AudioProcessing) => (c.rate ?? 1) !== 1 || !!c.pitch || !!c.reverse || (!!c.voiceFilter && c.voiceFilter !== "none" && (c.voiceStrength ?? 100) > 0);
+export const needsProcessing = (c: AudioProcessing) => !!c.dialogue || (c.rate ?? 1) !== 1 || !!c.pitch || !!c.reverse || (!!c.voiceFilter && c.voiceFilter !== "none" && (c.voiceStrength ?? 100) > 0);
 export const processSpec = (c: AudioProcessing & { name: string; start?: number }, duration: number, loop: boolean): ProcessSpec =>
-  ({ name: c.name, start: c.start ?? 0, duration, loop, rate: c.rate ?? 1, pitch: c.pitch ?? 0, changePitch: !!c.changePitch, reverse: !!c.reverse, voiceFilter: c.voiceFilter ?? "none", voiceStrength: c.voiceStrength ?? 100 });
+  ({ name: c.name, start: c.start ?? 0, duration, loop, rate: c.rate ?? 1, pitch: c.pitch ?? 0, changePitch: !!c.changePitch, reverse: !!c.reverse, voiceFilter: c.voiceFilter ?? "none", voiceStrength: c.voiceStrength ?? 100, dialogue: !!c.dialogue });
 
 export const clearProcessed = () => { cache.clear(); changed(); };
 export const retainProcessed = (specs: ProcessSpec[]) => {

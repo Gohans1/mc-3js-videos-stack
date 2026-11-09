@@ -56,7 +56,7 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
     <fieldset key={`${clip.list}${clip.i}`} aria-label="Selected clip" disabled={locked(clip)} className="flex min-w-0 flex-col">
       {locked(clip) && <p className="px-3 pb-2 text-xs text-muted-foreground">Track locked. Unlock it in the track header to edit.</p>}
       <div className="flex items-center gap-2 px-3 pb-1">
-        <Badge variant="audio">{bed ? "BED" : "SFX"}</Badge>
+        <Badge variant="audio">{c.name === lanes?.narration ? "Voice" : bed ? "BED" : "SFX"}</Badge>
         <span className="min-w-0 flex-1 truncate text-ui text-muted-foreground" title={item?.title}>{item?.title ?? c.name}</span>
         <Tip label="Delete clip (Delete)"><Button variant="remove" size="icon-lg" className="-me-1 pointer-coarse:size-10" aria-label={`Delete ${c.name}`} onClick={() => removeClip(clip)}><Trash2 /></Button></Tip>
       </div>
@@ -69,7 +69,7 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
         {row("Fade in", "fadeIn", fi, 0, fadeMax, 0.05, "s", 2)}
         {row("Fade out", "fadeOut", fo, 0, fadeMax, 0.05, "s", 2)}
         {bed && row("Ducking under the voice", "duck", (c.duck as number | undefined) ?? 0, 0, 24, 1, "dB", 0)}
-        {bed && lanes?.voice === false && <p className="text-xs text-muted-foreground">This film has no narration in its mix yet, so nothing ducks until it does.</p>}
+        {bed && lanes?.voice === false && !lanes.narration && <p className="text-xs text-muted-foreground">This film has no narration in its mix yet, so nothing ducks until it does.</p>}
         {!bed && row("Duration", "length", to - from, 1 / 30, Math.max(1 / 30, maxClipLength(c)), 0.01, "s", 2)}
       </Section>
       <NormalizeClip key={`${clip.list}:${clip.i}`} clip={clip} />

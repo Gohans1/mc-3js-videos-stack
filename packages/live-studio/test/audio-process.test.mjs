@@ -5,6 +5,26 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+test("a trimmed narration clip retains the previous dialogue processing and its compressor history", () => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-dialogue-"));
+  const run = (exe, args, input) => {
+    const r = spawnSync(exe, args, { cwd: dir, encoding: "utf8", input, timeout: 20000 });
+    assert.equal(r.status, 0, r.stderr);
+  };
+  try {
+    const source = join(dir, "source.wav"), out = join(dir, "out.wav");
+    run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "aevalsrc=0.2*sin(2*PI*440*t):s=48000:d=1", "-c:a", "pcm_f32le", source]);
+    run("python", [resolve("../../scripts/sound/process.py"), source, out], JSON.stringify({ start: .2, duration: .5, dialogue: true }));
+    run("ffmpeg", ["-v", "error", "-i", source, "-af", "aformat=sample_rates=48000:channel_layouts=stereo,acompressor=threshold=0.03:ratio=4:attack=1:release=150:makeup=3,alimiter=limit=0.35:level=false,atrim=start=0.2:duration=0.5", "-f", "f32le", "expected.raw"]);
+    run("ffmpeg", ["-v", "error", "-i", out, "-f", "f32le", "actual.raw"]);
+    const expected = readFileSync(join(dir, "expected.raw")), actual = readFileSync(join(dir, "actual.raw"));
+    assert.equal(actual.length, expected.length);
+    let error = 0;
+    for (let i = 0; i < actual.length; i += 4) error = Math.max(error, Math.abs(actual.readFloatLE(i) - expected.readFloatLE(i)));
+    assert.ok(error < 2e-7, `peak sample error ${error}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("offline audio processing changes duration and pitch independently and reverses only the trimmed source", () => {
   const dir = mkdtempSync(join(tmpdir(), "studio-process-"));
   const run = (exe, args, input) => {

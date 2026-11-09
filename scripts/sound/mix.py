@@ -29,21 +29,27 @@ A["beds"], A["sfx"] = ([e for e in A[k] if e.get("track") not in MUTED] for k in
 END = E["end"]
 VENV = Path("E:/threejs_lab/py/venv/Scripts")  # has ffmpeg-normalize and pyloudnorm
 SFX = ROOT / "sound/sfx"
+PKG = ROOT / "package.json"
+SOURCES = (json.loads(PKG.read_text(encoding="utf8")) if PKG.exists() else {}).get("live-studio", {}).get("soundSources", {})
 # What was picked in the studio: {sound name: {set: option name, gain: x}}. The studio writes it, never this script
 CHOICES = ROOT / "choices.json"
 STEMS = ROOT / "assets/public/agent/stems"  # served by the studio as /agent/stems
 
 
+def audio_file(name):
+    return ROOT / SOURCES[name] if name in SOURCES else SFX / f"{name}.wav"
+
+
 @cache
 def loudness(name):
     """Mean level in dB, so an option comes in at the level of the sound it stands in for (the room hum is 28 dB up)."""
-    r = subprocess.run(["ffmpeg", "-v", "info", "-i", str(SFX / f"{name}.wav"), "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True)
+    r = subprocess.run(["ffmpeg", "-v", "info", "-i", str(audio_file(name)), "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True)
     return float(re.search(r"mean_volume: (-?[\d.]+) dB", r.stderr).group(1))
 
 
 @cache
 def seconds(name):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(SFX / f"{name}.wav")], capture_output=True, text=True)
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(audio_file(name))], capture_output=True, text=True)
     return float(r.stdout)
 
 
@@ -89,8 +95,24 @@ def warped(x):
 
 
 def duck_windows():
+    intervals = [[warped(a), warped(b)] for a, b in E["voice"].get("lines", [])]
+    if A.get("narration"):
+        projected = []
+        for clip in A["sfx"]:
+            if clip["name"] != A["narration"]:
+                continue
+            rate, start = clip.get("rate", 1), clip.get("start", 0)
+            length = clip["length"] if "length" in clip else (seconds(clip["name"]) - start) / rate
+            end = start + length * rate
+            for a, b in intervals:
+                if b <= start or a >= end:
+                    continue
+                a, b = max(start, a), min(end, b)
+                projected.append([clip["at"] + (end - b if clip.get("reverse") else a - start) / rate,
+                                  clip["at"] + (end - a if clip.get("reverse") else b - start) / rate])
+        intervals = projected
     out = []
-    for s0, e0 in sorted([warped(a), warped(b)] for a, b in E["voice"].get("lines", [])):
+    for s0, e0 in sorted(intervals):
         if out and s0 - out[-1][1] < ATTACK + RELEASE:
             out[-1][1] = max(out[-1][1], e0)
         else:
@@ -137,7 +159,7 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
 
     def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None):
         i = len(chains)  # one chain per input file, so this is the input's index
-        if processing and (processing.get("rate", 1) != 1 or processing.get("pitch", 0) or processing.get("reverse") or (processing.get("voiceFilter", "none") != "none" and processing.get("voiceStrength", 100) > 0)):
+        if processing and (processing.get("dialogue") or processing.get("rate", 1) != 1 or processing.get("pitch", 0) or processing.get("reverse") or (processing.get("voiceFilter", "none") != "none" and processing.get("voiceStrength", 100) > 0)):
             length = length if length is not None else (seconds(processing["name"]) - start) / processing.get("rate", 1)
             processed = folder / f"{i}.wav"
             process_audio(path, processed, {**processing, "start": start, "duration": length, "loop": loop})
@@ -158,13 +180,13 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
 
     # Dialogue compression (4:1 above -30 dBFS, fast attack) and a voice limiter bring the hushed narration's peaks to
     # about 11 dB over its loudness, so the loudness pass below can stay linear
-    if voice and A.get("voice", True):  # audio.voice false: no narration in the mix (the dev records it later)
+    if voice and A.get("voice", True) and not A.get("narration"):
         add(ROOT / "assets/public/agent/full_voice.wav", 0, A["voiceGain"], extra=["acompressor=threshold=0.03:ratio=4:attack=1:release=150:makeup=3", "alimiter=limit=0.35:level=false"])
     for b in beds:
-        duck = duck_expr(b["from"], b["to"], b["duck"]) if b.get("duck") and A.get("voice", True) else None
-        add(SFX / f"{b['name']}.wav", b["from"], b["gain"], b.get("start", 0), b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*b.get("filters", []), *([duck] if duck else []), *([pan_filter(b["pan"])] if b.get("pan") else [])])
+        duck = duck_expr(b["from"], b["to"], b["duck"]) if b.get("duck") and (A.get("narration") or A.get("voice", True)) else None
+        add(audio_file(b["name"]), b["from"], b["gain"], b.get("start", 0), b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*b.get("filters", []), *([duck] if duck else []), *([pan_filter(b["pan"])] if b.get("pan") else [])])
     for s in sfx:
-        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
+        add(audio_file(s["name"]), s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
