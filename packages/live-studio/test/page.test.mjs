@@ -12,16 +12,20 @@ cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
 const scene = join(dir, "src/scene.ts"), original = readFileSync(scene, "utf8");
 const heard = [];
 let page;
-// Resolves once the builds a save starts are over, whatever they found: one save can fire the watcher twice
-const save = (text, file = scene) => new Promise((done) => {
-  let started = false, quiet;
-  const wait = (e) => {
-    if (e.code === "START") { started = true; clearTimeout(quiet); }
-    if (started && (e.code === "END" || e.code === "ERROR")) quiet = setTimeout(() => { page.watcher.off("event", wait); done(); }, 400);
+const cycle = (trigger, file) => new Promise((done, fail) => {
+  let changed = !file, started = !file;
+  const changedFile = (id) => { if (id.replaceAll("\\", "/") === file?.replaceAll("\\", "/")) changed = true; };
+  const cleanup = () => { clearTimeout(timer); page.watcher.off("event", event); page.watcher.off("change", changedFile); };
+  const event = (e) => {
+    if (changed && e.code === "START") started = true;
+    if (started && e.code === "END") { cleanup(); done(); }
   };
-  page.watcher.on("event", wait);
-  writeFileSync(file, text);
+  const timer = setTimeout(() => { cleanup(); fail(new Error(`Build cycle did not end for ${file ?? "initial build"}`)); }, 20000);
+  page.watcher.on("change", changedFile);
+  page.watcher.on("event", event);
+  trigger?.();
 });
+const save = (text, file = scene) => cycle(() => writeFileSync(file, text), file);
 
 before(async () => {
   // A library written for Node that a film may pull in (Minecraft's nbt readers do): its require of zlib is never reached
@@ -30,6 +34,7 @@ before(async () => {
   writeFileSync(join(dir, "node_modules/nodeish/index.js"), 'module.exports = { gunzip: (b) => require("zlib").gunzipSync(b) };');
   writeFileSync(scene, `import { gunzip } from "nodeish";\nexport const unzip = gunzip;\n${original}`);
   page = await buildPage(openFilm(dir, { send() {} }), { onChange: () => heard.push("change"), onError: (m) => heard.push(`error ${m}`) });
+  await cycle();
 });
 after(async () => { await page.close(); rmSync(dir, { recursive: true, force: true }); });
 
