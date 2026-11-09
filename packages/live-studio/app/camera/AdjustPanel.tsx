@@ -4,13 +4,15 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Footer, Reset, Section, SliderRow } from "../components/inspector";
+import { Footer, Reset, Section, Segmented, SliderRow } from "../components/inspector";
 import { S } from "../core/state";
 import { say, set, useStudio } from "../core/store";
 import { shownShot } from "./anim";
 import { shotsDoc } from "./shots";
 import { changeGrade as change, gradeOf, loadGrades, putGrade, savePreset } from "./adjust";
 import { AdjustLibrary, ImportLut } from "./AdjustLibrary";
+import { CurvesAdjust, HSLAdjust } from "./ColorAdjust";
+import { WheelsAdjust } from "./WheelsAdjust";
 
 const value = (shot: number, key: BasicKey, v: number, keep = true) => change(shot, (g) => { g.basic = { ...g.basic, [key]: v }; }, keep);
 
@@ -36,6 +38,7 @@ function SavePreset({ grade }: { grade: Grade }) {
 }
 
 export function AdjustPanel({ library: showLibrary = false }: { library?: boolean }) {
+  const [part, setPart] = useState<"basic" | "hsl" | "curves" | "wheels">("basic");
   useStudio((s) => s.shotsRev);
   useStudio((s) => s.camKey);
   useStudio((s) => s.shotPick);
@@ -48,8 +51,10 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between px-3 pb-2 text-xs text-muted-foreground"><span role="status">{saved === "busy" ? "Saving…" : saved === "fail" ? "Not saved. Retrying…" : "All changes saved"}</span><span>Shot {shot}</span></div>
+      <Segmented label="Adjust part" className="mx-3 mb-2 [&>button]:flex-auto [&>button]:px-1 [&>button]:whitespace-nowrap" value={part} onChange={setPart} items={[{ id: "basic", title: "Basic" }, { id: "hsl", title: "HSL" }, { id: "curves", title: "Curves" }, { id: "wheels", title: "Color wheel" }]} />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {error && <p role="alert" className="px-3 text-ui text-warn">{error}</p>}
+        {part === "hsl" ? <HSLAdjust shot={shot} grade={grade} /> : part === "curves" ? <CurvesAdjust shot={shot} grade={grade} /> : part === "wheels" ? <WheelsAdjust shot={shot} grade={grade} /> : <>
         <Section title="Adjust" on={grade.enabled !== false} onCheck={(on) => change(shot, (g) => { g.enabled = on; })}
           right={<Reset label="Reset adjustments" onClick={() => shotsDoc.edit((rows) => { delete rows[shot].adjust; })} />}>
           {(["Color", "Lightness", "Effects"] as const).map((group) => (
@@ -74,6 +79,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
           {grade.lut && <SliderRow compact label="Intensity" value={grade.lut.amount ?? 100} min={0} max={100} step={1} digits={0} doc={shotsDoc}
             preview={(v) => change(shot, (g) => { g.lut!.amount = v; }, false)} save={(v) => change(shot, (g) => { g.lut!.amount = v; })} />}
         </Section>
+        </>}
       </div>
       <Footer>{showLibrary && <Dialog>
         <DialogTrigger render={<Button variant="secondary" size="sm" />}>Presets</DialogTrigger>

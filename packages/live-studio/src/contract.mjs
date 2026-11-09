@@ -104,10 +104,16 @@ const AnimFx = z.looseObject({ fx: z.string().min(1), len: z.number().positive()
 const Anim = z.looseObject({ in: AnimFx.optional(), out: AnimFx.optional(), combo: AnimFx.optional() });
 const Transition = z.object({ fx: z.enum(["dissolve", "black", "white", "wipe"]), len: z.number().positive() });
 const basicControl = (min) => z.number().min(min).max(100).optional();
+const Curve = z.array(z.tuple([unit, unit])).min(2).max(16).refine((pts) => pts.every((p, i) => i === 0 || p[0] > pts[i - 1][0]), "curve inputs must increase");
+const Hsl = z.looseObject({ enabled: z.boolean().optional(), ...Object.fromEntries(["red", "orange", "yellow", "green", "cyan", "blue", "purple", "magenta"].map((key) => [key, z.object({ hue: basicControl(-100), saturation: basicControl(-100), brightness: basicControl(-100) }).optional()])) });
+const Curves = z.looseObject({ enabled: z.boolean().optional(), luma: Curve.optional(), red: Curve.optional(), green: Curve.optional(), blue: Curve.optional() });
+const wheelChannel = z.number().min(-1).max(1);
+const Wheel = z.object({ rgb: z.tuple([wheelChannel, wheelChannel, wheelChannel]).optional(), saturation: z.number().min(0).max(200).optional() });
+const Wheels = z.looseObject({ enabled: z.boolean().optional(), mode: z.enum(["primary", "log"]).optional(), amount: basicControl(0), ...Object.fromEntries(["shadows", "midtones", "highlights", "offset"].map((k) => [k, Wheel.optional()])) });
 export const Grade = z.looseObject({ enabled: z.boolean().optional(), basic: z.looseObject({
   ...Object.fromEntries(["temp", "tint", "saturation", "exposure", "contrast", "highlight", "shadow", "whites", "blacks", "brilliance", "vignette"].map((key) => [key, basicControl(-100)])),
   ...Object.fromEntries(["sharpen", "clarity", "particles", "fade"].map((key) => [key, basicControl(0)])),
-}).optional(), lut: z.object({ name: z.string(), url: z.string().regex(/^\/studio-luts\/[a-f0-9]{64}\.(cube|3dl)$/), amount: z.number().min(0).max(100).optional(), enabled: z.boolean().optional() }).optional() });
+}).optional(), hsl: Hsl.optional(), curves: Curves.optional(), wheels: Wheels.optional(), lut: z.object({ name: z.string(), url: z.string().regex(/^\/studio-luts\/[a-f0-9]{64}\.(cube|3dl)$/), amount: z.number().min(0).max(100).optional(), enabled: z.boolean().optional() }).optional() });
 export const ShotsTimeline = z.array(z.looseObject({ t: time, name: z.string().optional(), anim: Anim.optional(), transition: Transition.optional(), adjust: Grade.optional() })).min(1)
   .refine((s) => s.every((x, i) => i === 0 || x.t > s[i - 1].t), "shots must start in order of time, each after the one before");
 

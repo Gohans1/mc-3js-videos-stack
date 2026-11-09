@@ -14,6 +14,15 @@ test("shot adjustments reject non-finite or unsupported control values before sa
   }
 });
 
+test("color curves require ordered distinct inputs, bounded points and valid HSL values", () => {
+  const parse = (adjust) => ShotsTimeline.safeParse([{ t: 0, adjust }]).success;
+  assert.equal(parse({ curves: { luma: [[0, 0], [.5, .8], [1, 1]] }, hsl: { green: { saturation: -100 } } }), true);
+  for (const points of [[[0, 0]], [[0, 0], [0, 1]], [[1, 1], [0, 0]], [[0, -1], [1, 1]]]) assert.equal(parse({ curves: { red: points } }), false);
+  assert.equal(parse({ hsl: { blue: { hue: 101 } } }), false);
+  assert.equal(parse({ wheels: { mode: "log", offset: { rgb: [.1, -.1, 0], saturation: 50 } } }), true);
+  for (const wheels of [{ amount: 101 }, { mode: "invalid" }, { shadows: { rgb: [0, 0, 2] } }, { offset: { saturation: -1 } }]) assert.equal(parse({ wheels }), false);
+});
+
 test("a transition must name a supported effect and have a positive finite duration", () => {
   const shots = (transition) => [{ t: 0 }, { t: 4, transition }];
   assert.equal(ShotsTimeline.safeParse(shots({ fx: "dissolve", len: 1 })).success, true);

@@ -13,11 +13,11 @@ export const evalSum = (s: string): number | null => {
 
 const DRAG_PX = 3; // a press that moves less than this is a click into the box
 
-export function NumberField({ value, onSave, live, name, step = 1, digits = 3, placeholder, empty, className, disabled }: {
+export function NumberField({ value, onSave, live, name, step = 1, digits = 3, placeholder, empty, className, disabled, fixed = false }: {
   value: number | undefined; onSave: (v: number | undefined) => void; live?: (v: number) => void; name: string;
-  step?: number; digits?: number; placeholder?: string; empty?: boolean; className?: string; disabled?: boolean;
+  step?: number; digits?: number; placeholder?: string; empty?: boolean; className?: string; disabled?: boolean; fixed?: boolean;
 }) {
-  const show = (v: number | undefined) => (v === undefined ? "" : String(Math.round(v * 10 ** digits) / 10 ** digits));
+  const show = (v: number | undefined) => (v === undefined ? "" : fixed ? v.toFixed(digits) : String(Math.round(v * 10 ** digits) / 10 ** digits));
   const [text, setText] = useState(show(value));
   const editing = useRef(false), cancelled = useRef(false), drag = useRef<{ x: number; v: number; from: number | undefined; moved: boolean; now: number } | null>(null);
   useEffect(() => { if (!editing.current && !drag.current) setText(show(value)); }, [value]);

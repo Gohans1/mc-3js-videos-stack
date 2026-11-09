@@ -2,9 +2,10 @@ import { Color, HalfFloatType, SRGBColorSpace, Uniform, WebGLRenderTarget, type 
 import { BlendFunction, Effect, EffectAttribute, EffectComposer, EffectMaterial, EffectPass, GaussianBlurPass, LookupTexture, LUT3DEffect, NoiseEffect, VignetteEffect, VignetteTechnique } from "postprocessing";
 import { ADJUSTMENTS, colorGrade, type BasicGrade } from "./grade-color";
 import { readLUT } from "./lut";
+import { hasSecondary, type SecondaryGrade } from "./grade-secondary";
 
 export { ADJUSTMENTS };
-export type Grade = { enabled?: boolean; basic?: BasicGrade; lut?: { url: string; name: string; amount?: number; enabled?: boolean } };
+export type Grade = SecondaryGrade & { enabled?: boolean; basic?: BasicGrade; lut?: { url: string; name: string; amount?: number; enabled?: boolean } };
 
 // glfx.js unsharp mask (MIT): original + strength * (original - blurred).
 // Small and broad Gaussian neighborhoods expose detail and local contrast separately.
@@ -47,8 +48,8 @@ class DetailEffect extends Effect {
   }
 }
 
-export function gradeLUT(basic: BasicGrade, size = 32) {
-  const lut = LookupTexture.createNeutral(size), pixels = lut.image.data as Float32Array, c = new Color(), grade = colorGrade(basic);
+export function gradeLUT(basic: BasicGrade, size = 32, secondary: SecondaryGrade = {}) {
+  const lut = LookupTexture.createNeutral(size), pixels = lut.image.data as Float32Array, c = new Color(), grade = colorGrade(basic, secondary);
   for (let i = 0; i < pixels.length; i += 4) { grade(c.setRGB(pixels[i], pixels[i + 1], pixels[i + 2])); pixels[i] = c.r; pixels[i + 1] = c.g; pixels[i + 2] = c.b; }
   lut.needsUpdate = true;
   return lut;
@@ -81,15 +82,15 @@ export function makeAdjustments(composer: EffectComposer, camera: Camera) {
     const basic = settings?.basic ?? {};
     const importedLut = settings?.lut, texture = importedLut && imported.get(importedLut.url);
     const useCustom = !!texture && importedLut?.enabled !== false && (importedLut?.amount ?? 100) > 0;
-    const active = !bypass && settings?.enabled !== false && (useCustom || Object.values(basic).some((v) => v !== 0));
+    const active = !bypass && settings?.enabled !== false && (useCustom || Object.values(basic).some((v) => v !== 0) || hasSecondary(settings ?? {}));
     originalTail.renderToScreen = !active;
     detailPass.enabled = active && !!(basic.sharpen || basic.clarity);
     customPass.enabled = active && useCustom;
     colorPass.enabled = finishPass.enabled = active;
     if (!active) return;
-    const key = JSON.stringify(basic);
+    const key = JSON.stringify([basic, settings?.hsl, settings?.curves, settings?.wheels]);
     let entry = cache.get(shot);
-    if (entry?.key !== key) { entry?.texture.dispose(); entry = { key, texture: gradeLUT(basic) }; cache.set(shot, entry); }
+    if (entry?.key !== key) { entry?.texture.dispose(); entry = { key, texture: gradeLUT(basic, 32, settings) }; cache.set(shot, entry); }
     lut.lut = entry.texture;
     if (texture) custom.lut = texture;
     custom.blendMode.opacity.value = (importedLut?.amount ?? 100) / 100;

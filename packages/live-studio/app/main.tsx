@@ -9,7 +9,7 @@ const showFailure = (why: string, error: unknown) => {
   const box = document.createElement("pre");
   box.className = "m-3 overflow-auto rounded-lg bg-alarm-bg p-3 font-mono text-sm whitespace-pre-wrap text-foreground";
   box.textContent = `${why}\n\n${error instanceof Error ? (error.stack ?? error.message) : String(error)}`;
-  root.replaceChildren(box);
+  root.insertAdjacentElement("afterend", box);
   for (const event of ["code", "edit"]) onEvent(event, () => location.reload());
   onHello((current) => { if (!current) location.reload(); });
 };

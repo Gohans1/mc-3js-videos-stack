@@ -1,6 +1,7 @@
 // CAT16 white balance and tonal ranges: Google Filament, Apache-2.0 (THIRD_PARTY_NOTICES.txt).
 // This adapter grades display sRGB; exposure and chromatic adaptation run in linear Rec.709.
 import { Color, MathUtils, Matrix3, Vector3 } from "three";
+import { secondaryGrade, type SecondaryGrade } from "./grade-secondary";
 
 export const ADJUSTMENTS = [
   { id: "temp", title: "Temp", group: "Color", min: -100, max: 100 },
@@ -36,7 +37,8 @@ function whiteBalance(temp: number, tint: number) {
   return rgbFromLMS.clone().multiply(scale).multiply(lmsFromRGB);
 }
 
-export function colorGrade(basic: BasicGrade) {
+export function colorGrade(basic: BasicGrade, secondary: SecondaryGrade = {}) {
+  const more = secondaryGrade(secondary);
   const v = (key: BasicKey) => MathUtils.clamp(basic[key] ?? 0, -100, 100) / 100;
   const balance = whiteBalance(v("temp"), v("tint")), exposure = 2 ** (v("exposure") * 4);
   const linear = !!(v("temp") || v("tint") || v("exposure"));
@@ -52,6 +54,6 @@ export function colorGrade(basic: BasicGrade) {
     c.setRGB(tone(c.r), tone(c.g), tone(c.b));
     const grey = luma(c);
     c.setRGB(clamp(grey + (c.r - grey) * saturation), clamp(grey + (c.g - grey) * saturation), clamp(grey + (c.b - grey) * saturation));
-    return c;
+    return more(c);
   };
 }

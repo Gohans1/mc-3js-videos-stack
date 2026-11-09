@@ -13,6 +13,8 @@
     "./transitions": "./src/transitions.ts",
     "./grade": "./src/grade.ts",
     "./grade-color": "./src/grade-color.ts",
+    "./grade-secondary": "./src/grade-secondary.ts",
+    "./grade-wheels": "./src/grade-wheels.ts",
     "./lut": "./src/lut.ts"
   },
   "scripts": {
@@ -27,7 +29,8 @@
     "@fontsource/ibm-plex-mono": "5.3.0",
     "bezier-easing": "3.2.0",
     "gl-transitions": "3.1.0",
-    "postprocessing": "6.39.6"
+    "postprocessing": "6.39.6",
+    "typescript-cubic-spline": "1.0.1"
   },
   "devDependencies": {
     "@types/three": "0.187.0"

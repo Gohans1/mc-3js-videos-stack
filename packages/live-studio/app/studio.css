@@ -76,3 +76,21 @@
 .adjust-slider[data-gradient="temp"] [data-slot="slider-track"] { background: linear-gradient(to right, #0000ff, #ffff00); }
 .adjust-slider[data-gradient="tint"] [data-slot="slider-track"] { background: linear-gradient(to right, #008000, #ff00ff); }
 .adjust-slider[data-gradient="saturation"] [data-slot="slider-track"] { background: linear-gradient(to right, #808080, #ff0000); }
+.adjust-slider[data-gradient="hsl-hue"] [data-slot="slider-track"] { background: linear-gradient(to right, hsl(calc(var(--hue-angle) - 30) 80% 55%), var(--hue), hsl(calc(var(--hue-angle) + 30) 80% 55%)); }
+.adjust-slider[data-gradient="hsl-saturation"] [data-slot="slider-track"] { background: linear-gradient(to right, #808080, var(--hue)); }
+.adjust-slider[data-gradient="hsl-brightness"] [data-slot="slider-track"] { background: linear-gradient(to right, #000000, var(--hue), #ffffff); }
+.grade-wheel {
+  background: conic-gradient(#d92e52, #84559c, #3961d5, #4290a7, #78c369, #d7c945, #f48c22, #d76146, #d92e52);
+  box-shadow: 0 0 0 2px #111;
+}
+.grade-wheel::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #141414, #1110), conic-gradient(#33080d, #1e0c2d, #04162e, #09221e, #092409, #2c2908, #2d1407, #33100c, #33080d);
+}
+.grade-wheel-channel[data-channel="R"] { background: #f00; }
+.grade-wheel-channel[data-channel="G"] { background: #0f0; }
+.grade-wheel-channel[data-channel="B"] { background: #00f; }
+.grade-wheel-value { background: #1c1c1c; }

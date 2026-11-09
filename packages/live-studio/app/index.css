@@ -93,6 +93,7 @@
 /* CapCut 9.7's type steps (px, so a phone's larger rem leaves them be) and the studio's floating surfaces. A name added
    here goes in lib/utils.ts too, or cn() takes text-ui for a colour and drops it beside text-primary */
 @theme {
+    --color-curve: #080808;
     --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
     --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
     --text-title: 15px; /* a panel's or dialog's heading */
