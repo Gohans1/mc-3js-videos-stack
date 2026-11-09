@@ -31,6 +31,7 @@
     --color-warn-bg: var(--warn-bg);
     --color-favorite: var(--favorite);
     --color-peek: var(--peek);
+    --color-snap: var(--snap);
     --color-ink: var(--ink);
     --color-in-out: var(--in-out);
     --color-in-out-text: var(--in-out-text);
@@ -152,6 +153,7 @@
     --warn-bg: #2A2410;
     --favorite: #D0A215; /* a starred sound or effect, as CapCut colours its star */
     --peek: #D0A215; /* the preview axis and the time it shows (timeline/peek.ts), yellow as CapCut draws it */
+    --snap: #027059; /* the snapping line (timeline/snapline.ts): CapCut's 1 px teal green, estimated off a 1080p video frame, not yet a 9.7 screenshot */
     --in-out: #4385BE; /* the In to Out stretch (timeline/inout.ts; the ruler draws it in the same blue) */
     --in-out-text: #92BFDB;
     --ink: #CE5D97; /* a note's drawing while it is drawn, and the words that name it */

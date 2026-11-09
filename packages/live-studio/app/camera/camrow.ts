@@ -15,12 +15,13 @@ import { easeFn } from "../core/ease";
 import { shotIndex } from "../core/film";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
-import { r3, snapTo, stamp } from "../core/time";
+import { r3, snappedTo, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { bladeLine } from "../timeline/blade";
 import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { alongWith, type Along, inBox, NONE, pickAcross, picked } from "../timeline/across";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
+import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { animOf, lenOf, pickShot, shotSpan } from "./anim";
 import { together } from "../core/doc";
@@ -216,12 +217,14 @@ export const attachCamRow = () => {
       const [lo, hi] = groupRoom(drag.group), { along } = drag, d = Math.max(lo, along?.room[0] ?? lo, Math.min(hi, along?.room[1] ?? hi, to - drag.t));
       shiftCamKeys(drag.group, d, preview);
       along?.preview(d);
+      snapLine(noSnap(e) ? null : snappedTo([drag.t + d], snapPoints()));
       say(`${drag.group.length + (along?.count ?? 0)} ${along ? "picks" : "keyframes"} ${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2)} s${noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
       return;
     }
     const [lo, hi] = drag.roll ? rollRoom(i) : room(i), t = Math.max(lo, Math.min(hi, to));
     if (drag.roll) previewRoll(i, t);
     else preview((ks) => { ks[i].t = Math.round(t * 1000) / 1000; });
+    snapLine(noSnap(e) ? null : snappedTo([t], snapPoints()));
     say(`${drag.roll ? "Cut" : "Keyframe"} ${stamp(drag.t)} → ${stamp(t)}${noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
   });
   const up = () => {
@@ -234,6 +237,7 @@ export const attachCamRow = () => {
     }
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (!drag) return;
+    snapLine(null);
     const { snap, shots, roll, moved, i, group, along, t: was } = drag;
     drag = null;
     c.style.cursor = "";

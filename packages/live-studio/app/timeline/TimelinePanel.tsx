@@ -86,6 +86,8 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
       <AudioMeter />
       {/* CapCut's preview axis, from the ruler down the rows (peek.ts) */}
       <div ref={bind("peek")} aria-hidden hidden className="pointer-events-none absolute left-0 z-3 w-px -translate-x-px bg-peek ring-1 ring-black" />
+      {/* CapCut's snapping line, where a dragged edge meets a mark (snapline.ts) */}
+      <div ref={bind("snap")} aria-hidden hidden className="pointer-events-none absolute left-0 z-3 w-px bg-snap" />
     </div>
   );
 }

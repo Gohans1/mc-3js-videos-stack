@@ -1,7 +1,7 @@
 // The timeline's magnet (app/core/time.ts snapTo), shared by the sound clips, the camera row and the key rows
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FPS, SNAP_PX, snapSpan, snapTo } from "../app/core/time.ts";
+import { FPS, SNAP_PX, snapSpan, snappedTo, snapTo } from "../app/core/time.ts";
 
 const perPx = 0.01; // seconds a pixel: SNAP_PX pixels reach 0.07 s
 
@@ -43,4 +43,12 @@ test("with both ends in reach, the nearer one sticks", () => {
 test("a carried clip out of reach, or with the magnet off, stays where the pointer put it", () => {
   assert.equal(snapSpan(1.5, 1, [1, 3], perPx, false), 1.5);
   assert.equal(snapSpan(2.04, 1, [2], perPx, true), 2.04);
+});
+
+// The mark a dragged clip's edges lie on, where CapCut draws its snapping line. Saved times keep a millisecond (r3), so an edge
+// stuck on the playhead at 1/30 s is read back as 0.033, and still counts as on it
+test("the mark an edge lies on, though the saved edge was rounded to the millisecond", () => {
+  assert.equal(snappedTo([0.5, 0.033], [1 / 30, 2]), 1 / 30);
+  assert.equal(snappedTo([2.4, 3.4], [1, 2, 3]), null);
+  assert.equal(snappedTo([0.035], [1 / 30]), null, "two milliseconds off is not touching");
 });

@@ -1,7 +1,7 @@
 // The sound tracks under the timeline, CapCut style, on the same seconds as the stretch drawn above them (timeline.ts): one row
 // per track of audio.json (sound/tracks.ts), its name, mute and lock in the column beside it (sound/TrackHeads.tsx).
 // A clip is dragged to move (up or down onto another track, or below the last one for a new track), by an edge to trim, and
-// snaps to the playhead, cuts, words and other clips' edges (Shift: no snap). The handle on each top corner of the clip under the
+// snaps to the playhead, cuts, words and other clips' edges (Shift: no snap), CapCut's line showing where (timeline/snapline.ts). The handle on each top corner of the clip under the
 // pointer or picked drags its fade in or out, as in CapCut and Premiere. A box dragged over empty space picks every clip
 // it touches (Shift/Ctrl add to the pick), and the keys of the other rows it crosses (timeline/rowbox.ts, across.ts); dragging
 // one picked clip moves all of it, and with Alt held copies of the clips alone (CapCut's drag to duplicate). A click on empty space
@@ -9,7 +9,7 @@
 // A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
 // In split mode (blade.ts) a click on a clip cuts it there instead.
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-import { FPS, r3, snapSpan, snapTo, stamp } from "../core/time";
+import { FPS, r3, snappedTo, snapSpan, snapTo, stamp } from "../core/time";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
 import { get, noSnap, say } from "../core/store";
@@ -20,6 +20,7 @@ import { together } from "../core/doc";
 import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
 import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
+import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { addTrack, resolve, same } from "./tracks";
 import { seek, setPlaying } from "../playback/transport";
@@ -292,6 +293,7 @@ export const attachLanes = () => {
     if (drag.mode === "move") drag.along?.preview(drag.shift);
     const others = drag.mode === "move" ? group.length - 1 + (drag.along?.count ?? 0) : 0;
     const [a0, a1] = span(drag.moving[group.indexOf(ref)] ?? ref), many = others ? ` + ${others} more` : "";
+    snapLine(off ? null : snappedTo(drag.mode === "move" ? [a0, a1] : drag.mode === "start" ? [a0] : [a1], pts));
     say(`${drag.copy ? "Copy of " : ""}${clipOf(ref)!.name}${many}: ${stamp(a0)} → ${stamp(a1)}${off ? "" : " (Shift: no snapping)"}`, 1500);
   });
 
@@ -299,6 +301,7 @@ export const attachLanes = () => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
+    snapLine(null);
     const { snap, moved, alone, ref, copy, moving, along, shift } = drag;
     drag = null;
     c.style.cursor = "";
@@ -341,6 +344,7 @@ export const startCarry = (name: string, e: PointerEvent) => {
     drop = overLanes(ev);
     ghost.toggleAttribute("data-over", !!drop);
     ghost.textContent = drop ? `${name} → ${where(drop)} ${stamp(drop.at)}` : name;
+    snapLine(drop && !noSnap(ev) ? snappedTo([drop.at], snapPoints([])) : null);
     drawLanes();
   };
   const end = (ev: PointerEvent) => {
@@ -350,6 +354,7 @@ export const startCarry = (name: string, e: PointerEvent) => {
     const place = ev.type === "pointerup" ? overLanes(ev) : null;
     ghost.remove();
     drop = null;
+    snapLine(null);
     if (place) addClip(name, place.at, undefined, tracks()[place.row]?.id ?? "new");
     drawLanes();
   };

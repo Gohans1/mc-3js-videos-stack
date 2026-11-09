@@ -7,11 +7,12 @@ import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { together } from "../core/doc";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
-import { FPS, r3, snapSpan, snapTo, stamp } from "../core/time";
+import { FPS, r3, snappedTo, snapSpan, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
 import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
+import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { edit, isShape, items, nameOf, pickText, preview, restore, settle, snapshot, tracksUsed } from "./text";
 
@@ -156,6 +157,7 @@ export const attachTextRow = () => {
     });
     if (drag.mode === "move") drag.along?.preview(drag.shift);
     const others = drag.mode === "move" ? group.length - 1 + (drag.along?.count ?? 0) : 0, now = items[drag.moving[group.indexOf(i)] ?? i];
+    snapLine(off ? null : snappedTo(drag.mode === "move" ? [now.from, now.to] : drag.mode === "start" ? [now.from] : [now.to], pts));
     say(`${drag.copy ? "Copy of " : ""}${nameOf(now)}${others ? ` + ${others} more` : ""}: ${stamp(now.from)} → ${stamp(now.to)}${off ? "" : " (Shift: no snapping)"}`, 1500);
   });
 
@@ -163,6 +165,7 @@ export const attachTextRow = () => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
+    snapLine(null);
     const { snap, moved, alone, i, copy, moving, along, shift } = drag;
     drag = null;
     c.style.cursor = "";

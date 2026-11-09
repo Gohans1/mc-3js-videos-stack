@@ -23,7 +23,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Shift+Z (nút kính lúp) vừa cả phim; thanh trượt zoom giữa nút - và + như CapCut; Alt+lăn hoặc Shift+lăn trượt ngang.
   - Shift+P bật/tắt preview axis (phím của CapCut 9.7): rê chuột trên mọi hàng timeline xem khung đó, vạch vàng chạy từ thước giờ xuống đáy, playhead đứng yên, đồng hồ chuyển vàng.
   - Shift+S thêm tiếng (như "video and audio" của CapCut): rê chuột hay kéo playhead thì nghe vài khung tiếng ở đó, cả lời dẫn lẫn các track. Mặc định tắt.
-- Auto snapping (S, phím của CapCut 9.7): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác, bằng đầu nào của clip gần hơn; giữ Shift khi kéo để tắt tạm. Kéo đè lên clip khác quá tầm hít thì clip xuống track mới, như CapCut.
+- Auto snapping (S, phím của CapCut 9.7): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác, bằng đầu nào của clip gần hơn; giữ Shift khi kéo để tắt tạm. Lúc hít, một vạch xanh ngọc 1 px chạy từ thước xuống đáy các hàng ngay chỗ dính, như CapCut (màu ước lượng từ video, chưa đo trên ảnh 9.7). Kéo đè lên clip khác quá tầm hít thì clip xuống track mới, như CapCut.
 - Track lock, hide, mute, solo:
   - Mute, Lock ở đầu mỗi track âm thanh: CÓ. Mute áp cả bản render final (mix.py bỏ track đó).
   - Solo: CÓ, nút tai nghe ở đầu track (khi trang tự phát các track), lời dẫn cũng im theo. Chỉ trong trang, không lưu, không ảnh hưởng bản render.

@@ -7,7 +7,7 @@
 // a click on a key seeks there, one on empty space drops the pick and moves the playhead there (CapCut, the dev's call
 // 2026-11-09); a touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
-import { snapTo, stamp } from "../core/time";
+import { snappedTo, snapTo, stamp } from "../core/time";
 import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, rowsOf, same, sameKey, snapshot } from "./keys";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
@@ -16,6 +16,7 @@ import { together } from "../core/doc";
 import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
 import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
+import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { seek, setPlaying } from "../playback/transport";
 
@@ -151,6 +152,7 @@ export const attachKeyRows = () => {
     const d = Math.max(lo, along?.room[0] ?? lo, Math.min(hi, along?.room[1] ?? hi, want));
     preview(drag.group, (r, ks) => { ks[r.i].t = Math.round((ks[r.i].t + d) * 1000) / 1000; });
     along?.preview(d);
+    snapLine(noSnap(e) ? null : snappedTo([drag.t + d], snapPoints()));
     const others = drag.group.length - 1 + (along?.count ?? 0), many = others ? ` + ${others} more` : "";
     say(`${drag.ref.path.join(".")}${many}: ${stamp(drag.t)} → ${stamp(drag.t + d)}${d !== want ? " (stopped by its neighbour)" : noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
   });
@@ -158,6 +160,7 @@ export const attachKeyRows = () => {
     if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
     if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
+    snapLine(null);
     const { snap, moved, alone, ref, group, along, t: was } = drag;
     drag = null;
     c.style.cursor = "";

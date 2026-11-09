@@ -18,6 +18,11 @@ export const snapSpan = (from: number, len: number, pts: number[], perPx: number
   const g0 = gap(from), g1 = gap(from + len);
   return g0 === Infinity && g1 === Infinity ? from : g0 <= g1 ? snapTo(from, pts, perPx, off) : snapTo(from + len, pts, perPx, off) - len;
 };
+// The mark one of ts lies on, null when none: within a millisecond, as the timeline files round a snapped edge (r3)
+export const snappedTo = (ts: number[], pts: number[]) => {
+  for (const t of ts) for (const p of pts) if (Math.abs(p - t) <= 1e-3) return p;
+  return null;
+};
 
 // Times as people read them: 01:05.250 on the clock, 1:05.3 in a list
 export const pad = (n: number, w = 2) => String(n).padStart(w, "0");
