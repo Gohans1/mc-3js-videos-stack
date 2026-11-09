@@ -18,7 +18,7 @@ Every film in this monorepo shares this one studio (`"live-studio": "workspace:*
 bun run new-film <name>                 # at the monorepo root: copies templates/film, runs init.mjs, links the vault
 cd films/<name> && bun run studio       # prints the creator's link (Tailscale) or what is missing
 bun run notes [ID]                      # the creator's notes; bun run note done ID "..." when one is fixed
-bun run render stills|clip              # draft stills or the draft video; options and checks in the header of render.mjs
+bun run render stills|clip|captions     # draft stills, the draft video with its .srt, or the .srt alone; options in render.mjs
 bun run framecheck                      # faults in a rendered video
 ```
 

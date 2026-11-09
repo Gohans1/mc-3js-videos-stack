@@ -44,7 +44,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Preview quality, export:
   - Xem nháp 960×540, G bật Final quality.
   - Export still frame: ⋯ Settings > Heavy > Still frame, lưu PNG/JPEG cỡ final qua hộp Save của Chrome, ảnh sạch không guides hay pin.
-  - Xuất video: lệnh `bun run render` trong folder phim, trang không có nút Export. Xuất .srt: SẮP LÀM ở bước render final. Proxy: BỎ.
+  - Xuất video: lệnh `bun run render` trong folder phim, trang không có nút Export. Xuất .srt: CÓ, render clip ghi renders/draft_video.srt cạnh video (render captions chỉ ghi phụ đề, một giây), cắt câu theo chuẩn phụ đề Netflix: 42 ký tự một dòng, 2 dòng, 5/6 đến 7 giây. Proxy: BỎ.
 
 ## Tầng 2: Dễ
 

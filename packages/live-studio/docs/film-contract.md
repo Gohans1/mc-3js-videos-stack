@@ -34,7 +34,7 @@ What the studio reads from a film: the schemas in [`src/contract.mjs`](../src/co
 
 ## Draft renders
 
-`bun run render stills|clip` inside the film; its options (AT, LIST, CHUNKS, INSPECT, CHECK, ENTRY + LAB_*) are in the header of [`render.mjs`](../render.mjs), and lab pages import `live-studio/lab`.
+`bun run render stills|clip|captions` inside the film; its options (AT, LIST, CHUNKS, INSPECT, CHECK, ENTRY + LAB_*) are in the header of [`render.mjs`](../render.mjs), and lab pages import `live-studio/lab`.
 
 ## Notes
 

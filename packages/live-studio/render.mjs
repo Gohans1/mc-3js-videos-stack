@@ -1,7 +1,8 @@
-// Draft renders of any film, from inside the film: node node_modules/live-studio/render.mjs [stills|clip]   (none: both)
+// Draft renders of any film, from inside the film: node node_modules/live-studio/render.mjs [stills|clip|captions]   (none: stills and clip)
 // Builds the film with the studio's own bundler (src/vite_film.mjs, the same build the studio page uses), opens it in a
 // headless Chrome on the GPU, and writes what the page sends back: stills to renders/, the film as 30 s H.264 chunks to
-// renders/chunks/, joined losslessly into renders/draft_video.mp4. Nothing is written on any other drive.
+// renders/chunks/, joined losslessly into renders/draft_video.mp4, with the voice's captions beside it as draft_video.srt (a
+// player shows them with the video; captions alone writes only those, in a second). Nothing is written on any other drive.
 //   AT=40,41.5                 stills at these heard seconds (default 1), named still_<s>s.jpg
 //   LIST=1                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
 //                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot
@@ -22,16 +23,30 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
 import { build } from "vite";
-import { STUDIO, threeFromOf } from "./src/film.mjs";
+import { cues, srt } from "./src/captions.mjs";
+import { STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { ratioOf, sizeOf } from "./src/frame.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
+import { warp } from "./src/warp.mjs";
 
 const what = process.argv[2] ?? "all";
-if (!["all", "stills", "clip"].includes(what)) { console.log("usage: node node_modules/live-studio/render.mjs [stills|clip]"); process.exit(2); }
+if (!["all", "stills", "clip", "captions"].includes(what)) { console.log("usage: node node_modules/live-studio/render.mjs [stills|clip|captions]"); process.exit(2); }
 const PROJECT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 if (!existsSync(join(PROJECT, "src/scene.ts"))) { console.error(`${PROJECT} has no src/scene.ts: run this inside a film`); process.exit(1); }
 const FPS = 30, CHUNK = 30;
 const RENDERS = join(PROJECT, "renders"), CHUNKS = join(RENDERS, "chunks"), OUT = join(PROJECT, `node_modules/.vite/live-studio-render-${process.pid}`); // per run: two renders of one film must not share a build
+
+// The voice's captions at the seconds heard (src/captions.mjs), named as the video so a player picks them up with it
+const writeCaptions = () => {
+  const map = voiceMapOf(PROJECT), edit = join(PROJECT, "src/edit.json");
+  if (!existsSync(map)) { console.log("no captions: the studio writes renders/live/voice_map.json when it first opens this film"); return; }
+  const w = (existsSync(edit) ? JSON.parse(readFileSync(edit, "utf8")).voice?.warp : null) ?? [];
+  const list = cues(JSON.parse(readFileSync(map, "utf8")).lines ?? [], (s) => warp(w, s, 0, 1));
+  mkdirSync(RENDERS, { recursive: true });
+  writeFileSync(join(RENDERS, "draft_video.srt"), srt(list));
+  console.log(`wrote renders/draft_video.srt (${list.length} captions)`);
+};
+if (what === "captions") { writeCaptions(); process.exit(0); }
 const pkg = existsSync(join(PROJECT, "package.json")) ? JSON.parse(readFileSync(join(PROJECT, "package.json"), "utf8")) : {};
 const CHROME = join(PROJECT, pkg["live-studio"]?.chrome ?? "tools/chrome-headless-shell/chrome-headless-shell.exe");
 if (!existsSync(CHROME)) { console.error(`no headless Chrome at ${CHROME}: name it in package.json "live-studio": { "chrome": "..." }`); process.exit(1); }
@@ -120,6 +135,7 @@ if (!failed && chunks) {
     const j = spawnSync("ffmpeg", ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", join(CHUNKS, "list.txt"), "-c", "copy", join(RENDERS, "draft_video.mp4")], { stdio: "inherit" });
     console.log(j.status === 0 ? "joined renders/draft_video.mp4" : "ERROR join failed");
     if (j.status) failed = true;
+    else writeCaptions();
   }
 }
 process.exit(failed ? 1 : 0);

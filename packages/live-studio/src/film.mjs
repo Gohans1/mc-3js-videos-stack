@@ -14,6 +14,8 @@ import { openTimelineFile } from "./timeline_file.mjs";
 export const STUDIO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // One copy of three: the film's and the studio's would each otherwise bring their own, and objects from one fail instanceof in the other
 export const threeFromOf = (project) => (existsSync(join(project, "node_modules/three")) ? project : STUDIO);
+// The voice's lines and words in the voice's own seconds, which the studio writes on opening a film (voice_map.py)
+export const voiceMapOf = (project) => join(project, "renders/live/voice_map.json");
 
 const debounce = (f, ms) => { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => f(...a), ms); }; };
 
@@ -30,7 +32,7 @@ export const openFilm = (projectDir, { send }) => {
   const LITE = join(WORK, "lite"); // small copies of the assets, see make_lite.py
   const TRIALS = join(WORK, "trials.json");
   const EDIT = join(SRC, "edit.json");
-  const VOICE_MAP = join(WORK, "voice_map.json");
+  const VOICE_MAP = voiceMapOf(PROJECT);
   const VOICE = join(PUBLIC, "agent/full_voice.wav");
   // What was picked in the studio ("Use"), {group: {set, gain}}, read by the film's own renders; older films named it sound_choices.json
   const CHOICES = [join(PROJECT, "sound_choices.json"), join(PROJECT, "choices.json")].find(existsSync) ?? join(PROJECT, "choices.json");
