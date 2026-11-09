@@ -45,7 +45,7 @@ export const setTrack = (track: number, change: Partial<TextTrack>) => edit((f) 
 // The pick, which also opens the Text tab and drops every other kind's pick, as each row's own setter does
 export const pickText = (is: number[]) => {
   const ok = [...new Set(is)].filter((i) => items[i]).sort((a, b) => a - b);
-  set(ok.length ? { textPicks: ok, side: get().side === "textAnim" ? "textAnim" : "text", camKey: null, camPicks: [], shotPick: null, clips: [], clip: null, keyPicks: [], object: null } : { textPicks: [] });
+  set(ok.length ? { textPicks: ok, layerPicks: [], side: get().side === "textAnim" ? "textAnim" : "text", camKey: null, camPicks: [], shotPick: null, clips: [], clip: null, keyPicks: [], object: null } : { textPicks: [] });
   S.dirty = true;
 };
 

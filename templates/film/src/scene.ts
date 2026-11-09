@@ -24,7 +24,8 @@ import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
-import { makeAdjustments } from "film-stage/grade";
+import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
+import { activeAdjustments } from "film-stage/grade-layers";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -99,8 +100,8 @@ export async function buildScene(canvas, W, H, draft = false) {
   composer.addPass(new EffectPass(camera, new SMAAEffect()));
   const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
   composer.addPass(new EffectPass(camera, new BloomEffect({ intensity: 0.4, luminanceThreshold: 0.85, mipmapBlur: true }), tone, new VignetteEffect({ offset: 0.3, darkness: 0.45 }), new ToneMappingEffect({ mode: ToneMappingMode.AGX })));
-  const adjust = makeAdjustments(composer, camera);
-  await adjust.prepare(SHOTS_OUT.map((s) => s.adjust));
+  const adjust = makeAdjustments(composer, camera), layerAdjust = makeLayerAdjustments(renderer);
+  await Promise.all([adjust.prepare(SHOTS_OUT.map((s) => s.adjust)), layerAdjust.prepare((EDIT.adjustments?.items ?? []).map((it) => it.grade))]);
 
   // Steve at time t: body from the move keys, then each hand reaches its target and the head turns to its look point.
   // A target is a world point [x, y, z]; a film with props adds named anchors here (a handle that moves with its drawer)
@@ -166,7 +167,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     if (!free.on) titles(EDIT.text.items, t, camera, EDIT.text.tracks);
   };
 
-  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
+  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free, (t) => layerAdjust(activeAdjustments(EDIT.adjustments, t), t, free.on));
   // A draft frame's list (LIST=1): what is going on at t and which file holds it
   const mm = (fov) => Math.round(12 / Math.tan(THREE.MathUtils.degToRad(fov) / 2));
   draw.describe = (t) => {
@@ -190,7 +191,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   };
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.anims = ANIMS; // the studio's Animation tab lists these
-  draw.adjustments = { prepare: adjust.prepare };
+  draw.adjustments = { prepare: (grades) => Promise.all([adjust.prepare(grades), layerAdjust.prepare(grades)]) };
   draw.checks = footChecks({ perform, steve, now });
   return draw;
 }

@@ -49,6 +49,10 @@ Over 10 MB on a phone's first load the terminal names the biggest files: load on
 
 `init.mjs FILM` → replace `src/scene.ts` and `src/edit.json` → `bun run studio` prints both `film contract ... ok` lines → point the film's `AGENTS.md` here.
 
+## Lớp Adjust
+
+adjustmentTimeline trỏ tới file có items {id, name, from, to, track, grade} và tracks {lock, hidden}; setEdit nối vào EDIT.adjustments. Sau khi ghép transition và vẽ chữ, gọi film-stage/grade makeLayerAdjustments với activeAdjustments(EDIT.adjustments, t); draw.adjustments.prepare phải chuẩn bị LUT của cả shot và lớp, xem [adjustment-layers.md](adjustment-layers.md).
+
 ## Transition
 
 Shot phía sau có transition {fx, len}: dissolve, black, white hoặc wipe; len là giây phim, nằm hai phía điểm cắt. Nối frame qua film-stage/transitions như [hướng dẫn](transition-research.md); draw.transitions bật thư viện trong studio.

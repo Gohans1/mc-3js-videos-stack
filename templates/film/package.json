@@ -33,6 +33,7 @@
     "soundTimeline": "src/timeline/audio.json",
     "camTimeline": "src/timeline/cam.json",
     "textTimeline": "src/timeline/text.json",
+    "adjustmentTimeline": "src/timeline/adjust.json",
     "keyFiles": { "src/timeline/placed.json": "placed", "src/timeline/fx.json": "fx" },
     "sfx": "sound/sfx",
     "liveLanes": true,

@@ -265,7 +265,7 @@ export const setSnap = (on: boolean) => { set({ snap: on }); applySnap(); };
 export const setGizmo = (mode: GizmoMode) => { set({ gizmo: mode }); gizmo?.setMode(mode); S.dirty = true; };
 export const gizmoBusy = () => !!gizmo && (gizmo.dragging || gizmo.axis !== null);
 
-export const select = (name: string | null) => set(name ? { object: name, side: "objects", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [] } : { object: null });
+export const select = (name: string | null) => set(name ? { object: name, side: "objects", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [], layerPicks: [] } : { object: null });
 
 studio.subscribe((s, was) => {
   if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev || s.keyPicks !== was.keyPicks) attach();
@@ -311,7 +311,7 @@ const targets = (sceneTools: Tools): SceneTarget[] => {
   })];
 };
 export const selectTarget = (target: SceneTarget | null, additive = false) => {
-  if (!target) { set({ object: null, keyPicks: [], camKey: null, camPicks: [], shotPick: null, clips: [], clip: null, textPicks: [] }); S.dirty = true; return; }
+  if (!target) { set({ object: null, keyPicks: [], camKey: null, camPicks: [], shotPick: null, clips: [], clip: null, textPicks: [], layerPicks: [] }); S.dirty = true; return; }
   const row = rows.find((r) => target.rows.some((b) => matchesRow(b, files[r.f].edit, r.path)));
   if (!row) return;
   const ks = keysOf(row.f, row.path);

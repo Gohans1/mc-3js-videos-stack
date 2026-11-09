@@ -9,8 +9,8 @@ import { DURATION } from "film/scene";
 import { setBlade } from "./blade";
 import { canDelete, canSplit, deleteSelected, splitHere } from "./cut";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
-import { trimClips } from "../sound/sound";
-import { get, useStudio } from "../core/store";
+import { trimSelected } from "./cut";
+import { useStudio } from "../core/store";
 import { togglePreviewAxis } from "./peek";
 import { clearInOut } from "./inout";
 import { rangeText } from "../core/time";
@@ -49,7 +49,7 @@ function ZoomSlider() {
 export function TimelineBar() {
   // Every edit and pick changes the store: this redraws the bar then, so undo and the picks below are read fresh
   useStudio(() => `${canUndo()}${canRedo()}${canSplit()}${canDelete()}`);
-  const magnet = useStudio((s) => s.magnet), previewAxis = useStudio((s) => s.previewAxis), previewAudio = useStudio((s) => s.previewAudio), inOut = useStudio((s) => s.inOut), picks = useStudio((s) => s.clips.length > 0), blade = useStudio((s) => s.blade);
+  const magnet = useStudio((s) => s.magnet), previewAxis = useStudio((s) => s.previewAxis), previewAudio = useStudio((s) => s.previewAudio), inOut = useStudio((s) => s.inOut), picks = useStudio((s) => s.clips.length > 0 || s.layerPicks.length > 0), blade = useStudio((s) => s.blade);
   return (
     // Too long for a phone, the bar scrolls sideways under the finger, as CapCut's phone toolbar does, and fades at an end with
     // more beyond it (shadcn's scroll-fade-x), rather than holding the page wider than the screen. Its padding keeps the focus
@@ -62,8 +62,8 @@ export function TimelineBar() {
       <Tool label="Redo (Ctrl+Y)" icon={Redo2} onClick={redo} disabled={!canRedo()} />
       <span aria-hidden className="mx-1.5 h-5 w-px bg-border" />
       <Tool label="Split at the playhead (Ctrl+B): the picked sound clips, or the shot" icon={Scissors} onClick={splitHere} disabled={!canSplit()} />
-      <Tool label="Delete left (Q): cut the picked clips' part before the playhead" icon={ArrowLeftToLine} onClick={() => trimClips(get().clips, "left")} disabled={!picks} />
-      <Tool label="Delete right (W): cut the picked clips' part after the playhead" icon={ArrowRightToLine} onClick={() => trimClips(get().clips, "right")} disabled={!picks} />
+      <Tool label="Delete left (Q): cut the picked clips' part before the playhead" icon={ArrowLeftToLine} onClick={() => trimSelected("left")} disabled={!picks} />
+      <Tool label="Delete right (W): cut the picked clips' part after the playhead" icon={ArrowRightToLine} onClick={() => trimSelected("right")} disabled={!picks} />
       <Tool label="Delete (Delete)" icon={Trash2} onClick={deleteSelected} disabled={!canDelete()} />
       <BeatMenu />
       {/* The In to Out stretch (inout.ts), named while there is one: blue as on the ruler, and the way to clear it */}

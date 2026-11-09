@@ -1,6 +1,6 @@
 import { Color, HalfFloatType, PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { CopyPass, EffectComposer, RenderPass } from "postprocessing";
-import { makeAdjustments, type Grade } from "film-stage/grade";
+import { makeAdjustments, makeLayerAdjustments, type Grade } from "film-stage/grade";
 import { colorGrade, type BasicGrade } from "film-stage/grade-color";
 import { canvas, config, done, log, still } from "live-studio/lab";
 import { applyEdit, buildScene, SHOTS_OUT } from "../src/scene";
@@ -57,6 +57,21 @@ for (const swap of [false, true]) {
   }
   URL.revokeObjectURL(url);
 }
+const shared = makeLayerAdjustments(renderer);
+for (const stack of [
+  [{ basic: { saturation: -100 } }],
+  [{ basic: { exposure: 15 } }, { basic: { contrast: 30 } }],
+  [{ basic: { temp: 50 } }, { curves: { red: [[0, 0], [1, .6]] } }],
+] satisfies Grade[][]) {
+  draw({}); shared(stack.map((grade) => ({ grade })), 5);
+  if (gl.getError() !== gl.NO_ERROR) throw new Error("Shared grade produced a WebGL error");
+  const expected = stack.reduce((c, g) => colorGrade(g.basic ?? {}, g)(c), input.clone().convertLinearToSRGB()).toArray().map((x) => Math.round(x * 255)), got = pixel();
+  if (got.some((v, i) => Math.abs(v - expected[i]) > 3)) throw new Error(`Shared grade GPU mismatch: ${got} vs ${expected}`);
+  await log(`GPU shared layer stack ${JSON.stringify(stack)}: ${got}, expected ${expected}`);
+}
+draw({}); shared([{ grade: { basic: { exposure: 100 } } }], 5, true);
+if (String(pixel()) !== String(baseline)) throw new Error("Bypassed shared grade changed the picture");
+shared.dispose();
 adjust.dispose(); composer.dispose(); renderer.dispose();
 
 const film = await buildScene(c, W, H, true), originals = structuredClone(EDIT.shots);

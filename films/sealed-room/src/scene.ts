@@ -25,7 +25,8 @@ import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
-import { makeAdjustments } from "film-stage/grade";
+import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
+import { activeAdjustments } from "film-stage/grade-layers";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants } from "mc-assets/variants";
 import { VARIANTS } from "./variants";
@@ -199,8 +200,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const feed = new EffectPass(camera, lens, grain);
   composer.addPass(look);
   composer.addPass(feed);
-  const adjust = makeAdjustments(composer, camera);
-  await adjust.prepare(SHOTS_OUT.map((s) => s.adjust));
+  const adjust = makeAdjustments(composer, camera), layerAdjust = makeLayerAdjustments(renderer);
+  await Promise.all([adjust.prepare(SHOTS_OUT.map((s) => s.adjust)), layerAdjust.prepare((EDIT.adjustments?.items ?? []).map((it) => it.grade))]);
 
   // The 2D layer: the camera's cell number in the top left, in the game's own font
   const gs = Math.max(2, Math.floor(H / 360));
@@ -382,11 +383,11 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
     if (!free.on) titles(EDIT.text.items, t, camera, EDIT.text.tracks);
   };
-  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
+  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free, (t) => layerAdjust(activeAdjustments(EDIT.adjustments, t), t, free.on));
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.keyEases = [{ edit: "steve", path: ["moves"], names: Object.keys(EASES) }];
   draw.anims = ANIMS; // the studio's Animation tab lists these
-  draw.adjustments = { prepare: adjust.prepare };
+  draw.adjustments = { prepare: (grades) => Promise.all([adjust.prepare(grades), layerAdjust.prepare(grades)]) };
   draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody, variants, steve, now, props });
   draw.variants = variants;
   draw.tools = {

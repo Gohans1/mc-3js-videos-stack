@@ -28,7 +28,7 @@ export const shownShot = () => {
 // A shot block clicked on the camera row: its details show, in the Animation tab if that is open, else the Camera tab
 export const pickShot = (i: number | null) => {
   const side = get().side;
-  set(i === null ? { shotPick: null } : { shotPick: i, camKey: null, camPicks: [], side: side === "anim" || side === "adjust" ? side : "cam", clips: [], clip: null, keyPicks: [], textPicks: [], object: null });
+  set(i === null ? { shotPick: null } : { shotPick: i, camKey: null, camPicks: [], side: side === "anim" || side === "adjust" ? side : "cam", clips: [], clip: null, keyPicks: [], textPicks: [], layerPicks: [], object: null });
   S.dirty = true;
 };
 

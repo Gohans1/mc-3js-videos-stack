@@ -35,12 +35,12 @@ export const holds = (a: CamKey, b: CamKey) => JSON.stringify([a.p, a.l, a.fov])
 // The keys a key may move between: its shot's cut (or the film's start) and the next cut, never past its neighbours
 export const room = (i: number): [number, number] => [i > 0 ? Math.min(keys[i].t, keys[i - 1].t + SAME) : 0, i + 1 < keys.length ? Math.max(keys[i].t, keys[i + 1].t - SAME) : Infinity];
 export const movable = (i: number) => i > 0 && !!keys[i] && !keys[i].cut;
-export const setKey = (i: number | null) => { set(i === null ? { camKey: null, camPicks: [] } : { camKey: i, camPicks: [], side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], object: null }); S.dirty = true; };
+export const setKey = (i: number | null) => { set(i === null ? { camKey: null, camPicks: [] } : { camKey: i, camPicks: [], side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], layerPicks: [], object: null }); S.dirty = true; };
 // Selection includes fixed keys; group retiming and deletion still preserve shot boundaries.
 export const pickCamKeys = (is: number[]) => {
   const ok = [...new Set(is)].filter((i) => !!keys[i]).sort((a, b) => a - b);
   if (ok.length < 2) { setKey(ok[0] ?? null); return; }
-  set({ camPicks: ok, camKey: null, side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], object: null });
+  set({ camPicks: ok, camKey: null, side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], layerPicks: [], object: null });
   S.dirty = true;
 };
 // How far the picked keys may move together: until the first of them meets a key left out

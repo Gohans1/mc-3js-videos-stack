@@ -6,6 +6,7 @@ import { buildScene, SHOTS_OUT as SHOTS } from "film/scene";
 import { checkFilm } from "../src/contract.mjs";
 import { loadCam } from "./camera/cam";
 import { attachCamRow } from "./camera/camrow";
+import { loadLayers } from "./camera/layers";
 import { loadShots } from "./camera/shots";
 import { AWAY, PHONE } from "./core/device";
 import { onEvent, onHello } from "./core/events";
@@ -75,6 +76,7 @@ const listen = () => {
   onEvent("cam", loadCam); // an agent edited the camera keys: the picture takes them now, no new build to load
   onEvent("keys", (i) => loadKeys(Number(i))); // the same for one key file (Steve, props): which one it names
   onEvent("shots", loadShots);
+  onEvent("adjustment", loadLayers);
   onEvent("text", loadText); // an agent edited the titles: the picture takes them now
   onEvent("notes", loadNotes);
   onEvent("voice", loadVoice);
@@ -143,7 +145,7 @@ export const start = async (el: Elements) => {
   loadContract();
   set({ loading: "", ready: true });
   say(`Loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-  const extras = Promise.all([timeline, loadTrials(), loadSounds(), loadSound(), loadCam(), loadKeys(), loadShots(), loadText(), loadFavorites()]).then(() => { refreshTimes(); S.dirty = true; });
+  const extras = Promise.all([timeline, loadTrials(), loadSounds(), loadSound(), loadCam(), loadKeys(), loadShots(), loadText(), loadLayers(), loadFavorites()]).then(() => { refreshTimes(); S.dirty = true; });
   refreshTimes();
   seek(S.t);
   loop();

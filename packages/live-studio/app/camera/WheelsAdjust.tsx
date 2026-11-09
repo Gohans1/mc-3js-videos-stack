@@ -5,8 +5,7 @@ import { useEffect, useRef, type PointerEvent, type KeyboardEvent } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NumberField } from "../components/NumberField";
 import { Reset, Section, SliderRow } from "../components/inspector";
-import { changeGrade } from "./adjust";
-import { shotsDoc } from "./shots";
+import { changeGrade, gradeDoc, type GradeTarget } from "./adjust";
 
 type RGB = [number, number, number];
 type Part = "color" | "saturation" | "brightness";
@@ -28,11 +27,11 @@ const fromXY = (x: number, y: number, light: number): RGB => {
   return new Color().setHSL(h, 1, .5, LinearSRGBColorSpace).toArray().map((v) => bound(light + (v * 2 - 1) * radius)) as RGB;
 };
 
-function Wheel({ shot, grade, id, title }: { shot: number; grade: Grade; id: WheelKey; title: string }) {
+function Wheel({ shot, grade, id, title }: { shot: GradeTarget; grade: Grade; id: WheelKey; title: string }) {
   const value = grade.wheels?.[id] ?? {}, rgb = value.rgb ?? [0, 0, 0], p = polar(rgb), saturation = value.saturation ?? 100;
   const disabled = grade.enabled === false || grade.wheels?.enabled === false, area = useRef<HTMLDivElement>(null), drag = useRef<Drag>({ state: "idle" });
   const save = (v: WheelValue, keep = true) => changeGrade(shot, (g) => { g.wheels = { ...g.wheels, [id]: v }; }, keep);
-  const cancel = () => { const d = drag.current; drag.current = { state: "idle" }; if (d.state === "dragging") shotsDoc.restore(d.before); };
+  const cancel = () => { const d = drag.current; drag.current = { state: "idle" }; if (d.state === "dragging") gradeDoc(shot).restore(d.before); };
   useEffect(() => cancel, []);
   const at = (e: PointerEvent, part: Part) => {
     const start = drag.current.state === "dragging" ? drag.current.initial : value, initialRGB = start.rgb ?? [0, 0, 0], light = polar(initialRGB).light;
@@ -56,10 +55,10 @@ function Wheel({ shot, grade, id, title }: { shot: number; grade: Grade; id: Whe
     onPointerDown: (e: PointerEvent<SVGElement>) => {
       if (disabled || e.button !== 0) return;
       e.preventDefault(); e.stopPropagation(); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId);
-      const next = at(e, part); drag.current = { state: "dragging", before: shotsDoc.snapshot(), initial: value, value: next }; save(next, false);
+      const next = at(e, part); drag.current = { state: "dragging", before: gradeDoc(shot).snapshot(), initial: value, value: next }; save(next, false);
     },
     onPointerMove: (e: PointerEvent<SVGElement>) => { const d = drag.current; if (d.state !== "dragging") return; d.value = at(e, part); save(d.value, false); },
-    onPointerUp: (e: PointerEvent<SVGElement>) => { const d = drag.current; if (d.state !== "dragging") return; drag.current = { state: "idle" }; shotsDoc.restore(d.before); save(d.value); e.currentTarget.releasePointerCapture(e.pointerId); },
+    onPointerUp: (e: PointerEvent<SVGElement>) => { const d = drag.current; if (d.state !== "dragging") return; drag.current = { state: "idle" }; gradeDoc(shot).restore(d.before); save(d.value); e.currentTarget.releasePointerCapture(e.pointerId); },
     onPointerCancel: cancel, onLostPointerCapture: cancel, onKeyDown: (e: KeyboardEvent<SVGElement>) => keys(e, part),
   });
   const arrow = (level: number, side: number) => {
@@ -88,7 +87,7 @@ function Wheel({ shot, grade, id, title }: { shot: number; grade: Grade; id: Whe
   </div>;
 }
 
-export function WheelsAdjust({ shot, grade }: { shot: number; grade: Grade }) {
+export function WheelsAdjust({ shot, grade }: { shot: GradeTarget; grade: Grade }) {
   const mode = grade.wheels?.mode ?? "primary", disabled = grade.enabled === false || grade.wheels?.enabled === false;
   const amount = (v: number, keep = true) => changeGrade(shot, (g) => { g.wheels = { ...g.wheels, amount: v }; }, keep);
   return <Section title="Color wheel" on={grade.wheels?.enabled !== false} onCheck={(on) => changeGrade(shot, (g) => { g.wheels = { ...g.wheels, enabled: on }; })}
@@ -96,7 +95,7 @@ export function WheelsAdjust({ shot, grade }: { shot: number; grade: Grade }) {
     <Select value={mode} disabled={disabled} items={[{ value: "primary", label: "Primary" }, { value: "log", label: "Log" }]} onValueChange={(v) => { if (v === "primary" || v === "log") changeGrade(shot, (g) => { g.wheels = { ...g.wheels, mode: v }; }); }}>
       <SelectTrigger aria-label="Color wheel mode" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="log">Log</SelectItem></SelectContent>
     </Select>
-    <SliderRow compact label="Intensity" value={grade.wheels?.amount ?? 100} min={0} max={100} step={1} digits={0} disabled={disabled} doc={shotsDoc} preview={(v) => amount(v, false)} save={amount} />
+    <SliderRow compact label="Intensity" value={grade.wheels?.amount ?? 100} min={0} max={100} step={1} digits={0} disabled={disabled} doc={gradeDoc(shot)} preview={(v) => amount(v, false)} save={amount} />
     <div className="flex flex-wrap justify-between gap-y-6" aria-disabled={disabled}>
       {WHEEL_KEYS.map((id, i) => <Wheel key={`${shot}:${mode}:${id}`} shot={shot} grade={grade} id={id} title={(mode === "primary" ? ["Shadows", "Middle grey", "Tint", "Offset"] : ["Shadows", "Midtones", "Highlights", "Offset"])[i]} />)}
     </div>

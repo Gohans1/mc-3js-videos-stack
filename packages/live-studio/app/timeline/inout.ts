@@ -3,6 +3,7 @@
 // as a note drawn across seconds has), which the AI reads instead of one moment, and played from inside it the film loops it
 // (playback/transport.ts). Shift+X marks the picked sound clips, the
 // picked shot or the shot at the playhead (CapCut's Select by clip); Alt+X clears it. Kept for the tab, as the playhead is
+import { layerItems } from "../camera/layers";
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { shotEnd, shotIndex } from "../core/film";
 import { S } from "../core/state";
@@ -33,8 +34,8 @@ export const setIn = () => { const t = S.t, b = get().inOut?.[1] ?? DURATION; ke
 export const setOut = () => { const t = S.t, a = get().inOut?.[0] ?? 0; if (t <= 0) return; keep([t > a ? a : 0, t]); };
 export const clearInOut = () => { if (!get().inOut) return; keep(null); say("In and Out cleared"); };
 export const inOutByClip = () => {
-  const { clips, shotPick } = get();
-  const spans = clips.map(span), i = shotPick ?? shotIndex(S.t);
+  const { clips, shotPick, layerPicks } = get();
+  const spans = [...clips.map(span), ...layerItems().filter((it) => layerPicks.includes(it.id)).map((it) => [it.from, it.to])], i = shotPick ?? shotIndex(S.t);
   keep(spans.length ? [Math.min(...spans.map((s) => s[0])), Math.min(DURATION, Math.max(...spans.map((s) => s[1])))] : [SHOTS[i].t, shotEnd(i)]);
 };
 // The stretch a note written at second t is about, if t is inside it

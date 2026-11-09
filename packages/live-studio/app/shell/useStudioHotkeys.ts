@@ -15,6 +15,7 @@ import { setFov, setFree } from "../picture/freecam";
 import { S } from "../core/state";
 import { saveView, setKey } from "../camera/cam";
 import { copyCam } from "../camera/camline";
+import { trimSelected } from "../timeline/cut";
 import { copy, cut, hasCopy, paste } from "../timeline/clipboard";
 import { askPaste, copyAttrs } from "../timeline/attributes";
 import { deleteSelected, selectSide, splitAll, splitHere } from "../timeline/cut";
@@ -26,7 +27,7 @@ import { redo, undo } from "../core/doc";
 import { pickKeys } from "../keys/keys";
 import { select, setGizmo } from "../objects/placed";
 import { toggleFullscreen } from "./fullscreen";
-import { allClips, locked, setClips, trimClips } from "../sound/sound";
+import { allClips, locked, setClips } from "../sound/sound";
 import { get, say, set, setPref, useStudio } from "../core/store";
 
 // The keyboard walking a list (the ones marked data-arrow-scroll: notes, settings) scrolls it with Up and Down; everywhere else
@@ -51,9 +52,10 @@ export function useStudioHotkeys() {
   const ink = useStudio((s) => s.ink), picks = useStudio((s) => s.clips.length), sound = useStudio((s) => s.sound);
   const camKey = useStudio((s) => s.camKey), camPicks = useStudio((s) => s.camPicks.length), cam = useStudio((s) => s.cam), keyPicks = useStudio((s) => s.keyPicks.length), free = useStudio((s) => s.free);
   const object = useStudio((s) => s.object), shots = useStudio((s) => s.shots), blade = useStudio((s) => s.blade);
+  const layerPicks = useStudio((s) => s.layerPicks.length);
   const textPicks = useStudio((s) => s.textPicks.length);
   const transitionPicked = useStudio((s) => s.side === "transition" && s.shotPick !== null);
-  const anyPick = picks > 0 || camKey !== null || camPicks > 0 || keyPicks > 0 || textPicks > 0;
+  const anyPick = layerPicks > 0 || picks > 0 || camKey !== null || camPicks > 0 || keyPicks > 0 || textPicks > 0;
   const keys: UseHotkeyDefinition[] = [
     // ---- CapCut's own
     // In the free camera Space flies up (picture/flight.ts), as in Minecraft
@@ -66,14 +68,14 @@ export function useStudioHotkeys() {
     cutKey(1),
     { hotkey: "Home", callback: () => seek(0) },
     { hotkey: "End", callback: () => seek(DURATION) },
-    { hotkey: "Mod+B", callback: () => splitHere(), options: { enabled: picks > 0 || (cam && shots) } },
+    { hotkey: "Mod+B", callback: () => splitHere(), options: { enabled: layerPicks > 0 || picks > 0 || (cam && shots) } },
     { hotkey: "Mod+Shift+B", callback: () => splitAll(), options: { enabled: sound || (cam && shots) } },
     // Split mode: B as in CapCut, C as the razor of Premiere (the dev's habit); A is the select pointer again. A flies left in the free camera
     { hotkey: "B", callback: () => setBlade(true) },
     { hotkey: "C", callback: () => setBlade(true) },
     { hotkey: "A", callback: () => setBlade(false), options: { enabled: blade && !free } },
-    { hotkey: "Q", callback: () => trimClips(get().clips, "left"), options: { enabled: picks > 0 && !free } },
-    { hotkey: "W", callback: () => trimClips(get().clips, "right"), options: { enabled: picks > 0 && !free } },
+    { hotkey: "Q", callback: () => trimSelected("left"), options: { enabled: (picks > 0 || layerPicks > 0) && !free } },
+    { hotkey: "W", callback: () => trimSelected("right"), options: { enabled: (picks > 0 || layerPicks > 0) && !free } },
     { hotkey: "[", callback: () => selectSide(-1), options: { enabled: sound } },
     { hotkey: "]", callback: () => selectSide(1), options: { enabled: sound } },
     { hotkey: "Mod+A", callback: () => setClips(allClips().filter((c) => !locked(c))), options: { enabled: sound } },

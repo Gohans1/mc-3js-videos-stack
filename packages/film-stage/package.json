@@ -12,6 +12,7 @@
     "./titles": "./src/titles.ts",
     "./transitions": "./src/transitions.ts",
     "./grade": "./src/grade.ts",
+    "./grade-layers": "./src/grade-layers.ts",
     "./grade-color": "./src/grade-color.ts",
     "./grade-secondary": "./src/grade-secondary.ts",
     "./grade-wheels": "./src/grade-wheels.ts",

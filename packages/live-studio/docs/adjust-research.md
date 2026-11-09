@@ -24,7 +24,9 @@ LUT nằm trong assets/public/studio-luts của phim; preset trong thư mục c�
 
 sealed-room/lab/grade.ts so pixel GPU với mẫu tham chiếu; Basic sai tối đa một mức màu, LUT 0/50/100% khớp, noise giữ nguyên khi quay lại cùng giờ. renders/adjust-comparison.jpg và renders/adjust-verification lưu ảnh thật.
 
-Đã dùng giao diện thử Exposure, bật/tắt, Apply to all, Reset, Undo, nhập LUT, lưu/mở lại preset và màn hình hẹp; hoàn trả dữ liệu phim sau thử. HSL, Curves, Color wheel đã thử kéo, Esc, bàn phím, reset, bật/tắt, Apply to all/Undo và reload; chưa có keyframe màu, eyedropper hoặc adjustment layer.
+Đã dùng giao diện thử Exposure, bật/tắt, Apply to all, Reset, Undo, nhập LUT, lưu/mở lại preset và màn hình hẹp; hoàn trả dữ liệu phim sau thử. HSL, Curves, Color wheel đã thử kéo, Esc, bàn phím, reset, bật/tắt, Apply to all/Undo và reload; chưa có keyframe màu hoặc eyedropper.
+
+Lớp Adjust phủ nhiều shot đã có; cách ghép hình và bằng chứng nằm trong [adjustment-layers.md](adjustment-layers.md).
 
 ## Khác biệt cần nhớ
 

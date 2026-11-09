@@ -11,7 +11,8 @@ import placed from "./timeline/placed.json";
 import props from "./timeline/props.json";
 import steve from "./timeline/steve.json";
 import text from "./timeline/text.json";
+import adjustments from "./timeline/adjust.json";
 import { setEdit } from "live-studio/edit";
 
-setEdit({ ...data, steve, cam, props, placed, audio, fx, text });
+setEdit({ ...data, steve, cam, props, placed, audio, fx, text, adjustments });
 export * from "live-studio/edit";

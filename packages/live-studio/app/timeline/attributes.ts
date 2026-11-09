@@ -4,6 +4,8 @@
 // (anim.ts pasteAnims), a camera keyframe's lens and speed (cam.ts pasteKeyAttrs). One undo step each. The words follow CapCut
 // 9.7's own (its Resources/po/en.po, pc_copy_*): one source only, same kind only, and fades or animations too long for a clip
 // shortened to fit it
+import type { Grade } from "film-stage/grade";
+import { layerItems, layerLocked, layersDoc } from "../camera/layers";
 import { SHOTS_OUT } from "film/scene";
 import { type AnimSet, animFit, animOf, fxOf, pasteAnims, type ShotAnim, type Slot } from "../camera/anim";
 import { type CamKey, DEFAULT_EASE, keys as camKeys, movable, pasteKeyAttrs } from "../camera/cam";
@@ -14,17 +16,18 @@ import { get, say, set } from "../core/store";
 import type { ClipRef } from "../sound/slice";
 import { type Bed, type ClipAttr, clipOf, fadesFit, locked, type OneShot, pasteClipAttrs } from "../sound/sound";
 
-type Kind = "clip" | "shot" | "cam";
-type Copied = { kind: "clip"; x: Bed | OneShot; bed: boolean } | { kind: "shot"; anim: ShotAnim } | { kind: "cam"; k: CamKey; speed: boolean };
-type Target = { kind: "clip"; refs: ClipRef[] } | { kind: "shot"; is: number[] } | { kind: "cam"; is: number[] };
+type Kind = "layer" | "clip" | "shot" | "cam";
+type Copied = { kind: "layer"; grade: Grade } | { kind: "clip"; x: Bed | OneShot; bed: boolean } | { kind: "shot"; anim: ShotAnim } | { kind: "cam"; k: CamKey; speed: boolean };
+type Target = { kind: "layer"; is: string[] } | { kind: "clip"; refs: ClipRef[] } | { kind: "shot"; is: number[] } | { kind: "cam"; is: number[] };
 export interface Choice { id: string; title: string; value: string; warn?: string }
 
-const NOUN: Record<Kind, string> = { clip: "sound clip", shot: "shot", cam: "camera keyframe" };
+const NOUN: Record<Kind, string> = { layer: "adjustment layer", clip: "sound clip", shot: "shot", cam: "camera keyframe" };
 let copied: Copied | null = null;
 
 // What is picked now, as a paste would take it
 const target = (): Target | null => {
   const s = get();
+  if (s.layerPicks.length) return { kind: "layer", is: s.layerPicks };
   if (s.clips.length) return { kind: "clip", refs: s.clips };
   if (s.shotPick !== null && SHOTS_OUT[s.shotPick]) return { kind: "shot", is: [s.shotPick] };
   if (s.camPicks.length) return { kind: "cam", is: s.camPicks };
@@ -39,7 +42,8 @@ export const copyAttrs = () => {
   const t = target();
   if (!t) { say("Pick one sound clip, shot or camera keyframe to copy its attributes"); return; }
   if (count(t) > 1) { say(`Can't copy attributes of multiple ${NOUN[t.kind]}s: pick one`); return; }
-  if (t.kind === "clip") copied = { kind: "clip", x: structuredClone(clipOf(t.refs[0])!), bed: t.refs[0].list === "beds" };
+  if (t.kind === "layer") copied = { kind: "layer", grade: structuredClone(layerItems().find((it) => it.id === t.is[0])!.grade) };
+  else if (t.kind === "clip") copied = { kind: "clip", x: structuredClone(clipOf(t.refs[0])!), bed: t.refs[0].list === "beds" };
   else if (t.kind === "shot") {
     if (!get().shots) { say("This film keeps its shots in code: ask the AI in a note to change them"); return; }
     copied = { kind: "shot", anim: structuredClone(animOf(t.is[0])) };
@@ -55,6 +59,7 @@ export const askPaste = () => {
   if (t.kind !== copied.kind) { say(`Can't paste attributes to a different type: these came from a ${NOUN[copied.kind]}`); return; }
   if (t.kind === "shot" && !get().shots) { say("This film keeps its shots in code: ask the AI in a note to change them"); return; }
   if (t.kind === "clip" && t.refs.every(locked)) { say("This track is locked. Unlock it in the track header to edit"); return; }
+  if (t.kind === "layer" && t.is.every(layerLocked)) { say("Unlock the adjustment track before pasting"); return; }
   set({ pasteAsk: true });
 };
 
@@ -64,6 +69,7 @@ const animWords = (slot: Slot, a: AnimSet | undefined, len = true) => (a ? `${fx
 export const choices = (): Choice[] => {
   const t = target();
   if (!copied || !t || t.kind !== copied.kind) return [];
+  if (copied.kind === "layer") return [{ id: "grade", title: "Adjustment", value: "Basic, HSL, curves, color wheel and LUT" }];
   const n = count(t), they = n > 1 ? "Some of these are" : "This clip is";
   if (copied.kind === "clip" && t.kind === "clip") {
     const x = copied.x, pan = Math.round((x.pan ?? 0) * 100), short = t.refs.some((c) => clipOf(c) && fadesFit(x, c).short);
@@ -104,7 +110,11 @@ export const pasteAttrs = (ids: string[]) => {
   const t = target();
   if (!copied || !t || t.kind !== copied.kind || !ids.length) return;
   let n = count(t), left = 0;
-  if (copied.kind === "clip" && t.kind === "clip") {
+  if (copied.kind === "layer" && t.kind === "layer") {
+    const grade = copied.grade, idsToPaste = t.is.filter((id) => !layerLocked(id));
+    n = idsToPaste.length; left = t.is.length - n;
+    if (idsToPaste.length && ids.includes("grade")) layersDoc.edit((f) => { for (const it of f.items) if (idsToPaste.includes(it.id)) it.grade = structuredClone(grade); });
+  } else if (copied.kind === "clip" && t.kind === "clip") {
     n = pasteClipAttrs(copied.x, t.refs, ids as ClipAttr[]);
     left = t.refs.length - n;
   } else if (copied.kind === "shot" && t.kind === "shot") {

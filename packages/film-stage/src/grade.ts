@@ -1,5 +1,5 @@
-import { Color, HalfFloatType, SRGBColorSpace, Uniform, WebGLRenderTarget, type Camera, type TextureDataType, type WebGLRenderer } from "three";
-import { BlendFunction, Effect, EffectAttribute, EffectComposer, EffectMaterial, EffectPass, GaussianBlurPass, LookupTexture, LUT3DEffect, NoiseEffect, VignetteEffect, VignetteTechnique } from "postprocessing";
+import { Color, FramebufferTexture, HalfFloatType, PerspectiveCamera, Vector2, SRGBColorSpace, Uniform, WebGLRenderTarget, type Camera, type TextureDataType, type WebGLRenderer } from "three";
+import { BlendFunction, Effect, EffectAttribute, EffectComposer, EffectMaterial, EffectPass, GaussianBlurPass, LookupTexture, LUT3DEffect, NoiseEffect, TextureEffect, VignetteEffect, VignetteTechnique } from "postprocessing";
 import { ADJUSTMENTS, colorGrade, type BasicGrade } from "./grade-color";
 import { readLUT } from "./lut";
 import { hasSecondary, type SecondaryGrade } from "./grade-secondary";
@@ -55,8 +55,7 @@ export function gradeLUT(basic: BasicGrade, size = 32, secondary: SecondaryGrade
   return lut;
 }
 
-export function makeAdjustments(composer: EffectComposer, camera: Camera) {
-  const originalTail = composer.passes.at(-1)!;
+function makeGradeStage(composer: EffectComposer, camera: Camera, imported: Map<string, LookupTexture>) {
   const identity = gradeLUT({}), lut = new LUT3DEffect(identity, { tetrahedralInterpolation: true, inputColorSpace: SRGBColorSpace });
   const custom = new LUT3DEffect(identity, { blendFunction: BlendFunction.NORMAL, tetrahedralInterpolation: true, inputColorSpace: SRGBColorSpace });
   const detail = new DetailEffect(), vignette = new VignetteEffect({ technique: VignetteTechnique.ESKIL, offset: 1.2, darkness: 1 });
@@ -64,26 +63,12 @@ export function makeAdjustments(composer: EffectComposer, camera: Camera) {
   const detailPass = new EffectPass(camera, detail), colorPass = new EffectPass(camera, lut), finishPass = new EffectPass(camera, vignette, noise);
   const customPass = new EffectPass(camera, custom), passes = [detailPass, colorPass, customPass, finishPass];
   passes.forEach((pass) => { composer.addPass(pass); pass.enabled = false; });
-  originalTail.renderToScreen = true;
   const cache = new Map<number, { key: string; texture: LookupTexture }>();
-  const imported = new Map<string, LookupTexture>(), loading = new Map<string, Promise<void>>();
-  const prepare = async (settings: (Grade | undefined)[]) => {
-    await Promise.all(settings.flatMap((g) => {
-      const url = g?.lut?.url;
-      if (!url || imported.has(url)) return [];
-      if (!loading.has(url)) loading.set(url, fetch(url).then(async (r) => {
-        if (!r.ok) throw new Error(`LUT could not load: ${url} (${r.status})`);
-        imported.set(url, readLUT(await r.text(), url.endsWith(".3dl") ? "3dl" : "cube"));
-      }).finally(() => loading.delete(url)));
-      return [loading.get(url)!];
-    }));
-  };
   const apply = (shot: number, settings: Grade | undefined, t: number, bypass = false) => {
     const basic = settings?.basic ?? {};
     const importedLut = settings?.lut, texture = importedLut && imported.get(importedLut.url);
     const useCustom = !!texture && importedLut?.enabled !== false && (importedLut?.amount ?? 100) > 0;
     const active = !bypass && settings?.enabled !== false && (useCustom || Object.values(basic).some((v) => v !== 0) || hasSecondary(settings ?? {}));
-    originalTail.renderToScreen = !active;
     detailPass.enabled = active && !!(basic.sharpen || basic.clarity);
     customPass.enabled = active && useCustom;
     colorPass.enabled = finishPass.enabled = active;
@@ -100,7 +85,69 @@ export function makeAdjustments(composer: EffectComposer, camera: Camera) {
     noise.blendMode.opacity.value = (basic.particles ?? 0) / 100 * .35;
     (finishPass.fullscreenMaterial as EffectMaterial).time = t;
   };
-  apply.prepare = prepare;
-  apply.dispose = () => { cache.forEach(({ texture }) => texture.dispose()); imported.forEach((texture) => texture.dispose()); identity.dispose(); passes.forEach((pass) => pass.dispose()); };
+  apply.passes = passes;
+  apply.dispose = () => { cache.forEach(({ texture }) => texture.dispose()); identity.dispose(); passes.forEach((pass) => pass.dispose()); };
   return apply;
+}
+
+export function makeAdjustments(composer: EffectComposer, camera: Camera) {
+  const tail = composer.passes.at(-1)!;
+  const imported = new Map<string, LookupTexture>(), loading = new Map<string, Promise<void>>();
+  const stages: ReturnType<typeof makeGradeStage>[] = [];
+  const prepare = async (settings: (Grade | undefined)[]) => {
+    await Promise.all(settings.flatMap((g) => {
+      const url = g?.lut?.url;
+      if (!url || imported.has(url)) return [];
+      if (!loading.has(url)) loading.set(url, fetch(url).then(async (r) => {
+        if (!r.ok) throw new Error(`LUT could not load: ${url} (${r.status})`);
+        imported.set(url, readLUT(await r.text(), url.endsWith(".3dl") ? "3dl" : "cube"));
+      }).finally(() => loading.delete(url)));
+      return [loading.get(url)!];
+    }));
+  };
+  const apply = (shot: number, settings: Grade | undefined, t: number, bypass = false, layers: { grade: Grade }[] = []) => {
+    const grades = [settings, ...layers.map((it) => it.grade)];
+    for (let i = 0; i < grades.length; i++) {
+      stages[i] ??= makeGradeStage(composer, camera, imported);
+      stages[i](i === 0 ? shot : 0, grades[i], t, bypass);
+    }
+    for (let i = grades.length; i < stages.length; i++) stages[i](0, undefined, t, true);
+    const passes = [tail, ...stages.flatMap((stage) => stage.passes)];
+    passes.forEach((pass) => { pass.renderToScreen = false; });
+    passes.findLast((pass) => pass.enabled)!.renderToScreen = true;
+  };
+  apply.prepare = prepare;
+  apply.dispose = () => { stages.forEach((stage) => stage.dispose()); imported.forEach((texture) => texture.dispose()); };
+  return apply;
+}
+
+// Framebuffer copies require matching encodings; decode the display pixels in EffectPass instead of an sRGB texture.
+class FramebufferEffect extends TextureEffect {
+  constructor(texture: FramebufferTexture) {
+    super({ texture, blendFunction: BlendFunction.SRC });
+    this.outputColorSpace = SRGBColorSpace;
+  }
+}
+
+// The shared layer sits above the finished picture, including transitions and titles.
+// A GPU framebuffer copy preserves that order without reading pixels back to the CPU.
+export function makeLayerAdjustments(renderer: WebGLRenderer) {
+  const size = renderer.getDrawingBufferSize(new Vector2());
+  const texture = new FramebufferTexture(size.x, size.y);
+  const camera = new PerspectiveCamera(), composer = new EffectComposer(renderer, { depthBuffer: false, frameBufferType: HalfFloatType });
+  composer.addPass(new EffectPass(camera, new FramebufferEffect(texture)));
+  const apply = makeAdjustments(composer, camera);
+  const draw = (layers: { grade: Grade }[], t: number, bypass = false) => {
+    if (bypass || !layers.some(({ grade: g }) => g.enabled !== false && (Object.values(g.basic ?? {}).some((v) => v !== 0) || hasSecondary(g) || g.lut && g.lut.enabled !== false && (g.lut.amount ?? 100) > 0))) return;
+    renderer.getDrawingBufferSize(size);
+    if (texture.image.width !== size.x || texture.image.height !== size.y) {
+      texture.dispose(); texture.image.width = size.x; texture.image.height = size.y; texture.needsUpdate = true;
+      composer.setSize(size.x, size.y, false);
+    }
+    renderer.setRenderTarget(null); renderer.copyFramebufferToTexture(texture);
+    apply(-1, layers[0].grade, t, false, layers.slice(1)); composer.render(0);
+  };
+  draw.prepare = apply.prepare;
+  draw.dispose = () => { apply.dispose(); composer.dispose(); texture.dispose(); };
+  return draw;
 }

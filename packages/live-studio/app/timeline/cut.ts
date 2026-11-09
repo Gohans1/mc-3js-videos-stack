@@ -1,19 +1,21 @@
 // The cut (Ctrl+B and the timeline toolbar's scissors), as CapCut's: the picked sound clips if there are any, otherwise the
 // shot at the playhead (cam.ts splitShot, for a film that keeps its shots as data). Ctrl+Shift+B cuts every track there
+import { layerItems, removeLayers, splitLayers, trimLayers } from "../camera/layers";
 import { removeCamKeys, removeKey, splitShot } from "../camera/cam";
 import { setTransition, transitionOf } from "../camera/transitions";
 import { together } from "../core/doc";
 import { removeKeys } from "../keys/keys";
 import { removeObject } from "../objects/placed";
-import { allClips, locked, removeClips, setClips, span, splitClips } from "../sound/sound";
+import { allClips, locked, removeClips, setClips, span, splitClips, trimClips } from "../sound/sound";
 import { removeTexts } from "../text/text";
 import { S } from "../core/state";
 import { get, say } from "../core/store";
 import { SAME } from "../core/time";
 
-export const canSplit = () => get().clips.length > 0 || (get().cam && get().shots);
+export const canSplit = () => get().layerPicks.length > 0 || get().clips.length > 0 || (get().cam && get().shots);
 export const splitHere = () => {
-  if (get().clips.length) splitClips(get().clips);
+  if (get().layerPicks.length) splitLayers(get().layerPicks);
+  else if (get().clips.length) splitClips(get().clips);
   else if (get().cam && get().shots) splitShot();
   else say("Pick a sound clip to split it at the playhead");
 };
@@ -22,7 +24,7 @@ export const splitAll = () => {
   const hit = allClips().filter((c) => { const [a, b] = span(c); return !locked(c) && a + 0.05 < S.t && S.t < b - 0.05; });
   const shot = get().cam && get().shots;
   if (!hit.length && !shot) { say("Nothing to split at the playhead"); return; }
-  together(() => { if (hit.length) splitClips(hit); if (shot) splitShot(); });
+  together(() => { splitLayers(layerItems().map((it) => it.id)); if (hit.length) splitClips(hit); if (shot) splitShot(); });
 };
 // CapCut's [ and ]: every sound clip left of the playhead (starting before it) or right of it (ending after it), locked ones aside
 export const selectSide = (d: -1 | 1) => {
@@ -33,15 +35,22 @@ export const selectSide = (d: -1 | 1) => {
 
 // Delete and the toolbar's bin: whatever is picked, every kind of it in one undo step (text, sound clips, camera keyframes, keys;
 // a pick may hold them all, timeline/across.ts), or else the dropped-in object picked
-export const canDelete = () => { const s = get(); return s.textPicks.length > 0 || s.clips.length > 0 || s.camKey !== null || s.camPicks.length > 0 || s.keyPicks.length > 0 || s.object !== null || (s.side === "transition" && s.shotPick !== null && !!transitionOf(s.shotPick)); };
+export const canDelete = () => { const s = get(); return s.layerPicks.length > 0 || s.textPicks.length > 0 || s.clips.length > 0 || s.camKey !== null || s.camPicks.length > 0 || s.keyPicks.length > 0 || s.object !== null || (s.side === "transition" && s.shotPick !== null && !!transitionOf(s.shotPick)); };
 export const deleteSelected = () => {
-  const { clips, camKey, camPicks, keyPicks, object, textPicks, side, shotPick } = get();
+  const { layerPicks, clips, camKey, camPicks, keyPicks, object, textPicks, side, shotPick } = get();
   if (side === "transition" && shotPick !== null && transitionOf(shotPick)) { setTransition(shotPick, null); return; }
-  if (!clips.length && camKey === null && !camPicks.length && !keyPicks.length && !textPicks.length) { if (object) removeObject(object); return; }
+  if (!layerPicks.length && !clips.length && camKey === null && !camPicks.length && !keyPicks.length && !textPicks.length) { if (object) removeObject(object); return; }
   together(() => {
+    if (layerPicks.length) removeLayers(layerPicks);
     if (clips.length) removeClips(clips);
     if (camKey !== null) removeKey(camKey); else if (camPicks.length) removeCamKeys(camPicks);
     if (keyPicks.length) removeKeys(keyPicks);
     if (textPicks.length) removeTexts(textPicks);
   });
 };
+
+export const trimSelected = (side: "left" | "right") => together(() => {
+  const s = get();
+  if (s.layerPicks.length) trimLayers(s.layerPicks, side);
+  if (s.clips.length) trimClips(s.clips, side);
+});

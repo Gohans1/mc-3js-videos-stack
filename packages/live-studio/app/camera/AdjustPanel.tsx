@@ -7,14 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Footer, Reset, Section, Segmented, SliderRow } from "../components/inspector";
 import { S } from "../core/state";
 import { say, set, useStudio } from "../core/store";
-import { shownShot } from "./anim";
+import { layerItems, layerLocked } from "./layers";
 import { shotsDoc } from "./shots";
-import { changeGrade as change, gradeOf, loadGrades, putGrade, savePreset } from "./adjust";
+import { changeGrade as change, gradeOf, loadGrades, putGrade, savePreset, gradeTarget, gradeDoc, resetGrade, type GradeTarget } from "./adjust";
 import { AdjustLibrary, ImportLut } from "./AdjustLibrary";
 import { CurvesAdjust, HSLAdjust } from "./ColorAdjust";
 import { WheelsAdjust } from "./WheelsAdjust";
 
-const value = (shot: number, key: BasicKey, v: number, keep = true) => change(shot, (g) => { g.basic = { ...g.basic, [key]: v }; }, keep);
+const value = (shot: GradeTarget, key: BasicKey, v: number, keep = true) => change(shot, (g) => { g.basic = { ...g.basic, [key]: v }; }, keep);
 
 function SavePreset({ grade }: { grade: Grade }) {
   const [open, setOpen] = useState(false), [name, setName] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -46,23 +46,27 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
   const saved = useStudio((s) => s.shotsSaved), ready = useStudio((s) => s.ready), canEdit = useStudio((s) => s.shots);
   const library = useStudio((s) => s.gradeLibrary), [error, setError] = useState("");
   useEffect(() => { void loadGrades().catch((e: Error) => setError(e.message)); }, []);
-  const shot = shownShot(), grade = gradeOf(shot);
-  if (!ready || !canEdit || !S.render?.adjustments) return <p className="px-3 text-ui text-muted-foreground">Adjust is unavailable for this film.</p>;
+  useStudio((s) => s.layersRev);
+  useStudio((s) => s.layerPicks);
+  const layersSaved = useStudio((s) => s.layersSaved), layersReady = useStudio((s) => s.layers);
+  const shot = gradeTarget(), grade = gradeOf(shot), layer = typeof shot === "string", doc = gradeDoc(shot);
+  const saveState = layer ? layersSaved : saved;
+  if (!ready || !(layer ? layersReady : canEdit) || !S.render?.adjustments) return <p className="px-3 text-ui text-muted-foreground">Adjust is unavailable for this film.</p>;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between px-3 pb-2 text-xs text-muted-foreground"><span role="status">{saved === "busy" ? "Saving…" : saved === "fail" ? "Not saved. Retrying…" : "All changes saved"}</span><span>Shot {shot}</span></div>
+      <div className="flex items-center justify-between px-3 pb-2 text-xs text-muted-foreground"><span role="status">{saveState === "busy" ? "Saving…" : saveState === "fail" ? "Not saved. Retrying…" : "All changes saved"}</span><span>{layer ? layerItems().find((it) => it.id === shot)?.name : `Shot ${shot}`}</span></div>
       <Segmented label="Adjust part" className="mx-3 mb-2 [&>button]:flex-auto [&>button]:px-1 [&>button]:whitespace-nowrap" value={part} onChange={setPart} items={[{ id: "basic", title: "Basic" }, { id: "hsl", title: "HSL" }, { id: "curves", title: "Curves" }, { id: "wheels", title: "Color wheel" }]} />
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <fieldset disabled={layer && layerLocked(shot as string)} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {error && <p role="alert" className="px-3 text-ui text-warn">{error}</p>}
         {part === "hsl" ? <HSLAdjust shot={shot} grade={grade} /> : part === "curves" ? <CurvesAdjust shot={shot} grade={grade} /> : part === "wheels" ? <WheelsAdjust shot={shot} grade={grade} /> : <>
         <Section title="Adjust" on={grade.enabled !== false} onCheck={(on) => change(shot, (g) => { g.enabled = on; })}
-          right={<Reset label="Reset adjustments" onClick={() => shotsDoc.edit((rows) => { delete rows[shot].adjust; })} />}>
+          right={<Reset label="Reset adjustments" onClick={() => resetGrade(shot)} />}>
           {(["Color", "Lightness", "Effects"] as const).map((group) => (
             <div key={group} className="flex flex-col gap-1">
               <h3 className="border-b pb-2 text-xs text-muted-foreground">{group}</h3>
               {ADJUSTMENTS.filter((x) => x.group === group).map((x) => (
                 <SliderRow key={x.id} label={x.title} value={grade.basic?.[x.id] ?? 0} min={x.min} max={x.max} step={1} digits={0} origin={0} compact gradient={x.group === "Color" ? x.id : undefined}
-                  disabled={grade.enabled === false} doc={shotsDoc} preview={(v) => value(shot, x.id, v, false)} save={(v) => value(shot, x.id, v)} />
+                  disabled={grade.enabled === false} doc={doc} preview={(v) => value(shot, x.id, v, false)} save={(v) => value(shot, x.id, v)} />
               ))}
             </div>
           ))}
@@ -76,18 +80,18 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
             <SelectItem value="none">None</SelectItem>{library.luts.map((lut) => <SelectItem key={lut.url} value={lut.url}>{lut.name}</SelectItem>)}
           </SelectContent></Select>
           <div><ImportLut onError={setError} /></div>
-          {grade.lut && <SliderRow compact label="Intensity" value={grade.lut.amount ?? 100} min={0} max={100} step={1} digits={0} doc={shotsDoc}
+          {grade.lut && <SliderRow compact label="Intensity" value={grade.lut.amount ?? 100} min={0} max={100} step={1} digits={0} doc={doc}
             preview={(v) => change(shot, (g) => { g.lut!.amount = v; }, false)} save={(v) => change(shot, (g) => { g.lut!.amount = v; })} />}
         </Section>
         </>}
-      </div>
+      </fieldset>
       <Footer>{showLibrary && <Dialog>
         <DialogTrigger render={<Button variant="secondary" size="sm" />}>Presets</DialogTrigger>
         <DialogContent><DialogHeader><DialogTitle>Adjustment</DialogTitle><DialogDescription>Choose a saved preset or LUT for this shot.</DialogDescription></DialogHeader><AdjustLibrary /></DialogContent>
-      </Dialog>}<SavePreset grade={grade} /><Button variant="secondary" size="sm" onClick={() => {
+      </Dialog>}<SavePreset grade={grade} />{!layer && <Button variant="secondary" size="sm" onClick={() => {
         shotsDoc.edit((rows) => { for (const row of rows) row.adjust = structuredClone(grade); });
         say("Adjustments applied to all shots. Ctrl+Z to undo");
-      }}>Apply to all</Button></Footer>
+      }}>Apply to all</Button>}</Footer>
     </div>
   );
 }

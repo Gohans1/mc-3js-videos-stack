@@ -129,6 +129,9 @@ export const Grade = z.looseObject({ enabled: z.boolean().optional(), basic: z.l
   ...Object.fromEntries(["temp", "tint", "saturation", "exposure", "contrast", "highlight", "shadow", "whites", "blacks", "brilliance", "vignette"].map((key) => [key, basicControl(-100)])),
   ...Object.fromEntries(["sharpen", "clarity", "particles", "fade"].map((key) => [key, basicControl(0)])),
 }).optional(), hsl: Hsl.optional(), curves: Curves.optional(), wheels: Wheels.optional(), lut: z.object({ name: z.string(), url: z.string().regex(/^\/studio-luts\/[a-f0-9]{64}\.(cube|3dl)$/), amount: z.number().min(0).max(100).optional(), enabled: z.boolean().optional() }).optional() });
+const AdjustmentItem = z.object({ id: z.string().min(1), name: z.string(), from: secs, to: secs, track: z.int().nonnegative(), grade: Grade }).refine((it) => it.to > it.from, "to must come after from");
+export const AdjustmentTimeline = z.object({ items: z.array(AdjustmentItem), tracks: z.record(z.string(), z.object({ lock: z.boolean().optional(), hidden: z.boolean().optional() })).optional() })
+  .refine((f) => unique(f.items.map((it) => it.id)), "adjustment ids must differ");
 export const ShotsTimeline = z.array(z.looseObject({ t: time, name: z.string().optional(), anim: Anim.optional(), transition: Transition.optional(), adjust: Grade.optional() })).min(1)
   .refine((s) => s.every((x, i) => i === 0 || x.t > s[i - 1].t), "shots must start in order of time, each after the one before");
 

@@ -2,6 +2,7 @@
 // key rows and sound clips picked together by the box (rowbox.ts, which each row starts on its empty space), then moved together by a drag on
 // any of them (each row's drag takes alongWith for the other kinds), deleted and copied together (cut.ts, clipboard.ts), each
 // as one undo step (core/doc.ts together). A pick of one kind goes through that kind's own setter, which also opens its tab
+import * as layers from "../camera/layers";
 import * as cam from "../camera/cam";
 import { DURATION } from "film/scene";
 import * as keys from "../keys/keys";
@@ -15,29 +16,30 @@ import { get, say, set } from "../core/store";
 import { r3 } from "../core/time";
 import { boxPick, type ClientRect } from "./rowbox";
 
-export interface Across { text: number[]; cam: number[]; keys: KeyRef[]; clips: ClipRef[] }
+export interface Across { layers: string[]; text: number[]; cam: number[]; keys: KeyRef[]; clips: ClipRef[] }
 export type Kind = keyof Across;
-const KINDS: readonly Kind[] = ["text", "cam", "keys", "clips"];
-export const NONE: Across = { text: [], cam: [], keys: [], clips: [] };
+const KINDS: readonly Kind[] = ["layers", "text", "cam", "keys", "clips"];
+export const NONE: Across = { layers: [], text: [], cam: [], keys: [], clips: [] };
 
-export const picked = (): Across => { const s = get(); return { text: s.textPicks, cam: s.camPicks.length ? s.camPicks : s.camKey !== null ? [s.camKey] : [], keys: s.keyPicks, clips: s.clips }; };
-export const count = (p: Across) => p.text.length + p.cam.length + p.keys.length + p.clips.length;
+export const picked = (): Across => { const s = get(); return { layers: s.layerPicks, text: s.textPicks, cam: s.camPicks.length ? s.camPicks : s.camKey !== null ? [s.camKey] : [], keys: s.keyPicks, clips: s.clips }; };
+export const count = (p: Across) => p.layers.length + p.text.length + p.cam.length + p.keys.length + p.clips.length;
 
 export const pickAcross = (p: Across) => {
   const c = [...new Set(p.cam)].filter((i) => !!cam.keys[i]).sort((a, b) => a - b), n = KINDS.filter((k) => (k === "cam" ? c : p[k]).length).length;
-  if (n === 0) set({ camKey: null, camPicks: [], keyPicks: [], clips: [], clip: null, textPicks: [], object: null });
-  else if (n === 1) { if (p.clips.length) sound.setClips(p.clips); else if (p.keys.length) keys.pickKeys(p.keys); else if (p.text.length) text.pickText(p.text); else cam.pickCamKeys(c); }
-  else set({ textPicks: p.text, camPicks: c.length > 1 ? c : [], camKey: c.length === 1 ? c[0] : null, keyPicks: p.keys, clips: p.clips, clip: null, shotPick: null, object: null });
+  if (n === 0) set({ layerPicks: [], camKey: null, camPicks: [], keyPicks: [], clips: [], clip: null, textPicks: [], object: null });
+  else if (n === 1) { if (p.layers.length) layers.pickLayers(p.layers); else if (p.clips.length) sound.setClips(p.clips); else if (p.keys.length) keys.pickKeys(p.keys); else if (p.text.length) text.pickText(p.text); else cam.pickCamKeys(c); }
+  else set({ layerPicks: p.layers, textPicks: p.text, camPicks: c.length > 1 ? c : [], camKey: c.length === 1 ? c[0] : null, keyPicks: p.keys, clips: p.clips, clip: null, shotPick: null, object: null });
   S.dirty = true;
 };
 
 // What each row's things the box covers, in the page's coordinates: set by the rows as they attach (camrow, keyrows, lanes)
-export const inBox: { [K in Kind]: (r: ClientRect) => Across[K] } = { text: () => [], cam: () => [], keys: () => [], clips: () => [] };
+export const inBox: { [K in Kind]: (r: ClientRect) => Across[K] } = { layers: () => [], text: () => [], cam: () => [], keys: () => [], clips: () => [] };
 export const attachAcross = () => {
   boxPick.picked = picked;
   boxPick.pick = (r, base) => {
-    const b = base as Across, ts = inBox.text(r), cs = inBox.cam(r), ks = inBox.keys(r), ls = inBox.clips(r);
+    const b = base as Across, gs = inBox.layers(r), ts = inBox.text(r), cs = inBox.cam(r), ks = inBox.keys(r), ls = inBox.clips(r);
     pickAcross({
+      layers: [...b.layers.filter((id) => !gs.includes(id)), ...gs],
       text: [...b.text.filter((i) => !ts.includes(i)), ...ts],
       cam: [...b.cam.filter((k) => !cs.includes(k)), ...cs],
       keys: [...b.keys.filter((p) => !ks.some((q) => keys.sameKey(p, q))), ...ks],
@@ -56,6 +58,7 @@ const shiftClips = (refs: ClipRef[], d: number) => (l: sound.Lanes) => {
   for (const r of refs) { const e = l[r.list][r.i] as { from?: number; to?: number; at?: number }; if (r.list === "beds") { e.from = r3(e.from! + d); e.to = r3(e.to! + d); } else e.at = r3(e.at! + d); }
 };
 const MOVERS: { [K in Kind]: (refs: Across[K]) => Mover } = {
+  layers: (ids) => ({ room: layers.layerRoom(ids), snap: layers.layersDoc.snapshot(), restore: (s) => layers.layersDoc.restore(s as string), preview: (d) => layers.layersDoc.preview(layers.shiftLayers(ids, d)), commit: (d) => layers.layersDoc.edit(layers.shiftLayers(ids, d)) }),
   text: (is) => ({ room: text.room(is), snap: text.snapshot(), restore: (s) => text.restore(s as string), preview: (d) => text.preview(text.shiftItems(is, d)), commit: (d) => text.edit(text.shiftItems(is, d)) }),
   cam: (is) => ({ room: cam.groupRoom(is), snap: cam.snapshot(), restore: (s) => cam.restore(s as string), preview: (d) => cam.shiftCamKeys(is, d, cam.preview), commit: (d) => cam.shiftCamKeys(is, d) }),
   keys: (refs) => ({ room: keys.room(refs), snap: keys.snapshot(), restore: (s) => keys.restore(s as string[]), preview: (d) => keys.preview(refs, shiftKeys(d)), commit: (d) => keys.editKeys(refs, shiftKeys(d)) }),
@@ -67,13 +70,13 @@ const MOVERS: { [K in Kind]: (refs: Across[K]) => Mover } = {
 export type Along = { room: [number, number]; count: number; preview: (d: number) => void; restore: () => void; commit: (d: number) => void };
 // The picks of the kinds other than this one, when the thing pressed is picked along with them; null when nothing else is
 export const alongWith = (kind: Kind): Along | null => {
-  const raw = picked(), p = { ...raw, text: raw.text.filter((i) => !text.locked(i)) }, clips = p.clips.filter((c) => !sound.locked(c));
-  const ms = KINDS.filter((k) => k !== kind && (k === "clips" ? clips : p[k]).length).map((k) => (k === "cam" ? MOVERS.cam(p.cam.filter(cam.movable)) : k === "keys" ? MOVERS.keys(p.keys) : k === "text" ? MOVERS.text(p.text) : MOVERS.clips(clips)));
+  const raw = picked(), p = { ...raw, layers: raw.layers.filter((id) => !layers.layerLocked(id)), text: raw.text.filter((i) => !text.locked(i)) }, clips = p.clips.filter((c) => !sound.locked(c));
+  const ms = KINDS.filter((k) => k !== kind && (k === "clips" ? clips : p[k]).length).map((k) => (k === "layers" ? MOVERS.layers(p.layers) : k === "cam" ? MOVERS.cam(p.cam.filter(cam.movable)) : k === "keys" ? MOVERS.keys(p.keys) : k === "text" ? MOVERS.text(p.text) : MOVERS.clips(clips)));
   if (!ms.length) return null;
   const restore = () => ms.forEach((m) => m.restore(m.snap));
   return {
     room: ms.reduce<[number, number]>(([lo, hi], m) => [Math.max(lo, m.room[0]), Math.min(hi, m.room[1])], [-Infinity, Infinity]),
-    count: p.text.length + p.keys.length + clips.length + p.cam.length - (kind === "cam" ? p.cam.length : kind === "keys" ? p.keys.length : kind === "text" ? p.text.length : clips.length),
+    count: p.layers.length + p.text.length + p.keys.length + clips.length + p.cam.length - (kind === "layers" ? p.layers.length : kind === "cam" ? p.cam.length : kind === "keys" ? p.keys.length : kind === "text" ? p.text.length : clips.length),
     preview: (d) => { restore(); for (const m of ms) m.preview(d); },
     restore,
     commit: (d) => { for (const m of ms) m.commit(d); },

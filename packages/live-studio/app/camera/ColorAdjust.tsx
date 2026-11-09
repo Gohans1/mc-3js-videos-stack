@@ -2,10 +2,9 @@ import { curveMap, HUES, NEUTRAL_CURVE, type CurveKey, type CurvePoint, type Hue
 import type { Grade } from "film-stage/grade";
 import { useEffect, useRef, useState } from "react";
 import { Reset, Section, SliderRow, ValueBox } from "../components/inspector";
-import { changeGrade } from "./adjust";
-import { shotsDoc } from "./shots";
+import { changeGrade, gradeDoc, type GradeTarget } from "./adjust";
 
-export function HSLAdjust({ shot, grade }: { shot: number; grade: Grade }) {
+export function HSLAdjust({ shot, grade }: { shot: GradeTarget; grade: Grade }) {
   const [hue, setHue] = useState<HueKey>("red"), swatch = HUES.find((x) => x.id === hue)!;
   const change = (key: "hue" | "saturation" | "brightness", v: number, keep = true) => changeGrade(shot, (g) => { g.hsl ??= {}; g.hsl[hue] = { ...g.hsl[hue], [key]: v }; }, keep);
   return <Section title="HSL" on={grade.hsl?.enabled !== false} onCheck={(on) => changeGrade(shot, (g) => { g.hsl = { ...g.hsl, enabled: on }; })}
@@ -19,7 +18,7 @@ export function HSLAdjust({ shot, grade }: { shot: number; grade: Grade }) {
     </div>
     <div className="flex flex-col gap-1" style={{ "--hue": swatch.color, "--hue-angle": swatch.hue }}>
       {([['hue', 'Hue'], ['saturation', 'Saturation'], ['brightness', 'Brightness']] as const).map(([id, title]) => <SliderRow key={id} compact gradient={`hsl-${id}`} label={title} value={grade.hsl?.[hue]?.[id] ?? 0} min={-100} max={100} step={1} digits={0} origin={0}
-        disabled={grade.enabled === false || grade.hsl?.enabled === false} doc={shotsDoc} preview={(v) => change(id, v, false)} save={(v) => change(id, v)} />)}
+        disabled={grade.enabled === false || grade.hsl?.enabled === false} doc={gradeDoc(shot)} preview={(v) => change(id, v, false)} save={(v) => change(id, v)} />)}
     </div>
   </Section>;
 }
@@ -28,10 +27,10 @@ const CHANNELS: { id: CurveKey; title: string; color: string }[] = [{ id: "luma"
 type Drag = { state: "idle" } | { state: "dragging"; before: string; index: number; points: CurvePoint[] };
 const bounded = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 
-function CurveEditor({ shot, grade, channel }: { shot: number; grade: Grade; channel: typeof CHANNELS[number] }) {
+function CurveEditor({ shot, grade, channel }: { shot: GradeTarget; grade: Grade; channel: typeof CHANNELS[number] }) {
   const id = channel.id, points = grade.curves?.[id] ?? NEUTRAL_CURVE, disabled = grade.enabled === false || grade.curves?.enabled === false;
   const [picked, select] = useState<number | null>(null), drag = useRef<Drag>({ state: "idle" });
-  const cancel = () => { const d = drag.current; drag.current = { state: "idle" }; if (d.state === "dragging") shotsDoc.restore(d.before); };
+  const cancel = () => { const d = drag.current; drag.current = { state: "idle" }; if (d.state === "dragging") gradeDoc(shot).restore(d.before); };
   useEffect(() => cancel, []);
   const save = (pts: CurvePoint[], keep = true) => changeGrade(shot, (g) => { g.curves = { ...g.curves, [id]: pts }; }, keep);
   const movePoint = (pts: CurvePoint[], i: number, x: number, y: number) => {
@@ -53,7 +52,7 @@ function CurveEditor({ shot, grade, channel }: { shot: number; grade: Grade; cha
         const next = points.map((p) => [...p] as CurvePoint), index = hit >= 0 ? hit : next.findIndex((p) => p[0] > x);
         const at = index < 0 ? next.length : index;
         if (hit < 0) { if (next.some((p) => Math.abs(p[0] - x) < 1 / 1024)) return; next.splice(at, 0, [x, y]); }
-        drag.current = { state: "dragging", before: shotsDoc.snapshot(), index: at, points: next }; select(at);
+        drag.current = { state: "dragging", before: gradeDoc(shot).snapshot(), index: at, points: next }; select(at);
         e.currentTarget.setPointerCapture(e.pointerId); save(next, false);
         (e.currentTarget.querySelectorAll<SVGCircleElement>('[role=button]')[at])?.focus();
       }}
@@ -62,7 +61,7 @@ function CurveEditor({ shot, grade, channel }: { shot: number; grade: Grade; cha
         const rect = e.currentTarget.getBoundingClientRect();
         d.points = movePoint(d.points, d.index, ((e.clientX - rect.left) / rect.width * 300 - 4) / 292, (196 - (e.clientY - rect.top) / rect.height * 200) / 192); save(d.points, false);
       }}
-      onPointerUp={(e) => { const d = drag.current; if (d.state !== "dragging") return; drag.current = { state: "idle" }; shotsDoc.restore(d.before); save(d.points); e.currentTarget.releasePointerCapture(e.pointerId); }}
+      onPointerUp={(e) => { const d = drag.current; if (d.state !== "dragging") return; drag.current = { state: "idle" }; gradeDoc(shot).restore(d.before); save(d.points); e.currentTarget.releasePointerCapture(e.pointerId); }}
       onPointerCancel={cancel} onLostPointerCapture={cancel}
       onKeyDown={(e) => {
         if (disabled) return;
@@ -85,7 +84,7 @@ function CurveEditor({ shot, grade, channel }: { shot: number; grade: Grade; cha
   </div>;
 }
 
-export function CurvesAdjust({ shot, grade }: { shot: number; grade: Grade }) {
+export function CurvesAdjust({ shot, grade }: { shot: GradeTarget; grade: Grade }) {
   return <Section title="All" on={grade.curves?.enabled !== false} onCheck={(on) => changeGrade(shot, (g) => { g.curves = { ...g.curves, enabled: on }; })}
     right={<Reset label="Reset all curves" onClick={() => changeGrade(shot, (g) => { delete g.curves; })} />}>
     {CHANNELS.map((channel) => <CurveEditor key={`${shot}:${channel.id}`} shot={shot} grade={grade} channel={channel} />)}

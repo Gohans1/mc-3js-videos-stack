@@ -234,6 +234,12 @@ export const createApi = (film, { page, events, send }) => {
     const { base, data } = c.req.valid("json"), r = film.text.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
   });
+  app.get("/api/adjustment", (c) => { const data = film.adjustment?.read(); return data ? fresh(c, data) : noSound(c); });
+  app.post("/api/adjustment", zValidator("json", SoundSave), (c) => {
+    if (!film.adjustment) return noSound(c);
+    const { base, data } = c.req.valid("json"), r = film.adjustment.write(base, data);
+    return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
   // The key files (package.json "live-studio".keyFiles), each the same way, by its place in that list
   app.get("/api/keys", (c) => fresh(c, film.keyFiles.map((k) => ({ file: k.rel, edit: k.edit }))));
   app.get("/api/keys/:i{[0-9]+}", (c) => { const s = film.keyFiles[+c.req.param("i")]?.read(); return s ? fresh(c, s) : noSound(c); });
@@ -245,7 +251,7 @@ export const createApi = (film, { page, events, send }) => {
   });
   // Files edited in one go (a cut moved on the camera row changes cam.json and shots.json), named as their own routes name them:
   // every one is checked before any is written, so a 409 on one never leaves the others half saved
-  const named = (name) => new Map([["sound", film.sound], ["cam", film.cam], ["shots", film.shots], ["text", film.text], ...film.keyFiles.map((k, i) => [`keys/${i}`, k])]).get(name);
+  const named = (name) => new Map([["sound", film.sound], ["cam", film.cam], ["shots", film.shots], ["text", film.text], ["adjustment", film.adjustment], ...film.keyFiles.map((k, i) => [`keys/${i}`, k])]).get(name);
   app.post("/api/together", zValidator("json", TogetherSave), (c) => {
     const files = c.req.valid("json").files.map((f) => ({ ...f, file: named(f.name) }));
     if (files.some((f) => !f.file)) return noSound(c);

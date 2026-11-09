@@ -37,6 +37,7 @@ export const marks = {
   lanes: () => {}, // sound/lanes.ts draws its canvas whenever these do
   cam: () => {}, // and camera/camrow.ts its own
   keys: () => {}, // and keys/keyrows.ts the key rows
+  layers: () => {},
   text: () => {}, // and text/textrow.ts the text tracks
 };
 
@@ -262,7 +263,7 @@ const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: num
   g.fillRect(x0, 0, 2, h); g.fillRect(x1 - 2, 0, 2, h);
 };
 
-export const drawTimelines = () => { if (!S.el) return; drawRuler(); drawDetail(); marks.text(); marks.cam(); marks.keys(); marks.lanes(); };
+export const drawTimelines = () => { if (!S.el) return; drawRuler(); drawDetail(); marks.layers(); marks.text(); marks.cam(); marks.keys(); marks.lanes(); };
 // Shows s seconds (6 at the closest, the whole film at the farthest), as CapCut's zoom slider; zoomSpan scales what is shown
 export const ZOOM_MIN = 6;
 export const zoomTo = (s: number) => { const span = Math.max(ZOOM_MIN, Math.min(DURATION, s)); set({ span }); stored.set("span", String(span), sessionStorage); drawTimelines(); };

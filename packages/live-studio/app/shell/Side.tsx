@@ -86,8 +86,9 @@ export function Library() {
 }
 
 // Wide: the right column, CapCut's details: the tabs of what is selected
-type Group = "sound" | "text" | "objects" | "keys" | "cam" | "transition";
+type Group = "adjustment" | "sound" | "text" | "objects" | "keys" | "cam" | "transition";
 const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
+  adjustment: [{ id: "adjust", title: "Adjustment" }],
   sound: [{ id: "sound", title: "Basic" }, { id: "voiceChanger", title: "Voice changer" }, { id: "audioSpeed", title: "Speed" }],
   text: [{ id: "text", title: "Text" }, { id: "textAnim", title: "Animation" }],
   objects: [{ id: "objects", title: "Object" }],
@@ -95,10 +96,10 @@ const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
   cam: [{ id: "cam", title: "Camera" }, { id: "speed", title: "Speed" }, { id: "anim", title: "Animation" }, { id: "adjust", title: "Adjust" }],
   transition: [{ id: "transition", title: "Transition" }],
 };
-const groupOf = (s: StudioState): Group => (s.clips.length ? "sound" : s.textPicks.length ? "text" : s.object ? "objects" : s.keyPicks.length ? "keys" : s.side === "transition" ? "transition" : "cam");
+const groupOf = (s: StudioState): Group => (s.layerPicks.length ? "adjustment" : s.clips.length ? "sound" : s.textPicks.length ? "text" : s.object ? "objects" : s.keyPicks.length ? "keys" : s.side === "transition" ? "transition" : "cam");
 function Details() {
   const { sound, text, cam, keys, placed } = useParts(), side = useStudio((s) => s.side);
-  const has: Record<Group, boolean> = { sound, text, objects: placed, keys, cam, transition: cam };
+  const has: Record<Group, boolean> = { sound, text, objects: placed, keys, cam, transition: cam, adjustment: cam };
   const picked = useStudio(groupOf), group = has[picked] ? picked : (Object.keys(has) as Group[]).find((g) => has[g])!;
   const list = GROUPS[group], value = list.some((x) => x.id === side) ? side : list[0].id;
   return (
@@ -136,10 +137,11 @@ function TextTab() {
 
 // Narrow: the camera tab holds CapCut's three, Camera | Speed | Animation, under it
 function CameraTab() {
+  const layer = useStudio((s) => s.layerPicks.length > 0);
   const side = useStudio((s) => s.side), part = side === "anim" || side === "speed" || side === "adjust" ? side : "cam";
   return (
     <>
-      <Segmented label="Camera part" className="mx-3 mb-2" value={part} onChange={(v) => set({ side: v })} items={GROUPS.cam} />
+      {!layer && <Segmented label="Camera part" className="mx-3 mb-2" value={part} onChange={(v) => set({ side: v })} items={GROUPS.cam} />}
       {part === "anim" ? <AnimPanel /> : part === "speed" ? <SpeedPanel /> : part === "adjust" ? <AdjustPanel library /> : <CamPanel />}
     </>
   );
@@ -147,6 +149,7 @@ function CameraTab() {
 
 export function Side({ wide }: { wide: boolean }) {
   const { sound, text, cam, keys, placed, open } = useParts(), side = useStudio((s) => s.side);
+  const layer = useStudio((s) => s.layerPicks.length > 0);
   if (wide) return <Details />;
   const value = side === "anim" || side === "speed" || side === "adjust" ? "cam" : side === "textAnim" ? "text" : side === "voiceChanger" || side === "audioSpeed" ? "sound" : side;
   return (
@@ -162,7 +165,7 @@ export function Side({ wide }: { wide: boolean }) {
               {sound && <Tabs.Tab value="sound" className={tab}>Audio</Tabs.Tab>}
               {text && <Tabs.Tab value="text" className={tab}>Text</Tabs.Tab>}
               {placed && <Tabs.Tab value="objects" className={tab}>Objects</Tabs.Tab>}
-              {cam && <Tabs.Tab value="cam" className={tab}>Camera</Tabs.Tab>}
+              {cam && <Tabs.Tab value="cam" className={tab}>{layer ? "Adjustment" : "Camera"}</Tabs.Tab>}
               {cam && <Tabs.Tab value="transition" className={tab}>Transitions</Tabs.Tab>}
               {keys && <Tabs.Tab value="keys" className={tab}>Keyframes</Tabs.Tab>}
             </Tabs.List>

@@ -30,7 +30,7 @@ export function transitionAt(shots: Shot[], end: number, t: number) {
 // Camera handles hold their boundary pose; actors, lights and sound still use the unchanged film time.
 export const viewTime = (shots: Shot[], end: number, i: number, t: number) => Math.max(shots[i].t, Math.min(t, (shots[i + 1]?.t ?? end) - 1e-6));
 
-export function makeTransitions(renderer: THREE.WebGLRenderer, frame: (t: number, shot?: number) => void, shots: () => Shot[], end: () => number, free: { on: boolean }) {
+export function makeTransitions(renderer: THREE.WebGLRenderer, frame: (t: number, shot?: number) => void, shots: () => Shot[], end: () => number, free: { on: boolean }, finish?: (t: number) => void) {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const a = new THREE.FramebufferTexture(size.x, size.y), b = new THREE.FramebufferTexture(size.x, size.y);
   // These are already display-referred framebuffer pixels: no second tone map or output colour conversion.
@@ -50,7 +50,7 @@ export function makeTransitions(renderer: THREE.WebGLRenderer, frame: (t: number
   const quad = new FullScreenQuad(materials[0]);
   const draw = (t: number) => {
     const tr = free.on ? null : transitionAt(shots(), end(), t);
-    if (!tr) { frame(t); return; }
+    if (!tr) { frame(t); finish?.(t); return; }
     renderer.getDrawingBufferSize(size);
     for (const tex of [a, b]) if (tex.image.width !== size.x || tex.image.height !== size.y) {
       tex.dispose(); tex.image.width = size.x; tex.image.height = size.y; tex.needsUpdate = true;
@@ -69,6 +69,7 @@ export function makeTransitions(renderer: THREE.WebGLRenderer, frame: (t: number
     const auto = renderer.autoClear;
     renderer.autoClear = false;
     try { quad.render(renderer); } finally { renderer.autoClear = auto; }
+    finish?.(t);
   };
   draw.transitions = TRANSITIONS;
   draw.disposeTransitions = () => { a.dispose(); b.dispose(); materials.forEach((m) => m.dispose()); quad.dispose(); };

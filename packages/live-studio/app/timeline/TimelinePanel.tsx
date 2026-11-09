@@ -7,6 +7,7 @@ import { useLayoutEffect } from "react";
 import type { Bind } from "../core/state";
 import { ROW_MAX, ROW_MIN, RULER_H, rowLayout, setRowLayout } from "./rows";
 import { useStudio } from "../core/store";
+import { LayerTrack } from "../camera/LayerTrack";
 import { CameraTrack } from "../camera/CameraTrack";
 import { drawTimelines } from "./timeline";
 import { KeyHeads } from "../keys/KeyHeads";
@@ -48,6 +49,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
         onPointerDown={(e) => { if (e.button === 0 && e.currentTarget.contains(e.target as Node) && !(e.target as Element).closest("button, input, canvas, [role=separator]")) boxPick.clear(); }}
         className="relative col-span-2 grid min-h-0 grid-cols-subgrid content-start overflow-x-hidden overflow-y-auto overscroll-contain rounded-b-md sideways:hidden upright:max-h-86"
       >
+        <LayerTrack />
         <span className={cn("self-stretch border-e border-track-line bg-track-head ps-1.5 text-ui leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
         <CameraTrack bind={bind} shown={cam} />
         {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}

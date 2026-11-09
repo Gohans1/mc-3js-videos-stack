@@ -77,7 +77,7 @@ export const loadSound = async () => {
 export const edit = doc.edit, preview = doc.preview, snapshot = doc.snapshot, restore = doc.restore;
 
 // ---------- What the lanes and the panel ask for
-export const setClips = (cs: ClipRef[]) => { set(cs.length ? { clips: cs, clip: cs.length === 1 ? cs[0] : null, side: "sound", camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [], object: null } : { clips: [], clip: null }); S.dirty = true; };
+export const setClips = (cs: ClipRef[]) => { set(cs.length ? { clips: cs, clip: cs.length === 1 ? cs[0] : null, side: "sound", camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [], layerPicks: [], object: null } : { clips: [], clip: null }); S.dirty = true; };
 export const setClip = (c: ClipRef | null) => setClips(c ? [c] : []);
 // Solo, as in Premiere and Resolve: only the soloed tracks sound, heard at once; this page only, never saved or rendered
 export const setSolo = (id: string, on: boolean) => {

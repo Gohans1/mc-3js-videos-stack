@@ -178,7 +178,8 @@
     --pick: #FFFFFF; /* what is picked, on every row: outlined white */
     --clip-video: #004D52; /* a shot on the Camera row, as CapCut's video clip */
     --clip-video-tag: #1A5F64;
-    --clip-text: #9C4937;
+    --clip-adjust: #a6883b;
+  --clip-text: #9C4937;
     --clip-text-tag: #A65C4B;
     --clip-audio: #0E3058;
     --clip-audio-tag: #274569;
