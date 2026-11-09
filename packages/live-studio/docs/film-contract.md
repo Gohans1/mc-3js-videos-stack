@@ -55,3 +55,7 @@ Shot phía sau có transition {fx, len}: dissolve, black, white hoặc wipe; len
 ## Hàng Text
 
 text.json có tracks tùy chọn, khóa là số hàng dạng chuỗi; mỗi hàng có lock và hidden. Lock chặn chỉnh sửa trong studio, hidden ẩn chữ trong preview và render; truyền EDIT.text.tracks vào titles và titles.boxes.
+
+## Chọn đối tượng từ timeline
+
+draw.tools.targets nối id/title/objects với rows chứa edit và path; path là tiền tố đường dẫn key, [] nhận toàn bộ file. Studio dùng khai báo này để bấm chọn và vẽ khung trắng cho một hoặc nhiều đối tượng, kể cả Final quality; khung không đi vào ảnh xuất.

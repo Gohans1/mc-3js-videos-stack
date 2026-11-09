@@ -47,6 +47,7 @@ export const exportStill = async () => {
   const c = document.createElement("canvas");
   c.width = S.el.final.width; c.height = S.el.final.height;
   c.getContext("2d")!.drawImage(S.el.final, 0, 0);
+  S.finalAt = -1; S.dirty = true;
   const blob = await new Promise<Blob | null>((done) => c.toBlob(done, place.format, 0.95));
   if (!blob) return void say("Couldn't export the still frame: the browser couldn't encode it");
   try { await place.save(blob); } catch { return void say("Couldn't export the still frame: the file couldn't be written"); }

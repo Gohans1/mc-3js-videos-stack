@@ -38,7 +38,7 @@ export const drawFinalFrame = () => {
   fr.tools.free.p.copy(free.p); fr.tools.free.l.copy(free.l);
   fr(S.t);
 };
-export const drawFinal = () => { drawFinalFrame(); S.finalAt = S.t; S.el.final.hidden = false; };
+export const drawFinal = () => { drawFinalFrame(); drawGizmo(S.finalRender!.tools); S.finalAt = S.t; S.el.final.hidden = false; };
 export const setFinal = async (on: boolean) => {
   if (AWAY) return;
   set({ final: on });

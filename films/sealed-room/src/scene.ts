@@ -379,6 +379,15 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   draw.tools = {
     titles, clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf, anchor,
     objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
+    targets: [
+      { id: "steve", title: "Steve", objects: [steve.g], rows: [{ edit: "steve", path: [] }] },
+      { id: "chair", title: "Chair", objects: [props.chair], rows: [{ edit: "props", path: ["chair"] }] },
+      { id: "drawer", title: "Drawer", objects: [props.tray], rows: [{ edit: "props", path: ["drawer"] }] },
+      { id: "keyboard", title: "Keyboard", objects: [keyboard], rows: [{ edit: "props", path: ["keyboard"] }] },
+      { id: "screen", title: "Screen", objects: [props.glass], rows: [{ edit: "props", path: ["screen", "typing"] }] },
+      { id: "silverfish", title: "Silverfish", objects: [props.silverfish], rows: [{ edit: "props", path: ["silverfish"] }] },
+      ...props.sheets.map((object, i) => ({ id: `paper:${i}`, title: "Paper", objects: [object], rows: [{ edit: "props", path: ["takes"] }] })),
+    ],
     materials: [], composer, renderer, placed,
   };
   // What `CHECK=name:args` runs (node node_modules/live-studio/render.mjs stills): slide and trace for his feet

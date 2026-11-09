@@ -6,7 +6,7 @@ import { S } from "../core/state";
 import { sketch } from "../notes/ink";
 import { openNote } from "../notes/notes";
 import { textPress } from "../text/onpicture";
-import { gizmoBusy, hover, pickAt, select } from "../objects/placed";
+import { gizmoBusy, hover, pickAt, selectTarget } from "../objects/placed";
 import { setPlaying } from "../playback/transport";
 import { frameSize } from "./frame";
 import { flight, flyCam, moveCam, setFree, turnAbout } from "./freecam";
@@ -95,7 +95,7 @@ export const attachPicture = () => {
     if (e.button !== 0) return;
     const at = tapped(e);
     if (!at) return;
-    if (e.pointerType === "mouse") select(pickAt(...at)); // beside every object: nothing selected
+    if (e.pointerType === "mouse") selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
     else pinNote(...at);
   });
   canvas.addEventListener("pointerup", (e) => {

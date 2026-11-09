@@ -110,7 +110,7 @@ export const loadKeys = async (which?: number) => {
 export const pickKeys = (refs: KeyRef[]) => {
   const p = S.tools?.placed, pf = p ? files.findIndex((x) => x.edit === p.key) : -1;
   const own = refs.length > 0 && refs.every((r) => r.f === pf && r.path.length === 2 && r.path[1] === "keys" && r.path[0] === refs[0].path[0]);
-  set(refs.length ? { keyPicks: refs, side: own ? "objects" : "keys", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, textPicks: [], object: own ? refs[0].path[0] : null } : { keyPicks: [] });
+  set(refs.length ? { keyPicks: refs, side: own ? "objects" : "keys", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, textPicks: [], object: own ? refs[0].path[0] : null } : { keyPicks: [], object: null });
   S.dirty = true;
 };
 

@@ -12,6 +12,8 @@ declare module "film/scene" {
     free: FreeCam;
     home?: { p: [number, number, number]; l: [number, number, number]; fov?: number }; // where the first free camera after a reload starts
     objects?: [THREE.Object3D, string][];
+    targets?: import("./objects/targets").SceneTarget[];
+    renderer?: THREE.WebGLRenderer;
     materials?: [THREE.Material, string][];
     rig?: THREE.Object3D;
     bones?: Record<string, THREE.Object3D>;

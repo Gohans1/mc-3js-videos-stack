@@ -56,6 +56,13 @@ test("draw.checks, when a film has them, are functions by name", () => {
   assert.match(checkFilm(film(), withChecks({ slide: "0,108" })).join(), /checks\.slide/);
 });
 
+test("scene selection targets bind real objects to explicit key paths and have unique ids", () => {
+  const target = { id: "steve", title: "Steve", objects: [{ isObject3D: true }], rows: [{ edit: "steve", path: [] }] };
+  assert.deepEqual(checkFilm(film(), draw({ targets: [target] })), []);
+  assert.match(checkFilm(film(), draw({ targets: [target, target] })).join(), /target ids must differ/);
+  assert.match(checkFilm(film(), draw({ targets: [{ ...target, objects: ["steve"] }] })).join(), /targets.*objects/);
+});
+
 test("a home spot is optional, and one without a look point is reported", () => {
   assert.deepEqual(checkFilm(film(), draw({ home: { p: [2.5, 1.6, 3], l: [2.5, 1.4, 0], fov: 60 } })), []);
   assert.match(checkFilm(film(), draw({ home: { p: [2.5, 1.6, 3] } })).join(), /tools\.home\.l/);

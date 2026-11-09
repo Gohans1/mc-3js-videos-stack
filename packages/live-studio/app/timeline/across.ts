@@ -25,7 +25,7 @@ export const count = (p: Across) => p.text.length + p.cam.length + p.keys.length
 
 export const pickAcross = (p: Across) => {
   const c = [...new Set(p.cam)].filter((i) => !!cam.keys[i]).sort((a, b) => a - b), n = KINDS.filter((k) => (k === "cam" ? c : p[k]).length).length;
-  if (n === 0) set({ camKey: null, camPicks: [], keyPicks: [], clips: [], clip: null, textPicks: [] });
+  if (n === 0) set({ camKey: null, camPicks: [], keyPicks: [], clips: [], clip: null, textPicks: [], object: null });
   else if (n === 1) { if (p.clips.length) sound.setClips(p.clips); else if (p.keys.length) keys.pickKeys(p.keys); else if (p.text.length) text.pickText(p.text); else cam.pickCamKeys(c); }
   else set({ textPicks: p.text, camPicks: c.length > 1 ? c : [], camKey: c.length === 1 ? c[0] : null, keyPicks: p.keys, clips: p.clips, clip: null, shotPick: null, object: null });
   S.dirty = true;

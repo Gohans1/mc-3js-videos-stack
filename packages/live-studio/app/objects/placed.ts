@@ -5,9 +5,14 @@
 // undo, saving and an agent's edits are keys.ts and doc.ts's, and each object's keys are an ordinary key row.
 import * as THREE from "three";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { Ease } from "../core/ease";
 import { FPS, r3, stamp } from "../core/time";
-import { files } from "../keys/keys";
+import { files, keysOf, pickKeys, rows, sameKey } from "../keys/keys";
+import type { Tools } from "film/scene";
+import { boundsOf, hitTarget, matchesRow, targetsForKeys, type SceneTarget } from "./targets";
 import { path, showPath } from "./path";
 import { setPlaying } from "../playback/transport";
 import { S } from "../core/state";
@@ -168,13 +173,20 @@ export const setVisible =(name: string, on: boolean) => edit((d) => { const o = 
 export type GizmoMode = "translate" | "rotate" | "scale";
 let gizmo: TransformControls | null = null;
 const overlay = new THREE.Scene();
-const box = new THREE.BoxHelper(new THREE.Object3D(), 0xec8b49);
-box.visible = false;
-// What a click would pick, under the mouse
-const hoverBox = new THREE.BoxHelper(new THREE.Object3D(), 0xec8b49);
-Object.assign(hoverBox.material, { transparent: true, opacity: 0.45 });
+const cube = new THREE.BoxGeometry(1, 1, 1), edges = new THREE.EdgesGeometry(cube);
+const boxGeometry = new LineSegmentsGeometry().fromEdgesGeometry(edges);
+cube.dispose(); edges.dispose();
+const boxMaterial = new LineMaterial({ color: 0xe8e8e8, linewidth: 1, depthTest: false, depthWrite: false, toneMapped: false });
+const hoverMaterial = boxMaterial.clone(); hoverMaterial.transparent = true; hoverMaterial.opacity = 0.45;
+const makeBox = (material = boxMaterial) => Object.assign(new LineSegments2(boxGeometry, material), { box: new THREE.Box3() });
+const fitBox = (box: ReturnType<typeof makeBox>, objects: THREE.Object3D[]) => {
+  box.visible = !boundsOf(objects, box.box).isEmpty();
+  if (box.visible) { box.box.getCenter(box.position); box.box.getSize(box.scale); }
+};
+const boxes = new Map<string, ReturnType<typeof makeBox>>();
+const hoverBox = makeBox(hoverMaterial);
 hoverBox.visible = false;
-overlay.add(path, box, hoverBox);
+overlay.add(path, hoverBox);
 let hovered: string | null = null;
 let lastScale = 1;
 const ensureGizmo = () => {
@@ -216,13 +228,15 @@ export const gizmoBusy = () => !!gizmo && (gizmo.dragging || gizmo.axis !== null
 
 export const select = (name: string | null) => set(name ? { object: name, side: "objects", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [] } : { object: null });
 
-studio.subscribe((s, was) => { if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev) attach(); });
+studio.subscribe((s, was) => {
+  if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev) attach();
+  if (s.object !== was.object || s.keyPicks !== was.keyPicks) { S.finalAt = -1; S.dirty = true; }
+});
 // Re-points the gizmo whenever the selection or the built objects change (a rename or an undo builds a new one)
 export const attach = () => {
   const name = get().object;
   if (name && files.length && !placedData()[name]) { set({ object: null }); return; } // undone, or an agent took it out
   const o = name ? tools()?.objectOf(name) : null;
-  box.visible = !!o;
   S.dirty = true;
   if (!o) { gizmo?.detach(); return; }
   const g = ensureGizmo();
@@ -230,43 +244,59 @@ export const attach = () => {
   if (g.object !== o) g.attach(o);
   g.setMode(get().gizmo);
 };
-// The object under the mouse, outlined faintly; the canvas takes the hand cursor over it
-export const hover = (name: string | null) => {
-  if (name === hovered) return;
-  hovered = name;
-  if (S.el?.canvas) S.el.canvas.style.cursor = name ? "pointer" : "";
+export const hover = (target: SceneTarget | null) => {
+  if ((target?.id ?? null) === hovered) return;
+  hovered = target?.id ?? null;
+  if (S.el?.canvas) S.el.canvas.style.cursor = "default";
+  S.finalAt = -1;
   S.dirty = true;
+};
+const targets = (sceneTools: Tools): SceneTarget[] => {
+  const p = sceneTools.placed;
+  return [...(sceneTools.targets ?? []), ...Object.keys(placedData()).flatMap((name) => {
+    const object = p?.objectOf(name);
+    return object && p ? [{ id: `placed:${name}`, title: name, objects: [object], rows: [{ edit: p.key, path: [name, "keys"] }] }] : [];
+  })];
+};
+export const selectTarget = (target: SceneTarget | null, additive = false) => {
+  if (!target) { set({ object: null, keyPicks: [], camKey: null, camPicks: [], shotPick: null, clips: [], clip: null, textPicks: [] }); S.dirty = true; return; }
+  const row = rows.find((r) => target.rows.some((b) => matchesRow(b, files[r.f].edit, r.path)));
+  if (!row) return;
+  const ks = keysOf(row.f, row.path);
+  const i = Math.max(0, ks.findLastIndex((k) => k.t <= S.t));
+  const ref = { f: row.f, path: row.path, i }, before = get().keyPicks;
+  pickKeys(additive ? before.some((r) => sameKey(r, ref)) ? before.filter((r) => !sameKey(r, ref)) : [...before, ref] : [ref]);
 };
 // After the film draws: the selection's box, what the pointer is over and the gizmo, on top of the picture, outside the film's
 // own effects and its scene
-export const drawGizmo = () => {
-  if (!S.tools) return;
-  const name = get().object, o = name ? tools()?.objectOf(name) : null, h = hovered && hovered !== name ? tools()?.objectOf(hovered) : null;
-  box.visible = !!o; hoverBox.visible = !!h;
-  showPath(tools(), o ? name : null, get().keysRev);
-  if (!o && !h) return;
-  const r = (S.tools as { renderer?: THREE.WebGLRenderer }).renderer;
+export const drawGizmo = (sceneTools = S.tools) => {
+  if (!sceneTools) return;
+  const all = targets(sceneTools), name = get().object;
+  const selected = targetsForKeys(all, get().keyPicks, files);
+  const own = name ? all.find((t) => t.id === `placed:${name}`) : null;
+  if (own && !selected.includes(own)) selected.push(own);
+  for (const box of boxes.values()) box.visible = false;
+  for (const target of selected) {
+    let box = boxes.get(target.id);
+    if (!box) { box = makeBox(); boxes.set(target.id, box); overlay.add(box); }
+    fitBox(box, target.objects);
+  }
+  const h = all.find((t) => t.id === hovered && !selected.includes(t));
+  if (h) fitBox(hoverBox, h.objects); else hoverBox.visible = false;
+  showPath(sceneTools.placed ?? null, own ? name : null, get().keysRev);
+  const r = sceneTools.renderer;
   if (!r) return;
-  if (o) box.setFromObject(o);
-  if (h) hoverBox.setFromObject(h);
+  // Both render sizes occupy the same CSS frame; keep the selection one screen pixel wide in either quality.
+  boxMaterial.linewidth = hoverMaterial.linewidth = r.domElement.width / Math.max(1, S.el.canvas.clientWidth);
+  if (gizmo) gizmo.camera = sceneTools.camera;
   const auto = r.autoClear;
   r.autoClear = false;
   r.clearDepth();
-  r.render(overlay, S.tools.camera);
+  r.render(overlay, sceneTools.camera);
   r.autoClear = auto;
 };
-// What a click on the picture hit, if it is a dropped-in object
 export const pickAt = (x: number, y: number) => {
-  const p = tools();
-  if (!p || !S.tools) return null;
-  const ray = new THREE.Raycaster();
-  ray.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), S.tools.camera);
-  for (const h of ray.intersectObject(p.root, true)) {
-    let shown = true;
-    for (let c: THREE.Object3D | null = h.object; c; c = c.parent) if (!c.visible) shown = false;
-    if (shown) return p.nameOf(h.object);
-  }
-  return null;
+  return S.tools ? hitTarget(S.tools.scene, S.tools.camera, targets(S.tools), x, y) : null;
 };
 
 // Where a drop at (x, y) on the picture lands: the surface under it, else 3 m in front of the camera; facing the camera

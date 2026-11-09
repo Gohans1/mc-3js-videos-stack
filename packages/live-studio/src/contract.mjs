@@ -32,6 +32,10 @@ export const Tools = z.looseObject({
   free: z.looseObject({ on: z.boolean(), p: three("isVector3", "a THREE.Vector3"), l: three("isVector3", "a THREE.Vector3"), fov: z.number() }),
   home: z.object({ p: z.tuple([z.number(), z.number(), z.number()]), l: z.tuple([z.number(), z.number(), z.number()]), fov: z.number().optional() }).optional(),
   objects: z.array(z.tuple([three("isObject3D", "a THREE.Object3D"), z.string()])).optional(),
+  targets: z.array(z.object({
+    id: z.string().min(1), title: z.string(), objects: z.array(three("isObject3D", "a THREE.Object3D")).min(1),
+    rows: z.array(z.object({ edit: z.string().min(1), path: z.array(z.string()) })).min(1),
+  })).refine((targets) => unique(targets.map((t) => t.id)), "target ids must differ").optional(),
   materials: z.array(z.tuple([three("isMaterial", "a THREE.Material"), z.string()])).optional(),
   // mc-assets/placed.ts makePlaced: what the creator drops into the scene from the Objects library, in one of the film's keyFiles
   placed: z.looseObject({ key: z.string().min(1), root: three("isObject3D", "a THREE.Object3D"), sync: fn, draw: fn, objectOf: fn, nameOf: fn, clipsOf: fn, catalog: fn, icon: fn }).optional(),
