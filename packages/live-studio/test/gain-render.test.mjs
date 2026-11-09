@@ -21,7 +21,7 @@ test("the real FFmpeg mixer renders volume keys per sample on trimmed one-shots 
     for (const bed of [false, true]) {
       const gainKeys = [{ t: 0, gain: -20 }, { t: 1, gain: 0 }, { t: 2, gain: -10 }];
       const clip = { name: "tone", gain: -3, gainKeys, start: .25, fadeIn: 0, fadeOut: 0, ...(bed ? { from: .25, to: 3.25 } : { at: .25, length: .75 }) };
-      const code = "import importlib.util,json,sys; from pathlib import Path; s=importlib.util.spec_from_file_location('mix',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); c=json.loads(sys.argv[2]); m.build(Path('out.wav'),[c] if 'from' in c else [],[] if 'from' in c else [c],voice=False,master=False)";
+      const code = "import importlib.util,json,sys; from pathlib import Path; sys.path.insert(0,str(Path(sys.argv[1]).parent)); s=importlib.util.spec_from_file_location('mix',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); c=json.loads(sys.argv[2]); m.build(Path('out.wav'),[c] if 'from' in c else [],[] if 'from' in c else [c],voice=False,master=False)";
       run("python", ["-c", code, source, JSON.stringify(clip)]);
       run("ffmpeg", ["-v", "error", "-y", "-i", "out.wav", "-ar", "48000", "-ac", "2", "-f", "f32le", "out.raw"]);
       const samples = readFileSync(join(dir, "out.raw"));
@@ -31,7 +31,7 @@ test("the real FFmpeg mixer renders volume keys per sample on trimmed one-shots 
         const expected = .25 * Math.SQRT1_2 * 10 ** (db / 20);
         assert.ok(Math.abs(samples.readFloatLE(Math.round(t * 48000) * 8) - expected) < .00004, `${bed ? "bed" : "sfx"} at ${t}: expected ${db} dB`);
       }
-      const measured = run("python", ["-c", "import importlib.util,json,sys; s=importlib.util.spec_from_file_location('mix',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); c=json.loads(sys.argv[2]); m.A['beds' if 'from' in c else 'sfx']=[c]; print(json.dumps(m.measure_clip('beds' if 'from' in c else 'sfx',0)))", source, JSON.stringify(clip)]);
+      const measured = run("python", ["-c", "import importlib.util,json,sys; from pathlib import Path; sys.path.insert(0,str(Path(sys.argv[1]).parent)); s=importlib.util.spec_from_file_location('mix',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); c=json.loads(sys.argv[2]); m.A['beds' if 'from' in c else 'sfx']=[c]; print(json.dumps(m.measure_clip('beds' if 'from' in c else 'sfx',0)))", source, JSON.stringify(clip)]);
       const metrics = JSON.parse(measured.stdout);
       assert.equal(typeof metrics.peak, "number");
       assert.ok(metrics.peak < -10, "the clip's measured true peak includes its gain envelope");

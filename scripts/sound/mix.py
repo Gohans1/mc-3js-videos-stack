@@ -18,6 +18,7 @@ import sys
 import tempfile
 from functools import cache
 from pathlib import Path
+from process import render as process_audio
 
 ROOT = Path.cwd()  # the film's folder: run from films/<name>/ (python ../../scripts/...)
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
@@ -126,11 +127,21 @@ def gain_filter(keys, base):
 
 
 def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None):
+    with tempfile.TemporaryDirectory(prefix="studio-mix-clips-") as folder:
+        _build(out, beds, sfx, voice, span, master, float_output, end, Path(folder))
+
+
+def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
     inputs, chains = [], []
     end = END if end is None else end
 
-    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None):
+    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None):
         i = len(chains)  # one chain per input file, so this is the input's index
+        if processing and (processing.get("rate", 1) != 1 or processing.get("pitch", 0) or processing.get("reverse")):
+            length = length if length is not None else (seconds(processing["name"]) - start) / processing.get("rate", 1)
+            processed = folder / f"{i}.wav"
+            process_audio(path, processed, {**processing, "start": start, "duration": length, "loop": loop})
+            path, start, loop = processed, 0, False
         inputs.extend(["-stream_loop", "-1", "-i", str(path)] if loop else ["-i", str(path)])
         f = [f"atrim=start={start}" + (f":duration={length}" if length else ""), "asetpts=PTS-STARTPTS",
              "aformat=sample_rates=48000:channel_layouts=stereo", f"volume={gain}dB", *extra]
@@ -151,9 +162,9 @@ def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False
         add(ROOT / "assets/public/agent/full_voice.wav", 0, A["voiceGain"], extra=["acompressor=threshold=0.03:ratio=4:attack=1:release=150:makeup=3", "alimiter=limit=0.35:level=false"])
     for b in beds:
         duck = duck_expr(b["from"], b["to"], b["duck"]) if b.get("duck") and A.get("voice", True) else None
-        add(SFX / f"{b['name']}.wav", b["from"], b["gain"], b.get("start", 0), b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, gain_keys=b.get("gainKeys"), extra=[*b.get("filters", []), *([duck] if duck else []), *([pan_filter(b["pan"])] if b.get("pan") else [])])
+        add(SFX / f"{b['name']}.wav", b["from"], b["gain"], b.get("start", 0), b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*b.get("filters", []), *([duck] if duck else []), *([pan_filter(b["pan"])] if b.get("pan") else [])])
     for s in sfx:
-        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), gain_keys=s.get("gainKeys"), extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
+        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
@@ -179,7 +190,7 @@ def measure_clip(kind, index):
     if c is None:
         raise ValueError("Choose an audible sound option before normalizing")
     start = c["from"] if kind == "beds" else c["at"]
-    length = c["to"] - start if kind == "beds" else c.get("length", seconds(c["name"]) - c.get("start", 0))
+    length = c["to"] - start if kind == "beds" else c.get("length", (seconds(c["name"]) - c.get("start", 0)) / c.get("rate", 1))
     if length < 0.4:
         raise ValueError("Loudness needs at least 0.4 seconds of audio")
     with tempfile.TemporaryDirectory(prefix="studio-loudness-") as folder:

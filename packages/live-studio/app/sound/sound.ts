@@ -9,13 +9,14 @@ import { measureFinal } from "./meter";
 import { forgetSounds, replan, setLive } from "./mixer";
 import { S } from "../core/state";
 import type { Role } from "./hit";
-import { type GainClip, shiftGainTime } from "./gain";
+import { type GainClip } from "./gain";
 import { type ClipRef } from "./slice";
+import { retime, trimSource, type AudioProcessing } from "./retime";
 import { get, say, set } from "../core/store";
 import { addTrack, fits, freeTrack, normalize, refs, placeShift, same, tidy, type Track, trackOf } from "./tracks";
 
-export interface Bed extends GainClip { name: string; from: number; to: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
-export interface OneShot extends GainClip { at: number; name: string; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
+export interface Bed extends GainClip, AudioProcessing { name: string; from: number; to: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
+export interface OneShot extends GainClip, AudioProcessing { at: number; name: string; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface Lanes { beds: Bed[]; sfx: OneShot[]; tracks: Track[]; [k: string]: unknown }
 export interface LibraryItem { name: string; seconds: number; title?: string; license?: string; url?: string; for?: string; kind?: "bgm" | "sfx"; role?: Role }
 export interface Peaks { step: number; peaks: number[] }
@@ -51,8 +52,10 @@ export const span = (c: ClipRef): [number, number] => {
   if (!lanes) return [0, 0];
   if (c.list === "beds") { const b = lanes.beds[c.i]; return [b.from, b.to]; }
   const s = lanes.sfx[c.i];
-  return [s.at, s.at + (s.length ?? Math.max(0.05, seconds(s.name) - (s.start ?? 0)))];
+  return [s.at, s.at + clipLength(s)];
 };
+export const clipLength = (c: Pick<Bed, "name" | "start" | "rate" | "from" | "to"> | Pick<OneShot, "name" | "start" | "rate" | "length">): number => "from" in c ? c.to - c.from : c.length ?? Math.max(.05, (seconds(c.name) - (c.start ?? 0)) / (c.rate ?? 1));
+export const maxClipLength = (c: Bed | OneShot): number => typeof c.from === "number" ? Infinity : c.reverse ? clipLength(c) + (c.start ?? 0) / (c.rate ?? 1) : (seconds(c.name) - (c.start ?? 0)) / (c.rate ?? 1);
 export const clipOf = (c: ClipRef | null) => (c && lanes ? (c.list === "beds" ? lanes.beds[c.i] : lanes.sfx[c.i]) ?? null : null);
 export const clipTitle = (c: ClipRef) => { const x = clipOf(c)!; return `${x.name} ${stamp(span(c)[0])}`; };
 
@@ -139,7 +142,7 @@ export const addShots = (shots: NewShot[]) => {
   const made: OneShot[] = [];
   edit((l) => {
     for (const x of shots) {
-      const at = r3(x.at), len = x.length ?? Math.max(0.05, seconds(x.name) - (x.start ?? 0));
+      const at = r3(x.at), len = clipLength(x);
       const o: OneShot = { at, name: x.name, gain: x.gain, ...(x.start && { start: r3(x.start) }), ...(x.length && { length: r3(x.length) }), ...(x.fadeOut && { fadeOut: x.fadeOut }) };
       o.track = onto(l, "sfx", at, at + len);
       const i = l.sfx.findIndex((s) => s.at > at);
@@ -163,7 +166,7 @@ export const pasteClips = (items: CopiedClip[], d: number) => {
         b.track = freeTrack(l, list, [b.from, b.to], span, b.track ?? "");
         l.beds.push(b);
       } else {
-        const o = c as OneShot, len = (o.length ?? Math.max(0.05, seconds(o.name) - (o.start ?? 0)));
+        const o = c as OneShot, len = clipLength(o);
         o.at = r3(Math.max(0, o.at + d));
         o.track = freeTrack(l, list, [o.at, o.at + len], span, o.track ?? "");
         // In time order, as addClip keeps the list
@@ -211,17 +214,31 @@ const crossing = (cs: ClipRef[], t: number, what: string) => {
   if (!hit.length) say(cs.length ? `The playhead isn't inside a picked clip on an unlocked track: move it over the clip to ${what}` : `Pick a sound clip first, then ${what} it at the playhead`);
   return hit;
 };
-const into = (start: number | undefined, d: number, name: string, loop: boolean) => { const v = (start ?? 0) + d, f = seconds(name); return r3(loop ? ((v % f) + f) % f : v); };
 // Moves a clip's left edge to t, its sound staying where it was in the film (lanes.ts trims a bed's head with it too)
 export const cutBefore = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
-  shiftGainTime(x, (list === "beds" ? (x as Bed).from : (x as OneShot).at) - t);
-  if (list === "beds") { const b = x as Bed; b.start = into(b.start, t - b.from, b.name, true); b.from = r3(t); return; }
-  const o = x as OneShot, d = t - o.at;
-  o.start = into(o.start, d, o.name, false);
-  if (o.length !== undefined) o.length = r3(o.length - d);
-  o.at = r3(t);
+  const from = list === "beds" ? (x as Bed).from : (x as OneShot).at, length = clipLength(x), file = seconds(x.name), rate = x.rate ?? 1;
+  const available = x.reverse ? file - (x.start ?? 0) - length * rate : x.start ?? 0;
+  const left = Math.max(list === "beds" ? -Infinity : -Math.max(0, available) / rate, t - from);
+  trimSource(x, left, length, length, file, list === "beds");
+  if (list === "beds") (x as Bed).from = r3(from + left);
+  else { (x as OneShot).at = r3(from + left); (x as OneShot).length = r3(length - left); }
 };
-const cutAfter = (x: Bed | OneShot, list: ClipRef["list"], t: number) => { if (list === "beds") (x as Bed).to = r3(t); else (x as OneShot).length = r3(t - (x as OneShot).at); };
+export const cutAfter = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
+  const from = list === "beds" ? (x as Bed).from : (x as OneShot).at, length = clipLength(x), next = Math.min(maxClipLength(x), t - from);
+  trimSource(x, 0, next, length, seconds(x.name), list === "beds");
+  if (list === "beds") (x as Bed).to = r3(from + next); else (x as OneShot).length = r3(next);
+};
+
+export const setRate = (c: ClipRef, rate: number) => {
+  const x = clipOf(c);
+  if (!x || !lanes || locked(c)) return;
+  const [from, to] = span(c), length = (to - from) * (x.rate ?? 1) / rate;
+  if (!fits(lanes, x.track ?? "", [from, from + length], span, [c])) { say("Move the neighbouring clip or choose a faster speed to make room"); return; }
+  edit((l) => {
+    const entry = l[c.list][c.i], length = retime(entry, to - from, rate);
+    if (c.list === "beds") (entry as Bed).to = from + length; else (entry as OneShot).length = length;
+  });
+};
 
 export const splitClips = (cs: ClipRef[], t = S.t) => {
   const hit = crossing(cs, t, "split");
@@ -248,6 +265,7 @@ export const trimClips = (cs: ClipRef[], side: "left" | "right", t = S.t) => {
 };
 // pan: -1 all left, 1 all right (mixer.ts, mix.py pan_filter); the centre is left out of the file
 export const setField = (c: ClipRef, key: "gain" | "fadeIn" | "fadeOut" | "length" | "to" | "duck" | "pan", v: number) => edit((l) => {
+  if (key === "length" || key === "to") { const x = l[c.list][c.i]; cutAfter(x, c.list, key === "to" ? v : (x as OneShot).at + v); return; }
   const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
   if (key === "pan" && Math.abs(v) < 0.005) delete x.pan; else x[key] = r3(v);
 });

@@ -66,3 +66,7 @@ target.transform tùy chọn khai báo row, axes theo translate/rotate/scale, re
 ## Easing của key
 
 draw.keyEases khai báo edit/path/names cho hàng hỗ trợ trường ease; mỗi tên cần có hàm trong draw.eases. mc-actor moves hỗ trợ tên film-stage EASES hoặc bốn số Bezier; bỏ ease giữ chuyển động cũ.
+
+## Xử lý clip tiếng
+
+Audio hỗ trợ rate, pitch, changePitch và reverse; length/to tính theo giờ đầu ra, start tính theo mép thấp của đoạn nguồn. Trim/split phải đổi mép nguồn theo chiều phát, rate đổi cùng giờ key/fade; quy trình và phụ thuộc CLI ở docs/audio-processing.md.

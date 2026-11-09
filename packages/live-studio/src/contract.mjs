@@ -92,8 +92,10 @@ const secs = time.refine((v) => v >= 0, "expected seconds from the film's start,
 const track = z.string().min(1).optional();
 const dB = z.number().refine(Number.isFinite, "expected a finite number of dB");
 const gainKeys = z.array(z.object({ t: time, gain: dB })).refine((keys) => keys.every((k, i) => i === 0 || k.t > keys[i - 1].t), "volume keys must increase in time").optional();
-const Bed = z.looseObject({ name, from: secs, to: secs, gain: dB, gainKeys, fadeIn: z.number().nonnegative(), fadeOut: z.number().nonnegative(), start: z.number().nonnegative().optional(), duck: z.number().nonnegative().optional(), track }).refine((b) => b.to > b.from, "to must come after from");
-const Shot1 = z.looseObject({ at: secs, name, gain: dB, gainKeys, start: z.number().nonnegative().optional(), length: z.number().positive().optional(), fadeIn: z.number().nonnegative().optional(), fadeOut: z.number().nonnegative().optional(), track });
+const processing = { rate: z.number().min(.1).max(10).optional(), pitch: z.number().min(-24).max(24).optional(), changePitch: z.boolean().optional(), reverse: z.boolean().optional() };
+export const SoundProcess = z.object({ name, start: secs, duration: z.number().positive(), loop: z.boolean(), ...processing });
+const Bed = z.looseObject({ name, from: secs, to: secs, gain: dB, gainKeys, ...processing, fadeIn: z.number().nonnegative(), fadeOut: z.number().nonnegative(), start: z.number().nonnegative().optional(), duck: z.number().nonnegative().optional(), track }).refine((b) => b.to > b.from, "to must come after from");
+const Shot1 = z.looseObject({ at: secs, name, gain: dB, gainKeys, ...processing, start: z.number().nonnegative().optional(), length: z.number().positive().optional(), fadeIn: z.number().nonnegative().optional(), fadeOut: z.number().nonnegative().optional(), track });
 // tracks (top to bottom) and each entry's track: app/sound/tracks.ts. Optional, the page adds them; mute leaves a track out of the mix
 const Track = z.looseObject({ id: z.string().min(1), name: z.string(), mute: z.boolean().optional(), lock: z.boolean().optional() });
 export const SoundTimeline = z.looseObject({ beds: z.array(Bed), sfx: z.array(Shot1), tracks: z.array(Track).optional() })

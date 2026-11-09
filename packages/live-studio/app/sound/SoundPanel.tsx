@@ -12,7 +12,7 @@ import { stamp } from "../core/time";
 import { startCarry } from "./lanes";
 import { seek, setPlaying } from "../playback/transport";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
-import { addClip, clipOf, edit, kindOf, lanes, library, type LibraryItem, lightSound, listen, listening, moveTo, moveToTrack, pickAt, pickUses, preview, removeClip, removeClips, resetBasic, restore, seconds, setClips, setField, snapshot, span, swapSound, usesOf } from "./sound";
+import { addClip, clipOf, cutAfter, edit, kindOf, lanes, library, type LibraryItem, lightSound, listen, listening, maxClipLength, moveTo, moveToTrack, pickAt, pickUses, preview, removeClip, removeClips, resetBasic, restore, setClips, setField, snapshot, span, swapSound, usesOf } from "./sound";
 import { gainAt, GAIN_KEY_EPS, toggleGainKey, writeGain } from "./gain";
 import { useFrame } from "../core/useFrame";
 import { FPS, r3 } from "../core/time";
@@ -27,6 +27,7 @@ import { FieldRow, KeyNav, Reset, Section, Segmented, SliderRow } from "../compo
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { NormalizeClip } from "./NormalizeClip";
+import { AudioSpeed } from "./AudioSpeed";
 
 // The picked clip as CapCut's Audio tab: its Basic section (volume, pan, fades, and here ducking or length), then what the app adds
 // (which file, which track, where it runs). A drag previews and saves once, when let go: one undo step
@@ -35,7 +36,7 @@ function Inspector({ clip }: { clip: ClipRef }) {
   useFrame();
   const c = clipOf(clip);
   if (!c) return null;
-  const [from, to] = span(clip), bed = clip.list === "beds", file = seconds(c.name);
+  const [from, to] = span(clip), bed = clip.list === "beds";
   const u = r3(Math.min(to - from, Math.max(0, Math.round((S.t - from) * FPS) / FPS))), volume = gainAt(c, u);
   const keys = (c.gainKeys ?? []).filter((k) => k.t >= 0 && k.t <= to - from);
   const prev = keys.findLast((k) => k.t < u - GAIN_KEY_EPS), next = keys.find((k) => k.t > u + GAIN_KEY_EPS);
@@ -43,7 +44,7 @@ function Inspector({ clip }: { clip: ClipRef }) {
   const item = library.find((x) => x.name === c.name);
   const names = library.map((x) => ({ value: x.name, label: x.name }));
   const tracks = [...(lanes?.tracks ?? []).map((t) => ({ value: t.id, label: `${t.name}${t.lock ? " (locked)" : ""}` })), { value: "new", label: "New track at the bottom" }];
-  const live = (key: string, scale: number) => (v: number) => preview((l) => { ((bed ? l.beds : l.sfx)[clip.i] as Record<string, unknown>)[key] = v / scale; });
+  const live = (key: string, scale: number) => (v: number) => preview((l) => { if (key === "length") cutAfter(l.sfx[clip.i], "sfx", from + v); else ((bed ? l.beds : l.sfx)[clip.i] as Record<string, unknown>)[key] = v / scale; });
   // scale: what the slider shows per stored unit (pan is stored -1..1, shown -100..100)
   const row = (label: string, key: "gain" | "fadeIn" | "fadeOut" | "duck" | "length" | "pan", value: number, min: number, max: number, step: number, unit: string, digits: number, hint?: string, scale = 1) => (
     <SliderRow label={label} value={value} min={min} max={max} step={step} digits={digits} unit={unit} hint={hint} origin={key === "pan" ? 0 : undefined} doc={soundDoc} preview={live(key, scale)} save={(v) => setField(clip, key, v / scale)} />
@@ -66,9 +67,10 @@ function Inspector({ clip }: { clip: ClipRef }) {
         {row("Fade out", "fadeOut", fo, 0, fadeMax, 0.05, "s", 2)}
         {bed && row("Ducking under the voice", "duck", (c.duck as number | undefined) ?? 0, 0, 24, 1, "dB", 0)}
         {bed && lanes?.voice === false && <p className="text-xs text-muted-foreground">This film has no narration in its mix yet, so nothing ducks until it does.</p>}
-        {!bed && row("Duration", "length", to - from, 1 / 30, Math.max(1 / 30, file - ((c as { start?: number }).start ?? 0)), 0.01, "s", 2)}
+        {!bed && row("Duration", "length", to - from, 1 / 30, Math.max(1 / 30, maxClipLength(c)), 0.01, "s", 2)}
       </Section>
       <NormalizeClip key={`${clip.list}:${clip.i}`} clip={clip} />
+      <AudioSpeed key={`speed:${clip.list}:${clip.i}`} clip={clip} />
       <Section title="Clip">
         <FieldRow label="Sound">
           <Select items={names} value={c.name} onValueChange={(v) => v && swapSound(clip, v as string)}>

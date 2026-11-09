@@ -15,7 +15,7 @@ import { type ClipRef } from "./slice";
 import { get, noSnap, say } from "../core/store";
 import { BLADE_CURSOR } from "../components/cursor";
 import { bladeLine } from "../timeline/blade";
-import { addClip, allClips, clipOf, cutBefore, edit, lanes, locked, peaksOf, picked, preview, restore, seconds, setClips, snapshot, span, splitClips } from "./sound";
+import { addClip, allClips, clipOf, cutBefore, cutAfter, edit, lanes, locked, peaksOf, picked, preview, restore, setClips, snapshot, span, splitClips } from "./sound";
 import { together } from "../core/doc";
 import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
 import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
@@ -24,7 +24,8 @@ import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { addTrack, placeShift, same } from "./tracks";
 import { seek, setPlaying } from "../playback/transport";
-import { gainAt, gainPoints, GAIN_KEY_EPS, shiftGainTime, toggleGainKey } from "./gain";
+import { gainAt, gainPoints, GAIN_KEY_EPS, toggleGainKey } from "./gain";
+import { needsProcessing, processed, processSpec } from "./processed";
 
 // sound/TrackHeads.tsx lays its rows out on these
 export const TRACK_H = 52, TOP = 2, ADD_H = 24;
@@ -56,10 +57,10 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   g.fillStyle = tone("clip-audio");
   g.beginPath(); g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 4); g.fill();
   // The file's level, scaled by the clip's gain so a quiet clip looks quiet: each bar the loudest peak of the 2 px it stands for
-  const p = peaksOf(c.name), [from, to] = span(ref), px = (x1 - x0) / Math.max(1e-3, to - from);
+  const [from, to] = span(ref), altered = needsProcessing(c), p = altered ? processed(processSpec(c, to - from, ref.list === "beds"))?.peaks : peaksOf(c.name), px = (x1 - x0) / Math.max(1e-3, to - from);
   if (p && x1 - x0 > 6) {
-    const start = c.start ?? 0, n = p.peaks.length, room = CLIP_H - LABEL_H - 3, base = y + CLIP_H - 1;
-    const at = (x: number) => { const s = (x - x0) / px + start; return Math.floor((ref.list === "beds" ? ((s % (n * p.step)) + n * p.step) % (n * p.step) : s) / p.step); }; // a bed loops its file
+    const start = altered ? 0 : c.start ?? 0, n = p.peaks.length, room = CLIP_H - LABEL_H - 3, base = y + CLIP_H - 1;
+    const at = (x: number) => { const s = (x - x0) / px + start; return Math.floor((ref.list === "beds" && !altered ? ((s % (n * p.step)) + n * p.step) % (n * p.step) : s) / p.step); }; // a bed loops its file
     for (let x = Math.max(Math.ceil(cx0) + 1, 1); x < cx1 - 1; x += 2) {
       const i0 = at(x), i1 = Math.max(i0, at(x + 2) - 1);
       let v = 0;
@@ -328,21 +329,14 @@ export const attachLanes = () => {
         const snapped = drag!.magnet(to + d, [0], pts, perPx, off); target = snapped.target;
         const neighbours = allClips().filter((r) => !same(r, ref) && clipOf(r)!.track === clipOf(ref)!.track).map(span);
         const next = Math.min(Infinity, ...neighbours.filter(([a]) => a >= to - .02).map(([a]) => a));
-        const file = ref.list === "sfx" ? seconds(clipOf(ref)!.name) : Infinity, e2 = Math.min(next, Math.max(from + 1 / FPS, snapped.time));
-        if (ref.list === "beds") l.beds[ref.i].to = r3(e2);
-        else { const s = l.sfx[ref.i]; s.length = r3(Math.min(e2 - from, file - (s.start ?? 0))); }
+        const e2 = Math.min(next, Math.max(from + 1 / FPS, snapped.time));
+        cutAfter(l[ref.list][ref.i], ref.list, e2);
       } else {
         const snapped = drag!.magnet(from + d, [0], pts, perPx, off); target = snapped.target;
         const neighbours = allClips().filter((r) => !same(r, ref) && clipOf(r)!.track === clipOf(ref)!.track).map(span);
         const prev = Math.max(0, ...neighbours.filter(([, b]) => b <= from + .02).map(([, b]) => b));
         const s0 = Math.max(prev, Math.min(to - 1 / FPS, snapped.time));
-        if (ref.list === "beds") cutBefore(l.beds[ref.i], "beds", s0);
-        else {
-          // A one-shot trimmed at its head starts later in its file, so what's left stays where it was
-          const s = l.sfx[ref.i], into = r3(Math.max(0, (s.start ?? 0) + (s0 - from)));
-          shiftGainTime(s, -(into - (s.start ?? 0)));
-          s.at = r3(from + (into - (s.start ?? 0))); s.start = into; s.length = r3(to - s.at);
-        }
+        cutBefore(l[ref.list][ref.i], ref.list, s0);
       }
     });
     if (!valid) { floating = null; restore(drag.snap); drag.moving = group; drag.shift = 0; c.style.cursor = "not-allowed"; }

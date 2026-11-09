@@ -18,7 +18,7 @@ import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
 import { RATIOS } from "./frame.mjs";
 import { weighFirstVisit } from "./weight.mjs";
-import { SoundTimeline } from "./contract.mjs";
+import { SoundProcess, SoundTimeline } from "./contract.mjs";
 
 const MIME = { ".gltf": "application/json", ".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".png": "image/png", ".bin": "application/octet-stream", ".js": "text/javascript", ".json": "application/json", ".wav": "audio/wav", ".webm": "audio/webm", ".jar": "application/java-archive" };
 // The page sends null for a picture it could not make (no pin, no crop): the words still count
@@ -199,6 +199,12 @@ export const createApi = (film, { page, events, send }) => {
     const { list, i, data } = c.req.valid("json"), clip = data[list][i];
     if (!clip || !film.sound.fileOf(clip.name)) return c.json({ error: "This sound file is unavailable" }, 404);
     try { return c.json(await film.measureSound(list, i, data)); }
+    catch (e) { return c.json({ error: e.message }, 422); }
+  });
+  app.post("/api/sound/process", zValidator("json", SoundProcess), async (c) => {
+    const settings = c.req.valid("json");
+    if (!film.sound?.fileOf(settings.name)) return noSound(c);
+    try { c.header("Content-Type", "audio/wav"); return c.body(await film.processSound(settings.name, settings)); }
     catch (e) { return c.json({ error: e.message }, 422); }
   });
   // The camera keys, the same way (package.json "live-studio".camTimeline)

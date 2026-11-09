@@ -17,9 +17,10 @@ import type { Lanes, LibraryItem } from "./sound";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
 import { get, say } from "../core/store";
+import { clearProcessed, loadProcessed, needsProcessing, processed, processSpec, retainProcessed, type ProcessSpec } from "./processed";
 
 interface Source { lanes: () => Lanes | null; library: () => LibraryItem[]; span: (c: ClipRef) => [number, number] }
-interface Clip { key: string; name: string; t0: number; t1: number; start: number; length?: number; loop: boolean; db: number; gainKeys?: GainKey[]; fadeIn: number; fadeOut: number; duck: number; pan: number; filters: string[] }
+interface Clip { key: string; name: string; t0: number; t1: number; start: number; length?: number; loop: boolean; db: number; gainKeys?: GainKey[]; fadeIn: number; fadeOut: number; duck: number; pan: number; filters: string[]; process?: ProcessSpec }
 interface Sound { buf: AudioBuffer; mean: number }
 
 // Silent until the limiter's module has loaded (a moment after the page opens): an offline render waits for `ready`
@@ -55,7 +56,7 @@ const load = (name: string) => {
   return sounds.get(name)!;
 };
 // A file changed on disk (a new download): its old decode goes
-export const forgetSounds = () => { sounds.clear(); ready.clear(); };
+export const forgetSounds = () => { sounds.clear(); ready.clear(); clearProcessed(); };
 // A library sound decoded, as the lanes play it (sweeten.ts reads where its moment is)
 export const decoded = (name: string) => load(name).then((s) => s?.buf ?? null);
 // The mix element's own sound decoded, kept until a remix changes its URL: the meter's render and the skims play it
@@ -111,10 +112,23 @@ const clips = (l: Lanes, all = false): Clip[] => {
     if (!p) return;
     if (!buf) { load(p.name); return; }
     const start = p.own ? s.start ?? 0 : 0; // an option plays from its own start
-    out.push({ key: `sfx:${i}`, name: p.name, t0: s.at, t1: s.at + (s.length ?? buf.duration - start), start, length: s.length, loop: false, db: p.db, gainKeys: s.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - s.gain })), fadeIn: s.fadeIn ?? 0, fadeOut: s.fadeOut ?? 0, duck: 0, pan: s.pan ?? 0, filters: (s.filters as string[]) ?? [] });
+    out.push({ key: `sfx:${i}`, name: p.name, t0: s.at, t1: s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1)), start, length: s.length, loop: false, db: p.db, gainKeys: s.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - s.gain })), fadeIn: s.fadeIn ?? 0, fadeOut: s.fadeOut ?? 0, duck: 0, pan: s.pan ?? 0, filters: (s.filters as string[]) ?? [] });
   });
+  for (const c of out) {
+    const [list, i] = c.key.split(":") as ["beds" | "sfx", string], entry = l[list][+i];
+    if (needsProcessing(entry)) {
+      c.process = processSpec({ ...entry, name: c.name, start: c.start }, c.t1 - c.t0, c.loop);
+      c.start = 0; c.loop = false; c.length = c.t1 - c.t0;
+    }
+  }
   return out;
 };
+const soundFor = (c: Clip) => c.process ? processed(c.process) : ready.get(c.name);
+const loadClip = (c: Clip) => c.process ? loadProcessed(c.process) : load(c.name);
+const preloadSources = (l: Lanes) => Promise.all([...new Set([...l.beds, ...l.sfx].flatMap((c) => {
+  const p = c.try?.length ? lanePick(c.name)?.set : null;
+  return [c.name, ...(p && p !== "off" ? [p] : [])];
+}))].map(load));
 
 interface Voice { src: AudioBufferSourceNode; gain: GainNode }
 let voices: Voice[] = [];
@@ -165,8 +179,8 @@ addPlayer({
     if (!l) return;
     for (const c of clips(l)) {
       if (started.has(c.key) || !(c.t0 < w.until && w.now < c.t1)) continue;
-      const s = ready.get(c.name);
-      if (!s) { load(c.name); continue; }
+      const s = soundFor(c);
+      if (!s) { loadClip(c); continue; }
       const v = play(audioCtx, live.bus, c, s, Math.max(w.now, c.t0), w);
       started.add(c.key);
       if (v) { track(v.src); voices.push(v); v.src.addEventListener("ended", () => { voices = voices.filter((x) => x !== v); }); }
@@ -184,7 +198,10 @@ export const replan = () => {
   replanTimer = window.setTimeout(() => {
     hush(voices); voices = []; started.clear(); plans++;
     const l = source?.lanes();
-    if (l) { live.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20); setLaneGroups(groups(l)); }
+    if (l) {
+      live.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20); setLaneGroups(groups(l));
+      retainProcessed(clips(l, true).flatMap((c) => c.process ? [c.process] : []));
+    }
   }, 60);
 };
 
@@ -196,7 +213,7 @@ const audition = async (name: string) => {
   const all = clips(l).filter((c) => { const [list, i] = c.key.split(":") as ["beds" | "sfx", string]; return l[list][+i].name === name; });
   if (!all.length) return;
   const c = all.reduce((p, q) => (Math.abs(q.t0 - S.t) < Math.abs(p.t0 - S.t) ? q : p));
-  const s = await load(c.name);
+  const s = await loadClip(c);
   if (!s) return;
   hush(auditioning.splice(0));
   const from = Math.min(Math.max(S.t, c.t0), Math.max(c.t0, c.t1 - 2.5)), to = Math.min(c.t1, from + 2.5), t0 = audioCtx.currentTime + 0.02;
@@ -243,8 +260,8 @@ export const playSlice = async (t: number, len: number) => {
     const w = { speed: 1, ctxAt: (x: number) => t0 + x - t, when: (x: number) => Math.max(t0, t0 + x - t) };
     for (const c of clips(l)) {
       if (!(c.t0 <= t && t < c.t1)) continue;
-      const s = ready.get(c.name);
-      if (!s) { load(c.name); continue; }
+      const s = soundFor(c);
+      if (!s) { loadClip(c); continue; }
       const v = play(audioCtx, out, c, s, t, w);
       if (v) srcs.push(v.src);
     }
@@ -264,19 +281,21 @@ export const setLive = (live_: boolean, src: Source) => {
   if (live_ !== on) { on = live_; if (!on) { hush(voices); voices = []; started.clear(); setLaneGroups({}); } }
   levelMix();
   const l = src.lanes();
-  if (on && l) { for (const c of clips(l)) load(c.name); replan(); }
+  if (on && l) { for (const c of clips(l)) loadClip(c); replan(); }
 };
 
 // The lanes from..to as heard here, rendered offline: RMS per half second and the peak, to set against mix.py's own render
 window.__lanesRender = async (from: number, to: number) => {
   const l = source?.lanes();
   if (!l) return null;
-  await Promise.all(clips(l).map((c) => load(c.name)));
+  await preloadSources(l);
+  const all = clips(l), loaded = await Promise.all(all.map(loadClip));
+  if (loaded.some((s) => !s)) return null;
   const rate = 48000, ctx = new OfflineAudioContext(2, Math.ceil((to - from) * rate), rate), st = stage(ctx, ctx.destination);
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
   await st.ready;
   const w = { speed: 1, ctxAt: (t: number) => t - from, when: (t: number) => Math.max(0, t - from) };
-  for (const c of clips(l)) { const s = ready.get(c.name); if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w); }
+  all.forEach((c, i) => { const s = loaded[i]; if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w); });
   const out = await ctx.startRendering(), hop = rate / 2, rms: number[] = [];
   let peak = 0;
   for (let i = 0; i < out.length; i += hop) {
@@ -294,15 +313,17 @@ window.__lanesRender = async (from: number, to: number) => {
 export const renderFilm = async (into: (ctx: OfflineAudioContext) => Promise<AudioNode>): Promise<Lanes | null> => {
   const l = source?.lanes();
   if (!on || !l) return null;
+  await preloadSources(l);
   const all = clips(l, true);
-  const [voice] = await Promise.all([mixBuffer(), ...all.map((c) => load(c.name))]);
+  const [voice, loaded] = await Promise.all([mixBuffer(), Promise.all(all.map(loadClip))]);
+  if (loaded.some((s) => !s)) return null;
   // One channel out: the measuring node hears the stereo sum, and the rendered buffer nobody reads stays half the size
   const rate = 48000, ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate), st = stage(ctx, await into(ctx));
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
   await st.ready;
   if (voice) { const v = ctx.createBufferSource(); v.buffer = voice; v.connect(st.bus); v.start(0); }
   const w = { speed: 1, ctxAt: (t: number) => t, when: (t: number) => Math.max(0, t) };
-  for (const c of all) { const s = ready.get(c.name); if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w); }
+  all.forEach((c, i) => { const s = loaded[i]; if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w); });
   await ctx.startRendering();
   return l;
 };
