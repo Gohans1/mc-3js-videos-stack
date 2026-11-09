@@ -12,7 +12,7 @@ const TONES = [
   "ruler-text", "ruler-tick", "ruler-dot", "playhead", "pick", "clip-video", "clip-video-tag", "clip-text", "clip-text-tag",
   "clip-audio", "clip-audio-tag", "clip-wave", "clip-label", "in-out", "warn", "destructive", "slider", "ink", "ink-saved",
   "clip-video-hover", "clip-video-text", "clip-shape", "clip-shape-tag", "shot-now", "stuck", "pace", "pace-fast", "pace-slow",
-  "pace-pick", "beat-move", "beat-snap", "beat-hold", "note-done", "key-hold", "level-near", "level-over", "ok", "raised-2",
+  "pace-pick", "beat-move", "beat-snap", "beat-hold", "note-done", "key-hold", "level-near", "level-over", "ok", "raised-2", "raised-3",
 ] as const;
 export type Tone = (typeof TONES)[number];
 let tones: Record<Tone, string> | null = null;

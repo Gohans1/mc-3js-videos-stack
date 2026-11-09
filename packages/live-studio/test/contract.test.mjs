@@ -6,6 +6,14 @@ const v3 = () => ({ isVector3: true });
 const film = () => ({ buildScene() {}, applyEdit() {}, DURATION: 10, SHOTS: [{ t: 0 }, { t: 4 }], SHOTS_OUT: [{ t: 0 }, { t: 4 }] });
 const draw = (tools) => Object.assign(() => {}, { tools: { scene: { isObject3D: true }, camera: { isCamera: true }, look: v3(), free: { on: false, p: v3(), l: v3(), fov: 40 }, ...tools } });
 
+test("a transition must name a supported effect and have a positive finite duration", () => {
+  const shots = (transition) => [{ t: 0 }, { t: 4, transition }];
+  assert.equal(ShotsTimeline.safeParse(shots({ fx: "dissolve", len: 1 })).success, true);
+  for (const transition of [{ fx: "bad", len: 1 }, { fx: "black", len: 0 }, { fx: "wipe", len: Infinity }]) {
+    assert.equal(ShotsTimeline.safeParse(shots(transition)).success, false);
+  }
+});
+
 test("a beat without a time is reported with its file and where in it", () => {
   const edit = JSON.stringify({ voice: { edits: {}, warp: [] }, beats: { spin: { title: "spin", dur: 1, kind: "motion", sounds: [] } } });
   const [p] = checkFiles({ "src/edit.json": [Edit, edit] });

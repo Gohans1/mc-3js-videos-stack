@@ -26,6 +26,7 @@ import { asVariant, buildVariants } from "mc-assets/variants";
 import { buildScreen } from "mc-assets/screen";
 import { loadFont } from "mc-assets/gamefont";
 import { cameraAt, onScreenRanges, shakeAt } from "film-stage/camera";
+import { makeTransitions, viewTime } from "film-stage/transitions";
 import { flickerAt } from "film-stage/flicker";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -313,8 +314,9 @@ export async function buildScene(canvas, W, H, draft = false) {
 
   const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
   const lookAt = V(0, 0, 0), head = V(0, 0, 0);
-  const draw = (t) => {
-    const cam = cameraAt(t, EDIT.cam);
+  const frame = (t, view) => {
+    const cameraTime = view === undefined ? t : viewTime(SHOTS_OUT, DURATION, view, t);
+    const cam = cameraAt(cameraTime, EDIT.cam);
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
     camera.fov = cam.fov;
@@ -373,6 +375,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     composer.render(0);
   };
 
+  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
   // The studio's list top left (key I) and every draft frame: what is going on at t and which file holds it
   const mm = (fov) => Math.round(12 / Math.tan(THREE.MathUtils.degToRad(fov) / 2));
   draw.describe = (t) => {

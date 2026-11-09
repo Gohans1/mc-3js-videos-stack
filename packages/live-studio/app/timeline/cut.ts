@@ -1,6 +1,7 @@
 // The cut (Ctrl+B and the timeline toolbar's scissors), as CapCut's: the picked sound clips if there are any, otherwise the
 // shot at the playhead (cam.ts splitShot, for a film that keeps its shots as data). Ctrl+Shift+B cuts every track there
 import { removeCamKeys, removeKey, splitShot } from "../camera/cam";
+import { setTransition, transitionOf } from "../camera/transitions";
 import { together } from "../core/doc";
 import { removeKeys } from "../keys/keys";
 import { removeObject } from "../objects/placed";
@@ -32,9 +33,10 @@ export const selectSide = (d: -1 | 1) => {
 
 // Delete and the toolbar's bin: whatever is picked, every kind of it in one undo step (text, sound clips, camera keyframes, keys;
 // a pick may hold them all, timeline/across.ts), or else the dropped-in object picked
-export const canDelete = () => { const s = get(); return s.textPicks.length > 0 || s.clips.length > 0 || s.camKey !== null || s.camPicks.length > 0 || s.keyPicks.length > 0 || s.object !== null; };
+export const canDelete = () => { const s = get(); return s.textPicks.length > 0 || s.clips.length > 0 || s.camKey !== null || s.camPicks.length > 0 || s.keyPicks.length > 0 || s.object !== null || (s.side === "transition" && s.shotPick !== null && !!transitionOf(s.shotPick)); };
 export const deleteSelected = () => {
-  const { clips, camKey, camPicks, keyPicks, object, textPicks } = get();
+  const { clips, camKey, camPicks, keyPicks, object, textPicks, side, shotPick } = get();
+  if (side === "transition" && shotPick !== null && transitionOf(shotPick)) { setTransition(shotPick, null); return; }
   if (!clips.length && camKey === null && !camPicks.length && !keyPicks.length && !textPicks.length) { if (object) removeObject(object); return; }
   together(() => {
     if (clips.length) removeClips(clips);

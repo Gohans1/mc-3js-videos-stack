@@ -23,6 +23,7 @@ import { cameraAt, EASES } from "film-stage/camera";
 import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeTitles } from "film-stage/titles";
+import { makeTransitions, viewTime } from "film-stage/transitions";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -130,9 +131,10 @@ export async function buildScene(canvas, W, H, draft = false) {
 
   const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
   const lookAt = V(0, 0, 0), head = V(0, 0, 0);
-  const draw = (t) => {
-    const cam = cameraAt(t, EDIT.cam);
-    const animBlack = animate(cam, t, SHOTS_OUT, DURATION); // the shot's In / Out / Combo (shots.json anim) on top of the keys
+  const frame = (t, view) => {
+    const cameraTime = view === undefined ? t : viewTime(SHOTS_OUT, DURATION, view, t);
+    const cam = cameraAt(cameraTime, EDIT.cam);
+    const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION);
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
     camera.fov = cam.fov;
@@ -159,6 +161,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     if (!free.on) titles(EDIT.text.items, t, camera);
   };
 
+  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
   // A draft frame's list (LIST=1): what is going on at t and which file holds it
   const mm = (fov) => Math.round(12 / Math.tan(THREE.MathUtils.degToRad(fov) / 2));
   draw.describe = (t) => {

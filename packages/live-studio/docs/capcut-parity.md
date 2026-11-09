@@ -57,7 +57,8 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Separate audio: CÓ sẵn, tiếng là track riêng nên J-cut/L-cut làm ngay.
   - Replace clip: CÓ dạng Alternatives, chip A/B/C/D trên hình hoặc ⋯ Settings > Alternatives (phím 0-9), giữ nguyên chỗ, độ dài và mức âm.
   - Thu micro, vocal isolation: BỎ, giọng đọc làm bằng ElevenLabs (scripts/voice).
-- Transitions: SẮP LÀM (thứ 2 trong nhóm tính năng lớn). Hiện phim tự có fade đen giữa chương (fx.json), chưa chỉnh được trong studio.
+- Transitions: CÓ Dissolve, Black Fade, White Flash, Wipe right; kéo từ thư viện vào điểm cắt, kéo mép đổi độ dài, Apply to all, xoá và undo. Dùng GL Transitions; hình preview và render cùng pipeline, camera giữ góc biên khi thiếu khoảng đệm, giờ nhân vật không đổi.
+  - Đã đối chiếu video CapCut; nguồn, cách nối phim và giới hạn ở [transition-research.md](transition-research.md).
 - Clip animations In/Out/Combo: CÓ cho shot ở tab Animation, rê chuột lên ô để thử ngay, chuột phải khối shot để gắn nhanh. Lệch: là chuyển động máy quay 3D thật (đẩy, xoay, rung), không phải biến hình 2D.
 - Ducking, loudness normalization, enhance voice, noise reduction:
   - Ducking: CÓ, nhạc nền tự hạ khi có giọng đọc, trang nghe giống hệt mix.py.

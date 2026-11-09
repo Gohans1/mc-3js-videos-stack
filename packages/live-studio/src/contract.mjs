@@ -102,7 +102,8 @@ export const CamTimeline = z.array(CamKey).min(1).refine((ks) => ks.every((k, i)
 // anim: the shot's In, Out and Combo ({fx, len?, k?}, fx an id from the film's draw.anims), drawn by film-stage/animate.ts
 const AnimFx = z.looseObject({ fx: z.string().min(1), len: z.number().positive().optional(), k: z.number().optional() });
 const Anim = z.looseObject({ in: AnimFx.optional(), out: AnimFx.optional(), combo: AnimFx.optional() });
-export const ShotsTimeline = z.array(z.looseObject({ t: time, name: z.string().optional(), anim: Anim.optional() })).min(1)
+const Transition = z.object({ fx: z.enum(["dissolve", "black", "white", "wipe"]), len: z.number().positive() });
+export const ShotsTimeline = z.array(z.looseObject({ t: time, name: z.string().optional(), anim: Anim.optional(), transition: Transition.optional() })).min(1)
   .refine((s) => s.every((x, i) => i === 0 || x.t > s[i - 1].t), "shots must start in order of time, each after the one before");
 
 // ---------- Words and shapes over the picture (package.json "live-studio".textTimeline), which the studio also writes: CapCut's

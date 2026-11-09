@@ -201,7 +201,7 @@ export const splitShot = () => {
   const { t: _, p: __, l: ___, fov: ____, cut: _____, ease: ______, ...sway } = structuredClone(before);
   together(() => {
     edit((ks) => { ks.splice(at, 0, { ...sway, t: r3(t - TAIL), ...here }, { ...sway, t, ...next, cut: true }); });
-    shotsDoc.edit((sh) => { const { t: _t, name, ...rest } = sh[s]; sh.splice(s + 1, 0, { ...structuredClone(rest), t: r3(toSource(t)), name: secondName(name ?? `Shot ${s}`, sh) }); });
+    shotsDoc.edit((sh) => { const { t: _t, name, transition: _transition, ...rest } = sh[s]; sh.splice(s + 1, 0, { ...structuredClone(rest), t: r3(toSource(t)), name: secondName(name ?? `Shot ${s}`, sh) }); });
   });
   setKey(at + 1);
   say(`Shot ${s} split at ${stamp(t)}.${f.on ? "" : " Frame the new shot: Free camera (F), then Use current view."}${anchored ? " Its new keys are fixed points: they don't follow an object." : ""}`, 6000);

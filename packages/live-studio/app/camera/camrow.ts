@@ -27,10 +27,27 @@ import { animOf, lenOf, pickShot, shotSpan } from "./anim";
 import { together } from "../core/doc";
 import { type CamKey, DEFAULT_EASE, edit, groupRoom, holds, keys, movable, preview, previewRoll, restore, rollable, rollCut, rollRoom, room, setKey, shiftCamKeys, snapshot, splitShot } from "./cam";
 import { shotsDoc } from "./shots";
+import { pickTransition, setTransitionDuration, transitionDuration, transitionOf } from "./transitions";
 
 // A shot is CapCut's video clip: its teal, a lighter tag holding its name, its other words dimmer on the clip (index.css tokens)
 const ANIM_LIGHT = "rgba(255,255,255,.55)"; // the band under a shot that animates in or out
 const PAD = 2, HEAD = 15, BAND = 4, FOOT = 3; // FOOT: room under the bands for the picked outline
+const TRANSITION_TOP = HEAD + 1;
+
+const transitionBox = (i: number, w: number) => {
+  const { a, v } = view(), center = (SHOTS_OUT[i].t - a) / v * w, width = Math.max(14, transitionDuration(i) / v * w);
+  return { left: center - width / 2, right: center + width / 2 };
+};
+const transitionUnder = (x: number, y: number, w: number) => {
+  if (y < TRANSITION_TOP) return -1;
+  return SHOTS_OUT.findIndex((_, i) => { if (!transitionOf(i)) return false; const b = transitionBox(i, w); return x >= b.left && x <= b.right; });
+};
+export const cutAtPointer = (e: { clientX: number }) => {
+  const r = S.el.camrow.getBoundingClientRect(), x = e.clientX - r.left, { a, v } = view();
+  let best = -1, distance = 24;
+  SHOTS_OUT.forEach((shot, i) => { const d = Math.abs((shot.t - a) / v * r.width - x); if (i && d < distance) { best = i; distance = d; } });
+  return best;
+};
 
 let xs: number[] = []; // each key's x as last drawn, for the pointer
 let hover = -1; // the block under the pointer
@@ -114,6 +131,18 @@ export const drawCamRow = () => {
     g.fillStyle = k.cut || i === 0 ? tone("muted-foreground") : tone("foreground"); g.fill();
     if (picked.has(i)) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - r - 3); g.lineTo(x + r + 3, y); g.lineTo(x, y + r + 3); g.lineTo(x - r - 3, y); g.closePath(); g.stroke(); }
   });
+  SHOTS_OUT.forEach((_, i) => {
+    if (!transitionOf(i)) return;
+    const { left, right } = transitionBox(i, w), on = get().side === "transition" && get().shotPick === i;
+    if (right < 0 || left > w) return;
+    g.fillStyle = tone("raised-3"); g.fillRect(left, TRANSITION_TOP, right - left, h - TRANSITION_TOP - PAD);
+    g.strokeStyle = tone(on ? "pick" : "muted-foreground"); g.lineWidth = on ? 2 : 1;
+    g.strokeRect(left + 1, TRANSITION_TOP + 1, right - left - 2, h - TRANSITION_TOP - PAD - 2);
+    const cx = (left + right) / 2, cy = (TRANSITION_TOP + h - PAD) / 2;
+    g.strokeStyle = tone("foreground"); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(cx - 3, cy - 4); g.lineTo(cx + 3, cy + 4); g.moveTo(cx + 3, cy - 4); g.lineTo(cx - 3, cy + 4); g.stroke();
+    if (on && right - left > 18) { g.fillStyle = tone("pick"); g.fillRect(left + 3, cy - 5, 2, 10); g.fillRect(right - 5, cy - 5, 2, 10); }
+  });
   if (get().blade && bladeLine.row === "cam") {
     const x = Math.round(X(bladeLine.t));
     g.fillStyle = "#000"; g.fillRect(x - 1, 0, 3, h);
@@ -161,6 +190,7 @@ export const attachCamRow = () => {
   // group: the picked keys that move with the one held (just it when it is alone)
   let drag: { i: number; group: number[]; along: Along | null; x: number; t: number; snap: string; shots: string; roll: boolean; moved: boolean } | null = null;
   let scrub: { resume: boolean } | null = null;
+  let transitionDrag: { shot: number; edge: -1 | 0 | 1; x: number; len: number; snap: string } | null = null;
   // A press on a block: a click picks the shot, a mouse drag draws the box over the rows (rowbox.ts), a touch drag scrubs
   let press: { x: number; y: number; touch: boolean; shot: number; add: boolean } | null = null;
 
@@ -175,6 +205,14 @@ export const attachCamRow = () => {
       return;
     }
     c.setPointerCapture(e.pointerId);
+    const tr = transitionUnder(x, y, w);
+    if (tr > 0 && !onPlayhead(x, w, touch)) {
+      const b = transitionBox(tr, w), edge = x - b.left < 6 ? -1 : b.right - x < 6 ? 1 : 0;
+      pickTransition(tr);
+      transitionDrag = { shot: tr, edge, x, len: transitionDuration(tr), snap: shotsDoc.snapshot() };
+      drawCamRow();
+      return;
+    }
     if (i < 0) {
       if (onPlayhead(x, w, touch)) { startScrub(); return; }
       press = { x, y, touch, shot: shotAtX(x, w), add };
@@ -189,6 +227,11 @@ export const attachCamRow = () => {
   });
   c.addEventListener("pointermove", (e) => {
     const { x, y, w } = local(e), { v } = view();
+    if (transitionDrag) {
+      const { shot, edge, x: start, len } = transitionDrag;
+      if (edge && Math.abs(x - start) >= 2) setTransitionDuration(shot, Math.round((len + edge * 2 * (x - start) / w * v) * 30) / 30, false);
+      return;
+    }
     if (scrub) { seek(timeAt(x, w)); return; }
     if (press) {
       if (!press.touch) { boxMove(e); return; }
@@ -202,6 +245,12 @@ export const attachCamRow = () => {
       return;
     }
     if (!drag) {
+      const tr = transitionUnder(x, y, w);
+      if (tr > 0 && !onPlayhead(x, w, false)) {
+        const b = transitionBox(tr, w);
+        c.style.cursor = x - b.left < 6 || b.right - x < 6 ? "ew-resize" : "pointer";
+        return;
+      }
       const i = keyUnder(x, w, false), s = shotAtX(x, w);
       c.style.cursor = i < 0 ? (onPlayhead(x, w, false) ? "ew-resize" : "default") : rollable(i) ? "ew-resize" : movable(i) ? "grab" : "default";
       if (s !== hover) { hover = s; drawCamRow(); }
@@ -228,6 +277,14 @@ export const attachCamRow = () => {
     say(`${drag.roll ? "Cut" : "Keyframe"} ${stamp(drag.t)} → ${stamp(t)}${noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
   });
   const up = () => {
+    if (transitionDrag) {
+      const { shot, snap, len } = transitionDrag, now = transitionDuration(shot);
+      transitionDrag = null;
+      shotsDoc.restore(snap);
+      if (now !== len) setTransitionDuration(shot, now);
+      c.style.cursor = "";
+      return;
+    }
     if (press) {
       const { shot, add } = press;
       press = null;

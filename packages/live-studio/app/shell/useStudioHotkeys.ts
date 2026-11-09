@@ -52,6 +52,7 @@ export function useStudioHotkeys() {
   const camKey = useStudio((s) => s.camKey), camPicks = useStudio((s) => s.camPicks.length), cam = useStudio((s) => s.cam), keyPicks = useStudio((s) => s.keyPicks.length), free = useStudio((s) => s.free);
   const object = useStudio((s) => s.object), shots = useStudio((s) => s.shots), blade = useStudio((s) => s.blade);
   const textPicks = useStudio((s) => s.textPicks.length);
+  const transitionPicked = useStudio((s) => s.side === "transition" && s.shotPick !== null);
   const anyPick = picks > 0 || camKey !== null || camPicks > 0 || keyPicks > 0 || textPicks > 0;
   const keys: UseHotkeyDefinition[] = [
     // ---- CapCut's own
@@ -87,8 +88,8 @@ export function useStudioHotkeys() {
     { hotkey: "Mod+Shift+Z", callback: redo },
     { hotkey: "Mod+Y", callback: redo },
     // Every kind picked at once (a box across the rows picks clips, camera keys and keys together; timeline/across.ts)
-    { hotkey: "Delete", callback: deleteSelected, options: { enabled: anyPick || object !== null } },
-    { hotkey: "Backspace", callback: deleteSelected, options: { enabled: anyPick || object !== null } },
+    { hotkey: "Delete", callback: deleteSelected, options: { enabled: anyPick || object !== null || transitionPicked } },
+    { hotkey: "Backspace", callback: deleteSelected, options: { enabled: anyPick || object !== null || transitionPicked } },
     { hotkey: "I", callback: setIn },
     { hotkey: "O", callback: setOut },
     { hotkey: "Shift+X", callback: inOutByClip },
@@ -130,6 +131,7 @@ export function useStudioHotkeys() {
     { hotkey: "Escape", callback: () => setKey(null), options: { enabled: !settingsOpen && !ink && !blade && (camKey !== null || camPicks > 0) } },
     { hotkey: "Escape", callback: () => pickKeys([]), options: { enabled: !settingsOpen && !ink && !blade && keyPicks > 0 } },
     { hotkey: "Escape", callback: () => select(null), options: { enabled: !settingsOpen && !ink && !blade && object !== null } },
+    { hotkey: "Escape", callback: () => set({ shotPick: null, side: "cam" }), options: { enabled: !settingsOpen && !ink && !blade && transitionPicked } },
     // 1 to 4 pick a drawing tool while the tools are on screen, else every digit picks an alternative
     ...Array.from({ length: 10 }, (_, i) => ({ hotkey: String(i), callback: () => (i >= 1 && i <= 4 && toolsOpen(get()) ? setInk(INK_KEYS[i - 1]) : chooseInGroup(i)) }) as UseHotkeyDefinition),
     // W A S D, Space, Shift, Q and E fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts

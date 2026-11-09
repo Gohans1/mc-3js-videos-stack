@@ -34,3 +34,5 @@ What a film must provide and every rule an agent follows: [docs/film-contract.md
 ## License
 
 MIT; built on three.js, three-mesh-bvh, Vite, React, shadcn/ui, Base UI, Tailwind CSS, Hono, Zustand, TanStack Hotkeys, Zod, bezier-easing, bezier-easing-editor, vite-plugin-compression2 (all MIT), class-variance-authority (Apache-2.0), Lucide (ISC) and Mediabunny (MPL-2.0, unmodified).
+
+Transition của film-stage dùng GL Transitions 3.1.0 (ba shader MIT của gre); [giấy phép](../film-stage/THIRD_PARTY_NOTICES.txt) và [nguồn đối chiếu](docs/transition-research.md).

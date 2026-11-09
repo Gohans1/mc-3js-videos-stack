@@ -47,3 +47,7 @@ Over 10 MB on a phone's first load the terminal names the biggest files: load on
 ## New film
 
 `init.mjs FILM` → replace `src/scene.ts` and `src/edit.json` → `bun run studio` prints both `film contract ... ok` lines → point the film's `AGENTS.md` here.
+
+## Transition
+
+Shot phía sau có transition {fx, len}: dissolve, black, white hoặc wipe; len là giây phim, nằm hai phía điểm cắt. Nối frame qua film-stage/transitions như [hướng dẫn](transition-research.md); draw.transitions bật thư viện trong studio.

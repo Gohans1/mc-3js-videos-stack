@@ -24,6 +24,7 @@ import { flickerAt } from "film-stage/flicker";
 import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeTitles } from "film-stage/titles";
+import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants } from "mc-assets/variants";
 import { VARIANTS } from "./variants";
@@ -288,10 +289,10 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
 
   const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
   const lookAt = V(0, 0, 0), head = V(0, 0, 0);
-  const draw = (t) => {
-    const shot = shotAt(t);
-    const cam = cameraAt(t, keysOf(EDIT.cam));
-    const animBlack = animate(cam, t, SHOTS_OUT, DURATION); // the shot's In / Out / Combo (shots.json anim) on top of the keys
+  const frame = (t, view) => {
+    const shot = view ?? shotAt(t), cameraTime = view === undefined ? t : viewTime(SHOTS_OUT, DURATION, view, t);
+    const cam = cameraAt(cameraTime, keysOf(EDIT.cam));
+    const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION);
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
     camera.fov = cam.fov;
@@ -365,6 +366,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
     if (!free.on) titles(EDIT.text.items, t, camera);
   };
+  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.anims = ANIMS; // the studio's Animation tab lists these
   draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody, variants, steve, now, props });

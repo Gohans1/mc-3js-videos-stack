@@ -67,6 +67,7 @@ declare module "film/scene" {
     variants?: Variant[];
     eases?: Record<string, (x: number) => number>; // the camera keys' named eases (film-stage EASES), for the camera row
     anims?: { in: AnimFx[]; out: AnimFx[]; combo: AnimFx[] };
+    transitions?: readonly { id: string; title: string; tip: string }[];
   }
   export const SHOTS: Shot[];
   export const SHOTS_OUT: Shot[];

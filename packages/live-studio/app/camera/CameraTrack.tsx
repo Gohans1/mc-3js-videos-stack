@@ -14,13 +14,15 @@ import { seek } from "../playback/transport";
 import { SHOT_NAME_ID } from "./CamPanel";
 import { animOf, clearAnims, pickShot, type Slot, SLOT_NAMES, shotSpan } from "./anim";
 import { keys, removeKey, setKey, splitShot } from "./cam";
-import { shotAtPointer } from "./camrow";
+import { cutAtPointer, shotAtPointer } from "./camrow";
+import { setTransition, TRANSITION_DRAG, transitionOf } from "./transitions";
 import { askPaste, copyAttrs, hasAttrs } from "../timeline/attributes";
 import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 
-const openTab = (i: number, side: "cam" | "anim", slot?: Slot) => {
+const openTab = (i: number, side: "cam" | "anim" | "transition", slot?: Slot) => {
   pickShot(i);
   set(slot ? { side, animSlot: slot } : { side });
+  if (side === "transition") set({ lib: "transition" });
 };
 
 export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
@@ -39,6 +41,11 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
           ref={bind("camrow")}
           aria-label="Camera track: one block per shot holding its camera keyframes (diamonds). Click a block to pick the shot, click a diamond to edit it, drag it to retime, drag the gap between two shots to move the cut, right-click a shot for more. The yellow shape is the camera's speed"
           className="block h-12 w-full touch-none"
+          onDragOver={(e) => { if (e.dataTransfer.types.includes(TRANSITION_DRAG) && cutAtPointer(e) > 0) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
+          onDrop={(e) => {
+            const fx = e.dataTransfer.getData(TRANSITION_DRAG), cut = cutAtPointer(e);
+            if (fx && cut > 0) { e.preventDefault(); setTransition(cut, fx); }
+          }}
         />
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-52">
@@ -53,6 +60,8 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
             <ContextMenuItem disabled={!data} onClick={() => { openTab(shot, "cam"); requestAnimationFrame(() => { const el = document.getElementById(SHOT_NAME_ID) as HTMLInputElement | null; el?.focus(); el?.select(); }); }}>Rename</ContextMenuItem>
             <ContextMenuItem disabled={!data || !inside} onClick={splitShot}>Split at playhead<ContextMenuShortcut>Ctrl+B</ContextMenuShortcut></ContextMenuItem>
             <ContextMenuItem disabled={!data || cut < 0} onClick={() => removeKey(cut)}>Merge with shot before</ContextMenuItem>
+            <ContextMenuItem disabled={!data || shot < 1 || !S.render?.transitions} onClick={() => openTab(shot, "transition")}>Transition at the cut…</ContextMenuItem>
+            {transitionOf(shot) && <ContextMenuItem onClick={() => setTransition(shot, null)}>Remove transition</ContextMenuItem>}
             <ContextMenuSeparator />
             <ContextMenuItem disabled={!data} onClick={copyAttrs}>Copy attributes<ContextMenuShortcut>Ctrl+Alt+C</ContextMenuShortcut></ContextMenuItem>
             <ContextMenuItem disabled={!data || !hasAttrs()} onClick={askPaste}>Paste attributes<ContextMenuShortcut>Ctrl+Alt+V</ContextMenuShortcut></ContextMenuItem>
