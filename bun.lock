@@ -83,6 +83,10 @@
         "@fontsource/ibm-plex-mono": "5.3.0",
         "bezier-easing": "3.2.0",
         "gl-transitions": "3.1.0",
+        "postprocessing": "6.39.6",
+      },
+      "devDependencies": {
+        "@types/three": "0.187.0",
       },
       "peerDependencies": {
         "three": "0.186.1",
@@ -102,6 +106,7 @@
         "bezier-easing-editor": "1.1.0",
         "class-variance-authority": "0.7.1",
         "cn": "0.5.2",
+        "film-stage": "workspace:*",
         "hono": "4.13.16",
         "loudness-worklet": "2.1.0",
         "lucide-react": "1.69.0",

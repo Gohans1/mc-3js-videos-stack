@@ -6,9 +6,11 @@
 // the text, the camera (Camera | Speed | Animation under it) and the keys, each with its details above its library.
 import { Tabs } from "@base-ui/react/tabs";
 import { cn } from "@/lib/utils";
-import { Blend, Boxes, type LucideIcon, MessageSquareText, Music2, Type } from "lucide-react";
+import { Blend, Boxes, type LucideIcon, MessageSquareText, Music2, SlidersHorizontal, Type } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { AnimPanel } from "../camera/AnimPanel";
+import { AdjustPanel } from "../camera/AdjustPanel";
+import { AdjustLibrary } from "../camera/AdjustLibrary";
 import { CamPanel } from "../camera/CamPanel";
 import { SpeedPanel } from "../camera/SpeedPanel";
 import { TransitionPanel } from "../camera/TransitionPanel";
@@ -54,11 +56,12 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "text", title: "Text", icon: Type },
   { id: "objects", title: "Objects", icon: Boxes },
   { id: "transition", title: "Transitions", icon: Blend },
+  { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
 ];
 const tool = "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary data-active:after:absolute data-active:after:inset-x-3 data-active:after:-bottom-1 data-active:after:h-0.5 data-active:after:rounded-full data-active:after:bg-primary [&_svg]:size-5";
 export function Library() {
   const { sound, text, cam, placed, open } = useParts(), lib = useStudio((s) => s.lib);
-  const shown = LIBS.filter((l) => l.id === "notes" || (l.id === "sound" ? sound : l.id === "text" ? text : l.id === "transition" ? cam : placed));
+  const shown = LIBS.filter((l) => l.id === "notes" || (l.id === "sound" ? sound : l.id === "text" ? text : l.id === "transition" || l.id === "adjust" ? cam : placed));
   return (
     <aside aria-label="Library" className="col-start-1 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg bg-background in-data-lib-folded:hidden">
       <Compose />
@@ -76,6 +79,7 @@ export function Library() {
         {text && <Tabs.Panel value="text" className={panel}><TextLibrary /></Tabs.Panel>}
         {placed && <Tabs.Panel value="objects" className={panel}><ObjectsPanel part="library" /></Tabs.Panel>}
         {cam && <Tabs.Panel value="transition" className={panel}><TransitionLibrary /></Tabs.Panel>}
+        {cam && <Tabs.Panel value="adjust" className={panel}><AdjustLibrary /></Tabs.Panel>}
       </Tabs.Root>
     </aside>
   );
@@ -88,7 +92,7 @@ const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
   text: [{ id: "text", title: "Text" }, { id: "textAnim", title: "Animation" }],
   objects: [{ id: "objects", title: "Object" }],
   keys: [{ id: "keys", title: "Keyframes" }],
-  cam: [{ id: "cam", title: "Camera" }, { id: "speed", title: "Speed" }, { id: "anim", title: "Animation" }],
+  cam: [{ id: "cam", title: "Camera" }, { id: "speed", title: "Speed" }, { id: "anim", title: "Animation" }, { id: "adjust", title: "Adjust" }],
   transition: [{ id: "transition", title: "Transition" }],
 };
 const groupOf = (s: StudioState): Group => (s.clips.length ? "sound" : s.textPicks.length ? "text" : s.object ? "objects" : s.keyPicks.length ? "keys" : s.side === "transition" ? "transition" : "cam");
@@ -104,7 +108,7 @@ function Details() {
           {list.map((x) => <Tabs.Tab key={x.id} value={x.id} className={tab}>{x.title}</Tabs.Tab>)}
         </Tabs.List>
         <Tabs.Panel value={value} className={panel}>
-          {value === "sound" ? <SoundPanel part="clip" /> : value === "text" || value === "textAnim" ? <TextPanel part={value} /> : value === "objects" ? <ObjectsPanel part="object" /> : value === "keys" ? <KeyPanel /> : value === "transition" ? <TransitionPanel /> : value === "anim" ? <AnimPanel /> : value === "speed" ? <SpeedPanel /> : <CamPanel />}
+          {value === "sound" ? <SoundPanel part="clip" /> : value === "text" || value === "textAnim" ? <TextPanel part={value} /> : value === "objects" ? <ObjectsPanel part="object" /> : value === "keys" ? <KeyPanel /> : value === "transition" ? <TransitionPanel /> : value === "adjust" ? <AdjustPanel /> : value === "anim" ? <AnimPanel /> : value === "speed" ? <SpeedPanel /> : <CamPanel />}
         </Tabs.Panel>
       </Tabs.Root>
     </aside>
@@ -124,11 +128,11 @@ function TextTab() {
 
 // Narrow: the camera tab holds CapCut's three, Camera | Speed | Animation, under it
 function CameraTab() {
-  const side = useStudio((s) => s.side), part = side === "anim" || side === "speed" ? side : "cam";
+  const side = useStudio((s) => s.side), part = side === "anim" || side === "speed" || side === "adjust" ? side : "cam";
   return (
     <>
       <Segmented label="Camera part" className="mx-3 mb-2" value={part} onChange={(v) => set({ side: v })} items={GROUPS.cam} />
-      {part === "anim" ? <AnimPanel /> : part === "speed" ? <SpeedPanel /> : <CamPanel />}
+      {part === "anim" ? <AnimPanel /> : part === "speed" ? <SpeedPanel /> : part === "adjust" ? <AdjustPanel library /> : <CamPanel />}
     </>
   );
 }
@@ -136,7 +140,7 @@ function CameraTab() {
 export function Side({ wide }: { wide: boolean }) {
   const { sound, text, cam, keys, placed, open } = useParts(), side = useStudio((s) => s.side);
   if (wide) return <Details />;
-  const value = side === "anim" || side === "speed" ? "cam" : side === "textAnim" ? "text" : side;
+  const value = side === "anim" || side === "speed" || side === "adjust" ? "cam" : side === "textAnim" ? "text" : side;
   return (
     <aside className="col-start-2 row-span-2 row-start-1 flex sideways:row-span-3 min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg bg-background in-data-side-folded:hidden upright:flex-1 upright:rounded-none sideways:rounded-none">
       <Compose />

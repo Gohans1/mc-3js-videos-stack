@@ -97,21 +97,21 @@ export function KeyNav({ what, prev, next, here, onPrev, onNext, onToggle, addTi
 }
 
 // The value box with CapCut's ▲▼ beside it and the unit inside it ("0.0dB", "1.5s")
-export function ValueBox({ name, value, step, digits, unit, min, max, onSave, live, disabled }: {
+export function ValueBox({ name, value, step, digits, unit, min, max, onSave, live, disabled, compact }: {
   name: string; value: number; step: number; digits: number; unit?: string; min?: number; max?: number;
-  onSave: (v: number) => void; live?: (v: number) => void; disabled?: boolean;
+  onSave: (v: number) => void; live?: (v: number) => void; disabled?: boolean; compact?: boolean;
 }) {
   const clamp = (v: number) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v));
   const bump = (d: number) => onSave(Math.round(clamp(value + d * step) * 10 ** digits) / 10 ** digits);
   return (
     <span className={cn("flex flex-none items-center", disabled && "pointer-events-none opacity-50")}>
-      <span className="relative w-[4.5rem]">
-        <NumberField name={name} value={value} step={step} digits={digits} live={live && ((v) => live(clamp(v)))} onSave={(v) => v !== undefined && onSave(clamp(v))} className={cn("h-7 bg-background ps-2 text-start", unit && "pe-7")} />
+      <span className={cn("relative", compact ? "w-14" : "w-[4.5rem]")}>
+        <NumberField name={name} value={value} step={step} digits={digits} disabled={disabled} live={live && ((v) => live(clamp(v)))} onSave={(v) => v !== undefined && onSave(clamp(v))} className={cn("bg-background ps-2 text-start", compact ? "h-6 text-xs" : "h-7", unit && "pe-7")} />
         {unit && <span aria-hidden className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-xs text-muted-foreground">{unit}</span>}
       </span>
       <span className="flex flex-col">
-        <button type="button" tabIndex={-1} aria-label={`${name} up`} onClick={() => bump(1)} className="flex h-3.5 w-4 items-center justify-center text-muted-foreground hover:text-foreground"><ChevronUp className="size-3" /></button>
-        <button type="button" tabIndex={-1} aria-label={`${name} down`} onClick={() => bump(-1)} className="flex h-3.5 w-4 items-center justify-center text-muted-foreground hover:text-foreground"><ChevronDown className="size-3" /></button>
+        <button type="button" tabIndex={-1} disabled={disabled} aria-label={`${name} up`} onClick={() => bump(1)} className={cn("flex w-4 items-center justify-center text-muted-foreground hover:text-foreground", compact ? "h-3" : "h-3.5")}><ChevronUp className="size-3" /></button>
+        <button type="button" tabIndex={-1} disabled={disabled} aria-label={`${name} down`} onClick={() => bump(-1)} className={cn("flex w-4 items-center justify-center text-muted-foreground hover:text-foreground", compact ? "h-3" : "h-3.5")}><ChevronDown className="size-3" /></button>
       </span>
     </span>
   );
@@ -121,24 +121,24 @@ const one = (v: number | readonly number[]) => (typeof v === "number" ? v : v[0]
 
 // The label over the slider, the value box and ◁◇▷ after it. A drag previews (preview) and saves once on release (save), the
 // state before the drag put back first (doc), so the whole drag is one undo step
-export function SliderRow({ label, value, min, max, step, digits = 1, unit, doc, preview, save, nav, disabled, hint, origin }: {
+export function SliderRow({ label, value, min, max, step, digits = 1, unit, doc, preview, save, nav, disabled, hint, origin, compact, gradient }: {
   label: string; value: number; min: number; max: number; step: number; digits?: number; unit?: string; origin?: number;
   doc: { snapshot: () => string; restore: (s: string) => void }; preview: (v: number) => void; save: (v: number) => void;
-  nav?: ReactNode; disabled?: boolean; hint?: ReactNode;
+  nav?: ReactNode; disabled?: boolean; hint?: ReactNode; compact?: boolean; gradient?: string;
 }) {
   const start = useRef<string | null>(null);
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-ui text-foreground/90">{label}</span>
+    <div className={cn("flex flex-col", compact ? "gap-0" : "gap-1")}>
+      <span className={cn("text-foreground/90", compact ? "text-xs leading-4" : "text-ui")}>{label}</span>
       <div className="flex items-center gap-2">
-        <div className="flex h-7 min-w-0 flex-1 items-center pe-1">
+        <div className={cn("flex min-w-0 flex-1 items-center pe-1", compact ? "h-6" : "h-7")}>
           <Slider
-            min={min} max={max} step={step} value={Math.min(max, Math.max(min, value))} origin={origin} aria-label={label} disabled={disabled}
+            min={min} max={max} step={step} value={Math.min(max, Math.max(min, value))} origin={origin} aria-label={label} disabled={disabled} appearance={compact ? "adjust" : undefined} data-gradient={gradient}
             onValueChange={(v: number | readonly number[]) => { start.current ??= doc.snapshot(); preview(one(v)); }}
             onValueCommitted={(v: number | readonly number[]) => { if (start.current) doc.restore(start.current); start.current = null; save(one(v)); }}
           />
         </div>
-        <ValueBox name={label} value={value} step={step} digits={digits} unit={unit} min={min} max={max} onSave={save} disabled={disabled} />
+        <ValueBox name={label} value={value} step={step} digits={digits} unit={unit} min={min} max={max} onSave={save} disabled={disabled} compact={compact} />
         {nav}
       </div>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}

@@ -15,6 +15,7 @@ import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
+import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
 import { RATIOS } from "./frame.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
@@ -164,6 +165,13 @@ export const createApi = (film, { page, events, send }) => {
   const favorites = openFavorites();
   app.get("/api/favorites", (c) => fresh(c, favorites.shown()));
   app.post("/api/favorites", zValidator("json", FavoriteChange), (c) => { const all = favorites.set(c.req.valid("json")); send("favorites"); return c.json(all); });
+
+  const grades = openGrades(film.PUBLIC);
+  const gradeResult = (c, fn) => { try { return c.json(fn()); } catch (e) { return c.json({ error: e.message }, 400); } };
+  app.get("/api/adjust", (c) => gradeResult(c, grades.list));
+  app.post("/api/adjust/lut", zValidator("json", LutUpload), (c) => gradeResult(c, () => grades.addLut(c.req.valid("json"))));
+  app.post("/api/adjust/preset", zValidator("json", PresetUpload), (c) => gradeResult(c, () => { const { name, grade } = c.req.valid("json"); return grades.savePreset(name, grade); }));
+  app.post("/api/adjust/preset/:id/apply", (c) => gradeResult(c, () => grades.applyPreset(c.req.param("id"))));
 
   let weighed = null; // the heavy files last named, so each reload doesn't say it again
   app.post("/api/weight", zValidator("json", PageWeight), (c) => {

@@ -3,6 +3,7 @@
 // changes every frame (the clock, captions, the timelines, the film camera corner) is drawn straight into its element instead
 import { createStore, useStore } from "zustand";
 import { type CameraSlice, cameraSlice } from "../camera/slice";
+import type { GradeLibrary } from "../camera/adjust";
 import { type KeysSlice, keysSlice } from "../keys/slice";
 import { type NotesSlice, notesSlice } from "../notes/slice";
 import { type ObjectsSlice, objectsSlice } from "../objects/slice";
@@ -26,14 +27,15 @@ interface PageSlice {
   contract: string[];
   shot: string;
   perf: string;
-  side: "notes" | "sound" | "objects" | "cam" | "speed" | "anim" | "transition" | "keys" | "text" | "textAnim";
-  lib: "notes" | "sound" | "objects" | "text" | "transition"; // on a wide screen: the left column's tab (side then picks the right column's)
+  side: "notes" | "sound" | "objects" | "cam" | "speed" | "anim" | "adjust" | "transition" | "keys" | "text" | "textAnim";
+  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust"; // on a wide screen: the left column's tab (side then picks the right column's)
   favorites: Favorites; // core/favorites.ts
+  gradeLibrary: GradeLibrary;
 }
 export type StudioState = PageSlice & PlaybackSlice & PictureSlice & NotesSlice & OptionsSlice & SoundSlice & CameraSlice & KeysSlice & ObjectsSlice & TextSlice & TimelineSlice;
 
 export const studio = createStore<StudioState>(() => ({
-  ready: false, newBuild: false, loading: "Loading the scene…", error: null, status: "", settingsOpen: false, contract: [], shot: "", perf: "", side: "notes", lib: "notes", favorites: { sounds: [], effects: [] },
+  ready: false, newBuild: false, loading: "Loading the scene…", error: null, status: "", settingsOpen: false, contract: [], shot: "", perf: "", side: "notes", lib: "notes", favorites: { sounds: [], effects: [] }, gradeLibrary: { luts: [], presets: [] },
   ...playbackSlice, ...pictureSlice, ...notesSlice, ...optionsSlice, ...soundSlice, ...cameraSlice, ...keysSlice, ...objectsSlice, ...textSlice, ...timelineSlice,
   ...readPrefs(),
 }));

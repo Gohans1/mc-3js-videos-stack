@@ -6,6 +6,14 @@ const v3 = () => ({ isVector3: true });
 const film = () => ({ buildScene() {}, applyEdit() {}, DURATION: 10, SHOTS: [{ t: 0 }, { t: 4 }], SHOTS_OUT: [{ t: 0 }, { t: 4 }] });
 const draw = (tools) => Object.assign(() => {}, { tools: { scene: { isObject3D: true }, camera: { isCamera: true }, look: v3(), free: { on: false, p: v3(), l: v3(), fov: 40 }, ...tools } });
 
+test("shot adjustments reject non-finite or unsupported control values before saving", () => {
+  const shots = (basic) => [{ t: 0, adjust: { enabled: true, basic } }];
+  assert.equal(ShotsTimeline.safeParse(shots({ exposure: 25, vignette: -100, sharpen: 100 })).success, true);
+  for (const basic of [{ exposure: 101 }, { sharpen: -1 }, { temp: Infinity }, { exposure: "20" }]) {
+    assert.equal(ShotsTimeline.safeParse(shots(basic)).success, false);
+  }
+});
+
 test("a transition must name a supported effect and have a positive finite duration", () => {
   const shots = (transition) => [{ t: 0 }, { t: 4, transition }];
   assert.equal(ShotsTimeline.safeParse(shots({ fx: "dissolve", len: 1 })).success, true);

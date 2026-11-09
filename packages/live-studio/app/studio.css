@@ -69,3 +69,10 @@
     .stage-caption { bottom: 6px; font-size: 13px; }
   }
 }
+
+.adjust-slider [data-slot="slider-track"] { height: 2px; }
+.adjust-slider [data-slot="slider-range"] { opacity: 0; }
+.adjust-slider [data-slot="slider-thumb"] { width: 8px; height: 12px; border-radius: 3px; }
+.adjust-slider[data-gradient="temp"] [data-slot="slider-track"] { background: linear-gradient(to right, #0000ff, #ffff00); }
+.adjust-slider[data-gradient="tint"] [data-slot="slider-track"] { background: linear-gradient(to right, #008000, #ff00ff); }
+.adjust-slider[data-gradient="saturation"] [data-slot="slider-track"] { background: linear-gradient(to right, #808080, #ff0000); }

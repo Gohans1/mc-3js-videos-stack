@@ -24,6 +24,7 @@ import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
+import { makeAdjustments } from "film-stage/grade";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
@@ -98,6 +99,8 @@ export async function buildScene(canvas, W, H, draft = false) {
   composer.addPass(new EffectPass(camera, new SMAAEffect()));
   const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
   composer.addPass(new EffectPass(camera, new BloomEffect({ intensity: 0.4, luminanceThreshold: 0.85, mipmapBlur: true }), tone, new VignetteEffect({ offset: 0.3, darkness: 0.45 }), new ToneMappingEffect({ mode: ToneMappingMode.AGX })));
+  const adjust = makeAdjustments(composer, camera);
+  await adjust.prepare(SHOTS_OUT.map((s) => s.adjust));
 
   // Steve at time t: body from the move keys, then each hand reaches its target and the head turns to its look point.
   // A target is a world point [x, y, z]; a film with props adds named anchors here (a handle that moves with its drawer)
@@ -156,6 +159,8 @@ export async function buildScene(canvas, W, H, draft = false) {
     hemi.intensity = EDIT.light.fill;
     key.intensity = EDIT.light.key;
     tone.saturation = EDIT.look.saturation;
+    const shot = view ?? shotAt(t);
+    adjust(shot, SHOTS_OUT[shot]?.adjust, t, free.on);
     composer.render(0);
     if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
     if (!free.on) titles(EDIT.text.items, t, camera, EDIT.text.tracks);
@@ -185,6 +190,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   };
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.anims = ANIMS; // the studio's Animation tab lists these
+  draw.adjustments = { prepare: adjust.prepare };
   draw.checks = footChecks({ perform, steve, now });
   return draw;
 }

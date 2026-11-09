@@ -40,7 +40,7 @@ test("a cut moved on the camera row saves cam and shots together: both or neithe
   writeFileSync(join(dir, "cam.json"), JSON.stringify([{ t: 0, p: [0, 0, 0], l: [0, 0, 1] }, { t: 4, cut: true, p: [1, 0, 0], l: [0, 0, 1] }]));
   writeFileSync(join(dir, "shots2.json"), JSON.stringify([{ t: 0 }, { t: 4 }]));
   const cam = openTimelineFile(dir, "cam.json", CamTimeline), shots = openTimelineFile(dir, "shots2.json", ShotsTimeline);
-  const app = createApi({ cam, shots, keyFiles: [] }, { page: { dir, html: () => "" }, events: {} });
+  const app = createApi({ cam, shots, keyFiles: [], PUBLIC: join(dir, "public") }, { page: { dir, html: () => "" }, events: {} });
   const post = (files) => app.request("/api/together", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ files }) });
   const c0 = cam.read(), s0 = shots.read(), camText = readFileSync(cam.FILE, "utf8");
   const moved = (v) => [{ name: "cam", base: c0.version, data: [c0.data[0], { ...c0.data[1], t: v }] }, { name: "shots", base: s0.version, data: [{ t: 0 }, { t: v }] }];

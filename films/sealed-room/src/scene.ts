@@ -25,6 +25,7 @@ import { animate, ANIMS } from "film-stage/animate";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
+import { makeAdjustments } from "film-stage/grade";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants } from "mc-assets/variants";
 import { VARIANTS } from "./variants";
@@ -191,6 +192,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const feed = new EffectPass(camera, lens, grain);
   composer.addPass(look);
   composer.addPass(feed);
+  const adjust = makeAdjustments(composer, camera);
+  await adjust.prepare(SHOTS_OUT.map((s) => s.adjust));
 
   // The 2D layer: the camera's cell number in the top left, in the game's own font
   const gs = Math.max(2, Math.floor(H / 360));
@@ -360,6 +363,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     now.lamp = lv;
 
     renderer.clear();
+    adjust(shot, SHOTS_OUT[shot]?.adjust, t, free.on);
     composer.render(0);
     renderer.clearDepth();
     renderer.render(hud, hudCam);
@@ -369,6 +373,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.anims = ANIMS; // the studio's Animation tab lists these
+  draw.adjustments = { prepare: adjust.prepare };
   draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody, variants, steve, now, props });
   draw.variants = variants;
   draw.tools = {

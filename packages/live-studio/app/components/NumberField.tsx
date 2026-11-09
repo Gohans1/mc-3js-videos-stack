@@ -13,9 +13,9 @@ export const evalSum = (s: string): number | null => {
 
 const DRAG_PX = 3; // a press that moves less than this is a click into the box
 
-export function NumberField({ value, onSave, live, name, step = 1, digits = 3, placeholder, empty, className }: {
+export function NumberField({ value, onSave, live, name, step = 1, digits = 3, placeholder, empty, className, disabled }: {
   value: number | undefined; onSave: (v: number | undefined) => void; live?: (v: number) => void; name: string;
-  step?: number; digits?: number; placeholder?: string; empty?: boolean; className?: string;
+  step?: number; digits?: number; placeholder?: string; empty?: boolean; className?: string; disabled?: boolean;
 }) {
   const show = (v: number | undefined) => (v === undefined ? "" : String(Math.round(v * 10 ** digits) / 10 ** digits));
   const [text, setText] = useState(show(value));
@@ -33,7 +33,7 @@ export function NumberField({ value, onSave, live, name, step = 1, digits = 3, p
   };
   return (
     <input
-      type="text" inputMode="decimal" aria-label={name} value={text} placeholder={placeholder} spellCheck={false}
+      type="text" inputMode="decimal" aria-label={name} value={text} placeholder={placeholder} spellCheck={false} disabled={disabled}
       title="Type a value or a sum, or drag sideways (Shift: finer)"
       className={cn("h-8 w-full min-w-0 cursor-ew-resize rounded-md border border-input bg-input px-2 text-ui text-foreground tabular-nums outline-none focus:cursor-text focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base", className)}
       onPointerDown={(e) => {

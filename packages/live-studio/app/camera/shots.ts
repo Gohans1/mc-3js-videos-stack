@@ -4,7 +4,7 @@
 import { EDIT } from "film/edit";
 import { createDoc } from "../core/doc";
 import { S } from "../core/state";
-import { get, set } from "../core/store";
+import { get, set, showError } from "../core/store";
 import { refreshTimes } from "../timeline/timeline";
 
 export interface ShotRow { t: number; name?: string; [k: string]: unknown }
@@ -16,6 +16,7 @@ const changed = () => {
   S.finalAt = -1;
   refreshTimes();
   set({ shotsRev: get().shotsRev + 1 });
+  if (S.render?.adjustments) void S.render.adjustments.prepare(data.map((s) => s.adjust)).then(() => { S.dirty = true; S.finalAt = -1; }).catch(showError);
 };
 const doc = createDoc<ShotRow[]>("shots", { label: "shots", changed, saved: (shotsSaved) => set({ shotsSaved }) });
 export const shotsDoc = doc;
