@@ -4,8 +4,7 @@
 // Dragging a diamond retimes it (and every key picked with it), never past a key of its row that stays, snapping to frames,
 // the playhead, words and cuts (Shift: no snap). A box dragged over empty space picks every key it touches (Shift/Ctrl add), on
 // these rows and the others it crosses (timeline/rowbox.ts, across.ts), and a drag on a picked key moves all of it;
-// a click on a key seeks there, one on empty space drops the pick and moves the playhead there (CapCut, the dev's call
-// 2026-11-09); a touch dragged over empty space scrubs.
+// a click on a key seeks there; empty space starts a selection box. A touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
 import { makeSnapper, snappedTo, stamp } from "../core/time";
 import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, rowsOf, same, sameKey, snapshot } from "./keys";
@@ -142,9 +141,9 @@ export const attachKeyRows = () => {
   c.addEventListener("pointermove", (e) => {
     const { x, y, w } = local(e), { v } = view(), perPx = v / w;
     if (scrub) { seek(timeAt(x, w)); return; }
-    if (get().blade && !drag && !box) { c.style.cursor = "not-allowed"; return; }
+    if (get().blade && !drag && !box) { c.style.cursor = spotAt(x, y, false) ? "not-allowed" : "default"; return; }
     if (box) { boxMove(e); return; }
-    if (!drag) { c.style.cursor = spotAt(x, y, false) ? "default" : onPlayhead(x, w, false) ? "ew-resize" : "crosshair"; return; }
+    if (!drag) { c.style.cursor = !spotAt(x, y, false) && onPlayhead(x, w, false) ? "ew-resize" : "default"; return; }
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     if (!drag.moved) hold(true);
     drag.moved = true;

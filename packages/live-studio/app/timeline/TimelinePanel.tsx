@@ -75,7 +75,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
           <canvas
             ref={bind("keyrows")}
             aria-label="Keyframe tracks for Steve and props: click a diamond to edit it, drag to retime, drag on empty space to select several"
-            className="block w-full touch-none"
+            className="block w-full cursor-default touch-none"
           />
         </div>
         <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !sound && "hidden")}>
