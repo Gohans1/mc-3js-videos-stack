@@ -11,14 +11,14 @@ import { N8AOPostPass } from "n8ao";
 import { configure, createScene } from "block-model-renderer";
 import { AssetLoader, GuiObject } from "minerender";
 import { EDIT, fromSource } from "./edit";
-import { buildWorld, BED, CABINET, LAMP, ROOM } from "./world";
+import { buildWorld, BED, CABINET, CHAIR, LAMP, ROOM } from "./world";
 import { CHAIRS, buildProps } from "./props";
 import { bodyAt, blinkAt, moodAt, readLook, targetAt } from "./steve";
 import { makeFeet } from "mc-actor/feet";
 import { footChecks } from "mc-actor/checks";
 import { loadClips } from "mc-actor/clips";
 import { props as pack } from "mc-assets/pack";
-import { makePlaced } from "mc-assets/placed";
+import { makePlaced, poseAt } from "mc-assets/placed";
 import { cameraAt, EASES, onScreenRanges } from "film-stage/camera";
 import { flickerAt } from "film-stage/flicker";
 import { animate, ANIMS } from "film-stage/animate";
@@ -80,6 +80,13 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
   world.group.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
   scene.add(world.group);
+  const bedModel = await createScene(sources, ["head", "foot"].map((part, z) => ({ id: "black_bed", pos: [0, 0, z], properties: { facing: "north", part, occupied: "false" } })), { lighting: "scene", animate: false });
+  bedModel.group.scale.setScalar(S);
+  bedModel.group.position.set(0, .5, -.5);
+  bedModel.group.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+  const bed = new THREE.Group();
+  bed.add(bedModel.group);
+  scene.add(bed);
   // film seconds a box is on screen, worked out again whenever the camera keys change (the studio's variant chips)
   const rangesOf = (box) => {
     let at = null, r = null;
@@ -293,6 +300,11 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
   const lookAt = V(0, 0, 0), head = V(0, 0, 0);
   const frame = (t, view) => {
+    bed.visible = !!EDIT.props.bed?.length;
+    if (bed.visible) {
+      const bedPose = poseAt(EDIT.props.bed, t);
+      bed.position.copy(bedPose.at); bed.quaternion.copy(bedPose.q); bed.scale.setScalar(bedPose.scale); bed.visible = bedPose.visible;
+    }
     const shot = view ?? shotAt(t), cameraTime = view === undefined ? t : viewTime(SHOTS_OUT, DURATION, view, t);
     const cam = cameraAt(cameraTime, keysOf(EDIT.cam));
     const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION);
@@ -379,10 +391,23 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   draw.variants = variants;
   draw.tools = {
     titles, clips, scene, camera, free, head, look: lookAt, rig: steve.rig, bones: steve.bones, CELL: 0, smoother, zoomOf, anchor,
-    objects: [[world.group, "phòng"], [steve.g, "Steve"], ...props.objects],
+    objects: [[world.group, "phòng"], [bed, "Bed"], [steve.g, "Steve"], ...props.objects],
     targets: [
-      { id: "steve", title: "Steve", objects: [steve.g], rows: [{ edit: "steve", path: [] }] },
-      { id: "chair", title: "Chair", objects: [props.chair], rows: [{ edit: "props", path: ["chair"] }] },
+      { id: "bed", title: "Bed", objects: [bed], rows: [{ edit: "props", path: ["bed"] }], transform: {
+        row: { edit: "props", path: ["bed"] }, axes: { translate: [true, true, true], rotate: [true, true, true], scale: [true, true, true] },
+        read: (key) => ({ at: key.at, rot: key.rot ?? [0, 0, 0], scale: key.scale ?? 1 }),
+        write: (key, value) => Object.assign(key, { at: value.at, rot: value.rot, scale: value.scale }),
+      } },
+      { id: "steve", title: "Steve", objects: [steve.g], rows: [{ edit: "steve", path: [] }], transform: {
+        row: { edit: "steve", path: ["moves"] }, axes: { translate: [true, true, true], rotate: [false, true, false] },
+        read: (key) => ({ at: key.at, rot: [0, key.yaw, 0], scale: 1 }),
+        write: (key, value) => { key.at = value.at; key.yaw = value.rot[1]; },
+      } },
+      { id: "chair", title: "Chair", objects: [props.chair], rows: [{ edit: "props", path: ["chair"] }], transform: {
+        row: { edit: "props", path: ["chair"] }, axes: { translate: [true, false, false] },
+        read: (key) => ({ at: [CHAIR.x + key.dx, props.chair.position.y, props.chair.position.z], rot: [0, 0, 0], scale: 1 }),
+        write: (key, value) => { key.dx = value.at[0] - CHAIR.x; },
+      } },
       { id: "drawer", title: "Drawer", objects: [props.tray], rows: [{ edit: "props", path: ["drawer"] }] },
       { id: "keyboard", title: "Keyboard", objects: [keyboard], rows: [{ edit: "props", path: ["keyboard"] }] },
       { id: "screen", title: "Screen", objects: [props.glass], rows: [{ edit: "props", path: ["screen", "typing"] }] },

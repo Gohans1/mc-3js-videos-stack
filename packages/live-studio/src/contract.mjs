@@ -25,6 +25,8 @@ export const SceneModule = z.looseObject({
   .refine((m) => m.SHOTS_OUT.every((s, i, a) => i === 0 || s.t >= a[i - 1].t), { error: "shots must start in order of time", path: ["SHOTS_OUT"] });
 
 // ---------- What buildScene() resolves to: draw(t), with these attached
+const TargetRow = z.object({ edit: z.string().min(1), path: z.array(z.string()) });
+const Axes = z.tuple([z.boolean(), z.boolean(), z.boolean()]).refine((axes) => axes.some(Boolean), "at least one transform axis is needed");
 export const Tools = z.looseObject({
   scene: three("isObject3D", "the THREE.Scene drawn"),
   camera: three("isCamera", "the THREE camera the film draws with"),
@@ -34,7 +36,11 @@ export const Tools = z.looseObject({
   objects: z.array(z.tuple([three("isObject3D", "a THREE.Object3D"), z.string()])).optional(),
   targets: z.array(z.object({
     id: z.string().min(1), title: z.string(), objects: z.array(three("isObject3D", "a THREE.Object3D")).min(1),
-    rows: z.array(z.object({ edit: z.string().min(1), path: z.array(z.string()) })).min(1),
+    rows: z.array(TargetRow).min(1),
+    transform: z.object({
+      row: TargetRow, read: fn, write: fn,
+      axes: z.object({ translate: Axes.optional(), rotate: Axes.optional(), scale: Axes.optional() }).refine((modes) => Object.values(modes).some(Boolean), "at least one transform mode is needed"),
+    }).optional(),
   })).refine((targets) => unique(targets.map((t) => t.id)), "target ids must differ").optional(),
   materials: z.array(z.tuple([three("isMaterial", "a THREE.Material"), z.string()])).optional(),
   // mc-assets/placed.ts makePlaced: what the creator drops into the scene from the Objects library, in one of the film's keyFiles

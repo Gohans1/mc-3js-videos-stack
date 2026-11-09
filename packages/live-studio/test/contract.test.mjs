@@ -68,6 +68,9 @@ test("scene selection targets bind real objects to explicit key paths and have u
   assert.deepEqual(checkFilm(film(), draw({ targets: [target] })), []);
   assert.match(checkFilm(film(), draw({ targets: [target, target] })).join(), /target ids must differ/);
   assert.match(checkFilm(film(), draw({ targets: [{ ...target, objects: ["steve"] }] })).join(), /targets.*objects/);
+  const transform = { row: target.rows[0], axes: { translate: [true, false, false] }, read() {}, write() {} };
+  assert.deepEqual(checkFilm(film(), draw({ targets: [{ ...target, transform }] })), []);
+  assert.match(checkFilm(film(), draw({ targets: [{ ...target, transform: { ...transform, write: "missing" } }] })).join(), /transform.*write/);
 });
 
 test("a home spot is optional, and one without a look point is reported", () => {

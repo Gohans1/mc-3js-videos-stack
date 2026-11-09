@@ -17,6 +17,7 @@ import { Tip } from "../components/Tip";
 import { CurveEditor, EaseTiles } from "../components/EasePicker";
 import type { Ease } from "../core/ease";
 import { Section } from "../components/inspector";
+import { TargetTransformTools } from "../objects/TargetTransformTools";
 
 const label = "text-ui text-muted-foreground";
 const box = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-2 text-ui text-foreground outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base";
@@ -114,6 +115,7 @@ function One({ r }: { r: KeyRef }) {
       <div className="flex flex-col gap-2">
         {fields.map((f) => <Field key={f} r={r} k={k} field={f} optional={!everyone(f)} />)}
       </div>
+      <TargetTransformTools selected={r} />
       {missing.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Add:</span>

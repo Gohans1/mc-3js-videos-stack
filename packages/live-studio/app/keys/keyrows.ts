@@ -91,12 +91,6 @@ export const drawKeyRows = () => {
 };
 
 const snapPoints = () => [S.t, ...SHOTS.map((s) => s.t), ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];
-// The key a press takes: the playhead line comes first over keys behind it (a crowd of keys never hides it), except the
-// picked key, which a click has just brought the playhead onto and which must still drag
-const keyUnder = (x: number, y: number, w: number, touch: boolean) => {
-  const s = spotAt(x, y, touch);
-  return s && onPlayhead(x, w, touch) && !s.refs.some(isPicked) ? null : s;
-};
 const spotAt = (x: number, y: number, touch: boolean) => {
   const reach = keyReach(touch);
   let best: Spot | null = null, d = reach;
@@ -122,7 +116,7 @@ export const attachKeyRows = () => {
   c.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     const { x, y, w } = local(e), touch = e.pointerType === "touch", add = e.shiftKey || e.ctrlKey || e.metaKey;
-    const s = add ? spotAt(x, y, touch) : keyUnder(x, y, w, touch);
+    const s = spotAt(x, y, touch);
     if (get().blade) { say("Split mode cuts sound clips and shots, not keyframes. Press A to select again"); return; }
     c.setPointerCapture(e.pointerId);
     if (!s) {
@@ -149,7 +143,7 @@ export const attachKeyRows = () => {
     if (scrub) { seek(timeAt(x, w)); return; }
     if (get().blade && !drag && !box) { c.style.cursor = "not-allowed"; return; }
     if (box) { boxMove(e); return; }
-    if (!drag) { c.style.cursor = keyUnder(x, y, w, false) ? "default" : onPlayhead(x, w, false) ? "ew-resize" : "crosshair"; return; }
+    if (!drag) { c.style.cursor = spotAt(x, y, false) ? "default" : onPlayhead(x, w, false) ? "ew-resize" : "crosshair"; return; }
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     if (!drag.moved) hold(true);
     drag.moved = true;

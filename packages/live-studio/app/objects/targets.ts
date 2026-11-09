@@ -1,7 +1,15 @@
 import * as THREE from "three";
 
 export interface TargetRow { edit: string; path: string[] }
-export interface SceneTarget { id: string; title: string; objects: THREE.Object3D[]; rows: TargetRow[] }
+export type TransformMode = "translate" | "rotate" | "scale";
+export interface TargetTransform { at: number[]; rot: number[]; scale: number }
+export interface TransformBinding {
+  row: TargetRow;
+  axes: Partial<Record<TransformMode, [boolean, boolean, boolean]>>;
+  read(key: Record<string, unknown>): TargetTransform;
+  write(key: Record<string, unknown>, value: TargetTransform): void;
+}
+export interface SceneTarget { id: string; title: string; objects: THREE.Object3D[]; rows: TargetRow[]; transform?: TransformBinding }
 
 export const matchesRow = (binding: TargetRow, edit: string, path: string[]) => binding.edit === edit && binding.path.every((p, i) => path[i] === p);
 

@@ -58,10 +58,6 @@ export function buildWorld() {
   // (the north-east top corner holds the CCTV camera)
   for (const [x, y, z] of [[x1, top, z1], [x0, top, z1], [x0, top, z0], [x0, top, z0 + 1], [x0, top, z1 - 1], [x1 - 1, top, z1], [x0 + 1, top, z0], [x0, 0, z0]]) put("cobweb", x, y, z);
 
-  // the game's own black bed: head cell to the north, foot cell south of it
-  put("black_bed", BED.x, 0, BED.head, { facing: "north", part: "head", occupied: "false" });
-  put("black_bed", BED.x, 0, BED.head + 1, { facing: "north", part: "foot", occupied: "false" });
-
   // a steel desk bolted to the wall: iron trapdoors as the plate, the filing cabinet under its south cell. The old CRT
   // on it has looks to choose between, so it is built apart from the room (src/variants.ts)
   for (const dz of [0, 1]) put("iron_trapdoor", DESK.x, 0, DESK.z + dz, { facing: "east", half: "top", open: "false" });

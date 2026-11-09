@@ -10,9 +10,10 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { Ease } from "../core/ease";
 import { FPS, r3, stamp } from "../core/time";
-import { files, keysOf, pickKeys, rows, sameKey } from "../keys/keys";
+import { editKeys, files, hold, keyOf, keysOf, pickKeys, preview, rows, sameKey } from "../keys/keys";
+import type { KeyRef } from "../keys/slice";
 import type { Tools } from "film/scene";
-import { boundsOf, hitTarget, matchesRow, targetsForKeys, type SceneTarget } from "./targets";
+import { boundsOf, hitTarget, matchesRow, targetsForKeys, type SceneTarget, type TransformBinding } from "./targets";
 import { path, showPath } from "./path";
 import { setPlaying } from "../playback/transport";
 import { S } from "../core/state";
@@ -106,7 +107,7 @@ export const setTransform = (name: string, v: { at?: number[]; rot?: number[]; s
 };
 const transformOf = (o3: THREE.Object3D) => {
   const e = new THREE.Euler().setFromQuaternion(o3.quaternion, "YXZ");
-  return { at: o3.position.toArray(), rot: [e.x, e.y, e.z].map((r) => r * DEG), scale: o3.scale.x };
+  return { at: o3.position.toArray(), rot: [e.x, e.y, e.z].map((r) => r1(r * DEG)), scale: o3.scale.x };
 };
 // A value being dragged in the Object panel: drawn as it goes, held off its keys until setTransform saves it
 export const previewTransform = (name: string, v: { at?: number[]; rot?: number[]; scale?: number }) => {
@@ -173,6 +174,29 @@ export const setVisible =(name: string, on: boolean) => edit((d) => { const o = 
 export type GizmoMode = "translate" | "rotate" | "scale";
 let gizmo: TransformControls | null = null;
 const overlay = new THREE.Scene();
+const nativeProxy = new THREE.Object3D();
+overlay.add(nativeProxy);
+type NativeDrag = { ref: KeyRef; binding: TransformBinding; snapshot: string };
+let nativeDrag: NativeDrag | null = null;
+export const nativeTransform = (ref: KeyRef) => S.tools?.targets?.find((t) => {
+  const row = t.transform?.row;
+  return row && row.edit === files[ref.f]?.edit && row.path.length === ref.path.length && matchesRow(row, row.edit, ref.path);
+})?.transform;
+const nativeSelection = () => {
+  const s = get();
+  if (s.object || s.keyPicks.length !== 1 || s.clips.length || s.camPicks.length || s.textPicks.length) return null;
+  const ref = s.keyPicks[0], binding = nativeTransform(ref), key = keyOf(ref);
+  return binding && key && Math.abs(key.t - S.t) < .5 / FPS ? { ref, binding, key } : null;
+};
+const finishNative = (commit: boolean) => {
+  const drag = nativeDrag;
+  if (!drag) return;
+  const value = transformOf(nativeProxy);
+  nativeDrag = null;
+  files[drag.ref.f].doc.restore(drag.snapshot);
+  hold(false);
+  if (commit) editKeys([drag.ref], (r, ks) => drag.binding.write(ks[r.i], value));
+};
 const cube = new THREE.BoxGeometry(1, 1, 1), edges = new THREE.EdgesGeometry(cube);
 const boxGeometry = new LineSegmentsGeometry().fromEdgesGeometry(edges);
 cube.dispose(); edges.dispose();
@@ -188,16 +212,25 @@ const hoverBox = makeBox(hoverMaterial);
 hoverBox.visible = false;
 overlay.add(path, hoverBox);
 let hovered: string | null = null;
-let lastScale = 1;
 const ensureGizmo = () => {
   if (gizmo || !S.tools) return gizmo;
   gizmo = new TransformControls(S.tools.camera, S.el.canvas);
   gizmo.setSize(0.9);
   overlay.add(gizmo.getHelper());
   gizmo.addEventListener("dragging-changed", (e) => {
+    if (gizmo!.object === nativeProxy) {
+      if (e.value) {
+        const selected = nativeSelection();
+        if (!selected) return;
+        nativeDrag = { ref: selected.ref, binding: selected.binding, snapshot: files[selected.ref.f].doc.snapshot() };
+        hold(true);
+        if (S.playing) setPlaying(false);
+      } else finishNative(true);
+      return;
+    }
     const p = tools(), name = get().object, o = gizmo!.object;
     if (!p || !name || !o) return;
-    if (e.value) { p.hold = name; lastScale = o.scale.x; if (S.playing) setPlaying(false); return; }
+    if (e.value) { p.hold = name; if (S.playing) setPlaying(false); return; }
     setTransform(name, transformOf(o));
     p.hold = null;
   });
@@ -205,12 +238,18 @@ const ensureGizmo = () => {
   gizmo.addEventListener("objectChange", () => {
     const o = gizmo!.object;
     if (o && gizmo!.getMode() === "scale") {
-      const v = [o.scale.x, o.scale.y, o.scale.z], s = v.reduce((a, b) => (Math.abs(b - lastScale) > Math.abs(a - lastScale) ? b : a), lastScale);
+      const axis = gizmo!.axis ?? "XYZ", s = axis.includes("X") ? o.scale.x : axis.includes("Y") ? o.scale.y : o.scale.z;
       o.scale.setScalar(Math.max(0.05, s));
-      lastScale = o.scale.x;
+    }
+    if (nativeDrag) {
+      const { ref, binding } = nativeDrag, value = transformOf(nativeProxy);
+      preview([ref], (r, ks) => binding.write(ks[r.i], value));
     }
     S.dirty = true;
   });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && nativeDrag) { e.preventDefault(); e.stopPropagation(); finishNative(false); gizmo!.reset(); gizmo!.detach(); S.dirty = true; }
+  }, { capture: true });
   gizmo.addEventListener("change", () => { S.dirty = true; });
   applySnap();
   return gizmo;
@@ -229,20 +268,33 @@ export const gizmoBusy = () => !!gizmo && (gizmo.dragging || gizmo.axis !== null
 export const select = (name: string | null) => set(name ? { object: name, side: "objects", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [] } : { object: null });
 
 studio.subscribe((s, was) => {
-  if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev) attach();
+  if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev || s.keyPicks !== was.keyPicks) attach();
   if (s.object !== was.object || s.keyPicks !== was.keyPicks) { S.finalAt = -1; S.dirty = true; }
 });
 // Re-points the gizmo whenever the selection or the built objects change (a rename or an undo builds a new one)
-export const attach = () => {
+export const attach = (redraw = true) => {
+  if (gizmo?.dragging) return;
   const name = get().object;
   if (name && files.length && !placedData()[name]) { set({ object: null }); return; } // undone, or an agent took it out
   const o = name ? tools()?.objectOf(name) : null;
-  S.dirty = true;
-  if (!o) { gizmo?.detach(); return; }
+  if (redraw) S.dirty = true;
+  const native = !o ? nativeSelection() : null;
+  if (!o && !native) { gizmo?.detach(); return; }
   const g = ensureGizmo();
   if (!g) return;
-  if (g.object !== o) g.attach(o);
-  g.setMode(get().gizmo);
+  let mode = get().gizmo;
+  if (native) {
+    const v = native.binding.read(native.key);
+    nativeProxy.position.fromArray(v.at);
+    nativeProxy.quaternion.setFromEuler(new THREE.Euler(...(v.rot.map((r) => r / DEG) as [number, number, number]), "YXZ"));
+    nativeProxy.scale.setScalar(v.scale);
+    if (!native.binding.axes[mode]) mode = Object.keys(native.binding.axes)[0] as GizmoMode;
+  }
+  const axes = native?.binding.axes[mode] ?? [true, true, true];
+  [g.showX, g.showY, g.showZ] = axes;
+  const object = o ?? nativeProxy;
+  if (g.object !== object) g.attach(object);
+  g.setMode(mode);
 };
 export const hover = (target: SceneTarget | null) => {
   if ((target?.id ?? null) === hovered) return;
@@ -271,6 +323,7 @@ export const selectTarget = (target: SceneTarget | null, additive = false) => {
 // own effects and its scene
 export const drawGizmo = (sceneTools = S.tools) => {
   if (!sceneTools) return;
+  if (!gizmo?.dragging && get().keyPicks.length) attach(false);
   const all = targets(sceneTools), name = get().object;
   const selected = targetsForKeys(all, get().keyPicks, files);
   const own = name ? all.find((t) => t.id === `placed:${name}`) : null;
