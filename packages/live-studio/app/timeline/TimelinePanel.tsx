@@ -5,7 +5,7 @@
 import { cn } from "@/lib/utils";
 import { useLayoutEffect } from "react";
 import type { Bind } from "../core/state";
-import { ROW_MAX, ROW_MIN, RULER_H, rowLayout, setRowLayout, WORDS_H } from "./rows";
+import { ROW_MAX, ROW_MIN, RULER_H, rowLayout, setRowLayout } from "./rows";
 import { useStudio } from "../core/store";
 import { CameraTrack } from "../camera/CameraTrack";
 import { drawTimelines } from "./timeline";
@@ -16,7 +16,7 @@ import { TimelineBar } from "./TimelineBar";
 import { TrackHeads } from "../sound/TrackHeads";
 import { ClipMenu } from "../sound/ClipMenu";
 import { AudioMeter } from "../sound/AudioMeter";
-import { ROW_H } from "../text/textrow";
+import { TextHeads } from "../text/TextHeads";
 
 // size: the height the creator dragged it to (App), null for the default. As in CapCut only the head stays put (the tools, the
 // ruler); every row under the ruler scrolls as one list, and a press on its empty space picks nothing (rowbox.ts clear)
@@ -28,8 +28,8 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
   // Each row's bottom edge in the name column sizes it, as a track's edge does in CapCut
   const rows = [
     ...cam ? [] : [{ label: "Shots", y: L.shots / 2, edge: L.shots + 1, size: shotsH, now: L.shots, set: setShotsH, min: ROW_MIN.shots, max: ROW_MAX.shots }],
-    { label: "Voice", y: L.voiceY + (L.voice - WORDS_H) / 2, edge: L.actionY - 1, size: voiceH, now: L.voice, set: setVoiceH, min: ROW_MIN.voice, max: ROW_MAX.voice },
-    { label: "Action", y: L.actionY + 7, edge: L.actionY + L.action, size: actionH, now: L.action, set: setActionH, min: ROW_MIN.action, max: ROW_MAX.action },
+    { label: "Voice", y: L.voiceY + L.voice / 2, edge: L.actionY - 1, size: voiceH, now: L.voice, set: setVoiceH, min: ROW_MIN.voice, max: ROW_MAX.voice },
+    { label: "Action", y: L.actionY + L.action / 2, edge: L.actionY + L.action, size: actionH, now: L.action, set: setActionH, min: ROW_MIN.action, max: ROW_MAX.action },
   ];
   return (
     <div
@@ -45,14 +45,14 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
       <canvas ref={bind("ruler")} title="Time: click or drag to jump, Ctrl+scroll to zoom" aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom" style={{ "--ruler-h": `${RULER_H}px` }} className="block h-(--ruler-h) w-full cursor-ew-resize touch-none rounded-tr-md sideways:rounded-md" />
       <div
         data-tracks-scroll
-        onPointerDown={(e) => { if (e.button === 0 && !(e.target as Element).closest("button, input, canvas, [role=separator]")) boxPick.clear(); }}
+        onPointerDown={(e) => { if (e.button === 0 && e.currentTarget.contains(e.target as Node) && !(e.target as Element).closest("button, input, canvas, [role=separator]")) boxPick.clear(); }}
         className="relative col-span-2 grid min-h-0 grid-cols-subgrid content-start overflow-x-hidden overflow-y-auto overscroll-contain rounded-b-md sideways:hidden upright:max-h-86"
       >
         <span className={cn("self-stretch border-e border-track-line bg-track-head ps-1.5 text-ui leading-12 font-medium text-label", !cam && "hidden")}>Camera</span>
         <CameraTrack bind={bind} shown={cam} />
         {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}
         <div className={cn("col-span-2 grid grid-cols-subgrid mt-1", !text && "hidden")}>
-          <span style={{ "--row-h": `${ROW_H}px` }} className="flex items-end border-e border-track-line bg-track-head ps-1.5 text-ui leading-(--row-h) font-medium text-label">Text</span>
+          <TextHeads />
           <canvas ref={bind("textrow")} aria-label="Text tracks: click an item to edit it, drag to move or retime it, drag its edges to trim, drag on empty space to select several" className="block w-full touch-none" />
         </div>
         <div className={cn("col-span-2 grid grid-cols-subgrid", (cam || text) && "mt-1")}>
@@ -60,7 +60,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
             {rows.map((r) => (
               <div key={r.label}>
                 <span aria-hidden style={{ "--y": `${r.y}px` }} className="absolute top-(--y) -translate-y-1/2 ps-1.5">{r.label}</span>
-                <div style={{ "--y": `${r.edge}px` }} className="absolute inset-x-0 top-(--y)">
+                <div style={{ "--y": `${r.edge}px` }} className="absolute inset-x-0 top-(--y) border-b border-background">
                   <Splitter label={`${r.label} row height`} across before fold={false} step={4} size={r.size} measure={() => r.now} min={() => r.min} max={() => r.max} set={r.set} lineClassName="right-auto w-[200vw]" />
                 </div>
               </div>

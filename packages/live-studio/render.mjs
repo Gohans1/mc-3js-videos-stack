@@ -69,7 +69,7 @@ const cfg = {
 // ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
 const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/page.ts");
 const t0 = Date.now();
-await build({
+const built = await build({
   configFile: false,
   root: join(STUDIO, "render"),
   publicDir: false, // the film's assets are served from where they are, never copied
@@ -80,13 +80,14 @@ await build({
     rolldownOptions: { input: entry, output: { entryFileNames: "page.js", chunkFileNames: "_render/[name]-[hash].js", assetFileNames: "_render/[name]-[hash][extname]" } },
   },
 });
+const styles = (Array.isArray(built) ? built : [built]).flatMap((b) => b.output).filter((f) => f.type === "asset" && f.fileName.endsWith(".css")).map((f) => `<link rel="stylesheet" href="/${f.fileName}">`).join("");
 console.log(`built in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 // stills alone cannot show motion, contact or flicker: say what can, where every render prints
 if (!cfg.checks.length) console.log("checks: CHECK=motion|seen|touch:<target>,<from s>,<to s> (render.mjs header); after a clip: bun run framecheck");
 
 // ---------- Serve it to a headless Chrome and keep what it posts back
 mkdirSync(CHUNKS, { recursive: true });
-const MIME = { ".js": "text/javascript", ".json": "application/json", ".wasm": "application/wasm", ".png": "image/png", ".jpg": "image/jpeg", ".glb": "model/gltf-binary" }; // wasm: instantiateStreaming refuses anything else
+const MIME = { ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".woff2": "font/woff2", ".woff": "font/woff", ".wasm": "application/wasm", ".png": "image/png", ".jpg": "image/jpeg", ".glb": "model/gltf-binary" }; // wasm: instantiateStreaming refuses anything else
 const chunkFile = (i) => join(CHUNKS, `c${String(i).padStart(2, "0")}.mp4`);
 const body = (req) => new Promise((done) => { const c = []; req.on("data", (d) => c.push(d)); req.on("end", () => done(Buffer.concat(c))); });
 let finish, failed = false, chunks = null;
@@ -103,7 +104,7 @@ const server = createServer(async (req, res) => {
     return;
   }
   // The classic script reports errors thrown while the module's imports evaluate, before the page's own handlers exist
-  if (url === "/") { res.setHeader("content-type", "text/html"); res.end('<!doctype html><canvas id="gl"></canvas><script>onerror = (m, s, l, c, e) => { fetch("/log", { method: "POST", body: "ERROR " + (e && e.stack || m) }); };</script><script type="module" src="/page.js"></script>'); return; }
+  if (url === "/") { res.setHeader("content-type", "text/html"); res.end('<!doctype html>' + styles + '<canvas id="gl"></canvas><script>onerror = (m, s, l, c, e) => { fetch("/log", { method: "POST", body: "ERROR " + (e && e.stack || m) }); };</script><script type="module" src="/page.js"></script>'); return; }
   if (url === "/config") { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(cfg)); return; }
   const file = url === "/page.js" || url.startsWith("/_render/") ? join(OUT, url) : join(PROJECT, "assets/public", url);
   if (!existsSync(file)) { res.statusCode = 404; res.end(); return; }

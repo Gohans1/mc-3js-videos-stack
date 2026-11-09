@@ -30,6 +30,17 @@ test("a WAV's length comes from its header and its level curve follows the sound
   assert.equal(peaks.at(-10), 0.5);
 });
 
+test("waveform peaks include right-channel transients between sampled positions", () => {
+  const f = join(dir, "stereo.wav");
+  wav(f, 48000);
+  const bytes = readFileSync(f);
+  bytes.writeUInt16LE(2, 22); bytes.writeUInt32LE(48000 * 4, 28); bytes.writeUInt16LE(4, 32);
+  bytes.fill(0, 44);
+  bytes.writeInt16LE(24576, 44 + 4 + 2);
+  writeFileSync(f, bytes);
+  assert.equal(wavPeaks(f).peaks[0], .75);
+});
+
 test("the studio writes the lanes as the films' timeline writer does: short entries on one line", () => {
   const data = { beds: [{ name: "hum", from: 0, to: 9, gain: 2, fadeIn: 0.5, fadeOut: 1 }], sfx: Array.from({ length: 3 }, (_, i) => ({ at: i, name: "tap", gain: -3 })) };
   assert.equal(compactJson({ sfx: data.sfx.slice(0, 1) }), '{"sfx": [{"at": 0, "name": "tap", "gain": -3}]}');

@@ -5,14 +5,15 @@
 import { EDIT } from "film/edit";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
-import { edit, items, pickText, preview, restore, snapshot } from "./text";
+import { edit, items, locked, pickText, preview, restore, snapshot, type TextTrack } from "./text";
 
 const SNAP = 0.012; // how near the middle line, in frame fractions, the anchor sticks to it
 
 const boxesNow = () => {
   const tl = S.tools?.titles;
   if (!tl || S.tools?.free.on) return [];
-  return tl.boxes((EDIT as { text?: { items: unknown[] } }).text?.items ?? [], S.t, S.tools!.camera);
+  const text = (EDIT as { text?: { items: unknown[]; tracks?: Record<string, TextTrack> } }).text;
+  return tl.boxes(text?.items ?? [], S.t, S.tools!.camera, text?.tracks);
 };
 
 // The outline of each picked item on screen now, in percents of the frame (drawn with the frame, render.ts)
@@ -37,7 +38,8 @@ export const textPress = (e: PointerEvent, at: readonly [number, number]) => {
   const i = textAt(...at);
   if (i < 0 || !(get().textPicks.includes(i) || e.pointerType === "mouse")) return false;
   if (!get().textPicks.includes(i)) pickText([i]);
-  const canvas = S.el.canvas, r = canvas.getBoundingClientRect(), group = get().textPicks, snap = snapshot();
+  if (locked(i)) { say("This text track is locked. Unlock it in the track header to edit"); return true; }
+  const canvas = S.el.canvas, r = canvas.getBoundingClientRect(), group = get().textPicks.filter((j) => !locked(j)), snap = snapshot();
   const start = group.map((j) => [items[j].x ?? 0.5, items[j].y ?? 0.5] as const), lead = group.indexOf(i);
   let moved = false;
   canvas.setPointerCapture(e.pointerId);

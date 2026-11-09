@@ -23,11 +23,11 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Shift+Z (nút kính lúp) vừa cả phim; thanh trượt zoom giữa nút - và + như CapCut; Alt+lăn hoặc Shift+lăn trượt ngang.
   - Shift+P bật/tắt preview axis (phím của CapCut 9.7): rê chuột trên mọi hàng timeline xem khung đó, vạch vàng chạy từ thước giờ xuống đáy, playhead đứng yên, đồng hồ chuyển vàng.
   - Shift+S thêm tiếng (như "video and audio" của CapCut): rê chuột hay kéo playhead thì nghe vài khung tiếng ở đó, cả lời dẫn lẫn các track. Mặc định tắt.
-- Auto snapping (S, phím của CapCut 9.7): CÓ. Hít vào playhead, cắt, từ thoại và mép clip khác, bằng đầu nào của clip gần hơn; giữ Shift khi kéo để tắt tạm. Lúc hít, một vạch xanh ngọc 1 px chạy từ thước xuống đáy các hàng ngay chỗ dính, như CapCut (màu ước lượng từ video, chưa đo trên ảnh 9.7). Kéo đè lên clip khác quá tầm hít thì clip xuống track mới, như CapCut.
+- Auto snapping (S): CÓ, hút trong 7 px và giữ tới 17,5 px; Shift tắt tạm, vạch chỉ hiện khi mép thật sự dính. Audio giữ track khi va chạm, bóng xám báo vị trí thả; màu vạch còn là ước lượng từ video.
 - Track lock, hide, mute, solo:
   - Mute, Lock ở đầu mỗi track âm thanh: CÓ. Mute áp cả bản render final (mix.py bỏ track đó).
-  - Solo: CÓ, nút tai nghe ở đầu track (khi trang tự phát các track), lời dẫn cũng im theo. Chỉ trong trang, không lưu, không ảnh hưởng bản render.
-  - Hide: BỎ, studio không có track hình hay chữ; ẩn một đạo cụ thì chọn Off ở chip phương án.
+  - Solo: CÓ trong menu ⋯ đầu track, biểu tượng tai nghe sáng khi bật; lời dẫn cũng im theo. Chỉ trong trang, không ảnh hưởng bản render.
+  - Text: CÓ Lock và Hide trên từng hàng; Lock chặn sửa, Hide ẩn trong preview và bản xuất. Đạo cụ có Off ở chip phương án.
 - Transform, stabilize, apply to all:
   - Đồ vật đặt thêm: CÓ, kéo thả từ tab Objects, W/E/R đổi tay cầm di chuyển/xoay/phóng.
   - Camera: CÓ FOV, Roll, Sway và kéo khung bằng free camera (F) rồi Shift+K lưu khoá.
@@ -50,8 +50,8 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 
 - Volume, waveform, fade handles: CÓ.
   - Chọn clip thì tab Audio bên phải có Volume -40 đến +20 dB, Pan trái/phải, Fade in/out; sóng âm vẽ trên clip.
-  - Clip âm thanh đúng màu CapCut 9.7 đo từ ảnh dev: nền navy, sóng cột 1 px xanh cyan mọc từ đáy, tên trên tab sáng hơn, track cao 50 px. Đỉnh cam khi gần 0 dB, đỏ khi vượt: quy ước Final Cut Pro, CapCut không ghi tài liệu. Đường âm lượng kéo được trên clip: SẮP LÀM cùng Volume keyframe.
-  - Kéo nút ở hai góc trên của clip để fade như CapCut.
+  - Theo ảnh CapCut: track 52 px, clip 48 px, sóng cyan 1 px và nhãn cao 16 px; peak lấy mọi mẫu và mọi kênh WAV, áp gain thật. Đỉnh cam/đỏ theo quy ước Final Cut Pro, chưa xác minh CapCut.
+  - Đường trắng kéo được để đổi Volume, Shift chỉnh mịn; keyframe âm lượng còn SẮP LÀM. Tay nắm fade là vòng tròn trắng bán kính 3 px, cách mép 5 px dưới nhãn, vùng bấm 14 px.
   - Báo đỏ khi vỡ tiếng: CÓ, đồng hồ tổng bên phải timeline: đỉnh trái/phải (vàng từ -12, đỏ từ -1 dB), đèn đỏ trên cùng khi vỡ 0 dB (bấm để xoá), cột LUFS với vạch đích. Mọi số là của bản render final; tắt ở ⋯ Settings > View > Audio meter, điện thoại không có.
 - Voiceover, separate audio, vocal isolation, replace clip:
   - Separate audio: CÓ sẵn, tiếng là track riêng nên J-cut/L-cut làm ngay.
@@ -68,7 +68,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Text, captions, callouts, TTS:
   - Captions: CÓ trong studio (⋯ Settings > View), hiện câu thoại đang nói dưới hình.
   - Text: CÓ. Tab Text bên trái có Default text, Place and time (đánh máy góc dưới kiểu phim tài liệu), Chapter title, Big number; bấm ô là thêm tại playhead.
-  - Hàng Text trên hàng Camera như text track của CapCut: kéo để dời hoặc đổi track, kéo mép để gọt, Alt+kéo tạo bản sao, chọn bằng khung cùng các hàng khác, Delete, Ctrl+C/V.
+  - Hàng Text dưới Camera theo yêu cầu dev: kéo để dời hoặc đổi track, kéo mép để gọt, Alt+kéo tạo bản sao, chọn bằng khung, Delete, Ctrl+C/V. Mỗi hàng có đường chia và nút chọn, Lock, Hide riêng.
   - Tab Text bên phải: chữ, font (Inter, Plex Mono, Source Serif), cỡ, đậm, nghiêng, viết hoa, màu, giãn chữ, giãn dòng, căn lề, độ mờ, Stroke, Background, Shadow, Scale, Position, Rotate. Chọn nhiều thì sửa cả nhóm.
   - Tab Animation: In và Out (Fade, Typewriter, Slide, Zoom, Blur) kèm độ dài. Lệch: ô chưa có hình động thử trước như CapCut.
   - Trên hình: bấm chữ là chọn, kéo để dời, hít vào đường giữa (Shift: không hít). film-stage/titles.ts vẽ nên render final giống hệt.
@@ -96,7 +96,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Property keyframes, auto-key: CÓ.
   - Nút ◁◇▷ cạnh thuộc tính ở tab Camera và tab đồ vật; đã có khoá thì sửa giá trị là tự thêm khoá tại playhead.
   - Kéo, chọn nhiều, xoá kim cương ngay trên hàng Camera và các hàng keyframe Steve, đạo cụ.
-  - Mỗi file keyframe là một nhóm gập được, tên dễ đọc (Steve, Props, Objects) kèm số hàng; hàng nhóm hiện gộp mọi kim cương của nhóm như dope sheet của Blender và Theatre.js, gập lại vẫn thấy chỗ đổi.
+  - Mỗi file keyframe là một nhóm gập được; kim cương hàng nhóm chọn cả cột key cùng giờ, Shift thêm/bỏ cột. Kéo và undo cả nhóm, kể cả khi gập.
   - Motion blur: BỎ ở studio, thuộc bước render final.
 - Adjustment layer: SẮP LÀM dạng Adjust theo shot; lớp phủ ngang nhiều shot thì chưa.
 - Group, compound clip: BỎ, phim ít clip. Chọn nhiều bằng khung (kéo từ chỗ trống, Ctrl hoặc Shift để thêm): CÓ, một khung đi xuyên hàng Camera, keyframe và âm thanh; trên hàng Camera khung chọn nguyên khối shot nó chạm (cùng mọi kim cương trong khối) như CapCut chọn clip, bấm từng kim cương để chọn lẻ. Kéo một thứ đã chọn thì mọi thứ đã chọn ở các hàng khác chạy theo; Delete, Ctrl+C và Ctrl+V cũng làm cho cả nhóm, một lần undo.
@@ -119,7 +119,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Màu CapCut 9.7 đo từ ảnh dev, bỏ Flexoki: mọi màu là token trong app/index.css, canvas đọc qua tone() ở timeline/canvas.ts. Khung bo góc tách nhau 6 px trên nền xám tối, thước giờ mờ với đầu kim rỗng, clip camera xanh lục lam, Text nâu đỏ, âm thanh navy, tooltip gần đen, thanh trượt xám nút trắng; điện thoại giữ khung sát mép. Cỡ chữ CapCut 11/13/15 px là token text-tag/ui/title, nút và ô theo variant shadcn; lệnh bun run lint chặn màu, cỡ chữ và style viết cứng.
 - Thanh Overview (cả phim) đã BỎ vì CapCut không có; điện thoại nằm ngang dùng thước giờ thay. Hàng Camera nằm trên cùng, dưới thước giờ (dev chọn), rồi Text, Voice, Action, keyframe, âm thanh.
 - Hàng Shots gộp vào hàng Camera: tên shot nằm trên khối camera như clip của CapCut, dưới thước giờ chỉ còn dải mỏng cho vạch đỏ (cảnh đứng yên quá 6 s) và note. Phim không có hàng Camera vẫn giữ hàng Shots.
-- Track âm thanh: bấm tên track chọn mọi clip của nó, nhấp đúp (F2) đổi tên, thả clip vào dải trống dưới cùng tạo track mới (dải để trơn như CapCut, chỉ sáng khi đang kéo), track rỗng tự mất.
+- Track âm thanh: biểu tượng chọn mọi clip, Lock, Mute, menu ⋯ chứa Solo và đổi tên; F2 vẫn đổi tên. Thả vào dải dưới cùng mới tạo track mới, track rỗng tự mất.
 - Chọn clip: Ctrl+A chọn mọi clip, [ và ] chọn mọi clip bên trái/phải playhead, chuột phải clip có menu.
 - Bấm chỗ trống ở bất kì hàng nào: playhead nhảy tới đó và bỏ chọn mọi thứ, như CapCut (Shift hoặc Ctrl: giữ chọn). Bấm khoảng trống cột tên track cũng bỏ chọn; bấm đúng vạch playhead là kéo nó.
 - Toàn màn hình: Ctrl+Shift+F, Esc thoát.
@@ -167,4 +167,4 @@ Từng mục dev chụp trên máy, AI tự chọn làm hay bỏ theo lời dev.
 - Main track magnet (Shift+Backspace), Linkage (Ctrl+L): SẮP LÀM cùng Ripple (quyết định 4).
 - Record voiceover (micro): BỎ, giọng đọc làm bằng ElevenLabs.
 - Các nút còn lại sau Delete trong ảnh (6 biểu tượng): chưa xác minh tên, dev chụp tooltip thì AI xếp tiếp.
-- Đầu track video của CapCut (khoá, ẩn, tắt tiếng, Cover): track âm thanh đã có Mute, Solo, Lock; hàng Text chưa có Lock và Hide (SẮP LÀM); Cover: BỎ, thumbnail làm ngoài studio.
+- Đầu track: âm thanh CÓ Mute, Solo, Lock; Text CÓ Lock và Hide. Cover: BỎ, thumbnail làm ngoài studio.

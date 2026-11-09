@@ -23,7 +23,7 @@ const changed = () => {
   S.dirty = true;
   S.finalAt = -1;
   const { camKey: k, camPicks: ps } = get();
-  set({ camRev: get().camRev + 1, ...(k !== null && !keys[k] ? { camKey: null } : {}), ...(ps.some((i) => !movable(i)) ? { camPicks: [] } : {}) });
+  set({ camRev: get().camRev + 1, ...(k !== null && !keys[k] ? { camKey: null } : {}), ...(ps.some((i) => !keys[i]) ? { camPicks: [] } : {}) });
 };
 const doc = createDoc<CamKey[]>("cam", { label: "camera", changed, saved: (camSaved) => set({ camSaved }), replaced: (was) => { if (was?.length !== keys.length && (get().camKey !== null || get().camPicks.length)) setKey(null); } });
 export const { edit, preview, snapshot, restore } = doc;
@@ -33,30 +33,30 @@ export const loadCam = async () => { set({ cam: !!(await doc.load()) }); };
 export const DEFAULT_EASE = "smooth";
 export const holds = (a: CamKey, b: CamKey) => JSON.stringify([a.p, a.l, a.fov]) === JSON.stringify([b.p, b.l, b.fov]);
 // The keys a key may move between: its shot's cut (or the film's start) and the next cut, never past its neighbours
-export const room = (i: number): [number, number] => [i > 0 ? keys[i - 1].t + SAME : 0, i + 1 < keys.length ? keys[i + 1].t - SAME : Infinity];
-export const movable = (i: number) => i > 0 && !keys[i]?.cut;
+export const room = (i: number): [number, number] => [i > 0 ? Math.min(keys[i].t, keys[i - 1].t + SAME) : 0, i + 1 < keys.length ? Math.max(keys[i].t, keys[i + 1].t - SAME) : Infinity];
+export const movable = (i: number) => i > 0 && !!keys[i] && !keys[i].cut;
 export const setKey = (i: number | null) => { set(i === null ? { camKey: null, camPicks: [] } : { camKey: i, camPicks: [], side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], object: null }); S.dirty = true; };
-// Several keys picked at once (a box dragged on the camera row), moved or deleted together. Only keys inside a shot: a shot's
-// first key is its cut, which moves by rolling the cut alone
+// Selection includes fixed keys; group retiming and deletion still preserve shot boundaries.
 export const pickCamKeys = (is: number[]) => {
-  const ok = [...new Set(is)].filter(movable).sort((a, b) => a - b);
+  const ok = [...new Set(is)].filter((i) => !!keys[i]).sort((a, b) => a - b);
   if (ok.length < 2) { setKey(ok[0] ?? null); return; }
   set({ camPicks: ok, camKey: null, side: get().side === "speed" ? "speed" : "cam", shotPick: null, clips: [], clip: null, keyPicks: [], textPicks: [], object: null });
   S.dirty = true;
 };
 // How far the picked keys may move together: until the first of them meets a key left out
 export const groupRoom = (is: number[]): [number, number] => {
+  is = is.filter(movable);
   let lo = -Infinity, hi = Infinity;
   for (const i of is) {
     let p = i - 1, n = i + 1;
     while (is.includes(p)) p--;
     while (is.includes(n)) n++;
-    lo = Math.max(lo, (p >= 0 ? keys[p].t + SAME : 0) - keys[i].t);
-    if (n < keys.length) hi = Math.min(hi, keys[n].t - SAME - keys[i].t);
+    lo = Math.max(lo, Math.min(0, (p >= 0 ? keys[p].t + SAME : 0) - keys[i].t));
+    if (n < keys.length) hi = Math.min(hi, Math.max(0, keys[n].t - SAME - keys[i].t));
   }
   return [lo, hi];
 };
-export const shiftCamKeys = (is: number[], d: number, apply: typeof edit = edit) => apply((ks) => { for (const i of is) ks[i].t = r3(ks[i].t + d); });
+export const shiftCamKeys = (is: number[], d: number, apply: typeof edit = edit) => apply((ks) => { for (const i of is.filter(movable)) ks[i].t = r3(ks[i].t + d); });
 // Copies of keys (timeline/clipboard.ts), d seconds later: each lands in whatever shot it falls in, taking the place of a key on
 // that frame; one that would land on a cut, the film's first key or past its end is left out. The copies are picked after
 export const pasteCamKeys = (items: CamKey[], d: number) => {

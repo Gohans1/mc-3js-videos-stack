@@ -217,6 +217,8 @@ const drawDetail = () => {
   g.globalAlpha = 0.4;
   for (const [x0, x1] of runs) g.fillRect(x0, SH + 10, x1 - x0 + 1, h - SH - 10);
   g.globalAlpha = 1;
+  g.fillStyle = tone("background");
+  g.fillRect(0, AY - 1, w, 1); g.fillRect(0, h - 1, w, 1);
   drawPlayhead(g, X(t), h);
 };
 

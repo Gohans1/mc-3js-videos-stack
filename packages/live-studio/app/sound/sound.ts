@@ -1,6 +1,7 @@
 // The film's sound lanes (src/sound.mjs on the server), edited by hand like the camera keys (doc.ts: undo, saving, an agent's
 // edit wins): beds that loop from..to and one-shots at a time, both from the film's sfx folder. The film's own sound watcher
 // remixes on a save, or, with live lanes (mixer.ts), the page plays the change itself and nothing is remixed.
+import { DURATION } from "film/scene";
 import { createDoc } from "../core/doc";
 import { getFile } from "../core/net";
 import { r3, stamp } from "../core/time";
@@ -10,7 +11,7 @@ import { S } from "../core/state";
 import type { Role } from "./hit";
 import { type ClipRef } from "./slice";
 import { get, say, set } from "../core/store";
-import { addTrack, fits, freeTrack, normalize, refs, resolve, same, tidy, type Track, trackOf } from "./tracks";
+import { addTrack, fits, freeTrack, normalize, refs, placeShift, same, tidy, type Track, trackOf } from "./tracks";
 
 export interface Bed { name: string; from: number; to: number; gain: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface OneShot { at: number; name: string; gain: number; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
@@ -184,13 +185,21 @@ export const removeClips = (cs: ClipRef[]) => {
   say(`${gone.length > 1 ? `${gone.length} clips` : first} deleted. Ctrl+Z to undo`);
 };
 export const removeClip = (c: ClipRef) => removeClips([c]);
-// The keyboard's (and one tap's) way to another track; a clip that lands on another goes to a new track below it, as a drag does
-export const moveToTrack = (c: ClipRef, id: string) => locked(c) ? say("This track is locked. Unlock it in the track header to edit") : edit((l) => { const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]; x.track = id === "new" ? addTrack(l, c.list).id : id; resolve(l, [c], span); });
+export const moveToTrack = (c: ClipRef, id: string) => {
+  if (locked(c) || lanes?.tracks.find((t) => t.id === id)?.lock) { say("This track is locked. Unlock it in the track header to edit"); return; }
+  if (id !== "new" && lanes && !fits(lanes, id, span(c), span, [c])) { say("This clip does not fit here. Choose a track with space or drag it to a gap"); return; }
+  edit((l) => { l[c.list][c.i].track = id === "new" ? addTrack(l, c.list).id : id; });
+};
 export const setTrack = (id: string, change: Partial<Track>) => edit((l) => { const t = l.tracks.find((t) => t.id === id); if (t) Object.assign(t, change); });
-export const moveTo = (c: ClipRef, at: number) => edit((l) => {
-  if (c.list === "beds") { const b = l.beds[c.i], d = b.to - b.from; b.from = r3(Math.max(0, at)); b.to = r3(b.from + d); }
-  else l.sfx[c.i].at = r3(Math.max(0, at));
-});
+export const moveTo = (c: ClipRef, at: number) => {
+  if (!lanes || locked(c)) return;
+  const [from] = span(c), shift = placeShift(lanes, [c], span, at - from, [-from, DURATION - .05 - from]);
+  if (shift === null) return;
+  edit((l) => {
+    if (c.list === "beds") { const b = l.beds[c.i]; b.from = r3(b.from + shift); b.to = r3(b.to + shift); }
+    else l.sfx[c.i].at = r3(l.sfx[c.i].at + shift);
+  });
+};
 
 // ---------- CapCut's cuts on the picked clips at the playhead: Ctrl+B splits each one it crosses, Q drops what lies before it,
 // W what lies after. The part kept on the right goes on playing the file from where the left part stopped (start: seconds

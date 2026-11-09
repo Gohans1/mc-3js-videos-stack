@@ -19,7 +19,8 @@ export interface TextItem {
   shadow?: boolean; opacity?: number; scale?: number; rotate?: number; w?: number; h?: number; width?: number; in?: Fx; out?: Fx;
   [k: string]: unknown;
 }
-interface TextFile { items: TextItem[]; [k: string]: unknown }
+export interface TextTrack { lock?: boolean; hidden?: boolean }
+interface TextFile { items: TextItem[]; tracks?: Record<string, TextTrack>; [k: string]: unknown }
 
 export let items: TextItem[] = [];
 const changed = () => {
@@ -37,6 +38,9 @@ export const loadText = async () => { set({ text: !!(await doc.load()) }); };
 export const isShape = (it: TextItem) => it.kind === "arrow" || it.kind === "circle";
 export const nameOf = (it: TextItem) => (it.kind === "arrow" ? "Arrow" : it.kind === "circle" ? "Circle" : (it.text ?? "").split("\n")[0].trim() || "Text");
 export const tracksUsed = () => Math.max(0, ...items.map((it) => (it.track ?? 0) + 1));
+export const trackState = (track: number): TextTrack => doc.data?.tracks?.[track] ?? {};
+export const locked = (i: number) => !!trackState(items[i]?.track ?? 0).lock;
+export const setTrack = (track: number, change: Partial<TextTrack>) => edit((f) => { f.tracks ??= {}; f.tracks[track] = { ...f.tracks[track], ...change }; });
 
 // The pick, which also opens the Text tab and drops every other kind's pick, as each row's own setter does
 export const pickText = (is: number[]) => {
@@ -48,7 +52,7 @@ export const pickText = (is: number[]) => {
 // ---------- Tracks: whether [s, e] is free on track k, and the first track from k up that is
 const TOUCH = 0.02;
 const fits = (list: TextItem[], k: number, s: number, e: number, skip: Set<number>) =>
-  list.every((it, i) => skip.has(i) || (it.track ?? 0) !== k || e <= it.from + TOUCH || s >= it.to - TOUCH);
+  !trackState(k).lock && list.every((it, i) => skip.has(i) || (it.track ?? 0) !== k || e <= it.from + TOUCH || s >= it.to - TOUCH);
 export const freeTrack = (list: TextItem[], s: number, e: number, from = 0, skip = new Set<number>()) => { let k = from; while (!fits(list, k, s, e, skip)) k++; return k; };
 // After items were moved or added: each that lands on one it wasn't moved with goes up to the first track with room
 export const settle = (list: TextItem[], moved: number[]) => {
@@ -61,8 +65,9 @@ export const settle = (list: TextItem[], moved: number[]) => {
 };
 // Shifts items in time by d seconds (clamped by the caller to their room), then settles them on free tracks
 export const shiftItems = (is: number[], d: number) => (f: TextFile) => {
-  for (const i of is) { const it = f.items[i]; it.from = r3(it.from + d); it.to = r3(it.to + d); }
-  settle(f.items, is);
+  const moving = is.filter((i) => !locked(i));
+  for (const i of moving) { const it = f.items[i]; it.from = r3(it.from + d); it.to = r3(it.to + d); }
+  settle(f.items, moving);
 };
 // How far a group may move in time: none before the film's start or past its end
 export const room = (is: number[]): [number, number] => [-Math.min(...is.map((i) => items[i].from)), DURATION - Math.max(...is.map((i) => items[i].to))];
@@ -89,7 +94,8 @@ export const addPreset = (p: Preset) => {
   say(`${p.title} added at ${stamp(from)}. Drag it on the picture to place it`);
 };
 export const removeTexts = (is: number[]) => {
-  const set_ = new Set(is);
+  const set_ = new Set(is.filter((i) => !locked(i)));
+  if (!set_.size) { say("This text track is locked. Unlock it in the track header to edit"); return; }
   edit((f) => { f.items = f.items.filter((_, i) => !set_.has(i)); });
   pickText([]);
 };
@@ -109,6 +115,6 @@ export const pasteTexts = (copies: TextItem[], d: number) => {
 };
 // One change to every picked item, from the Text tab (CapCut styles every picked text at once)
 export const editPicked = (change: (it: TextItem) => void, live = false) => {
-  const is = get().textPicks;
+  const is = get().textPicks.filter((i) => !locked(i));
   (live ? preview : edit)((f) => { for (const i of is) if (f.items[i]) change(f.items[i]); });
 };

@@ -11,7 +11,7 @@ import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { frameSize } from "../picture/frame";
-import { editPicked, isShape, items, nameOf, restore, snapshot, type TextItem } from "./text";
+import { editPicked, isShape, items, locked, nameOf, restore, snapshot, type TextItem } from "./text";
 
 const DOC = { snapshot, restore };
 const SWATCHES = ["#FFFFFF", "#100F0F", "#E5484D", "#F5C542", "#3AA99F", "#4385BE"];
@@ -178,6 +178,7 @@ export function TextPanel({ part }: { part: "text" | "textAnim" }) {
   useStudio((s) => s.textRev);
   const it = items[picks[0]];
   if (!it) return <p className="px-3 pt-2 text-ui text-muted-foreground">Pick a text item on the Text row or the picture to edit it, or add one from the Text library.</p>;
+  if (picks.every(locked)) return <p className="px-3 pt-2 text-ui text-muted-foreground">This text track is locked. Unlock it in the track header to edit.</p>;
   const shapes = picks.every((i) => items[i] && isShape(items[i])), mixed = !shapes && picks.some((i) => items[i] && isShape(items[i]));
   return (
     <div className="flex min-h-0 flex-1 flex-col">

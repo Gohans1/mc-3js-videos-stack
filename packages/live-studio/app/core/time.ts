@@ -6,6 +6,25 @@ export const r3 = (x: number) => Math.round(x * 1000) / 1000; // a millisecond, 
 // CapCut's magnet for a time dragged on the timeline: within SNAP_PX of one of pts it lands on the nearest, else it stays where
 // the pointer put it (on a whole frame for frame keys). off: Shift held or the magnet turned off
 export const SNAP_PX = 7;
+type SnapState = { kind: "free" } | { kind: "held"; target: number; offset: number };
+// Separate capture/release radii prevent a held edge flickering between neighbouring targets.
+export const makeSnapper = () => {
+  let state: SnapState = { kind: "free" };
+  return (from: number, offsets: number[], pts: number[], perPx: number, off: boolean, frame = false) => {
+    if (off) { state = { kind: "free" }; return { time: from, target: null }; }
+    const reach = SNAP_PX * perPx;
+    if (state.kind === "held" && pts.includes(state.target) && offsets.includes(state.offset) && Math.abs(from + state.offset - state.target) <= reach * 2.5) {
+      return { time: state.target - state.offset, target: state.target };
+    }
+    state = { kind: "free" };
+    let distance = reach;
+    for (const offset of offsets) for (const target of pts) {
+      const d = Math.abs(from + offset - target);
+      if (d < distance) { distance = d; state = { kind: "held", target, offset }; }
+    }
+    return state.kind === "held" ? { time: state.target - state.offset, target: state.target } : { time: frame ? Math.round(from * FPS) / FPS : from, target: null };
+  };
+};
 export const snapTo = (s: number, pts: number[], perPx: number, off: boolean, frame = false) => {
   if (off) return s;
   let best = frame ? Math.round(s * FPS) / FPS : s, d = SNAP_PX * perPx;

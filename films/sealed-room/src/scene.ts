@@ -364,7 +364,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     renderer.clearDepth();
     renderer.render(hud, hudCam);
     if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
-    if (!free.on) titles(EDIT.text.items, t, camera);
+    if (!free.on) titles(EDIT.text.items, t, camera, EDIT.text.tracks);
   };
   const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these

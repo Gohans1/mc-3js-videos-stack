@@ -37,6 +37,28 @@ export const fits = (l: Tracked, id: string, [s, e]: [number, number], spanOf: S
     return e <= a + TOUCH || s >= b - TOUCH;
   });
 
+// Collision intervals are displacements of the entire selection, so clips never drift apart.
+export const placeShift = (l: Tracked, moved: Ref[], spanOf: SpanOf, want: number, [lo, hi]: [number, number]): number | null => {
+  if (moved.some((r) => trackOf(l, r)?.lock)) return null;
+  const still = refs(l).filter((r) => !moved.some((m) => same(m, r))), blocked: [number, number][] = [];
+  for (const r of moved) {
+    const [s, e] = spanOf(r);
+    for (const other of still) if (entry(l, r).track === entry(l, other).track) {
+      const [a, b] = spanOf(other);
+      blocked.push([a - e, b - s]);
+    }
+  }
+  const merged: [number, number][] = [];
+  for (const interval of blocked.sort((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1);
+    if (last && interval[0] < last[1] - 1e-6) last[1] = Math.max(last[1], interval[1]);
+    else merged.push([...interval]);
+  }
+  const at = Math.max(lo, Math.min(hi, want)), blockedAt = merged.find(([a, b]) => at > a + 1e-6 && at < b - 1e-6);
+  if (!blockedAt) return at;
+  return blockedAt.filter((d) => d >= lo && d <= hi).sort((a, b) => Math.abs(a - at) - Math.abs(b - at))[0] ?? null;
+};
+
 // Where a pasted clip goes: the track it came from while that has room, else the nearest free one of its kind (below, then
 // above), so a paste fills a track that is there before it adds one (the dev's call); a new one just below only when none is
 export const freeTrack = (l: Tracked, kind: List, sp: [number, number], spanOf: SpanOf, from: string) => {
@@ -66,22 +88,20 @@ export const normalize = (l: Tracked, spanOf: SpanOf) => {
   return homeless.length > 0;
 };
 
-// After clips were moved: each one that lands on a clip it wasn't moved with goes to a new track just below, as CapCut does
-export const resolve = (l: Tracked, moved: Ref[], spanOf: SpanOf) => {
-  const placed: Ref[] = [];
-  for (const r of [...moved].sort((a, b) => spanOf(a)[0] - spanOf(b)[0])) {
-    const e = entry(l, r), sp = spanOf(r), others = moved.filter((m) => !placed.some((p) => same(p, m)));
-    if (fits(l, e.track as string, sp, spanOf, others)) { placed.push(r); continue; }
-    const row = l.tracks!.findIndex((t) => t.id === e.track);
-    // A track this pass made already, if the clip fits there; else another one
-    let t = l.tracks!.slice(row + 1).find((t) => t.made && fits(l, t.id, sp, spanOf, others));
-    let at = row + 1;
-    while (l.tracks![at]?.made) at++;
-    if (!t) { t = addTrack(l, r.list, at); t.made = true; }
-    e.track = t.id;
-    placed.push(r);
+export const shiftRoom = (l: Tracked, moved: Ref[], spanOf: SpanOf): [number, number] => {
+  if (moved.some((r) => trackOf(l, r)?.lock)) return [0, 0];
+  let lo = -Infinity, hi = Infinity;
+  const still = refs(l).filter((r) => !moved.some((m) => same(m, r)));
+  for (const r of moved) {
+    const [s, e] = spanOf(r);
+    for (const other of still) if (entry(l, r).track === entry(l, other).track) {
+      const [a, b] = spanOf(other);
+      if (b <= s + TOUCH) lo = Math.max(lo, b - s);
+      else if (a >= e - TOUCH) hi = Math.min(hi, a - e);
+      else return [0, 0];
+    }
   }
-  for (const t of l.tracks ?? []) delete t.made;
+  return [lo, hi];
 };
 
 // Tracks left with no clips go, as in CapCut

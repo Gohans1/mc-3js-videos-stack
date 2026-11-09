@@ -1,12 +1,28 @@
-// The sound lanes' tracks (app/sound/tracks.ts): a film without them gets one track per row it needs, and a clip moved onto
-// another clip moves on to a new track below rather than hiding under it
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addTrack, freeTrack, normalize, resolve, tidy } from "../app/sound/tracks.ts";
+import { addTrack, freeTrack, normalize, shiftRoom, tidy, placeShift } from "../app/sound/tracks.ts";
 
 const spanOf = (l) => (r) => (r.list === "beds" ? [l.beds[r.i].from, l.beds[r.i].to] : [l.sfx[r.i].at, l.sfx[r.i].at + l.sfx[r.i].length]);
 const bed = (from, to) => ({ name: "hum", from, to, gain: 0, fadeIn: 0, fadeOut: 0 });
 const hit = (at, length = 1) => ({ name: "slam", at, length, gain: 0 });
+
+test("a dragged clip stops beside its neighbour without adding or changing tracks", () => {
+  const l = { beds: [], sfx: [hit(0, 2), hit(4, 3)], tracks: [{ id: "t1", name: "SFX" }] };
+  l.sfx.forEach((s) => { s.track = "t1"; });
+  const before = structuredClone(l), moved = [{ list: "sfx", i: 0 }];
+  assert.equal(placeShift(l, moved, spanOf(l), 3, [0, 20]), 2);
+  assert.equal(placeShift(l, moved, spanOf(l), 6.5, [0, 20]), 7);
+  assert.equal(placeShift(l, moved, spanOf(l), 10, [0, 20]), 10);
+  assert.deepEqual(l, before);
+});
+
+test("a group finds one valid displacement across its target tracks or rejects the drop", () => {
+  const l = { beds: [], sfx: [hit(0, 2), hit(4, 2), hit(0, 3), hit(7, 1)], tracks: [{ id: "a" }, { id: "b" }] };
+  l.sfx.forEach((s, i) => { s.track = i < 2 ? "a" : "b"; });
+  const moved = [{ list: "sfx", i: 0 }, { list: "sfx", i: 2 }];
+  assert.equal(placeShift(l, moved, spanOf(l), 3, [0, 10]), 2);
+  assert.equal(placeShift(l, moved, spanOf(l), 5, [3, 7]), null);
+});
 
 test("a film written before tracks: beds and one-shots on tracks of their own, overlapping ones on a second", () => {
   const l = { beds: [bed(0, 30)], sfx: [hit(2), hit(2.5), hit(5)] };
@@ -31,15 +47,14 @@ test("clips that end where the next starts share a track", () => {
   assert.equal(l.tracks.length, 1);
 });
 
-test("a clip dragged onto another goes to a new track just below; one landing on both goes one further down", () => {
-  const l = { beds: [], sfx: [hit(0), hit(5), hit(5.2)], tracks: [{ id: "t1", name: "SFX" }, { id: "t9", name: "Music" }] };
-  l.sfx.forEach((s, i) => { s.track = i ? "t9" : "t1"; s.at = i ? s.at : 0; });
-  l.sfx[2].at = 9; // apart on t9 before the move
-  l.sfx[1].track = "t1"; l.sfx[1].at = 0.5; l.sfx[2].track = "t1"; l.sfx[2].at = 0.7; // both dropped onto the first clip
-  resolve(l, [{ list: "sfx", i: 1 }, { list: "sfx", i: 2 }], spanOf(l));
-  assert.deepEqual(l.tracks.map((t) => t.id), ["t1", "t10", "t11", "t9"]);
-  assert.deepEqual(l.sfx.map((s) => s.track), ["t1", "t10", "t11"]);
-  assert.ok(l.tracks.every((t) => !("made" in t)));
+test("linked audio constrains the entire selection between neighbours without changing tracks", () => {
+  const l = { beds: [bed(2, 4), bed(8, 10), bed(13, 16)], sfx: [], tracks: [{ id: "a" }] };
+  l.beds.forEach((b) => { b.track = "a"; });
+  const moved = [{ list: "beds", i: 1 }];
+  assert.deepEqual(shiftRoom(l, moved, spanOf(l)), [-4, 3]);
+  assert.deepEqual(shiftRoom(l, [{ list: "beds", i: 0 }, ...moved], spanOf(l)), [-Infinity, 3]);
+  l.tracks[0].lock = true;
+  assert.deepEqual(shiftRoom(l, moved, spanOf(l)), [0, 0]);
 });
 
 test("tracks left empty go", () => {

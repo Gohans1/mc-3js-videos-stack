@@ -112,7 +112,7 @@ export const ShotsTimeline = z.array(z.looseObject({ t: time, name: z.string().o
 // Anything else on an item (size, font, colour, stroke, background, in, out) is the drawer's
 const TextItem = z.looseObject({ kind: z.enum(["text", "arrow", "circle"]), from: secs, to: secs, track: z.number().int().nonnegative().optional(), text: z.string().optional(), x: z.number().optional(), y: z.number().optional(), at: z.tuple([z.number(), z.number(), z.number()]).optional() })
   .refine((it) => it.to > it.from, "to must come after from");
-export const TextTimeline = z.looseObject({ items: z.array(TextItem) });
+export const TextTimeline = z.looseObject({ items: z.array(TextItem), tracks: z.record(z.string().regex(/^\d+$/), z.looseObject({ lock: z.boolean().optional(), hidden: z.boolean().optional() })).optional() });
 
 // ---------- Key files (package.json "live-studio".keyFiles: { file: the EDIT key the film reads it from }): every list of
 // {t, ...} in the file, at any depth through objects, is a row of keys the studio shows and retimes (Steve's moves, a drawer's

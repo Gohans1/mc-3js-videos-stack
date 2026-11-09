@@ -1,7 +1,7 @@
 // The sound tracks under the timeline, CapCut style, on the same seconds as the stretch drawn above them (timeline.ts): one row
 // per track of audio.json (sound/tracks.ts), its name, mute and lock in the column beside it (sound/TrackHeads.tsx).
 // A clip is dragged to move (up or down onto another track, or below the last one for a new track), by an edge to trim, and
-// snaps to the playhead, cuts, words and other clips' edges (Shift: no snap), CapCut's line showing where (timeline/snapline.ts). The handle on each top corner of the clip under the
+// snaps to the playhead, cuts, words and other clips' edges (Shift: no snap), CapCut's line showing where (timeline/snapline.ts). The inset handle below each end of the label under the
 // pointer or picked drags its fade in or out, as in CapCut and Premiere. A box dragged over empty space picks every clip
 // it touches (Shift/Ctrl add to the pick), and the keys of the other rows it crosses (timeline/rowbox.ts, across.ts); dragging
 // one picked clip moves all of it, and with Alt held copies of the clips alone (CapCut's drag to duplicate). A click on empty space
@@ -9,7 +9,7 @@
 // A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
 // In split mode (blade.ts) a click on a clip cuts it there instead.
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-import { FPS, r3, snappedTo, snapSpan, snapTo, stamp } from "../core/time";
+import { FPS, makeSnapper, r3, snappedTo, snapTo, stamp } from "../core/time";
 import { S } from "../core/state";
 import { type ClipRef } from "./slice";
 import { get, noSnap, say } from "../core/store";
@@ -22,12 +22,12 @@ import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
-import { addTrack, resolve, same } from "./tracks";
+import { addTrack, placeShift, same } from "./tracks";
 import { seek, setPlaying } from "../playback/transport";
 
 // sound/TrackHeads.tsx lays its rows out on these
-export const TRACK_H = 50, TOP = 2, ADD_H = 24;
-const CLIP_H = 46, LABEL_H = 16;
+export const TRACK_H = 52, TOP = 2, ADD_H = 24;
+const CLIP_H = 48, LABEL_H = 16;
 // CapCut 9.7's audio clip, measured off the dev's screenshot (index.css --clip-audio and the rest): a navy clip, its level in
 // 1 px cyan bars from the bottom, the name on a lighter tag. A bar within 1 dB of full scale gets an orange cap and one past it a
 // red tip, Final Cut Pro's documented warning, which CapCut's look follows
@@ -38,6 +38,9 @@ type Box = { ref: ClipRef; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
 let drop: { row: number; at: number } | null = null; // row = tracks.length: below the last track, a new one
 let hover: ClipRef | null = null;
+let floating: { refs: ClipRef[]; dy: number } | null = null;
+const gainY = (gain: number) => LABEL_H + 5 + (1 - Math.max(0, Math.min(1, (gain + 60) / 96))) * (CLIP_H - LABEL_H - 9);
+const fadeX = (x0: number, x1: number, x: number) => Math.max(x0 + 5, Math.min(x1 - 5, x));
 
 const tracks = () => lanes?.tracks ?? [];
 export const lanesHeight = () => TOP + tracks().length * TRACK_H + ADD_H;
@@ -54,14 +57,14 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   // The file's level, scaled by the clip's gain so a quiet clip looks quiet: each bar the loudest peak of the 2 px it stands for
   const p = peaksOf(c.name), [from, to] = span(ref), px = (x1 - x0) / Math.max(1e-3, to - from);
   if (p && x1 - x0 > 6) {
-    const k = Math.min(4, 10 ** (c.gain / 20)), start = (c as { start?: number }).start ?? 0, n = p.peaks.length, room = CLIP_H - LABEL_H - 3, base = y + CLIP_H - 1;
+    const k = 10 ** (c.gain / 20), start = (c as { start?: number }).start ?? 0, n = p.peaks.length, room = CLIP_H - LABEL_H - 3, base = y + CLIP_H - 1;
     const at = (x: number) => { const s = (x - x0) / px + start; return Math.floor((ref.list === "beds" ? ((s % (n * p.step)) + n * p.step) % (n * p.step) : s) / p.step); }; // a bed loops its file
     for (let x = Math.max(Math.ceil(cx0) + 1, 1); x < cx1 - 1; x += 2) {
       const i0 = at(x), i1 = Math.max(i0, at(x + 2) - 1);
       let v = 0;
       for (let i = i0; i <= i1 && i < n; i++) if (i >= 0 && p.peaks[i] > v) v = p.peaks[i];
       v *= k;
-      if (v < 0.02) continue;
+      if (v <= 0) continue;
       const bar = Math.max(1, Math.min(1, v) * room);
       g.fillStyle = tone("clip-wave"); g.fillRect(x, base - bar, 1, bar);
       if (v >= NEAR) { g.fillStyle = tone("level-near"); g.fillRect(x, base - bar, 1, 2); }
@@ -73,9 +76,12 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   g.fillStyle = "rgba(0,0,0,.45)";
   if (fi > 0) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + fi * px, y); g.lineTo(x0, y + CLIP_H); g.fill(); }
   if (fo > 0) { g.beginPath(); g.moveTo(x1, y); g.lineTo(x1 - fo * px, y); g.lineTo(x1, y + CLIP_H); g.fill(); }
+  if (on || (hover && same(hover, ref))) {
+    g.fillStyle = "rgba(255,255,255,.3)"; g.fillRect(cx0 + 1, Math.round(y + gainY(c.gain)), cx1 - cx0 - 2, 1);
+  }
   if ((on || (hover && same(hover, ref))) && x1 - x0 > KNOB * 4 && !locked(ref)) {
-    g.fillStyle = tone("foreground"); g.strokeStyle = tone("backdrop"); g.lineWidth = 1;
-    for (const hx of [x0 + fi * px, x1 - fo * px]) { g.beginPath(); g.arc(hx, y + 4, 3.5, 0, Math.PI * 2); g.fill(); g.stroke(); }
+    g.fillStyle = tone("clip-audio"); g.strokeStyle = tone("pick"); g.lineWidth = 1.5;
+    for (const hx of [x0 + fi * px, x1 - fo * px]) { g.beginPath(); g.arc(fadeX(x0, x1, hx), y + LABEL_H + 5, 3, 0, Math.PI * 2); g.fill(); g.stroke(); }
   }
   if (c.try) { g.fillStyle = tone("warn"); g.fillRect(cx0, y + CLIP_H - 2, Math.min(10, cx1 - cx0), 2); }
   g.save(); g.beginPath(); g.rect(cx0, y, cx1 - cx0 - 2, CLIP_H); g.clip();
@@ -98,6 +104,8 @@ export const drawLanes = () => {
   // Each track's row a step lighter than the empty space under the last, as CapCut's
   g.fillStyle = tone("background"); g.fillRect(0, 0, w, h);
   g.fillStyle = tone("track"); g.fillRect(0, 0, w, TOP + ts.length * TRACK_H);
+  g.fillStyle = tone("background");
+  for (let i = 1; i <= ts.length; i++) g.fillRect(0, rowY(i) - 1, w, 1);
   // Cuts, faint, so a sound can be put on one by eye
   g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
@@ -110,11 +118,14 @@ export const drawLanes = () => {
     if (k < 0 || e < a || s > a + v) continue;
     const x0 = X(s), x1 = Math.max(x0 + 4, X(e)), y = rowY(k) + (TRACK_H - CLIP_H) / 2, t = ts[k], shine = lit !== null && clipOf(ref)!.name === lit;
     g.globalAlpha = t.mute || (solo.length && !solo.includes(t.id)) || (lit !== null && !shine) ? 0.35 : 1;
-    drawClip(g, ref, x0, x1, y, w);
+    if (floating?.refs.some((r) => same(r, ref))) {
+      g.fillStyle = tone("raised-3"); g.beginPath(); g.roundRect(x0, y, x1 - x0, CLIP_H, 4); g.fill();
+    } else drawClip(g, ref, x0, x1, y, w);
     g.globalAlpha = 1;
     if (shine) { g.strokeStyle = tone("pick"); g.lineWidth = 1.5; g.beginPath(); g.roundRect(Math.max(-2, x0) - 1.5, y - 1.5, Math.min(w + 2, x1) - Math.max(-2, x0) + 3, CLIP_H + 3, 4); g.stroke(); }
     boxes.push({ ref, x0, x1, y0: y, y1: y + CLIP_H });
   }
+  if (floating) for (const b of boxes) if (floating.refs.some((r) => same(r, b.ref))) drawClip(g, b.ref, b.x0, b.x1, b.y0 + floating.dy, w);
   // The strip under the last track takes a dropped clip as a new track. As in CapCut it stays blank and lights only under a drag;
   // words show only while there is no track at all, as CapCut's empty timeline asks for its first clip
   if (!ts.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2); }
@@ -151,8 +162,8 @@ export const clipAtPointer = (e: { clientX: number; clientY: number }) => {
 // The fade handle under the pointer: the clip's top strip, near where its fade in ends or its fade out starts
 const knobAt = (b: Box, x: number, y: number, touch: boolean): "fadeIn" | "fadeOut" | null => {
   const c = clipOf(b.ref)!, [from, to] = span(b.ref), px = (b.x1 - b.x0) / Math.max(1e-3, to - from), r = touch ? KNOB * 2 : KNOB;
-  if (b.x1 - b.x0 <= KNOB * 4 || y > b.y0 + r + 2) return null;
-  const di = Math.abs(x - (b.x0 + (c.fadeIn ?? 0) * px)), dout = Math.abs(x - (b.x1 - (c.fadeOut ?? 0) * px));
+  if (b.x1 - b.x0 <= KNOB * 4 || Math.abs(y - b.y0 - LABEL_H - 5) > r) return null;
+  const di = Math.abs(x - fadeX(b.x0, b.x1, b.x0 + (c.fadeIn ?? 0) * px)), dout = Math.abs(x - fadeX(b.x0, b.x1, b.x1 - (c.fadeOut ?? 0) * px));
   return Math.min(di, dout) > r ? null : di <= dout ? "fadeIn" : "fadeOut";
 };
 const clipsInBox = (m: { x0: number; x1: number; y0: number; y1: number }) => {
@@ -163,11 +174,12 @@ const clipsInBox = (m: { x0: number; x1: number; y0: number; y1: number }) => {
 };
 
 type Drag = {
-  ref: ClipRef; group: ClipRef[]; mode: "move" | "start" | "end" | "fadeIn" | "fadeOut"; x: number; y: number; snap: string;
+  ref: ClipRef; group: ClipRef[]; mode: "move" | "start" | "end" | "fadeIn" | "fadeOut" | "gain"; x: number; y: number; snap: string;
   from: number; to: number; pts: number[]; moved: boolean; alone: boolean; x0: number; x1: number;
   copy: boolean; // CapCut's drag to duplicate (Alt held as the drag starts): copies move, the clips stay
   moving: ClipRef[]; // the clips the drag moves: the pick, or its copies
   along: Along | null; shift: number; // the other rows' picks moving with the clips (timeline/across.ts), and by how much
+  magnet: ReturnType<typeof makeSnapper>;
 };
 
 export const attachLanes = () => {
@@ -178,9 +190,10 @@ export const attachLanes = () => {
   let drag: Drag | null = null;
   let scrub: { resume: boolean } | null = null;
   let box: { add: boolean } | null = null;
+  const onGain = (b: Box, y: number) => (picked(b.ref) || !!hover && same(hover, b.ref)) && Math.abs(y - b.y0 - gainY(clipOf(b.ref)!.gain)) <= 3;
   // The playhead line over a clip's body is the playhead's; its trim edges and fade knobs stay the clip's
   const playheadGrab = (b: Box | null, x: number, y: number, w: number, touch: boolean) =>
-    onPlayhead(x, w, touch) && (!b || (x > b.x0 + EDGE && x < b.x1 - EDGE && !knobAt(b, x, y, touch)));
+    onPlayhead(x, w, touch) && (!b || (x > b.x0 + EDGE && x < b.x1 - EDGE && !knobAt(b, x, y, touch) && !onGain(b, y)));
   // Where a click cuts the clip under it: snapped to the playhead, cuts, words and other clips' edges, never to its own ends
   const bladeTime = (ref: ClipRef, x: number, w: number, off: boolean) => snapTo(timeAt(x, w), snapPoints([ref]), view().v / w, off, true);
 
@@ -210,9 +223,9 @@ export const attachLanes = () => {
     if (!was) setClips([b.ref]);
     const group = get().clips.filter((r) => !locked(r)), along = was ? alongWith("clips") : null, many = group.length > 1 || !!along;
     const edge = touch ? 10 : EDGE, wide = b.x1 - b.x0 > edge * 3, knob = many ? null : knobAt(b, x, y, touch);
-    const mode = knob ?? (many || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : "move");
+    const mode = knob ?? (many || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : onGain(b, y) ? "gain" : "move");
     const [from, to] = span(b.ref);
-    drag = { ref: b.ref, group, mode, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && many, x0: b.x0, x1: b.x1, copy: false, moving: group, along, shift: 0 };
+    drag = { ref: b.ref, group, mode, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && many, x0: b.x0, x1: b.x1, copy: false, moving: group, along, shift: 0, magnet: makeSnapper() };
   });
 
   // A drag near the top or bottom of the tracks' box scrolls it, so a clip can be taken to a track out of sight
@@ -222,10 +235,10 @@ export const attachLanes = () => {
     if (e.clientY > r.bottom - 18) box.scrollTop += 10; else if (e.clientY < r.top + 18) box.scrollTop -= 10;
   };
   c.addEventListener("pointermove", (e) => {
+    if (drag?.moved) edgeScroll(e);
     const { x, y, w } = local(e), { v } = view(), perPx = v / w;
     if (scrub) { seek(timeAt(x, w)); return; }
     if (box) { boxMove(e); return; }
-    if (drag?.moved) edgeScroll(e);
     if (!drag && get().blade) {
       const b = hit(x, y, false);
       c.style.cursor = !b ? "default" : locked(b.ref) ? "not-allowed" : BLADE_CURSOR;
@@ -237,63 +250,77 @@ export const attachLanes = () => {
     if (!drag) {
       const b = hit(x, y, false), edge = b && get().clips.length < 2 && b.x1 - b.x0 > EDGE * 3 && (x <= b.x0 + EDGE || x >= b.x1 - EDGE);
       const knob = b && get().clips.length < 2 && !locked(b.ref) && knobAt(b, x, y, false);
-      c.style.cursor = playheadGrab(b, x, y, w, false) ? "ew-resize" : !b ? "crosshair" : locked(b.ref) ? "not-allowed" : knob ? "ew-resize" : edge ? "col-resize" : "grab";
+      c.style.cursor = playheadGrab(b, x, y, w, false) ? "ew-resize" : !b ? "default" : locked(b.ref) ? "not-allowed" : knob ? "ew-resize" : edge ? "col-resize" : onGain(b, y) ? "ns-resize" : "default";
       if ((hover && b ? !same(hover, b.ref) : hover !== (b?.ref ?? null))) { hover = b?.ref ?? null; drawLanes(); }
       return;
     }
-    if (!drag.moved && Math.abs(x - drag.x) < 3 && Math.abs(y - drag.y) < 6) return;
+    if (!drag.moved && Math.abs(x - drag.x) < 3 && Math.abs(y - drag.y) < (drag.mode === "gain" ? 1 : 6)) return;
     if (!drag.moved) drag.copy = e.altKey && drag.mode === "move" && !drag.along;
     drag.moved = true;
-    c.style.cursor = drag.copy ? "copy" : drag.mode === "move" ? "grabbing" : drag.mode.startsWith("fade") ? "ew-resize" : "col-resize";
+    c.style.cursor = drag.copy ? "copy" : drag.mode === "move" ? "default" : drag.mode === "gain" ? "ns-resize" : drag.mode.startsWith("fade") ? "ew-resize" : "col-resize";
     const d = (x - drag.x) * perPx, off = noSnap(e), { ref, group, from, to, pts } = drag;
     restore(drag.snap);
+    if (drag.mode === "gain") {
+      const gain = Math.round(Math.max(-60, Math.min(36, clipOf(ref)!.gain + (drag.y - y) * 96 / (CLIP_H - LABEL_H - 9) * (e.shiftKey ? .1 : 1))) * 10) / 10;
+      preview((l) => { l[ref.list][ref.i].gain = gain; });
+      say(`Volume: ${gain.toFixed(1)} dB (Shift: fine adjustment)`, 1500);
+      return;
+    }
     if (drag.mode === "fadeIn" || drag.mode === "fadeOut") {
       const key = drag.mode, other = (clipOf(ref)![key === "fadeIn" ? "fadeOut" : "fadeIn"] as number | undefined) ?? 0;
-      const raw = key === "fadeIn" ? (x - drag.x0) * perPx : (drag.x1 - x) * perPx, len = Math.max(0, Math.min(to - from - other, raw));
+      const raw = (clipOf(ref)![key] ?? 0) + (key === "fadeIn" ? d : -d), len = Math.max(0, Math.min(to - from - other, raw));
       preview((l) => { (l[ref.list][ref.i] as Record<string, unknown>)[key] = Math.round(len * 100) / 100; });
       say(`${clipOf(ref)!.name}: ${key === "fadeIn" ? "fade in" : "fade out"} ${len.toFixed(2)} s`, 1500);
       return;
     }
+    let target: number | null = null, valid = true;
     preview((l) => {
       if (drag!.mode === "move") {
         // Copies of the pick go at the ends of their lists, the same each time the drag is redrawn from its snapshot
         const moving = drag!.moving = drag!.copy ? group.map((r): ClipRef => { const list = l[r.list] as unknown[]; list.push(structuredClone(list[r.i])); return { list: r.list, i: list.length - 1 }; }) : group;
         // The clip under the pointer snaps, by whichever end lands nearer a snap point; the rest of the pick moves as far
-        let shift = snapSpan(from + d, to - from, pts, perPx, off) - from;
+        const snapped = drag!.magnet(from + d, [0, to - from], pts, perPx, off);
+        target = snapped.target;
         const starts = moving.map((r) => span(r)[0]);
         const room = drag!.along?.room ?? [-Infinity, Infinity];
-        shift = Math.max(-Math.min(...starts), room[0], Math.min(DURATION - 0.05 - Math.max(...starts), room[1], shift));
-        drag!.shift = shift;
         // Up or down by as many rows as the pointer went, the whole pick together, none past the strip for a new track
         const rows = moving.map(rowOf), n = l.tracks.length;
         const dk = Math.max(-Math.min(...rows), Math.min(n - Math.max(...rows), rowAt(y) - rowAt(drag!.y)));
         const fresh = rows.some((k) => k + dk === n) ? addTrack(l, ref.list).id : "";
-        moving.forEach((r, k) => {
+        moving.forEach((r, k) => { if (dk) l[r.list][r.i].track = rows[k] + dk === n ? fresh : l.tracks[rows[k] + dk].id; });
+        const shift = placeShift(l, moving, span, snapped.time - from, [Math.max(-Math.min(...starts), room[0]), Math.min(DURATION - 0.05 - Math.max(...starts), room[1])]);
+        if (shift === null) { valid = false; return; }
+        drag!.shift = shift;
+        floating = { refs: moving, dy: y - drag!.y - dk * TRACK_H };
+        moving.forEach((r) => {
           const e = l[r.list][r.i] as { from?: number; to?: number; at?: number; track?: string };
           if (r.list === "beds") { const len = e.to! - e.from!; e.from = r3(e.from! + shift); e.to = r3(e.from + len); } else e.at = r3(e.at! + shift);
-          if (dk) e.track = rows[k] + dk === n ? fresh : l.tracks[rows[k] + dk].id;
         });
-        resolve(l, moving, span);
       } else if (drag!.mode === "end") {
-        const file = ref.list === "sfx" ? seconds(clipOf(ref)!.name) : Infinity, e2 = Math.max(from + 1 / FPS, snapTo(to + d, pts, perPx, off));
+        const snapped = drag!.magnet(to + d, [0], pts, perPx, off); target = snapped.target;
+        const neighbours = allClips().filter((r) => !same(r, ref) && clipOf(r)!.track === clipOf(ref)!.track).map(span);
+        const next = Math.min(Infinity, ...neighbours.filter(([a]) => a >= to - .02).map(([a]) => a));
+        const file = ref.list === "sfx" ? seconds(clipOf(ref)!.name) : Infinity, e2 = Math.min(next, Math.max(from + 1 / FPS, snapped.time));
         if (ref.list === "beds") l.beds[ref.i].to = r3(e2);
         else { const s = l.sfx[ref.i]; s.length = r3(Math.min(e2 - from, file - (s.start ?? 0))); }
-        resolve(l, [ref], span);
       } else {
-        const s0 = Math.max(0, Math.min(to - 1 / FPS, snapTo(from + d, pts, perPx, off)));
+        const snapped = drag!.magnet(from + d, [0], pts, perPx, off); target = snapped.target;
+        const neighbours = allClips().filter((r) => !same(r, ref) && clipOf(r)!.track === clipOf(ref)!.track).map(span);
+        const prev = Math.max(0, ...neighbours.filter(([, b]) => b <= from + .02).map(([, b]) => b));
+        const s0 = Math.max(prev, Math.min(to - 1 / FPS, snapped.time));
         if (ref.list === "beds") cutBefore(l.beds[ref.i], "beds", s0);
         else {
           // A one-shot trimmed at its head starts later in its file, so what's left stays where it was
           const s = l.sfx[ref.i], into = r3(Math.max(0, (s.start ?? 0) + (s0 - from)));
           s.at = r3(from + (into - (s.start ?? 0))); s.start = into; s.length = r3(to - s.at);
         }
-        resolve(l, [ref], span);
       }
     });
+    if (!valid) { floating = null; restore(drag.snap); drag.moving = group; drag.shift = 0; c.style.cursor = "not-allowed"; }
     if (drag.mode === "move") drag.along?.preview(drag.shift);
     const others = drag.mode === "move" ? group.length - 1 + (drag.along?.count ?? 0) : 0;
     const [a0, a1] = span(drag.moving[group.indexOf(ref)] ?? ref), many = others ? ` + ${others} more` : "";
-    snapLine(off ? null : snappedTo(drag.mode === "move" ? [a0, a1] : drag.mode === "start" ? [a0] : [a1], pts));
+    snapLine(target === null || !valid ? null : snappedTo(drag.mode === "move" ? [a0, a1] : drag.mode === "start" ? [a0] : [a1], [target]));
     say(`${drag.copy ? "Copy of " : ""}${clipOf(ref)!.name}${many}: ${stamp(a0)} → ${stamp(a1)}${off ? "" : " (Shift: no snapping)"}`, 1500);
   });
 
@@ -302,6 +329,7 @@ export const attachLanes = () => {
     if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
     snapLine(null);
+    floating = null;
     const { snap, moved, alone, ref, copy, moving, along, shift } = drag;
     drag = null;
     c.style.cursor = "";
@@ -309,6 +337,7 @@ export const attachLanes = () => {
     const after = snapshot();
     restore(snap);
     along?.restore();
+    if (after === snap || e.type !== "pointerup") { drawLanes(); return; }
     together(() => {
       edit((l) => { const now: typeof l = JSON.parse(after); l.beds = now.beds; l.sfx = now.sfx; l.tracks = now.tracks; });
       along?.commit(Math.round(shift * 1000) / 1000);

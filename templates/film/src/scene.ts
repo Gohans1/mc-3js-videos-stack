@@ -158,7 +158,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     tone.saturation = EDIT.look.saturation;
     composer.render(0);
     if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
-    if (!free.on) titles(EDIT.text.items, t, camera);
+    if (!free.on) titles(EDIT.text.items, t, camera, EDIT.text.tracks);
   };
 
   const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);

@@ -47,14 +47,13 @@ export const wavPeaks = (file) => {
       : bits === 24 ? (b, i) => b.readIntLE(i, 3) / 8388608
       : bits === 32 ? (b, i) => b.readInt32LE(i) / 2147483648 : null;
     if (!read) return null;
-    // Every Nth frame is plenty for a lane a few pixels tall, and keeps a three minute track to a few milliseconds
-    const per = Math.max(1, Math.round(rate * PEAK_STEP)), skip = Math.max(1, Math.floor(per / 64)), peaks = [];
+    const per = Math.max(1, Math.round(rate * PEAK_STEP)), peaks = [];
     const block = Buffer.alloc(per * frame);
     for (let at = 0; at + frame <= c.data.len; at += per * frame) {
       const got = readSync(fd, block, 0, Math.min(block.length, c.data.len - at), c.data.at + at);
       let p = 0;
-      for (let i = 0; i + frame <= got; i += frame * skip) { const v = Math.abs(read(block, i)); if (v > p) p = v; }
-      peaks.push(Math.round(Math.min(1, p) * 1000) / 1000);
+      for (let i = 0; i + bytes <= got; i += bytes) { const v = Math.abs(read(block, i)); if (Number.isFinite(v) && v > p) p = v; }
+      peaks.push(Math.round(p * 1e6) / 1e6);
     }
     return { step: PEAK_STEP, peaks };
   } finally { closeSync(fd); }

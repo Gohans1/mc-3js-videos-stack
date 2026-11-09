@@ -155,11 +155,11 @@ const drawShape = (g, it, m, lk) => {
 };
 
 // The items on screen at t, in drawing order (a higher track over a lower one, as CapCut's tracks are), with their boxes
-const onScreen = (g, list, t, W, H, camera) => {
+const onScreen = (g, list, t, W, H, camera, tracks) => {
   const out = [];
   (list ?? []).forEach((it, i) => {
     const ph = phaseOf(it, t);
-    if (!ph || it.hidden) return;
+    if (!ph || it.hidden || tracks?.[it.track ?? 0]?.hidden) return;
     const m = measure(g, it, W, H, camera);
     if (m) out.push({ it, i, ph, m });
   });
@@ -183,8 +183,8 @@ export function makeTitles(renderer, W, H) {
   // The faces load before the first frame is drawn (a draft's first frame and a final's are the same as the studio's); a family
   // a title never used loads in the background the first time it is needed
   const ready = Promise.all(FONTS.flatMap((f) => [400, 700].map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0")))).catch(() => {});
-  const draw = (list, t, camera) => {
-    const now = onScreen(g, list, t, W, H, camera);
+  const draw = (list, t, camera, tracks) => {
+    const now = onScreen(g, list, t, W, H, camera, tracks);
     if (!now.length) { last = ""; return; }
     const key = JSON.stringify(now.map(({ it, ph, m }) => [it, ph, m.cx, m.cy]));
     if (key !== last) {
@@ -216,6 +216,6 @@ export function makeTitles(renderer, W, H) {
   draw.fonts = FONTS;
   draw.anims = { text: { in: TEXT_IN, out: TEXT_OUT }, shape: { in: SHAPE_IN, out: SHAPE_OUT } };
   // Each item on screen at t: its place in the list and its box (x0, y0, x1, y1 in 0 to 1 of the frame), top-most last
-  draw.boxes = (list, t, camera) => onScreen(g, list, t, W, H, camera).map(({ i, m }) => ({ i, box: [m.x0 / W, m.y0 / H, (m.x0 + m.w) / W, (m.y0 + m.h) / H] }));
+  draw.boxes = (list, t, camera, tracks) => onScreen(g, list, t, W, H, camera, tracks).map(({ i, m }) => ({ i, box: [m.x0 / W, m.y0 / H, (m.x0 + m.w) / W, (m.y0 + m.h) / H] }));
   return draw;
 }

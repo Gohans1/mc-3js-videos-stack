@@ -7,7 +7,7 @@
 // a click on a key seeks there, one on empty space drops the pick and moves the playhead there (CapCut, the dev's call
 // 2026-11-09); a touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
-import { snappedTo, snapTo, stamp } from "../core/time";
+import { makeSnapper, snappedTo, stamp } from "../core/time";
 import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, rowsOf, same, sameKey, snapshot } from "./keys";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
@@ -23,7 +23,7 @@ import { seek, setPlaying } from "../playback/transport";
 const R = 4.5;
 
 
-type Spot = { ref: KeyRef; x: number; y: number };
+type Spot = { refs: KeyRef[]; x: number; y: number; height: number };
 let spots: Spot[] = [];
 
 const diamond = (g: CanvasRenderingContext2D, x: number, y: number, r: number) => { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath(); };
@@ -45,12 +45,17 @@ export const drawKeyRows = () => {
     // file on it as Blender's summary row and Theatre.js's aggregate rows show them, so a folded file still shows where it changes
     if (l.kind === "file") {
       g.fillStyle = tone("card"); g.fillRect(0, l.y, w, HEAD_H);
-      const y = l.y + HEAD_H / 2, drawn = new Set<number>();
-      g.fillStyle = tone("muted-foreground");
-      for (const r of rowsOf(l.f)) for (const k of keysOf(r.f, r.path)) {
-        const x = Math.round(X(k.t));
-        if (x < -R || x > w + R || drawn.has(x)) continue;
-        drawn.add(x); diamond(g, x, y, R - 1); g.fill();
+      const y = l.y + HEAD_H / 2, columns = new Map<number, KeyRef[]>();
+      for (const r of rowsOf(l.f)) keysOf(r.f, r.path).forEach((k, i) => {
+        const refs = columns.get(k.t) ?? [];
+        refs.push({ f: r.f, path: r.path, i }); columns.set(k.t, refs);
+      });
+      for (const [t, refs] of columns) {
+        const x = X(t);
+        if (x < -REACH || x > w + REACH) continue;
+        spots.push({ refs, x, y, height: HEAD_H });
+        diamond(g, x, y, R - 1); g.fillStyle = tone(refs.some(isPicked) ? "foreground" : "muted-foreground"); g.fill();
+        if (refs.every(isPicked)) { diamond(g, x, y, R + 2); g.strokeStyle = tone("pick"); g.lineWidth = 2; g.stroke(); }
       }
       continue;
     }
@@ -67,7 +72,7 @@ export const drawKeyRows = () => {
       const x = X(k.t);
       if (x < -60 || x > w + REACH) return;
       const ref = { f: l.row.f, path: l.row.path, i };
-      spots.push({ ref, x, y });
+      spots.push({ refs: [ref], x, y, height: ROW_H });
       const name = nameOf(k), room = (i + 1 < ks.length ? X(ks[i + 1].t) : w) - x - 10;
       if (name && room > 24) {
         g.save(); g.beginPath(); g.rect(x + 7, l.y, room, ROW_H); g.clip();
@@ -86,23 +91,23 @@ export const drawKeyRows = () => {
 };
 
 const snapPoints = () => [S.t, ...SHOTS.map((s) => s.t), ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];
-const snapped = (s: number, perPx: number, off: boolean) => snapTo(s, snapPoints(), perPx, off, true);
 // The key a press takes: the playhead line comes first over keys behind it (a crowd of keys never hides it), except the
 // picked key, which a click has just brought the playhead onto and which must still drag
 const keyUnder = (x: number, y: number, w: number, touch: boolean) => {
   const s = spotAt(x, y, touch);
-  return s && onPlayhead(x, w, touch) && !isPicked(s.ref) ? null : s;
+  return s && onPlayhead(x, w, touch) && !s.refs.some(isPicked) ? null : s;
 };
 const spotAt = (x: number, y: number, touch: boolean) => {
   const reach = keyReach(touch);
   let best: Spot | null = null, d = reach;
-  for (const s of spots) { if (Math.abs(s.y - y) > ROW_H / 2) continue; const e = Math.abs(s.x - x); if (e <= d) { d = e; best = s; } }
+  for (const s of spots) { if (Math.abs(s.y - y) >= s.height / 2) continue; const e = Math.abs(s.x - x); if (e <= d) { d = e; best = s; } }
   return best;
 };
 const keysInBox = (b: { x0: number; x1: number; y0: number; y1: number }) => {
   const r = S.el.keyrows.getBoundingClientRect();
   if (!r.height) return [];
-  return spots.filter((s) => r.left + s.x >= b.x0 - R && r.left + s.x <= b.x1 + R && r.top + s.y >= b.y0 - R && r.top + s.y <= b.y1 + R).map((s) => s.ref);
+  const refs = spots.filter((s) => r.left + s.x >= b.x0 - R && r.left + s.x <= b.x1 + R && r.top + s.y >= b.y0 - R && r.top + s.y <= b.y1 + R).flatMap((s) => s.refs);
+  return refs.filter((ref, i) => refs.findIndex((other) => sameKey(ref, other)) === i);
 };
 
 export const attachKeyRows = () => {
@@ -110,7 +115,7 @@ export const attachKeyRows = () => {
   marks.keys = drawKeyRows;
   inBox.keys = keysInBox;
   const local = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width }; };
-  let drag: { ref: KeyRef; group: KeyRef[]; along: Along | null; x: number; t: number; snap: string[]; moved: boolean; alone: boolean } | null = null;
+  let drag: { ref: KeyRef; column: KeyRef[]; group: KeyRef[]; along: Along | null; x: number; t: number; snap: string[]; moved: boolean; alone: boolean; magnet: ReturnType<typeof makeSnapper> } | null = null;
   let scrub: { resume: boolean } | null = null;
   let box: { add: boolean } | null = null;
 
@@ -130,29 +135,32 @@ export const attachKeyRows = () => {
       } else { box = { add }; boxStart(e, add); }
       return;
     }
-    if (add) { const p = picked(); pickAcross({ ...p, keys: isPicked(s.ref) ? p.keys.filter((q) => !sameKey(q, s.ref)) : [...p.keys, s.ref] }); return; }
-    const was = isPicked(s.ref);
-    if (!was) pickKeys([s.ref]);
+    if (add) {
+      const p = picked(), rest = p.keys.filter((q) => !s.refs.some((ref) => sameKey(q, ref)));
+      pickAcross({ ...p, keys: s.refs.every(isPicked) ? rest : [...rest, ...s.refs] }); return;
+    }
+    const was = s.refs.every(isPicked), ref = s.refs[0];
+    if (!was) pickKeys(s.refs);
     const along = was ? alongWith("keys") : null;
-    drag = { ref: s.ref, group: get().keyPicks, along, x, t: keyOf(s.ref).t, snap: snapshot(), moved: false, alone: was && (get().keyPicks.length > 1 || !!along) };
+    drag = { ref, column: s.refs, group: get().keyPicks, along, x, t: keyOf(ref).t, snap: snapshot(), moved: false, alone: was && (get().keyPicks.length > s.refs.length || !!along), magnet: makeSnapper() };
   });
   c.addEventListener("pointermove", (e) => {
     const { x, y, w } = local(e), { v } = view(), perPx = v / w;
     if (scrub) { seek(timeAt(x, w)); return; }
     if (get().blade && !drag && !box) { c.style.cursor = "not-allowed"; return; }
     if (box) { boxMove(e); return; }
-    if (!drag) { c.style.cursor = keyUnder(x, y, w, false) ? "grab" : onPlayhead(x, w, false) ? "ew-resize" : "crosshair"; return; }
+    if (!drag) { c.style.cursor = keyUnder(x, y, w, false) ? "default" : onPlayhead(x, w, false) ? "ew-resize" : "crosshair"; return; }
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     if (!drag.moved) hold(true);
     drag.moved = true;
-    c.style.cursor = "grabbing";
+    c.style.cursor = "default";
     // The key under the pointer snaps; the rest of the pick moves as far, none past a key of its row that stays
     restore(drag.snap);
-    const { along } = drag, [lo, hi] = room(drag.group), want = snapped(drag.t + (x - drag.x) * perPx, perPx, noSnap(e)) - drag.t;
+    const { along } = drag, [lo, hi] = room(drag.group), snap = drag.magnet(drag.t + (x - drag.x) * perPx, [0], snapPoints(), perPx, noSnap(e), true), want = snap.time - drag.t;
     const d = Math.max(lo, along?.room[0] ?? lo, Math.min(hi, along?.room[1] ?? hi, want));
     preview(drag.group, (r, ks) => { ks[r.i].t = Math.round((ks[r.i].t + d) * 1000) / 1000; });
     along?.preview(d);
-    snapLine(noSnap(e) ? null : snappedTo([drag.t + d], snapPoints()));
+    snapLine(snap.target === null ? null : snappedTo([drag.t + d], [snap.target]));
     const others = drag.group.length - 1 + (along?.count ?? 0), many = others ? ` + ${others} more` : "";
     say(`${drag.ref.path.join(".")}${many}: ${stamp(drag.t)} → ${stamp(drag.t + d)}${d !== want ? " (stopped by its neighbour)" : noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
   });
@@ -161,15 +169,16 @@ export const attachKeyRows = () => {
     if (box) { box = null; boxEnd(e); return; }
     if (!drag) return;
     snapLine(null);
-    const { snap, moved, alone, ref, group, along, t: was } = drag;
+    const { snap, moved, alone, ref, column, group, along, t: was } = drag;
     drag = null;
     c.style.cursor = "";
     // A plain click also brings the picture to the key, so the Key tab and the frame show the same moment
-    if (!moved) { if (alone) pickKeys([ref]); seek(keyOf(ref).t); return; }
+    if (!moved) { if (alone) pickKeys(column); seek(keyOf(ref).t); return; }
     const after = group.map((r) => keyOf(r).t), d = Math.round((keyOf(ref).t - was) * 1000) / 1000;
     restore(snap);
     hold(false);
     along?.restore();
+    if (e.type !== "pointerup" || d === 0) return;
     together(() => {
       editKeys(group, (r, ks) => { ks[r.i].t = after[group.findIndex((g) => sameKey(g, r))]; });
       along?.commit(d);
