@@ -138,7 +138,8 @@ const play = (ctx: BaseAudioContext, bus: AudioNode, c: Clip, s: Sound, at: numb
   const u0 = at - c.t0, offset = c.loop ? (c.start + u0) % s.buf.duration : c.start + u0;
   if (!c.loop && offset >= s.buf.duration) return null;
   // mix.py's aformat makes a mono file stereo the ffmpeg way, the center at -3 dB in each side; Web Audio copies it at full level
-  const src = ctx.createBufferSource(), gain = ctx.createGain(), lin = s.buf.numberOfChannels === 1 ? Math.SQRT1_2 : 1, begin = w.when(at);
+  const src = ctx.createBufferSource(), gain = ctx.createGain(), lin = s.buf.numberOfChannels === 1 ? Math.SQRT1_2 : 1;
+  const begin = Math.round(w.when(at) * ctx.sampleRate) / ctx.sampleRate;
   src.buffer = s.buf; src.loop = c.loop; src.playbackRate.value = w.speed;
   let pts = envelopePoints(u0, c.t1 - c.t0, c.fadeIn, c.fadeOut, c.length);
   if (c.duck > 0) {

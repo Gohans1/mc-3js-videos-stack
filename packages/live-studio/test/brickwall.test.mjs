@@ -1,6 +1,7 @@
 // The master limiter (app/sound/brickwall.ts) holds mix.py's alimiter ceiling: no sample past 0.45, the sound under it
 // untouched, and back to unity within the release once the loud part has gone
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { ATTACK, Brickwall, CEILING, RELEASE } from "../app/sound/brickwall.ts";
 
@@ -16,9 +17,35 @@ const run = (chans, block = 128) => {
 const sine = (secs, amp, hz = 220) => Float32Array.from({ length: secs * RATE }, (_, i) => amp * Math.sin((2 * Math.PI * hz * i) / RATE));
 const peak = (a, from = 0, to = a.length) => { let m = 0; for (let i = from; i < to; i++) m = Math.max(m, Math.abs(a[i])); return m; };
 
-test("a quiet sound passes untouched, ATTACK late", () => {
+for (const rate of [44100, 48000]) test(`live limiter matches FFmpeg samples through stereo transients, sustained peaks and release at ${rate} Hz`, () => {
+  const frames = Math.round(rate * .4), channels = 2;
+  const input = new Float32Array(frames * channels);
+  for (let i = 0; i < frames; i++) for (let c = 0; c < channels; c++) {
+    const t = i / rate, loud = t > .08 && t < .18;
+    input[i * channels + c] = (t < .28 ? (loud ? 1.6 : .2) : 0) * Math.sin(2 * Math.PI * (c ? 331 : 220) * t);
+  }
+  input[Math.round(rate * .025) * channels] = 2;
+  input[Math.round(rate * .026) * channels + 1] = -3;
+  const result = spawnSync("ffmpeg", ["-v", "error", "-f", "f32le", "-ar", String(rate), "-ac", "2", "-i", "pipe:0", "-af", "alimiter=limit=0.45:level=false", "-f", "f32le", "pipe:1"], { input: Buffer.from(input.buffer), timeout: 15000, maxBuffer: 2e6 });
+  assert.equal(result.status, 0, result.stderr?.toString());
+  const expected = new Float32Array(result.stdout.buffer.slice(result.stdout.byteOffset, result.stdout.byteOffset + result.stdout.byteLength));
+  assert.equal(expected.length, input.length);
+  for (const block of [97, 128]) {
+    const limiter = new Brickwall(rate, channels), output = [new Float32Array(block), new Float32Array(block)];
+    let error = 0;
+    for (let offset = 0; offset < frames; offset += block) {
+      const n = Math.min(block, frames - offset), chunk = [new Float32Array(n), new Float32Array(n)];
+      for (let i = 0; i < n; i++) for (let c = 0; c < channels; c++) chunk[c][i] = input[(offset + i) * channels + c];
+      limiter.process(chunk, output, n);
+      for (let i = 0; i < n; i++) for (let c = 0; c < channels; c++) error = Math.max(error, Math.abs(output[c][i] - expected[(offset + i) * channels + c]));
+    }
+    assert.ok(error < 2e-7, `${block}-sample blocks: max error ${error}`);
+  }
+});
+
+test("a quiet sound passes untouched after FFmpeg's 239-sample look-ahead at 48 kHz", () => {
   const x = sine(1, 0.3), { out, delay } = run([x, x]);
-  assert.equal(delay, Math.round(ATTACK * RATE));
+  assert.equal(delay, 239);
   for (let i = delay; i < x.length; i++) assert.ok(Math.abs(out[0][i] - x[i - delay]) < 1e-6);
 });
 

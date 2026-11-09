@@ -152,8 +152,8 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
             f.append(f"afade=t=in:d={fade_in}")
         if fade_out and length:
             f.append(f"afade=t=out:st={max(0, length - fade_out)}:d={fade_out}")
-        ms = int(round(at * 1000))
-        f.append(f"adelay={ms}|{ms}")
+        samples = math.floor(at * 48000 + 0.5)
+        f.append(f"adelay={samples}S|{samples}S")
         chains.append(f"[{i}:a]{','.join(f)}[a{i}]")
 
     # Dialogue compression (4:1 above -30 dBFS, fast attack) and a voice limiter bring the hushed narration's peaks to

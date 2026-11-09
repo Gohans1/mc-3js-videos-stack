@@ -5,6 +5,28 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+test("the mixer places sub-millisecond clip starts on the nearest 48 kHz sample", () => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-sample-time-"));
+  const run = (exe, args) => {
+    const r = spawnSync(exe, args, { cwd: dir, encoding: "utf8", timeout: 20000 });
+    assert.equal(r.status, 0, r.stderr);
+  };
+  try {
+    mkdirSync(join(dir, "src/timeline"), { recursive: true }); mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+    writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: .1, voice: { warp: [], lines: [] } }));
+    writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: [], sfx: [], voice: false }));
+    run("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "aevalsrc=0.25:s=48000:d=0.05", "sound/sfx/tone.wav"]);
+    const clip = { name: "tone", gain: 0, at: .01236 };
+    const code = "import importlib.util,json,sys; from pathlib import Path; sys.path.insert(0,str(Path(sys.argv[1]).parent)); s=importlib.util.spec_from_file_location('mix',sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.build(Path('out.wav'),[],[json.loads(sys.argv[2])],voice=False,master=False,float_output=True)";
+    run("python", ["-c", code, resolve("../../scripts/sound/mix.py"), JSON.stringify(clip)]);
+    run("ffmpeg", ["-v", "error", "-i", "out.wav", "-f", "f32le", "out.raw"]);
+    const raw = readFileSync(join(dir, "out.raw"));
+    let first = 0;
+    while (first < raw.length / 8 && raw.readFloatLE(first * 8) === 0) first++;
+    assert.equal(first, 593, "round(0.01236 × 48000), without millisecond quantization");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("the real FFmpeg mixer renders volume keys per sample on trimmed one-shots and looping beds", () => {
   const dir = mkdtempSync(join(tmpdir(), "studio-gain-"));
   const run = (exe, args) => {

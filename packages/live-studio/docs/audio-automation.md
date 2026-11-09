@@ -18,4 +18,8 @@ Codegraph: editor-refs/opencut-classic, audio-state.ts và audio-manager.ts; tha
 
 Đã thao tác thật thêm/xóa/đi key, kéo điểm/đường, key đầu, nhấp đúp, trim/split, Escape, Undo và reload. Ảnh, WAV và số đo nằm ở films/sealed-room/renders/audio-automation-verification; dữ liệu thử đã trả về nguyên bản.
 
-Clip riêng chưa chạm limiter: preview và PCM16 lệch tối đa 0,04 dB ở đoạn trên −80 dBFS, cùng peak 0,0777. Master limiter sẵn có còn lệch tối đa 0,28 dB trong mix 20 giây; chưa khẳng định khớp hoàn toàn hoặc giống CapCut 99%.
+Clip riêng chưa chạm limiter: preview và PCM16 lệch tối đa 0,04 dB ở đoạn trên −80 dBFS, cùng peak 0,0777. Mix 20 giây sau sửa limiter và vị trí mẫu lệch tối đa 0,01 dB mỗi nửa giây, cùng peak 0,45; bằng chứng nằm trong renders/limiter-verification.
+
+Limiter cũ tự viết đã thay bằng bản chuyển TypeScript từ [FFmpeg n8.1.1](https://github.com/FFmpeg/FFmpeg/blob/n8.1.1/libavfilter/af_alimiter.c), kèm nguồn và LGPL trong app/sound/vendor. Bài thử so từng mẫu với FFmpeg tại 44,1/48 kHz, attack/release và stereo; delay đúng của FFmpeg là 239 mẫu ở 48 kHz.
+
+Sai lệch mix trước đây không chỉ do limiter: adelay làm tròn mili giây khiến các lớp tiếng lệch pha. Mix.py dùng adelay theo mẫu 48 kHz, AudioBufferSource bắt đầu tại mẫu gần nhất; đã kiểm trực tiếp OfflineAudioContext và WAV xuất.
