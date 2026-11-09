@@ -12,7 +12,10 @@ import { stamp } from "../core/time";
 import { startCarry } from "./lanes";
 import { seek, setPlaying } from "../playback/transport";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
-import { addClip, clipOf, kindOf, lanes, library, type LibraryItem, lightSound, listen, listening, moveTo, moveToTrack, pickAt, pickUses, preview, removeClip, removeClips, resetBasic, restore, seconds, setClips, setField, snapshot, span, swapSound, usesOf } from "./sound";
+import { addClip, clipOf, edit, kindOf, lanes, library, type LibraryItem, lightSound, listen, listening, moveTo, moveToTrack, pickAt, pickUses, preview, removeClip, removeClips, resetBasic, restore, seconds, setClips, setField, snapshot, span, swapSound, usesOf } from "./sound";
+import { gainAt, GAIN_KEY_EPS, toggleGainKey, writeGain } from "./gain";
+import { useFrame } from "../core/useFrame";
+import { FPS, r3 } from "../core/time";
 
 const soundDoc = { snapshot, restore };
 const secs = (x: number) => `${x.toFixed(x < 10 ? 2 : 1)} s`;
@@ -20,7 +23,7 @@ import { S } from "../core/state";
 import { type ClipRef } from "./slice";
 import { useStudio } from "../core/store";
 import { FavoriteStar } from "../components/FavoriteStar";
-import { FieldRow, Reset, Section, Segmented, SliderRow } from "../components/inspector";
+import { FieldRow, KeyNav, Reset, Section, Segmented, SliderRow } from "../components/inspector";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 
@@ -28,9 +31,14 @@ import { Tip } from "../components/Tip";
 // (which file, which track, where it runs). A drag previews and saves once, when let go: one undo step
 function Inspector({ clip }: { clip: ClipRef }) {
   useStudio((s) => s.soundRev);
+  useFrame();
   const c = clipOf(clip);
   if (!c) return null;
   const [from, to] = span(clip), bed = clip.list === "beds", file = seconds(c.name);
+  const u = r3(Math.min(to - from, Math.max(0, Math.round((S.t - from) * FPS) / FPS))), volume = gainAt(c, u);
+  const keys = (c.gainKeys ?? []).filter((k) => k.t >= 0 && k.t <= to - from);
+  const prev = keys.findLast((k) => k.t < u - GAIN_KEY_EPS), next = keys.find((k) => k.t > u + GAIN_KEY_EPS);
+  const here = keys.some((k) => Math.abs(k.t - u) < GAIN_KEY_EPS);
   const item = library.find((x) => x.name === c.name);
   const names = library.map((x) => ({ value: x.name, label: x.name }));
   const tracks = [...(lanes?.tracks ?? []).map((t) => ({ value: t.id, label: `${t.name}${t.lock ? " (locked)" : ""}` })), { value: "new", label: "New track at the bottom" }];
@@ -48,8 +56,10 @@ function Inspector({ clip }: { clip: ClipRef }) {
         <span className="min-w-0 flex-1 truncate text-ui text-muted-foreground" title={item?.title}>{item?.title ?? c.name}</span>
         <Tip label="Delete clip (Delete)"><Button variant="remove" size="icon-lg" className="-me-1 pointer-coarse:size-10" aria-label={`Delete ${c.name}`} onClick={() => removeClip(clip)}><Trash2 /></Button></Tip>
       </div>
-      <Section title="Basic" right={<Reset label="Reset volume, pan and fades" disabled={!c.gain && !c.pan && !fi && !fo} onClick={() => resetBasic(clip)} />}>
-        {row("Volume", "gain", c.gain, Math.min(-40, c.gain), Math.max(20, c.gain), 0.1, "dB", 1)}
+      <Section title="Basic" right={<Reset label="Reset volume, pan and fades" disabled={!c.gain && !c.gainKeys?.length && !c.pan && !fi && !fo} onClick={() => resetBasic(clip)} />}>
+        <SliderRow label="Volume" value={volume} min={Math.min(-40, volume)} max={Math.max(20, volume)} step={0.1} digits={1} unit="dB" doc={soundDoc}
+          preview={(v) => preview((l) => writeGain(l[clip.list][clip.i], u, v))} save={(v) => edit((l) => writeGain(l[clip.list][clip.i], u, v))}
+          nav={<KeyNav what="volume" prev={!!prev} next={!!next} here={here} onPrev={() => prev && seek(from + prev.t)} onNext={() => next && seek(from + next.t)} onToggle={() => edit((l) => toggleGainKey(l[clip.list][clip.i], u))} />} />
         {row("Pan", "pan", Math.round((c.pan ?? 0) * 100), -100, 100, 1, "", 0, "Left −100, right 100: put the sound where it is in the picture", 100)}
         {row("Fade in", "fadeIn", fi, 0, fadeMax, 0.05, "s", 2)}
         {row("Fade out", "fadeOut", fo, 0, fadeMax, 0.05, "s", 2)}

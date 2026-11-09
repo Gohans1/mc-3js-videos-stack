@@ -24,6 +24,7 @@ import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { addTrack, placeShift, same } from "./tracks";
 import { seek, setPlaying } from "../playback/transport";
+import { gainAt, gainPoints, GAIN_KEY_EPS, shiftGainTime, toggleGainKey } from "./gain";
 
 // sound/TrackHeads.tsx lays its rows out on these
 export const TRACK_H = 52, TOP = 2, ADD_H = 24;
@@ -57,13 +58,13 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   // The file's level, scaled by the clip's gain so a quiet clip looks quiet: each bar the loudest peak of the 2 px it stands for
   const p = peaksOf(c.name), [from, to] = span(ref), px = (x1 - x0) / Math.max(1e-3, to - from);
   if (p && x1 - x0 > 6) {
-    const k = 10 ** (c.gain / 20), start = (c as { start?: number }).start ?? 0, n = p.peaks.length, room = CLIP_H - LABEL_H - 3, base = y + CLIP_H - 1;
+    const start = c.start ?? 0, n = p.peaks.length, room = CLIP_H - LABEL_H - 3, base = y + CLIP_H - 1;
     const at = (x: number) => { const s = (x - x0) / px + start; return Math.floor((ref.list === "beds" ? ((s % (n * p.step)) + n * p.step) % (n * p.step) : s) / p.step); }; // a bed loops its file
     for (let x = Math.max(Math.ceil(cx0) + 1, 1); x < cx1 - 1; x += 2) {
       const i0 = at(x), i1 = Math.max(i0, at(x + 2) - 1);
       let v = 0;
       for (let i = i0; i <= i1 && i < n; i++) if (i >= 0 && p.peaks[i] > v) v = p.peaks[i];
-      v *= k;
+      v *= 10 ** (gainAt(c, (x - x0) / px) / 20);
       if (v <= 0) continue;
       const bar = Math.max(1, Math.min(1, v) * room);
       g.fillStyle = tone("clip-wave"); g.fillRect(x, base - bar, 1, bar);
@@ -77,7 +78,16 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   if (fi > 0) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + fi * px, y); g.lineTo(x0, y + CLIP_H); g.fill(); }
   if (fo > 0) { g.beginPath(); g.moveTo(x1, y); g.lineTo(x1 - fo * px, y); g.lineTo(x1, y + CLIP_H); g.fill(); }
   if (on || (hover && same(hover, ref))) {
-    g.fillStyle = "rgba(255,255,255,.3)"; g.fillRect(cx0 + 1, Math.round(y + gainY(c.gain)), cx1 - cx0 - 2, 1);
+    const from = Math.max(0, (cx0 - x0) / px), to = Math.min(span(ref)[1] - span(ref)[0], (cx1 - x0) / px);
+    g.strokeStyle = "rgba(255,255,255,.65)"; g.lineWidth = 1; g.beginPath();
+    for (const [i, k] of gainPoints(c, from, to).entries()) { const x = x0 + k.t * px, yy = y + gainY(k.gain); if (i) g.lineTo(x, yy); else g.moveTo(x, yy); }
+    g.stroke();
+    if (on) for (const k of c.gainKeys ?? []) {
+      const x = x0 + k.t * px, yy = y + gainY(k.gain);
+      if (k.t < 0 || k.t > span(ref)[1] - span(ref)[0] || x < 0 || x > w) continue;
+      g.fillStyle = tone(Math.abs(S.t - span(ref)[0] - k.t) < GAIN_KEY_EPS ? "primary" : "pick");
+      g.beginPath(); g.moveTo(x, yy - 3.5); g.lineTo(x + 3.5, yy); g.lineTo(x, yy + 3.5); g.lineTo(x - 3.5, yy); g.closePath(); g.fill();
+    }
   }
   if ((on || (hover && same(hover, ref))) && x1 - x0 > KNOB * 4 && !locked(ref)) {
     g.fillStyle = tone("clip-audio"); g.strokeStyle = tone("pick"); g.lineWidth = 1.5;
@@ -174,7 +184,7 @@ const clipsInBox = (m: { x0: number; x1: number; y0: number; y1: number }) => {
 };
 
 type Drag = {
-  ref: ClipRef; group: ClipRef[]; mode: "move" | "start" | "end" | "fadeIn" | "fadeOut" | "gain"; x: number; y: number; snap: string;
+  ref: ClipRef; group: ClipRef[]; mode: "move" | "start" | "end" | "fadeIn" | "fadeOut" | "gain" | "gain-key"; gainKey: number | null; x: number; y: number; snap: string;
   from: number; to: number; pts: number[]; moved: boolean; alone: boolean; x0: number; x1: number;
   copy: boolean; // CapCut's drag to duplicate (Alt held as the drag starts): copies move, the clips stay
   moving: ClipRef[]; // the clips the drag moves: the pick, or its copies
@@ -190,10 +200,17 @@ export const attachLanes = () => {
   let drag: Drag | null = null;
   let scrub: { resume: boolean } | null = null;
   let box: { add: boolean } | null = null;
-  const onGain = (b: Box, y: number) => (picked(b.ref) || !!hover && same(hover, b.ref)) && Math.abs(y - b.y0 - gainY(clipOf(b.ref)!.gain)) <= 3;
+  const localTime = (b: Pick<Box, "x0" | "x1" | "ref">, x: number) => (x - b.x0) / (b.x1 - b.x0) * (span(b.ref)[1] - span(b.ref)[0]);
+  const onGain = (b: Box, x: number, y: number) => (picked(b.ref) || !!hover && same(hover, b.ref)) && Math.abs(y - b.y0 - gainY(gainAt(clipOf(b.ref)!, localTime(b, x)))) <= 3;
+  const gainKeyAt = (b: Box, x: number, y: number, touch: boolean) => {
+    if (!picked(b.ref)) return null;
+    const duration = span(b.ref)[1] - span(b.ref)[0], reach = touch ? 12 : 7;
+    const i = clipOf(b.ref)!.gainKeys?.findIndex((k) => k.t >= 0 && k.t <= duration && Math.abs(x - b.x0 - k.t / duration * (b.x1 - b.x0)) <= reach && Math.abs(y - b.y0 - gainY(k.gain)) <= reach) ?? -1;
+    return i >= 0 ? i : null;
+  };
   // The playhead line over a clip's body is the playhead's; its trim edges and fade knobs stay the clip's
   const playheadGrab = (b: Box | null, x: number, y: number, w: number, touch: boolean) =>
-    onPlayhead(x, w, touch) && (!b || (x > b.x0 + EDGE && x < b.x1 - EDGE && !knobAt(b, x, y, touch) && !onGain(b, y)));
+    onPlayhead(x, w, touch) && (!b || (x > b.x0 + EDGE && x < b.x1 - EDGE && gainKeyAt(b, x, y, touch) === null && !knobAt(b, x, y, touch) && !onGain(b, x, y)));
   // Where a click cuts the clip under it: snapped to the playhead, cuts, words and other clips' edges, never to its own ends
   const bladeTime = (ref: ClipRef, x: number, w: number, off: boolean) => snapTo(timeAt(x, w), snapPoints([ref]), view().v / w, off, true);
 
@@ -223,9 +240,11 @@ export const attachLanes = () => {
     if (!was) setClips([b.ref]);
     const group = get().clips.filter((r) => !locked(r)), along = was ? alongWith("clips") : null, many = group.length > 1 || !!along;
     const edge = touch ? 10 : EDGE, wide = b.x1 - b.x0 > edge * 3, knob = many ? null : knobAt(b, x, y, touch);
-    const mode = knob ?? (many || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : onGain(b, y) ? "gain" : "move");
+    const gainKey = many ? null : gainKeyAt(b, x, y, touch);
+    const mode = gainKey !== null ? "gain-key" : knob ?? (many || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : onGain(b, x, y) ? "gain" : "move");
     const [from, to] = span(b.ref);
-    drag = { ref: b.ref, group, mode, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && many, x0: b.x0, x1: b.x1, copy: false, moving: group, along, shift: 0, magnet: makeSnapper() };
+    if (gainKey !== null) seek(from + clipOf(b.ref)!.gainKeys![gainKey].t);
+    drag = { ref: b.ref, group, mode, gainKey, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && many, x0: b.x0, x1: b.x1, copy: false, moving: group, along, shift: 0, magnet: makeSnapper() };
   });
 
   // A drag near the top or bottom of the tracks' box scrolls it, so a clip can be taken to a track out of sight
@@ -250,19 +269,28 @@ export const attachLanes = () => {
     if (!drag) {
       const b = hit(x, y, false), edge = b && get().clips.length < 2 && b.x1 - b.x0 > EDGE * 3 && (x <= b.x0 + EDGE || x >= b.x1 - EDGE);
       const knob = b && get().clips.length < 2 && !locked(b.ref) && knobAt(b, x, y, false);
-      c.style.cursor = playheadGrab(b, x, y, w, false) ? "ew-resize" : !b ? "default" : locked(b.ref) ? "not-allowed" : knob ? "ew-resize" : edge ? "col-resize" : onGain(b, y) ? "ns-resize" : "default";
+      c.style.cursor = playheadGrab(b, x, y, w, false) ? "ew-resize" : !b ? "default" : locked(b.ref) ? "not-allowed" : gainKeyAt(b, x, y, false) !== null ? "default" : knob ? "ew-resize" : edge ? "col-resize" : onGain(b, x, y) ? "ns-resize" : "default";
       if ((hover && b ? !same(hover, b.ref) : hover !== (b?.ref ?? null))) { hover = b?.ref ?? null; drawLanes(); }
       return;
     }
-    if (!drag.moved && Math.abs(x - drag.x) < 3 && Math.abs(y - drag.y) < (drag.mode === "gain" ? 1 : 6)) return;
+    if (!drag.moved && Math.abs(x - drag.x) < 3 && Math.abs(y - drag.y) < (drag.mode.startsWith("gain") ? 1 : 6)) return;
     if (!drag.moved) drag.copy = e.altKey && drag.mode === "move" && !drag.along;
     drag.moved = true;
-    c.style.cursor = drag.copy ? "copy" : drag.mode === "move" ? "default" : drag.mode === "gain" ? "ns-resize" : drag.mode.startsWith("fade") ? "ew-resize" : "col-resize";
+    c.style.cursor = drag.copy ? "copy" : drag.mode === "move" || drag.mode === "gain-key" ? "default" : drag.mode === "gain" ? "ns-resize" : drag.mode.startsWith("fade") ? "ew-resize" : "col-resize";
     const d = (x - drag.x) * perPx, off = noSnap(e), { ref, group, from, to, pts } = drag;
     restore(drag.snap);
-    if (drag.mode === "gain") {
-      const gain = Math.round(Math.max(-60, Math.min(36, clipOf(ref)!.gain + (drag.y - y) * 96 / (CLIP_H - LABEL_H - 9) * (e.shiftKey ? .1 : 1))) * 10) / 10;
-      preview((l) => { l[ref.list][ref.i].gain = gain; });
+    if (drag.mode === "gain" || drag.mode === "gain-key") {
+      const change = (drag.y - y) * 96 / (CLIP_H - LABEL_H - 9) * (e.shiftKey ? .1 : 1), c0 = clipOf(ref)!;
+      const key = drag.gainKey, base = key === null ? gainAt(c0, localTime({ x0: drag.x0, x1: drag.x1, ref }, drag.x)) : c0.gainKeys![key].gain;
+      const gain = Math.round(Math.max(-60, Math.min(36, base + change)) * 10) / 10;
+      const u = key === null ? null : r3(Math.max(0, (c0.gainKeys![key - 1]?.t ?? -1 / FPS) + 1 / FPS, Math.min(to - from, (c0.gainKeys![key + 1]?.t ?? to - from + 1 / FPS) - 1 / FPS, Math.round((c0.gainKeys![key].t + d) * FPS) / FPS)));
+      preview((l) => {
+        const c = l[ref.list][ref.i];
+        if (key !== null) { c.gainKeys![key] = { t: u!, gain }; }
+        else if (c.gainKeys?.length) { for (const k of c.gainKeys) k.gain = Math.round(Math.max(-60, Math.min(36, k.gain + gain - base)) * 10) / 10; }
+        else c.gain = gain;
+      });
+      if (u !== null) seek(from + u);
       say(`Volume: ${gain.toFixed(1)} dB (Shift: fine adjustment)`, 1500);
       return;
     }
@@ -312,6 +340,7 @@ export const attachLanes = () => {
         else {
           // A one-shot trimmed at its head starts later in its file, so what's left stays where it was
           const s = l.sfx[ref.i], into = r3(Math.max(0, (s.start ?? 0) + (s0 - from)));
+          shiftGainTime(s, -(into - (s.start ?? 0)));
           s.at = r3(from + (into - (s.start ?? 0))); s.start = into; s.length = r3(to - s.at);
         }
       }
@@ -345,6 +374,16 @@ export const attachLanes = () => {
     if (copy) setClips(moving); // as in CapCut, the copies are what is picked after
   };
   c.addEventListener("pointerup", up);
+  c.addEventListener("dblclick", (e) => {
+    const r = c.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, b = hit(x, y, false);
+    if (!b || locked(b.ref) || !onGain(b, x, y)) return;
+    const t = r3(Math.max(0, Math.min(span(b.ref)[1] - span(b.ref)[0], Math.round(localTime(b, x) * FPS) / FPS)));
+    edit((l) => toggleGainKey(l[b.ref.list][b.ref.i], t)); seek(span(b.ref)[0] + t);
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !drag?.mode.startsWith("gain")) return;
+    e.preventDefault(); e.stopPropagation(); restore(drag.snap); drag = null; c.style.cursor = "";
+  }, true);
   c.addEventListener("pointerleave", () => {
     if (bladeLine.row === "lanes") { bladeLine.row = null; drawLanes(); }
     if (hover && !drag) { hover = null; drawLanes(); }

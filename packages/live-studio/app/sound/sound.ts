@@ -9,12 +9,13 @@ import { measureFinal } from "./meter";
 import { forgetSounds, replan, setLive } from "./mixer";
 import { S } from "../core/state";
 import type { Role } from "./hit";
+import { type GainClip, shiftGainTime } from "./gain";
 import { type ClipRef } from "./slice";
 import { get, say, set } from "../core/store";
 import { addTrack, fits, freeTrack, normalize, refs, placeShift, same, tidy, type Track, trackOf } from "./tracks";
 
-export interface Bed { name: string; from: number; to: number; gain: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
-export interface OneShot { at: number; name: string; gain: number; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
+export interface Bed extends GainClip { name: string; from: number; to: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
+export interface OneShot extends GainClip { at: number; name: string; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface Lanes { beds: Bed[]; sfx: OneShot[]; tracks: Track[]; [k: string]: unknown }
 export interface LibraryItem { name: string; seconds: number; title?: string; license?: string; url?: string; for?: string; kind?: "bgm" | "sfx"; role?: Role }
 export interface Peaks { step: number; peaks: number[] }
@@ -213,6 +214,7 @@ const crossing = (cs: ClipRef[], t: number, what: string) => {
 const into = (start: number | undefined, d: number, name: string, loop: boolean) => { const v = (start ?? 0) + d, f = seconds(name); return r3(loop ? ((v % f) + f) % f : v); };
 // Moves a clip's left edge to t, its sound staying where it was in the film (lanes.ts trims a bed's head with it too)
 export const cutBefore = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
+  shiftGainTime(x, (list === "beds" ? (x as Bed).from : (x as OneShot).at) - t);
   if (list === "beds") { const b = x as Bed; b.start = into(b.start, t - b.from, b.name, true); b.from = r3(t); return; }
   const o = x as OneShot, d = t - o.at;
   o.start = into(o.start, d, o.name, false);
@@ -252,7 +254,9 @@ export const setField = (c: ClipRef, key: "gain" | "fadeIn" | "fadeOut" | "lengt
 // CapCut's ↺ on the Basic section: level back to 0 dB, centred, no fades
 export const resetBasic = (c: ClipRef) => edit((l) => {
   const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
-  x.gain = 0; delete x.pan; delete x.fadeIn; delete x.fadeOut;
+  x.gain = 0; delete x.gainKeys; delete x.pan;
+  if (c.list === "beds") { x.fadeIn = 0; x.fadeOut = 0; }
+  else { delete x.fadeIn; delete x.fadeOut; }
 });
 // Paste attributes (timeline/attributes.ts): what of the clip `from` the creator ticked, onto the clips `to`, one undo step.
 // Fades longer than a clip are shortened to fit it, as CapCut does; ducking only goes from a bed onto beds. Locked tracks are
@@ -268,7 +272,7 @@ export const pasteClipAttrs = (from: Bed | OneShot, to: ClipRef[], what: ClipAtt
   edit((l) => {
     for (const c of ok) {
       const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
-      if (what.includes("volume")) x.gain = from.gain;
+      if (what.includes("volume")) { x.gain = from.gain; if (from.gainKeys?.length) x.gainKeys = structuredClone(from.gainKeys); else delete x.gainKeys; }
       if (what.includes("pan")) { if (from.pan) x.pan = from.pan; else delete x.pan; }
       if (what.includes("fades")) {
         const f = fadesFit(from, c);

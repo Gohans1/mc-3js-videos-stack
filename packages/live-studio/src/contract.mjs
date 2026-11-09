@@ -91,8 +91,9 @@ const name = z.string().regex(/^[\w.-]+$/, "a file name in the sfx folder, witho
 const secs = time.refine((v) => v >= 0, "expected seconds from the film's start, 0 or more");
 const track = z.string().min(1).optional();
 const dB = z.number().refine(Number.isFinite, "expected a finite number of dB");
-const Bed = z.looseObject({ name, from: secs, to: secs, gain: dB, fadeIn: z.number().nonnegative(), fadeOut: z.number().nonnegative(), start: z.number().nonnegative().optional(), duck: z.number().nonnegative().optional(), track }).refine((b) => b.to > b.from, "to must come after from");
-const Shot1 = z.looseObject({ at: secs, name, gain: dB, start: z.number().nonnegative().optional(), length: z.number().positive().optional(), fadeIn: z.number().nonnegative().optional(), fadeOut: z.number().nonnegative().optional(), track });
+const gainKeys = z.array(z.object({ t: time, gain: dB })).refine((keys) => keys.every((k, i) => i === 0 || k.t > keys[i - 1].t), "volume keys must increase in time").optional();
+const Bed = z.looseObject({ name, from: secs, to: secs, gain: dB, gainKeys, fadeIn: z.number().nonnegative(), fadeOut: z.number().nonnegative(), start: z.number().nonnegative().optional(), duck: z.number().nonnegative().optional(), track }).refine((b) => b.to > b.from, "to must come after from");
+const Shot1 = z.looseObject({ at: secs, name, gain: dB, gainKeys, start: z.number().nonnegative().optional(), length: z.number().positive().optional(), fadeIn: z.number().nonnegative().optional(), fadeOut: z.number().nonnegative().optional(), track });
 // tracks (top to bottom) and each entry's track: app/sound/tracks.ts. Optional, the page adds them; mute leaves a track out of the mix
 const Track = z.looseObject({ id: z.string().min(1), name: z.string(), mute: z.boolean().optional(), lock: z.boolean().optional() });
 export const SoundTimeline = z.looseObject({ beds: z.array(Bed), sfx: z.array(Shot1), tracks: z.array(Track).optional() })

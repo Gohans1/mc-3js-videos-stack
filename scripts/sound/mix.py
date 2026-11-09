@@ -54,6 +54,8 @@ def as_option(e, name, gain=1.0):
     if name == e["name"] and gain == 1.0:
         return e
     out = {**e, "name": name, "gain": e["gain"] + loudness(e["name"]) - loudness(name) + 20 * math.log10(gain)}
+    if e.get("gainKeys"):
+        out["gainKeys"] = [{**k, "gain": k["gain"] + out["gain"] - e["gain"]} for k in e["gainKeys"]]
     if name != e["name"]:
         out.pop("start", None)
     return out
@@ -112,14 +114,27 @@ def pan_filter(p):
     return f"pan=stereo|c0={math.cos(x):.6f}*c0|c1=c1+{math.sin(x):.6f}*c0"
 
 
+def gain_filter(keys, base):
+    """Clip-local, linear dB automation; aeval evaluates each sample, matching Web Audio's exponential gain ramps."""
+    if not keys:
+        return None
+    expression = f"({keys[0]['gain'] - base:.12g})"
+    for a, b in zip(keys, keys[1:]):
+        expression += f"+({b['gain'] - a['gain']:.12g})*clip((t-({a['t']:.12g}))/({b['t'] - a['t']:.12g}),0,1)"
+    return f"aeval='val(ch)*pow(10,({expression})/20)':c=same"
+
+
 def build(out, beds, sfx, voice=True, span=None, master=True):
     inputs, chains = [], []
 
-    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=()):
+    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None):
         i = len(chains)  # one chain per input file, so this is the input's index
         inputs.extend(["-stream_loop", "-1", "-i", str(path)] if loop else ["-i", str(path)])
         f = [f"atrim=start={start}" + (f":duration={length}" if length else ""), "asetpts=PTS-STARTPTS",
              "aformat=sample_rates=48000:channel_layouts=stereo", f"volume={gain}dB", *extra]
+        automation = gain_filter(gain_keys, gain)
+        if automation:
+            f.append(automation)
         if fade_in:
             f.append(f"afade=t=in:d={fade_in}")
         if fade_out and length:
@@ -134,9 +149,9 @@ def build(out, beds, sfx, voice=True, span=None, master=True):
         add(ROOT / "assets/public/agent/full_voice.wav", 0, A["voiceGain"], extra=["acompressor=threshold=0.03:ratio=4:attack=1:release=150:makeup=3", "alimiter=limit=0.35:level=false"])
     for b in beds:
         duck = duck_expr(b["from"], b["to"], b["duck"]) if b.get("duck") and A.get("voice", True) else None
-        add(SFX / f"{b['name']}.wav", b["from"], b["gain"], b.get("start", 0), b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, extra=[*b.get("filters", []), *([duck] if duck else []), *([pan_filter(b["pan"])] if b.get("pan") else [])])
+        add(SFX / f"{b['name']}.wav", b["from"], b["gain"], b.get("start", 0), b["to"] - b["from"], b["fadeIn"], b["fadeOut"], loop=True, gain_keys=b.get("gainKeys"), extra=[*b.get("filters", []), *([duck] if duck else []), *([pan_filter(b["pan"])] if b.get("pan") else [])])
     for s in sfx:
-        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
+        add(SFX / f"{s['name']}.wav", s["at"], s["gain"], s.get("start", 0), s.get("length"), s.get("fadeIn", 0), s.get("fadeOut", 0), gain_keys=s.get("gainKeys"), extra=[*s.get("filters", []), *([pan_filter(s["pan"])] if s.get("pan") else [])])
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(END), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
@@ -146,7 +161,7 @@ def build(out, beds, sfx, voice=True, span=None, master=True):
         # safety limiter at about -7 dBFS. The loudness pass must stay linear: ffmpeg-normalize's dynamic fallback lifts
         # every quiet stretch (the CCTV hiss came up level with the voice). It falls back when target - true peak gap is
         # too small, so a quiet excerpt takes a lower target (src/timeline/audio.json lufs)
-        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},atrim=duration={END}"
+        f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={END},asetpts=N/SR/TB,atrim=duration={END}"
         + (f",volume={A.get('drive', 0)}dB,alimiter=limit=0.45:level=false" if master else "")
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
     ]

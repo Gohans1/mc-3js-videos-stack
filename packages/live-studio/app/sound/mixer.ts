@@ -11,6 +11,7 @@ import { AWAY } from "../core/device";
 import { getFile } from "../core/net";
 import { duckCorners, duckGain, duckWindows } from "./duck";
 import { envelope, envelopePoints } from "./envelope";
+import { type GainKey, scheduleGain } from "./gain";
 import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
 import type { Lanes, LibraryItem } from "./sound";
 import { S } from "../core/state";
@@ -18,7 +19,7 @@ import { type ClipRef } from "./slice";
 import { get, say } from "../core/store";
 
 interface Source { lanes: () => Lanes | null; library: () => LibraryItem[]; span: (c: ClipRef) => [number, number] }
-interface Clip { key: string; name: string; t0: number; t1: number; start: number; length?: number; loop: boolean; db: number; fadeIn: number; fadeOut: number; duck: number; pan: number; filters: string[] }
+interface Clip { key: string; name: string; t0: number; t1: number; start: number; length?: number; loop: boolean; db: number; gainKeys?: GainKey[]; fadeIn: number; fadeOut: number; duck: number; pan: number; filters: string[] }
 interface Sound { buf: AudioBuffer; mean: number }
 
 // Silent until the limiter's module has loaded (a moment after the page opens): an offline render waits for `ready`
@@ -103,14 +104,14 @@ const clips = (l: Lanes, all = false): Clip[] => {
   const narrated = l.voice !== false; // audio.json voice false: no narration in the mix yet, so mix.py ducks nothing either
   l.beds.forEach((b, i) => {
     const p = pick(b);
-    if (p) out.push({ key: `beds:${i}`, name: p.name, t0: b.from, t1: b.to, start: p.own ? b.start ?? 0 : 0, length: b.to - b.from, loop: true, db: p.db, fadeIn: b.fadeIn, fadeOut: b.fadeOut, duck: narrated ? (b.duck as number | undefined) ?? 0 : 0, pan: b.pan ?? 0, filters: (b.filters as string[]) ?? [] });
+    if (p) out.push({ key: `beds:${i}`, name: p.name, t0: b.from, t1: b.to, start: p.own ? b.start ?? 0 : 0, length: b.to - b.from, loop: true, db: p.db, gainKeys: b.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - b.gain })), fadeIn: b.fadeIn, fadeOut: b.fadeOut, duck: narrated ? (b.duck as number | undefined) ?? 0 : 0, pan: b.pan ?? 0, filters: (b.filters as string[]) ?? [] });
   });
   l.sfx.forEach((s, i) => {
     const p = pick(s), buf = p && ready.get(p.name)?.buf;
     if (!p) return;
     if (!buf) { load(p.name); return; }
     const start = p.own ? s.start ?? 0 : 0; // an option plays from its own start
-    out.push({ key: `sfx:${i}`, name: p.name, t0: s.at, t1: s.at + (s.length ?? buf.duration - start), start, length: s.length, loop: false, db: p.db, fadeIn: s.fadeIn ?? 0, fadeOut: s.fadeOut ?? 0, duck: 0, pan: s.pan ?? 0, filters: (s.filters as string[]) ?? [] });
+    out.push({ key: `sfx:${i}`, name: p.name, t0: s.at, t1: s.at + (s.length ?? buf.duration - start), start, length: s.length, loop: false, db: p.db, gainKeys: s.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - s.gain })), fadeIn: s.fadeIn ?? 0, fadeOut: s.fadeOut ?? 0, duck: 0, pan: s.pan ?? 0, filters: (s.filters as string[]) ?? [] });
   });
   return out;
 };
@@ -123,7 +124,7 @@ const play = (ctx: BaseAudioContext, bus: AudioNode, c: Clip, s: Sound, at: numb
   const u0 = at - c.t0, offset = c.loop ? (c.start + u0) % s.buf.duration : c.start + u0;
   if (!c.loop && offset >= s.buf.duration) return null;
   // mix.py's aformat makes a mono file stereo the ffmpeg way, the center at -3 dB in each side; Web Audio copies it at full level
-  const src = ctx.createBufferSource(), gain = ctx.createGain(), lin = 10 ** (c.db / 20) * (s.buf.numberOfChannels === 1 ? Math.SQRT1_2 : 1), begin = w.when(at);
+  const src = ctx.createBufferSource(), gain = ctx.createGain(), lin = s.buf.numberOfChannels === 1 ? Math.SQRT1_2 : 1, begin = w.when(at);
   src.buffer = s.buf; src.loop = c.loop; src.playbackRate.value = w.speed;
   let pts = envelopePoints(u0, c.t1 - c.t0, c.fadeIn, c.fadeOut, c.length);
   if (c.duck > 0) {
@@ -135,6 +136,9 @@ const play = (ctx: BaseAudioContext, bus: AudioNode, c: Clip, s: Sound, at: numb
   for (const [u, v] of pts.slice(1)) gain.gain.linearRampToValueAtTime(lin * v, Math.max(begin, w.ctxAt(c.t0 + u)));
   let tail: AudioNode = src;
   for (const spec of c.filters) { const f = filterNode(ctx, spec); if (f) tail = tail.connect(f); }
+  const volume = ctx.createGain();
+  scheduleGain(volume.gain, { gain: c.db, gainKeys: c.gainKeys }, u0, c.t1 - c.t0, (u) => Math.max(begin, w.ctxAt(c.t0 + u)));
+  tail = tail.connect(volume);
   tail = tail.connect(gain);
   if (c.pan) {
     // mix.py pan_filter: equal-power balance on the stereo signal; explicit stereo, so a mono file is made stereo first as
