@@ -16,6 +16,7 @@ import { clearInOut } from "./inout";
 import { rangeText } from "../core/time";
 import { toggleMagnet, ZOOM_MIN, zoomSpan, zoomTo, zoomToFit } from "./timeline";
 import { Tip } from "../components/Tip";
+import { BeatMenu } from "../sound/BeatMenu";
 
 
 function Tool({ label, icon: Icon, onClick, disabled, pressed }: { label: string; icon: ComponentType<{ className?: string }>; onClick: () => void; disabled?: boolean; pressed?: boolean }) {
@@ -64,6 +65,7 @@ export function TimelineBar() {
       <Tool label="Delete left (Q): cut the picked clips' part before the playhead" icon={ArrowLeftToLine} onClick={() => trimClips(get().clips, "left")} disabled={!picks} />
       <Tool label="Delete right (W): cut the picked clips' part after the playhead" icon={ArrowRightToLine} onClick={() => trimClips(get().clips, "right")} disabled={!picks} />
       <Tool label="Delete (Delete)" icon={Trash2} onClick={deleteSelected} disabled={!canDelete()} />
+      <BeatMenu />
       {/* The In to Out stretch (inout.ts), named while there is one: blue as on the ruler, and the way to clear it */}
       {inOut && (
         <Tip label="In to Out (I, O): a note written inside it is about the whole stretch, and played from inside it loops. Clear it (Alt+X)">

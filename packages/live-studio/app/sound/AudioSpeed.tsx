@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { FieldRow, Reset, Section, ValueBox } from "../components/inspector";
 import { clipOf, edit, setRate, span } from "./sound";
 import { AudioStatus } from "./AudioStatus";
+import { reverseBeats } from "./beat-marks";
 import type { ClipRef } from "./slice";
 
 export function AudioSpeed({ clip }: { clip: ClipRef }) {
@@ -19,7 +20,7 @@ export function AudioSpeed({ clip }: { clip: ClipRef }) {
       <p className="text-xs tabular-nums text-muted-foreground">Duration {(to - from).toFixed(2)}s{draft !== null && ` → ${((to - from) * rate / shown).toFixed(2)}s`}</p>
       <label className="flex items-center justify-between gap-2 text-ui">Change audio pitch<Switch checked={!!c.changePitch} onCheckedChange={(v) => edit((l) => { l[clip.list][clip.i].changePitch = v; })} /></label>
       <FieldRow label="Pitch"><ValueBox name="Audio pitch" value={c.pitch ?? 0} min={-24} max={24} step={1} digits={0} unit="st" onSave={(v) => edit((l) => { l[clip.list][clip.i].pitch = v; })} /></FieldRow>
-      <label className="flex items-center justify-between gap-2 text-ui">Reverse audio<Switch checked={!!c.reverse} onCheckedChange={(v) => edit((l) => { l[clip.list][clip.i].reverse = v; })} /></label>
+      <label className="flex items-center justify-between gap-2 text-ui">Reverse audio<Switch checked={!!c.reverse} onCheckedChange={(v) => edit((l) => { const c = l[clip.list][clip.i]; if (!!c.reverse !== v) reverseBeats(c, to - from); c.reverse = v; })} /></label>
       <AudioStatus clip={clip} />
     </Section>
   );

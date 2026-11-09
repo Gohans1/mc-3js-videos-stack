@@ -10,13 +10,15 @@ import { forgetSounds, replan, setLive } from "./mixer";
 import { S } from "../core/state";
 import type { Role } from "./hit";
 import { type GainClip } from "./gain";
+import { beatMarks, type BeatMarkers } from "./beat-marks";
+import { lanePick } from "../options/options";
 import { type ClipRef } from "./slice";
 import { retime, trimSource, type AudioProcessing } from "./retime";
 import { get, say, set } from "../core/store";
 import { addTrack, fits, freeTrack, normalize, refs, placeShift, same, tidy, type Track, trackOf } from "./tracks";
 
-export interface Bed extends GainClip, AudioProcessing { name: string; from: number; to: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
-export interface OneShot extends GainClip, AudioProcessing { at: number; name: string; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
+export interface Bed extends GainClip, AudioProcessing, BeatMarkers { name: string; from: number; to: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
+export interface OneShot extends GainClip, AudioProcessing, BeatMarkers { at: number; name: string; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
 export interface Lanes { beds: Bed[]; sfx: OneShot[]; tracks: Track[]; [k: string]: unknown }
 export interface LibraryItem { name: string; seconds: number; title?: string; license?: string; url?: string; for?: string; kind?: "bgm" | "sfx"; role?: Role }
 export interface Peaks { step: number; peaks: number[] }
@@ -87,6 +89,15 @@ export const setSolo = (id: string, on: boolean) => {
 export const picked = (c: ClipRef) => get().clips.some((p) => same(p, c));
 export const locked = (c: ClipRef) => !!(lanes && trackOf(lanes, c)?.lock);
 export const allClips = (): ClipRef[] => (lanes ? refs(lanes) : []);
+export const audibleName = (c: Bed | OneShot) => {
+  const picked = c.try?.length ? lanePick(c.name)?.set : null;
+  return picked === "off" ? null : picked && [c.name, ...c.try!].includes(picked) ? picked : c.name;
+};
+export const clipBeats = (ref: ClipRef) => {
+  const c = clipOf(ref), [from, to] = span(ref);
+  return c && (c.beatSource ?? c.name) === audibleName(c) ? beatMarks(c, to - from) : [];
+};
+export const beatTimes = (skip: ClipRef[] = []) => allClips().flatMap((r) => skip.some((s) => same(s, r)) ? [] : clipBeats(r).map((t) => span(r)[0] + t));
 // Every clip that plays this file: what the library row counts, lights and picks (Resolve's clip usage)
 export const usesOf = (name: string) => allClips().filter((c) => clipOf(c)?.name === name);
 export const lightSound = (name: string | null) => { if (get().soundLit !== name) { set({ soundLit: name }); S.dirty = true; } };
@@ -304,6 +315,7 @@ export const pasteClipAttrs = (from: Bed | OneShot, to: ClipRef[], what: ClipAtt
 export const swapSound = (c: ClipRef, name: string) => edit((l) => {
   const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i];
   x.name = name;
+  delete x.beats; delete x.beatMode; delete x.bpm; delete x.beatSource;
   if (c.list === "sfx") delete (x as OneShot).start; // a start offset belongs to the old file
 });
 

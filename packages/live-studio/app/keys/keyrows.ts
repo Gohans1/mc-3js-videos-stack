@@ -19,6 +19,7 @@ import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { seek, setPlaying } from "../playback/transport";
+import { beatTimes } from "../sound/sound";
 
 const R = 4.5;
 
@@ -90,7 +91,7 @@ export const drawKeyRows = () => {
   drawPlayhead(g, X(S.t), h);
 };
 
-const snapPoints = () => [S.t, ...SHOTS.map((s) => s.t), ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];
+const snapPoints = () => [S.t, ...beatTimes(), ...SHOTS.map((s) => s.t), ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];
 const spotAt = (x: number, y: number, touch: boolean) => {
   const reach = keyReach(touch);
   let best: Spot | null = null, d = reach;

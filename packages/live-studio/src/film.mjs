@@ -10,7 +10,7 @@ import { ratioOf } from "./frame.mjs";
 import { createNotes } from "./notes.mjs";
 import { openSound } from "./sound.mjs";
 import { openTimelineFile } from "./timeline_file.mjs";
-import { renderAudio } from "./audio-process.mjs";
+import { analyzeBeats, renderAudio } from "./audio-process.mjs";
 
 export const STUDIO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // One copy of three: the film's and the studio's would each otherwise bring their own, and objects from one fail instanceof in the other
@@ -286,6 +286,7 @@ export const openFilm = (projectDir, { send }) => {
   return {
     PROJECT, NAME, SRC, PUBLIC, WORK, MIX, MIX_SMALL, LITE, EDIT, VOICE_MAP, hosts, threeFrom, smallSfx, measureSound,
     processSound: (name, settings) => renderAudio(sound.fileOf(name), settings, PYTHON),
+    analyzeBeats: (name, settings) => analyzeBeats(sound.fileOf(name), settings, PYTHON),
     liveLanes: () => LIVE && mixIsLive(),
     notes, readChoices, choose, ratio, setRatio, trials, shotComments, stamp, sound, cam, shots, text, keyFiles, ownWrites, handEdited,
     contract: () => ({ files: fileProblems }), pageSays,

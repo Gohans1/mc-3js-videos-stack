@@ -11,6 +11,7 @@
 // In split mode (blade.ts) a click splits the shot there: the playhead goes to it, so the new shot's first frame shows.
 import { DURATION, SHOTS_OUT } from "film/scene";
 import { BLADE_CURSOR } from "../components/cursor";
+import { beatTimes } from "../sound/sound";
 import { easeFn } from "../core/ease";
 import { shotIndex } from "../core/film";
 import { S } from "../core/state";
@@ -151,7 +152,7 @@ export const drawCamRow = () => {
   drawPlayhead(g, X(S.t), h);
 };
 
-const snapPoints = () => [S.t, ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];
+const snapPoints = () => [S.t, ...beatTimes(), ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];
 const snapped = (s: number, perPx: number, off: boolean) => snapTo(s, snapPoints(), perPx, off, true);
 // The key under x: the nearest within reach; of a shot's last key and the cut on the same second, the cut when it can roll (its
 // last key goes with it), else the last key

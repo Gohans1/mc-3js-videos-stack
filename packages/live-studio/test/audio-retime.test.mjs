@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { retime, trimSource, sourceTime } from "../app/sound/retime.ts";
+import { beatMarks, reverseBeats } from "../app/sound/beat-marks.ts";
 
 test("audio speed retains the same source region and moves fades and volume keys with the sound", () => {
   const c = { start: 3, rate: 2, gain: -8, gainKeys: [{ t: 0, gain: -8 }, { t: 2, gain: -2 }], fadeIn: 1, fadeOut: .5 };
@@ -30,4 +31,18 @@ test("looping source trims wrap in source seconds after speed is applied", () =>
   const c = { start: 3, rate: 2, gain: 0 };
   trimSource(c, 2, 10, 10, 5, true);
   assert.equal(c.start, 2);
+});
+
+test("beat markers follow speed, trim and reverse without losing trimmed markers", () => {
+  const c = { gain: 0, beats: [0, 4, 8], beatMode: 1, bpm: 60 };
+  assert.deepEqual(beatMarks(c, 9), [0, 4, 8]);
+  retime(c, 9, 2);
+  assert.equal(c.bpm, 120);
+  assert.deepEqual(beatMarks(c, 4.5), [0, 2, 4]);
+  trimSource(c, 1, 4.5, 4.5, 20, false);
+  assert.deepEqual(beatMarks(c, 3.5), [1, 3]);
+  reverseBeats(c, 3.5);
+  assert.deepEqual(beatMarks(c, 3.5), [.5, 2.5]);
+  reverseBeats(c, 3.5);
+  assert.deepEqual(beatMarks(c, 3.5), [1, 3]);
 });

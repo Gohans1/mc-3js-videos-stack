@@ -9,6 +9,7 @@ import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { FPS, makeSnapper, r3, snappedTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
+import { beatTimes } from "../sound/sound";
 import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
 import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
@@ -77,7 +78,7 @@ export const drawTextRow = () => {
 };
 
 const snapPoints = (skip: number[]) => {
-  const out = [S.t, ...SHOTS.map((s) => s.t)];
+  const out = [S.t, ...SHOTS.map((s) => s.t), ...beatTimes()];
   for (const l of S.voiceOut) for (const word of l.words) out.push(word.s);
   items.forEach((it, i) => { if (!skip.includes(i)) out.push(it.from, it.to); });
   return out;

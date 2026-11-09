@@ -207,6 +207,12 @@ export const createApi = (film, { page, events, send }) => {
     try { c.header("Content-Type", "audio/wav"); return c.body(await film.processSound(settings.name, settings)); }
     catch (e) { return c.json({ error: e.message }, 422); }
   });
+  app.post("/api/sound/beats", zValidator("json", SoundProcess), async (c) => {
+    const settings = c.req.valid("json");
+    if (!film.sound?.fileOf(settings.name)) return noSound(c);
+    try { return c.json(await film.analyzeBeats(settings.name, settings)); }
+    catch (e) { return c.json({ error: e.message }, 422); }
+  });
   // The camera keys, the same way (package.json "live-studio".camTimeline)
   app.get("/api/cam", (c) => { const s = film.cam?.read(); return s ? fresh(c, s) : noSound(c); });
   app.post("/api/cam", zValidator("json", CamSave), (c) => {

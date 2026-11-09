@@ -39,7 +39,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - Auto reframe, Canvas blur: BỎ, phim 3D đổi khung bằng camera.
 - Markers, beat markers:
   - Marker là note: CÓ. M thêm note tại playhead, Shift+M note kế, Alt+Shift+M note trước.
-  - Auto beat trên clip nhạc: SẮP LÀM.
+  - Auto beat: CÓ menu None/Beats 1/Beats 2, cờ xanh, thêm/xóa thủ công và snap; [kiểm chứng](audio-beats.md).
 - Favorites, search, hover preview: CÓ. Sao yêu thích cho âm thanh và hiệu ứng, ô tìm, nút ▷ nghe thử; rê chuột lên một âm thanh trong thư viện thì các clip của nó sáng lên trên timeline.
 - Preview quality, export:
   - Xem nháp 960×540, G bật Final quality.
@@ -51,7 +51,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 - Volume, waveform, fade handles: CÓ.
   - Chọn clip thì tab Audio bên phải có Volume -40 đến +20 dB, Pan trái/phải, Fade in/out; sóng âm vẽ trên clip.
   - Theo ảnh CapCut: track 52 px, clip 48 px, sóng cyan 1 px và nhãn cao 16 px; peak lấy mọi mẫu và mọi kênh WAV, áp gain thật. Đỉnh cam/đỏ theo quy ước Final Cut Pro, chưa xác minh CapCut.
-  - Đường trắng kéo được để đổi Volume, Shift chỉnh mịn; keyframe âm lượng còn SẮP LÀM. Tay nắm fade là vòng tròn trắng bán kính 3 px, cách mép 5 px dưới nhãn, vùng bấm 14 px.
+  - Đường trắng và keyframe Volume kéo được, Shift chỉnh mịn; preview và mix.py cùng áp đường gain, [kiểm chứng](audio-automation.md). Tay nắm fade là vòng tròn trắng bán kính 3 px, cách mép 5 px dưới nhãn, vùng bấm 14 px.
   - Báo đỏ khi vỡ tiếng: CÓ, đồng hồ tổng bên phải timeline: đỉnh trái/phải (vàng từ -12, đỏ từ -1 dB), đèn đỏ trên cùng khi vỡ 0 dB (bấm để xoá), cột LUFS với vạch đích. Mọi số là của bản render final; tắt ở ⋯ Settings > View > Audio meter, điện thoại không có.
 - Voiceover, separate audio, vocal isolation, replace clip:
   - Separate audio: CÓ sẵn, tiếng là track riêng nên J-cut/L-cut làm ngay.
@@ -76,7 +76,7 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
   - TTS: ngoài studio (scripts/voice/gen.py qua GenVoice).
 - Speed, reverse, freeze frame:
   - Tab Speed: CÓ, chỉnh tốc độ máy quay giữa hai khoá bằng preset vẽ đường vàng như CapCut Curve. Lệch: không có Standard (nhân tốc độ) vì camera không có tốc độ gốc.
-  - Freeze frame và speed ramp cho cả phim: SẮP LÀM. Reverse tiếng: SẮP LÀM.
+  - Freeze frame và speed ramp cho cả phim: SẮP LÀM. Reverse tiếng: CÓ, đảo đúng đoạn nguồn đã trim, cùng bộ xử lý preview và xuất.
 
 ## Tầng 3: Trung bình
 
@@ -105,10 +105,10 @@ Nhãn: CÓ (dùng được), ĐANG LÀM, SẮP LÀM (dev đã chốt, Desktop/li
 
 - Keyframe graphs, easing: CÓ.
   - Tab Speed: preset mang đúng tên CapCut (None, Ease In, Quad In...) và đồ thị bezier tự kéo; đồ vật cũng có ô ease.
-  - Lệch: CapCut sửa ease ngay trên clip mở rộng, studio sửa ở tab Speed. Ease cho các bước của Steve: SẮP LÀM (mc-actor).
+  - Lệch: CapCut sửa ease ngay trên clip mở rộng, studio sửa ở tab Speed. Ease của Steve: CÓ preset và Bezier, [kiểm chứng](actor-easing.md).
 - Speed curve, ramping: CÓ cho camera (đường vàng trên hàng Camera); ramp thời gian cả phim: SẮP LÀM cùng Freeze frame.
 - Masks, feathering: BỎ.
-- Color curves, HSL, color wheels: chưa làm, xét sau khi có Adjust theo shot.
+- Color curves, HSL, color wheels: CÓ theo shot, cùng Basic/LUT/preset; [kiểm chứng và giới hạn](adjust-research.md).
 - Motion tracking: BỎ, AI gắn nhãn thẳng vào vật trong cảnh.
 
 ## CapCut có, file 95% không ghi, studio đã làm
@@ -142,12 +142,12 @@ Từng mục dev chụp trên máy, AI tự chọn làm hay bỏ theo lời dev.
 
 ### Chọn clip âm thanh (Basic | Voice changer | Speed)
 
-- Volume, Fade in, Fade out: CÓ. Keyframe ◁◇▷ cho Volume (tăng giảm âm lượng theo thời gian trong một clip): SẮP LÀM, mix.py cũng phải theo.
-- Normalize loudness (đưa clip về một mức chuẩn): SẮP LÀM, một nút đo file rồi đặt Volume.
+- Volume, Fade in, Fade out và keyframe ◁◇▷ cho Volume: CÓ, mix.py áp cùng đường gain.
+- Normalize loudness: CÓ, đo lại kết quả bằng FFmpeg, giữ đường key và giới hạn đỉnh; [kiểm chứng](audio-normalize.md).
 - Enhance voice, Reduce noise, Isolate voice, Video translator: BỎ, giọng ElevenLabs đã sạch và không có video quay.
 - Fill channel: BỎ, đã có Pan và file mono vốn ra cả hai bên.
-- Voice changer: SẮP LÀM (quyết định 7).
-- Speed của clip (tốc độ, độ dài, Change audio pitch): SẮP LÀM, để làm chậm tiếng cọt kẹt hay tiếng bước chân cho nặng.
+- Voice changer: CÓ Telephone, Walkie-talkie, Megaphone và Strength; [kiểm chứng](voice-filters.md).
+- Speed của clip: CÓ tốc độ, độ dài, Change audio pitch, Pitch và Reverse; dùng Rubber Band R3 cùng FFmpeg, [kiểm chứng](audio-processing.md).
 
 ### Chọn shot (CapCut gọi là clip video: Video | Audio | Speed | Animation | Adjust | AI stylize)
 

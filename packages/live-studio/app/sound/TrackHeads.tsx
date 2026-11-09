@@ -5,7 +5,7 @@ import { Tip } from "../components/Tip";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { Toggle } from "@/components/ui/toggle";
-import { ADD_H, TOP, TRACK_H } from "./lanes";
+import { ADD_H, TOP, trackHeight } from "./lanes";
 import { allClips, clipOf, lanes, setClips, setSolo, setTrack } from "./sound";
 import type { Track } from "./tracks";
 import { useStudio } from "../core/store";
@@ -16,7 +16,7 @@ function Head({ t }: { t: Track }) {
   const pickAll = () => setClips(allClips().filter((r) => clipOf(r)?.track === t.id));
   const done = (name: string | null) => { setNaming(false); if (name?.trim() && name.trim() !== t.name) setTrack(t.id, { name: name.trim() }); };
   return (
-    <li style={{ "--row-h": `${TRACK_H}px` }} className={cn("relative flex h-(--row-h) items-center border-b border-background bg-track-head", t.mute && "text-muted-foreground")}>
+    <li style={{ "--row-h": `${trackHeight(t.id)}px` }} className={cn("relative flex h-(--row-h) items-center border-b border-background bg-track-head", t.mute && "text-muted-foreground")}>
       {naming ? (
         <input
           autoFocus

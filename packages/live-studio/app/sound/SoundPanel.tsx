@@ -12,7 +12,7 @@ import { stamp } from "../core/time";
 import { startCarry } from "./lanes";
 import { seek, setPlaying } from "../playback/transport";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
-import { addClip, clipOf, cutAfter, edit, kindOf, lanes, library, type LibraryItem, lightSound, listen, listening, maxClipLength, moveTo, moveToTrack, pickAt, pickUses, preview, removeClip, removeClips, resetBasic, restore, setClips, setField, snapshot, span, swapSound, usesOf } from "./sound";
+import { addClip, clipOf, cutAfter, edit, kindOf, lanes, library, type LibraryItem, lightSound, listen, listening, locked, maxClipLength, moveTo, moveToTrack, pickAt, pickUses, preview, removeClip, removeClips, resetBasic, restore, setClips, setField, snapshot, span, swapSound, usesOf } from "./sound";
 import { gainAt, GAIN_KEY_EPS, toggleGainKey, writeGain } from "./gain";
 import { useFrame } from "../core/useFrame";
 import { FPS, r3 } from "../core/time";
@@ -53,7 +53,8 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
   const hear = () => { seek(Math.max(0, from - 0.5)); setPlaying(true); };
   const fadeMax = Math.max(0.05, Math.min(10, to - from)), fi = (c.fadeIn as number | undefined) ?? 0, fo = (c.fadeOut as number | undefined) ?? 0;
   return (
-    <div key={`${clip.list}${clip.i}`} aria-label="Selected clip" role="group" className="flex flex-col">
+    <fieldset key={`${clip.list}${clip.i}`} aria-label="Selected clip" disabled={locked(clip)} className="flex min-w-0 flex-col">
+      {locked(clip) && <p className="px-3 pb-2 text-xs text-muted-foreground">Track locked. Unlock it in the track header to edit.</p>}
       <div className="flex items-center gap-2 px-3 pb-1">
         <Badge variant="audio">{bed ? "BED" : "SFX"}</Badge>
         <span className="min-w-0 flex-1 truncate text-ui text-muted-foreground" title={item?.title}>{item?.title ?? c.name}</span>
@@ -96,7 +97,7 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
         {item?.license && <p className="text-xs text-muted-foreground">{item.license}{item.url && <> · <a className="underline underline-offset-2 hover:text-foreground" href={item.url} target="_blank" rel="noreferrer">source</a></>}</p>}
       </Section>
       </>}
-    </div>
+    </fieldset>
   );
 }
 

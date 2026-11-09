@@ -72,3 +72,5 @@ draw.keyEases khai báo edit/path/names cho hàng hỗ trợ trường ease; m�
 Audio hỗ trợ rate, pitch, changePitch và reverse; length/to tính theo giờ đầu ra, start tính theo mép thấp của đoạn nguồn. Trim/split phải đổi mép nguồn theo chiều phát, rate đổi cùng giờ key/fade; quy trình và phụ thuộc CLI ở docs/audio-processing.md.
 
 voiceFilter nhận none, telephone, walkieTalkie hoặc megaphone; voiceStrength từ 0 đến 100, mặc định 100. Bộ lọc chạy sau đổi tốc độ và trước gain/fade; docs/voice-filters.md ghi nguồn và số đo.
+
+beats chứa mốc tăng dần theo giây trong clip, có thể âm hoặc vượt độ dài sau trim; beatMode, bpm và beatSource ghi chế độ và nguồn đã dò. Mốc chỉ phục vụ dựng phim, không đổi âm xuất; docs/audio-beats.md ghi quy tắc retime và phân tích.

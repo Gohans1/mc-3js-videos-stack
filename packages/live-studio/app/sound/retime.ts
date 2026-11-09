@@ -1,8 +1,9 @@
 import type { GainClip } from "./gain";
+import type { BeatMarkers } from "./beat-marks";
 
 export type VoiceFilter = "none" | "telephone" | "walkieTalkie" | "megaphone";
 export interface AudioProcessing { rate?: number; pitch?: number; changePitch?: boolean; reverse?: boolean; voiceFilter?: VoiceFilter; voiceStrength?: number }
-type Timed = GainClip & AudioProcessing & { start?: number; fadeIn?: number; fadeOut?: number };
+type Timed = GainClip & AudioProcessing & BeatMarkers & { start?: number; fadeIn?: number; fadeOut?: number };
 
 export const sourceTime = (c: AudioProcessing & { start?: number }, length: number, u: number) =>
   (c.start ?? 0) + (c.reverse ? length - u : u) * (c.rate ?? 1);
@@ -11,6 +12,8 @@ export const retime = (c: Timed, length: number, rate: number) => {
   const scale = (c.rate ?? 1) / rate;
   c.rate = rate;
   if (c.gainKeys) for (const k of c.gainKeys) k.t *= scale;
+  if (c.beats) c.beats = c.beats.map((t) => t * scale);
+  if (c.bpm) c.bpm /= scale;
   if (c.fadeIn !== undefined) c.fadeIn *= scale;
   if (c.fadeOut !== undefined) c.fadeOut *= scale;
   return length * scale;
@@ -21,4 +24,5 @@ export const trimSource = (c: Timed, left: number, right: number, length: number
   const start = (c.start ?? 0) + (c.reverse ? length - right : left) * (c.rate ?? 1);
   c.start = Math.round((loop ? ((start % file) + file) % file : start) * 1e6) / 1e6;
   if (c.gainKeys) for (const k of c.gainKeys) k.t -= left;
+  if (c.beats) c.beats = c.beats.map((t) => t - left);
 };

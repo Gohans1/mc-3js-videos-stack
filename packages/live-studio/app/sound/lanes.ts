@@ -15,7 +15,7 @@ import { type ClipRef } from "./slice";
 import { get, noSnap, say } from "../core/store";
 import { BLADE_CURSOR } from "../components/cursor";
 import { bladeLine } from "../timeline/blade";
-import { addClip, allClips, clipOf, cutBefore, cutAfter, edit, lanes, locked, peaksOf, picked, preview, restore, setClips, snapshot, span, splitClips } from "./sound";
+import { addClip, allClips, beatTimes, clipBeats, clipOf, cutBefore, cutAfter, edit, lanes, locked, peaksOf, picked, preview, restore, setClips, snapshot, span, splitClips } from "./sound";
 import { together } from "../core/doc";
 import { alongWith, type Along, inBox, pickAcross, picked as across } from "../timeline/across";
 import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
@@ -45,10 +45,12 @@ const gainY = (gain: number) => LABEL_H + 5 + (1 - Math.max(0, Math.min(1, (gain
 const fadeX = (x0: number, x1: number, x: number) => Math.max(x0 + 5, Math.min(x1 - 5, x));
 
 const tracks = () => lanes?.tracks ?? [];
-export const lanesHeight = () => TOP + tracks().length * TRACK_H + ADD_H;
-const rowY = (k: number) => TOP + k * TRACK_H;
+export const trackHeight = (id: string) => TRACK_H + (lanes && [...lanes.beds, ...lanes.sfx].some((c) => c.track === id && c.beats?.length) ? 10 : 0);
+export const lanesHeight = () => rowY(tracks().length) + ADD_H;
+const rowY = (k: number) => TOP + tracks().slice(0, k).reduce((h, t) => h + trackHeight(t.id), 0);
+const clipY = (k: number) => rowY(k) + trackHeight(tracks()[k].id) - TRACK_H + (TRACK_H - CLIP_H) / 2;
 // The row under y; tracks.length is the strip below the last track, where a new one starts
-const rowAt = (y: number) => Math.max(0, Math.min(tracks().length, Math.floor((y - TOP) / TRACK_H)));
+const rowAt = (y: number) => { const k = tracks().findIndex((_, i) => y < rowY(i + 1)); return k < 0 ? tracks().length : k; };
 const rowOf = (c: ClipRef) => tracks().findIndex((t) => t.id === clipOf(c)?.track);
 
 const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: number, y: number, w: number) => {
@@ -102,6 +104,12 @@ const drawClip = (g: CanvasRenderingContext2D, ref: ClipRef, x0: number, x1: num
   g.restore();
   // Outside the clip, on the dark track, so the clip's own edge and fade handles stay seen
   if (on) { g.strokeStyle = tone("pick"); g.lineWidth = 2; g.beginPath(); g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4); g.stroke(); }
+  g.fillStyle = tone("primary");
+  for (const t of clipBeats(ref)) {
+    const x = x0 + t * px;
+    if (x < 0 || x > w) continue;
+    g.beginPath(); g.moveTo(x - 3.5, y - 9); g.lineTo(x + 3.5, y - 9); g.lineTo(x + 3.5, y - 4); g.lineTo(x, y - 1); g.lineTo(x - 3.5, y - 4); g.closePath(); g.fill();
+  }
 };
 
 export const drawLanes = () => {
@@ -114,7 +122,7 @@ export const drawLanes = () => {
   const { a, v } = view(), X = (s: number) => ((s - a) / v) * w, ts = tracks();
   // Each track's row a step lighter than the empty space under the last, as CapCut's
   g.fillStyle = tone("background"); g.fillRect(0, 0, w, h);
-  g.fillStyle = tone("track"); g.fillRect(0, 0, w, TOP + ts.length * TRACK_H);
+  g.fillStyle = tone("track"); g.fillRect(0, 0, w, rowY(ts.length));
   g.fillStyle = tone("background");
   for (let i = 1; i <= ts.length; i++) g.fillRect(0, rowY(i) - 1, w, 1);
   // Cuts, faint, so a sound can be put on one by eye
@@ -127,7 +135,7 @@ export const drawLanes = () => {
   for (const ref of allClips()) {
     const [s, e] = span(ref), k = rowOf(ref);
     if (k < 0 || e < a || s > a + v) continue;
-    const x0 = X(s), x1 = Math.max(x0 + 4, X(e)), y = rowY(k) + (TRACK_H - CLIP_H) / 2, t = ts[k], shine = lit !== null && clipOf(ref)!.name === lit;
+    const x0 = X(s), x1 = Math.max(x0 + 4, X(e)), y = clipY(k), t = ts[k], shine = lit !== null && clipOf(ref)!.name === lit;
     g.globalAlpha = t.mute || (solo.length && !solo.includes(t.id)) || (lit !== null && !shine) ? 0.35 : 1;
     if (floating?.refs.some((r) => same(r, ref))) {
       g.fillStyle = tone("raised-3"); g.beginPath(); g.roundRect(x0, y, x1 - x0, CLIP_H, 4); g.fill();
@@ -141,7 +149,7 @@ export const drawLanes = () => {
   // words show only while there is no track at all, as CapCut's empty timeline asks for its first clip
   if (!ts.length) { g.fillStyle = tone("muted-foreground"); g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2); }
   if (drop) {
-    const x = X(drop.at), y = rowY(drop.row), hh = drop.row === ts.length ? ADD_H : TRACK_H;
+    const x = X(drop.at), y = rowY(drop.row), hh = drop.row === ts.length ? ADD_H : trackHeight(ts[drop.row].id);
     g.globalAlpha = 0.18; g.fillStyle = tone("primary"); g.fillRect(0, y, w, hh); g.globalAlpha = 1;
     g.fillStyle = tone("primary"); g.fillRect(x - 1, y, 2, hh);
   }
@@ -155,7 +163,7 @@ export const drawLanes = () => {
 
 // ---------- Snapping: the playhead, cuts, word starts and the edges of every clip not being moved
 const snapPoints = (skip: ClipRef[]) => {
-  const out = [S.t, ...SHOTS.map((s) => s.t)];
+  const out = [S.t, ...SHOTS.map((s) => s.t), ...beatTimes(skip)];
   for (const l of S.voiceOut) for (const word of l.words) out.push(word.s);
   for (const r of allClips()) if (!skip.some((k) => same(k, r))) out.push(...span(r));
   return out;
@@ -186,7 +194,7 @@ const clipsInBox = (m: { x0: number; x1: number; y0: number; y1: number }) => {
 
 type Drag = {
   ref: ClipRef; group: ClipRef[]; mode: "move" | "start" | "end" | "fadeIn" | "fadeOut" | "gain" | "gain-key"; gainKey: number | null; x: number; y: number; snap: string;
-  from: number; to: number; pts: number[]; moved: boolean; alone: boolean; x0: number; x1: number;
+  from: number; to: number; pts: number[]; moved: boolean; alone: boolean; x0: number; x1: number; y0: number;
   copy: boolean; // CapCut's drag to duplicate (Alt held as the drag starts): copies move, the clips stay
   moving: ClipRef[]; // the clips the drag moves: the pick, or its copies
   along: Along | null; shift: number; // the other rows' picks moving with the clips (timeline/across.ts), and by how much
@@ -218,6 +226,11 @@ export const attachLanes = () => {
   c.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     const { x, y, w } = local(e), touch = e.pointerType === "touch", b = hit(x, y, touch), add = e.shiftKey || e.ctrlKey || e.metaKey;
+    const markerBox = boxes.findLast((b) => y >= b.y0 - 11 && y < b.y0 - 1 && x >= b.x0 - 5 && x <= b.x1 + 5);
+    if (markerBox) {
+      const [from, to] = span(markerBox.ref), mark = clipBeats(markerBox.ref).find((t) => Math.abs(x - markerBox.x0 - t / (to - from) * (markerBox.x1 - markerBox.x0)) < (touch ? 10 : 5));
+      if (mark !== undefined) { setClips([markerBox.ref]); seek(from + mark); return; }
+    }
     if (get().blade) {
       if (!b) return;
       if (locked(b.ref)) { say("This track is locked. Unlock it in the track header to cut it"); return; }
@@ -245,7 +258,7 @@ export const attachLanes = () => {
     const mode = gainKey !== null ? "gain-key" : knob ?? (many || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : onGain(b, x, y) ? "gain" : "move");
     const [from, to] = span(b.ref);
     if (gainKey !== null) seek(from + clipOf(b.ref)!.gainKeys![gainKey].t);
-    drag = { ref: b.ref, group, mode, gainKey, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && many, x0: b.x0, x1: b.x1, copy: false, moving: group, along, shift: 0, magnet: makeSnapper() };
+    drag = { ref: b.ref, group, mode, gainKey, x, y, snap: snapshot(), from, to, pts: snapPoints(group), moved: false, alone: was && many, x0: b.x0, x1: b.x1, y0: b.y0, copy: false, moving: group, along, shift: 0, magnet: makeSnapper() };
   });
 
   // A drag near the top or bottom of the tracks' box scrolls it, so a clip can be taken to a track out of sight
@@ -320,7 +333,8 @@ export const attachLanes = () => {
         const shift = placeShift(l, moving, span, snapped.time - from, [Math.max(-Math.min(...starts), room[0]), Math.min(DURATION - 0.05 - Math.max(...starts), room[1])]);
         if (shift === null) { valid = false; return; }
         drag!.shift = shift;
-        floating = { refs: moving, dy: y - drag!.y - dk * TRACK_H };
+        const grabbed = moving[group.findIndex((r) => same(r, ref))];
+        floating = { refs: moving, dy: y - drag!.y + drag!.y0 - clipY(rowOf(grabbed)) };
         moving.forEach((r) => {
           const e = l[r.list][r.i] as { from?: number; to?: number; at?: number; track?: string };
           if (r.list === "beds") { const len = e.to! - e.from!; e.from = r3(e.from! + shift); e.to = r3(e.from + len); } else e.at = r3(e.at! + shift);

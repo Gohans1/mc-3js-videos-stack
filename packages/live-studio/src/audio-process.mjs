@@ -6,6 +6,16 @@ import { fileURLToPath } from "node:url";
 
 const script = fileURLToPath(new URL("../../../scripts/sound/process.py", import.meta.url));
 const pending = new Map();
+export const analyzeBeats = (source, settings, python) => new Promise((done, fail) => {
+  const script = fileURLToPath(new URL("../../../scripts/sound/beats.py", import.meta.url));
+  const child = execFile(python, [script, source], { windowsHide: true, timeout: 250000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    if (error) return fail(new Error(stderr.trim().split("\n").at(-1) || error.message));
+    try { done(JSON.parse(stdout)); } catch (e) { fail(e); }
+  });
+  child.stdin.on("error", () => {});
+  child.stdin.end(JSON.stringify(settings));
+});
+
 export const renderAudio = (source, settings, python) => {
   const key = JSON.stringify([source, settings]);
   if (pending.has(key)) return pending.get(key);
