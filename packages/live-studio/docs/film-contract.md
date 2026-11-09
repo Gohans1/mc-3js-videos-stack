@@ -59,3 +59,7 @@ text.json có tracks tùy chọn, khóa là số hàng dạng chuỗi; mỗi hà
 ## Chọn đối tượng từ timeline
 
 draw.tools.targets nối id/title/objects với rows chứa edit và path; path là tiền tố đường dẫn key, [] nhận toàn bộ file. Studio dùng khai báo này để bấm chọn và vẽ khung trắng cho một hoặc nhiều đối tượng, kể cả Final quality; khung không đi vào ảnh xuất.
+
+## Easing của key
+
+draw.keyEases khai báo edit/path/names cho hàng hỗ trợ trường ease; mỗi tên cần có hàm trong draw.eases. mc-actor moves hỗ trợ tên film-stage EASES hoặc bốn số Bezier; bỏ ease giữ chuyển động cũ.

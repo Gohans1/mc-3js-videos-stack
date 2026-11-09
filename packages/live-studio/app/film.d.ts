@@ -68,6 +68,7 @@ declare module "film/scene" {
     checks?: Record<string, (...args: number[]) => string | string[]>; // CHECK=name:args in a draft render (render.mjs)
     variants?: Variant[];
     eases?: Record<string, (x: number) => number>; // the camera keys' named eases (film-stage EASES), for the camera row
+    keyEases?: { edit: string; path: string[]; names: string[] }[];
     anims?: { in: AnimFx[]; out: AnimFx[]; combo: AnimFx[] };
     transitions?: readonly { id: string; title: string; tip: string }[];
     adjustments?: { prepare: (grades: unknown[]) => Promise<void> };

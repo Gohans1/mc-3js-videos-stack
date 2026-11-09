@@ -56,6 +56,13 @@ test("draw.checks, when a film has them, are functions by name", () => {
   assert.match(checkFilm(film(), withChecks({ slide: "0,108" })).join(), /checks\.slide/);
 });
 
+test("key easing controls only offer evaluators the film can draw", () => {
+  const withEase = (names) => Object.assign(draw(), { eases: { linear: (t) => t }, keyEases: [{ edit: "steve", path: ["moves"], names }] });
+  assert.deepEqual(checkFilm(film(), withEase(["linear"])), []);
+  assert.match(checkFilm(film(), withEase(["missing"])).join(), /keyEases/);
+  assert.match(checkFilm(film(), withEase([])).join(), /keyEases/);
+});
+
 test("scene selection targets bind real objects to explicit key paths and have unique ids", () => {
   const target = { id: "steve", title: "Steve", objects: [{ isObject3D: true }], rows: [{ edit: "steve", path: [] }] };
   assert.deepEqual(checkFilm(film(), draw({ targets: [target] })), []);

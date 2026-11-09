@@ -140,6 +140,7 @@
       "version": "0.1.0",
       "dependencies": {
         "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
         "minerender": "2.1.0-beta.8",
         "zod": "4.6.7",
       },

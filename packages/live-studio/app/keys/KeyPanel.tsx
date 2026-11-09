@@ -8,12 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
 import { FPS, stamp } from "../core/time";
-import { addKeyAt, files, type Key, keyOf, keysOf, nameOf, pickKeys, removeKeys, rows, setField, shift } from "./keys";
+import { addKeyAt, files, hold, type Key, keyOf, keysOf, nameOf, pickKeys, preview, removeKeys, rows, setField, shift } from "./keys";
 import { seek } from "../playback/transport";
 import { S } from "../core/state";
 import { get, say, useStudio } from "../core/store";
 import { type KeyRef } from "./slice";
 import { Tip } from "../components/Tip";
+import { CurveEditor, EaseTiles } from "../components/EasePicker";
+import type { Ease } from "../core/ease";
+import { Section } from "../components/inspector";
 
 const label = "text-ui text-muted-foreground";
 const box = "h-8 w-full min-w-0 rounded-md border border-input bg-input px-2 text-ui text-foreground outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:text-base";
@@ -85,10 +88,12 @@ function Field({ r, k, field, optional }: { r: KeyRef; k: Key; field: string; op
 function One({ r }: { r: KeyRef }) {
   const ks = keysOf(r.f, r.path), k = ks[r.i];
   const go = (i: number) => { pickKeys([{ ...r, i }]); seek(ks[i].t); };
-  const fields = Object.keys(k).filter((f) => f !== "t");
+  const easing = S.render?.keyEases?.find((x) => x.edit === files[r.f].edit && x.path.join(".") === r.path.join("."));
+  const editable = (f: string) => f !== "t" && !(easing && f === "ease");
+  const fields = Object.keys(k).filter(editable);
   // Fields only some keys of the row carry can be taken off, or put on from the key before that has them
   const everyone = (f: string) => ks.every((x) => f in x);
-  const missing = [...new Set(ks.flatMap((x) => Object.keys(x)))].filter((f) => f !== "t" && !(f in k));
+  const missing = [...new Set(ks.flatMap((x) => Object.keys(x)))].filter((f) => editable(f) && !(f in k));
   const lastWith = (f: string) => { for (let j = r.i - 1; j >= 0; j--) if (f in ks[j]) return ks[j][f]; return ks.find((x) => f in x)?.[f]; };
   return (
     <section aria-label="Selected keyframe" className="flex flex-col gap-3 rounded-xl bg-card p-3">
@@ -119,7 +124,20 @@ function One({ r }: { r: KeyRef }) {
           ))}
         </div>
       )}
+      {easing && r.i > 0 && <KeyEase r={r} names={easing.names} value={k.ease as Ease | undefined} />}
     </section>
+  );
+}
+
+function KeyEase({ r, names, value }: { r: KeyRef; names: string[]; value: Ease | undefined }) {
+  const doc = files[r.f].doc;
+  return (
+    <Section title="Easing">
+      <p className="text-xs text-muted-foreground">From the previous keyframe into this one.</p>
+      <Button variant="secondary" aria-pressed={value === undefined} onClick={() => setField(r, "ease", undefined)}>Automatic</Button>
+      <EaseTiles value={value} names={names} fallback="automatic" onPick={(v) => setField(r, "ease", v)} />
+      {Array.isArray(value) && <CurveEditor value={value} doc={{ snapshot: doc.snapshot, restore: (s) => { doc.restore(s); hold(false); } }} preview={(v) => { hold(true); preview([r], (_, ks) => { ks[r.i].ease = v; }); }} onSave={(v) => setField(r, "ease", v)} />}
+    </Section>
   );
 }
 

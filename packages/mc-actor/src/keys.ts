@@ -5,9 +5,12 @@
 // one perform.ts doesn't read is an error (an "pos" for "at" would otherwise be ignored). A field perform.ts learns to read
 // goes in MOVE here too.
 import * as z from "zod";
+import { EASES } from "film-stage/camera";
 
 const t = z.number().nonnegative();
 const xyz = z.tuple([z.number(), z.number(), z.number()]);
+const unit = z.number().min(0).max(1);
+const ease = z.union([z.enum(Object.keys(EASES)), z.tuple([unit, z.number(), unit, z.number()])]);
 // a hand or look target: a world point, a film anchor's name or object, or null to let go
 const target = z.union([z.null(), xyz, z.string().min(1), z.looseObject({})]);
 
@@ -15,6 +18,7 @@ export const MOVE = z.strictObject({
   t, at: xyz, yaw: z.number(), pose: z.string().optional(), clip: z.string().optional(), walk: z.boolean().optional(),
   via: z.string().optional(), do: z.string().optional(), from: z.number().optional(), rate: z.number().optional(), // 0 holds the clip's frame at from
   loop: z.boolean().optional(), blend: z.number().nonnegative().optional(), add: z.record(z.string(), z.unknown()).optional(),
+  ease: ease.optional(),
 }).refine((k) => !!k.pose !== !!k.clip, "a move key holds a body pose or a mocap clip: exactly one of pose, clip");
 const TARGET = z.strictObject({ t, R: target.optional(), L: target.optional(), at: target.optional() });
 const FACE = z.strictObject({ t, mood: z.string().min(1) });

@@ -372,6 +372,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   };
   const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free);
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
+  draw.keyEases = [{ edit: "steve", path: ["moves"], names: Object.keys(EASES) }];
   draw.anims = ANIMS; // the studio's Animation tab lists these
   draw.adjustments = { prepare: adjust.prepare };
   draw.describe = makeDescribe({ EDIT, SHOTS: SHOTS_OUT, shotAt, keysOf, camera, steveBox, steveBody, variants, steve, now, props });

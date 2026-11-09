@@ -6,6 +6,8 @@
 //     too far); with walk: true on the later key he walks there (gait phased from the distance walked, every footfall
 //     planted). Keep a non-walk shift small (a weight shift, half a step): anything longer is a walk. via: a pose that
 //     peaks halfway through the blend (rising from a seat).
+//     ease on the incoming key replaces that blend's curve (film-stage EASES or four Bezier handles); omitted keeps
+//     smoothstep/walkEase. It also phases gait distance, but does not retime a mocap clip's source playback.
 //     clip: "<lib>/<clip>" instead of pose plays a mocap clip (clips.ts) from the key on, its first frame's hips at
 //     `at`; from: seconds into the clip to start at, rate: its speed, loop: true repeats it (in-place clips only: each lap
 //     starts back at `at`), else it holds its last frame. It plays at full weight until `blend` seconds (default 0.4)
@@ -28,6 +30,7 @@ import { MOODS, addPose, gaitOf, walkPose } from "./player";
 import { slerpPose } from "./mocap";
 import { reachK } from "film-kit/reach";
 import { arc } from "film-kit/arc";
+import { easeOf } from "film-stage/camera";
 
 const D = Math.PI / 180;
 
@@ -86,6 +89,7 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     const w = a.clip ? Math.min(a.blend ?? 0.4, b.t - a.t) : b.t - a.t;
     return clamp01((t - (b.t - w)) / w);
   };
+  const travel = (key, x, duration) => key.ease === undefined ? key.walk ? walkEase(x, duration) : smooth(x) : easeOf(key.ease)(x);
 
   // Where he is, which way he faces and the body pose at time t (no hand targets, no head aim yet)
   function bodyAt(moves, t, clips) {
@@ -94,11 +98,11 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     const i = keyAt(moves, t), a = moves[i], b = moves[Math.min(i + 1, moves.length - 1)];
     const x = progress(a, b, t);
     const cum = pathOf(moves);
-    const k = b.walk ? walkEase(x, b.t - a.t) : smooth(x);
+    const k = travel(b, x, b.t - a.t), phase = b.ease === undefined ? x : k;
     const at = a.at.map((v, j) => THREE.MathUtils.lerp(v, b.at[j], k));
-    const yaw = yawLerp(a.yaw, b.yaw, b.walk ? smooth(x / 0.25) : k);
+    const yaw = yawLerp(a.yaw, b.yaw, b.walk ? smooth(phase / 0.25) : k);
     const sa = t - a.t, sb = Math.max(0, t - b.t);
-    const w = b.walk ? smooth((x - 0.8) / 0.2) : k; // a walk keeps its own body until its last fifth
+    const w = b.walk ? smooth((phase - 0.8) / 0.2) : k; // a walk keeps its own body until its last fifth
     let pose;
     if (b === a) pose = poseOf(a, sa, clips);
     else if (a.clip || b.clip) {
@@ -115,12 +119,12 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
       pose.root.x = ax + bx;
       pose.root.z = az + bz;
     } else pose = mixPose(poseOf(a, sa, clips), poseOf(b, sb, clips), w);
-    if (b.via && b !== a) pose = addPose(pose, mixPose({}, poses[b.via](sa), Math.sin(Math.PI * x)));
+    if (b.via && b !== a) pose = addPose(pose, mixPose({}, poses[b.via](sa), Math.sin(Math.PI * phase)));
     // steps: walking, or shuffling round on the spot while turning; the gait fades in and out with the speed
     const dist = (tt) => {
       const j = keyAt(moves, tt), p = moves[j], q = moves[Math.min(j + 1, moves.length - 1)];
       const xx = progress(p, q, tt);
-      return cum[j] + (cum[Math.min(j + 1, cum.length - 1)] - cum[j]) * (q.walk ? walkEase(xx, q.t - p.t) : smooth(xx));
+      return cum[j] + (cum[Math.min(j + 1, cum.length - 1)] - cum[j]) * travel(q, xx, q.t - p.t);
     };
     const d = dist(t), speed = (dist(t + 0.05) - d) / 0.05;
     const walking = standing.includes(a.pose) && standing.includes(b.pose) || b.walk;

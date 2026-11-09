@@ -56,9 +56,10 @@ export const Draw = z.looseObject({
   checks: z.record(z.string(), fn).optional(),
   variants: z.array(Variant).refine((v) => unique(v.map((x) => x.id)), "variant ids must differ").optional(),
   eases: z.record(z.string(), fn).optional(), // the camera keys' named eases (film-stage EASES), drawn in the studio's ease picker
+  keyEases: z.array(z.object({ edit: z.string().min(1), path: z.array(z.string()), names: z.array(z.string()).min(1) })).optional(),
   // film-stage ANIMS: the In, Out and Combo effects the film draws from a shot's "anim", listed in the studio's Animation tab
   anims: z.object(Object.fromEntries(["in", "out", "combo"].map((k) => [k, z.array(z.looseObject({ id: z.string().min(1), title: z.string(), cat: z.string(), tip: z.string() }))]))).optional(),
-});
+}).refine((draw) => draw.keyEases?.every((row) => row.names.every((name) => typeof draw.eases?.[name] === "function")) ?? true, { error: "each key easing must have a draw.eases evaluator", path: ["keyEases"] });
 
 // ---------- src/edit.json: the studio reads the voice, the beats and their sounds. Everything else in it is the film's
 const Beat = z.looseObject({ title: z.string(), at: time, dur: z.number().nonnegative(), kind: z.enum(["motion", "sound"]), sounds: z.array(z.tuple([time, z.string(), z.number()])) });
@@ -161,5 +162,5 @@ export const checkFiles = (files) => Object.entries(files).flatMap(([name, [sche
 
 export const checkFilm = (scene, draw) => [
   ...problems(SceneModule, scene, "src/scene.ts exports"),
-  ...(typeof draw === "function" ? problems(Draw, { tools: draw.tools, describe: draw.describe, checks: draw.checks, variants: draw.variants, anims: draw.anims }, "what buildScene() resolves to (draw)") : ["buildScene()\n✖ must resolve to draw(t), a function"]),
+  ...(typeof draw === "function" ? problems(Draw, { tools: draw.tools, describe: draw.describe, checks: draw.checks, variants: draw.variants, anims: draw.anims, eases: draw.eases, keyEases: draw.keyEases }, "what buildScene() resolves to (draw)") : ["buildScene()\n✖ must resolve to draw(t), a function"]),
 ];

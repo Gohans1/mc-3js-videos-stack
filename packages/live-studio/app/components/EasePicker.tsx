@@ -56,8 +56,8 @@ function Tile({ title, tip, f, on, onPick, mono }: { title: string; tip: string;
 }
 
 // value: the key's ease as stored, none meaning fallback (what the film gives a key without one); onPick saves, one undo step
-export function EaseTiles({ value, fallback, onPick, className }: { value: Ease | undefined; fallback: string; onPick: (v: Ease | undefined) => void; className?: string }) {
-  const curve = Array.isArray(value) ? value : null, names = easeNames(), presets = names.length ? [] : CURVES;
+export function EaseTiles({ value, fallback, onPick, className, names = easeNames() }: { value: Ease | undefined; fallback: string; onPick: (v: Ease | undefined) => void; className?: string; names?: string[] }) {
+  const curve = Array.isArray(value) ? value : null, presets = names.length ? [] : CURVES;
   const now = curve ? (presets.find((c) => c.v.join() === curve.join())?.id ?? "custom") : value ?? fallback;
   const pick = (id: string) => {
     if (id === now) return;
