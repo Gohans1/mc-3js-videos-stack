@@ -28,7 +28,7 @@ Lấy form từ templates/film, có thể custom thoải mái
 - Camera: `film-stage/src/camera.ts` (key, ease, shakeAt). Nhịp cắt và cách máy chuyển động: `film-stage/docs/film-grammar.md`.
 - Đèn chập chờn: `film-stage/src/flicker.ts`.
 - Lồng tiếng: `scripts/voice/gen.py` (ElevenLabs qua GenVoice), rồi `words.py` (whisperX), rồi `assemble.py`.
-- SFX CC0: `python ../../scripts/sound/get_sfx.py find "từ khoá"`. Mix: `scripts/sound/mix.py`.
+- SFX CC0: `python ../../scripts/sound/get_sfx.py find "từ khoá"`; bộ âm ở vết cắt: `python ../../scripts/sound/get_sfx.py sweeteners`. Mix: `scripts/sound/mix.py`.
 - Ghi file src/timeline/*.json: `scripts/timeline_fmt.py`.
 
 ## Verify (làm xong phải tự kiểm, chạy trong folder film)

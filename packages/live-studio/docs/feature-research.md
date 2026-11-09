@@ -1,5 +1,7 @@
 # Soi tính năng các phần mềm dựng phim, chọn cái cho live-studio
 
+Đây là ghi chép nghiên cứu; trạng thái sử dụng hiện tại lấy ở [capcut-parity.md](capcut-parity.md).
+
 Mục tiêu: live-studio thành "CapCut cho 3js": dễ như CapCut, nhưng không bỏ tính năng khó mà quan trọng. AI dựng phim, dev xem và góp ý, dev được tự sửa mọi thứ.
 
 ## Cách đọc
@@ -173,14 +175,14 @@ Cách đo: ffmpeg chấm điểm đổi cảnh từng khung, một khung gấp �
 ## Mẹo nhỏ nhặt được
 
 - Shift giữ khi kéo thì tạm tắt hít (OpenCut, Theatre). Studio đã làm.
-- Esc luôn là bỏ chọn/huỷ thao tác đang dở (OpenCut). Studio đã có Esc bỏ chọn, chưa có Esc huỷ lúc đang kéo.
+- Esc đã bỏ chọn và hủy thao tác kéo trên timeline; không còn là mục chưa làm.
 - Đường cong bezier: tay nắm tự hít về 0 và 1 khi gần (ngưỡng 0.06), Shift tắt hít; trục dọc giới hạn -0.5..1.5 để được nảy nhẹ (OpenCut bezier-graph).
-- Xem trước khi kéo, thả mới lưu (OpenCut): studio đã làm vậy. Esc trong lúc kéo thì bỏ: chưa làm.
+- Kéo chỉ xem trước, thả mới lưu; Esc trả về trạng thái trước khi kéo.
 - Ô số nhận phép tính và kéo chuột để đổi (OpenCut 0.3).
-- Khe nhỏ giữa hai clip liền nhau để vẫn thấy viền chọn; viền chọn nét đứt (OpenCut).
-- Dạng sóng RMS, phần quá 0 dBFS tô màu khác; chỉ vẽ phần đang thấy cho nhẹ (OpenCut).
+- Clip có khe phân biệt; viền chọn trắng liền theo ảnh CapCut dev gửi, không dùng viền nét đứt OpenCut.
+- Dạng sóng lấy peak của mọi mẫu/kênh WAV ở đoạn đang thấy; không dùng RMS làm độ cao sóng. Quy ước đỉnh cam/đỏ chưa xác minh trên CapCut.
 - Đường âm lượng giữ đúng tỉ lệ dB với vị trí ở mọi độ cao track (OpenCut).
-- Bấm vùng trống dưới các track cũng nhảy playhead tới đó (OpenCut).
+- Vùng trống trên hàng dùng quét chọn; chỉ thước hoặc đúng vạch playhead mới kéo giờ.
 - Hàng track sáng lên khi đang chọn clip trong nó (OpenCut).
 - Lăn chuột dọc ở đâu cũng cuộn, tiêu đề cột không cuộn theo (OpenCut).
 - Fade âm thanh chuẩn: điểm đầu và cuối về -vô cực dB, không phải 0 dB nhỏ (FilmCraft docs).
@@ -203,20 +205,20 @@ Cách đo: ffmpeg chấm điểm đổi cảnh từng khung, một khung gấp �
 5. Thanh công cụ timeline kiểu CapCut: XONG. Hoàn tác, làm lại, cắt, xoá trái, xoá phải, xoá, hít (bật/tắt), thu nhỏ, phóng to, cả phim (timeline/TimelineBar.tsx).
 6. Tự hạ nhạc nền khi có giọng (ducking): XONG. Chọn clip Bed, kéo "Ducking" (dB); trang nghe thử và mix.py cùng một công thức (sound/duck.ts, mix.py duck_expr), đã đo bằng ffmpeg: -24 dB xuống -36 dB khi có lời.
 7. Fade in cho tiếng động lẻ (SFX): XONG. Trước đây chỉ Bed có fade in.
-8. Mẫu chuyển động camera: XONG. Tab Camera, khu Shot move: 15 nút (push, pull, orbit, pan, tilt, slide, rise, lower, zoom, hold) với 3 mức Subtle/Medium/Strong; một chạm thay keyframe của shot đang ở playhead, Ctrl+Z để bỏ (camera/cam.ts applyMove).
+8. Mẫu chuyển động camera: nằm trong Animation > In/Out/Combo; khu Shot move cũ đã bỏ khỏi Camera. Mỗi lần áp dụng là một Undo.
 9. Đường bay và khung camera khi bay tự do: XONG. Bật Free camera (F) sẽ thấy đường bay shot hiện tại màu cam kèm chấm keyframe, shot khác màu xám, và khung camera thật ở playhead (camera/campath.ts).
-10. Fade hình (tối dần, sáng dần, chớp đen): XONG. Tab Camera, khu Fade: Fade in, Fade out, Dip to black, ô Length; key ghi vào hàng black của fx.json, kéo key để chỉnh, film vẽ màn đen cuối cùng nên nháp và video final đều có (film-stage/src/fade.ts, camera/fades.ts). Đã soi: dip 6.5 s đen đúng khung cắt trong studio và ảnh render nháp. Fade out shot trước rồi Fade in shot sau (thứ tự nào cũng được) nối thành một lần qua đen kiểu Atrium; bản đầu hai cái xoá nhau, đã sửa và có test.
+10. Fade hình: chọn hiệu ứng trong Animation hoặc transition Black Fade; không còn khu Fade cũ trong Camera. Hàng FX/black vẫn giữ key để phim vẽ trong preview và render.
 11. Tay nắm fade trên clip âm thanh: XONG. Rê chuột lên clip (hoặc chọn clip) sẽ hiện chấm trắng ở hai góc trên, kéo vào trong để fade in/out như CapCut và Premiere, không cho hai fade chồng quá độ dài clip (sound/lanes.ts knobAt). Sửa luôn lỗi fade in của SFX không hiện trên clip.
 12. Bộ ba ◁ ◇ ▷ keyframe kiểu CapCut ở bảng Object: XONG. Dòng Transform: ◁ ▷ nhảy keyframe trước/sau, ◇ rỗng thêm key giữ nguyên chỗ vật đang đứng, ◇ đặc là đang đứng trên key và bấm để xoá, nút ↺ đặt lại xoay và cỡ (keys/keynav.ts, placed.ts toggleKey). Một nút cho cả Transform vì mỗi key của vật giữ cả vị trí, xoay và cỡ; CapCut cũng có nút key chung cho Transform.
 13. Hình camera gốc cạnh camera tự do: XONG. Bật Free camera (F), góc dưới phải có khung Film camera chiếu đúng hình phim ở playhead (cả fade và hậu kỳ) như camera preview của Unreal; nút đổi cỡ 3 mức, nút ẩn còn một nút nhỏ để hiện lại (picture/filmcam.ts). Chỉ bay camera thì khung không vẽ lại, nên không tốn thêm.
 14. Phím tắt theo CapCut toàn app: XONG. Ctrl+B, Ctrl+Shift+B, B hoặc C bật dao cắt (bấm lên clip hay hàng camera là cắt ở đó), A về chọn, Q W, [ ] chọn clip trái/phải, lên/xuống nhảy cut, Shift+mũi tên 5 khung, Home End, N bật tắt hít, M thêm ghi chú (marker của CapCut), Shift+M ghi chú kế. Ctrl+ và Ctrl- trả lại cho trình duyệt phóng trang, timeline phóng bằng = và -.
 15. Bỏ Loop shot (L) vì dev thấy vô dụng. Timeline kiểu CapCut: chỉ thanh công cụ, Overview và thước giây đứng yên, mọi hàng từ Shots tới track âm thanh cuộn chung (trước đây phần đầu cố định che gần hết track âm thanh).
 
-Còn lại trong đợt này, chưa làm: vùng làm việc/vùng tập trung (work area, focus range: lặp một đoạn, Space chỉ phát trong đó), phím nhảy keyframe trước/sau (J/K), nút tăng giảm cạnh ô số.
+Work area đã có I/O, Shift+X và Alt+X; phát từ trong vùng sẽ lặp lại. Bộ ◁◇▷ nhảy key, ô số có nút tăng/giảm; J/K/L là điều khiển phát, không phải nhảy key.
 
-## Câu hỏi cho dev
+## Quyết định và việc còn mở
 
 1. Phím tắt có đổi theo CapCut không? Dev đã chốt: theo CapCut toàn app, C cũng là dao cắt như thói quen của dev (xem mục 14).
-2. Sửa giọng: kéo dài hay rút ngắn khoảng nghỉ giữa hai câu thì camera, nhân vật, SFX phía sau có dời theo không? Đề xuất có, vì studio đã ghi giờ theo giây gốc của giọng và có warp kéo giãn (src/edit.ts); trước khi làm phải soát file nào chưa theo warp (audio.json đang tính giây đầu ra).
-3. Có làm hàng chữ trên hình kiểu Atrium (địa danh + năm, nhãn tên lên ảnh) không? Đề xuất có, film tự vẽ như fade để nháp và final cùng có, nhưng đây là phần kể truyện nên dev quyết lúc nào làm.
+2. Dev đã chốt Ripple/Linkage: đổi thời lượng phải dời camera, Steve, giọng và SFX cùng nhau, một Undo. Cần tách giờ nguồn/đầu ra vì scene còn chuyển động theo giây tuyệt đối; chưa triển khai.
+3. Dev đã chốt và đã có hàng Text, preset Place and time, Animation, Lock/Hide và chọn trên preview.
 4. Luật "shot tối đa 8 s" trong film-grammar.md (theo Fern) có giữ không, khi Atrium có 14% shot dài hơn 8 s? Đề xuất giữ 8 s cho shot máy đứng yên, cho dài hơn khi máy đi liên tục qua nhiều thứ.

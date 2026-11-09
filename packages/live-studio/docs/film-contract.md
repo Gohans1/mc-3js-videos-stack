@@ -10,6 +10,8 @@ What the studio reads from a film: the schemas in [`src/contract.mjs`](../src/co
 
 ## Film files
 
+Giờ nguồn và giờ nghe hiện chưa thống nhất: shots và beats đi qua voice.warp; cam, keyFiles, audio, Text và lớp Adjust dùng giây renderer trực tiếp. Chỉ đổi voice.warp sẽ không làm Ripple/Speed cả phim đúng; các tính năng đó vẫn đang nghiên cứu.
+
 - `src/scene.ts`: `SHOTS`, `SHOTS_OUT`, `DURATION`, `applyEdit`, `buildScene(canvas, W, H, draft)` → `draw(t)` with `draw.tools` (scene, camera, look, `free` camera it must obey when `on`: it changes the viewpoint only, so the frame is the same moment as the keyed camera sees it, less the fade and the camera's own moves (keys, roll, a shot's animation); optional `home` {p, l, fov?}: where the first free camera after a reload starts; optional `objects`/`materials`/`rig`/`bones` name what a tap hit).
 - `src/edit.ts`: `setEdit(data)` then `export * from "live-studio/edit"`; the place to merge the film's own timeline files.
 - `src/edit.json`: `voice {edits, warp}` + `beats`, all times in the voice's source seconds; the studio never writes it, and saving it (like any code) rebuilds the page, which shows **New version** instead of reloading.

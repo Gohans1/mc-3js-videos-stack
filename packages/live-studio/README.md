@@ -1,38 +1,29 @@
 # Live Studio
 
-A review room and timeline editor for Three.js films: the creator watches on a PC or phone and pins notes to a moment and a spot, an AI agent reads them and changes the film's code. The creator can also edit the timeline CapCut-style (sound clips, camera keys and eases, cuts, placed objects, fades); those edits go into the film's timeline files, and its code stays the agent's.
+Studio xem và chỉnh timeline phim Three.js trên máy tính hoặc điện thoại; người dùng ghim note, AI đọc rồi sửa phim. Timeline hỗ trợ âm thanh, key camera/Steve/đạo cụ, Text, transition, Adjust theo shot và lớp Adjust.
 
-<img src="docs/studio.png" width="320" alt="The studio on a phone: the picture with a pin on the tapped ball, big play and note buttons, the timeline with words and actions, and the notes below.">
+## Chạy
 
-```bash
-bun run demo -- 4321     # the demo film at http://localhost:4321; needs Node 22+, Bun, Python 3, ffmpeg
-```
+Ở root, dùng bun run new-film <tên>; trong phim chạy bun run studio. Demo: bun run demo -- 4321 trong packages/live-studio; cần Node 22+, Bun, Python và FFmpeg.
 
-Local only and without a password: reach it from a phone through `tailscale serve` with the host name in the film's `.live_hosts` (any other name gets 403), never from the open internet.
+Studio dùng chung qua workspace, không chép vào từng phim; [film-contract.md](docs/film-contract.md) quy định cách nối. Truy cập điện thoại qua Tailscale với tên máy trong .live_hosts; không mở dịch vụ trực tiếp ra internet.
 
-## On your film
+## Làm việc với phim
 
-Every film in this monorepo shares this one studio (`"live-studio": "workspace:*"`); never copy it into a film.
+bun run notes [ID] đọc note; bun run note done ID "nội dung" đánh dấu sau khi sửa và kiểm chứng. Không chỉnh notes.jsonl bằng tay.
 
-```bash
-bun run new-film <name>                 # at the monorepo root: copies templates/film, runs init.mjs, links the vault
-cd films/<name> && bun run studio       # prints the creator's link (Tailscale) or what is missing
-bun run notes [ID]                      # the creator's notes; bun run note done ID "..." when one is fixed
-bun run render stills|clip|captions     # draft stills, the draft video with its .srt, or the .srt alone; options in render.mjs
-bun run framecheck                      # faults in a rendered video
-```
+bun run render stills tạo ảnh nháp; render clip tạo video và SRT, render captions chỉ tạo phụ đề. CHECK và framecheck kiểm chuyển động/hình; tùy chọn nằm trong render.mjs và AGENTS.md root.
 
-What a film must provide and every rule an agent follows: [docs/film-contract.md](docs/film-contract.md).
+## Mã nguồn và kiểm tra
 
-## Working on the studio
+app/ chứa React, Base UI/shadcn, Tailwind và Zustand; src/ là server, render/ dựng nháp, checks/ tính số kiểm tra. Sửa server cần khởi động lại studio; Vite dựng lại giao diện, người dùng bấm New version để tải bản mới.
 
-- `app/` is the React page (shadcn/ui on Base UI, Tailwind, Zustand) that Vite rebuilds with the film on every save (`src/page.mjs`). One folder per part of the page, each with its state (`slice.ts`), its logic and its panels: `picture/`, `playback/`, `notes/`, `timeline/`, `sound/`, `camera/`, `keys/`, `objects/`, `options/`. `core/` is what they share (the store, saved settings in `prefs.ts`, film time), `shell/` the frame around them (side bar, transport, settings, hotkeys), `start.ts` the start and the frame loop.
-- `src/` is the server (restart each studio after changing it), `render/` the draft renderer and its checks, `checks/` the numbers those checks and framecheck compute (pure, tested in node).
-- `bun run test` runs the tests, `bun run typecheck` the types, `bun run lint` the page against shadcn's lint (`.oxlintrc.json`): colours, type sizes and shadows come from the tokens in `app/index.css` and the variants in `app/components/ui/`, a dynamic value goes in as a CSS custom property read by a class such as `h-(--row-h)`.
-- [docs/capcut-parity.md](docs/capcut-parity.md) is the creator's list of what the studio has of CapCut, feature by feature (in Vietnamese): change a feature's line in the same commit as the feature.
+bun run test, bun run typecheck và bun run lint là ba lệnh kiểm tra. Màu/cỡ chữ lấy từ app/index.css; thành phần dùng variant trong app/components/ui.
 
-## License
+[capcut-parity.md](docs/capcut-parity.md) ghi tính năng, thao tác và giới hạn đã kiểm; không coi danh sách là chứng nhận giống CapCut 99%. Thay tính năng phải cập nhật đúng trạng thái và giữ bằng chứng nhìn/nghe/đo thực tế.
 
-MIT; built on three.js, three-mesh-bvh, Vite, React, shadcn/ui, Base UI, Tailwind CSS, Hono, Zustand, TanStack Hotkeys, Zod, bezier-easing, bezier-easing-editor, vite-plugin-compression2 (all MIT), class-variance-authority (Apache-2.0), Lucide (ISC) and Mediabunny (MPL-2.0, unmodified).
+## Giấy phép
 
-Transition của film-stage dùng GL Transitions 3.1.0 (ba shader MIT của gre); [giấy phép](../film-stage/THIRD_PARTY_NOTICES.txt) và [nguồn đối chiếu](docs/transition-research.md).
+Mã studio theo [MIT](LICENSE), ngoại trừ các phần bên thứ ba ghi riêng. Limiter chuyển từ FFmpeg n8.1.1 theo LGPL-2.1-or-later, có nguồn gốc và giấy phép trong [app/sound/vendor](app/sound/vendor/README.md); giữ mã nguồn/thông báo khi phân phối.
+
+GL Transitions và mã màu của film-stage có [thông báo riêng](../film-stage/THIRD_PARTY_NOTICES.txt); Mediabunny là MPL-2.0, Lucide/librosa là ISC. Rubber Band R3 dùng bản thực thi ngoài repo, xem [audio-processing.md](docs/audio-processing.md).
