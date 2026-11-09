@@ -18,7 +18,7 @@ Máy này cài bản Windows 4.0.0 ở C:/Users/ADMIN/.local/share/live-studio/t
 
 Codegraph đọc OpenCut classic: speed-tab.tsx, audio-stretch.ts và retime/rate.ts; đọc filmcraft/effects/pitch.rs. OpenCut dùng SoundTouch.js, filmcraft có phase vocoder riêng; studio chọn CLI đã có thuật toán chuẩn để cùng dùng cho preview và xuất phim.
 
-Đã xem lại khung CapCut speed-026-c.png: slider, Duration và Change audio pitch; studio thêm Pitch và Reverse audio cho clip tiếng. Bố cục hiện nằm trong Audio/Speed, chưa tuyên bố giống CapCut 99%; Curve/Velocity toàn phim là việc riêng còn tiếp tục.
+Đã xem lại khung CapCut speed-026-c.png: slider, Duration và Change audio pitch; studio thêm Pitch và Reverse audio cho clip tiếng. Audio có ba tab Basic, Voice changer và Speed; Curve/Velocity toàn phim là việc riêng còn tiếp tục.
 
 # Kiểm chứng
 

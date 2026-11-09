@@ -27,7 +27,7 @@ interface PageSlice {
   contract: string[];
   shot: string;
   perf: string;
-  side: "notes" | "sound" | "objects" | "cam" | "speed" | "anim" | "adjust" | "transition" | "keys" | "text" | "textAnim";
+  side: "notes" | "sound" | "voiceChanger" | "audioSpeed" | "objects" | "cam" | "speed" | "anim" | "adjust" | "transition" | "keys" | "text" | "textAnim";
   lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust"; // on a wide screen: the left column's tab (side then picks the right column's)
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;

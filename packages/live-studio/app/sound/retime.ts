@@ -1,6 +1,7 @@
 import type { GainClip } from "./gain";
 
-export interface AudioProcessing { rate?: number; pitch?: number; changePitch?: boolean; reverse?: boolean }
+export type VoiceFilter = "none" | "telephone" | "walkieTalkie" | "megaphone";
+export interface AudioProcessing { rate?: number; pitch?: number; changePitch?: boolean; reverse?: boolean; voiceFilter?: VoiceFilter; voiceStrength?: number }
 type Timed = GainClip & AudioProcessing & { start?: number; fadeIn?: number; fadeOut?: number };
 
 export const sourceTime = (c: AudioProcessing & { start?: number }, length: number, u: number) =>

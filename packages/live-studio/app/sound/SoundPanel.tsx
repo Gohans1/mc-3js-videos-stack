@@ -28,10 +28,11 @@ import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { NormalizeClip } from "./NormalizeClip";
 import { AudioSpeed } from "./AudioSpeed";
+import { VoiceChanger } from "./VoiceChanger";
 
 // The picked clip as CapCut's Audio tab: its Basic section (volume, pan, fades, and here ducking or length), then what the app adds
 // (which file, which track, where it runs). A drag previews and saves once, when let go: one undo step
-function Inspector({ clip }: { clip: ClipRef }) {
+function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "speed" }) {
   useStudio((s) => s.soundRev);
   useFrame();
   const c = clipOf(clip);
@@ -58,6 +59,7 @@ function Inspector({ clip }: { clip: ClipRef }) {
         <span className="min-w-0 flex-1 truncate text-ui text-muted-foreground" title={item?.title}>{item?.title ?? c.name}</span>
         <Tip label="Delete clip (Delete)"><Button variant="remove" size="icon-lg" className="-me-1 pointer-coarse:size-10" aria-label={`Delete ${c.name}`} onClick={() => removeClip(clip)}><Trash2 /></Button></Tip>
       </div>
+      {tab === "voice" ? <VoiceChanger key={`voice:${clip.list}:${clip.i}`} clip={clip} /> : tab === "speed" ? <AudioSpeed key={`speed:${clip.list}:${clip.i}`} clip={clip} /> : <>
       <Section title="Basic" right={<Reset label="Reset volume, pan and fades" disabled={!c.gain && !c.gainKeys?.length && !c.pan && !fi && !fo} onClick={() => resetBasic(clip)} />}>
         <SliderRow label="Volume" value={volume} min={Math.min(-40, volume)} max={Math.max(20, volume)} step={0.1} digits={1} unit="dB" doc={soundDoc}
           preview={(v) => preview((l) => writeGain(l[clip.list][clip.i], u, v))} save={(v) => edit((l) => writeGain(l[clip.list][clip.i], u, v))}
@@ -70,7 +72,6 @@ function Inspector({ clip }: { clip: ClipRef }) {
         {!bed && row("Duration", "length", to - from, 1 / 30, Math.max(1 / 30, maxClipLength(c)), 0.01, "s", 2)}
       </Section>
       <NormalizeClip key={`${clip.list}:${clip.i}`} clip={clip} />
-      <AudioSpeed key={`speed:${clip.list}:${clip.i}`} clip={clip} />
       <Section title="Clip">
         <FieldRow label="Sound">
           <Select items={names} value={c.name} onValueChange={(v) => v && swapSound(clip, v as string)}>
@@ -94,6 +95,7 @@ function Inspector({ clip }: { clip: ClipRef }) {
         {c.try?.length ? <p className="text-xs text-warn">{c.try.length} alternatives to try. Switch them with the chips on the picture; Use keeps one.</p> : null}
         {item?.license && <p className="text-xs text-muted-foreground">{item.license}{item.url && <> · <a className="underline underline-offset-2 hover:text-foreground" href={item.url} target="_blank" rel="noreferrer">source</a></>}</p>}
       </Section>
+      </>}
     </div>
   );
 }
@@ -196,7 +198,7 @@ function Library({ side }: { side: boolean }) {
 }
 
 // part: the whole tab (one column), or on a wide screen the clip in the right column and the library in the left one
-export function SoundPanel({ part = "all" }: { part?: "all" | "clip" | "library" }) {
+export function SoundPanel({ part = "all", tab = "basic" }: { part?: "all" | "clip" | "library"; tab?: "basic" | "voice" | "speed" }) {
   const clip = useStudio((s) => s.clip), clips = useStudio((s) => s.clips), saved = useStudio((s) => s.soundSaved);
   useStudio((s) => s.soundRev);
   return (
@@ -210,7 +212,7 @@ export function SoundPanel({ part = "all" }: { part?: "all" | "clip" | "library"
         <Tip label="Undo (Ctrl+Z)"><Button variant="quiet" size="icon-lg" className="pointer-coarse:size-10" aria-label="Undo" disabled={!canUndo()} onClick={undo}><Undo2 /></Button></Tip>
         <Tip label="Redo (Ctrl+Y)"><Button variant="quiet" size="icon-lg" className="pointer-coarse:size-10" aria-label="Redo" disabled={!canRedo()} onClick={redo}><Redo2 /></Button></Tip>
       </div>
-      {clip ? <Inspector clip={clip} /> : clips.length > 1 ? (
+      {clip ? <Inspector clip={clip} tab={tab} /> : clips.length > 1 ? (
         <section aria-label="Selected clips" className="mx-3 flex items-center gap-2 rounded-xl bg-card p-3">
           <p className="min-w-0 flex-1 text-ui">{clips.length} clips selected<span className="block text-xs text-muted-foreground">Drag one to move them all</span></p>
           <Button variant="ghost" size="sm" className="h-8" onClick={() => setClips([])}>Deselect</Button>

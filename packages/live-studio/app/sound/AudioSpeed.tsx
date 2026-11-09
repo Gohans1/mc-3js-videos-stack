@@ -1,17 +1,15 @@
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { FieldRow, Reset, Section, ValueBox } from "../components/inspector";
 import { clipOf, edit, setRate, span } from "./sound";
-import { needsProcessing, processSpec, processStatus, processedRevision, subscribeProcessed } from "./processed";
+import { AudioStatus } from "./AudioStatus";
 import type { ClipRef } from "./slice";
 
 export function AudioSpeed({ clip }: { clip: ClipRef }) {
-  useSyncExternalStore(subscribeProcessed, processedRevision, processedRevision);
   const [draft, setDraft] = useState<number | null>(null), c = clipOf(clip)!;
   const [from, to] = span(clip), rate = c.rate ?? 1, shown = draft ?? rate;
   const commit = (v: number) => { setDraft(null); setRate(clip, v); };
-  const status = needsProcessing(c) ? processStatus(processSpec(c, to - from, clip.list === "beds")) : undefined;
   return (
     <Section title="Speed" right={<Reset label="Reset audio speed" disabled={rate === 1} onClick={() => commit(1)} />}>
       <div className="flex items-center gap-2" onKeyDown={(e) => { if (e.key === "Escape") setDraft(null); }}>
@@ -22,7 +20,7 @@ export function AudioSpeed({ clip }: { clip: ClipRef }) {
       <label className="flex items-center justify-between gap-2 text-ui">Change audio pitch<Switch checked={!!c.changePitch} onCheckedChange={(v) => edit((l) => { l[clip.list][clip.i].changePitch = v; })} /></label>
       <FieldRow label="Pitch"><ValueBox name="Audio pitch" value={c.pitch ?? 0} min={-24} max={24} step={1} digits={0} unit="st" onSave={(v) => edit((l) => { l[clip.list][clip.i].pitch = v; })} /></FieldRow>
       <label className="flex items-center justify-between gap-2 text-ui">Reverse audio<Switch checked={!!c.reverse} onCheckedChange={(v) => edit((l) => { l[clip.list][clip.i].reverse = v; })} /></label>
-      {status && <p aria-live="polite" className="text-xs text-muted-foreground">{status.status === "loading" ? "Processing audio…" : status.status === "error" ? status.message : "Audio ready"}</p>}
+      <AudioStatus clip={clip} />
     </Section>
   );
 }

@@ -88,7 +88,7 @@ export function Library() {
 // Wide: the right column, CapCut's details: the tabs of what is selected
 type Group = "sound" | "text" | "objects" | "keys" | "cam" | "transition";
 const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
-  sound: [{ id: "sound", title: "Audio" }],
+  sound: [{ id: "sound", title: "Basic" }, { id: "voiceChanger", title: "Voice changer" }, { id: "audioSpeed", title: "Speed" }],
   text: [{ id: "text", title: "Text" }, { id: "textAnim", title: "Animation" }],
   objects: [{ id: "objects", title: "Object" }],
   keys: [{ id: "keys", title: "Keyframes" }],
@@ -108,11 +108,19 @@ function Details() {
           {list.map((x) => <Tabs.Tab key={x.id} value={x.id} className={tab}>{x.title}</Tabs.Tab>)}
         </Tabs.List>
         <Tabs.Panel value={value} className={panel}>
-          {value === "sound" ? <SoundPanel part="clip" /> : value === "text" || value === "textAnim" ? <TextPanel part={value} /> : value === "objects" ? <ObjectsPanel part="object" /> : value === "keys" ? <KeyPanel /> : value === "transition" ? <TransitionPanel /> : value === "adjust" ? <AdjustPanel /> : value === "anim" ? <AnimPanel /> : value === "speed" ? <SpeedPanel /> : <CamPanel />}
+          {value === "sound" || value === "voiceChanger" || value === "audioSpeed" ? <SoundPanel part="clip" tab={value === "voiceChanger" ? "voice" : value === "audioSpeed" ? "speed" : "basic"} /> : value === "text" || value === "textAnim" ? <TextPanel part={value} /> : value === "objects" ? <ObjectsPanel part="object" /> : value === "keys" ? <KeyPanel /> : value === "transition" ? <TransitionPanel /> : value === "adjust" ? <AdjustPanel /> : value === "anim" ? <AnimPanel /> : value === "speed" ? <SpeedPanel /> : <CamPanel />}
         </Tabs.Panel>
       </Tabs.Root>
     </aside>
   );
+}
+
+function AudioTab() {
+  const side = useStudio((s) => s.side), part = side === "voiceChanger" || side === "audioSpeed" ? side : "sound";
+  return <>
+    <Segmented label="Audio part" className="mx-3 mb-2" value={part} onChange={(v) => set({ side: v })} items={GROUPS.sound} />
+    <SoundPanel tab={part === "voiceChanger" ? "voice" : part === "audioSpeed" ? "speed" : "basic"} />
+  </>;
 }
 
 // Narrow: the text tab holds the picked item's Text | Animation, or the library when none is picked
@@ -140,7 +148,7 @@ function CameraTab() {
 export function Side({ wide }: { wide: boolean }) {
   const { sound, text, cam, keys, placed, open } = useParts(), side = useStudio((s) => s.side);
   if (wide) return <Details />;
-  const value = side === "anim" || side === "speed" || side === "adjust" ? "cam" : side === "textAnim" ? "text" : side;
+  const value = side === "anim" || side === "speed" || side === "adjust" ? "cam" : side === "textAnim" ? "text" : side === "voiceChanger" || side === "audioSpeed" ? "sound" : side;
   return (
     <aside className="col-start-2 row-span-2 row-start-1 flex sideways:row-span-3 min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg bg-background in-data-side-folded:hidden upright:flex-1 upright:rounded-none sideways:rounded-none">
       <Compose />
@@ -160,7 +168,7 @@ export function Side({ wide }: { wide: boolean }) {
             </Tabs.List>
           </div>
           <Tabs.Panel value="notes" className="flex min-h-0 flex-1 flex-col"><NoteList /></Tabs.Panel>
-          {sound && <Tabs.Panel value="sound" className={panel}><SoundPanel /></Tabs.Panel>}
+          {sound && <Tabs.Panel value="sound" className={panel}><AudioTab /></Tabs.Panel>}
           {text && <Tabs.Panel value="text" className={panel}><TextTab /></Tabs.Panel>}
           {placed && <Tabs.Panel value="objects" className={panel}><ObjectsPanel /></Tabs.Panel>}
           {cam && <Tabs.Panel value="cam" className={panel}><CameraTab /></Tabs.Panel>}

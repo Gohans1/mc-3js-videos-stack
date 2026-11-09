@@ -137,7 +137,7 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
 
     def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None):
         i = len(chains)  # one chain per input file, so this is the input's index
-        if processing and (processing.get("rate", 1) != 1 or processing.get("pitch", 0) or processing.get("reverse")):
+        if processing and (processing.get("rate", 1) != 1 or processing.get("pitch", 0) or processing.get("reverse") or (processing.get("voiceFilter", "none") != "none" and processing.get("voiceStrength", 100) > 0)):
             length = length if length is not None else (seconds(processing["name"]) - start) / processing.get("rate", 1)
             processed = folder / f"{i}.wav"
             process_audio(path, processed, {**processing, "start": start, "duration": length, "loop": loop})
