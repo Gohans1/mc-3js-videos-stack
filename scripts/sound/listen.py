@@ -3,6 +3,9 @@ stems the film's own mix graph renders (scripts/sound/mix.py, before the master 
 bed and sound effect without it. Run inside the film.
   bun run listen               where the voice is buried, sounds louder than the narration, level jumps at cuts, dead
                                air, an abrupt end, a sound that cancels in one speaker (mono); each with the second (bun run at <second> names the rows to change)
+                               every fault also lands in renders/listen.json; the first run renders the stems (about a
+                               second per film second), later runs reuse renders/listen_stems/ until src/ or the film's sounds change
+  bun run listen --fresh       render the stems anew (a vault sound changed; the kept stems only see the film's own files)
   bun run listen --sheet       also renders/listen_sheet.png, about 2 minutes more (earshot sheet: spectrogram, loudness, events, cuts,
                                the draft video's frames), a picture of the soundtrack to look at
   bun run listen --at 35.2     the 2 s either side of one heard second, half a second at a time: the voice, the rest, what
@@ -10,6 +13,7 @@ bed and sound effect without it. Run inside the film.
 Voice over the rest, measured per spoken stretch: 15 LU or more keeps every word (AES TD1009: speech 15 dB over a steady
 masker is fully intelligible), under 8 LU words get lost; narrated documentaries keep beds 24-31 LU under the voice.
 A sound effect may hit close to the voice (about 10 LU under), not over it. Gains live in src/timeline/audio.json."""
+import hashlib
 import json
 import math
 import os
@@ -223,6 +227,31 @@ def stems(folder):
     return voice, rest, hits
 
 
+def kept_stems(root, folder):
+    """stems(), kept in renders/listen_stems/ while what they are made of is unchanged: the film's src/**/*.json, its own
+    sound and voice files (by size and time), and the mix code. A changed vault file is not seen: --fresh renders anew."""
+    here = Path(__file__).resolve().parent
+    h = hashlib.sha256()
+    for p in sorted([*root.glob("src/**/*.json"), here / "mix.py", here / "process.py"]):
+        h.update(p.as_posix().encode() + p.read_bytes())
+    for top in ("sound", "assets/public/agent"):
+        for p in sorted(f for f in (root / top).rglob("*") if f.is_file()) if (root / top).is_dir() else []:
+            st = p.stat()
+            h.update(f"{p.as_posix()} {st.st_size} {st.st_mtime_ns}".encode())
+    keep, stamp = root / "renders/listen_stems", h.hexdigest()
+    voice, rest, meta = keep / "voice.wav", keep / "rest.wav", keep / "stamp.json"
+    if meta.exists() and voice.exists() and rest.exists():
+        was = json.loads(meta.read_text(encoding="utf8"))
+        if was.get("stamp") == stamp:
+            return voice, rest, [tuple(x) for x in was["hits"]], True
+    made_voice, made_rest, hits = stems(folder)
+    keep.mkdir(parents=True, exist_ok=True)
+    shutil.copy(made_voice, voice)
+    shutil.copy(made_rest, rest)
+    meta.write_text(json.dumps({"stamp": stamp, "hits": hits}), encoding="utf8")
+    return voice, rest, hits, False
+
+
 def at_rows(second):
     """What plays at that second, by file and row (scripts/at.ts)."""
     r = subprocess.run(["bun", str(Path(__file__).resolve().parents[1] / "at.ts"), f"{second:.2f}", "--json"],
@@ -247,8 +276,9 @@ def focus(got, at, last, cuts):
     for r in levels_around(got["curve"], at, last):
         was = f" (was {r['was']:.1f})" if last and r["was"] is not None and abs(r["was"] - r["rest"]) >= 0.5 else ""
         voice = "silent" if r["voice"] <= -70 else f"{r['voice']:.1f}"
-        print((f"  {r['from']:6.2f}-{r['from'] + 0.5:.2f}  voice {voice:>6}  rest {r['rest']:6.1f}{was:<13}"
-              + (f"  {r['margin']:+.1f} LU" if r["voice"] > -70 else "")).rstrip())
+        rest = "silent" if r["rest"] <= -70 else f"{r['rest']:.1f}"
+        margin = "" if r["voice"] <= -70 else "  voice alone" if r["rest"] <= -70 else f"  {r['margin']:+.1f} LU"
+        print(f"  {r['from']:6.2f}-{r['from'] + 0.5:.2f}  voice {voice:>6}  rest {rest:>6}{was:<13}{margin}".rstrip())
     rows = at_rows(at)
     print(f"playing at {at:.2f}: {', '.join(rows) if rows else 'nothing from src/timeline/audio.json'}")
     near = lambda a, b: a <= at + 2 and b >= at - 2  # noqa: E731
@@ -283,10 +313,10 @@ def main(args):
                 print(f"--at takes a heard second, like --at 35.2 (the clock bun run at reads); got {value or 'nothing'}", file=sys.stderr)
                 return 2
             i += 2 if a == "--at" else 1
-        elif a == "--sheet":
+        elif a in ("--sheet", "--fresh"):
             i += 1
         else:
-            print(f"unknown {'option' if a.startswith('-') else 'word'} {a}: bun run listen [--sheet] [--at <second>] (--help for more)", file=sys.stderr)
+            print(f"unknown {'option' if a.startswith('-') else 'word'} {a}: bun run listen [--sheet] [--at <second>] [--fresh] (--help for more)", file=sys.stderr)
             return 2
     root = Path(os.environ.get("LIVE_PROJECT") or Path.cwd())
     if not (root / "src/scene.ts").exists():
@@ -303,8 +333,13 @@ def main(args):
             if at is not None and not 0 <= at <= mix.END:
                 print(f"--at {at:g} is outside the film: it is {mix.END:.2f} s long (heard)", file=sys.stderr)
                 return 2
-            print("rendering the narration and the rest as two stems (the film's own mix graph, about a second per film second) ...", file=sys.stderr)
-            voice, rest, hits = stems(Path(tmp))
+            if "--fresh" in args:
+                shutil.rmtree(root / "renders/listen_stems", ignore_errors=True)
+            print("the narration and the rest as two stems (the film's own mix graph, about a second per film second the first "
+                  "time; kept in renders/listen_stems/ until the sound changes) ...", file=sys.stderr)
+            voice, rest, hits, kept = kept_stems(root, Path(tmp))
+            if kept:
+                print("  unchanged since the last listen: the kept stems (--fresh renders them anew, after a vault sound changed)", file=sys.stderr)
         except SystemExit as e:  # mix.py names a missing sound itself
             if e.code not in (0, None):
                 print(f"{e.code}\n(bun run check lists every missing sound; bun run sfx:get fetches the film's own)", file=sys.stderr)
@@ -339,6 +374,14 @@ def main(args):
     if at is not None:
         return focus(got, at, last, cuts)
     lines = got["lines"]
+    every = root / "renders/listen.json"
+    every.write_text(json.dumps({
+        "voice": [{**x, "playing": at_rows((x["from"] + x["to"]) / 2)} for x in lines if x["verdict"] != "clear"],
+        "louder": [{**x, "playing": at_rows(x["to"])} for x in got["over"]],
+        "buried": [{**b, "playing": at_rows(b["at"] + 0.05)} for b in got["buried"]],
+        "jumps": got["jumps"], "dead": got["dead"], "abrupt_end": got["abrupt_end"],
+        "mono": [{**s, "playing": at_rows((s["from"] + s["to"]) / 2)} for s in folded["stretches"]]}, indent=1), encoding="utf8")
+    more = "more (every one, with what plays: renders/listen.json)"
     print(f"mix {got['loudness']} LUFS before the master (the final mix is brought to audio.json lufs), narration {got['voice']} LUFS, {got['length']} s")
     bad = [x for x in lines if x["verdict"] != "clear"]
     if not lines:
@@ -351,16 +394,18 @@ def main(args):
         print(f"  {x['verdict'].upper()} {x['from']:.2f}-{x['to']:.2f}: voice {x['margin']:+.1f} LU over the rest"
               f"{' (playing: ' + ', '.join(rows) + ')' if rows else ''}")
     if len(bad) > 8:
-        print(f"  and {len(bad) - 8} more")
+        print(f"  and {len(bad) - 8} {more}")
     for x in got["over"][:5]:
         rows = at_rows(x["to"])
         print(f"{louder(x)}{' (' + ', '.join(rows) + ')' if rows else ''}")
+    if len(got["over"]) > 5:
+        print(f"  and {len(got['over']) - 5} {more}")
     for b in got["buried"][:8]:
         rows = at_rows(b["at"] + 0.05)  # inside the hit, not on its rounded edge
         print(f"BURIED {b['name']} at {b['at']:.2f}: only {b['rise']:+.1f} dB over the second before it (a hit needs about +{BURIED:g})"
               f"{' (playing: ' + ', '.join(rows) + ')' if rows else ''}")
     if len(got["buried"]) > 8:
-        print(f"  and {len(got['buried']) - 8} more")
+        print(f"  and {len(got['buried']) - 8} {more}")
     for j in got["jumps"]:
         print(f"jump at the cut {j['at']:.2f}: {j['change']:+.1f} LU (more than 6; fine when the story calls for it)")
     if cuts == []:
@@ -377,7 +422,7 @@ def main(args):
               "mix line above near 0 LUFS) does it too: lower the gains"
               f"{' (playing: ' + ', '.join(rows) + ')' if rows else ''}")
     if len(folded["stretches"]) > 5:
-        print(f"  and {len(folded['stretches']) - 5} more")
+        print(f"  and {len(folded['stretches']) - 5} {more}")
     if not folded["stretches"]:
         print(f"mono (one speaker, as a phone plays it): the narration {-folded['voice']:+.1f} dB, the rest {-folded['rest']:+.1f} dB, "
               "nothing cancels")
