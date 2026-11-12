@@ -39,4 +39,4 @@ A target is `cam`, a bone, an object's `.name`, or a `draw.tools.objects` label.
 | One stretch changed                         | `CHUNKS=3 bun run render clip` re-renders only that 30 s chunk (3 is 1:30-2:00)             |
 | Commands only print paths                   | Open the pictures with your image viewer and look                                           |
 
-Rendering fast, the GPU, YouTube's spec and banding: `packages/live-studio/RENDER.md`.
+Rendering fast, the GPU, YouTube's spec and banding: `bun run skills get core --ref render`.

@@ -13,7 +13,7 @@ Checked: MP4 with the moov atom up front and no edit lists, H.264 High 8-bit 4:2
 keyframe at least every second, 1440p or 2160p (Shorts: 1080x1920, 3 min at most), AAC stereo 48 kHz (asked at 384 kbps: bun run mix
 asks that; ffmpeg's AAC lands under it on purpose, so the rate is shown, not judged), sound as long
 as the picture, -14 LUFS (YouTube turns louder down, never quieter up) with true peak at -1 dBTP or under.
-Exit 0 ready, 1 something to fix (each FIX line), 2 a wrong word. Why these numbers: packages/live-studio/RENDER.md."""
+Exit 0 ready, 1 something to fix (each FIX line), 2 a wrong word. Why these numbers: bun run skills get core --ref render."""
 import json
 import os
 import re

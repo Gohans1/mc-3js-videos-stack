@@ -58,7 +58,7 @@ Examples:
   bun run render final        then bun run mix renders/final_video.mp4 puts the soundtrack on it
 package.json "live-studio": { "chrome": path } names the headless Chrome (default tools/chrome-headless-shell/...);
 { "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.
-Why each setting, YouTube's spec, what survives its re-encode, how to render faster: packages/live-studio/RENDER.md.`;
+Why each setting, YouTube's spec, what survives its re-encode, how to render faster: bun run skills get core --ref render.`;
 // its options are environment variables: --at 12 is the flag form an AI tries first
 const ENV_OPTIONS = ["AT", "LIST", "CHUNKS", "INSPECT", "CHECK", "ENTRY", "SAMPLES", "RES"];
 const TARGETS = ["stills", "clip", "captions", "all", "final"];
