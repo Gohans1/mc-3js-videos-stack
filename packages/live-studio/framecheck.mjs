@@ -165,7 +165,7 @@ for (const x of faults.slice(0, 12)) {
 if (faults.length > 12) console.log(`${faults.length - 12} more not drawn`);
 if (faults.length)
   console.log(
-    `next: look at the frames_*.jpg, fix the scene, re-render only that stretch (CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render clip: chunk N is N*30 s on), then bun run framecheck again`,
+    `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render clip: chunk N is N*30 s on), then bun run framecheck again`,
   );
 // a clean file is not a good one: what the meter cannot judge is left to the eye
 else

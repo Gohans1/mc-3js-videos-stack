@@ -39,8 +39,17 @@ const filmOf = (dir: string) => {
   setTiming(read(conf.timingTimeline, {}), sourceEnd);
   // a film keeps its shots in shotsTimeline (narration seconds) or as the camera's cuts (scene seconds)
   const shotRows: Row[] = read(conf.shotsTimeline, null);
-  const shots = shotRows
-    ? shotRows.map((s, i) => ({ index: i, t: fromSource(s.t), name: s.name, size: s.size, row: i }))
+  type Shot = { index: number; t: number; name?: string; size?: string; row: number };
+  const shots: (Shot & { transition?: Row; anim?: Row })[] = shotRows
+    ? shotRows.map((s, i) => ({
+        index: i,
+        t: fromSource(s.t),
+        name: s.name,
+        size: s.size,
+        row: i,
+        transition: s.transition,
+        anim: s.anim,
+      }))
     : cam.flatMap((k, i) =>
         i === 0 || k.cut ? [{ index: 0, t: k.t, name: k.what, size: k.size, row: i }] : [],
       );
@@ -98,6 +107,25 @@ export const whatsAt = (dir: string, t: number) => {
   const scene = frameAt(timingClock, t);
   const si = shots.filter((s) => s.t <= scene).length - 1;
   const shot = si >= 0 ? { ...shots[si]!, to: shots[si + 1]?.t ?? sourceEnd } : null;
+  // the transition into shot i plays len/2 either side of its cut, clamped to its neighbours as film-stage transitionLength does
+  const blend = (i: number) => {
+    const tr = shots[i]?.transition;
+    if (!i || !tr?.len) return null;
+    const len = Math.min(
+      tr.len,
+      shots[i]!.t - shots[i - 1]!.t,
+      (shots[i + 1]?.t ?? sourceEnd) - shots[i]!.t,
+    );
+    const from = shots[i]!.t - len / 2;
+    return {
+      row: i,
+      fx: tr.fx as string,
+      from,
+      to: from + len,
+      now: scene >= from && scene < from + len,
+    };
+  };
+  const cuts = [blend(si), blend(si + 1)].filter((b) => b !== null);
   const ci = cam.filter((k) => k.t <= scene).length - 1;
 
   const audio = read(conf.soundTimeline, null);
@@ -221,6 +249,7 @@ export const whatsAt = (dir: string, t: number) => {
     scene,
     shot,
     shotCount: shots.length,
+    cuts,
     cam:
       ci >= 0
         ? {
@@ -266,7 +295,13 @@ if (isMain) {
   let t: number;
   if (mm) t = +mm[1]! * 60 + +mm[2]!;
   else if (/^\d+(\.\d+)?$/.test(arg)) t = numberArg("the second", arg, { min: 0 });
-  else {
+  else if (/^-\d/.test(arg)) {
+    console.error(`${arg}: the film starts at 0; give a second from 0 on (bun run at 35.6)`);
+    process.exit(2);
+  } else if (/^\d+,\d+$/.test(arg)) {
+    console.error(`${arg}: seconds take a dot; did you mean bun run at ${arg.replace(",", ".")}?`);
+    process.exit(2);
+  } else {
     // a note: #N or its id
     const n = noteMoment(film, arg);
     if (!n) {
@@ -311,6 +346,20 @@ if (isMain) {
       // a draft's strip counts shots from 1, notes (and notes --shot) from 0
       `shot ${got.shot.index + 1}/${got.shotCount} (notes call it shot ${got.shot.index}): "${got.shot.name ?? ""}"${got.shot.size ? ` ${got.shot.size}` : ""}, ` +
         `${c.shotsTimeline ? `${c.shotsTimeline} [${got.shot.row}]` : `${c.camTimeline ?? "src/timeline/cam.json"} [${got.shot.row}] (a cut key)`}`,
+    );
+  const shotsFile = c.shotsTimeline ?? "the shots timeline";
+  for (const b of got.cuts)
+    out.push(
+      `  ${b.now ? "in" : "near"} the ${b.fx} transition into shot ${b.row + 1}, scene ${fmt(b.from)}-${fmt(b.to)}: ${shotsFile} [${b.row}].transition`,
+    );
+  const anim = got.shot?.anim as Record<string, { fx: string; len?: number }> | undefined;
+  if (anim && Object.keys(anim).length)
+    out.push(
+      `  shot anim: ${Object.entries(anim)
+        .map(([k, a]) => `${k} ${a.fx}${a.len ? ` ${a.len} s` : ""}`)
+        .join(
+          ", ",
+        )} (${shotsFile} [${got.shot!.row}].anim: In plays its len from the cut, Out its len up to the next cut, Combo the whole shot)`,
     );
   if (got.cam)
     out.push(
