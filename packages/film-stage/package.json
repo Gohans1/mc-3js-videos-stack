@@ -2,8 +2,8 @@
   "name": "film-stage",
   "version": "0.1.0",
   "private": true,
+  "description": "three.js parts of a film's stage that any film shares: the keyed camera with named eases and impact shake, and when a box is on screen (camera), a flickering lamp's level (flicker), fades to and from black over the whole frame (fade); a shot's In, Out and Combo animations on the camera (animate); two-shot WebGL cut shaders (transitions); optical lens effects and beat accents (velocity); primary, wheel, HSL, curve, LUT, halation and TPDF dither colour grading (grade); titles, arrows and callout shapes over the picture (titles)",
   "type": "module",
-  "description": "three.js parts of a film's stage that any film shares: the keyed camera with named eases and impact shake, and when a box is on screen (camera), a flickering lamp's level (flicker), fades to and from black over the whole frame (fade); a shot's In, Out and Combo animations on the camera (animate); titles, arrows and circles over the picture, CapCut's Text and Shapes (titles); docs/film-grammar.md: why each cut, move and sound",
   "exports": {
     "./camera": "./src/camera.ts",
     "./flicker": "./src/flicker.ts",
@@ -11,6 +11,7 @@
     "./animate": "./src/animate.ts",
     "./titles": "./src/titles.ts",
     "./transitions": "./src/transitions.ts",
+    "./velocity": "./src/velocity.ts",
     "./grade": "./src/grade.ts",
     "./grade-layers": "./src/grade-layers.ts",
     "./grade-color": "./src/grade-color.ts",
@@ -21,19 +22,30 @@
   "scripts": {
     "test": "bun test"
   },
-  "peerDependencies": {
-    "three": "0.186.1"
-  },
   "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "5.3.0",
+    "@fontsource-variable/dm-sans": "5.3.0",
+    "@fontsource-variable/funnel-display": "5.3.0",
+    "@fontsource-variable/funnel-sans": "5.3.0",
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@fontsource-variable/hanken-grotesk": "5.3.0",
+    "@fontsource-variable/host-grotesk": "5.3.0",
+    "@fontsource-variable/instrument-sans": "5.3.0",
     "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/manrope": "5.3.0",
+    "@fontsource-variable/mona-sans": "5.3.0",
+    "@fontsource-variable/schibsted-grotesk": "5.3.0",
     "@fontsource-variable/source-serif-4": "5.3.1",
     "@fontsource/ibm-plex-mono": "5.3.0",
-    "bezier-easing": "3.2.0",
+    "bezier-easing": "catalog:",
     "gl-transitions": "3.1.0",
-    "postprocessing": "6.39.6",
-    "typescript-cubic-spline": "1.0.1"
+    "postprocessing": "catalog:"
   },
   "devDependencies": {
-    "@types/three": "0.187.0"
+    "@types/three": "catalog:"
+  },
+  "peerDependencies": {
+    "three": "catalog:"
   }
 }
