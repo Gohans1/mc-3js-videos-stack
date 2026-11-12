@@ -3,17 +3,23 @@ renders/
 notes/
 .venv/
 __pycache__/
+.env
+.env.*
+!.env.example
 .live_hosts
 # Links into the vault (bun run link at the repo root): Mojang files, never commit them
 /assets/public/mc
 /assets/public/mcasset
 /assets/public/rig
 /assets/public/motion
+/assets/public/sfx
 /assets/public/vendor/
 /assets/public/block_model_renderer_bg.wasm
 # Built from the vault's mod jars by bun run link (mc-assets/pick.py): their licences, not ours to republish
 /assets/public/picked.zip
 voice/takes/*.mp3
+voice/takes/*.wav
+voice/takes/.request_ids.json
 voice/try/
 sound/mix.wav
 sound/mix_raw.wav

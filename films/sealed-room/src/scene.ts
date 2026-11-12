@@ -27,6 +27,7 @@ import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
 import { activeAdjustments } from "film-stage/grade-layers";
+import { makeVelocity } from "film-stage/velocity";
 import { makeDescribe } from "./describe";
 import { asVariant, buildVariants } from "mc-assets/variants";
 import { VARIANTS } from "./variants";
@@ -249,7 +250,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const now = {};
   const feetAt = makeFeet(steve, () => EDIT.end, bodyAt, clips);
   // film-kit overlap: chest, head and arms trail the body's own moves and settle past a stop (follow-through). Baked over
-  // the whole film once per edit; faded out over mocap clips, which already carry their own (film-kit AGENTS.md)
+  // the whole film once per edit; faded out over mocap clips, which already carry their own (film-kit)
   let lagFor = null, lagOf = null, offClips = null;
   const lagAt = (t) => {
     if (lagFor !== EDIT.steve) {
@@ -279,7 +280,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     const patch = [];
     for (const sd of ["L", "R"]) if (feet[sd]) patch.push([steve.legTo(sd, feet[sd]), 1]);
     if (look) patch.push([{ head: steve.headTo(look.p) }, look.w]);
-    // hand IK the film-kit way (AGENTS.md there): the elbow on a pole, down and out, and blended into the pose's own arm by
+    // hand IK the film-kit way: the elbow on a pole, down and out, and blended into the pose's own arm by
     // quaternion slerp; twist-free with an Euler blend, a hand reaching low in front raised the elbow over his shoulder
     const arms = [[R, "R", [-0.6, -1, -0.2]], [Lh, "L", [0.6, -1, -0.2]]].filter(([h]) => h).map(([h, sd, pole]) => [steve.armTo(sd, h.p, pole), h.w]);
     for (const [p, w] of patch) pose = blendPose(pose, p, w);
@@ -300,6 +301,8 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
 
   const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
   const lookAt = V(0, 0, 0), head = V(0, 0, 0);
+  let layerTime = 0;
+  const velocityEffect = makeVelocity(renderer);
   const frame = (t, view) => {
     bed.visible = !!EDIT.props.bed?.length;
     if (bed.visible) {
@@ -376,14 +379,20 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     now.lamp = lv;
 
     renderer.clear();
-    adjust(shot, SHOTS_OUT[shot]?.adjust, t, free.on);
-    composer.render(0);
-    renderer.clearDepth();
-    renderer.render(hud, hudCam);
-    if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
-    if (!free.on) titles(EDIT.text.items, t, camera, EDIT.text.tracks);
+    if (pictureVisible || free.on) {
+      adjust(shot, SHOTS_OUT[shot]?.adjust, t, free.on);
+      composer.render(0);
+      renderer.clearDepth();
+      renderer.render(hud, hudCam);
+      if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
+      if (!free.on) velocityEffect(velocity, cam.optics);
+    }
+    if (!free.on && layersVisible) titles(EDIT.text.items, layerTime, camera, EDIT.text.tracks, textTime);
   };
-  const draw = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free, (t) => layerAdjust(activeAdjustments(EDIT.adjustments, t), t, free.on));
+  let pictureVisible = true, layersVisible = true, adjustmentTime = 0, adjustmentsVisible = true, transitionVisible, velocity = null, textTime, adjustmentItemTime;
+  const composite = makeTransitions(renderer, frame, () => SHOTS_OUT, () => DURATION, free, () => layerAdjust(adjustmentsVisible ? activeAdjustments(EDIT.adjustments, adjustmentTime, adjustmentItemTime) : [], adjustmentTime, free.on), (cut) => transitionVisible?.(cut) ?? true);
+  const draw = Object.assign((t, clocks) => { layerTime = clocks?.layers ?? t; adjustmentTime = clocks?.adjustments ?? layerTime; textTime = clocks?.textTime; adjustmentItemTime = clocks?.adjustmentTime; pictureVisible = clocks?.pictureVisible ?? true; layersVisible = clocks?.layersVisible ?? true; adjustmentsVisible = clocks?.adjustmentsVisible ?? layersVisible; transitionVisible = clocks?.transitionVisible; velocity = clocks?.velocity ?? null; composite(t); }, composite);
+  draw.velocity = true;
   draw.eases = EASES; // the studio's camera row draws the keys' eases with these
   draw.keyEases = [{ edit: "steve", path: ["moves"], names: Object.keys(EASES) }];
   draw.anims = ANIMS; // the studio's Animation tab lists these

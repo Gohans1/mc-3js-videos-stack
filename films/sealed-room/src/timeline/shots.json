@@ -3,7 +3,13 @@
  {"t": 3.5, "name": "close on his eyes as they open", "size": "extreme close-up (ECU)", "what": "his eyes"},
  {"t": 6.5, "name": "his eyes: bare wall, desk, door", "size": "POV", "what": "through his eyes", "pov": true},
  {"t": 27, "name": "side of the bed: up, and to the door", "size": "medium side (MS)", "what": "he gets up and walks to the door"},
- {"t": 40, "name": "his hand along the door's seam", "size": "close-up (CU)", "what": "his hand on the door seam"},
+ {
+  "t": 40,
+  "name": "his hand along the door's seam",
+  "size": "close-up (CU)",
+  "what": "his hand on the door seam",
+  "anim": {"in": {"fx": "zoomIn", "len": 1, "k": 1}}
+ },
  {
   "t": 42.5,
   "name": "the button by the door: he jabs it again and again, nothing",
@@ -11,57 +17,23 @@
   "what": "he jabs the stone button"
  },
  {"t": 44.6, "name": "he steps back and kicks the steel door", "size": "medium wide, from behind his right", "what": "he kicks the door"},
- {"t": 46, "name": "wide: from the door back to the desk", "size": "wide (WS)", "what": "back to the lit desk"},
+ {"t": 46, "name": "wide: from the door back to the desk", "size": "wide (WS)", "what": "back to the lit desk", "adjust": {}},
  {
   "t": 52.03,
   "name": "over his shoulder: the screen, his hands on the keys",
   "size": "over-the-shoulder insert",
-  "what": "the screen: he types"
+  "what": "the screen: he types",
+  "transition": {"fx": "dissolve", "len": 0.5},
+  "anim": {"in": {"fx": "zoomIn", "len": 2}}
  },
  {"t": 54.95, "name": "his face in the screen's glow, typing harder", "size": "close-up (CU)", "what": "his strained face"},
- {"t": 55.75, "name": "over his shoulder again: the last try, denied", "size": "over-the-shoulder insert", "what": "ACCESS DENIED"},
+ {"t": 55.904, "name": "over his shoulder again: the last try, denied", "size": "over-the-shoulder insert", "what": "ACCESS DENIED"},
  {
-  "t": 56.667,
+  "t": 58.537,
   "name": "three-quarter front: he slams the keyboard askew, slumps back; a rustle",
   "size": "medium three-quarter (MS)",
-  "what": "he slams the keys, slumps back"
- },
- {
-  "t": 62.067,
-  "name": "dazed in the chair: something stirs in the cabinet",
-  "size": "medium three-quarter (MS)",
-  "what": "a rustle in the cabinet"
- },
- {"t": 63.767, "name": "insert: the drawer front jolts", "size": "insert (CU)", "what": "the drawer jolts"},
- {
-  "t": 64.567,
-  "name": "he scoots the chair back, stands, turns and walks straight to the cabinet",
-  "size": "medium (MS)",
-  "what": "chair back, up, to the drawer"
- },
- {
-  "t": 67.267,
-  "name": "from the north: he bends to the drawer and eases it open",
-  "size": "medium profile (MS), from the north",
-  "what": "he bends and eases the drawer open"
- },
- {
-  "t": 68.217,
-  "name": "overhead: the burst, he falls back and pants on the stone, the silverfish runs off",
-  "size": "top-down (overhead)",
-  "what": "the silverfish bursts out; he falls, panting"
- },
- {
-  "t": 72.167,
-  "name": "from his front-left: up on one hand, the other sweeps up the three pages",
-  "size": "medium (MS), from his front-left",
-  "what": "sitting up, he gathers the spilt pages"
- },
- {
-  "t": 74.4,
-  "name": "overhead: he gets up, knees the drawer shut, lays the pages down",
-  "size": "top-down (overhead)",
-  "what": "up, drawer shut, pages on the desk"
+  "what": "he slams the keys, slumps back",
+  "anim": {"in": {"fx": "fade", "len": 1}}
  },
  {
   "t": 76.2,
@@ -140,7 +112,8 @@
   "name": "from inside the slot: his face, then his hand",
   "size": "POV from inside the slot",
   "what": "his face peers in, his hand reaches",
-  "fill": true
+  "fill": true,
+  "anim": {"in": {"fx": "level", "len": 1}}
  },
  {
   "t": 100.353,

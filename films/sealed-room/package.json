@@ -3,12 +3,36 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node ../../packages/mc-assets/vendor.mjs",
-    "studio": "node node_modules/live-studio/src/live.mjs 4324",
-    "notes": "python node_modules/live-studio/notes_report.py",
-    "note": "node node_modules/live-studio/note.mjs",
-    "render": "node node_modules/live-studio/render.mjs",
-    "framecheck": "node node_modules/live-studio/framecheck.mjs"
+    "help": "bun node_modules/live-studio/help.mjs",
+    "find": "bun ../../scripts/find.ts",
+    "postinstall": "bun ../../packages/mc-assets/vendor.mjs",
+    "studio": "bun node_modules/live-studio/src/live.mjs 4324",
+    "notes": "bun node_modules/live-studio/notes.mjs",
+    "at": "bun ../../scripts/at.ts",
+    "note": "bun node_modules/live-studio/note.mjs",
+    "render": "bun node_modules/live-studio/render.mjs",
+    "framecheck": "bun node_modules/live-studio/framecheck.mjs",
+    "check": "bun node_modules/live-studio/check.mjs",
+    "voice:gen": "bun ../../scripts/voice/gen.ts",
+    "voice:assemble": "bun ../../scripts/voice/assemble.ts",
+    "voice:cues": "bun ../../scripts/voice/cues.ts",
+    "sheet": "python ../../scripts/review/sheet.py",
+    "jumps": "python ../../scripts/review/jumps.py",
+    "sfx:get": "python ../../scripts/sound/get_sfx.py",
+    "mix": "python ../../scripts/sound/mix.py",
+    "listen": "python ../../scripts/sound/listen.py",
+    "new-film": "bun node_modules/live-studio/wrong-place.mjs new-film",
+    "link": "bun node_modules/live-studio/wrong-place.mjs link",
+    "setup:vault": "bun node_modules/live-studio/wrong-place.mjs setup:vault",
+    "setup:sound": "bun node_modules/live-studio/wrong-place.mjs setup:sound",
+    "setup:mc-sound": "bun node_modules/live-studio/wrong-place.mjs setup:mc-sound",
+    "fetch:sfx": "bun node_modules/live-studio/wrong-place.mjs fetch:sfx",
+    "test": "bun node_modules/live-studio/wrong-place.mjs test",
+    "verify": "bun node_modules/live-studio/wrong-place.mjs verify",
+    "lint": "bun node_modules/live-studio/wrong-place.mjs lint",
+    "typecheck": "bun node_modules/live-studio/wrong-place.mjs typecheck",
+    "fmt": "bun node_modules/live-studio/wrong-place.mjs fmt",
+    "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check"
   },
   "dependencies": {
     "block-model-renderer": "2.20.0",
@@ -22,7 +46,7 @@
     "minerender": "2.1.0-beta.8",
     "n8ao": "2.0.1",
     "postprocessing": "6.39.6",
-    "three": "0.186.1"
+    "three": "0.187.0"
   },
   "trustedDependencies": [],
   "live-studio": {
@@ -32,13 +56,36 @@
       "sound/sfx",
       "src/timeline/audio.json"
     ],
-    "soundSources": {"narration": "assets/public/agent/full_voice.wav"},
+    "soundSources": {
+      "narration": "assets/public/agent/full_voice.wav"
+    },
     "soundTimeline": "src/timeline/audio.json",
     "camTimeline": "src/timeline/cam.json",
     "textTimeline": "src/timeline/text.json",
     "adjustmentTimeline": "src/timeline/adjust.json",
+    "timingTimeline": "src/timeline/timing.json",
     "shotsTimeline": "src/timeline/shots.json",
-    "keyFiles": { "src/timeline/steve.json": "steve", "src/timeline/props.json": "props", "src/timeline/placed.json": "placed", "src/timeline/fx.json": "fx" },
+    "keyFiles": {
+      "src/timeline/steve.json": "steve",
+      "src/timeline/props.json": "props",
+      "src/timeline/placed.json": "placed",
+      "src/timeline/fx.json": "fx"
+    },
+    "requiredKeyRows": {
+      "steve": [
+        [
+          "moves"
+        ]
+      ],
+      "props": [
+        [
+          "chair"
+        ],
+        [
+          "drawer"
+        ]
+      ]
+    },
     "sfx": "sound/sfx",
     "liveLanes": true,
     "chrome": "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe"

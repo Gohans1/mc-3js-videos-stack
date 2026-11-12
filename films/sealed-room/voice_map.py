@@ -10,7 +10,12 @@ ROOT = Path(__file__).resolve().parent
 STEP = 0.04
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
 
-with wave.open(str(ROOT / "assets/public/agent/full_voice.wav")) as w:
+VOICE = ROOT / "assets/public/agent/full_voice.wav"
+if not VOICE.exists():  # no narration yet (voice/assemble.py writes it)
+    Path(sys.argv[1]).write_text(json.dumps({"step": STEP, "peaks": [], "lines": []}))
+    print("words 0", flush=True)
+    sys.exit(0)
+with wave.open(str(VOICE)) as w:
     samples = array.array("h", w.readframes(w.getnframes()))
     size = int(w.getframerate() * STEP)
 peaks = [round(max((abs(v) for v in samples[i : i + size]), default=0) / 32768, 3) for i in range(0, len(samples), size)]

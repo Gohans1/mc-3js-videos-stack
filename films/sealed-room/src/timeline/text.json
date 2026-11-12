@@ -1,1 +1,78 @@
-{"items": []}
+{
+ "items": [
+  {
+   "kind": "text",
+   "text": "SEALED ROOM\n3:12 AM",
+   "font": "mono",
+   "size": 40,
+   "spacing": 0.06,
+   "line": 1.35,
+   "x": 0.07,
+   "y": 0.84,
+   "align": "left",
+   "out": {"fx": "fade", "len": 1.86},
+   "from": 0,
+   "to": 1.86,
+   "track": 0
+  },
+  {
+   "kind": "text",
+   "text": "SEALED ROOM\n3:12 AM",
+   "font": "mono",
+   "size": 40,
+   "spacing": 0.06,
+   "line": 1.35,
+   "x": 0.07,
+   "y": 0.84,
+   "align": "left",
+   "in": {"fx": "type", "len": 4.230000000000002},
+   "out": {"fx": "fade", "len": 2.1149999999999984},
+   "from": 8.116451290322578,
+   "to": 22.921451290322583,
+   "track": 1,
+   "color": "#E5484D"
+  },
+  {
+   "kind": "text",
+   "text": "SEALED ROOM\n3:12 AM",
+   "font": "mono",
+   "size": 40,
+   "spacing": 0.06,
+   "line": 1.35,
+   "x": 0.07,
+   "y": 0.84,
+   "align": "left",
+   "in": {"fx": "type", "len": 1},
+   "out": {"fx": "fade", "len": 0.5},
+   "from": 67.77980408754671,
+   "to": 71.27980408754671,
+   "track": 2
+  },
+  {
+   "kind": "arrow",
+   "size": 180,
+   "width": 10,
+   "color": "#E5484D",
+   "x": 0.5,
+   "y": 0.5,
+   "rotate": 30,
+   "in": {"fx": "draw", "len": 0.5},
+   "out": {"fx": "fade", "len": 0.4000000000000057},
+   "from": 52.96860817509342,
+   "to": 55.46860817509342,
+   "track": 0
+  },
+  {
+   "kind": "text",
+   "text": "địt mẹ trần tiến",
+   "font": "sans",
+   "size": 64,
+   "x": 0.5,
+   "y": 0.5,
+   "align": "center",
+   "from": 51.84580408754671,
+   "to": 54.84580408754671,
+   "track": 1
+  }
+ ]
+}

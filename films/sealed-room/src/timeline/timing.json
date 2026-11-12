@@ -1,0 +1,453 @@
+{
+ "speeds": [
+  {"from": 0, "to": 3.5, "rate": 3.72},
+  {"from": 6.5, "to": 27, "rate": 4.23},
+  {
+   "from": 52.03,
+   "to": 54.95,
+   "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+   "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+  }
+ ],
+ "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+ "velocity": [],
+ "layerKinds": {
+  "text": {
+   "base": {
+    "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+    "freezes": [{"at": 24.375161290322577, "duration": 3}],
+    "cuts": [],
+    "gaps": []
+   },
+   "changes": [
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    }
+   ]
+  },
+  "adjustment": {
+   "base": {
+    "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+    "freezes": [{"at": 24.375161290322577, "duration": 3}],
+    "cuts": [],
+    "gaps": []
+   },
+   "changes": [
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    }
+   ]
+  },
+  "audio": {
+   "base": {
+    "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+    "freezes": [{"at": 24.375161290322577, "duration": 3}],
+    "cuts": [],
+    "gaps": []
+   },
+   "changes": []
+  },
+  "sfx": {
+   "base": {
+    "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+    "freezes": [{"at": 24.375161290322577, "duration": 3}],
+    "cuts": [],
+    "gaps": []
+   },
+   "changes": [
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    }
+   ]
+  },
+  "voice": {
+   "base": {
+    "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+    "freezes": [{"at": 24.375161290322577, "duration": 3}],
+    "cuts": [],
+    "gaps": []
+   },
+   "changes": [
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 3}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    },
+    {
+     "before": {
+      "speeds": [{"from": 0, "to": 3.5, "rate": 3.72}, {"from": 6.5, "to": 27, "rate": 4.23}],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     },
+     "after": {
+      "speeds": [
+       {"from": 0, "to": 3.5, "rate": 3.72},
+       {"from": 6.5, "to": 27, "rate": 4.23},
+       {
+        "from": 52.03,
+        "to": 54.95,
+        "curve": [[0, 1], [0.3, 4], [0.55, 1], [0.7, 0.3], [1, 1]],
+        "handles": [[2.5, 4], [4, 1.6180555555555556], [0.629166666666667, 0.3], [0.3, 0.65]]
+       }
+      ],
+      "freezes": [{"at": 0, "duration": 6}, {"at": 24.375161290322577, "duration": 3}],
+      "cuts": [],
+      "gaps": []
+     }
+    }
+   ]
+  }
+ }
+}

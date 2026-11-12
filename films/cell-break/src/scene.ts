@@ -302,7 +302,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     const patch = [];
     for (const sd of ["L", "R"]) if (feet[sd]) patch.push([steve.legTo(sd, feet[sd]), 1]);
     if (look) patch.push([{ head: steve.headTo(look.p) }, look.w]);
-    // hand IK the film-kit way (AGENTS.md there): the elbow on a pole, down and out, and blended into the pose's own arm by
+    // hand IK the film-kit way: the elbow on a pole, down and out, and blended into the pose's own arm by
     // quaternion slerp; twist-free with an Euler blend, a hand reaching low in front raised the elbow over his shoulder
     const arms = [[R, "R", [-0.6, -1, -0.2]], [Lh, "L", [0.6, -1, -0.2]]].filter(([h]) => h).map(([h, sd, pole]) => [steve.armTo(sd, h.p, pole), h.w]);
     for (const [p, w] of patch) pose = blendPose(pose, p, w);

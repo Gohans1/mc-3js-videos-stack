@@ -1,5 +1,4 @@
-# Phim này
-Phong cách kể, nhịp và luật riêng của phim ghi ở đây, AI nào làm phim này cũng đọc file này trước.
+## Live-studio
 
-- Luật studio cho film: node_modules/live-studio/docs/film-contract.md, đọc trước khi sửa src/scene.ts hay src/timeline/.
-- Đồ nghề dùng chung (mob, động tác, camera, tiếng) và cách tự kiểm tra: AGENTS.md ở root monorepo.
+- live-studio chỉ là live-preview cho con người, mục đích của nó chỉ là để dev có công cụ feedback hiệu quả hơn cho bạn, sinh ra là để match/đuổi-kịp sự sáng tạo của bạn, đừng vì quá gò bó mình vào bất kì format/luật-lệ nào của nó mà mất đi sự tự do và sáng tạo. Nó (KHÔNG phải rào chắn) mà là BÀN ĐẠP(hãy coi nó như thể là starter pack) để bạn dựa vào đó mà vươn đến tiềm năng cao nhất để làm ra VIDEOS đẳng cấp nhất có thể, chứ không phải để gò bó bạn bằng những luật lệ quan liêu cồng kềnh. Bạn là chúa của sự sáng tạo và đẳng cấp, không có gì có thể ngăn cản.
+- Trong live-studio chưa có format/luật-lệ/tools/khả-năng/cơ-hội/templates/packages/etc... để bạn làm ra videos đẳng cấp? -> vượt lên trên nó, cứ thoải mái mà custom, nhớ báo cáo lại là được. (ĐỪNG ỷ lại vào đồ có sẵn mà quên mất khả năng sáng tạo tự code 3D đỉnh cao)

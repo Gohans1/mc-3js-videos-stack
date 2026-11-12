@@ -65,7 +65,7 @@ for (const stack of [
 ] satisfies Grade[][]) {
   draw({}); shared(stack.map((grade) => ({ grade })), 5);
   if (gl.getError() !== gl.NO_ERROR) throw new Error("Shared grade produced a WebGL error");
-  const expected = stack.reduce((c, g) => colorGrade(g.basic ?? {}, g)(c), input.clone().convertLinearToSRGB()).toArray().map((x) => Math.round(x * 255)), got = pixel();
+  const expected = stack.reduce((c, { basic = {}, ...sec }) => colorGrade(basic, sec)(c), input.clone().convertLinearToSRGB()).toArray().map((x) => Math.round(x * 255)), got = pixel();
   if (got.some((v, i) => Math.abs(v - expected[i]) > 3)) throw new Error(`Shared grade GPU mismatch: ${got} vs ${expected}`);
   await log(`GPU shared layer stack ${JSON.stringify(stack)}: ${got}, expected ${expected}`);
 }
