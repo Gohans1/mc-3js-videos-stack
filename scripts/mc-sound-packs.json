@@ -1,0 +1,257 @@
+{
+  "packs": [
+    {
+      "file": "alexs-caves.jar",
+      "source": "alexs-caves",
+      "title": "Alex's Caves",
+      "license": "LGPL-3.0-only",
+      "url": "https://modrinth.com/mod/alexs-caves",
+      "downloadUrl": "https://cdn.modrinth.com/data/U6GY0xp0/versions/lC8HHXOF/alexscaves-2.0.2.jar",
+      "sha1": "a1e5c7b7c7eadda4c8e954acbcbaf75a7b500d53"
+    },
+    {
+      "file": "ambientsounds.jar",
+      "source": "ambientsounds",
+      "title": "AmbientSounds",
+      "license": "LGPL-3.0-only",
+      "url": "https://modrinth.com/mod/ambientsounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/fM515JnW/versions/LFUkYKC1/AmbientSounds_FABRIC_v6.3.11_mc26.3.jar",
+      "sha1": "fff553cf5aef69026b1b25d1435da39e9097a2f3"
+    },
+    {
+      "file": "artemis-laboratory-blocks.jar",
+      "source": "laboratory-blocks",
+      "title": "Artemis' Laboratory Blocks",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/artemis-laboratory-blocks",
+      "downloadUrl": "https://cdn.modrinth.com/data/C6R8uCNQ/versions/bZc4SLUC/laboratoryblocks-0.8.5-neoforge-mc26.3.jar",
+      "sha1": "1fd3fb565ca184bbbedc7753a7e92a6a973cd813"
+    },
+    {
+      "file": "auditory-continued.jar",
+      "source": "auditory-continued",
+      "title": "Auditory Continued",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/auditory-continued",
+      "downloadUrl": "https://cdn.modrinth.com/data/UafsfA4K/versions/jHCKiVoB/auditory-0.0.7-1.21.1.jar",
+      "sha1": "b5c1babab242708002b804f6a606a173b2090481"
+    },
+    {
+      "file": "betterexpsounds.zip",
+      "source": "betterexpsounds",
+      "title": "Better Explosion Sounds",
+      "license": "Apache-2.0",
+      "url": "https://modrinth.com/resourcepack/betterexpsounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/zUlfN3B2/versions/to1J7sbV/BetterExp.zip",
+      "sha1": "09a1b9b6dbb561a76a5834e756806ffa5e724ebc"
+    },
+    {
+      "file": "charmonium.jar",
+      "source": "charmonium",
+      "title": "Charmonium",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/charmonium",
+      "downloadUrl": "https://cdn.modrinth.com/data/bpii4Xsa/versions/Rx4IPbpz/charmonium-fabric-1.21-7.0.0.jar",
+      "sha1": "04a80742c6af813dd457ebc37fb16353270a07fa"
+    },
+    {
+      "file": "cluttered.jar",
+      "source": "cluttered",
+      "title": "Cluttered",
+      "license": "GPL-3.0-or-later",
+      "url": "https://modrinth.com/mod/cluttered",
+      "downloadUrl": "https://cdn.modrinth.com/data/UnAEo77V/versions/xzERbfOO/cluttered-%5BNeoForge%5D-3.0.3-1.21.1.jar",
+      "sha1": "ae644104c83cdce103f536fb42d500c282cf1b35"
+    },
+    {
+      "file": "crackers-wither-storm-mod-v-sides-soundtrack.jar",
+      "source": "wither-storm",
+      "title": "Cracker's Wither Storm Mod: V-Sides Soundtrack",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/crackers-wither-storm-mod-v-sides-soundtrack",
+      "downloadUrl": "https://cdn.modrinth.com/data/dXudHaYl/versions/QB7aHQSJ/CWSM%20V-Sides%201.20.1%201.1.1.jar",
+      "sha1": "2f67fbd68172c9c13457de44483f6137b97def15"
+    },
+    {
+      "file": "create-nuclear.jar",
+      "source": "create-nuclear",
+      "title": "Create Nuclear",
+      "license": "LGPL-3.0-only",
+      "url": "https://modrinth.com/mod/createnuclear",
+      "downloadUrl": "https://cdn.modrinth.com/data/z611fdf7/versions/TANOhO2C/createnuclear-2.0.0-neoforge.jar",
+      "sha1": "1e635e4d1d4f636d3f07f17f4fe178e567de128c"
+    },
+    {
+      "file": "dusty-decorations.jar",
+      "source": "dusty-decorations",
+      "title": "Dusty Decorations",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/dusty-decorations",
+      "downloadUrl": "https://cdn.modrinth.com/data/KgFOuaiZ/versions/M1qcgkbI/dustydecorations-neoforge%2B1.21.1-2.3.2.jar",
+      "sha1": "d75a1c9166b8d41309e591acbf5dadc7d21c68b6"
+    },
+    {
+      "file": "extrasounds.jar",
+      "source": "extrasounds",
+      "title": "ExtraSounds",
+      "license": "CC0-1.0",
+      "url": "https://modrinth.com/mod/extrasounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/uPWCQrVL/versions/4tJroa66/extrasounds-3.0.1%2B26.2-build.1.jar",
+      "sha1": "619011699ba75a522f85c3a32a0d8b45051d2cac"
+    },
+    {
+      "file": "farmers-delight.jar",
+      "source": "farmers-delight",
+      "title": "Farmer's Delight",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/farmers-delight",
+      "downloadUrl": "https://cdn.modrinth.com/data/R2OftAxM/versions/XTVZDOol/FarmersDelight-1.21.1-1.3.4.jar",
+      "sha1": "27675ddfcb8cc37e6ea1ab6c15051c7949d94657"
+    },
+    {
+      "file": "gentler-weather-sounds.zip",
+      "source": "gentler-weather-sounds",
+      "title": "Gentler Weather Sounds",
+      "license": "Apache-2.0 / CC-BY-4.0",
+      "credits": "bone666138, Soundrack, Spennnyyy, jrosin, dobroide (Freesound CC BY 4.0)",
+      "url": "https://modrinth.com/resourcepack/gentler-weather-sounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/GB2EXKpD/versions/VmBTRwCD/Gentler%20Weather%20Sounds%202.3.0.zip",
+      "sha1": "33245e4e5b9c81651310a34453d63f92ad479c7d"
+    },
+    {
+      "file": "horror-sounds.jar",
+      "source": "horror-sounds",
+      "title": "Horror sounds",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/horror-sounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/NeVnRSAc/versions/CQspQajF/horror_sounds-1.0.0-forge-1.20.1.jar",
+      "sha1": "4b831711ec448d5b4745ab052439d8c92430f1fd"
+    },
+    {
+      "file": "immersive-aircraft.jar",
+      "source": "immersive-aircraft",
+      "title": "Immersive Aircraft",
+      "license": "GPL-3.0-only",
+      "url": "https://modrinth.com/mod/immersive-aircraft",
+      "downloadUrl": "https://cdn.modrinth.com/data/x3HZvrj6/versions/vxF8Fnsx/immersive_aircraft-neoforge-1.7.0%2B26.2.jar",
+      "sha1": "450a40b43dea121460bbe35f767d8210d9080729"
+    },
+    {
+      "file": "immersive-sound.jar",
+      "source": "immersive-sound",
+      "title": "Immersive Sounds",
+      "license": "CC0-1.0",
+      "url": "https://modrinth.com/mod/immersive-sound",
+      "downloadUrl": "https://cdn.modrinth.com/data/nt5t82dO/versions/npXgTSHC/immersive-sound-0.2.jar",
+      "sha1": "4ee3b3b9f716b819c82a6b688134cdf8729f807b"
+    },
+    {
+      "file": "immersive-weapons-sounds.jar",
+      "source": "immersive-weapons",
+      "title": "Immersive Weapon Draw Sounds",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/immersive_weapons_sounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/jaiqEG3N/versions/8BeMcPKK/medival_weapon_sounds-1.1.0-forge-1.20.1.jar",
+      "sha1": "ceaea4a234bbe300cb4ea4eb9c18747c584d5701"
+    },
+    {
+      "file": "immersive-weathering.jar",
+      "source": "immersive-weathering",
+      "title": "Immersive Weathering",
+      "license": "LGPL-3.0-only",
+      "url": "https://modrinth.com/mod/immersive-weathering",
+      "downloadUrl": "https://cdn.modrinth.com/data/jkskOO9i/versions/Fl2lADP9/immersive_weathering-1.20.1-2.0.5-forge.jar",
+      "sha1": "d89ad3793ffb97df27f415ac6cc07c61460dd9f3"
+    },
+    {
+      "file": "immersivethunder.jar",
+      "source": "immersivethunder",
+      "title": "ImmersiveThunder",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/immersivethunder",
+      "downloadUrl": "https://cdn.modrinth.com/data/uKjKoMsj/versions/lDvKkCFz/immersivethunder-fabric-1.21.6-1.3.0.jar",
+      "sha1": "b06594842fe48b8580c58df04da1d317422cd971"
+    },
+    {
+      "file": "lightmans-currency.jar",
+      "source": "lightmans-currency",
+      "title": "Lightman's Currency",
+      "license": "Apache-2.0",
+      "url": "https://modrinth.com/mod/lightmans-currency",
+      "downloadUrl": "https://cdn.modrinth.com/data/wvMc8AJt/versions/mW4NC50E/lightmanscurrency-26.1-1.0.0.2.jar",
+      "sha1": "e494515da54bed653c64af11cb3a0279b780a60a"
+    },
+    {
+      "file": "macaws-doors.jar",
+      "source": "macaws-doors",
+      "title": "Macaw's Doors",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/macaws-doors",
+      "downloadUrl": "https://cdn.modrinth.com/data/kNxa8z3e/versions/xfU8SZ7D/mcw-doors-1.1.5-mc26.3fabric.jar",
+      "sha1": "4314bdcf52cd4261cb6cf20d80c733453364ceff"
+    },
+    {
+      "file": "particle-rain.jar",
+      "source": "particle-rain",
+      "title": "Particle Rain",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/particle-rain",
+      "downloadUrl": "https://cdn.modrinth.com/data/nrikgvxm/versions/inhna3NE/particlerain-4.0.3%2B1.21.1-neoforge.jar",
+      "sha1": "d1b6bb30d56d29b6f850bfbd29d45fc5e3bcaf02"
+    },
+    {
+      "file": "presence-footsteps.jar",
+      "source": "presence-footsteps",
+      "title": "Presence Footsteps",
+      "license": "Polyform-Shield-1.0",
+      "url": "https://modrinth.com/mod/presence-footsteps",
+      "downloadUrl": "https://cdn.modrinth.com/data/rcTfTZr3/versions/UUNiN7Tm/PresenceFootsteps-1.14.0%2B26.3.jar",
+      "sha1": "2747a6c39d42ef4024a26bb43fc17be5f1eb86b5"
+    },
+    {
+      "file": "quality-sounds.jar",
+      "source": "quality-sounds",
+      "title": "Quality Sounds",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/quality-sounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/ZAfRfkTo/versions/odY5OxSz/qualitysounds-forge-1.5.0-1.20.2.jar",
+      "sha1": "8234168f97de6f28568164281369c4ba1c66ec5c"
+    },
+    {
+      "file": "refined-storage.jar",
+      "source": "refined-storage",
+      "title": "Refined Storage",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/refined-storage",
+      "downloadUrl": "https://cdn.modrinth.com/data/KDvYkUg3/versions/PMoDGaFz/refinedstorage-fabric-2.0.9.jar",
+      "sha1": "0be595b8c0d96010172df81a91fbb46e4f1a71db"
+    },
+    {
+      "file": "security-craft.jar",
+      "source": "security-craft",
+      "title": "SecurityCraft",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/security-craft",
+      "downloadUrl": "https://cdn.modrinth.com/data/v8jzRtAt/versions/mgxwefx4/%5B26.3%5D%20SecurityCraft%20v1.10.2.1-beta4.jar",
+      "sha1": "a0451a8423872987ada80fdb9300f168bff50904"
+    },
+    {
+      "file": "willows-scary-cave-sounds.zip",
+      "source": "willows-horror",
+      "title": "Willow's Horror Cave Sounds",
+      "license": "Apache-2.0",
+      "url": "https://modrinth.com/resourcepack/willows-scary-cave-sounds",
+      "downloadUrl": "https://cdn.modrinth.com/data/DunlLunz/versions/38Pikm0y/willowshorrorcavesounds.zip",
+      "sha1": "6c2ece6bf86fb52dd5ba727a7489f9d1fcfe977c"
+    },
+    {
+      "file": "world-alive.jar",
+      "source": "world-alive",
+      "title": "World Alive: Ambient birds and wildlife",
+      "license": "MIT",
+      "url": "https://modrinth.com/mod/world-alive",
+      "downloadUrl": "https://cdn.modrinth.com/data/YFkuYUFq/versions/gBkVJgEG/world_alive-1.3.0%2B26.3-fabric.jar",
+      "sha1": "c8f0ef0dc12852ab56cb04c3d291835d1b2b4962"
+    }
+  ]
+}

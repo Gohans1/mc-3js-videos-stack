@@ -1,0 +1,13 @@
+{
+  "minecraft": {
+    "version": "26.3",
+    "metadata": "https://piston-meta.mojang.com/v1/packages/5df1795e16eea19d75b923d66ecca9ce183353c5/26.3.json",
+    "url": "https://piston-data.mojang.com/v1/objects/e877b6a07acd633fb3bb475002175cec036e7b87/client.jar",
+    "sha1": "e877b6a07acd633fb3bb475002175cec036e7b87"
+  },
+  "mobs": "1.21.11",
+  "player": {
+    "file": "packages/mc-actor/assets/player.glb",
+    "sha256": "8f242b5168ba36715de23f1d3a921ee07c22f63f97b83fef9f8b53361e827eea"
+  }
+}

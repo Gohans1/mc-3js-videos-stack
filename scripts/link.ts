@@ -1,36 +1,51 @@
-// The vault (vault.json "root") holds what never goes in git: Mojang's jar and assets, the Steve rig, the motion clips and
-// their catalogue, the mod packs, headless Chrome. This links it in as ./vault and, in each film, as assets/public/<name>
-// (vault.json "film_links"), the folders the studio serves to the page, and builds each film's assets/public/picked.zip
-// from its pack/picks.json and the vault's mod jars (packages/mc-assets/pick.py; the zip is never committed: mod licences).
-// Re-runnable; a link already there is kept, picked.zip is rebuilt.
-// bun run link [film ...]   (default: every film)
-import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, symlinkSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-const ROOT = resolve(import.meta.dir, "..");
-const cfg = await Bun.file(join(ROOT, "vault.json")).json();
+import { cliArgs } from "../packages/live-studio/src/cli.mjs";
+import { config, EXTERNAL, linkDirectory, LOCAL, ROOT } from "./vault.mjs";
 
-function link(path: string, target: string) {
-  if (!existsSync(target)) throw new Error(`no ${target}: fix vault.json "root" or fill the vault`);
-  try {
-    lstatSync(path);
-    console.log(`kept ${path} -> ${readlinkSync(path)}`);
-  } catch {
-    symlinkSync(target, path, "junction");
-    console.log(`${path} -> ${target}`);
-  }
+const HELP = `Connects the vault to the films, from the repo root: links the heavy external vault folders into vault/ and each film's
+assets/public to the vault, then builds the film's picks zip from pack/picks.json.
+  bun run link                 every film in films/
+  bun run link sealed-room     only these films
+A new film from bun run new-film is linked already; run this after moving the vault or adding to pack/picks.json.`;
+const args = cliArgs(HELP, []);
+const there = readdirSync(join(ROOT, "films")).filter((f) =>
+  existsSync(join(ROOT, "films", f, "package.json")),
+);
+const films = args.length ? args : there;
+// every name is checked before anything is linked or built
+const wrong = films.filter((f) => !there.includes(f));
+if (wrong.length) {
+  console.error(
+    `no film ${wrong.join(", ")} in films/ (there: ${there.join(", ")}): bun run link <one of them>, or bun run link for all`,
+  );
+  process.exit(2);
 }
 
-link(join(ROOT, "vault"), resolve(cfg.root));
-const films = process.argv.slice(2).length ? process.argv.slice(2)
-  : readdirSync(join(ROOT, "films")).filter((f) => existsSync(join(ROOT, "films", f, "package.json")));
+if (lstatSync(LOCAL, { throwIfNoEntry: false })?.isSymbolicLink())
+  throw new Error(
+    `Local vault must be a real directory: ${LOCAL}. Copy light assets before changing the old vault link.`,
+  );
+for (const name of config.external ?? []) {
+  if (!existsSync(join(EXTERNAL, name)))
+    throw new Error(
+      `Missing external vault/${name}: ${EXTERNAL}. Restore the heavy assets there or set MC_VAULT_EXTERNAL.`,
+    );
+}
+mkdirSync(LOCAL, { recursive: true });
+for (const name of config.external ?? []) linkDirectory(join(LOCAL, name), join(EXTERNAL, name));
+
 for (const film of films) {
-  const pub = join(ROOT, "films", film, "assets/public");
-  mkdirSync(pub, { recursive: true });
-  for (const [name, sub] of Object.entries(cfg.film_links as Record<string, string>)) link(join(pub, name), resolve(cfg.root, sub));
-  if (existsSync(join(ROOT, "films", film, "pack/picks.json"))) {
-    const r = spawnSync("python", [join(ROOT, "packages/mc-assets/pick.py")], { cwd: join(ROOT, "films", film), stdio: "inherit" });
-    if (r.status !== 0) process.exit(r.status ?? 1);
+  const dir = join(ROOT, "films", film);
+  const pub = join(dir, "assets/public");
+  for (const [name, sub] of Object.entries(config.film_links as Record<string, string>))
+    linkDirectory(join(pub, name), join(LOCAL, sub));
+  if (existsSync(join(dir, "pack/picks.json"))) {
+    const { pickBlocks } = await import(
+      pathToFileURL(join(ROOT, "packages/mc-assets/pick.mjs")).href
+    );
+    pickBlocks({ cwd: dir, vaultDir: join(LOCAL, "packs") });
   }
 }

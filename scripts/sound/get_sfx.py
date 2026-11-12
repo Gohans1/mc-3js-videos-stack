@@ -2,10 +2,12 @@
 Minecraft worktree's get_sfx.py. Each sound is a Freesound id picked from `find` (most downloaded CC0 first) and
 pinned in SFX, or in the film's own sound/sfx_list.json when it has one ({name: {id, keep, for, bed, music}}, which then
 replaces SFX); title, author and link are kept in sound/sfx/SOURCES.json.
-  python ../../scripts/sound/get_sfx.py                 fetch every missing sound in SFX
-  python ../../scripts/sound/get_sfx.py find "cat meow" [max seconds]
-  python ../../scripts/sound/get_sfx.py sweeteners      fetch the cut sweeteners every film shares (SWEETENERS)
-A sound is used only if its own page still says Creative Commons 0. Already fetched sounds are skipped."""
+  bun run sfx:get                        fetch every missing sound in SFX (or sound/sfx_list.json)
+  bun run sfx:get find "cat meow" [max seconds]   search Freesound: id | title | seconds | downloads, to pin one
+  bun run sfx:get sweeteners             fetch the cut sweeteners every film shares (SWEETENERS)
+To pin one: add "name": {"id": <id from find>, "for": "what it is for"} to sound/sfx_list.json, then bun run sfx:get.
+A sound is used only if its own page still says Creative Commons 0. Already fetched sounds are skipped. Run inside the
+film (python ../../scripts/sound/get_sfx.py). The vault may have it already: bun run find <words>."""
 import html
 import json
 import re
@@ -145,10 +147,39 @@ def fetch(name, sid, keep):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["find"]:
-        for r in find(sys.argv[2], 0, float(sys.argv[3]) if len(sys.argv) > 3 else 60):
-            print(*r, sep=" | ")
+    args = sys.argv[1:]
+    if args[:1] in (["-h"], ["--help"], ["help"]):
+        print(__doc__)
         raise SystemExit
+    flags = [a for a in args if re.match(r"^--?[a-zA-Z]", a)]
+    if flags:
+        print(f"unknown option {flags[0]}: bun run sfx:get [find \"words\" [max seconds] | sweeteners] (--help for more)", file=sys.stderr)
+        raise SystemExit(2)
+    if args[:1] == ["find"] and (len(args) < 2 or not args[1].strip()):
+        print('find what? words in quotes: bun run sfx:get find "cat meow" (the vault first: bun run find cat meow)', file=sys.stderr)
+        raise SystemExit(2)
+    if not (args in ([], ["sweeteners"]) or (args[:1] == ["find"] and len(args) in (2, 3))):
+        print(f"usage: bun run sfx:get [find \"words\" [max seconds] | sweeteners] (--help for more); got {' '.join(args)}", file=sys.stderr)
+        raise SystemExit(2)
+    if args[:1] == ["find"]:
+        try:
+            hi = float(args[2]) if len(args) > 2 else 60.0
+        except ValueError:
+            hi = -1
+        if not 0 < hi < 1e6:
+            print(f"max seconds is a number above 0, got {args[2]}: bun run sfx:get find \"words\" 10", file=sys.stderr)
+            raise SystemExit(2)
+        hits = find(args[1], 0, hi)
+        if not hits:
+            print(f"no CC0 sound on Freesound for \"{args[1]}\" up to {hi:g} s: fewer or other words, or a longer max", file=sys.stderr)
+            raise SystemExit(1)
+        for r in hits:
+            print(*r, sep=" | ")
+        print('pin one: "name": {"id": <id>, "for": "what it is for"} in sound/sfx_list.json, then bun run sfx:get')
+        raise SystemExit
+    if not (Path.cwd() / "src" / "scene.ts").exists():
+        print(f"{Path.cwd()} is not a film (no src/scene.ts): cd films/<name> first, it fetches into the film's sound/sfx", file=sys.stderr)
+        raise SystemExit(1)
     OUT.mkdir(parents=True, exist_ok=True)
     known = json.loads(SOURCES.read_text(encoding="utf8")) if SOURCES.exists() else {}
     wanted = {k: (sid, keep, why, role) for k, (sid, keep, role, why) in SWEETENERS.items()} if sys.argv[1:2] == ["sweeteners"] else {k: (*v, None) for k, v in SFX.items()}
@@ -158,3 +189,4 @@ if __name__ == "__main__":
         known[name] = {**fetch(name, sid, keep), "for": why, **({"role": role, "kind": "sfx"} if role else {})}
         SOURCES.write_text(json.dumps(known, indent=1, ensure_ascii=False), encoding="utf8")
         print("got", name, known[name]["title"])
+    print(f"{len(wanted)} sounds in {OUT.relative_to(Path.cwd()).as_posix()}/: use them by name in src/timeline/audio.json, then bun run check")

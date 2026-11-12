@@ -7,12 +7,16 @@ import sys
 from pathlib import Path
 
 import numpy as np
-os.environ.setdefault("HF_HOME", "E:/threejs_lab/.hf")  # models on E:, next to the lab's other caches
+lab_root = Path(os.environ.get("THREEJS_LAB") or "E:/threejs_lab")
+if lab_root.exists():
+    os.environ.setdefault("HF_HOME", str(lab_root / ".hf"))  # models beside the lab's other caches
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
+import torch
 import whisperx
 
-device = "cuda"
-model = whisperx.load_model("large-v3", device, compute_type="float16", language="en")
+device = os.environ.get("WHISPER_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
+compute = os.environ.get("WHISPER_COMPUTE_TYPE") or ("float16" if device == "cuda" else "int8")
+model = whisperx.load_model("large-v3", device, compute_type=compute, language="en")
 align, meta = whisperx.load_align_model(language_code="en", device=device)
 for f in sys.argv[1:]:
     audio = whisperx.load_audio(f)
