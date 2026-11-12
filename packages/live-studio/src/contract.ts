@@ -503,6 +503,14 @@ export const SoundTimeline = z
       });
   });
 
+// The keys the mix and the studio read on each part of the sound timeline: a key next to one of these by a letter or two is a
+// typo the loose schemas let through (bun run check names it)
+export const SOUND_KEYS = {
+  audio: Object.keys(SoundTimeline.shape),
+  beds: Object.keys(Bed.shape),
+  sfx: Object.keys(Shot1.shape),
+};
+
 // ---------- The camera keys (package.json "live-studio".camTimeline), which the studio also writes: one entry per key, in time
 // order, t in the seconds draw(t) is given. p and l are a point [x, y, z] or the film's own anchor ({"eye": [...]}); ease is a
 // named ease of the film or a CSS cubic-bezier [x1, y1, x2, y2]. Anything else on a key (fov, wave, roll) is the film's

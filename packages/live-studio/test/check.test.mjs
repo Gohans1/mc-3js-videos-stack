@@ -109,4 +109,20 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   const loud = check();
   assert.equal(loud.status, 0, loud.stdout + loud.stderr);
   assert.match(loud.stdout, /⚠ beds\[0\] "door_slam" gain \+20 dB/);
+
+  // a misspelt key is read by nothing: the AI believes it changed the sound and nothing did
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [],
+      sfx: [{ name: "door_slam", at: 4, gain: 0, gian: -6 }],
+      lufs: -3,
+      drive: 99,
+    }),
+  );
+  const typo = check();
+  assert.equal(typo.status, 1, typo.stdout + typo.stderr);
+  assert.match(typo.stderr, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
+  assert.match(typo.stderr, /⚠ lufs -3/);
+  assert.match(typo.stderr, /⚠ drive \+99 dB/);
 });

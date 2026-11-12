@@ -5,7 +5,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, needFilm } from "./src/cli.mjs";
-import { checkFiles } from "./src/contract.ts";
+import { checkFiles, SOUND_KEYS } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { findVaults, openSound } from "./src/sound.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
@@ -106,6 +106,26 @@ for (const p of found) {
   }
 }
 
+const distance = (a, b) => {
+  let row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++)
+      next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return row[b.length];
+};
+// [key, the known key it is a letter or two from] for each key of obj nothing reads
+const misspelt = (obj, keys) =>
+  Object.keys(obj).flatMap((k) => {
+    if (keys.includes(k)) return [];
+    const near = keys.find(
+      (n) => distance(k.toLowerCase(), n.toLowerCase()) <= (n.length >= 4 ? 2 : 1),
+    );
+    return near ? [[k, near]] : [];
+  });
+
 // Sound names: only when the lanes themselves parse, so a broken file is said once
 const sound = conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
 const lanesFile = sound && join(PROJECT, conf.soundTimeline);
@@ -113,20 +133,6 @@ if (lanesFile && existsSync(lanesFile) && !found.some((p) => p.where === conf.so
   const lanes = JSON.parse(readFileSync(lanesFile, "utf8"));
   const names = sound.library().map((x) => x.name),
     known = new Set(names);
-  const distance = (a, b) => {
-    let row = Array.from({ length: b.length + 1 }, (_, j) => j);
-    for (let i = 1; i <= a.length; i++) {
-      const next = [i];
-      for (let j = 1; j <= b.length; j++)
-        next[j] = Math.min(
-          row[j] + 1,
-          next[j - 1] + 1,
-          row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
-        );
-      row = next;
-    }
-    return row[b.length];
-  };
   const nearest = (name) =>
     names
       .map((n) => [n, distance(name.toLowerCase(), n.toLowerCase())])
@@ -190,6 +196,23 @@ if (lanesPath && existsSync(lanesPath) && !found.some((p) => p.where === conf.so
           `⚠ ${list}[${i}] "${e.name}" gain +${e.gain} dB (${conf.soundTimeline}): over +12 a sound is pushed far past its file's own level and the limiter flattens it; meant? bun run listen --at <its second> hears it`,
         );
     });
+  const typos = [
+    ...misspelt(lanes, SOUND_KEYS.audio),
+    ...["beds", "sfx"].flatMap((list) =>
+      (lanes[list] ?? []).flatMap((e, i) =>
+        misspelt(e, SOUND_KEYS[list]).map(([k, near]) => [`${list}[${i}] "${k}"`, near]),
+      ),
+    ),
+  ].map(([k, near]) => `✖ ${k}: no key the mix reads; did you mean "${near}"?`);
+  if (typos.length) found.push({ where: conf.soundTimeline, issue: typos.join("\n") });
+  if (typeof lanes.lufs === "number" && (lanes.lufs > -12 || lanes.lufs < -20))
+    warnings.push(
+      `⚠ lufs ${lanes.lufs} (${conf.soundTimeline}): YouTube plays every video at -14 LUFS, ${lanes.lufs > -12 ? "turning a louder one down, so the loudness bought with limiting is lost" : "never turning a quieter one up"}; -14 unless the film means it`,
+    );
+  if (typeof lanes.drive === "number" && lanes.drive > 12)
+    warnings.push(
+      `⚠ drive +${lanes.drive} dB (${conf.soundTimeline}): the mix's push into its limiter; over +12 every hit is flattened into the bed; the films use 0-12`,
+    );
   const ends = heardLength(PROJECT, conf);
   if (ends) {
     const length = ends.layers;
