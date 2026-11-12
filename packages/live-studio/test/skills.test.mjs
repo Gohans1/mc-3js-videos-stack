@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -28,7 +28,7 @@ test("the core guide routes to every reference and every other skill, so none is
 test("every command the skills name is a command of the repo or of a film", () => {
   const scripts = (f) => Object.keys(JSON.parse(readFileSync(join(ROOT, f), "utf8")).scripts);
   const known = new Set([...scripts("package.json"), ...scripts("templates/film/package.json")]);
-  for (const file of [...md(DATA), ...md(join(ROOT, "skills"))])
+  for (const file of [...md(DATA), join(ROOT, ".claude/skills/mc-films/SKILL.md")])
     for (const [, name] of readFileSync(file, "utf8").matchAll(/bun run ([a-z][\w:-]*)/g))
       assert.ok(known.has(name), `${file} names bun run ${name}, which no package.json has`);
 });
@@ -51,5 +51,4 @@ test("skills get prints a guide, one reference by its name, and names the refere
   const missing = run(["get", "nope"]);
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /core/);
-  assert.ok(existsSync(join(ROOT, "skills/mc-films/SKILL.md")));
 });

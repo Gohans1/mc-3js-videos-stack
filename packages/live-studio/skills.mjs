@@ -1,5 +1,5 @@
 // bun run skills: the guides for an AI agent, served from the repo's skill-data/ so they always match the commands checked
-// out next to them. skills/mc-films/SKILL.md is only a stub that sends an agent here (agent-browser's skills get pattern).
+// out next to them. .claude/skills/mc-films/SKILL.md is only a stub that sends an agent here (agent-browser's skills get pattern).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
