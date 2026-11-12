@@ -10,8 +10,10 @@ const DATA = fileURLToPath(new URL("../../skill-data", import.meta.url));
 const HELP = `The guides for an AI agent working in this repo, matched to the commands checked out with them. Runs at the root or in a film.
   bun run skills                         the guides, one line each
   bun run skills get core                start here: the loop from an idea to an upload, the clocks, the safe and the costly commands
-  bun run skills get core --ref sound    one reference of a guide by its name (its routing table lists them); --ref again for more
-  bun run skills get core --full         the guide and every reference at once, several times longer`;
+  bun run skills get core --ref sound    one reference by its path, file name or stem (the guide's Load table lists them);
+                                         --ref again for more
+  bun run skills get core --full         the guide and every reference at once, several times longer
+A command's flags are in its own help (bun run <command> --help), not here: these guides are how to work.`;
 
 const argv = cliArgs(HELP, ["--ref NAME", "--full"], 2);
 const words = argv.filter((a, i) => !a.startsWith("-") && argv[i - 1] !== "--ref");
@@ -58,6 +60,15 @@ const pick = (want) => {
       p === want || p.replace(/\.md$/, "") === w || p.split("/").at(-1).replace(/\.md$/, "") === w,
   );
   if (hits.length === 1) return hits[0];
+  // the guide also routes to repo docs (RENDER.md, INSTALL.md): those are opened, never served here
+  const doc = [...about(name).text.matchAll(/`([\w./-]+\.md)`/g)]
+    .map((m) => m[1])
+    .find(
+      (p) =>
+        !p.startsWith("references/") &&
+        p.split("/").at(-1).replace(/\.md$/, "").toLowerCase() === w.toLowerCase(),
+    );
+  if (doc) fail(`${want} is a repo file, not a reference: open ${doc}`);
   fail(
     `${hits.length ? `${want} could be ${hits.join(" or ")}: give the path` : `${name} has no ${want}`}. ${
       all.length ? `Its references: ${all.join(", ")}` : `${name} has no references`

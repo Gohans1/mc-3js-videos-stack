@@ -101,5 +101,5 @@ export const needFilm = (dir = process.cwd()) => {
   console.error(
     `${dir} is not a film (no src/scene.ts): cd films/<name> first (the films: ls films)`,
   );
-  process.exit(1);
+  process.exit(2);
 };

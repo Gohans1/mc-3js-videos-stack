@@ -5,14 +5,22 @@ description: Core mc-films usage guide. Read this before running any of the repo
 
 # mc-films core
 
-Every job goes through `bun run`. At the repo root: the repo's commands (new films, the vault, tests). Inside `films/<name>`: the film's commands (studio, render, sound, notes). A command run in the wrong place says where it runs. This guide covers the loop and the rules. Each command's flags live in `bun run <command> --help`; each area's detail lives in a reference, and [Load more when you need it](#load-more-when-you-need-it) says which one.
+Every job goes through `bun run`. At the repo root: the repo's commands (new films, the vault, tests). Inside `films/<name>`: the film's commands (studio, render, sound, notes). A command run in the wrong place says where it runs.
 
-## How the CLI talks
+## Where each answer lives
+
+Three sources, one job each. None repeats another's job:
 
 ```bash
-bun run help                 # every command where you stand; in a film, also the map of its files
-bun run render --help        # everything one command does; --help never runs the job
+bun run help                     # which commands exist where you stand; in a film, also the map of its files
+bun run render --help            # one command: every flag and variable, examples, its cost. The only place flags are listed
+bun run skills get core          # how to work: the loop, the clocks, the rules (this guide)
+bun run skills get core --ref sound   # one area in depth, by reference name
 ```
+
+`-h`, `--help` and a bare `help` word are the same and never run the job. `--ref` belongs to `skills get` only.
+
+## How the CLI talks
 
 - Every error says how to fix it. Exit 2: a wrong word, flag or second, and nothing was done. Exit 1: the film has something to fix.
 - Output ends with a `next:` line. Run that instead of guessing.
@@ -64,7 +72,7 @@ AT=35.6 bun run render stills
 ```bash
 bun run notes                                # the open notes, #1 first
 bun run notes 3                              # one in full: where they tapped, words, pictures
-bun run at #3                                # where that note is heard now
+bun run at '#3'                              # where that note is heard now
 bun run note done 3 "what changed"           # only after you saw the fix; the creator approves or reopens
 bun run note ask 3 "your question"           # when unsure what they want
 ```
@@ -105,29 +113,34 @@ bun run deliver --youtube 9-15               # how those seconds look after YouT
 | `STALE` from `framecheck`, `sheet` or `jumps` | The video predates `src/`: `bun run render clip` again                                                                    |
 | `check` names a missing sound                 | It lists the nearest names; `bun run find <words>` searches the vault, `bun run sfx:get` fetches the film's pinned sounds |
 | A command says it runs elsewhere              | It belongs to the repo root or to a film: `cd` where it says                                                              |
-| A note's second moved after a Speed edit      | Notes keep the second they were written at; `bun run at #N` gives where it is heard now                                   |
+| A note's second moved after a Speed edit      | Notes keep the second they were written at; `bun run at '#N'` gives where it is heard now                                 |
 | `listen` misses a vault sound you changed     | `bun run listen --fresh`                                                                                                  |
 | `CHECK` has no such target                    | It suggests the nearest names and lists the targets; names match case                                                     |
 
 ## Load more when you need it
 
-Load one reference without the rest by its name:
+Load one reference without the rest by passing its path, file name, or stem to `--ref`:
 
 ```bash
 bun run skills get core --ref sound
-bun run skills get core --ref review --ref notes
+bun run skills get core --ref references/review.md --ref notes
 ```
 
-`bun run skills get core --full` prints every reference at once.
+`bun run skills get core --full` prints every reference at once, several times the size of this guide.
 
-| Load                                         | When you need                                                                               |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `references/film.md`                         | A new film, which file holds what, the vault, trying a command on a copy of a film          |
-| `references/review.md`                       | The eyes: `at`, stills, sheets, `CHECK=motion/seen/touch`, `framecheck`, `jumps`, `deliver` |
-| `references/sound.md`                        | Placing sounds and music, gains, the mix, `listen` and its targets                          |
-| `references/voice.md`                        | Narration: takes, generating, assembling, word seconds, reading pace                        |
-| `references/notes.md`                        | The creator's notes: states, answering, remembering a rule                                  |
-| `references/cli.md`                          | Writing or changing a repo command, and keeping these guides in step with it                |
-| `packages/live-studio/RENDER.md`             | Rendering fast, the GPU, YouTube's spec, banding after its re-encode                        |
-| `packages/live-studio/docs/film-contract.md` | The studio's data contract: `scene.ts`, `edit.json`, schemas, hooks                         |
-| `INSTALL.md`                                 | A new machine, the vault, licences                                                          |
+| Load                   | When you need                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `references/film.md`   | A new film, which file holds what, the vault, trying a command on a copy of a film          |
+| `references/review.md` | The eyes: `at`, stills, sheets, `CHECK=motion/seen/touch`, `framecheck`, `jumps`, `deliver` |
+| `references/sound.md`  | Placing sounds and music, gains, the mix, `listen` and its targets                          |
+| `references/voice.md`  | Narration: takes, generating, assembling, word seconds, reading pace                        |
+| `references/notes.md`  | The creator's notes: states, answering, remembering a rule                                  |
+| `references/cli.md`    | Writing or changing a repo command, and keeping these guides in step with it                |
+
+Deeper docs live in the repo, not in `--ref`. Open the file:
+
+| File                                         | When you need                                                        |
+| -------------------------------------------- | -------------------------------------------------------------------- |
+| `packages/live-studio/RENDER.md`             | Rendering fast, the GPU, YouTube's spec, banding after its re-encode |
+| `packages/live-studio/docs/film-contract.md` | The studio's data contract: `scene.ts`, `edit.json`, schemas, hooks  |
+| `INSTALL.md`                                 | A new machine, the vault, licences                                   |

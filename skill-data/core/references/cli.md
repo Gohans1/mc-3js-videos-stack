@@ -23,7 +23,7 @@ Python commands (`scripts/sound`, `scripts/review`) keep the same contract by ha
 
 Update every place an agent looks, in the same commit:
 
-1. The command's `HELP`: what it does, each option, an example, what to run next.
+1. The command's `HELP`: what it does, each option, an example, what to run next. It is the one full list of a command's flags; a guide shows a flag in an example, never the whole list again.
 2. `package.json` `scripts`: the repo root's, or `templates/film/package.json` and every film's. A command of the other place gets a `wrong-place.mjs` stub, so running it in the wrong folder says where it runs.
 3. `packages/live-studio/help.mjs` `GROUPS`: one line under its job.
 4. These guides: `skill-data/core/references/*.md`, plus `skill-data/core/SKILL.md` when the core loop changes. Keep `SKILL.md` to the loop, clocks, costs, troubleshooting and its routing table; put details in a reference and add a routing row for a new one. Never put feature content in `.claude/skills/mc-films/SKILL.md`: it is a stub that only points at `bun run skills get core`.

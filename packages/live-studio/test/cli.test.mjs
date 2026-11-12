@@ -32,6 +32,20 @@ test("an option's value is not one of the words, and an option missing its value
   expect(r.stderr).toContain("--shot needs a value: --shot N");
 });
 
+test("a film's command run outside a film did nothing: exit 2, as every wrong place does, saying where it runs", () => {
+  const r = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      `const { needFilm } = await import(${JSON.stringify(cli)}); needFilm(${JSON.stringify(import.meta.dir)}); console.log("worked");`,
+    ],
+    { encoding: "utf8" },
+  );
+  expect(r.status).toBe(2);
+  expect(r.stdout).not.toContain("worked");
+  expect(r.stderr).toContain("cd films/<name> first");
+});
+
 test("a number that is no number stops with what it takes", () => {
   const r = spawnSync(
     process.execPath,

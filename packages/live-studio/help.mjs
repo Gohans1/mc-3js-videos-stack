@@ -10,7 +10,7 @@ const GROUPS = [
     "Start here",
     {
       skills:
-        "the guides for an AI agent, matched to these commands: bun run skills get core first",
+        "for an AI agent: bun run skills get core before guessing from a command's --help (the loop, the three clocks, what costs money)",
     },
   ],
   [
@@ -78,7 +78,8 @@ const GROUPS = [
       verify: "lint and typecheck together",
       lint: "oxlint",
       typecheck: "bun check",
-      check: "the same as typecheck",
+      check:
+        "the same as typecheck, here at the root (in a film, bun run check reads the film's JSON)",
       fmt: "format (bun fmt --no-script <files> for a few)",
       "fmt:check": "is everything formatted?",
     },
@@ -118,7 +119,7 @@ const said = new Set(["help", "postinstall", ...stubs]);
 const out = [];
 for (const [title, cmds] of GROUPS) {
   const lines = Object.entries(cmds)
-    // "check" is the film contract in a film and lint plus typecheck at the root
+    // "check" is the film contract in a film and typecheck at the root
     .filter(([k]) => k in scripts && !said.has(k) && (k !== "check" || (title === "Code") !== film))
     .map(([k, about]) => {
       said.add(k);
@@ -173,6 +174,6 @@ console.log(
                 .filter((f) => existsSync(join("films", f, "src/scene.ts")))
                 .join(", ") || "none yet"
             : "none yet"
-        } (a new one: bun run new-film <name>). The packages and the skill: AGENTS.md; the vault and its setup: INSTALL.md`
+        } (a new one: bun run new-film <name>). The packages: AGENTS.md; the vault and its setup: INSTALL.md`
   }`,
 );

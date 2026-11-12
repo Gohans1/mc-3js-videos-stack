@@ -48,6 +48,11 @@ test("skills get prints a guide, one reference by its name, and names the refere
   assert.equal(wrong.status, 2);
   assert.match(wrong.stderr, new RegExp(`references/${stem}\\.md`));
 
+  // a repo doc the guide routes to is a file to open, not a reference
+  const doc = run(["get", "core", "--ref", "render"]);
+  assert.equal(doc.status, 2);
+  assert.match(doc.stderr, /a repo file, not a reference: open packages\/live-studio\/RENDER\.md/);
+
   const missing = run(["get", "nope"]);
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /core/);

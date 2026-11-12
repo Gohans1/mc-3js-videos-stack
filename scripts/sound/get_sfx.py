@@ -179,7 +179,7 @@ if __name__ == "__main__":
         raise SystemExit
     if not (Path.cwd() / "src" / "scene.ts").exists():
         print(f"{Path.cwd()} is not a film (no src/scene.ts): cd films/<name> first, it fetches into the film's sound/sfx", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(2)
     OUT.mkdir(parents=True, exist_ok=True)
     known = json.loads(SOURCES.read_text(encoding="utf8")) if SOURCES.exists() else {}
     wanted = {k: (sid, keep, why, role) for k, (sid, keep, role, why) in SWEETENERS.items()} if sys.argv[1:2] == ["sweeteners"] else {k: (*v, None) for k, v in SFX.items()}

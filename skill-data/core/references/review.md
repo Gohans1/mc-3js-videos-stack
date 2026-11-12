@@ -5,11 +5,11 @@ Never guess. Nothing is done until you have seen the new frames or video. Aim at
 ## Which command for what
 
 ```bash
-bun run at 35.6                              # what plays at a heard second (also 00:35.633, or #N for a note)
+bun run at 35.6                              # what plays at a heard second (also 00:35.633, or '#3' for note 3, quoted)
 AT=12,30.5 bun run render stills             # frames, with the heard time and shot under each
 bun run sheet                                # every still, six to a picture
 bun run sheet renders/draft_video.mp4 shots  # the whole film at a glance: one frame from every shot
-bun run sheet renders/draft_video.mp4 cut 4  # a transition up close: 0.25 s before cut 4 to 0.35 s after
+bun run sheet renders/draft_video.mp4 cut 4  # a transition up close: 0.25 s before cut 4 to 0.35 s after, naming shot 4 and 5 and the fx
 bun run render clip                          # the draft video and renders/cuts.json
 bun run framecheck                           # black, one-frame flashes, jumps away from cuts, shimmer, freezes
 bun run jumps renders/draft_video.mp4        # frames far from their neighbours: a mob teleporting, an item snapping
