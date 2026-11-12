@@ -126,10 +126,16 @@ const misspelt = (obj, keys) =>
     return near ? [[k, near]] : [];
   });
 
-// Sound names: only when the lanes themselves parse, so a broken file is said once
+// A fault in the lanes must not hide the others (an AI fixes what it is shown and meets the rest a run later):
+// names are checked whenever the file parses; gains, keys and the end need rows of the right shape
+const soundBroken = found.find((p) => p.where === conf.soundTimeline);
+const soundParses = !soundBroken || !/not (valid )?JSON/.test(soundBroken.issue);
+if (soundBroken)
+  soundBroken.issue += `\n  gains, misspelt keys and sounds after the end are checked once these are fixed`;
+
 const sound = conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
 const lanesFile = sound && join(PROJECT, conf.soundTimeline);
-if (lanesFile && existsSync(lanesFile) && !found.some((p) => p.where === conf.soundTimeline)) {
+if (lanesFile && existsSync(lanesFile) && soundParses) {
   const lanes = JSON.parse(readFileSync(lanesFile, "utf8"));
   const names = sound.library().map((x) => x.name),
     known = new Set(names);
@@ -144,8 +150,9 @@ if (lanesFile && existsSync(lanesFile) && !found.some((p) => p.where === conf.so
   const missing = new Map(),
     used = new Set();
   for (const list of ["beds", "sfx"])
-    (lanes[list] ?? []).forEach((e, i) => {
-      for (const name of new Set([e.name, ...(e.try ?? [])])) {
+    (Array.isArray(lanes?.[list]) ? lanes[list] : []).forEach((e, i) => {
+      for (const name of new Set([e?.name, ...(Array.isArray(e?.try) ? e.try : [])])) {
+        if (typeof name !== "string") continue;
         used.add(name);
         if (!known.has(name)) missing.set(name, [...(missing.get(name) ?? []), `${list}[${i}]`]);
       }
@@ -164,7 +171,7 @@ if (lanesFile && existsSync(lanesFile) && !found.some((p) => p.where === conf.so
   });
   if (issues.length)
     issues.push(
-      `  ${missing.size} names. A sound lives in ${conf.sfx}/ (the film's own: bun run sfx:get fetches the CC0 ones it pins) or the vault; pick another: bun run find <words>`,
+      `  ${missing.size} name${missing.size === 1 ? "" : "s"}. A sound lives in ${conf.sfx}/ (the film's own: bun run sfx:get fetches the CC0 ones it pins) or the vault; pick another: bun run find <words>`,
     );
   // a name find printed but this film cannot hear: the vault itself is out of its reach, not the name wrong
   const vaults = findVaults(PROJECT, conf);
@@ -187,7 +194,7 @@ if (lanesFile && existsSync(lanesFile) && !found.some((p) => p.where === conf.so
 // voice edit and Speed/Freeze). A sound after the end is never heard; a gain far over the file's own level is allowed, said once
 const warnings = [];
 const lanesPath = conf.soundTimeline && join(PROJECT, conf.soundTimeline);
-if (lanesPath && existsSync(lanesPath) && !found.some((p) => p.where === conf.soundTimeline)) {
+if (lanesPath && existsSync(lanesPath) && !soundBroken) {
   const lanes = JSON.parse(readFileSync(lanesPath, "utf8"));
   for (const list of ["beds", "sfx"])
     (lanes[list] ?? []).forEach((e, i) => {

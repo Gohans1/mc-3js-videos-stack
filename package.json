@@ -51,7 +51,8 @@
     "listen": "bun packages/live-studio/wrong-place.mjs listen",
     "sheet": "bun packages/live-studio/wrong-place.mjs sheet",
     "jumps": "bun packages/live-studio/wrong-place.mjs jumps",
-    "framecheck": "bun packages/live-studio/wrong-place.mjs framecheck"
+    "framecheck": "bun packages/live-studio/wrong-place.mjs framecheck",
+    "deliver": "bun packages/live-studio/wrong-place.mjs deliver"
   },
   "devDependencies": {
     "fflate": "catalog:",

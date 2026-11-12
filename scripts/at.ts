@@ -276,8 +276,9 @@ and row that holds it: the shot, the camera keys, the narration word, the sounds
 the key rows moving, the open notes near it. Run inside the film.
   bun run at 35.6        or  bun run at 00:35.633  (mm:ss as notes print it)
   bun run at 35.6 --json   the same as data, every moving key row included
-  bun run at #52         a note's moment (its number or id, as bun run notes prints them), where it is heard now: a note
-                         keeps the second it was written at, and Speed or Freeze edits since move that moment
+  bun run at '#52'       a note's moment (its #number, quoted: a bare # starts a shell comment; or its id, as mw9jknxt),
+                         where it is heard now: a note keeps the second it was written at, and Speed or Freeze edits since
+                         move that moment. A plain 52 is a second, not a note
 Rows are named as their files keep them (scene or narration seconds); the seconds after them are heard.`;
 
 const isMain =
@@ -286,7 +287,7 @@ if (isMain) {
   const arg = cliArgs(HELP, ["--json"], 1).find((a) => a !== "--json");
   if (!arg) {
     console.error(
-      "which second? bun run at 35.6 (a note's, a line's or a fault's: bun run notes, voice:cues)",
+      "which second? bun run at 35.6 (a note's, a line's or a fault's: bun run notes, voice:cues). A note by its number: bun run at '#52', quoted, since a bare # starts a shell comment and reaches no command",
     );
     process.exit(2);
   }
@@ -350,7 +351,7 @@ if (isMain) {
   const shotsFile = c.shotsTimeline ?? "the shots timeline";
   for (const b of got.cuts)
     out.push(
-      `  ${b.now ? "in" : "near"} the ${b.fx} transition into shot ${b.row + 1}, scene ${fmt(b.from)}-${fmt(b.to)}: ${shotsFile} [${b.row}].transition`,
+      `  ${b.now ? "in" : "near"} the ${b.fx} transition into shot ${b.row + 1} (notes call it ${b.row}), scene ${fmt(b.from)}-${fmt(b.to)}: ${shotsFile} [${b.row}].transition`,
     );
   const anim = got.shot?.anim as Record<string, { fx: string; len?: number }> | undefined;
   if (anim && Object.keys(anim).length)
@@ -414,8 +415,16 @@ if (isMain) {
     out.push(
       `open notes within 3 s: ${got.notes.map((n) => `${n.id} at ${fmt(n.t)} "${String(n.text).slice(0, 40)}"`).join("; ")} (bun run notes <id>)`,
     );
-  console.log(out.join("\n"));
-  console.error(
+  // the cut a draft's sheet numbers (renders/cuts.json, heard seconds), when this second sits on one
+  const cutsFile = join(film, "renders/cuts.json");
+  const cutTimes: number[] = existsSync(cutsFile) ? jsonFile(cutsFile, film) : [];
+  const near = cutTimes.findIndex((s) => Math.abs(s - t) <= 0.3);
+  if (near >= 0)
+    out.push(
+      `cut ${near} at ${fmt(cutTimes[near]!)} heard, into the shot notes call ${near + 1}: bun run sheet renders/draft_video.mp4 cut ${near} shows it frame by frame`,
+    );
+  out.push(
     `next: look at it with the film's own list over it (AT=${t} LIST=1 bun run render stills), change the rows named, then bun run check`,
   );
+  console.log(out.join("\n"));
 }

@@ -405,6 +405,35 @@ test("assemble.ts builds full_voice.wav + per-take draggable Phrase Bricks, pres
   );
 });
 
+test("voice:gen --dry-run ends on the real command and what it spends, and sends nothing", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-dry-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "");
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "01", text: "Twelve chars" },
+        { id: "02", text: "Eight ch" },
+      ],
+    }),
+  );
+  const r = spawnSync(
+    "bun",
+    [fileURLToPath(new URL("../voice/gen.ts", import.meta.url)), "--dry-run", "01", "02"],
+    {
+      encoding: "utf8",
+      env: { ...process.env, LIVE_PROJECT: dir, ELEVENLABS_API_BASE: "http://127.0.0.1:9/v1" },
+    },
+  );
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(
+    r.stdout,
+    /next: bun run voice:gen 01 02 sends these 2 takes \(20 characters, billed by the character\)/,
+  );
+});
+
 test("tts classifies English smart punctuation as en, Vietnamese diacritics as vi, and gen.ts respects active/try .wav files", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "voice-lang-wav-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

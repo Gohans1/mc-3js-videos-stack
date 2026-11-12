@@ -125,4 +125,29 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.match(typo.stderr, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
   assert.match(typo.stderr, /⚠ lufs -3/);
   assert.match(typo.stderr, /⚠ drive \+99 dB/);
+
+  // one fault must not hide the others: an AI fixes what it is shown, runs check again and meets the next only then
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [],
+      sfx: [
+        { name: "door_slamm", at: 4, gain: 99 },
+        { name: "door_slam", at: -2, gain: 0 },
+      ],
+    }),
+  );
+  const many = check();
+  assert.equal(many.status, 1, many.stdout + many.stderr);
+  assert.match(many.stderr, /sfx\.1\.at|sfx\[1\]\.at/);
+  assert.match(many.stderr, /"door_slamm" \(sfx\[0\]\) is no sound the studio has/);
+  assert.match(many.stderr, /once these are fixed/);
+
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], sfx: [{ name: "door_slamm", at: 4, gain: 99 }] }),
+  );
+  const named = check();
+  assert.match(named.stderr, /"door_slamm" \(sfx\[0\]\) is no sound the studio has/);
+  assert.match(named.stdout + named.stderr, /⚠ sfx\[0\] "door_slamm" gain \+99 dB/);
 });

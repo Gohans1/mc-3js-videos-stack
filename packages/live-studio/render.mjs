@@ -237,6 +237,12 @@ if (ends) {
 for (const c of (env.CHECK ?? "").split(";").filter(Boolean)) {
   const [name, args = ""] = c.split(":");
   const [, from, to] = args.split(",").map((a) => (a.trim() === "" ? NaN : +a));
+  if (["motion", "seen", "touch"].includes(name.trim()) && from < 0) {
+    console.error(
+      `CHECK ${c}: from ${from} is before the film starts (0): CHECK=${name.trim()}:<target>,<from s>,<to s>, both in heard seconds`,
+    );
+    process.exit(2);
+  }
   if (["motion", "seen", "touch"].includes(name.trim()) && from >= to) {
     console.error(
       `CHECK ${c}: from ${from} must come before to ${to} (CHECK=${name.trim()}:<target>,<from s>,<to s>)`,
@@ -530,9 +536,10 @@ if (stillsWritten.length)
 if (!failed && chunks) {
   const all = Array.from({ length: chunks }, (_, i) => chunkFile(i));
   const missing = all.flatMap((f, i) => (existsSync(f) ? [] : [i]));
+  const folder = `renders/${CHUNKS.slice(RENDERS.length + 1).replaceAll("\\", "/")}`;
   if (missing.length)
     console.log(
-      `not joined into renders/${JOINED}: chunks ${missing.join(", ")} not rendered yet. bun run render ${what} renders them (the chunks already there are kept while the film is unchanged)`,
+      `not joined into renders/${JOINED}: ${missing.length === 1 ? `chunk ${missing[0]} is` : `chunks ${missing.join(", ")} are`} not in ${folder} (a CHUNKS run joins the chunks it draws with the ones already there, and a copied or fresh film has none).\nnext: CHUNKS=${missing.join(",")} bun run render ${what} draws just ${missing.length === 1 ? "that one" : "those"}; bun run render ${what} draws every chunk not current`,
     );
   else {
     writeFileSync(
@@ -559,6 +566,13 @@ if (!failed && chunks) {
       ],
       { stdio: "inherit" },
     );
+    // a CHUNKS run keeps the other chunks as they are, even those drawn before the film last changed
+    const old =
+      only && j.status === 0 ? all.flatMap((_, i) => (stamps[i] === stamp ? [] : [i])) : [];
+    if (old.length)
+      console.log(
+        `⚠ ${old.length === 1 ? `chunk ${old[0]} was` : `chunks ${old.join(", ")} were`} drawn before the film's last change and joined as ${old.length === 1 ? "it was" : "they were"}: CHUNKS=${old.join(",")} bun run render ${what} redraws ${old.length === 1 ? "it" : "them"} (bun run render ${what} redraws every chunk not current)`,
+      );
     console.log(
       j.status !== 0
         ? "ERROR join failed"

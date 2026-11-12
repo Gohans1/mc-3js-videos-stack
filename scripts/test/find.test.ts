@@ -126,10 +126,10 @@ test("--show gives one entry in full with a line to paste, and close ids for a w
   const out = await run(["--show", "dissolve"], vault, noJev);
   expect(out).toMatch(/"transition": \{"fx": "dissolve", "len": 0\.5\}/);
   expect(out).toMatch(/see it:/);
-  // asked right, nothing has that id: exit 1 on stderr, with the near ids
+  // an id nothing has is a wrong word and nothing was shown: exit 2 on stderr, with the near ids
   const miss = run(["--show", "disolve"], vault, noJev);
   await expect(miss).rejects.toMatchObject({
-    code: 1,
+    code: 2,
     message: expect.stringMatching(/Close: dissolve/),
   });
 });

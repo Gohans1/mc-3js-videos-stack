@@ -23,8 +23,15 @@ const DO = {
 };
 const ARG = { done: "what changed", ask: "your question", learned: "the rule, where you kept it" };
 if (DO[cmd] && key && what) {
+  let id;
   try {
-    console.log(await DO[cmd](resolveNote(project, key)));
+    id = resolveNote(project, key);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(2);
+  }
+  try {
+    console.log(await DO[cmd](id));
   } catch (e) {
     console.error(`${e.message}. The notes yours to answer: bun run notes`);
     process.exit(1);

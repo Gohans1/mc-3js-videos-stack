@@ -314,7 +314,13 @@ if (isMain) {
     process.exit(e.usage ? 2 : 1);
   });
   for (const r of results) console.log(r.id, r.out, JSON.stringify(r.info));
-  if (results.length && !process.argv.includes("--dry-run"))
+  if (results.length && process.argv.includes("--dry-run")) {
+    const real = process.argv.slice(2).filter((a) => a !== "--dry-run");
+    const chars = results.reduce((n, r) => n + ((r.info as { chars?: number }).chars ?? 0), 0);
+    console.log(
+      `next: bun run voice:gen${real.length ? ` ${real.join(" ")}` : ""} sends these ${results.length} ${process.argv.includes("--try") ? "tries" : "takes"} (${chars} characters, billed by the character)`,
+    );
+  } else if (results.length)
     console.log(
       process.argv.includes("--try")
         ? "next: hear the tries in the studio and keep one there (they are in voice/try), then bun run voice:assemble"

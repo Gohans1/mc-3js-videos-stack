@@ -609,12 +609,17 @@ function detail(x: Entry): string[] {
         ? `beds[]: {"name": "${x.id}", "from": 0, "to": ${num(x.secs) ?? 10}, "gain": 0, "fadeIn": 1, "fadeOut": 1}  (gain in dB; + "start", "duck", "pan"; a bed shorter than its span loops)`
         : `sfx[]: {"at": <scene seconds, not heard: bun run at <heard s> gives the scene second>, "name": "${x.id}", "gain": 0}  (gain in dB; + "rate", "pitch", "reverse", "fadeIn", "fadeOut")`,
     );
-    if (d.file)
+    if (d.file) {
+      // a vault file is kept relative to the repo root, a film's own to the film: say it from where find runs
+      const file = existsSync(d.file)
+        ? d.file
+        : relative(process.cwd(), join(ROOT, d.file)).replaceAll("\\", "/");
       out.push(
         Bun.which("earshot")
-          ? `hear it: earshot describe ${d.file}`
-          : `hear it: earshot describe ${d.file}  (earshot is not on PATH here: install it as the earshot skill's SKILL.md says, or play the file)`,
+          ? `hear it: earshot describe ${file}`
+          : `hear it: earshot describe ${file}  (earshot is not on PATH here: install it as the earshot skill's SKILL.md says, or play the file)`,
       );
+    }
   } else if (x.kind === "mocap") {
     const travel = d.travel,
       loop = d.loop;
@@ -744,7 +749,6 @@ function show(ids: string[], pool: Entry[]) {
         ].slice(0, 6);
         throw new FindError(
           `no entry has the id "${id}"${near.length ? `. Close: ${near.join(", ")}` : ""}. Ids are the second column of bun run find <words> (a film's own sounds show only from its folder).`,
-          1,
         );
       }
       const shared =

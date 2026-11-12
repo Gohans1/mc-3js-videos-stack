@@ -260,7 +260,7 @@ if (ids.length) {
     console.error(
       `no such note: ${unknown.join(", ")} (the ids: bun run notes, or --done for fixed ones too)`,
     );
-    process.exit(1);
+    process.exit(2);
   }
   const want = new Set(ids.map((id) => byKey.get(id)));
   pick = notes.filter((n) => want.has(n));

@@ -38,4 +38,9 @@ test("render refuses AT past the end and a backwards CHECK at once, saying the f
   const back = render({ AT: "4", CHECK: "motion:cam,6,5" });
   assert.equal(back.status, 2, back.stdout + back.stderr);
   assert.match(back.stderr, /CHECK motion:cam,6,5: from 6 must come before to 5/);
+
+  // the page crashed Chrome on a range before the film starts
+  const early = render({ AT: "4", CHECK: "motion:cam,-1,2" });
+  assert.equal(early.status, 2, early.stdout + early.stderr);
+  assert.match(early.stderr, /CHECK motion:cam,-1,2: from -1 is before the film starts \(0\)/);
 });
