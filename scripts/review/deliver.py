@@ -228,11 +228,12 @@ def youtube(video, span, root):
         else:
             spans.append([s, s])
     worst_up = max(before.values(), default=0.0)
-    print(f"bands (CAMBI, worst second): upload {worst_up:.1f}, after YouTube's re-encode {max(after.values(), default=0.0):.1f}; "
-          f"preview in renders/youtube_preview.mp4")
-    if worst_up >= BANDS:
-        print(f"  the upload itself scores {worst_up:.1f}: on Minecraft's flat tiles CAMBI also counts neighbouring tile colours as "
-              "bands, so judge by what the re-encode adds below")
+    gain = {s: v - before.get(s, 0.0) for s, v in after.items()}
+    at = max(gain, key=gain.get, default=None)
+    print(f"bands (Netflix CAMBI): what counts is what YouTube's re-encode adds to the upload, at most "
+          f"{gain.get(at, 0.0):+.1f} (second {at}); a viewer notices a gain of {ADDED:g} where it reaches {BANDS:g}. The upload "
+          f"alone scores up to {worst_up:.1f}: CAMBI counts the steps between flat Minecraft tiles too, so that is no fault by itself. "
+          "Preview: renders/youtube_preview.mp4")
     cuts_file = root / "renders/cuts.json"
     cuts = json.loads(cuts_file.read_text(encoding="utf8")) if cuts_file.exists() and video.parent == out else []
     for a, b in spans[:6]:
@@ -269,9 +270,12 @@ def main(args):
             m = re.fullmatch(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)", nxt)
             if m:
                 span = (float(m.group(1)), float(m.group(2)))
+                if span[0] >= span[1]:
+                    print(f"--youtube {nxt}: the first second must come before the second one, like --youtube 9-15", file=sys.stderr)
+                    return 2
                 i += 1
-            elif re.fullmatch(r"[\d.\-]+", nxt):
-                print(f"--youtube takes seconds as <from>-<to>, like --youtube 9-15; got {nxt}", file=sys.stderr)
+            elif nxt and not nxt.startswith("-") and not nxt.lower().endswith((".mp4", ".mov", ".mkv", ".webm")):
+                print(f"--youtube takes seconds as <from>-<to>, plain numbers, like --youtube 9-15; got {nxt}", file=sys.stderr)
                 return 2
         elif a.startswith("-"):
             print(f"unknown option {a}: {USAGE}", file=sys.stderr)
@@ -283,19 +287,27 @@ def main(args):
             return 2
         i += 1
     root = Path.cwd()
+    named = video is not None
     video = Path(video or "renders/final.mp4")
     if not video.is_file():
-        print(f"{video} does not exist: bun run render final, then bun run mix renders/final_video.mp4 makes renders/final.mp4",
-              file=sys.stderr)
+        here = sorted(p.as_posix() for p in Path("renders").glob("*.mp4")) if Path("renders").is_dir() else []
+        print(f"{video} does not exist"
+              + (f"; videos here: {', '.join(here)}" if named and here else
+                 ": bun run render final, then bun run mix renders/final_video.mp4 makes renders/final.mp4"), file=sys.stderr)
         return 1
     if not shutil.which("ffprobe"):
         print("no ffprobe on PATH: INSTALL.md says how to set up ffmpeg", file=sys.stderr)
         return 1
     try:
-        summary, found = check(video, probe(video))
+        info = probe(video)
     except SystemExit as e:
         print(e.code, file=sys.stderr)
         return 1
+    long = float(info["format"].get("duration") or 0)
+    if span and span[1] > long + 0.05:
+        print(f"--youtube {span[0]:g}-{span[1]:g} runs past the video's end: it is {long:.2f} s long", file=sys.stderr)
+        return 2
+    summary, found = check(video, info)
     print(summary)
     for kind, words in found:
         print(f"{kind} {words}")
