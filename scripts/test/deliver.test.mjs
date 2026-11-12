@@ -48,60 +48,48 @@ const make = (
 };
 const deliver = (...args) => spawnSync("python", [DELIVER, ...args], { encoding: "utf8" });
 
-test(
-  "a video made the way YouTube asks is ready, and the answer says what goes up",
-  { timeout: 60_000 },
-  (t) => {
-    const dir = mkdtempSync(join(tmpdir(), "deliver-"));
-    t.after(() => rmSync(dir, { recursive: true, force: true }));
-    const file = join(dir, "final.mp4");
-    make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
-    const r = deliver(file);
-    assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /2560x1440 30 fps H\.264 High/);
-    assert.match(r.stdout, /ready to upload/);
-    assert.doesNotMatch(r.stdout, /FIX/);
-  },
-);
+test("a video made the way YouTube asks is ready, and the answer says what goes up", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final.mp4");
+  make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
+  const r = deliver(file);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /2560x1440 30 fps H\.264 High/);
+  assert.match(r.stdout, /ready to upload/);
+  assert.doesNotMatch(r.stdout, /FIX/);
+});
 
-test(
-  "each way a file can fail the upload spec is named with the command or setting that fixes it",
-  { timeout: 60_000 },
-  (t) => {
-    const dir = mkdtempSync(join(tmpdir(), "deliver-"));
-    t.after(() => rmSync(dir, { recursive: true, force: true }));
-    const file = join(dir, "bad.mp4");
-    make(file, {
-      size: "1280x720",
-      audio: ["-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-ac", "1"],
-      extra: ["-af", "volume=-12dB"],
-    });
-    const r = deliver(file);
-    assert.equal(r.status, 1, r.stdout + r.stderr);
-    const fix = r.stdout.split("\n").filter((l) => l.startsWith("FIX"));
-    for (const what of [/moov/, /edit list/, /mono/, /quieter/])
-      assert.ok(
-        fix.some((l) => what.test(l)),
-        `${what} in:\n${r.stdout}`,
-      );
-    assert.match(r.stdout, /720p/);
-    assert.match(r.stdout, /bun run render final/);
-  },
-);
+test("each way a file can fail the upload spec is named with the command or setting that fixes it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "bad.mp4");
+  make(file, {
+    size: "1280x720",
+    audio: ["-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-ac", "1"],
+    extra: ["-af", "volume=-12dB"],
+  });
+  const r = deliver(file);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  const fix = r.stdout.split("\n").filter((l) => l.startsWith("FIX"));
+  for (const what of [/moov/, /edit list/, /mono/, /quieter/])
+    assert.ok(
+      fix.some((l) => what.test(l)),
+      `${what} in:\n${r.stdout}`,
+    );
+  assert.match(r.stdout, /720p/);
+  assert.match(r.stdout, /bun run render final/);
+});
 
-test(
-  "a picture with no soundtrack is sent to the mix that puts one on it",
-  { timeout: 60_000 },
-  (t) => {
-    const dir = mkdtempSync(join(tmpdir(), "deliver-"));
-    t.after(() => rmSync(dir, { recursive: true, force: true }));
-    const file = join(dir, "final_video.mp4");
-    make(file, { audio: null, extra: ["-movflags", "+faststart"] });
-    const r = deliver(file);
-    assert.equal(r.status, 1);
-    assert.match(r.stdout, /FIX.*no sound.*bun run mix/);
-  },
-);
+test("a picture with no soundtrack is sent to the mix that puts one on it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final_video.mp4");
+  make(file, { audio: null, extra: ["-movflags", "+faststart"] });
+  const r = deliver(file);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /FIX.*no sound.*bun run mix/);
+});
 
 test("a wrong word or a missing file stops before any work, saying what it takes", () => {
   assert.equal(deliver("--nope").status, 2);

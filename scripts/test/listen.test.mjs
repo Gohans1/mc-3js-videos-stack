@@ -174,3 +174,34 @@ test("a stretch louder than the narration says whether the voice was speaking un
     ],
   );
 });
+
+test("a sound that cancels itself when a phone plays the mix in one speaker is named with its seconds, a wide one is not", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const voice = join(dir, "voice.wav"),
+    rest = join(dir, "rest.wav");
+  // the narration sits in the middle 1-3 s; the bed is wide all along (each side its own), and 4-6 s one side is the other upside down
+  tone(voice, "0.1*sin(2*PI*1000*t)*between(t\\,1\\,3)|0.1*sin(2*PI*1000*t)*between(t\\,1\\,3)");
+  tone(
+    rest,
+    "0.05*sin(2*PI*300*t)+0.1*sin(2*PI*500*t)*between(t\\,4\\,6)|0.05*sin(2*PI*310*t)-0.1*sin(2*PI*500*t)*between(t\\,4\\,6)",
+  );
+  const r = spawnSync(
+    "python",
+    [
+      "-c",
+      `import json, sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import mono; print(json.dumps(mono(sys.argv[1], sys.argv[2])))`,
+      voice,
+      rest,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  const got = JSON.parse(r.stdout);
+  assert.deepEqual(
+    got.stretches.map((s) => [s.stem, Math.round(s.from), Math.round(s.to)]),
+    [["rest", 4, 6]],
+  );
+  assert.ok(got.stretches[0].loss > 6);
+  assert.ok(Math.abs(got.voice) < 0.5, `the voice keeps its level: ${got.voice}`);
+});

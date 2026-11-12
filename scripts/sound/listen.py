@@ -2,7 +2,7 @@
 stems the film's own mix graph renders (scripts/sound/mix.py, before the master limiter): the narration alone, and every
 bed and sound effect without it. Run inside the film.
   bun run listen               where the voice is buried, sounds louder than the narration, level jumps at cuts, dead
-                               air, an abrupt end; each with the second (bun run at <second> names the rows to change)
+                               air, an abrupt end, a sound that cancels in one speaker (mono); each with the second (bun run at <second> names the rows to change)
   bun run listen --sheet       also renders/listen_sheet.png, about 2 minutes more (earshot sheet: spectrogram, loudness, events, cuts,
                                the draft video's frames), a picture of the soundtrack to look at
   bun run listen --at 35.2     the 2 s either side of one heard second, half a second at a time: the voice, the rest, what
@@ -169,6 +169,32 @@ def analyse(voice_wav, rest_wav, cuts=(), hits=()):
             "curve": [(round(t, 2), round(v, 1), round(r, 1)) for (t, v), (_, r) in zip(voice, rest)]}
 
 
+MONO_LOST = {"voice": 1.5, "rest": 6.0}  # dB a stem may lose folded to one speaker: wide but unrelated sides lose 3 dB, fine
+
+
+def mono(voice_wav, rest_wav):
+    """Each stem folded to one speaker (a phone, a laptop, a TV in mono: left and right summed), against itself in stereo.
+    A side that is the other upside down cancels; the stretches where a heard stem loses more than MONO_LOST, every 0.1 s."""
+    out = {"stretches": []}
+    with tempfile.TemporaryDirectory(prefix="mono-") as tmp:
+        for stem, wav in (("voice", voice_wav), ("rest", rest_wav)):
+            folded = Path(tmp) / f"{stem}.wav"
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(wav), "-af", "pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1",
+                            str(folded)], check=True, timeout=600)
+            wide, one = momentary(wav), dict(momentary(folded))
+            heard = [(t, m, one.get(t, FLOOR)) for t, m in wide if m > -50]
+            out[stem] = round(power_mean([m for _, m, _ in heard]) - power_mean([f for _, _, f in heard]), 1) if heard else 0.0
+            for t, m, f in heard:
+                if m - f <= MONO_LOST[stem]:
+                    continue
+                last = out["stretches"][-1] if out["stretches"] else None
+                if last and last["stem"] == stem and t - last["to"] <= 0.5:
+                    last["to"], last["loss"] = round(t, 2), max(last["loss"], round(m - f, 1))
+                else:
+                    out["stretches"].append({"stem": stem, "from": round(t - 0.4, 2), "to": round(t, 2), "loss": round(m - f, 1)})
+    return out
+
+
 def stems(folder):
     """The narration alone and the rest, through the film's own graph (mix.py build), before the master limiter."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -287,6 +313,7 @@ def main(args):
         cuts_file = root / "renders/cuts.json"
         cuts = json.loads(cuts_file.read_text(encoding="utf8")) if cuts_file.exists() else []
         got = analyse(voice, rest, cuts, hits)
+        folded = mono(voice, rest) if at is None else None
         sheet = None
         if "--sheet" in args:
             earshot = shutil.which("earshot")
@@ -342,6 +369,18 @@ def main(args):
         print(f"near silence {d['from']:.2f}-{d['to']:.2f} (30 LU under the mix): dead air, unless meant")
     if got["abrupt_end"]:
         print("abrupt end: the sound is still loud in the last 0.3 s; fade the beds out before the end")
+    for s in folded["stretches"][:5]:
+        rows = at_rows((s["from"] + s["to"]) / 2)
+        print(f"MONO {s['from']:.2f}-{s['to']:.2f}: {'the narration' if s['stem'] == 'voice' else 'the rest'} loses {s['loss']:.1f} dB "
+              "in one speaker (a phone, a laptop): its sides cancel. Usually a stereowiden/extrastereo filter on a row (audio.json "
+              "filters) or a recording with a flipped side: drop the widening or swap the sound; a rest driven far over 0 dBFS (the "
+              "mix line above near 0 LUFS) does it too: lower the gains"
+              f"{' (playing: ' + ', '.join(rows) + ')' if rows else ''}")
+    if len(folded["stretches"]) > 5:
+        print(f"  and {len(folded['stretches']) - 5} more")
+    if not folded["stretches"]:
+        print(f"mono (one speaker, as a phone plays it): the narration {-folded['voice']:+.1f} dB, the rest {-folded['rest']:+.1f} dB, "
+              "nothing cancels")
     if sheet:
         print(f"sheet: {sheet.relative_to(root).as_posix()} (open it to look; its LUFS and peaks are the stems before the master "
               "limiter and the loudness pass, so they run hotter than the upload: bun run mix prints the upload's)")
