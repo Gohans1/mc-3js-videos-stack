@@ -1,13 +1,17 @@
 # mc-3js-videos-stack
 
-Kho làm phim Minecraft bằng Three.js cho YouTube; mã chung ở packages/, mỗi phim trong films/.
+Phim Minecraft dựng bằng Three.js: mã chung ở packages/, phim ở films/, mẫu ở templates/film/.
 
 ## Bắt đầu
 
-Chạy bun install ở root, khai kho tài nguyên trong vault.json rồi bun run link; hướng dẫn tải nằm trong INSTALL.md. Tạo phim bằng bun run new-film <tên>, mở studio bằng bun run studio trong phim.
+Cài theo [INSTALL.md](INSTALL.md); tạo phim bằng bun run new-film <tên> [cổng].
 
-## Tìm công cụ
+Đọc [AGENTS.md](AGENTS.md) và [cách dùng Studio](packages/live-studio/docs/film-contract.md).
 
-AGENTS.md root và từng thư mục là bản đồ công cụ; luật làm phim ở .claude/skills/gohans-3js-videos-skills. [Live Studio](packages/live-studio/README.md) chỉnh timeline, âm thanh, Text, transition và màu; trạng thái từng tính năng ở [CapCut parity](packages/live-studio/docs/capcut-parity.md).
+Chạy bun run studio trong phim; kiểm hình, tiếng và mở ảnh render trước khi báo xong.
 
-File Mojang, rig và clip Mixamo nằm trong kho ngoài repo, nối vào phim và không commit.
+## Nguồn
+
+[Skill làm phim](.claude/skills/gohans-3js-videos-skills/SKILL.md) giữ gu và luật chung; AGENTS.md chỉ đường.
+
+Tài nguyên tách kho nhẹ trong repo khỏi kho nặng theo vault.json.
