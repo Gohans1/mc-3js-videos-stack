@@ -7,6 +7,13 @@ import { cliArgs } from "./src/cli.mjs";
 /** @type {[string, Record<string, string>][]} */
 const GROUPS = [
   [
+    "Start here",
+    {
+      skills:
+        "the guides for an AI agent, matched to these commands: bun run skills get core first",
+    },
+  ],
+  [
     "Make the film",
     {
       studio: "the live studio: preview, timeline, notes (bun run studio, then open the link)",

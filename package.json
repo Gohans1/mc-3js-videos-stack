@@ -23,6 +23,7 @@
   "type": "module",
   "scripts": {
     "help": "bun packages/live-studio/help.mjs",
+    "skills": "bun packages/live-studio/skills.mjs",
     "setup:vault": "bun scripts/setup_vault.mjs",
     "setup:sound": "bun scripts/build_sound_vault.mjs",
     "setup:mc-sound": "bun scripts/build_mc_sound_vault.mjs",

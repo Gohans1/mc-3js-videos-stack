@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "help": "bun node_modules/live-studio/help.mjs",
+    "skills": "bun ../../packages/live-studio/skills.mjs",
     "find": "bun ../../scripts/find.ts",
     "postinstall": "bun ../../packages/mc-assets/vendor.mjs",
     "studio": "bun node_modules/live-studio/src/live.mjs __PORT__",
