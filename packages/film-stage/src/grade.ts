@@ -323,7 +323,12 @@ export function makeAdjustments(composer: EffectComposer, camera: Camera) {
     passes.forEach((pass) => {
       pass.renderToScreen = false;
     });
-    passes.findLast((pass) => pass.enabled)!.renderToScreen = true;
+    const screen = passes.findLast((pass) => pass.enabled)!;
+    screen.renderToScreen = true;
+    // The 8-bit picture bands smooth light (CAMBI ~20 on a lit floor) unless the screen pass dithers; a setter recompiles
+    for (const pass of passes)
+      if (pass instanceof EffectPass && pass.dithering !== (pass === screen))
+        pass.dithering = pass === screen;
   };
   apply.prepare = prepare;
   apply.dispose = () => {

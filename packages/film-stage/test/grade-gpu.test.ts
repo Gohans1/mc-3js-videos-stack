@@ -10,9 +10,9 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(() => page?.close());
 
-const shot = async (picture: string, basic: Record<string, number> = {}) => {
+const shot = async (picture: string, basic: Record<string, number> = {}, film = false) => {
   const r = await page.run<{ w: number; h: number; rgb: string }>(
-    `grade(${JSON.stringify(picture)}, ${JSON.stringify(basic)})`,
+    `grade(${JSON.stringify(picture)}, ${JSON.stringify(basic)}, ${film})`,
   );
   const px = Buffer.from(r.rgb, "base64");
   const at = (x: number, y: number) => [...px.subarray((y * r.w + x) * 3, (y * r.w + x) * 3 + 3)];
@@ -80,4 +80,16 @@ test("Smooth dither stays a level or two in the dark, where banding shows, inste
   const g = (await shot("dark", { dither: 100 })).box(400, 200, 460, 260).map((p) => p[1]!);
   expect(Math.max(...g) - Math.min(...g)).toBeGreaterThan(1);
   expect(Math.max(...g.map((v) => Math.abs(v - 13)))).toBeLessThanOrEqual(2);
+});
+
+test("A film's picture leaves the GPU without bands: a ramp finer than 8 bits keeps its in-between levels", async () => {
+  for (const basic of [{}, { vignette: 1 }]) {
+    const s = await shot("ramp", basic, true);
+    for (let x = 30; x < 900; x += 29) {
+      const level = 100 + (4 * x) / s.w,
+        g = s.box(x, 200, x + 1, 340).map((p) => p[1]!);
+      expect(Math.abs(g.reduce((sum, v) => sum + v, 0) / g.length - level)).toBeLessThan(0.2);
+      expect(Math.max(...g.map((v) => Math.abs(v - level)))).toBeLessThan(1.5);
+    }
+  }
 });
