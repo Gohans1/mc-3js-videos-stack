@@ -137,7 +137,7 @@ if (isMain) {
     console.error(
       made
         ? "no narration lines on the film yet, but voice/takes has audio: bun run voice:assemble lays them on it"
-        : "no narration lines yet: bun run voice:gen --dry-run (what it would make), then voice:gen, then voice:assemble",
+        : "no narration lines yet: bun run voice:gen (what it would make), then voice:gen --yes, then voice:assemble",
     );
   }
   if (process.argv.includes("--json")) {

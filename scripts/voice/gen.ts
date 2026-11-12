@@ -17,12 +17,13 @@ import { assertInsideDir } from "../../packages/live-studio/src/voice-map.mjs";
 import { sts, tts } from "./genvoice.ts";
 
 const HELP = `Narration takes for the lines in src/edit.json "takes", from ElevenLabs (via genvoice.pro unless ELEVENLABS_API_KEY
-is set). Run inside the film. Every run without --dry-run spends voice credits.
-  bun run voice:gen               every take with no audio yet in voice/takes
+is set). Run inside the film. Credits are spent only with --yes; without it every run only previews.
+  bun run voice:gen               every take with no audio yet in voice/takes: what it would write and spend
   bun run voice:gen ID [ID ...]   those takes again, replacing their audio
   --try ID [ID ...] [--takes N]   new tries of those takes (N each, 1-20) into voice/try/<id>_<n>.mp3, the takes kept
   --guide FILE        speech-to-speech from this recording (exactly one ID; take.guide sets it per take)
-  --dry-run           print what would be generated (ids, characters, voice) and send nothing
+  --yes               send them: spends credits, billed by the character (the preview's next line has the command)
+  --dry-run           preview only, even with --yes
 Takes of one voice go in story order so neighbours share prosody (previous/next text, request ids).
 Next: bun run voice:assemble lays the takes onto the film, then bun run voice:cues gives their heard seconds.`;
 
@@ -92,6 +93,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
 
   let trying = false,
     dryRun = false,
+    confirmed = false,
     takesCount = 1,
     cliGuide: string | undefined;
   const names: string[] = [];
@@ -99,6 +101,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
     const a = args[i];
     if (a === "--try") trying = true;
     else if (a === "--dry-run") dryRun = true;
+    else if (a === "--yes") confirmed = true;
     else if (a === "--takes") {
       const rawTakes = args[++i] ?? "";
       if (!/^[1-9]\d*$/.test(rawTakes) || Number(rawTakes) > 20) {
@@ -121,7 +124,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   // tries spend credits on takes that already have audio: only ever for takes named (a bare --try once tried them all)
   if (trying && !names.length) {
     throw usage(
-      "--try needs the takes to try, by id: bun run voice:gen --try 01 03 (--dry-run first)",
+      "--try needs the takes to try, by id: bun run voice:gen --try 01 03 (previews; --yes sends)",
     );
   }
   if (cliGuide && names.length !== 1) {
@@ -178,16 +181,22 @@ export const runGen = async (opts: GenRunOptions = {}) => {
       throw new Error(`Guide audio file not found inside film directory: "${guideRel}"`);
     }
   }
-  if (dryRun)
+  // spending needs --yes (no one is at a prompt to ask); without it, or with --dry-run, the run only says what it would do
+  if (dryRun || !confirmed) {
+    const rel = (p: string) => relative(filmDir, p).replaceAll("\\", "/");
     return ordered
       .filter((t) => wantSet.has(t.id))
-      .flatMap((t) =>
-        Array.from({ length: trying ? takesCount : 1 }, () => ({
+      .flatMap((t) => {
+        const first = trying ? Number(/_(\d+)\.mp3$/.exec(nextTryOut(tryDir, t.id))![1]) : 0;
+        return Array.from({ length: trying ? takesCount : 1 }, (_, k) => ({
           id: t.id,
-          out: "(dry run: nothing sent)",
+          out: trying
+            ? `would write voice/try/${t.id}_${first + k}.mp3`
+            : `would write ${rel(join(takesDir, `${t.id}.mp3`))}${hasTakeAudio(takesDir, t.id) ? ", replacing its audio" : ""}`,
           info: { chars: t.text.length, voice: t.voice ?? DEFAULT_NARRATOR },
-        })),
-      );
+        }));
+      });
+  }
 
   const reqFile = assertInsideDir(filmDir, join(takesDir, ".request_ids.json"), "Request IDs file");
   const reqIds: Record<string, string | StoredRequestId> = existsSync(reqFile)
@@ -307,18 +316,26 @@ export const runGen = async (opts: GenRunOptions = {}) => {
 const isMain =
   process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 if (isMain) {
-  cliArgs(HELP, ["--try", "--takes N", "--guide FILE", "--dry-run"]);
+  cliArgs(HELP, ["--try", "--takes N", "--guide FILE", "--dry-run", "--yes"]);
   const film = needFilm(process.env.LIVE_PROJECT);
   const results = await runGen({ cwd: film }).catch((e: Error & { usage?: boolean }) => {
     console.error(e.message);
     process.exit(e.usage ? 2 : 1);
   });
   for (const r of results) console.log(r.id, r.out, JSON.stringify(r.info));
-  if (results.length && process.argv.includes("--dry-run")) {
-    const real = process.argv.slice(2).filter((a) => a !== "--dry-run");
+  const sent = process.argv.includes("--yes") && !process.argv.includes("--dry-run");
+  if (results.length && !sent) {
+    const real = [
+      ...process.argv.slice(2).filter((a) => a !== "--dry-run" && a !== "--yes"),
+      "--yes",
+    ];
     const chars = results.reduce((n, r) => n + ((r.info as { chars?: number }).chars ?? 0), 0);
+    const what =
+      results.length === 1
+        ? `this ${process.argv.includes("--try") ? "try" : "take"}`
+        : `these ${results.length} ${process.argv.includes("--try") ? "tries" : "takes"}`;
     console.log(
-      `next: bun run voice:gen${real.length ? ` ${real.join(" ")}` : ""} sends these ${results.length} ${process.argv.includes("--try") ? "tries" : "takes"} (${chars} characters, billed by the character)`,
+      `nothing sent.\nnext: bun run voice:gen ${real.join(" ")} sends ${what} (${chars} characters, billed by the character)`,
     );
   } else if (results.length)
     console.log(
@@ -331,7 +348,7 @@ if (isMain) {
       (jsonFile(join(film, "src/edit.json"), film) as { takes?: { id: string }[] }).takes ?? []
     ).map((t) => t.id);
     console.log(
-      `nothing to generate: every take in src/edit.json has audio in voice/takes. Redo some: bun run voice:gen --dry-run ${ids[0] ?? "ID"} first (the ids: ${ids.join(", ") || "none yet"}); new tries beside them: --try ID`,
+      `nothing to generate: every take in src/edit.json has audio in voice/takes. Redo some: bun run voice:gen ${ids[0] ?? "ID"} previews it (the ids: ${ids.join(", ") || "none yet"}); new tries beside them: --try ID`,
     );
   }
 }

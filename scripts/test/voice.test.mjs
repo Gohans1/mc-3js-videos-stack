@@ -189,7 +189,7 @@ test("gen.ts runs takes sequentially per voice with neighbor context, request-id
 
   await runGen({
     cwd: dir,
-    args: [],
+    args: ["--yes"],
     env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
   });
 
@@ -206,7 +206,7 @@ test("gen.ts runs takes sequentially per voice with neighbor context, request-id
   calls.length = 0;
   await runGen({
     cwd: dir,
-    args: ["02", "--try", "--takes", "2"],
+    args: ["--yes", "02", "--try", "--takes", "2"],
     env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
   });
   assert.equal(calls.length, 2);
@@ -405,6 +405,54 @@ test("assemble.ts builds full_voice.wav + per-take draggable Phrase Bricks, pres
   );
 });
 
+// a blind probe once spent credits with a bare voice:gen ID: without --yes it only previews (Vercel CLI guidelines: money
+// needs --yes when nobody is at a prompt), and the preview's next line is the command that spends
+test("voice:gen without --yes previews what it would write and spend, sends nothing, and names the command that sends", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-yes-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "");
+  writeFileSync(join(dir, "voice/takes/02.mp3"), "old");
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "01", text: "Twelve chars" },
+        { id: "02", text: "Eight ch" },
+      ],
+    }),
+  );
+  // a request would fail on this closed port: exit 0 proves nothing was sent
+  const gen = (...args) =>
+    spawnSync("bun", [fileURLToPath(new URL("../voice/gen.ts", import.meta.url)), ...args], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        LIVE_PROJECT: dir,
+        ELEVENLABS_API_KEY: "el_test",
+        ELEVENLABS_API_BASE: "http://127.0.0.1:9/v1",
+      },
+    });
+  const bare = gen("01", "02");
+  assert.equal(bare.status, 0, bare.stdout + bare.stderr);
+  assert.match(bare.stdout, /01 would write voice\/takes\/01\.mp3/);
+  assert.match(bare.stdout, /02 would write voice\/takes\/02\.mp3, replacing its audio/);
+  assert.match(
+    bare.stdout,
+    /next: bun run voice:gen 01 02 --yes sends these 2 takes \(20 characters, billed by the character\)/,
+  );
+  assert.equal(readFileSync(join(dir, "voice/takes/02.mp3"), "utf8"), "old");
+
+  // --dry-run wins over --yes
+  const both = gen("--dry-run", "01", "--yes");
+  assert.equal(both.status, 0, both.stdout + both.stderr);
+  assert.match(both.stdout, /next: bun run voice:gen 01 --yes sends this take \(12 characters/);
+
+  // with --yes it sends: the closed port fails the request
+  assert.equal(gen("01", "--yes").status, 1);
+});
+
 test("voice:gen --dry-run ends on the real command and what it spends, and sends nothing", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "voice-dry-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -430,7 +478,7 @@ test("voice:gen --dry-run ends on the real command and what it spends, and sends
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(
     r.stdout,
-    /next: bun run voice:gen 01 02 sends these 2 takes \(20 characters, billed by the character\)/,
+    /next: bun run voice:gen 01 02 --yes sends these 2 takes \(20 characters, billed by the character\)/,
   );
 });
 
@@ -494,7 +542,7 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   seenLangs.length = 0;
   const generated = await runGen({
     cwd: dir,
-    args: [],
+    args: ["--yes"],
     env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
   });
   assert.deepEqual(
@@ -506,7 +554,7 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
 
   const tried = await runGen({
     cwd: dir,
-    args: ["01", "--try"],
+    args: ["--yes", "01", "--try"],
     env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
   });
   assert.equal(tried.length, 1);
@@ -517,7 +565,7 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: ["02", "99_typo"],
+      args: ["--yes", "02", "99_typo"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /Unknown take id "99_typo"/,
@@ -528,7 +576,7 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: ["--try"],
+      args: ["--yes", "--try"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /--try needs the takes to try/,
@@ -542,7 +590,7 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   );
   await runGen({
     cwd: dir,
-    args: ["02"],
+    args: ["--yes", "02"],
     env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
   });
   assert.equal(
@@ -649,7 +697,7 @@ test("alignmentToWords strips ElevenLabs [audio tags], gen.ts --guide requires o
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: ["--guide", "guide.wav"],
+      args: ["--yes", "--guide", "guide.wav"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /--guide requires exactly one explicit take id/,
@@ -745,7 +793,7 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
 
   await runGen({
     cwd: dir,
-    args: ["02"],
+    args: ["--yes", "02"],
     env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
   });
   assert.equal(payloads.length, 1);
@@ -780,7 +828,7 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: ["01", "--guide"],
+      args: ["--yes", "01", "--guide"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /--guide requires a path/,
@@ -788,7 +836,7 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: ["--guide", "--try", "01"],
+      args: ["--yes", "--guide", "--try", "01"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /--guide requires a path/,
@@ -796,7 +844,7 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: ["01", "--guide", "missing_guide.wav"],
+      args: ["--yes", "01", "--guide", "missing_guide.wav"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /Guide audio file not found/,
@@ -810,7 +858,7 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: [],
+      args: ["--yes"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /Invalid take id/,
@@ -827,7 +875,7 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: [],
+      args: ["--yes"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /Duplicate take id/,
@@ -924,7 +972,7 @@ test("genvoice, gen, assemble, and mix.py enforce remote URL, --takes integer, a
     await assert.rejects(
       runGen({
         cwd: dir,
-        args: ["--try", "--takes", badTakes],
+        args: ["--yes", "--try", "--takes", badTakes],
         env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: "http://127.0.0.1:9" },
       }),
       /--takes requires an integer between 1 and 20/,
@@ -1143,7 +1191,7 @@ test("runGen rejects junction-escaped voice/takes directories before calling TTS
   await assert.rejects(
     runGen({
       cwd: dir,
-      args: [],
+      args: ["--yes"],
       env: { ELEVENLABS_API_KEY: "el_test", ELEVENLABS_API_BASE: `${baseUrl}/v1` },
     }),
     /inside|escapes|symlink/i,

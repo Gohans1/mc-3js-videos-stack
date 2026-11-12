@@ -96,15 +96,15 @@ bun run deliver --youtube 9-15               # how those seconds look after YouT
 
 ## Costly or one-way
 
-| Command                        | Cost                                     | Do this                                                                   |
-| ------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
-| `bun run voice:gen`            | Voice credits on every run               | `--dry-run` first; regenerate only the takes to fix (`ID`, or `--try ID`) |
-| `bun run find --jev`           | Under $0.01 a search                     | Words first; they are free and offline                                    |
-| `bun run render final`         | Minutes per 30 s, loud GPU               | Only when the creator asks; `CHUNKS=` re-renders one stretch              |
-| `bun run deliver --youtube`    | About 3x the film's length               | Name the seconds: `--youtube 9-15`                                        |
-| `bun run note done`            | The creator reviews what you call fixed  | Only after you have seen the fix                                          |
-| `notes/notes.jsonl`            | The creator's notes                      | Never edit by hand; only through `bun run note`                           |
-| Trying commands on a real film | Can change the creator's notes and files | Try on a copy of the film (`references/film.md`), delete it after         |
+| Command                        | Cost                                     | Do this                                                                               |
+| ------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| `bun run voice:gen --yes`      | Voice credits, by the character          | Run it bare first (a preview); regenerate only the takes to fix (`ID`, or `--try ID`) |
+| `bun run find --jev`           | Under $0.01 a search                     | Words first; they are free and offline                                                |
+| `bun run render final`         | Minutes per 30 s, loud GPU               | Only when the creator asks; `CHUNKS=` re-renders one stretch                          |
+| `bun run deliver --youtube`    | About 3x the film's length               | Name the seconds: `--youtube 9-15`                                                    |
+| `bun run note done`            | The creator reviews what you call fixed  | Only after you have seen the fix                                                      |
+| `notes/notes.jsonl`            | The creator's notes                      | Never edit by hand; only through `bun run note`                                       |
+| Trying commands on a real film | Can change the creator's notes and files | Try on a copy of the film (`references/film.md`), delete it after                     |
 
 ## Troubleshooting
 
