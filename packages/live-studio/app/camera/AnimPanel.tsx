@@ -416,8 +416,8 @@ export function AnimPanel() {
   if (!anims()) {
     return (
       <EmptyCard className="mx-3 mt-2" title="This film draws no shot animations yet">
-        Add film-stage/animate to its draw and set draw.anims (docs/film-contract.md), or ask the AI
-        in a note.
+        Add film-stage/animate to its draw and set draw.anims (bun run skills get core --ref
+        contract), or ask the AI in a note.
       </EmptyCard>
     );
   }

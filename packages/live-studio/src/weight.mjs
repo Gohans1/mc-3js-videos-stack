@@ -19,6 +19,6 @@ export const weighFirstVisit = (files) => {
     names: big.map(([p]) => p).join(" "),
     text:
       `a first visit from a phone or over Tailscale downloads ${mb(total)}, over the ${mb(BUDGET)} budget. ` +
-      `Biggest: ${big.map(([p, b]) => `${p} ${mb(b)}`).join(", ")}. Load only what the page needs from them (docs/film-contract.md, "Load weight")`,
+      `Biggest: ${big.map(([p, b]) => `${p} ${mb(b)}`).join(", ")}. Load only what the page needs from them`,
   };
 };

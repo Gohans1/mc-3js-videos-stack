@@ -6,7 +6,7 @@ Phim Minecraft dựng bằng Three.js: mã chung ở packages/, phim ở films/,
 
 Cài theo [INSTALL.md](INSTALL.md); tạo phim bằng bun run new-film <tên> [cổng].
 
-Đọc [AGENTS.md](AGENTS.md) và [cách dùng Studio](packages/live-studio/docs/film-contract.md).
+Đọc [AGENTS.md](AGENTS.md); cách dùng Studio: bun run skills get core (hợp đồng phim: --ref contract).
 
 Chạy bun run studio trong phim; kiểm hình, tiếng và mở ảnh render trước khi báo xong.
 

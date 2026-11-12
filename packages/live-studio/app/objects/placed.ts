@@ -73,7 +73,9 @@ export const titleOf = (what: string) => what.split(":").at(-1)!.replaceAll("_",
 const edit = (change: (d: Placed) => void) => {
   const f = fileOf();
   if (f < 0) {
-    say("This film can't take objects yet: it needs a placed key file (docs/film-contract.md)");
+    say(
+      "This film can't take objects yet: it needs a placed key file (bun run skills get core --ref contract)",
+    );
     return false;
   }
   files[f].doc.edit((d) => change(d as Placed));

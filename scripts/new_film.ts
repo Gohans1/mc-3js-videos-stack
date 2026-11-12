@@ -23,7 +23,7 @@ const HELP = `A new film from templates/film, from the repo root: copies the tem
 (package.json link and scripts, bun install), links the vault into it and builds its empty picks zip.
   bun run new-film <name> [studio port]     name: lowercase-with-dashes; port: the studio's (default one above the films' highest)
 Example: bun run new-film cave-escape 47920
-Then: cd films/<name> && bun run studio. The film's data rules: packages/live-studio/docs/film-contract.md.`;
+Then: cd films/<name> && bun run studio. The film's data rules: bun run skills get core --ref contract.`;
 const [name, portArg] = cliArgs(HELP, [], 2);
 if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
   console.error(

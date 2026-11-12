@@ -32,7 +32,7 @@ import {
 // models (block-model-renderer) plus the shared props (mc-assets/pack) and this film's picks (pack/picks.json); Steve is
 // MCprep's rig (mc-actor/player.ts) acting from src/timeline/steve.json (mc-actor/perform.ts, feet.ts); the camera follows
 // src/timeline/cam.json (film-stage/camera.ts). draw(t) draws any moment straight away (the studio's film contract:
-// node_modules/live-studio/docs/film-contract.md). Mojang files come through assets/public links into the vault (bun run link).
+// bun run skills get core --ref contract). Mojang files come through assets/public links into the vault (bun run link).
 import * as THREE from "three";
 
 import { EDIT, fromSource } from "./edit";

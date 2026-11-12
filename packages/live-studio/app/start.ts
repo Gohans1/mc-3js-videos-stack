@@ -64,7 +64,7 @@ addEventListener("resize", () => {
   S.dirty = true;
 });
 
-// ---------- The film contract (contract.ts, docs/film-contract.md): the server checks the film's files, this page its code
+// ---------- The film contract (contract.ts; bun run skills get core --ref contract): the server checks the film's files, this page its code
 let filmProblems: string[] = [],
   fileProblems: string[] = [];
 const showContract = () => set({ contract: [...fileProblems, ...filmProblems] });

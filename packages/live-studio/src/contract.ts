@@ -1,12 +1,12 @@
 // The film contract: everything the studio reads from a film, as zod schemas. The server checks the film's JSON files when the
 // studio starts and whenever one changes; the page checks the film's module and its draw() once built. Problems are printed in
-// the studio's terminal, where the AI working on the film reads them, and shown in the page. docs/film-contract.md explains
+// the studio's terminal, where the AI working on the film reads them, and shown in the page. bun run skills get core --ref contract explains
 // each part. What a schema doesn't name is the film's own (its camera keys, audio, props): loose objects let it through.
 import * as z from "zod";
 
 import { RATIOS } from "./frame.ts";
 
-export const DOC = "live-studio/docs/film-contract.md";
+export const DOC = "bun run skills get core --ref contract";
 
 const fn = z.custom<Function>((v) => typeof v === "function", "expected a function");
 const three = (flag: string, what: string) =>

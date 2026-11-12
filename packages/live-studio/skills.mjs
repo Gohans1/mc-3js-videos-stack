@@ -60,7 +60,7 @@ const pick = (want) => {
       p === want || p.replace(/\.md$/, "") === w || p.split("/").at(-1).replace(/\.md$/, "") === w,
   );
   if (hits.length === 1) return hits[0];
-  // the guide also routes to repo docs (INSTALL.md, the film contract): those are opened, never served here
+  // the guide also routes to repo docs (INSTALL.md): those are opened, never served here
   const doc = [...about(name).text.matchAll(/`([\w./-]+\.md)`/g)]
     .map((m) => m[1])
     .find(

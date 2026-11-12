@@ -728,7 +728,8 @@ export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "libr
   if (!canPlace())
     return (
       <EmptyCard title="This film can't take objects yet" className="m-3">
-        It needs a placed key file and makePlaced in its scene (docs/film-contract.md).
+        It needs a placed key file and makePlaced in its scene (bun run skills get core --ref
+        contract).
       </EmptyCard>
     );
   return (

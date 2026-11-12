@@ -1,4 +1,4 @@
-// What the studio imports from a film (docs/film-contract.md). Vite resolves film/* to the film's src/ (src/vite_film.mjs);
+// What the studio imports from a film (the film contract: bun run skills get core --ref contract). Vite resolves film/* to the film's src/ (src/vite_film.mjs);
 // src/contract.mjs checks the same shapes at run time, since a film is plain code the studio did not write.
 declare module "film/scene" {
   import type * as THREE from "three";

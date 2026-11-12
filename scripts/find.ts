@@ -534,7 +534,7 @@ const MAKE_SOUND =
   "a sound: source a recording with the real-sound skill or make one with the earshot skill, into the film's sound/sfx/ with a SOURCES.json credit";
 const MAKE_MOCAP =
   "a move: key Steve's body by hand (steve.json moves[] pose instead of clip), or retarget a new clip into vault/motion";
-const HOOKS = "src/scene.ts (hooks: packages/live-studio/docs/film-contract.md)";
+const HOOKS = "src/scene.ts (hooks: bun run skills get core --ref contract)";
 const MAKE_LOOK =
   'a look (teal and orange, VHS, bleach bypass): no named looks; mix the adjust sliders (bun run find --kind adjust) or load a .cube LUT, adjust.json items[].grade.lut {"url","name","amount"}';
 const make = (kinds: string[] | undefined, entries: Entry[]) => {

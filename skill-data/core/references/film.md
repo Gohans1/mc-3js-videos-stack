@@ -29,7 +29,7 @@ A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`
 | `renders/`                              | Everything render, sheet, framecheck and listen write (ignored by git)              |           |
 | `notes/`                                | The creator's notes; read them with `bun run notes`                                 |           |
 
-After every JSON edit run `bun run check`: the studio's own schemas, every sound name, misspelt keys, an off-target `lufs` or a runaway `drive`. The full contract: `packages/live-studio/docs/film-contract.md`.
+After every JSON edit run `bun run check`: the studio's own schemas, every sound name, misspelt keys, an off-target `lufs` or a runaway `drive`. The full contract: `bun run skills get core --ref contract`.
 
 ## What a film can name
 

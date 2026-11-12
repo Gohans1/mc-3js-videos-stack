@@ -160,7 +160,7 @@ if (film) {
   out.push(
     "\nWhere things are (edit a timeline by hand or in the studio, then bun run check)",
     ...files,
-    "  every field of each file: node_modules/live-studio/docs/film-contract.md",
+    "  what the studio needs from each file, and the hooks: bun run skills get core --ref contract",
   );
 }
 console.log(

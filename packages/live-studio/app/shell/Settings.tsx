@@ -546,7 +546,7 @@ export function Settings() {
           <Section title="Film contract errors">
             <p className="text-muted-foreground text-xs">
               Send this to the AI working on the film; it also shows in the studio's terminal.
-              Rules: live-studio/docs/film-contract.md.
+              Rules: bun run skills get core --ref contract.
             </p>
             <pre className="bg-warn-bg max-h-[40vh] overflow-auto overscroll-contain rounded-lg px-2.5 py-2 font-mono text-xs/normal wrap-anywhere whitespace-pre-wrap">
               {s.contract.join("\n\n")}

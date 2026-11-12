@@ -128,19 +128,15 @@ bun run skills get core --ref references/review.md --ref notes
 
 `bun run skills get core --full` prints every reference at once, several times the size of this guide.
 
-| Load                   | When you need                                                                                  |
-| ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `references/film.md`   | A new film, which file holds what, the vault, trying a command on a copy of a film             |
-| `references/review.md` | The eyes: `at`, stills, sheets, `CHECK=motion/seen/touch`, `framecheck`, `jumps`, `deliver`    |
-| `references/render.md` | Rendering fast, re-rendering one stretch, the GPU, YouTube's spec, banding after its re-encode |
-| `references/sound.md`  | Placing sounds and music, gains, the mix, `listen` and its targets                             |
-| `references/voice.md`  | Narration: takes, generating, assembling, word seconds, reading pace                           |
-| `references/notes.md`  | The creator's notes: states, answering, remembering a rule                                     |
-| `references/cli.md`    | Writing or changing a repo command, and keeping these guides in step with it                   |
+| Load                     | When you need                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `references/film.md`     | A new film, which file holds what, the vault, trying a command on a copy of a film             |
+| `references/contract.md` | Writing `scene.ts`: what the studio needs from a film, the hooks on `draw`, the open schemas   |
+| `references/review.md`   | The eyes: `at`, stills, sheets, `CHECK=motion/seen/touch`, `framecheck`, `jumps`, `deliver`    |
+| `references/render.md`   | Rendering fast, re-rendering one stretch, the GPU, YouTube's spec, banding after its re-encode |
+| `references/sound.md`    | Placing sounds and music, gains, the mix, `listen` and its targets                             |
+| `references/voice.md`    | Narration: takes, generating, assembling, word seconds, reading pace                           |
+| `references/notes.md`    | The creator's notes: states, answering, remembering a rule                                     |
+| `references/cli.md`      | Writing or changing a repo command, and keeping these guides in step with it                   |
 
-Deeper docs live in the repo, not in `--ref`. Open the file:
-
-| File                                         | When you need                                                       |
-| -------------------------------------------- | ------------------------------------------------------------------- |
-| `packages/live-studio/docs/film-contract.md` | The studio's data contract: `scene.ts`, `edit.json`, schemas, hooks |
-| `INSTALL.md`                                 | A new machine, the vault, licences                                  |
+A new machine, the vault and licences are in `INSTALL.md` at the repo root, a file to open rather than a `--ref`.
