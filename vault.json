@@ -1,9 +1,12 @@
 {
-  "root": "E:/mc_vault",
+  "root": "./vault",
+  "externalRoot": "E:/mc_vault",
+  "external": ["motion", "packs", "tools", "mc-sound"],
   "film_links": {
     "mc": "jar",
     "mcasset": "mcasset",
     "rig": "mcprep",
-    "motion": "motion"
+    "motion": "motion",
+    "sfx": "sfx/mixkit"
   }
 }

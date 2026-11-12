@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./packages/live-studio/app/*"],
+      "film-kit/*": ["./packages/film-kit/src/*"],
+      "film-stage/*": ["./packages/film-stage/src/*"],
+      "mc-actor/*": ["./packages/mc-actor/src/*"],
+      "mc-assets/*": ["./packages/mc-assets/src/*"],
+      "live-studio/edit": ["./packages/live-studio/src/edit.ts"],
+      "live-studio/lab": ["./packages/live-studio/render/lab.ts"],
+      "live-studio/src/*": ["./packages/live-studio/src/*"]
+    }
+  },
+  "include": [
+    "packages/film-kit/src",
+    "packages/film-stage/src",
+    "packages/mc-actor/src",
+    "packages/mc-assets/src",
+    "packages/film-kit-demo",
+    "scripts"
+  ],
+  "exclude": ["**/*.test.ts", "node_modules", "vault", ".claude", ".agents", "**/renders/**"]
+}

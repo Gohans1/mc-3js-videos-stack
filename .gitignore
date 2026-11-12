@@ -1,4 +1,12 @@
 node_modules/
 __pycache__/
 .venv/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 /vault
+
+# a junction to .claude/skills for other agent tools
+/.agents/

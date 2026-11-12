@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "typeAware": true,
+    "denyWarnings": true
+  },
+  "plugins": ["eslint", "typescript", "unicorn", "oxc"],
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "vault/**",
+    "**/renders/**",
+    "**/chunks/**",
+    "**/demo/**",
+    "**/test/fixtures/**",
+    "films/**"
+  ],
+  "rules": {
+    "typescript/no-floating-promises": "off",
+    "typescript/unbound-method": "off",
+    "typescript/no-implied-eval": "off",
+    "typescript/restrict-template-expressions": "off"
+  }
+}

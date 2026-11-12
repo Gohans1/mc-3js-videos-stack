@@ -1,13 +1,63 @@
 {
   "name": "mc-films",
   "private": true,
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "films/*"
+    ],
+    "catalog": {
+      "@types/three": "0.187.0",
+      "bezier-easing": "3.2.0",
+      "block-model-renderer": "2.20.0",
+      "fflate": "0.8.3",
+      "math": "0.1.0",
+      "oxlint": "1.92.0",
+      "oxlint-tsgolint": "7.0.2006",
+      "postprocessing": "6.39.6",
+      "three": "0.187.0",
+      "vite": "8.3.6",
+      "zod": "4.6.7"
+    }
+  },
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "films/*"
-  ],
   "scripts": {
+    "help": "bun packages/live-studio/help.mjs",
+    "setup:vault": "bun scripts/setup_vault.mjs",
+    "setup:sound": "bun scripts/build_sound_vault.mjs",
+    "setup:mc-sound": "bun scripts/build_mc_sound_vault.mjs",
     "link": "bun scripts/link.ts",
-    "new-film": "bun scripts/new_film.ts"
+    "fetch:sfx": "bun scripts/fetch_mixkit.mjs",
+    "find": "bun scripts/find.ts",
+    "new-film": "bun scripts/new_film.ts",
+    "test": "bun test --timeout 30000 ./packages/film-stage ./packages/film-kit ./packages/mc-actor ./packages/mc-assets ./packages/live-studio ./scripts/test",
+    "lint": "oxlint packages scripts",
+    "typecheck": "bun check --no-script && bun check --no-script -p packages/live-studio",
+    "check": "bun check --no-script && bun check --no-script -p packages/live-studio",
+    "verify": "bun run --parallel lint typecheck",
+    "fmt": "bun fmt --no-script",
+    "fmt:check": "bun fmt --no-script --check",
+    "studio": "bun packages/live-studio/wrong-place.mjs studio",
+    "render": "bun packages/live-studio/wrong-place.mjs render",
+    "notes": "bun packages/live-studio/wrong-place.mjs notes",
+    "at": "bun packages/live-studio/wrong-place.mjs at",
+    "note": "bun packages/live-studio/wrong-place.mjs note",
+    "voice:gen": "bun packages/live-studio/wrong-place.mjs voice:gen",
+    "voice:assemble": "bun packages/live-studio/wrong-place.mjs voice:assemble",
+    "voice:cues": "bun packages/live-studio/wrong-place.mjs voice:cues",
+    "sfx:get": "bun packages/live-studio/wrong-place.mjs sfx:get",
+    "mix": "bun packages/live-studio/wrong-place.mjs mix",
+    "listen": "bun packages/live-studio/wrong-place.mjs listen",
+    "sheet": "bun packages/live-studio/wrong-place.mjs sheet",
+    "jumps": "bun packages/live-studio/wrong-place.mjs jumps",
+    "framecheck": "bun packages/live-studio/wrong-place.mjs framecheck"
+  },
+  "devDependencies": {
+    "fflate": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:"
+  },
+  "patchedDependencies": {
+    "n8ao@2.0.1": "patches/n8ao@2.0.1.patch"
   }
 }

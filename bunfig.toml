@@ -1,0 +1,17 @@
+[install]
+minimumReleaseAge = 259200 # 3 days (seconds)
+
+[fmt]
+printWidth = 100
+sortImports = true
+sortTailwindcss = true
+sortPackageJson = true
+ignorePatterns = [
+  "**/timeline/*.json",
+  "films/**",
+  "templates/film/src/timeline/**",
+  "vault/**",
+  "**/renders/**",
+  "**/chunks/**",
+  "patches/**",
+]
