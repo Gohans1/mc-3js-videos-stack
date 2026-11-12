@@ -4,6 +4,14 @@ export const NOTE_FADE = 3;
 // Opacity of a note's pin and words at film second t: full on its frame (0.05 s early counts, a seek lands near it), then
 // fading to nothing over NOTE_FADE seconds of watching. Paused, it holds
 export const pinFade = (at: number, t: number, rate = 1) => {
-  const d = t - at, span = NOTE_FADE * rate;
+  const d = t - at,
+    span = NOTE_FADE * rate;
   return d < -0.05 || d > span ? 0 : Math.min(1, 1 - d / span);
 };
+
+export const spanFade = (sp: [number, number] | null, t: number, rate = 1) =>
+  !sp
+    ? 0
+    : t >= sp[0] && t <= sp[1]
+      ? 1
+      : Math.max(pinFade(sp[0], t, rate), pinFade(sp[1], t, rate));

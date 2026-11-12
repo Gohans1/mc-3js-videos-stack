@@ -6,4 +6,10 @@ export interface TextSlice {
   textRev: number;
   textSlot: "in" | "out"; // the Animation tab's open part
 }
-export const textSlice: TextSlice = { text: false, textPicks: [], textSaved: null, textRev: 0, textSlot: "in" };
+export const textSlice: TextSlice = {
+  text: false,
+  textPicks: [],
+  textSaved: null,
+  textRev: 0,
+  textSlot: "in",
+};

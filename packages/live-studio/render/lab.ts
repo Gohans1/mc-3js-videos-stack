@@ -6,13 +6,19 @@ export const post = (url, body) => fetch(url, { method: "POST", body });
 let said = Promise.resolve();
 export const log = (m) => (said = said.then(() => post("/log", String(m))));
 // A page that throws ends the run with the error, instead of leaving it to wait out its time limit
-window.onerror = (m, s, l, c, e) => { log("ERROR " + (e?.stack ?? m)); };
-window.onunhandledrejection = (e) => { log("ERROR " + (e.reason?.stack ?? e.reason)); };
+window.onerror = (m, s, l, c, e) => {
+  log("ERROR " + String(e?.stack ?? (typeof m === "string" ? m : "script error")));
+};
+window.onunhandledrejection = (e) => {
+  log("ERROR " + (e.reason?.stack ?? e.reason));
+};
 
 // { W, H, ratio, draft, quality, stills: [{ name, frame }], clip, list, inspect, checks, choices, lab }: see render.mjs
 export const config = async () => (await fetch("/config")).json();
 export const canvas = () => document.getElementById("gl");
 // Written as renders/NAME
-export const still = async (name, from, quality = 0.92) => post(`/still/${name}`, await new Promise((res) => from.toBlob(res, "image/jpeg", quality)));
+export const still = async (name, from, quality = 0.92) =>
+  post(`/still/${name}`, await new Promise((res) => from.toBlob(res, "image/jpeg", quality)));
 // Ends the run; chunks: how many clip chunks the film has, so render.mjs joins exactly those
-export const done = (chunks) => said.then(() => post("/done", chunks === undefined ? "" : String(chunks)));
+export const done = (chunks?: number) =>
+  said.then(() => post("/done", chunks === undefined ? "" : String(chunks)));

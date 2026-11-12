@@ -10,10 +10,19 @@ export const envelope = (u: number, fadeIn: number, fadeOut: number, length?: nu
 
 // The points to draw that level with straight ramps between them, from u0 to the clip's end: the corners of each fade, and
 // where both fades overlap (a curve, the product of two lines) eight steps through it
-export const envelopePoints = (u0: number, end: number, fadeIn: number, fadeOut: number, length?: number): [number, number][] => {
+export const envelopePoints = (
+  u0: number,
+  end: number,
+  fadeIn: number,
+  fadeOut: number,
+  length?: number,
+): [number, number][] => {
   const st = fadeOut > 0 && length ? Math.max(0, length - fadeOut) : Infinity;
   const corners = [u0, end, fadeIn, st, st + fadeOut].filter((u) => u >= u0 && u <= end);
-  const lo = Math.max(u0, st), hi = Math.min(end, fadeIn);
+  const lo = Math.max(u0, st),
+    hi = Math.min(end, fadeIn);
   if (lo < hi) for (let k = 1; k < 8; k++) corners.push(lo + ((hi - lo) * k) / 8);
-  return [...new Set(corners)].sort((a, b) => a - b).map((u) => [u, envelope(u, fadeIn, fadeOut, length)]);
+  return [...new Set(corners)]
+    .sort((a, b) => a - b)
+    .map((u) => [u, envelope(u, fadeIn, fadeOut, length)]);
 };

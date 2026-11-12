@@ -1,3 +1,4 @@
+import type { Tools } from "film/scene";
 // Objects the creator drops into the scene (the film's tools.placed, mc-assets/placed.ts), the way Unreal drops an asset from the
 // Content Browser into the level: the Objects library adds one where the pointer lets go or in front of the camera, a click on
 // the picture selects one (picture/pointer.ts; the right button pins a note), and the gizmo (three's TransformControls) moves, turns and sizes it. As with Unreal's Auto Key, a
@@ -5,35 +6,76 @@
 // undo, saving and an agent's edits are keys.ts and doc.ts's, and each object's keys are an ordinary key row.
 import * as THREE from "three";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+
 import type { Ease } from "../core/ease";
-import { FPS, r3, stamp } from "../core/time";
-import { editKeys, files, hold, keyOf, keysOf, pickKeys, preview, rows, sameKey } from "../keys/keys";
-import type { KeyRef } from "../keys/slice";
-import type { Tools } from "film/scene";
-import { boundsOf, hitTarget, matchesRow, targetsForKeys, type SceneTarget, type TransformBinding } from "./targets";
-import { path, showPath } from "./path";
-import { setPlaying } from "../playback/transport";
+import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set, studio } from "../core/store";
+import { FPS, r3, stamp } from "../core/time";
+import {
+  editKeys,
+  files,
+  hold,
+  keyOf,
+  keysOf,
+  pickKeys,
+  preview,
+  rows,
+  sameKey,
+} from "../keys/keys";
+import type { KeyRef } from "../keys/slice";
+import { setPlaying } from "../playback/transport";
+import { path, showPath } from "./path";
+import {
+  boundsOf,
+  hitTarget,
+  inferTargetTransform,
+  matchesRow,
+  type SceneTarget,
+  targetsForKeys,
+  type TransformBinding,
+} from "./targets";
 
-export interface PlacedKey { t: number; at: number[]; rot?: number[]; scale?: number; visible?: boolean; ease?: Ease; clip?: string; rate?: number; [k: string]: unknown }
-export interface PlacedObject { what: string; properties?: Record<string, string>; clip?: string; rate?: number; keys: PlacedKey[] }
+export interface PlacedKey {
+  t: number;
+  at: number[];
+  rot?: number[];
+  scale?: number;
+  visible?: boolean;
+  ease?: Ease;
+  clip?: string;
+  rate?: number;
+  [k: string]: unknown;
+}
+export interface PlacedObject {
+  what: string;
+  properties?: Record<string, string>;
+  clip?: string;
+  rate?: number;
+  keys: PlacedKey[];
+}
 type Placed = Record<string, PlacedObject>;
 
 const DEG = 180 / Math.PI;
 const r1 = (x: number) => Math.round(x * 10) / 10;
 export const tools = () => S.tools?.placed ?? null;
-const fileOf = () => { const p = tools(); return p ? files.findIndex((x) => x.edit === p.key) : -1; };
-export const placedData = (): Placed => ((files[fileOf()]?.doc.data as Placed | null) ?? {});
+const fileOf = () => {
+  const p = tools();
+  return p ? files.findIndex((x) => x.edit === p.key) : -1;
+};
+export const placedData = (): Placed => (files[fileOf()]?.doc.data as Placed | null) ?? {};
 export const canPlace = () => fileOf() >= 0;
 export const titleOf = (what: string) => what.split(":").at(-1)!.replaceAll("_", " ");
 
 const edit = (change: (d: Placed) => void) => {
   const f = fileOf();
-  if (f < 0) { say("This film can't take objects yet: it needs a placed key file (docs/film-contract.md)"); return false; }
+  if (f < 0) {
+    say("This film can't take objects yet: it needs a placed key file (docs/film-contract.md)");
+    return false;
+  }
   files[f].doc.edit((d) => change(d as Placed));
   return true;
 };
@@ -46,51 +88,79 @@ const freeName = (base: string) => {
 // ---------- Adding, removing, renaming
 export const addObject = (what: string, at: number[], yaw = 0) => {
   const name = freeName(titleOf(what));
-  const ok = edit((d) => { d[name] = { what, keys: [{ t: r3(S.t), at: at.map(r3), rot: [0, r1(yaw), 0], scale: 1 }] }; });
+  const ok = edit((d) => {
+    d[name] = { what, keys: [{ t: r3(S.t), at: at.map(r3), rot: [0, r1(yaw), 0], scale: 1 }] };
+  });
   if (!ok) return;
   select(name);
   say(`${name} added. Drag the arrows to move it`);
 };
 export const removeObject = (name: string) => {
-  if (!edit((d) => { delete d[name]; })) return;
+  if (
+    !edit((d) => {
+      delete d[name];
+    })
+  )
+    return;
   if (get().object === name) select(null);
   say(`${name} deleted. Ctrl+Z to undo`);
 };
-export const renameObject = (from: string, to: string) => {
+export const renameObject = (from: string, to: string): boolean => {
   to = to.trim();
-  if (!to || to === from) return;
-  if (placedData()[to]) { say(`There's already an object called ${to}`); return; }
+  if (!to || to === from) return false;
+  if (placedData()[to]) {
+    say(`There's already an object called ${to}`);
+    return false;
+  }
   // Rebuilt in the same order, so the key rows stay where they were
-  edit((d) => { const all = Object.entries(d); for (const k of Object.keys(d)) delete d[k]; for (const [k, v] of all) d[k === from ? to : k] = v; });
+  edit((d) => {
+    const all = Object.entries(d);
+    for (const k of Object.keys(d)) delete d[k];
+    for (const [k, v] of all) d[k === from ? to : k] = v;
+  });
   if (get().object === from) select(to);
+  return true;
 };
 
 // How an object moves into its key i (components/EasePicker.tsx): a key without an ease moves on mc-assets/placed.ts's
 // smoothstep, which the "inout" tile (Ease) draws to within about 1%
 export const OBJECT_EASE = "inout";
-export const setKeyEase = (name: string, i: number, ease: Ease | undefined) => edit((d) => {
-  const k = d[name]?.keys[i];
-  if (!k) return;
-  if (ease === undefined) delete k.ease; else k.ease = ease;
-});
+export const setKeyEase = (name: string, i: number, ease: Ease | undefined) =>
+  edit((d) => {
+    const k = d[name]?.keys[i];
+    if (!k) return;
+    if (ease === undefined) delete k.ease;
+    else k.ease = ease;
+  });
 export const placedDoc = {
   snapshot: () => files[fileOf()]?.doc.snapshot() ?? "null",
   restore: (s: string) => files[fileOf()]?.doc.restore(s),
-  preview: (name: string, i: number, ease: Ease) => files[fileOf()]?.doc.preview((d) => { const k = (d as Placed)[name]?.keys[i]; if (k) k.ease = ease; }),
+  preview: (name: string, i: number, ease: Ease) =>
+    files[fileOf()]?.doc.preview((d) => {
+      const k = (d as Placed)[name]?.keys[i];
+      if (k) k.ease = ease;
+    }),
 };
 
 // The key at the playhead (within half a frame), or a new one there copied from the key before it
 const keyHere = (o: PlacedObject) => {
-  const ks = o.keys, near = ks.findIndex((k) => Math.abs(k.t - S.t) < 0.5 / FPS);
+  const ks = o.keys,
+    near = ks.findIndex((k) => Math.abs(k.t - S.t) < 0.5 / FPS);
   if (near >= 0) return { k: ks[near], fresh: false };
-  const i = ks.findIndex((k) => k.t > S.t), at = i < 0 ? ks.length : i;
+  const i = ks.findIndex((k) => k.t > S.t),
+    at = i < 0 ? ks.length : i;
   const k = { ...structuredClone(ks[Math.max(0, at - 1)]), t: r3(S.t) };
-  delete k.visible; delete k.clip; delete k.rate; // a copied clip would start over here
+  delete k.visible;
+  delete k.clip;
+  delete k.rate; // a copied clip would start over here
   ks.splice(at, 0, k);
   return { k, fresh: true };
 };
 // Keys the object at the playhead with these values (the gizmo's, or typed in the Object panel); the rest stay as they are there
-export const setTransform = (name: string, v: { at?: number[]; rot?: number[]; scale?: number }) => {
+export const setTransform = (
+  name: string,
+  v: { at?: number[]; rot?: number[]; scale?: number },
+) => {
   const p = tools();
   if (p?.hold === name && !gizmo?.dragging) p.hold = null;
   let fresh = false;
@@ -107,68 +177,131 @@ export const setTransform = (name: string, v: { at?: number[]; rot?: number[]; s
 };
 const transformOf = (o3: THREE.Object3D) => {
   const e = new THREE.Euler().setFromQuaternion(o3.quaternion, "YXZ");
-  return { at: o3.position.toArray(), rot: [e.x, e.y, e.z].map((r) => r1(r * DEG)), scale: o3.scale.x };
+  return {
+    at: o3.position.toArray(),
+    rot: [e.x, e.y, e.z].map((r) => r1(r * DEG)),
+    scale: o3.scale.x,
+  };
 };
 // A value being dragged in the Object panel: drawn as it goes, held off its keys until setTransform saves it
-export const previewTransform = (name: string, v: { at?: number[]; rot?: number[]; scale?: number }) => {
-  const p = tools(), o3 = p?.objectOf(name);
+export const previewTransform = (
+  name: string,
+  v: { at?: number[]; rot?: number[]; scale?: number },
+) => {
+  const p = tools(),
+    o3 = p?.objectOf(name);
   if (!p || !o3) return;
   p.hold = name;
   if (v.at) o3.position.fromArray(v.at);
-  if (v.rot) o3.quaternion.setFromEuler(new THREE.Euler(...(v.rot.map((r) => r / DEG) as [number, number, number]), "YXZ"));
+  if (v.rot)
+    o3.quaternion.setFromEuler(
+      new THREE.Euler(...(v.rot.map((r) => r / DEG) as [number, number, number]), "YXZ"),
+    );
   if (v.scale !== undefined) o3.scale.setScalar(Math.max(0.01, v.scale));
   S.dirty = true;
 };
+export const cancelPreviewTransform = (name: string) => {
+  const p = tools();
+  if (p?.hold === name && !gizmo?.dragging) {
+    p.hold = null;
+    S.dirty = true;
+  }
+};
 // What the object is at the playhead, as drawn
-export const shownTransform = (name: string) => { const o3 = tools()?.objectOf(name); return o3 ? transformOf(o3) : null; };
+export const shownTransform = (name: string) => {
+  const o3 = tools()?.objectOf(name);
+  return o3 ? transformOf(o3) : null;
+};
 // CapCut's ◇: off a key, a new key holding the object where it is drawn there, so nothing moves until a value changes; on a
 // key, that key taken out (an object keeps its last one: deleting the object is what takes it out of the film)
 export const toggleKey = (name: string) => {
   const o = placedData()[name];
   if (!o) return;
   const i = o.keys.findIndex((k) => Math.abs(k.t - S.t) < 0.5 / FPS);
-  if (i < 0) { const v = shownTransform(name); if (v) setTransform(name, v); return; }
-  if (o.keys.length === 1) { say(`${name} needs at least one keyframe. To take it out of the film, delete the object`, 4000); return; }
+  if (i < 0) {
+    const v = shownTransform(name);
+    if (v) setTransform(name, v);
+    return;
+  }
+  if (o.keys.length === 1) {
+    say(`${name} needs at least one keyframe. To take it out of the film, delete the object`, 4000);
+    return;
+  }
   const t = o.keys[i].t;
-  if (edit((d) => { d[name]?.keys.splice(i, 1); })) say(`Keyframe at ${stamp(t)} deleted. Ctrl+Z to undo`);
+  if (
+    edit((d) => {
+      d[name]?.keys.splice(i, 1);
+    })
+  )
+    say(`Keyframe at ${stamp(t)} deleted. Ctrl+Z to undo`);
 };
 // The mob's clip from the playhead on, keyed like a value under CapCut's ◇: the key here names it (a new key if none), so it
 // starts there and runs until a later key names another. A clip set before keys carried clips ran the whole film: it moves
 // onto the first key, where it meant to start
 const ownClip = (o: PlacedObject) => {
-  if (o.clip !== undefined && o.keys[0].clip === undefined) { o.keys[0].clip = o.clip; if (o.rate !== undefined) o.keys[0].rate = o.rate; }
-  delete o.clip; delete o.rate;
+  if (o.clip !== undefined && o.keys[0].clip === undefined) {
+    o.keys[0].clip = o.clip;
+    if (o.rate !== undefined) o.keys[0].rate = o.rate;
+  }
+  delete o.clip;
+  delete o.rate;
 };
 export const setClip = (name: string, clip: string) => {
   let fresh = false;
-  edit((d) => { const o = d[name]; if (!o) return; ownClip(o); const h = keyHere(o); fresh = h.fresh; h.k.clip = clip; delete h.k.rate; });
-  say(`${name}: ${clip === "none" ? "stands still" : clip} from ${stamp(S.t)}${fresh ? " (keyframe added)" : ""}. Ctrl+Z to undo`, 3000);
+  edit((d) => {
+    const o = d[name];
+    if (!o) return;
+    ownClip(o);
+    const h = keyHere(o);
+    fresh = h.fresh;
+    h.k.clip = clip;
+    delete h.k.rate;
+  });
+  say(
+    `${name}: ${clip === "none" ? "stands still" : clip} from ${stamp(S.t)}${fresh ? " (keyframe added)" : ""}. Ctrl+Z to undo`,
+    3000,
+  );
 };
 // The key at the playhead names no clip of its own again: the one before carries on
-export const clearClip = (name: string) => edit((d) => {
-  const o = d[name];
-  if (!o) return;
-  ownClip(o);
-  const k = o.keys.find((x) => Math.abs(x.t - S.t) < 0.5 / FPS);
-  if (k) { delete k.clip; delete k.rate; }
-});
+export const clearClip = (name: string) =>
+  edit((d) => {
+    const o = d[name];
+    if (!o) return;
+    ownClip(o);
+    const k = o.keys.find((x) => Math.abs(x.t - S.t) < 0.5 / FPS);
+    if (k) {
+      delete k.clip;
+      delete k.rate;
+    }
+  });
 // The speed of the clip running at the playhead (clip: its name), on the key that started it, or keyed here if none did
 export const startedBy = (o: PlacedObject) => {
   const on = o.keys.filter((x) => x.t <= S.t + 0.5 / FPS);
-  return on.filter((x) => x.clip !== undefined).at(-1) ?? (o.clip !== undefined ? (on[0] ?? null) : null); // the object's own: its first key
+  return (
+    on.filter((x) => x.clip !== undefined).at(-1) ?? (o.clip !== undefined ? (on[0] ?? null) : null)
+  ); // the object's own: its first key
 };
-export const setClipRate = (name: string, rate: number, clip: string) => edit((d) => {
-  const o = d[name];
-  if (!o) return;
-  ownClip(o);
-  let k = startedBy(o);
-  if (!k) { k = keyHere(o).k; k.clip = clip; }
-  if (rate === 1) delete k.rate; else k.rate = rate;
-});
+export const setClipRate = (name: string, rate: number, clip: string) =>
+  edit((d) => {
+    const o = d[name];
+    if (!o) return;
+    ownClip(o);
+    let k = startedBy(o);
+    if (!k) {
+      k = keyHere(o).k;
+      k.clip = clip;
+    }
+    if (rate === 1) delete k.rate;
+    else k.rate = rate;
+  });
 // CapCut's reset, keyed at the playhead: no turn, size 1. Position has no default to go back to
 export const resetTransform = (name: string) => setTransform(name, { rot: [0, 0, 0], scale: 1 });
 // Shown from here on, or hidden (a key at the playhead holds it)
-export const setVisible =(name: string, on: boolean) => edit((d) => { const o = d[name]; if (o) keyHere(o).k.visible = on; });
+export const setVisible = (name: string, on: boolean) =>
+  edit((d) => {
+    const o = d[name];
+    if (o) keyHere(o).k.visible = on;
+  });
 
 // ---------- Selecting and the gizmo
 export type GizmoMode = "translate" | "rotate" | "scale";
@@ -178,15 +311,38 @@ const nativeProxy = new THREE.Object3D();
 overlay.add(nativeProxy);
 type NativeDrag = { ref: KeyRef; binding: TransformBinding; snapshot: string };
 let nativeDrag: NativeDrag | null = null;
-export const nativeTransform = (ref: KeyRef) => S.tools?.targets?.find((t) => {
-  const row = t.transform?.row;
-  return row && row.edit === files[ref.f]?.edit && row.path.length === ref.path.length && matchesRow(row, row.edit, ref.path);
-})?.transform;
+export const nativeTransform = (ref: KeyRef) => {
+  const editName = files[ref.f]?.edit;
+  if (!editName || !S.tools?.targets) return undefined;
+  const explicit = S.tools.targets.find((t) => {
+    const row = t.transform?.row;
+    return (
+      row &&
+      row.edit === editName &&
+      row.path.length === ref.path.length &&
+      matchesRow(row, row.edit, ref.path)
+    );
+  })?.transform;
+  if (explicit) return explicit;
+  const matched = S.tools.targets.find(
+    (t) => !t.transform && t.rows.some((r) => matchesRow(r, editName, ref.path)),
+  );
+  return matched ? inferTargetTransform({ edit: editName, path: ref.path }, keyOf(ref)) : undefined;
+};
 const nativeSelection = () => {
   const s = get();
-  if (s.object || s.keyPicks.length !== 1 || s.clips.length || s.camPicks.length || s.textPicks.length) return null;
-  const ref = s.keyPicks[0], binding = nativeTransform(ref), key = keyOf(ref);
-  return binding && key && Math.abs(key.t - S.t) < .5 / FPS ? { ref, binding, key } : null;
+  if (
+    s.object ||
+    s.keyPicks.length !== 1 ||
+    s.clips.length ||
+    s.camPicks.length ||
+    s.textPicks.length
+  )
+    return null;
+  const ref = s.keyPicks[0],
+    binding = nativeTransform(ref),
+    key = keyOf(ref);
+  return binding && key && Math.abs(key.t - S.t) < 0.5 / FPS ? { ref, binding, key } : null;
 };
 const finishNative = (commit: boolean) => {
   const drag = nativeDrag;
@@ -197,15 +353,29 @@ const finishNative = (commit: boolean) => {
   hold(false);
   if (commit) editKeys([drag.ref], (r, ks) => drag.binding.write(ks[r.i], value));
 };
-const cube = new THREE.BoxGeometry(1, 1, 1), edges = new THREE.EdgesGeometry(cube);
+const cube = new THREE.BoxGeometry(1, 1, 1),
+  edges = new THREE.EdgesGeometry(cube);
 const boxGeometry = new LineSegmentsGeometry().fromEdgesGeometry(edges);
-cube.dispose(); edges.dispose();
-const boxMaterial = new LineMaterial({ color: 0xe8e8e8, linewidth: 1, depthTest: false, depthWrite: false, toneMapped: false });
-const hoverMaterial = boxMaterial.clone(); hoverMaterial.transparent = true; hoverMaterial.opacity = 0.45;
-const makeBox = (material = boxMaterial) => Object.assign(new LineSegments2(boxGeometry, material), { box: new THREE.Box3() });
+cube.dispose();
+edges.dispose();
+const boxMaterial = new LineMaterial({
+  color: 0xe8e8e8,
+  linewidth: 1,
+  depthTest: false,
+  depthWrite: false,
+  toneMapped: false,
+});
+const hoverMaterial = boxMaterial.clone();
+hoverMaterial.transparent = true;
+hoverMaterial.opacity = 0.45;
+const makeBox = (material = boxMaterial) =>
+  Object.assign(new LineSegments2(boxGeometry, material), { box: new THREE.Box3() });
 const fitBox = (box: ReturnType<typeof makeBox>, objects: THREE.Object3D[]) => {
   box.visible = !boundsOf(objects, box.box).isEmpty();
-  if (box.visible) { box.box.getCenter(box.position); box.box.getSize(box.scale); }
+  if (box.visible) {
+    box.box.getCenter(box.position);
+    box.box.getSize(box.scale);
+  }
 };
 const boxes = new Map<string, ReturnType<typeof makeBox>>();
 const hoverBox = makeBox(hoverMaterial);
@@ -222,15 +392,25 @@ const ensureGizmo = () => {
       if (e.value) {
         const selected = nativeSelection();
         if (!selected) return;
-        nativeDrag = { ref: selected.ref, binding: selected.binding, snapshot: files[selected.ref.f].doc.snapshot() };
+        nativeDrag = {
+          ref: selected.ref,
+          binding: selected.binding,
+          snapshot: files[selected.ref.f].doc.snapshot(),
+        };
         hold(true);
         if (S.playing) setPlaying(false);
       } else finishNative(true);
       return;
     }
-    const p = tools(), name = get().object, o = gizmo!.object;
+    const p = tools(),
+      name = get().object,
+      o = gizmo!.object;
     if (!p || !name || !o) return;
-    if (e.value) { p.hold = name; if (S.playing) setPlaying(false); return; }
+    if (e.value) {
+      p.hold = name;
+      if (S.playing) setPlaying(false);
+      return;
+    }
     setTransform(name, transformOf(o));
     p.hold = null;
   });
@@ -238,19 +418,34 @@ const ensureGizmo = () => {
   gizmo.addEventListener("objectChange", () => {
     const o = gizmo!.object;
     if (o && gizmo!.getMode() === "scale") {
-      const axis = gizmo!.axis ?? "XYZ", s = axis.includes("X") ? o.scale.x : axis.includes("Y") ? o.scale.y : o.scale.z;
+      const axis = gizmo!.axis ?? "XYZ",
+        s = axis.includes("X") ? o.scale.x : axis.includes("Y") ? o.scale.y : o.scale.z;
       o.scale.setScalar(Math.max(0.05, s));
     }
     if (nativeDrag) {
-      const { ref, binding } = nativeDrag, value = transformOf(nativeProxy);
+      const { ref, binding } = nativeDrag,
+        value = transformOf(nativeProxy);
       preview([ref], (r, ks) => binding.write(ks[r.i], value));
     }
     S.dirty = true;
   });
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && nativeDrag) { e.preventDefault(); e.stopPropagation(); finishNative(false); gizmo!.reset(); gizmo!.detach(); S.dirty = true; }
-  }, { capture: true });
-  gizmo.addEventListener("change", () => { S.dirty = true; });
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Escape" && nativeDrag) {
+        e.preventDefault();
+        e.stopPropagation();
+        finishNative(false);
+        gizmo!.reset();
+        gizmo!.detach();
+        S.dirty = true;
+      }
+    },
+    { capture: true },
+  );
+  gizmo.addEventListener("change", () => {
+    S.dirty = true;
+  });
   applySnap();
   return gizmo;
 };
@@ -261,32 +456,57 @@ const applySnap = () => {
   gizmo.setRotationSnap(on ? Math.PI / 12 : null); // 15 degrees
   gizmo.setScaleSnap(on ? 1 / 16 : null);
 };
-export const setSnap = (on: boolean) => { set({ snap: on }); applySnap(); };
-export const setGizmo = (mode: GizmoMode) => { set({ gizmo: mode }); gizmo?.setMode(mode); S.dirty = true; };
+export const setSnap = (on: boolean) => {
+  set({ snap: on });
+  applySnap();
+};
+export const setGizmo = (mode: GizmoMode) => {
+  set({ gizmo: mode });
+  gizmo?.setMode(mode);
+  S.dirty = true;
+};
 export const gizmoBusy = () => !!gizmo && (gizmo.dragging || gizmo.axis !== null);
 
-export const select = (name: string | null) => set(name ? { object: name, side: "objects", clips: [], clip: null, camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [], layerPicks: [] } : { object: null });
+export const select = (name: string | null) =>
+  set(transitionSelection({ kind: "object", name }, get().side));
 
 studio.subscribe((s, was) => {
-  if (s.object !== was.object || s.gizmo !== was.gizmo || s.keysRev !== was.keysRev || s.keyPicks !== was.keyPicks) attach();
-  if (s.object !== was.object || s.keyPicks !== was.keyPicks) { S.finalAt = -1; S.dirty = true; }
+  if (
+    s.object !== was.object ||
+    s.gizmo !== was.gizmo ||
+    s.keysRev !== was.keysRev ||
+    s.keyPicks !== was.keyPicks
+  )
+    attach();
+  if (s.object !== was.object || s.keyPicks !== was.keyPicks) {
+    S.finalAt = -1;
+    S.dirty = true;
+  }
 });
 // Re-points the gizmo whenever the selection or the built objects change (a rename or an undo builds a new one)
 export const attach = (redraw = true) => {
   if (gizmo?.dragging) return;
   const name = get().object;
-  if (name && files.length && !placedData()[name]) { set({ object: null }); return; } // undone, or an agent took it out
+  if (name && files.length && !placedData()[name]) {
+    set({ object: null });
+    return;
+  } // undone, or an agent took it out
   const o = name ? tools()?.objectOf(name) : null;
   if (redraw) S.dirty = true;
   const native = !o ? nativeSelection() : null;
-  if (!o && !native) { gizmo?.detach(); return; }
+  if (!o && !native) {
+    gizmo?.detach();
+    return;
+  }
   const g = ensureGizmo();
   if (!g) return;
   let mode = get().gizmo;
   if (native) {
     const v = native.binding.read(native.key);
     nativeProxy.position.fromArray(v.at);
-    nativeProxy.quaternion.setFromEuler(new THREE.Euler(...(v.rot.map((r) => r / DEG) as [number, number, number]), "YXZ"));
+    nativeProxy.quaternion.setFromEuler(
+      new THREE.Euler(...(v.rot.map((r) => r / DEG) as [number, number, number]), "YXZ"),
+    );
     nativeProxy.scale.setScalar(v.scale);
     if (!native.binding.axes[mode]) mode = Object.keys(native.binding.axes)[0] as GizmoMode;
   }
@@ -305,42 +525,75 @@ export const hover = (target: SceneTarget | null) => {
 };
 const targets = (sceneTools: Tools): SceneTarget[] => {
   const p = sceneTools.placed;
-  return [...(sceneTools.targets ?? []), ...Object.keys(placedData()).flatMap((name) => {
-    const object = p?.objectOf(name);
-    return object && p ? [{ id: `placed:${name}`, title: name, objects: [object], rows: [{ edit: p.key, path: [name, "keys"] }] }] : [];
-  })];
+  return [
+    ...(sceneTools.targets ?? []),
+    ...Object.keys(placedData()).flatMap((name) => {
+      const object = p?.objectOf(name);
+      return object && p
+        ? [
+            {
+              id: `placed:${name}`,
+              title: name,
+              objects: [object],
+              rows: [{ edit: p.key, path: [name, "keys"] }],
+            },
+          ]
+        : [];
+    }),
+  ];
 };
 export const selectTarget = (target: SceneTarget | null, additive = false) => {
-  if (!target) { set({ object: null, keyPicks: [], camKey: null, camPicks: [], shotPick: null, clips: [], clip: null, textPicks: [], layerPicks: [] }); S.dirty = true; return; }
+  if (!target) {
+    set(transitionSelection({ kind: "none" }, get().side));
+    S.dirty = true;
+    return;
+  }
   const row = rows.find((r) => target.rows.some((b) => matchesRow(b, files[r.f].edit, r.path)));
   if (!row) return;
   const ks = keysOf(row.f, row.path);
-  const i = Math.max(0, ks.findLastIndex((k) => k.t <= S.t));
-  const ref = { f: row.f, path: row.path, i }, before = get().keyPicks;
-  pickKeys(additive ? before.some((r) => sameKey(r, ref)) ? before.filter((r) => !sameKey(r, ref)) : [...before, ref] : [ref]);
+  const i = Math.max(
+    0,
+    ks.findLastIndex((k) => k.t <= S.t),
+  );
+  const ref = { f: row.f, path: row.path, i },
+    before = get().keyPicks;
+  pickKeys(
+    additive
+      ? before.some((r) => sameKey(r, ref))
+        ? before.filter((r) => !sameKey(r, ref))
+        : [...before, ref]
+      : [ref],
+  );
 };
 // After the film draws: the selection's box, what the pointer is over and the gizmo, on top of the picture, outside the film's
 // own effects and its scene
 export const drawGizmo = (sceneTools = S.tools) => {
   if (!sceneTools) return;
   if (!gizmo?.dragging && get().keyPicks.length) attach(false);
-  const all = targets(sceneTools), name = get().object;
+  const all = targets(sceneTools),
+    name = get().object;
   const selected = targetsForKeys(all, get().keyPicks, files);
   const own = name ? all.find((t) => t.id === `placed:${name}`) : null;
   if (own && !selected.includes(own)) selected.push(own);
   for (const box of boxes.values()) box.visible = false;
   for (const target of selected) {
     let box = boxes.get(target.id);
-    if (!box) { box = makeBox(); boxes.set(target.id, box); overlay.add(box); }
+    if (!box) {
+      box = makeBox();
+      boxes.set(target.id, box);
+      overlay.add(box);
+    }
     fitBox(box, target.objects);
   }
   const h = all.find((t) => t.id === hovered && !selected.includes(t));
-  if (h) fitBox(hoverBox, h.objects); else hoverBox.visible = false;
+  if (h) fitBox(hoverBox, h.objects);
+  else hoverBox.visible = false;
   showPath(sceneTools.placed ?? null, own ? name : null, get().keysRev);
   const r = sceneTools.renderer;
   if (!r) return;
   // Both render sizes occupy the same CSS frame; keep the selection one screen pixel wide in either quality.
-  boxMaterial.linewidth = hoverMaterial.linewidth = r.domElement.width / Math.max(1, S.el.canvas.clientWidth);
+  boxMaterial.linewidth = hoverMaterial.linewidth =
+    r.domElement.width / Math.max(1, S.el.canvas.clientWidth);
   if (gizmo) gizmo.camera = sceneTools.camera;
   const auto = r.autoClear;
   r.autoClear = false;
@@ -355,24 +608,33 @@ export const pickAt = (x: number, y: number) => {
 // Where a drop at (x, y) on the picture lands: the surface under it, else 3 m in front of the camera; facing the camera
 export const dropPoint = (x: number, y: number, hitWorld?: number[]) => {
   const cam = S.tools!.camera;
-  const at = hitWorld ? new THREE.Vector3(...hitWorld) : (() => {
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), cam);
-    return ray.ray.at(3, new THREE.Vector3());
-  })();
-  if (get().snap) at.set(Math.round(at.x * 16) / 16, Math.round(at.y * 16) / 16, Math.round(at.z * 16) / 16);
+  const at = hitWorld
+    ? new THREE.Vector3(...hitWorld)
+    : (() => {
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), cam);
+        return ray.ray.at(3, new THREE.Vector3());
+      })();
+  if (get().snap)
+    at.set(Math.round(at.x * 16) / 16, Math.round(at.y * 16) / 16, Math.round(at.z * 16) / 16);
   const to = cam.position.clone().sub(at);
   return { at: at.toArray(), yaw: Math.atan2(-to.x, -to.z) * DEG };
 };
 
 // The library's drag: a ghost follows the pointer, and letting go over the picture drops the object on what lies under it
-export const startObjectCarry = (what: string, e: PointerEvent, look: (x: number, y: number) => { world?: number[] }) => {
-  const ghost = document.createElement("div"), name = titleOf(what);
+export const startObjectCarry = (
+  what: string,
+  e: PointerEvent,
+  look: (x: number, y: number) => { world?: number[] },
+) => {
+  const ghost = document.createElement("div"),
+    name = titleOf(what);
   ghost.className = "carry";
   document.body.append(ghost);
   const over = (ev: PointerEvent) => {
     const r = S.el.canvas.getBoundingClientRect();
-    const x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+    const x = (ev.clientX - r.left) / r.width,
+      y = (ev.clientY - r.top) / r.height;
     return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
   };
   const move = (ev: PointerEvent) => {

@@ -5,56 +5,111 @@
 // vision and the key from view while flying (Shift+K; night vision in Settings), the free camera (F, and in Settings; kept
 // while on); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
 // Settings). Play, Note, Draw, full screen and the settings never go. The widths are the bar's inside at a phone's larger text
-import { Brush, Ellipsis, Grid3x3, Maximize, Minimize, MoonStar, Move3d, Pause, Pencil, Play, Save, Volume2, VolumeX } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  Brush,
+  Ellipsis,
+  Grid3x3,
+  Maximize,
+  Minimize,
+  MoonStar,
+  Move3d,
+  Pause,
+  Pencil,
+  Play,
+  Save,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
+
 import { saveView } from "../camera/cam";
-import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
+import { Tip } from "../components/Tip";
+import { set, setPref, useStudio } from "../core/store";
 import { setInk } from "../notes/ink";
 import { openNote } from "../notes/notes";
-import { setFree } from "../picture/freecam";
-import { setVolume, togglePlay, toggleMute } from "../playback/transport";
-import { set, setPref, useStudio } from "../core/store";
 import { SnapshotButtons } from "../picture/Compare";
+import { setFree } from "../picture/freecam";
+import { setVolume, toggleMute, togglePlay } from "../playback/transport";
+import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 import { Settings } from "./Settings";
-import { Tip } from "../components/Tip";
 
 // CapCut's player bar is one slim row under the picture: 32 px controls with a mouse, 40 px under a finger (Button size md)
 const square = "pointer-coarse:size-10";
 
 export function Transport() {
-  const playing = useStudio((s) => s.playing), muted = useStudio((s) => s.muted), volume = useStudio((s) => s.volume);
-  const settingsOpen = useStudio((s) => s.settingsOpen), free = useStudio((s) => s.free), ink = useStudio((s) => s.ink), cam = useStudio((s) => s.cam);
-  const guides = useStudio((s) => s.guides), ratio = useStudio((s) => s.ratio), night = useStudio((s) => s.nightVision), full = useFullscreen();
+  const playing = useStudio((s) => s.playing),
+    muted = useStudio((s) => s.muted),
+    volume = useStudio((s) => s.volume);
+  const settingsOpen = useStudio((s) => s.settingsOpen),
+    free = useStudio((s) => s.free),
+    ink = useStudio((s) => s.ink),
+    cam = useStudio((s) => s.cam);
+  const guides = useStudio((s) => s.guides),
+    ratio = useStudio((s) => s.ratio),
+    night = useStudio((s) => s.nightVision),
+    full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="@container col-start-1 row-start-2 in-data-wide:col-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg bg-background px-3 py-1 upright:flex-none upright:rounded-none sideways:rounded-none">
-      <Button variant="secondary" size="md" className="min-w-19 @max-[440px]:min-w-0" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>
+    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg px-3 py-1 in-data-wide:col-start-2">
+      <Button
+        variant="secondary"
+        size="md"
+        className="min-w-19 @max-[440px]:min-w-0"
+        aria-label={playing ? "Pause" : "Play"}
+        onClick={togglePlay}
+      >
         {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
         <span className="@max-[440px]:hidden">{playing ? "Pause" : "Play"}</span>
       </Button>
-      <Button size="md" className="upright:flex-1 sideways:flex-1" onClick={() => openNote(null)} aria-label="Add note">
+      <Button
+        size="md"
+        className="upright:flex-1 sideways:flex-1"
+        onClick={() => openNote(null)}
+        aria-label="Add note"
+      >
         <Pencil data-icon="inline-start" />
         <span className="@max-[420px]:hidden">Note</span>
       </Button>
       <Tip label="Draw on the picture (D): pen, arrow, box, or a path across seconds">
-        <Button variant="quiet" size="md" aria-label="Draw" aria-pressed={!!ink} onClick={() => setInk(ink ? null : "pen")}>
+        <Button
+          variant="quiet"
+          size="md"
+          aria-label="Draw"
+          aria-pressed={!!ink}
+          onClick={() => setInk(ink ? null : "pen")}
+        >
           <Brush data-icon="inline-start" />
           <span className="@max-[700px]:hidden">Draw</span>
         </Button>
       </Tip>
       {/* Walking the camera needs a mouse and keys, as in Settings */}
       <Tip label="Free camera (F): drag to look, W A S D to fly, Space up, Shift down">
-        <Button variant="quiet" size="md" className={cn("pointer-coarse:hidden", !free && "@max-[520px]:hidden")} aria-label="Free camera" aria-pressed={free} onClick={() => setFree(!free)}>
+        <Button
+          variant="quiet"
+          size="md"
+          className={cn("pointer-coarse:hidden", !free && "@max-[520px]:hidden")}
+          aria-label="Free camera"
+          aria-pressed={free}
+          onClick={() => setFree(!free)}
+        >
           <Move3d data-icon="inline-start" />
           <span className="@max-[960px]:hidden">Free camera</span>
         </Button>
       </Tip>
       {free && (
         <Tip label="Night vision: light up this view and clear the fog to find your way. The film's own light stays as it is">
-          <Button variant="quiet" size="md" className="pointer-coarse:hidden @max-[640px]:hidden" aria-label="Night vision" aria-pressed={night} onClick={() => setPref("nightVision", !night)}>
+          <Button
+            variant="quiet"
+            size="md"
+            className="@max-[640px]:hidden pointer-coarse:hidden"
+            aria-label="Night vision"
+            aria-pressed={night}
+            onClick={() => setPref("nightVision", !night)}
+          >
             <MoonStar data-icon="inline-start" />
             <span className="@max-[1240px]:hidden">Night vision</span>
           </Button>
@@ -62,46 +117,89 @@ export function Transport() {
       )}
       {free && cam && (
         <Tip label="Add a camera keyframe at the playhead from this view (Shift+K)">
-          <Button variant="quiet" size="md" className="pointer-coarse:hidden @max-[640px]:hidden" aria-label="Add keyframe from view" onClick={() => saveView()}>
+          <Button
+            variant="quiet"
+            size="md"
+            className="@max-[640px]:hidden pointer-coarse:hidden"
+            aria-label="Add keyframe from view"
+            onClick={() => saveView()}
+          >
             <Save data-icon="inline-start" />
             <span className="@max-[1100px]:hidden">Add keyframe</span>
           </Button>
         </Tip>
       )}
-      <div className="ml-auto flex items-center gap-0.5 upright:ml-0 sideways:ml-0">
-        <SnapshotButtons className="pointer-coarse:hidden @max-[600px]:hidden" />
-        <Tip label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}>
-          <Button variant="quiet" size="icon-lg" className={cn(square, "@max-[330px]:hidden")} aria-label="Guides" aria-pressed={guides} onClick={() => setPref("guides", !guides)}>
+      <div className="upright:ml-0 sideways:ml-0 ml-auto flex items-center gap-0.5">
+        <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
+        <Tip
+          label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}
+        >
+          <Button
+            variant="quiet"
+            size="icon-lg"
+            className={cn(square, "@max-[330px]:hidden")}
+            aria-label="Guides"
+            aria-pressed={guides}
+            onClick={() => setPref("guides", !guides)}
+          >
             <Grid3x3 />
           </Button>
         </Tip>
         {canFullscreen() && (
           <Tip label={full ? "Leave full screen (Esc)" : "Full screen preview (Ctrl+Shift+F)"}>
-            <Button variant="quiet" size="icon-lg" className={square} aria-label={full ? "Leave full screen" : "Full screen preview"} onClick={toggleFullscreen}>
+            <Button
+              variant="quiet"
+              size="icon-lg"
+              className={square}
+              aria-label={full ? "Leave full screen" : "Full screen preview"}
+              onClick={toggleFullscreen}
+            >
               {full ? <Minimize /> : <Maximize />}
             </Button>
           </Tip>
         )}
         <Tip label="Mute">
-          <Button variant="quiet" size="icon-lg" className={cn(square, "pointer-coarse:@max-[384px]:hidden")} aria-label="Mute" aria-pressed={muted} onClick={toggleMute}>
+          <Button
+            variant="quiet"
+            size="icon-lg"
+            className={cn(square, "pointer-coarse:@max-[384px]:hidden")}
+            aria-label="Mute"
+            aria-pressed={muted}
+            onClick={toggleMute}
+          >
             {muted ? <VolumeX /> : <Volume2 />}
           </Button>
         </Tip>
         {/* Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes */}
-        <div className="ms-1 flex h-8 w-24 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden upright:hidden sideways:hidden" title="Volume (Ctrl+↑ ↓)">
+        <div
+          className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden"
+          title="Volume (Ctrl+↑ ↓)"
+        >
           <Slider
             min={0}
             max={1}
             step={0.05}
             value={muted ? 0 : volume}
-            onValueChange={(v: number | readonly number[]) => setVolume(typeof v === "number" ? v : v[0])}
+            onValueChange={(v: number | readonly number[]) =>
+              setVolume(typeof v === "number" ? v : v[0])
+            }
             aria-label="Volume"
             format={{ style: "percent" }}
           />
         </div>
       </div>
       <Popover open={settingsOpen} onOpenChange={(open) => set({ settingsOpen: open })}>
-        <PopoverTrigger render={<Button variant="quiet" size="icon-lg" className={square} title="Settings" aria-label="Settings" />}>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="quiet"
+              size="icon-lg"
+              className={square}
+              title="Settings"
+              aria-label="Settings"
+            />
+          }
+        >
           <Ellipsis />
         </PopoverTrigger>
         <PopoverContent

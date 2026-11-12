@@ -1,18 +1,55 @@
 // The engine's own state, read and written every frame by its parts. Not React state: nothing here re-renders anything.
 import type { Draw, Tools } from "film/scene";
 import { DURATION } from "film/scene";
+
 import { stored } from "./storage";
 
-export interface Word { w: string; s: number; e: number }
-export interface Line { text: string; s: number; e: number; words: Word[]; pieces?: Word[][] }
-export interface VoiceMap { step: number; peaks: number[]; lines: Line[] }
+export interface Word {
+  w: string;
+  s: number;
+  e: number;
+}
+export interface Line {
+  text: string;
+  s: number;
+  e: number;
+  words: Word[];
+  pieces?: Word[][];
+}
+export interface VoiceMap {
+  step: number;
+  peaks: number[];
+  lines: Line[];
+}
 
 // The page's elements the engine draws into, handed over by the React components that own them
 export interface Elements {
-  view: HTMLElement; stage: HTMLElement; canvas: HTMLCanvasElement; final: HTMLCanvasElement; audio: HTMLAudioElement;
-  clock: HTMLElement; caption: HTMLElement; pins: HTMLElement; chips: HTMLElement; ink: HTMLCanvasElement;
-  filmview: HTMLCanvasElement; ruler: HTMLCanvasElement; detail: HTMLCanvasElement; lanes: HTMLCanvasElement; camrow: HTMLCanvasElement; keyrows: HTMLCanvasElement; textrow: HTMLCanvasElement; textsel: HTMLElement; timeline: HTMLElement; rowbox: HTMLElement; peek: HTMLElement; snap: HTMLElement;
-  scopes: HTMLElement; parade: HTMLCanvasElement; wave: HTMLCanvasElement; vector: HTMLCanvasElement;
+  view: HTMLElement;
+  stage: HTMLElement;
+  canvas: HTMLCanvasElement;
+  final: HTMLCanvasElement;
+  audio: HTMLAudioElement;
+  clock: HTMLElement;
+  caption: HTMLElement;
+  pins: HTMLElement;
+  chips: HTMLElement;
+  ink: HTMLCanvasElement;
+  filmview: HTMLCanvasElement;
+  ruler: HTMLCanvasElement;
+  detail: HTMLCanvasElement;
+  lanes: HTMLCanvasElement;
+  camrow: HTMLCanvasElement;
+  keyrows: HTMLCanvasElement;
+  textrow: HTMLCanvasElement;
+  textsel: HTMLElement;
+  timeline: HTMLElement;
+  rowbox: HTMLElement;
+  peek: HTMLElement;
+  snap: HTMLElement;
+  scopes: HTMLElement;
+  parade: HTMLCanvasElement;
+  wave: HTMLCanvasElement;
+  vector: HTMLCanvasElement;
 }
 // How a component hands its element over: ref={bind("canvas")}
 export type Bind = <K extends keyof Elements>(key: K) => (node: Elements[K] | null) => void;
@@ -30,6 +67,7 @@ export const S = {
   finalAt: -1,
   comments: [] as string[],
   voice: { step: 0.04, peaks: [], lines: [] } as VoiceMap,
+  voiceReady: false,
   voiceOut: [] as Line[],
   voiceBase: [] as Line[],
   clockStart: 0,

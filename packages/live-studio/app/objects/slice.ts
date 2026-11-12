@@ -5,4 +5,9 @@ export interface ObjectsSlice {
   gizmo: "translate" | "rotate" | "scale";
   snap: boolean; // the gizmo moves by game pixels and turns by 15 degrees
 }
-export const objectsSlice: ObjectsSlice = { placed: false, object: null, gizmo: "translate", snap: true };
+export const objectsSlice: ObjectsSlice = {
+  placed: false,
+  object: null,
+  gizmo: "translate",
+  snap: true,
+};

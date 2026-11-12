@@ -1,5 +1,5 @@
 // The picture's part of the page state (core/store.ts). Fields kept between visits come from core/prefs.ts
-import type { Ratio } from "../../src/frame.mjs";
+import type { Ratio } from "../../src/frame.ts";
 import type { FilmViewSize } from "../core/prefs";
 
 export interface PictureSlice {
@@ -15,4 +15,7 @@ export interface PictureSlice {
   still: { url: string; t: number } | null; // the snapshot to compare against (snapshot.ts)
   comparing: boolean; // the snapshot shows over the picture while \ is held
 }
-export const pictureSlice: Omit<PictureSlice, "captions" | "guides" | "flySpeed" | "nightVision" | "filmView" | "scopes"> = { ratio: "16:9", free: false, final: false, still: null, comparing: false };
+export const pictureSlice: Omit<
+  PictureSlice,
+  "captions" | "guides" | "flySpeed" | "nightVision" | "filmView" | "scopes"
+> = { ratio: "16:9", free: false, final: false, still: null, comparing: false };

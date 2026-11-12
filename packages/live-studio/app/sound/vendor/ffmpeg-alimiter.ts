@@ -42,7 +42,7 @@ export class FFmpegLimiter {
     this.limit = limit;
     this.releaseSamples = rate * release;
     const size = Math.floor(rate * attack * channels);
-    this.size = size - size % channels;
+    this.size = size - (size % channels);
     if (this.size < channels) throw new RangeError("Limiter attack must cover at least one sample");
     this.delay = this.size / channels - 1;
     this.buffer = new Float64Array(this.size);
@@ -62,7 +62,7 @@ export class FFmpegLimiter {
       if (peak > limit) {
         const patt = Math.min(limit / peak, 1);
         const rdelta = (1 - patt) / releaseSamples;
-        const delta = (limit / peak - this.att) / size * channels;
+        const delta = ((limit / peak - this.att) / size) * channels;
         if (delta < this.delta) {
           this.delta = delta;
           nextpos[0] = this.pos;
@@ -71,13 +71,21 @@ export class FFmpegLimiter {
           this.nextlen = 1;
           this.nextiter = 0;
         } else {
-          let found = false, i;
+          let found = false,
+            i;
           for (i = this.nextiter; i < this.nextiter + this.nextlen; i++) {
             const j = i % size;
             let ppeak = 0;
-            if (nextpos[j] >= 0) for (let c = 0; c < channels; c++) ppeak = Math.max(ppeak, Math.abs(buffer[nextpos[j] + c]));
-            const pdelta = (limit / peak - limit / ppeak) / (((size - nextpos[j] + this.pos) % size) / channels);
-            if (pdelta < nextdelta[j]) { nextdelta[j] = pdelta; found = true; break; }
+            if (nextpos[j] >= 0)
+              for (let c = 0; c < channels; c++)
+                ppeak = Math.max(ppeak, Math.abs(buffer[nextpos[j] + c]));
+            const pdelta =
+              (limit / peak - limit / ppeak) / (((size - nextpos[j] + this.pos) % size) / channels);
+            if (pdelta < nextdelta[j]) {
+              nextdelta[j] = pdelta;
+              found = true;
+              break;
+            }
           }
           if (found) {
             this.nextlen = i - this.nextiter + 1;
@@ -92,7 +100,9 @@ export class FFmpegLimiter {
       peak = 0;
       for (let c = 0; c < channels; c++) peak = Math.max(peak, Math.abs(buffer[at + c]));
       this.att += this.delta;
-      for (let c = 0; c < output.length; c++) output[c][n] = c < channels ? Math.max(-limit, Math.min(limit, buffer[at + c] * this.att)) : 0;
+      for (let c = 0; c < output.length; c++)
+        output[c][n] =
+          c < channels ? Math.max(-limit, Math.min(limit, buffer[at + c] * this.att)) : 0;
       if (at === nextpos[this.nextiter]) {
         this.delta = nextdelta[this.nextiter];
         this.att = limit / peak;
@@ -107,7 +117,10 @@ export class FFmpegLimiter {
         this.nextlen = 0;
         nextpos[0] = -1;
       }
-      if (this.att <= 0) { this.att = 1e-13; this.delta = (1 - this.att) / releaseSamples; }
+      if (this.att <= 0) {
+        this.att = 1e-13;
+        this.delta = (1 - this.att) / releaseSamples;
+      }
       if (this.att !== 1 && 1 - this.att < 1e-13) this.att = 1;
       if (this.delta !== 0 && Math.abs(this.delta) < 1e-14) this.delta = 0;
       this.pos = at;

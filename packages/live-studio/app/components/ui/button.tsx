@@ -1,9 +1,10 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { cva, type VariantProps } from "class-variance-authority";
+
+import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 motion-safe:enabled:active:not-aria-[haspopup]:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out outline-none select-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:ring-2 motion-safe:enabled:active:not-aria-[haspopup]:scale-[0.96] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -11,7 +12,7 @@ const buttonVariants = cva(
         outline:
           "border-border hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-secondary text-secondary-foreground aria-expanded:bg-secondary aria-expanded:text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
@@ -24,13 +25,24 @@ const buttonVariants = cva(
         lit: "text-primary hover:bg-muted/50", // a quiet button whose thing is there now: a key at the playhead, the sound playing
         tool: "text-foreground/80 hover:bg-muted/50 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary", // the bars over the picture
         picture: "text-picture hover:bg-white/15", // an icon on the film itself
-        scrim: "bg-black/70 text-picture hover:bg-black/85", // a chip on the film itself
-        time: "bg-tint font-mono font-semibold text-primary tabular-nums hover:bg-tint-hover", // a note's time, which seeks there
-        "in-out": "bg-in-out/18 text-in-out-text tabular-nums hover:bg-in-out/30 hover:text-foreground",
-        hint: "bg-raised-2 font-semibold text-foreground hover:bg-raised-3 data-popup-open:bg-tint data-popup-open:text-primary", // the "?" beside an option
-        favorite: "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-pressed:text-favorite", // CapCut's star, yellow when on
-        "favorite-tile": "rounded-full bg-black/55 text-white/90 hover:bg-black/70 aria-pressed:text-favorite", // the star over an effect's picture
-        choice: "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary", // one of a list, picked
+        scrim: "text-picture bg-black/70 hover:bg-black/85", // a chip on the film itself
+        time: "bg-tint text-primary hover:bg-tint-hover font-mono font-semibold tabular-nums", // a note's time, which seeks there
+        "in-out":
+          "bg-in-out/18 text-in-out-text hover:bg-in-out/30 hover:text-foreground tabular-nums",
+        hint: "bg-raised-2 text-foreground hover:bg-raised-3 data-popup-open:bg-tint data-popup-open:text-primary font-semibold", // the "?" beside an option
+        favorite:
+          "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-pressed:text-favorite", // CapCut's star, yellow when on
+        "favorite-tile":
+          "aria-pressed:text-favorite rounded-full bg-black/55 text-white/90 hover:bg-black/70", // the star over an effect's picture
+        "favorite-card":
+          "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:text-favorite rounded-full", // CapCut's round star well on an audio card
+        "card-action":
+          "bg-backdrop text-foreground/90 hover:bg-raised-3 hover:text-foreground rounded-full", // CapCut's round + well on an audio card
+        cover:
+          "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary aria-pressed:ring-primary rounded-md aria-pressed:ring-1", // CapCut's 36px audio cover tile
+        approve: "bg-warn hover:bg-warn/85 font-semibold text-black", // the creator's yes to a fix waiting in yellow (To check)
+        choice:
+          "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary", // one of a list, picked
       },
       size: {
         default:
@@ -42,12 +54,14 @@ const buttonVariants = cva(
         "icon-xs": "size-5 rounded-sm [&_svg:not([class*='size-'])]:size-2.5",
         "icon-sm": "size-6 [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-8 [&_svg:not([class*='size-'])]:size-4",
+        cover: "size-9 pointer-coarse:size-10 [&_svg:not([class*='size-'])]:size-4",
+        filter: "h-8 gap-0.5 px-1.5 pointer-coarse:h-10 [&_svg:not([class*='size-'])]:size-4", // CapCut's funnel + chevron beside search
         // CapCut's 32 px button with its 13 px words; a finger gets 40 px
-        md: "h-8 gap-1.5 px-2.5 text-ui has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 pointer-coarse:h-10 pointer-coarse:text-sm [&_svg:not([class*='size-'])]:size-4",
+        md: "text-ui h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 pointer-coarse:h-10 pointer-coarse:text-sm [&_svg:not([class*='size-'])]:size-4",
         xl: "h-11 gap-1.5 px-5 text-sm font-semibold [&_svg:not([class*='size-'])]:size-4", // the note sheet's Save and Cancel
-        inline: "h-auto p-0 text-ui", // a link inside a sentence
+        inline: "text-ui h-auto p-0", // a link inside a sentence
         hint: "size-5 rounded-full text-xs leading-none",
-        chip: "min-h-7.5 px-2 text-ui font-semibold upright:min-h-7 upright:text-xs", // beside the option chips on the picture
+        chip: "text-ui upright:min-h-7 upright:text-xs min-h-7.5 px-2 font-semibold", // beside the option chips on the picture
         row: "h-auto min-h-9 justify-between gap-2 px-2.5 text-left text-sm font-normal whitespace-normal", // a line in a list of choices
       },
     },
@@ -55,8 +69,8 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
-)
+  },
+);
 
 function Button({
   className,
@@ -70,7 +84,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  )
+  );
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants };

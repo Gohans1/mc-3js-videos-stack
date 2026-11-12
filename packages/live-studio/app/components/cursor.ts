@@ -5,4 +5,9 @@ const of = (icon: string, x: number, y: number, fallback: string) => {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${x} ${y}, ${fallback}`;
 };
 // scissors: split mode over the timeline (blade.ts)
-export const BLADE_CURSOR = of(`<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>`, 12, 12, "crosshair");
+export const BLADE_CURSOR = of(
+  `<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>`,
+  12,
+  12,
+  "crosshair",
+);

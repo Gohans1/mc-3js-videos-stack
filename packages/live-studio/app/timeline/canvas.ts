@@ -8,29 +8,89 @@ export const keyReach = (touch: boolean) => (touch ? REACH * 2 : REACH);
 // The canvases' colours are index.css's tokens of the same names, so one place sets the page's and the rows' alike. Read once
 // the page has its styles: before that a token reads empty and is asked for again
 const TONES = [
-  "background", "foreground", "muted-foreground", "label", "primary", "backdrop", "card", "tint", "track", "track-head", "main-track", "grid",
-  "ruler-text", "ruler-tick", "ruler-dot", "playhead", "pick", "clip-video", "clip-video-tag", "clip-text", "clip-text-tag", "clip-adjust",
-  "clip-audio", "clip-audio-tag", "clip-wave", "clip-label", "in-out", "warn", "destructive", "slider", "ink", "ink-saved",
-  "clip-video-hover", "clip-video-text", "clip-shape", "clip-shape-tag", "shot-now", "stuck", "pace", "pace-fast", "pace-slow",
-  "pace-pick", "beat-move", "beat-snap", "beat-hold", "note-done", "key-hold", "level-near", "level-over", "ok", "raised-2", "raised-3",
+  "background",
+  "foreground",
+  "muted-foreground",
+  "label",
+  "primary",
+  "backdrop",
+  "card",
+  "tint",
+  "track",
+  "track-head",
+  "main-track",
+  "grid",
+  "ruler-text",
+  "ruler-tick",
+  "ruler-dot",
+  "playhead",
+  "pick",
+  "clip-video",
+  "clip-video-tag",
+  "clip-text",
+  "clip-text-tag",
+  "clip-adjust",
+  "clip-audio",
+  "clip-audio-tag",
+  "clip-wave",
+  "clip-voice",
+  "clip-voice-tag",
+  "clip-voice-wave",
+  "clip-label",
+  "in-out",
+  "warn",
+  "destructive",
+  "slider",
+  "ink",
+  "ink-saved",
+  "clip-video-hover",
+  "clip-video-text",
+  "clip-shape",
+  "clip-shape-tag",
+  "shot-now",
+  "stuck",
+  "pace",
+  "pace-fast",
+  "pace-slow",
+  "pace-pick",
+  "beat-move",
+  "beat-snap",
+  "beat-hold",
+  "note-done",
+  "key-hold",
+  "level-near",
+  "level-over",
+  "ok",
+  "raised-2",
+  "raised-3",
 ] as const;
 export type Tone = (typeof TONES)[number];
 let tones: Record<Tone, string> | null = null;
 export const tone = (k: Tone) => {
   if (!tones) {
-    const css = getComputedStyle(document.documentElement), read = Object.fromEntries(TONES.map((n) => [n, css.getPropertyValue(`--${n}`).trim()])) as Record<Tone, string>;
+    const css = getComputedStyle(document.documentElement),
+      read = Object.fromEntries(
+        TONES.map((n) => [n, css.getPropertyValue(`--${n}`).trim()]),
+      ) as Record<Tone, string>;
     if (!read.background) return "#000";
     tones = read;
   }
   return tones[k];
 };
 // The playhead down a row: CapCut's half-white line, grey on an empty row and tinted over a clip, with no edge of its own
-export const drawPlayhead = (g: CanvasRenderingContext2D, x: number, h: number) => { g.fillStyle = tone("playhead"); g.fillRect(x - 0.75, 0, 1.5, h); };
+export const drawPlayhead = (g: CanvasRenderingContext2D, x: number, h: number) => {
+  g.fillStyle = tone("playhead");
+  g.fillRect(x - 0.75, 0, 1.5, h);
+};
 
 // The canvas sized to its box in CSS pixels and drawn sharp at the screen's pixel ratio
 export const sized = (c: HTMLCanvasElement) => {
-  const r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
-  if (c.width !== Math.round(r.width * d) || c.height !== Math.round(r.height * d)) { c.width = Math.round(r.width * d); c.height = Math.round(r.height * d); }
+  const r = c.getBoundingClientRect(),
+    d = devicePixelRatio || 1;
+  if (c.width !== Math.round(r.width * d) || c.height !== Math.round(r.height * d)) {
+    c.width = Math.round(r.width * d);
+    c.height = Math.round(r.height * d);
+  }
   const g = c.getContext("2d")!;
   g.setTransform(d, 0, 0, d, 0, 0);
   return { g, w: r.width, h: r.height };

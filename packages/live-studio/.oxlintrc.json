@@ -1,5 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["../../.oxlintrc.json"],
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y"],
   "jsPlugins": ["@shadcn/lint"],
   "ignorePatterns": ["demo/**", "test/fixtures/**"],
   "rules": {
@@ -8,12 +10,29 @@
     "shadcn/no-unknown-classes": "error",
     "shadcn/require-static-classes": "error",
     "shadcn/no-restyle": ["error", { "allow": ["layout"] }],
-    "shadcn/no-inline-styles": "error"
+    "shadcn/no-inline-styles": "error",
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "jsx-a11y/media-has-caption": "off",
+    "jsx-a11y/no-autofocus": "off",
+    "jsx-a11y/no-noninteractive-tabindex": "off",
+    "jsx-a11y/click-events-have-key-events": "off",
+    "jsx-a11y/no-noninteractive-element-interactions": "off",
+    "jsx-a11y/no-static-element-interactions": "off"
   },
   "overrides": [
     {
       "files": ["app/components/ui/**"],
-      "rules": { "shadcn/no-restyle": "off", "shadcn/no-arbitrary-values": "off" }
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": "off",
+        "jsx-a11y/label-has-associated-control": "off"
+      }
+    },
+    {
+      "files": ["app/notes/NoteList.tsx"],
+      "rules": {
+        "react/incompatible-library": "off"
+      }
     }
   ]
 }

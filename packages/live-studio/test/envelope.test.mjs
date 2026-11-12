@@ -2,6 +2,7 @@
 // afade). The expected values were read off ffmpeg itself: a constant signal through the same atrim/afade chain, 1000 samples/s
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { envelope, envelopePoints } from "../app/sound/envelope.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 0.002, `${a} vs ${b}`);
@@ -25,12 +26,19 @@ test("a one-shot without a length has no fade out", () => {
 });
 
 test("straight ramps through the points stay on the curve, even where the fades overlap", () => {
-  for (const [fi, fo, len, u0] of [[0.8, 0.6, 1, 0], [0.5, 0.5, 1, 0.3], [4, 3, 104, 50], [0.3, 1.6, 1, 0]]) {
+  for (const [fi, fo, len, u0] of [
+    [0.8, 0.6, 1, 0],
+    [0.5, 0.5, 1, 0.3],
+    [4, 3, 104, 50],
+    [0.3, 1.6, 1, 0],
+  ]) {
     const pts = envelopePoints(u0, len, fi, fo, len);
     assert.equal(pts[0][0], u0);
     assert.equal(pts.at(-1)[0], len);
     for (let u = u0; u <= len; u += len / 997) {
-      const k = pts.findIndex(([x]) => x >= u), [x1, y1] = pts[k], [x0, y0] = pts[Math.max(0, k - 1)];
+      const k = pts.findIndex(([x]) => x >= u),
+        [x1, y1] = pts[k],
+        [x0, y0] = pts[Math.max(0, k - 1)];
       const line = x1 === x0 ? y1 : y0 + ((y1 - y0) * (u - x0)) / (x1 - x0);
       assert.ok(Math.abs(line - envelope(u, fi, fo, len)) < 0.01, `fi ${fi} fo ${fo} at ${u}`);
     }

@@ -2,6 +2,7 @@
 // note passed while playing can be read and is not one frame long
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { NOTE_FADE, pinFade } from "../app/notes/pinfade.ts";
 
 test("full on the note's frame, gone before it", () => {

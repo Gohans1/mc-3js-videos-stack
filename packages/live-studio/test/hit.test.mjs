@@ -1,11 +1,16 @@
 // The moments Sound at the cut lines up with the cut (app/sound/hit.ts): a riser's end, a whoosh's loudest point, an impact's and a downlifter's start
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { hitOf } from "../app/sound/hit.ts";
 
 const RATE = 48000;
 // Noise whose level (0..1) follows shape(t) over secs
-const shaped = (secs, shape) => Float32Array.from({ length: Math.round(secs * RATE) }, (_, i) => shape(i / RATE) * (Math.sin(i * 12.9898) * 43758.5453 % 1));
+const shaped = (secs, shape) =>
+  Float32Array.from(
+    { length: Math.round(secs * RATE) },
+    (_, i) => shape(i / RATE) * ((Math.sin(i * 12.9898) * 43758.5453) % 1),
+  );
 const near = (a, b, tol = 0.011) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
 
 test("a riser's moment is where its build stops, not where its tail ends", () => {

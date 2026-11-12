@@ -1,19 +1,42 @@
 // What lies under a point of the picture, in words a note can carry ("character, left hand", "chair"), and where it is
 import * as THREE from "three";
+
 import { S } from "../core/state";
 
 const ray = new THREE.Raycaster();
-const BONE_PARTS: [RegExp, string][] = [[/Head|Neck/, "head"], [/Left.*Hand|LeftHand/, "left hand"], [/Right.*Hand|RightHand/, "right hand"], [/LeftFoot|LeftToe/, "left foot"], [/RightFoot|RightToe/, "right foot"], [/LeftForeArm|LeftArm|LeftShoulder/, "left arm"], [/RightForeArm|RightArm|RightShoulder/, "right arm"], [/LeftUpLeg|LeftLeg/, "left leg"], [/RightUpLeg|RightLeg/, "right leg"], [/Spine|Hips/, "body"]];
-const shown = (o: THREE.Object3D | null) => { for (let c = o; c; c = c.parent) if (!c.visible) return false; return true; };
+const BONE_PARTS: [RegExp, string][] = [
+  [/Head|Neck/, "head"],
+  [/Left.*Hand|LeftHand/, "left hand"],
+  [/Right.*Hand|RightHand/, "right hand"],
+  [/LeftFoot|LeftToe/, "left foot"],
+  [/RightFoot|RightToe/, "right foot"],
+  [/LeftForeArm|LeftArm|LeftShoulder/, "left arm"],
+  [/RightForeArm|RightArm|RightShoulder/, "right arm"],
+  [/LeftUpLeg|LeftLeg/, "left leg"],
+  [/RightUpLeg|RightLeg/, "right leg"],
+  [/Spine|Hips/, "body"],
+];
+const shown = (o: THREE.Object3D | null) => {
+  for (let c = o; c; c = c.parent) if (!c.visible) return false;
+  return true;
+};
 const firstMaterial = (o: THREE.Object3D) => [(o as THREE.Mesh).material].flat()[0];
 const whatIs = (hit: THREE.Intersection) => {
   const tools = S.tools!;
   let found: [THREE.Object3D, string] | null = null;
-  for (let c: THREE.Object3D | null = hit.object; c && !found; c = c.parent) found = (tools.objects ?? []).find(([obj]) => obj === c) ?? null;
+  for (let c: THREE.Object3D | null = hit.object; c && !found; c = c.parent)
+    found = (tools.objects ?? []).find(([obj]) => obj === c) ?? null;
   if (found && found[0] === tools.rig && tools.bones) {
-    let best = "", d = 1e9;
+    let best = "",
+      d = 1e9;
     const v = new THREE.Vector3();
-    for (const n in tools.bones) { const e = tools.bones[n].getWorldPosition(v).distanceToSquared(hit.point); if (e < d) { d = e; best = n; } }
+    for (const n in tools.bones) {
+      const e = tools.bones[n].getWorldPosition(v).distanceToSquared(hit.point);
+      if (e < d) {
+        d = e;
+        best = n;
+      }
+    }
     const part = BONE_PARTS.find(([re]) => re.test(best))?.[1];
     return part ? `character, ${part}` : "character";
   }

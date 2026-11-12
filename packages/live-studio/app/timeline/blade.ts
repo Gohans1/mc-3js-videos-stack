@@ -5,7 +5,12 @@ import { S } from "../core/state";
 import { set } from "../core/store";
 
 // Where the next click would cut: on which row, at what time, and (on the tracks) the clip's top and bottom
-export const bladeLine: { row: "lanes" | "cam" | null; t: number; y0: number; y1: number } = { row: null, t: 0, y0: 0, y1: 0 };
+export const bladeLine: { row: "lanes" | "cam" | null; t: number; y0: number; y1: number } = {
+  row: null,
+  t: 0,
+  y0: 0,
+  y1: 0,
+};
 
 export const setBlade = (on: boolean) => {
   set({ blade: on });

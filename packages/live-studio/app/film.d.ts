@@ -3,8 +3,16 @@
 declare module "film/scene" {
   import type * as THREE from "three";
 
-  export interface Shot { t: number; [key: string]: unknown }
-  export interface FreeCam { on: boolean; p: THREE.Vector3; l: THREE.Vector3; fov: number }
+  export interface Shot {
+    t: number;
+    [key: string]: unknown;
+  }
+  export interface FreeCam {
+    on: boolean;
+    p: THREE.Vector3;
+    l: THREE.Vector3;
+    fov: number;
+  }
   export interface Tools {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -25,12 +33,38 @@ declare module "film/scene" {
     titles?: Titles;
   }
   // film-stage/titles.ts makeTitles: draws text.json's items over the frame, and tells the studio where each one is
-  export interface TitleFx { id: string; title: string; len: number }
+  export interface TitleFx {
+    id: string;
+    title: string;
+    len: number;
+    cat?: string;
+    tip?: string;
+    stagger?: boolean;
+    defaultStagger?: number;
+    tint?: boolean;
+    defaultTint?: string;
+  }
   export interface Titles {
-    (list: unknown[], t: number, camera?: THREE.Camera, tracks?: Record<string, { hidden?: boolean }>): void;
-    boxes(list: unknown[], t: number, camera?: THREE.Camera, tracks?: Record<string, { hidden?: boolean }>): { i: number; box: [number, number, number, number]; corners?: [number, number][] }[];
-    fonts: { id: string; title: string; css: string }[];
+    (
+      list: unknown[],
+      t: number,
+      camera?: THREE.Camera,
+      tracks?: Record<string, { hidden?: boolean }>,
+      timeAt?: (item: unknown) => number,
+    ): void;
+    boxes(
+      list: unknown[],
+      t: number,
+      camera?: THREE.Camera,
+      tracks?: Record<string, { hidden?: boolean }>,
+      timeAt?: (item: unknown) => number,
+    ): { i: number; box: [number, number, number, number]; corners?: [number, number][] }[];
+    fonts: { id: string; title: string; css: string; tip?: string }[];
+    categories?: { text: readonly string[]; shape: readonly string[] };
+    eases?: readonly string[];
+    shapes?: readonly { id: string; title: string; tip?: string }[];
     anims: { text: { in: TitleFx[]; out: TitleFx[] }; shape: { in: TitleFx[]; out: TitleFx[] } };
+    disposeTitles?(): void;
   }
   // mc-assets/placed.ts: objects dropped in from the Objects library, stored in the keyFiles entry whose EDIT key is `key`
   export interface Placed {
@@ -49,7 +83,10 @@ declare module "film/scene" {
     catalog(): Promise<{ what: string; kind: "block" | "mob" | "custom"; title: string }[]>;
     icon(what: string, size?: number): Promise<string | null>;
   }
-  export interface ReviewSection { head: string; lines: { text: string; fresh?: boolean }[] }
+  export interface ReviewSection {
+    head: string;
+    lines: { text: string; fresh?: boolean }[];
+  }
   export interface Variant {
     id: string;
     title: string;
@@ -60,7 +97,21 @@ declare module "film/scene" {
     off?: boolean; // set("off") hides it: the studio adds an Off chip
   }
   // film-stage/animate.ts ANIMS: what a shot's "anim" {in, out, combo} may name (fx: id), for the studio's Animation tab
-  export interface AnimFx { id: string; title: string; cat: string; tip: string; len?: number; black?: boolean }
+  export interface AnimFx {
+    id: string;
+    title: string;
+    cat: string;
+    tip: string;
+    len?: number;
+    pair?: string;
+    move?: string;
+    a?: number;
+    loop?: string;
+    jolt?: boolean;
+    black?: boolean;
+    flip?: boolean;
+    optics?: boolean;
+  }
   export interface Draw {
     (t: number): void;
     tools: Tools;
@@ -70,18 +121,43 @@ declare module "film/scene" {
     eases?: Record<string, (x: number) => number>; // the camera keys' named eases (film-stage EASES), for the camera row
     keyEases?: { edit: string; path: string[]; names: string[] }[];
     anims?: { in: AnimFx[]; out: AnimFx[]; combo: AnimFx[] };
-    transitions?: readonly { id: string; title: string; tip: string }[];
+    transitions?: readonly {
+      id: string;
+      title: string;
+      tip: string;
+      category?: string;
+      cat?: string;
+      len?: number;
+      glsl?: string;
+      ease?: import("film-stage/transitions").TransitionEase;
+      feather?: boolean;
+      flip?: boolean;
+    }[];
+    velocity?: boolean;
+    velocityEffects?: readonly (string | { id: string; title?: string; preview?: string })[];
     adjustments?: { prepare: (grades: unknown[]) => Promise<void> };
   }
   export const SHOTS: Shot[];
   export const SHOTS_OUT: Shot[];
   export let DURATION: number;
   export function applyEdit(): void;
-  export function buildScene(canvas: HTMLCanvasElement, w: number, h: number, draft: boolean): Promise<Draw>;
+  export function buildScene(
+    canvas: HTMLCanvasElement,
+    w: number,
+    h: number,
+    draft: boolean,
+  ): Promise<Draw>;
 }
 
 declare module "film/edit" {
-  export interface Beat { title: string; at: number; dur: number; kind: "motion" | "sound"; sounds: [number, string, number][]; curve?: string }
+  export interface Beat {
+    title: string;
+    at: number;
+    dur: number;
+    kind: "motion" | "sound";
+    sounds: [number, string, number][];
+    curve?: string;
+  }
   export interface Edit {
     voice: { edits: Record<string, { speed?: number } | undefined>; warp: [number, number][] };
     beats: Record<string, Beat>;

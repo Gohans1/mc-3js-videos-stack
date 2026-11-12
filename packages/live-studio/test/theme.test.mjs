@@ -3,10 +3,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+
 import { cn } from "../app/lib/utils.ts";
 
 const css = readFileSync(new URL("../app/index.css", import.meta.url), "utf8");
-const own = (scale) => [...css.matchAll(new RegExp(`^\\s*--${scale}-([a-z]+):`, "gm"))].map((m) => m[1]);
+const own = (scale) =>
+  [...css.matchAll(new RegExp(`^\\s*--${scale}-([a-z]+):`, "gm"))].map((m) => m[1]);
 
 test("the theme names some steps of its own", () => {
   assert.ok(own("text").length > 0);
@@ -21,5 +23,6 @@ test("a theme font size stays beside a text colour, and replaces another size", 
 });
 
 test("a theme shadow replaces another shadow", () => {
-  for (const n of own("shadow")) assert.equal(cn("shadow-sm", `shadow-${n}`), `shadow-${n}`, `shadow-${n}`);
+  for (const n of own("shadow"))
+    assert.equal(cn("shadow-sm", `shadow-${n}`), `shadow-${n}`, `shadow-${n}`);
 });

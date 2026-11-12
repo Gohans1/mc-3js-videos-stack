@@ -4,9 +4,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+
 import { openFavorites } from "../src/favorites.mjs";
 
-const fresh = () => { const dir = mkdtempSync(join(tmpdir(), "fav-")); return { dir, fav: openFavorites(join(dir, "sub", "favorites.json")) }; };
+const fresh = () => {
+  const dir = mkdtempSync(join(tmpdir(), "fav-"));
+  return { dir, fav: openFavorites(join(dir, "sub", "favorites.json")) };
+};
 
 test("no file yet reads as no favorites", () => {
   const { dir, fav } = fresh();
@@ -19,9 +23,18 @@ test("a star is added once, newest last, and taken off again", () => {
   fav.set({ kind: "sounds", id: "door_kick", on: true });
   fav.set({ kind: "effects", id: "move:push", on: true });
   fav.set({ kind: "sounds", id: "room_hum", on: true });
-  assert.deepEqual(fav.set({ kind: "sounds", id: "door_kick", on: true }).sounds, ["room_hum", "door_kick"]);
-  assert.deepEqual(fav.set({ kind: "sounds", id: "room_hum", on: false }), { sounds: ["door_kick"], effects: ["move:push"] });
-  assert.deepEqual(JSON.parse(readFileSync(fav.file, "utf8")), { sounds: ["door_kick"], effects: ["move:push"] });
+  assert.deepEqual(fav.set({ kind: "sounds", id: "door_kick", on: true }).sounds, [
+    "room_hum",
+    "door_kick",
+  ]);
+  assert.deepEqual(fav.set({ kind: "sounds", id: "room_hum", on: false }), {
+    sounds: ["door_kick"],
+    effects: ["move:push"],
+  });
+  assert.deepEqual(JSON.parse(readFileSync(fav.file, "utf8")), {
+    sounds: ["door_kick"],
+    effects: ["move:push"],
+  });
   rmSync(dir, { recursive: true });
 });
 
@@ -30,7 +43,10 @@ test("another studio's star made meanwhile is kept", () => {
   const other = openFavorites(fav.file);
   fav.set({ kind: "sounds", id: "a", on: true });
   other.set({ kind: "sounds", id: "b", on: true });
-  assert.deepEqual(fav.set({ kind: "effects", id: "fade:dip", on: true }), { sounds: ["a", "b"], effects: ["fade:dip"] });
+  assert.deepEqual(fav.set({ kind: "effects", id: "fade:dip", on: true }), {
+    sounds: ["a", "b"],
+    effects: ["fade:dip"],
+  });
   rmSync(dir, { recursive: true });
 });
 

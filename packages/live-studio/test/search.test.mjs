@@ -1,6 +1,7 @@
 // The libraries' search (app/core/search.ts): each word typed begins a word of the item
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { matcher } from "../app/core/search.ts";
 
 test("a word matches the start of a word, not the middle of one", () => {

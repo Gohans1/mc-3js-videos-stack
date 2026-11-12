@@ -6,8 +6,14 @@ const streams = [];
 globalThis.EventSource = class extends EventTarget {
   static CLOSED = 2;
   readyState = 1;
-  constructor(url) { super(); this.url = url; streams.push(this); }
-  say(event, data) { this.dispatchEvent(new MessageEvent(event, { data })); }
+  constructor(url) {
+    super();
+    this.url = url;
+    streams.push(this);
+  }
+  say(event, data) {
+    this.dispatchEvent(new MessageEvent(event, { data }));
+  }
 };
 globalThis.document = { querySelector: () => ({ content: "build-1" }) };
 const { onHello } = await import("../app/core/events.ts");
@@ -21,7 +27,10 @@ test("a part of the page that listens late still tells the stream's first hello 
   assert.deepEqual(heard, [{ current: true, reconnect: false }]);
   stream().say("hello", "build-1"); // the line dropped and came back on the same code
   stream().say("hello", "build-2"); // ... or on new code
-  assert.deepEqual(heard.slice(1), [{ current: true, reconnect: true }, { current: false, reconnect: true }]);
+  assert.deepEqual(heard.slice(1), [
+    { current: true, reconnect: true },
+    { current: false, reconnect: true },
+  ]);
 });
 
 test("a stream the browser gave up on (a proxy's 502) is opened again, with its listeners", async (t) => {

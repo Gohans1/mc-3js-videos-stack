@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { weighFirstVisit } from "../src/weight.mjs";
 
 const MB = 1e6;
 
 test("a light first visit says nothing", () => {
-  assert.equal(weighFirstVisit([{ path: "/_studio/App.js", bytes: 0.5 * MB }, { path: "/rig/player.glb", bytes: 0.3 * MB }]), null);
+  assert.equal(
+    weighFirstVisit([
+      { path: "/_studio/App.js", bytes: 0.5 * MB },
+      { path: "/rig/player.glb", bytes: 0.3 * MB },
+    ]),
+    null,
+  );
 });
 
 test("a heavy first visit names its total and the biggest files, biggest first", () => {
@@ -21,5 +28,11 @@ test("a heavy first visit names its total and the biggest files, biggest first",
 });
 
 test("a file fetched twice counts once", () => {
-  assert.equal(weighFirstVisit([{ path: "/a.bin", bytes: 6 * MB }, { path: "/a.bin", bytes: 6 * MB }]), null);
+  assert.equal(
+    weighFirstVisit([
+      { path: "/a.bin", bytes: 6 * MB },
+      { path: "/a.bin", bytes: 6 * MB },
+    ]),
+    null,
+  );
 });

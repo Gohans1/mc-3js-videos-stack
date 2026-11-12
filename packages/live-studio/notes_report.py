@@ -5,7 +5,7 @@ bun run notes ID [ID ...]     everything about those notes: the tap, words, acti
 bun run notes --shot 3        everything about one shot's notes
 (the film's script for: python node_modules/live-studio/notes_report.py, run in the film)
 Add --done to include fixed notes, --cam to include the camera line (for changing a shot's framing).
-Fixed one: bun run note done ID "what you changed" (docs/film-contract.md, "Notes").
+Answer one: bun run note done|ask|learned ID "words"; a fixed note waits for the creator's check (src/note-state.mjs).
 
 Notes come in the order the creator wrote them, not film order: a later note often builds on, narrows or takes back an earlier
 one ("this", "still", "no, rather"), so read them in that order before fixing any. #N is a note's place in that order and never
@@ -25,6 +25,29 @@ ROOT = Path.cwd()
 sys.stdout.reconfigure(encoding="utf8")
 
 
+STATE_HEAD = {"open": "", "check": " (WAITS FOR THE CREATOR'S CHECK)", "done": " (DONE)"}
+SCOPE = {"film": "this film", "all": "every film"}
+LEARN = ("keep it as a rule that outlives this chat, in code where you can (a default, or a check that fails), else in the repo's "
+         "skill .claude/skills/gohans-3js-videos-skills; a this-film rule stays in this film's src; then")
+
+
+def state(n):
+    """src/note-state.mjs noteState"""
+    return n["state"] if n.get("state") in STATE_HEAD else "done" if n.get("done") else "open"
+
+
+def to_learn(n):
+    return bool(n.get("remember")) and not (n.get("learned") and n["learned"]["at"] >= n["remember"]["at"])
+
+
+def thread(n):
+    """src/note-state.mjs noteThread, past the note itself"""
+    said = [dict(by="ai", text=f["what"], at=f.get("at", ""), ask=bool(f.get("ask")), checkpoint=f.get("checkpoint"))
+            for f in n.get("fixes", [])]
+    said += [dict(by="creator", text=a["text"], at=a["at"]) for a in n.get("asks", [])]
+    return sorted(said, key=lambda m: m["at"])
+
+
 def load_notes():
     file = ROOT / "notes/notes.jsonl"
     notes = [json.loads(l) for l in file.read_text(encoding="utf8").splitlines() if l.strip()] if file.exists() else []
@@ -39,6 +62,16 @@ def load_notes():
 
 def written(notes):
     return sorted(notes, key=lambda n: n["n"])
+
+
+def shots_past(shot):
+    """'; the film has shots 0-N' when shot is past the film's shots (a typo, not a quiet shot), else ''"""
+    try:
+        rel = json.loads((ROOT / "package.json").read_text(encoding="utf8")).get("live-studio", {}).get("shotsTimeline")
+        count = len(json.loads((ROOT / rel).read_text(encoding="utf8"))) if rel else None
+    except (OSError, ValueError, TypeError):
+        return ""
+    return f"; the film has shots 0-{count - 1}" if count is not None and shot >= count else ""
 
 
 def worked_out(n):
@@ -95,8 +128,12 @@ def one_line(n):
         tags.append("while playing")
     if n.get("fixes"):
         tags.append(f"tried {len(n['fixes'])}x")
-    if n.get("done"):
-        tags.append("done")
+    if n.get("asks"):
+        tags.append(f"creator answered {len(n['asks'])}x")
+    if n.get("remember"):
+        tags.append("remember")
+    if state(n) != "open":
+        tags.append("waits for the creator's check" if state(n) == "check" else "done")
     text = " ".join(n["text"].split())
     return f"#{n['n']} {n['id']} {n['time']} shot {n['shot']}{' [' +', '.join(tags) + ']' if tags else ''} {text}"
 
@@ -107,9 +144,20 @@ def index(notes):
         print(one_line(n))
 
 
+def after_index(notes, done):
+    waiting = [n for n in notes if state(n) == "check"]
+    if not done and waiting:
+        print(f"\n{len(waiting)} more wait for the creator's check in the studio, not yours until they answer (--done lists them)")
+    learn = written([n for n in notes if to_learn(n)])
+    if learn:
+        print(f'\nThe creator asked you to remember these: {LEARN} bun run note learned ID "the rule, where"')
+        for n in learn:
+            print(f"[{SCOPE[n['remember']['scope']]}] {one_line(n)}")
+
+
 def detail(n, cam):
     c = n.get("context")
-    print(f"\n## #{n['n']} {n['id']} {n['time']} frame {n.get('frame')}, shot {n['shot']}: {n.get('shotName', '')}{' (DONE)' if n.get('done') else ''}")
+    print(f"\n## #{n['n']} {n['id']} {n['time']} frame {n.get('frame')}, shot {n['shot']}: {n.get('shotName', '')}{STATE_HEAD[state(n)]}")
     print(f"NOTE: {n['text']}")
     for e in n.get("edits", []):
         print(f"earlier wording: {e['was']}")
@@ -134,7 +182,7 @@ def detail(n, cam):
         v = worked_out(n)
     suffix = "" if c else " (today's edit)"
     if v.get("word"):
-        print(f"word: \"{v['word']}\" at {v.get('wordAt')}s in \"...{v.get('around')}...\"")
+        print(f"word: \"{v['word']}\" at {v.get('wordAt')}s in \"...{v.get('around')}...\" (heard second when written; now: bun run voice:cues)")
     for name, key in (("before", "before"), ("saying", "line"), ("next", "next")):
         if v.get(key):
             print(f"{name}{suffix}: {v[key]}")
@@ -151,8 +199,13 @@ def detail(n, cam):
             print(words)
     if n.get("version"):
         print(f"said about version: {n['version']}")
-    for fix in n.get("fixes", []):
-        print(f"tried: {fix['what']} ({fix['checkpoint']})")
+    for m in thread(n):
+        print(f"creator answered: {m['text']}" if m["by"] == "creator" else f"you asked: {m['text']}" if m["ask"]
+              else f"tried: {m['text']} ({m['checkpoint']})")
+    if n.get("learned"):
+        print(f"learned ({SCOPE[n['learned']['scope']]}): {n['learned']['what']}")
+    if to_learn(n):
+        print(f"the creator asked you to remember this ({SCOPE[n['remember']['scope']]}): {LEARN} bun run note learned {n['id']} \"the rule, where\"")
     if cam and n.get("cam"):
         print(f"camera: {n['cam'].get('line')}" + (f" ({n['cam']['warn']})" if n["cam"].get("warn") else ""))
     for label, key in (("seconds around (-2 -1 0 +1)", "strip"), ("frame", "img"), ("under the tap", "crop")):
@@ -171,19 +224,28 @@ def main():
     a = p.parse_args()
     notes = load_notes()
     if a.ids:
-        unknown = set(a.ids) - {n["id"] for n in notes}
+        # a note by its id or by the #N the list shows
+        by_key = {k: n for n in notes for k in (n["id"], f"#{n['n']}", str(n["n"]))}
+        unknown = [i for i in a.ids if i not in by_key]
         if unknown:
-            sys.exit(f"no such note: {', '.join(unknown)}")
-        pick = [n for n in notes if n["id"] in a.ids]
+            sys.exit(f"no such note: {', '.join(unknown)} (the ids: bun run notes, or --done for fixed ones too)")
+        want = [by_key[i] for i in a.ids]
+        pick = [n for n in notes if any(n is w for w in want)]
     else:
         pick = [n for n in notes if a.done or not n.get("done")]
         if a.shot is not None:
             pick = [n for n in pick if n["shot"] == a.shot]
+    if a.shot is not None and not pick:
+        print(f"no {'' if a.done else 'open '}notes on shot {a.shot}{'' if a.done else ' (--done for fixed ones too)'}{shots_past(a.shot)}")
     if a.ids or a.shot is not None:
         for n in written(pick):
             detail(n, a.cam)
+        todo = [n for n in pick if not n.get("done")]
+        if todo:
+            print(f'\nnext: where it is heard now and what the film has there, file and row: bun run at {todo[0]["id"]}; fix it, look (AT=<the second at prints> bun run render stills), then bun run note done {todo[0]["id"]} "what changed"')
     else:
         index(pick)
+        after_index(notes, a.done)
 
 
 if __name__ == "__main__":

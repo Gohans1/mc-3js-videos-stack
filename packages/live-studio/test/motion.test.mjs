@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { measure, report } from "../checks/motion.mjs";
 
 const DT = 1 / 60;
-const track = (from, to, x) => { const out = []; for (let t = from; t <= to + 1e-9; t += DT) out.push({ t, p: [x(t), 1, 0] }); return out; };
+const track = (from, to, x) => {
+  const out = [];
+  for (let t = from; t <= to + 1e-9; t += DT) out.push({ t, p: [x(t), 1, 0] });
+  return out;
+};
 const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 
 test("a smoothstep move peaks in its middle and has no faults", () => {
@@ -17,7 +22,14 @@ test("a smoothstep move peaks in its middle and has no faults", () => {
 test("a fling that whips out and settles slowly peaks early", () => {
   const m = measure(track(0, 2, (t) => (t < 0.5 ? 0 : t > 1.5 ? 1 : 1 - (1 - (t - 0.5)) ** 3)));
   assert.ok(m.moves[0].peakAt < 0.35, `peak at ${m.moves[0].peakAt}`);
-  assert.match(report("handR", track(0, 2, () => 0), m).join("\n"), /fast start, slow finish/);
+  assert.match(
+    report(
+      "handR",
+      track(0, 2, () => 0),
+      m,
+    ).join("\n"),
+    /fast start, slow finish/,
+  );
 });
 
 test("a one-sample jump is a pop", () => {
@@ -27,7 +39,10 @@ test("a one-sample jump is a pop", () => {
 });
 
 test("stopping from full speed in one sample is a dead stop, easing to rest is not", () => {
-  assert.equal(measure(track(0, 1, (t) => Math.min(t, 0.5) * 2)).stops.filter((s) => s.kind === "stop").length, 1);
+  assert.equal(
+    measure(track(0, 1, (t) => Math.min(t, 0.5) * 2)).stops.filter((s) => s.kind === "stop").length,
+    1,
+  );
   assert.equal(measure(track(0, 1.5, (t) => smooth(t))).stops.length, 0);
 });
 

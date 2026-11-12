@@ -1,7 +1,8 @@
 // The timeline's magnet (app/core/time.ts snapTo), shared by the sound clips, the camera row and the key rows
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FPS, SNAP_PX, makeSnapper, snapSpan, snappedTo, snapTo } from "../app/core/time.ts";
+
+import { FPS, makeSnapper, SNAP_PX, snappedTo, snapSpan, snapTo } from "../app/core/time.ts";
 
 const perPx = 0.01; // seconds a pixel: SNAP_PX pixels reach 0.07 s
 
@@ -15,7 +16,7 @@ test("a drag magnet attracts, holds beyond the entry radius, then releases", () 
 
 test("a held trailing edge releases on Shift and never leaves a false guide", () => {
   const snap = makeSnapper();
-  assert.deepEqual(snap(.96, [0, 1], [2], perPx, false), { time: 1, target: 2 });
+  assert.deepEqual(snap(0.96, [0, 1], [2], perPx, false), { time: 1, target: 2 });
   assert.deepEqual(snap(1.1, [0, 1], [2], perPx, false), { time: 1, target: 2 });
   assert.deepEqual(snap(1.1, [0, 1], [2], perPx, true), { time: 1.1, target: null });
   assert.deepEqual(snap(1.1, [0, 1], [2], perPx, false), { time: 1.1, target: null });
@@ -52,7 +53,11 @@ test("a carried clip sticks by its end when only its end is in reach", () => {
 });
 
 test("with both ends in reach, the nearer one sticks", () => {
-  assert.equal(snapSpan(2.05, 1, [2, 3.03], perPx, false), 2.03, "the end is 0.02 off, the start 0.05");
+  assert.equal(
+    snapSpan(2.05, 1, [2, 3.03], perPx, false),
+    2.03,
+    "the end is 0.02 off, the start 0.05",
+  );
   assert.equal(snapSpan(2, 1, [2, 3.03], perPx, false), 2, "a start right on a mark stays on it");
 });
 

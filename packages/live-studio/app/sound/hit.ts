@@ -5,11 +5,14 @@
 export type Role = "riser" | "whoosh" | "impact" | "downlifter";
 export const ROLES: readonly Role[] = ["riser", "whoosh", "impact", "downlifter"];
 
-const STEP = 0.01, RANGE = 20; // a moment counts from 20 dB under the loudest 10 ms on
+const STEP = 0.01,
+  RANGE = 20; // a moment counts from 20 dB under the loudest 10 ms on
 
 // Each channel's samples (mono or stereo); returns seconds into the file, and the loudest 10 ms in dB (for the level)
 export const hitOf = (role: Role, channels: readonly Float32Array[], rate: number) => {
-  const h = Math.max(1, Math.round(STEP * rate)), n = Math.floor(channels[0].length / h), db = new Float64Array(n);
+  const h = Math.max(1, Math.round(STEP * rate)),
+    n = Math.floor(channels[0].length / h),
+    db = new Float64Array(n);
   for (let w = 0; w < n; w++) {
     let sum = 0;
     for (const c of channels) for (let i = w * h; i < (w + 1) * h; i++) sum += c[i] * c[i];
@@ -21,10 +24,25 @@ export const hitOf = (role: Role, channels: readonly Float32Array[], rate: numbe
   let at: number;
   if (role === "whoosh") {
     // Loudest over 50 ms, not one 10 ms window: a noise sweep's peak is broad and ragged
-    let best = 0, bestAt = top;
-    for (let w = 2; w < n - 2; w++) { let p = 0; for (let k = -2; k <= 2; k++) p += 10 ** (db[w + k] / 10); if (p > best) { best = p; bestAt = w; } }
+    let best = 0,
+      bestAt = top;
+    for (let w = 2; w < n - 2; w++) {
+      let p = 0;
+      for (let k = -2; k <= 2; k++) p += 10 ** (db[w + k] / 10);
+      if (p > best) {
+        best = p;
+        bestAt = w;
+      }
+    }
     at = (bestAt + 0.5) * STEP;
-  } else if (role === "riser") { let w = n - 1; while (w > top && db[w] < floor) w--; at = (w + 1) * STEP; }
-  else { let w = 0; while (w < top && db[w] < floor) w++; at = w * STEP; }
+  } else if (role === "riser") {
+    let w = n - 1;
+    while (w > top && db[w] < floor) w--;
+    at = (w + 1) * STEP;
+  } else {
+    let w = 0;
+    while (w < top && db[w] < floor) w++;
+    at = w * STEP;
+  }
   return { at, loudest: db[top] };
 };

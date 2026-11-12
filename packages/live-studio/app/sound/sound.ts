@@ -2,86 +2,307 @@
 // edit wins): beds that loop from..to and one-shots at a time, both from the film's sfx folder. The film's own sound watcher
 // remixes on a save, or, with live lanes (mixer.ts), the page plays the change itself and nothing is remixed.
 import { DURATION } from "film/scene";
-import { createDoc } from "../core/doc";
+
+import { narrationLines } from "../../src/narration.ts";
+import { mapVoice } from "../../src/timing-data.mjs";
+import { clockForTimeline } from "../../src/timing-state.mjs";
 import { getFile } from "../core/net";
+import { transitionSelection } from "../core/selection";
+import { S } from "../core/state";
+import { get, say, set } from "../core/store";
 import { r3, stamp } from "../core/time";
+import { createTimedDoc } from "../core/timed-doc";
+import { lanePick } from "../options/options";
+import { marks, refreshVoiceTimes } from "../timeline/timeline";
+import { type BeatMarkers, beatMarks } from "./beat-marks";
+import { type GainClip } from "./gain";
+import type { Role } from "./hit";
+import { compareVariants, warmSearchTokens } from "./library-view";
 import { measureFinal } from "./meter";
 import { forgetSounds, replan, setLive } from "./mixer";
-import { S } from "../core/state";
-import type { Role } from "./hit";
-import { type GainClip } from "./gain";
-import { beatMarks, type BeatMarkers } from "./beat-marks";
-import { lanePick } from "../options/options";
+import { type AudioProcessing, retime, retimedLength, sourceRoom, trimSource } from "./retime";
 import { type ClipRef } from "./slice";
-import { retime, trimSource, type AudioProcessing } from "./retime";
-import { get, say, set } from "../core/store";
-import { narrationLines } from "../../src/narration.mjs";
-import { marks, refreshVoiceTimes } from "../timeline/timeline";
-import { addTrack, fits, freeTrack, normalize, refs, placeShift, same, tidy, type Track, trackOf } from "./tracks";
+import {
+  addTrack,
+  fits,
+  freeTrack,
+  normalize,
+  placeShift,
+  refs,
+  same,
+  tidy,
+  type Track,
+  trackOf,
+} from "./tracks";
 
-export interface Bed extends GainClip, AudioProcessing, BeatMarkers { name: string; from: number; to: number; fadeIn: number; fadeOut: number; start?: number; duck?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
-export interface OneShot extends GainClip, AudioProcessing, BeatMarkers { at: number; name: string; start?: number; length?: number; fadeIn?: number; fadeOut?: number; pan?: number; track?: string; try?: string[]; [k: string]: unknown }
-export interface Lanes { beds: Bed[]; sfx: OneShot[]; tracks: Track[]; narration?: string; [k: string]: unknown }
-export interface LibraryItem { name: string; seconds: number; title?: string; license?: string; url?: string; for?: string; kind?: "bgm" | "sfx"; role?: Role }
-export interface Peaks { step: number; peaks: number[] }
+export interface Bed extends GainClip, AudioProcessing, BeatMarkers {
+  name: string;
+  from: number;
+  to: number;
+  fadeIn: number;
+  fadeOut: number;
+  start?: number;
+  duck?: number;
+  pan?: number;
+  track?: string;
+  try?: string[];
+  [k: string]: unknown;
+}
+export interface OneShot extends GainClip, AudioProcessing, BeatMarkers {
+  at: number;
+  name: string;
+  start?: number;
+  length?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+  pan?: number;
+  track?: string;
+  try?: string[];
+  [k: string]: unknown;
+}
+export interface Lanes {
+  beds: Bed[];
+  sfx: OneShot[];
+  tracks: Track[];
+  narration?: string;
+  [k: string]: unknown;
+}
+export interface LibraryItem {
+  name: string;
+  seconds: number;
+  title?: string;
+  license?: string;
+  url?: string;
+  for?: string;
+  kind?: "bgm" | "sfx" | "mc";
+  role?: Role;
+  origin?: "real" | "synth";
+  category?: string;
+  source?: string;
+  family?: string;
+  variant?: number;
+  contentId?: boolean;
+}
+export interface Peaks {
+  step: number;
+  peaks: number[];
+}
 
 export let lanes: Lanes | null = null;
 export let library: LibraryItem[] = [];
+let libraryByName = new Map<string, LibraryItem>();
+let libraryByFamily = new Map<string, LibraryItem[]>();
+let libraryDurations: Record<string, number> = {};
+let clipUseCounts = new Map<string, number>();
+
+let cancelTokenWarm: (() => void) | null = null;
+
+const scheduleSearchTokenWarm = (items: readonly LibraryItem[]) => {
+  cancelTokenWarm?.();
+  cancelTokenWarm = null;
+  if (typeof window === "undefined" || !items.length) return;
+  let idx = 0;
+  let cancelled = false;
+  const scheduleNext = (cb: () => void): (() => void) => {
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(cb, { timeout: 500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(cb, 16);
+    return () => window.clearTimeout(id);
+  };
+  let cancelStep = () => {};
+  const step = () => {
+    if (cancelled || library !== items) return;
+    idx = warmSearchTokens(items, idx, 600);
+    if (idx < items.length) cancelStep = scheduleNext(step);
+  };
+  cancelStep = scheduleNext(step);
+  cancelTokenWarm = () => {
+    cancelled = true;
+    cancelStep();
+  };
+};
+
+const rebuildLibraryIndex = () => {
+  libraryByName = new Map(library.map((x) => [x.name, x]));
+  const durs: Record<string, number> = {};
+  const fam = new Map<string, LibraryItem[]>();
+  for (const x of library) {
+    durs[x.name] = x.seconds;
+    if (!x.family) continue;
+    const list = fam.get(x.family);
+    if (list) list.push(x);
+    else fam.set(x.family, [x]);
+  }
+  for (const list of fam.values()) list.sort(compareVariants);
+  libraryByFamily = fam;
+  libraryDurations = durs;
+  scheduleSearchTokenWarm(library);
+};
+
+const rebuildClipUseCounts = () => {
+  const counts = new Map<string, number>();
+  if (lanes) {
+    for (const b of lanes.beds) counts.set(b.name, (counts.get(b.name) ?? 0) + 1);
+    for (const s of lanes.sfx) counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
+  }
+  clipUseCounts = counts;
+};
+
+export const itemOf = (name: string): LibraryItem | undefined =>
+  libraryByName.get(name) ?? library.find((x) => x.name === name);
+
+export const familyItemsOf = (name: string): readonly LibraryItem[] => {
+  const it = itemOf(name);
+  if (!it) return [];
+  if (!it.family) return [it];
+  return libraryByFamily.get(it.family) ?? [it];
+};
 
 // A soloed track that went (emptied, undone) lets go of its solo, or the page would stay silent with no button to undo it
 const changed = () => {
   lanes = doc.data;
-  const ids = new Set(lanes?.tracks?.map((t) => t.id)), solo = get().solo.filter((t) => ids.has(t));
-  set({ soundRev: get().soundRev + 1, voiceClips: !!lanes?.narration, ...(solo.length !== get().solo.length && { solo }) });
+  rebuildClipUseCounts();
+  const ids = new Set(lanes?.tracks?.map((t) => t.id)),
+    solo = get().solo.filter((t) => ids.has(t));
+  set({
+    soundRev: get().soundRev + 1,
+    voiceClips: !!lanes?.narration,
+    ...(solo.length !== get().solo.length && { solo }),
+  });
   S.dirty = true;
   refreshVoiceTimes();
   replan();
   measureFinal();
   if (get().clips.some((c) => !clipOf(c))) setClips([]);
 };
-const doc = createDoc<Lanes>("sound", {
-  label: "audio",
-  changed,
-  tidy: (l) => { lanes = l; normalize(l, span); tidy(l); }, // a film without tracks gets them here, and in the file with its next edit
-  saved: (soundSaved) => set({ soundSaved }),
-  replaced: (was) => { if (!was || !lanes || was.beds.length !== lanes.beds.length || was.sfx.length !== lanes.sfx.length) setClips([]); },
-});
-export const seconds = (name: string) => library.find((x) => x.name === name)?.seconds ?? 1;
+const doc = createTimedDoc<Lanes>(
+  "sound",
+  {
+    label: "audio",
+    changed,
+    tidy: (l) => {
+      lanes = l;
+      normalize(l, span);
+      tidy(l);
+    }, // a film without tracks gets them here, and in the file with its next edit
+    saved: (soundSaved) => set({ soundSaved }),
+    replaced: (was) => {
+      if (
+        (get().clips.length || get().clip !== null) &&
+        (!was ||
+          !lanes ||
+          was.beds.length !== lanes.beds.length ||
+          was.sfx.length !== lanes.sfx.length)
+      )
+        setClips([]);
+    },
+  },
+  () => libraryDurations,
+);
+export const clockOf = (c: Bed | OneShot) =>
+  clockForTimeline(
+    c.name === lanes?.narration ? "voice" : typeof c.from === "number" ? "audio" : "sfx",
+  );
+export const seconds = (name: string) => itemOf(name)?.seconds ?? 1;
 // Which library tab a sound sits in (CapCut's Music and Sound effects) and which lane + puts it on: what SOURCES.json says,
 // else its length, since music and room tone run long and a hit is short
 const LONG = 10;
-export const kindOf = (x: LibraryItem): "bgm" | "sfx" => x.name === lanes?.narration ? "sfx" : x.kind ?? (x.seconds >= LONG ? "bgm" : "sfx");
+export const kindOf = (x: LibraryItem): "bgm" | "sfx" | "mc" =>
+  x.name === lanes?.narration ? "sfx" : (x.kind ?? (x.seconds >= LONG ? "bgm" : "sfx"));
 
 // Where a clip sounds, in film seconds. A one-shot without a length rings to the end of its file
 export const span = (c: ClipRef): [number, number] => {
   if (!lanes) return [0, 0];
-  if (c.list === "beds") { const b = lanes.beds[c.i]; return [b.from, b.to]; }
+  if (c.list === "beds") {
+    const b = lanes.beds[c.i];
+    return [b.from, b.to];
+  }
   const s = lanes.sfx[c.i];
   return [s.at, s.at + clipLength(s)];
 };
-export const clipLength = (c: Pick<Bed, "name" | "start" | "rate" | "from" | "to"> | Pick<OneShot, "name" | "start" | "rate" | "length">): number => "from" in c ? c.to - c.from : c.length ?? Math.max(.05, (seconds(c.name) - (c.start ?? 0)) / (c.rate ?? 1));
-export const maxClipLength = (c: Bed | OneShot): number => typeof c.from === "number" ? Infinity : c.reverse ? clipLength(c) + (c.start ?? 0) / (c.rate ?? 1) : (seconds(c.name) - (c.start ?? 0)) / (c.rate ?? 1);
-export const clipOf = (c: ClipRef | null) => (c && lanes ? (c.list === "beds" ? lanes.beds[c.i] : lanes.sfx[c.i]) ?? null : null);
-export const clipTitle = (c: ClipRef) => { const x = clipOf(c)!; return `${x.name} ${stamp(span(c)[0])}`; };
+export const clipLength = (
+  c:
+    | Pick<Bed, "name" | "start" | "rate" | "from" | "to">
+    | Pick<OneShot, "name" | "start" | "rate" | "length">,
+): number =>
+  "from" in c
+    ? c.to - c.from
+    : (c.length ?? Math.max(0.05, (seconds(c.name) - (c.start ?? 0)) / (c.rate ?? 1)));
+export const maxClipLength = (c: Bed | OneShot): number =>
+  typeof c.from === "number"
+    ? Infinity
+    : sourceRoom(c, clipLength(c), seconds(c.name), (c as OneShot).at, clockOf(c))[1] -
+      (c as OneShot).at;
+export const clipOf = (c: ClipRef | null) =>
+  c && lanes ? ((c.list === "beds" ? lanes.beds[c.i] : lanes.sfx[c.i]) ?? null) : null;
+export const clipTitle = (c: ClipRef) => {
+  const x = clipOf(c)!;
+  return `${x.name} ${stamp(span(c)[0])}`;
+};
+
+const sameLibrary = (a: readonly LibraryItem[], b: readonly LibraryItem[]) =>
+  a.length === b.length &&
+  a.every(
+    (x, i) =>
+      x.name === b[i].name &&
+      x.seconds === b[i].seconds &&
+      x.title === b[i].title &&
+      x.kind === b[i].kind &&
+      x.source === b[i].source &&
+      x.origin === b[i].origin &&
+      x.category === b[i].category &&
+      x.family === b[i].family &&
+      x.variant === b[i].variant &&
+      x.contentId === b[i].contentId,
+  );
 
 // ---------- Loading: on start, after any remix and when an agent edits the file (the "lanes" event)
-export const loadSound = async () => {
-  marks.voice = (lines) => narrationLines(lines, lanes, seconds(lanes?.narration ?? ""));
-  const r = await doc.load();
-  if (!r) { set({ sound: false }); return; }
-  const got: { library: LibraryItem[]; live?: boolean } = await r.json();
-  if (library.length && JSON.stringify(got.library) !== JSON.stringify(library)) forgetSounds();
-  library = got.library;
+export const loadSound = async (opts?: { lanesOnly?: boolean }) => {
+  marks.voice = (lines) =>
+    mapVoice(
+      narrationLines(lines, doc.source, seconds(lanes?.narration ?? "")),
+      clockForTimeline("voice"),
+    );
+  const r = await doc.load(opts?.lanesOnly && library.length > 0 ? "?lanes=1" : "");
+  if (!r) {
+    set({ sound: false });
+    return;
+  }
+  const got: { library?: LibraryItem[]; live?: boolean } = await r.json();
+  if (Array.isArray(got.library)) {
+    if (library.length && !sameLibrary(library, got.library)) forgetSounds();
+    library = got.library;
+    rebuildLibraryIndex();
+  }
   set({ sound: true, liveLanes: !!got.live });
-  setLive(!!got.live, { lanes: () => lanes, library: () => library, span });
-  changed();
+  setLive(!!got.live, {
+    lanes: () => lanes,
+    library: () => library,
+    span,
+    voice: () =>
+      mapVoice(
+        narrationLines(S.voiceBase, doc.source, seconds(lanes?.narration ?? ""), true),
+        clockForTimeline("voice"),
+      ),
+  });
+  doc.refresh();
 };
 
 // Every edit goes through here: one undo step, drawn now, saved shortly (a slider dragged saves once, when let go)
-export const edit = doc.edit, preview = doc.preview, snapshot = doc.snapshot, restore = doc.restore;
+export const edit = doc.edit,
+  editSource = doc.editSource,
+  sourceLanes = () => doc.source,
+  preview = doc.preview,
+  snapshot = doc.snapshot,
+  restore = doc.restore;
 
 // ---------- What the lanes and the panel ask for
-export const setClips = (cs: ClipRef[]) => { set(cs.length ? { clips: cs, clip: cs.length === 1 ? cs[0] : null, side: "sound", camKey: null, camPicks: [], shotPick: null, keyPicks: [], textPicks: [], layerPicks: [], object: null } : { clips: [], clip: null }); S.dirty = true; };
+export const setClips = (cs: ClipRef[]) => {
+  set(transitionSelection({ kind: "clips", clips: cs }, get().side));
+  S.dirty = true;
+};
 export const setClip = (c: ClipRef | null) => setClips(c ? [c] : []);
 // Solo, as in Premiere and Resolve: only the soloed tracks sound, heard at once; this page only, never saved or rendered
 export const setSolo = (id: string, on: boolean) => {
@@ -98,52 +319,117 @@ export const audibleName = (c: Bed | OneShot) => {
   return picked === "off" ? null : picked && [c.name, ...c.try!].includes(picked) ? picked : c.name;
 };
 export const clipBeats = (ref: ClipRef) => {
-  const c = clipOf(ref), [from, to] = span(ref);
+  const c = clipOf(ref),
+    [from, to] = span(ref);
   return c && (c.beatSource ?? c.name) === audibleName(c) ? beatMarks(c, to - from) : [];
 };
-export const beatTimes = (skip: ClipRef[] = []) => allClips().flatMap((r) => skip.some((s) => same(s, r)) ? [] : clipBeats(r).map((t) => span(r)[0] + t));
-// Every clip that plays this file: what the library row counts, lights and picks (Resolve's clip usage)
-export const usesOf = (name: string) => allClips().filter((c) => clipOf(c)?.name === name);
-export const lightSound = (name: string | null) => { if (get().soundLit !== name) { set({ soundLit: name }); S.dirty = true; } };
-export const pickUses = (name: string) => {
-  const cs = usesOf(name);
-  if (!cs.length) { say(`${name} isn't on a track yet. Drag it onto one, or click +`); return; }
-  setClips(cs);
-  say(cs.length > 1 ? `All ${cs.length} clips of ${name} selected` : `The clip of ${name} selected`);
+export const beatTimes = (skip: ClipRef[] = []) =>
+  allClips().flatMap((r) =>
+    skip.some((s) => same(s, r)) ? [] : clipBeats(r).map((t) => span(r)[0] + t),
+  );
+// Every clip that plays this file (or any variant in a family): what the library row counts, lights and picks (Resolve's clip usage)
+export const useCountOfNames = (names: readonly string[]): number => {
+  let n = 0;
+  for (const name of names) n += clipUseCounts.get(name) ?? 0;
+  return n;
 };
+export const usesOf = (name: string) => allClips().filter((c) => clipOf(c)?.name === name);
+export const usesOfNames = (names: readonly string[]) => {
+  if (names.length <= 1) return names.length === 1 ? usesOf(names[0]) : [];
+  const set = new Set(names);
+  return allClips().filter((c) => {
+    const n = clipOf(c)?.name;
+    return n !== undefined && set.has(n);
+  });
+};
+export const lightSounds = (names: readonly string[] | null) => {
+  const cur = get().soundLit;
+  const next = names && names.length ? names : null;
+  if (
+    cur === next ||
+    (cur && next && cur.length === next.length && cur.every((v, i) => v === next[i]))
+  )
+    return;
+  set({ soundLit: next });
+  S.dirty = true;
+};
+export const lightSound = (name: string | null) => lightSounds(name ? [name] : null);
+export const pickNamesUses = (names: readonly string[], label = names[0] ?? "") => {
+  const cs = usesOfNames(names);
+  if (!cs.length) {
+    say(`${label} isn't on a track yet. Drag it onto one, or click +`);
+    return;
+  }
+  setClips(cs);
+  say(
+    cs.length > 1 ? `All ${cs.length} clips of ${label} selected` : `The clip of ${label} selected`,
+  );
+};
+export const pickUses = (name: string) => pickNamesUses([name], name);
 // The keyboard's way onto the lanes: each press picks the next clip sounding at t, or the nearest one when none is
 export const pickAt = (t: number) => {
   if (!lanes) return;
-  const all = (["beds", "sfx"] as const).flatMap((list) => lanes![list].map((_, i) => ({ list, i })));
+  const all = (["beds", "sfx"] as const).flatMap((list) =>
+    lanes![list].map((_, i) => ({ list, i })),
+  );
   if (!all.length) return;
-  const here = all.filter((c) => { const [a, b] = span(c); return a <= t && t <= b; });
-  const now = get().clip, k = here.findIndex((c) => c.list === now?.list && c.i === now.i);
-  const dist = (c: ClipRef) => { const [a, b] = span(c); return Math.min(Math.abs(a - t), Math.abs(b - t)); };
-  setClip(here.length ? here[(k + 1) % here.length] : all.reduce((p, q) => (dist(q) < dist(p) ? q : p)));
+  const here = all.filter((c) => {
+    const [a, b] = span(c);
+    return a <= t && t <= b;
+  });
+  const now = get().clip,
+    k = here.findIndex((c) => c.list === now?.list && c.i === now.i);
+  const dist = (c: ClipRef) => {
+    const [a, b] = span(c);
+    return Math.min(Math.abs(a - t), Math.abs(b - t));
+  };
+  setClip(
+    here.length ? here[(k + 1) % here.length] : all.reduce((p, q) => (dist(q) < dist(p) ? q : p)),
+  );
 };
 // The track a new clip goes on: the one it was dropped on if it has room there, else the first of the film's tracks for that kind
 // with room, else a new one (below the one dropped on)
 const onto = (l: Lanes, kind: "beds" | "sfx", s: number, e: number, want?: string) => {
   if (want === "new") return addTrack(l, kind).id;
-  if (want &&l.tracks.some((t) => t.id === want && !t.lock) && fits(l, want, [s, e], span)) return want;
-  const home = new Set(refs(l).filter((r) => r.list === kind).map((r) => l[r.list][r.i].track));
+  if (want && l.tracks.some((t) => t.id === want && !t.lock) && fits(l, want, [s, e], span))
+    return want;
+  const home = new Set(
+    refs(l)
+      .filter((r) => r.list === kind)
+      .map((r) => l[r.list][r.i].track),
+  );
   const t = l.tracks.find((t) => home.has(t.id) && !t.lock && fits(l, t.id, [s, e], span));
   if (t && !want) return t.id;
   const row = l.tracks.findIndex((t) => t.id === want);
   return addTrack(l, kind, row < 0 ? undefined : row + 1).id;
 };
 export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?: string) => {
-  const item = library.find((x) => x.name === name), len = seconds(name), kind = list ?? (item && kindOf(item) === "bgm" ? "beds" : "sfx");
+  const item = itemOf(name),
+    len = seconds(name),
+    kind = list ?? (item && kindOf(item) === "bgm" ? "beds" : "sfx");
   let ref: ClipRef = { list: kind, i: 0 };
   edit((l) => {
     if (kind === "beds") {
-      l.beds.push({ name, from: r3(at), to: r3(at + Math.min(len, 30)), gain: 0, fadeIn: 0.5, fadeOut: 0.5, track: onto(l, kind, at, at + Math.min(len, 30), track) });
+      l.beds.push({
+        name,
+        from: r3(at),
+        to: r3(at + Math.min(len, 30)),
+        gain: 0,
+        fadeIn: 0.5,
+        fadeOut: 0.5,
+        track: onto(l, kind, at, at + Math.min(len, 30), track),
+      });
       ref = { list: "beds", i: l.beds.length - 1 };
     } else {
       // In time order, as a film's own list is written, so the file reads top to bottom
       const i = l.sfx.findIndex((s) => s.at > at);
       const at3 = r3(at);
-      l.sfx.splice(i < 0 ? l.sfx.length : i, 0, { at: at3, name, gain: 0, track: onto(l, kind, at3, at3 + len, track) });
+      l.sfx.splice(i < 0 ? l.sfx.length : i, 0, {
+        at: at3,
+        name,
+        gain: 0,
+        track: onto(l, kind, at3, at3 + len, track),
+      });
       ref = { list: "sfx", i: i < 0 ? l.sfx.length - 1 : i };
     }
   });
@@ -152,20 +438,37 @@ export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?:
 };
 // Several one-shots at once (sweeten.ts), each on the first sound-effects track with room as addClip puts one; one undo step,
 // all picked after
-export interface NewShot { name: string; at: number; gain: number; start?: number; length?: number; fadeOut?: number }
+export interface NewShot {
+  name: string;
+  at: number;
+  gain: number;
+  start?: number;
+  length?: number;
+  fadeOut?: number;
+}
 export const addShots = (shots: NewShot[]) => {
   const made: OneShot[] = [];
   edit((l) => {
     for (const x of shots) {
-      const at = r3(x.at), len = clipLength(x);
-      const o: OneShot = { at, name: x.name, gain: x.gain, ...(x.start && { start: r3(x.start) }), ...(x.length && { length: r3(x.length) }), ...(x.fadeOut && { fadeOut: x.fadeOut }) };
+      const at = r3(x.at),
+        len = clipLength(x);
+      const o: OneShot = {
+        at,
+        name: x.name,
+        gain: x.gain,
+        ...(x.start && { start: r3(x.start) }),
+        ...(x.length && { length: r3(x.length) }),
+        ...(x.fadeOut && { fadeOut: x.fadeOut }),
+      };
       o.track = onto(l, "sfx", at, at + len);
       const i = l.sfx.findIndex((s) => s.at > at);
       l.sfx.splice(i < 0 ? l.sfx.length : i, 0, o);
       made.push(o);
     }
   });
-  setClips(made.map((x) => ({ list: "sfx" as const, i: lanes!.sfx.indexOf(x) })).filter((r) => r.i >= 0));
+  setClips(
+    made.map((x) => ({ list: "sfx" as const, i: lanes!.sfx.indexOf(x) })).filter((r) => r.i >= 0),
+  );
 };
 // Copies of clips (timeline/clipboard.ts), d seconds later: each on the track it came from while that has room, else the
 // nearest free track of its kind (freeTrack), the copies picked after; one undo step
@@ -176,12 +479,15 @@ export const pasteClips = (items: CopiedClip[], d: number) => {
     for (const { list, x } of items) {
       const c = structuredClone(x);
       if (list === "beds") {
-        const b = c as Bed, len = b.to - b.from;
-        b.from = r3(Math.max(0, b.from + d)); b.to = r3(b.from + len);
+        const b = c as Bed,
+          len = b.to - b.from;
+        b.from = r3(Math.max(0, b.from + d));
+        b.to = r3(b.from + len);
         b.track = freeTrack(l, list, [b.from, b.to], span, b.track ?? "");
         l.beds.push(b);
       } else {
-        const o = c as OneShot, len = clipLength(o);
+        const o = c as OneShot,
+          len = clipLength(o);
         o.at = r3(Math.max(0, o.at + d));
         o.track = freeTrack(l, list, [o.at, o.at + len], span, o.track ?? "");
         // In time order, as addClip keeps the list
@@ -191,32 +497,61 @@ export const pasteClips = (items: CopiedClip[], d: number) => {
       made.push({ list, x: c });
     }
   });
-  setClips(made.map(({ list, x }) => ({ list, i: (list === "beds" ? lanes!.beds : lanes!.sfx).indexOf(x as never) })).filter((r) => r.i >= 0));
+  setClips(
+    made
+      .map(({ list, x }) => ({
+        list,
+        i: (list === "beds" ? lanes!.beds : lanes!.sfx).indexOf(x as never),
+      }))
+      .filter((r) => r.i >= 0),
+  );
   say(`${made.length > 1 ? `${made.length} clips` : made[0].x.name} pasted at ${stamp(S.t)}`);
 };
 export const removeClips = (cs: ClipRef[]) => {
   const gone = cs.filter((c) => clipOf(c) && !locked(c));
-  if (!gone.length) { if (cs.length) say("This track is locked. Unlock it in the track header to delete"); return; }
+  if (!gone.length) {
+    if (cs.length) say("This track is locked. Unlock it in the track header to delete");
+    return;
+  }
   const first = clipOf(gone[0])!.name;
   // From the back of each list, so the places still to remove don't move
-  edit((l) => { for (const c of [...gone].sort((a, b) => b.i - a.i)) (c.list === "beds" ? l.beds : l.sfx).splice(c.i, 1); });
+  edit((l) => {
+    for (const c of [...gone].sort((a, b) => b.i - a.i))
+      (c.list === "beds" ? l.beds : l.sfx).splice(c.i, 1);
+  });
   setClips([]);
   say(`${gone.length > 1 ? `${gone.length} clips` : first} deleted. Ctrl+Z to undo`);
 };
 export const removeClip = (c: ClipRef) => removeClips([c]);
 export const moveToTrack = (c: ClipRef, id: string) => {
-  if (locked(c) || lanes?.tracks.find((t) => t.id === id)?.lock) { say("This track is locked. Unlock it in the track header to edit"); return; }
-  if (id !== "new" && lanes && !fits(lanes, id, span(c), span, [c])) { say("This clip does not fit here. Choose a track with space or drag it to a gap"); return; }
-  edit((l) => { l[c.list][c.i].track = id === "new" ? addTrack(l, c.list).id : id; });
+  if (locked(c) || lanes?.tracks.find((t) => t.id === id)?.lock) {
+    say("This track is locked. Unlock it in the track header to edit");
+    return;
+  }
+  if (id !== "new" && lanes && !fits(lanes, id, span(c), span, [c])) {
+    say("This clip does not fit here. Choose a track with space or drag it to a gap");
+    return;
+  }
+  edit((l) => {
+    l[c.list][c.i].track = id === "new" ? addTrack(l, c.list).id : id;
+  });
 };
-export const setTrack = (id: string, change: Partial<Track>) => edit((l) => { const t = l.tracks.find((t) => t.id === id); if (t) Object.assign(t, change); });
+export const setTrack = (id: string, change: Partial<Track>) =>
+  edit((l) => {
+    const t = l.tracks.find((t) => t.id === id);
+    if (t) Object.assign(t, change);
+  });
 export const moveTo = (c: ClipRef, at: number) => {
   if (!lanes || locked(c)) return;
-  const [from] = span(c), shift = placeShift(lanes, [c], span, at - from, [-from, DURATION - .05 - from]);
+  const [from] = span(c),
+    shift = placeShift(lanes, [c], span, at - from, [-from, DURATION - 0.05 - from]);
   if (shift === null) return;
   edit((l) => {
-    if (c.list === "beds") { const b = l.beds[c.i]; b.from = r3(b.from + shift); b.to = r3(b.to + shift); }
-    else l.sfx[c.i].at = r3(l.sfx[c.i].at + shift);
+    if (c.list === "beds") {
+      const b = l.beds[c.i];
+      b.from = r3(b.from + shift);
+      b.to = r3(b.to + shift);
+    } else l.sfx[c.i].at = r3(l.sfx[c.i].at + shift);
   });
 };
 
@@ -225,33 +560,57 @@ export const moveTo = (c: ClipRef, at: number) => {
 // into the file, which a bed loops), and only the outer ends keep their fades
 const MIN = 0.05;
 const crossing = (cs: ClipRef[], t: number, what: string) => {
-  const hit = cs.filter((c) => { const [a, b] = span(c); return !locked(c) && a + MIN < t && t < b - MIN; });
-  if (!hit.length) say(cs.length ? `The playhead isn't inside a picked clip on an unlocked track: move it over the clip to ${what}` : `Pick a sound clip first, then ${what} it at the playhead`);
+  const hit = cs.filter((c) => {
+    const [a, b] = span(c);
+    return !locked(c) && a + MIN < t && t < b - MIN;
+  });
+  if (!hit.length)
+    say(
+      cs.length
+        ? `The playhead isn't inside a picked clip on an unlocked track: move it over the clip to ${what}`
+        : `Pick a sound clip first, then ${what} it at the playhead`,
+    );
   return hit;
 };
 // Moves a clip's left edge to t, its sound staying where it was in the film (lanes.ts trims a bed's head with it too)
 export const cutBefore = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
-  const from = list === "beds" ? (x as Bed).from : (x as OneShot).at, length = clipLength(x), file = seconds(x.name), rate = x.rate ?? 1;
-  const available = x.reverse ? file - (x.start ?? 0) - length * rate : x.start ?? 0;
-  const left = Math.max(list === "beds" ? -Infinity : -Math.max(0, available) / rate, t - from);
+  const from = list === "beds" ? (x as Bed).from : (x as OneShot).at,
+    length = clipLength(x),
+    file = seconds(x.name);
+  const left = Math.max(
+    list === "beds" ? -Infinity : sourceRoom(x, length, file, from, clockOf(x))[0] - from,
+    t - from,
+  );
   trimSource(x, left, length, length, file, list === "beds");
   if (list === "beds") (x as Bed).from = r3(from + left);
-  else { (x as OneShot).at = r3(from + left); (x as OneShot).length = r3(length - left); }
+  else {
+    (x as OneShot).at = r3(from + left);
+    (x as OneShot).length = r3(length - left);
+  }
 };
 export const cutAfter = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
-  const from = list === "beds" ? (x as Bed).from : (x as OneShot).at, length = clipLength(x), next = Math.min(maxClipLength(x), t - from);
+  const from = list === "beds" ? (x as Bed).from : (x as OneShot).at,
+    length = clipLength(x),
+    next = Math.min(maxClipLength(x), t - from);
   trimSource(x, 0, next, length, seconds(x.name), list === "beds");
-  if (list === "beds") (x as Bed).to = r3(from + next); else (x as OneShot).length = r3(next);
+  if (list === "beds") (x as Bed).to = r3(from + next);
+  else (x as OneShot).length = r3(next);
 };
 
 export const setRate = (c: ClipRef, rate: number) => {
   const x = clipOf(c);
   if (!x || !lanes || locked(c)) return;
-  const [from, to] = span(c), length = (to - from) * (x.rate ?? 1) / rate;
-  if (!fits(lanes, x.track ?? "", [from, from + length], span, [c])) { say("Move the neighbouring clip or choose a faster speed to make room"); return; }
+  const [from, to] = span(c),
+    length = retimedLength(x, to - from, rate, from, clockOf(x));
+  if (!fits(lanes, x.track ?? "", [from, from + length], span, [c])) {
+    say("Move the neighbouring clip or choose a faster speed to make room");
+    return;
+  }
   edit((l) => {
-    const entry = l[c.list][c.i], length = retime(entry, to - from, rate);
-    if (c.list === "beds") (entry as Bed).to = from + length; else (entry as OneShot).length = length;
+    const entry = l[c.list][c.i],
+      length = retime(entry, to - from, rate);
+    if (c.list === "beds") (entry as Bed).to = from + length;
+    else (entry as OneShot).length = length;
   });
 };
 
@@ -261,42 +620,78 @@ export const splitClips = (cs: ClipRef[], t = S.t) => {
   const right: ClipRef[] = [];
   edit((l) => {
     for (const c of hit) {
-      const list = c.list === "beds" ? l.beds : l.sfx, a = list[c.i], b = structuredClone(a);
-      cutAfter(a, c.list, t); a.fadeOut = 0;
-      cutBefore(b, c.list, t); if (c.list === "beds") (b as Bed).fadeIn = 0; else delete (b as OneShot).fadeIn;
+      const list = c.list === "beds" ? l.beds : l.sfx,
+        a = list[c.i],
+        b = structuredClone(a);
+      cutAfter(a, c.list, t);
+      a.fadeOut = 0;
+      cutBefore(b, c.list, t);
+      if (c.list === "beds") (b as Bed).fadeIn = 0;
+      else delete (b as OneShot).fadeIn;
       if (c.list === "sfx" && !(b as OneShot).fadeOut) delete (b as OneShot).fadeOut;
       (list as (Bed | OneShot)[]).push(b);
       right.push({ list: c.list, i: list.length - 1 });
     }
   });
   setClips(right);
-  say(`${hit.length > 1 ? `${hit.length} clips` : clipOf(right[0])!.name} split at ${stamp(t)}. Ctrl+Z to undo`);
+  say(
+    `${hit.length > 1 ? `${hit.length} clips` : clipOf(right[0])!.name} split at ${stamp(t)}. Ctrl+Z to undo`,
+  );
 };
 export const trimClips = (cs: ClipRef[], side: "left" | "right", t = S.t) => {
   const hit = crossing(cs, t, side === "left" ? "delete left of" : "delete right of");
   if (!hit.length) return;
-  edit((l) => { for (const c of hit) { const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]; if (side === "left") cutBefore(x, c.list, t); else cutAfter(x, c.list, t); } });
-  say(`${side === "left" ? "Start" : "End"} of ${hit.length > 1 ? `${hit.length} clips` : clipOf(hit[0])!.name} trimmed to ${stamp(t)}. Ctrl+Z to undo`);
+  edit((l) => {
+    for (const c of hit) {
+      const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i];
+      if (side === "left") cutBefore(x, c.list, t);
+      else cutAfter(x, c.list, t);
+    }
+  });
+  say(
+    `${side === "left" ? "Start" : "End"} of ${hit.length > 1 ? `${hit.length} clips` : clipOf(hit[0])!.name} trimmed to ${stamp(t)}. Ctrl+Z to undo`,
+  );
 };
 // pan: -1 all left, 1 all right (mixer.ts, mix.py pan_filter); the centre is left out of the file
-export const setField = (c: ClipRef, key: "gain" | "fadeIn" | "fadeOut" | "length" | "to" | "duck" | "pan", v: number) => edit((l) => {
-  if (key === "length" || key === "to") { const x = l[c.list][c.i]; cutAfter(x, c.list, key === "to" ? v : (x as OneShot).at + v); return; }
-  const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
-  if (key === "pan" && Math.abs(v) < 0.005) delete x.pan; else x[key] = r3(v);
-});
+export const setField = (
+  c: ClipRef,
+  key: "gain" | "fadeIn" | "fadeOut" | "length" | "to" | "duck" | "pan",
+  v: number,
+) =>
+  edit((l) => {
+    if (key === "length" || key === "to") {
+      const x = l[c.list][c.i];
+      cutAfter(x, c.list, key === "to" ? v : (x as OneShot).at + v);
+      return;
+    }
+    const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
+    if (key === "pan" && Math.abs(v) < 0.005) delete x.pan;
+    else x[key] = r3(v);
+  });
 // CapCut's ↺ on the Basic section: level back to 0 dB, centred, no fades
-export const resetBasic = (c: ClipRef) => edit((l) => {
-  const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
-  x.gain = 0; delete x.gainKeys; delete x.pan;
-  if (c.list === "beds") { x.fadeIn = 0; x.fadeOut = 0; }
-  else { delete x.fadeIn; delete x.fadeOut; }
-});
+export const resetBasic = (c: ClipRef) =>
+  edit((l) => {
+    const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
+    x.gain = 0;
+    delete x.gainKeys;
+    delete x.pan;
+    if (c.list === "beds") {
+      x.fadeIn = 0;
+      x.fadeOut = 0;
+    } else {
+      delete x.fadeIn;
+      delete x.fadeOut;
+    }
+  });
 // Paste attributes (timeline/attributes.ts): what of the clip `from` the creator ticked, onto the clips `to`, one undo step.
 // Fades longer than a clip are shortened to fit it, as CapCut does; ducking only goes from a bed onto beds. Locked tracks are
 // left out. Returns how many clips took them
 export type ClipAttr = "volume" | "pan" | "fades" | "duck";
 export const fadesFit = (from: Bed | OneShot, c: ClipRef) => {
-  const [a, b] = span(c), fi = (from.fadeIn ?? 0) as number, fo = (from.fadeOut ?? 0) as number, k = fi + fo > b - a ? (b - a) / (fi + fo) : 1;
+  const [a, b] = span(c),
+    fi = (from.fadeIn ?? 0) as number,
+    fo = (from.fadeOut ?? 0) as number,
+    k = fi + fo > b - a ? (b - a) / (fi + fo) : 1;
   return { fadeIn: r3(fi * k), fadeOut: r3(fo * k), short: k < 1 };
 };
 export const pasteClipAttrs = (from: Bed | OneShot, to: ClipRef[], what: ClipAttr[]) => {
@@ -305,30 +700,63 @@ export const pasteClipAttrs = (from: Bed | OneShot, to: ClipRef[], what: ClipAtt
   edit((l) => {
     for (const c of ok) {
       const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
-      if (what.includes("volume")) { x.gain = from.gain; if (from.gainKeys?.length) x.gainKeys = structuredClone(from.gainKeys); else delete x.gainKeys; }
-      if (what.includes("pan")) { if (from.pan) x.pan = from.pan; else delete x.pan; }
+      if (what.includes("volume")) {
+        x.gain = from.gain;
+        if (from.gainKeys?.length) x.gainKeys = structuredClone(from.gainKeys);
+        else delete x.gainKeys;
+      }
+      if (what.includes("pan")) {
+        if (from.pan) x.pan = from.pan;
+        else delete x.pan;
+      }
       if (what.includes("fades")) {
         const f = fadesFit(from, c);
-        for (const k of ["fadeIn", "fadeOut"] as const) { if (c.list === "sfx" && !f[k]) delete x[k]; else x[k] = f[k]; }
+        for (const k of ["fadeIn", "fadeOut"] as const) {
+          if (c.list === "sfx" && !f[k]) delete x[k];
+          else x[k] = f[k];
+        }
       }
-      if (what.includes("duck") && c.list === "beds") { if (from.duck) x.duck = from.duck; else delete x.duck; }
+      if (what.includes("duck") && c.list === "beds") {
+        if (from.duck) x.duck = from.duck;
+        else delete x.duck;
+      }
     }
   });
   return ok.length;
 };
-export const swapSound = (c: ClipRef, name: string) => edit((l) => {
-  const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i];
-  x.name = name;
-  delete x.beats; delete x.beatMode; delete x.bpm; delete x.beatSource;
-  if (c.list === "sfx") delete (x as OneShot).start; // a start offset belongs to the old file
-});
+export const swapSound = (c: ClipRef, name: string) =>
+  edit((l) => {
+    const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i];
+    x.name = name;
+    delete x.beats;
+    delete x.beatMode;
+    delete x.bpm;
+    delete x.beatSource;
+    if (c.list === "sfx") {
+      delete (x as OneShot).start; // a start offset belongs to the old file
+      if (name !== lanes?.narration) delete (x as OneShot).dialogue;
+    }
+  });
 
 // Level curves come once per file and stay
 const peaks = new Map<string, Peaks | null>();
+export const invalidateSoundCaches = () => {
+  forgetSounds();
+  peaks.clear();
+  S.dirty = true;
+  replan();
+};
 export const peaksOf = (name: string) => {
   if (!peaks.has(name)) {
     peaks.set(name, null);
-    getFile(`/api/sfx/${encodeURIComponent(name)}/peaks`).then((r) => (r.ok ? r.json() : null)).then((p) => { if (p) { peaks.set(name, p); S.dirty = true; } });
+    getFile(`/api/sfx/${encodeURIComponent(name)}/peaks`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => {
+        if (p) {
+          peaks.set(name, p);
+          S.dirty = true;
+        }
+      });
   }
   return peaks.get(name) ?? null;
 };
@@ -336,13 +764,74 @@ export const peaksOf = (name: string) => {
 // One sound heard on its own, from the library: a second press stops it
 const audition = new Audio();
 let auditioning = "";
-export const listen = (name: string) => {
-  if (auditioning === name && !audition.paused) { audition.pause(); auditioning = ""; return; }
-  auditioning = name;
-  audition.src = `/api/sfx/${encodeURIComponent(name)}.wav`;
+let auditionRev = 0;
+let auditionTick: ReturnType<typeof setInterval> | null = null;
+const auditionSubs = new Set<() => void>();
+const notifyAudition = () => {
+  auditionRev++;
+  for (const fn of auditionSubs) fn();
+};
+const stopAuditionTick = () => {
+  if (auditionTick !== null) {
+    clearInterval(auditionTick);
+    auditionTick = null;
+  }
+};
+const startAuditionTick = () => {
+  stopAuditionTick();
+  auditionTick = setInterval(notifyAudition, 80);
+};
+export const listenUrl = (id: string, url: string) => {
+  if (auditioning === id && !audition.paused) {
+    audition.pause();
+    auditioning = "";
+    return;
+  }
+  auditioning = id;
+  audition.src = url;
   audition.play().catch(() => {});
 };
+export const listen = (name: string) => listenUrl(name, `/api/sfx/${encodeURIComponent(name)}.wav`);
 export const listening = () => (audition.paused ? "" : auditioning);
-audition.addEventListener("ended", () => { auditioning = ""; set({ soundRev: get().soundRev + 1 }); });
-audition.addEventListener("play", () => set({ soundRev: get().soundRev + 1 }));
-audition.addEventListener("pause", () => set({ soundRev: get().soundRev + 1 }));
+export const subscribeAudition = (fn: () => void) => {
+  auditionSubs.add(fn);
+  return () => {
+    auditionSubs.delete(fn);
+  };
+};
+export const auditionSnapshot = () => auditionRev;
+export const auditionProgress = (fallbackSeconds: number) => {
+  const liveDur =
+    Number.isFinite(audition.duration) && audition.duration > 0 ? audition.duration : 0;
+  const known = liveDur > 0 || fallbackSeconds > 0;
+  const duration = liveDur > 0 ? liveDur : fallbackSeconds;
+  const at = Number.isFinite(audition.currentTime)
+    ? Math.min(Math.max(0.01, duration), Math.max(0, audition.currentTime))
+    : 0;
+  return { at, duration: Math.max(0.01, duration), known };
+};
+export const seekAudition = (id: string, toSeconds: number, fallbackSeconds = seconds(id)) => {
+  if (auditioning !== id) return;
+  const { duration } = auditionProgress(fallbackSeconds);
+  const maxSeek = Math.max(0, duration - 0.02);
+  audition.currentTime = Math.min(maxSeek, Math.max(0, toSeconds));
+  notifyAudition();
+};
+audition.addEventListener("ended", () => {
+  stopAuditionTick();
+  auditioning = "";
+  notifyAudition();
+  set({ soundRev: get().soundRev + 1 });
+});
+audition.addEventListener("play", () => {
+  startAuditionTick();
+  notifyAudition();
+  set({ soundRev: get().soundRev + 1 });
+});
+audition.addEventListener("pause", () => {
+  stopAuditionTick();
+  notifyAudition();
+  set({ soundRev: get().soundRev + 1 });
+});
+audition.addEventListener("timeupdate", notifyAudition);
+audition.addEventListener("loadedmetadata", notifyAudition);

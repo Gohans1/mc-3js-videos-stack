@@ -6,27 +6,54 @@
 // these rows and the others it crosses (timeline/rowbox.ts, across.ts), and a drag on a picked key moves all of it;
 // a click on a key seeks there; empty space starts a selection box. A touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "film/scene";
-import { makeSnapper, snappedTo, stamp } from "../core/time";
-import { editKeys, HEAD_H, hold, isPicked, keyOf, keysOf, lines, linesHeight, litRow, nameOf, pickKeys, preview, restore, ROW_H, room, rowsOf, same, sameKey, snapshot } from "./keys";
+
+import { together } from "../core/doc";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
-import { type KeyRef } from "./slice";
-import { together } from "../core/doc";
-import { alongWith, type Along, inBox, pickAcross, picked } from "../timeline/across";
+import { makeSnapper, snappedTo, stamp } from "../core/time";
+import { seek, setPlaying } from "../playback/transport";
+import { beatTimes } from "../sound/sound";
+import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
 import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
-import { seek, setPlaying } from "../playback/transport";
-import { beatTimes } from "../sound/sound";
+import {
+  editKeys,
+  HEAD_H,
+  hold,
+  isPicked,
+  keyOf,
+  keysOf,
+  lines,
+  linesHeight,
+  litRow,
+  nameOf,
+  pickKeys,
+  preview,
+  restore,
+  room,
+  ROW_H,
+  rowsOf,
+  same,
+  sameKey,
+  snapshot,
+} from "./keys";
+import { type KeyRef } from "./slice";
 
 const R = 4.5;
-
 
 type Spot = { refs: KeyRef[]; x: number; y: number; height: number };
 let spots: Spot[] = [];
 
-const diamond = (g: CanvasRenderingContext2D, x: number, y: number, r: number) => { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath(); };
+const diamond = (g: CanvasRenderingContext2D, x: number, y: number, r: number) => {
+  g.beginPath();
+  g.moveTo(x, y - r);
+  g.lineTo(x + r, y);
+  g.lineTo(x, y + r);
+  g.lineTo(x - r, y);
+  g.closePath();
+};
 
 export const drawKeyRows = () => {
   const c = S.el?.keyrows;
@@ -35,53 +62,90 @@ export const drawKeyRows = () => {
   if (c.style.height !== `${height}px`) c.style.height = `${height}px`;
   const { g, w, h } = sized(c);
   if (!c.width) return;
-  const { a, v } = view(), X = (s: number) => ((s - a) / v) * w;
-  g.fillStyle = tone("track"); g.fillRect(0, 0, w, h);
-  g.font = `12px ${UI_FONT}`; g.textBaseline = "middle";
+  const { a, v } = view(),
+    X = (s: number) => ((s - a) / v) * w;
+  g.fillStyle = tone("track");
+  g.fillRect(0, 0, w, h);
+  g.font = `12px ${UI_FONT}`;
+  g.textBaseline = "middle";
   spots = [];
   const lit = litRow();
   for (const l of lines()) {
     // Flat rows as CapCut's tracks; the file's heading in the label column's colour (KeyHeads.tsx bg-card), every key of the
     // file on it as Blender's summary row and Theatre.js's aggregate rows show them, so a folded file still shows where it changes
     if (l.kind === "file") {
-      g.fillStyle = tone("card"); g.fillRect(0, l.y, w, HEAD_H);
-      const y = l.y + HEAD_H / 2, columns = new Map<number, KeyRef[]>();
-      for (const r of rowsOf(l.f)) keysOf(r.f, r.path).forEach((k, i) => {
-        const refs = columns.get(k.t) ?? [];
-        refs.push({ f: r.f, path: r.path, i }); columns.set(k.t, refs);
-      });
+      g.fillStyle = tone("card");
+      g.fillRect(0, l.y, w, HEAD_H);
+      const y = l.y + HEAD_H / 2,
+        columns = new Map<number, KeyRef[]>();
+      for (const r of rowsOf(l.f))
+        keysOf(r.f, r.path).forEach((k, i) => {
+          const refs = columns.get(k.t) ?? [];
+          refs.push({ f: r.f, path: r.path, i });
+          columns.set(k.t, refs);
+        });
       for (const [t, refs] of columns) {
         const x = X(t);
         if (x < -REACH || x > w + REACH) continue;
         spots.push({ refs, x, y, height: HEAD_H });
-        diamond(g, x, y, R - 1); g.fillStyle = tone(refs.some(isPicked) ? "foreground" : "muted-foreground"); g.fill();
-        if (refs.every(isPicked)) { diamond(g, x, y, R + 2); g.strokeStyle = tone("pick"); g.lineWidth = 2; g.stroke(); }
+        diamond(g, x, y, R - 1);
+        g.fillStyle = tone(refs.some(isPicked) ? "foreground" : "muted-foreground");
+        g.fill();
+        if (refs.every(isPicked)) {
+          diamond(g, x, y, R + 2);
+          g.strokeStyle = tone("pick");
+          g.lineWidth = 2;
+          g.stroke();
+        }
       }
       continue;
     }
-    if (l.row.id === lit) { g.fillStyle = tone("tint"); g.fillRect(0, l.y, w, ROW_H); }
-    const ks = keysOf(l.row.f, l.row.path), y = l.y + ROW_H / 2;
+    if (l.row.id === lit) {
+      g.fillStyle = tone("tint");
+      g.fillRect(0, l.y, w, ROW_H);
+    }
+    const ks = keysOf(l.row.f, l.row.path),
+      y = l.y + ROW_H / 2;
     // What happens between keys first, so the diamonds sit on top
     for (let i = 1; i < ks.length; i++) {
-      const x0 = X(ks[i - 1].t), x1 = X(ks[i].t);
+      const x0 = X(ks[i - 1].t),
+        x1 = X(ks[i].t);
       if (x1 < 0 || x0 > w || x1 - x0 < 1) continue;
-      if (same(ks[i - 1], ks[i])) { g.fillStyle = tone("key-hold"); for (let x = Math.max(0, x0); x < Math.min(w, x1); x += 4) g.fillRect(x, y, 2, 1); }
-      else { g.fillStyle = tone("muted-foreground"); g.fillRect(Math.max(0, x0), y, Math.min(w, x1) - Math.max(0, x0), 1); }
+      if (same(ks[i - 1], ks[i])) {
+        g.fillStyle = tone("key-hold");
+        for (let x = Math.max(0, x0); x < Math.min(w, x1); x += 4) g.fillRect(x, y, 2, 1);
+      } else {
+        g.fillStyle = tone("muted-foreground");
+        g.fillRect(Math.max(0, x0), y, Math.min(w, x1) - Math.max(0, x0), 1);
+      }
     }
     ks.forEach((k, i) => {
       const x = X(k.t);
       if (x < -60 || x > w + REACH) return;
       const ref = { f: l.row.f, path: l.row.path, i };
       spots.push({ refs: [ref], x, y, height: ROW_H });
-      const name = nameOf(k), room = (i + 1 < ks.length ? X(ks[i + 1].t) : w) - x - 10;
+      const name = nameOf(k),
+        room = (i + 1 < ks.length ? X(ks[i + 1].t) : w) - x - 10;
       if (name && room > 24) {
-        g.save(); g.beginPath(); g.rect(x + 7, l.y, room, ROW_H); g.clip();
-        g.fillStyle = l.row.id === lit ? tone("tint") : tone("track"); g.fillRect(x + 6, y - 7, Math.min(room, g.measureText(name).width + 4), 14);
-        g.fillStyle = tone("label"); g.fillText(name, x + 8, y);
+        g.save();
+        g.beginPath();
+        g.rect(x + 7, l.y, room, ROW_H);
+        g.clip();
+        g.fillStyle = l.row.id === lit ? tone("tint") : tone("track");
+        g.fillRect(x + 6, y - 7, Math.min(room, g.measureText(name).width + 4), 14);
+        g.fillStyle = tone("label");
+        g.fillText(name, x + 8, y);
         g.restore();
       }
-      diamond(g, x, y, R); g.fillStyle = tone("foreground"); g.fill();
-      if (isPicked(ref)) { diamond(g, x, y, R + 3); g.strokeStyle = tone("pick"); g.lineWidth = 2; g.stroke(); }
+      diamond(g, x, y, R);
+      g.fillStyle = tone("foreground");
+      g.fill();
+      if (isPicked(ref)) {
+        diamond(g, x, y, R + 3);
+        g.strokeStyle = tone("pick");
+        g.lineWidth = 2;
+        g.stroke();
+      }
     });
   }
   // Cuts, faint, over everything: a key is often put on one by eye
@@ -90,17 +154,38 @@ export const drawKeyRows = () => {
   drawPlayhead(g, X(S.t), h);
 };
 
-const snapPoints = () => [S.t, ...beatTimes(), ...SHOTS.map((s) => s.t), ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s))];
+const snapPoints = () => [
+  S.t,
+  ...beatTimes(),
+  ...SHOTS.map((s) => s.t),
+  ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s)),
+];
 const spotAt = (x: number, y: number, touch: boolean) => {
   const reach = keyReach(touch);
-  let best: Spot | null = null, d = reach;
-  for (const s of spots) { if (Math.abs(s.y - y) >= s.height / 2) continue; const e = Math.abs(s.x - x); if (e <= d) { d = e; best = s; } }
+  let best: Spot | null = null,
+    d = reach;
+  for (const s of spots) {
+    if (Math.abs(s.y - y) >= s.height / 2) continue;
+    const e = Math.abs(s.x - x);
+    if (e <= d) {
+      d = e;
+      best = s;
+    }
+  }
   return best;
 };
 const keysInBox = (b: { x0: number; x1: number; y0: number; y1: number }) => {
   const r = S.el.keyrows.getBoundingClientRect();
   if (!r.height) return [];
-  const refs = spots.filter((s) => r.left + s.x >= b.x0 - R && r.left + s.x <= b.x1 + R && r.top + s.y >= b.y0 - R && r.top + s.y <= b.y1 + R).flatMap((s) => s.refs);
+  const refs = spots
+    .filter(
+      (s) =>
+        r.left + s.x >= b.x0 - R &&
+        r.left + s.x <= b.x1 + R &&
+        r.top + s.y >= b.y0 - R &&
+        r.top + s.y <= b.y1 + R,
+    )
+    .flatMap((s) => s.refs);
   return refs.filter((ref, i) => refs.findIndex((other) => sameKey(ref, other)) === i);
 };
 
@@ -108,16 +193,35 @@ export const attachKeyRows = () => {
   const c = S.el.keyrows;
   marks.keys = drawKeyRows;
   inBox.keys = keysInBox;
-  const local = (e: PointerEvent) => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width }; };
-  let drag: { ref: KeyRef; column: KeyRef[]; group: KeyRef[]; along: Along | null; x: number; t: number; snap: string[]; moved: boolean; alone: boolean; magnet: ReturnType<typeof makeSnapper> } | null = null;
+  const local = (e: PointerEvent) => {
+    const r = c.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width };
+  };
+  let drag: {
+    ref: KeyRef;
+    column: KeyRef[];
+    group: KeyRef[];
+    along: Along | null;
+    x: number;
+    t: number;
+    snap: string[];
+    moved: boolean;
+    alone: boolean;
+    magnet: ReturnType<typeof makeSnapper>;
+  } | null = null;
   let scrub: { resume: boolean } | null = null;
   let box: { add: boolean } | null = null;
 
   c.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
-    const { x, y, w } = local(e), touch = e.pointerType === "touch", add = e.shiftKey || e.ctrlKey || e.metaKey;
+    const { x, y, w } = local(e),
+      touch = e.pointerType === "touch",
+      add = e.shiftKey || e.ctrlKey || e.metaKey;
     const s = spotAt(x, y, touch);
-    if (get().blade) { say("Split mode cuts sound clips and shots, not keyframes. Press A to select again"); return; }
+    if (get().blade) {
+      say("Split mode cuts sound clips and shots, not keyframes. Press A to select again");
+      return;
+    }
     c.setPointerCapture(e.pointerId);
     if (!s) {
       const grab = onPlayhead(x, w, touch);
@@ -126,55 +230,112 @@ export const attachKeyRows = () => {
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
-      } else { box = { add }; boxStart(e, add); }
+      } else {
+        box = { add };
+        boxStart(e, add);
+      }
       return;
     }
     if (add) {
-      const p = picked(), rest = p.keys.filter((q) => !s.refs.some((ref) => sameKey(q, ref)));
-      pickAcross({ ...p, keys: s.refs.every(isPicked) ? rest : [...rest, ...s.refs] }); return;
+      const p = picked(),
+        rest = p.keys.filter((q) => !s.refs.some((ref) => sameKey(q, ref)));
+      pickAcross({ ...p, keys: s.refs.every(isPicked) ? rest : [...rest, ...s.refs] });
+      return;
     }
-    const was = s.refs.every(isPicked), ref = s.refs[0];
+    const was = s.refs.every(isPicked),
+      ref = s.refs[0];
     if (!was) pickKeys(s.refs);
     const along = was ? alongWith("keys") : null;
-    drag = { ref, column: s.refs, group: get().keyPicks, along, x, t: keyOf(ref).t, snap: snapshot(), moved: false, alone: was && (get().keyPicks.length > s.refs.length || !!along), magnet: makeSnapper() };
+    drag = {
+      ref,
+      column: s.refs,
+      group: get().keyPicks,
+      along,
+      x,
+      t: keyOf(ref).t,
+      snap: snapshot(),
+      moved: false,
+      alone: was && (get().keyPicks.length > s.refs.length || !!along),
+      magnet: makeSnapper(),
+    };
   });
   c.addEventListener("pointermove", (e) => {
-    const { x, y, w } = local(e), { v } = view(), perPx = v / w;
-    if (scrub) { seek(timeAt(x, w)); return; }
-    if (get().blade && !drag && !box) { c.style.cursor = spotAt(x, y, false) ? "not-allowed" : "default"; return; }
-    if (box) { boxMove(e); return; }
-    if (!drag) { c.style.cursor = !spotAt(x, y, false) && onPlayhead(x, w, false) ? "ew-resize" : "default"; return; }
+    const { x, y, w } = local(e),
+      { v } = view(),
+      perPx = v / w;
+    if (scrub) {
+      seek(timeAt(x, w));
+      return;
+    }
+    if (get().blade && !drag && !box) {
+      c.style.cursor = spotAt(x, y, false) ? "not-allowed" : "default";
+      return;
+    }
+    if (box) {
+      boxMove(e);
+      return;
+    }
+    if (!drag) {
+      c.style.cursor = !spotAt(x, y, false) && onPlayhead(x, w, false) ? "ew-resize" : "default";
+      return;
+    }
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     if (!drag.moved) hold(true);
     drag.moved = true;
     c.style.cursor = "default";
     // The key under the pointer snaps; the rest of the pick moves as far, none past a key of its row that stays
     restore(drag.snap);
-    const { along } = drag, [lo, hi] = room(drag.group), snap = drag.magnet(drag.t + (x - drag.x) * perPx, [0], snapPoints(), perPx, noSnap(e), true), want = snap.time - drag.t;
+    const { along } = drag,
+      [lo, hi] = room(drag.group),
+      snap = drag.magnet(drag.t + (x - drag.x) * perPx, [0], snapPoints(), perPx, noSnap(e), true),
+      want = snap.time - drag.t;
     const d = Math.max(lo, along?.room[0] ?? lo, Math.min(hi, along?.room[1] ?? hi, want));
-    preview(drag.group, (r, ks) => { ks[r.i].t = Math.round((ks[r.i].t + d) * 1000) / 1000; });
+    preview(drag.group, (r, ks) => {
+      ks[r.i].t = Math.round((ks[r.i].t + d) * 1000) / 1000;
+    });
     along?.preview(d);
     snapLine(snap.target === null ? null : snappedTo([drag.t + d], [snap.target]));
-    const others = drag.group.length - 1 + (along?.count ?? 0), many = others ? ` + ${others} more` : "";
-    say(`${drag.ref.path.join(".")}${many}: ${stamp(drag.t)} → ${stamp(drag.t + d)}${d !== want ? " (stopped by its neighbour)" : noSnap(e) ? "" : " (Shift: no snapping)"}`, 1500);
+    const others = drag.group.length - 1 + (along?.count ?? 0),
+      many = others ? ` + ${others} more` : "";
+    say(
+      `${drag.ref.path.join(".")}${many}: ${stamp(drag.t)} → ${stamp(drag.t + d)}${d !== want ? " (stopped by its neighbour)" : noSnap(e) ? "" : " (Shift: no snapping)"}`,
+      1500,
+    );
   });
   const up = (e: PointerEvent) => {
-    if (scrub) { const r = scrub.resume; scrub = null; holdView(false); if (r) setPlaying(true); return; }
-    if (box) { box = null; boxEnd(e); return; }
+    if (scrub) {
+      const r = scrub.resume;
+      scrub = null;
+      holdView(false);
+      if (r) setPlaying(true);
+      return;
+    }
+    if (box) {
+      box = null;
+      boxEnd(e);
+      return;
+    }
     if (!drag) return;
     snapLine(null);
     const { snap, moved, alone, ref, column, group, along, t: was } = drag;
     drag = null;
     c.style.cursor = "";
     // A plain click also brings the picture to the key, so the Key tab and the frame show the same moment
-    if (!moved) { if (alone) pickKeys(column); seek(keyOf(ref).t); return; }
-    const after = group.map((r) => keyOf(r).t), d = Math.round((keyOf(ref).t - was) * 1000) / 1000;
+    if (!moved) {
+      if (alone) pickKeys(column);
+      seek(keyOf(ref).t);
+      return;
+    }
+    const after = group.map((r) => keyOf(r).t),
+      d = Math.round((keyOf(ref).t - was) * 1000) / 1000;
     restore(snap);
     hold(false);
     along?.restore();
     if (e.type !== "pointerup" || d === 0) return;
     together(() => {
-      editKeys(group, (r, ks) => { ks[r.i].t = after[group.findIndex((g) => sameKey(g, r))]; });
+      editKeys(group, (r, ks) => {
+        ks[r.i].t = after[group.findIndex((g) => sameKey(g, r))];
+      });
       along?.commit(d);
     });
   };

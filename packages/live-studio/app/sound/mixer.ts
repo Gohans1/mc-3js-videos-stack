@@ -1,63 +1,123 @@
 // The sound lanes heard as they are edited, for a film with package.json "live-studio": { liveLanes: true }. Its sound.py then
 // mixes without them, and this plays every bed and one-shot of the timeline file on the mix's clock the way the film's
 // scripts/sound/mix.py builds them: a bed looped from..to, a one-shot from start for length, gains in dB, fades (envelope.ts),
-// lowpass/highpass filters, and an option picked in its place at the level of the sound it stands in for. All of it goes
+// its filters (EQ and width, eq.ts), its track's volume, and an option picked in its place at the level of the sound it stands in for. All of it goes
 // through the mix's master stage: audio.drive dB into mix.py's limiter at 0.45 (brickwall.ts), with the narration summed in before it.
 // A drag is heard on the next tick, nothing is remixed. The final render still comes from mix.py.
 import { DURATION } from "film/scene";
-import { addModule, addPlayer, audioCtx, master, STEREO, track, type Window } from "./clock";
-import brickwall from "./brickwall.worklet.ts?worker&url";
+
 import { AWAY } from "../core/device";
 import { getFile } from "../core/net";
+import { S } from "../core/state";
+import { get, say } from "../core/store";
+import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
+import brickwall from "./brickwall.worklet.ts?worker&url";
+import { addModule, addPlayer, audioCtx, master, STEREO, track, type Window } from "./clock";
 import { duckCorners, duckGain, duckWindows } from "./duck";
 import { envelope, envelopePoints } from "./envelope";
+import { coefficients, widthOf } from "./eq";
 import { type GainKey, scheduleGain } from "./gain";
-import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
-import type { Lanes, LibraryItem } from "./sound";
-import { S } from "../core/state";
+import { loopSources } from "./loop";
+import {
+  clearProcessed,
+  loadProcessed,
+  needsProcessing,
+  processed,
+  type ProcessSpec,
+  processSpec,
+  retainProcessed,
+} from "./processed";
 import { type ClipRef } from "./slice";
-import { get, say } from "../core/store";
-import { narrationLines } from "../../src/narration.mjs";
-import { clearProcessed, loadProcessed, needsProcessing, processed, processSpec, retainProcessed, type ProcessSpec } from "./processed";
+import type { Lanes, LibraryItem } from "./sound";
 
-interface Source { lanes: () => Lanes | null; library: () => LibraryItem[]; span: (c: ClipRef) => [number, number] }
-interface Clip { key: string; name: string; t0: number; t1: number; start: number; length?: number; loop: boolean; db: number; gainKeys?: GainKey[]; fadeIn: number; fadeOut: number; duck: number; pan: number; filters: string[]; process?: ProcessSpec }
-interface Sound { buf: AudioBuffer; mean: number }
+interface Source {
+  lanes: () => Lanes | null;
+  library: () => LibraryItem[];
+  span: (c: ClipRef) => [number, number];
+  voice: () => { s: number; e: number }[];
+}
+interface Clip {
+  key: string;
+  name: string;
+  t0: number;
+  t1: number;
+  start: number;
+  length?: number;
+  loop: boolean;
+  db: number;
+  gainKeys?: GainKey[];
+  fadeIn: number;
+  fadeOut: number;
+  duck: number;
+  pan: number;
+  filters: string[];
+  process?: ProcessSpec;
+}
+interface Sound {
+  buf: AudioBuffer;
+  mean: number;
+}
 
 // Silent until the limiter's module has loaded (a moment after the page opens): an offline render waits for `ready`
 const stage = (ctx: BaseAudioContext, out: AudioNode) => {
-  const bus = ctx.createGain(), drive = ctx.createGain();
+  const bus = ctx.createGain(),
+    drive = ctx.createGain();
   bus.connect(drive);
-  const ready = addModule(ctx, brickwall).then(() => { drive.connect(new AudioWorkletNode(ctx, "brickwall", { ...STEREO, outputChannelCount: [2] })).connect(out); });
+  const ready = addModule(ctx, brickwall).then(() => {
+    drive
+      .connect(new AudioWorkletNode(ctx, "brickwall", { ...STEREO, outputChannelCount: [2] }))
+      .connect(out);
+  });
   return { bus, drive, ready };
 };
 const live = stage(audioCtx, master);
 
-let source: Source | null = null, on = false, routed: MediaElementAudioSourceNode | null = null;
+let source: Source | null = null,
+  on = false,
+  routed: MediaElementAudioSourceNode | null = null;
 const fromMix = audioCtx.createGain();
 // The mix element's own volume is applied before it reaches here, and the volume after master applies it again: undone, so it
 // counts once. A soloed track silences the narration as it does every other track
-const levelMix = () => { const a = S.el.audio, v = a.muted ? 0 : a.volume; fromMix.gain.value = v > 0 && !get().solo.length ? 1 / v : 0; };
+const levelMix = () => {
+  const a = S.el.audio,
+    v = a.muted ? 0 : a.volume;
+  fromMix.gain.value = v > 0 && !get().solo.length ? 1 / v : 0;
+};
 
 // ---------- The lanes' sound files, decoded once, with ffmpeg volumedetect's mean_volume for an option's level
-const sounds = new Map<string, Promise<Sound | null>>(), ready = new Map<string, Sound>();
+const sounds = new Map<string, Promise<Sound | null>>(),
+  ready = new Map<string, Sound>();
 const load = (name: string) => {
   if (!sounds.has(name)) {
     const url = `/api/sfx/${encodeURIComponent(name)}.${AWAY ? "webm" : "wav"}`; // anything but this machine gets Opus, a tenth of it
-    sounds.set(name, getFile(url).then(async (r) => {
-      if (!r.ok) return null;
-      const buf = await audioCtx.decodeAudioData(await r.arrayBuffer());
-      let sum = 0, n = 0;
-      for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) sum += d[i] * d[i]; n += d.length; }
-      const s = { buf, mean: 10 * Math.log10(sum / n || 1e-12) };
-      ready.set(name, s);
-      return s;
-    }).catch(() => null));
+    sounds.set(
+      name,
+      getFile(url)
+        .then(async (r) => {
+          if (!r.ok) return null;
+          const buf = await audioCtx.decodeAudioData(await r.arrayBuffer());
+          let sum = 0,
+            n = 0;
+          for (let c = 0; c < buf.numberOfChannels; c++) {
+            const d = buf.getChannelData(c);
+            for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+            n += d.length;
+          }
+          const s = { buf, mean: 10 * Math.log10(sum / n || 1e-12) };
+          ready.set(name, s);
+          return s;
+        })
+        .catch(() => null),
+    );
   }
   return sounds.get(name)!;
 };
 // A file changed on disk (a new download): its old decode goes
-export const forgetSounds = () => { sounds.clear(); ready.clear(); clearProcessed(); };
+export const forgetSounds = () => {
+  sounds.clear();
+  ready.clear();
+  clearProcessed();
+};
 // A library sound decoded, as the lanes play it (sweeten.ts reads where its moment is)
 export const decoded = (name: string) => load(name).then((s) => s?.buf ?? null);
 // The mix element's own sound decoded, kept until a remix changes its URL: the meter's render and the skims play it
@@ -65,118 +125,249 @@ let mixDecoded: { url: string; buf: Promise<AudioBuffer | null> } | null = null;
 const mixBuffer = () => {
   const url = S.el.audio?.currentSrc;
   if (!url) return Promise.resolve(null);
-  if (mixDecoded?.url !== url) mixDecoded = { url, buf: getFile(url).then((r) => r.arrayBuffer()).then((b) => audioCtx.decodeAudioData(b)).catch(() => null) };
+  if (mixDecoded?.url !== url)
+    mixDecoded = {
+      url,
+      buf: getFile(url)
+        .then((r) => r.arrayBuffer())
+        .then((b) => audioCtx.decodeAudioData(b))
+        .catch(() => null),
+    };
   return mixDecoded.buf;
 };
 
-// ---------- mix.py's ffmpeg filters, the two the films use: lowpass/highpass=f=..:poles=1|2[:w=Q]
+// ---------- mix.py's ffmpeg filters as the same difference equations (eq.ts), and extrastereo as its mid/side scale:
+// L' = M + m S, R' = M - m S, so L' = (1+m)/2 L + (1-m)/2 R. A filter with no exact preview is skipped with a note
 const warned = new Set<string>();
-const filterNode = (ctx: BaseAudioContext, spec: string): AudioNode | null => {
-  const [kind, args = ""] = spec.split("="), m = Object.fromEntries(args ? spec.slice(kind.length + 1).split(":").map((kv) => kv.split("=")) : []);
-  const f = Number(m.f ?? m.frequency ?? 500), poles = Number(m.p ?? m.poles ?? 2), q = Number(m.w ?? m.width ?? 0.707);
-  if ((kind !== "lowpass" && kind !== "highpass") || !(f > 0) || (poles !== 1 && poles !== 2) || (m.t ?? m.width_type ?? "q") !== "q") {
-    if (!warned.has(spec)) { warned.add(spec); say(`Audio filter "${spec}" can't play in the studio yet; renders still apply it`, 6000); }
-    return null;
+const attach = (ctx: BaseAudioContext, from: AudioNode, spec: string): AudioNode => {
+  const sections = coefficients(spec, ctx.sampleRate),
+    m = widthOf(spec);
+  if (sections)
+    return sections.reduce<AudioNode>(
+      (tail, { b, a }) => tail.connect(ctx.createIIRFilter(b, a)),
+      from,
+    );
+  if (m !== null) {
+    const up = ctx.createGain(),
+      split = ctx.createChannelSplitter(2),
+      merge = ctx.createChannelMerger(2);
+    up.channelCount = 2;
+    up.channelCountMode = "explicit"; // a mono file reaches both sides, as after mix.py's aformat
+    from.connect(up).connect(split);
+    for (const [side, to, k] of [
+      [0, 0, (1 + m) / 2],
+      [0, 1, (1 - m) / 2],
+      [1, 1, (1 + m) / 2],
+      [1, 0, (1 - m) / 2],
+    ] as const) {
+      const g = ctx.createGain();
+      g.gain.value = k;
+      split.connect(g, side).connect(merge, 0, to);
+    }
+    return merge;
   }
-  if (poles === 2) {
-    // ffmpeg's two-pole filters are the RBJ cookbook ones, as Web Audio's; its Q is a plain ratio, Web Audio's lowpass Q is in dB
-    const b = ctx.createBiquadFilter();
-    b.type = kind; b.frequency.value = f; b.Q.value = 20 * Math.log10(q);
-    return b;
+  if (!warned.has(spec)) {
+    warned.add(spec);
+    say(`Audio filter "${spec}" can't play in the studio yet; renders still apply it`, 6000);
   }
-  const a1 = -Math.exp((-2 * Math.PI * f) / ctx.sampleRate), b0 = kind === "lowpass" ? 1 + a1 : (1 - a1) / 2; // ffmpeg's one-pole
-  return ctx.createIIRFilter(kind === "lowpass" ? [b0, 0] : [b0, -b0], [1, a1]);
+  return from;
 };
 
 // ---------- What sounds where: mix.py's build() over the lanes, with the studio's picks (mix.py chosen/as_option) and its muted tracks;
 // in the page also its soloed ones, unless `all` (the meter's render of the film as mix.py makes it)
 const clips = (l: Lanes, all = false): Clip[] => {
-  const out: Clip[] = [], muted = new Set((l.tracks ?? []).filter((t) => t.mute).map((t) => t.id)), solo = all ? [] : get().solo;
+  const out: Clip[] = [],
+    muted = new Set((l.tracks ?? []).filter((t) => t.mute).map((t) => t.id)),
+    trackDb = new Map((l.tracks ?? []).map((t) => [t.id, t.gain ?? 0])),
+    trackEq = new Map(
+      (l.tracks ?? []).map((t) => [t.id, (t.filters as string[] | undefined) ?? []]),
+    ),
+    solo = all ? [] : get().solo;
   const pick = (e: { name: string; gain: number; track?: string; try?: string[] }) => {
     if (e.track && muted.has(e.track)) return null;
     if (solo.length && !solo.includes(e.track ?? "")) return null;
+    const td = trackDb.get(e.track ?? "") ?? 0;
     const p = e.try?.length ? lanePick(e.name) : null;
     if (p?.set === "off") return null;
-    const name = p && [e.name, ...e.try!].includes(p.set) ? p.set : e.name, gain = p?.gain ?? 1;
-    if (name === e.name && gain === 1) return { name, db: e.gain, own: true };
-    const a = ready.get(e.name), b = ready.get(name);
-    if (!a || !b) { load(e.name); load(name); return null; }
-    return { name, db: e.gain + a.mean - b.mean + 20 * Math.log10(gain), own: name === e.name };
+    const name = p && [e.name, ...e.try!].includes(p.set) ? p.set : e.name,
+      gain = p?.gain ?? 1;
+    if (name === e.name && gain === 1) return { name, db: e.gain + td, own: true };
+    const a = ready.get(e.name),
+      b = ready.get(name);
+    if (!a || !b) {
+      load(e.name);
+      load(name);
+      return null;
+    }
+    return {
+      name,
+      db: e.gain + td + a.mean - b.mean + 20 * Math.log10(gain),
+      own: name === e.name,
+    };
   };
   const narrated = !!l.narration || l.voice !== false;
   l.beds.forEach((b, i) => {
     const p = pick(b);
-    if (p) out.push({ key: `beds:${i}`, name: p.name, t0: b.from, t1: b.to, start: p.own ? b.start ?? 0 : 0, length: b.to - b.from, loop: true, db: p.db, gainKeys: b.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - b.gain })), fadeIn: b.fadeIn, fadeOut: b.fadeOut, duck: narrated ? (b.duck as number | undefined) ?? 0 : 0, pan: b.pan ?? 0, filters: (b.filters as string[]) ?? [] });
+    if (p)
+      out.push({
+        key: `beds:${i}`,
+        name: p.name,
+        t0: b.from,
+        t1: b.to,
+        start: p.own ? (b.start ?? 0) : 0,
+        length: b.to - b.from,
+        loop: true,
+        db: p.db,
+        gainKeys: b.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - b.gain })),
+        fadeIn: b.fadeIn,
+        fadeOut: b.fadeOut,
+        duck: narrated ? ((b.duck as number | undefined) ?? 0) : 0,
+        pan: b.pan ?? 0,
+        filters: [...((b.filters as string[]) ?? []), ...(trackEq.get(b.track ?? "") ?? [])],
+      });
   });
   l.sfx.forEach((s, i) => {
-    const p = pick(s), buf = p && ready.get(p.name)?.buf;
+    const p = pick(s),
+      buf = p && ready.get(p.name)?.buf;
     if (!p) return;
-    if (!buf) { load(p.name); return; }
-    const start = p.own ? s.start ?? 0 : 0; // an option plays from its own start
-    out.push({ key: `sfx:${i}`, name: p.name, t0: s.at, t1: s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1)), start, length: s.length, loop: false, db: p.db, gainKeys: s.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - s.gain })), fadeIn: s.fadeIn ?? 0, fadeOut: s.fadeOut ?? 0, duck: 0, pan: s.pan ?? 0, filters: (s.filters as string[]) ?? [] });
+    if (!buf) {
+      load(p.name);
+      return;
+    }
+    const start = p.own ? (s.start ?? 0) : 0; // an option plays from its own start
+    out.push({
+      key: `sfx:${i}`,
+      name: p.name,
+      t0: s.at,
+      t1: s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1)),
+      start,
+      length: s.length,
+      loop: false,
+      db: p.db,
+      gainKeys: s.gainKeys?.map((k) => ({ ...k, gain: k.gain + p.db - s.gain })),
+      fadeIn: s.fadeIn ?? 0,
+      fadeOut: s.fadeOut ?? 0,
+      duck: 0,
+      pan: s.pan ?? 0,
+      filters: [...((s.filters as string[]) ?? []), ...(trackEq.get(s.track ?? "") ?? [])],
+    });
   });
-  for (const c of out) {
-    const [list, i] = c.key.split(":") as ["beds" | "sfx", string], entry = l[list][+i];
+  const audible = out.filter((c) => c.t1 > c.t0);
+  for (const c of audible) {
+    const [list, i] = c.key.split(":") as ["beds" | "sfx", string],
+      entry = l[list][+i];
     if (needsProcessing(entry)) {
       c.process = processSpec({ ...entry, name: c.name, start: c.start }, c.t1 - c.t0, c.loop);
-      c.start = 0; c.loop = false; c.length = c.t1 - c.t0;
+      c.start = 0;
+      c.loop = false;
+      c.length = c.t1 - c.t0;
     }
   }
-  return out;
+  return audible;
 };
-const soundFor = (c: Clip) => c.process ? processed(c.process) : ready.get(c.name);
-const loadClip = (c: Clip) => c.process ? loadProcessed(c.process) : load(c.name);
-const preloadSources = (l: Lanes) => Promise.all([...new Set([...l.beds, ...l.sfx].flatMap((c) => {
-  const p = c.try?.length ? lanePick(c.name)?.set : null;
-  return [c.name, ...(p && p !== "off" ? [p] : [])];
-}))].map(load));
+const soundFor = (c: Clip) => (c.process ? processed(c.process) : ready.get(c.name));
+const loadClip = (c: Clip) => (c.process ? loadProcessed(c.process) : load(c.name));
+const preloadSources = (l: Lanes) =>
+  Promise.all(
+    [
+      ...new Set(
+        [...l.beds, ...l.sfx].flatMap((c) => {
+          const p = c.try?.length ? lanePick(c.name)?.set : null;
+          return [c.name, ...(p && p !== "off" ? [p] : [])];
+        }),
+      ),
+    ].map(load),
+  );
 
-interface Voice { src: AudioBufferSourceNode; gain: GainNode }
+interface Voice {
+  srcs: AudioBufferSourceNode[];
+  gain: GainNode;
+}
 let voices: Voice[] = [];
 const started = new Set<string>();
 // One clip from film second at (inside it) on; w maps film seconds onto ctx's clock
-const play = (ctx: BaseAudioContext, bus: AudioNode, c: Clip, s: Sound, at: number, w: Pick<Window, "speed" | "when" | "ctxAt">): Voice | null => {
-  const u0 = at - c.t0, offset = c.loop ? (c.start + u0) % s.buf.duration : c.start + u0;
-  if (!c.loop && offset >= s.buf.duration) return null;
+const play = (
+  ctx: BaseAudioContext,
+  bus: AudioNode,
+  c: Clip,
+  s: Sound,
+  at: number,
+  w: Pick<Window, "speed" | "when" | "ctxAt">,
+): Voice | null => {
+  const u0 = at - c.t0;
+  if (!c.loop && c.start + u0 >= s.buf.duration) return null;
   // mix.py's aformat makes a mono file stereo the ffmpeg way, the center at -3 dB in each side; Web Audio copies it at full level
-  const src = ctx.createBufferSource(), gain = ctx.createGain(), lin = s.buf.numberOfChannels === 1 ? Math.SQRT1_2 : 1;
-  const begin = Math.round(w.when(at) * ctx.sampleRate) / ctx.sampleRate;
-  src.buffer = s.buf; src.loop = c.loop; src.playbackRate.value = w.speed;
+  const head = ctx.createGain(),
+    gain = ctx.createGain(),
+    lin = s.buf.numberOfChannels === 1 ? Math.SQRT1_2 : 1;
+  const begin = Math.round(w.when(at) * ctx.sampleRate) / ctx.sampleRate,
+    ctxAt = (u: number) => w.ctxAt(c.t0 + u);
+  let srcs: AudioBufferSourceNode[];
+  if (c.loop) srcs = loopSources(ctx, s.buf, c.start, c.t1 - c.t0, u0, begin, ctxAt, w.speed, head);
+  else {
+    const src = ctx.createBufferSource();
+    src.buffer = s.buf;
+    src.playbackRate.value = w.speed;
+    src.connect(head);
+    src.start(begin, c.start + u0);
+    src.stop(Math.max(begin, ctxAt(c.t1 - c.t0)));
+    srcs = [src];
+  }
   let pts = envelopePoints(u0, c.t1 - c.t0, c.fadeIn, c.fadeOut, c.length);
   if (c.duck > 0) {
-    const lanes = source?.lanes();
-    const lines = lanes?.narration ? narrationLines(S.voiceBase, lanes, source?.library().find((x) => x.name === lanes.narration)?.seconds ?? 0, true) : S.voiceOut;
+    const lines = source?.voice() ?? S.voiceOut;
     const w = duckWindows(lines.map((l) => [l.s, l.e]));
-    const us = [...new Set([...pts.map((p) => p[0]), ...duckCorners(c.t0 + u0, c.t1, w).map((t) => t - c.t0)])].sort((a, b) => a - b);
-    pts = us.map((u) => [u, envelope(u, c.fadeIn, c.fadeOut, c.length) * duckGain(c.t0 + u, w, c.duck)]);
+    const us = [
+      ...new Set([
+        ...pts.map((p) => p[0]),
+        ...duckCorners(c.t0 + u0, c.t1, w).map((t) => t - c.t0),
+      ]),
+    ].sort((a, b) => a - b);
+    pts = us.map((u) => [
+      u,
+      envelope(u, c.fadeIn, c.fadeOut, c.length) * duckGain(c.t0 + u, w, c.duck),
+    ]);
   }
   gain.gain.setValueAtTime(lin * pts[0][1], begin);
-  for (const [u, v] of pts.slice(1)) gain.gain.linearRampToValueAtTime(lin * v, Math.max(begin, w.ctxAt(c.t0 + u)));
-  let tail: AudioNode = src;
-  for (const spec of c.filters) { const f = filterNode(ctx, spec); if (f) tail = tail.connect(f); }
+  for (const [u, v] of pts.slice(1))
+    gain.gain.linearRampToValueAtTime(lin * v, Math.max(begin, w.ctxAt(c.t0 + u)));
+  let tail: AudioNode = head;
+  for (const spec of c.filters) tail = attach(ctx, tail, spec);
   const volume = ctx.createGain();
-  scheduleGain(volume.gain, { gain: c.db, gainKeys: c.gainKeys }, u0, c.t1 - c.t0, (u) => Math.max(begin, w.ctxAt(c.t0 + u)));
+  scheduleGain(volume.gain, { gain: c.db, gainKeys: c.gainKeys }, u0, c.t1 - c.t0, (u) =>
+    Math.max(begin, w.ctxAt(c.t0 + u)),
+  );
   tail = tail.connect(volume);
   tail = tail.connect(gain);
   if (c.pan) {
     // mix.py pan_filter: equal-power balance on the stereo signal; explicit stereo, so a mono file is made stereo first as
     // ffmpeg's aformat does (the SQRT1_2 above) rather than panned by the mono rule
     const p = ctx.createStereoPanner();
-    p.channelCountMode = "explicit"; p.channelCount = 2; p.pan.value = c.pan;
+    p.channelCountMode = "explicit";
+    p.channelCount = 2;
+    p.pan.value = c.pan;
     tail = tail.connect(p);
   }
   tail.connect(bus);
-  src.start(begin, offset);
-  src.stop(Math.max(begin, w.ctxAt(c.t1)));
-  return { src, gain };
+  return { srcs, gain };
 };
 const hush = (list: Voice[]) => {
   const t = audioCtx.currentTime;
-  for (const v of list) { v.gain.gain.cancelScheduledValues(t); v.gain.gain.setTargetAtTime(0, t, 0.004); try { v.src.stop(t + 0.03); } catch {} }
+  for (const v of list) {
+    v.gain.gain.cancelScheduledValues(t);
+    v.gain.gain.setTargetAtTime(0, t, 0.004);
+    for (const src of v.srcs)
+      try {
+        src.stop(t + 0.03);
+      } catch {}
+  }
 };
 
 addPlayer({
-  reset: () => { started.clear(); voices = []; },
+  reset: () => {
+    started.clear();
+    voices = [];
+  },
   tick: (w) => {
     if (routed) levelMix(); // the mix plays through the graph whether or not the lanes do
     const l = on && source?.lanes();
@@ -184,10 +375,19 @@ addPlayer({
     for (const c of clips(l)) {
       if (started.has(c.key) || !(c.t0 < w.until && w.now < c.t1)) continue;
       const s = soundFor(c);
-      if (!s) { loadClip(c); continue; }
+      if (!s) {
+        loadClip(c);
+        continue;
+      }
       const v = play(audioCtx, live.bus, c, s, Math.max(w.now, c.t0), w);
       started.add(c.key);
-      if (v) { track(v.src); voices.push(v); v.src.addEventListener("ended", () => { voices = voices.filter((x) => x !== v); }); }
+      if (v) {
+        v.srcs.forEach(track);
+        voices.push(v);
+        v.srcs.at(-1)!.addEventListener("ended", () => {
+          voices = voices.filter((x) => x !== v);
+        });
+      }
     }
     window.__lanes = { sounding: voices.length, at: +w.now.toFixed(3), plans };
   },
@@ -195,16 +395,21 @@ addPlayer({
 
 // A lane edit or a pick: what is sounding fades out in a few ms and the next tick starts it again as it now is. While a
 // clip is being dragged that waits until the hand rests a moment
-let replanTimer = 0, plans = 0;
+let replanTimer = 0,
+  plans = 0;
 export const replan = () => {
   if (!on) return;
   clearTimeout(replanTimer);
   replanTimer = window.setTimeout(() => {
-    hush(voices); voices = []; started.clear(); plans++;
+    hush(voices);
+    voices = [];
+    started.clear();
+    plans++;
     const l = source?.lanes();
     if (l) {
-      live.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20); setLaneGroups(groups(l));
-      retainProcessed(clips(l, true).flatMap((c) => c.process ? [c.process] : []));
+      live.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+      setLaneGroups(groups(l));
+      retainProcessed(clips(l, true).flatMap((c) => (c.process ? [c.process] : [])));
     }
   }, 60);
 };
@@ -214,14 +419,23 @@ const auditioning: Voice[] = [];
 const audition = async (name: string) => {
   const l = source?.lanes();
   if (!l) return;
-  const all = clips(l).filter((c) => { const [list, i] = c.key.split(":") as ["beds" | "sfx", string]; return l[list][+i].name === name; });
+  const all = clips(l).filter((c) => {
+    const [list, i] = c.key.split(":") as ["beds" | "sfx", string];
+    return l[list][+i].name === name;
+  });
   if (!all.length) return;
   const c = all.reduce((p, q) => (Math.abs(q.t0 - S.t) < Math.abs(p.t0 - S.t) ? q : p));
   const s = await loadClip(c);
   if (!s) return;
   hush(auditioning.splice(0));
-  const from = Math.min(Math.max(S.t, c.t0), Math.max(c.t0, c.t1 - 2.5)), to = Math.min(c.t1, from + 2.5), t0 = audioCtx.currentTime + 0.02;
-  const w = { speed: 1, ctxAt: (t: number) => t0 + t - from, when: (t: number) => Math.max(t0, t0 + t - from) };
+  const from = Math.min(Math.max(S.t, c.t0), Math.max(c.t0, c.t1 - 2.5)),
+    to = Math.min(c.t1, from + 2.5),
+    t0 = audioCtx.currentTime + 0.02;
+  const w = {
+    speed: 1,
+    ctxAt: (t: number) => t0 + t - from,
+    when: (t: number) => Math.max(t0, t0 + t - from),
+  };
   const v = play(audioCtx, live.bus, { ...c, t1: to }, s, from, w);
   if (!v) return;
   v.gain.gain.setTargetAtTime(0, w.ctxAt(to) - 0.08, 0.02);
@@ -230,11 +444,25 @@ const audition = async (name: string) => {
 const groups = (l: Lanes): Record<string, LaneGroup> => {
   const lib = new Map(source!.library().map((x) => [x.name, x]));
   const out: Record<string, LaneGroup> = {};
-  for (const [list, kind] of [["beds", "bed"], ["sfx", "sfx"]] as const) {
+  for (const [list, kind] of [
+    ["beds", "bed"],
+    ["sfx", "sfx"],
+  ] as const) {
     l[list].forEach((e, i) => {
       if (!e.try?.length) return;
       // mix.py groups a sound by name and takes the first entry's options
-      out[e.name] ??= { title: `${e.name.replace(/_/g, " ")} (${kind})`, options: [e.name, ...e.try].map((id) => ({ id, title: lib.get(id)?.title ?? id, source: lib.get(id)?.url ?? "" })), spans: [], audition: () => { audition(e.name); } };
+      out[e.name] ??= {
+        title: `${e.name.replace(/_/g, " ")} (${kind})`,
+        options: [e.name, ...e.try].map((id) => ({
+          id,
+          title: lib.get(id)?.title ?? id,
+          source: lib.get(id)?.url ?? "",
+        })),
+        spans: [],
+        audition: () => {
+          audition(e.name);
+        },
+      };
       out[e.name].spans.push(source!.span({ list, i }));
     });
   }
@@ -243,31 +471,56 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
 
 // ---------- A skim (timeline/peek.ts): the next len seconds from film second t, everything as playback sounds there, each
 // one cutting the last off, as audio scrubbing in an editor does
-let skim: { out: GainNode; srcs: AudioScheduledSourceNode[] } | null = null, skims = 0;
+let skim: { out: GainNode; srcs: AudioScheduledSourceNode[] } | null = null,
+  skims = 0;
 const endSkim = (at: number) => {
   if (!skim) return;
-  skim.out.gain.cancelScheduledValues(at); skim.out.gain.setTargetAtTime(0, at, 0.003);
-  for (const s of skim.srcs) { try { s.stop(at + 0.02); } catch {} }
+  skim.out.gain.cancelScheduledValues(at);
+  skim.out.gain.setTargetAtTime(0, at, 0.003);
+  for (const s of skim.srcs) {
+    try {
+      s.stop(at + 0.02);
+    } catch {}
+  }
   skim = null;
 };
 export const playSlice = async (t: number, len: number) => {
-  const mine = ++skims, mix = await mixBuffer();
+  const mine = ++skims,
+    mix = await mixBuffer();
   if (mine !== skims) return;
-  const t0 = audioCtx.currentTime + 0.01, end = t0 + len, out = audioCtx.createGain(), srcs: AudioScheduledSourceNode[] = [];
+  const t0 = audioCtx.currentTime + 0.01,
+    end = t0 + len,
+    out = audioCtx.createGain(),
+    srcs: AudioScheduledSourceNode[] = [];
   endSkim(t0);
-  out.gain.setValueAtTime(0, t0); out.gain.linearRampToValueAtTime(1, t0 + 0.004);
-  out.gain.setValueAtTime(1, end - 0.012); out.gain.linearRampToValueAtTime(0, end);
+  out.gain.setValueAtTime(0, t0);
+  out.gain.linearRampToValueAtTime(1, t0 + 0.004);
+  out.gain.setValueAtTime(1, end - 0.012);
+  out.gain.linearRampToValueAtTime(0, end);
   out.connect(on ? live.bus : master);
-  if (mix && !get().solo.length && t < mix.duration) { const s = audioCtx.createBufferSource(); s.buffer = mix; s.connect(out); s.start(t0, t); srcs.push(s); }
+  if (mix && !get().solo.length && t < mix.duration) {
+    const s = audioCtx.createBufferSource();
+    s.buffer = mix;
+    s.connect(out);
+    s.start(t0, t);
+    srcs.push(s);
+  }
   const l = on && source?.lanes();
   if (l) {
-    const w = { speed: 1, ctxAt: (x: number) => t0 + x - t, when: (x: number) => Math.max(t0, t0 + x - t) };
+    const w = {
+      speed: 1,
+      ctxAt: (x: number) => t0 + x - t,
+      when: (x: number) => Math.max(t0, t0 + x - t),
+    };
     for (const c of clips(l)) {
       if (!(c.t0 <= t && t < c.t1)) continue;
       const s = soundFor(c);
-      if (!s) { loadClip(c); continue; }
+      if (!s) {
+        loadClip(c);
+        continue;
+      }
       const v = play(audioCtx, out, c, s, t, w);
-      if (v) srcs.push(v.src);
+      if (v) srcs.push(...v.srcs);
     }
   }
   for (const s of srcs) s.stop(end); // the last stop called is the one kept
@@ -278,14 +531,28 @@ export const playSlice = async (t: number, len: number) => {
 export const setLive = (live_: boolean, src: Source) => {
   source = src;
   // Through the page's own graph either way, so the meter hears the mix (meter.ts)
-  if (!routed) { routed = audioCtx.createMediaElementSource(S.el.audio); routed.connect(fromMix); }
+  if (!routed) {
+    routed = audioCtx.createMediaElementSource(S.el.audio);
+    routed.connect(fromMix);
+  }
   // The mix goes through the master stage only while the lanes are summed with it; otherwise it already went through mix.py's
   fromMix.disconnect();
   fromMix.connect(live_ ? live.bus : master);
-  if (live_ !== on) { on = live_; if (!on) { hush(voices); voices = []; started.clear(); setLaneGroups({}); } }
+  if (live_ !== on) {
+    on = live_;
+    if (!on) {
+      hush(voices);
+      voices = [];
+      started.clear();
+      setLaneGroups({});
+    }
+  }
   levelMix();
   const l = src.lanes();
-  if (on && l) { for (const c of clips(l)) loadClip(c); replan(); }
+  if (on && l) {
+    for (const c of clips(l)) loadClip(c);
+    replan();
+  }
 };
 
 // The lanes from..to as heard here, rendered offline: RMS per half second and the peak, to set against mix.py's own render
@@ -293,18 +560,38 @@ window.__lanesRender = async (from: number, to: number) => {
   const l = source?.lanes();
   if (!l) return null;
   await preloadSources(l);
-  const all = clips(l), loaded = await Promise.all(all.map(loadClip));
+  const all = clips(l),
+    loaded = await Promise.all(all.map(loadClip));
   if (loaded.some((s) => !s)) return null;
-  const rate = 48000, ctx = new OfflineAudioContext(2, Math.ceil((to - from) * rate), rate), st = stage(ctx, ctx.destination);
+  const rate = 48000,
+    ctx = new OfflineAudioContext(2, Math.ceil((to - from) * rate), rate),
+    st = stage(ctx, ctx.destination);
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
   await st.ready;
-  const w = { speed: 1, ctxAt: (t: number) => t - from, when: (t: number) => Math.max(0, t - from) };
-  all.forEach((c, i) => { const s = loaded[i]; if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w); });
-  const out = await ctx.startRendering(), hop = rate / 2, rms: number[] = [];
+  const w = {
+    speed: 1,
+    ctxAt: (t: number) => t - from,
+    when: (t: number) => Math.max(0, t - from),
+  };
+  all.forEach((c, i) => {
+    const s = loaded[i];
+    if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w);
+  });
+  const out = await ctx.startRendering(),
+    hop = rate / 2,
+    rms: number[] = [];
   let peak = 0;
   for (let i = 0; i < out.length; i += hop) {
-    let sum = 0, n = 0;
-    for (let c = 0; c < 2; c++) { const d = out.getChannelData(c); for (let k = i; k < Math.min(out.length, i + hop); k++) { sum += d[k] * d[k]; n++; peak = Math.max(peak, Math.abs(d[k])); } }
+    let sum = 0,
+      n = 0;
+    for (let c = 0; c < 2; c++) {
+      const d = out.getChannelData(c);
+      for (let k = i; k < Math.min(out.length, i + hop); k++) {
+        sum += d[k] * d[k];
+        n++;
+        peak = Math.max(peak, Math.abs(d[k]));
+      }
+    }
     rms.push(+(10 * Math.log10(sum / n || 1e-12)).toFixed(2));
   }
   return { rms, peak: +peak.toFixed(4) };
@@ -314,7 +601,9 @@ window.__lanesRender = async (from: number, to: number) => {
 // limiter; every track but the muted ones, soloed or not), rendered offline into the node `into` makes: the meter measures the
 // gain that pass will add (meter.ts). Gives the lanes it built from, or null when the page doesn't play the lanes, so it can't
 // build the film's sound itself
-export const renderFilm = async (into: (ctx: OfflineAudioContext) => Promise<AudioNode>): Promise<Lanes | null> => {
+export const renderFilm = async (
+  into: (ctx: OfflineAudioContext) => Promise<AudioNode>,
+): Promise<Lanes | null> => {
   const l = source?.lanes();
   if (!on || !l) return null;
   await preloadSources(l);
@@ -322,12 +611,22 @@ export const renderFilm = async (into: (ctx: OfflineAudioContext) => Promise<Aud
   const [voice, loaded] = await Promise.all([mixBuffer(), Promise.all(all.map(loadClip))]);
   if (loaded.some((s) => !s)) return null;
   // One channel out: the measuring node hears the stereo sum, and the rendered buffer nobody reads stays half the size
-  const rate = 48000, ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate), st = stage(ctx, await into(ctx));
+  const rate = 48000,
+    ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate),
+    st = stage(ctx, await into(ctx));
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
   await st.ready;
-  if (voice) { const v = ctx.createBufferSource(); v.buffer = voice; v.connect(st.bus); v.start(0); }
+  if (voice) {
+    const v = ctx.createBufferSource();
+    v.buffer = voice;
+    v.connect(st.bus);
+    v.start(0);
+  }
   const w = { speed: 1, ctxAt: (t: number) => t, when: (t: number) => Math.max(0, t) };
-  all.forEach((c, i) => { const s = loaded[i]; if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w); });
+  all.forEach((c, i) => {
+    const s = loaded[i];
+    if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w);
+  });
   await ctx.startRendering();
   return l;
 };

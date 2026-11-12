@@ -2,6 +2,7 @@
 // fog, to find the way round a dark set. Only on the main view and only while the free camera flies: lit just for that one
 // draw and put back after it, so the film's own lights, its camera corner, a snapshot, the drafts and the video never see it
 import * as THREE from "three";
+
 import { S } from "../core/state";
 import { get } from "../core/store";
 
@@ -17,7 +18,10 @@ export const nightVision = (on: boolean) => {
   if (on && tools.free.on && get().nightVision) {
     if (lamp.parent !== tools.scene) tools.scene.add(lamp);
     lamp.intensity = 2.5;
-    if (fog && "density" in fog) { fogWas = fog.density; fog.density = 0; }
+    if (fog && "density" in fog) {
+      fogWas = fog.density;
+      fog.density = 0;
+    }
     return;
   }
   lamp.intensity = 0;

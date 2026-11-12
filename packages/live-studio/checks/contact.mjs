@@ -9,24 +9,40 @@ import { MeshBVH } from "three-mesh-bvh";
 export const REACH = 0.15; // m: gaps farther than this are not reported (inside: any depth)
 
 const bvhs = new WeakMap();
-const bvhOf = (g) => { if (!bvhs.has(g)) bvhs.set(g, new MeshBVH(g, { indirect: true })); return bvhs.get(g); }; // indirect: the film's index buffer is left as it is
+const bvhOf = (g) => {
+  if (!bvhs.has(g)) bvhs.set(g, new MeshBVH(g, { indirect: true }));
+  return bvhs.get(g);
+}; // indirect: the film's index buffer is left as it is
 
 // one mesh (or one instance) placed by matrix: side is its material's (BackSide: drawn from inside, so its inside is out;
 // a mirrored matrix changes nothing, the normal matrix keeps normals pointing out)
 export function surface(g, matrix, { side = THREE.FrontSide, label = "" } = {}) {
   if (!g.boundingBox) g.computeBoundingBox();
   return {
-    g, matrix, inv: matrix.clone().invert(), box: g.boundingBox.clone().applyMatrix4(matrix).expandByScalar(REACH), label,
-    two: side === THREE.DoubleSide, flip: side === THREE.BackSide,
+    g,
+    matrix,
+    inv: matrix.clone().invert(),
+    box: g.boundingBox.clone().applyMatrix4(matrix).expandByScalar(REACH),
+    label,
+    two: side === THREE.DoubleSide,
+    flip: side === THREE.BackSide,
   };
 }
 
-const v = new THREE.Vector3(), w = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3(), ray = new THREE.Ray();
-const hit = { point: new THREE.Vector3() }, tri = new THREE.Triangle();
+const v = new THREE.Vector3(),
+  w = new THREE.Vector3(),
+  n = new THREE.Vector3(),
+  nm = new THREE.Matrix3(),
+  ray = new THREE.Ray();
+const hit = { point: new THREE.Vector3() },
+  tri = new THREE.Triangle();
 // the face's normal from its corners' winding, indexed geometry or not
 const normalOf = (g, f, out) => {
-  const pos = g.attributes.position, ix = (k) => (g.index ? g.index.getX(f * 3 + k) : f * 3 + k);
-  tri.a.fromBufferAttribute(pos, ix(0)); tri.b.fromBufferAttribute(pos, ix(1)); tri.c.fromBufferAttribute(pos, ix(2));
+  const pos = g.attributes.position,
+    ix = (k) => (g.index ? g.index.getX(f * 3 + k) : f * 3 + k);
+  tri.a.fromBufferAttribute(pos, ix(0));
+  tri.b.fromBufferAttribute(pos, ix(1));
+  tri.c.fromBufferAttribute(pos, ix(2));
   return tri.getNormal(out);
 };
 

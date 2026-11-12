@@ -5,7 +5,12 @@ export const warp = (w, x, a, b) => {
   if (x <= w[0][a]) return x - w[0][a] + w[0][b];
   const last = w[w.length - 1];
   if (x >= last[a]) return x - last[a] + last[b];
-  let lo = 0, hi = w.length - 1;
-  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (w[m][a] <= x) lo = m; else hi = m; }
+  let lo = 0,
+    hi = w.length - 1;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (w[m][a] <= x) lo = m;
+    else hi = m;
+  }
   return w[lo][b] + ((x - w[lo][a]) / (w[hi][a] - w[lo][a])) * (w[hi][b] - w[lo][b]);
 };

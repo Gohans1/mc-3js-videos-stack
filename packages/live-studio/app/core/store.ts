@@ -2,8 +2,9 @@
 // fields and types live in its own folder (camera/slice.ts, notes/slice.ts…). The engine writes it; React reads it. What
 // changes every frame (the clock, captions, the timelines, the film camera corner) is drawn straight into its element instead
 import { createStore, useStore } from "zustand";
-import { type CameraSlice, cameraSlice } from "../camera/slice";
+
 import type { GradeLibrary } from "../camera/adjust";
+import { type CameraSlice, cameraSlice } from "../camera/slice";
 import { type KeysSlice, keysSlice } from "../keys/slice";
 import { type NotesSlice, notesSlice } from "../notes/slice";
 import { type ObjectsSlice, objectsSlice } from "../objects/slice";
@@ -17,6 +18,8 @@ import type { Favorites } from "./favorites";
 import { type Prefs, readPrefs, savePref } from "./prefs";
 import { S } from "./state";
 
+export type ModalKind = "paste" | "linkage" | "savePreset" | "adjustLibrary" | null;
+
 interface PageSlice {
   ready: boolean;
   newBuild: boolean; // the film's code changed since this page loaded
@@ -24,23 +27,69 @@ interface PageSlice {
   error: string | null;
   status: string;
   settingsOpen: boolean;
+  modal: ModalKind;
   contract: string[];
   shot: string;
   perf: string;
-  side: "notes" | "sound" | "voiceChanger" | "audioSpeed" | "objects" | "cam" | "speed" | "anim" | "adjust" | "transition" | "keys" | "text" | "textAnim";
+  side:
+    | "notes"
+    | "sound"
+    | "voiceChanger"
+    | "audioSpeed"
+    | "objects"
+    | "cam"
+    | "speed"
+    | "anim"
+    | "adjust"
+    | "transition"
+    | "keys"
+    | "text"
+    | "textAnim";
   lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust"; // on a wide screen: the left column's tab (side then picks the right column's)
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;
 }
-export type StudioState = PageSlice & PlaybackSlice & PictureSlice & NotesSlice & OptionsSlice & SoundSlice & CameraSlice & KeysSlice & ObjectsSlice & TextSlice & TimelineSlice;
+export type StudioState = PageSlice &
+  PlaybackSlice &
+  PictureSlice &
+  NotesSlice &
+  OptionsSlice &
+  SoundSlice &
+  CameraSlice &
+  KeysSlice &
+  ObjectsSlice &
+  TextSlice &
+  TimelineSlice;
 
 export const studio = createStore<StudioState>(() => ({
-  ready: false, newBuild: false, loading: "Loading the scene…", error: null, status: "", settingsOpen: false, contract: [], shot: "", perf: "", side: "notes", lib: "notes", favorites: { sounds: [], effects: [] }, gradeLibrary: { luts: [], presets: [] },
-  ...playbackSlice, ...pictureSlice, ...notesSlice, ...optionsSlice, ...soundSlice, ...cameraSlice, ...keysSlice, ...objectsSlice, ...textSlice, ...timelineSlice,
+  ready: false,
+  newBuild: false,
+  loading: "Loading the scene…",
+  error: null,
+  status: "",
+  settingsOpen: false,
+  modal: null,
+  contract: [],
+  shot: "",
+  perf: "",
+  side: "notes",
+  lib: "notes",
+  favorites: { sounds: [], effects: [] },
+  gradeLibrary: { luts: [], presets: [] },
+  ...playbackSlice,
+  ...pictureSlice,
+  ...notesSlice,
+  ...optionsSlice,
+  ...soundSlice,
+  ...cameraSlice,
+  ...keysSlice,
+  ...objectsSlice,
+  ...textSlice,
+  ...timelineSlice,
   ...readPrefs(),
 }));
 
-export const useStudio = <T,>(pick: (s: StudioState) => T) => useStore(studio, pick);
+export const useStudio = <T>(pick: (s: StudioState) => T) => useStore(studio, pick);
 export const set = studio.setState;
 export const get = studio.getState;
 
@@ -55,7 +104,8 @@ export const setPref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => {
 export const noSnap = (e: { shiftKey: boolean }) => e.shiftKey || !studio.getState().magnet;
 
 // The box over the picture, kept until closed: what broke and where, as the old page showed it
-export const showError = (e: unknown) => set({ error: e instanceof Error ? (e.stack ?? e.message) : String(e) });
+export const showError = (e: unknown) =>
+  set({ error: e instanceof Error ? (e.stack ?? e.message) : String(e) });
 
 let statusTimer = 0;
 // A line over the picture that says what just happened, gone after a few seconds

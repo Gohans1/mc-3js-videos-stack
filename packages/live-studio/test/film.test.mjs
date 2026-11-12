@@ -4,6 +4,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+
 import { openFilm, STUDIO } from "../src/film.mjs";
 
 const fixture = (t) => {
@@ -12,17 +13,39 @@ const fixture = (t) => {
   mkdirSync(join(dir, "src/timeline"));
   const audio = join(dir, "src/timeline/audio.json");
   writeFileSync(audio, '{"gain": 1}\n');
-  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": { sound: ["sound.py", "src/timeline/audio.json"] } }));
-  writeFileSync(join(dir, "sound.py"), 'import sys, pathlib\nout = pathlib.Path(sys.argv[1])\nout.write_bytes(b"")\nout.with_name("trials.json").write_text("{}")\n');
-  const events = new EventEmitter(), heard = [];
-  const film = openFilm(dir, { send: (e) => { heard.push(e); events.emit(e); } });
-  t.after(() => { film.stop(); rmSync(dir, { recursive: true, force: true }); });
-  const mixed = (change) => new Promise((done, fail) => {
-    const complete = () => { clearTimeout(timer); done(); };
-    const timer = setTimeout(() => { events.off("sound", complete); fail(new Error(`No completed mix: ${heard.join(", ")}`)); }, 20000);
-    events.once("sound", complete);
-    change();
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { sound: ["sound.py", "src/timeline/audio.json"] } }),
+  );
+  writeFileSync(
+    join(dir, "sound.py"),
+    'import sys, pathlib\nout = pathlib.Path(sys.argv[1])\nout.write_bytes(b"")\nout.with_name("trials.json").write_text("{}")\n',
+  );
+  const events = new EventEmitter(),
+    heard = [];
+  const film = openFilm(dir, {
+    send: (e) => {
+      heard.push(e);
+      events.emit(e);
+    },
   });
+  t.after(() => {
+    film.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const mixed = (change) =>
+    new Promise((done, fail) => {
+      const complete = () => {
+        clearTimeout(timer);
+        done();
+      };
+      const timer = setTimeout(() => {
+        events.off("sound", complete);
+        fail(new Error(`No completed mix: ${heard.join(", ")}`));
+      }, 20000);
+      events.once("sound", complete);
+      change();
+    });
   return { film, audio, heard, mixed };
 };
 

@@ -1,10 +1,10 @@
+import { S } from "../core/state";
+import { get, say, set } from "../core/store";
 // A still of the picture to compare against later, as After Effects' snapshot: take one before a change (Shift+\), hold \ (or
 // the Compare button) after it to see the old picture over the new one. Kept for the session only
 import { stamp } from "../core/time";
 import { frameSize } from "./frame";
 import { finalCanvas } from "./render";
-import { S } from "../core/state";
-import { get, say, set } from "../core/store";
 
 export const takeSnapshot = () => {
   if (!S.render) return;
@@ -17,4 +17,6 @@ export const takeSnapshot = () => {
   set({ still: { url: c.toDataURL("image/jpeg", 0.9), t: S.t }, comparing: false });
   say(`Snapshot taken at ${stamp(S.t)}. Make the change, then hold \\ to compare`);
 };
-export const compare = (on: boolean) => { if (get().still || !on) set({ comparing: on && !!get().still }); };
+export const compare = (on: boolean) => {
+  if (get().still || !on) set({ comparing: on && !!get().still });
+};

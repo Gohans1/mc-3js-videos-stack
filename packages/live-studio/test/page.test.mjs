@@ -1,42 +1,83 @@
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
+
 import { openFilm, STUDIO } from "../src/film.mjs";
 import { buildPage } from "../src/page.mjs";
 
 // A copy of the demo film, so saves here never touch the real one
 const dir = mkdtempSync(join(tmpdir(), "studio-page-"));
 cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
-const scene = join(dir, "src/scene.ts"), original = readFileSync(scene, "utf8");
+const scene = join(dir, "src/scene.ts"),
+  original = readFileSync(scene, "utf8");
 const heard = [];
 let page;
-const cycle = (trigger, file) => new Promise((done, fail) => {
-  let changed = !file, started = !file;
-  const changedFile = (id) => { if (id.replaceAll("\\", "/") === file?.replaceAll("\\", "/")) changed = true; };
-  const cleanup = () => { clearTimeout(timer); page.watcher.off("event", event); page.watcher.off("change", changedFile); };
-  const event = (e) => {
-    if (changed && e.code === "START") started = true;
-    if (started && e.code === "END") { cleanup(); done(); }
-  };
-  const timer = setTimeout(() => { cleanup(); fail(new Error(`Build cycle did not end for ${file ?? "initial build"}`)); }, 20000);
-  page.watcher.on("change", changedFile);
-  page.watcher.on("event", event);
-  trigger?.();
-});
+const cycle = (trigger, file) =>
+  new Promise((done, fail) => {
+    let changed = !file,
+      started = !file;
+    const changedFile = (id) => {
+      if (id.replaceAll("\\", "/") === file?.replaceAll("\\", "/")) changed = true;
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      page.watcher.off("event", event);
+      page.watcher.off("change", changedFile);
+    };
+    const event = (e) => {
+      if (changed && e.code === "START") started = true;
+      if (started && e.code === "END") {
+        cleanup();
+        done();
+      }
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      fail(new Error(`Build cycle did not end for ${file ?? "initial build"}`));
+    }, 20000);
+    page.watcher.on("change", changedFile);
+    page.watcher.on("event", event);
+    trigger?.();
+  });
 const save = (text, file = scene) => cycle(() => writeFileSync(file, text), file);
 
 before(async () => {
   // A library written for Node that a film may pull in (Minecraft's nbt readers do): its require of zlib is never reached
   mkdirSync(join(dir, "node_modules/nodeish"), { recursive: true });
-  writeFileSync(join(dir, "node_modules/nodeish/package.json"), '{"name":"nodeish","main":"index.js"}');
-  writeFileSync(join(dir, "node_modules/nodeish/index.js"), 'module.exports = { gunzip: (b) => require("zlib").gunzipSync(b) };');
-  writeFileSync(scene, `import { gunzip } from "nodeish";\nexport const unzip = gunzip;\n${original}`);
-  page = await buildPage(openFilm(dir, { send() {} }), { onChange: () => heard.push("change"), onError: (m) => heard.push(`error ${m}`) });
+  writeFileSync(
+    join(dir, "node_modules/nodeish/package.json"),
+    '{"name":"nodeish","main":"index.js"}',
+  );
+  writeFileSync(
+    join(dir, "node_modules/nodeish/index.js"),
+    'module.exports = { gunzip: (b) => require("zlib").gunzipSync(b) };',
+  );
+  writeFileSync(
+    scene,
+    `import { gunzip } from "nodeish";\nexport const unzip = gunzip;\n${original}`,
+  );
+  page = await buildPage(openFilm(dir, { send() {} }), {
+    onChange: () => heard.push("change"),
+    onError: (m) => heard.push(`error ${m}`),
+  });
   await cycle();
 });
-after(async () => { await page.close(); rmSync(dir, { recursive: true, force: true }); });
+after(async () => {
+  await page.close();
+  rmSync(dir, { recursive: true, force: true });
+});
 
 test("the film builds into the page, even with a Node library that requires a Node built-in", () => {
   assert.equal(heard.length, 0, heard.join("\n"));
@@ -52,13 +93,18 @@ test("a saved comment builds the same page and reloads nothing", async () => {
 });
 
 test("a broken save keeps the last page and says why; fixing it reloads", async () => {
-  const good = readFileSync(scene, "utf8"), before = page.html();
+  const good = readFileSync(scene, "utf8"),
+    before = page.html();
   await save(`${good}\nexport const broken = ;\n`);
   assert.equal(page.html(), before);
   assert.equal(heard.length, 1);
   assert.match(heard[0], /^error /);
   assert.match(heard[0], /scene\.ts/);
-  assert.doesNotMatch(heard[0], /\u001b/, "the page shows this as text: no terminal colour codes");
+  assert.equal(
+    heard[0].includes("\x1b"),
+    false,
+    "the page shows this as text: no terminal colour codes",
+  );
   await save(good);
   assert.deepEqual(heard.slice(1), ["change"]);
   heard.length = 0;
@@ -72,19 +118,56 @@ test("a real change to the film's code reloads the page", async () => {
 });
 
 test("a rebuild keeps the last build's files for pages still loading it, and clears out old ones", async () => {
-  const code = join(page.dir, "_studio"), last = readdirSync(code);
-  const stale = join(code, "index-gone.js"), longAgo = new Date(Date.now() - 2 * 3600e3);
+  const code = join(page.dir, "_studio"),
+    last = readdirSync(code);
+  const stale = join(code, "index-gone.js"),
+    longAgo = new Date(Date.now() - 2 * 3600e3);
   writeFileSync(stale, "");
   utimesSync(stale, longAgo, longAgo);
   await save(`${readFileSync(scene, "utf8")}\nexport const again = "newer";\n`);
-  assert.deepEqual(last.filter((f) => !existsSync(join(code, f))), []);
+  assert.deepEqual(
+    last.filter((f) => !existsSync(join(code, f))),
+    [],
+  );
   assert.equal(existsSync(stale), false);
 });
 
 test("a changed edit.json is a new page, offered like code: the next reload has it", async () => {
   heard.length = 0;
-  const edit = join(dir, "src/edit.json"), before = page.html();
-  await save(JSON.stringify({ ...JSON.parse(readFileSync(edit, "utf8")), added: 1 }, null, 1), edit);
+  const edit = join(dir, "src/edit.json"),
+    before = page.html();
+  await save(
+    JSON.stringify({ ...JSON.parse(readFileSync(edit, "utf8")), added: 1 }, null, 1),
+    edit,
+  );
   assert.notEqual(page.html(), before);
   assert.deepEqual(heard, ["change"]);
+});
+
+test("vendor chunks stay cached across film edits with fresh .br and .gz siblings", async () => {
+  const code = join(page.dir, "_studio");
+  const vendorsBefore = readdirSync(code)
+    .filter((f) => /^vendor-.*\.js$/.test(f))
+    .sort();
+  assert.ok(
+    vendorsBefore.length >= 2,
+    `expected split vendor chunks, got: ${vendorsBefore.join(", ")}`,
+  );
+  for (const v of vendorsBefore) {
+    assert.equal(existsSync(join(code, `${v}.br`)), true, `missing ${v}.br`);
+    assert.equal(existsSync(join(code, `${v}.gz`)), true, `missing ${v}.gz`);
+    // Age the precompressed siblings near KEEP so a rebuild that forgets to touch them would let clearOld() delete them
+    const old = new Date(Date.now() - 3700e3);
+    utimesSync(join(code, `${v}.br`), old, old);
+    utimesSync(join(code, `${v}.gz`), old, old);
+  }
+  await save(`${readFileSync(scene, "utf8")}\nexport const cacheCheck = 42;\n`);
+  const vendorsAfter = readdirSync(code)
+    .filter((f) => /^vendor-.*\.js$/.test(f))
+    .sort();
+  assert.deepEqual(vendorsAfter, vendorsBefore);
+  for (const v of vendorsAfter) {
+    assert.equal(existsSync(join(code, `${v}.br`)), true, `clearOld evicted active ${v}.br`);
+    assert.equal(existsSync(join(code, `${v}.gz`)), true, `clearOld evicted active ${v}.gz`);
+  }
 });

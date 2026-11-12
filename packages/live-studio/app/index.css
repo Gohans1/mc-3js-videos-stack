@@ -7,219 +7,231 @@
 @custom-variant dark (&:is(.dark *));
 /* A phone held upright: picture on top, notes under it. A phone on its side: picture beside a narrow notes column */
 @custom-variant upright {
-    @media (max-width: 820px) and (min-height: 521px), (max-width: 559px) {
-        @slot;
-    }
+  @media (max-width: 820px) and (min-height: 521px), (max-width: 559px) {
+    @slot;
+  }
 }
 @custom-variant sideways {
-    @media (max-height: 520px) and (min-width: 560px) {
-        @slot;
-    }
+  @media (max-height: 520px) and (min-width: 560px) {
+    @slot;
+  }
 }
 
 @theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
-    --color-raised-2: var(--raised-2);
-    --color-raised-3: var(--raised-3);
-    --color-accent-hover: var(--accent-hover);
-    --color-tint: var(--tint);
-    --color-tint-hover: var(--tint-hover);
-    --color-ok: var(--ok);
-    --color-warn: var(--warn);
-    --color-warn-bg: var(--warn-bg);
-    --color-favorite: var(--favorite);
-    --color-peek: var(--peek);
-    --color-snap: var(--snap);
-    --color-ink: var(--ink);
-    --color-in-out: var(--in-out);
-    --color-in-out-text: var(--in-out-text);
-    --color-picture: var(--picture);
-    --color-alarm: var(--alarm);
-    --color-alarm-bg: var(--alarm-bg);
-    --color-raised-4: var(--raised-4);
-    --color-backdrop: var(--backdrop);
-    --color-tooltip: var(--tooltip);
-    --color-track: var(--track);
-    --color-track-head: var(--track-head);
-    --color-main-track: var(--main-track);
-    --color-track-line: var(--track-line);
-    --color-clip-audio-tag: var(--clip-audio-tag);
-    --color-clip-label: var(--clip-label);
-    --color-slider: var(--slider);
-    --color-slider-fill: var(--slider-fill);
-    --color-label: var(--label);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+  --font-heading: var(--font-sans);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --color-raised-2: var(--raised-2);
+  --color-raised-3: var(--raised-3);
+  --color-accent-hover: var(--accent-hover);
+  --color-tint: var(--tint);
+  --color-tint-hover: var(--tint-hover);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-favorite: var(--favorite);
+  --color-peek: var(--peek);
+  --color-snap: var(--snap);
+  --color-ink: var(--ink);
+  --color-in-out: var(--in-out);
+  --color-in-out-text: var(--in-out-text);
+  --color-picture: var(--picture);
+  --color-alarm: var(--alarm);
+  --color-alarm-bg: var(--alarm-bg);
+  --color-raised-4: var(--raised-4);
+  --color-backdrop: var(--backdrop);
+  --color-tooltip: var(--tooltip);
+  --color-track: var(--track);
+  --color-track-head: var(--track-head);
+  --color-main-track: var(--main-track);
+  --color-track-line: var(--track-line);
+  --color-clip-audio-tag: var(--clip-audio-tag);
+  --color-clip-audio: var(--clip-audio);
+  --color-clip-voice-tag: var(--clip-voice-tag);
+  --color-clip-voice: var(--clip-voice);
+  --color-clip-voice-wave: var(--clip-voice-wave);
+  --color-timeline-text: var(--clip-text);
+  --color-clip-adjust: var(--clip-adjust);
+  --color-clip-wave: var(--clip-wave);
+  --color-clip-label: var(--clip-label);
+  --color-slider: var(--slider);
+  --color-slider-fill: var(--slider-fill);
+  --color-label: var(--label);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /* CapCut 9.7's type steps (px, so a phone's larger rem leaves them be) and the studio's floating surfaces. A name added
    here goes in lib/utils.ts too, or cn() takes text-ui for a colour and drops it beside text-primary */
 @theme {
-    --color-curve: #080808;
-    --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
-    --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
-    --text-title: 15px; /* a panel's or dialog's heading */
-    --shadow-float: 0 4px 16px rgb(0 0 0 / 0.5); /* a bar over the picture */
-    --shadow-sheet: 0 8px 20px rgb(0 0 0 / 0.6); /* the note sheet over the picture on a phone */
+  --color-curve: #080808;
+  --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
+  --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
+  --text-title: 15px; /* a panel's or dialog's heading */
+  --shadow-float: 0 4px 16px rgb(0 0 0 / 0.5); /* a bar over the picture */
+  --shadow-sheet: 0 8px 20px rgb(0 0 0 / 0.6); /* the note sheet over the picture on a phone */
 }
 
 /* The film's frame shape, until picture/frame.ts sets it from the film */
 :root {
-    --frame: 16 / 9;
+  --frame: 16 / 9;
 }
 
 /* CapCut 9.7 desktop's dark theme, measured pixel by pixel off the dev's screenshots of it (2026-11-09): one theme, as the
    studio sits beside a moving picture. Where CapCut shows no such thing (a popover, a red), the nearest of its own greys */
 :root {
-    --backdrop: #1C1C1C; /* the window behind the panels: CapCut's title bar, the gaps between panels, inputs and wells */
-    --background: #262626; /* a panel, and the timeline's empty space */
-    --foreground: #DFDFDF;
-    --card: #303030; /* a panel's head and foot bars, and a card raised on a panel */
-    --card-foreground: #DFDFDF;
-    --popover: #303030;
-    --popover-foreground: #DFDFDF;
-    --primary: #00C1CD; /* CapCut's cyan: the open tab, Export, a picked tile's ring */
-    --primary-foreground: #FFFFFF; /* white on the cyan, as on CapCut's Export: only 2.2:1, kept to look as CapCut does */
-    --secondary: #3B3B3B; /* a raised control: Import, Cover, the picked segment */
-    --secondary-foreground: #DFDFDF;
-    --muted: #3B3B3B;
-    --muted-foreground: #929292; /* a section's name, a hint: 4.9:1 on a panel */
-    --accent: #3B3B3B;
-    --accent-foreground: #DFDFDF;
-    --destructive: #E5484D;
-    --border: #373737; /* a divider inside a panel */
-    --input: #1C1C1C; /* a field's well, filled as CapCut's search and number boxes */
-    --ring: #00C1CD;
-    --chart-1: #00C1CD;
-    --chart-2: #D0A215;
-    --chart-3: #879A39;
-    --chart-4: #4385BE;
-    --chart-5: #CE5D97;
-    --radius: 0.5rem;
-    --sidebar: #262626;
-    --sidebar-foreground: #DFDFDF;
-    --sidebar-primary: #00C1CD;
-    --sidebar-primary-foreground: #FFFFFF;
-    --sidebar-accent: #3B3B3B;
-    --sidebar-accent-foreground: #DFDFDF;
-    --sidebar-border: #373737;
-    --sidebar-ring: #00C1CD;
-    /* The studio's own, beyond shadcn's set */
-    --raised-2: #303030;
-    --raised-3: #3B3B3B;
-    --raised-4: #4F4F4F; /* a button on a head or foot bar: Modify, Apply to all, Share */
-    --accent-hover: #33CDD7;
-    --tint: #1C1C1C; /* a toggle that is on: CapCut sinks it to the window's grey and lights its icon cyan */
-    --tint-hover: #141414;
-    --ok: #879A39;
-    --warn: #D0A215;
-    --warn-bg: #2A2410;
-    --favorite: #D0A215; /* a starred sound or effect, as CapCut colours its star */
-    --peek: #D0A215; /* the preview axis and the time it shows (timeline/peek.ts), yellow as CapCut draws it */
-    --snap: #027059; /* the snapping line (timeline/snapline.ts): CapCut's 1 px teal green, estimated off a 1080p video frame, not yet a 9.7 screenshot */
-    --in-out: #4385BE; /* the In to Out stretch (timeline/inout.ts; the ruler draws it in the same blue) */
-    --in-out-text: #92BFDB;
-    --ink: #CE5D97; /* a note's drawing while it is drawn, and the words that name it */
-    --ink-saved: #4385BE; /* a note's drawing once the note holds it */
-    --picture: #FFFFFF; /* words over the picture */
-    --alarm: #AF3029;
-    --alarm-bg: #2E1513;
-    /* Names that label a row or a field, as CapCut's Temp and Exposure: a step under content, far over hints */
-    --label: #D2D2D2;
-    --tooltip: #141414; /* CapCut's tooltip, its words in --label */
-    /* The timeline, drawn on canvases that read these (timeline/canvas.ts tone) */
-    --track: #292929; /* a row that holds clips */
-    --track-head: #2A2A2A; /* its name and buttons in the column beside it */
-    --main-track: #2F2F2F; /* the Camera row, CapCut's main track */
-    --track-line: #141414; /* the line between the name column and the rows */
-    --grid: #303030; /* a cut, faint across the rows */
-    --ruler-text: #6C6C6C; /* CapCut keeps the seconds dim, so the clips under them lead */
-    --ruler-tick: #4C4C4C;
-    --ruler-dot: #3C3C3C;
-    --playhead: rgb(255 255 255 / 0.5); /* half white, as CapCut's: grey on the empty rows, tinted over a clip */
-    --pick: #FFFFFF; /* what is picked, on every row: outlined white */
-    --clip-video: #004D52; /* a shot on the Camera row, as CapCut's video clip */
-    --clip-video-tag: #1A5F64;
-    --clip-adjust: #a6883b;
+  --backdrop: #1C1C1C; /* the window behind the panels: CapCut's title bar, the gaps between panels, inputs and wells */
+  --background: #262626; /* a panel, and the timeline's empty space */
+  --foreground: #DFDFDF;
+  --card: #303030; /* a panel's head and foot bars, and a card raised on a panel */
+  --card-foreground: #DFDFDF;
+  --popover: #303030;
+  --popover-foreground: #DFDFDF;
+  --primary: #00C1CD; /* CapCut's cyan: the open tab, Export, a picked tile's ring */
+  --primary-foreground: #FFFFFF; /* white on the cyan, as on CapCut's Export: only 2.2:1, kept to look as CapCut does */
+  --secondary: #3B3B3B; /* a raised control: Import, Cover, the picked segment */
+  --secondary-foreground: #DFDFDF;
+  --muted: #3B3B3B;
+  --muted-foreground: #929292; /* a section's name, a hint: 4.9:1 on a panel */
+  --accent: #3B3B3B;
+  --accent-foreground: #DFDFDF;
+  --destructive: #E5484D;
+  --border: #373737; /* a divider inside a panel */
+  --input: #1C1C1C; /* a field's well, filled as CapCut's search and number boxes */
+  --ring: #00C1CD;
+  --chart-1: #00C1CD;
+  --chart-2: #D0A215;
+  --chart-3: #879A39;
+  --chart-4: #4385BE;
+  --chart-5: #CE5D97;
+  --radius: 0.5rem;
+  --sidebar: #262626;
+  --sidebar-foreground: #DFDFDF;
+  --sidebar-primary: #00C1CD;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #3B3B3B;
+  --sidebar-accent-foreground: #DFDFDF;
+  --sidebar-border: #373737;
+  --sidebar-ring: #00C1CD;
+  /* The studio's own, beyond shadcn's set */
+  --raised-2: #303030;
+  --raised-3: #3B3B3B;
+  --raised-4: #4F4F4F; /* a button on a head or foot bar: Modify, Apply to all, Share */
+  --accent-hover: #33CDD7;
+  --tint: #1C1C1C; /* a toggle that is on: CapCut sinks it to the window's grey and lights its icon cyan */
+  --tint-hover: #141414;
+  --ok: #879A39;
+  --warn: #D0A215;
+  --warn-bg: #2A2410;
+  --favorite: #D0A215; /* a starred sound or effect, as CapCut colours its star */
+  --peek: #D0A215; /* the preview axis and the time it shows (timeline/peek.ts), yellow as CapCut draws it */
+  --snap: #004D52; /* CapCut 9.7, measured away from the playhead: renders/timing-verification/capcut-snap-nonplayhead.png */
+  --in-out: #4385BE; /* the In to Out stretch (timeline/inout.ts; the ruler draws it in the same blue) */
+  --in-out-text: #92BFDB;
+  --ink: #CE5D97; /* a note's drawing while it is drawn, and the words that name it */
+  --ink-saved: #4385BE; /* a note's drawing once the note holds it */
+  --picture: #FFFFFF; /* words over the picture */
+  --alarm: #AF3029;
+  --alarm-bg: #2E1513;
+  /* Names that label a row or a field, as CapCut's Temp and Exposure: a step under content, far over hints */
+  --label: #D2D2D2;
+  --tooltip: #141414; /* CapCut's tooltip, its words in --label */
+  /* The timeline, drawn on canvases that read these (timeline/canvas.ts tone) */
+  --track: #292929; /* a row that holds clips */
+  --track-head: #2A2A2A; /* its name and buttons in the column beside it */
+  --main-track: #2F2F2F; /* the Camera row, CapCut's main track */
+  --track-line: #141414; /* the line between the name column and the rows */
+  --grid: #303030; /* a cut, faint across the rows */
+  --ruler-text: #6C6C6C; /* CapCut keeps the seconds dim, so the clips under them lead */
+  --ruler-tick: #4C4C4C;
+  --ruler-dot: #3C3C3C;
+  --playhead: rgb(
+    255 255 255 / 0.5
+  ); /* half white, as CapCut's: grey on the empty rows, tinted over a clip */
+  --pick: #FFFFFF; /* what is picked, on every row: outlined white */
+  --clip-video: #004D52; /* a shot on the Camera row, as CapCut's video clip */
+  --clip-video-tag: #1A5F64;
+  --clip-adjust: #a6883b;
   --clip-text: #9C4937;
-    --clip-text-tag: #A65C4B;
-    --clip-audio: #0E3058;
-    --clip-audio-tag: #274569;
-    --clip-wave: #0E81B3;
-    --clip-label: #D2D6D9; /* the words on a clip's tag */
-    --clip-video-hover: #0A5A60;
-    --clip-video-text: #8FB3B5; /* a shot's length and "hold", dim on its clip */
-    --clip-shape: #6B3F58; /* an arrow or a circle on the Text row */
-    --clip-shape-tag: #7D5069;
-    --shot-now: #404040; /* the shot under the playhead, on the strip that names shots when a film has no Camera row */
-    --stuck: #D14D41; /* a stretch held still past 6 s, under the ruler */
-    --pace: #323232; /* a voice line behind its wave, at an easy pace */
-    --pace-fast: #4A2622;
-    --pace-slow: #1E3550;
-    --pace-pick: #3D4A16; /* the line picked */
-    --beat-move: #205EA6; /* an action on the Action row, eased */
-    --beat-snap: #BC5215; /* one that snaps */
-    --beat-hold: #4A5A12; /* one that holds still */
-    --note-done: #5A5A5A; /* a done note's mark on the ruler */
-    --key-hold: #4F4F4F; /* the dotted line where a keyframe row holds still */
-    --level-near: #F08A34; /* an audio level within 1 dB of full scale: its cap, Final Cut Pro's warning */
-    --level-over: #EA3223; /* one past it: its tip */
-    --slider: #404040;
-    --slider-fill: #E0E0E0;
-    color-scheme: dark;
+  --clip-text-tag: #A65C4B;
+  --clip-audio: #0E3058;
+  --clip-audio-tag: #274569;
+  --clip-wave: #0E81B3;
+  --clip-voice: #143D3B; /* a voiceover or dialogue phrase brick on the audio lanes */
+  --clip-voice-tag: #1F5754;
+  --clip-voice-wave: #2CC4B2;
+  --clip-label: #D2D6D9; /* the words on a clip's tag */
+  --clip-video-hover: #0A5A60;
+  --clip-video-text: #8FB3B5; /* a shot's length and "hold", dim on its clip */
+  --clip-shape: #6B3F58; /* an arrow or a circle on the Text row */
+  --clip-shape-tag: #7D5069;
+  --shot-now: #404040; /* the shot under the playhead, on the strip that names shots when a film has no Camera row */
+  --stuck: #D14D41; /* a stretch held still past 6 s, under the ruler */
+  --pace: #323232; /* a voice line behind its wave, at an easy pace */
+  --pace-fast: #4A2622;
+  --pace-slow: #1E3550;
+  --pace-pick: #3D4A16; /* the line picked */
+  --beat-move: #205EA6; /* an action on the Action row, eased */
+  --beat-snap: #BC5215; /* one that snaps */
+  --beat-hold: #4A5A12; /* one that holds still */
+  --note-done: #5A5A5A; /* a done note's mark on the ruler */
+  --key-hold: #4F4F4F; /* the dotted line where a keyframe row holds still */
+  --level-near: #F08A34; /* an audio level within 1 dB of full scale: its cap, Final Cut Pro's warning */
+  --level-over: #EA3223; /* one past it: its tip */
+  --slider: #404040;
+  --slider-fill: #E0E0E0;
+  color-scheme: dark;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
   html {
     @apply font-sans;
-    }
+  }
   ::selection {
     @apply bg-primary/40 text-foreground;
-    }
+  }
   /* Touch: everything sized in rem grows to a fingertip; the compact desktop density stays for the mouse */
   html {
     @media (pointer: coarse) {
@@ -230,5 +242,5 @@
     caret-color: var(--primary);
     scrollbar-color: #404040 transparent; /* CapCut's scrollbar thumb */
     -webkit-tap-highlight-color: transparent;
-    }
+  }
 }

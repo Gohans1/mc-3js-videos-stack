@@ -9,9 +9,19 @@ const captionPieces = (words: Line["words"]) => {
   let piece: Line["words"] = [];
   for (const word of words) {
     piece.push(word);
-    if (/[.?!]["']?$/.test(word.w) || (/[,;:]$/.test(word.w) && piece.length >= 5) || piece.length >= CAPTION_WORDS) { pieces.push(piece); piece = []; }
+    if (
+      /[.?!]["']?$/.test(word.w) ||
+      (/[,;:]$/.test(word.w) && piece.length >= 5) ||
+      piece.length >= CAPTION_WORDS
+    ) {
+      pieces.push(piece);
+      piece = [];
+    }
   }
-  if (piece.length) { if (piece.length < 3 && pieces.length) pieces.at(-1)!.push(...piece); else pieces.push(piece); }
+  if (piece.length) {
+    if (piece.length < 3 && pieces.length) pieces.at(-1)!.push(...piece);
+    else pieces.push(piece);
+  }
   return pieces;
 };
 export const captionAt = (x: number) => {
