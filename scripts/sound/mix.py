@@ -498,13 +498,14 @@ if __name__ == "__main__":
     from listen import loudness_report
     print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]))))
     if len(sys.argv) > 1:
-        # the final (bun run render final) goes out as the upload: AAC at YouTube's 384 kbps for stereo, moov up front
+        # the final (bun run render final) goes out as the upload: AAC at YouTube's 384 kbps for stereo, moov up front, no edit list
         final = Path(sys.argv[1]).name == "final_video.mp4"
         name = "final.mp4" if final else "draft.mp4"
         muxed = _assert_in_root(ROOT / "renders" / name, "Muxed mp4 output")
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", sys.argv[1], "-i", str(out), "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
-                        "-b:a", "384k" if final else "192k", "-movflags", "+faststart", "-shortest", str(muxed)], check=True, timeout=300)
-        print(f"muxed renders/{name}" + (" (the file to upload)" if final else ""))
+                        "-b:a", "384k" if final else "192k", "-movflags", "+faststart", "-use_editlist", "0", "-shortest", str(muxed)],
+                       check=True, timeout=300)
+        print(f"muxed renders/{name}" + (" (the file to upload; bun run deliver checks it against YouTube's spec)" if final else ""))
     print("NOT checked here, and needed before calling it ready: whether every word is heard over the beds, the end fades, "
           "no hit is buried: bun run listen (about 1.5 min)"
           + ("" if len(sys.argv) > 1 else "; bun run mix renders/draft_video.mp4 puts it on the draft"))

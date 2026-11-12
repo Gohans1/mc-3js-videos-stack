@@ -42,13 +42,18 @@ def power_mean(values):
 YOUTUBE = -14.0  # LUFS YouTube plays every video at: louder ones are turned down, quieter ones are left as they are
 
 
-def loudness_report(wav, target):
-    """The finished mix as an upload is judged (ffmpeg ebur128, true peak 4x oversampled): what bun run mix prints last."""
-    err = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(wav), "-af", "ebur128=peak=true", "-f", "null", "-"],
+def loudness(media):
+    """Integrated loudness (LUFS), loudness range (LU) and true peak (dBTP, 4x oversampled) of a file's sound: ffmpeg ebur128"""
+    err = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(media), "-af", "ebur128=peak=true", "-f", "null", "-"],
                          capture_output=True, text=True, timeout=600).stderr
     summary = err[err.rfind("Summary:"):]
     read = lambda key: float(re.search(rf"{key}:\s+(-?[\d.]+|-inf)", summary).group(1))  # noqa: E731
-    i, lra, tp = read("I"), read("LRA"), read("Peak")
+    return read("I"), read("LRA"), read("Peak")
+
+
+def loudness_report(wav, target):
+    """The finished mix as an upload is judged (ffmpeg ebur128, true peak 4x oversampled): what bun run mix prints last."""
+    i, lra, tp = loudness(wav)
     out = [f"{wav}: {i:.1f} LUFS integrated, true peak {tp:.1f} dBTP, loudness range {lra:.1f} LU"]
     if abs(i - target) > 1:
         out.append(f"  {abs(i - target):.1f} LU {'over' if i > target else 'under'} audio.json lufs ({target:g})"
