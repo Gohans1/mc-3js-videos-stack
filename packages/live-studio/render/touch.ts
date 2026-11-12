@@ -103,7 +103,7 @@ export const touchCheck = (render) => {
     const tools = render.tools,
       { scene, camera, objects, bones } = tools;
     const obj = findTarget(tools, target);
-    if (!obj || target === "cam") return [targetHelp(tools, target)];
+    if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
     let owner = obj; // the nearest draw.tools.objects entry around the target: the actor, never a surface for itself
     for (let p = obj; p; p = p.parent)
       if (objects?.some(([o]) => o === p)) {

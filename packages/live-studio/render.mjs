@@ -190,8 +190,15 @@ if (inspect && inspect.length !== 7) {
   console.error(`INSPECT takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${inspect.length}`);
   process.exit(2);
 }
+// a CHECK run writes its own charts; a still at 1 s beside them would only crowd bun run sheet
 const at =
-  what === "clip" || what === "final" ? [] : env.AT === undefined ? [1] : numbers("AT", { min: 0 });
+  what === "clip" || what === "final"
+    ? []
+    : env.AT === undefined
+      ? env.CHECK
+        ? []
+        : [1]
+      : numbers("AT", { min: 0 });
 const only = env.CHUNKS ? numbers("CHUNKS", { min: 0, int: true }) : null;
 const final = what === "final";
 const samples = env.SAMPLES
@@ -233,6 +240,12 @@ for (const c of (env.CHECK ?? "").split(";").filter(Boolean)) {
   if (["motion", "seen", "touch"].includes(name.trim()) && from >= to) {
     console.error(
       `CHECK ${c}: from ${from} must come before to ${to} (CHECK=${name.trim()}:<target>,<from s>,<to s>)`,
+    );
+    process.exit(2);
+  }
+  if (["motion", "seen", "touch"].includes(name.trim()) && ends && to > ends.film + 0.05) {
+    console.error(
+      `CHECK ${c}: to ${to} is past the film's end: it runs 0-${ends.film.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
     );
     process.exit(2);
   }
@@ -510,7 +523,7 @@ rmSync(OUT, { recursive: true, force: true });
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}\nnext: open them to look; many at once: bun run sheet (6 to a picture)`,
+    `wrote ${stillsWritten.join(" ")}${failed ? "" : "\nnext: open them to look; many at once: bun run sheet (6 to a picture)"}`,
   );
 
 // Every chunk starts on a keyframe with the same encoder settings, so the join is a lossless stream copy

@@ -176,7 +176,7 @@ export const seenCheck = (render, cfg) => {
     if (typeof target !== "string" || !(to > from) || !(step > 0))
       return ["ERROR usage: CHECK=seen:<target>,<from s>,<to s>[,<step s>]"];
     const obj = findTarget(render.tools, target);
-    if (!obj || target === "cam") return [targetHelp(render.tools, target)];
+    if (!obj || target === "cam") return [targetHelp(render.tools, target, { camera: false })];
     if (!render.tools.camera.isPerspectiveCamera)
       return ["ERROR seen: the film camera is not a PerspectiveCamera"];
     const frames = [];

@@ -12,8 +12,42 @@ export const findTarget = ({ scene, camera, bones, objects }, name) =>
       objects?.find(([, label]) => label === name)?.[0] ??
       null);
 
-export const targetHelp = ({ bones, objects }, name) =>
-  `ERROR no "${name}" (the camera: cam; bones: ${Object.keys(bones ?? {}).join(", ") || "none"}; objects: ${(objects ?? []).map(([, l]) => l).join(", ") || "none"}; or any object's .name)`;
+// the names a target can take, the closest to a wrong one first: case, then a letter or two off
+const close = (a, b) => {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+  if (a === b) return 0;
+  let row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++)
+      next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return row[b.length];
+};
+export const targetHelp = ({ bones, objects }, name, { camera = true } = {}) => {
+  const names = [
+    ...(camera ? ["cam"] : []),
+    ...Object.keys(bones ?? {}),
+    ...(objects ?? []).map(([, l]) => l),
+  ];
+  const near = names
+    .filter((n) => close(name, n) <= 2)
+    .sort((a, b) => close(name, a) - close(name, b));
+  const why =
+    !camera && name === "cam"
+      ? `this check looks at an object in the frame, not the camera`
+      : `no "${name}"${
+          near.length
+            ? `: did you mean ${near
+                .slice(0, 3)
+                .map((n) => `"${n}"`)
+                .join(" or ")}? (names match case)`
+            : ""
+        }`;
+  return `ERROR ${why}. Targets: ${camera ? "the camera: cam; " : ""}bones: ${Object.keys(bones ?? {}).join(", ") || "none"}; objects: ${(objects ?? []).map(([, l]) => l).join(", ") || "none"}; or any object's .name`;
+};
 
 // the draw.tools.objects label of the nearest ancestor that has one, else the object's own name
 export const labelOf = (objects, o) => {
