@@ -1,41 +1,33 @@
 {
- "textures": {
-  "paper": "minecraft:block/quartz_block_bottom",
-  "particle": "minecraft:block/quartz_block_bottom"
- },
- "elements": [
-  {
-   "name": "sheet",
-   "from": [
-    0,
-    0,
-    0
-   ],
-   "to": [
-    3.8,
-    0.12,
-    5
-   ],
-   "faces": {
-    "north": {
-     "texture": "#paper"
-    },
-    "south": {
-     "texture": "#paper"
-    },
-    "east": {
-     "texture": "#paper"
-    },
-    "west": {
-     "texture": "#paper"
-    },
-    "up": {
-     "texture": "#paper"
-    },
-    "down": {
-     "texture": "#paper"
+  "textures": {
+    "paper": "minecraft:block/quartz_block_bottom",
+    "particle": "minecraft:block/quartz_block_bottom"
+  },
+  "elements": [
+    {
+      "name": "sheet",
+      "from": [0, 0, 0],
+      "to": [3.8, 0.12, 5],
+      "faces": {
+        "north": {
+          "texture": "#paper"
+        },
+        "south": {
+          "texture": "#paper"
+        },
+        "east": {
+          "texture": "#paper"
+        },
+        "west": {
+          "texture": "#paper"
+        },
+        "up": {
+          "texture": "#paper"
+        },
+        "down": {
+          "texture": "#paper"
+        }
+      }
     }
-   }
-  }
- ]
+  ]
 }

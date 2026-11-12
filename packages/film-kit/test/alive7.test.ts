@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { blinks } from "../src/blinks";
 import { idle } from "../src/idle";
 import { fly, jumpArc, MC, mcBody, TPS } from "../src/mcmotion";
@@ -28,7 +29,10 @@ test("mcmotion: the game's jump (1.25 blocks, lands after 12 ticks) and a hit's 
 
 test("mcmotion: a hit keyed by side follows him; by floor point it does not", () => {
   // after the first hit he is ~3 blocks away; a second hit from his front (-x) must still push him +x
-  const ev = [{ t: 0.5, from: [0, -1] as [number, number] }, { t: 3, from: [-1, 0] as [number, number] }];
+  const ev = [
+    { t: 0.5, from: [0, -1] as [number, number] },
+    { t: 3, from: [-1, 0] as [number, number] },
+  ];
   const b = mcBody([0, 0, 0], ev, { end: 6 });
   expect(b(5.5).p[0]).toBeGreaterThan(1.5);
 });
@@ -53,14 +57,21 @@ test("mcmotion: an arrow sticks where it lands; an item bounces to a stop", () =
 test("steps: heel strikes from the soles, a step sound each, never the same variant twice in a row", () => {
   // two feet stepping in turn: each swings forward 1.2 m in 0.3 s every 0.8 s and stands still the rest, half a cycle apart
   const sole = (phase: number) => (t: number) => {
-    const n = Math.floor((t + phase) / 0.8), u = Math.min(1, ((t + phase) % 0.8) / 0.3);
-    return [1.2 * (n + u * u * (3 - 2 * u)), u < 1 ? 0.08 * Math.sin(Math.PI * u) : 0, 0] as [number, number, number];
+    const n = Math.floor((t + phase) / 0.8),
+      u = Math.min(1, ((t + phase) % 0.8) / 0.3);
+    return [1.2 * (n + u * u * (3 - 2 * u)), u < 1 ? 0.08 * Math.sin(Math.PI * u) : 0, 0] as [
+      number,
+      number,
+      number,
+    ];
   };
   const s = contacts({ L: sole(0), R: sole(0.4) }, 8, { ground: 0 });
   expect(s.length).toBeGreaterThan(15);
   expect(s.length).toBeLessThan(22);
   const sounds = stepSounds(s, () => "stone");
-  expect(sounds.every((x) => x.event === "block.stone.step" && x.volume === STEP.volume)).toBe(true);
+  expect(sounds.every((x) => x.event === "block.stone.step" && x.volume === STEP.volume)).toBe(
+    true,
+  );
   for (let i = 1; i < sounds.length; i++) expect(sounds[i].variant).not.toBe(sounds[i - 1].variant);
   // carpet: its own step plus the block below, quieter and lower
   const carpet = stepSounds(s.slice(0, 1), (_x, y) => (y > -0.5 ? "white_carpet" : "stone"));
@@ -70,7 +81,11 @@ test("steps: heel strikes from the soles, a step sound each, never the same vari
 });
 
 test("steps: the game's own rhythm is one step every 1/0.6 blocks walked", () => {
-  const g = gameSteps((t) => t * 4.317, () => [0, 0, 0], 10);
+  const g = gameSteps(
+    (t) => t * 4.317,
+    () => [0, 0, 0],
+    10,
+  );
   expect(g.length).toBe(Math.floor((10 * 4.317) / STEP.every));
 });
 
@@ -108,7 +123,11 @@ test("sigh: a second breath on top (2-5 x a normal one), the let-go below rest, 
 
 test("idle: breaths rank gasp > yawn > sigh; an overlapped lower one is dropped", () => {
   const Y = yawns([{ t: 10 }]);
-  const life = idle(still, 40, { gasps: [{ t: 2 }], sighs: [{ t: 2.5 }, { t: 11 }, { t: 25 }], yawns: Y });
+  const life = idle(still, 40, {
+    gasps: [{ t: 2 }],
+    sighs: [{ t: 2.5 }, { t: 11 }, { t: 25 }],
+    yawns: Y,
+  });
   const kinds = life.windows.map((w) => w.kind);
   expect(kinds).toEqual(["gasp", "yawn", "sigh"]);
   expect(life.breath(26)).toBe("sigh");
@@ -124,13 +143,21 @@ test("blinks: none start inside a quiet span (a yawn's own lids)", () => {
 });
 
 test("posture: follows the face's emotion at the face's pace; sad hangs the head, joy lifts it", () => {
-  const p = posture([{ t: 0, mood: "neutral" }, { t: 5, mood: "sad" }, { t: 20, mood: "happy" }]);
+  const p = posture([
+    { t: 0, mood: "neutral" },
+    { t: 5, mood: "sad" },
+    { t: 20, mood: "happy" },
+  ]);
   expect(p(4).head).toBeUndefined();
   expect(p(15).head![0]).toBeCloseTo(POSTURE.shape.sadness.head![0], 6);
   expect(p(30).head![0]).toBeCloseTo(POSTURE.shape.joy.head![0], 6);
   expect(p.amp(15)).toBeCloseTo(POSTURE.amp.sadness, 6);
   // a change cut short goes on from where it had got to
-  const cut = posture([{ t: 0, mood: "neutral" }, { t: 5, mood: "sad" }, { t: 5.2, mood: "neutral" }]);
+  const cut = posture([
+    { t: 0, mood: "neutral" },
+    { t: 5, mood: "sad" },
+    { t: 5.2, mood: "neutral" },
+  ]);
   expect(cut(5.2).head![0]).toBeGreaterThan(0);
   expect(cut(5.2).head![0]).toBeLessThan(POSTURE.shape.sadness.head![0]);
 });
@@ -139,7 +166,9 @@ test("touch: about 23 an hour, more when stressed; only with a free hand, and an
   const n = touches(3600 * 3).list.length / 3;
   expect(n).toBeGreaterThan(12);
   expect(n).toBeLessThan(34);
-  expect(touches(3600, { rate: () => TOUCH.rate * TOUCH.stress }).list.length).toBeGreaterThan(touches(3600).list.length);
+  expect(touches(3600, { rate: () => TOUCH.rate * TOUCH.stress }).list.length).toBeGreaterThan(
+    touches(3600).list.length,
+  );
   const busy = (t: number) => t >= 100 && t < 300;
   const T = touches(1200, { free: (t) => !busy(t) });
   expect(T.list.some((x) => x.t < 300 && x.end > 100)).toBe(false);

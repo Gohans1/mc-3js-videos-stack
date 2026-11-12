@@ -1,19 +1,19 @@
 {
- "variants": {
-  "facing=north": {
-   "model": "gohans:block/book_pulled"
-  },
-  "facing=east": {
-   "model": "gohans:block/book_pulled",
-   "y": 90
-  },
-  "facing=south": {
-   "model": "gohans:block/book_pulled",
-   "y": 180
-  },
-  "facing=west": {
-   "model": "gohans:block/book_pulled",
-   "y": 270
+  "variants": {
+    "facing=north": {
+      "model": "gohans:block/book_pulled"
+    },
+    "facing=east": {
+      "model": "gohans:block/book_pulled",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "gohans:block/book_pulled",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "gohans:block/book_pulled",
+      "y": 270
+    }
   }
- }
 }

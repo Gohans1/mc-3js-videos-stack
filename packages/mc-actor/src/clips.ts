@@ -7,7 +7,8 @@ import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { MIXAMO, UAL, UE, bakeClip, retargeter, skeletonSource } from "./mocap";
+
+import { bakeClip, MIXAMO, retargeter, skeletonSource, UAL, UE } from "./mocap";
 
 const GLTF_LIBS = {
   ual1: { file: "motion/ual1/AnimationLibrary_Godot_Standard.gltf", names: UAL },
@@ -35,7 +36,10 @@ export async function loadSource(ref) {
     return { root, names: MIXAMO, clip: root.animations[0] };
   }
   const L = GLTF_LIBS[lib];
-  if (!L) throw new Error(`mocap clip ${ref}: no library "${lib}" (mixamo, ${Object.keys(GLTF_LIBS).join(", ")})`);
+  if (!L)
+    throw new Error(
+      `mocap clip ${ref}: no library "${lib}" (mixamo, ${Object.keys(GLTF_LIBS).join(", ")})`,
+    );
   const gl = await gltfOf(lib);
   const clip = gl.animations.find((a) => a.name === name);
   if (!clip) throw new Error(`mocap clip ${ref}: not in ${L.file}`);
@@ -55,7 +59,10 @@ export async function loadClip(ref, player, fps = 60) {
   mixer.uncacheRoot(root);
   // the clip starts where its key puts him: its hips' first ground position is the key's `at`
   const { x: x0, z: z0 } = bake.frames[0].root;
-  for (const f of bake.frames) { f.root.x -= x0; f.root.z -= z0; }
+  for (const f of bake.frames) {
+    f.root.x -= x0;
+    f.root.z -= z0;
+  }
   // where it leaves him, in his own frame (x his left, z his front, ry degrees to his left): the next key's place
   const { x, z, ry } = bake.frames.at(-1).root;
   return { duration: clip.duration, end: { x, z, ry }, ...bake };

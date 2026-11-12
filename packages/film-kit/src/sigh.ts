@@ -21,11 +21,19 @@ export const SIGH = {
 };
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
-const minJerk = (u: number) => { const x = clamp01(u); return x * x * x * (10 + x * (-15 + 6 * x)); };
+const minJerk = (u: number) => {
+  const x = clamp01(u);
+  return x * x * x * (10 + x * (-15 + 6 * x));
+};
 
 // lungs over one sigh from `from` (where the breath was when it began), in normal-breath units; u in seconds since start
 export function sighLungs(u: number, from: number, k = 1, o = SIGH) {
-  const a = o.first, b = a + o.second, c = b + o.hold, d = c + o.out, top = 1 + (o.peak - 1) * k, low = o.low * k;
+  const a = o.first,
+    b = a + o.second,
+    c = b + o.hold,
+    d = c + o.out,
+    top = 1 + (o.peak - 1) * k,
+    low = o.low * k;
   if (u < a) return from + (1 - from) * minJerk(u / a);
   if (u < b) return 1 + (top - 1) * minJerk((u - a) / o.second);
   if (u < c) return top;
@@ -36,9 +44,14 @@ export const sighLength = (o = SIGH) => o.first + o.second + o.hold + o.out + o.
 
 // sighs that come by themselves: rate(t) an hour (SIGH.rate.rest, .relief), gaps uneven (exponential), never closer
 // than 20 s; none while busy(t)
-export function sighTimes(end: number, rate: (t: number) => number, { seed = 9, from = 0, busy = (_t: number) => false } = {}) {
+export function sighTimes(
+  end: number,
+  rate: (t: number) => number,
+  { seed = 9, from = 0, busy = (_t: number): boolean => false } = {},
+) {
   const out: { t: number; k: number }[] = [];
-  let t = from, i = 0;
+  let t = from,
+    i = 0;
   for (;;) {
     t += Math.max(20, (-Math.log(1 - 0.999 * hash(i, seed)) * 3600) / Math.max(0.1, rate(t)));
     if (t > end - sighLength()) break;

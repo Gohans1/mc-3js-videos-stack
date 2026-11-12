@@ -2,11 +2,8 @@
   "name": "mc-actor",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "Minecraft actors for films: MCprep's player rig, poses and IK (player), mocap clips retargeted onto it (mocap, clips), the performance keys (perform), planted feet (feet), things carried in the hands (carry), mobs, any of the game's 209 through MineRender (mob)",
-  "scripts": {
-    "test": "bun test"
-  },
+  "type": "module",
   "exports": {
     "./player": "./src/player.ts",
     "./mocap": "./src/mocap.ts",
@@ -18,13 +15,16 @@
     "./mob": "./src/mob.ts",
     "./checks": "./src/checks.ts"
   },
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
-    "film-stage": "workspace:*",
     "film-kit": "workspace:*",
+    "film-stage": "workspace:*",
     "minerender": "2.1.0-beta.8",
-    "zod": "4.6.7"
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "three": "0.186.1"
+    "three": "catalog:"
   }
 }

@@ -7,18 +7,26 @@
 //   drift(t) scaled by 1 - FREEZE.drift * still(t);   blinks at BLINKS.rate.focus while still(t) > 0.5
 // still(t): 0..1. Mocap clips carry their own sway, which this can't take out: over a clip only the eyes freeze.
 export const FREEZE = {
-  onset: 0.2, in: 1, out: 0.8, // s: starts after the cue, takes hold over, lets go over
-  sway: 0.8, drift: 0.8, wander: 0.85, // how much of each is taken away at full freeze
+  onset: 0.2,
+  in: 1,
+  out: 0.8, // s: starts after the cue, takes hold over, lets go over
+  sway: 0.8,
+  drift: 0.8,
+  wander: 0.85, // how much of each is taken away at full freeze
   look: 1.5, // s, at most one fixation shift this often while frozen
 };
 
-const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
+const smooth = (x: number) => {
+  const u = Math.min(1, Math.max(0, x));
+  return u * u * (3 - 2 * u);
+};
 
 export function freeze(spans: { t: number; until: number; k?: number }[]) {
   return (t: number) => {
     let v = 0;
     for (const s of spans) {
-      const a = s.t + FREEZE.onset, k = Math.min(1, Math.max(0, s.k ?? 1));
+      const a = s.t + FREEZE.onset,
+        k = Math.min(1, Math.max(0, s.k ?? 1));
       v = Math.max(v, k * smooth((t - a) / FREEZE.in) * (1 - smooth((t - s.until) / FREEZE.out)));
     }
     return v;

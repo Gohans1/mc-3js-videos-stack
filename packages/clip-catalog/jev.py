@@ -58,3 +58,9 @@ class Jev:
                         break
                     time.sleep(after)
         sys.exit("Jev: no route left (keys in ~/.secrets: opencode_zen.env, openrouter.env); ")
+
+
+if __name__ == "__main__":
+    # A pipe for tools in other languages (scripts/find.ts): {"state": ..., "questions": {...}} on stdin, the answers on stdout
+    req = json.load(sys.stdin)
+    print(json.dumps(Jev().ask(req["state"], req["questions"])))

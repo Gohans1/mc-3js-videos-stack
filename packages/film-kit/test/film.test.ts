@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+
 import { Euler, PerspectiveCamera, Quaternion, Vector3 } from "three";
+
 import DATA from "../data/shakify.json";
 import { handheld, SHAKES } from "../src/handheld";
 import { blurPx, dollyZoom, fovOf, hfovOf, mmOf, nearestPrime } from "../src/lens";
@@ -31,8 +33,12 @@ test("lens: full-frame millimetres match a photographer's angles and three's set
 });
 
 test("lens: a dolly zoom keeps the subject the same size on screen", () => {
-  const f0 = fovOf(35, A), f1 = fovOf(85, A), d0 = 3, d1 = dollyZoom(d0, f0, f1);
-  const size = (d: number, fov: number) => new Vector3(0, 0.5, 0).project(threeCam({ p: [0, 0, d], l: [0, 0, 0], fov })).y;
+  const f0 = fovOf(35, A),
+    f1 = fovOf(85, A),
+    d0 = 3,
+    d1 = dollyZoom(d0, f0, f1);
+  const size = (d: number, fov: number) =>
+    new Vector3(0, 0.5, 0).project(threeCam({ p: [0, 0, d], l: [0, 0, 0], fov })).y;
   expect(size(d1, f1)).toBeCloseTo(size(d0, f0), 9);
 });
 
@@ -50,7 +56,8 @@ test("safe: EBU R 95 insets at 1920x1080", () => {
 
 test("handheld: loops, is centred, passes through the recording and its quat is Blender's XYZ order", () => {
   for (const name of SHAKES) {
-    const h = handheld(name), n = (DATA[name] as { rotation_euler0: number[] }).rotation_euler0.length;
+    const h = handheld(name),
+      n = (DATA[name] as { rotation_euler0: number[] }).rotation_euler0.length;
     expect(h(0.37).rot[1]).toBeCloseTo(h(0.37 + n / 24).rot[1], 9);
     let sum = 0;
     for (let i = 0; i < n; i++) sum += h(i / 24).rot[0];
@@ -58,9 +65,13 @@ test("handheld: loops, is centred, passes through the recording and its quat is 
     const [rx, ry, rz] = h(1.234).rot.map((d) => (d * Math.PI) / 180);
     const q = new Quaternion().setFromEuler(new Euler(rx, ry, rz, "ZYX"));
     const mine = h(1.234).quat;
-    expect(Math.abs(mine[0] * q.x + mine[1] * q.y + mine[2] * q.z + mine[3] * q.w)).toBeCloseTo(1, 12);
+    expect(Math.abs(mine[0] * q.x + mine[1] * q.y + mine[2] * q.z + mine[3] * q.w)).toBeCloseTo(
+      1,
+      12,
+    );
   }
-  const raw = (DATA.THE_CLOSEUP as { rotation_euler2: number[] }).rotation_euler2, m = raw.reduce((a, b) => a + b, 0) / raw.length;
+  const raw = (DATA.THE_CLOSEUP as { rotation_euler2: number[] }).rotation_euler2,
+    m = raw.reduce((a, b) => a + b, 0) / raw.length;
   expect(handheld("THE_CLOSEUP")(5 / 24).rot[2]).toBeCloseTo(((raw[5] - m) * 180) / Math.PI, 9);
   expect(handheld("THE_ZEEK_2D")(3).pos).toEqual([0, 0, 0]);
   expect(handheld("HANDYCAM_RUN", { amount: 0 })(3).rot.every((x) => x === 0)).toBe(true);

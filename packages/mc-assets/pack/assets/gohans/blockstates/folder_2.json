@@ -1,7 +1,7 @@
 {
- "variants": {
-  "": {
-   "model": "gohans:block/folder_2"
+  "variants": {
+    "": {
+      "model": "gohans:block/folder_2"
+    }
   }
- }
 }

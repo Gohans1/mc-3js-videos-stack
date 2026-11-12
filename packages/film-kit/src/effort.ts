@@ -14,7 +14,13 @@
 //   sink > 0: the chest and head bend forward and down (tired, beaten); < 0 rises (alert, proud).
 import type { Pose } from "./pose";
 
-export type Effort = { space?: number; weight?: number; time?: number; flow?: number; sink?: number };
+export type Effort = {
+  space?: number;
+  weight?: number;
+  time?: number;
+  flow?: number;
+  sink?: number;
+};
 export const MOOD: Record<string, Effort> = {
   calm: {},
   tense: { space: 0.7, weight: 0.4, time: 0.8, flow: 0.8, sink: -0.3 },
@@ -24,7 +30,11 @@ export const MOOD: Record<string, Effort> = {
 const c1 = (x = 0) => Math.max(-1, Math.min(1, x));
 
 export function effort(e: Effort = {}) {
-  const space = c1(e.space), weight = c1(e.weight), time = c1(e.time), flow = c1(e.flow), sink = c1(e.sink);
+  const space = c1(e.space),
+    weight = c1(e.weight),
+    time = c1(e.time),
+    flow = c1(e.flow),
+    sink = c1(e.sink);
   return {
     hold: 0.4 * Math.max(0, time),
     overlap: { damping: 0.6 + 0.25 * flow, amount: 1 - 0.45 * flow },
@@ -40,13 +50,17 @@ export function effort(e: Effort = {}) {
 // then moves in the rest, so it lands on the same key time, faster. Returns the keys with a held copy added before each
 // move (same fields, `held: true`); the caller blends them as before (a key equal to the one before stops there). A move
 // into or out of a key with a `clip` (mocap keeps its own timing) is left as it is.
-export function phrase<K extends { t: number; clip?: unknown }>(keys: K[], hold: number): (K & { held?: boolean })[] {
+export function phrase<K extends { t: number; clip?: unknown }>(
+  keys: K[],
+  hold: number,
+): (K & { held?: boolean })[] {
   if (!(hold > 0)) return keys;
   const out: (K & { held?: boolean })[] = [];
   keys.forEach((k, i) => {
     out.push(k);
     const n = keys[i + 1];
-    if (n && n.t - k.t > 0.05 && !k.clip && !n.clip) out.push({ ...k, t: k.t + hold * (n.t - k.t), held: true });
+    if (n && n.t - k.t > 0.05 && !k.clip && !n.clip)
+      out.push({ ...k, t: k.t + hold * (n.t - k.t), held: true });
   });
   return out;
 }

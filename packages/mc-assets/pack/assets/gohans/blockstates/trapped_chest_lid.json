@@ -1,7 +1,7 @@
 {
- "variants": {
-  "": {
-   "model": "gohans:block/trapped_chest_lid"
+  "variants": {
+    "": {
+      "model": "gohans:block/trapped_chest_lid"
+    }
   }
- }
 }

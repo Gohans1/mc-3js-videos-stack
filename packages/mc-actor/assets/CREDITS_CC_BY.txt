@@ -1,0 +1,9 @@
+Simple Player rig: BoxScape Studios, modified in MCprep by Patrick W. Crawford (TheDuckCow).
+Source: https://github.com/Moo-Ack-Productions/MCprep
+Asset license: Creative Commons Attribution 3.0 US — https://creativecommons.org/licenses/by/3.0/us/
+Credit reference: https://github.com/Moo-Ack-Productions/MCprep#credit
+
+Modification: exported from MCprep 3.6.3 to glTF 2.0 with Khronos glTF Blender I/O 5.2.41; geometry and rig only, no Minecraft textures or materials.
+The GLB keeps the existing film rig's transforms and skin weights. Its SHA-256 is pinned in scripts/vault-assets.json.
+
+Film credit: Minecraft rig: Simple Player by BoxScape Studios and TheDuckCow, via MCprep (CC BY 3.0 US) — https://github.com/Moo-Ack-Productions/MCprep

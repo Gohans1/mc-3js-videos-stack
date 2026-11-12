@@ -209,7 +209,8 @@ def main():
             # words in the name or the eye-checked description outrank Mixamo's search keywords
             score = sum(2 if w in name.lower() or w in r.get("desc", "").lower() else 1 for w in words)
             hits.append((score, r, loop, tags))
-    hits.sort(key=lambda h: (-h[0], h[1]["dur"]))
+    # a one-frame clip is a still pose, never the move its name says: after every clip that moves
+    hits.sort(key=lambda h: (h[1]["dur"] < 0.1, -h[0], h[1]["dur"]))
     pool = len(hits)
     fit = {}
     if a.jev and hits:
@@ -221,8 +222,12 @@ def main():
         print(f"Jev via {jev.used}" + (f", cost ${jev.spent:.4f}" if jev.spent else "") + "; rank = Choice probability, fits = "
               "its own yes/no", file=sys.stderr)
         # TypeSafe's starting thresholds for a Noul: yes above 0.7, no below 0.3
-        if max(fit.values()) < 0.3:
-            print(f"Jev: no shown clip fits (best {max(fit.values()):.2f}): the vault may have nothing for this scene", file=sys.stderr)
+        best = max(fit.values())
+        if best < 0.3:
+            print(f"Jev: no shown clip fits (best {best:.2f}): the vault may have nothing for this scene", file=sys.stderr)
+        elif best <= 0.7:
+            print(f"Jev: unsure any shown clip fits (best {best:.2f}): see the top few before using one; if none acts it out, "
+                  "key the pose by hand (steve.json moves[] pose) or retarget a new clip into vault/motion", file=sys.stderr)
     for score, r, loop, tags in hits[: a.n]:
         hands = " ".join(f"{k} {r[k]}s" for k in ["head", "up", "ground", "bend", "air"] if has(r, k))
         print(f"{f'{score:.2f}  ' if a.jev else ''}{f'fits {fit[id(r)]:.2f}  ' if id(r) in fit else ''}{r['ref']}  {r['dur']}s  {'>'.join(r['seq'])}  travel {r['travel'][0]},{r['travel'][1]} turn {r['turn']}"

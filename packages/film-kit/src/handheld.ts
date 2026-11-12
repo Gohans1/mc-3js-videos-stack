@@ -1,5 +1,5 @@
 // A camera held by a person: real recorded camera wobble from Camera Shakify (Ian Hubert & Nathan Vegdahl; the data is CC0,
-// data/shakify.LICENSE.md; their add-on code is GPL and is not used here). Each recording loops seamlessly at 24 fps;
+// data/shakify.LICENSE.txt; their add-on code is GPL and is not used here). Each recording loops seamlessly at 24 fps;
 // samples are joined by Catmull-Rom so any t reads directly. Unlike Shakify, each track is centred on its mean, so the shake
 // never shifts the framing you set (Investigation drifts the camera 6-12 cm off otherwise).
 // Shakes: INVESTIGATION, THE_CLOSEUP, THE_WEDDING, WALK_TO_THE_STORE, HANDYCAM_RUN, OUT_CAR_WINDOW (rotate and move);
@@ -20,7 +20,10 @@ const centred = (v?: number[]) => {
   return v.map((x) => x - m);
 };
 
-export function handheld(kind: ShakeName = "THE_CLOSEUP", { amount = 1, move = 1, speed = 1, offset = 0 } = {}) {
+export function handheld(
+  kind: ShakeName = "THE_CLOSEUP",
+  { amount = 1, move = 1, speed = 1, offset = 0 } = {},
+) {
   const s = DATA[kind] as Record<string, unknown> & { fps: number };
   if (!s) throw new Error(`handheld: no shake ${kind}; one of ${SHAKES.join(", ")}`);
   const loc = [0, 1, 2].map((i) => centred(s[`location${i}`] as number[] | undefined));
@@ -28,17 +31,25 @@ export function handheld(kind: ShakeName = "THE_CLOSEUP", { amount = 1, move = 1
   const n = rot[0]!.length;
   const sample = (v: number[] | null, f: number) => {
     if (!v) return 0;
-    const i = Math.floor(f), u = f - i;
+    const i = Math.floor(f),
+      u = f - i;
     const at = (k: number) => v[((k % n) + n) % n];
-    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
-    return p1 + 0.5 * u * (p2 - p0 + u * (2 * p0 - 5 * p1 + 4 * p2 - p3 + u * (3 * (p1 - p2) + p3 - p0)));
+    const p0 = at(i - 1),
+      p1 = at(i),
+      p2 = at(i + 1),
+      p3 = at(i + 2);
+    return (
+      p1 + 0.5 * u * (p2 - p0 + u * (2 * p0 - 5 * p1 + 4 * p2 - p3 + u * (3 * (p1 - p2) + p3 - p0)))
+    );
   };
   return (t: number) => {
     const f = (t * speed + offset) * s.fps;
     const r = rot.map((v) => sample(v, f) * amount);
     const pos = loc.map((v) => sample(v, f) * amount * move) as [number, number, number];
     // Blender XYZ euler: x first, then y, then z, about fixed axes = qz * qy * qx
-    const h = r.map((a) => a / 2), c = h.map(Math.cos), sn = h.map(Math.sin);
+    const h = r.map((a) => a / 2),
+      c = h.map(Math.cos),
+      sn = h.map(Math.sin);
     const quat: [number, number, number, number] = [
       sn[0] * c[1] * c[2] - c[0] * sn[1] * sn[2],
       c[0] * sn[1] * c[2] + sn[0] * c[1] * sn[2],

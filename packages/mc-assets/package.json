@@ -2,8 +2,8 @@
   "name": "mc-assets",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "Minecraft assets every film shares: the props pack (pack/assets/gohans, pack.ts) and what makes props work (gamefont, ink, screen, variants for the studio), block-model-renderer's runtime files (vendor.mjs, a film's postinstall), blocks cherry-picked from the vault's mod packs (pick.py), what the creator drops into a scene from the studio (placed). MineRender's mob dataset mirrored into the vault (mobs.ts, for mc-actor/mob). The game itself, the rig and the clips stay in the vault (vault.json, bun run link).",
+  "type": "module",
   "exports": {
     "./pack": "./src/pack.ts",
     "./gamefont": "./src/gamefont.ts",
@@ -13,11 +13,15 @@
     "./placed": "./src/placed.ts"
   },
   "dependencies": {
-    "block-model-renderer": "2.20.0",
+    "block-model-renderer": "catalog:",
+    "fflate": "catalog:",
     "film-stage": "workspace:*",
     "mc-actor": "workspace:*"
   },
+  "devDependencies": {
+    "@types/three": "catalog:"
+  },
   "peerDependencies": {
-    "three": "0.186.1"
+    "three": "catalog:"
   }
 }

@@ -1,19 +1,19 @@
 {
- "variants": {
-  "facing=north": {
-   "model": "gohans:block/computer_black_keys"
-  },
-  "facing=east": {
-   "model": "gohans:block/computer_black_keys",
-   "y": 90
-  },
-  "facing=south": {
-   "model": "gohans:block/computer_black_keys",
-   "y": 180
-  },
-  "facing=west": {
-   "model": "gohans:block/computer_black_keys",
-   "y": 270
+  "variants": {
+    "facing=north": {
+      "model": "gohans:block/computer_black_keys"
+    },
+    "facing=east": {
+      "model": "gohans:block/computer_black_keys",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "gohans:block/computer_black_keys",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "gohans:block/computer_black_keys",
+      "y": 270
+    }
   }
- }
 }

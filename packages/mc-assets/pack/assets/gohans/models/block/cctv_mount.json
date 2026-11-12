@@ -1,108 +1,84 @@
 {
- "textures": {
-  "plate": "minecraft:block/gray_concrete",
-  "arm": "minecraft:block/light_gray_concrete",
-  "particle": "minecraft:block/gray_concrete"
- },
- "elements": [
-  {
-   "name": "plate",
-   "from": [
-    5.5,
-    15.2,
-    5.5
-   ],
-   "to": [
-    10.5,
-    16,
-    10.5
-   ],
-   "faces": {
-    "north": {
-     "texture": "#plate"
-    },
-    "south": {
-     "texture": "#plate"
-    },
-    "east": {
-     "texture": "#plate"
-    },
-    "west": {
-     "texture": "#plate"
-    },
-    "up": {
-     "texture": "#plate"
-    },
-    "down": {
-     "texture": "#plate"
-    }
-   }
+  "textures": {
+    "plate": "minecraft:block/gray_concrete",
+    "arm": "minecraft:block/light_gray_concrete",
+    "particle": "minecraft:block/gray_concrete"
   },
-  {
-   "name": "arm",
-   "from": [
-    7.3,
-    9.4,
-    7.3
-   ],
-   "to": [
-    8.7,
-    15.2,
-    8.7
-   ],
-   "faces": {
-    "north": {
-     "texture": "#arm"
+  "elements": [
+    {
+      "name": "plate",
+      "from": [5.5, 15.2, 5.5],
+      "to": [10.5, 16, 10.5],
+      "faces": {
+        "north": {
+          "texture": "#plate"
+        },
+        "south": {
+          "texture": "#plate"
+        },
+        "east": {
+          "texture": "#plate"
+        },
+        "west": {
+          "texture": "#plate"
+        },
+        "up": {
+          "texture": "#plate"
+        },
+        "down": {
+          "texture": "#plate"
+        }
+      }
     },
-    "south": {
-     "texture": "#arm"
+    {
+      "name": "arm",
+      "from": [7.3, 9.4, 7.3],
+      "to": [8.7, 15.2, 8.7],
+      "faces": {
+        "north": {
+          "texture": "#arm"
+        },
+        "south": {
+          "texture": "#arm"
+        },
+        "east": {
+          "texture": "#arm"
+        },
+        "west": {
+          "texture": "#arm"
+        },
+        "up": {
+          "texture": "#arm"
+        },
+        "down": {
+          "texture": "#arm"
+        }
+      }
     },
-    "east": {
-     "texture": "#arm"
-    },
-    "west": {
-     "texture": "#arm"
-    },
-    "up": {
-     "texture": "#arm"
-    },
-    "down": {
-     "texture": "#arm"
+    {
+      "name": "ball",
+      "from": [6.9, 8.2, 6.9],
+      "to": [9.1, 9.4, 9.1],
+      "faces": {
+        "north": {
+          "texture": "#plate"
+        },
+        "south": {
+          "texture": "#plate"
+        },
+        "east": {
+          "texture": "#plate"
+        },
+        "west": {
+          "texture": "#plate"
+        },
+        "up": {
+          "texture": "#plate"
+        },
+        "down": {
+          "texture": "#plate"
+        }
+      }
     }
-   }
-  },
-  {
-   "name": "ball",
-   "from": [
-    6.9,
-    8.2,
-    6.9
-   ],
-   "to": [
-    9.1,
-    9.4,
-    9.1
-   ],
-   "faces": {
-    "north": {
-     "texture": "#plate"
-    },
-    "south": {
-     "texture": "#plate"
-    },
-    "east": {
-     "texture": "#plate"
-    },
-    "west": {
-     "texture": "#plate"
-    },
-    "up": {
-     "texture": "#plate"
-    },
-    "down": {
-     "texture": "#plate"
-    }
-   }
-  }
- ]
+  ]
 }

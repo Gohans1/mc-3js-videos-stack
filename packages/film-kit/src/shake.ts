@@ -5,9 +5,18 @@
 import { simplex2d } from "math/noise";
 
 export type Hit = { t: number; amount: number };
-export type ShakeOpts = { decay?: number; power?: number; freq?: number; max?: [number, number, number]; seed?: number };
+export type ShakeOpts = {
+  decay?: number;
+  power?: number;
+  freq?: number;
+  max?: [number, number, number];
+  seed?: number;
+};
 
-export function shake(input: Hit[], { decay = 1, power = 2, freq = 14, max = [2, 2, 1.5], seed = 1 }: ShakeOpts = {}) {
+export function shake(
+  input: Hit[],
+  { decay = 1, power = 2, freq = 14, max = [2, 2, 1.5], seed = 1 }: ShakeOpts = {},
+) {
   const hits = [...input].sort((a, b) => a.t - b.t);
   const noise = simplex2d.create(seed);
   // trauma right after each hit
@@ -23,7 +32,9 @@ export function shake(input: Hit[], { decay = 1, power = 2, freq = 14, max = [2,
   };
   const shk = (t: number): [number, number, number] => {
     const k = trauma(t) ** power;
-    return [0, 1, 2].map((c) => (k ? max[c] * k * simplex2d.sample(noise, t * freq, c * 37.1 + 0.5) : 0)) as [number, number, number];
+    return [0, 1, 2].map((c) =>
+      k ? max[c] * k * simplex2d.sample(noise, t * freq, c * 37.1 + 0.5) : 0,
+    ) as [number, number, number];
   };
   return Object.assign(shk, { trauma });
 }

@@ -1,19 +1,19 @@
 {
- "variants": {
-  "facing=north": {
-   "model": "gohans:block/iron_bed"
-  },
-  "facing=east": {
-   "model": "gohans:block/iron_bed",
-   "y": 90
-  },
-  "facing=south": {
-   "model": "gohans:block/iron_bed",
-   "y": 180
-  },
-  "facing=west": {
-   "model": "gohans:block/iron_bed",
-   "y": 270
+  "variants": {
+    "facing=north": {
+      "model": "gohans:block/iron_bed"
+    },
+    "facing=east": {
+      "model": "gohans:block/iron_bed",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "gohans:block/iron_bed",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "gohans:block/iron_bed",
+      "y": 270
+    }
   }
- }
 }

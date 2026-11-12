@@ -1,208 +1,160 @@
 {
- "textures": {
-  "mount": "minecraft:block/gray_concrete",
-  "dome": "minecraft:block/tinted_glass",
-  "lens": "minecraft:block/black_concrete",
-  "particle": "minecraft:block/gray_concrete"
- },
- "elements": [
-  {
-   "name": "mount",
-   "from": [
-    7.5,
-    15.4,
-    1
-   ],
-   "to": [
-    15,
-    16,
-    8.5
-   ],
-   "faces": {
-    "north": {
-     "texture": "#mount"
-    },
-    "south": {
-     "texture": "#mount"
-    },
-    "east": {
-     "texture": "#mount"
-    },
-    "west": {
-     "texture": "#mount"
-    },
-    "up": {
-     "texture": "#mount"
-    },
-    "down": {
-     "texture": "#mount"
-    }
-   }
+  "textures": {
+    "mount": "minecraft:block/gray_concrete",
+    "dome": "minecraft:block/tinted_glass",
+    "lens": "minecraft:block/black_concrete",
+    "particle": "minecraft:block/gray_concrete"
   },
-  {
-   "name": "ring",
-   "from": [
-    8,
-    14.8,
-    1.5
-   ],
-   "to": [
-    14.5,
-    15.4,
-    8
-   ],
-   "faces": {
-    "north": {
-     "texture": "#mount"
+  "elements": [
+    {
+      "name": "mount",
+      "from": [7.5, 15.4, 1],
+      "to": [15, 16, 8.5],
+      "faces": {
+        "north": {
+          "texture": "#mount"
+        },
+        "south": {
+          "texture": "#mount"
+        },
+        "east": {
+          "texture": "#mount"
+        },
+        "west": {
+          "texture": "#mount"
+        },
+        "up": {
+          "texture": "#mount"
+        },
+        "down": {
+          "texture": "#mount"
+        }
+      }
     },
-    "south": {
-     "texture": "#mount"
+    {
+      "name": "ring",
+      "from": [8, 14.8, 1.5],
+      "to": [14.5, 15.4, 8],
+      "faces": {
+        "north": {
+          "texture": "#mount"
+        },
+        "south": {
+          "texture": "#mount"
+        },
+        "east": {
+          "texture": "#mount"
+        },
+        "west": {
+          "texture": "#mount"
+        },
+        "up": {
+          "texture": "#mount"
+        },
+        "down": {
+          "texture": "#mount"
+        }
+      }
     },
-    "east": {
-     "texture": "#mount"
+    {
+      "name": "lens",
+      "from": [10.2, 12.6, 3.7],
+      "to": [12.3, 14.4, 5.8],
+      "faces": {
+        "north": {
+          "texture": "#lens"
+        },
+        "south": {
+          "texture": "#lens"
+        },
+        "east": {
+          "texture": "#lens"
+        },
+        "west": {
+          "texture": "#lens"
+        },
+        "up": {
+          "texture": "#lens"
+        },
+        "down": {
+          "texture": "#lens"
+        }
+      }
     },
-    "west": {
-     "texture": "#mount"
+    {
+      "name": "dome_1",
+      "from": [8.4, 13.9, 1.9],
+      "to": [14.1, 14.8, 7.6],
+      "faces": {
+        "north": {
+          "texture": "#dome"
+        },
+        "south": {
+          "texture": "#dome"
+        },
+        "east": {
+          "texture": "#dome"
+        },
+        "west": {
+          "texture": "#dome"
+        },
+        "up": {
+          "texture": "#dome"
+        },
+        "down": {
+          "texture": "#dome"
+        }
+      }
     },
-    "up": {
-     "texture": "#mount"
+    {
+      "name": "dome_2",
+      "from": [8.9, 13.1, 2.4],
+      "to": [13.6, 13.9, 7.1],
+      "faces": {
+        "north": {
+          "texture": "#dome"
+        },
+        "south": {
+          "texture": "#dome"
+        },
+        "east": {
+          "texture": "#dome"
+        },
+        "west": {
+          "texture": "#dome"
+        },
+        "up": {
+          "texture": "#dome"
+        },
+        "down": {
+          "texture": "#dome"
+        }
+      }
     },
-    "down": {
-     "texture": "#mount"
+    {
+      "name": "dome_3",
+      "from": [9.6, 12.5, 3.1],
+      "to": [12.9, 13.1, 6.4],
+      "faces": {
+        "north": {
+          "texture": "#dome"
+        },
+        "south": {
+          "texture": "#dome"
+        },
+        "east": {
+          "texture": "#dome"
+        },
+        "west": {
+          "texture": "#dome"
+        },
+        "up": {
+          "texture": "#dome"
+        },
+        "down": {
+          "texture": "#dome"
+        }
+      }
     }
-   }
-  },
-  {
-   "name": "lens",
-   "from": [
-    10.2,
-    12.6,
-    3.7
-   ],
-   "to": [
-    12.3,
-    14.4,
-    5.8
-   ],
-   "faces": {
-    "north": {
-     "texture": "#lens"
-    },
-    "south": {
-     "texture": "#lens"
-    },
-    "east": {
-     "texture": "#lens"
-    },
-    "west": {
-     "texture": "#lens"
-    },
-    "up": {
-     "texture": "#lens"
-    },
-    "down": {
-     "texture": "#lens"
-    }
-   }
-  },
-  {
-   "name": "dome_1",
-   "from": [
-    8.4,
-    13.9,
-    1.9
-   ],
-   "to": [
-    14.1,
-    14.8,
-    7.6
-   ],
-   "faces": {
-    "north": {
-     "texture": "#dome"
-    },
-    "south": {
-     "texture": "#dome"
-    },
-    "east": {
-     "texture": "#dome"
-    },
-    "west": {
-     "texture": "#dome"
-    },
-    "up": {
-     "texture": "#dome"
-    },
-    "down": {
-     "texture": "#dome"
-    }
-   }
-  },
-  {
-   "name": "dome_2",
-   "from": [
-    8.9,
-    13.1,
-    2.4
-   ],
-   "to": [
-    13.6,
-    13.9,
-    7.1
-   ],
-   "faces": {
-    "north": {
-     "texture": "#dome"
-    },
-    "south": {
-     "texture": "#dome"
-    },
-    "east": {
-     "texture": "#dome"
-    },
-    "west": {
-     "texture": "#dome"
-    },
-    "up": {
-     "texture": "#dome"
-    },
-    "down": {
-     "texture": "#dome"
-    }
-   }
-  },
-  {
-   "name": "dome_3",
-   "from": [
-    9.6,
-    12.5,
-    3.1
-   ],
-   "to": [
-    12.9,
-    13.1,
-    6.4
-   ],
-   "faces": {
-    "north": {
-     "texture": "#dome"
-    },
-    "south": {
-     "texture": "#dome"
-    },
-    "east": {
-     "texture": "#dome"
-    },
-    "west": {
-     "texture": "#dome"
-    },
-    "up": {
-     "texture": "#dome"
-    },
-    "down": {
-     "texture": "#dome"
-    }
-   }
-  }
- ]
+  ]
 }

@@ -2,9 +2,9 @@
   "name": "film-kit",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "Motion and camera building blocks for films drawn with draw(t): pure functions of film time",
   "license": "MIT",
+  "type": "module",
   "exports": {
     "./curve": "./src/curve.ts",
     "./spring": "./src/spring.ts",
@@ -50,10 +50,10 @@
     "demo": "cd ../film-kit-demo && bun run demo"
   },
   "dependencies": {
-    "math": "0.1.0"
+    "math": "catalog:"
   },
   "devDependencies": {
-    "@types/three": "^0.187.0",
-    "three": "0.186.1"
+    "@types/three": "catalog:",
+    "three": "catalog:"
   }
 }

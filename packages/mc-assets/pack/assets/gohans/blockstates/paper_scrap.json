@@ -1,7 +1,7 @@
 {
- "variants": {
-  "": {
-   "model": "gohans:block/paper_scrap"
+  "variants": {
+    "": {
+      "model": "gohans:block/paper_scrap"
+    }
   }
- }
 }

@@ -7,5 +7,8 @@ import { join } from "node:path";
 const bmr = join(import.meta.dirname, "node_modules/block-model-renderer");
 const pub = join(process.cwd(), "assets/public");
 mkdirSync(join(pub, "vendor"), { recursive: true });
-copyFileSync(join(bmr, "dist/block_model_renderer_bg.wasm"), join(pub, "block_model_renderer_bg.wasm"));
+copyFileSync(
+  join(bmr, "dist/block_model_renderer_bg.wasm"),
+  join(pub, "block_model_renderer_bg.wasm"),
+);
 copyFileSync(join(bmr, "assets.zip"), join(pub, "vendor/bmr_assets.zip"));

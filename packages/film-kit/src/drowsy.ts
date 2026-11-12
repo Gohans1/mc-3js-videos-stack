@@ -10,9 +10,13 @@
 //   gaze(shifts, end, { slow: (t) => 1 + DROWSY.slow * d(t) })
 // d(t): 0 wide awake .. 1 barely awake. Eyes and lids only, so it is safe over mocap clips.
 export const DROWSY = {
-  down: 0.3, up: 1, shut: 0.1, // at full drowsiness: closing x1.3, reopening x2, +0.1 s shut (a blink about twice as long)
-  long: 0.25, longShut: [0.5, 1.2], // chance of a long closure, and how long it stays shut (s)
-  partial: 0.3, depth: [0.55, 0.85], // chance of a partial blink, and how far it closes
+  down: 0.3,
+  up: 1,
+  shut: 0.1, // at full drowsiness: closing x1.3, reopening x2, +0.1 s shut (a blink about twice as long)
+  long: 0.25,
+  longShut: [0.5, 1.2], // chance of a long closure, and how long it stays shut (s)
+  partial: 0.3,
+  depth: [0.55, 0.85], // chance of a partial blink, and how far it closes
   droop: 0.35, // openness lost between blinks
   slow: 0.6, // saccades this much longer
   wake: 1.5, // the first opening after sleep, times a drowsy reopening
@@ -21,21 +25,39 @@ export const DROWSY = {
 
 export type BlinkShape = { down: number; shut: number; up: number; depth: number };
 // the shape of one blink at drowsiness d; r: three numbers 0..1 that make it this blink (from a hash)
-export function drowsyBlink(base: { down: number; shut: number; up: number }, d: number, r: [number, number, number], o = DROWSY): BlinkShape {
+export function drowsyBlink(
+  base: { down: number; shut: number; up: number },
+  d: number,
+  r: [number, number, number],
+  o = DROWSY,
+): BlinkShape {
   const k = Math.min(1, Math.max(0, d));
-  const s: BlinkShape = { down: base.down * (1 + o.down * k), shut: base.shut + o.shut * k, up: base.up * (1 + o.up * k), depth: 1 };
+  const s: BlinkShape = {
+    down: base.down * (1 + o.down * k),
+    shut: base.shut + o.shut * k,
+    up: base.up * (1 + o.up * k),
+    depth: 1,
+  };
   if (r[0] < o.long * k) s.shut = o.longShut[0] + (o.longShut[1] - o.longShut[0]) * r[1];
   else if (r[0] > 1 - o.partial * k) s.depth = o.depth[0] + (o.depth[1] - o.depth[0]) * r[2];
   return s;
 }
 
-const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
+const smooth = (x: number) => {
+  const u = Math.min(1, Math.max(0, x));
+  return u * u * (3 - 2 * u);
+};
 // a level from keys { t, k }, eased between them, held before the first and after the last
 export function drowsiness(keys: { t: number; k: number }[]) {
   return (t: number) => {
     if (!keys.length) return 0;
     if (t <= keys[0].t) return keys[0].k;
-    for (let i = 1; i < keys.length; i++) if (t < keys[i].t) { const a = keys[i - 1], b = keys[i]; return a.k + (b.k - a.k) * smooth((t - a.t) / (b.t - a.t)); }
+    for (let i = 1; i < keys.length; i++)
+      if (t < keys[i].t) {
+        const a = keys[i - 1],
+          b = keys[i];
+        return a.k + (b.k - a.k) * smooth((t - a.t) / (b.t - a.t));
+      }
     return keys[keys.length - 1].k;
   };
 }

@@ -1,76 +1,60 @@
 {
- "textures": {
-  "red": "minecraft:block/red_terracotta",
-  "brown": "minecraft:block/brown_terracotta",
-  "pages": "minecraft:block/sandstone_top",
-  "particle": "minecraft:block/red_terracotta"
- },
- "elements": [
-  {
-   "name": "red_book",
-   "from": [
-    11.5,
-    8.6,
-    12.5
-   ],
-   "to": [
-    13.5,
-    15.2,
-    16
-   ],
-   "faces": {
-    "north": {
-     "texture": "#red"
-    },
-    "south": {
-     "texture": "#red"
-    },
-    "east": {
-     "texture": "#red"
-    },
-    "west": {
-     "texture": "#red"
-    },
-    "up": {
-     "texture": "#pages"
-    },
-    "down": {
-     "texture": "#pages"
-    }
-   }
+  "textures": {
+    "red": "minecraft:block/red_terracotta",
+    "brown": "minecraft:block/brown_terracotta",
+    "pages": "minecraft:block/sandstone_top",
+    "particle": "minecraft:block/red_terracotta"
   },
-  {
-   "name": "brown_book",
-   "from": [
-    6.5,
-    8.6,
-    13.6
-   ],
-   "to": [
-    8.7,
-    14.6,
-    16
-   ],
-   "faces": {
-    "north": {
-     "texture": "#brown"
+  "elements": [
+    {
+      "name": "red_book",
+      "from": [11.5, 8.6, 12.5],
+      "to": [13.5, 15.2, 16],
+      "faces": {
+        "north": {
+          "texture": "#red"
+        },
+        "south": {
+          "texture": "#red"
+        },
+        "east": {
+          "texture": "#red"
+        },
+        "west": {
+          "texture": "#red"
+        },
+        "up": {
+          "texture": "#pages"
+        },
+        "down": {
+          "texture": "#pages"
+        }
+      }
     },
-    "south": {
-     "texture": "#brown"
-    },
-    "east": {
-     "texture": "#brown"
-    },
-    "west": {
-     "texture": "#brown"
-    },
-    "up": {
-     "texture": "#pages"
-    },
-    "down": {
-     "texture": "#pages"
+    {
+      "name": "brown_book",
+      "from": [6.5, 8.6, 13.6],
+      "to": [8.7, 14.6, 16],
+      "faces": {
+        "north": {
+          "texture": "#brown"
+        },
+        "south": {
+          "texture": "#brown"
+        },
+        "east": {
+          "texture": "#brown"
+        },
+        "west": {
+          "texture": "#brown"
+        },
+        "up": {
+          "texture": "#pages"
+        },
+        "down": {
+          "texture": "#pages"
+        }
+      }
     }
-   }
-  }
- ]
+  ]
 }

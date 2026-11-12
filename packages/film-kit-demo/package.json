@@ -1,19 +1,19 @@
 {
   "name": "film-kit-demo",
   "private": true,
-  "type": "module",
   "description": "film-kit's demo page on Steve (localhost:4350), a sibling package: inside film-kit's folder, or listed as a film-kit dependency, its mc-actor link would loop (mc-actor depends on film-kit)",
+  "type": "module",
   "scripts": {
     "demo": "bun setup.ts && vite"
   },
   "dependencies": {
     "film-kit": "workspace:*",
     "mc-actor": "workspace:*",
-    "three": "0.186.1"
+    "three": "catalog:"
   },
   "devDependencies": {
-    "@types/three": "^0.187.0",
-    "fflate": "^0.8.3",
-    "vite": "^8.3.6"
+    "@types/three": "catalog:",
+    "fflate": "catalog:",
+    "vite": "catalog:"
   }
 }

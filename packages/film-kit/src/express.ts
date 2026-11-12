@@ -11,26 +11,66 @@
 // The key time is when the change starts. A key that comes before the last change has finished starts from wherever
 // the face is then, so nothing pops. A move into a calm face (a mood with no kind) takes the old mood's offset time.
 export const EXPRESS = {
-  onset: { surprise: 0.515, fear: 0.565, anger: 0.78, disgust: 0.78, joy: 0.78, sadness: 0.99 } as Record<string, number>,
-  offset: { surprise: 0.98, fear: 1.27, anger: 1.27, disgust: 1.27, joy: 1.27, sadness: 1.52 } as Record<string, number>,
+  onset: {
+    surprise: 0.515,
+    fear: 0.565,
+    anger: 0.78,
+    disgust: 0.78,
+    joy: 0.78,
+    sadness: 0.99,
+  } as Record<string, number>,
+  offset: {
+    surprise: 0.98,
+    fear: 1.27,
+    anger: 1.27,
+    disgust: 1.27,
+    joy: 1.27,
+    sadness: 1.52,
+  } as Record<string, number>,
   calm: 0.8, // s, calm into calm
   fear: { brow: 0, mouth: 0.15, eyes: 0.3 }, // each part's start, as a share of the change; each part takes the rest
 };
 // face fields by part (brows, mouth, eyes), for the fear order; anything else moves with the whole
-export const PART: Record<string, string> = { y: "brow", tilt: "brow", L: "brow", R: "brow", smile: "mouth", open: "eyes", squint: "eyes", pupil: "eyes" };
+export const PART: Record<string, string> = {
+  y: "brow",
+  tilt: "brow",
+  L: "brow",
+  R: "brow",
+  smile: "mouth",
+  open: "eyes",
+  squint: "eyes",
+  pupil: "eyes",
+};
 // the kind of emotion of the film-kit demo's mood names (and the film's): a mood not here is calm
 export const KIND: Record<string, string> = {
-  surprised: "surprise", scared: "fear", worried: "fear", uneasy: "fear", sad: "sadness",
-  happy: "joy", proud: "joy", smug: "joy", angry: "anger", annoyed: "anger", seething: "anger", restless: "anger", unimpressed: "disgust",
+  surprised: "surprise",
+  scared: "fear",
+  worried: "fear",
+  uneasy: "fear",
+  sad: "sadness",
+  happy: "joy",
+  proud: "joy",
+  smug: "joy",
+  angry: "anger",
+  annoyed: "anger",
+  seething: "anger",
+  restless: "anger",
+  unimpressed: "disgust",
 };
 
 type Face = { [k: string]: number | Face };
-const minJerk = (u: number) => { const x = Math.min(1, Math.max(0, u)); return x * x * x * (10 + x * (-15 + 6 * x)); };
+const minJerk = (u: number) => {
+  const x = Math.min(1, Math.max(0, u));
+  return x * x * x * (10 + x * (-15 + 6 * x));
+};
 const mix = (a: Face, b: Face, k: (field: string) => number, part = ""): Face => {
   const out: Face = {};
   for (const f of new Set([...Object.keys(a), ...Object.keys(b)])) {
-    const x = a[f], y = b[f], p = part || f;
-    if (typeof x === "object" || typeof y === "object") out[f] = mix((x as Face) ?? {}, (y as Face) ?? {}, k, p);
+    const x = a[f],
+      y = b[f],
+      p = part || f;
+    if (typeof x === "object" || typeof y === "object")
+      out[f] = mix((x as Face) ?? {}, (y as Face) ?? {}, k, p);
     else out[f] = ((x as number) ?? 0) + (((y as number) ?? 0) - ((x as number) ?? 0)) * k(p);
   }
   return out;
@@ -38,19 +78,34 @@ const mix = (a: Face, b: Face, k: (field: string) => number, part = ""): Face =>
 
 // how long the change from mood `a` to mood `b` takes
 export const changeTime = (a: string, b: string, kind = KIND, tempo = 1) => {
-  const kb = kind[b], ka = kind[a];
-  return tempo * (kb ? EXPRESS.onset[kb] ?? EXPRESS.calm : ka ? EXPRESS.offset[ka] ?? EXPRESS.calm : EXPRESS.calm);
+  const kb = kind[b],
+    ka = kind[a];
+  return (
+    tempo *
+    (kb
+      ? (EXPRESS.onset[kb] ?? EXPRESS.calm)
+      : ka
+        ? (EXPRESS.offset[ka] ?? EXPRESS.calm)
+        : EXPRESS.calm)
+  );
 };
 
-export function express(keys: { t: number; mood: string }[], moods: Record<string, Face>, { kind = KIND, tempo = 1, order = true } = {}) {
+export function express(
+  keys: { t: number; mood: string }[],
+  moods: Record<string, Face>,
+  { kind = KIND, tempo = 1, order = true } = {},
+) {
   const of = (n: string) => moods[n] ?? moods.neutral ?? {};
   // the face where each change starts (the last change may not have finished), and how long each takes
-  const from: Face[] = [], dur: number[] = [];
+  const from: Face[] = [],
+    dur: number[] = [];
   const during = (i: number, t: number): Face => {
     if (i === 0) return mix(of(keys[0].mood), {}, () => 0); // a copy: callers may change what they get
-    const T = dur[i], fear = order && kind[keys[i].mood] === "fear", u = (t - keys[i].t) / T;
+    const T = dur[i],
+      fear = order && kind[keys[i].mood] === "fear",
+      u = (t - keys[i].t) / T;
     const k = (p: string) => {
-      const s = fear ? (EXPRESS.fear as Record<string, number>)[PART[p] ?? ""] ?? 0 : 0;
+      const s = fear ? ((EXPRESS.fear as Record<string, number>)[PART[p] ?? ""] ?? 0) : 0;
       return minJerk((u - s) / (1 - s));
     };
     return mix(from[i], of(keys[i].mood), k);

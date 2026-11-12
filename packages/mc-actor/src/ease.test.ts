@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
+
 import { walkEase } from "./ease";
 
-const speed = (x: number, dur: number, h = 1e-4) => (walkEase(Math.min(1, x + h), dur) - walkEase(Math.max(0, x - h), dur)) / (Math.min(1, x + h) - Math.max(0, x - h));
+const speed = (x: number, dur: number, h = 1e-4) =>
+  (walkEase(Math.min(1, x + h), dur) - walkEase(Math.max(0, x - h), dur)) /
+  (Math.min(1, x + h) - Math.max(0, x - h));
 
 test("a walk starts and stops at rest, never dead", () => {
   for (const dur of [0.8, 2.5, 6]) {
@@ -14,7 +17,11 @@ test("a walk starts and stops at rest, never dead", () => {
 
 test("it only ever goes forward, at one pace between the ramps", () => {
   let last = 0;
-  for (let x = 0.001; x <= 1; x += 0.001) { const k = walkEase(x, 2.5); expect(k).toBeGreaterThanOrEqual(last); last = k; }
+  for (let x = 0.001; x <= 1; x += 0.001) {
+    const k = walkEase(x, 2.5);
+    expect(k).toBeGreaterThanOrEqual(last);
+    last = k;
+  }
   expect(speed(0.5, 6)).toBeCloseTo(speed(0.7, 6), 6);
 });
 

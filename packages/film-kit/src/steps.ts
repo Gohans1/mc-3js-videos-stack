@@ -32,34 +32,83 @@ export const SOUND_TYPE: Record<string, { volume: number; pitch: number }> = {
 };
 // a few common blocks' sound types; check a new entry against minecraft.wiki/w/Block_sound_type, which lists every block
 export const BLOCK_SOUND: Record<string, string> = {
-  stone: "stone", cobblestone: "stone", deepslate: "deepslate", bricks: "stone", andesite: "stone", stone_bricks: "stone",
-  dirt: "gravel", gravel: "gravel", grass_block: "grass", sand: "sand", red_sand: "sand", snow_block: "snow", clay: "gravel",
-  oak_planks: "wood", spruce_planks: "wood", oak_log: "wood", crafting_table: "wood", bookshelf: "wood", chest: "wood",
-  white_wool: "wool", glass: "glass", iron_block: "metal", iron_door: "metal", anvil: "anvil", ladder: "ladder",
-  netherrack: "netherrack", soul_sand: "soul_sand", moss_block: "moss", ice: "glass", packed_ice: "glass",
-  white_carpet: "wool", snow: "snow", moss_carpet: "moss_carpet",
+  stone: "stone",
+  cobblestone: "stone",
+  deepslate: "deepslate",
+  bricks: "stone",
+  andesite: "stone",
+  stone_bricks: "stone",
+  dirt: "gravel",
+  gravel: "gravel",
+  grass_block: "grass",
+  sand: "sand",
+  red_sand: "sand",
+  snow_block: "snow",
+  clay: "gravel",
+  oak_planks: "wood",
+  spruce_planks: "wood",
+  oak_log: "wood",
+  crafting_table: "wood",
+  bookshelf: "wood",
+  chest: "wood",
+  white_wool: "wool",
+  glass: "glass",
+  iron_block: "metal",
+  iron_door: "metal",
+  anvil: "anvil",
+  ladder: "ladder",
+  netherrack: "netherrack",
+  soul_sand: "soul_sand",
+  moss_block: "moss",
+  ice: "glass",
+  packed_ice: "glass",
+  white_carpet: "wool",
+  snow: "snow",
+  moss_carpet: "moss_carpet",
 };
 // blocks that let the block under them be heard (Java's combination_step_sound_blocks)
-export const LAYERED = new Set(["carpet", "snow", "moss_carpet", "crimson_roots", "warped_roots", "nether_sprouts"]);
+export const LAYERED = new Set([
+  "carpet",
+  "snow",
+  "moss_carpet",
+  "crimson_roots",
+  "warped_roots",
+  "nether_sprouts",
+]);
 
 type V3 = [number, number, number];
 const HZ = 120;
 
 export type Step = { t: number; foot: string; at: V3; speed: number };
 // heel strikes: a sole that was off the floor (or moving) comes down within `lift` and slows under `still`
-export function contacts(soles: Record<string, (t: number) => V3>, end: number, { ground = 0 as number | ((x: number, z: number) => number), from = 0 } = {}) {
+export function contacts(
+  soles: Record<string, (t: number) => V3>,
+  end: number,
+  { ground = 0 as number | ((x: number, z: number) => number), from = 0 } = {},
+) {
   const fl = (x: number, z: number) => (typeof ground === "number" ? ground : ground(x, z));
   const out: Step[] = [];
   for (const [foot, at] of Object.entries(soles)) {
-    let prev = at(from), down = true, last = -1e9, peak = 0;
+    let prev = at(from),
+      down = true,
+      last = -1e9,
+      peak = 0;
     for (let i = 1; i <= Math.ceil((end - from) * HZ); i++) {
-      const t = from + i / HZ, p = at(t);
+      const t = from + i / HZ,
+        p = at(t);
       const v = Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]) * HZ;
       const low = p[1] - fl(p[0], p[2]) <= STEP.lift;
-      if (!low || v > STEP.still) { if (down && !low) down = false; peak = Math.max(peak, v); }
+      if (!low || v > STEP.still) {
+        if (down && !low) down = false;
+        peak = Math.max(peak, v);
+      }
       if (!down && low && v <= STEP.still * 2) {
-        if (t - last >= STEP.gap) { out.push({ t, foot, at: p, speed: peak }); last = t; }
-        down = true; peak = 0;
+        if (t - last >= STEP.gap) {
+          out.push({ t, foot, at: p, speed: peak });
+          last = t;
+        }
+        down = true;
+        peak = 0;
       }
       prev = p;
     }
@@ -68,19 +117,31 @@ export function contacts(soles: Record<string, (t: number) => V3>, end: number, 
 }
 
 // the game's step rhythm from how far he has walked: walked(t) in blocks (horizontal), at(t) where he is
-export function gameSteps(walked: (t: number) => number, at: (t: number) => V3, end: number, { from = 0 } = {}) {
+export function gameSteps(
+  walked: (t: number) => number,
+  at: (t: number) => V3,
+  end: number,
+  { from = 0 } = {},
+) {
   const out: Step[] = [];
   let next = Math.floor(walked(from) / STEP.every) + 1;
   for (let i = 1; i <= Math.ceil((end - from) * HZ); i++) {
     const t = from + i / HZ;
-    if (walked(t) / STEP.every > next) { out.push({ t, foot: out.length % 2 ? "R" : "L", at: at(t), speed: 0 }); next = Math.floor(walked(t) / STEP.every) + 1; }
+    if (walked(t) / STEP.every > next) {
+      out.push({ t, foot: out.length % 2 ? "R" : "L", at: at(t), speed: 0 });
+      next = Math.floor(walked(t) / STEP.every) + 1;
+    }
   }
   return out;
 }
 
 // what each step sounds like: blockAt(x, y, z) names the block the sole is on (asked 0.2 below the sole, as the game
 // does); a block in LAYERED plays its own step and, muffled, the step of the block under it (asked 1 block lower)
-export function stepSounds(steps: Step[], blockAt: (x: number, y: number, z: number) => string, { seed = 3, variants = STEP.variants } = {}) {
+export function stepSounds(
+  steps: Step[],
+  blockAt: (x: number, y: number, z: number) => string,
+  { seed = 3, variants = STEP.variants } = {},
+) {
   const last: Record<string, number> = {};
   let n = 0;
   const sound = (s: Step, block: string, muffled: boolean) => {
@@ -88,9 +149,16 @@ export function stepSounds(steps: Step[], blockAt: (x: number, y: number, z: num
     const T = SOUND_TYPE[type] ?? { volume: 1, pitch: 1 };
     let v = Math.floor(hash(n, seed) * variants);
     if (v === last[type]) v = (v + 1 + Math.floor(hash(n, seed + 1) * (variants - 1))) % variants;
-    last[type] = v; n++;
+    last[type] = v;
+    n++;
     return {
-      t: s.t, foot: s.foot, at: s.at, block, type, event: `block.${type}.step`, variant: v,
+      t: s.t,
+      foot: s.foot,
+      at: s.at,
+      block,
+      type,
+      event: `block.${type}.step`,
+      variant: v,
       volume: STEP.volume * T.volume * (muffled ? STEP.layered.volume : 1),
       pitch: T.pitch * (muffled ? STEP.layered.pitch : 1),
     };

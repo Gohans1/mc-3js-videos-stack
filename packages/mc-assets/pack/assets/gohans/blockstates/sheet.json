@@ -1,7 +1,7 @@
 {
- "variants": {
-  "": {
-   "model": "gohans:block/sheet"
+  "variants": {
+    "": {
+      "model": "gohans:block/sheet"
+    }
   }
- }
 }

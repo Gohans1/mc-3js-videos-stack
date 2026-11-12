@@ -13,7 +13,10 @@ export const EXPLORE = {
   wander: 2.2, // how far fixations stray at full ambient, times the usual
 };
 
-const smooth = (x: number) => { const u = Math.min(1, Math.max(0, x)); return u * u * (3 - 2 * u); };
+const smooth = (x: number) => {
+  const u = Math.min(1, Math.max(0, x));
+  return u * u * (3 - 2 * u);
+};
 
 export function explore(starts: number[], o = EXPLORE) {
   const amb = (t: number) => {

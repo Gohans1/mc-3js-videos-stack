@@ -1,19 +1,19 @@
 {
- "variants": {
-  "facing=north": {
-   "model": "gohans:block/submit_slot"
-  },
-  "facing=east": {
-   "model": "gohans:block/submit_slot",
-   "y": 90
-  },
-  "facing=south": {
-   "model": "gohans:block/submit_slot",
-   "y": 180
-  },
-  "facing=west": {
-   "model": "gohans:block/submit_slot",
-   "y": 270
+  "variants": {
+    "facing=north": {
+      "model": "gohans:block/submit_slot"
+    },
+    "facing=east": {
+      "model": "gohans:block/submit_slot",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "gohans:block/submit_slot",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "gohans:block/submit_slot",
+      "y": 270
+    }
   }
- }
 }

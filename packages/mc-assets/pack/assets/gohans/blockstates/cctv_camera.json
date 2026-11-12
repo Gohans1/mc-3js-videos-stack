@@ -1,7 +1,7 @@
 {
- "variants": {
-  "": {
-   "model": "gohans:block/cctv_camera"
+  "variants": {
+    "": {
+      "model": "gohans:block/cctv_camera"
+    }
   }
- }
 }
