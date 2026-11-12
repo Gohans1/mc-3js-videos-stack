@@ -39,8 +39,9 @@ Nothing is written outside the film. Options are environment variables:
                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot
   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
   SAMPLES=16                 sub-frames a frame for clip or final (1-64; clip 1, final 8): more is smoother blur, slower
-  RES=2160                   final only: 1440 (default), 2160 or 1080 lines. YouTube re-encodes a 1440p or bigger upload
-                             in VP9, sharper even for viewers at 1080p; a 1080p upload gets H.264
+  RES=2160                   final only: 1440 (default), 2160 or 1080 lines (the short side). YouTube re-encodes a 1440p or
+                             bigger upload in VP9, sharper even for viewers at 1080p; a 1080p upload gets H.264. A Shorts
+                             film defaults to 1080 (1080x1920, as big as Shorts play)
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
@@ -56,7 +57,8 @@ Examples:
   CHUNKS=3 bun run render clip
   bun run render final        then bun run mix renders/final_video.mp4 puts the soundtrack on it
 package.json "live-studio": { "chrome": path } names the headless Chrome (default tools/chrome-headless-shell/...);
-{ "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.`;
+{ "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.
+Why each setting, YouTube's spec, what survives its re-encode, how to render faster: packages/live-studio/RENDER.md.`;
 // its options are environment variables: --at 12 is the flag form an AI tries first
 const ENV_OPTIONS = ["AT", "LIST", "CHUNKS", "INSPECT", "CHECK", "ENTRY", "SAMPLES", "RES"];
 const TARGETS = ["stills", "clip", "captions", "all", "final"];
@@ -199,9 +201,11 @@ const samples = env.SAMPLES
     : 1;
 // YouTube's upload table for 30 fps (8, 16, 35-45 Mbps), doubled: the GPU's encoder spends bits less well than x264
 const FINAL_SIZES = { 1080: [1920, 16e6], 1440: [2560, 32e6], 2160: [3840, 60e6] };
-const res = env.RES ?? "1440";
+const res = env.RES ?? (ratioOf(pkg) === "9:16" ? "1080" : "1440");
 if (final && !FINAL_SIZES[res]) {
-  console.error(`RES is 1440 (the default), 2160 or 1080, got ${JSON.stringify(env.RES)}`);
+  console.error(
+    `RES is 1440 (the default; 1080 for Shorts), 2160 or 1080, got ${JSON.stringify(env.RES)}`,
+  );
   process.exit(2);
 }
 // A second past the end, or a CHECK range that runs backwards, is refused here: the page would say it too, after the scene build

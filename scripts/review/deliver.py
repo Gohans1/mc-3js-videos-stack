@@ -13,7 +13,7 @@ Checked: MP4 with the moov atom up front and no edit lists, H.264 High 8-bit 4:2
 keyframe at least every second, 1440p or 2160p (Shorts: 1080x1920, 3 min at most), AAC stereo 48 kHz (asked at 384 kbps: bun run mix
 asks that; ffmpeg's AAC lands under it on purpose, so the rate is shown, not judged), sound as long
 as the picture, -14 LUFS (YouTube turns louder down, never quieter up) with true peak at -1 dBTP or under.
-Exit 0 ready, 1 something to fix (each FIX line), 2 a wrong word."""
+Exit 0 ready, 1 something to fix (each FIX line), 2 a wrong word. Why these numbers: packages/live-studio/RENDER.md."""
 import json
 import os
 import re
@@ -126,8 +126,10 @@ def check(video, info):
         fix(f"{w}x{h} has an odd side: 4:2:0 needs both even")
     long = float(info["format"].get("duration") or pic.get("duration") or 0)
     if h > w:
-        if (w, h) != (1080, 1920):
+        if w < 1080 or h * 9 != w * 16:
             fix(f"{w}x{h} upright: a Short is 1080x1920 (9:16); bun run render final with package.json live-studio.ratio 9:16")
+        elif w > 1080:
+            advise(f"{w}x{h}: Shorts play at 1080x1920 at most; render final makes 1080x1920 for a Shorts film unless RES says more")
         if long > SHORTS_LONGEST:
             fix(f"{long:.0f} s upright: a Short is {SHORTS_LONGEST // 60} min at most, longer plays as an ordinary video")
     elif min(w, h) < 1080:
