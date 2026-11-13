@@ -19,7 +19,8 @@ import { sts, tts } from "./genvoice.ts";
 
 const HELP = `Narration takes for the lines in src/edit.json "takes", from ElevenLabs (via genvoice.pro unless ELEVENLABS_API_KEY
 is set). Run inside the film. Credits are spent only with --yes; without it every run only previews.
-  bun run voice:gen               every take with no audio yet in voice/takes: what it would write and spend
+  bun run voice:gen               every take with no audio yet in voice/takes, or whose words changed since: what it
+                                  would write and spend
   bun run voice:gen ID [ID ...]   those takes again, replacing their audio
   --try ID [ID ...] [--takes N]   new tries of those takes (N each, 1-20) into voice/try/<id>_<n>.mp3, the takes kept
   --guide FILE        speech-to-speech from this recording (exactly one ID; take.guide sets it per take)
@@ -160,11 +161,17 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   mkdirSync(takesDir, { recursive: true });
   mkdirSync(tryDir, { recursive: true });
 
+  // the words each take's audio was made from: a take whose words changed since is due again (a take made before this
+  // file existed is not known, so not offered)
+  const textsFile = assertInsideDir(filmDir, join(takesDir, ".texts.json"), "Take texts file");
+  const spoken: Record<string, string> = existsSync(textsFile) ? jsonFile(textsFile, filmDir) : {};
+  const reworded = (t: TakeSpec) =>
+    hasTakeAudio(takesDir, t.id) && spoken[t.id] !== undefined && spoken[t.id] !== t.text;
   const want = names.length
     ? names
     : trying
       ? ordered.map((t) => t.id)
-      : ordered.filter((t) => !hasTakeAudio(takesDir, t.id)).map((t) => t.id);
+      : ordered.filter((t) => !hasTakeAudio(takesDir, t.id) || reworded(t)).map((t) => t.id);
   const wantSet = new Set(want);
 
   // checked before a dry run returns, so the dry run says what the real one would fail on
@@ -193,7 +200,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
           id: t.id,
           out: trying
             ? `would write voice/try/${t.id}_${first + k}.mp3`
-            : `would write ${rel(join(takesDir, `${t.id}.mp3`))}${hasTakeAudio(takesDir, t.id) ? ", replacing its audio" : ""}`,
+            : `would write ${rel(join(takesDir, `${t.id}.mp3`))}${hasTakeAudio(takesDir, t.id) ? `, replacing its audio${reworded(t) ? ": its words changed since" : ""}` : ""}`,
           info: { chars: t.text.length, voice: t.voice ?? DEFAULT_NARRATOR },
         }));
       });
@@ -209,6 +216,11 @@ export const runGen = async (opts: GenRunOptions = {}) => {
       JSON.stringify(reqIds, null, 1) + "\n",
       "utf8",
     );
+
+  const saveSpoken = (t: TakeSpec) => {
+    spoken[t.id] = t.text;
+    writeFileSync(textsFile, JSON.stringify(spoken, null, 1) + "\n", "utf8");
+  };
 
   const provider = env.ELEVENLABS_API_KEY ? "elevenlabs" : "genvoice";
   const apiKey = provider === "elevenlabs" ? env.ELEVENLABS_API_KEY : env.GENVOICE_API_KEY;
@@ -269,6 +281,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
         if (!trying) {
           rmSync(staleWav, { force: true });
           rmSync(staleWords, { force: true });
+          saveSpoken(t);
           if (info.requestId) {
             reqIds[t.id] = {
               id: info.requestId,
@@ -301,6 +314,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
         if (!trying) {
           rmSync(staleWav, { force: true });
           rmSync(staleWords, { force: true });
+          saveSpoken(t);
           if (info.requestId) {
             reqIds[t.id] = { id: info.requestId, at: Date.now(), voiceId, model };
             saveReqIds();

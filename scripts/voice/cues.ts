@@ -1,7 +1,7 @@
 // Audio-Lock Word & Silence-Gap GPS: reads the current Phrase Bricks on src/timeline/audio.json plus Speed/Freeze/Cuts
 // in src/timeline/timing.json and outputs the exact heard seconds of every line, word, and silent breathing gap.
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
@@ -109,7 +109,21 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
       afterLine: lines.length - 1,
     });
 
-  return { duration: r3(clock.duration), lines, gaps };
+  // takes newer than the assembled voice: their words are read at the old take's place, cut to its length
+  const takesDir = join(root, "voice/takes");
+  const unplaced =
+    existsSync(voiceWav) && existsSync(takesDir)
+      ? readdirSync(takesDir)
+          .filter(
+            (f) =>
+              /^[^.].*\.(mp3|wav)$/.test(f) &&
+              statSync(join(takesDir, f)).mtimeMs > statSync(voiceWav).mtimeMs,
+          )
+          .map((f) => f.replace(/\.(mp3|wav)$/, ""))
+          .sort()
+      : [];
+
+  return { duration: r3(clock.duration), lines, gaps, unplaced };
 };
 
 const HELP = `The heard second of every narration line, word and silent gap, after the Phrase Bricks in src/timeline/audio.json
@@ -140,6 +154,10 @@ if (isMain) {
         : "no narration lines yet: bun run voice:gen (what it would make), then voice:gen --yes, then voice:assemble",
     );
   }
+  if (cues.lines.length && cues.unplaced.length)
+    console.error(
+      `⚠ take${cues.unplaced.length > 1 ? "s" : ""} ${cues.unplaced.join(", ")} newer than the film's voice: ${cues.unplaced.length > 1 ? "their" : "its"} words below sit at the old take's place, cut to its length. bun run voice:assemble lays ${cues.unplaced.length > 1 ? "them" : "it"} on the film, then this again`,
+    );
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(cues, null, 2));
   } else {

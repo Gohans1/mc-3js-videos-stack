@@ -268,6 +268,6 @@ if (isMain) {
   });
   console.log("full_voice.wav", res.lines.length, "takes,", res.bricksWritten, "phrase bricks");
   console.log(
-    "next: bun run voice:cues for the second of every line and word; hear it: bun run studio",
+    "next: bun run voice:cues for the second of every line and word; hear it: bun run studio. The draft video gets the new voice through bun run render clip (the picture follows the voice, so every chunk) then bun run mix renders/draft_video.mp4",
   );
 }

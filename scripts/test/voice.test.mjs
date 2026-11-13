@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
@@ -16,6 +17,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { SoundTimeline } from "../../packages/live-studio/src/contract.ts";
+import { voiceFileOf } from "../../packages/live-studio/src/voice-map.mjs";
 import { runAssemble } from "../voice/assemble.ts";
 import { buildVoiceCues } from "../voice/cues.ts";
 import { runGen } from "../voice/gen.ts";
@@ -552,6 +554,31 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   );
   assert.equal(existsSync(join(dir, "voice/takes/01.mp3")), false);
 
+  // 02's words edited after its audio was made: a bare run offers it again, saying why; 01's words were never sent, so unknown
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "01", text: "Already promoted WAV take, reworded." },
+        { id: "02", text: "Needs a second MP3 generation." },
+      ],
+    }),
+  );
+  const changed = await runGen({ cwd: dir, args: [], env: {} });
+  assert.deepEqual(
+    changed.map((r) => [r.id, r.out]),
+    [["02", "would write voice/takes/02.mp3, replacing its audio: its words changed since"]],
+  );
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "01", text: "Already promoted WAV take." },
+        { id: "02", text: "Needs initial MP3 generation." },
+      ],
+    }),
+  );
+
   const tried = await runGen({
     cwd: dir,
     args: ["--yes", "01", "--try"],
@@ -623,6 +650,14 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   );
   const freshCues = buildVoiceCues(dir);
   assert.equal(freshCues.lines[0]?.text, "Fresh line.");
+
+  // a take made after full_voice.wav is not on the film yet: its words read at the old take's place until voice:assemble
+  const wav = voiceFileOf(dir);
+  mkdirSync(dirname(wav), { recursive: true });
+  writeFileSync(wav, "old");
+  utimesSync(wav, new Date(2020, 0, 1), new Date(2020, 0, 1));
+  utimesSync(join(dir, "voice/takes/01.wav"), new Date(2019, 0, 1), new Date(2019, 0, 1));
+  assert.deepEqual(buildVoiceCues(dir).unplaced, ["02"]);
 });
 
 test("alignmentToWords strips ElevenLabs [audio tags], gen.ts --guide requires one take id, and assemble --clips initializes audio.narration", async (t) => {

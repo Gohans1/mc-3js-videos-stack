@@ -83,7 +83,7 @@ envTypos([...ENV_OPTIONS, "LIVE_PROJECT"]); // any LAB_* goes to the lab page as
 if (!TARGETS.includes(what)) {
   const near = what && TARGETS.find((t) => t.startsWith(what.slice(0, 3).toLowerCase()));
   console.error(
-    `${what ? `unknown target ${what}${near ? ` (did you mean ${near}?)` : ""}` : "which render?"}: bun run render stills (seconds), clip (minutes), captions, all, or final (the upload; --help for everything)`,
+    `${what ? `unknown target ${what}${near ? ` (did you mean ${near}?)` : ""}` : `which render?${process.env.CHECK || process.env.AT ? ` (${process.env.CHECK ? "CHECK" : "AT"} goes with stills)` : ""}`}: bun run render stills (seconds), clip (minutes), captions, all, or final (the upload; --help for everything)`,
   );
   process.exit(2);
 }
