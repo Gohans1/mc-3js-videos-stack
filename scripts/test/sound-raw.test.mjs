@@ -269,12 +269,12 @@ test("a torrent pack is marked done as soon as its own download ends, while anot
 });
 
 // An .ogg tone at the given peak level (dBFS), made with ffmpeg
-const tone = (file, db, hz = 660, seconds = 0.2) => {
+const lavfi = (file, expr, seconds) => {
   mkdirSync(join(file, ".."), { recursive: true });
   const r = spawnSync(
     "ffmpeg",
     ["-v", "error", "-y", "-f", "lavfi", "-i"].concat([
-      `aevalsrc=${10 ** (db / 20)}*sin(2*PI*${hz}*t):s=44100:d=${seconds}`,
+      `aevalsrc=${expr}:s=44100:d=${seconds}`,
       "-c:a",
       "libvorbis",
       file,
@@ -283,6 +283,19 @@ const tone = (file, db, hz = 660, seconds = 0.2) => {
   );
   assert.equal(r.status, 0, r.stderr);
 };
+const tone = (file, db, hz = 660, seconds = 0.2) =>
+  lavfi(file, `${10 ** (db / 20)}*sin(2*PI*${hz}*t)`, seconds);
+const secondsOf = (file) =>
+  Number(
+    spawnSync(
+      "ffprobe",
+      ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
+      { encoding: "utf8" },
+    ).stdout,
+  );
+// shots of `long` seconds every 0.9 s
+const shots = (file, long, seconds) =>
+  lavfi(file, `0.3*sin(2*PI*440*t)*lt(mod(t\\,0.9)\\,${long})`, seconds);
 
 async function packFixture(t, sort) {
   const root = mkdtempSync(join(tmpdir(), "sound-raw-build-"));
@@ -441,6 +454,57 @@ test("a title reads as words: its source's noise words, a mono mark and bare com
   await f.build();
   const s = f.sources();
   assert.equal(s["ken-ui-efx-int-rope-creak-taut-03"]?.title, "Rope, creak, taut");
+});
+
+test("a long file of takes is cut at its silences into one sound per take, faded and each at -1 dBFS", async (t) => {
+  const f = await packFixture(t, RULES);
+  // three 0.3 s shots, 0.6 s apart, then a 40 dB quieter blip that is no take: 2.9 s in all, over the 1 s limit
+  lavfi(
+    join(f.pack, "Lib/shots_01.ogg"),
+    "sin(2*PI*440*t)*(0.3*lt(mod(t\\,0.9)\\,0.3)*lt(t\\,2.1)+0.003*between(t\\,2.6\\,2.7))",
+    2.9,
+  );
+  f.write([...RULES, { match: "/shots_", category: "weapons", for: "a shot" }], {
+    maxSeconds: 1,
+  });
+  await f.build();
+  const s = f.sources();
+  const takes = Object.keys(s).filter((n) => n.startsWith("ken-ui-shots-01-take-"));
+  assert.deepEqual(takes.sort(), [
+    "ken-ui-shots-01-take-1",
+    "ken-ui-shots-01-take-2",
+    "ken-ui-shots-01-take-3",
+  ]);
+  assert.deepEqual(
+    takes.map((n) => [s[n].family, s[n].for]),
+    takes.map(() => ["ken-ui-shots", "a shot"]),
+  );
+  const { wavPeaks } = await import("../../packages/live-studio/src/sound.mjs");
+  for (const n of takes) {
+    const wav = join(f.local, `sound/sfx/weapons/${n}.wav`);
+    const seconds = secondsOf(wav);
+    assert.ok(seconds > 0.3 && seconds < 0.55, `${n} holds one shot, got ${seconds} s`);
+    const peak = Math.max(...wavPeaks(wav).peaks);
+    assert.ok(peak > 0.8 && peak < 0.92, `${n} is brought up to -1 dBFS, got ${peak}`);
+  }
+  assert.ok(
+    f.lines.some((l) => /1 files? cut into 3 takes/.test(l)),
+    f.lines.join("\n"),
+  );
+});
+
+test("a take whose cut moves when its file changes is converted again", async (t) => {
+  const f = await packFixture(t, RULES);
+  const file = join(f.pack, "Lib/shots_01.ogg");
+  f.write([...RULES, { match: "/shots_", category: "weapons", for: "a shot" }], {
+    maxSeconds: 1,
+  });
+  shots(file, 0.3, 2.1);
+  await f.build();
+  shots(file, 0.5, 2.3);
+  await f.build();
+  const seconds = secondsOf(join(f.local, "sound/sfx/weapons/ken-ui-shots-01-take-1.wav"));
+  assert.ok(seconds > 0.5, `take 1 holds the new 0.5 s shot, got ${seconds} s`);
 });
 
 test("a sound longer than its source's maxSeconds is left out and counted, unless its rule allows it", async (t) => {

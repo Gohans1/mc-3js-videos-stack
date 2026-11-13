@@ -502,7 +502,7 @@
           "for": "a footstep"
         },
         {
-          "match": "(?i:(?<!one[ _-]?)(?<![a-z])shots?(?![a-z])|(?<![a-z])(guns?|gunshots?|gunfire|rifles?|pistols?|shotguns?|revolvers?|reload(s|ing)?|bullets?|ammo|cannons?|mortars?|swords?|blades?|knife|knives|melee|arrows?|crossbows?|firing|weapons?|uzi|smg|9mm|caliber|cal)(?![a-z]))",
+          "match": "(?i:switchblade|(?<!one[ _-]?)(?<![a-z])shots?(?![a-z])|(?<![a-z])(guns?|gunshots?|gunfire|rifles?|pistols?|shotguns?|revolvers?|reload(s|ing)?|bullets?|ammo|cannons?|mortars?|swords?|blades?|knife|knives|melee|arrows?|crossbows?|firing|weapons?|uzi|smg|9mm|caliber|cal)(?![a-z]))",
           "category": "weapons",
           "for": "a weapon: shot, reload or blade"
         },
@@ -513,12 +513,12 @@
           "for": "a whoosh, riser or transition"
         },
         {
-          "match": "(?i:explo(sion|sions|de|des|ding|sive)|detonat|debris|destruction|firework|(?<![a-z])(blasts?|booms?|crash(es|ing)?)(?![a-z]))",
+          "match": "(?i:explo(sion|sions|de|des|ding|sive)|detonat|debris|destruction|firecracker|firework|(?<![a-z])(blasts?|booms?|crash(es|ing)?)(?![a-z]))",
           "category": "impacts",
           "for": "an explosion, crash or debris"
         },
         {
-          "match": "(?i:impact|punch|smash|thud|crunch|crush|bone ?(break|crack)|body ?fall|(?<![a-z])(hits?|slams?|knocks?|strikes?|gore|stabs?|chops?|thumps?|whacks?|bash(es)?|kicks?|crack(s|ing)?)(?![a-z]))",
+          "match": "(?i:impact|punch|smash|thud|crunch|crush|carcass|(?<![a-z])(blood|guts|flesh)(?![a-z])|bone ?(break|crack)|body ?fall|(?<![a-z])(hits?|slams?|knocks?|strikes?|gore|stabs?|chops?|thumps?|whacks?|bash(es)?|kicks?|crack(s|ing)?)(?![a-z]))",
           "category": "impacts",
           "for": "a hit or impact"
         },
@@ -533,17 +533,17 @@
           "for": "a magic spell or sparkle"
         },
         {
-          "match": "(?i:sci-?fi|futuristic|robot|space ?ship|plasma|force ?field|hologram|cyber|(?<![a-z])(lasers?|blasters?|mechs?|droids?)(?![a-z]))",
+          "match": "(?i:sci-?fi|futuristic|robot|scanner|space ?ship|(?<![a-z])(scans?|robo)(?![a-z])|plasma|force ?field|hologram|cyber|(?<![a-z])(lasers?|blasters?|mechs?|droids?)(?![a-z]))",
           "category": "sci-fi",
           "for": "a sci-fi or laser sound"
         },
         {
-          "match": "(?i:glitch|interference|data corrupt|(?<![a-z])(static|bit ?crush(ed)?)(?![a-z]))",
+          "match": "(?i:glitch|interference|data corrupt|(?<![a-z])(buzz|static|bit ?crush(ed)?)(?![a-z]))",
           "category": "glitch",
           "for": "a digital glitch"
         },
         {
-          "match": "(?i:notification|(?<![a-z])(alerts?|chimes?|dings?|success|errors?|confirm(ation)?|messages?|notify|incoming)(?![a-z]))",
+          "match": "(?i:notification|(?<![a-z])(sirens?|alerts?|chimes?|dings?|success|errors?|confirm(ation)?|messages?|notify|incoming)(?![a-z]))",
           "category": "notifications",
           "for": "a notification or alert"
         },
@@ -553,7 +553,7 @@
           "for": "a camera shutter"
         },
         {
-          "match": "(?i:interface|(?<![a-z])(ui|gui|hud|buttons?|clicks?|blips?|beeps?|menus?|hover|toggles?|switch(es)?)(?![a-z]))",
+          "match": "(?i:interface|(?<![a-z])(pops?|ui|gui|hud|buttons?|clicks?|blips?|beeps?|menus?|hover|toggles?|switch(es)?)(?![a-z]))",
           "category": "clicks",
           "for": "a UI click or button"
         },
@@ -568,22 +568,22 @@
           "for": "a crowd reaction"
         },
         {
-          "match": "(?i:vocal|scream|shout|(?<![a-z])(voices?|yells?|grunts?|breath(s|ing)?|efforts?|soldiers?|gasps?|sighs?|coughs?|sneezes?)(?![a-z]))",
+          "match": "(?i:vocal|scream|shout|(?<![a-z])(baby|voices?|yells?|grunts?|breath(s|ing)?|efforts?|soldiers?|gasps?|sighs?|coughs?|sneezes?)(?![a-z]))",
           "category": "voices",
           "for": "a human voice: shout, scream or breath"
         },
         {
-          "match": "(?i:stinger|piano|guitar|marimba|xylophone|percussion|(?<![a-z])(stings?|bells?|gongs?|drums?|notes?|harp|chords?)(?![a-z]))",
+          "match": "(?i:stinger|piano|guitar|marimba|xylophone|percussion|zither|(?<![a-z])(plucks?|stings?|bells?|gongs?|drums?|notes?|harp|chords?)(?![a-z]))",
           "category": "musical",
           "for": "a musical hit or note"
         },
         {
-          "match": "(?i:thunder|lightning|splash|bubbl|(?<![a-z])(rain|water|drips?|fire|flames?|ice|birds?|dogs?|cats?|horses?|pigs?|cows?|chickens?|insects?|bees?|animals?|waves?|wind|leaves|branch(es)?|trees?)(?![a-z]))",
+          "match": "(?i:thunder|lightning|splash|bubbl|(?<![a-z])(whales?|seals?|rain|water|drips?|fire|flames?|ice|birds?|dogs?|cats?|horses?|pigs?|cows?|chickens?|insects?|bees?|animals?|waves?|wind|leaves|branch(es)?|trees?)(?![a-z]))",
           "category": "nature",
           "for": "weather, water, fire or an animal"
         },
         {
-          "match": "(?i:foley|cloth|paper|glass|kitchen|cutlery|zipper|latch|creak|seatbelt|buckle|ratchet|cash register|cash-register|(?<![a-z])(lids?|box(es)?|trash|doors?|bottles?|plates?|cups?|keys?|bags?|chairs?|drawers?|cabinets?|windows?|locks?|handles?|tools?|wood(en)?|metal(lic)?|plastic|rocks?|stones?|chains?|clocks?|tape|spray|toilet|pens?|carpet|props?|gears?|mechanisms?|pedals?|clutch)(?![a-z]))",
+          "match": "(?i:foley|cloth|paper|glass|kitchen|cutlery|zipper|latch|creak|printer|abacus|floppy|pulley|knuckle|(?<![a-z])(rips?|tears?|sinks?|shakers?|pours?)(?![a-z])|seatbelt|buckle|ratchet|cash register|cash-register|(?<![a-z])(lids?|box(es)?|trash|doors?|bottles?|plates?|cups?|keys?|bags?|chairs?|drawers?|cabinets?|windows?|locks?|handles?|tools?|wood(en)?|metal(lic)?|plastic|rocks?|stones?|chains?|clocks?|tape|spray|toilet|pens?|carpet|props?|gears?|mechanisms?|pedals?|clutch)(?![a-z]))",
           "category": "foley",
           "for": "a foley handling sound"
         }

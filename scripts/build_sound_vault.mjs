@@ -229,21 +229,36 @@ const moveIntoCategory = (vaultSound, kind, target) => {
 // normalize: bring every sound's peak to -1 dBFS (a library's quiet takes come up, at most MAX_BOOST_DB); otherwise only
 // a hot one comes down
 const MAX_BOOST_DB = 30;
-async function convertToPcmWav(raw, target, { rate = 44100, channels, normalize = false } = {}) {
+const peakOf = async (raw, seek = []) => {
+  const stat = await run(
+    "ffmpeg",
+    [...seek, "-i", raw, "-af", "astats=metadata=0:reset=0", "-f", "null", "-"],
+    { timeout: 120_000, windowsHide: true },
+  );
+  const peaks = [...stat.stderr.matchAll(/Peak level dB:\s*([-\d.]+)/g)]
+    .map((m) => Number(m[1]))
+    .filter(Number.isFinite);
+  return peaks.length ? Math.max(...peaks) : -1;
+};
+// from/to: one take of a longer file, faded in 3 ms and out 10 ms so its cut never clicks
+async function convertToPcmWav(
+  raw,
+  target,
+  { rate = 44100, channels, normalize = false, from, to } = {},
+) {
   mkdirSync(dirname(target), { recursive: true });
   const part = `${target}.${process.pid}.part.wav`;
   try {
-    const stat = await run(
-      "ffmpeg",
-      ["-i", raw, "-af", "astats=metadata=0:reset=0", "-f", "null", "-"],
-      { timeout: 60_000, windowsHide: true },
-    );
-    const peaks = [...stat.stderr.matchAll(/Peak level dB:\s*([-\d.]+)/g)]
-      .map((m) => Number(m[1]))
-      .filter(Number.isFinite);
-    const peak = peaks.length ? Math.max(...peaks) : -1;
+    const seek = to === undefined ? [] : ["-ss", from.toFixed(3), "-to", to.toFixed(3)];
+    const peak = await peakOf(raw, seek);
     const gainDb = normalize ? Math.min(-1 - peak, MAX_BOOST_DB) : peak > -1 ? -1 - peak : 0;
-    const af = gainDb ? ["-af", `volume=${gainDb.toFixed(2)}dB`] : [];
+    const filters = [
+      ...(gainDb ? [`volume=${gainDb.toFixed(2)}dB`] : []),
+      ...(to === undefined
+        ? []
+        : ["afade=t=in:d=0.003", `afade=t=out:st=${(to - from - 0.01).toFixed(3)}:d=0.01`]),
+    ];
+    const af = filters.length ? ["-af", filters.join(",")] : [];
     const ac = channels ? ["-ac", String(channels)] : [];
     await run(
       "ffmpeg",
@@ -251,6 +266,7 @@ async function convertToPcmWav(raw, target, { rate = 44100, channels, normalize 
         "-v",
         "error",
         "-y",
+        ...seek,
         "-i",
         raw,
         ...af,
@@ -334,6 +350,104 @@ const secondsOf = async (file) => {
   );
   return Number(stdout.trim());
 };
+// A file of many takes cut at its silences, as an editor's strip silence does (Sound Forge "remove silence between
+// phrases"), on a 5 ms peak envelope: a gap is 0.35 s below 45 dB under the file's peak. A stretch more than
+// MAX_BOOST_DB under that peak is noise between takes, not a take. Each take's edges are found again against its own
+// peak (a quiet take's file-level gap is still inside its attack and tail): 10 ms before the first block within 40 dB
+// of it, 20 ms after the last, at most 0.5 s past where the file-level gap began, never past half the gap
+const TAKE = {
+  rate: 16000,
+  blockS: 0.005,
+  gapDb: 45,
+  gapS: 0.35,
+  edgeDb: 40,
+  preS: 0.01,
+  releaseS: 0.02,
+  tailMaxS: 0.5,
+  shortestS: 0.05,
+};
+// Longer than this is an ambience, not a row of takes: never decoded to look for gaps
+const SPLIT_MAX_S = 300;
+async function takesOf(file) {
+  const { stdout } = await run(
+    "ffmpeg",
+    ["-v", "error", "-i", file, "-ac", "1", "-ar", String(TAKE.rate), "-f", "f32le", "-"],
+    { encoding: "buffer", maxBuffer: 2 ** 30, timeout: 300_000, windowsHide: true },
+  );
+  const samples = stdout.length >> 2;
+  const per = Math.round(TAKE.rate * TAKE.blockS);
+  const env = new Float64Array(Math.ceil(samples / per));
+  for (let i = 0; i < samples; i++)
+    env[(i / per) | 0] = Math.max(env[(i / per) | 0], Math.abs(stdout.readFloatLE(i * 4)));
+  const maxOf = (a, z) => env.subarray(a, z + 1).reduce((m, v) => Math.max(m, v), 0);
+  const peak = maxOf(0, env.length - 1);
+  const db = (d) => peak * 10 ** (-d / 20);
+  const gapBlocks = Math.round(TAKE.gapS / TAKE.blockS);
+  const runs = [];
+  for (let b = 0; b < env.length; b++) {
+    if (env[b] <= db(TAKE.gapDb)) continue;
+    const last = runs.at(-1);
+    if (last && b - last[1] <= gapBlocks) last[1] = b;
+    else runs.push([b, b]);
+  }
+  const s = (b) => b * TAKE.blockS;
+  return runs.flatMap(([a, z], i) => {
+    const top = maxOf(a, z);
+    if (top < db(MAX_BOOST_DB)) return [];
+    const from = i ? Math.ceil((runs[i - 1][1] + a) / 2) : 0;
+    const to = Math.min(
+      i + 1 < runs.length ? Math.floor((z + runs[i + 1][0]) / 2) : env.length - 1,
+      z + Math.round(TAKE.tailMaxS / TAKE.blockS),
+    );
+    const edge = top * 10 ** (-TAKE.edgeDb / 20);
+    while (a > from && env[a - 1] > edge) a--;
+    while (z < to && env[z + 1] > edge) z++;
+    const span = [
+      Math.max(s(from), s(a) - TAKE.preS),
+      Math.min(s(to + 1), samples / TAKE.rate, s(z + 1) + TAKE.releaseS),
+    ];
+    return span[1] - span[0] >= TAKE.shortestS ? [span] : [];
+  });
+}
+// Each file's length and takes, kept beside the pack so a rebuild reads no long file twice
+const packCache = (dir) => {
+  const file = join(dir, ".sort-cache.json");
+  const params = JSON.stringify(TAKE);
+  let saved = {};
+  try {
+    const got = JSON.parse(readFileSync(file, "utf8"));
+    if (got.params === params) saved = got.files;
+  } catch {}
+  const files = {};
+  const entry = (rel) => {
+    if (files[rel]) return files[rel];
+    const st = statSync(join(dir, rel));
+    const had = saved[rel];
+    files[rel] =
+      had && had.size === st.size && had.mtimeMs === st.mtimeMs
+        ? had
+        : { size: st.size, mtimeMs: st.mtimeMs };
+    return files[rel];
+  };
+  const write = (all) => writeFileSync(file, JSON.stringify({ params, files: all }) + "\n");
+  return {
+    seconds: async (rel) => {
+      const e = entry(rel);
+      e.seconds ??= await secondsOf(join(dir, rel));
+      return e.seconds;
+    },
+    // Saved after each file it decodes (seconds each on a busy disk), so a stopped build loses none of them
+    takes: async (rel) => {
+      const e = entry(rel);
+      if (!e.takes) {
+        e.takes = await takesOf(join(dir, rel));
+        write({ ...saved, ...files });
+      }
+      return e.takes;
+    },
+    save: () => write(files),
+  };
+};
 const pool = async (items, n, work) => {
   let next = 0;
   await Promise.all(
@@ -345,7 +459,8 @@ const pool = async (items, n, work) => {
 
 // The raw packs fetch:sound-raw unpacked, each file filed by the first sort rule that matches its name, else its path
 // in the pack (a folder named "Hits & Whooshes" holds both): the pack's own rules, then its source's. A file longer
-// than "maxSeconds" (the rule's, else the source's) is left out.
+// than "maxSeconds" (the rule's, else the source's) gives one sound per take when its silences cut it into takes
+// that fit, and is left out otherwise.
 // A file no rule takes is named, never guessed into a category; a rule with "skip" leaves files out on
 // purpose. Sounds whose names differ only by a trailing number become one family of takes, unless the rule says
 // "takes": false. A rule's "title" wraps the file's name ("{name} (female voice)")
@@ -398,23 +513,49 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
           ),
         });
       }
-      // A long file is an ambience or many takes in one: not a sound to drop on a cue as it is
-      const long = new Set();
+      // A long file is an ambience or many takes in one: not a sound to drop on a cue as it is. One whose silences cut
+      // it into takes that each fit the limit gives one sound per take; any other stays out
+      const cache = packCache(dir);
+      const long = new Map();
       await pool(
         picked.filter((p) => p.limit),
         6,
         async (p) => {
-          if (!((await secondsOf(join(dir, p.rel))) <= p.limit)) long.add(p);
+          const seconds = await cache.seconds(p.rel);
+          if (!(seconds <= p.limit)) long.set(p, seconds);
         },
       );
-      if (long.size) picked = picked.filter((p) => !long.has(p));
+      const cut = new Map();
+      await pool(
+        [...long].filter(([, seconds]) => seconds <= SPLIT_MAX_S),
+        6,
+        async ([p]) => {
+          const takes = await cache.takes(p.rel);
+          if (takes.length > 1 && takes.every(([a, b]) => b - a <= p.limit)) cut.set(p, takes);
+        },
+      );
+      cache.save();
+      // A take's span (seconds in its file, to the ms) is kept in SOURCES.json: a take whose span moved is cut again
+      picked = picked.flatMap((p) =>
+        !long.has(p)
+          ? [p]
+          : (cut.get(p)?.map((span, i) => ({
+              ...p,
+              name: `${p.name}-take-${i + 1}`,
+              span: span.map((s) => Math.round(s * 1000) / 1000),
+            })) ?? []),
+      );
       const families = Map.groupBy(picked, (p) => p.family);
       let converted = 0;
       await pool(picked, 6, async (p) => {
         const target = join(vaultSound, "sfx", p.rule.category, `${p.name}.wav`);
         moveIntoCategory(vaultSound, "sfx", target);
-        if (hasRiffWave(target)) return;
-        await convertToPcmWav(join(dir, p.rel), target, { rate: 48000, normalize: true });
+        if (hasRiffWave(target) && String(sources[p.name]?.span) === String(p.span)) return;
+        await convertToPcmWav(join(dir, p.rel), target, {
+          rate: 48000,
+          normalize: true,
+          ...(p.span && { from: p.span[0], to: p.span[1] }),
+        });
         converted++;
       });
       const kept = new Set(picked.map((p) => p.name));
@@ -436,14 +577,19 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
           origin: "real",
           ...(takes.length > 1 && { family: p.family, variant: takes.indexOf(p) + 1 }),
           pack: packId,
+          ...(p.span && { span: p.span }),
         };
       }
       log(
         `${packId}: ${picked.length} sounds in ${families.size} families (${converted} converted)`,
       );
-      if (long.size)
+      if (cut.size)
         log(
-          `${packId}: ${long.size} files longer than its limit left out (maxSeconds in scripts/sound-raw.json)`,
+          `${packId}: ${cut.size} files cut into ${[...cut.values()].reduce((n, t) => n + t.length, 0)} takes`,
+        );
+      if (long.size > cut.size)
+        log(
+          `${packId}: ${long.size - cut.size} files longer than its limit left out (maxSeconds in scripts/sound-raw.json)`,
         );
       if (unsorted.length)
         log(
