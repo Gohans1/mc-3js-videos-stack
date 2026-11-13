@@ -10,8 +10,37 @@ import { test } from "node:test";
 import { strToU8, zipSync } from "fflate";
 
 import { fetchSoundRaw } from "../fetch_sound_raw.mjs";
+import { readTorrent, torrentPaths } from "../torrent.mjs";
 
 const sha256 = (b) => createHash("sha256").update(b).digest("hex");
+
+// bencode, enough to write a test torrent
+const benc = (v) =>
+  typeof v === "number"
+    ? Buffer.from(`i${v}e`)
+    : Array.isArray(v)
+      ? Buffer.concat([Buffer.from("l"), ...v.map(benc), Buffer.from("e")])
+      : typeof v === "object" && !Buffer.isBuffer(v)
+        ? Buffer.concat([
+            Buffer.from("d"),
+            ...Object.keys(v)
+              .sort()
+              .flatMap((k) => [benc(k), benc(v[k])]),
+            Buffer.from("e"),
+          ])
+        : Buffer.concat([Buffer.from(`${Buffer.byteLength(v)}:`), Buffer.from(v)]);
+const torrentOf = (files) => {
+  const info = {
+    name: "Sonniss.com - GDC 2016- Game Audio Bundle",
+    "piece length": 16384,
+    pieces: "x".repeat(20),
+    files: files.map((path) => ({ length: 1, path })),
+  };
+  return {
+    bytes: benc({ announce: "udp://t", info }),
+    btih: createHash("sha1").update(benc(info)).digest("hex"),
+  };
+};
 
 async function fixture(t, zips, packs) {
   const root = mkdtempSync(join(tmpdir(), "sound-raw-test-"));
@@ -117,6 +146,85 @@ test("a pack the site only hands to a browser waits for its zip, then is taken f
   );
 });
 
+test("a torrent's files get paths Windows can write, inside the pack, each its own", () => {
+  const long = `${"Crowd,Military,Army,Squad,Medium Distant,Light,Milling,".repeat(5)}end.wav`;
+  const t = torrentOf([
+    ["1964 Mercury Montclair ", "drive_03.wav"],
+    ["Armored Car\t", "passby.wav"],
+    ["Lib", long],
+    ["Lib", "a:b.wav"],
+    ["Lib", "a?b.wav"],
+    ["Lib", "con.wav"],
+    ["..", "escape.wav"],
+  ]);
+  const torrent = readTorrent(t.bytes);
+  assert.equal(torrent.btih, t.btih);
+  const paths = torrentPaths(torrent, 200);
+  assert.deepEqual(
+    paths.slice(0, 2).map(({ index, path }) => ({ index, path })),
+    [
+      { index: 1, path: "1964 Mercury Montclair/drive_03.wav" },
+      { index: 2, path: "Armored Car_/passby.wav" },
+    ],
+  );
+  assert.ok(paths[2].path.length <= 200 && paths[2].path.endsWith(".wav"), paths[2].path);
+  assert.deepEqual(
+    paths.slice(3).map((p) => p.path),
+    ["Lib/a_b.wav", "Lib/a_b (2).wav", "Lib/_con.wav", "_/escape.wav"],
+  );
+});
+
+test("a torrent pack waits for its .torrent, refuses another torrent, and is done once the client wrote every file", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "sound-raw-torrent-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const external = join(root, "ext"),
+    downloads = join(root, "downloads");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(downloads);
+  const good = torrentOf([["Lib ", "hit.wav"]]);
+  const pack = {
+    id: "gdc-2016",
+    title: "GDC 2016",
+    page: "https://sonniss.com/gameaudiogdc/",
+    torrent: "GameAudioGDCPart2.torrent",
+    btih: good.btih,
+  };
+  writeFileSync(
+    join(root, "scripts/sound-raw.json"),
+    JSON.stringify({ sources: { sonniss: { licence: "Sonniss GDC", packs: [pack] } } }),
+  );
+  const runs = [];
+  const fetch = () =>
+    fetchSoundRaw({
+      root,
+      external,
+      downloads,
+      log: () => {},
+      torrentClient: async (input) => {
+        runs.push(readFileSync(input, "utf8"));
+        const dir = join(external, "sound-raw/sonniss/gdc-2016/Lib");
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, "hit.wav"), "x");
+        return 0;
+      },
+    });
+  const waiting = await fetch();
+  assert.match(waiting.waiting[0], /GameAudioGDCPart2\.torrent/);
+  assert.equal(runs.length, 0);
+
+  writeFileSync(join(downloads, "GameAudioGDCPart2.torrent"), torrentOf([["x", "y.wav"]]).bytes);
+  assert.deepEqual((await fetch()).failed, ["gdc-2016"]);
+  assert.equal(runs.length, 0);
+
+  writeFileSync(join(downloads, "GameAudioGDCPart2.torrent"), good.bytes);
+  const done = await fetch();
+  assert.deepEqual(done.unpacked, ["gdc-2016"]);
+  assert.match(runs[0], /index-out=1=Lib\/hit\.wav/);
+  assert.equal(existsSync(join(external, "sound-raw/sonniss/gdc-2016/.pack.json")), true);
+  await fetch();
+  assert.equal(runs.length, 1, "a finished pack is not handed to the client again");
+});
+
 // An .ogg tone at the given peak level (dBFS), made with ffmpeg
 const tone = (file, db, hz = 660) => {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -166,6 +274,7 @@ async function packFixture(t, sort) {
   tone(join(pack, "Audio/round_1.ogg"), -3);
   tone(join(pack, "Audio/round_2.ogg"), -3);
   tone(join(pack, "Preview.ogg"), -3);
+  writeFileSync(join(pack, ".pack.json"), "{}");
   const { buildSoundVault } = await import("../build_sound_vault.mjs");
   const lines = [];
   const build = () =>
@@ -246,6 +355,14 @@ test("a rule whose numbers name different lines keeps each file its own sound", 
       ["Go · male", undefined],
     ],
   );
+});
+
+test("a pack still downloading is left alone until fetch:sound-raw marks it done", async (t) => {
+  const f = await packFixture(t, RULES);
+  rmSync(join(f.pack, ".pack.json"));
+  await f.build();
+  assert.equal(f.sources()["ken-ui-error-001"], undefined);
+  assert.ok(f.lines.some((l) => /kenney\/ui: not downloaded yet/.test(l)));
 });
 
 test("a sound the pack's rules stop taking leaves the vault on the next build", async (t) => {

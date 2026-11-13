@@ -346,7 +346,8 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
     for (const pack of src.packs) {
       const dir = join(external, "sound-raw", srcId, pack.id),
         packId = `${srcId}/${pack.id}`;
-      if (!existsSync(dir)) {
+      // fetch:sound-raw writes .pack.json once a pack is whole: a torrent still running holds half-written files
+      if (!existsSync(join(dir, ".pack.json"))) {
         log(`${packId}: not downloaded yet (bun run fetch:sound-raw)`);
         continue;
       }
@@ -408,7 +409,7 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
       );
       if (unsorted.length)
         log(
-          `${packId}: ${unsorted.length} files no sort rule takes (add a rule, or one with "skip"): ${unsorted.join(", ")}`,
+          `${packId}: ${unsorted.length} files no sort rule takes (add a rule, or one with "skip"): ${unsorted.slice(0, 20).join(", ")}${unsorted.length > 20 ? ", ..." : ""}`,
         );
     }
   }

@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
@@ -7,6 +8,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -16,14 +18,17 @@ import { unzipSync } from "fflate";
 
 import { cliArgs } from "../packages/live-studio/src/cli.mjs";
 import { download } from "./download.mjs";
+import { readTorrent, torrentPaths } from "./torrent.mjs";
 import { EXTERNAL, ROOT } from "./vault.mjs";
 
-const HELP = `Downloads the raw sound packs listed in scripts/sound-raw.json and unpacks each into
-<externalRoot>/sound-raw/<source>/<pack>/ (vault.json, default E:/mc_vault). Every zip is checked against its pinned
-sha256; a pack already unpacked is kept, so a rerun downloads nothing. From the repo root:
+const HELP = `Downloads the raw sound packs listed in scripts/sound-raw.json into <externalRoot>/sound-raw/<source>/<pack>/
+(vault.json, default E:/mc_vault). Every zip is checked against its pinned sha256 and unpacked; a torrent pack is
+checked against its pinned info hash and downloaded by aria2c (scoop install aria2), every file under a name Windows
+accepts. A pack already there is kept, so a rerun downloads nothing. From the repo root:
   bun run fetch:sound-raw
-A pack its site hands only to a browser is named at the end with its page: download it there and run this again
-(it is taken from Downloads or sound-raw/inbox). Adding a pack = adding its line to scripts/sound-raw.json.`;
+A pack its site hands only to a browser (a zip, or a .torrent behind a bot check) is named at the end with its page:
+download it there and run this again (it is taken from Downloads or sound-raw/inbox). Torrents run for hours: stop any
+time, the next run resumes. Adding a pack = adding its line to scripts/sound-raw.json.`;
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const MARK = ".pack.json";
@@ -50,40 +55,86 @@ function unpack(zip, dir) {
   return Object.keys(files).length;
 }
 
-// A browser may save "kenney_impact-sounds (1).zip": any zip starting with the expected name counts
+// A browser may save "kenney_impact-sounds (1).zip": any file starting with the expected name, same extension, counts
 const findByHand = (dirs, name) => {
-  const stem = name.replace(/\.zip$/i, "").toLowerCase();
+  const ext = name.match(/\.[a-z0-9]+$/i)?.[0].toLowerCase() ?? "";
+  const stem = name.slice(0, name.length - ext.length).toLowerCase();
   for (const d of dirs) {
     if (!existsSync(d)) continue;
     const hit = readdirSync(d)
-      .filter((f) => f.toLowerCase().startsWith(stem) && f.toLowerCase().endsWith(".zip"))
+      .filter((f) => f.toLowerCase().startsWith(stem) && f.toLowerCase().endsWith(ext))
       .sort()[0];
     if (hit) return join(d, hit);
   }
   return null;
 };
 
+const ARIA2 = [
+  "--continue=true",
+  "--seed-time=0",
+  "--max-concurrent-downloads=2",
+  "--file-allocation=none",
+  "--summary-interval=60",
+  "--console-log-level=warn",
+];
+const aria2 = (input, log) =>
+  new Promise((done) => {
+    // Its live progress line redraws every second: into a log file, only the 60 s summary
+    const readout = process.stdout.isTTY ? [] : ["--show-console-readout=false"];
+    const child = spawn("aria2c", [`--input-file=${input}`, ...ARIA2, ...readout], {
+      stdio: "inherit",
+    });
+    child.on("error", (e) => {
+      log(
+        `aria2c could not start (${e.message}): install it (scoop install aria2, brew install aria2, apt install aria2)`,
+      );
+      done(1);
+    });
+    child.on("close", done);
+  });
+
+// Windows' classic path limit is 260; the rest is left for the pack's own folder
+const PATH_MAX = 240;
+
 export async function fetchSoundRaw({
   root = ROOT,
   external = EXTERNAL,
   downloads = join(homedir(), "Downloads"),
   log = console.log,
+  torrentClient = aria2,
 } = {}) {
   const { sources } = JSON.parse(readFileSync(join(root, "scripts/sound-raw.json"), "utf8"));
   const raw = join(external, "sound-raw"),
     inbox = join(raw, "inbox");
   const result = { unpacked: [], kept: [], waiting: [], failed: [] };
+  const torrents = [];
   for (const [source, { packs }] of Object.entries(sources)) {
     for (const p of packs) {
       const dir = join(raw, source, p.id),
         zip = join(raw, source, ".zips", `${p.id}.zip`),
         mark = join(dir, MARK);
       try {
-        if (
-          existsSync(mark) &&
-          (!p.sha256 || JSON.parse(readFileSync(mark, "utf8")).sha256 === p.sha256)
-        ) {
+        const pinned = p.btih ?? p.sha256;
+        if (existsSync(mark) && (!pinned || pinnedIn(mark) === pinned)) {
           result.kept.push(p.id);
+          continue;
+        }
+        if (p.torrent) {
+          const found = findByHand([inbox, downloads], p.torrent);
+          if (!found) {
+            result.waiting.push(
+              `${p.title}: open ${p.page}, press its official torrent link, leave ${p.torrent} in Downloads or ${inbox}`,
+            );
+            continue;
+          }
+          const torrent = readTorrent(readFileSync(found));
+          if (torrent.btih !== p.btih)
+            throw new Error(`${found} is torrent ${torrent.btih}, not the pinned ${p.btih}`);
+          const file = join(raw, source, ".torrents", `${p.id}.torrent`);
+          mkdirSync(dirname(file), { recursive: true });
+          copyFileSync(found, file);
+          const plan = torrentPaths(torrent, PATH_MAX - resolve(dir).length - 1);
+          torrents.push({ p, dir, file, plan, mark });
           continue;
         }
         if (p.file) {
@@ -113,7 +164,47 @@ export async function fetchSoundRaw({
       }
     }
   }
+  if (torrents.length) await fetchTorrents(torrents, { raw, log, torrentClient, result });
   return result;
+}
+
+const pinnedIn = (mark) => {
+  const m = JSON.parse(readFileSync(mark, "utf8"));
+  return m.btih ?? m.sha256;
+};
+
+// One aria2 run for every torrent pack, each file written to its planned name (index-out). A pack is done when every
+// file has its full length and aria2 left no control file (.aria2) for it, which it keeps until the last piece checks
+async function fetchTorrents(torrents, { raw, log, torrentClient, result }) {
+  const input = join(raw, ".torrents.aria2.txt");
+  writeFileSync(
+    input,
+    torrents
+      .map(({ file, dir, plan }) =>
+        [file, `  dir=${dir}`, ...plan.map((f) => `  index-out=${f.index}=${f.path}`)].join("\n"),
+      )
+      .join("\n") + "\n",
+  );
+  log(`Downloading ${torrents.length} torrent packs with aria2c (stop any time; a rerun resumes)`);
+  await torrentClient(input, log);
+  for (const { p, dir, plan, mark } of torrents) {
+    const missing = plan.filter((f) => {
+      const at = join(dir, f.path);
+      return !existsSync(at) || statSync(at).size !== f.length;
+    }).length;
+    const unfinished = existsSync(dir) && readdirSync(dir).some((f) => f.endsWith(".aria2"));
+    if (missing || unfinished) {
+      log(`${p.id}: ${missing || "some"} of ${plan.length} files not finished yet`);
+      result.failed.push(p.id);
+      continue;
+    }
+    writeFileSync(
+      mark,
+      JSON.stringify({ btih: p.btih, files: plan.length, from: p.page }, null, 2) + "\n",
+    );
+    result.unpacked.push(p.id);
+    log(`${p.id}: ${plan.length} files`);
+  }
 }
 
 if (import.meta.main) {

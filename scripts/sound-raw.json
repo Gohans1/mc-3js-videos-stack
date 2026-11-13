@@ -409,6 +409,74 @@
           ]
         }
       ]
+    },
+    "sonniss": {
+      "name": "Sonniss",
+      "licence": "Sonniss #GameAudioGDC Bundle License",
+      "url": "https://sonniss.com/gdc-bundle-license/",
+      "read_at": "https://sonniss.com/gdc-bundle-license/",
+      "read": "2026-11-13",
+      "credit": false,
+      "prefix": "son",
+      "note": "Royalty-free in films, no credit; never redistribute the files, edited or not, and never use them to train AI. Its sites stop bots, so each official .torrent is downloaded by hand from the page; seeding official torrents is allowed. GDC 2017 (GameAudioGDCPart3.torrent, info hash 751189932f9a32eb57f4aa39b87d81d04a6f8708) is left out: a folder name holds a tab, which aria2 refuses to load. GDC 2026 (GameAudioGDCPart9.torrent at https://gdc.sonniss.com/) waits for its info hash. Packs download in this order, the most short usable sounds per GB first.",
+      "packs": [
+        {
+          "id": "gdc-2015",
+          "key": "15",
+          "title": "GDC 2015 Game Audio Bundle",
+          "page": "https://sonniss.com/gameaudiogdc/",
+          "torrent": "GameAudioGDC.torrent",
+          "btih": "694916b432913f35872e806e1ca50c80201c6798"
+        },
+        {
+          "id": "gdc-2016",
+          "key": "16",
+          "title": "GDC 2016 Game Audio Bundle",
+          "page": "https://sonniss.com/gameaudiogdc/",
+          "torrent": "GameAudioGDCPart2.torrent",
+          "btih": "aaa1407465c82160e20aba23de56ce7d4c4025ca"
+        },
+        {
+          "id": "gdc-2019",
+          "key": "19",
+          "title": "GDC 2019 Game Audio Bundle",
+          "page": "https://sonniss.com/gameaudiogdc/",
+          "torrent": "GameAudioGDCPart5.torrent",
+          "btih": "9d3f5edbc08bc5ffc0017876d1c6c9f2d1a6bee9"
+        },
+        {
+          "id": "gdc-2018",
+          "key": "18",
+          "title": "GDC 2018 Game Audio Bundle",
+          "page": "https://sonniss.com/gameaudiogdc/",
+          "torrent": "GameAudioGDCPart4.torrent",
+          "btih": "f29f43ed4d31f1dbf74e4c17b80ba0dc758651db"
+        },
+        {
+          "id": "gdc-2020",
+          "key": "20",
+          "title": "GDC 2020 Game Audio Bundle",
+          "page": "https://sonniss.com/gameaudiogdc/",
+          "torrent": "GameAudioGDCPart6.torrent",
+          "btih": "d78516081aada0855d967ca530dfacc5b8a04ba1"
+        },
+        {
+          "id": "gdc-2024",
+          "key": "24",
+          "title": "GDC 2024 Game Audio Bundle",
+          "page": "https://sonniss.com/gameaudiogdc/",
+          "torrent": "GameAudioGDCPart8.torrent",
+          "btih": "b6efae339ed5a288ca396c8101ed874d68fa236a"
+        },
+        {
+          "id": "gdc-2021-2023",
+          "key": "23",
+          "title": "GDC 2021 to 2023 Game Audio Bundle",
+          "page": "https://sonniss.com/gameaudiogdc/",
+          "torrent": "GameAudioGDCPart7.torrent",
+          "btih": "e353e4ed202ee24a816b39a2ec7f21640212387f"
+        }
+      ]
     }
   }
 }
