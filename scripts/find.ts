@@ -866,12 +866,17 @@ Options:
                    the first line says how a loose one was read). --kind <kind> alone: its groups with counts, then
                    every entry when 60 or fewer; --kind <kind>/<category>: that group, and the words its entries are
                    named by when it is long
-  --source <s[,s]> sources (minecraft, earshot, mixkit, mixamo, film-stage/transitions.ts ...; a wrong name lists them)
+  --source <s[,s]> where it comes from: minecraft and each mod pack by name (alexs-caves, quality-sounds ...), earshot,
+                   mixkit, mixamo, film-stage (every preset) or one preset file
   --origin <o>     sfx and bgm: real (recordings, the studio's Real / Studio) or synth (made in code, its Code-gen)
   --edition <e>    Minecraft sounds: vanilla (the game itself) or modded (mod packs)
-  --license <l>    sounds by what a YouTube upload must do: free (nothing), credit (name the author: CC BY) or
-                   claim (Content ID claims the video)
+  --license <l>    sounds by what a YouTube upload must do: free (nothing), credit (CC BY: name the author), claim
+                   (Content ID claims the video), minecraft (Mojang's game sounds: Minecraft videos only), mod (a mod's
+                   code licence: credit the mod); or a word of a licence's own name: --license mit, --license lgpl
   --dur <min-max>  length in seconds, sounds and mocap clips: --dur 0-1 a short hit, --dur 120-600 a long track
+  Any filter without a value lists its values with counts: bun run find --source lists every source and mod pack.
+  Other names work and the first line says how they were read: --licence, --type/--category (--kind), --pack/--mod
+  (--source), --length/--duration (--dur), --limit (-n); values too: --origin recorded, --edition mods, --license cc-by
   -n <N>           hits shown (default 12)
   --all            every take of a sound family on its own line (default: one line per family, "(N takes)")
   --jev            rank by meaning with Jev, a small AI judge that reads any language: 1-3 s, under $0.01 a search. With
@@ -893,9 +898,10 @@ ask without --kind also meets mocap clips and presets: add --kind sound. No hit:
 groups (--kind sfx, then --kind sfx/<group>). Music has no tags beyond its group: for another mood, list a bgm group
 and rank it by ear (earshot rank). --jev (paid) last, when the cue is a feeling or a moment ("the moment he realises
 the door is locked") and words and groups miss it.
-Every vault sound may be used on YouTube: a row tagged credit needs the author named in the video description, one
-tagged Content ID gets the video claimed (--license free keeps neither). Mixamo and Quaternius (ual1, ual2) clips are
-free to use in videos.
+Every vault sound may be used on YouTube: a row tagged credit needs the author (or the mod) named in the video
+description, one tagged Content ID gets the video claimed (--license free keeps neither); Minecraft's own sounds are
+fine in a Minecraft video. Mixamo and Quaternius (ual1, ual2) clips are free to use in videos. --show <id> ends with
+where to make your own of that kind when no built-in fits.
 
 Examples:
   bun run find creaky door
@@ -1025,8 +1031,21 @@ const MOCAP_COLUMNS =
 // Postures the catalogue measured (stand, kneel, sitFloor ...) and the hint that lists them
 const postures = (pool: Entry[]) =>
   [...new Set(pool.flatMap((x) => (x.kind === "mocap" ? (x.data?.seq ?? []) : [])))].toSorted();
-const mocapNext = (pool: Entry[]) =>
-  `mocap: one clip in full (its timeline, where it leaves him): bun run find --show <id>. By body: add --from <posture> --to <posture> --has <posture> --still|--moves --loop --dur 1-6 --energy 10-40${postures(pool).length ? ` (postures: ${postures(pool).join(" ")})` : ""}`;
+const mocapNext = (pool: Entry[]) => {
+  const clips = pool.filter((x) => x.kind === "mocap");
+  const names = (field: string) =>
+    tagged(field, clips)
+      .split(", ")
+      .map((s) => s.split(" ")[0])
+      .filter((s) => s && s !== "none")
+      .join(" ");
+  const [ps, moods, props] = [postures(clips).join(" "), names("mood"), names("prop")];
+  return `mocap: one clip in full (its timeline, where it leaves him): bun run find --show <id>. By body, any mix: --from|--to|--has <posture>${ps ? ` (${ps})` : ""}, --still|--moves, --loop, --dur 1-6, --energy 10-40, a hand --head|--up|--ground, --bend, --air yes|no, --look 45${moods ? `, --mood <${moods}>` : ""}${props ? `, --prop <${props}>` : ""} (mood and prop: only clips checked by eye), --fights`;
+};
+// earshot rank over the files a list shows: the first few, as each call takes ~40 s whatever their number
+const HEAR_MAX = 8;
+const hearThem = (what: string, files: string[]) =>
+  `hear them (you cannot): earshot rank "${what.replaceAll('"', "")}" ${files.slice(0, HEAR_MAX).join(" ")} --top 3${files.length > HEAR_MAX ? `  (the first ${HEAR_MAX} of ${files.length})` : ""}`;
 
 // ---------- --show: one entry in full, from the catalogue record behind its line
 
@@ -1065,7 +1084,47 @@ const TL: Record<string, string> = {
 const soundFile = (file: string) =>
   existsSync(file) ? file : relative(process.cwd(), join(ROOT, file)).replaceAll("\\", "/");
 
+// --show's last word on an entry: where a film makes its own of that kind when no built-in is right (the hooks are the
+// contract's "Your own work" table; the studio's Film tab lists what a film adds)
+const VOICE_OWN =
+  'a voice: {id, title, tip, len, cat, step(st, p, cfg, it)} in makeTitles\' 4th argument in src/scene.ts ({items, text: {"in": [...], "out": [...]}, shape: {"in", "out"}}); step changes the look st at progress p. Built-ins: packages/film-stage/src/titles-catalog.ts, drawn by titles-look.ts';
+const OWN: Record<string, string> = {
+  transition:
+    "a transition: {id, title, tip, category, glsl} passed as makeTransitions' last argument in src/scene.ts; glsl defines vec4 transition(vec2 uv) from getFromColor, getToColor and progress (copy a built-in's from packages/film-stage/src/transitions.ts)",
+  anim: "an anim: {id, title, cat, tip, len, apply(cam, u, t, k)} added to the anims src/scene.ts passes to animate; apply moves cam.p, cam.l, cam.fov at progress u and returns how black the frame goes. Built-ins: packages/film-stage/src/animate.ts",
+  text: VOICE_OWN,
+  "shape-voice": VOICE_OWN,
+  shape:
+    'a mark: makeTitles\' 4th argument in src/scene.ts, shapes: {"<kind>": {title, tip, measure(it, k, W, H) => {w, h}, draw(g, it, m, look)}}, then text.json items[] {"kind": "<kind>", ...}. Built-ins: packages/film-stage/src/titles.ts',
+  font: "a font: {id, title, css, tip} in FONTS (packages/film-stage/src/titles-catalog.ts) plus its @fontsource import at the top of packages/film-stage/src/titles.ts; shared by every film, OFL faces only",
+  adjust: MAKE_LOOK,
+  velocity:
+    'an effect: makeVelocity(renderer, {"<name>": (frame, optics) => a partial CameraOptics}) in src/scene.ts. Built-ins: packages/film-stage/src/velocity.ts',
+  ease: "a curve: a function of t (0-1 to 0-1) added to EASES from film-stage/camera in src/scene.ts (cameraAt reads EASES by name; draw.eases is what the studio draws). Built-ins: packages/film-stage/src/camera.ts",
+  sound: MAKE_SOUND,
+  mocap: MAKE_MOCAP,
+};
+const ownOf = (kind: string) =>
+  OWN[
+    SOUND.includes(kind)
+      ? "sound"
+      : kind.startsWith("anim-") && kind !== "anim-curve"
+        ? "anim"
+        : kind.startsWith("text-")
+          ? "text"
+          : kind.startsWith("shape-")
+            ? "shape-voice"
+            : kind
+  ];
+
 function detail(x: Entry): string[] {
+  const own = ownOf(x.kind);
+  return [
+    ...details(x),
+    ...(own ? [`make your own: ${own} (every hook: bun run skills get core --ref contract)`] : []),
+  ];
+}
+function details(x: Entry): string[] {
   const d = x.data ?? {},
     side = x.kind.split("-")[1] ?? "in",
     dir = timelineDir();
@@ -1187,7 +1246,21 @@ function detail(x: Entry): string[] {
         `curve: at 25%, 50%, 75% of the time it has gone ${[0.25, 0.5, 0.75].map((t) => f(t).toFixed(2)).join(", ")}`,
       );
     use("cam.json", `a key: "ease": "${x.id}"  (the move into that key)`);
+  } else if (x.kind === "shape") {
+    // arrow and underline are a stroke of a length (size), the rest a frame of w x h; x, y place its middle (0-1)
+    const sized =
+      x.id === "arrow" || x.id === "underline"
+        ? `"size": ${x.id === "arrow" ? 160 : 220}, "rotate": 0`
+        : `"w": 260, "h": 170`;
+    use(
+      "text.json",
+      `items[]: {"kind": "${x.id}", "x": 0.5, "y": 0.5, ${sized}, "width": 10, "color": "#E5484D", "from": 0, "to": 3, "in": {"fx": "draw", "len": 0.5}}  (size and width in px at 1080p; "at": [x, y, z] pins it to a world point; in/out voices: bun run find --kind shape)`,
+    );
   } else out.push(`use: ${dir}/${useOf(x.kind)}`);
+  if (!SOUND.includes(x.kind) && !out.some((l) => l.startsWith("see it:")))
+    out.push(
+      "see it: AT=<a second it is on screen> bun run render stills  (in a film folder), or the Studio at that second",
+    );
   return out;
 }
 
@@ -1413,14 +1486,15 @@ const FACETS: Record<
   "--edition": { keep: (x) => x.kind === "mc", of: editionOfEntry, t: EDITIONS },
   "--license": { keep: (x) => SOUND.includes(x.kind), of: licenseOf, t: LICENSES },
 };
-// "free 120 (nothing to do ...), credit 9 (...)": every value with its count; terse drops the labels and the empty ones
-const buckets = (o: string, xs: Entry[], terse = false) => {
+// "free 120 (nothing to do ...), credit 9 (...)": all = every value with its meaning (what the filter takes), held = the
+// values these entries have, with their meaning, terse = those values bare
+const buckets = (o: string, xs: Entry[], style: "all" | "held" | "terse" = "all") => {
   const f = FACETS[o]!,
     ys = xs.filter(f.keep);
   return Object.entries(f.t)
     .map(([k, label]) => [k, ys.filter((y) => f.of(y) === k).length, label] as const)
-    .filter(([, c]) => !terse || c > 0)
-    .map(([k, c, label]) => `${k} ${c}${terse ? "" : ` (${label})`}`)
+    .filter(([, c]) => style === "all" || c > 0)
+    .map(([k, c, label]) => `${k} ${c}${style === "terse" ? "" : ` (${label})`}`)
     .join(", ");
 };
 const rawLicenses = (xs: Entry[]) =>
@@ -1698,6 +1772,32 @@ export async function run(
   // what --kind names without its categories (sfx/typing is sfx), for the hints that speak of a kind
   const kindNames = kinds?.map((k) => k.split("/")[0]!);
   const filters = `${kinds ? ` --kind ${kinds.join(",")}` : ""}${sources ? ` --source ${sources.join(",")}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}`;
+  // The filters these entries can still take, each value with how many it keeps (a filter already given is left out).
+  // Terse (under a search): only filters that would split the hits, values without their meaning
+  const filtersFor = (xs: Entry[], terse = false) => {
+    const given: Record<string, unknown> = {
+      "--origin": origin,
+      "--edition": edition,
+      "--license": license,
+    };
+    const facets = Object.keys(FACETS).flatMap((o) => {
+      const ys = xs.filter(FACETS[o]!.keep);
+      if (given[o] || !ys.length) return [];
+      if (terse && new Set(ys.map(FACETS[o]!.of)).size < 2) return [];
+      return [`${o} ${buckets(o, ys, terse ? "terse" : "held")}`];
+    });
+    const srcs = xs.flatMap((x) =>
+      (SOUND.includes(x.kind) || x.kind === "mocap") && x.src ? [x.src] : [],
+    );
+    const bySrc = tally(srcs).split(", ").filter(Boolean);
+    if (!sources && bySrc.length > (terse ? 1 : 0))
+      facets.push(
+        `--source ${terse && bySrc.length > 8 ? `${bySrc.slice(0, 8).join(", ")} and ${bySrc.length - 8} more` : bySrc.join(", ")}`,
+      );
+    const lengths = durs(xs).split(", ").filter(Boolean);
+    if (!dur && lengths.length > (terse ? 1 : 0)) facets.push(`--dur ${lengths.join(", ")}`);
+    return facets;
+  };
   const where = (shown: Entry[]) => {
     const uses = [...new Set(shown.map((x) => useOf(x.kind)))];
     return uses.length ? ["", `where (in ${timelineDir()}/): ${uses.join("\n       ")}`] : [];
@@ -1709,32 +1809,7 @@ export async function run(
       );
     const kindsHere = [...new Set(inKinds.map((x) => top(x.kind)))];
     const narrowed = kinds?.some((k) => k.includes("/"));
-    // the filters a sound list can take next, with how many each keeps
-    const soundFilters = (xs: Entry[]) => {
-      const fx = xs.filter((x) => SOUND.includes(x.kind) && x.kind !== "mc"),
-        mc = xs.filter((x) => x.kind === "mc");
-      const by = (ys: Entry[], of: (x: Entry) => string, t: Record<string, string>) =>
-        Object.entries(t)
-          .map(([k, label]) => `${k} ${ys.filter((y) => of(y) === k).length} (${label})`)
-          .join(", ");
-      return [
-        fx.length && !origin && `--origin ${by(fx, originOfEntry, ORIGINS)}`,
-        mc.length && !edition && `--edition ${by(mc, editionOfEntry, EDITIONS)}`,
-        !license &&
-          xs.some((x) => SOUND.includes(x.kind)) &&
-          `--license ${by(
-            xs.filter((x) => SOUND.includes(x.kind)),
-            licenseOf,
-            LICENSES,
-          )}`,
-        !sources &&
-          xs.some((x) => SOUND.includes(x.kind)) &&
-          `--source ${tally(xs.flatMap((x) => (x.src ? [x.src] : [])))
-            .split(", ")
-            .slice(0, 10)
-            .join(", ")}${new Set(xs.map((x) => x.src)).size > 10 ? ", ..." : ""}`,
-      ].filter(Boolean) as string[];
-    };
+    const jevHere = `by meaning (Jev, paid; reads every entry of the kind or category): bun run find --jev --kind ${kinds?.join(",") ?? kindsHere.join(",")} "<the scene or feeling>"`;
     const groups =
       narrowed ||
       kindsHere.every((k) => !catList(inKinds.filter((x) => top(x.kind) === k)).includes(","))
@@ -1754,14 +1829,14 @@ export async function run(
           ...(cut ? [`first ${some.length} of ${inKinds.length}:`] : []),
           ...some.map((x) => line(x)),
           ...where(some),
-          ...soundFilters(inKinds).map((f) => `filter: ${f}`),
+          ...filtersFor(inKinds).map((f) => `filter: ${f}`),
           ...(cut ? [`named by: ${namedBy(inKinds)}`] : []),
           ...(some.some((x) => x.kind === "bgm") ? [BGM_MOOD] : []),
           `next: ${cut ? `search inside: bun run find <word>${filters} (a word from "named by"); all ${inKinds.length}: -n ${inKinds.length}` : `bun run find <words>${filters} searches these`}; one in full: bun run find --show <id>`,
+          `      ${jevHere}`,
+          ...(some.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool)}`] : []),
           ...(files.length > 1 && files.length <= 20
-            ? [
-                `      hear them (you cannot): earshot rank "<what it should sound or feel like>" ${files.join(" ")} --top 3`,
-              ]
+            ? [`      ${hearThem("<what it should sound or feel like>", files)}`]
             : []),
         ].join("\n"),
       );
@@ -1801,9 +1876,11 @@ export async function run(
             .join(", ")}${xs.length > 3 ? "…" : ""})`;
         }),
         ...more,
-        ...soundFilters(inKinds).map((f) => `filter: ${f}`),
+        ...filtersFor(inKinds).map((f) => `filter: ${f}`),
         `next: one category in full: bun run find --kind ${example ?? "<kind>/<category>"}${sources ? ` --source ${sources.join(",")}` : ""} (-n 500 for every entry)`,
         `      search inside it: bun run find <english words> --kind ${example ?? "<kind>/<category>"}; one in full: bun run find --show <id>`,
+        `      by meaning inside one (Jev, paid): bun run find --jev --kind ${example ?? "<kind>/<category>"} "<the scene or feeling>"`,
+        ...(inKinds.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool)}`] : []),
       ].join("\n"),
     );
   }
@@ -2043,13 +2120,19 @@ export async function run(
     next.push(
       "(N takes): the id shown is take 1 and plays as is; --all lists every take's id, to vary a sound that repeats.",
     );
+  // the filters that would split these hits, so a pack, a licence or a length is never a guess
+  const narrow = !jev && matches.length > 1 ? filtersFor(matches, true) : [];
+  if (narrow.length)
+    next.push(
+      `narrow these ${matches.length}: ${narrow.join(" | ")}  (a filter named alone, e.g. --license, says what its values mean)`,
+    );
   if (shown.some(([, x]) => x.kind === "mocap")) next.push(mocapNext(pool));
   const files = shown.flatMap(([, x]) =>
     SOUND.includes(x.kind) && x.data?.file ? [soundFile(x.data.file)] : [],
   );
   if (files.length > 1)
     next.push(
-      `hear them (you cannot): earshot rank "${query.replaceAll('"', "")}" ${files.join(" ")} --top 3  (about 40 s, its models load each call; describe the sound, not its job; which earshot command for what: bun run skills get core --ref sound)`,
+      `${hearThem(query, files)}  (about 40 s a call; describe the sound, not its job; which earshot command for what: bun run skills get core --ref sound)`,
     );
   if (next.length) out.push(`next: ${next.join("\n      ")}`);
   return readAs(out.join("\n"));

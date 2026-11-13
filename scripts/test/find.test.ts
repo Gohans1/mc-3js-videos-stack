@@ -699,3 +699,51 @@ test("a mocap mood no checked clip carries lists the moods the clips do carry", 
     /no checked clip has --mood scaredd\..*scared 1/,
   );
 });
+
+test("search hits end with the filters that would split them, each value with its count", async () => {
+  const pool = [
+    {
+      ...e("mc-door-open", "Door · Open", "", "mc", "blocks"),
+      src: "minecraft",
+      secs: 0.4,
+      data: { license: "Minecraft 26.3 Assets" },
+    },
+    {
+      ...e("mc-garage-door", "Garage door", "", "mc", "blocks"),
+      src: "macaws-doors",
+      secs: 1.2,
+      data: { license: "MIT" },
+    },
+  ];
+  const out = await run(["door"], pool, noJev);
+  expect(out).toMatch(
+    /narrow these 2: --edition vanilla 1, modded 1 \| --license minecraft 1, mod 1 \| --source macaws-doors 1, minecraft 1 \| --dur 0-1 1, 1-5 1/,
+  );
+});
+
+test("a category listed whole offers Jev inside that category", async () => {
+  const out = await run(["--kind", "sfx/foley"], vault, noJev);
+  expect(out).toMatch(/bun run find --jev --kind sfx\/foley "<the scene or feeling>"/);
+});
+
+test("--show says where a film makes its own of that kind, and a mark gets a line to paste", async () => {
+  expect(await run(["--show", "dissolve"], vault, noJev)).toMatch(
+    /make your own: a transition: \{id, title, tip, category, glsl\} passed as makeTransitions' last argument/,
+  );
+  const arrow = await run(["--show", "arrow"], presetEntries(), noJev);
+  expect(arrow).toMatch(
+    /text\.json items\[\]: \{"kind": "arrow", "x": 0\.5, "y": 0\.5, "size": 160/,
+  );
+  expect(arrow).toMatch(/see it: AT=/);
+});
+
+test("the mocap hint names every body filter with the moods and props the clips carry", async () => {
+  const clip = {
+    ...e("mixamo/Shiver", "Shiver", "", "mocap", "stand"),
+    data: { seq: ["stand"], mood: ["scared"], prop: ["none", "chair"] },
+  };
+  const out = await run(["shiver"], [clip], noJev);
+  expect(out).toMatch(/--from\|--to\|--has <posture> \(stand\)/);
+  expect(out).toMatch(/--mood <scared>, --prop <chair>/);
+  expect(out).toMatch(/--air yes\|no/);
+});
