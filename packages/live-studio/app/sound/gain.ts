@@ -77,8 +77,13 @@ export const normalizationDelta = (
   measured: number,
   target: number,
   peak: number,
+  ceiling = -1,
 ): number | null =>
-  [measured, target, peak].every(Number.isFinite) ? Math.min(target - measured, -1 - peak) : null;
+  [measured, target, peak].every(Number.isFinite)
+    ? Math.min(target - measured, ceiling - peak)
+    : null;
+
+export const MIX_CEILING = -1.5; // listen.py CEILING: the true peak the whole film's loudness pass stops at
 
 export const offsetGain = (c: GainClip, delta: number) => {
   c.gain = Math.round((c.gain + delta) * 1000) / 1000;

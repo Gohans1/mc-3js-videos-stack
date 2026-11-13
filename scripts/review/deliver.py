@@ -153,12 +153,13 @@ def check(video, info):
         i, lra, tp = loudness(video)
         if i < YOUTUBE - 1:
             fix(f"{i:.1f} LUFS: YouTube never turns it up, it plays {YOUTUBE - i:.1f} dB quieter than the videos around it. "
-                f"audio.json lufs {YOUTUBE:g}, then bun run mix renders/final_video.mp4")
+                f"bun run mix renders/final_video.mp4 again; if it says it stopped short, raise audio.json drive by what it names")
         elif i > YOUTUBE + 1:
             advise(f"{i:.1f} LUFS: YouTube turns it down {i - YOUTUBE:.1f} dB to {YOUTUBE:g}, the loudness bought with limiting is lost; "
                    f"audio.json lufs {YOUTUBE:g}")
         if tp > -1:
-            fix(f"true peak {tp:+.1f} dBTP: over -1 the AAC encode clips; bun run mix keeps -1 (audio.json lufs too high?)")
+            fix(f"true peak {tp:+.1f} dBTP: over -1 the AAC encode clips; bun run mix renders/final_video.mp4 again (it leaves "
+                f"the mix 1.5 dB under for the encode); still over: lower audio.json lufs by {tp + 1:.1f}")
     mbps = int(pic.get("bit_rate") or info["format"].get("bit_rate") or 0) / 1e6
     sound = (f", AAC {int(snd.get('sample_rate', 0)) / 1000:g} kHz {'stereo' if snd.get('channels') == 2 else str(snd.get('channels')) + ' ch'}"
              f" {int(snd.get('bit_rate') or 0) / 1000:.0f} kbps, {i:.1f} LUFS, peak {tp:+.1f} dBTP" if snd else ", no sound")

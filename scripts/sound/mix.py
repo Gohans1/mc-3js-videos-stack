@@ -1,12 +1,8 @@
 """The film's soundtrack from src/timeline/audio.json in one ffmpeg graph: the narration (assets/public/agent/full_voice.wav,
 already placed on the film clock by voice/assemble.ts and the studio's voice edits), beds (room hum, CCTV hiss) and
-one-shot sound effects (sound/sfx, CC0, sound/get_sfx.py). A limiter catches peaks, then ffmpeg-normalize (two-pass EBU
-R128, linear) brings it to audio.json lufs / -1 dBTP, and ffmpeg's ebur128 measures the result (listen.py loudness_report). -14 LUFS
-is what YouTube plays at; the 27 s cold open alone is mostly quiet room tone and stays linear only at -16.
-  python ../../scripts/sound/mix.py --raw OUT.wav      the studio's mix (sound.py): no loudness pass, and without the sounds that have
-                                         options to try; those go out as one stem per option, which the page plays itself
-  python ../../scripts/sound/mix.py --raw OUT.wav --live-lanes   the narration only, without the drive and limiter: the studio
-                                         plays audio.json's beds and one-shots itself and puts the limiter over the sum
+one-shot sound effects (sound/sfx, CC0, sound/get_sfx.py). A limiter catches peaks (audio.json drive pushes into it), then
+one linear gain brings it to audio.json lufs, or only as far as its true peak stays under -1.5 dBTP (listen.py level), and
+ffmpeg's ebur128 measures the result. -14 LUFS is what YouTube plays at.
   bun run mix                          -> sound/mix.wav (48 kHz stereo, film length)
   bun run mix renders/draft_video.mp4  also muxes it -> renders/draft.mp4, the draft with its sound (bun run render clip
                                        makes the silent video first)
@@ -58,7 +54,6 @@ def track_chain(e):
 
 
 PROJECTED_VOICE = LEGACY_TIMELINE = None
-VENV = Path(os.environ.get("AUDIO_VENV") or f"{os.environ.get('THREEJS_LAB', 'E:/threejs_lab')}/py/venv/Scripts")  # has ffmpeg-normalize
 PKG = ROOT / "package.json"
 CONFIG = (json.loads(PKG.read_text(encoding="utf8")) if PKG.exists() else {}).get("live-studio", {})
 SFX = ROOT / CONFIG.get("sfx", "sound/sfx")
@@ -405,9 +400,8 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
     graph = chains + [
         # audio.drive dB into the limiter first: hits (a slam, a drawer) stand ~20 dB over the average, too far apart for the
         # linear -14 LUFS pass below; the limiter trims them so the gap fits. Then the
-        # safety limiter at about -7 dBFS. The loudness pass must stay linear: ffmpeg-normalize's dynamic fallback lifts
-        # every quiet stretch (the CCTV hiss came up level with the voice). It falls back when target - true peak gap is
-        # too small, so a quiet excerpt takes a lower target (src/timeline/audio.json lufs)
+        # safety limiter at about -7 dBFS. The loudness pass after it stays linear (listen.level): a dynamic one lifts
+        # every quiet stretch (the CCTV hiss came up level with the voice), so drive is the only lever for more loudness
         f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={end},asetpts=N/SR/TB,atrim=duration={end}"
         + (f",volume={drive_db}dB,alimiter=limit=0.45:level=false" if master else "")
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
@@ -493,10 +487,9 @@ if __name__ == "__main__":
     raw = _assert_in_root(ROOT / "sound/mix_raw.wav", "Mix raw output")
     build(raw, [c for b in A["beds"] if (c := chosen(b))], [c for s in A["sfx"] if (c := chosen(s))])
     out = _assert_in_root(ROOT / "sound/mix.wav", "Mix output")
-    norm = shutil.which("ffmpeg-normalize", path=str(VENV)) or shutil.which("ffmpeg-normalize") or "ffmpeg-normalize"
-    subprocess.run([norm, str(raw), "-o", str(out), "-f", "-nt", "ebu", "-t", str(float(A["lufs"])), "-tp", "-1", "-lrt", "11", "--keep-lra-above-loudness-range-target", "-ar", "48000", "-c:a", "pcm_s16le"], check=True, timeout=300)
-    from listen import loudness_report
-    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]))))
+    from listen import level, loudness_report
+    held = level(raw, out, float(A["lufs"]))
+    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]), held)))
     if len(sys.argv) > 1:
         # the final (bun run render final) goes out as the upload: AAC at YouTube's 384 kbps for stereo, moov up front, no edit list
         final = Path(sys.argv[1]).name == "final_video.mp4"
@@ -507,5 +500,5 @@ if __name__ == "__main__":
                        check=True, timeout=300)
         print(f"muxed renders/{name}" + (" (the file to upload; bun run deliver checks it against YouTube's spec)" if final else ""))
     print("NOT checked here, and needed before calling it ready: whether every word is heard over the beds, the end fades, "
-          "no hit is buried: bun run listen (about 1.5 min)"
+          "no hit is buried: bun run listen (about a second per film second the first time)"
           + ("" if len(sys.argv) > 1 else "; bun run mix renders/draft_video.mp4 puts it on the draft"))

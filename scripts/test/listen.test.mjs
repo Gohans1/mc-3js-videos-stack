@@ -56,6 +56,63 @@ test("the mix's loudness is judged the way YouTube plays it: turned down when lo
   assert.doesNotMatch(soft, /true peak over/);
 });
 
+// ffmpeg-normalize once fell back to dynamic loudnorm on a mix whose peaks stood far over its loudness, lifting every quiet
+// stretch and still leaving +0.5 dBTP after the AAC encode (AES TD1004 6a: raise linearly to the target or the peak ceiling)
+test("the loudness pass raises a mix linearly to its target, or only as far as its true peaks allow, and says which lever is left", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "level-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const level = (src, target) => {
+    const out = src.replace(/\.wav$/, "_out.wav");
+    const r = spawnSync(
+      "python",
+      [
+        "-c",
+        `import sys, json; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import level, loudness, loudness_report
+held = level(sys.argv[1], sys.argv[2], float(sys.argv[3]))
+i, lra, tp = loudness(sys.argv[2])
+print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.argv[2], float(sys.argv[3]), held)}))`,
+        src,
+        out,
+        String(target),
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.stdout);
+  };
+  const even = join(dir, "even.wav"),
+    spiky = join(dir, "spiky.wav");
+  tone(even, "0.05*sin(2*PI*440*t)");
+  // a quiet bed with one hit 26 dB over it: no linear gain reaches -14 LUFS under the ceiling
+  tone(spiky, "0.03*sin(2*PI*440*t)+between(t\\,4\\,4.05)*0.6*sin(2*PI*900*t)");
+
+  const plain = level(even, -14);
+  assert.equal(plain.held, 0);
+  assert.ok(Math.abs(plain.i + 14) < 0.3, `reached -14: ${plain.i}`);
+
+  const hit = level(spiky, -14);
+  assert.ok(hit.held > 1, `held back: ${hit.held}`);
+  assert.ok(hit.tp <= -1.4, `peak under the ceiling: ${hit.tp}`);
+  assert.ok(Math.abs(hit.i + 14 + hit.held) < 0.3, `short of -14 by what it says: ${hit.i}`);
+  assert.match(
+    hit.report.join("\n"),
+    /stopped \d+\.\d dB short so its true peak stays under -1\.5 dBTP; louder: raise audio\.json drive, try \+\d+ dB/,
+  );
+  assert.doesNotMatch(hit.report.join("\n"), /lufs -14 is what it plays at/);
+  // within YouTube's 1 LU the loudness is ready: no lever to pull
+  const close = spawnSync(
+    "python",
+    [
+      "-c",
+      `import sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import loudness_report; print("\\n".join(loudness_report(sys.argv[1], -14, 0.6)))`,
+      even.replace(/\.wav$/, "_out.wav"),
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(close.status, 0, close.stderr);
+  assert.doesNotMatch(close.stdout, /stopped/);
+});
+
 test("listen flags a sound effect that barely rises over the bed it lands on, and not one that cuts through", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "listen-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

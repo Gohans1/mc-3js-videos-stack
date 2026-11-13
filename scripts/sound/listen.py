@@ -55,18 +55,39 @@ def loudness(media):
     return read("I"), read("LRA"), read("Peak")
 
 
-def loudness_report(wav, target):
-    """The finished mix as an upload is judged (ffmpeg ebur128, true peak 4x oversampled): what bun run mix prints last."""
+# The mix's true-peak ceiling before the AAC encode: AES TD1008 asks -1 dBTP at a lossy codec's input, and AAC overshoots
+# more at lower rates (a 192 kbps draft rose 1.4 dB)
+CEILING = -1.5
+
+
+def level(raw, out, target, ceiling=CEILING):
+    """Linear gain up to `target` LUFS, or only as far as the true peak stays under `ceiling` (AES TD1004 6a), never a dynamic
+    loudnorm that lifts every quiet stretch. Returns the dB it stopped short of the target, 0 when it got there."""
+    i, _, tp = loudness(raw)
+    want = target - i if math.isfinite(i) else 0.0
+    gain = min(want, ceiling - tp) if math.isfinite(tp) else want
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(raw), "-af", f"volume={gain:.3f}dB", "-ar", "48000",
+                    "-c:a", "pcm_s16le", str(out)], check=True, timeout=300)
+    return round(max(0.0, want - gain), 1)
+
+
+def loudness_report(wav, target, held=0.0):
+    """The finished mix as an upload is judged (ffmpeg ebur128, true peak 4x oversampled): what bun run mix prints last.
+    held: what level() stopped short of the target to keep the true peak under the ceiling."""
     i, lra, tp = loudness(wav)
     out = [f"{wav}: {i:.1f} LUFS integrated, true peak {tp:.1f} dBTP, loudness range {lra:.1f} LU"]
-    if abs(i - target) > 1:
-        out.append(f"  {abs(i - target):.1f} LU {'over' if i > target else 'under'} audio.json lufs ({target:g})"
-                   + (": the -1 dBTP ceiling held it back (the loudness pass stays linear, it does not squash)" if i < target else ""))
+    short = held > 1
+    if short:
+        # on sealed-room +4 dB of drive bought +1.6 LU and +3 bought +1.0: the limiter gives back about a third
+        out.append(f"  stopped {held:.1f} dB short so its true peak stays under {CEILING:g} dBTP; louder: raise audio.json drive, "
+                   f"try +{math.ceil(3 * held)} dB (its limiter takes the peaks and returns about a third of a dB per dB), then bun run mix again")
+    elif abs(i - target) > 1:
+        out.append(f"  {abs(i - target):.1f} LU {'over' if i > target else 'under'} audio.json lufs ({target:g})")
     if i > YOUTUBE + 1:
         out.append(f"  YouTube turns it down {i - YOUTUBE:.1f} dB to {YOUTUBE:g} LUFS: the loudness bought with limiting is thrown away")
     elif i < YOUTUBE - 1:
-        out.append(f"  YouTube never turns it up: it plays {YOUTUBE - i:.1f} dB quieter than the videos around it "
-                   f"(audio.json lufs {YOUTUBE:g} is what it plays at)")
+        out.append(f"  YouTube never turns it up: it plays {YOUTUBE - i:.1f} dB quieter than the videos around it"
+                   + ("" if short else f" (audio.json lufs {YOUTUBE:g} is what it plays at)"))
     else:
         out.append(f"  YouTube plays it as made (within 1 LU of {YOUTUBE:g} LUFS): the loudness is ready, nothing more")
     if tp > -1:

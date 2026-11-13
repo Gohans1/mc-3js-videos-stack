@@ -6,7 +6,7 @@
 - trước/trong/sau khi triển khai/tư vấn/làm việc/etc... Với chủ đề/lĩnh vực/task/yêu cầu/thông tin/etc... Cụ thể nào đó liên quan đến 3js -> ưu tiên tìm hiểu/triển khai/áp dụng/tư vấn/etc... những repo dưới đây (research latest/best-practice là cần thiết đề phòng quên/outdate) (không có thì hãy research xem có thư viện nào giải quyết được chưa, nếu không có thì có thể tự custom code nhưng phải báo cáo dev)
 - Hãy biết thông minh lựa chọn công cụ/vũ khí để phối hợp sử dụng hài hoà một cách hiệu quả/best practice/trùm cuối nhất, KHÔNG mù quáng áp dụng
 
-- Đã gắn sẵn trong monorepo Minecraft (dùng lại, đừng gắn lần 2): mediabunny (render), math, postprocessing, n8ao, block-model-renderer (template phim), MineRender (mc-actor/mob.ts), MCprep + UAL + Mixamo (mc-actor, clip-catalog), three-mesh-bvh (CHECK=touch), whisperX (scripts/voice/words.py), pyloudnorm + ffmpeg-normalize (scripts/sound/mix.py).
+- Đã gắn sẵn trong monorepo Minecraft (dùng lại, đừng gắn lần 2): mediabunny (render), math, postprocessing, n8ao, block-model-renderer (template phim), MineRender (mc-actor/mob.ts), MCprep + UAL + Mixamo (mc-actor, clip-catalog), three-mesh-bvh (CHECK=touch), whisperX (scripts/voice/words.py), ffmpeg ebur128 + một gain tuyến tính chặn ở -1.5 dBTP (scripts/sound/mix.py, listen.py).
 
 ## Thực chiến Mọi video all time
 

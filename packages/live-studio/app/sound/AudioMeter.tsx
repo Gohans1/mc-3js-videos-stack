@@ -19,7 +19,7 @@ const SCALE = [0, -6, -12, -18, -24, -36, -48, -60];
 const HOLD = 1.5,
   FALL = 20 / 1.7; // IEC TR 60268-18's digital peak meter: back 20 dB in 1.7 s; the hold mark waits 1.5 s first
 const YELLOW = -12,
-  RED = -1; // red from -1 dBTP, where mix.py's loudness pass stops being linear
+  RED = -1; // red from -1 dBTP, where the upload's AAC encode can clip
 const fixed = (v: number) =>
   Number.isFinite(v) ? (v > -0.05 && v < 0.05 ? "0.0" : v.toFixed(1)) : "−∞";
 const signed = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
@@ -140,11 +140,10 @@ export function AudioMeter() {
   }, [on]);
 
   if (!on) return null;
-  const over = loudness && loudness.truePeak > -1;
-  // The highest target the pass can reach and stay even, a little under, as this measure and ffmpeg's differ by about 0.2 dB
-  const highest = loudness && Math.floor((loudness.target - loudness.truePeak - 1 - 0.3) * 10) / 10;
+  // more than YouTube's 1 LU short: the same line bun run mix prints, so the creator and the AI see one lever
+  const under = loudness && loudness.held > 1;
   const about = loudness
-    ? `The final render moves the whole film by ${signed(loudness.gain)} dB, from ${loudness.before.toFixed(1)} to ${loudness.target} LUFS, and these numbers already include that. ${over ? `After it the loudest peak is ${signed(loudness.truePeak)} dBTP, over −1: the loudness pass can't stay even and squeezes the whole film. Set "lufs" in audio.json to ${highest} or lower, or lower "drive".` : `Its loudest peak is then ${signed(loudness.truePeak)} dBTP, under −1.`}`
+    ? `The final render moves the whole film by ${signed(loudness.gain)} dB, from ${loudness.before.toFixed(1)} to ${(loudness.before + loudness.gain).toFixed(1)} LUFS, and these numbers already include that. ${under ? `That is ${loudness.held.toFixed(1)} dB short of ${loudness.target}: more would push its loudest peak over −1.5 dBTP. Louder: raise "drive" in audio.json; its limiter takes the peaks and each dB of drive buys about a third of a dB.` : `Its loudest peak is then ${signed(loudness.truePeak)} dBTP.`}`
     : live
       ? "Measuring the film's loudness…"
       : "The page plays this film's last mix, before the final loudness pass, so these are the page's levels, not the video's.";
@@ -166,9 +165,9 @@ export function AudioMeter() {
           className="text-foreground focus-visible:ring-ring flex items-center justify-between gap-0.5 rounded-sm px-0.5 py-0.5 outline-none focus-visible:ring-2"
         >
           <span ref={short}>−∞</span>
-          {over && (
+          {under && (
             <TriangleAlert
-              aria-label="Peaks over −1 dBTP after the loudness pass"
+              aria-label="Quieter than the target: its peaks stop the loudness pass"
               className="text-warn ms-auto size-3 flex-none"
             />
           )}

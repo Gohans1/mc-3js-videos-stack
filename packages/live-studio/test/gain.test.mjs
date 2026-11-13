@@ -92,6 +92,8 @@ test("normalization reaches the loudness target when headroom permits and caps g
   assert.equal(normalizationDelta(-24, -14, -3), 2);
   assert.equal(normalizationDelta(-10, -14, 0), -4);
   assert.equal(normalizationDelta(-Infinity, -14, -Infinity), null);
+  // the whole film's pass (mix.py, listen.level) keeps 1.5 dB for the AAC encode's overshoot
+  assert.equal(normalizationDelta(-24, -14, -3, -1.5), 1.5);
 });
 
 test("normalizing an animated clip preserves the differences between its volume keys", () => {

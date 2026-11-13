@@ -9,6 +9,7 @@ import worklet from "loudness-worklet/worklet?url";
 
 import { get, set } from "../core/store";
 import { addModule, audioCtx, master, STEREO } from "./clock";
+import { MIX_CEILING, normalizationDelta } from "./gain";
 import { renderFilm } from "./mixer";
 
 const load = (ctx: BaseAudioContext) => addModule(ctx, worklet);
@@ -94,13 +95,14 @@ export const readMeter = (gain: number): Reading => {
   };
 };
 
-// ---------- The final render's loudness pass (mix.py: ffmpeg-normalize, EBU R128, linear): the gain it gives the whole film
+// ---------- The final render's loudness pass (mix.py, listen.level): one linear gain to the target, or as far as MIX_CEILING allows
 export interface Loudness {
   before: number;
   target: number;
   gain: number;
   truePeak: number;
-} // truePeak: the film's, after the gain
+  held: number;
+} // truePeak: the film's, after the gain; held: how far short of the target the ceiling stopped it
 let timer = 0,
   busy = false,
   again = false;
@@ -141,13 +143,16 @@ const measure = async () => {
       set({ loudness: null });
       return;
     }
-    const gain = target - s.integratedLoudness;
+    const gain =
+      normalizationDelta(s.integratedLoudness, target, s.maximumTruePeakLevel, MIX_CEILING) ??
+      target - s.integratedLoudness;
     set({
       loudness: {
         before: s.integratedLoudness,
         target,
         gain,
         truePeak: s.maximumTruePeakLevel + gain,
+        held: target - s.integratedLoudness - gain,
       },
     });
   } catch (e) {
