@@ -60,9 +60,9 @@ export async function buildScene(canvas, W, H, draft = false) {
   const camera = new THREE.PerspectiveCamera(60, W / H, 0.02, 700);
   scene.add(camera);
 
-  // client.jar without its Java code (scripts/mc/slim_jar.py), then the props and the picks stacked above it
+  // client.jar without its Java code (scripts/mc/slim_jar.mjs), then the props and the picks stacked above it
   const jarFile = await fetch("mc/client_assets.zip");
-  if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: bun run link at the repo root (python ../../scripts/mc/slim_jar.py if the vault lacks it)");
+  if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: bun run link at the repo root (bun ../../scripts/mc/slim_jar.mjs if the vault lacks it)");
   const jar = new Uint8Array(await jarFile.arrayBuffer());
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
   const sources = [pack, picked, jar];

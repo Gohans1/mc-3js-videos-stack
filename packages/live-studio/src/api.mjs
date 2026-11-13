@@ -162,6 +162,18 @@ export const createApi = (film, { page, events, send }) => {
       c.header("etag", tag);
       c.header("cache-control", "no-cache"); // a re-made copy shows up at once
       if (c.req.header("if-none-match") === tag && !range) return c.body(null, 304);
+      // A copy squeezed once at its best (scripts/mc/slim_jar.mjs writes one for the Minecraft jar): too big to squeeze per
+      // request, and it shrinks most when squeezed whole. Only while it is newer than the file it copies
+      const br = `${file}.br`;
+      if (!range && /\bbr\b/.test(c.req.header("accept-encoding") ?? "") && existsSync(br)) {
+        const copy = statSync(br);
+        c.header("vary", "accept-encoding");
+        if (copy.mtimeMs >= mtimeMs) {
+          c.header("content-encoding", "br");
+          c.header("content-length", String(copy.size));
+          return c.body(Readable.toWeb(film.openRead(br)));
+        }
+      }
       if (pack && !range && size <= PACK_MAX)
         return c.body(await squeeze(c, readFileSync(file), tag));
     }

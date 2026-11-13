@@ -240,7 +240,40 @@ test("slim_jar.mjs strips .class and META-INF while keeping assets, data/minecra
   // Second call verifies cached client_assets.zip without failing; corrupting it triggers a clear error
   slimJar({ mcDir });
   writeFileSync(join(mcDir, "client_assets.zip"), "corrupted");
+  const later = new Date(Date.now() + 60_000);
+  utimesSync(join(mcDir, "client_assets.zip.br"), later, later); // still counts as made: only checked
   assert.throws(() => slimJar({ mcDir }), /Corrupt/);
+});
+
+test("slim_jar.mjs stores the files as they are and squeezes the whole zip once into client_assets.zip.br", async (t) => {
+  const { zipSync, unzipSync, strToU8 } = await import("fflate");
+  const { brotliDecompressSync } = await import("node:zlib");
+  const { slimJar } = await import("../mc/slim_jar.mjs");
+  const mcDir = mkdtempSync(join(tmpdir(), "mc-slim-br-test-"));
+  t.after(() => rmSync(mcDir, { recursive: true, force: true }));
+  const model = strToU8(
+    JSON.stringify({ parent: "block/cube_all", textures: { all: "block/stone" } }),
+  );
+  const files = Object.fromEntries(
+    Array.from({ length: 40 }, (_, i) => [`assets/minecraft/models/block/b${i}.json`, model]),
+  );
+  writeFileSync(join(mcDir, "client.jar"), zipSync(files));
+  // a zip from before (deflated, no .br beside it) is made again, not kept as verified
+  writeFileSync(join(mcDir, "client_assets.zip"), zipSync(files, { level: 6 }));
+  const after = new Date(Date.now() + 60_000);
+  utimesSync(join(mcDir, "client_assets.zip"), after, after);
+  slimJar({ mcDir });
+
+  const zip = readFileSync(join(mcDir, "client_assets.zip"));
+  const methods = new Set();
+  unzipSync(zip, { filter: (f) => (methods.add(f.compression), true) });
+  assert.deepEqual(
+    [...methods],
+    [0],
+    "stored: brotli over the whole zip finds the repeats across files",
+  );
+  assert.deepEqual(brotliDecompressSync(readFileSync(join(mcDir, "client_assets.zip.br"))), zip);
+  assert.deepEqual(Object.keys(unzipSync(zip)), Object.keys(files));
 });
 
 test("timeline_fmt.ts matches timeline_fmt.py 140-column formatting", async () => {
