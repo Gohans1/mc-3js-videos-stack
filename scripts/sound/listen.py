@@ -74,6 +74,23 @@ def level(raw, out, target, ceiling=CEILING):
     return round(max(0.0, want - gain), 1)
 
 
+def fit_encoded(raw, out, target, encode, limit=-1.0):
+    """level() into out, then encode(out) -> the encoded file. When the codec's overshoot lifts that file's true peak over
+    `limit` (the upload spec), level again with the ceiling lowered by the overshoot and encode again, so the file that
+    goes out is measured, not the wav before it (AES TD1004: lossy codecs overshoot). Returns (dB held short, dB taken off)."""
+    held, ceiling, taken = level(raw, out, target), CEILING, 0.0
+    # the overshoot scales with the gain, near enough; a second try mops up what the first misjudged
+    for tries in range(4):
+        tp = loudness(encode(out))[2]
+        if not math.isfinite(tp) or tp <= limit or tries == 3:
+            break
+        over = tp - limit + 0.1
+        ceiling = min(ceiling, loudness(out)[2]) - over
+        taken = round(taken + over, 1)
+        held = level(raw, out, target, ceiling)
+    return held, taken
+
+
 DRIVE_MAX = 12  # live-studio check.mjs warns past it: every hit flattened into the bed
 
 
@@ -88,7 +105,7 @@ def loudness_report(wav, target, held=0.0, drive=0.0):
         want = min(DRIVE_MAX, drive + math.ceil(3 * held))
         # sealed-room at +12: the narration 3 dB up bought 0.2 LU (its own limiter holds it); only drive closes the peak gap
         lever = (f"drive is at +{drive:g}, the most before bun run check warns the hits flatten. Either leave it (the upload plays "
-                 f"{held:.1f} dB under the target, nothing else wrong) or raise drive past {DRIVE_MAX} and listen whether the hits still land"
+                 f"{held:.1f} dB under audio.json lufs, nothing else wrong) or raise drive past {DRIVE_MAX} and listen whether the hits still land"
                  if drive >= DRIVE_MAX else
                  f"set audio.json drive to {want:g} (now {drive:g}){', the most before the hits flatten' if want == DRIVE_MAX else ''}; "
                  "its limiter takes the peaks, each dB buying a third to a half of one; then bun run mix again")

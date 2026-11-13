@@ -205,7 +205,8 @@ export const whatsAt = (dir: string, t: number) => {
   }
 
   let narration: { line: number; text: string; word?: string; s: number; e: number } | null = null,
-    nextLine: number | null = null;
+    nextLine: number | null = null,
+    voiceFault: string | null = null;
   try {
     const cues = buildVoiceCues(dir);
     const li = cues.lines.findIndex((l) => l.s <= t && t <= l.e);
@@ -219,7 +220,10 @@ export const whatsAt = (dir: string, t: number) => {
         e: l.e,
       };
     } else nextLine = cues.lines.find((l) => l.s > t)?.s ?? null;
-  } catch {} // no narration yet: bun run voice:cues says why
+  } catch (e) {
+    // a film with no narration has no lines and no error: a throw is a fault, so the voice may be playing here unseen
+    voiceFault = (e as Error).message;
+  }
   // the script not voiced yet (src/edit.json script_lines, scene seconds as the film's list reads them)
   const scriptLines: Row[] = edit.script_lines ?? [];
   const script = narration
@@ -265,6 +269,7 @@ export const whatsAt = (dir: string, t: number) => {
     keys,
     narration,
     nextLine,
+    voiceFault,
     script,
     notes,
     conf,
@@ -367,9 +372,11 @@ if (isMain) {
       }`,
     );
   out.push(
-    got.narration
-      ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
-      : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)`,
+    got.voiceFault
+      ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
+      : got.narration
+        ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
+        : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)`,
   );
   if (got.script)
     out.push(

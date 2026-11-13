@@ -20,7 +20,7 @@ import { SoundTimeline } from "../../packages/live-studio/src/contract.ts";
 import { voiceFileOf } from "../../packages/live-studio/src/voice-map.mjs";
 import { runAssemble } from "../voice/assemble.ts";
 import { buildVoiceCues } from "../voice/cues.ts";
-import { runGen } from "../voice/gen.ts";
+import { runGen, unheardWords } from "../voice/gen.ts";
 import { alignmentToWords, stripAudioTags, sts, tts } from "../voice/genvoice.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -1262,4 +1262,72 @@ test("mix.py rejects file-writing audio filters outside the stateless DSP allowl
   assert.notEqual(py.status, 0);
   assert.match(py.stderr, /Unsafe or invalid ffmpeg audio filter/);
   assert.equal(existsSync(join(dir, "pwned.txt")), false);
+});
+
+test("voice:cues reads a line a Freeze cuts in two as its two heard pieces, each at its own pace", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cues-freeze-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ takes: [{ id: "01", t: 0, text: "One two three." }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ freezes: [{ at: 1.5, duration: 2 }] }),
+  );
+  writeFileSync(join(dir, "voice/takes/01.mp3"), "mp3");
+  writeFileSync(
+    join(dir, "voice/takes/01.mp3.words.json"),
+    JSON.stringify({
+      dur: 3,
+      words: [
+        { w: "One", s: 0, e: 1 },
+        { w: "two", s: 1, e: 2 },
+        { w: "three.", s: 2, e: 3 },
+      ],
+    }),
+  );
+  const cues = buildVoiceCues(dir);
+  assert.deepEqual(
+    cues.lines.map((l) => [l.s, l.e, l.speed]),
+    [
+      [0, 1.5, 1],
+      [3.5, 5, 1],
+    ],
+  );
+});
+
+// a take made before voice:gen kept its words has only what whisperX heard: words that no longer read the same are named, never
+// spent on (a misheard word reads differently too)
+test("voice:gen names the takes whose audio says other words than src/edit.json, when it never kept what it sent", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "gen-heard-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "01", text: "[low] He opens his eyes." },
+        { id: "02", text: "A heavy iron door, sealed." },
+        { id: "03", text: "Kept words." },
+      ],
+    }),
+  );
+  const take = (id, words) => {
+    writeFileSync(join(dir, `voice/takes/${id}.mp3`), "mp3");
+    writeFileSync(
+      join(dir, `voice/takes/${id}.mp3.words.json`),
+      JSON.stringify({ dur: 1, words: words.split(" ").map((w, i) => ({ w, s: i, e: i + 0.5 })) }),
+    );
+  };
+  take("01", "He opens his eyes.");
+  take("02", "A heavy steel door.");
+  take("03", "Old words.");
+  writeFileSync(join(dir, "voice/takes/.texts.json"), JSON.stringify({ "03": "Kept words." }));
+  assert.deepEqual(unheardWords(dir), [
+    { id: "02", heard: "A heavy steel door.", text: "A heavy iron door, sealed." },
+  ]);
 });

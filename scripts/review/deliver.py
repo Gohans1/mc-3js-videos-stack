@@ -92,6 +92,8 @@ def rate(stream):
 
 
 def check(video, info):
+    # the mix that wrote this file: a draft.mp4 comes from the draft, anything else is taken for the upload
+    remix = f"bun run mix renders/{'draft_video' if Path(video).name == 'draft.mp4' else 'final_video'}.mp4"
     """(summary line, [(FIX|ADVICE, words)]) for one video against the upload spec"""
     out = []
     fix = lambda words: out.append(("FIX", words))  # noqa: E731
@@ -138,29 +140,29 @@ def check(video, info):
     elif min(w, h) < 1440:
         advise(f"{min(w, h)}p: YouTube serves a 1440p or bigger upload in better codecs even to 1080p viewers; RES=1440 bun run render final")
     if not snd:
-        fix("no sound: bun run mix renders/final_video.mp4 puts the soundtrack on the picture (renders/final.mp4)")
+        fix(f"no sound: {remix} puts the soundtrack on the picture")
     else:
         if snd["codec_name"] != "aac":
-            advise(f"{snd['codec_name']} sound: YouTube asks AAC-LC; bun run mix renders/final_video.mp4 writes it")
+            advise(f"{snd['codec_name']} sound: YouTube asks AAC-LC; {remix} writes it")
         if snd.get("channels") == 1:
-            fix("mono sound: YouTube asks stereo (or 5.1); bun run mix renders/final_video.mp4 writes stereo")
+            fix(f"mono sound: YouTube asks stereo (or 5.1); {remix} writes stereo")
         if int(snd.get("sample_rate", 0)) not in (48000, 96000):
-            advise(f"{int(snd.get('sample_rate', 0)) / 1000:g} kHz: YouTube asks 48 or 96 kHz; bun run mix renders/final_video.mp4 writes 48")
+            advise(f"{int(snd.get('sample_rate', 0)) / 1000:g} kHz: YouTube asks 48 or 96 kHz; {remix} writes 48")
         heard = float(snd.get("duration") or long)
         seen = float(pic.get("duration") or long)
         if abs(heard - seen) > 0.1:
             fix(f"the sound is {abs(heard - seen):.2f} s {'shorter' if heard < seen else 'longer'} than the picture: "
-                "bun run mix renders/final_video.mp4 again (it cuts the mix to the picture)")
+                f"{remix} again (it cuts the mix to the picture)")
         i, lra, tp = loudness(video)
         if i < YOUTUBE - 1:
             fix(f"{i:.1f} LUFS: YouTube never turns it up, it plays {YOUTUBE - i:.1f} dB quieter than the videos around it. "
-                f"bun run mix renders/final_video.mp4 again; if it says it stopped short, raise audio.json drive by what it names")
+                f"{remix} again; if it says it stopped short, set audio.json drive as it says")
         elif i > YOUTUBE + 1:
             advise(f"{i:.1f} LUFS: YouTube turns it down {i - YOUTUBE:.1f} dB to {YOUTUBE:g}, the loudness bought with limiting is lost; "
                    f"audio.json lufs {YOUTUBE:g}")
         if tp > -1:
-            fix(f"true peak {tp:+.1f} dBTP: over -1 the AAC encode clips; bun run mix renders/final_video.mp4 again (it leaves "
-                f"the mix 1.5 dB under for the encode); still over: lower audio.json lufs by {tp + 1:.1f}")
+            fix(f"true peak {tp:+.1f} dBTP: over -1 the AAC encode clips; {remix} again: it measures the encoded file and "
+                "lowers the mix by what the codec added")
     mbps = int(pic.get("bit_rate") or info["format"].get("bit_rate") or 0) / 1e6
     sound = (f", AAC {int(snd.get('sample_rate', 0)) / 1000:g} kHz {'stereo' if snd.get('channels') == 2 else str(snd.get('channels')) + ' ch'}"
              f" {int(snd.get('bit_rate') or 0) / 1000:.0f} kbps, {i:.1f} LUFS, peak {tp:+.1f} dBTP" if snd else ", no sound")

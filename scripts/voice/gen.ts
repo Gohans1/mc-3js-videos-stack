@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import { cliArgs, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
 import { assertInsideDir, wordsCommand } from "../../packages/live-studio/src/voice-map.mjs";
-import { sts, tts } from "./genvoice.ts";
+import { stripAudioTags, sts, tts } from "./genvoice.ts";
 
 const HELP = `Narration takes for the lines in src/edit.json "takes", from ElevenLabs (via genvoice.pro unless ELEVENLABS_API_KEY
 is set). Run inside the film. Credits are spent only with --yes; without it every run only previews.
@@ -78,6 +78,32 @@ export interface GenRunOptions {
 
 const hasTakeAudio = (dir: string, stem: string) =>
   existsSync(join(dir, `${stem}.mp3`)) || existsSync(join(dir, `${stem}.wav`));
+
+// Takes whose kept words (whisperX's, in <take>.words.json) read otherwise than src/edit.json, for the takes voice:gen made
+// before it kept what it sent (voice/takes/.texts.json). Named only: a misheard word reads otherwise too, so nothing is spent
+export const unheardWords = (filmDir: string) => {
+  const takesDir = join(filmDir, "voice/takes");
+  const plain = (text: string) =>
+    stripAudioTags(text)
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+  const textsFile = join(takesDir, ".texts.json");
+  const kept: Record<string, string> = existsSync(textsFile) ? jsonFile(textsFile, filmDir) : {};
+  const takes: TakeSpec[] =
+    (jsonFile(join(filmDir, "src/edit.json"), filmDir) as { takes?: TakeSpec[] }).takes ?? [];
+  return takes.flatMap((t) => {
+    if (kept[t.id] !== undefined || typeof t.text !== "string") return [];
+    const wordsFile = [`${t.id}.mp3`, `${t.id}.wav`]
+      .map((f) => join(takesDir, `${f}.words.json`))
+      .find(existsSync);
+    if (!wordsFile) return [];
+    const heard = ((jsonFile(wordsFile, filmDir) as { words?: { w: string }[] }).words ?? [])
+      .map((w) => w.w)
+      .join(" ");
+    return heard && plain(heard) !== plain(t.text) ? [{ id: t.id, heard, text: t.text }] : [];
+  });
+};
 
 const nextTryOut = (tryDir: string, id: string) => {
   let n = 1;
@@ -390,4 +416,9 @@ if (isMain) {
       `nothing to generate: every take in src/edit.json has audio in voice/takes. Redo some: bun run voice:gen ${ids[0] ?? "ID"} previews it (the ids: ${ids.join(", ") || "none yet"}); new tries beside them: --try ID`,
     );
   }
+  if (!process.argv.slice(2).some((a) => !a.startsWith("-")))
+    for (const u of unheardWords(film))
+      console.log(
+        `take ${u.id}: its audio says "${u.heard}", src/edit.json says "${u.text}". Reworded since? bun run voice:gen ${u.id} previews it again (a misheard word reads otherwise too)`,
+      );
 }

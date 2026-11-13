@@ -513,8 +513,11 @@ export const SOUND_KEYS = {
 
 // ---------- The camera keys (package.json "live-studio".camTimeline), which the studio also writes: one entry per key, in time
 // order, t in the seconds draw(t) is given. p and l are a point [x, y, z] or the film's own anchor ({"eye": [...]}); ease is a
-// named ease of the film or a CSS cubic-bezier [x1, y1, x2, y2]. Anything else on a key (fov, wave, roll) is the film's
-const point = z.union([z.tuple([z.number(), z.number(), z.number()]), z.looseObject({})]);
+// named ease of the film or a CSS cubic-bezier [x1, y1, x2, y2]; fov, wave and roll are numbers every film's camera reads.
+// Any other key on a key is the film's own
+const point = z.union([z.tuple([z.number(), z.number(), z.number()]), z.looseObject({})], {
+  error: 'a point [x, y, z], or the film\'s anchor like {"eye": [x, y, z]}',
+});
 const unit = z.number().min(0).max(1);
 const Ease = z.union([z.string().min(1), z.tuple([unit, z.number(), unit, z.number()])]);
 const CamKey = z.looseObject({
@@ -523,7 +526,11 @@ const CamKey = z.looseObject({
   l: point,
   cut: z.boolean().optional(),
   ease: Ease.optional(),
+  fov: z.number().positive().optional(),
+  wave: z.number().optional(),
+  roll: z.number().optional(),
 });
+export const CAM_KEYS = Object.keys(CamKey.shape);
 export const CamTimeline = z
   .array(CamKey)
   .min(1)

@@ -83,12 +83,13 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
   const sourceDur = Math.max(heard(edit.end ?? wavDur), ...projected.map((l) => l.e), wavDur);
   const clock = compileLayerTiming(timing, Math.max(0.1, sourceDur), "voice");
   // speed: how much faster than spoken the line plays, when the voice follows the picture's Speed (timing.json layerKinds.voice)
+  // a Freeze inside a line splits it into pieces, so each piece's pace comes from its own source span
   const lines: (NarrationLine & { speed: number })[] = mapVoice(projected, clock).map(
-    (l: NarrationLine, i: number) => ({
+    (l: NarrationLine) => ({
       text: l.text,
       s: r3(l.s),
       e: r3(l.e),
-      speed: r3((projected[i]!.e - projected[i]!.s) / Math.max(l.e - l.s, 1e-3)),
+      speed: r3((clock.sourceAt(l.e, "before") - clock.sourceAt(l.s)) / Math.max(l.e - l.s, 1e-3)),
       words: l.words.map((v) => ({ w: v.w, s: r3(v.s), e: r3(v.e) })),
     }),
   );

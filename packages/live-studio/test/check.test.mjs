@@ -63,6 +63,34 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   const good = check();
   assert.equal(good.status, 0, good.stdout + good.stderr);
   assert.match(good.stdout, /^ok/);
+
+  // the keys every film's camera reads, typed and spelt (a probe's fov "wide" and "fvo" passed, a 2-number p said only "Invalid input")
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 1, 5], l: [0, 1, 0], fov: "wide" },
+      { t: 1, p: [0, 1], l: [0, 1, 0], fvo: 40 },
+    ]),
+  );
+  const cam = check();
+  assert.equal(cam.status, 1, cam.stdout + cam.stderr);
+  assert.match(cam.stderr, /at \[0\]\.fov/);
+  assert.match(cam.stderr, /\[x, y, z\][^\n]*\n\s*→ at \[1\]\.p/);
+  assert.match(cam.stderr, /\[1\] "fvo": no key the camera reads; did you mean "fov"\?/);
+
+  // a misspelt key named even while the row it belongs to is missing the right one
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([{ t: 0, p: [0, 1, 5], l: [0, 1, 0] }]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], sfx: [{ name: "door_slam", at: 1, gian: -8 }] }),
+  );
+  const gian = check();
+  assert.equal(gian.status, 1, gian.stdout + gian.stderr);
+  assert.match(gian.stderr, /sfx\.0\.gain|sfx\[0\]\.gain/);
+  assert.match(gian.stderr, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
 });
 
 test("check refuses a sound placed after the film ends, and only warns of a gain far over the file's own level", (t) => {

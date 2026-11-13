@@ -5,7 +5,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, needFilm } from "./src/cli.mjs";
-import { checkFiles, SOUND_KEYS } from "./src/contract.ts";
+import { CAM_KEYS, checkFiles, SOUND_KEYS } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { findVaults, openSound } from "./src/sound.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
@@ -131,7 +131,7 @@ const misspelt = (obj, keys) =>
 const soundBroken = found.find((p) => p.where === conf.soundTimeline);
 const soundParses = !soundBroken || !/not (valid )?JSON/.test(soundBroken.issue);
 if (soundBroken)
-  soundBroken.issue += `\n  gains, misspelt keys and sounds after the end are checked once these are fixed`;
+  soundBroken.issue += `\n  gains and sounds after the end are checked once these are fixed`;
 
 const sound = conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
 const lanesFile = sound && join(PROJECT, conf.soundTimeline);
@@ -193,6 +193,61 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
 // Where the sounds sit, read through the clocks the studio plays them on (the film's end: src/edit.json end, through the
 // voice edit and Speed/Freeze). A sound after the end is never heard; a gain far over the file's own level is allowed, said once
 const warnings = [];
+// a misspelt key is read by nothing: named whenever its file parses, even beside the shape faults it causes (gian for a missing gain)
+const keyTypos = (where, lines) => {
+  if (!lines.length) return;
+  const issue = lines.join("\n");
+  const there = found.find((p) => p.where === where);
+  if (there) there.issue = `${issue}\n${there.issue}`;
+  else found.push({ where, issue });
+};
+const readJson = (rel) => {
+  try {
+    return rel && existsSync(join(PROJECT, rel))
+      ? JSON.parse(readFileSync(join(PROJECT, rel), "utf8"))
+      : null;
+  } catch {
+    return null;
+  }
+};
+const lanesRead = readJson(conf.soundTimeline);
+if (lanesRead && typeof lanesRead === "object")
+  keyTypos(
+    conf.soundTimeline,
+    [
+      ...misspelt(lanesRead, SOUND_KEYS.audio),
+      ...["beds", "sfx"].flatMap((list) =>
+        (Array.isArray(lanesRead[list]) ? lanesRead[list] : []).flatMap((e, i) =>
+          e && typeof e === "object"
+            ? misspelt(e, SOUND_KEYS[list]).map(([k, near]) => [`${list}[${i}] "${k}"`, near])
+            : [],
+        ),
+      ),
+    ].map(([k, near]) => `✖ ${k}: no key the mix reads; did you mean "${near}"?`),
+  );
+// a film may put keys of its own on a camera key (cell-break's live, size): only a letter off or swapped is taken for a typo
+const camRead = readJson(conf.camTimeline);
+if (Array.isArray(camRead))
+  keyTypos(
+    conf.camTimeline,
+    camRead.flatMap((key, i) =>
+      key && typeof key === "object"
+        ? Object.keys(key).flatMap((k) => {
+            const near = CAM_KEYS.includes(k)
+              ? null
+              : CAM_KEYS.find(
+                  (n) =>
+                    distance(k.toLowerCase(), n) <= 1 ||
+                    (k.length === n.length &&
+                      k.toLowerCase().split("").sort().join() === n.split("").sort().join()),
+                );
+            return near
+              ? [`✖ [${i}] "${k}": no key the camera reads; did you mean "${near}"?`]
+              : [];
+          })
+        : [],
+    ),
+  );
 const lanesPath = conf.soundTimeline && join(PROJECT, conf.soundTimeline);
 if (lanesPath && existsSync(lanesPath) && !soundBroken) {
   const lanes = JSON.parse(readFileSync(lanesPath, "utf8"));
@@ -203,15 +258,6 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
           `⚠ ${list}[${i}] "${e.name}" gain +${e.gain} dB (${conf.soundTimeline}): over +12 a sound is pushed far past its file's own level and the limiter flattens it; meant? bun run listen --at <its second> hears it`,
         );
     });
-  const typos = [
-    ...misspelt(lanes, SOUND_KEYS.audio),
-    ...["beds", "sfx"].flatMap((list) =>
-      (lanes[list] ?? []).flatMap((e, i) =>
-        misspelt(e, SOUND_KEYS[list]).map(([k, near]) => [`${list}[${i}] "${k}"`, near]),
-      ),
-    ),
-  ].map(([k, near]) => `✖ ${k}: no key the mix reads; did you mean "${near}"?`);
-  if (typos.length) found.push({ where: conf.soundTimeline, issue: typos.join("\n") });
   if (typeof lanes.lufs === "number" && (lanes.lufs > -12 || lanes.lufs < -20))
     warnings.push(
       `⚠ lufs ${lanes.lufs} (${conf.soundTimeline}): YouTube plays every video at -14 LUFS, ${lanes.lufs > -12 ? "turning a louder one down, so the loudness bought with limiting is lost" : "never turning a quieter one up"}; -14 unless the film means it`,

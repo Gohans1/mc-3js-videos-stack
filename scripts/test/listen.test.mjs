@@ -122,7 +122,7 @@ print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.
   // on sealed-room the narration 3 dB up bought 0.2 LU (its own limiter holds it): only drive closes the gap to the peaks
   assert.match(
     advice(2, 12),
-    /louder: drive is at \+12, the most before bun run check warns the hits flatten\. Either leave it \(the upload plays 2\.0 dB under the target, nothing else wrong\) or raise drive past 12 and listen whether the hits still land/,
+    /louder: drive is at \+12, the most before bun run check warns the hits flatten\. Either leave it \(the upload plays 2\.0 dB under audio\.json lufs, nothing else wrong\) or raise drive past 12 and listen whether the hits still land/,
   );
   // within YouTube's 1 LU the loudness is ready: no lever to pull
   assert.doesNotMatch(advice(0.6, 0), /stopped/);
@@ -323,4 +323,35 @@ test("mix given a video that is not there did nothing: exit 2, naming the videos
   rmSync(dir, { recursive: true, force: true });
   assert.equal(r.status, 2, r.stderr);
   assert.match(r.stderr, /no renders\/nope\.mp4 \(the videos here: none yet\)/);
+});
+
+// a mix stopped at the -1.5 dBTP ceiling still went out at -0.9 after the AAC encode (probe R7): the encoded file is measured.
+// Square bursts overshoot at 96 kbps: at 900 Hz the mix is held at the ceiling, at 7 kHz it reaches -14 and still overshoots
+test("a mix put on a video is measured after the AAC encode, and lowered by what the codec added when that crosses -1 dBTP", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "encoded-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const hz of [900, 7000]) {
+    const raw = join(dir, `raw${hz}.wav`);
+    tone(raw, `0.03*sin(2*PI*440*t)+between(t\\,4\\,4.05)*0.6*sgn(sin(2*PI*${hz}*t))`);
+    const r = spawnSync(
+      "python",
+      [
+        "-c",
+        `import sys, json, subprocess; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import fit_encoded, loudness
+def encode(wav):
+    m = wav.replace(".wav", ".m4a")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", wav, "-c:a", "aac", "-b:a", "96k", m], check=True)
+    return m
+out = sys.argv[1].replace("raw", "out")
+held, taken = fit_encoded(sys.argv[1], out, -14, encode)
+print(json.dumps({"taken": taken, "tp": loudness(out.replace(".wav", ".m4a"))[2]}))`,
+        raw,
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    const got = JSON.parse(r.stdout);
+    assert.ok(got.taken > 0, `${hz} Hz: the codec pushed the peak over -1 first: ${r.stdout}`);
+    assert.ok(got.tp <= -1, `${hz} Hz: the encoded file ends at or under -1 dBTP: ${got.tp}`);
+  }
 });

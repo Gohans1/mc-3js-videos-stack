@@ -507,17 +507,25 @@ if __name__ == "__main__":
     raw = _assert_in_root(ROOT / "sound/mix_raw.wav", "Mix raw output")
     build(raw, [c for b in A["beds"] if (c := chosen(b))], [c for s in A["sfx"] if (c := chosen(s))])
     out = _assert_in_root(ROOT / "sound/mix.wav", "Mix output")
-    from listen import level, loudness_report
-    held = level(raw, out, float(A["lufs"]))
-    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]), held, float(A.get("drive", 0)))))
+    from listen import fit_encoded, level, loudness_report
     if len(sys.argv) > 1:
         # the final (bun run render final) goes out as the upload: AAC at YouTube's 384 kbps for stereo, moov up front, no edit list
         final = Path(sys.argv[1]).name == "final_video.mp4"
         name = "final.mp4" if final else "draft.mp4"
         muxed = _assert_in_root(ROOT / "renders" / name, "Muxed mp4 output")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", sys.argv[1], "-i", str(out), "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
-                        "-b:a", "384k" if final else "192k", "-movflags", "+faststart", "-use_editlist", "0", "-shortest", str(muxed)],
-                       check=True, timeout=300)
+
+        def mux(wav):
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", sys.argv[1], "-i", str(wav), "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
+                            "-b:a", "384k" if final else "192k", "-movflags", "+faststart", "-use_editlist", "0", "-shortest", str(muxed)],
+                           check=True, timeout=300)
+            return muxed
+        held, taken = fit_encoded(raw, out, float(A["lufs"]), mux)
+    else:
+        held, taken = level(raw, out, float(A["lufs"])), 0.0
+    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]), held, float(A.get("drive", 0)))))
+    if taken:
+        print(f"  the AAC encode lifted its true peak over -1 dBTP: the mix went {taken:.1f} dB lower so renders/{name} stays under")
+    if len(sys.argv) > 1:
         print(f"muxed renders/{name}" + (" (the file to upload; bun run deliver checks it against YouTube's spec)" if final else ""))
     print("NOT checked here, and needed before calling it ready: whether every word is heard over the beds, the end fades, "
           "no hit is buried: bun run listen (about a second per film second the first time)"
