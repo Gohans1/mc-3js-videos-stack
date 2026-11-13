@@ -808,3 +808,27 @@ test("--show finds a clip named under the wrong library when only one library ha
     "ual1/Sitting_Enter",
   );
 });
+
+test("a word no title says but a category is about points to that category", async () => {
+  const pool = [
+    e("mc-cave-amb", "Cave · Ambience", "", "mc", "ambience"),
+    e("mc-cave-eerie", "Cave", "", "mc", "horror"),
+  ];
+  const out = await run(["creepy", "cave", "ambience"], pool, noJev);
+  expect(out).toMatch(
+    /"creepy" is what a category holds: mc\/horror 1\. bun run find cave ambience --kind mc\/horror/,
+  );
+  expect(out).not.toMatch(/a track says no more than its group/);
+});
+
+test("when every clip shown has a flaw, find says none is clean and how to get one", async () => {
+  const clips = async () =>
+    "1 match\nmixamo/Fall_Pool  3s  stand>sitFloor\n      falls\n      FLAW: meant to land in water";
+  const out = await run(
+    ["--from", "stand"],
+    [{ ...e("mixamo/Fall_Pool", "Fall", "", "mocap", "stand"), data: { seq: ["stand"] } }],
+    noJev,
+    clips,
+  );
+  expect(out).toMatch(/next: every clip shown has a FLAW seen by eye: none is clean as it is/);
+});

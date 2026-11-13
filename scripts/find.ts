@@ -1612,7 +1612,14 @@ export async function run(
       const said = await clips([...args, "-n", `${n}`]);
       if (/^0 matches/m.test(said))
         return `${said}\nnext: no clip passes every word and filter together (${args.join(" ")}). Drop one filter or widen a range (--energy, --dur), then add it back; words match from a word start in the clip's name and description.\n      by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"\n      ${mocapNext(clipPool)}\n      none fits: ${MAKE_MOCAP}`;
-      return `${said}\n\n${MOCAP_COLUMNS}\nwhere (in ${timelineDir()}/): ${USE.mocap}\nnext: ${mocapNext(clipPool)}`;
+      // catalog.py prints a clip per unindented line, its FLAW (a fault seen by eye) on an indented one under it
+      const rows = said.split("\n").filter((l) => /^\S+\/\S+\s/.test(l)).length,
+        flawed = said.split("\n").filter((l) => /^\s+FLAW:/.test(l)).length;
+      const allFlawed =
+        rows && flawed === rows
+          ? `every clip shown has a FLAW seen by eye: none is clean as it is. Drop or loosen a filter (--mood, --to, --from, --dur) for a clean one, or by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"; else ${MAKE_MOCAP}\n      `
+          : "";
+      return `${said}\n\n${MOCAP_COLUMNS}\nwhere (in ${timelineDir()}/): ${USE.mocap}\nnext: ${allFlawed}${mocapNext(clipPool)}`;
     } catch (err) {
       return `the mocap catalogue failed: ${(err as Error).message}. Words alone still work: bun run find --kind mocap <words>`;
     }
@@ -1973,7 +1980,9 @@ export async function run(
   // an ask for music, or in a mood: words cannot find a mood no group names
   const music =
     [...(kindNames ?? []), ...named].some((k) => k === "bgm" || k === "sound") ||
-    typed.some((w) => MOODS.has(stem(w)));
+    // a mood word ("creepy") asks for music only when music is among the hits, or nothing matched
+    (typed.some((w) => MOODS.has(stem(w))) &&
+      (!ranked.length || ranked.slice(0, n).some((x) => x.kind === "bgm")));
   // The kind to hand Jev: the one the words name, else the one most of the hits are
   const guess = () => {
     if (kinds) return kinds.join(",");
@@ -2154,6 +2163,21 @@ export async function run(
         next.push(
           `a sound? add --kind sound (sfx, bgm and Minecraft only): bun run find ${query} --kind sound`,
         );
+      // a word no title says may be what a whole category is ("creepy": mc/horror): the category, searched with the rest
+      const cats = new Map<string, Entry[]>();
+      for (const x of inKinds) if (x.cat) cats.set(catKey(x), [...(cats.get(catKey(x)) ?? []), x]);
+      for (const w of missing) {
+        const holds = [...cats].filter(
+          ([key, xs]) =>
+            key !== catKey(best) &&
+            words(`${xs[0]!.cat} ${catLabel(xs[0]!)} ${CAT_WORDS[key] ?? ""}`).includes(stem(w)),
+        );
+        const rest = typed.filter((t) => t !== w).join(" ");
+        if (holds.length)
+          next.push(
+            `"${w}" is what a category holds: ${holds.map(([key, xs]) => `${key} ${xs.length}`).join(", ")}. bun run find ${rest ? `${rest} ` : ""}--kind ${holds[0]![0]}`,
+          );
+      }
       if (kind === "adjust" && missing.length)
         next.push(`top hits are adjust sliders, which lack: ${missing.join(", ")}. ${MAKE_LOOK}`);
       else if (scene)
