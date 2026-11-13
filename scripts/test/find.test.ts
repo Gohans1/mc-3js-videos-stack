@@ -81,7 +81,7 @@ test("each hit names its kind, category and source", async () => {
   const out = await run(["door", "knock"], vault, noJev);
   expect(out).toContain("sfx/foley");
   expect(out).toContain("ear-door-knock");
-  expect(out).toContain("[earshot]");
+  expect(out).toContain("[earshot, made in code]");
 });
 
 test("words that match nothing point to Jev with the kinds to pick from", async () => {
@@ -430,7 +430,7 @@ test("--show on any take of a family names all its takes", async () => {
 test("a big kind listed alone shows a few ids per category to start from", async () => {
   const many = Array.from({ length: 61 }, (_, i) => e(`hit-${i}`, "Hit", "", "sfx", "impacts"));
   expect(await run(["--kind", "sfx"], many, noJev)).toMatch(
-    /sfx\/impacts 61 {2}\(hit-0, hit-1, hit-2/,
+    /sfx\/impacts 61( "[^"]*")? {2}\(hit-0, hit-1, hit-2/,
   );
 });
 
@@ -737,13 +737,74 @@ test("--show says where a film makes its own of that kind, and a mark gets a lin
   expect(arrow).toMatch(/see it: AT=/);
 });
 
-test("the mocap hint names every body filter with the moods and props the clips carry", async () => {
+test("the mocap hint names every body filter, and says how to list the moods and props", async () => {
   const clip = {
     ...e("mixamo/Shiver", "Shiver", "", "mocap", "stand"),
     data: { seq: ["stand"], mood: ["scared"], prop: ["none", "chair"] },
   };
   const out = await run(["shiver"], [clip], noJev);
   expect(out).toMatch(/--from\|--to\|--has <posture> \(stand\)/);
-  expect(out).toMatch(/--mood <scared>, --prop <chair>/);
+  expect(out).toMatch(
+    /--mood <m>, --prop <p> \(clips checked by eye; --mood or --prop alone lists them\)/,
+  );
   expect(out).toMatch(/--air yes\|no/);
+  await expect(run(["--mood"], [clip], noJev)).rejects.toThrow(/--mood .*: scared 1/);
+});
+
+test("a mood or posture said another way is read as the tag the clips carry", async () => {
+  const clip = {
+    ...e("mixamo/Shiver", "Shiver", "", "mocap", "stand"),
+    data: { seq: ["stand"], mood: ["scared"] },
+  };
+  const seen: string[][] = [];
+  const clips = async (args: string[]) => (seen.push(args), "1 matches");
+  const out = await run(["--mood", "frightened", "--from", "standing"], [clip], noJev, clips);
+  expect(out.split("\n")[0]).toBe(
+    "(--from standing read as stand; --mood frightened read as scared)",
+  );
+  expect(seen[0]).toEqual(["--from", "stand", "--mood", "scared", "-n", "12"]);
+  await expect(
+    run(["--from", "sitting"], [{ ...clip, data: { seq: ["sitFloor", "sitSeat"] } }], noJev, clips),
+  ).rejects.toThrow(/close: sitFloor, sitSeat/);
+});
+
+test("words that name a kind put its hits first", async () => {
+  const pool = [
+    e("sad-pose", "Sad pose", "", "mocap", "stand"),
+    e("bgm-sad", "Sad piano", "", "bgm", "chill"),
+  ];
+  const out = await run(["sad", "music"], pool, noJev);
+  expect(out.indexOf("bgm-sad")).toBeLessThan(out.indexOf("sad-pose"));
+  expect(out).toMatch(/bun run find sad --kind bgm searches only that/);
+});
+
+test("a source's name in the words is a filter, and a kind it never fills is said to be absent", async () => {
+  const pool = [
+    { ...e("mc-door", "Door", "", "mc", "blocks"), src: "minecraft" },
+    { ...e("bgm-calm", "Calm music", "", "bgm", "chill"), src: "pixabay" },
+  ];
+  const out = await run(["minecraft", "music"], pool, noJev);
+  expect(out).toMatch(
+    /minecraft is a source with no bgm \(only mc\): the vault has no minecraft bgm\. bgm comes from: pixabay 1/,
+  );
+  expect(await run(["minecraft", "door"], pool, noJev)).toMatch(
+    /minecraft is a source: add --source minecraft/,
+  );
+});
+
+test("a filter that leaves a kind empty names the filter, even when the source never had that kind", async () => {
+  const pool = [
+    { ...e("mc-cave", "Cave", "", "mc", "ambience"), src: "alexs-caves" },
+    { ...e("ear-hit", "Hit", "", "sfx", "impacts"), src: "earshot" },
+  ];
+  await expect(run(["--kind", "sfx", "--source", "alexs-caves"], pool, noJev)).rejects.toThrow(
+    /--source alexs-caves keeps mc 1, none of it --kind sfx/,
+  );
+});
+
+test("--show finds a clip named under the wrong library when only one library has it", async () => {
+  const clip = { ...e("ual1/Sitting_Enter", "Sitting Enter", "", "mocap", "stand"), src: "ual1" };
+  expect(await run(["--show", "mixamo/Sitting_Enter"], [clip], noJev)).toContain(
+    "ual1/Sitting_Enter",
+  );
 });
