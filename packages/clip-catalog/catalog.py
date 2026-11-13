@@ -182,6 +182,8 @@ def main():
     kw = keywords()
     span = lambda s: [float(x) for x in s.split("-")]
     words = [w.lower() for w in a.words]
+    # a word matches from a word start ("sit" finds sitting, never disposition)
+    starts = [re.compile(r"\b" + re.escape(w)) for w in words]
     hits = []
     for r in rows(a.lib.split(",")):
         if "error" in r:
@@ -191,7 +193,7 @@ def main():
         text = " | ".join([name.lower().replace("_", " "), *sorted(tags), r.get("desc", "").lower(), *r.get("mood", []), *r.get("prop", []), *r.get("style", [])])
         if not a.fights and FIGHT.search(name):
             continue
-        if any(w not in text for w in words):
+        if not all(w.search(text) for w in starts):
             continue
         loop = r["loop"][0] < LOOP_DEG and r["loop"][1] < LOOP_CM
         checks = [
@@ -207,7 +209,8 @@ def main():
         ]
         if all(f() for on, f in checks if on):
             # words in the name or the eye-checked description outrank Mixamo's search keywords
-            score = sum(2 if w in name.lower() or w in r.get("desc", "").lower() else 1 for w in words)
+            said = name.lower().replace("_", " ") + " | " + r.get("desc", "").lower()
+            score = sum(2 if w.search(said) else 1 for w in starts)
             hits.append((score, r, loop, tags))
     # a one-frame clip is a still pose, never the move its name says: after every clip that moves
     hits.sort(key=lambda h: (h[1]["dur"] < 0.1, -h[0], h[1]["dur"]))
