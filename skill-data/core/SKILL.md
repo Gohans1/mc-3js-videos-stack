@@ -47,6 +47,7 @@ Inside a film:
 
 ```bash
 bun run find creaky door                     # 1. Find a sound, music, mocap clip, transition, anim, font or look
+bun run find creaky door --fav               #    Only the creator's starred ones (favorites/<list>.json): when told "use my favourites"
                                              # 2. Edit src/scene.ts or src/timeline/*.json
 bun run check                                # 3. After every JSON edit: schema, sound names, typos, text too brief or small
 AT=12,30 bun run render stills               # 4. Look at a few frames (renders/still_<s>s.jpg)

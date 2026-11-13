@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { openFavorites } from "../src/favorites.mjs";
+import { favoriteLists, openFavorites } from "../src/favorites.mjs";
 
 const fresh = () => {
   const dir = mkdtempSync(join(tmpdir(), "fav-"));
@@ -65,5 +65,19 @@ test("a file that doesn't parse is left alone, not written over", () => {
   writeFileSync(fav.file, "{ broken");
   assert.throws(() => fav.set({ kind: "sounds", id: "b", on: true }));
   assert.equal(readFileSync(fav.file, "utf8"), "{ broken");
+  rmSync(dir, { recursive: true });
+});
+
+test("the lists are default first, then every named list, each with its star count", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fav-"));
+  const lists = favoriteLists(dir);
+  assert.deepEqual(lists.lists(), [{ name: "default", count: 0 }]);
+  lists.open("horror").set({ kind: "sounds", id: "a", on: true });
+  lists.open("horror").set({ kind: "effects", id: "in:pop", on: true });
+  writeFileSync(join(dir, "Not A List.json"), "{}");
+  assert.deepEqual(lists.lists(), [
+    { name: "default", count: 0 },
+    { name: "horror", count: 2 },
+  ]);
   rmSync(dir, { recursive: true });
 });

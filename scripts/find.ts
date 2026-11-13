@@ -25,6 +25,7 @@ import {
   originOf,
   sentenceSlug,
 } from "../packages/live-studio/app/sound/groups";
+import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 export type Entry = {
@@ -37,6 +38,8 @@ export type Entry = {
   takes?: number;
   secs?: number;
   note?: string;
+  // starred by the creator (the studio's star, or find --star)
+  fav?: boolean;
   // the catalogue record behind the line, for --show
   data?: Detail;
 };
@@ -741,6 +744,38 @@ function filmSounds(film: string): SoundItem[] {
     });
 }
 
+// The id the studio's star gives an entry (live-studio/src/favorites.mjs): a sound by its file name, an effect by its
+// panel's prefix; kinds no panel stars (mocap, fonts, eases...) by "<kind>:<id>", starred with find --star only
+const STAR_PREFIX: Record<string, string> = {
+  transition: "transition:",
+  "anim-in": "in:",
+  "anim-out": "out:",
+  "anim-combo": "combo:",
+  "text-in": "text:text:in:",
+  "text-out": "text:text:out:",
+  "shape-in": "text:shape:in:",
+  "shape-out": "text:shape:out:",
+};
+type Favorites = { sounds: string[]; effects: string[] };
+type FavoriteLists = ReturnType<typeof favoriteLists>;
+const starOf = (x: Entry) =>
+  SOUND.includes(x.kind)
+    ? { kind: "sounds" as const, id: x.id }
+    : { kind: "effects" as const, id: `${STAR_PREFIX[x.kind] ?? `${x.kind}:`}${x.id}` };
+// a sound family is starred when any of its takes is (the studio stars the take that was playing)
+export const markStarred = (xs: Entry[], favs: Favorites) => {
+  const sounds = new Set(favs.sounds),
+    effects = new Set(favs.effects);
+  return xs.map((x) => {
+    const s = starOf(x);
+    const fav =
+      s.kind === "sounds"
+        ? [x.id, ...(x.data?.takes ?? [])].some((t) => sounds.has(t))
+        : effects.has(s.id);
+    return fav === !!x.fav ? x : { ...x, fav };
+  });
+};
+
 export const allEntries = (fold = true, film = process.cwd()) => [
   ...presetEntries(),
   ...soundEntries([...filmSounds(film), ...vaultSounds()], fold),
@@ -762,7 +797,9 @@ const line = (x: Entry, lead = "") => {
   const said = heard ? `heard: ${heard}` : !tells(x) ? "" : x.about;
   const about = said.length > 90 ? `${said.slice(0, 89)}…` : said;
   const synth = (x.kind === "sfx" || x.kind === "bgm") && originOfEntry(x) === "synth";
-  const tags = [x.src, synth && "made in code", x.note].filter(Boolean).join(", ");
+  const tags = [x.fav && "starred", x.src, synth && "made in code", x.note]
+    .filter(Boolean)
+    .join(", ");
   return [
     `${lead}${x.kind}${x.cat ? `/${x.cat}` : ""}`,
     `${x.id}${(x.takes ?? 1) > 1 ? ` (${x.takes} takes)` : ""}`,
@@ -900,6 +937,11 @@ Options:
                    (Content ID claims the video), minecraft (Mojang's game sounds: Minecraft videos only), mod (a mod's
                    code licence: credit the mod); or a word of a licence's own name: --license mit, --license lgpl
   --dur <min-max>  length in seconds, sounds and mocap clips: --dur 0-1 a short hit, --dur 120-600 a long track
+  --fav [list]     only what the creator starred (the studio's star; rows tagged starred): the default list, or a named
+                   one (--fav horror). Lists live in favorites/<list>.json, for every film; an answer names the others.
+                   When the creator says "use my favourites", add --fav to every search. --favorites, --starred work too
+  --star <id[,id]> star for the creator, when asked (--unstar takes it off); into a named list: --star boom --fav horror
+                   (a new name makes the list). An id in several kinds needs --kind
   Any filter without a value lists its values with counts: bun run find --source lists every source and mod pack.
   Other names work and the first line says how they were read: --licence, --type/--category (--kind), --pack/--mod
   (--source), --length/--duration (--dur), --limit (-n); values too: --origin recorded, --edition mods, --license cc-by
@@ -916,7 +958,7 @@ Options:
                    (bent over), --air yes|no, --look 45 (head turn, deg); --mood scared, --prop chair (clips checked
                    by eye only; a wrong one lists them); --fights keeps weapons and fights (left out by default).
                    With words or --jev "<scene>"; a wrong posture lists them
-  Any filter alone (--kind, --source, --origin, --edition, --license, --dur) lists what it keeps.
+  Any filter alone (--kind, --source, --origin, --edition, --license, --dur, --fav) lists what it keeps.
 
 Words first: free, offline, instant, English only (translate first). Name the thing, not the moment: "whoosh", not "the
 camera flies past"; Minecraft sounds also match what the game's subtitles say ("creeper hisses", "door creaks"). A sound
@@ -1289,6 +1331,53 @@ function details(x: Entry): string[] {
   return out;
 }
 
+// --star / --unstar: the creator's favourites, written where the studio's star keeps them (favorites/<list>.json)
+function star(
+  ids: string,
+  on: boolean,
+  kinds: string[] | undefined,
+  pool: Entry[],
+  listName: string,
+  favorites: ReturnType<FavoriteLists["open"]>,
+) {
+  const kf = kinds ? kindFilter(kinds, pool) : undefined;
+  if (kf?.bad.length) throw new FindError(kf.bad.join("\n"));
+  // every id is checked before any is written: a wrong one in a list leaves the list as it was
+  const found = ids
+    .split(",")
+    .filter(Boolean)
+    .map((id) => {
+      const hits = pool.filter(
+        (x) => x.id.toLowerCase() === id.toLowerCase() && (!kf || kf.test(x)),
+      );
+      if (!hits.length)
+        throw new FindError(
+          `no entry${kinds ? ` of --kind ${kinds.join(",")}` : ""} has the id "${id}": ids are the second column of bun run find <words> (bun run find ${id} searches by words)`,
+        );
+      const kindsOf = [...new Set(hits.map((x) => x.kind))];
+      if (kindsOf.length > 1)
+        throw new FindError(
+          `${id} is ${kindsOf.map((k) => `a${/^[aeiou]/.test(k) ? "n" : ""} ${k}`).join(" and ")}: add --kind ${kindsOf[0]} (or another of them) to say which`,
+        );
+      return hits[0]!;
+    });
+  const done = found.map((x) => {
+    const family = x.data?.family;
+    // unstarring a sound takes the star off every take of its family, whichever take the studio starred
+    const targets =
+      !on && family ? pool.filter((y) => y.data?.family === family).map(starOf) : [starOf(x)];
+    const was = favorites.read();
+    const had = targets.some((t) => was[t.kind].includes(t.id));
+    for (const t of targets) favorites.set({ ...t, on });
+    return `${x.kind} ${x.id}${on === had ? ` (already ${on ? "starred" : "not starred"})` : ""}`;
+  });
+  const fav = listName === "default" ? "--fav" : `--fav ${listName}`;
+  return [
+    `${on ? "starred" : "unstarred"} in the ${listName} favourites: ${done.join(", ")} (${relative(ROOT, favorites.file).replaceAll("\\", "/")}, for every film${listName === "default" ? "; an open studio shows it after a reload" : ""})`,
+    `next: every starred entry: bun run find ${fav}; search only those: bun run find <words> ${fav}`,
+  ].join("\n");
+}
+
 function show(ids: string[], pool: Entry[]) {
   return ids
     .map((id) => {
@@ -1387,6 +1476,9 @@ const OPTIONS: Record<string, string | null> = {
   "-h": null,
   "--all": null,
   "--jev": null,
+  "--fav": null,
+  "--star": "--star dissolve",
+  "--unstar": "--unstar dissolve",
   "--kind": "--kind sfx",
   "--source": "--source minecraft",
   "--origin": "--origin real",
@@ -1468,9 +1560,18 @@ const OPTION_ALIAS: Record<string, string> = {
   "--meaning": "--jev",
   "--ai": "--jev",
   "--takes": "--all",
+  "--favs": "--fav",
+  "--faves": "--fav",
+  "--favorite": "--fav",
+  "--favorites": "--fav",
+  "--favourite": "--fav",
+  "--favourites": "--fav",
+  "--starred": "--fav",
+  "--stars": "--fav",
+  "--liked": "--fav",
 };
 const isOption = (a: string) => /^--?[a-z]/i.test(a);
-function parse(argv: string[]) {
+function parse(argv: string[], lists: string[] = []) {
   const set = new Map<string, string>(),
     rest: string[] = [],
     notes: string[] = [],
@@ -1487,8 +1588,22 @@ function parse(argv: string[]) {
     if (name !== typed) notes.push(`${typed} read as ${name}`);
     if (!(name in OPTIONS))
       throw new FindError(
-        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur -n --all --jev --show --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any of them without a value lists its values.`,
+        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --all --jev --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any of them without a value lists its values.`,
       );
+    if (name === "--fav") {
+      // a favourites list's name may follow (--fav horror); any other word after it is a search word, except when
+      // starring, where it names the list to make
+      const next = argv[i + 1]?.toLowerCase();
+      const starring = argv.some((a) => /^--(?:un)?star(?:=|$)/i.test(a));
+      const v =
+        eq > 0
+          ? arg.slice(eq + 1)
+          : next && (lists.includes(next) || (starring && !isOption(next)))
+            ? (i++, next)
+            : "default";
+      set.set(name, v.toLowerCase());
+      continue;
+    }
     const example = OPTIONS[name];
     if (!example) {
       if (eq > 0) throw new FindError(`${name} takes no value: write ${name} alone`);
@@ -1584,7 +1699,8 @@ const valuesOf = (o: string, pool: Entry[]) => {
     return `postures: ${postures(clips).join(" ")}`;
   if (o === "--mood" || o === "--prop")
     return `${o} (only clips checked by eye carry it): ${tagged(o.slice(2), clips)}`;
-  if (o === "--show") return "an id: the second column of bun run find <words>";
+  if (o === "--show" || o === "--star" || o === "--unstar")
+    return "an id: the second column of bun run find <words>";
   return "";
 };
 
@@ -1593,8 +1709,13 @@ export async function run(
   given?: Entry[],
   judge: Judge = jevJudge,
   clips: Catalog = catalog,
+  favorites: FavoriteLists = favoriteLists(),
 ): Promise<string> {
-  const { set, query, notes, bare } = parse(argv);
+  const lists = favorites.lists();
+  const { set, query, notes, bare } = parse(
+    argv,
+    lists.map((l) => l.name),
+  );
   // how a loose option or value was read (--licence as --license, --origin recorded as real), above the answer
   const noted = (text: string) => (notes.length ? `(${notes.join("; ")})\n${text}` : text);
   const all = set.has("--all"),
@@ -1614,8 +1735,27 @@ export async function run(
   const n = Number(nRaw ?? 12);
   if (set.has("--help") || set.has("-h")) return HELP;
   if (query.toLowerCase() === "help" && set.size === 0 && !bare.length) return HELP;
+  const starring = set.has("--star") ? "--star" : set.has("--unstar") ? "--unstar" : undefined;
+  // The favourites list in use: default unless --fav names another; a name no list has falls back to default, said so
+  // (--star into a new name makes that list)
+  let listName = set.get("--fav") ?? "default";
+  if (!lists.some((l) => l.name === listName) && !(starring && LIST_NAME.test(listName))) {
+    notes.push(
+      `no favourites list "${listName}", the default list used${starring ? " (a list name is a-z, 0-9 and -)" : ""}`,
+    );
+    listName = "default";
+  }
+  const stars = favorites.open(listName);
+  const entriesOf = (fold = true) => markStarred(given ?? allEntries(fold), stars.shown());
+  const fav = set.has("--fav"),
+    favArg = listName === "default" ? "--fav" : `--fav ${listName}`;
+  // the creator's other lists, offered beside the one in use, never forced
+  const otherLists = lists.filter((l) => l.name !== listName && l.count);
+  const listsLine = otherLists.length
+    ? `other favourites lists: ${otherLists.map((l) => `${l.name} ${l.count}`).join(", ")} (this one: ${listName}; another: bun run find --fav ${otherLists[0]!.name}${query ? ` ${query}` : ""})`
+    : "";
   if (bare.length) {
-    const pool = given ?? allEntries();
+    const pool = entriesOf();
     throw new FindError(
       bare
         .map((o) => `${o} needs a value, e.g. ${OPTIONS[o]}. ${valuesOf(o, pool)}`.trim())
@@ -1629,7 +1769,20 @@ export async function run(
       throw new FindError(
         `--show takes ids only (a comma list for several: --show dissolve,push); drop ${[query, ...[...set.keys()].filter((k) => k !== "--show" && k !== "-n")].filter(Boolean).join(" ")}`,
       );
-    return noted(show(showIds, given ?? allEntries(false)));
+    return noted(show(showIds, entriesOf(false)));
+  }
+  if (starring) {
+    const extra = [
+      query,
+      ...[...set.keys()].filter((k) => k !== starring && k !== "--kind" && k !== "--fav"),
+    ];
+    if (extra.some(Boolean))
+      throw new FindError(
+        `${starring} takes ids, --kind and --fav <list> only (a comma list for several: ${starring} boom,dissolve); drop ${extra.filter(Boolean).join(" ")}`,
+      );
+    return noted(
+      star(set.get(starring)!, starring === "--star", asked, entriesOf(false), listName, stars),
+    );
   }
   const catalogSays = async (args: string[], clipPool: Entry[]) => {
     try {
@@ -1665,7 +1818,12 @@ export async function run(
   span("--energy");
   const body = Object.keys(BODY).filter((o) => set.has(o));
   if (body.length) {
-    const clipPool = (given ?? allEntries()).filter((x) => x.kind === "mocap");
+    const clipPool = entriesOf().filter((x) => x.kind === "mocap");
+    // catalog.py reads the clips' own records, which know no stars: the starred clips are few enough to list
+    if (fav)
+      throw new FindError(
+        `--fav does not combine with the body filters (${body.join(" ")}); the starred clips: bun run find --kind mocap ${favArg} (${clipPool.filter((x) => x.fav).length} of them)`,
+      );
     if (kinds && kinds.join() !== "mocap") {
       const soundy = kinds.some((k) =>
         [...SOUND, "sound"].includes(kindOf(k.split("/")[0]!, clipPool)),
@@ -1749,7 +1907,7 @@ export async function run(
     !query &&
     !kinds &&
     !sources &&
-    !["--origin", "--edition", "--license", "--dur"].some((o) => set.has(o))
+    !["--origin", "--edition", "--license", "--dur", "--fav"].some((o) => set.has(o))
   ) {
     if (argv.length)
       throw new FindError(
@@ -1758,7 +1916,17 @@ export async function run(
     return HELP;
   }
 
-  const pool = given ?? allEntries(!all);
+  const pool = entriesOf(!all);
+  // nothing in the list in use: how a star is given, and the lists that have some
+  if (fav && !pool.some((x) => x.fav))
+    return noted(
+      [
+        `nothing is starred yet in the ${listName} favourites (${relative(ROOT, stars.file).replaceAll("\\", "/")}).`,
+        ...(listsLine ? [listsLine] : []),
+        `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
+        `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
+      ].join("\n"),
+    );
   // A source by its whole name, or a folder of them (film-stage = every film-stage/*.ts)
   const fromSource = (x: Entry, s: string) => {
     const src = x.src?.toLowerCase();
@@ -1820,7 +1988,8 @@ export async function run(
   const licensed = (x: Entry) =>
     SOUND.includes(x.kind) &&
     (namedLicense ? namedLicense.test(String(x.data?.license ?? "")) : licenseOf(x) === license);
-  const entries = bySource.filter(
+  // every filter but --fav: what a search outside the favourites, or in another list, would meet
+  const unstarred = bySource.filter(
     (x) =>
       (origin === undefined ||
         (SOUND.includes(x.kind) && x.kind !== "mc" && originOfEntry(x) === origin)) &&
@@ -1828,6 +1997,7 @@ export async function run(
       (license === undefined || licensed(x)) &&
       (!dur || (x.secs !== undefined && x.secs >= dur[0] && x.secs <= dur[1])),
   );
+  const entries = fav ? unstarred.filter((x) => x.fav) : unstarred;
   const kf = kinds ? kindFilter(kinds, entries) : undefined;
   if (kf?.bad.length) {
     const filter = [
@@ -1836,6 +2006,7 @@ export async function run(
       edition && `--edition ${edition}`,
       license && `--license ${license}`,
       dur && `--dur ${set.get("--dur")}`,
+      fav && favArg,
     ]
       .filter(Boolean)
       .join(" ");
@@ -1855,7 +2026,7 @@ export async function run(
     noted(kf?.read.length ? `(${kf.read.join("; ")})\n${text}` : text);
   // what --kind names without its categories (sfx/typing is sfx), for the hints that speak of a kind
   const kindNames = kinds?.map((k) => k.split("/")[0]!);
-  const filters = `${kinds ? ` --kind ${kinds.join(",")}` : ""}${sources ? ` --source ${sources.join(",")}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}`;
+  const filters = `${kinds ? ` --kind ${kinds.join(",")}` : ""}${sources ? ` --source ${sources.join(",")}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}${fav ? ` ${favArg}` : ""}`;
   // The filters these entries can still take, each value with how many it keeps (a filter already given is left out).
   // Terse (under a search): only filters that would split the hits, values without their meaning
   const filtersFor = (xs: Entry[], terse = false) => {
@@ -1880,6 +2051,9 @@ export async function run(
       );
     const lengths = durs(xs).split(", ").filter(Boolean);
     if (!dur && lengths.length > (terse ? 1 : 0)) facets.push(`--dur ${lengths.join(", ")}`);
+    const starredHere = xs.filter((x) => x.fav).length;
+    if (!fav && starredHere && (!terse || starredHere < xs.length))
+      facets.push(`--fav ${starredHere} starred (the creator's favourites)`);
     return facets;
   };
   const where = (shown: Entry[]) => {
@@ -1909,13 +2083,18 @@ export async function run(
       );
       return readAs(
         [
+          ...(fav
+            ? [
+                `${inKinds.length} starred by the creator in the ${listName} favourites${listsLine ? `; ${listsLine}` : ""}:`,
+              ]
+            : []),
           ...groups,
           ...(cut ? [`first ${some.length} of ${inKinds.length}:`] : []),
           ...some.map((x) => line(x)),
           ...where(some),
           ...filtersFor(inKinds).map((f) => `filter: ${f}`),
           ...(cut ? [`named by: ${namedBy(inKinds)}`] : []),
-          ...(some.some((x) => x.kind === "bgm") ? [BGM_MOOD] : []),
+          ...(some.some((x) => x.kind === "bgm") ? [BGM_MOOD, MC_MUSIC_NOTE] : []),
           `next: ${cut ? `search inside: bun run find <word>${filters} (a word from "named by"); all ${inKinds.length}: -n ${inKinds.length}` : `bun run find <words>${filters} searches these`}; one in full: bun run find --show <id>`,
           `      ${jevHere}`,
           ...(some.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool)}`] : []),
@@ -1943,7 +2122,8 @@ export async function run(
     const example = big.find(([k]) => k.includes("/"))?.[0];
     return readAs(
       [
-        `${inKinds.length} entries by category, as --kind takes them (the studio's heading, a few ids):`,
+        `${inKinds.length} ${fav ? `starred in the ${listName} favourites` : "entries"} by category, as --kind takes them (the studio's heading, a few ids):`,
+        ...(fav && listsLine ? [listsLine] : []),
         ...big.slice(0, 20).map(([k, xs]) => {
           const label = catLabel(xs[0]!);
           // the ids to start from: vanilla Minecraft and real recordings before modded packs and code-made ones
@@ -1969,7 +2149,7 @@ export async function run(
     );
   }
 
-  if (jev && kinds?.length === 1 && kinds[0] === "mocap" && !sources)
+  if (jev && kinds?.length === 1 && kinds[0] === "mocap" && !sources && !fav)
     return readAs(await catalogSays(["--jev", query], pool));
 
   // Words are matched as English; letters outside it (Vietnamese, emoji aside) would only match stray fragments
@@ -2156,22 +2336,41 @@ export async function run(
                     ? `--origin ${SOUND.includes(x.kind) && x.kind !== "mc" ? originOfEntry(x) : `(${top(x.kind)} has none)`}`
                     : edition
                       ? `--edition ${x.kind === "mc" ? editionOfEntry(x) : `(${top(x.kind)} has none)`}`
-                      : `--dur ${x.secs === undefined ? `(${top(x.kind)} has no length)` : x.secs < 1 ? "0-1" : x.secs < 5 ? "1-5" : x.secs < 30 ? "5-30" : "30-600"}`,
+                      : `--dur ${x.secs === undefined ? `(${top(x.kind)} has no length)` : durOf(x.secs)}`,
             ),
           )
             .split(", ")
             .slice(0, 5)
             .join(", ")} (bun run find ${query}${kinds ? ` --kind ${kinds.join(",")}` : ""})`
         : elsewhere();
-      next.push(
-        ...(other ? [other] : []),
-        `no entry${kinds ? ` of --kind ${kinds.join(",")}` : ""}${unfiltered.length ? ` with${filters.replace(/ --kind \S+/, "")}` : ""} has these words${guesses.length ? ` (did you mean: ${guesses.join(", ")}?)` : ""}. Try other words: ${PLAIN}`,
-        browse(),
-        ...(music ? [moodAdvice()] : []),
-        `last, by meaning (Jev, a paid call): ${byMeaning(guess())}`,
-        "if none of these has it, make it:",
-        ...make(kindNames, entries).map((m) => `  ${m}`),
-      );
+      // under --fav: the creator's other lists that have these words, then everything outside the favourites
+      const inKind = (xs: Entry[]) => (kf ? xs.filter(kf.test) : xs);
+      const inLists = fav
+        ? otherLists.flatMap((l) => {
+            const xs = markStarred(unstarred, favorites.open(l.name).shown());
+            const hits = rank(inKind(xs.filter((x) => x.fav)), query).length;
+            return hits ? [`${l.name} ${hits}`] : [];
+          })
+        : [];
+      const favMiss = fav
+        ? `none of the ${listName} favourites has these words${inLists.length ? `; other lists do: ${inLists.join(", ")} (bun run find ${query} --fav ${inLists[0]!.split(" ")[0]})` : ""}; ${rank(inKind(unstarred), query).length} entries outside the favourites do (bun run find ${query}${filters.replace(` ${favArg}`, "")})`
+        : "";
+      // the creator chose from the favourites: a miss goes back to them, not into making one
+      if (favMiss)
+        next.push(
+          favMiss,
+          `if the creator asked for favourites only: say none has it and ask which to use, or which to star (bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}). The favourites in full: bun run find ${favArg}`,
+        );
+      else
+        next.push(
+          ...(other ? [other] : []),
+          `no entry${kinds ? ` of --kind ${kinds.join(",")}` : ""}${unfiltered.length ? ` with${filters.replace(/ --kind \S+/, "")}` : ""} has these words${guesses.length ? ` (did you mean: ${guesses.join(", ")}?)` : ""}. Try other words: ${PLAIN}`,
+          browse(),
+          ...(music ? [moodAdvice()] : []),
+          `last, by meaning (Jev, a paid call): ${byMeaning(guess())}`,
+          "if none of these has it, make it:",
+          ...make(kindNames, entries).map((m) => `  ${m}`),
+        );
     } else if (!jev) {
       const has = new Set(fieldWords(best));
       const missing = typed.filter((w) => !(slotsOf(w)[0] ?? []).some((t) => has.has(t)));
@@ -2261,6 +2460,7 @@ export async function run(
       `narrow these ${matches.length}: ${narrow.join(" | ")}  (a filter named alone, e.g. --license, says what its values mean)`,
     );
   if (shown.some(([, x]) => x.kind === "mocap")) next.push(mocapNext(pool));
+  if (fav && listsLine && shown.length) next.push(listsLine);
   const files = shown.flatMap(([, x]) =>
     SOUND.includes(x.kind) && x.data?.file ? [soundFile(x.data.file)] : [],
   );

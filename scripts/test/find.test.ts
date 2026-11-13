@@ -1,9 +1,26 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { ANIMS } from "../../packages/film-stage/src/animate";
 import { TEXT_IN, TEXT_OUT } from "../../packages/film-stage/src/titles";
 import { TRANSITIONS } from "../../packages/film-stage/src/transitions";
-import { easeAbout, type Entry, presetEntries, rank, run, soundEntries } from "../find";
+import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
+import {
+  easeAbout,
+  type Entry,
+  markStarred,
+  presetEntries,
+  rank,
+  run as findRun,
+  soundEntries,
+} from "../find";
+
+// the creator's real stars (favorites/) never reach a test: an empty folder unless a test gives its own
+const noStars = favoriteLists(join(tmpdir(), "find-test-no-favorites"));
+const run = (...[argv, given, judge, clips, favs]: Parameters<typeof findRun>) =>
+  findRun(argv, given, judge, clips, favs ?? noStars);
 
 const e = (id: string, title: string, about = "", kind = "sfx", cat = ""): Entry => ({
   kind,
@@ -860,3 +877,138 @@ test("a long sound offers a looping bed as well as a hit", async () => {
     /or under a whole scene, looping: beds\[\]: \{"name": "mc-cave-amb"/,
   );
 });
+
+test("an entry is starred by the id the studio's star gives it, and any take stars its sound family", () => {
+  const [door] = soundEntries([
+    { name: "door-1", family: "door", variant: 1 },
+    { name: "door-2", family: "door", variant: 2 },
+  ]);
+  const xs = markStarred(
+    [
+      door!,
+      e("dissolve", "Dissolve", "", "transition"),
+      e("pop", "Pop", "", "anim-in"),
+      e("pop", "Pop", "", "text-in"),
+      e("ring", "Ring", "", "shape-out"),
+      e("mixamo/Walking", "Walking", "", "mocap"),
+      e("slide", "Slide", "", "transition"),
+    ],
+    {
+      sounds: ["door-2"],
+      effects: [
+        "transition:dissolve",
+        "text:text:in:pop",
+        "text:shape:out:ring",
+        "mocap:mixamo/Walking",
+      ],
+    },
+  );
+  expect(xs.map((x) => `${x.kind}:${x.id}:${!!x.fav}`)).toEqual([
+    "sfx:door-1:true",
+    "transition:dissolve:true",
+    "anim-in:pop:false",
+    "text-in:pop:true",
+    "shape-out:ring:true",
+    "mocap:mixamo/Walking:true",
+    "transition:slide:false",
+  ]);
+});
+
+// A favourites folder of the test's own, with these lists written into it
+const withFavorites = async (
+  lists: Record<string, { sounds?: string[]; effects?: string[] }>,
+  body: (favs: ReturnType<typeof favoriteLists>) => Promise<void>,
+) => {
+  const dir = mkdtempSync(join(tmpdir(), "fav-"));
+  try {
+    for (const [name, l] of Object.entries(lists))
+      writeFileSync(join(dir, `${name}.json`), JSON.stringify({ sounds: [], effects: [], ...l }));
+    await body(favoriteLists(dir));
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+};
+const starredPool = () => [
+  e("boom", "Big boom", "", "sfx", "impacts"),
+  e("thud", "Boom thud", "", "sfx", "impacts"),
+  e("dissolve", "Dissolve", "", "transition", "basic"),
+];
+
+test("--fav keeps only what the creator starred, and each starred line says so", () =>
+  withFavorites(
+    { default: { sounds: ["boom"], effects: ["transition:dissolve"] } },
+    async (favs) => {
+      const out = await run(["boom", "--fav"], starredPool(), noJev, undefined, favs);
+      expect(out).toMatch(/boom .*\[starred\]/);
+      expect(out).not.toMatch(/thud/);
+      const all = await run(["--favorites"], starredPool(), noJev, undefined, favs);
+      expect(all).toMatch(
+        /^\(--favorites read as --fav\)\n2 starred by the creator in the default favourites/,
+      );
+      expect(all).toMatch(/dissolve/);
+    },
+  ));
+
+test("--fav reads the default list unless a list is named, and offers the others", () =>
+  withFavorites({ default: { sounds: ["boom"] }, horror: { sounds: ["thud"] } }, async (favs) => {
+    const plain = await run(["boom", "--fav"], starredPool(), noJev, undefined, favs);
+    expect(plain).toMatch(
+      /other favourites lists: horror 1 \(this one: default; another: bun run find --fav horror boom\)/,
+    );
+    const horror = await run(["boom", "--fav", "horror"], starredPool(), noJev, undefined, favs);
+    expect(horror).toMatch(/thud .*\[starred\]/);
+    expect(horror).not.toMatch(/Big boom/);
+    const typo = await run(["--fav=horrror"], starredPool(), noJev, undefined, favs);
+    expect(typo).toMatch(/^\(no favourites list "horrror", the default list used\)/);
+  }));
+
+test("--fav with nothing starred says how a star is given", () =>
+  withFavorites({}, async (favs) => {
+    const out = await run(["--fav"], starredPool(), noJev, undefined, favs);
+    expect(out).toMatch(/nothing is starred yet in the default favourites/);
+    expect(out).toMatch(/bun run find --star <id>/);
+  }));
+
+test("a list with starred entries offers --fav among its filters", () =>
+  withFavorites({ default: { sounds: ["boom"] } }, async (favs) => {
+    expect(await run(["--kind", "sfx"], starredPool(), noJev, undefined, favs)).toMatch(
+      /filter: --fav 1 starred/,
+    );
+  }));
+
+test("--star and --unstar write the list the studio reads, or a named one", () =>
+  withFavorites({}, async (favs) => {
+    const pool = [
+      e("boom", "Big boom", "", "sfx"),
+      e("fade", "Fade", "", "transition"),
+      e("fade", "Fade", "", "anim-in"),
+    ];
+    expect(await run(["--star", "boom"], pool, noJev, undefined, favs)).toMatch(
+      /starred in the default favourites: sfx boom/,
+    );
+    await expect(run(["--star", "fade"], pool, noJev, undefined, favs)).rejects.toThrow(
+      /fade is a transition and an anim-in: add --kind/,
+    );
+    await run(["--star", "fade", "--kind", "anim"], pool, noJev, undefined, favs);
+    await run(["--star", "boom", "--fav", "horror"], pool, noJev, undefined, favs);
+    await run(["--unstar", "boom"], pool, noJev, undefined, favs);
+    expect(favs.open().read()).toEqual({ sounds: [], effects: ["in:fade"] });
+    expect(favs.open("horror").read().sounds).toEqual(["boom"]);
+  }));
+
+test("a bgm list says Minecraft's own music is not in the vault", async () => {
+  const pool = [{ ...e("bgm-boss", "Boss theme", "", "bgm", "boss"), src: "wither-storm" }];
+  expect(await run(["--kind", "bgm"], pool, noJev)).toMatch(
+    /Minecraft's own music .* is not in the vault/,
+  );
+});
+
+test("words no favourite has point to the lists that have them, and to the search without --fav", () =>
+  withFavorites(
+    { default: { effects: ["transition:dissolve"] }, horror: { sounds: ["thud"] } },
+    async (favs) => {
+      expect(await run(["thud", "--fav"], starredPool(), noJev, undefined, favs)).toMatch(
+        /none of the default favourites has these words; other lists do: horror 1 \(bun run find thud --fav horror\); \d+ entries outside the favourites do \(bun run find thud\)/,
+      );
+    },
+  ));
