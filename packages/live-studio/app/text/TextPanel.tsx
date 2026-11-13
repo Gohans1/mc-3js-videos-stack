@@ -42,6 +42,8 @@ import { matcher } from "../core/search";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
+import { ownVoice } from "../own/builtins";
+import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { frameSize } from "../picture/frame";
 import {
   editPicked,
@@ -831,14 +833,16 @@ function Anim({ it }: { it: TextItem }) {
                 onFocus={() => tryOn(x)}
                 onBlur={leave}
                 title={x.tip ?? x.title}
+                aria-label={ownVoice(shape, slot, x) ? `${x.title}, ${FILM_MADE}` : undefined}
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring aria-pressed:text-foreground flex w-full flex-col items-center gap-1 rounded-md text-xs outline-none focus-visible:ring-2"
               >
                 <span
                   className={cn(
-                    "bg-backdrop in-aria-pressed:ring-primary grid aspect-square w-full place-items-center rounded-md ring-1 ring-white/6 group-hover:ring-white/20 in-aria-pressed:ring-2",
+                    "bg-backdrop in-aria-pressed:ring-primary relative grid aspect-square w-full place-items-center rounded-md ring-1 ring-white/6 group-hover:ring-white/20 in-aria-pressed:ring-2",
                   )}
                 >
                   <VoiceBadge fx={x} shape={shape} kind={it.kind} />
+                  {ownVoice(shape, slot, x) && <FilmMark />}
                 </span>
                 <span className={cn("w-full truncate text-center", now === x.id && "text-primary")}>
                   {x.title}

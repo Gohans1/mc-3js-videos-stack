@@ -44,8 +44,9 @@ interface PageSlice {
     | "transition"
     | "keys"
     | "text"
-    | "textAnim";
-  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust"; // on a wide screen: the left column's tab (side then picks the right column's)
+    | "textAnim"
+    | "film";
+  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film"; // on a wide screen: the left column's tab (side then picks the right column's)
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;
 }

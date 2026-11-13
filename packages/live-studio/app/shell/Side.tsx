@@ -8,6 +8,7 @@ import { Tabs } from "@base-ui/react/tabs";
 import {
   Blend,
   Boxes,
+  Clapperboard,
   type LucideIcon,
   MessageSquareText,
   Music2,
@@ -31,6 +32,7 @@ import { KeyPanel } from "../keys/KeyPanel";
 import { Compose } from "../notes/Compose";
 import { NoteList } from "../notes/NoteList";
 import { ObjectsPanel } from "../objects/ObjectsPanel";
+import { OwnPanel } from "../own/OwnPanel";
 import { SoundPanel } from "../sound/SoundPanel";
 import { TextLibrary } from "../text/TextLibrary";
 import { TextPanel } from "../text/TextPanel";
@@ -103,6 +105,7 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "objects", title: "Objects", icon: Boxes },
   { id: "transition", title: "Transitions", icon: Blend },
   { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
+  { id: "film", title: "Film", icon: Clapperboard },
 ];
 const tool =
   "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary data-active:after:absolute data-active:after:inset-x-3 data-active:after:-bottom-1 data-active:after:h-0.5 data-active:after:rounded-full data-active:after:bg-primary [&_svg]:size-5";
@@ -112,6 +115,7 @@ export function Library() {
   const shown = LIBS.filter(
     (l) =>
       l.id === "notes" ||
+      l.id === "film" ||
       (l.id === "sound"
         ? sound
         : l.id === "text"
@@ -131,20 +135,23 @@ export function Library() {
         onValueChange={(v) => set({ lib: v as Lib })}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <Tabs.List
-          aria-label="Libraries"
-          className="bg-card flex flex-none [scrollbar-width:none] gap-1 overflow-x-auto px-2 pt-1 pb-1"
-        >
-          {shown.map((l) => (
-            <Tabs.Tab key={l.id} value={l.id} className={tool}>
-              <l.icon aria-hidden />
-              <span className="flex items-center gap-1">
-                {l.title}
-                {l.id === "notes" && <NotesCount open={open} check={check} />}
-              </span>
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
+        {/* More tools than a narrow column holds scroll sideways, the fade saying there are more (the card stays under it) */}
+        <div className="bg-card flex-none">
+          <Tabs.List
+            aria-label="Libraries"
+            className="scroll-fade-x flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain px-2 pt-1 pb-1"
+          >
+            {shown.map((l) => (
+              <Tabs.Tab key={l.id} value={l.id} className={cn(tool, "flex-none")}>
+                <l.icon aria-hidden />
+                <span className="flex items-center gap-1">
+                  {l.title}
+                  {l.id === "notes" && <NotesCount open={open} check={check} />}
+                </span>
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </div>
         <Tabs.Panel value="notes" className="flex min-h-0 flex-1 flex-col">
           <NoteList />
         </Tabs.Panel>
@@ -173,6 +180,9 @@ export function Library() {
             <AdjustLibrary />
           </Tabs.Panel>
         )}
+        <Tabs.Panel value="film" className="flex min-h-0 flex-1 flex-col">
+          <OwnPanel />
+        </Tabs.Panel>
       </Tabs.Root>
     </aside>
   );
@@ -416,6 +426,9 @@ export function Side({ wide }: { wide: boolean }) {
                   Keyframes
                 </Tabs.Tab>
               )}
+              <Tabs.Tab value="film" className={tab}>
+                Film
+              </Tabs.Tab>
             </Tabs.List>
           </div>
           <Tabs.Panel value="notes" className="flex min-h-0 flex-1 flex-col">
@@ -452,6 +465,9 @@ export function Side({ wide }: { wide: boolean }) {
               <KeyPanel />
             </Tabs.Panel>
           )}
+          <Tabs.Panel value="film" className="flex min-h-0 flex-1 flex-col">
+            <OwnPanel />
+          </Tabs.Panel>
         </Tabs.Root>
       ) : (
         <NoteList />

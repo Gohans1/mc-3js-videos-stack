@@ -11,6 +11,8 @@ import { SearchBox } from "../components/SearchBox";
 import { matcher } from "../core/search";
 import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
+import { ownTransition } from "../own/builtins";
+import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { pickShot, playSpan, shownShot, stopSpan } from "./anim";
 import { shotsDoc } from "./shots";
 import {
@@ -358,7 +360,7 @@ export function TransitionLibrary() {
               <button
                 type="button"
                 draggable
-                aria-label={`Add ${fx.title}`}
+                aria-label={`Add ${fx.title}${ownTransition(fx) ? `, ${FILM_MADE}` : ""}`}
                 aria-pressed={current?.fx === fx.id}
                 disabled={at === undefined || !transitionRoom(shot)}
                 title={fx.tip}
@@ -380,6 +382,7 @@ export function TransitionLibrary() {
                   )}
                 >
                   <Look fx={fx} />
+                  {ownTransition(fx) && <FilmMark />}
                   <span
                     aria-hidden
                     className="bg-primary text-primary-foreground absolute end-0.5 bottom-0.5 rounded-sm opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"

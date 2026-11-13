@@ -29,6 +29,8 @@ import { matcher } from "../core/search";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
+import { ownAnim } from "../own/builtins";
+import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import {
   animOf,
   anims,
@@ -137,7 +139,8 @@ function Tile({
   onTry: () => void;
   onLeave: () => void;
 }) {
-  const title = fx?.title ?? "None";
+  const title = fx?.title ?? "None",
+    own = !!fx && ownAnim(slot, fx);
   const fav = useStudio((s) => !!fx && s.favorites.effects.includes(`${slot}:${fx.id}`));
   return (
     <li
@@ -149,7 +152,11 @@ function Tile({
         <button
           type="button"
           aria-pressed={on}
-          aria-label={fx ? `${title}: ${fx.tip}` : `None: no ${SLOT_NAMES[slot]} animation`}
+          aria-label={
+            fx
+              ? `${title}${fx.tip ? `: ${fx.tip}` : ""}${own ? `, ${FILM_MADE}` : ""}`
+              : `None: no ${SLOT_NAMES[slot]} animation`
+          }
           onClick={onPick}
           onFocus={onTry}
           onBlur={onLeave}
@@ -162,6 +169,7 @@ function Tile({
               <Ban className="text-muted-foreground size-6" />
             </span>
           )}
+          {own && <FilmMark />}
           {fx?.pair && (
             <span
               aria-hidden
