@@ -1,4 +1,6 @@
 // Pure metadata and picture-URL helpers shared by NoteList.tsx, notes.ts, scripts/at.ts and tests.
+import { frameAt, type TimingClock } from "../../src/timing.mjs";
+
 export interface NoteMediaSource {
   id: string;
   img?: string;
@@ -84,13 +86,16 @@ export const noteScene = (n: NoteWhere, shots: readonly { t: number; name?: stri
 };
 
 // Where a note is heard now: its picture (noteScene) through today's Speed and Freeze, else its narration second, which follows
-// voice edits but not Speed or Freeze
+// voice edits but not Speed or Freeze. A held picture is heard over a stretch: a note whose own second still shows its picture
+// stays there; moved, it goes to the picture's first heard second
 export const noteSecond = (
   n: NoteWhere & { t: number; srcT?: number | null },
   fromSource: (s: number) => number,
-  clock: { outputAt: (t: number) => number },
+  clock: TimingClock,
   shots: readonly { t: number; name?: string }[] = [],
 ) => {
   const s = noteScene(n, shots);
-  return s ? clock.outputAt(s.at) : n.srcT != null ? fromSource(n.srcT) : n.t;
+  if (!s) return n.srcT != null ? fromSource(n.srcT) : n.t;
+  if (Math.abs(frameAt(clock, n.t) - s.at) < 0.002) return n.t; // seconds are kept to the millisecond
+  return clock.outputAt(s.at, "before");
 };

@@ -63,6 +63,20 @@ test("a note stays on its picture when a Speed edit after it moves that picture'
   assert.equal(noteSecond({ ...old, shotName: "gone" }, voiceOnly, clock, shots), 8.2);
 });
 
+test("a note written during a held frame stays at its own second while that frame still holds there", () => {
+  // scene second 0 held for the film's first 6 s (a Freeze): a note at 0 s, at 2 s, and one written before the hold existed
+  const held = compileTiming({ freezes: [{ at: 0, duration: 6 }] }, 20),
+    voiceOnly = (s) => s;
+  assert.equal(noteSecond({ t: 0, srcT: 0, scene: 0 }, voiceOnly, held), 0);
+  assert.equal(noteSecond({ t: 2, srcT: 2, scene: 0 }, voiceOnly, held), 2);
+  // the hold moved away from where the note was written: the picture's first heard second, not the end of its hold
+  const later = compileTiming(
+    { speeds: [{ from: 0, to: 20, rate: 1 }], freezes: [{ at: 0, duration: 6 }] },
+    20,
+  );
+  assert.equal(noteSecond({ t: 9, srcT: 9, scene: 0 }, voiceOnly, later), 0);
+});
+
 test("a note keeps its frame, the pin's close-up, the seconds around it and one picture per drawn moment", () => {
   const dir = mkdtempSync(join(tmpdir(), "notes-"));
   try {
