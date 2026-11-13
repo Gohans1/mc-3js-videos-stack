@@ -1,0 +1,44 @@
+D-T1	transition	en	scene	a memory slipping away, dreamy and soft	^(dissolve|blurDissolve|crossOver|lumaMelt|exposureBloom)$
+D-T2	transition	vi	para	chuyển cảnh giật lag như máy tính bị lỗi	^(glitchBreak|rgbSplitCut|mosaicCut|invertFlash)$
+D-T3	transition	en	scene	old cartoon ending where a circle closes on the hero	^(irisClose)$
+D-T4	transition	en	use	a punchy high energy cut on the beat drop	^(whipStreak|zoomCross|rgbSplitCut|invertFlash|glitchBreak|white|snapMorph)$
+D-T5	transition	en	para	handmade scrapbook paper look	^(tornPaper)$
+D-N1	transition	en	none	a page curl like turning the page of a book	NONE
+D-A1	anim	en	scene	unease, something is wrong, the world slowly tilts	^(dutch|sway|vertigoIn|vertigoOut)$
+D-A2	anim	en	scene	Hitchcock moment of realisation, the background stretches behind him	^(vertigoIn|vertigoOut)$
+D-A3	anim	vi	para	camera như người cầm tay quay phim tài liệu	^(handheld)$
+D-A4	anim	en	use	keep a still shot alive, barely moving	^(creepIn|creepOut|breathe)$
+D-A5	anim	en	scene	an explosion hits and the camera jolts	^(impact|impactKick|shake)$
+D-X1	text	en	para	letters appear one at a time like a hacker terminal	^(type|easedType|scramble|letterReveal)$
+D-X2	text	vi	para	chữ rơi xuống vỡ vụn khi biến mất	^(shatter|gravityFall|wordDropOut)$
+D-X3	text	en	use	a number ticking up to show a big statistic	^(counter)$
+D-X4	text	en	use	elegant minimal title arrival for a documentary	^(fade|blur|trackingIn|clipRise|wipeIn|wordRise)$
+D-S1	shape	en	para	an arrow being drawn by hand	^(draw|spinDraw|wipeIn)$
+D-S2	shape	en	para	a circle that ripples away when it leaves	^(expandFade)$
+D-F1	font	en	use	a font for a quote from an old book	^(serif)$
+D-F2	font	vi	use	font chữ cho phim tiếng Việt có dấu, hiện đại, kỹ thuật	^(sans|mona-sans|geist|mono|geist-mono)$
+D-F3	font	en	use	hacker code on a terminal screen	^(mono|geist-mono)$
+D-N2	font	en	none	a japanese calligraphy brush font	NONE
+D-D1	adjust	en	scene	make it look like an old faded film	^(fade|halation)$
+D-D2	adjust	en	para	darken the corners to pull the eye to the centre	^(vignette)$
+D-D3	adjust	vi	para	làm ảnh ấm hơn kiểu hoàng hôn	^(temp)$
+D-D4	adjust	en	para	a glowing red halo around bright lights like on film stock	^(halation)$
+D-V1	velocity	en	para	a hard punch on every kick drum	^(hitPunch)$
+D-V2	velocity	en	para	colourful psychedelic pulse on the beat	^(rainbow|fringeBeat)$
+D-V3	velocity	en	name	a white flash on each beat	^(flash)$
+# D-E1 key 2026-11-13: + xpLeave, expIn(6) is 1% at a quarter and 5% at half: the hardest slow-then-fast curve there is
+D-E1	ease	en	para	starts slow then shoots off fast	^(in|buildIn|launchIn|whipBuild|softIn|expo|xpLeave)$
+D-E2	ease	en	para	arrives fast and gently settles	^(out|snapOut|settleOut|softOut|glideOut|xpArrive|expo)$
+D-E3	ease	en	para	pulls back a little before moving, like winding up	^(anticipate)$
+D-SF1	sfx	en	scene	a hacker typing furiously	^(ear-fit-key-lubed|ear-fit-key-medium|ear-fit-key-thock|ear-fit-key\.space-thock_space|ear-pro_typing_key-blip|ear-pro_typing_key-crackle|ear-pro_typing_key-double|ear-pro_typing_key-glass|ear-pro_typing_key-soft|ear-pro_typing_key-tick|ear-pro_typing_run-blip|ear-pro_typing_run-double|ear-pro_typing_run-glass|ear-pro_typing_run-soft|ear-pro_typing_run-standard|ear-pro_typing_run-tick|ear-typing_key-clicky|ear-typing_key-crisp|ear-typing_key-deep|ear-typing_key-laptop|ear-typing_key-light|ear-typing_key-thock|fs-378084|fs-665075|fs-789628|fs-789630|mixkit-1119|mixkit-1125|mixkit-1386|mixkit-1387|mixkit-1389|mixkit-2532|mixkit-2533|mixkit-2534|mixkit-2537|mixkit-2541|mixkit-2542)$
+D-SF2	sfx	vi	para	tiếng gió vút khi camera lia thật nhanh	^(ear-fit-whoosh\.short-bamboo_swish|ear-pro_whoosh_big-gritty|ear-pro_whoosh_big-long|ear-pro_whoosh_big-reverse|ear-pro_whoosh_big-swell|ear-pro_whoosh_big-tonal|ear-pro_whoosh_big-windy|ear-swish-blade|ear-swish-bright|ear-swish-cane|ear-swish-flick|ear-swish-soft|ear-swish-stick|ear-swish-zing|ear-whoosh_big-cape|ear-whoosh_big-deep|ear-whoosh_big-gust|ear-whoosh_big-jet|ear-whoosh_big-reverse|ear-whoosh_big-swell|ear-whoosh_big-thump|ear-whoosh_big-thump_airy|ear-whoosh_big-thump_deep|ear-whoosh_fast-crisp|ear-whoosh_fast-heavy|ear-whoosh_fast-reverse|ear-whoosh_fast-sleeve|ear-whoosh_fast-tight|ear-whoosh_fast-whip|ear-whoosh_fast-whistle|fs-427979|mixkit-1094|mixkit-1465|mixkit-1469|mixkit-1473|mixkit-1486|mixkit-1487|mixkit-1489|mixkit-1491|mixkit-1492|mixkit-168|mixkit-174|mixkit-175|mixkit-2615|mixkit-2637|mixkit-2903|mixkit-3115|mixkit-3161)$
+D-SF3	sfx	en	use	a jump scare hit	^(mixkit-556|mixkit-565|ear-impact-deep|mixkit-2187)$
+D-SF4	sfx	en	use	the sound when a task is done successfully	^(ear-notify-m0|ear-notify-m1|ear-notify-m2|ear-notify-m3|ear-notify-m4|ear-notify-m5|ear-notify-mid_tine|ear-notify-mid_wood|ear-pro_notify-ding_1822|ear-pro_notify-ding_1930|ear-pro_notify-ding_2045|ear-pro_notify-ding_2167|ear-pro_notify-ding_2296|mixkit-1107|mixkit-2574|mixkit-2575|mixkit-2861|mixkit-2863|mixkit-2866|mixkit-2867)$
+D-M1	mc	en	scene	a zombie groaning in the dark	zombie
+D-M2	mc	en	scene	a creaky wooden door opening slowly in a haunted house	(?<!trap)door
+D-M3	mc	vi	para	tiếng tim đập thình thịch	heartbeat
+D-M4	mc	en	scene	eerie cave atmosphere	(cave|horror|ambient)
+D-C1	mocap	en	scene	he searches the room nervously, looking around	(Look_Around|Looking_Around|Search|Nervous)
+D-C2	mocap	en	scene	she jumps up celebrating a win with arms raised	(Celebrat|Cheer|Victory)
+D-C3	mocap	vi	para	ông ấy sợ hãi, co rúm người lại	(Terrified|Cower|Scared|Afraid|Fear)
+D-C4	mocap	en	scene	limping because his leg is hurt	(Injured|Limp)

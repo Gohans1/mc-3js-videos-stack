@@ -1,0 +1,365 @@
+HA-tr-01	transition	en	name	dissolve transition	^(dissolve|blurDissolve)$
+HA-tr-02	transition	en	name	fade to black between scenes	^(black|topDip)$
+HA-tr-03	transition	en	para	gently blend one shot into the next with no hard edge	^(dissolve|blurDissolve|lumaMelt)$
+HA-tr-04	transition	en	scene	a blinding camera flash takes us to the next scene	^(white|snapMorph)$
+HA-tr-05	transition	en	use	hard-hitting cut on the beat for a fast action montage	^(whipStreak|zoomCross|rgbSplitCut|glitchBreak|invertFlash|snapMorph)$
+HA-tr-06	transition	en	name	iris open	^(irisOpen|lightIris|blobRing)$
+HA-tr-07	transition	en	para	scene closes down into a shrinking circle like the end of an old silent film	^irisClose$
+HA-tr-08	transition	en	name	wipe to the right	^wipe$
+HA-tr-09	transition	en	para	the new shot slides in and pushes the old one out of frame	^pushSlide$
+HA-tr-10	transition	en	para	the picture splits down the middle and the halves open like curtains	^doorSplit$
+HA-tr-11	transition	en	scene	a ripped sheet of paper reveals the next scene, scrapbook feel	^tornPaper$
+HA-tr-12	transition	en	para	pixelate the image into big blocks and then resolve into the next shot	^(mosaicCut|mosaicIris)$
+HA-tr-13	transition	en	name	glitch transition	^(glitchBreak|rgbSplitCut)$
+HA-tr-14	transition	en	para	red and cyan colour fringing pulse across the cut, VHS look	^(rgbSplitCut|glitchBreak)$
+HA-tr-15	transition	en	scene	a memory dissolving into overexposed warm sunlight	^(exposureBloom|heatBleach)$
+HA-tr-16	transition	en	use	a bright diagonal light streak sweeping across to reveal the product shot	^lightSweep$
+HA-tr-17	transition	en	para	scale up and fly through the screen into the next shot	^zoomCross$
+HA-tr-18	transition	en	name	diagonal wipe	^diagonalWipe$
+HA-tr-19	transition	en	para	the brightest parts of the next shot break through first, like melting	^lumaMelt$
+HA-tr-20	transition	en	para	a neutral grey bridge between clips so the colours do not clash	^dipGrey$
+HA-tr-21	transition	en	para	invert the colours in a quick band that snaps across the cut	^invertFlash$
+HA-tr-22	transition	en	para	make the transition run at a constant rate with no easing	^linear$
+HA-tr-23	transition	en	none	page curl turning like a book	NONE
+HA-tr-24	transition	en	none	clock-style radial sweep wipe	NONE
+HA-tr-25	transition	vi	name	chuyển cảnh hòa tan	^(dissolve|blurDissolve)$
+HA-tr-26	transition	vi	para	tối đen hoàn toàn rồi mới hiện cảnh sau	^(black|topDip)$
+HA-tr-27	transition	vi	para	ánh trắng lóe lên rồi sang cảnh khác	^(white|snapMorph)$
+HA-tr-28	transition	vi	para	cảnh sau trượt vào đẩy cảnh trước ra khỏi khung hình	^pushSlide$
+HA-tr-29	transition	vi	para	hình tròn mở rộng từ giữa màn hình để lộ cảnh tiếp theo	^(irisOpen|lightIris|blobRing|windowExpand)$
+HA-tr-30	transition	vi	scene	cú quay ngoắt thật nhanh, hình bị nhòe kéo ngang	^whipStreak$
+HA-tr-31	transition	vi	use	chuyển cảnh cho video hacker, màn hình bị lỗi	^(glitchBreak|rgbSplitCut)$
+HA-tr-32	transition	vi	para	các dải ngang quét qua lệch nhịp nhau	^bandWipe$
+HA-tr-33	transition	vi	scene	mở cánh cửa đôi, cảnh mới lộ ra giữa hai cánh	^doorSplit$
+HA-tr-34	transition	vi	none	chuyển cảnh xoay khối lập phương 3D	NONE
+HA-tr-35	transition	vi	none	chuyển cảnh hình trái tim	NONE
+HA-an-01	anim	en	name	dolly zoom	^(vertigoIn|vertigoOut)$
+HA-an-02	anim	en	para	camera drifts in an arc around the character	^(orbitL|orbitR)$
+HA-an-03	anim	en	name	whip pan right	^(whipR|whipDipR)$
+HA-an-04	anim	en	scene	documentary found-footage hand held wobble	^(handheld|shake)$
+HA-an-05	anim	en	scene	on the deck of a ship in a storm, drunk dizzy view	^sway$
+HA-an-06	anim	en	scene	something is wrong, the horizon slowly tips over	^(dutch|roll)$
+HA-an-07	anim	en	use	rise up from the ground to reveal a huge castle	^(craneUp|rise)$
+HA-an-08	anim	en	para	start tight on a detail and pull out to the wide frame	^(insidePullout|logZoomOut|zoomOut|pull)$
+HA-an-09	anim	en	name	rack focus	^(blurThrough|blurBridge)$
+HA-an-10	anim	en	para	a sudden fast zoom for comedic emphasis	^(snapZoomIn|snapZoomOut)$
+HA-an-11	anim	en	scene	an explosion nearby and the camera jolts	^(impact|impactKick|shake)$
+HA-an-12	anim	en	para	the whole picture rotates around the lens axis	^barrelRoll$
+HA-an-13	anim	en	name	fade in from black	^(fade|blackDip)$
+HA-an-14	anim	en	use	last shot of the film, ends on black	^(fade|blackDip)$
+HA-an-15	anim	en	para	lens warps outward like a barrel as the camera rushes forward	^(lensBulge|rush)$
+HA-an-16	anim	en	para	a floating figure-8 drift that loops back seamlessly	^figureEight$
+HA-an-17	anim	en	scene	the character takes a slow breath, the shot gently closes in and eases back	^(breathe|creepIn|creepOut)$
+HA-an-18	anim	en	use	keep a long held shot from freezing dead	^(creepIn|creepOut|breathe)$
+HA-an-19	anim	en	para	animation curve that settles with a bounce	^bounce$
+HA-an-20	anim	en	name	linear camera curve, constant speed	^linear$
+HA-an-21	anim	en	para	tilt the camera up toward the sky	^tiltU$
+HA-an-22	anim	en	para	camera moves sideways to the right while still facing forward	^slideR$
+HA-an-23	anim	en	para	a zoom that feels the same speed all the way through, logarithmic	^(logZoomIn|logZoomOut)$
+HA-an-24	anim	en	none	rewind time reverse playback	NONE
+HA-an-25	anim	en	none	stuttering stop motion 12 fps camera	NONE
+HA-an-26	anim	vi	name	zoom vào	^(zoomIn|logZoomIn|snapZoomIn)$
+HA-an-27	anim	vi	para	máy quay lướt nhẹ sang bên trái giữ nguyên hướng nhìn	^slideL$
+HA-an-28	anim	vi	scene	cảnh rung nhẹ liên tục như động cơ đang chạy, sợ hãi run rẩy	^shake$
+HA-an-29	anim	vi	scene	cảm giác bất an, đường chân trời nghiêng dần	^(dutch|roll)$
+HA-an-30	anim	vi	use	mở đầu phim, hiện dần từ màn hình đen	^(fade|blackDip)$
+HA-an-31	anim	vi	para	hạ camera từ trên cao xuống và nghiêng để giữ nhân vật trong khung	^(craneDown|lower)$
+HA-an-32	anim	vi	para	quay ngoắt sang phải thật nhanh	^(whipR|whipDipR)$
+HA-an-33	anim	vi	name	xoay camera quanh nhân vật	^(orbitL|orbitR)$
+HA-an-34	anim	vi	para	góc nhìn isometric từ trên cao hạ xuống ngang tầm mắt	^isoToFlat$
+HA-an-35	anim	vi	scene	tiếng nổ lớn làm cả màn hình giật mạnh một nhịp	^(impact|impactKick)$
+HA-an-36	anim	vi	none	hiệu ứng tua ngược thời gian	NONE
+HA-an-37	anim	vi	none	camera chuyển động chậm kiểu bullet time đóng băng	NONE
+HA-tx-01	text	en	name	typewriter	^(type|easedType)$
+HA-tx-02	text	en	para	letters appear one at a time as if someone is typing	^(type|easedType|letterReveal)$
+HA-tx-03	text	en	name	fade in text	^fade$
+HA-tx-04	text	en	name	slide up title	^(up|wordRise|clipRise)$
+HA-tx-05	text	en	para	the title drops from above with weight	^(gravityDrop|wordBounce)$
+HA-tx-06	text	en	use	hacker terminal reveal where gibberish resolves into the real word	^scramble$
+HA-tx-07	text	en	para	a number that counts up from zero to the final value	^counter$
+HA-tx-08	text	en	scene	the title swings in like a hanging sign	^pendulum$
+HA-tx-09	text	en	para	each word pops in on the beat of the music	^(staggerWords|wordRise|wordBounce|wordBuild)$
+HA-tx-10	text	en	para	text flies out of the lens toward the viewer and settles	^lensFly$
+HA-tx-11	text	en	use	outro where the letters tumble off the screen	^(shatter|gravityFall)$
+HA-tx-12	text	en	name	blur out	^(blur|blurExit)$
+HA-tx-13	text	en	para	the text shrinks away into the cut point	^(collapseOut|zoom)$
+HA-tx-14	text	en	scene	the title slams in oversized and shrinks to fit	^(oversize|zoom|popIn)$
+HA-tx-15	text	en	para	the typeface changes in quick hops while the text appears	^fontCycle$
+HA-tx-16	text	en	para	the text vanishes starting from its last letter	^letterHide$
+HA-tx-17	text	en	para	throw the title off to the left side	^whipLeft$
+HA-tx-18	text	en	para	words build up one after another into the full sentence	^(wordBuild|assemble|staggerWords|wordRise)$
+HA-tx-19	text	en	para	letters spread wide apart as the title leaves	^trackingOut$
+HA-tx-20	text	en	para	text enters along a curved flight path with a slight tilt	^arcFlight$
+HA-tx-21	text	en	name	echo	^(echoIn|echoOut)$
+HA-tx-22	text	en	none	text that follows a curved circular path	NONE
+HA-tx-23	text	en	none	confetti burst out of the letters	NONE
+HA-tx-24	text	vi	name	chữ hiện mờ dần	^(fade|blur)$
+HA-tx-25	text	vi	para	chữ gõ từng ký tự như máy đánh chữ	^(type|easedType)$
+HA-tx-26	text	vi	para	chữ trượt lên từ phía dưới	^(up|clipRise|wordRise)$
+HA-tx-27	text	vi	scene	tiêu đề đập vào màn hình rồi nảy nhẹ	^(wordBounce|popIn|gravityDrop)$
+HA-tx-28	text	vi	para	các chữ cái được giải mã từ ký tự ngẫu nhiên	^scramble$
+HA-tx-29	text	vi	para	số đếm tăng dần từ 0	^counter$
+HA-tx-30	text	vi	use	cuối đoạn, chữ chìm xuống dưới màn hình	^(gravityFall|down|clipDrop)$
+HA-tx-31	text	vi	para	chữ lao thẳng vào ống kính	^(lensFly|lensFlyOut)$
+HA-tx-32	text	vi	para	chữ mở ra từ giữa tâm tỏa ra hai bên	^centreUnmask$
+HA-tx-33	text	vi	none	chữ cháy rụi thành tro	NONE
+HA-tx-34	text	vi	none	chữ phát sáng neon nhấp nháy	NONE
+HA-sh-01	shape	en	para	the line draws itself on like a pen stroke	^(draw|spinDraw|wipeIn)$
+HA-sh-02	shape	en	name	pop in	^popIn$
+HA-sh-03	shape	en	para	the circle grows out of a single dot	^growDot$
+HA-sh-04	shape	en	para	the shape erases itself as if rubbed out	^undraw$
+HA-sh-05	shape	en	para	the highlight box ripples outward and fades away	^expandFade$
+HA-sh-06	shape	en	scene	the arrow drops in with weight	^gravityDrop$
+HA-sh-07	shape	en	para	it shrinks away at the cut	^(collapseOut|zoom)$
+HA-sh-08	shape	en	para	swings in like a pendulum	^pendulum$
+HA-sh-09	shape	en	name	snap shrink	^oversize$
+HA-sh-10	shape	en	none	shape that morphs into another shape	NONE
+HA-sh-11	shape	en	none	glowing pulse loop on the box	NONE
+HA-sh-12	shape	vi	para	nét vẽ hiện ra như đang vẽ tay	^(draw|spinDraw|wipeIn)$
+HA-sh-13	shape	vi	para	hình tròn nở ra từ một chấm nhỏ	^growDot$
+HA-sh-14	shape	vi	scene	cái hộp chìm xuống rồi biến mất	^(gravityFall|down)$
+HA-sh-15	shape	vi	name	mờ dần biến mất	^fade$
+HA-sh-16	shape	vi	para	xoay tròn trong lúc được vẽ ra	^spinDraw$
+HA-sh-17	shape	vi	none	hình vẽ nhấp nháy theo nhịp tim liên tục	NONE
+HA-fn-01	font	en	use	title for a coding tutorial screencast	^(mono|geist|geist-mono)$
+HA-fn-02	font	en	use	documentary quote card	^serif$
+HA-fn-03	font	en	scene	a friendly warm consumer app	^(manrope|dm-sans)$
+HA-fn-04	font	en	use	newsroom breaking headline	^schibsted-grotesk$
+HA-fn-05	font	en	use	developer tools product launch	^(geist|geist-mono|mona-sans|mono)$
+HA-fn-06	font	en	para	monospaced face for numbers and labels	^(geist-mono|mono)$
+HA-fn-07	font	en	para	a bold expressive creative headline face	^(bricolage-grotesque|funnel-display)$
+HA-fn-08	font	en	use	clean sans that must show Vietnamese accented letters	^(sans|mona-sans|hanken-grotesk|geist|manrope|bricolage-grotesque)$
+HA-fn-09	font	en	name	Inter	^sans$
+HA-fn-10	font	en	name	Geist Mono	^geist-mono$
+HA-fn-11	font	en	none	handwritten script signature font	NONE
+HA-fn-12	font	en	none	blocky Minecraft pixel font	NONE
+HA-fn-13	font	vi	use	phông có chân cho trích dẫn sách	^serif$
+HA-fn-14	font	vi	use	chữ gọn gàng cho video tài chính, phải hiển thị tiếng Việt có dấu	^(sans|mona-sans|hanken-grotesk)$
+HA-fn-15	font	vi	use	phông chữ cho đoạn code	^(mono|geist-mono|geist)$
+HA-fn-16	font	vi	scene	kiểu chữ thân thiện ấm áp cho ứng dụng	^(manrope|dm-sans)$
+HA-fn-17	font	vi	para	phông tiêu đề đậm hiện đại cho video về AI	^(funnel-display|mona-sans)$
+HA-fn-18	font	vi	none	chữ thư pháp viết tay	NONE
+HA-ad-01	adjust	en	para	make the image warmer and more orange	^temp$
+HA-ad-02	adjust	en	para	push the whole image toward green or magenta	^tint$
+HA-ad-03	adjust	en	name	saturation	^saturation$
+HA-ad-04	adjust	en	para	bring down the blown-out bright sky	^(highlight|exposure|whites)$
+HA-ad-05	adjust	en	para	pull detail out of the dark areas	^(shadow|blacks|brilliance)$
+HA-ad-06	adjust	en	scene	dreamy glow around the lights like film halation	^(halation|soften)$
+HA-ad-07	adjust	en	use	old film look with grain texture	^particles$
+HA-ad-08	adjust	en	para	darken the corners of the frame to focus on the centre	^vignette$
+HA-ad-09	adjust	en	para	wide-angle barrel distortion lens look	^fisheye$
+HA-ad-10	adjust	en	para	colour fringes at the edges like a cheap lens	^fringe$
+HA-ad-11	adjust	en	para	washed-out faded look with lifted blacks	^(fade|blacks)$
+HA-ad-12	adjust	en	para	stop banding in smooth gradients	^dither$
+HA-ad-13	adjust	en	para	crisper punchier edges	^(sharpen|clarity)$
+HA-ad-14	adjust	en	para	dreamy soft blurry look	^(soften|halation)$
+HA-ad-15	adjust	en	name	contrast	^contrast$
+HA-ad-16	adjust	en	para	make the picture brighter overall	^(exposure|brilliance|whites)$
+HA-ad-17	adjust	en	none	film burn light leak overlay	NONE
+HA-ad-18	adjust	en	none	teal and orange LUT preset	NONE
+HA-ad-19	adjust	vi	para	ảnh bị ám vàng, chỉnh cho lạnh hơn	^temp$
+HA-ad-20	adjust	vi	para	màu sắc rực rỡ hơn	^saturation$
+HA-ad-21	adjust	vi	para	làm tối bốn góc khung hình	^vignette$
+HA-ad-22	adjust	vi	para	vùng sáng bị cháy, giảm xuống	^(highlight|exposure|whites)$
+HA-ad-23	adjust	vi	name	tăng độ tương phản	^contrast$
+HA-ad-24	adjust	vi	use	hạt nhiễu kiểu phim cũ	^particles$
+HA-ad-25	adjust	vi	scene	ảnh mờ ảo mơ màng	^(soften|halation)$
+HA-ad-26	adjust	vi	none	hiệu ứng rò sáng cháy phim	NONE
+HA-ad-27	adjust	vi	none	áp một bảng màu LUT điện ảnh sẵn	NONE
+HA-ve-01	velocity	en	para	white flash on every beat	^flash$
+HA-ve-02	velocity	en	para	punch the picture in with a quick zoom and contrast bump on the hit	^(hitPunch|retroZoom)$
+HA-ve-03	velocity	en	para	horizontal motion smear like a fast shutter	^shutterStreak$
+HA-ve-04	velocity	en	para	the image goes soft and dim for a moment on the beat	^fadeBlur$
+HA-ve-05	velocity	en	para	the picture shudders and blurs on impact	^blurShake$
+HA-ve-06	velocity	en	para	red and blue edges split apart on the downbeat	^(fringeBeat|rainbow)$
+HA-ve-07	velocity	en	para	colour channels split across the whole frame	^(rainbow|fringeBeat)$
+HA-ve-08	velocity	en	para	a retro zoom pulse with a warm tint	^retroZoom$
+HA-ve-09	velocity	en	none	slow motion time stretch ramp	NONE
+HA-ve-10	velocity	en	none	freeze frame stutter repeat	NONE
+HA-ve-11	velocity	vi	para	chớp trắng theo nhịp nhạc	^flash$
+HA-ve-12	velocity	vi	scene	màn hình rung và mờ khi có cú đấm	^(blurShake|hitPunch)$
+HA-ve-13	velocity	vi	para	vệt nhòe ngang tốc độ cao	^shutterStreak$
+HA-ve-14	velocity	vi	none	hiệu ứng pixel hóa theo nhịp	NONE
+HA-ea-01	ease	en	name	linear	^linear$
+HA-ea-02	ease	en	para	constant speed with no acceleration	^linear$
+HA-ea-03	ease	en	para	slow start that gradually speeds up	^(in|softIn|buildIn|launchIn|expo|xpLeave)$
+HA-ea-04	ease	en	para	fast at the start then decelerates smoothly to rest	^(out|softOut|snapOut|glideOut|settleOut|xpArrive|liftOut)$
+HA-ea-05	ease	en	para	pulls back slightly before moving forward, a wind-up	^anticipate$
+HA-ea-06	ease	en	para	almost instant jump to the target and then holds	^(jump|xpArrive)$
+HA-ea-07	ease	en	para	a very long slow build and then a violent snap at the end	^(whipBuild|launchIn|expo)$
+HA-ea-08	ease	en	scene	a calm neutral gentle S-curve move	^(smooth|inout|stdInOut)$
+HA-ea-09	ease	en	para	strong S curve that lingers at both ends and rushes through the middle	^(strongInOut|xpTravel|stdInOut)$
+HA-ea-10	ease	en	use	the final landing of a push-in that should settle softly	^(settleOut|softOut|glideOut|out|snapOut|liftOut)$
+HA-ea-11	ease	en	name	expo	^(expo|xpArrive|xpTravel|xpLeave)$
+HA-ea-12	ease	en	scene	the camera leaves the shot accelerating exponentially away	^(xpLeave|expo|launchIn|buildIn)$
+HA-ea-13	ease	en	name	sine ease in out	^inout$
+HA-ea-14	ease	en	scene	a velvet glide arriving in frame	^(glideOut|settleOut|softOut|liftOut)$
+HA-ea-15	ease	en	none	elastic spring overshoot wobble	NONE
+HA-ea-16	ease	en	none	stepped staircase holding frames	NONE
+HA-ea-17	ease	vi	para	chuyển động đều, không tăng tốc	^linear$
+HA-ea-18	ease	vi	para	bắt đầu chậm rồi nhanh dần	^(in|softIn|buildIn|launchIn|expo|xpLeave)$
+HA-ea-19	ease	vi	para	đến đích thật nhanh rồi dừng từ từ	^(out|softOut|snapOut|glideOut|settleOut|xpArrive|liftOut)$
+HA-ea-20	ease	vi	para	lùi lại một chút trước khi lao tới	^anticipate$
+HA-ea-21	ease	vi	para	nhảy tức thì đến vị trí rồi đứng yên	^(jump|xpArrive)$
+HA-ea-22	ease	vi	para	đường cong mượt hai đầu chậm giữa nhanh	^(smooth|inout|stdInOut|strongInOut|xpTravel)$
+HA-ea-23	ease	vi	para	tích lũy rất lâu rồi quất mạnh ở cuối như vung roi	^(whipBuild|launchIn)$
+HA-ea-24	ease	vi	none	nảy lò xo dao động vài lần	NONE
+HA-ve-15	velocity	vi	para	viền đỏ xanh tách ra ở mép khung hình theo nhịp trống	^(fringeBeat|rainbow)$
+HA-ve-16	velocity	en	use	give the kick drum hit more weight on the downbeat	^(hitPunch|blurShake|flash|retroZoom)$
+HA-sf-01	sfx	en	name	camera shutter click	^(ear-shutter-|mixkit-(1133|1430|1432|1433|1434)$)
+HA-sf-02	sfx	en	name	keyboard typing	^(ear-(typing_key|pro_typing_key|pro_typing_run|fit-key)|fs-(378084|665075|789628|789630)$|mixkit-(1386|1387|1389|2532|2533|2534|2537|2541|2542|1119|1125)$)
+HA-sf-03	sfx	en	use	a deep cinematic boom for a title slam	^(ear-(impact-|pro_impact-|cut_hit-)|mixkit-(2187|2294|2908|2909|544|773|557|565|2150)$)
+HA-sf-04	sfx	en	use	logo reveal sting on the end card	^ear-(pro_)?logo_sting-
+HA-sf-05	sfx	en	para	airy fast swoosh as the camera whips past	^(ear-(whoosh_fast-|swish-|pro_zip-)|mixkit-(1465|1469|1473|1487|1489|1491|1492|168|174|175|2637|3115)$)
+HA-sf-06	sfx	en	para	rising tension build up just before the reveal	^(ear-(riser-|pro_riser-)|mixkit-(645|790|2668|784)$)
+HA-sf-07	sfx	en	para	a low sub drop that lands right after the beat	^(ear-(pro_)?sub_drop-|ear-downlifter-sub_sink)
+HA-sf-08	sfx	en	para	computer glitch error stutter	^ear-(pro_)?glitch-
+HA-sf-09	sfx	en	para	a soft ding for a notification or success	^(ear-(pro_)?notify-|mixkit-(2574|2575|2863|2866|2867|2861)$)
+HA-sf-10	sfx	en	name	mouse click	^(ear-(click-|pro_click-)|mixkit-(1111|1115|1118|1122|275|2997|1130)$)
+HA-sf-11	sfx	en	scene	a water drop falling in a quiet cave	^ear-drip-
+HA-sf-12	sfx	en	para	turning a page of paper	^(ear-swipe-(paper|cloth)|mixkit-(1530|2380|2384|2386)$)
+HA-sf-13	sfx	en	scene	a wall clock ticking in a silent room	^mixkit-1063$
+HA-sf-14	sfx	en	para	a small bell struck once	^(fs-452379|ear-fit-bell-small_bell|mixkit-3109)$
+HA-sf-15	sfx	en	scene	dark ominous horror drum hit	^mixkit-(556|557|565|773)$
+HA-sf-16	sfx	en	para	tape rewinding backwards	^mixkit-(1088|1092|1094)$
+HA-sf-17	sfx	en	para	a bubble popping	^(ear-pop-[0-9]|mixkit-(3000|3192)$|ear-drip-bubble)
+HA-sf-18	sfx	en	para	flicking a light switch	^(ear-toggle-|ear-fit-snap-switch_flip|fs-278205|mixkit-(1830|2579|2585)$)
+HA-sf-19	sfx	en	use	hovering the cursor over a menu item	^ear-(pro_)?hover_tick-
+HA-sf-20	sfx	en	use	a settings toggle switching on	^(ear-toggle-|fs-278205|ear-fit-snap-switch_flip)
+HA-sf-21	sfx	en	scene	magical sparkle chimes on the end card	^(ear-(pro_)?shimmer-|ear-mallet-(celesta|flourish|glock|up4)|ear-pluck-kalimba_ring)
+HA-sf-22	sfx	en	para	a single marimba or kalimba note	^(ear-(mallet-marimba|pluck-kalimba)|mixkit-2323$)
+HA-sf-23	sfx	en	para	a thudding heartbeat	^mixkit-498$
+HA-sf-24	sfx	en	scene	energy falling away as the scene exits after a hit	^ear-downlifter-
+HA-sf-25	sfx	en	use	a big whoosh for a scene change	^(ear-(whoosh_big-|pro_whoosh_big-)|mixkit-(1486|2615|3161|2903|1465)$)
+HA-sf-26	sfx	en	para	a finger tapping on a phone screen	^(ear-(tap-|pro_tap-|fit-land.light-finger_phone)|fs-704862$)
+HA-sf-27	sfx	en	para	a wooden knock on a door	^ear-knock-(desk|double|wood)
+HA-sf-28	sfx	en	none	audience applause and cheering	NONE
+HA-sf-29	sfx	en	none	a dog barking	NONE
+HA-sf-30	sfx	en	none	rain falling on a roof	NONE
+HA-sf-31	sfx	vi	name	tiếng gõ phím máy tính	^(ear-(typing_key|pro_typing_key|pro_typing_run|fit-key)|fs-(378084|665075|789628|789630)$|mixkit-(1386|1387|1389|2532|2533|2534|2537|2541|2542|1119|1125)$)
+HA-sf-32	sfx	vi	scene	tiếng vút ngang qua khi chuyển cảnh	^(ear-(whoosh_|swish-|pro_whoosh|pro_zip-)|mixkit-(1465|1469|1473|1486|1487|1489|1491|1492|168|174|175|2615|2637|3115|3161)$|fs-427979$|ear-fit-whoosh)
+HA-sf-33	sfx	vi	use	cú đập trầm khi hiện tiêu đề	^(ear-(impact-|pro_impact-|cut_hit-)|mixkit-(2187|2294|2908|2909|544|773|557|565|2150)$)
+HA-sf-34	sfx	vi	name	tiếng chụp ảnh của máy ảnh	^(ear-shutter-|mixkit-(1133|1430|1432|1433|1434)$)
+HA-sf-35	sfx	vi	para	tiếng bong bóng nổ lụp bụp	^(ear-pop-[0-9]|mixkit-(3000|3192)$|ear-drip-bubble)
+HA-sf-36	sfx	vi	para	tiếng ting báo có tin nhắn mới	^(ear-(pro_)?notify-|mixkit-(2574|2575|2863|2866|2867|2861)$)
+HA-sf-37	sfx	vi	scene	tiếng nước nhỏ giọt trong hang	^ear-drip-
+HA-sf-38	sfx	vi	name	tiếng nhấp chuột	^(ear-(click-|pro_click-)|mixkit-(1111|1115|1118|1122|275|2997|1130)$)
+HA-sf-39	sfx	vi	para	tiếng lật giấy sột soạt	^(ear-swipe-(paper|cloth)|mixkit-(1530|2380|2384|2386)$)
+HA-sf-40	sfx	vi	scene	âm thanh dâng lên hồi hộp trước khi lộ diện	^(ear-(riser-|pro_riser-)|mixkit-(645|790|2668|784)$)
+HA-sf-41	sfx	vi	para	tiếng nhiễu lỗi hệ thống giật cục	^ear-(pro_)?glitch-
+HA-sf-42	sfx	vi	scene	tiếng tim đập thình thịch	^mixkit-498$
+HA-sf-43	sfx	vi	none	tiếng vỗ tay khán giả	NONE
+HA-sf-44	sfx	vi	none	tiếng súng nổ	NONE
+HA-sf-45	sfx	vi	none	tiếng mưa rơi trên mái tôn	NONE
+HA-bg-01	bgm	en	use	epic boss fight against a giant storm monster	^bgm-wither-storm-
+HA-bg-02	bgm	en	use	calm minimal background music under a product walkthrough	^bgm-(chill-abstract-intention|future-design|modern-chillout-future-calm|lazy-day|hazy-after-hours|digital-clouds|this-minimal-technology-pure|limit-70)$
+HA-bg-03	bgm	en	para	fast breakbeat with energetic drums for a chase	^bgm-(drive-breakbeat|movement|jungle-waves|code-switch|brain-dance)$
+HA-bg-04	bgm	en	para	orchestral strings with a trailer feel, building to a big finale	^bgm-(convergence|amalgam|code-switch)$
+HA-bg-05	bgm	en	scene	dark propulsive underground techno at night	^bgm-(minimal-techno-01|deep-urban|techsonik-hypnotic-groove)$
+HA-bg-06	bgm	en	scene	dreamy futuristic floating atmosphere with a clean glitch	^bgm-(creative-technology-showreel|floating-abstract-reinvention|digital-clouds|modern-chillout-future-calm|the-last-point)$
+HA-bg-07	bgm	en	name	Limit 70	^bgm-limit-70$
+HA-bg-08	bgm	en	para	relaxed lounge downtempo for a lazy afternoon	^bgm-(lazy-day|hazy-after-hours|beauty-flow|night-owl|limit-70)$
+HA-bg-09	bgm	en	none	acoustic folk guitar campfire song	NONE
+HA-bg-10	bgm	en	none	sad solo piano	NONE
+HA-bg-11	bgm	vi	use	nhạc nền thư giãn nhẹ nhàng	^bgm-(chill-abstract-intention|future-design|modern-chillout-future-calm|lazy-day|hazy-after-hours|digital-clouds|limit-70|beauty-flow|night-owl)$
+HA-bg-12	bgm	vi	scene	nhạc kịch tính cho trận đánh trùm cuối	^bgm-wither-storm-
+HA-bg-13	bgm	vi	para	nhạc điện tử nhịp nhanh sôi động	^bgm-(drive-breakbeat|movement|jungle-waves|brain-dance|code-switch)$
+HA-bg-14	bgm	vi	use	nhạc nền cho video giới thiệu công nghệ tối giản	^bgm-(this-minimal-technology-pure|future-design|creative-technology-showreel|modern-chillout-future-calm|minimal-techno-01|chill-abstract-intention)$
+HA-bg-15	bgm	vi	none	bài hát rock có lời hát	NONE
+HA-mc-01	mc	en	name	creeper hiss	^mc-(mob-creeper-|random-fuse)
+HA-mc-02	mc	en	name	enderman scream	^mc-mob-endermen-(scream|stare)
+HA-mc-03	mc	en	para	villager grunting no, refusing a trade	^mc-mob-(villager|wandering-trader)-no
+HA-mc-04	mc	en	para	undead corpse groaning	^mc-mob-(zombie|zombie-villager)-(say|hurt)
+HA-mc-05	mc	en	scene	a skeleton rattling its bones in the dark	^mc-mob-skeleton-(say|step|hurt)
+HA-mc-06	mc	en	scene	the Warden is right next to you and your heartbeat quickens	^mc-mob-warden-(heartbeat|nearby|listening|sniff)
+HA-mc-07	mc	en	para	a floating tear-shedding creature screams and spits a fireball	^mc-mob-ghast-(scream|fireball|charge|moan|affectionate-scream)
+HA-mc-08	mc	en	name	cat purring	^mc-mob-cat-purr
+HA-mc-09	mc	en	name	wolf growl	^mc-mob-wolf-[a-z-]*growl
+HA-mc-10	mc	en	name	opening a chest	^mc-(block-chest-open|random-chestopen|block-enderchest-open|block-copper-chest-copper-chest-open)(-\d+)?$
+HA-mc-11	mc	en	para	wooden door creaking open	^mc-(random-door-open|block-wooden-door-open)(-\d+)?$
+HA-mc-12	mc	en	para	a glass window shattering	^mc-(quality-sounds-block-glass-break|random-glass)
+HA-mc-13	mc	en	para	an anvil landing hard on the ground	^mc-random-anvil-land$
+HA-mc-14	mc	en	scene	a crackling campfire at night	^mc-block-(campfire-crackle|furnace-fire-crackle)
+HA-mc-15	mc	en	scene	steady rain falling outside	^mc-(ambient-weather-rain|ambientsounds-weather-rain|gentler-weather-sounds-ambient-weather-rain)
+HA-mc-16	mc	en	scene	distant thunder rolling across the sky	^mc-(ambient-weather-thunder|gentler-weather-sounds-ambient-weather-thunder|immersivethunder-thunder-(far|medium)|ambientsounds-weather-storm-away)
+HA-mc-17	mc	en	scene	insects chirping on a warm summer night	^mc-(ambientsounds-animals-(cricket|cicadas)|charmonium-world-(crickets|cicadas)|world-alive-cicada)
+HA-mc-18	mc	en	para	walking on crunchy snow	^mc-(presence-footsteps-snow-|step-snow|dig-snow)
+HA-mc-19	mc	en	para	heavy boots walking on gravel	^mc-(presence-footsteps-gravel-(walk|run|wander|land)|step-gravel)
+HA-mc-20	mc	en	para	a bow being drawn back and released	^mc-(auditory-continued-item-bow-pulling|immersive-weapons-bow-draw|alexs-caves-item-dreadbow-release)
+HA-mc-21	mc	en	para	raising a shield to block an attack	^mc-(item-shield-block|auditory-continued-item-shield-raise)
+HA-mc-22	mc	en	use	the player taking a hit, oof	^mc-(damage-hit|entity-player-hurt)
+HA-mc-23	mc	en	scene	a magical totem saves you from death	^mc-item-totem-use-totem
+HA-mc-24	mc	en	para	nether portal swirling hum	^mc-portal
+HA-mc-25	mc	en	scene	fireworks launching and bursting overhead	^mc-fireworks-
+HA-mc-26	mc	en	para	a minecart rolling on rails	^mc-minecart-
+HA-mc-27	mc	en	para	an aircraft propeller engine spinning	^mc-immersive-aircraft-(propeller|engine)
+HA-mc-28	mc	en	para	geiger counter radiation clicks	^mc-create-nuclear-geiger
+HA-mc-29	mc	en	scene	an alarm siren blaring a warning	^mc-(security-craft-alarm|create-nuclear-alarm|alexs-caves-misc-nuclear-siren|alexs-caves-ambient-toxic-caves-loop-additions-alarm)
+HA-mc-30	mc	en	scene	someone whispering behind you in the dark	^mc-(horror-sounds-(evil-whispers|behind-you|i-see-you|can-you-see-me)|ambient-nether-soulsand-valley-whisper)
+HA-mc-31	mc	en	para	a creaking wooden tree creature moving	^mc-(mob-creaking-|block-creaking-heart)
+HA-mc-32	mc	en	para	a piston pushing out	^mc-tile-piston-
+HA-mc-33	mc	en	para	a heavy mace slam on the ground	^mc-item-mace-smash
+HA-mc-34	mc	en	para	a bee buzzing around	^mc-mob-bee-(loop|aggressive)
+HA-mc-35	mc	en	para	picking up an experience orb, level up chime	^mc-random-(levelup|orb)
+HA-mc-36	mc	en	none	audience applause	NONE
+HA-mc-37	mc	en	none	church organ chord	NONE
+HA-mc-38	mc	en	none	car horn honking in traffic	NONE
+HA-mc-39	mc	vi	name	tiếng rồng ender gầm	^mc-mob-enderdragon-(growl|hit|end)
+HA-mc-40	mc	vi	scene	tiếng nổ hạt nhân khổng lồ	^mc-(alexs-caves-misc-nuclear-explosion|create-nuclear-explosion)
+HA-mc-41	mc	vi	name	tiếng ếch kêu	^mc-(mob-frog-|ambientsounds-animals-frog)
+HA-mc-42	mc	vi	name	tiếng gà con kêu	^mc-mob-chicken-
+HA-mc-43	mc	vi	para	tiếng bước chân trên cỏ	^mc-(presence-footsteps-grass-|step-grass|step-wet-grass)
+HA-mc-44	mc	vi	para	tiếng nhai ăn đồ ăn	^mc-(auditory-continued-item-food-eat|random-eat|random-burp)
+HA-mc-45	mc	vi	para	múc nước đầy xô	^mc-item-bucket-fill
+HA-mc-46	mc	vi	scene	dung nham sôi sùng sục	^mc-liquid-lava
+HA-mc-47	mc	vi	scene	gió hú trong đêm	^mc-(ambientsounds-wind|block-deadbush-sandblock-version-howlingwind)
+HA-mc-48	mc	vi	name	tiếng chuông	^mc-(block-bell-|note-bell)
+HA-mc-49	mc	vi	scene	tàu ngầm dò sonar dưới biển sâu	^mc-alexs-caves-misc-submarine-
+HA-mc-50	mc	vi	scene	cảm giác sợ hãi, tiếng ma quái thì thầm	^mc-(horror-sounds-|ambient-nether-soulsand-valley-whisper)
+HA-mc-51	mc	vi	none	tiếng chuông điện thoại reo	NONE
+HA-mc-52	mc	vi	none	tiếng cưa máy chạy	NONE
+HA-mc-53	mc	vi	none	tiếng khán giả cổ vũ hò reo	NONE
+HA-mo-01	mocap	en	name	zombie walking	^(mixamo/Zombie_Walking(_\d+)?_[0-9a-f]{8}$|ual2/Zombie_Walk_Fwd_Loop$)
+HA-mo-02	mocap	en	scene	a zombie chasing the hero at speed	^mixamo/Zombie_Run(ning)?(_\d+)?_[0-9a-f]{8}$
+HA-mo-03	mocap	en	para	hit by a bullet and collapses dead	^mixamo/(Dying_Shot_|Shot_To_The_Chest_Falling_Backwards_|Dying_Reaction_While_Standing|Walking_While_Aiming_Rifle_To_(Immediate_)?Dying|Dying_Rear_Impact|Dying_Front_Head|Dying_With_Front)
+HA-mo-04	mocap	en	name	boxing jab punch	^(mixamo/(Jab_|Long_Body_Jab|Med_Head_Jab|Short_Head_Jab|Short_Body_Jab|Long_Head_Jab|Mid_Body_Jab|Short_Jab|Quick_Left_Handed_Punch)|ual1/Punch_Jab$)
+HA-mo-05	mocap	en	para	waving hello to someone	^mixamo/(Waving|Aj_Waving_Gesture|Emotional_Waving_Forward|Waving_With_Both_Hands|Greeting_While_Standing)(_\d+)?_[0-9a-f]{8}$
+HA-mo-06	mocap	en	scene	a character sitting at a desk typing on a computer	^mixamo/(Sitting_At_A_Computer_And_Typing|Sitting_To_Typing|Typing_To_Sitting_Idle)
+HA-mo-07	mocap	en	para	crouching and sneaking quietly	^(mixamo/(Sneaking|Sneaking_Forward_Quickly|Crouched_Walk|Crouched_Walk_With_Rifle|Male_Ninja_Sneak_Walk|Female_Ninja_Sneak_Walk|Crouched_Cover_Sneaking_(Left|Right))(_d+)?_[0-9a-f]{8}$|ual1/Crouch_Fwd_Loop$)
+HA-mo-08	mocap	en	para	chopping a tree with an axe	^(ual2/TreeChopping_Loop$|mixamo/Downward_Attack_With_Axe)
+HA-mo-09	mocap	en	para	digging a hole with a shovel	^mixamo/(Digging_Hole_With_Shovel|Kneeling_Digging_And_Planting_Seeds)
+HA-mo-10	mocap	en	scene	falling to the knees to pray	^mixamo/(Kneeling_In_Prayer|Buckled_Stand_And_Praying|Falling_To_Knees_In_Prayer|Standing_Praying_While_Swaying)
+HA-mo-11	mocap	en	use	a hip hop dance for the party scene	^mixamo/[A-Za-z_]*(Hip_Hop|Bboy|House_Dance|Boogaloo|Locking)
+HA-mo-12	mocap	en	para	a drunk stumbling walk	^mixamo/(Drunk_Walk_Forward|Walking_While_Drunk|Male_Drunk_Walk|Drunken_|Drunk_Idle|Running_Forward_While_Drunk)
+HA-mo-13	mocap	en	para	ducking behind cover and firing a rifle	^mixamo/(Cover_To_Shooting|Fire_Rifle_While_Crouched|Rapid_Fire_While_In_Crouch|Shooting_A_Pistol_From_Behind_Cover)
+HA-mo-14	mocap	en	scene	an angry man yelling	^mixamo/(Yelling_In_Anger|Standing_Long_Yell|Short_Yell_While_Standing|Yelling_While_Standing_Leaning_Forward|Long_Yell_While_Standing_Leaning_Back|Long_Yell_Leaning_Forward|Stepping_Forward_And_Yelling_Out|Belting_Out)
+HA-mo-15	mocap	en	para	celebrating a win with fists pumping	^(mixamo/(Celebrating_After_A_Win|High_Enthusiasm_Fist_Pump|Pumping_A_Fist|Restrained_Enthusiasm_Standing_Fist_Pump|Less_Enthusiastic_Fist_Pump|Aj_Victory_Idle|Victory_From_A_Boxing_Win|Big_Vegas_Victory_Idle|Ecstatic_Jumping)|ual2/Yes$)
+HA-mo-16	mocap	en	para	climbing up a ladder	^mixamo/(Climbing_Up_A_Ladder|Ladder_Climb_|Standing_To_Climb_Ladder_Quickly)
+HA-mo-17	mocap	en	para	swimming in water	^(ual1/Swim_|mixamo/Swimming_)
+HA-mo-18	mocap	en	para	playing a guitar	^mixamo/Playing_(A|The_Bass)_Guitar
+HA-mo-19	mocap	en	para	casting a spell with both hands	^mixamo/(Casting_A_Spell_With_Two_Hands|Casting_A_Ressurection_Or_Summon_Spell)
+HA-mo-20	mocap	en	para	slipping and falling over	^mixamo/(Slip_And_Fall_Backwards|Frantically_Slip_And_Fall_To_Stomach|Walk_To_Tripping_And_Falling|Tripping_Forward_While_Walking|Slipping_Off_An_Edge)
+HA-mo-21	mocap	en	use	reloading a pistol	^(ual1/Pistol_Reload$|mixamo/Gun_Reload_While_Walking)
+HA-mo-22	mocap	en	scene	a sword and shield fighter blocks an incoming blow	^(mixamo/Sword_And_Shield_(Blocked_Impact|Block_Idle|Idle_To_Block|Crouch_Block_Idle|Block_To_)|ual2/(Sword_Block|Idle_Shield_Break)$)
+HA-mo-23	mocap	en	para	a goalkeeper diving to save the ball	^mixamo/Goalkeeper_(Left|Right)_Diving_Save
+HA-mo-24	mocap	en	use	driving a car, hands on the wheel	^(ual1/Driving_Loop$|mixamo/(Male_Driving_A_Car|Hitting_Steering_Wheel_In_Driving_Idle))
+HA-mo-25	mocap	en	none	riding a horse	NONE
+HA-mo-26	mocap	en	none	playing the trumpet	NONE
+HA-mo-27	mocap	en	none	doing yoga downward dog	NONE
+HA-mo-28	mocap	vi	para	nhân vật đi bộ bình thường	^(mixamo/(Walking|Walking_Forward|Walking_Forwards|Standard_Walk|Male_Standard_Walk|Male_Walk_Forward|Female_Walk)(_\d+)?_[0-9a-f]{8}$|ual1/Walk_Loop$)
+HA-mo-29	mocap	vi	para	chạy nước rút hết tốc lực	^(mixamo/(Sprinting|Standard_Sprint|Full_Speed_Sprint_For_Two_Cycles|Sprinting_Forward)(_\d+)?_[0-9a-f]{8}$|ual1/Sprint_Loop$)
+HA-mo-30	mocap	vi	scene	hai người ngồi trên ghế nói chuyện với nhau	^(mixamo/(Sitting_And_Talking_To_Another_Person|Male_Talking_While_Seated)|ual1/Sitting_Talking_Loop$)
+HA-mo-31	mocap	vi	para	xác sống lê bước	^(mixamo/Zombie_Walking(_\d+)?_[0-9a-f]{8}$|ual2/Zombie_Walk_Fwd_Loop$)
+HA-mo-32	mocap	vi	scene	bị đấm một cú vào mặt rồi ngã ra	^mixamo/(Receive_An_Uppercut_Punch_To_The_Face|Getting_Hit_By_An_Uppercut|Male_Knocked_Down_From_A_Punch|Getting_Rocked_By_A_Big_Uppercut|Receiving_A_Big_Hit_To_The_Head)
+HA-mo-33	mocap	vi	para	vẫy tay chào	^mixamo/(Waving|Aj_Waving_Gesture|Emotional_Waving_Forward|Waving_With_Both_Hands|Greeting_While_Standing)(_\d+)?_[0-9a-f]{8}$
+HA-mo-34	mocap	vi	use	nhảy múa vui vẻ trong tiệc	^(mixamo/[A-Za-z_]*(Dance|Dancing|Salsa|Samba|Macarena|Twerk|Boogaloo|Moonwalk)|ual1/Dance_Loop$)
+HA-mo-35	mocap	vi	para	người bị thương đi khập khiễng	^mixamo/(Injured_Walking(_\d+)?_[0-9a-f]{8}$|Male_Injured_Walk|Walking_With_Arm_Injury|Injured_Standard_Idle|Injured_Stumbling_Idle)
+HA-mo-36	mocap	vi	para	lăn người trên đất để né	^(ual1/Roll|mixamo/(Dive_Roll|Quick_Roll|Run_Ro_Roll|Action_Move_Running_And_Rolling))
+HA-mo-37	mocap	vi	scene	nhìn quanh đầy lo lắng, sợ có ai theo dõi	^mixamo/(Look_Around_Nervously|Nervously_Looking_Around_Left_To_Right_Loop|Duck_And_Look_Around_Apprehensively|Quick_Nervous_Look_Over_Right_Shoulder|Looking_Over_Both_Shoulders)
+HA-mo-38	mocap	vi	para	nhảy qua chướng ngại vật	^mixamo/(Male_Jumping_Over_An_Obstacle|Male_Jumping_Over_And_Obstacle|Step_Up_To_Jump_Over_Object|Vault_Over_Box_And_Hide|Jumping_Over_Obstacle)
+HA-mo-39	mocap	vi	scene	nằm ngủ say trên giường	^mixamo/(Laying_Asleep_On_A_Bed|Sleeping_Deeply|Restless_Sleeping)
+HA-mo-40	mocap	vi	para	rút kiếm ra khỏi vỏ	^mixamo/(Withdrawing_A_Sword|Sheath_Pose_To_Standing)
+HA-mo-41	mocap	vi	para	đào đất bằng xẻng	^mixamo/(Digging_Hole_With_Shovel|Kneeling_Digging_And_Planting_Seeds)
+HA-mo-42	mocap	vi	none	cưỡi ngựa phi nước đại	NONE
+HA-mo-43	mocap	vi	none	chơi trống	NONE
+HA-mo-44	mocap	vi	none	lướt sóng trên ván	NONE
