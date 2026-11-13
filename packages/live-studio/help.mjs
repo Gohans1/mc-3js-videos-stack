@@ -128,7 +128,7 @@ for (const [title, cmds] of GROUPS) {
   // earshot is a CLI of its own, not a script here: named so an AI knows it can hear what a sound is, not only its level
   if (film && title === "Sound" && lines.length)
     lines.push(
-      `  ${"earshot".padEnd(16)}ears, its own CLI (not bun run): which sound fits, what plays when, hits on the cuts${Bun.which("earshot") ? "" : " (not on PATH: INSTALL.md)"}; which call for what: bun run skills get core --ref sound`,
+      `  ${"earshot".padEnd(16)}ears, its own CLI (earshot <command> -h): which sound fits, what plays when, hits on the cuts${Bun.which("earshot") ? "" : " (not on PATH: INSTALL.md)"}; which call for what: bun run skills get core --ref sound`,
     );
   if (lines.length) out.push(`${out.length ? "\n" : ""}${title}`, ...lines);
 }

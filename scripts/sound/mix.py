@@ -30,9 +30,15 @@ if __name__ == "__main__" and sys.argv[1:2] not in (["--raw"], ["--measure"]) an
     if len(sys.argv) > 2 or sys.argv[1].startswith("-"):
         print(f"bun run mix, or bun run mix <video> to put the sound on it; got {' '.join(sys.argv[1:])} (--help for more)", file=sys.stderr)
         raise SystemExit(2)
+    videos = sorted(p.as_posix() for p in Path("renders").glob("*_video.mp4")) if Path("renders").is_dir() else []
     if not Path(sys.argv[1]).is_file():
-        videos = sorted(p.as_posix() for p in Path("renders").glob("*_video.mp4")) if Path("renders").is_dir() else []
         print(f"no {sys.argv[1]} (the pictures here: {', '.join(videos) or 'none yet'}); bun run render clip makes renders/draft_video.mp4", file=sys.stderr)
+        raise SystemExit(2)
+    # the result is always renders/draft.mp4 (or final.mp4): a mixed copy given here would put its old picture there
+    heard = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", sys.argv[1]],
+                           capture_output=True, text=True, timeout=30).stdout.strip()
+    if heard:
+        print(f"{sys.argv[1]} already has sound: mix puts the soundtrack on a picture-only render ({', '.join(videos) or 'bun run render clip makes renders/draft_video.mp4'})", file=sys.stderr)
         raise SystemExit(2)
 if not (Path.cwd() / "src/timeline/audio.json").exists():
     print("no src/timeline/audio.json here: run it inside a film (cd films/<name>)", file=sys.stderr)

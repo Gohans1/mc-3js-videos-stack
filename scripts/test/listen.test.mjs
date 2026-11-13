@@ -191,15 +191,21 @@ test("listen --at shows the levels around one second, half a second at a time, n
 test("listen --at hands over the earshot timeline of the same stretch of the draft with sound", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "listen-at-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const focus = () =>
+  const python = Bun.which("python");
+  const focus = (env = process.env) =>
     spawnSync(
-      "python",
+      python,
       [
         "-c",
         `import sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import focus; focus({"curve": [(30 + i / 10, -20, -30) for i in range(100)], "lines": [], "over": [], "buried": []}, 35.0, None, [])`,
       ],
-      { cwd: dir, encoding: "utf8" },
+      { cwd: dir, encoding: "utf8", env },
     );
+  // a machine without earshot is told how to set it up, not handed a command that fails
+  const deaf = focus({ ...process.env, PATH: dirname(process.execPath) });
+  assert.equal(deaf.status, 0, deaf.stderr);
+  assert.doesNotMatch(deaf.stdout, /earshot timeline/);
+  assert.match(deaf.stdout, /earshot is not on PATH[^\n]*INSTALL\.md/);
   const none = focus();
   assert.equal(none.status, 0, none.stderr);
   assert.match(none.stdout, /bun run mix renders\/draft_video\.mp4[^\n]*then earshot timeline/);
@@ -352,6 +358,30 @@ test("mix given a video that is not there did nothing: exit 2, naming the videos
   rmSync(dir, { recursive: true, force: true });
   assert.equal(r.status, 2, r.stderr);
   assert.match(r.stderr, /no renders\/nope\.mp4 \(the pictures here: renders\/draft_video\.mp4\)/);
+});
+
+// mix writes renders/draft.mp4 from any video it is given: a copy kept for earshot ab (before.mp4) would put an old picture there
+test("mix given a video that already has sound did nothing: exit 2, naming the picture-only renders", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "mix-sound-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "renders"));
+  const picture = ["-f", "lavfi", "-i", "color=c=black:s=64x64:d=1"];
+  const sound = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "1"];
+  const made = spawnSync("ffmpeg", [
+    "-v",
+    "error",
+    ...picture,
+    ...sound,
+    join(dir, "renders/before.mp4"),
+  ]);
+  assert.equal(made.status, 0, String(made.stderr));
+  writeFileSync(join(dir, "renders/draft_video.mp4"), "x");
+  const r = spawnSync("python", [join(SOUND, "mix.py"), "renders/before.mp4"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /renders\/before\.mp4 already has sound[^\n]*renders\/draft_video\.mp4/);
 });
 
 // a mix stopped at the -1.5 dBTP ceiling still went out at -0.9 after the AAC encode (probe R7): the encoded file is measured.

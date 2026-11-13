@@ -351,8 +351,11 @@ def focus(got, at, last, cuts):
     print(f"next: change a row there (bun run at {at:g} names each file and row), then bun run listen --at {at:g} shows it next to this run")
     # levels only: what each sound there is, and whether the hits land on the cuts, takes ears
     ear = f"earshot timeline renders/draft.mp4 --cues renders/cuts.json --from {max(0, at - 2):g} --to {at + 2:g} --detail low"
-    print(f"      what is heard there and how each hit lands on the cuts (about 20 s): "
-          + (ear if Path("renders/draft.mp4").exists() else f"bun run mix renders/draft_video.mp4, then {ear}"))
+    if not shutil.which("earshot"):
+        ear = "earshot is not on PATH: INSTALL.md sets it up, earshot doctor checks it"
+    elif not Path("renders/draft.mp4").exists():
+        ear = f"bun run mix renders/draft_video.mp4, then {ear}"
+    print(f"      what is heard there and how each hit lands on the cuts (about 20 s): {ear}")
     return 0
 
 

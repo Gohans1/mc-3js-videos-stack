@@ -23,7 +23,7 @@ test("a film's help names earshot beside its sound commands, and where the guide
       r.stdout.indexOf("\nLook and review"),
     );
     expect(sound).toMatch(
-      /\n {2}earshot {2,}[^\n]*not bun run[^\n]*bun run skills get core --ref sound/,
+      /\n {2}earshot {2,}ears, its own CLI \(earshot <command> -h\)[^\n]*bun run skills get core --ref sound/,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

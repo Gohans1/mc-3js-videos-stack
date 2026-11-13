@@ -56,4 +56,9 @@ test("skills get prints a guide, one reference by its name, and names the refere
   const missing = run(["get", "nope"]);
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /core/);
+
+  // an agent skill of its own (earshot, cinetic) is a file to open, named from where the agent stands
+  const own = run(["get", "cinetic"], join(ROOT, "templates/film"));
+  assert.equal(own.status, 2);
+  assert.match(own.stderr, /open \.\.\/\.\.\/\.claude\/skills\/cinetic\/SKILL\.md/);
 });

@@ -49,7 +49,15 @@ if (!verb || verb === "list") {
 if (verb !== "get") fail(`no ${verb}: bun run skills (the list) or bun run skills get <guide>`);
 if (!name)
   fail(`which guide? bun run skills get ${guides[0] ?? "core"} (the list: bun run skills)`);
-if (!guides.includes(name)) fail(`no guide ${name}; the guides: ${guides.join(", ")}`);
+if (!guides.includes(name)) {
+  // earshot, real-sound, cinetic: agent skills of their own, read where they are, never served as an mc-films guide
+  const own = join(DATA, "../.claude/skills", name, "SKILL.md");
+  fail(
+    existsSync(own)
+      ? `${name} is an agent skill of its own, not an mc-films guide: open ${relative(process.cwd(), own).replaceAll("\\", "/")}`
+      : `no guide ${name}; the guides: ${guides.join(", ")}`,
+  );
+}
 
 const all = files(name);
 // a reference by its path, its file name or its name without .md
