@@ -308,6 +308,7 @@ const slug = (s) =>
 const humanize = (s) => {
   const t = s
     .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s*,\s*/g, ", ")
     .split(/[\s_-]+/)
     .filter(Boolean)
     .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.toLowerCase()))
@@ -366,7 +367,12 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
         re: new RegExp(r.match),
       }));
       const files = audioFiles(dir).filter((rel) => !skip?.test(rel));
-      const stemOf = (rel) => basename(rel).replace(RAW_AUDIO, "");
+      // "take 12.M": a mono file's mark, not part of its name
+      const stemOf = (rel) =>
+        basename(rel)
+          .replace(RAW_AUDIO, "")
+          .replace(/\.(?:M|MS)$/i, "");
+      const titleDrop = src.titleDrop ? new RegExp(src.titleDrop, "g") : null;
       const stems = Map.groupBy(files, stemOf);
       const unsorted = [];
       let picked = [];
@@ -386,7 +392,10 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
           limit: rule.maxSeconds ?? src.maxSeconds,
           name: `${src.prefix}-${pack.key}-${slug(own)}`,
           family: `${src.prefix}-${pack.key}-${slug(rule.takes === false ? own : base)}`,
-          title: (rule.title ?? "{name}").replace("{name}", humanize(base)),
+          title: (rule.title ?? "{name}").replace(
+            "{name}",
+            humanize(titleDrop ? base.replace(titleDrop, " ") : base),
+          ),
         });
       }
       // A long file is an ambience or many takes in one: not a sound to drop on a cue as it is

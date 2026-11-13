@@ -432,6 +432,17 @@ test("a file's own name picks its rule before its folder's name does", async (t)
   assert.equal(s["ken-ui-thing-01"]?.for, "a whoosh");
 });
 
+test("a title reads as words: its source's noise words, a mono mark and bare commas go", async (t) => {
+  const f = await packFixture(t, RULES);
+  tone(join(f.pack, "Lib/EFX INT Rope,creak,taut 03.M.ogg"), -3);
+  f.write([...RULES, { match: "(?i:rope)", category: "foley", for: "a rope" }], {
+    titleDrop: "(?i:(?<![a-z])(efx|int)(?![a-z]))",
+  });
+  await f.build();
+  const s = f.sources();
+  assert.equal(s["ken-ui-efx-int-rope-creak-taut-03"]?.title, "Rope, creak, taut");
+});
+
 test("a sound longer than its source's maxSeconds is left out and counted, unless its rule allows it", async (t) => {
   const f = await packFixture(t, RULES);
   tone(join(f.pack, "Audio/drone_001.ogg"), -3, 110, 3);

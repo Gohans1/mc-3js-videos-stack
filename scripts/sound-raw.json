@@ -418,6 +418,176 @@
       "read": "2026-11-13",
       "credit": false,
       "prefix": "son",
+      "maxSeconds": 12,
+      "titleDrop": "(?i:the[ _]?library[ _]?by[ _]?(mtc)?|(?<![a-z])(efx|int|ext|sd|fienup|vs|uc|hk|si|mtc|cntct|ortf|mono|stereo|96k|24b|u87|(mkh|dpa|rsm|cmc|cs)[0-9]+)(?![a-z]))",
+      "sort": [
+        {
+          "match": "^(AMB|VEH(?!Door)|TRN|AERO|BOAT|MOTR|MACH)[A-Z]",
+          "skip": true
+        },
+        {
+          "match": "^(WHSH|SWSH|WOOSH|DSGNRise|DSGNWhsh)",
+          "category": "transitions",
+          "maxSeconds": 20,
+          "for": "a whoosh, riser or transition"
+        },
+        {
+          "match": "^((GUN|WEAP)[A-Z]|SCIWeap)",
+          "category": "weapons",
+          "for": "a weapon: shot, reload or blade"
+        },
+        {
+          "match": "^(IMPT|EXPL|DESTR|FGHT|GORE|DSGNBoom|DSGNBram|DSGNImpt|[A-Z]{3,5}(Impt|Crsh|Brk|Clpse))",
+          "category": "impacts",
+          "for": "a hit, crash or explosion"
+        },
+        {
+          "match": "^(CREA|MONS)[A-Z]",
+          "category": "creatures",
+          "for": "a monster or creature"
+        },
+        { "match": "^MAG[A-Z]", "category": "spells", "for": "a magic spell or sparkle" },
+        {
+          "match": "^(SCI|LASR|ROBT)[A-Z]",
+          "category": "sci-fi",
+          "for": "a sci-fi or laser sound"
+        },
+        { "match": "^(UIGlitch|ELEC)", "category": "glitch", "for": "a digital glitch" },
+        {
+          "match": "^(UIAlert|ALRM|SCIAlrm|BELLDoor)",
+          "category": "notifications",
+          "for": "a notification or alert"
+        },
+        {
+          "match": "^((UI|BEEP)[A-Z]|MECHClik|MECHSwtch)",
+          "category": "clicks",
+          "for": "a UI click or button"
+        },
+        {
+          "match": "^(VOX|HMN|HUMN)[A-Z]",
+          "category": "voices",
+          "for": "a human voice: shout, scream or breath"
+        },
+        { "match": "^CRWD[A-Z]", "category": "crowd", "for": "a crowd reaction" },
+        { "match": "^TOON[A-Z]", "category": "comedy", "for": "a cartoon or slapstick gag" },
+        { "match": "^GAME[A-Z]", "category": "game", "for": "a game pickup or reward" },
+        {
+          "match": "^((MUSC|BELL)[A-Z]|DSGNStngr|DSGNTonl)",
+          "category": "musical",
+          "for": "a musical hit or note"
+        },
+        { "match": "^FEET[A-Z]", "category": "footsteps", "for": "a footstep" },
+        {
+          "match": "^(WATR|RAIN|FIRE|BIRD|ANML|WIND|WTHR|ICE|VEGE|INSC|LIQ)[A-Z]",
+          "category": "nature",
+          "for": "weather, water, fire or an animal"
+        },
+        {
+          "match": "^((DOOR|OBJ|FOLY|PAPR|CLOTH|CHAIN|TOOL|WOOD|METL|GLAS|FOOD|CLOCK|MECH|DIRT|CERM|EQUIP)[A-Z]|VEHDoor|HHDoors)",
+          "category": "foley",
+          "for": "a foley handling sound"
+        },
+        {
+          "match": "(?i:(?<![a-z])(amb|ambiences?|ambient|ambix|ambisonics?|atmos|atmospheres?|room ?tone|roomtone|background|loops?|looped|drones?|textures?|soundscapes?|bpm)(?![a-z]))[^/]*$",
+          "skip": true
+        },
+        {
+          "match": "(?i:cartoon|comedy|slapstick|boing|goofy|clown|squeak|kazoo|slide whistle|fart|burp|(?<![a-z])toys?(?![a-z]))",
+          "category": "comedy",
+          "for": "a cartoon or slapstick gag"
+        },
+        {
+          "match": "(?i:foot ?steps?|footfalls?|(?<![a-z])(steps?|bare ?feet|walk(s|ing)?)(?![a-z]))",
+          "category": "footsteps",
+          "for": "a footstep"
+        },
+        {
+          "match": "(?i:(?<!one[ _-]?)(?<![a-z])shots?(?![a-z])|(?<![a-z])(guns?|gunshots?|gunfire|rifles?|pistols?|shotguns?|revolvers?|reload(s|ing)?|bullets?|ammo|cannons?|mortars?|swords?|blades?|knife|knives|melee|arrows?|crossbows?|firing|weapons?|uzi|smg|9mm|caliber|cal)(?![a-z]))",
+          "category": "weapons",
+          "for": "a weapon: shot, reload or blade"
+        },
+        {
+          "match": "(?i:oosh|swish|pass ?by|fly ?by|uplifter|downlifter|(?<![a-z])(swipes?|transitions?|risers?|rise|downers?|sweeps?|whips?|swells?|suck ?backs?)(?![a-z]))",
+          "category": "transitions",
+          "maxSeconds": 20,
+          "for": "a whoosh, riser or transition"
+        },
+        {
+          "match": "(?i:explo(sion|sions|de|des|ding|sive)|detonat|debris|destruction|firework|(?<![a-z])(blasts?|booms?|crash(es|ing)?)(?![a-z]))",
+          "category": "impacts",
+          "for": "an explosion, crash or debris"
+        },
+        {
+          "match": "(?i:impact|punch|smash|thud|crunch|crush|bone ?(break|crack)|body ?fall|(?<![a-z])(hits?|slams?|knocks?|strikes?|gore|stabs?|chops?|thumps?|whacks?|bash(es)?|kicks?|crack(s|ing)?)(?![a-z]))",
+          "category": "impacts",
+          "for": "a hit or impact"
+        },
+        {
+          "match": "(?i:monster|creature|zombie|growl|werewolf|undead|goblin|(?<![a-z])(roars?|aliens?|demons?|beasts?|dragons?|wolf|wolves|snarls?|ghosts?|orcs?|trolls?|ogres?)(?![a-z]))",
+          "category": "creatures",
+          "for": "a monster or creature"
+        },
+        {
+          "match": "(?i:magic|sparkl|fairy|enchant|mystic|teleport|(?<![a-z])(spells?|potions?|heal(s|ing)?|portals?|curses?|wands?|cast(s|ing)?)(?![a-z]))",
+          "category": "spells",
+          "for": "a magic spell or sparkle"
+        },
+        {
+          "match": "(?i:sci-?fi|futuristic|robot|space ?ship|plasma|force ?field|hologram|cyber|(?<![a-z])(lasers?|blasters?|mechs?|droids?)(?![a-z]))",
+          "category": "sci-fi",
+          "for": "a sci-fi or laser sound"
+        },
+        {
+          "match": "(?i:glitch|interference|data corrupt|(?<![a-z])(static|bit ?crush(ed)?)(?![a-z]))",
+          "category": "glitch",
+          "for": "a digital glitch"
+        },
+        {
+          "match": "(?i:notification|(?<![a-z])(alerts?|chimes?|dings?|success|errors?|confirm(ation)?|messages?|notify|incoming)(?![a-z]))",
+          "category": "notifications",
+          "for": "a notification or alert"
+        },
+        {
+          "match": "(?i:shutter|camera)",
+          "category": "shutter",
+          "for": "a camera shutter"
+        },
+        {
+          "match": "(?i:interface|(?<![a-z])(ui|gui|hud|buttons?|clicks?|blips?|beeps?|menus?|hover|toggles?|switch(es)?)(?![a-z]))",
+          "category": "clicks",
+          "for": "a UI click or button"
+        },
+        {
+          "match": "(?i:chiptune|arcade|retro game|casual game|pick ?up|power ?up|level ?up|(?<![a-z])(coins?|8-?bit|bonus|rewards?|jackpot)(?![a-z]))",
+          "category": "game",
+          "for": "a game pickup or reward"
+        },
+        {
+          "match": "(?i:crowds?|walla|cheer|applause|clapping|audience|laugh)",
+          "category": "crowd",
+          "for": "a crowd reaction"
+        },
+        {
+          "match": "(?i:vocal|scream|shout|(?<![a-z])(voices?|yells?|grunts?|breath(s|ing)?|efforts?|soldiers?|gasps?|sighs?|coughs?|sneezes?)(?![a-z]))",
+          "category": "voices",
+          "for": "a human voice: shout, scream or breath"
+        },
+        {
+          "match": "(?i:stinger|piano|guitar|marimba|xylophone|percussion|(?<![a-z])(stings?|bells?|gongs?|drums?|notes?|harp|chords?)(?![a-z]))",
+          "category": "musical",
+          "for": "a musical hit or note"
+        },
+        {
+          "match": "(?i:thunder|lightning|splash|bubbl|(?<![a-z])(rain|water|drips?|fire|flames?|ice|birds?|dogs?|cats?|horses?|pigs?|cows?|chickens?|insects?|bees?|animals?|waves?|wind|leaves|branch(es)?|trees?)(?![a-z]))",
+          "category": "nature",
+          "for": "weather, water, fire or an animal"
+        },
+        {
+          "match": "(?i:foley|cloth|paper|glass|kitchen|cutlery|zipper|latch|creak|seatbelt|buckle|ratchet|cash register|cash-register|(?<![a-z])(lids?|box(es)?|trash|doors?|bottles?|plates?|cups?|keys?|bags?|chairs?|drawers?|cabinets?|windows?|locks?|handles?|tools?|wood(en)?|metal(lic)?|plastic|rocks?|stones?|chains?|clocks?|tape|spray|toilet|pens?|carpet|props?|gears?|mechanisms?|pedals?|clutch)(?![a-z]))",
+          "category": "foley",
+          "for": "a foley handling sound"
+        }
+      ],
       "note": "Royalty-free in films, no credit; never redistribute the files, edited or not, and never use them to train AI. Its sites stop bots, so each official .torrent is downloaded by hand from the page; seeding official torrents is allowed. GDC 2017 (GameAudioGDCPart3.torrent, info hash 751189932f9a32eb57f4aa39b87d81d04a6f8708) is left out: a folder name holds a tab, which aria2 refuses to load. GDC 2026 (GameAudioGDCPart9.torrent at https://gdc.sonniss.com/) waits for its info hash. Packs download in this order, the most short usable sounds per GB first.",
       "packs": [
         {
