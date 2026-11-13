@@ -1,12 +1,25 @@
-// PreToolUse guard (.claude/settings.json): the repo's guiding commands are read whole. find puts its hits first and its
-// next: lines (what to run next) last, so a pipe through head/tail/grep or a file read in part loses one or the other
-const GUIDED =
-  /^(?:\w+=\S*\s+)*(?:timeout\s+\S+\s+)?bun\s+(?:run\s+(?:find|help|skills)(?=\s|$)|\S*scripts[/\\]find\.ts(?=\s|$))/;
-// stdout into a file: >, >>, 1>, &>; not 2> (stderr) nor >&2
-const TO_FILE = /(?:^|\s)(?:1|&)?>>?(?!&)/;
+// PreToolUse guard (.claude/settings.json): the repo's film commands are read whole. Their faults (✖, POP, DEAD STOP),
+// the files they wrote and their next: lines sit anywhere in the output, so a pipe through head/tail/grep, a file read
+// in part, stderr thrown away or output caught in a variable loses some. --json output (for a script) and tee pass.
+const NAMES =
+  "find|help|skills|gap|at|check|render|framecheck|notes|note|sheet|jumps|pace|deliver|mix|listen|sfx:get|voice:gen|voice:align|voice:assemble|voice:cues|new-film";
+// the same commands called by their files, as package.json runs them
+const FILES =
+  /\S*(?:live-studio[/\\](?:help|skills|check|render|framecheck|notes|note)\.mjs|scripts[/\\](?:find|gap|at|new_film)\.ts|scripts[/\\]review[/\\](?:sheet\.py|jumps\.py|deliver\.py|pace\.ts)|scripts[/\\]sound[/\\](?:get_sfx|mix|listen)\.py|scripts[/\\]voice[/\\](?:gen|align|assemble|cues)\.ts)/;
+// what may come before: a subshell's (, env settings, time, nohup, timeout
+const LEAD = String.raw`^[({]?\s*(?:(?:export\s+)?\w+=\S*\s+|time\s+|nohup\s+|timeout\s+(?:-\S+\s+)*\S+\s+)*`;
+const GUIDED = new RegExp(
+  String.raw`${LEAD}(?:bun\s+run\s+(?:-\S+\s+)*(?:${NAMES})(?=[\s>)}]|$)|\S*(?:bun|node|python3?|py)(?:\.exe)?\s+(?:-\S+\s+)*${FILES.source}(?=[\s>)}]|$))`,
+);
+// output into a file: >, >>, 1>, &>, *> (PowerShell), and 2> (the errors); not 2>&1 nor >&2
+const TO_FILE = /[12&*]?>>?(?!&)/;
+const JSON_OUT = /\s--json(?=\s|$)/;
+const TEE = /^(?:tee|Tee-Object)(?=\s|$)/i;
+// PowerShell's $x = <command>: the output caught in a variable
+const ASSIGN = /^\$[\w:]+\s*=\s*/;
 
 const REASON =
-  "Read bun run find / help / skills whole: never pipe them (head, tail, grep, sed, Select-Object...) or send them to a file. find's hits come first and its next: lines (what to run next) last; a cut loses one. Run it bare; for fewer hits use -n N or a filter (--kind, --source...).";
+  "Read the repo's film commands whole (find, render, check, framecheck, listen...): never pipe them (head, tail, grep, Select-Object...), send them or their errors to a file, or catch them in a variable. Faults, written files and next: lines sit anywhere; a cut loses them. Narrow with the command's own options (-n, --kind, AT=, CHECK=), or --json (check, at, voice:cues) for a script.";
 
 // quoted text and heredoc bodies are data, not commands: blanked before the command is read
 const blank = (cmd: string) =>
@@ -14,12 +27,21 @@ const blank = (cmd: string) =>
     .replace(/<<-?\s*(['"]?)(\w+)\1([^\n]*)\n[\s\S]*?\n\s*\2(?=\n|$)/g, "<<$2$3")
     .replace(/'[^']*'|"(?:\\.|[^"\\])*"/g, (q) => `${q[0]}${"_".repeat(q.length - 2)}${q[0]}`);
 
+const guided = (s: string) => GUIDED.test(s) && !JSON_OUT.test(s);
+
 export function verdict(cmd: string): string | undefined {
-  for (const list of blank(cmd).split(/\|\||&&|;|\n/)) {
+  const text = blank(cmd);
+  // output caught whole in a variable: $(...), `...`
+  for (const m of text.matchAll(/\$\(([^()]*)\)|`([^`]*)`/g))
+    if (guided((m[1] ?? m[2])!.trim())) return REASON;
+  for (const list of text.split(/\|\||&&|;|\n/)) {
     const stages = list.split(/\|&?/).map((s) => s.trim());
-    const at = stages.findIndex((s) => GUIDED.test(s));
+    const at = stages.findIndex((s) => guided(s.replace(ASSIGN, "")));
     if (at < 0) continue;
-    if (at < stages.length - 1 || TO_FILE.test(stages[at]!)) return REASON;
+    const stage = stages[at]!,
+      rest = stages.slice(at + 1);
+    if (ASSIGN.test(stage) || TO_FILE.test(stage)) return REASON;
+    if (rest.length && !(rest.length === 1 && TEE.test(rest[0]!))) return REASON;
   }
   return undefined;
 }
