@@ -1,0 +1,466 @@
+{
+ "room_hum": {
+  "id": 671455,
+  "title": "Bedroom Room Tone Electric Lamp Hum",
+  "by": "jamesdrake89",
+  "url": "https://freesound.org/s/671455/",
+  "license": "CC0 1.0",
+  "for": "the cold lamp's electric hum under the whole cell (Bedroom Room Tone Electric Lamp Hum)"
+ },
+ "cctv_hiss": {
+  "id": 443339,
+  "title": "TAPE HISS Sonab c500 B",
+  "by": "foad",
+  "url": "https://freesound.org/s/443339/",
+  "license": "CC0 1.0",
+  "for": "the CCTV feed's faint recording hiss, cut dead at the cut to the clean lens (TAPE HISS)"
+ },
+ "cut_pop": {
+  "id": 674713,
+  "title": "Turning Off Microphone Percussion 1",
+  "by": "deadrobotmusic",
+  "url": "https://freesound.org/s/674713/",
+  "license": "CC0 1.0",
+  "for": "the hiss cutting out at 00:03.5 (Turning Off Microphone)"
+ },
+ "rustle_hand": {
+  "id": 320144,
+  "title": "Blanket Movement 6",
+  "by": "OwlStorm",
+  "url": "https://freesound.org/s/320144/",
+  "license": "CC0 1.0",
+  "for": "his right hand twitching on the mattress at 00:02.8 (Blanket Movement 6)"
+ },
+ "rustle_head": {
+  "id": 556711,
+  "title": "Rustling fabric",
+  "by": "NachtmahrTV",
+  "url": "https://freesound.org/s/556711/",
+  "license": "CC0 1.0",
+  "for": "his collar on the mattress as his head turns at 00:06.6 (Rustling fabric)"
+ },
+ "breath": {
+  "id": 707832,
+  "title": "IN-BREATHS",
+  "by": "stevielematt",
+  "url": "https://freesound.org/s/707832/",
+  "license": "CC0 1.0",
+  "for": "the short breath in as his eyes open at 00:03.7 (IN-BREATHS; the mix keeps the first breath)"
+ },
+ "hum_lowfreq": {
+  "id": 72091,
+  "title": "Low Frequency Humming Noise",
+  "by": "JoeDinesSound",
+  "url": "https://freesound.org/s/72091/",
+  "license": "CC0 1.0",
+  "for": "room hum option: a plain low-frequency hum (Low Frequency Humming Noise)"
+ },
+ "hum_fluorescent": {
+  "id": 784208,
+  "title": "1950s Flourescent Bathroom Lights (quiet room tone)",
+  "by": "OverlookHotelRecords",
+  "url": "https://freesound.org/s/784208/",
+  "license": "CC0 1.0",
+  "for": "room hum option: old fluorescent tubes in a quiet room (1950s Flourescent Bathroom Lights)"
+ },
+ "hum_backrooms": {
+  "id": 626096,
+  "title": "Backrooms Ambience",
+  "by": "Resaural",
+  "url": "https://freesound.org/s/626096/",
+  "license": "CC0 1.0",
+  "for": "room hum option: a buzzing fluorescent backrooms tone (Backrooms Ambience)"
+ },
+ "pop_flick": {
+  "id": 448394,
+  "title": "Fuze Switch Flick",
+  "by": "LordForklift",
+  "url": "https://freesound.org/s/448394/",
+  "license": "CC0 1.0",
+  "for": "cut pop option: a fuse switch flicked off (Fuze Switch Flick)"
+ },
+ "pop_flashlight": {
+  "id": 758910,
+  "title": "Flashlight Off",
+  "by": "LuckyEcho",
+  "url": "https://freesound.org/s/758910/",
+  "license": "CC0 1.0",
+  "for": "cut pop option: a flashlight clicked off (Flashlight Off)"
+ },
+ "bed_creak": {
+  "id": 444389,
+  "title": "Bed creak.wav",
+  "by": "MootMcnoodles",
+  "url": "https://freesound.org/s/444389/",
+  "license": "CC0 1.0",
+  "for": "the bed frame as he pushes himself up (Bed creak)"
+ },
+ "steps": {
+  "id": 366111,
+  "title": "Indoor Footsteps.wav",
+  "by": "WakuWakuWakuWaku",
+  "url": "https://freesound.org/s/366111/",
+  "license": "CC0 1.0",
+  "for": "his bare feet on the stone floor (Indoor Footsteps)"
+ },
+ "steps_stone": {
+  "id": 813622,
+  "title": "Footsteps - Stone, Rock, Concrete, Cement",
+  "by": "SecureSubset",
+  "url": "https://freesound.org/s/813622/",
+  "license": "CC0 1.0",
+  "for": "footsteps option: harder steps on stone (Footsteps - Stone, Rock, Concrete, Cement)"
+ },
+ "door_touch": {
+  "id": 337853,
+  "title": "metal-touch.wav",
+  "by": "newagesoup",
+  "url": "https://freesound.org/s/337853/",
+  "license": "CC0 1.0",
+  "for": "his hand along the steel door's seam (metal-touch)"
+ },
+ "button_click": {
+  "id": 257357,
+  "title": "Button click.wav",
+  "by": "brnck",
+  "url": "https://freesound.org/s/257357/",
+  "license": "CC0 1.0",
+  "for": "the stone button by the door, pressed again and again (Button click)"
+ },
+ "button_push": {
+  "id": 635915,
+  "title": "Button Push",
+  "by": "earth_cord",
+  "url": "https://freesound.org/s/635915/",
+  "license": "CC0 1.0",
+  "for": "button option: a heavier push (Button Push)"
+ },
+ "door_kick": {
+  "id": 209772,
+  "title": "Metal Boom",
+  "by": "Johnnyfarmer",
+  "url": "https://freesound.org/s/209772/",
+  "license": "CC0 1.0",
+  "for": "his kick on the steel door (Metal Boom)"
+ },
+ "door_kick_wood": {
+  "id": 411694,
+  "title": "DoorKick2.wav",
+  "by": "deoking",
+  "url": "https://freesound.org/s/411694/",
+  "license": "CC0 1.0",
+  "for": "door kick option: a drier thud (DoorKick2)"
+ },
+ "chair_drag": {
+  "id": 186437,
+  "title": "chair dragged.wav",
+  "by": "jar jar vince",
+  "url": "https://freesound.org/s/186437/",
+  "license": "CC0 1.0",
+  "for": "the chair dragged on the stone (chair dragged)"
+ },
+ "chair_drag_concrete": {
+  "id": 871017,
+  "title": "dragging chair on concrete floor, wide room 05",
+  "by": "funkysandwich",
+  "url": "https://freesound.org/s/871017/",
+  "license": "CC0 1.0",
+  "for": "chair drag option: on concrete in a bare room (dragging chair on concrete floor)"
+ },
+ "chair_creak": {
+  "id": 175410,
+  "title": "Moaning Chair.aif",
+  "by": "Housed1J",
+  "url": "https://freesound.org/s/175410/",
+  "license": "CC0 1.0",
+  "for": "the chair taking his weight (Moaning Chair)"
+ },
+ "typing": {
+  "id": 644842,
+  "title": "Old Keyboard Typing 8.wav",
+  "by": "KittyKatHunter",
+  "url": "https://freesound.org/s/644842/",
+  "license": "CC0 1.0",
+  "for": "his first try at the old keyboard (Old Keyboard Typing 8)"
+ },
+ "typing_fast": {
+  "id": 677658,
+  "title": "Fast Typying.mp3",
+  "by": "zekybomb",
+  "url": "https://freesound.org/s/677658/",
+  "license": "CC0 1.0",
+  "for": "the second try, hammered in (Fast Typing)"
+ },
+ "typing_fast_short": {
+  "id": 813214,
+  "title": "Very_Fast_Typing_Short",
+  "by": "Capt.Jack",
+  "url": "https://freesound.org/s/813214/",
+  "license": "CC0 1.0",
+  "for": "fast typing option (Very_Fast_Typing_Short)"
+ },
+ "key_enter": {
+  "id": 627647,
+  "title": "Enter Key Press Mechanical Keyboard",
+  "by": "alpinemesh",
+  "url": "https://freesound.org/s/627647/",
+  "license": "CC0 1.0",
+  "for": "Enter (Enter Key Press Mechanical Keyboard)"
+ },
+ "denied": {
+  "id": 419023,
+  "title": "acess denied buzz",
+  "by": "Jacco18",
+  "url": "https://freesound.org/s/419023/",
+  "license": "CC0 1.0",
+  "for": "the terminal's ACCESS DENIED (acess denied buzz)"
+ },
+ "denied_soft": {
+  "id": 67454,
+  "title": "negativebeep.wav",
+  "by": "Splashdust",
+  "url": "https://freesound.org/s/67454/",
+  "license": "CC0 1.0",
+  "for": "ACCESS DENIED option: a softer low beep (negativebeep)"
+ },
+ "slam": {
+  "id": 529396,
+  "title": "thump_thud_slam_fist_heavy.wav",
+  "by": "bouncyballblue",
+  "url": "https://freesound.org/s/529396/",
+  "license": "CC0 1.0",
+  "for": "both fists slammed on the keyboard (thump_thud_slam_fist_heavy)"
+ },
+ "slam_table": {
+  "id": 787456,
+  "title": "hand_on_table",
+  "by": "nottooloud_1",
+  "url": "https://freesound.org/s/787456/",
+  "license": "CC0 1.0",
+  "for": "slam option: a hand slapped on a table (hand_on_table)"
+ },
+ "keys_rattle": {
+  "id": 368025,
+  "title": "keyboard bang",
+  "by": "Warrior5445",
+  "url": "https://freesound.org/s/368025/",
+  "license": "CC0 1.0",
+  "for": "the keyboard rattling as it is knocked askew (keyboard bang)"
+ },
+ "sigh": {
+  "id": 215380,
+  "title": "male sigh.wav",
+  "by": "Reitanna",
+  "url": "https://freesound.org/s/215380/",
+  "license": "CC0 1.0",
+  "for": "his breath out as he slumps (male sigh)"
+ },
+ "cabinet_rustle": {
+  "id": 211246,
+  "title": "PageRustle",
+  "by": "Tomoyo Ichijouji",
+  "url": "https://freesound.org/s/211246/",
+  "license": "CC0 1.0",
+  "for": "something stirring among the papers inside the cabinet (PageRustle)"
+ },
+ "cabinet_rustle_crumple": {
+  "id": 272015,
+  "title": "Crumpling Paper",
+  "by": "aldenroth2",
+  "url": "https://freesound.org/s/272015/",
+  "license": "CC0 1.0",
+  "for": "cabinet rustle option: paper crumpled inside (Crumpling Paper)"
+ },
+ "drawer_creak": {
+  "id": 752216,
+  "title": "Sliding Squeaking Drawer Soft Opening",
+  "by": "qubodup",
+  "url": "https://freesound.org/s/752216/",
+  "license": "CC0 1.0",
+  "for": "the drawer eased open (Sliding Squeaking Drawer Soft Opening)"
+ },
+ "drawer_yank": {
+  "id": 185838,
+  "title": "Metal drawer with objects inside",
+  "by": "LloydEvans09",
+  "url": "https://freesound.org/s/185838/",
+  "license": "CC0 1.0",
+  "for": "the metal drawer jerked open, things shifting inside (Metal drawer with objects inside)"
+ },
+ "drawer_shut": {
+  "id": 50735,
+  "title": "Kitchen Drawer Close 3.wav",
+  "by": "RutgerMuller",
+  "url": "https://freesound.org/s/50735/",
+  "license": "CC0 1.0",
+  "for": "the drawer kneed shut (Kitchen Drawer Close 3)"
+ },
+ "drawer_out": {
+  "id": 643502,
+  "title": "Steel Drawer Open & Close",
+  "by": "The_Isot_is_Back",
+  "url": "https://freesound.org/s/643502/",
+  "license": "CC0 1.0",
+  "for": "the drawer pulled off its slides (Steel Drawer Open & Close)"
+ },
+ "set_down": {
+  "id": 500283,
+  "title": "Box Falling Down",
+  "by": "danlucaz",
+  "url": "https://freesound.org/s/500283/",
+  "license": "CC0 1.0",
+  "for": "the emptied drawer set down on the stone (Box Falling Down)"
+ },
+ "squeak": {
+  "id": 288941,
+  "title": "rat-squeak.wav",
+  "by": "toefur",
+  "url": "https://freesound.org/s/288941/",
+  "license": "CC0 1.0",
+  "for": "the silverfish's squeal as it leaps (rat-squeak)"
+ },
+ "squeak_rat": {
+  "id": 536753,
+  "title": "Rat.ogg",
+  "by": "egomassive",
+  "url": "https://freesound.org/s/536753/",
+  "license": "CC0 1.0",
+  "for": "silverfish option: a rat's chitter (Rat.ogg)"
+ },
+ "paper_burst": {
+  "id": 389437,
+  "title": "Papers Tossed into Air; falling 1.wav",
+  "by": "RossBell",
+  "url": "https://freesound.org/s/389437/",
+  "license": "CC0 1.0",
+  "for": "pages blown out of the drawer (Papers Tossed into Air; falling 1)"
+ },
+ "gasp": {
+  "id": 344407,
+  "title": "Male Gasp 1.wav",
+  "by": "jawbutch",
+  "url": "https://freesound.org/s/344407/",
+  "license": "CC0 1.0",
+  "for": "his gasp at the burst (Male Gasp 1)"
+ },
+ "fall": {
+  "id": 346695,
+  "title": "Body fall_01.wav",
+  "by": "deleted_user_2104797",
+  "url": "https://freesound.org/s/346695/",
+  "license": "CC0 1.0",
+  "for": "he falls back onto the floor (Body fall_01)"
+ },
+ "panting": {
+  "id": 543243,
+  "title": "vocals panting.WAV",
+  "by": "myfreesoundaccount1998",
+  "url": "https://freesound.org/s/543243/",
+  "license": "CC0 1.0",
+  "for": "his panting on the floor (vocals panting)"
+ },
+ "paper_grab": {
+  "id": 767489,
+  "title": "Paper Grab",
+  "by": "danluxradium",
+  "url": "https://freesound.org/s/767489/",
+  "license": "CC0 1.0",
+  "for": "a page picked up (Paper Grab)"
+ },
+ "paper_lay": {
+  "id": 464302,
+  "title": "PaperSlide.wav",
+  "by": "eyesonlegs",
+  "url": "https://freesound.org/s/464302/",
+  "license": "CC0 1.0",
+  "for": "the pages laid on the desk (PaperSlide)"
+ },
+ "page_turn": {
+  "id": 136778,
+  "title": "Page Turn",
+  "by": "davidbain",
+  "url": "https://freesound.org/s/136778/",
+  "license": "CC0 1.0",
+  "for": "a page moved to the aside pile (Page Turn)"
+ },
+ "paper_sweep": {
+  "id": 389441,
+  "title": "Paper Throw Into Air; 3.wav",
+  "by": "RossBell",
+  "url": "https://freesound.org/s/389441/",
+  "license": "CC0 1.0",
+  "for": "the pages swept off the desk (Paper Throw Into Air; 3)"
+ },
+ "dig_papers": {
+  "id": 389440,
+  "title": "Papers Flapping; Intense.wav",
+  "by": "RossBell",
+  "url": "https://freesound.org/s/389440/",
+  "license": "CC0 1.0",
+  "for": "papers flung out while he digs (Papers Flapping; Intense)"
+ },
+ "zap": {
+  "id": 582631,
+  "title": "Long Crackle 04.wav",
+  "by": "ironcross32",
+  "url": "https://freesound.org/s/582631/",
+  "license": "CC0 1.0",
+  "for": "the lamp dropping out (Long Crackle 04)"
+ },
+ "arrival": {
+  "id": 541029,
+  "title": "Very low frequency impact.wav",
+  "by": "AudioPapkin",
+  "url": "https://freesound.org/s/541029/",
+  "license": "CC0 1.0",
+  "for": "a page out of nowhere: a very low thud (Very low frequency impact)"
+ },
+ "lamp_flicker": {
+  "id": 484157,
+  "title": "fluorescent light flickering 1.wav",
+  "by": "TemperMode",
+  "url": "https://freesound.org/s/484157/",
+  "license": "CC0 1.0",
+  "for": "the dying tube's flicker under section 1.2 (fluorescent light flickering 1)"
+ },
+ "heartbeat": {
+  "id": 249716,
+  "title": "SLOW HEARTBEAT",
+  "by": "daandraait",
+  "url": "https://freesound.org/s/249716/",
+  "license": "CC0 1.0",
+  "for": "his heartbeat at the empty slot (SLOW HEARTBEAT)"
+ },
+ "bgm_thriller": {
+  "id": 157133,
+  "title": "Thriller Ambient",
+  "by": "unfa",
+  "url": "https://freesound.org/s/157133/",
+  "license": "CC0 1.0",
+  "for": "BGM: slow dark thriller ambience (Thriller Ambient)"
+ },
+ "bgm_museum": {
+  "id": 726368,
+  "title": "Street Museum (Dark Ambient BGM)",
+  "by": "ChristmasKrumble666",
+  "url": "https://freesound.org/s/726368/",
+  "license": "CC0 1.0",
+  "for": "BGM option: dark ambient (Street Museum (Dark Ambient BGM))"
+ },
+ "bgm_drone": {
+  "id": 332246,
+  "title": "Drone - 15.12.2015",
+  "by": "cabled_mess",
+  "url": "https://freesound.org/s/332246/",
+  "license": "CC0 1.0",
+  "for": "BGM option: a plain drone (Drone - 15.12.2015)"
+ },
+ "bgm_suspense": {
+  "id": 387223,
+  "title": "Orchestral Suspense Loop 1",
+  "by": "awrmacd",
+  "url": "https://freesound.org/s/387223/",
+  "license": "CC0 1.0",
+  "for": "BGM option: orchestral suspense (Orchestral Suspense Loop 1)"
+ }
+}
