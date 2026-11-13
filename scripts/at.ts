@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { noteScene, noteSecond } from "../packages/live-studio/app/notes/note-card-meta.ts";
-import { cliArgs, jsonFile, needFilm, numberArg } from "../packages/live-studio/src/cli.mjs";
+import { cliArgs, jsonFile, needFilm, secondArg } from "../packages/live-studio/src/cli.mjs";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
 import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
@@ -292,17 +292,15 @@ if (isMain) {
     process.exit(2);
   }
   const film = needFilm(process.env.LIVE_PROJECT);
-  const mm = /^(\d+):(\d+(?:\.\d+)?)$/.exec(arg);
   let t: number;
-  if (mm) t = +mm[1]! * 60 + +mm[2]!;
-  else if (/^\d+(\.\d+)?$/.test(arg)) t = numberArg("the second", arg, { min: 0 });
-  else if (/^-\d/.test(arg)) {
+  if (/^-\d/.test(arg)) {
     console.error(`${arg}: the film starts at 0; give a second from 0 on (bun run at 35.6)`);
     process.exit(2);
   } else if (/^\d+,\d+$/.test(arg)) {
     console.error(`${arg}: seconds take a dot; did you mean bun run at ${arg.replace(",", ".")}?`);
     process.exit(2);
-  } else {
+  } else if (/^\d/.test(arg)) t = secondArg("bun run at", arg);
+  else {
     // a note: #N or its id
     const n = noteMoment(film, arg);
     if (!n) {

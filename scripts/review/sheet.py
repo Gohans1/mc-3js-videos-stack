@@ -9,9 +9,9 @@
                                                  naming the shots either side as the notes number them (cut 4: shot 4 into 5)
                                                  and the transition between them (shotsTimeline row 5 .transition)
                                                  (shots and cuts from renders/cuts.json, the render clip that made the video)
-Seconds worth a look: a note's (bun run notes), a line's (bun run voice:cues), a fault's (bun run framecheck, jumps),
-either side of a cut (renders/cuts.json).
-Prints each sheet with the seconds on it; open them to look. (python ../../scripts/review/sheet.py, in the film)"""
+Seconds are heard seconds: 65, 1:05 or 01:05.250. Worth a look: a note's (bun run notes), a line's (bun run voice:cues),
+a fault's (bun run framecheck, jumps), either side of a cut (renders/cuts.json).
+Prints each sheet with the seconds on it; open them to look. Run inside the film."""
 import os
 import re
 import shutil
@@ -89,6 +89,12 @@ def say_if_stale(video):
         print(f"STALE: {r.stdout.strip()}")
 
 
+def heard_second(text):
+    """65, 1:05, 01:05.250 or 65s as a float, else None: live-studio src/cli.mjs secondArg's rule (listen.py has the same)"""
+    m = re.fullmatch(r"(?:(\d+):([0-5]?\d(?:\.\d+)?)|(\d+(?:\.\d+)?)s?)", text.strip())
+    return None if not m else float(m[3]) if m[3] is not None else int(m[1]) * 60 + float(m[2])
+
+
 def usage(why, code=2):
     print(why, file=sys.stderr)
     raise SystemExit(code)
@@ -97,10 +103,9 @@ def usage(why, code=2):
 tmp = None
 if args:
     video = args[0]
-    try:
-        secs = [float(s) for s in args[1].split(",")]
-    except ValueError:
-        usage(f"seconds are numbers with commas, e.g. 10,20.5,30; got {args[1]}")
+    secs = [heard_second(s) for s in args[1].split(",")]
+    if None in secs:
+        usage(f"takes heard seconds (65, 1:05 or 01:05.250), with commas; got {args[1]}")
     # a render's chunk renders/chunks/cNN.mp4 starts at NN*30 s of the film; the seconds asked are the film's
     chunk = re.search(r"[\\/]?chunks[\\/]c(\d+)\.mp4$", video)
     try:

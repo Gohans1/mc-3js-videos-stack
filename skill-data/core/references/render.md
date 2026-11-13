@@ -18,13 +18,13 @@ bun run deliver --youtube 9-15               # renders/youtube_preview.mp4 and y
 
 ## Fast, never from scratch
 
-| Job                    | How                                                                                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| One stretch changed    | `CHUNKS=3 bun run render clip` redraws that 30 s chunk. A plain `render clip` keeps every chunk whose code, data and settings are unchanged |
-| A crash midway         | Run the same command again: it carries on where it stopped. Chrome that draws nothing for 4 minutes is restarted (3 tries)                  |
-| Only the sound changed | `bun run mix` alone; no picture is rendered                                                                                                 |
-| The final is slow      | 8 sub-frames a frame for motion blur; 30 s at 16 sub-frames took 4.5 minutes on an RTX 2060. A lower `SAMPLES` is faster, blurs less        |
-| The GPU                | H.264 is encoded on the GPU (NVENC) through WebCodecs in Chrome. The RTX 2060 has no AV1 encoder, and NVENC makes no B-frames               |
+| Job                    | How                                                                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One stretch changed    | `CHUNKS=3 bun run render clip` redraws that 30 s chunk. A plain `render clip` keeps every chunk whose code, data and settings are unchanged; a sound edit changes none (`bun run mix` alone) |
+| A crash midway         | Run the same command again: it carries on where it stopped. Chrome that draws nothing for 4 minutes is restarted (3 tries)                                                                   |
+| Only the sound changed | `bun run mix` alone; no picture is rendered                                                                                                                                                  |
+| The final is slow      | 8 sub-frames a frame for motion blur; 30 s at 16 sub-frames took 4.5 minutes on an RTX 2060. A lower `SAMPLES` is faster, blurs less                                                         |
+| The GPU                | H.264 is encoded on the GPU (NVENC) through WebCodecs in Chrome. The RTX 2060 has no AV1 encoder, and NVENC makes no B-frames                                                                |
 
 ## YouTube's upload spec
 

@@ -9,6 +9,11 @@ export declare const numberArg: (
   text: string | undefined,
   limits?: { min?: number; max?: number; int?: boolean },
 ) => number;
+export declare const secondArg: (
+  name: string,
+  text: string | undefined,
+  limits?: { min?: number; max?: number },
+) => number;
 export declare const needFilm: (dir?: string) => string;
 export declare const envTypos: (known: string[], env?: Record<string, string | undefined>) => void;
 export declare const jsonFile: (file: string, root?: string) => any;

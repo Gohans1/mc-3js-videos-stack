@@ -43,4 +43,16 @@ test("render refuses AT past the end and a backwards CHECK at once, saying the f
   const early = render({ AT: "4", CHECK: "motion:cam,-1,2" });
   assert.equal(early.status, 2, early.stdout + early.stderr);
   assert.match(early.stderr, /CHECK motion:cam,-1,2: from -1 is before the film starts \(0\)/);
+
+  // seconds as notes print them: AT passes, and CHECK reads 0:06 and 0:05 as 6 and 5
+  const clock = render({ AT: "0:04", CHECK: "motion:cam,0:06,0:05" });
+  assert.equal(clock.status, 2, clock.stdout + clock.stderr);
+  assert.match(clock.stderr, /from 6 must come before to 5/);
+
+  const extra = render({ AT: "4", CHECK: "motion:cam,1,2,3" });
+  assert.equal(extra.status, 2, extra.stdout + extra.stderr);
+  assert.match(
+    extra.stderr,
+    /CHECK motion:cam,1,2,3: motion takes 3 values, <target>,<from s>,<to s>; got 4/,
+  );
 });

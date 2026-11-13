@@ -61,6 +61,24 @@ test("a number that is no number stops with what it takes", () => {
   expect(r.stderr).toContain('AT item 1 takes a number from 0, got "abc"');
 });
 
+// notes, a draft's strip and bun run at print mm:ss.mmm; a probe typed AT=1:05 and was refused
+test("a heard second is read as notes print it, mm:ss, or with an s after it, and a minute past 59 s is refused", async () => {
+  const { secondArg } = await import(cli);
+  expect([
+    secondArg("AT", "65"),
+    secondArg("AT", "1:05"),
+    secondArg("AT", "01:05.250"),
+    secondArg("AT", "65s"),
+  ]).toEqual([65, 65, 65.25, 65]);
+  const r = spawnSync(
+    process.execPath,
+    ["-e", `const { secondArg } = await import(${JSON.stringify(cli)}); secondArg("AT", "1:75")`],
+    { encoding: "utf8" },
+  );
+  expect(r.status).toBe(2);
+  expect(r.stderr).toContain('AT takes a heard second (65, 1:05 or 01:05.250), got "1:75"');
+});
+
 test("bun run studio help prints the help though the script put the port first, and starts no studio", () => {
   const r = spawnSync(
     process.execPath,

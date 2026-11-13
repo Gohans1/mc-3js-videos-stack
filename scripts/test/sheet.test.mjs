@@ -53,4 +53,11 @@ test("sheet cut N says which shots meet there and the transition between them; a
   const gone = sheet("renders/nope.mp4", "1");
   assert.equal(gone.status, 2, gone.stdout + gone.stderr);
   assert.match(gone.stderr, /no renders\/nope\.mp4 \(the videos here: renders\/draft_video\.mp4\)/);
+
+  // seconds as notes print them, the clock bun run at and AT= read
+  const clock = sheet("renders/draft_video.mp4", "0:01,0:02.5");
+  assert.equal(clock.status, 0, clock.stdout + clock.stderr);
+  const bad = sheet("renders/draft_video.mp4", "0:75");
+  assert.equal(bad.status, 2, bad.stdout + bad.stderr);
+  assert.match(bad.stderr, /takes heard seconds \(65, 1:05 or 01:05\.250\), with commas; got 0:75/);
 });

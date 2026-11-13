@@ -8,7 +8,7 @@ import { extname, join, resolve } from "node:path";
 import { build } from "vite";
 
 import { cues, srt } from "./src/captions.mjs";
-import { cliArgs, envTypos, jsonFile, numberArg } from "./src/cli.mjs";
+import { cliArgs, envTypos, jsonFile, numberArg, secondArg } from "./src/cli.mjs";
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { ratioOf, sizeOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
@@ -30,11 +30,12 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
                               shutter motion blur averaged as light), YouTube's H.264 (GOP half a second, 32 Mbps),
                               chunks in renders/final_chunks/ joined into renders/final_video.mp4
 A clip or final run keeps every chunk already rendered from the same film code, data and settings, and renders the rest:
-after a crash, the same command again picks up where it stopped. Chrome is restarted (up to 3 times) when the page goes
-quiet for 4 minutes mid-video.
+after a crash, the same command again picks up where it stopped. The sound timeline is not part of it: after a sound
+edit, bun run mix renders/draft_video.mp4 alone puts the new sound on the draft. Chrome is restarted (up to 3 times)
+when the page goes quiet for 4 minutes mid-video.
 Builds the film with the studio's own bundler, opens it in headless Chrome on the GPU and writes what the page sends back.
 Nothing is written outside the film. Options are environment variables:
-  AT=40,41.5                 stills at these heard seconds (default 1)
+  AT=40,41.5                 stills at these heard seconds, or as notes print them: AT=0:40,0:41.5 (default 1)
   LIST=1                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot
   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
@@ -55,6 +56,7 @@ Nothing is written outside the film. Options are environment variables:
 Examples:
   AT=12,30.5 LIST=1 bun run render stills
   CHUNKS=3 bun run render clip
+  $env:AT='12,30.5'; bun run render stills; Remove-Item Env:AT     the same in PowerShell, where VAR=x cmd is no syntax
   bun run render final        then bun run mix renders/final_video.mp4 puts the soundtrack on it
 package.json "live-studio": { "chrome": path } names the headless Chrome (default tools/chrome-headless-shell/...);
 { "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.
@@ -181,6 +183,33 @@ const env = process.env;
 // a typo here once hung the render for good: every number is checked before Chrome opens
 const numbers = (name, limits) =>
   env[name].split(",").map((x, i) => numberArg(`${name} item ${i + 1}`, x.trim(), limits));
+// CHECK=<name>:<args>;...: the built-in checks take <target>,<from s>,<to s> in heard seconds (mm:ss too, as notes print
+// them; a minus is kept so the range check below can say the film starts at 0); a film's own take what it takes
+const BUILT_IN = ["motion", "seen", "touch"];
+const CHECKS = (env.CHECK ?? "")
+  .split(";")
+  .filter(Boolean)
+  .map((c) => {
+    const colon = c.indexOf(":"),
+      name = (colon < 0 ? c : c.slice(0, colon)).trim(),
+      args =
+        colon < 0 || c.slice(colon + 1) === ""
+          ? []
+          : c
+              .slice(colon + 1)
+              .split(",")
+              .map((a) => a.trim());
+    if (!BUILT_IN.includes(name))
+      return { c, name, args: args.map((a) => (a !== "" && !isNaN(+a) ? +a : a)) };
+    if (args.length !== 3) {
+      console.error(
+        `CHECK ${c}: ${name} takes 3 values, <target>,<from s>,<to s>; got ${args.length} (bun run render --help)`,
+      );
+      process.exit(2);
+    }
+    const sec = (which, v) => (/^-\d/.test(v) ? +v : secondArg(`CHECK ${c}: ${which}`, v));
+    return { c, name, args: [args[0], sec("from", args[1]), sec("to", args[2])] };
+  });
 if (env.LIST !== undefined && !["0", "1"].includes(env.LIST)) {
   console.error(`LIST is 1 (the list over the picture) or 0, got ${JSON.stringify(env.LIST)}`);
   process.exit(2);
@@ -198,7 +227,7 @@ const at =
       ? env.CHECK
         ? []
         : [1]
-      : numbers("AT", { min: 0 });
+      : env.AT.split(",").map((x, i) => secondArg(`AT item ${i + 1}`, x));
 const only = env.CHUNKS ? numbers("CHUNKS", { min: 0, int: true }) : null;
 const final = what === "final";
 const samples = env.SAMPLES
@@ -234,22 +263,21 @@ if (ends) {
     process.exit(2);
   }
 }
-for (const c of (env.CHECK ?? "").split(";").filter(Boolean)) {
-  const [name, args = ""] = c.split(":");
-  const [, from, to] = args.split(",").map((a) => (a.trim() === "" ? NaN : +a));
-  if (["motion", "seen", "touch"].includes(name.trim()) && from < 0) {
+for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name))) {
+  const [, from, to] = args;
+  if (from < 0) {
     console.error(
-      `CHECK ${c}: from ${from} is before the film starts (0): CHECK=${name.trim()}:<target>,<from s>,<to s>, both in heard seconds`,
+      `CHECK ${c}: from ${from} is before the film starts (0): CHECK=${name}:<target>,<from s>,<to s>, both in heard seconds`,
     );
     process.exit(2);
   }
-  if (["motion", "seen", "touch"].includes(name.trim()) && from >= to) {
+  if (from >= to) {
     console.error(
-      `CHECK ${c}: from ${from} must come before to ${to} (CHECK=${name.trim()}:<target>,<from s>,<to s>)`,
+      `CHECK ${c}: from ${from} must come before to ${to} (CHECK=${name}:<target>,<from s>,<to s>)`,
     );
     process.exit(2);
   }
-  if (["motion", "seen", "touch"].includes(name.trim()) && ends && to > ends.film + 0.05) {
+  if (ends && to > ends.film + 0.05) {
     console.error(
       `CHECK ${c}: to ${to} is past the film's end: it runs 0-${ends.film.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
     );
@@ -291,16 +319,7 @@ const cfg = {
     : null,
   list: env.LIST === "1",
   inspect,
-  checks: (env.CHECK ?? "")
-    .split(";")
-    .filter(Boolean)
-    .map((c) => {
-      const [name, args = ""] = c.split(":");
-      return [
-        name.trim(),
-        args ? args.split(",").map((a) => (a.trim() !== "" && !isNaN(+a) ? +a : a.trim())) : [],
-      ];
-    }),
+  checks: CHECKS.map(({ name, args }) => [name, args]),
   choices: choicesFile ? readJson(choicesFile, {}) : {},
   lab: Object.fromEntries(
     Object.entries(env)
@@ -312,12 +331,26 @@ const cfg = {
 // ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
 const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/page.ts");
 const t0 = Date.now();
+// The sound timeline never changes a frame (src/stale.mjs skips it too); only LIST=1's overlay names its rows. Left out of a
+// video's build, a gain tweak keeps every chunk's stamp, so render clip redraws nothing for it
+const soundFile =
+  video && !cfg.list && pkg["live-studio"]?.soundTimeline
+    ? resolve(PROJECT, pkg["live-studio"].soundTimeline)
+    : null;
+const noSound = {
+  name: "picture-without-sound",
+  enforce: "pre",
+  load: (id) =>
+    soundFile && resolve(id.split("?")[0]) === soundFile
+      ? JSON.stringify({ beds: [], sfx: [] })
+      : null,
+};
 const built = await build({
   configFile: false,
   root: join(STUDIO, "render"),
   publicDir: false, // the film's assets are served from where they are, never copied
   logLevel: "error",
-  plugins: [filmPlugin({ SRC: join(PROJECT, "src"), threeFrom: threeFromOf(PROJECT) })],
+  plugins: [noSound, filmPlugin({ SRC: join(PROJECT, "src"), threeFrom: threeFromOf(PROJECT) })],
   build: {
     outDir: OUT,
     emptyOutDir: true,
