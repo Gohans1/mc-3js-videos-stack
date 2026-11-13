@@ -104,7 +104,7 @@ test("an unknown kind is an error that lists the kinds there are", async () => {
 
 test("an unknown source is an error that lists the sources, never a silent empty search", async () => {
   await expect(run(["door", "--source", "nope"], vault, noJev)).rejects.toThrow(
-    /unknown --source nope.*earshot.*minecraft/i,
+    /unknown --source nope[\s\S]*sfx: earshot 1[\s\S]*mc: minecraft 1/i,
   );
 });
 
@@ -174,7 +174,10 @@ test("--origin and --edition filter sounds as the Sound panel's Filter does", as
   expect(real).toContain("snap-1");
   expect(real).not.toContain("ear-hit");
   expect(await run(["--edition", "vanilla"], groups, noJev)).toContain("mc-mob-zombie-hurt-1");
-  await expect(run(["--origin", "studio"], groups, noJev)).rejects.toThrow(
+  const studio = await run(["--origin", "studio", "--kind", "sfx"], groups, noJev);
+  expect(studio.split("\n")[0]).toMatch(/--origin studio read as real/);
+  expect(studio).toContain("snap-1");
+  await expect(run(["--origin", "nope"], groups, noJev)).rejects.toThrow(
     /--origin is real or synth/,
   );
 });
@@ -631,15 +634,36 @@ test("--license sorts sounds by what an upload must do: credit for CC BY, claim 
     sound("rain-cc0", { license: "CC0 1.0" }),
     sound("rain-ccby", { license: "CC BY 4.0" }),
     sound("rain-pixabay", { license: "Pixabay Content License", contentId: true }),
+    sound("rain-vanilla", { license: "Minecraft 26.3 Assets" }),
+    sound("rain-lgpl", { license: "LGPL-3.0-only" }),
   ];
   const ids = async (l: string) =>
     (await run(["rain", "--license", l], pool, noJev)).match(/rain-\w+/g) ?? [];
   expect(await ids("free")).toEqual(["rain-cc0"]);
   expect(await ids("credit")).toEqual(["rain-ccby"]);
   expect(await ids("claim")).toEqual(["rain-pixabay"]);
-  await expect(run(["--license", "nope"], pool, noJev)).rejects.toThrow(
-    /--license is free, credit or claim \(sounds\): free 1 .*credit 1 .*claim 1/,
+  expect(await ids("minecraft")).toEqual(["rain-vanilla"]);
+  expect(await ids("mod")).toEqual(["rain-lgpl"]);
+  // a licence by its own name, and "gpl" is not the end of "lgpl"
+  expect(await ids("lgpl")).toEqual(["rain-lgpl"]);
+  await expect(run(["rain", "--license", "gpl"], pool, noJev)).rejects.toThrow(
+    /--license is free, credit, claim, minecraft, mod .*free 1 .*mod 1 .*LGPL-3\.0-only 1/,
   );
+});
+
+test("a filter named without a value lists its values with counts", async () => {
+  await expect(run(["--license"], vault, noJev)).rejects.toThrow(
+    /--license needs a value, e.g. --license free\. --license: free 2 .*minecraft 0/,
+  );
+  await expect(run(["door", "--source"], vault, noJev)).rejects.toThrow(
+    /--source needs a value[\s\S]*mc: minecraft 1/,
+  );
+});
+
+test("another name for an option is read as the option, and the first line says so", async () => {
+  const out = await run(["door", "--type", "sfx", "--limit", "1"], vault, noJev);
+  expect(out.split("\n")[0]).toBe("(--type read as --kind; --limit read as -n)");
+  expect(out).toContain("ear-door-knock");
 });
 
 test("under --kind, a word that only names the kind matches nothing, so a mood ask gets the mood advice", async () => {

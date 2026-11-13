@@ -379,19 +379,73 @@ const EDITIONS = { vanilla: "Vanilla Minecraft", modded: "Modded packs" };
 const originOfEntry = (x: Entry) =>
   originOf({ name: x.id, source: x.src, origin: x.data?.origin as "real" | "synth" | undefined });
 const editionOfEntry = (x: Entry) => editionOf({ source: x.src });
-// What a sound asks of a YouTube upload, as its line tags it: nothing, the author named in the description (CC BY), or a
-// Content ID claim on the video
+// What a sound asks of a YouTube upload. Mojang's usage guidelines (minecraft.net/usage-guidelines) allow its game audio in
+// monetised Minecraft videos; mods ship sounds under code licences (MIT, Apache, LGPL, GPL, PolyForm Shield) whose notice
+// terms were written for software, so the safe reading is a credit, and whether copyleft reaches a video is untested
 const LICENSES = {
-  free: "nothing to do: no credit, no Content ID claim",
-  credit: "CC BY: name the author in the video description",
+  free: "nothing to do: no credit, no Content ID claim (CC0, Mixkit, Pixabay, earshot)",
+  credit: "CC BY: name the author and licence in the video description",
   claim: "YouTube Content ID claims the video when uploaded",
+  minecraft:
+    "Mojang's own game sounds: fine in a Minecraft video under Mojang's usage guidelines, not in other videos",
+  mod: "a mod's sounds under a code licence (MIT, Apache, LGPL, GPL, PolyForm Shield): name the mod and its licence in the description",
 };
-const licenseOf = (x: Entry): keyof typeof LICENSES =>
-  x.data?.contentId
+const CODE_LICENSE = /\b(?:MIT|Apache|L?GPL|PolyForm)\b/i;
+const licenseOf = (x: Entry): keyof typeof LICENSES => {
+  const l = String(x.data?.license ?? "");
+  return x.data?.contentId
     ? "claim"
-    : /\bCC[ -]BY\b/i.test(String(x.data?.license ?? ""))
+    : /\bCC[ -]BY\b/i.test(l)
       ? "credit"
-      : "free";
+      : /^Minecraft\b/.test(l)
+        ? "minecraft"
+        : CODE_LICENSE.test(l)
+          ? "mod"
+          : "free";
+};
+// Other words for a filter's values; anything else --license gets is matched against the licences' own names (mit, lgpl)
+const VALUE_ALIAS: Record<string, Record<string, string>> = {
+  "--license": {
+    none: "free",
+    nothing: "free",
+    "no-credit": "free",
+    "royalty-free": "free",
+    attribution: "credit",
+    "cc-by": "credit",
+    ccby: "credit",
+    contentid: "claim",
+    "content-id": "claim",
+    cid: "claim",
+    claimed: "claim",
+    mojang: "minecraft",
+    vanilla: "minecraft",
+    mods: "mod",
+    modded: "mod",
+    code: "mod",
+    "open-source": "mod",
+  },
+  "--origin": {
+    recorded: "real",
+    recording: "real",
+    studio: "real",
+    synthesized: "synth",
+    synthetic: "synth",
+    code: "synth",
+    codegen: "synth",
+    "code-gen": "synth",
+    generated: "synth",
+    procedural: "synth",
+  },
+  "--edition": {
+    minecraft: "vanilla",
+    mojang: "vanilla",
+    base: "vanilla",
+    mod: "modded",
+    mods: "modded",
+    pack: "modded",
+    packs: "modded",
+  },
+};
 
 export function rank(
   entries: Entry[],
@@ -455,7 +509,9 @@ export function soundEntries(items: SoundItem[], fold = true): Entry[] {
   return [...groups.values()].map((takes) => {
     const first = takes.toSorted((a, b) => (a.variant ?? 0) - (b.variant ?? 0))[0] as SoundItem;
     const note = [
-      /\bCC[ -]BY\b/i.test(first.license ?? "") && `credit: ${first.license}`,
+      /\bCC[ -]BY\b/i.test(first.license ?? "")
+        ? `credit: ${first.license}`
+        : CODE_LICENSE.test(first.license ?? "") && `credit the mod: ${first.license}`,
       first.contentId && "YouTube Content ID: claimed if uploaded",
     ]
       .filter(Boolean)
@@ -1255,10 +1311,35 @@ const BODY: Record<string, string | null> = {
 // Tags written by eye (catalog_review.py), read off the clips that have them so the list never drifts from the data
 const TAGGED = ["--mood", "--prop"] as const;
 Object.assign(OPTIONS, BODY);
+// Other names an agent reaches for, read as the option they mean (the first line of the answer says so)
+const OPTION_ALIAS: Record<string, string> = {
+  "--licence": "--license",
+  "--licenses": "--license",
+  "--duration": "--dur",
+  "--length": "--dur",
+  "--seconds": "--dur",
+  "--secs": "--dur",
+  "--pack": "--source",
+  "--mod": "--source",
+  "--src": "--source",
+  "--type": "--kind",
+  "--category": "--kind",
+  "--cat": "--kind",
+  "--limit": "-n",
+  "--top": "-n",
+  "--count": "-n",
+  "--info": "--show",
+  "--details": "--show",
+  "--meaning": "--jev",
+  "--ai": "--jev",
+  "--takes": "--all",
+};
 const isOption = (a: string) => /^--?[a-z]/i.test(a);
 function parse(argv: string[]) {
   const set = new Map<string, string>(),
-    rest: string[] = [];
+    rest: string[] = [],
+    notes: string[] = [],
+    bare: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
     if (!isOption(arg)) {
@@ -1266,10 +1347,12 @@ function parse(argv: string[]) {
       continue;
     }
     const eq = arg.indexOf("=");
-    const name = eq > 0 ? arg.slice(0, eq) : arg;
+    const typed = (eq > 0 ? arg.slice(0, eq) : arg).toLowerCase();
+    const name = OPTION_ALIAS[typed] ?? typed;
+    if (name !== typed) notes.push(`${typed} read as ${name}`);
     if (!(name in OPTIONS))
       throw new FindError(
-        `Unknown option ${name}. Options: --kind --source --origin --edition --license --dur -n --all --jev --show --help; mocap by body: ${Object.keys(BODY).join(" ")}`,
+        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur -n --all --jev --show --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any of them without a value lists its values.`,
       );
     const example = OPTIONS[name];
     if (!example) {
@@ -1278,8 +1361,11 @@ function parse(argv: string[]) {
       continue;
     }
     const v = eq > 0 ? arg.slice(eq + 1) : argv[i + 1];
-    if (v === undefined || v === "" || isOption(v))
-      throw new FindError(`${name} needs a value, e.g. ${example}`);
+    // a filter with no value is asked what it takes: run() answers with its values
+    if (v === undefined || v === "" || isOption(v)) {
+      bare.push(name);
+      continue;
+    }
     if (eq < 0) i++;
     if (set.has(name))
       throw new FindError(
@@ -1287,8 +1373,84 @@ function parse(argv: string[]) {
       );
     set.set(name, v);
   }
-  return { set, query: rest.join(" ").trim() };
+  return { set, query: rest.join(" ").trim(), notes, bare };
 }
+
+// ---------- What each filter takes, with how many entries each value keeps: said whenever a filter is named without a
+// value, given a wrong one, or could narrow a list, so an agent never has to guess a pack or a licence exists
+
+// Every source by kind, biggest first; Minecraft mods by their pack name
+const sourceList = (pool: Entry[]) => {
+  const by = new Map<string, string[]>();
+  for (const x of pool) {
+    if (!x.src) continue;
+    const k = x.src.startsWith("film-stage/") ? "presets" : top(x.kind);
+    by.set(k, by.get(k) ?? [])
+      .get(k)!
+      .push(x.src);
+  }
+  const order = ["sfx", "bgm", "mc", "mocap"];
+  const at = (k: string) => (k === "presets" ? 99 : order.indexOf(k) + 1 || 50);
+  return [...by]
+    .toSorted(([a], [b]) => at(a) - at(b))
+    .map(([k, srcs]) =>
+      k === "presets"
+        ? `presets: film-stage (every preset), or one file: ${[...new Set(srcs)].join(", ")}`
+        : `${k}: ${tally(srcs)}`,
+    )
+    .join("\n  ");
+};
+// The Sound panel's filters and the licence buckets: which entries each sorts, and what it calls each one
+const FACETS: Record<
+  string,
+  { keep: (x: Entry) => boolean; of: (x: Entry) => string; t: Record<string, string> }
+> = {
+  "--origin": {
+    keep: (x) => SOUND.includes(x.kind) && x.kind !== "mc",
+    of: originOfEntry,
+    t: ORIGINS,
+  },
+  "--edition": { keep: (x) => x.kind === "mc", of: editionOfEntry, t: EDITIONS },
+  "--license": { keep: (x) => SOUND.includes(x.kind), of: licenseOf, t: LICENSES },
+};
+// "free 120 (nothing to do ...), credit 9 (...)": every value with its count; terse drops the labels and the empty ones
+const buckets = (o: string, xs: Entry[], terse = false) => {
+  const f = FACETS[o]!,
+    ys = xs.filter(f.keep);
+  return Object.entries(f.t)
+    .map(([k, label]) => [k, ys.filter((y) => f.of(y) === k).length, label] as const)
+    .filter(([, c]) => !terse || c > 0)
+    .map(([k, c, label]) => `${k} ${c}${terse ? "" : ` (${label})`}`)
+    .join(", ");
+};
+const rawLicenses = (xs: Entry[]) =>
+  tally(
+    xs.flatMap((x) => (SOUND.includes(x.kind) && x.data?.license ? [String(x.data.license)] : [])),
+  );
+const durOf = (secs: number) =>
+  secs < 1 ? "0-1" : secs < 5 ? "1-5" : secs < 30 ? "5-30" : "30-3600";
+const durs = (xs: Entry[]) =>
+  tally(xs.flatMap((x) => (x.secs === undefined ? [] : [durOf(x.secs)])));
+const tagged = (field: string, clips: Entry[]) =>
+  tally(clips.flatMap((x) => (Array.isArray(x.data?.[field]) ? (x.data[field] as string[]) : [])));
+const DUR_SAYS =
+  "min-max seconds, low first, for sounds and mocap clips: --dur 0-1 a short hit, 1-5, 5-30, 30-3600 a track or long ambience";
+// What a filter takes, from the entries here: asked by naming it without a value
+const valuesOf = (o: string, pool: Entry[]) => {
+  const clips = pool.filter((x) => x.kind === "mocap");
+  if (o === "--kind")
+    return `Kinds: ${counts(pool)}, or sound for sfx+bgm+mc. Each takes /<category> (bun run find --kind <kind> lists them); plain names work too: music is bgm, titles is text, camera is anim`;
+  if (o === "--source") return `Sources (a comma list for several):\n  ${sourceList(pool)}`;
+  if (o in FACETS)
+    return `${o}: ${buckets(o, pool)}${o === "--license" && rawLicenses(pool) ? `. Or a licence by name (--license mit): ${rawLicenses(pool)}` : ""}`;
+  if (o === "--dur") return `--dur takes ${DUR_SAYS}. Here: ${durs(pool)}`;
+  if (o === "--from" || o === "--to" || o === "--has")
+    return `postures: ${postures(clips).join(" ")}`;
+  if (o === "--mood" || o === "--prop")
+    return `${o} (only clips checked by eye carry it): ${tagged(o.slice(2), clips)}`;
+  if (o === "--show") return "an id: the second column of bun run find <words>";
+  return "";
+};
 
 export async function run(
   argv: string[],
@@ -1296,7 +1458,9 @@ export async function run(
   judge: Judge = jevJudge,
   clips: Catalog = catalog,
 ): Promise<string> {
-  const { set, query } = parse(argv);
+  const { set, query, notes, bare } = parse(argv);
+  // how a loose option or value was read (--licence as --license, --origin recorded as real), above the answer
+  const noted = (text: string) => (notes.length ? `(${notes.join("; ")})\n${text}` : text);
   const all = set.has("--all"),
     jev = set.has("--jev");
   const list = (v?: string) => v?.toLowerCase().split(",").filter(Boolean);
@@ -1313,7 +1477,15 @@ export async function run(
     throw new FindError("-n takes a whole number of hits, 1 or more, e.g. -n 20");
   const n = Number(nRaw ?? 12);
   if (set.has("--help") || set.has("-h")) return HELP;
-  if (query.toLowerCase() === "help" && set.size === 0) return HELP;
+  if (query.toLowerCase() === "help" && set.size === 0 && !bare.length) return HELP;
+  if (bare.length) {
+    const pool = given ?? allEntries();
+    throw new FindError(
+      bare
+        .map((o) => `${o} needs a value, e.g. ${OPTIONS[o]}. ${valuesOf(o, pool)}`.trim())
+        .join("\n"),
+    );
+  }
   const showIds = set.get("--show")?.split(",").filter(Boolean);
   if (showIds && !showIds.length) throw new FindError("--show needs an id, e.g. --show dissolve");
   if (showIds) {
@@ -1321,7 +1493,7 @@ export async function run(
       throw new FindError(
         `--show takes ids only (a comma list for several: --show dissolve,push); drop ${[query, ...[...set.keys()].filter((k) => k !== "--show" && k !== "-n")].filter(Boolean).join(" ")}`,
       );
-    return show(showIds, given ?? allEntries(false));
+    return noted(show(showIds, given ?? allEntries(false)));
   }
   const catalogSays = async (args: string[], clipPool: Entry[]) => {
     try {
@@ -1351,10 +1523,14 @@ export async function run(
   const body = Object.keys(BODY).filter((o) => set.has(o));
   if (body.length) {
     const clipPool = (given ?? allEntries()).filter((x) => x.kind === "mocap");
-    if (kinds && kinds.join() !== "mocap")
-      throw new FindError(
-        `${body.join(" ")} filter mocap clips by the body; use --kind mocap or no --kind`,
+    if (kinds && kinds.join() !== "mocap") {
+      const soundy = kinds.some((k) =>
+        [...SOUND, "sound"].includes(kindOf(k.split("/")[0]!, clipPool)),
       );
+      throw new FindError(
+        `${body.join(" ")} filter mocap clips by the body; use --kind mocap or no --kind${soundy && set.has("--mood") ? `. For music: ${BGM_MOOD}` : ""}`,
+      );
+    }
     if (jev && !query)
       throw new FindError(`--jev needs the scene in words, e.g. --jev "he kneels to tie a shoe"`);
     if (set.has("--still") && set.has("--moves"))
@@ -1381,12 +1557,7 @@ export async function run(
         return [o, v];
       }
       if ((TAGGED as readonly string[]).includes(o)) {
-        const field = o.slice(2);
-        const seen = tally(
-          clipPool.flatMap((x) =>
-            Array.isArray(x.data?.[field]) ? (x.data[field] as string[]) : [],
-          ),
-        );
+        const seen = tagged(o.slice(2), clipPool);
         const known = seen.split(", ").map((s) => s.split(" ")[0]);
         if (!known.includes(v.toLowerCase()))
           throw new FindError(
@@ -1414,7 +1585,7 @@ export async function run(
     const libs = sources ? ["--lib", sources.join(",")] : [];
     const words = jev ? ["--jev", query] : query.split(/\s+/).filter(Boolean);
     const durArg = dur ? ["--dur", set.get("--dur")!] : [];
-    return catalogSays([...words, ...args, ...durArg, ...libs], clipPool);
+    return noted(await catalogSays([...words, ...args, ...durArg, ...libs], clipPool));
   }
   if (
     !query &&
@@ -1437,56 +1608,66 @@ export async function run(
   };
   const bySource = sources ? pool.filter((x) => sources.some((s) => fromSource(x, s))) : pool;
   const badSource = sources?.filter((s) => !pool.some((x) => fromSource(x, s)));
-  if (badSource?.length)
-    throw new FindError(
-      `${badSource.includes("this-film") ? "this-film is a film's own sounds: run find from its folder (cd films/<film>). " : ""}Unknown --source ${badSource.join(",")}. Sources: ${tally(
-        pool.flatMap((x) => x.src ?? []),
-      )
-        .split(", ")
-        .slice(0, 12)
-        .join(", ")}, ... (bun run find --source <one> lists it; film-stage = every preset)`,
+  if (badSource?.length) {
+    const names = [...new Set(pool.flatMap((x) => x.src?.toLowerCase() ?? []))];
+    const close = badSource.flatMap((s) =>
+      names.filter(
+        (n) =>
+          n.includes(s) ||
+          s.includes(n.split("/")[0]!) ||
+          levenshtein(s, n) <= (s.length > 5 ? 2 : 1),
+      ),
     );
+    throw new FindError(
+      `${badSource.includes("this-film") ? "this-film is a film's own sounds: run find from its folder (cd films/<film>). " : ""}Unknown --source ${badSource.join(",")}${close.length ? ` (did you mean: ${[...new Set(close)].slice(0, 6).join(", ")}?)` : ""}. ${valuesOf("--source", pool)}`,
+    );
+  }
+  // A filter's value said another way (--origin recorded is real), read as the value and said so on the first line
+  const valueOf = (o: string) => {
+    const v = set.get(o)?.toLowerCase();
+    const a = v && VALUE_ALIAS[o]?.[v];
+    if (a) notes.push(`${o} ${v} read as ${a}`);
+    return a || v;
+  };
   // The Sound panel's two filters; either keeps sounds only (a transition is neither a recording nor a pack)
-  const origin = set.get("--origin")?.toLowerCase(),
-    edition = set.get("--edition")?.toLowerCase();
-  const sounds = (k: string) =>
-    bySource.filter((x) => SOUND.includes(x.kind) && (k === "mc") === (x.kind === "mc"));
+  const origin = valueOf("--origin"),
+    edition = valueOf("--edition"),
+    license = valueOf("--license");
   if (origin !== undefined && !(origin in ORIGINS))
     throw new FindError(
-      `--origin is real or synth (sfx and bgm): ${Object.entries(ORIGINS)
-        .map(
-          ([k, t]) => `${k} ${sounds("sfx").filter((x) => originOfEntry(x) === k).length} (${t})`,
-        )
-        .join(", ")}`,
+      `--origin is real or synth (sfx and bgm): ${buckets("--origin", bySource)}`,
     );
   if (edition !== undefined && !(edition in EDITIONS))
     throw new FindError(
-      `--edition is vanilla or modded (Minecraft sounds): ${Object.entries(EDITIONS)
-        .map(
-          ([k, t]) => `${k} ${sounds("mc").filter((x) => editionOfEntry(x) === k).length} (${t})`,
-        )
-        .join(", ")}`,
+      `--edition is vanilla or modded (Minecraft sounds): ${buckets("--edition", bySource)}`,
     );
   if (origin && edition)
     throw new FindError(
       `--origin sorts sfx and bgm, --edition sorts mc (Minecraft): together they keep nothing. Give one: --origin ${origin} for sfx/bgm, --edition ${edition} for mc`,
     );
-  const license = set.get("--license")?.toLowerCase();
-  if (license !== undefined && !(license in LICENSES))
+  // --license is a bucket (what an upload must do), else a word of a licence's own name: mit, lgpl, cc0, polyform
+  const namedLicense =
+    license !== undefined && !(license in LICENSES)
+      ? new RegExp(`\\b${license.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i")
+      : undefined;
+  if (
+    namedLicense &&
+    !bySource.some(
+      (x) => SOUND.includes(x.kind) && namedLicense.test(String(x.data?.license ?? "")),
+    )
+  )
     throw new FindError(
-      `--license is free, credit or claim (sounds): ${Object.entries(LICENSES)
-        .map(
-          ([k, t]) =>
-            `${k} ${bySource.filter((x) => SOUND.includes(x.kind) && licenseOf(x) === k).length} (${t})`,
-        )
-        .join(", ")}`,
+      `--license is ${Object.keys(LICENSES).join(", ")} (sounds, by what a YouTube upload must do): ${buckets("--license", bySource)}. Or a word of a licence's own name: ${rawLicenses(bySource)}`,
     );
+  const licensed = (x: Entry) =>
+    SOUND.includes(x.kind) &&
+    (namedLicense ? namedLicense.test(String(x.data?.license ?? "")) : licenseOf(x) === license);
   const entries = bySource.filter(
     (x) =>
       (origin === undefined ||
         (SOUND.includes(x.kind) && x.kind !== "mc" && originOfEntry(x) === origin)) &&
       (edition === undefined || (x.kind === "mc" && editionOfEntry(x) === edition)) &&
-      (license === undefined || (SOUND.includes(x.kind) && licenseOf(x) === license)) &&
+      (license === undefined || licensed(x)) &&
       (!dur || (x.secs !== undefined && x.secs >= dur[0] && x.secs <= dur[1])),
   );
   const kf = kinds ? kindFilter(kinds, entries) : undefined;
@@ -1505,14 +1686,15 @@ export async function run(
       !filter
         ? kf.bad.join("\n")
         : !kindFilter(kinds!, bySource).bad.length
-          ? `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${sounds("sfx").filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc only." : ""}${license ? " --license sorts sounds only." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}`
+          ? `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${bySource.filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc only." : ""}${license ? " --license sorts sounds only." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}`
           : `${filter} keeps ${counts(entries) || "nothing"}: ${kf.bad.join("; ")}`,
     );
   }
   kinds = kf?.as;
   const inKinds = kf ? entries.filter(kf.test) : entries;
   // how a loose --kind was read (music as bgm, sfx/riser as sfx/transitions), above whatever it found
-  const readAs = (text: string) => (kf?.read.length ? `(${kf.read.join("; ")})\n${text}` : text);
+  const readAs = (text: string) =>
+    noted(kf?.read.length ? `(${kf.read.join("; ")})\n${text}` : text);
   // what --kind names without its categories (sfx/typing is sfx), for the hints that speak of a kind
   const kindNames = kinds?.map((k) => k.split("/")[0]!);
   const filters = `${kinds ? ` --kind ${kinds.join(",")}` : ""}${sources ? ` --source ${sources.join(",")}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}`;
