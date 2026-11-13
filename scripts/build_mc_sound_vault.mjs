@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { unzipSync } from "fflate";
 
 import { cliArgs } from "../packages/live-studio/src/cli.mjs";
-import { EXTERNAL, ROOT } from "./vault.mjs";
+import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 const HELP = `Rebuilds <externalRoot>/mc-sound/mc/<category>/*.ogg from vanilla Minecraft and the packs in scripts/mc-sound-packs.json
 (licence-checked; restricted packs are left out), with SOURCES.json, PEAKS.json and take families (x.ogg, x2.ogg ...).
@@ -315,6 +315,31 @@ export function classifyMcSound(source, relNoExt) {
   return "blocks";
 }
 
+// Minecraft's own captions for its sounds ("Creeper hisses", "Rain falls"), the words a player reads and an editor searches
+// by: sounds.json maps each event to its files and a subtitle key, lang/en_us.json the key to words. A file in several
+// events gets each caption; events that point at other events carry none of their own. Keys: "<ns>:<path>" lowercase
+export function captionsOf(soundsJson, lang, ns, into = new Map()) {
+  for (const ev of Object.values(soundsJson ?? {})) {
+    const text = ev?.subtitle && lang[ev.subtitle];
+    if (typeof text !== "string" || !Array.isArray(ev.sounds)) continue;
+    for (const s of ev.sounds) {
+      if (s?.type === "event") continue;
+      const name = typeof s === "string" ? s : s?.name;
+      if (typeof name !== "string") continue;
+      const key = (name.includes(":") ? name : `${ns}:${name}`).toLowerCase();
+      into.set(key, new Set([...(into.get(key) ?? []), text]));
+    }
+  }
+  return into;
+}
+const parseJson = (bytes) => {
+  try {
+    return JSON.parse(Buffer.from(bytes).toString("utf8"));
+  } catch {
+    return null;
+  }
+};
+
 function splitTrailingIndex(relNoExt) {
   const slash = relNoExt.lastIndexOf("/");
   const dir = slash >= 0 ? relNoExt.slice(0, slash) : "";
@@ -330,6 +355,8 @@ export async function buildMcSoundVault({
   mcAssetsDir = defaultMcAssetsDir(),
   resourcesBaseUrl = "https://resources.download.minecraft.net",
   skipPeaks = false,
+  // the game's en_us.json lives in its client jar (vault/jar, bun run setup:vault); without it sounds keep no captions
+  clientJar = join(LOCAL, "jar/client.jar"),
 } = {}) {
   const outDir = join(external, "mc-sound");
   const cacheDir = join(outDir, ".cache");
@@ -363,6 +390,34 @@ export async function buildMcSoundVault({
   }
 
   const rawItems = [];
+
+  // 1b. Vanilla captions: sounds.json is an asset object (local cache, else Mojang's CDN), en_us.json is in the client jar
+  const vanillaLang = existsSync(clientJar)
+    ? (parseJson(
+        unzipSync(readFileSync(clientJar), {
+          filter: (f) => f.name === "assets/minecraft/lang/en_us.json",
+        })["assets/minecraft/lang/en_us.json"] ?? [],
+      ) ?? {})
+    : {};
+  const soundsHash = assetIndex.objects?.["minecraft/sounds.json"]?.hash;
+  let vanillaSounds = {};
+  if (soundsHash) {
+    const localObj = join(mcAssetsDir, "objects", soundsHash.slice(0, 2), soundsHash);
+    const cached = join(cacheDir, `sounds-${soundsHash}.json`);
+    let buf = existsSync(localObj)
+      ? readFileSync(localObj)
+      : existsSync(cached)
+        ? readFileSync(cached)
+        : null;
+    if (!buf || sha1Hex(buf) !== soundsHash) {
+      buf = await fetchBytes(`${resourcesBaseUrl}/${soundsHash.slice(0, 2)}/${soundsHash}`);
+      if (sha1Hex(buf) !== soundsHash)
+        throw new Error(`SHA1 mismatch for minecraft/sounds.json (${soundsHash})`);
+      writeAtomic(cached, buf);
+    }
+    vanillaSounds = parseJson(buf) ?? {};
+  }
+  const captions = captionsOf(vanillaSounds, vanillaLang, "minecraft");
 
   // 2. Collect Vanilla sound candidates (excluding music/ and records/)
   for (const [objKey, meta] of Object.entries(assetIndex.objects ?? {})) {
@@ -444,9 +499,17 @@ export async function buildMcSoundVault({
     const entries = unzipSync(readFileSync(join(packsDir, spec.file)), {
       filter: (f) =>
         f.name.startsWith("assets/") &&
-        f.name.toLowerCase().endsWith(".ogg") &&
-        !f.name.startsWith("assets/presencefootstepsmono/"),
+        (/^assets\/[^/]+\/(?:sounds\.json|lang\/en_us\.json)$/i.test(f.name) ||
+          (f.name.toLowerCase().endsWith(".ogg") &&
+            !f.name.startsWith("assets/presencefootstepsmono/"))),
     });
+    // the pack's own captions; its subtitle keys may be vanilla's, so its words go over the game's
+    for (const name of Object.keys(entries)) {
+      const s = name.match(/^assets\/([^/]+)\/sounds\.json$/i);
+      if (!s) continue;
+      const lang = parseJson(entries[`assets/${s[1]}/lang/en_us.json`] ?? []) ?? {};
+      captionsOf(parseJson(entries[name]), { ...vanillaLang, ...lang }, s[1], captions);
+    }
 
     for (const entryName of Object.keys(entries).sort((a, b) => a.localeCompare(b))) {
       const m = entryName.match(/^assets\/([^/]+)\/sounds\/(.+)\.ogg$/i);
@@ -591,11 +654,13 @@ export async function buildMcSoundVault({
     const relBase = item.relBase ?? item.relNoExt;
     const words = slugTokens(relBase).join(" ");
     const creditNote = item.credits ? ` · Credits: ${item.credits}` : "";
+    const heard = [...(captions.get(`${item.ns}:${item.relNoExt}`.toLowerCase()) ?? [])];
     sources[name] = {
       title: formatMcTitle(relBase, { stripSingleDigit: !item.family }),
       license: item.license,
       ...(item.url && { url: item.url }),
-      for: `${item.packTitle} ${category} — ${words} (${item.ns}:${item.relNoExt})${creditNote}`,
+      for: `${item.packTitle} ${category} — ${heard.length ? `${heard.join("; ")}; ` : ""}${words} (${item.ns}:${item.relNoExt})${creditNote}`,
+      ...(heard.length && { heard }),
       source: item.source,
       kind: "mc",
       origin: "real",

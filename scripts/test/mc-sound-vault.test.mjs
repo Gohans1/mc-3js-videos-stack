@@ -403,3 +403,81 @@ test("buildMcSoundVault folds an unnumbered take (cricket.ogg beside cricket2.og
     false,
   );
 });
+
+test("buildMcSoundVault writes what the game's subtitles say a sound is into its text, so words search finds a hiss by 'hisses'", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "mc-sound-captions-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "tmp-audio"), { recursive: true });
+  const tone = makeOgg(join(root, "tmp-audio"), "tone.ogg", 440, 0.2);
+
+  const cacheDir = join(root, "external/mc-sound/.cache");
+  mkdirSync(cacheDir, { recursive: true });
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  writeFileSync(
+    join(root, "scripts/vault-assets.json"),
+    JSON.stringify({ minecraft: { version: "26.3", metadata: "http://127.0.0.1:1/unused" } }),
+  );
+  writeFileSync(join(cacheDir, "version-26.3.json"), JSON.stringify({ assetIndex: { id: "34" } }));
+  writeFileSync(join(cacheDir, "asset-index-34.json"), JSON.stringify({ objects: {} }));
+  const clientJar = join(root, "client.jar");
+  writeFileSync(
+    clientJar,
+    zipSync({
+      "assets/minecraft/lang/en_us.json": strToU8(
+        JSON.stringify({ "subtitles.entity.creeper.primed": "Creeper hisses" }),
+      ),
+    }),
+  );
+
+  const external = join(root, "external");
+  mkdirSync(join(external, "packs"), { recursive: true });
+  mkdirSync(join(external, "tools"), { recursive: true });
+  writeFileSync(
+    join(external, "packs/spooky.jar"),
+    zipSync({
+      "assets/spooky/sounds/fuse.ogg": tone,
+      "assets/spooky/sounds/bell.ogg": tone,
+      "assets/spooky/sounds.json": strToU8(
+        JSON.stringify({
+          "creeper.fuse": { subtitle: "subtitles.entity.creeper.primed", sounds: ["fuse"] },
+          "tnt.fuse": { subtitle: "subtitles.spooky.tnt", sounds: [{ name: "spooky:fuse" }] },
+          "bell.toll": {
+            subtitle: "subtitles.spooky.bell",
+            sounds: ["bell", { name: "creeper.fuse", type: "event" }],
+          },
+        }),
+      ),
+      "assets/spooky/lang/en_us.json": strToU8(
+        JSON.stringify({
+          "subtitles.spooky.tnt": "TNT fizzes",
+          "subtitles.spooky.bell": "Bell tolls",
+        }),
+      ),
+    }),
+  );
+  writeFileSync(
+    join(external, "tools/triage_result.json"),
+    JSON.stringify({ "spooky.jar": { verdict: "keep" } }),
+  );
+  writeFileSync(
+    join(external, "packs_index.json"),
+    JSON.stringify({ "spooky.jar": { slug: "spooky", license: { id: "MIT" } } }),
+  );
+
+  await buildMcSoundVault({
+    root,
+    external,
+    mcAssetsDir: join(root, "empty-mc-assets"),
+    clientJar,
+    skipPeaks: true,
+  });
+  const sources = Object.values(
+    JSON.parse(readFileSync(join(external, "mc-sound/SOURCES.json"), "utf8")),
+  );
+  const textOf = (path) => sources.find((s) => s.for.includes(`(${path})`))?.for ?? "";
+  assert.match(textOf("spooky:fuse"), /Creeper hisses/);
+  assert.match(textOf("spooky:fuse"), /TNT fizzes/);
+  assert.match(textOf("spooky:bell"), /Bell tolls/);
+  assert.doesNotMatch(textOf("spooky:bell"), /hisses/);
+  assert.deepEqual(sources.find((s) => s.for.includes("(spooky:bell)"))?.heard, ["Bell tolls"]);
+});
