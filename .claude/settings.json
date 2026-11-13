@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/cli-guard.ts"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
