@@ -1,4 +1,4 @@
-// The creator's notes for the AI about to act on them (Bun counterpart to notes_report.py); HELP below
+// The creator's notes for the AI about to act on them; HELP below
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -9,19 +9,8 @@ import { noteState, noteThread } from "./src/note-state.mjs";
 
 const ROOT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 const posix = (rel) => join(ROOT, rel).replaceAll("\\", "/");
-// Matches Python's :.0f (banker's round half-to-even)
-const pct = (x) => {
-  const v = x * 100,
-    f = Math.floor(v),
-    d = v - f;
-  const r = d > 0.5 ? f + 1 : d < 0.5 ? f : f % 2 === 0 ? f : f + 1;
-  return `${Object.is(r, -0) ? 0 : r}%`;
-};
-const pyRepr = (v) => {
-  if (Array.isArray(v)) return `[${v.map(pyRepr).join(", ")}]`;
-  if (typeof v === "string") return `'${v.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
-  return String(v);
-};
+const pct = (x) => `${Math.round(x * 100) + 0}%`;
+const list = (v) => `[${v.join(", ")}]`;
 
 const loadNotes = () => {
   const file = join(ROOT, "notes/notes.jsonl");
@@ -91,7 +80,7 @@ const filmNow = () => {
 };
 
 const where = (pt, hit) =>
-  `(${pct(pt[0])}, ${pct(pt[1])}) on "${hit?.what ?? "?"}"${hit?.world ? ` world ${pyRepr(hit.world)}` : ""}`;
+  `(${pct(pt[0])}, ${pct(pt[1])}) on "${hit?.what ?? "?"}"${hit?.world ? ` world ${list(hit.world)}` : ""}`;
 
 const drawn = (m) => {
   const hits = m.hits || [],
@@ -113,7 +102,7 @@ const drawn = (m) => {
 
 const oneLine = (n) => {
   const tags = [];
-  if (n.pin) tags.push(`tap ${n.pin.what ?? "None"}`);
+  if (n.pin) tags.push(`tap ${n.pin.what ?? "?"}`);
   if (n.marks?.length)
     tags.push(`drew ${n.marks.length}${n.range ? ` over ${n.range[0]}-${n.range[1]}s` : ""}`);
   if (n.context?.playing) tags.push("while playing");
@@ -126,7 +115,6 @@ const oneLine = (n) => {
   return `#${n.n} ${n.id} ${n.time} shot ${n.shot}${tags.length ? ` [${tags.join(", ")}]` : ""} ${text}`;
 };
 
-const printVal = (v) => (v === null || v === undefined ? "None" : v);
 const STATE_HEAD = { open: "", check: " (WAITS FOR THE CREATOR'S CHECK)", done: " (DONE)" };
 const SCOPE = { film: "this film", all: "every film" };
 const LEARN =
@@ -136,13 +124,13 @@ const toLearn = (n) => n.remember && !(n.learned && n.learned.at >= n.remember.a
 const detail = (n, showCam) => {
   const c = n.context;
   console.log(
-    `\n## #${n.n} ${n.id} ${n.time} frame ${printVal(n.frame)}, shot ${n.shot}: ${n.shotName ?? ""}${STATE_HEAD[noteState(n)]}`,
+    `\n## #${n.n} ${n.id} ${n.time}${n.frame == null ? "" : ` frame ${n.frame},`} shot ${n.shot}${n.shotName ? `: ${n.shotName}` : ""}${STATE_HEAD[noteState(n)]}`,
   );
   console.log(`NOTE: ${n.text}`);
   for (const e of n.edits ?? []) console.log(`earlier wording: ${e.was}`);
   if (n.pin)
     console.log(
-      `tap: ${pct(n.pin.x)} across, ${pct(n.pin.y)} down, on "${printVal(n.pin.what)}"${n.pin.world ? `, world ${pyRepr(n.pin.world)}` : ""}`,
+      `tap: ${pct(n.pin.x)} across, ${pct(n.pin.y)} down, on "${n.pin.what ?? "?"}"${n.pin.world ? `, world ${list(n.pin.world)}` : ""}`,
     );
   else if (n.marks?.length) console.log("tap: none, it was drawn on");
   else console.log("tap: none (note button), about the moment as a whole");
@@ -159,7 +147,7 @@ const detail = (n, showCam) => {
   const suffix = c ? "" : " (today's edit)";
   if (v.word)
     console.log(
-      `word: "${v.word}" at ${printVal(v.wordAt)}s in "...${printVal(v.around)}..." (heard second when written; now: bun run voice:cues)`,
+      `word: "${v.word}" at ${v.wordAt ?? "?"}s in "...${v.around ?? ""}..." (heard second when written; now: bun run voice:cues)`,
     );
   for (const [name, key] of [
     ["before", "before"],
@@ -171,7 +159,7 @@ const detail = (n, showCam) => {
   if (v.silence) console.log(`voice${suffix}: silent here`);
   for (const b of (c || v).beats || []) {
     console.log(
-      `action${suffix}: ${b.id} "${printVal(b.title)}" ${b.at}s +${printVal(b.dur)}s${b.sounds ? `, sounds ${pyRepr(b.sounds)}` : ""}`,
+      `action${suffix}: ${b.id}${b.title ? ` "${b.title}"` : ""} ${b.at}s${b.dur == null ? "" : ` +${b.dur}s`}${b.sounds?.length ? `, sounds ${b.sounds.join(", ")}` : ""}`,
     );
   }
   if (c?.view?.lite)
@@ -194,7 +182,7 @@ const detail = (n, showCam) => {
       `the creator asked you to remember this (${SCOPE[n.remember.scope]}): ${LEARN} bun run note learned ${n.id} "the rule, where"`,
     );
   if (showCam && n.cam)
-    console.log(`camera: ${printVal(n.cam.line)}${n.cam.warn ? ` (${n.cam.warn})` : ""}`);
+    console.log(`camera: ${n.cam.line ?? "?"}${n.cam.warn ? ` (${n.cam.warn})` : ""}`);
   for (const [label, key] of [
     ["seconds around (-2 -1 0 +1)", "strip"],
     ["frame", "img"],
@@ -281,7 +269,7 @@ const shotCount = () => {
 if (shot !== null && !pick.length) {
   const count = shotCount();
   console.log(
-    `no ${values.done ? "" : "open "}notes on shot ${shot}${values.done ? "" : " (--done for fixed ones too)"}${count !== null && shot >= count ? `; the film has shots 0-${count - 1}` : ""}`,
+    `no ${values.done ? "" : "open "}notes on shot ${shot}${values.done ? "" : ` (${notes.filter((n) => n.shot === shot && n.done).length} fixed or done there: --done lists them too)`}${count !== null && shot >= count ? `; the film has shots 0-${count - 1}` : ""}`,
   );
 }
 if (ids.length || shot !== null) {
@@ -293,7 +281,7 @@ if (ids.length || shot !== null) {
     );
 } else {
   console.log(
-    `${pick.length} notes, in the order written. Film now: ${filmNow()}. Detail: bun run notes ID ...\n`,
+    `${pick.length} ${values.done ? "" : "open "}notes of ${notes.length}, in the order written. Film now: ${filmNow()}. Detail: bun run notes ID ...\n`,
   );
   for (const n of written(pick)) console.log(oneLine(n));
   const waiting = notes.filter((n) => noteState(n) === "check");

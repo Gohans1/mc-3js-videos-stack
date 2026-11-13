@@ -1,4 +1,4 @@
-// notes_report.py, what the AI reads before acting: notes come in the order the creator wrote them, since a later note
+// bun run notes, what the AI reads before acting: notes come in the order the creator wrote them, since a later note
 // often builds on or takes back an earlier one, and film order would hide that
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -8,7 +8,6 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const PY_REPORT = join(dirname(fileURLToPath(import.meta.url)), "../notes_report.py");
 const REPORT = join(dirname(fileURLToPath(import.meta.url)), "../notes.mjs");
 const note = (id, t, at, extra = {}) => ({
   id,
@@ -30,8 +29,6 @@ const film = (notes) => {
 };
 const report = (dir, ...args) =>
   execFileSync("bun", [REPORT, ...args], { cwd: dir, encoding: "utf8" });
-const pyReport = (dir, ...args) =>
-  execFileSync("python", [PY_REPORT, ...args], { cwd: dir, encoding: "utf8" });
 const written = [
   note("a", 5, "2026-11-06T10:00:00Z"),
   note("b", 10, "2026-11-06T10:01:00Z"),
@@ -91,7 +88,7 @@ test("the index says how many fixed notes wait for the creator, and lists what t
   assert.match(out, /^\[this film\] #3 c /m);
 });
 
-test("notes.mjs matches notes_report.py across pins, marks, --shot, --done, --cam and worked-out voice/beats", () => {
+test("a note's detail spells out its tap, drawings, the edit around it, its rounds and, with --cam, its camera", () => {
   const rich = [
     note("n1", 4, "2026-11-06T10:00:00Z", {
       shot: 2,
@@ -171,17 +168,24 @@ test("notes.mjs matches notes_report.py across pins, marks, --shot, --done, --ca
       beats: { open_door: { title: "Open door", at: 4.8, dur: 1.0, sounds: ["creak"] } },
     }),
   );
-  for (const args of [
-    [],
-    ["--done"],
-    ["--done", "--shot", "2", "--cam"],
-    ["n2", "n1", "--cam"],
-    ["n3", "--shot", "3"],
-  ]) {
-    assert.equal(
-      report(dir, ...args),
-      pyReport(dir, ...args).replaceAll("\r\n", "\n"),
-      `mismatch for args: ${args.join(" ")}`,
-    );
-  }
+  const one = report(dir, "n1", "--cam");
+  for (const line of [
+    'tap: 25% across, 75% down, on "torch", world [1.5, 2, -3]',
+    'drawn: path 4s (10%, 20%) on "floor" world [0, 0, 0] -> 5s (40%, 60%) on "?"',
+    'drawn: box at 4s: 20-80% across, 30-70% down, middle (50%, 50%) on "door"',
+    'drawn: arrow at 4s: tail (10%, 10%) on "steve", head (90%, 90%) on "lever"',
+    "next (today's edit): Right now",
+    `action (today's edit): open_door "Open door" 4.8s +1s, sounds creak`,
+    "tried: raised light (abc1234)",
+    "camera: { t: 4, p: [0, 2, 5] } (free cam)",
+  ])
+    assert.ok(one.includes(line), `n1 --cam lacks: ${line}\n${one}`);
+  assert.ok(!report(dir, "n1").includes("camera:"), "the camera only with --cam");
+  const two = report(dir, "n2");
+  assert.match(two, /^## #2 n2 00:05\.000 shot 3$/m);
+  assert.ok(two.includes("creator answered: still slow, 20% more"));
+  assert.ok(two.includes("the creator asked you to remember this (every film)"));
+  assert.ok(report(dir, "n3").includes("you asked: iron or wooden door?"));
+  assert.match(report(dir, "--done"), /^3 notes of 3,/);
+  assert.match(report(dir), /^1 open notes of 3,/);
 });

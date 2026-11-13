@@ -5,7 +5,7 @@
 //                                                  takes no fix until the creator reopens it
 //   check | done --creator: again "words"--> open  needs work: the words join the thread, the note's own words stay
 //   any   --creator: text "new words"-->   open    the old words go to edits
-// done stays written beside state for scripts that only know it (notes_report.py, older film scripts): true whenever the note is
+// done stays written beside state for scripts that only know it (older film scripts): true whenever the note is
 // not the AI's to work on. Notes from before states: done true is done, else open.
 export const STATES = ["open", "check", "done"];
 export const noteState = (n) => (STATES.includes(n.state) ? n.state : n.done ? "done" : "open");
