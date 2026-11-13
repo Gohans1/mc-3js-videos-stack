@@ -325,6 +325,14 @@ const audioFiles = (dir, at = "") =>
       return RAW_AUDIO.test(d.name) ? [rel] : [];
     })
     .sort(NATURAL.compare);
+const secondsOf = async (file) => {
+  const { stdout } = await run(
+    "ffprobe",
+    ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
+    { timeout: 30_000, windowsHide: true },
+  );
+  return Number(stdout.trim());
+};
 const pool = async (items, n, work) => {
   let next = 0;
   await Promise.all(
@@ -334,8 +342,10 @@ const pool = async (items, n, work) => {
   );
 };
 
-// The raw packs fetch:sound-raw unpacked, each file filed by the first of its pack's sort rules that matches its path
-// in the pack. A file no rule takes is named, never guessed into a category; a rule with "skip" leaves files out on
+// The raw packs fetch:sound-raw unpacked, each file filed by the first sort rule that matches its name, else its path
+// in the pack (a folder named "Hits & Whooshes" holds both): the pack's own rules, then its source's. A file longer
+// than "maxSeconds" (the rule's, else the source's) is left out.
+// A file no rule takes is named, never guessed into a category; a rule with "skip" leaves files out on
 // purpose. Sounds whose names differ only by a trailing number become one family of takes, unless the rule says
 // "takes": false. A rule's "title" wraps the file's name ("{name} (female voice)")
 async function buildRawPacks({ root, external, vaultSound, sources, log }) {
@@ -351,14 +361,18 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
         log(`${packId}: not downloaded yet (bun run fetch:sound-raw)`);
         continue;
       }
-      const rules = (pack.sort ?? []).map((r) => ({ ...r, re: new RegExp(r.match) }));
+      const rules = [...(pack.sort ?? []), ...(src.sort ?? [])].map((r) => ({
+        ...r,
+        re: new RegExp(r.match),
+      }));
       const files = audioFiles(dir).filter((rel) => !skip?.test(rel));
       const stemOf = (rel) => basename(rel).replace(RAW_AUDIO, "");
       const stems = Map.groupBy(files, stemOf);
-      const unsorted = [],
-        picked = [];
+      const unsorted = [];
+      let picked = [];
       for (const rel of files) {
-        const rule = rules.find((r) => r.re.test(rel));
+        const rule =
+          rules.find((r) => r.re.test(basename(rel))) ?? rules.find((r) => r.re.test(rel));
         if (!rule) unsorted.push(rel);
         if (!rule || rule.skip) continue;
         // "takes": false = the number names a different line ("round_2"), not another take of one sound
@@ -369,11 +383,22 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
         picked.push({
           rel,
           rule,
+          limit: rule.maxSeconds ?? src.maxSeconds,
           name: `${src.prefix}-${pack.key}-${slug(own)}`,
           family: `${src.prefix}-${pack.key}-${slug(rule.takes === false ? own : base)}`,
           title: (rule.title ?? "{name}").replace("{name}", humanize(base)),
         });
       }
+      // A long file is an ambience or many takes in one: not a sound to drop on a cue as it is
+      const long = new Set();
+      await pool(
+        picked.filter((p) => p.limit),
+        6,
+        async (p) => {
+          if (!((await secondsOf(join(dir, p.rel))) <= p.limit)) long.add(p);
+        },
+      );
+      if (long.size) picked = picked.filter((p) => !long.has(p));
       const families = Map.groupBy(picked, (p) => p.family);
       let converted = 0;
       await pool(picked, 6, async (p) => {
@@ -407,6 +432,10 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
       log(
         `${packId}: ${picked.length} sounds in ${families.size} families (${converted} converted)`,
       );
+      if (long.size)
+        log(
+          `${packId}: ${long.size} files longer than its limit left out (maxSeconds in scripts/sound-raw.json)`,
+        );
       if (unsorted.length)
         log(
           `${packId}: ${unsorted.length} files no sort rule takes (add a rule, or one with "skip"): ${unsorted.slice(0, 20).join(", ")}${unsorted.length > 20 ? ", ..." : ""}`,

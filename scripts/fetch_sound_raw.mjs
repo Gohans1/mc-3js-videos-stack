@@ -72,7 +72,6 @@ const findByHand = (dirs, name) => {
 const ARIA2 = [
   "--continue=true",
   "--seed-time=0",
-  "--max-concurrent-downloads=2",
   "--file-allocation=none",
   "--summary-interval=60",
   "--console-log-level=warn",
@@ -164,7 +163,7 @@ export async function fetchSoundRaw({
       }
     }
   }
-  if (torrents.length) await fetchTorrents(torrents, { raw, log, torrentClient, result });
+  if (torrents.length) await fetchTorrents(torrents, { log, torrentClient, result });
   return result;
 }
 
@@ -173,38 +172,46 @@ const pinnedIn = (mark) => {
   return m.btih ?? m.sha256;
 };
 
-// One aria2 run for every torrent pack, each file written to its planned name (index-out). A pack is done when every
-// file has its full length and aria2 left no control file (.aria2) for it, which it keeps until the last piece checks
-async function fetchTorrents(torrents, { raw, log, torrentClient, result }) {
-  const input = join(raw, ".torrents.aria2.txt");
+// One aria2 run per torrent pack, two at a time, each file written to its planned name (index-out); a pack is marked
+// the moment its run ends, so setup:sound files it while the rest download. A pack is done when every file has its
+// full length and aria2 left no control file (.aria2) for it, which it keeps until the last piece checks
+const AT_ONCE = 2;
+async function fetchTorrents(torrents, { log, torrentClient, result }) {
+  log(
+    `Downloading ${torrents.length} torrent packs with aria2c, ${AT_ONCE} at a time (stop any time; a rerun resumes)`,
+  );
+  let next = 0;
+  const one = async () => {
+    while (next < torrents.length)
+      await fetchTorrent(torrents[next++], { log, torrentClient, result });
+  };
+  await Promise.all(Array.from({ length: Math.min(AT_ONCE, torrents.length) }, one));
+}
+
+async function fetchTorrent({ p, dir, file, plan, mark }, { log, torrentClient, result }) {
+  const input = file.replace(/\.torrent$/, ".aria2.txt");
   writeFileSync(
     input,
-    torrents
-      .map(({ file, dir, plan }) =>
-        [file, `  dir=${dir}`, ...plan.map((f) => `  index-out=${f.index}=${f.path}`)].join("\n"),
-      )
-      .join("\n") + "\n",
+    [file, `  dir=${dir}`, ...plan.map((f) => `  index-out=${f.index}=${f.path}`)].join("\n") +
+      "\n",
   );
-  log(`Downloading ${torrents.length} torrent packs with aria2c (stop any time; a rerun resumes)`);
   await torrentClient(input, log);
-  for (const { p, dir, plan, mark } of torrents) {
-    const missing = plan.filter((f) => {
-      const at = join(dir, f.path);
-      return !existsSync(at) || statSync(at).size !== f.length;
-    }).length;
-    const unfinished = existsSync(dir) && readdirSync(dir).some((f) => f.endsWith(".aria2"));
-    if (missing || unfinished) {
-      log(`${p.id}: ${missing || "some"} of ${plan.length} files not finished yet`);
-      result.failed.push(p.id);
-      continue;
-    }
-    writeFileSync(
-      mark,
-      JSON.stringify({ btih: p.btih, files: plan.length, from: p.page }, null, 2) + "\n",
-    );
-    result.unpacked.push(p.id);
-    log(`${p.id}: ${plan.length} files`);
+  const missing = plan.filter((f) => {
+    const at = join(dir, f.path);
+    return !existsSync(at) || statSync(at).size !== f.length;
+  }).length;
+  const unfinished = existsSync(dir) && readdirSync(dir).some((f) => f.endsWith(".aria2"));
+  if (missing || unfinished) {
+    log(`${p.id}: ${missing || "some"} of ${plan.length} files not finished yet`);
+    result.failed.push(p.id);
+    return;
   }
+  writeFileSync(
+    mark,
+    JSON.stringify({ btih: p.btih, files: plan.length, from: p.page }, null, 2) + "\n",
+  );
+  result.unpacked.push(p.id);
+  log(`${p.id}: ${plan.length} files`);
 }
 
 if (import.meta.main) {

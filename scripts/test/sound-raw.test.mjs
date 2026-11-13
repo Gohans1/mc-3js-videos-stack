@@ -225,13 +225,56 @@ test("a torrent pack waits for its .torrent, refuses another torrent, and is don
   assert.equal(runs.length, 1, "a finished pack is not handed to the client again");
 });
 
+test("a torrent pack is marked done as soon as its own download ends, while another still runs", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "sound-raw-torrents-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const external = join(root, "ext"),
+    downloads = join(root, "downloads"),
+    raw = join(external, "sound-raw/sonniss");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(downloads);
+  const packs = ["gdc-2015", "gdc-2016"].map((id) => {
+    const t = torrentOf([[id, "hit.wav"]]);
+    writeFileSync(join(downloads, `${id}.torrent`), t.bytes);
+    return { id, title: id, page: "https://sonniss.com/", torrent: `${id}.torrent`, btih: t.btih };
+  });
+  writeFileSync(
+    join(root, "scripts/sound-raw.json"),
+    JSON.stringify({ sources: { sonniss: { licence: "Sonniss GDC", packs } } }),
+  );
+  const runs = [];
+  let early = false;
+  const r = await fetchSoundRaw({
+    root,
+    external,
+    downloads,
+    log: () => {},
+    torrentClient: async (input) => {
+      const text = readFileSync(input, "utf8");
+      runs.push(text);
+      const id = text.includes("gdc-2016") ? "gdc-2016" : "gdc-2015";
+      if (id === "gdc-2016")
+        for (let i = 0; i < 40 && !early; i++) {
+          early = existsSync(join(raw, "gdc-2015/.pack.json"));
+          await new Promise((done) => setTimeout(done, 25));
+        }
+      mkdirSync(join(raw, id, id), { recursive: true });
+      writeFileSync(join(raw, id, id, "hit.wav"), "x");
+      return 0;
+    },
+  });
+  assert.deepEqual(new Set(r.unpacked), new Set(["gdc-2015", "gdc-2016"]));
+  assert.equal(runs.length, 2, "one client run per pack");
+  assert.equal(early, true, "2015 was marked while 2016 still ran");
+});
+
 // An .ogg tone at the given peak level (dBFS), made with ffmpeg
-const tone = (file, db, hz = 660) => {
+const tone = (file, db, hz = 660, seconds = 0.2) => {
   mkdirSync(join(file, ".."), { recursive: true });
   const r = spawnSync(
     "ffmpeg",
     ["-v", "error", "-y", "-f", "lavfi", "-i"].concat([
-      `aevalsrc=${10 ** (db / 20)}*sin(2*PI*${hz}*t):s=44100:d=0.2`,
+      `aevalsrc=${10 ** (db / 20)}*sin(2*PI*${hz}*t):s=44100:d=${seconds}`,
       "-c:a",
       "libvorbis",
       file,
@@ -249,7 +292,7 @@ async function packFixture(t, sort) {
     pack = join(external, "sound-raw/kenney/ui");
   mkdirSync(join(root, "scripts"), { recursive: true });
   writeFileSync(join(root, "scripts/sfx-catalogue.json"), JSON.stringify({ sounds: [] }));
-  const write = (rules) =>
+  const write = (rules, source = {}) =>
     writeFileSync(
       join(root, "scripts/sound-raw.json"),
       JSON.stringify({
@@ -258,6 +301,7 @@ async function packFixture(t, sort) {
             licence: "CC0 1.0",
             prefix: "ken",
             skip: "(^|/)Preview[^/]*$",
+            ...source,
             packs: [
               { id: "ui", key: "ui", title: "UI", page: "https://kenney.nl/ui", sort: rules },
             ],
@@ -354,6 +398,61 @@ test("a rule whose numbers name different lines keeps each file its own sound", 
       ["Go · female", undefined],
       ["Go · male", undefined],
     ],
+  );
+});
+
+test("a source's sort rules file every pack's sounds its own rules leave", async (t) => {
+  const f = await packFixture(t, RULES);
+  f.write(RULES, {
+    sort: [
+      { match: "/click_", category: "foley", for: "never: the pack's rule comes first" },
+      { match: "/mystery_", category: "foley", for: "a mystery" },
+    ],
+  });
+  await f.build();
+  const s = f.sources();
+  assert.equal(existsSync(join(f.local, "sound/sfx/clicks/ken-ui-click-001.wav")), true);
+  assert.equal(s["ken-ui-click-001"].for, "a UI click");
+  assert.equal(s["ken-ui-mystery-001"].for, "a mystery");
+  assert.equal(existsSync(join(f.local, "sound/sfx/foley/ken-ui-mystery-001.wav")), true);
+});
+
+test("a file's own name picks its rule before its folder's name does", async (t) => {
+  const f = await packFixture(t, RULES);
+  tone(join(f.pack, "Hits & Whooshes/metal slam_01.ogg"), -3);
+  tone(join(f.pack, "Hits & Whooshes/thing_01.ogg"), -3);
+  f.write([
+    ...RULES,
+    { match: "(?i:whoosh)", category: "transitions", for: "a whoosh" },
+    { match: "(?i:slam)", category: "impacts", for: "a slam" },
+  ]);
+  await f.build();
+  const s = f.sources();
+  assert.equal(s["ken-ui-metal-slam-01"]?.for, "a slam");
+  assert.equal(s["ken-ui-thing-01"]?.for, "a whoosh");
+});
+
+test("a sound longer than its source's maxSeconds is left out and counted, unless its rule allows it", async (t) => {
+  const f = await packFixture(t, RULES);
+  tone(join(f.pack, "Audio/drone_001.ogg"), -3, 110, 3);
+  tone(join(f.pack, "Audio/rumble_001.ogg"), -3, 80, 3);
+  f.write(
+    [
+      ...RULES,
+      { match: "/drone_", category: "sci-fi", for: "a drone" },
+      { match: "/rumble_", category: "impacts", maxSeconds: 5, for: "a rumble" },
+    ],
+    { maxSeconds: 1 },
+  );
+  await f.build();
+  const s = f.sources();
+  assert.equal(s["ken-ui-drone-001"], undefined);
+  assert.equal(existsSync(join(f.local, "sound/sfx/sci-fi/ken-ui-drone-001.wav")), false);
+  assert.equal(s["ken-ui-rumble-001"]?.for, "a rumble");
+  assert.equal(s["ken-ui-click-001"]?.for, "a UI click");
+  assert.ok(
+    f.lines.some((l) => /kenney\/ui: 1 files? longer than its limit left out/.test(l)),
+    f.lines.join("\n"),
   );
 });
 
