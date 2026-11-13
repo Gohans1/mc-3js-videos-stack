@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -96,26 +96,36 @@ print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.
   assert.ok(Math.abs(hit.i + 14 + hit.held) < 0.3, `short of -14 by what it says: ${hit.i}`);
   assert.match(
     hit.report.join("\n"),
-    /stopped \d+\.\d dB short so its true peak stays under -1\.5 dBTP; louder: raise audio\.json drive, try \+\d+ dB/,
+    /stopped \d+\.\d dB short so its true peak stays under -1\.5 dBTP/,
   );
   assert.doesNotMatch(hit.report.join("\n"), /lufs -14 is what it plays at/);
-  // the same limit bun run check warns at, so the two never contradict
+
+  // the lever said as the value to write, never past the +12 bun run check warns at (a probe read "+10" as "set to 10")
+  const advice = (held, drive) => {
+    const r = spawnSync(
+      "python",
+      [
+        "-c",
+        `import sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import loudness_report; print("\\n".join(loudness_report(sys.argv[1], -14, ${held}, ${drive})))`,
+        even.replace(/\.wav$/, "_out.wav"),
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout;
+  };
+  assert.match(advice(1.5, 0), /louder: set audio\.json drive to 5 \(now 0\)/);
   assert.match(
-    hit.report.join("\n"),
-    /past \+12 the hits flatten into the bed \(bun run check warns\)/,
+    advice(3.1, 9),
+    /set audio\.json drive to 12 \(now 9\), the most before the hits flatten/,
+  );
+  // on sealed-room the narration 3 dB up bought 0.2 LU (its own limiter holds it): only drive closes the gap to the peaks
+  assert.match(
+    advice(2, 12),
+    /drive is already \+12, past which bun run check warns the hits flatten: louder means more drive anyway \(listen whether the hits still land\), or leaving it/,
   );
   // within YouTube's 1 LU the loudness is ready: no lever to pull
-  const close = spawnSync(
-    "python",
-    [
-      "-c",
-      `import sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import loudness_report; print("\\n".join(loudness_report(sys.argv[1], -14, 0.6)))`,
-      even.replace(/\.wav$/, "_out.wav"),
-    ],
-    { encoding: "utf8" },
-  );
-  assert.equal(close.status, 0, close.stderr);
-  assert.doesNotMatch(close.stdout, /stopped/);
+  assert.doesNotMatch(advice(0.6, 0), /stopped/);
 });
 
 test("listen flags a sound effect that barely rises over the bed it lands on, and not one that cuts through", (t) => {
@@ -266,4 +276,40 @@ test("a sound that cancels itself when a phone plays the mix in one speaker is n
   );
   assert.ok(got.stretches[0].loss > 6);
   assert.ok(Math.abs(got.voice) < 0.5, `the voice keeps its level: ${got.voice}`);
+});
+
+// a probe's copy lost one row's gain: both crashed in a Python traceback, though bun run check names the fault
+test("a row that lacks what the mix reads stops mix and listen with the command that names it, no traceback", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "unfit-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ end: 2, voice: { warp: [], lines: [] } }),
+  );
+  writeFileSync(join(dir, "src/scene.ts"), "");
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [{ name: "tone", from: 0, to: 1, fadeIn: 0, fadeOut: 0 }],
+      sfx: [],
+      voice: false,
+      lufs: -14,
+    }),
+  );
+  tone(join(dir, "sound/sfx/tone.wav"), "0.1*sin(2*PI*440*t)");
+  for (const script of ["mix.py", "listen.py"]) {
+    const r = spawnSync("python", [join(SOUND, script)], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 120000,
+    });
+    assert.equal(r.status, 1, `${script}: ${r.stdout}${r.stderr}`);
+    assert.match(
+      r.stderr,
+      /src\/timeline\/audio\.json: beds\[0\] has no gain: bun run check names every fault/,
+    );
+    assert.doesNotMatch(r.stderr, /Traceback/);
+  }
 });

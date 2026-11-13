@@ -69,14 +69,17 @@ test("a heard second is read as notes print it, mm:ss, or with an s after it, an
     secondArg("AT", "1:05"),
     secondArg("AT", "01:05.250"),
     secondArg("AT", "65s"),
-  ]).toEqual([65, 65, 65.25, 65]);
+    secondArg("AT", ".5"),
+  ]).toEqual([65, 65, 65.25, 65, 0.5]);
   const r = spawnSync(
     process.execPath,
     ["-e", `const { secondArg } = await import(${JSON.stringify(cli)}); secondArg("AT", "1:75")`],
     { encoding: "utf8" },
   );
   expect(r.status).toBe(2);
-  expect(r.stderr).toContain('AT takes a heard second (65, 1:05 or 01:05.250), got "1:75"');
+  expect(r.stderr).toContain(
+    'AT takes a heard second (65, 1:05 or 01:05.250), got "1:75": a minute holds 0-59 s, did you mean 2:15?',
+  );
 });
 
 test("bun run studio help prints the help though the script put the port first, and starts no studio", () => {

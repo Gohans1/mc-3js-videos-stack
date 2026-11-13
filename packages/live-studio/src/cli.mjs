@@ -74,11 +74,18 @@ export const numberArg = (name, text, { min = -Infinity, max = Infinity, int = f
 // A heard second as notes, a draft's strip and bun run at print it (65, 1:05, 01:05.250, 65s), or exit 2 saying so.
 // scripts/review/sheet.py and scripts/sound/listen.py read it the same way (seconds_arg)
 export const secondArg = (name, text, { min = 0, max = Infinity } = {}) => {
-  const m = /^(?:(\d+):([0-5]?\d(?:\.\d+)?)|(\d+(?:\.\d+)?)s?)$/.exec(String(text ?? "").trim());
+  const s = String(text ?? "").trim();
+  const m = /^(?:(\d+):([0-5]?\d(?:\.\d+)?)|(\d*\.?\d+)s?)$/.exec(s);
   const t = m ? (m[3] !== undefined ? +m[3] : +m[1] * 60 + +m[2]) : NaN;
   if (!(t >= min && t <= max)) {
+    // 1:75 is a minute and 75 s: say the time it likely meant
+    const over = /^(\d+):(\d+(?:\.\d+)?)$/.exec(s);
+    const meant =
+      over && +over[2] >= 60
+        ? `: a minute holds 0-59 s, did you mean ${Math.floor((+over[1] * 60 + +over[2]) / 60)}:${String(+((+over[1] * 60 + +over[2]) % 60).toFixed(3)).padStart(2, "0")}?`
+        : "";
     console.error(
-      `${name} takes a heard second (65, 1:05 or 01:05.250)${min > 0 ? ` from ${min}` : ""}${max < Infinity ? ` to ${max}` : ""}, got ${JSON.stringify(text ?? "")}`,
+      `${name} takes a heard second (65, 1:05 or 01:05.250)${min > 0 ? ` from ${min}` : ""}${max < Infinity ? ` to ${max}` : ""}, got ${JSON.stringify(text ?? "")}${meant}`,
     );
     process.exit(2);
   }

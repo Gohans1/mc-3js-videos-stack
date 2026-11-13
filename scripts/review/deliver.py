@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sound"))
 from listen import YOUTUBE, loudness  # noqa: E402
+from seconds import SAY, heard_second  # noqa: E402  (listen puts scripts/ on the path)
 
 USAGE = "bun run deliver [<video>] [--youtube [<from>-<to>]] (--help for more)"
 SHORTS_LONGEST = 180
@@ -269,15 +270,15 @@ def main(args):
         if a == "--youtube":
             preview = True
             nxt = args[i + 1] if i + 1 < len(args) else ""
-            m = re.fullmatch(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)", nxt)
-            if m:
-                span = (float(m.group(1)), float(m.group(2)))
+            ends = [heard_second(x) for x in nxt.split("-")] if nxt.count("-") == 1 else []
+            if len(ends) == 2 and None not in ends:
+                span = tuple(ends)
                 if span[0] >= span[1]:
                     print(f"--youtube {nxt}: the first second must come before the second one, like --youtube 9-15", file=sys.stderr)
                     return 2
                 i += 1
             elif nxt and not nxt.startswith("-") and not nxt.lower().endswith((".mp4", ".mov", ".mkv", ".webm")):
-                print(f"--youtube takes seconds as <from>-<to>, plain numbers, like --youtube 9-15; got {nxt}", file=sys.stderr)
+                print(f"--youtube takes heard seconds as <from>-<to> ({SAY} each), like --youtube 9-15; got {nxt}", file=sys.stderr)
                 return 2
         elif a.startswith("-"):
             print(f"unknown option {a}: {USAGE}", file=sys.stderr)
@@ -296,7 +297,7 @@ def main(args):
         print(f"{video} does not exist"
               + (f"; videos here: {', '.join(here)}" if named and here else
                  ": bun run render final, then bun run mix renders/final_video.mp4 makes renders/final.mp4"), file=sys.stderr)
-        return 1
+        return 2
     if not shutil.which("ffprobe"):
         print("no ffprobe on PATH: INSTALL.md says how to set up ffmpeg", file=sys.stderr)
         return 1

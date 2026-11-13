@@ -28,7 +28,7 @@ A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` pu
 
 The mix goes through `drive` dB into a limiter, then one linear gain brings it to `lufs` (-14), or only as far as its true peak stays under -1.5 dBTP (room for the AAC encode). Never a dynamic loudness pass: it lifts every quiet stretch, room tone up to the voice (AES TD1004).
 
-When mix says it stopped short, the lever is `drive`: the limiter takes the peaks and each dB of drive buys about a third of a dB. Past +12 the hits flatten into the bed, so `bun run check` warns; listen for them. A film 2 LU under -14 only plays a little quieter on YouTube.
+When mix says it stopped short, it names the `drive` value to set: the limiter takes the peaks and each dB of drive buys a third to a half of one. Raising the narration barely helps, its own limiter holds it. Past +12 the hits flatten into the bed, so `bun run check` warns; listen whether they still land. A film 2 LU under -14 only plays a little quieter on YouTube.
 
 ## Targets
 

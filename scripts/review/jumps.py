@@ -58,11 +58,14 @@ try:
 except ValueError:
     print(f"START takes the film second the video starts at, 0 or more, got {os.environ['START']!r}", file=sys.stderr)
     raise SystemExit(2)
+# nothing done on a path that is no video: exit 2, as every wrong word
 if Path(video).is_dir():
-    raise SystemExit(f"{video} is a folder, not a video: give it a render's mp4, as renders/draft_video.mp4")
+    print(f"{video} is a folder, not a video: give it a render's mp4, as renders/draft_video.mp4", file=sys.stderr)
+    raise SystemExit(2)
 if not Path(video).is_file():
     videos = ", ".join(sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "renders").rglob("*.mp4"))[:8]) or "none yet"
-    raise SystemExit(f"no {video} (the videos here: {videos}); a new one: bun run render clip")
+    print(f"no {video} (the videos here: {videos}); a new one: bun run render clip", file=sys.stderr)
+    raise SystemExit(2)
 # ffprobe reads a picture as a one-frame video stream (image2, png_pipe, ...)
 fmt = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_type:format=format_name", "-of", "csv=p=0", video], capture_output=True, text=True).stdout.split()
 if "video" not in fmt or any(f.startswith("image2") or f.endswith("_pipe") for f in fmt):

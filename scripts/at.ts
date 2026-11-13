@@ -299,7 +299,7 @@ if (isMain) {
   } else if (/^\d+,\d+$/.test(arg)) {
     console.error(`${arg}: seconds take a dot; did you mean bun run at ${arg.replace(",", ".")}?`);
     process.exit(2);
-  } else if (/^\d/.test(arg)) t = secondArg("bun run at", arg);
+  } else if (/^\.?\d/.test(arg)) t = secondArg("bun run at", arg);
   else {
     // a note: #N or its id
     const n = noteMoment(film, arg);

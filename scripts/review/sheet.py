@@ -20,6 +20,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from seconds import heard_second  # noqa: E402
+
 R = Path.cwd() / "renders"  # run from the film folder
 args = sys.argv[1:]
 if args[:1] in (["-h"], ["--help"], ["help"]):
@@ -87,12 +90,6 @@ def say_if_stale(video):
                        capture_output=True, text=True, timeout=60)
     if r.stdout.strip():
         print(f"STALE: {r.stdout.strip()}")
-
-
-def heard_second(text):
-    """65, 1:05, 01:05.250 or 65s as a float, else None: live-studio src/cli.mjs secondArg's rule (listen.py has the same)"""
-    m = re.fullmatch(r"(?:(\d+):([0-5]?\d(?:\.\d+)?)|(\d+(?:\.\d+)?)s?)", text.strip())
-    return None if not m else float(m[3]) if m[3] is not None else int(m[1]) * 60 + float(m[2])
 
 
 def usage(why, code=2):

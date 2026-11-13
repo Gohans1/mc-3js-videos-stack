@@ -21,7 +21,7 @@ import { warp } from "./src/warp.mjs";
 
 const HELP = `Renders of the film, run inside it: draft stills, the film as video, its captions, the final for upload.
   bun run render all          stills and clip
-  bun run render stills       stills only, to renders/still_<s>s.jpg
+  bun run render stills       stills only, to renders/still_<s>s.jpg (the last run's stills are cleared first)
   bun run render clip         the film as 30 s H.264 chunks in renders/chunks/, joined into renders/draft_video.mp4
   bun run render captions     renders/draft_video.srt alone, in a second
   bun run render final        the film for upload, only when the creator asks for it (a 30 s chunk at 16 sub-frames took
@@ -291,6 +291,10 @@ if (!existsSync(CHROME)) {
   process.exit(1);
 }
 const stillsWritten = [];
+// bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
+if (at.length && existsSync(RENDERS))
+  for (const f of readdirSync(RENDERS))
+    if (/^still_.*\.jpg$/.test(f)) rmSync(join(RENDERS, f), { force: true });
 const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);

@@ -94,6 +94,14 @@ test("a picture with no soundtrack is sent to the mix that puts one on it", (t) 
 test("a wrong word or a missing file stops before any work, saying what it takes", () => {
   assert.equal(deliver("--nope").status, 2);
   const r = deliver(join(tmpdir(), "no-such-video.mp4"));
-  assert.equal(r.status, 1);
+  // nothing was done, as sheet, framecheck and jumps say it: exit 2 (exit 1 is a film with something to fix)
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /no-such-video\.mp4.*bun run mix/);
+});
+
+test("--youtube reads its seconds as notes print them", () => {
+  // a backwards span is refused on the seconds themselves: 0:05 and 0:02 were read, not turned away as "plain numbers"
+  const r = deliver(join(tmpdir(), "any.mp4"), "--youtube", "0:05-0:02");
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--youtube 0:05-0:02: the first second must come before the second one/);
 });

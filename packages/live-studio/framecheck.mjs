@@ -1,6 +1,6 @@
 // The encoded draft's picture faults; HELP below says how to run it
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { meter } from "./checks/frames.mjs";
@@ -13,7 +13,7 @@ flashes, jumps away from cuts, shimmering, frozen stretches (checks/frames.mjs).
   bun run framecheck renders/chunks/c02.mp4  any video of the film; a chunk starts at its film second by itself (c02: 60 s),
                                              START=60 says it for any other video
 Prints the faults and writes renders/frames_<KIND>_<s>.jpg for each (up to 12): the frame before, the frame, the frame
-after. Cuts come from renders/cuts.json, which every bun run render clip writes, so a cut is never a JUMP. Render without LIST=1 for
+after (the last run's are cleared first). Cuts come from renders/cuts.json, which every bun run render clip writes, so a cut is never a JUMP. Render without LIST=1 for
 this check (the list changes the picture). Only the picture is measured, never the draft's strip under it.`;
 const [videoArg] = cliArgs(HELP, [], 1);
 envTypos(["START", "LIVE_PROJECT"]);
@@ -33,7 +33,7 @@ if (!existsSync(video)) {
   console.error(
     `no ${videoArg ?? "renders/draft_video.mp4"} (the videos here: ${videos.join(", ") || "none yet"}); a new one: bun run render clip`,
   );
-  process.exit(1);
+  process.exit(2);
 }
 
 const probe = spawnSync(
@@ -139,6 +139,9 @@ for (const l of lines)
       (_, k, a, b) => `${k}${film(+a)}${b ? `-${film(+b)}` : ""}`,
     ),
   );
+// frames of faults since fixed would read as faults still there
+for (const f of readdirSync(RENDERS))
+  if (/^frames_.*\.jpg$/.test(f)) rmSync(join(RENDERS, f), { force: true });
 for (const x of faults.slice(0, 12)) {
   const name = `frames_${x.kind}_${film(x.t)}.jpg`;
   // tile packs 3 frames into one picture and -frames:v counts pictures: 3 kept the third, frames 6-8 after the seek

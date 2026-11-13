@@ -22,7 +22,7 @@ bun run skills get core --ref sound   # one area in depth, by reference name
 
 ## How the CLI talks
 
-- Every error says how to fix it. Exit 2: a wrong word, flag or second, and nothing was done. Exit 1: the film has something to fix.
+- Every error says how to fix it. Exit 2: nothing was done (a wrong word, flag or second, a missing file, a note whose state refuses it). Exit 1: the film has something to fix.
 - Output ends with a `next:` line. Run that instead of guessing.
 - Missing data is named with the command that makes it (no video yet: `bun run render clip`).
 - `check`, `at` and `voice:cues` take `--json`.

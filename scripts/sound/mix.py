@@ -235,6 +235,21 @@ def as_option(e, name, gain=1.0):
     return out
 
 
+def unfit():
+    """The first row missing a field every row of its list must have (the ones the mix reads), said as bun run check would
+    place it; None when all rows have them. bun run mix and listen stop on it before any work, check names every fault."""
+    need = {"beds": ("name", "from", "to", "gain", "fadeIn", "fadeOut"), "sfx": ("name", "at", "gain")}
+    for kind, keys in need.items():
+        rows = A.get(kind)
+        if not isinstance(rows, list):
+            return f"src/timeline/audio.json: no {kind} list: bun run check names every fault"
+        for i, row in enumerate(rows):
+            gone = next((k for k in keys if not isinstance(row, dict) or row.get(k) is None), None)
+            if gone:
+                return f"src/timeline/audio.json: {kind}[{i}] has no {gone}: bun run check names every fault and where"
+    return None
+
+
 def chosen(e):
     """None when the studio's Tắt was picked (set "off"): the sound is left out of the mix."""
     c = CHOICES_MAP.get(e["name"]) or {}
@@ -484,12 +499,15 @@ if __name__ == "__main__":
         else:
             studio(Path(sys.argv[2]))
         raise SystemExit
+    if why := unfit():
+        print(why, file=sys.stderr)
+        raise SystemExit(1)
     raw = _assert_in_root(ROOT / "sound/mix_raw.wav", "Mix raw output")
     build(raw, [c for b in A["beds"] if (c := chosen(b))], [c for s in A["sfx"] if (c := chosen(s))])
     out = _assert_in_root(ROOT / "sound/mix.wav", "Mix output")
     from listen import level, loudness_report
     held = level(raw, out, float(A["lufs"]))
-    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]), held)))
+    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]), held, float(A.get("drive", 0)))))
     if len(sys.argv) > 1:
         # the final (bun run render final) goes out as the upload: AAC at YouTube's 384 kbps for stereo, moov up front, no edit list
         final = Path(sys.argv[1]).name == "final_video.mp4"

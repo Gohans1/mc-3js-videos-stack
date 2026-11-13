@@ -143,7 +143,7 @@ export function AudioMeter() {
   // more than YouTube's 1 LU short: the same line bun run mix prints, so the creator and the AI see one lever
   const under = loudness && loudness.held > 1;
   const about = loudness
-    ? `The final render moves the whole film by ${signed(loudness.gain)} dB, from ${loudness.before.toFixed(1)} to ${(loudness.before + loudness.gain).toFixed(1)} LUFS, and these numbers already include that. ${under ? `That is ${loudness.held.toFixed(1)} dB short of ${loudness.target}: more would push its loudest peak over −1.5 dBTP. Louder: raise "drive" in audio.json; its limiter takes the peaks and each dB of drive buys about a third of a dB.` : `Its loudest peak is then ${signed(loudness.truePeak)} dBTP.`}`
+    ? `The final render moves the whole film by ${signed(loudness.gain)} dB, from ${loudness.before.toFixed(1)} to ${(loudness.before + loudness.gain).toFixed(1)} LUFS, and these numbers already include that. ${under ? `That is ${loudness.held.toFixed(1)} dB short of ${loudness.target}: more would push its loudest peak over −1.5 dBTP. Louder: raise "drive" in audio.json (bun run mix names the value); its limiter takes the peaks and each dB buys a third to a half of one, and past +12 the hits flatten.` : `Its loudest peak is then ${signed(loudness.truePeak)} dBTP.`}`
     : live
       ? "Measuring the film's loudness…"
       : "The page plays this film's last mix, before the final loudness pass, so these are the page's levels, not the video's.";

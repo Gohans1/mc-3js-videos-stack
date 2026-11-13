@@ -24,6 +24,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from seconds import heard_second  # noqa: E402
+
 GOOD, LOST = 15.0, 8.0  # LU of voice over the rest: every word kept / words lost
 FLOOR = -120.0
 
@@ -57,12 +60,6 @@ def loudness(media):
 
 # The mix's true-peak ceiling before the AAC encode: AES TD1008 asks -1 dBTP at a lossy codec's input, and AAC overshoots
 # more at lower rates (a 192 kbps draft rose 1.4 dB)
-def heard_second(text):
-    """65, 1:05, 01:05.250 or 65s as a float, else None: live-studio src/cli.mjs secondArg's rule (sheet.py has the same)"""
-    m = re.fullmatch(r"(?:(\d+):([0-5]?\d(?:\.\d+)?)|(\d+(?:\.\d+)?)s?)", text.strip())
-    return None if not m else float(m[3]) if m[3] is not None else int(m[1]) * 60 + float(m[2])
-
-
 CEILING = -1.5
 
 
@@ -77,17 +74,24 @@ def level(raw, out, target, ceiling=CEILING):
     return round(max(0.0, want - gain), 1)
 
 
-def loudness_report(wav, target, held=0.0):
+DRIVE_MAX = 12  # live-studio check.mjs warns past it: every hit flattened into the bed
+
+
+def loudness_report(wav, target, held=0.0, drive=0.0):
     """The finished mix as an upload is judged (ffmpeg ebur128, true peak 4x oversampled): what bun run mix prints last.
-    held: what level() stopped short of the target to keep the true peak under the ceiling."""
+    held: what level() stopped short of the target to keep the true peak under the ceiling; drive: audio.json's."""
     i, lra, tp = loudness(wav)
     out = [f"{wav}: {i:.1f} LUFS integrated, true peak {tp:.1f} dBTP, loudness range {lra:.1f} LU"]
     short = held > 1
     if short:
-        # on sealed-room +4 dB of drive bought +1.6 LU and +3 bought +1.0: the limiter gives back about a third
-        out.append(f"  stopped {held:.1f} dB short so its true peak stays under {CEILING:g} dBTP; louder: raise audio.json drive, "
-                   f"try +{math.ceil(3 * held)} dB (its limiter takes the peaks and returns about a third of a dB per dB; past +12 the "
-                   "hits flatten into the bed (bun run check warns): listen for them), then bun run mix again")
+        # on sealed-room each dB of drive bought 0.3-0.5 LU (9->13 +1.6, 13->16 +1.0, 9->10 +0.5): about a third, rounded up
+        want = min(DRIVE_MAX, drive + math.ceil(3 * held))
+        # sealed-room at +12: the narration 3 dB up bought 0.2 LU (its own limiter holds it); only drive closes the peak gap
+        lever = (f"drive is already +{drive:g}, past which bun run check warns the hits flatten: louder means more drive anyway "
+                 "(listen whether the hits still land), or leaving it" if drive >= DRIVE_MAX else
+                 f"set audio.json drive to {want:g} (now {drive:g}){', the most before the hits flatten' if want == DRIVE_MAX else ''}; "
+                 "its limiter takes the peaks, each dB buying a third to a half of one; then bun run mix again")
+        out.append(f"  stopped {held:.1f} dB short so its true peak stays under {CEILING:g} dBTP; louder: {lever}")
     elif abs(i - target) > 1:
         out.append(f"  {abs(i - target):.1f} LU {'over' if i > target else 'under'} audio.json lufs ({target:g})")
     if i > YOUTUBE + 1:
@@ -357,6 +361,9 @@ def main(args):
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent))
             import mix  # the film's heard length, so a wrong --at is refused before the stems are rendered
+            if why := mix.unfit():
+                print(why, file=sys.stderr)
+                return 1
             if at is not None and not 0 <= at <= mix.END:
                 print(f"--at {at:g} is outside the film: it is {mix.END:.2f} s long (heard)", file=sys.stderr)
                 return 2

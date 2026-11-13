@@ -13,13 +13,18 @@ const project = process.env.LIVE_PROJECT ?? process.cwd();
 const [cmd, key, ...words] = cliArgs(HELP, null);
 needFilm(project);
 const what = words.join(" ").trim();
+// where the change went (note-cli.mjs sendChange): through the open studio, or straight into the file with none running
+const HOW = {
+  studio: "sent through the running studio",
+  file: "written to notes/notes.jsonl, no studio running",
+};
 const DO = {
   done: async (id) =>
-    `${id} waits for the creator's check (${await markDone(project, id, what)}). Other open notes: bun run notes`,
+    `${id} waits for the creator's check (${HOW[await markDone(project, id, what)]}). Other open notes: bun run notes`,
   ask: async (id) =>
-    `${id}: your question waits for the creator's answer (${await markDone(project, id, what, true)}); it comes back in bun run notes with it. Other open notes: bun run notes`,
+    `${id}: your question waits for the creator's answer (${HOW[await markDone(project, id, what, true)]}); it comes back in bun run notes with it. Other open notes: bun run notes`,
   learned: async (id) =>
-    `${id}: kept as learned (${await sendChange(project, id, { learned: { what } })}); the creator sees it on the note. bun run notes`,
+    `${id}: kept as learned (${HOW[await sendChange(project, id, { learned: { what } })]}); the creator sees it on the note. bun run notes`,
 };
 const ARG = { done: "what changed", ask: "your question", learned: "the rule, where you kept it" };
 if (DO[cmd] && key && what) {
@@ -33,8 +38,9 @@ if (DO[cmd] && key && what) {
   try {
     console.log(await DO[cmd](id));
   } catch (e) {
+    // the note's state refused it (note-state.mjs): nothing was done, as with a wrong word
     console.error(`${e.message}. The notes yours to answer: bun run notes`);
-    process.exit(1);
+    process.exit(2);
   }
 } else {
   const why = !DO[cmd]
