@@ -51,7 +51,8 @@ Nothing is written outside the film. Options are environment variables:
   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
                              between two HEARD seconds as AT takes them, not the scene seconds of src/timeline rows
                              (bun run at <s> converts and names the shot; the result says which shots it spans):
-                             motion  speed graph, onion skin + speed-coloured path, pops, dead stops (render/motion.ts)
+                             motion  speed graph, onion skin + speed-coloured path, pops, dead stops (render/motion.ts);
+                                     cam also: turn and zoom in °/s, a frame width in how many seconds (7-second rule)
                              seen    how much of the frame it fills, hidden behind what, cut off, too dark (render/seen.ts)
                              touch   sinking into things, hanging just off them (render/touch.ts): for one shot or move in
                                      question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)

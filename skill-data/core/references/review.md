@@ -23,7 +23,8 @@ bun run deliver                              # the upload against YouTube's spec
 `CHECK` runs a built-in check between two heard seconds and writes charts to `renders/`:
 
 ```bash
-CHECK=motion:cam,40,48 bun run render stills     # speed graph and onion skin: peaks, pops, dead stops
+CHECK=motion:cam,40,48 bun run render stills     # speed graph, peaks, pops, dead stops; for cam also turn and zoom in °/s against the 7-second panning rule
+CHECK=motion:handR,40,48 bun run render stills   # the same for a bone, with an onion skin of the move
 CHECK=seen:Steve,40,48 bun run render stills     # frame share, hidden behind what, cut off, too dark
 CHECK=touch:handR,81,83 bun run render stills    # sinking into things, hanging just off them (one shot, not a whole film)
 ```

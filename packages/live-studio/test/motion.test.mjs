@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { measure, report } from "../checks/motion.mjs";
+import { measure, report, turnReport, turns } from "../checks/motion.mjs";
 
 const DT = 1 / 60;
 const track = (from, to, x) => {
@@ -56,4 +56,44 @@ test("a cut is the picture changing, not a pop", () => {
   const m = measure(track2, [0.5]);
   assert.deepEqual([m.pops.length, m.stops.length, m.cuts.length], [0, 0, 1]);
   assert.ok(Math.max(...m.speed) < 0.31);
+});
+
+// a camera turning about the vertical axis: yaw(t) in degrees, a 60° tall view at 16:9 (about 91° wide)
+const pan = (from, to, yaw, fov = () => 60) => {
+  const out = [];
+  for (let t = from; t <= to + 1e-9; t += DT) {
+    const h = (yaw(t) * Math.PI) / 360;
+    out.push({ t, p: [0, 1, 0], q: [0, Math.sin(h), 0, Math.cos(h)], fov: fov(t), aspect: 16 / 9 });
+  }
+  return out;
+};
+
+test("a camera that only turns is measured in degrees a second and frame widths, not reported as still", () => {
+  const m = turns(pan(0, 2, (t) => smooth((t - 0.5) / 1) * 50));
+  assert.ok(Math.abs(m.peak.v - 75) < 1, `peak ${m.peak.v}`); // 50° in 1 s, smoothstep peaks at 1.5x
+  const out = turnReport(m).join("\n");
+  assert.match(out, /turns 75°\/s at 1\.00 s/);
+  assert.match(out, /a frame width in 1\.2 s: faster than the 7-second rule/);
+});
+
+test("a slow pan keeps to the 7-second rule and says so", () => {
+  const out = turnReport(turns(pan(0, 4, (t) => t * 10))).join("\n");
+  assert.match(out, /a frame width in 9\.1 s, within the 7-second rule/);
+});
+
+test("a one-sample turn is a pop, and a zoom gives its field of view and how fast it changes", () => {
+  const snap = turns(pan(0, 1, (t) => t * 5 + (t > 0.5 ? 8 : 0)));
+  assert.equal(snap.pops.length, 1);
+  assert.match(turnReport(snap).join("\n"), /POP 0\.5\d: turns 8\.\d° in one sample/);
+  const zoom = turnReport(
+    turns(
+      pan(
+        0,
+        2,
+        () => 0,
+        (t) => 60 - smooth(t / 2) * 30,
+      ),
+    ),
+  ).join("\n");
+  assert.match(zoom, /field of view 60° to 30°, changing 22\.\d°\/s at its fastest \(1\.00 s\)/);
 });

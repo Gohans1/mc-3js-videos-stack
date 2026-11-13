@@ -84,6 +84,83 @@ export function measure(samples, cuts = []) {
   };
 }
 
+// How a camera turns and zooms, which its position alone never shows (a pan from a still tripod reads 0 m/s): samples also
+// carry q, its world quaternion [x, y, z, w], fov (vertical, degrees) and aspect. Judged by RED's panning rule of thumb:
+// a frame width in under 7 s judders at 24 fps (reddigitalcinema.com/red-101/camera-panning-speed)
+export const WIDTH_SECONDS = 7;
+const TURN_POP = 0.5; // degrees in one sample, and POP_RATIO times the steps around it
+
+export function turns(samples, cuts = []) {
+  const n = samples.length,
+    dt = n > 1 ? samples[1].t - samples[0].t : 1,
+    deg = 180 / Math.PI;
+  const cut = samples.map((s, i) => i > 0 && cuts.some((c) => samples[i - 1].t < c && c <= s.t));
+  const angle = samples.map((s, i) => {
+    if (!i || cut[i]) return 0;
+    const a = samples[i - 1].q,
+      d = Math.abs(a[0] * s.q[0] + a[1] * s.q[1] + a[2] * s.q[2] + a[3] * s.q[3]);
+    return 2 * Math.acos(Math.min(1, d)) * deg;
+  });
+  const rate = (step) =>
+    samples.map((_, i) => {
+      const near = [i, i + 1].filter((k) => k > 0 && k < n && !cut[k]).map((k) => step[k]);
+      return near.length ? near.reduce((a, b) => a + b) / near.length / dt : 0;
+    });
+  const speed = rate(angle);
+  const fovStep = samples.map((s, i) => (i && !cut[i] ? Math.abs(s.fov - samples[i - 1].fov) : 0));
+  const fovRate = rate(fovStep);
+  const top = (xs) =>
+    xs.reduce((best, v, i) => (v > best.v ? { t: samples[i].t, v } : best), {
+      t: samples[0]?.t ?? 0,
+      v: 0,
+    });
+  const peak = top(speed),
+    at = speed.indexOf(peak.v);
+  const pops = [];
+  for (let i = 1; i < n; i++) {
+    const around = median([...angle.slice(Math.max(1, i - 3), i), ...angle.slice(i + 1, i + 4)]);
+    if (angle[i] >= TURN_POP && angle[i] > POP_RATIO * Math.max(around, 0.05))
+      pops.push({ t: samples[i].t, step: angle[i], around });
+  }
+  const s = samples[Math.max(0, at)];
+  const wide = s ? 2 * Math.atan(Math.tan(s.fov / 2 / deg) * s.aspect) * deg : 0;
+  const fovs = samples.map((x) => x.fov);
+  return {
+    speed,
+    peak,
+    pops,
+    widthSeconds: peak.v > 0 ? wide / peak.v : Infinity,
+    fov: { from: fovs[0], to: fovs[n - 1], min: Math.min(...fovs), max: Math.max(...fovs) },
+    fovRate,
+    fovPeak: top(fovRate),
+  };
+}
+
+export function turnReport(m) {
+  const f = (x) => x.toFixed(2),
+    out = [];
+  if (m.peak.v < 0.5) out.push("  turns: none");
+  else
+    out.push(
+      `  turns ${Math.round(m.peak.v)}°/s at ${f(m.peak.t)} s, a frame width in ${m.widthSeconds.toFixed(1)} s${
+        m.widthSeconds < WIDTH_SECONDS
+          ? `: faster than the ${WIDTH_SECONDS}-second rule, judders unless it is a whip pan or motion blur hides it (render final blurs)`
+          : `, within the ${WIDTH_SECONDS}-second rule`
+      }`,
+    );
+  const { from, to, min, max } = m.fov;
+  if (max - min < 0.1) out.push(`  field of view ${Math.round(from)}° throughout`);
+  else
+    out.push(
+      `  field of view ${Math.round(from)}° to ${Math.round(to)}°${min < Math.min(from, to) - 0.5 || max > Math.max(from, to) + 0.5 ? ` (between ${Math.round(min)}° and ${Math.round(max)}°)` : ""}, changing ${m.fovPeak.v.toFixed(1)}°/s at its fastest (${f(m.fovPeak.t)} s)`,
+    );
+  for (const p of m.pops)
+    out.push(
+      `  POP ${f(p.t)}: turns ${p.step.toFixed(1)}° in one sample, the steps around it ${p.around.toFixed(1)}°`,
+    );
+  return out;
+}
+
 export const easeOf = (peakAt) =>
   peakAt < 0.35
     ? "fast start, slow finish (eases out)"

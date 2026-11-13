@@ -5,10 +5,11 @@
 //     second), its path drawn over them coloured by speed (blue slow, red fast), a dot every 0.1 s and the time every 0.5 s:
 //     dots bunched up = slow, spread out = fast; POP and STOP marks where it jumps or stops dead
 //   motion_<target>_<from>-<to>_speed.jpg  speed over time (m/s), each move's peak and how it is eased, the faults marked
-// and prints the numbers (checks/motion.mjs). target: see target.ts; "cam" gives the graph only.
+//   motion_cam_<from>-<to>_turn.jpg  for cam: how fast it turns and zooms (°/s) against the 7-second panning rule
+// and prints the numbers (checks/motion.mjs). target: see target.ts; "cam" gives the graphs only.
 import * as THREE from "three";
 
-import { measure, report } from "../checks/motion.mjs";
+import { measure, report, turnReport, turns, WIDTH_SECONDS } from "../checks/motion.mjs";
 import { canvas } from "./lab";
 import { chart, findTarget, hue, label, mark, targetHelp } from "./target";
 
@@ -49,10 +50,23 @@ export const motionCheck =
       const t = from + i / HZ;
       render(t);
       obj.updateWorldMatrix(true, false);
-      samples.push({ t, p: obj.getWorldPosition(new THREE.Vector3()).toArray() });
+      samples.push({
+        t,
+        p: obj.getWorldPosition(new THREE.Vector3()).toArray(),
+        ...(isCam && {
+          q: obj.getWorldQuaternion(new THREE.Quaternion()).toArray(),
+          fov: camera.fov,
+          aspect: camera.aspect,
+        }),
+      });
     }
     const m = measure(samples, cuts);
     const out = report(target, samples, m);
+    const tm = isCam ? turns(samples, cuts) : null;
+    if (tm) {
+      if (tm.pops.length) out.splice(out.indexOf("  no pops, no dead stops"), 1);
+      out.push(...turnReport(tm));
+    }
     const tag = `motion_${target}_${from}-${to}`;
     const peak = Math.max(m.peak.v, 1e-6);
     const gl = canvas();
@@ -170,6 +184,45 @@ export const motionCheck =
     for (const p of m.pops) mark(c, p.t, "#ff2d2d", "POP");
     for (const s of m.stops) mark(c, s.t, "#ffffff", `DEAD ${s.kind.toUpperCase()}`, 1);
     out.push({ still: `${tag}_speed.jpg`, canvas: c.canvas });
+
+    if (tm) {
+      // the turn rate a frame width in WIDTH_SECONDS makes, at the widest view the camera has
+      const wide = (fov) =>
+        (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect) * 180) / Math.PI;
+      const limit = wide(tm.fov.max) / WIDTH_SECONDS;
+      const most = Math.max(tm.peak.v, tm.fovPeak.v, limit);
+      const k = chart(W, 420, {
+        from,
+        to,
+        top: Math.ceil((most * 1.15) / 5) * 5,
+        title: `cam turn (°/s, coloured) and field of view change (°/s, white), ${from}-${to} s`,
+      });
+      for (const cu of m.cuts) mark(k, cu, "#6b7280", "CUT", 2, [2, 3]);
+      k.g.save();
+      k.g.strokeStyle = "#ff6b6b";
+      k.g.setLineDash([6, 4]);
+      k.g.beginPath();
+      k.g.moveTo(k.X(from), k.Y(limit));
+      k.g.lineTo(k.X(to), k.Y(limit));
+      k.g.stroke();
+      k.g.restore();
+      label(k.g, `${WIDTH_SECONDS}-second rule`, k.X(to) - 4, k.Y(limit) - 6, "#ff6b6b", "right");
+      for (const [series, color] of [
+        [tm.fovRate, () => "#fff"],
+        [tm.speed, (v) => hue(v / Math.max(limit, 1e-6) / 2)],
+      ]) {
+        k.g.lineWidth = 2.5;
+        for (let i = 1; i < samples.length; i++) {
+          k.g.strokeStyle = color(series[i]);
+          k.g.beginPath();
+          k.g.moveTo(k.X(samples[i - 1].t), k.Y(series[i - 1]));
+          k.g.lineTo(k.X(samples[i].t), k.Y(series[i]));
+          k.g.stroke();
+        }
+      }
+      for (const p of tm.pops) mark(k, p.t, "#ff2d2d", "POP");
+      out.push({ still: `${tag}_turn.jpg`, canvas: k.canvas });
+    }
 
     Object.assign(free, { on: saved.on, fov: saved.fov });
     free.p.copy(saved.p);
