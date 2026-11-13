@@ -7,7 +7,7 @@ replaces SFX); title, author and link are kept in sound/sfx/SOURCES.json.
   bun run sfx:get sweeteners             fetch the cut sweeteners every film shares (SWEETENERS)
 To pin one: add "name": {"id": <id from find>, "for": "what it is for"} to sound/sfx_list.json, then bun run sfx:get.
 A sound is used only if its own page still says Creative Commons 0. Already fetched sounds are skipped. Run inside the
-film (python ../../scripts/sound/get_sfx.py). The vault may have it already: bun run find <words>."""
+film. The vault may have it already: bun run find <words>."""
 import html
 import json
 import re

@@ -73,7 +73,9 @@ const vault: Entry[] = [
     src: "film-stage/transitions.ts",
   },
 ];
-const noJev = () => Promise.reject(new Error("no key"));
+// as jev.py exits without a key (its own words name the key file)
+const noJev = () =>
+  Promise.reject(new Error("Jev: no key: OPENCODE_API_KEY in ~/.secrets/opencode_zen.env"));
 
 test("each hit names its kind, category and source", async () => {
   const out = await run(["door", "knock"], vault, noJev);
@@ -211,8 +213,15 @@ test("a split Jev vote is flagged as unsure", async () => {
 
 test("Jev failing says why and still answers with the word match", async () => {
   const out = await run(["--jev", "--kind", "sfx", "door"], vault, noJev);
-  expect(out).toMatch(/Jev failed: no key/);
+  expect(out).toMatch(
+    /Jev: no key: OPENCODE_API_KEY in ~\/\.secrets\/opencode_zen\.env\. Word matches below/,
+  );
   expect(out).toContain("ear-door-knock");
+  // one that never reached jev.py says what it needs instead
+  const noPython = () => Promise.reject(new Error("spawn python ENOENT"));
+  expect(await run(["--jev", "--kind", "sfx", "door"], vault, noPython)).toMatch(
+    /Jev did not run: spawn python ENOENT\. Word matches below\. Jev needs python on PATH/,
+  );
 });
 
 test("Jev's order replaces the word order when it answers", async () => {

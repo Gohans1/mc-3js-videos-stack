@@ -22,6 +22,14 @@ The first `listen` renders two stems at about a second per film second; later ru
 
 In `audio.json`, `tracks[].gain` is a whole track and a clip's `filters` is an ffmpeg EQ chain (the studio's Inspector writes it).
 
+A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` puts it on the draft, and `render clip` keeps every chunk (the sound timeline is not in a chunk's stamp).
+
+## How mix sets the loudness
+
+The mix goes through `drive` dB into a limiter, then one linear gain brings it to `lufs` (-14), or only as far as its true peak stays under -1.5 dBTP (room for the AAC encode). Never a dynamic loudness pass: it lifts every quiet stretch, room tone up to the voice (AES TD1004).
+
+When mix says it stopped short, the lever is `drive`: the limiter takes the peaks and each dB of drive buys about a third of a dB. Past +12 the hits flatten into the bed, so `bun run check` warns; listen for them. A film 2 LU under -14 only plays a little quieter on YouTube.
+
 ## Targets
 
 | Measure                 | Target                                                                             |

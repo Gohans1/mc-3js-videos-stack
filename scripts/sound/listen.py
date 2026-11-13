@@ -57,6 +57,12 @@ def loudness(media):
 
 # The mix's true-peak ceiling before the AAC encode: AES TD1008 asks -1 dBTP at a lossy codec's input, and AAC overshoots
 # more at lower rates (a 192 kbps draft rose 1.4 dB)
+def heard_second(text):
+    """65, 1:05, 01:05.250 or 65s as a float, else None: live-studio src/cli.mjs secondArg's rule (sheet.py has the same)"""
+    m = re.fullmatch(r"(?:(\d+):([0-5]?\d(?:\.\d+)?)|(\d+(?:\.\d+)?)s?)", text.strip())
+    return None if not m else float(m[3]) if m[3] is not None else int(m[1]) * 60 + float(m[2])
+
+
 CEILING = -1.5
 
 
@@ -80,7 +86,8 @@ def loudness_report(wav, target, held=0.0):
     if short:
         # on sealed-room +4 dB of drive bought +1.6 LU and +3 bought +1.0: the limiter gives back about a third
         out.append(f"  stopped {held:.1f} dB short so its true peak stays under {CEILING:g} dBTP; louder: raise audio.json drive, "
-                   f"try +{math.ceil(3 * held)} dB (its limiter takes the peaks and returns about a third of a dB per dB), then bun run mix again")
+                   f"try +{math.ceil(3 * held)} dB (its limiter takes the peaks and returns about a third of a dB per dB; past +12 the "
+                   "hits flatten into the bed (bun run check warns): listen for them), then bun run mix again")
     elif abs(i - target) > 1:
         out.append(f"  {abs(i - target):.1f} LU {'over' if i > target else 'under'} audio.json lufs ({target:g})")
     if i > YOUTUBE + 1:
@@ -328,10 +335,9 @@ def main(args):
         a = args[i]
         if a == "--at" or a.startswith("--at="):
             value = a[5:] if a != "--at" else (args[i + 1] if i + 1 < len(args) else "")
-            try:
-                at = float(value)
-            except ValueError:
-                print(f"--at takes a heard second, like --at 35.2 (the clock bun run at reads); got {value or 'nothing'}", file=sys.stderr)
+            at = heard_second(value)
+            if at is None:
+                print(f"--at takes a heard second (35.2, 0:35.2 or 00:35.200; the clock bun run at reads), got {value or 'nothing'}", file=sys.stderr)
                 return 2
             i += 2 if a == "--at" else 1
         elif a in ("--sheet", "--fresh"):
@@ -427,8 +433,12 @@ def main(args):
               f"{' (playing: ' + ', '.join(rows) + ')' if rows else ''}")
     if len(got["buried"]) > 8:
         print(f"  and {len(got['buried']) - 8} {more}")
-    for j in got["jumps"]:
-        print(f"jump at the cut {j['at']:.2f}: {j['change']:+.1f} LU (more than 6; fine when the story calls for it)")
+    if got["jumps"]:
+        # one line: a film cut hard on sound jumps at most cuts, and a line each buried the faults above under them
+        jumps = got["jumps"]
+        shown = ", ".join(f"{j['at']:.2f} {j['change']:+.1f}" for j in jumps[:6])
+        rest = f" and {len(jumps) - 6} {more}" if len(jumps) > 6 else ""
+        print(f"level jumps at {len(jumps)} cut(s), more than 6 LU, fine when the story calls for it: {shown}{rest}")
     if cuts == []:
         print("cuts: no renders/cuts.json, so level jumps at cuts are not checked (bun run render clip writes it)")
     for d in got["dead"]:

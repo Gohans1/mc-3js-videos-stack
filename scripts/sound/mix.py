@@ -36,7 +36,7 @@ if __name__ == "__main__" and sys.argv[1:2] not in (["--raw"], ["--measure"]) an
 if not (Path.cwd() / "src/timeline/audio.json").exists():
     sys.exit("no src/timeline/audio.json here: run it inside a film (cd films/<name>)")
 
-ROOT = Path.cwd()  # the film's folder: run from films/<name>/ (python ../../scripts/...)
+ROOT = Path.cwd()  # the film's folder: bun run mix runs it there
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
 A = json.loads((ROOT / "src/timeline/audio.json").read_text(encoding="utf8"))
 # A track muted in the studio (audio.json "tracks", mute) is left out of every mix; a track's gain (dB) is a volume after each

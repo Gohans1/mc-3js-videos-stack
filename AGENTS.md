@@ -8,21 +8,22 @@
 - Trong live-studio chưa có format/luật-lệ/tools/khả-năng/cơ-hội/templates/packages/etc... để bạn làm ra videos đẳng cấp? -> vượt lên trên nó, cứ thoải mái mà custom, nhớ báo cáo lại là được. (ĐỪNG ỷ lại vào đồ có sẵn mà quên mất khả năng sáng tạo tự code 3D đỉnh cao)
 
 # Skills
+
 - Luôn luôn dùng SKILL(và CLI): `mc-films` C:\Users\ADMIN\Desktop\gohans-monorepo-3js-mc\.claude\skills\mc-films
 - Sound/âm-thanh/SFX/BGM/Voice/Audio/etc...: `earshot`; `real-sound`
 
 # Bản đồ
 
-| Đường dẫn                               | Nội dung                                                             |
-| --------------------------------------- | -------------------------------------------------------------------- |
-| .claude/skills/gohans-3js-videos-skills | Skill dựng phim 3js và MC.                                           |
+| Đường dẫn                               | Nội dung                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------- |
+| .claude/skills/gohans-3js-videos-skills | Skill dựng phim 3js và MC.                                                            |
 | packages/live-studio                    | Studio, timeline, ghi chú, render; cách dùng: bun run skills get core --ref contract. |
-| packages/film-stage                     | Camera, fade, animate, transitions, titles, grade, velocity.         |
-| packages/film-kit                       | Thở, chớp mắt, liếc, giật mình, run tay.                             |
-| packages/mc-actor                       | Player, feet, mob, carry.                                            |
-| packages/mc-assets                      | Pack, placed, screen, ink, variants.                                 |
-| packages/clip-catalog                   | Kho mocap.                                                           |
-| templates/film                          | Phim mẫu; bun run new-film.                                          |
-| films/                                  | Phim thật.                                                           |
-| scripts/                                | Voice, sound, review, vault.                                         |
-| INSTALL.md                              | Cài đặt, kho, giấy phép.                                             |
+| packages/film-stage                     | Camera, fade, animate, transitions, titles, grade, velocity.                          |
+| packages/film-kit                       | Thở, chớp mắt, liếc, giật mình, run tay.                                              |
+| packages/mc-actor                       | Player, feet, mob, carry.                                                             |
+| packages/mc-assets                      | Pack, placed, screen, ink, variants.                                                  |
+| packages/clip-catalog                   | Kho mocap.                                                                            |
+| templates/film                          | Phim mẫu; bun run new-film.                                                           |
+| films/                                  | Phim thật.                                                                            |
+| scripts/                                | Voice, sound, review, vault.                                                          |
+| INSTALL.md                              | Cài đặt, kho, giấy phép.                                                              |

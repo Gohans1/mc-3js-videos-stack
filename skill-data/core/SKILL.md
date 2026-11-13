@@ -26,6 +26,8 @@ bun run skills get core --ref sound   # one area in depth, by reference name
 - Output ends with a `next:` line. Run that instead of guessing.
 - Missing data is named with the command that makes it (no video yet: `bun run render clip`).
 - `check`, `at` and `voice:cues` take `--json`.
+- A second is a heard second, written `65`, `1:05` or `01:05.250` as notes print them: `at`, `AT=`, `CHECK=`, `sheet` and `listen --at` read all three.
+- Options in `VAR=x bun run ...` form are environment variables. In PowerShell: `$env:AT='12'; bun run render stills; Remove-Item Env:AT`.
 
 ## The three clocks
 

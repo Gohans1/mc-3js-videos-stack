@@ -1,7 +1,7 @@
 """Finds pops in a draft: frames that differ from the one before far more than the frames around them do (a mob
 teleporting, an item snapping, a camera jerk). The cuts in renders/cuts.json (the last bun run render clip writes it,
 framecheck reads the same) are listed separately.
-  bun run jumps renders/draft_video.mp4     (python ../../scripts/review/jumps.py, inside the film)
+  bun run jumps                            renders/draft_video.mp4, inside the film
   bun run jumps renders/chunks/c02.mp4     a chunk: its times are film seconds by itself (c02 starts at 60 s);
                                            START=60 says it for any other video
 Make the video first: bun run render clip. bun run framecheck is the fuller check on the same file."""
@@ -13,16 +13,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path.cwd()  # the film's folder: run from films/<name>/ (python ../../scripts/...)
+ROOT = Path.cwd()  # the film's folder: bun run jumps runs it there
 args = sys.argv[1:]
 if args[:1] in (["-h"], ["--help"], ["help"]):
     print(__doc__)
     raise SystemExit
-if len(args) != 1 or args[0].startswith("-"):
-    why = f"unknown option {args[0]}" if args and args[0].startswith("-") else "which video?" if not args else f"one video at a time, got {len(args)}"
-    print(f"{why}: bun run jumps renders/draft_video.mp4 (--help for more)", file=sys.stderr)
+if len(args) > 1 or (args and args[0].startswith("-")):
+    why = f"unknown option {args[0]}" if args[0].startswith("-") else f"one video at a time, got {len(args)}"
+    print(f"{why}: bun run jumps [renders/draft_video.mp4] (--help for more)", file=sys.stderr)
     raise SystemExit(2)
-video = args[0]
+video = args[0] if args else "renders/draft_video.mp4"
 
 
 def say_if_stale(video):

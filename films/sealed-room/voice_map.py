@@ -1,5 +1,5 @@
 """What the studio's timeline shows of the voice: python voice_map.py OUT.json. Word times are whisperX's, per take
-(voice/takes/NN.mp3.words.json), moved to where voice/assemble.py laid each take in full_voice.wav."""
+(voice/takes/NN.mp3.words.json), moved to where bun run voice:assemble laid each take in full_voice.wav."""
 import array
 import json
 import sys
@@ -11,7 +11,7 @@ STEP = 0.04
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
 
 VOICE = ROOT / "assets/public/agent/full_voice.wav"
-if not VOICE.exists():  # no narration yet (voice/assemble.py writes it)
+if not VOICE.exists():  # no narration yet (bun run voice:assemble writes it)
     Path(sys.argv[1]).write_text(json.dumps({"step": STEP, "peaks": [], "lines": []}))
     print("words 0", flush=True)
     sys.exit(0)

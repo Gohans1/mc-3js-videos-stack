@@ -1088,8 +1088,12 @@ export async function run(
           if (other) next.push(other);
         } else next.push("Jev found no entry that fits; word matches below.");
       } catch (err) {
+        // jev.py's own words already say which key or quota; anything else never reached it
+        const why = (err as Error).message;
         next.push(
-          `Jev failed: ${(err as Error).message}. Word matches below. Jev needs python on PATH and a key in ~/.secrets/opencode_zen.env (free, daily quota) or openrouter.env (paid).`,
+          why.startsWith("Jev:")
+            ? `${why}. Word matches below.`
+            : `Jev did not run: ${why}. Word matches below. Jev needs python on PATH (packages/clip-catalog/jev.py).`,
         );
       }
     }

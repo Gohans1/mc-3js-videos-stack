@@ -213,7 +213,8 @@ def youtube(video, span, root):
         old.unlink()
     preview = out / "youtube_preview.mp4"
     print(f"re-encoding {length:.0f} s the way YouTube serves it (AV1 {bitrate}bps, {width} wide) and measuring bands in both, "
-          f"about {max(10, length * 3):.0f} s ...", file=sys.stderr)
+          f"about {max(10, length * 3):.0f} s{' (a few seconds judge banding as well: --youtube <from>-<to>)' if length > 60 else ''} ...",
+          file=sys.stderr)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(length), "-i", str(video), "-map", "0:v:0",
                     "-map", "0:a:0?", "-vf", f"scale={width}:-2:flags=lanczos", "-c:v", "libsvtav1", "-preset", "10", "-b:v",
                     bitrate, "-c:a", "aac", "-b:a", "128k", str(preview)], check=True, timeout=600 + length * 20,

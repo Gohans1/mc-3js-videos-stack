@@ -27,6 +27,7 @@ class Jev:
 
     def __init__(self):
         self.routes = [r for r in ROUTES if secret(*r[3:])]
+        self.keyed = bool(self.routes)
         self.spent, self.lock = 0.0, threading.Lock()
 
     def ask(self, state, questions):
@@ -57,7 +58,10 @@ class Jev:
                                 self.routes.pop(0)
                         break
                     time.sleep(after)
-        sys.exit("Jev: no route left (keys in ~/.secrets: opencode_zen.env, openrouter.env); ")
+        sys.exit("Jev: every route with a key has spent its quota (the line above says when the free one is back); a paid "
+                 "route meanwhile: OPENROUTER_API_KEY in ~/.secrets/openrouter.env" if self.keyed else
+                 "Jev: no key: OPENCODE_API_KEY in ~/.secrets/opencode_zen.env (free, a daily quota) or OPENROUTER_API_KEY in "
+                 "~/.secrets/openrouter.env (paid)")
 
 
 if __name__ == "__main__":

@@ -99,6 +99,11 @@ print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.
     /stopped \d+\.\d dB short so its true peak stays under -1\.5 dBTP; louder: raise audio\.json drive, try \+\d+ dB/,
   );
   assert.doesNotMatch(hit.report.join("\n"), /lufs -14 is what it plays at/);
+  // the same limit bun run check warns at, so the two never contradict
+  assert.match(
+    hit.report.join("\n"),
+    /past \+12 the hits flatten into the bed \(bun run check warns\)/,
+  );
   // within YouTube's 1 LU the loudness is ready: no lever to pull
   const close = spawnSync(
     "python",
