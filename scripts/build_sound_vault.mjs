@@ -24,9 +24,11 @@ import { download, validAudio, validWav } from "./download.mjs";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 const HELP = `Rebuilds vault/sound/{bgm,sfx}/<category>/ (WAV, -1 dBFS peaks) with SOURCES.json (title, licence, url) and PEAKS.json
-from the downloaded Mixkit, Freesound CC0, Earshot bank and Cinetic BGM sources. From the repo root:
+from the downloaded Mixkit, Freesound CC0, Earshot bank and Cinetic BGM sources, and from the raw packs that
+bun run fetch:sound-raw unpacked, filed by each pack's sort rules in scripts/sound-raw.json. From the repo root:
   bun run setup:sound
-A rebuild that re-files a sound moves it, so it never sits in two categories. Look a sound up: bun run find <words>.`;
+A rebuild that re-files a sound moves it, so it never sits in two categories; a raw pack's sound its rules no longer
+take leaves the vault. Look a sound up: bun run find <words>.`;
 cliArgs(HELP, [], 0);
 
 const run = promisify(execFile);
@@ -224,7 +226,10 @@ const moveIntoCategory = (vaultSound, kind, target) => {
   }
 };
 
-async function convertToPcmWav(raw, target, { rate = 44100, channels } = {}) {
+// normalize: bring every sound's peak to -1 dBFS (a library's quiet takes come up, at most MAX_BOOST_DB); otherwise only
+// a hot one comes down
+const MAX_BOOST_DB = 30;
+async function convertToPcmWav(raw, target, { rate = 44100, channels, normalize = false } = {}) {
   mkdirSync(dirname(target), { recursive: true });
   const part = `${target}.${process.pid}.part.wav`;
   try {
@@ -237,7 +242,8 @@ async function convertToPcmWav(raw, target, { rate = 44100, channels } = {}) {
       .map((m) => Number(m[1]))
       .filter(Number.isFinite);
     const peak = peaks.length ? Math.max(...peaks) : -1;
-    const af = peak > -1 ? ["-af", `volume=${(-1 - peak).toFixed(2)}dB`] : [];
+    const gainDb = normalize ? Math.min(-1 - peak, MAX_BOOST_DB) : peak > -1 ? -1 - peak : 0;
+    const af = gainDb ? ["-af", `volume=${gainDb.toFixed(2)}dB`] : [];
     const ac = channels ? ["-ac", String(channels)] : [];
     await run(
       "ffmpeg",
@@ -290,6 +296,124 @@ const saveSources = (file, sources) => {
   writeFileSync(file, JSON.stringify(sorted, null, 2) + "\n");
 };
 
+const RAW_AUDIO = /\.(?:ogg|wav|mp3|flac)$/i;
+const NATURAL = new Intl.Collator(undefined, { numeric: true });
+const slug = (s) =>
+  s
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+// "impactWood_heavy" -> "Impact wood heavy"; an all-caps word stays ("jingles_NES" -> "Jingles NES")
+const humanize = (s) => {
+  const t = s
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.toLowerCase()))
+    .join(" ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+// Takes of one sound differ only by a trailing number ("click_003", "footstep07"); a name that is only a number is its own
+const baseOf = (stem) => stem.match(/^(.*?[^\d\s_-])[\s_-]*\d+$/)?.[1] ?? stem;
+const audioFiles = (dir, at = "") =>
+  readdirSync(join(dir, at), { withFileTypes: true })
+    .flatMap((d) => {
+      const rel = at ? `${at}/${d.name}` : d.name;
+      if (d.name.startsWith(".")) return [];
+      if (d.isDirectory()) return audioFiles(dir, rel);
+      return RAW_AUDIO.test(d.name) ? [rel] : [];
+    })
+    .sort(NATURAL.compare);
+const pool = async (items, n, work) => {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (next < items.length) await work(items[next++]);
+    }),
+  );
+};
+
+// The raw packs fetch:sound-raw unpacked, each file filed by the first of its pack's sort rules that matches its path
+// in the pack. A file no rule takes is named, never guessed into a category; a rule with "skip" leaves files out on
+// purpose. Sounds whose names differ only by a trailing number become one family of takes, unless the rule says
+// "takes": false. A rule's "title" wraps the file's name ("{name} (female voice)")
+async function buildRawPacks({ root, external, vaultSound, sources, log }) {
+  const file = join(root, "scripts/sound-raw.json");
+  if (!existsSync(file)) return;
+  for (const [srcId, src] of Object.entries(JSON.parse(readFileSync(file, "utf8")).sources)) {
+    const skip = src.skip ? new RegExp(src.skip) : null;
+    for (const pack of src.packs) {
+      const dir = join(external, "sound-raw", srcId, pack.id),
+        packId = `${srcId}/${pack.id}`;
+      if (!existsSync(dir)) {
+        log(`${packId}: not downloaded yet (bun run fetch:sound-raw)`);
+        continue;
+      }
+      const rules = (pack.sort ?? []).map((r) => ({ ...r, re: new RegExp(r.match) }));
+      const files = audioFiles(dir).filter((rel) => !skip?.test(rel));
+      const stemOf = (rel) => basename(rel).replace(RAW_AUDIO, "");
+      const stems = Map.groupBy(files, stemOf);
+      const unsorted = [],
+        picked = [];
+      for (const rel of files) {
+        const rule = rules.find((r) => r.re.test(rel));
+        if (!rule) unsorted.push(rel);
+        if (!rule || rule.skip) continue;
+        // "takes": false = the number names a different line ("round_2"), not another take of one sound
+        const stem = stemOf(rel),
+          base = rule.takes === false ? stem : baseOf(stem);
+        // the same file name in two folders of a pack (Female/go, Male/go) takes its folder into its name
+        const own = stems.get(stem).length > 1 ? `${basename(dirname(rel))}-${stem}` : stem;
+        picked.push({
+          rel,
+          rule,
+          name: `${src.prefix}-${pack.key}-${slug(own)}`,
+          family: `${src.prefix}-${pack.key}-${slug(rule.takes === false ? own : base)}`,
+          title: (rule.title ?? "{name}").replace("{name}", humanize(base)),
+        });
+      }
+      const families = Map.groupBy(picked, (p) => p.family);
+      let converted = 0;
+      await pool(picked, 6, async (p) => {
+        const target = join(vaultSound, "sfx", p.rule.category, `${p.name}.wav`);
+        moveIntoCategory(vaultSound, "sfx", target);
+        if (hasRiffWave(target)) return;
+        await convertToPcmWav(join(dir, p.rel), target, { rate: 48000, normalize: true });
+        converted++;
+      });
+      const kept = new Set(picked.map((p) => p.name));
+      for (const [name, v] of Object.entries(sources)) {
+        if (v.pack !== packId || kept.has(name)) continue;
+        delete sources[name];
+        for (const cat of readdirSync(join(vaultSound, "sfx")))
+          rmSync(join(vaultSound, "sfx", cat, `${name}.wav`), { force: true });
+      }
+      for (const p of picked) {
+        const takes = families.get(p.family);
+        sources[p.name] = {
+          title: p.title,
+          license: src.licence,
+          url: pack.page,
+          for: p.rule.for,
+          source: srcId,
+          kind: "sfx",
+          origin: "real",
+          ...(takes.length > 1 && { family: p.family, variant: takes.indexOf(p) + 1 }),
+          pack: packId,
+        };
+      }
+      log(
+        `${packId}: ${picked.length} sounds in ${families.size} families (${converted} converted)`,
+      );
+      if (unsorted.length)
+        log(
+          `${packId}: ${unsorted.length} files no sort rule takes (add a rule, or one with "skip"): ${unsorted.join(", ")}`,
+        );
+    }
+  }
+}
+
 export async function buildSoundVault({
   root = ROOT,
   local = LOCAL,
@@ -298,6 +422,7 @@ export async function buildSoundVault({
   skipEarshot = false,
   skipFreesound = false,
   pixabayDir,
+  log = console.log,
 } = {}) {
   const vaultSound = join(local, "sound"),
     sourcesFile = join(vaultSound, "SOURCES.json");
@@ -340,7 +465,7 @@ export async function buildSoundVault({
     };
   }
   saveSources(sourcesFile, sources);
-  console.log(
+  log(
     `Mixkit SFX: ${mixkitKept.length} curated (${mixLinked} linked, ${mixFetched} fetched, ${mixReused} reused)`,
   );
 
@@ -364,7 +489,7 @@ export async function buildSoundVault({
     const out = JSON.parse(res.stdout);
     Object.assign(sources, out.sources);
     saveSources(sourcesFile, sources);
-    console.log(
+    log(
       `Earshot SFX: ${Object.keys(out.sources).length} recipes (${out.rendered} rendered, ${out.reused} reused)`,
     );
   }
@@ -402,7 +527,7 @@ export async function buildSoundVault({
       };
     }
     saveSources(sourcesFile, sources);
-    console.log(
+    log(
       `Earshot Freesound CC0 Originals: ${fsConverted + fsReused} recordings (${fsConverted} converted, ${fsReused} reused)`,
     );
   }
@@ -458,10 +583,14 @@ export async function buildSoundVault({
       };
     }
     saveSources(sourcesFile, sources);
-    console.log(
+    log(
       `Cinetic BGM: ${bgmConverted + bgmReused} tracks (${bgmConverted} converted, ${bgmReused} reused)`,
     );
   }
+
+  // 4. Raw packs (scripts/sound-raw.json), when the external vault holds them
+  await buildRawPacks({ root, external, vaultSound, sources, log });
+  saveSources(sourcesFile, sources);
   syncSoundVaultPeaks(vaultSound);
   return { vaultSound, count: Object.keys(sources).length };
 }

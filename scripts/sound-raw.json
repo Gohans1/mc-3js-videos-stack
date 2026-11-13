@@ -1,5 +1,5 @@
 {
-  "about": "Raw sound packs the vault's sounds are chosen from. bun run fetch:sound-raw downloads each, checks its sha256 and unpacks it into <externalRoot>/sound-raw/<source>/<id>/. A pack with byHand instead of file is handed out only to a browser: the command names its page and takes the zip from Downloads.",
+  "about": "Raw sound packs the vault's sounds are chosen from. bun run fetch:sound-raw downloads each, checks its sha256 and unpacks it into <externalRoot>/sound-raw/<source>/<id>/. A pack with byHand instead of file is handed out only to a browser: the command names its page and takes the zip from Downloads. bun run setup:sound then files each pack's sounds into vault/sound/sfx/<category>/<prefix>-<key>-<name>.wav by the first sort rule whose match (a regex on the file's path in the pack) fits; title wraps the file's name ({name}), takes: false keeps numbered files apart, and a file no rule takes is named in the build's output.",
   "sources": {
     "kenney": {
       "name": "Kenney",
@@ -9,75 +9,404 @@
       "read": "2026-11-13",
       "credit": false,
       "note": "Kenney uploads his packs to OpenGameArt himself (author: Kenney), where they download directly",
+      "prefix": "ken",
+      "skip": "(^|/)Preview[^/]*$",
       "packs": [
         {
           "id": "interface-sounds",
+          "key": "interface",
           "title": "Interface Sounds",
           "page": "https://opengameart.org/content/interface-sounds",
           "file": "https://opengameart.org/sites/default/files/kenney_interfaceSounds.zip",
-          "sha256": "f2193d072726d6758a5f7871b2dcc54dcce0d5c35c6f0a62f92549b327c81232"
+          "sha256": "f2193d072726d6758a5f7871b2dcc54dcce0d5c35c6f0a62f92549b327c81232",
+          "sort": [
+            {
+              "match": "(^|/)confirmation_",
+              "category": "notifications",
+              "for": "a confirm or success chime in an interface"
+            },
+            {
+              "match": "(^|/)error_",
+              "category": "notifications",
+              "for": "an error or wrong-answer buzz"
+            },
+            {
+              "match": "(^|/)question_",
+              "category": "notifications",
+              "for": "a question or prompt popping up"
+            },
+            {
+              "match": "(^|/)glass_",
+              "category": "notifications",
+              "for": "a light glass ting: a soft notification"
+            },
+            {
+              "match": "(^|/)glitch_",
+              "category": "glitch",
+              "for": "a short digital glitch"
+            },
+            {
+              "match": "(^|/)scratch_",
+              "category": "glitch",
+              "for": "a record scratch: a stop or rewind gag"
+            },
+            {
+              "match": "(^|/)(maximize|open)_",
+              "category": "clicks",
+              "for": "a window or panel opening"
+            },
+            {
+              "match": "(^|/)(minimize|close|back)_",
+              "category": "clicks",
+              "for": "a window or panel closing, going back"
+            },
+            {
+              "match": "(^|/)(click|select|switch|toggle|tick|scroll)_",
+              "category": "clicks",
+              "for": "a button, toggle or list in an interface"
+            },
+            {
+              "match": "(^|/)drop_",
+              "category": "clicks",
+              "for": "an item dropped into a slot"
+            },
+            {
+              "match": "(^|/)(pluck|bong)_",
+              "category": "musical",
+              "for": "a soft wooden pluck for a pop or reveal"
+            }
+          ]
         },
         {
           "id": "ui-audio",
+          "key": "ui",
           "title": "UI Audio",
           "page": "https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks",
           "file": "https://opengameart.org/sites/default/files/UI_SFX_Set.zip",
-          "sha256": "66026b9e39859b85964dbb3ee7a2d1fc46a6a406bb3e97c8b0defee0e25fb369"
+          "sha256": "66026b9e39859b85964dbb3ee7a2d1fc46a6a406bb3e97c8b0defee0e25fb369",
+          "sort": [
+            {
+              "match": "(^|/)rollover",
+              "category": "clicks",
+              "for": "the pointer rolling over a button"
+            },
+            {
+              "match": "(^|/)switch",
+              "category": "clicks",
+              "for": "a switch or toggle flicked"
+            },
+            {
+              "match": "(^|/)(click|mouseclick|mouserelease)",
+              "category": "clicks",
+              "for": "a mouse button pressed or released"
+            }
+          ]
         },
         {
           "id": "digital-audio",
+          "key": "digital",
           "title": "Digital Audio",
           "page": "https://opengameart.org/content/63-digital-sound-effects-lasers-phasers-space-etc",
           "file": "https://opengameart.org/sites/default/files/Digital_SFX_Set.zip",
-          "sha256": "022f0f4b73da55989567fe2b373c8af89d74f5d015257e293cab497ca606d063"
+          "sha256": "022f0f4b73da55989567fe2b373c8af89d74f5d015257e293cab497ca606d063",
+          "sort": [
+            {
+              "match": "(^|/)powerUp",
+              "category": "game",
+              "for": "a power-up or level-up rising"
+            },
+            {
+              "match": "(^|/)pepSound",
+              "category": "game",
+              "for": "a quick pickup blip: a coin, a point"
+            },
+            {
+              "match": "(^|/)phaseJump",
+              "category": "game",
+              "for": "a jump or teleport"
+            },
+            {
+              "match": "(^|/)(high|low)(Up|Down|Random|ThreeTone)",
+              "category": "game",
+              "for": "a retro game tone stepping up or down"
+            },
+            {
+              "match": "(^|/)(two|three)?[tT]one",
+              "category": "game",
+              "for": "a retro game tone stepping up or down"
+            },
+            {
+              "match": "(^|/)zap(Two|Three)Tone",
+              "category": "game",
+              "for": "a retro zapped tone"
+            },
+            {
+              "match": "(^|/)laser",
+              "category": "sci-fi",
+              "for": "a laser shot"
+            },
+            {
+              "match": "(^|/)phaser",
+              "category": "sci-fi",
+              "for": "a phaser sweeping up or down"
+            },
+            {
+              "match": "(^|/)zap",
+              "category": "sci-fi",
+              "for": "an electric zap"
+            },
+            {
+              "match": "(^|/)spaceTrash",
+              "category": "sci-fi",
+              "for": "space junk tumbling, a sci-fi debris rattle"
+            }
+          ]
         },
         {
           "id": "rpg-audio",
+          "key": "rpg",
           "title": "RPG Audio",
           "page": "https://opengameart.org/content/50-rpg-sound-effects",
           "file": "https://opengameart.org/sites/default/files/RPGsounds_Kenney.zip",
-          "sha256": "3ae398ad63e293f9c450bda22d5d81c3af69c74df66fc1400f33c012c0bbc231"
+          "sha256": "3ae398ad63e293f9c450bda22d5d81c3af69c74df66fc1400f33c012c0bbc231",
+          "sort": [
+            {
+              "match": "(^|/)footstep",
+              "category": "footsteps",
+              "for": "a single footstep"
+            },
+            {
+              "match": "(^|/)book",
+              "category": "foley",
+              "for": "a book opened, flipped, closed or set down"
+            },
+            {
+              "match": "(^|/)door",
+              "category": "foley",
+              "for": "a wooden door opening or closing"
+            },
+            {
+              "match": "(^|/)creak",
+              "category": "foley",
+              "for": "a wooden creak"
+            },
+            {
+              "match": "(^|/)(cloth|beltHandle|dropLeather|handleSmallLeather)",
+              "category": "foley",
+              "for": "cloth and leather handled: gear, a belt, a bag"
+            },
+            {
+              "match": "(^|/)handleCoins",
+              "category": "foley",
+              "for": "coins handled"
+            },
+            {
+              "match": "(^|/)(drawKnife|knifeSlice|chop)",
+              "category": "foley",
+              "for": "a knife drawn, a slice, a chop"
+            },
+            {
+              "match": "(^|/)metal",
+              "category": "foley",
+              "for": "metal handled: a latch, a click, a pot"
+            }
+          ]
         },
         {
           "id": "sci-fi-sounds",
+          "key": "scifi",
           "title": "Sci-fi Sounds",
           "page": "https://opengameart.org/content/sci-fi-sounds",
           "file": "https://opengameart.org/sites/default/files/sci-fi_sounds.zip",
-          "sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04"
+          "sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+          "sort": [
+            {
+              "match": "(^|/)(explosionCrunch|lowFrequency_explosion)",
+              "category": "impacts",
+              "for": "an explosion"
+            },
+            {
+              "match": "(^|/)impactMetal",
+              "category": "impacts",
+              "for": "a heavy metal impact"
+            },
+            {
+              "match": "(^|/)laser",
+              "category": "sci-fi",
+              "for": "a laser shot"
+            },
+            {
+              "match": "(^|/)(spaceEngine|engineCircular|thrusterFire)",
+              "category": "sci-fi",
+              "for": "a spaceship engine hum or thruster burst"
+            },
+            {
+              "match": "(^|/)forceField",
+              "category": "sci-fi",
+              "for": "a force field humming"
+            },
+            {
+              "match": "(^|/)computerNoise",
+              "category": "sci-fi",
+              "for": "a computer chattering and bleeping"
+            },
+            {
+              "match": "(^|/)door",
+              "category": "sci-fi",
+              "for": "a sci-fi sliding door"
+            },
+            {
+              "match": "(^|/)slime",
+              "category": "foley",
+              "for": "a wet slime squelch"
+            }
+          ]
         },
         {
           "id": "casino-audio",
+          "key": "casino",
           "title": "Casino Audio",
           "page": "https://opengameart.org/content/54-casino-sound-effects-cards-dice-chips",
           "file": "https://opengameart.org/sites/default/files/kenney_casino-audio.zip",
-          "sha256": "f36250766ac5bc378c13708ddf12a23a8e54a3251f8d482c7536e51b5dbafa18"
+          "sha256": "f36250766ac5bc378c13708ddf12a23a8e54a3251f8d482c7536e51b5dbafa18",
+          "sort": [
+            {
+              "match": "(^|/)card",
+              "category": "foley",
+              "for": "playing cards dealt, slid, shuffled or fanned"
+            },
+            {
+              "match": "(^|/)chip",
+              "category": "foley",
+              "for": "poker chips stacked, laid or handled"
+            },
+            {
+              "match": "(^|/)di(c)?e-",
+              "category": "foley",
+              "for": "dice grabbed, shaken or thrown"
+            }
+          ]
         },
         {
           "id": "music-jingles",
+          "key": "jingle",
           "title": "Music Jingles",
           "page": "https://opengameart.org/content/85-short-music-jingles",
           "file": "https://opengameart.org/sites/default/files/jingleSounds_Kenney.zip",
-          "sha256": "be324b6cf26e35c95c2a344569a2470512819d0246cc81328bef3499de3682e5"
+          "sha256": "be324b6cf26e35c95c2a344569a2470512819d0246cc81328bef3499de3682e5",
+          "sort": [
+            {
+              "match": "(^|/)jingles_HIT",
+              "category": "musical",
+              "title": "Jingle · hit",
+              "for": "a short win, lose or level-end sting"
+            },
+            {
+              "match": "(^|/)jingles_NES",
+              "category": "musical",
+              "title": "Jingle · NES 8-bit",
+              "for": "a short win, lose or level-end sting"
+            },
+            {
+              "match": "(^|/)jingles_PIZZA",
+              "category": "musical",
+              "title": "Jingle · pizzicato",
+              "for": "a short win, lose or level-end sting"
+            },
+            {
+              "match": "(^|/)jingles_SAX",
+              "category": "musical",
+              "title": "Jingle · sax",
+              "for": "a short win, lose or level-end sting"
+            },
+            {
+              "match": "(^|/)jingles_STEEL",
+              "category": "musical",
+              "title": "Jingle · steel drum",
+              "for": "a short win, lose or level-end sting"
+            }
+          ]
         },
         {
           "id": "voiceover-pack",
+          "key": "voice",
           "title": "Voiceover Pack",
           "page": "https://opengameart.org/content/voiceover-pack-40-lines",
           "file": "https://opengameart.org/sites/default/files/Voiceover%20Pack.zip",
-          "sha256": "2ff0c8c51a959a754df698c4ee1e7c2db007c4abde4d600fd19545a1aea9d835"
+          "sha256": "2ff0c8c51a959a754df698c4ee1e7c2db007c4abde4d600fd19545a1aea9d835",
+          "sort": [
+            {
+              "match": "^Female/[0-9]+[.]ogg$",
+              "category": "voices",
+              "takes": false,
+              "title": "Number {name} · female voice",
+              "for": "a game voice counting"
+            },
+            {
+              "match": "^Male/[0-9]+[.]ogg$",
+              "category": "voices",
+              "takes": false,
+              "title": "Number {name} · male voice",
+              "for": "a game voice counting"
+            },
+            {
+              "match": "^Female/",
+              "category": "voices",
+              "takes": false,
+              "title": "{name} · female voice",
+              "for": "a game voice line: a win, a loss, an order"
+            },
+            {
+              "match": "^Male/",
+              "category": "voices",
+              "takes": false,
+              "title": "{name} · male voice",
+              "for": "a game voice line: a win, a loss, an order"
+            }
+          ]
         },
         {
           "id": "voiceover-pack-fighter",
+          "key": "fighter",
           "title": "Voiceover Pack: Fighter",
           "page": "https://opengameart.org/content/voiceover-pack-fighter-40-taunts",
           "file": "https://opengameart.org/sites/default/files/kenney_voiceoverFighter.zip",
-          "sha256": "368ac0711e59521aff965a833e22e2b5218c397cf8b059ce3cb72e8d13219ee2"
+          "sha256": "368ac0711e59521aff965a833e22e2b5218c397cf8b059ce3cb72e8d13219ee2",
+          "sort": [
+            {
+              "match": "(^|/)[0-9]+[.]ogg$",
+              "category": "voices",
+              "takes": false,
+              "title": "Number {name} · announcer",
+              "for": "a fighting-game announcer counting"
+            },
+            {
+              "match": ".",
+              "category": "voices",
+              "takes": false,
+              "title": "{name} · announcer",
+              "for": "a fighting-game announcer line"
+            }
+          ]
         },
         {
           "id": "impact-sounds",
+          "key": "impact",
           "title": "Impact Sounds",
           "page": "https://kenney.nl/assets/impact-sounds",
-          "byHand": "kenney_impact-sounds.zip"
+          "byHand": "kenney_impact-sounds.zip",
+          "sort": [
+            {
+              "match": "(^|/)footstep",
+              "category": "footsteps",
+              "for": "a footstep on the named ground"
+            },
+            {
+              "match": "(^|/)impact",
+              "category": "impacts",
+              "for": "a hit on the named material"
+            }
+          ]
         }
       ]
     }

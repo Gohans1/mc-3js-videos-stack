@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -114,4 +115,145 @@ test("a pack the site only hands to a browser waits for its zip, then is taken f
     existsSync(join(f.raw, "kenney/impact-sounds/Audio/impactGlass_heavy_000.ogg")),
     true,
   );
+});
+
+// An .ogg tone at the given peak level (dBFS), made with ffmpeg
+const tone = (file, db, hz = 660) => {
+  mkdirSync(join(file, ".."), { recursive: true });
+  const r = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-y", "-f", "lavfi", "-i"].concat([
+      `aevalsrc=${10 ** (db / 20)}*sin(2*PI*${hz}*t):s=44100:d=0.2`,
+      "-c:a",
+      "libvorbis",
+      file,
+    ]),
+    { encoding: "utf8" },
+  );
+  assert.equal(r.status, 0, r.stderr);
+};
+
+async function packFixture(t, sort) {
+  const root = mkdtempSync(join(tmpdir(), "sound-raw-build-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const local = join(root, "vault"),
+    external = join(root, "ext"),
+    pack = join(external, "sound-raw/kenney/ui");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  writeFileSync(join(root, "scripts/sfx-catalogue.json"), JSON.stringify({ sounds: [] }));
+  const write = (rules) =>
+    writeFileSync(
+      join(root, "scripts/sound-raw.json"),
+      JSON.stringify({
+        sources: {
+          kenney: {
+            licence: "CC0 1.0",
+            prefix: "ken",
+            skip: "(^|/)Preview[^/]*$",
+            packs: [
+              { id: "ui", key: "ui", title: "UI", page: "https://kenney.nl/ui", sort: rules },
+            ],
+          },
+        },
+      }),
+    );
+  write(sort);
+  // takes of one sound (one quiet), a lone sound, one the rules leave out, and the pack's preview
+  tone(join(pack, "Audio/click_001.ogg"), -3);
+  tone(join(pack, "Audio/click_002.ogg"), -30, 880);
+  tone(join(pack, "Audio/error_001.ogg"), -3, 220);
+  tone(join(pack, "Audio/mystery_001.ogg"), -3);
+  tone(join(pack, "Audio/round_1.ogg"), -3);
+  tone(join(pack, "Audio/round_2.ogg"), -3);
+  tone(join(pack, "Preview.ogg"), -3);
+  const { buildSoundVault } = await import("../build_sound_vault.mjs");
+  const lines = [];
+  const build = () =>
+    buildSoundVault({
+      root,
+      local,
+      external,
+      skipBgm: true,
+      skipEarshot: true,
+      skipFreesound: true,
+      log: (l) => lines.push(l),
+    });
+  const sources = () => JSON.parse(readFileSync(join(local, "sound/SOURCES.json"), "utf8"));
+  return { pack, local, write, build, sources, lines };
+}
+
+const RULES = [
+  { match: "/click_", category: "clicks", for: "a UI click" },
+  { match: "/error_", category: "notifications", title: "{name} beep", for: "a UI error" },
+];
+
+test("a raw pack's sounds are filed by its sort rules, as one family of takes, at -1 dBFS", async (t) => {
+  const f = await packFixture(t, RULES);
+  await f.build();
+  const s = f.sources();
+  const takes = Object.entries(s).filter(([, v]) => v.family === "ken-ui-click");
+  assert.deepEqual(
+    takes.map(([name, v]) => [name, v.variant, v.title]),
+    [
+      ["ken-ui-click-001", 1, "Click"],
+      ["ken-ui-click-002", 2, "Click"],
+    ],
+  );
+  assert.deepEqual(s["ken-ui-error-001"], {
+    title: "Error beep",
+    license: "CC0 1.0",
+    url: "https://kenney.nl/ui",
+    for: "a UI error",
+    source: "kenney",
+    kind: "sfx",
+    origin: "real",
+    pack: "kenney/ui",
+  });
+  assert.equal(existsSync(join(f.local, "sound/sfx/clicks/ken-ui-click-002.wav")), true);
+  assert.equal(existsSync(join(f.local, "sound/sfx/notifications/ken-ui-error-001.wav")), true);
+  const { wavPeaks } = await import("../../packages/live-studio/src/sound.mjs");
+  const quiet = Math.max(...wavPeaks(join(f.local, "sound/sfx/clicks/ken-ui-click-002.wav")).peaks);
+  assert.ok(quiet > 0.8 && quiet < 0.92, `a quiet take is brought up to -1 dBFS, got ${quiet}`);
+  assert.equal(
+    Object.keys(s).some((n) => n.includes("mystery") || n.includes("preview")),
+    false,
+  );
+  assert.ok(
+    f.lines.some((l) => /mystery_001\.ogg/.test(l)),
+    "a file no rule takes is named",
+  );
+});
+
+test("a rule whose numbers name different lines keeps each file its own sound", async (t) => {
+  const f = await packFixture(t, [
+    { match: "/round_", category: "voices", takes: false, for: "an announcer" },
+    { match: "^Female/", category: "voices", takes: false, title: "{name} · female" },
+    { match: "^Male/", category: "voices", takes: false, title: "{name} · male" },
+  ]);
+  tone(join(f.pack, "Female/go.ogg"), -3);
+  tone(join(f.pack, "Male/go.ogg"), -3);
+  await f.build();
+  const s = f.sources();
+  assert.deepEqual(
+    ["ken-ui-round-1", "ken-ui-round-2", "ken-ui-female-go", "ken-ui-male-go"].map((n) => [
+      s[n]?.title,
+      s[n]?.family,
+    ]),
+    [
+      ["Round 1", undefined],
+      ["Round 2", undefined],
+      ["Go · female", undefined],
+      ["Go · male", undefined],
+    ],
+  );
+});
+
+test("a sound the pack's rules stop taking leaves the vault on the next build", async (t) => {
+  const f = await packFixture(t, RULES);
+  await f.build();
+  f.write(RULES.slice(0, 1));
+  await f.build();
+  assert.equal(f.sources()["ken-ui-error-001"], undefined);
+  assert.equal(existsSync(join(f.local, "sound/sfx/notifications/ken-ui-error-001.wav")), false);
+  assert.equal(existsSync(join(f.local, "sound/sfx/clicks/ken-ui-click-001.wav")), true);
 });

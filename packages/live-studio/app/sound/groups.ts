@@ -8,8 +8,10 @@ const CATEGORY_TITLES: Record<string, string> = {
   other: "Other",
   magic: "Magic & UI",
   boss: "Boss",
-  musical: "Musical tones",
+  musical: "Jingles & tones",
   shutter: "Camera shutter",
+  "sci-fi": "Sci-fi & lasers",
+  game: "Game & arcade",
 };
 
 export const MC_HEADINGS: Record<string, string> = {
