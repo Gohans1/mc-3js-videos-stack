@@ -31,6 +31,7 @@
     "fetch:sfx": "bun scripts/fetch_mixkit.mjs",
     "fetch:sound-raw": "bun scripts/fetch_sound_raw.mjs",
     "find": "bun scripts/find.ts",
+    "gap": "bun scripts/gap.ts",
     "eval:find": "bun scripts/evals/find/run.ts",
     "new-film": "bun scripts/new_film.ts",
     "test": "bun test --timeout 30000 ./packages/film-stage ./packages/film-kit ./packages/mc-actor ./packages/mc-assets ./packages/live-studio ./scripts/test",

@@ -6,6 +6,7 @@
     "help": "bun node_modules/live-studio/help.mjs",
     "skills": "bun ../../packages/live-studio/skills.mjs",
     "find": "bun ../../scripts/find.ts",
+    "gap": "bun ../../scripts/gap.ts",
     "studio": "bun node_modules/live-studio/src/live.mjs 4325",
     "notes": "bun node_modules/live-studio/notes.mjs",
     "at": "bun ../../scripts/at.ts",

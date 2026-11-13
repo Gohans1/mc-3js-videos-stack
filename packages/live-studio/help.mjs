@@ -11,6 +11,7 @@ const GROUPS = [
     {
       skills:
         "for an AI agent: bun run skills get core before guessing from a command's --help (the loop, the three clocks, what costs money)",
+      gap: 'a command lacked something you needed: do it another way, then bun run gap "<what>" --did "<how>"; bare, every gap kept',
     },
   ],
   [
