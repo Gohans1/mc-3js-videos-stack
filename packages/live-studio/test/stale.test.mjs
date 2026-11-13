@@ -54,3 +54,38 @@ test("a video older than a picture change names the newest such file and the com
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// draft.mp4 is mix's: draft_video.mp4's picture with the sound of when mix ran, so either can be older than the film
+test("a draft with sound is older than its picture, or than its sound, and says which mix brings it up to date", () => {
+  const { dir, at } = film();
+  try {
+    writeFileSync(join(dir, "renders/draft.mp4"), "x");
+    mkdirSync(join(dir, "assets/public/agent"), { recursive: true });
+    writeFileSync(join(dir, "assets/public/agent/full_voice.wav"), "x");
+    at("assets/public/agent/full_voice.wav", 1000);
+    at("renders/draft.mp4", 3000);
+    expect(staleVideo(dir, "renders/draft.mp4")).toBeNull();
+
+    at("renders/draft_video.mp4", 3600);
+    expect(staleVideo(dir, "renders/draft.mp4")?.message).toMatch(
+      /renders\/draft\.mp4 has an older picture than renders\/draft_video\.mp4[^\n]*bun run mix renders\/draft_video\.mp4/,
+    );
+
+    at("renders/draft_video.mp4", 2000);
+    at("src/timeline/audio.json", 3600);
+    expect(staleVideo(dir, "renders/draft.mp4")?.message).toMatch(
+      /renders\/draft\.mp4 has an older sound than src\/timeline\/audio\.json[^\n]*bun run mix renders\/draft_video\.mp4/,
+    );
+    at("src/timeline/audio.json", 1000);
+    at("assets/public/agent/full_voice.wav", 3600);
+    expect(staleVideo(dir, "renders/draft.mp4")?.file).toBe("assets/public/agent/full_voice.wav");
+
+    at("assets/public/agent/full_voice.wav", 1000);
+    at("src/scene.ts", 3600);
+    expect(staleVideo(dir, "renders/draft.mp4")?.message).toMatch(
+      /older than src\/scene\.ts[^\n]*bun run render clip[^\n]*then bun run mix renders\/draft_video\.mp4/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

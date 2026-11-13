@@ -3,7 +3,7 @@
 // new block model up close without touching the film's cameras. LAB_VIEW=desk picks a set; AT is the film second drawn.
 // ENTRY=lab/prop.ts AT=72.6 LAB_VIEW=desk bun run render stills  (LAB_LOOKS=chair: each chair look from those spots)
 import { buildScene } from "../src/scene";
-import { canvas, config, done, still } from "live-studio/lab";
+import { canvas, config, done, log, still } from "live-studio/lab";
 
 const SETS = {
   room: [
@@ -58,7 +58,11 @@ const SETS = {
 };
 (async () => {
   const cfg = await config();
-  const VIEWS = SETS[cfg.lab.view ?? "room"] ?? SETS.room;
+  if (cfg.lab.view && !SETS[cfg.lab.view]) {
+    log(`ERROR LAB_VIEW=${cfg.lab.view} is no view of lab/prop.ts: ${Object.keys(SETS).join(", ")}`);
+    return;
+  }
+  const VIEWS = SETS[cfg.lab.view ?? "room"];
   const c = canvas();
   const draw = await buildScene(c, cfg.W, cfg.H, false);
   const { free } = draw.tools;

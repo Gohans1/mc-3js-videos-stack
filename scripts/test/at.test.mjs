@@ -104,7 +104,8 @@ test("at #N finds a note's moment after a Speed edit moved it: by its scene seco
     });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /written at 00:08\.200 heard; that moment is heard at 00:04\.100 now/);
-    assert.match(r.stdout, /shot 2\/2 \(notes call it shot 1\): "his hand"/);
+    // one numbering everywhere: notes, the studio, the draft's strip and the shots file's row
+    assert.match(r.stdout, /shot 1 \(shots 0-1\): "his hand"/);
   }
   // its shot renamed since: its narration second through today's Speed, the second the studio's note list shows it at
   const r = spawnSync("bun", [AT, "renamed"], {

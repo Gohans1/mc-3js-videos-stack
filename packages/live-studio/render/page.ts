@@ -44,6 +44,18 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   const render = await buildScene(canvas, cfg.W, cfg.H, cfg.draft, log);
   log(`scene built in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
   for (const v of render.variants ?? []) if (cfg.choices?.[v.id]?.set) v.set(cfg.choices[v.id].set); // what was picked in the studio
+  // a transition the film does not have plays as a hard cut with no error: check only knows the built-ins, this page knows
+  // the film's own too (draw.transitions, from makeTransitions)
+  if (render.transitions) {
+    const ids = render.transitions.map((x) => x.id);
+    SHOTS.forEach((s, i) => {
+      const fx = s.transition?.fx;
+      if (i && fx && !ids.includes(fx))
+        log(
+          `WARN shot ${i}'s transition "${fx}" is none this film has, so that cut plays hard (shots [${i}].transition). Its transitions: bun run find --kind transition, or its own passed to makeTransitions`,
+        );
+    });
+  }
   // framecheck.mjs: a cut is not a jump. Only a clip render writes them, so they stay the cuts of the video framecheck reads
   if (cfg.clip) await post("/still/cuts.json", JSON.stringify(SHOTS.slice(1).map((s) => s.t)));
   // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
@@ -71,7 +83,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       const a = shotAt(args[1]),
         b = shotAt(args[2] - 1e-3);
       log(
-        `heard ${args[1]}-${args[2]} s: shot ${a}${b > a ? `-${b}` : ""}/${SHOTS.length} (bun run at ${args[1]} names it)`,
+        `heard ${args[1]}-${args[2]} s: shot ${a - 1}${b > a ? `-${b - 1}` : ""} (bun run at ${args[1]} names it)`,
       );
     }
     for (const item of [await fn(...args)].flat()) {
@@ -216,7 +228,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     const x = 14 + ctx.measureText(label).width + F;
     ctx.font = `${Math.round(F * 0.8)}px Consolas, monospace`;
     ctx.fillStyle = "#b8b6ad";
-    let text = `shot ${n}/${SHOTS.length}${about ? ` · ${about}` : ""}`;
+    let text = `shot ${n - 1}${about ? ` · ${about}` : ""}`;
     while (text.length > 4 && ctx.measureText(text).width > cfg.W - x - 14)
       text = `${text.slice(0, -2)}…`;
     ctx.fillText(text, x, y);

@@ -331,6 +331,10 @@ def focus(got, at, last, cuts):
         print(f"  {r['from']:6.2f}-{r['from'] + 0.5:.2f}  voice {voice:>6}  rest {rest:>6}{was:<13}{margin}".rstrip())
     rows = at_rows(at)
     print(f"playing at {at:.2f}: {', '.join(rows) if rows else 'nothing from src/timeline/audio.json'}")
+    # a hit a few frames on is not playing yet but is in the row that starts here: named, as the row's level is partly its
+    soon = list(dict.fromkeys(r for k in range(1, 6) for r in at_rows(at + k / 10) if r not in rows))
+    if soon:
+        print(f"  starting by {at + 0.5:.2f}: {', '.join(soon)}")
     near = lambda a, b: a <= at + 2 and b >= at - 2  # noqa: E731
     for x in got["lines"]:
         if x["verdict"] != "clear" and near(x["from"], x["to"]):

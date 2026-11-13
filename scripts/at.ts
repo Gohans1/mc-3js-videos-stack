@@ -97,7 +97,7 @@ export const noteMoment = (dir: string, ref: string) => {
         : "its heard second as written (its shot has changed since)"
       : scene.shot === null
         ? "its scene second, kept with it"
-        : `${(n.context.shot.into as number).toFixed(2)} s into shot ${scene.shot + 1}/${shots.length}${n.shotName ? ` "${n.shotName}"` : ""}, as when it was written`,
+        : `${(n.context.shot.into as number).toFixed(2)} s into shot ${scene.shot}${n.shotName ? ` "${n.shotName}"` : ""}, as when it was written`,
   };
 };
 
@@ -347,14 +347,13 @@ if (isMain) {
   );
   if (got.shot)
     out.push(
-      // a draft's strip counts shots from 1, notes (and notes --shot) from 0
-      `shot ${got.shot.index + 1}/${got.shotCount} (notes call it shot ${got.shot.index}): "${got.shot.name ?? ""}"${got.shot.size ? ` ${got.shot.size}` : ""}, ` +
+      `shot ${got.shot.index} (shots 0-${got.shotCount - 1}): "${got.shot.name ?? ""}"${got.shot.size ? ` ${got.shot.size}` : ""}, ` +
         `${c.shotsTimeline ? `${c.shotsTimeline} [${got.shot.row}]` : `${c.camTimeline ?? "src/timeline/cam.json"} [${got.shot.row}] (a cut key)`}`,
     );
   const shotsFile = c.shotsTimeline ?? "the shots timeline";
   for (const b of got.cuts)
     out.push(
-      `  ${b.now ? "in" : "near"} the ${b.fx} transition into shot ${b.row + 1} (notes call it ${b.row}), scene ${fmt(b.from)}-${fmt(b.to)}: ${shotsFile} [${b.row}].transition`,
+      `  ${b.now ? "in" : "near"} the ${b.fx} transition into shot ${b.row}, scene ${fmt(b.from)}-${fmt(b.to)}: ${shotsFile} [${b.row}].transition`,
     );
   const anim = got.shot?.anim as Record<string, { fx: string; len?: number }> | undefined;
   if (anim && Object.keys(anim).length)
@@ -426,7 +425,7 @@ if (isMain) {
   const near = cutTimes.findIndex((s) => Math.abs(s - t) <= 0.3);
   if (near >= 0)
     out.push(
-      `cut ${near} at ${fmt(cutTimes[near]!)} heard, into the shot notes call ${near + 1}: bun run sheet renders/draft_video.mp4 cut ${near} shows it frame by frame`,
+      `cut ${near} at ${fmt(cutTimes[near]!)} heard, into shot ${near + 1}: bun run sheet renders/draft_video.mp4 cut ${near} shows it frame by frame`,
     );
   out.push(
     `next: look at it with the film's own list over it (AT=${t} LIST=1 bun run render stills), change the rows named, then bun run check`,

@@ -6,7 +6,7 @@
                                                  film second by itself (c02: 60 s), START=60 says it for any other video
   bun run sheet renders/draft_video.mp4 shots    the whole film at a glance: one frame from the middle of every shot
   bun run sheet renders/draft_video.mp4 cut 4    a transition up close: 6 frames from 0.25 s before cut 4 to 0.35 s after,
-                                                 naming the shots either side as the notes number them (cut 4: shot 4 into 5)
+                                                 naming the shots either side (cut 4: shot 4 into 5, numbered from 0 as everywhere)
                                                  and the transition between them (shotsTimeline row 5 .transition)
                                                  (shots and cuts from renders/cuts.json, the render clip that made the video)
 Seconds are heard seconds: 65, 1:05 or 01:05.250. Worth a look: a note's (bun run notes), a line's (bun run voice:cues),
@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from seconds import heard_second, meant  # noqa: E402
+from stale import say_if_stale  # noqa: E402
 
 R = Path.cwd() / "renders"  # run from the film folder
 args = sys.argv[1:]
@@ -72,7 +73,7 @@ elif len(args) == 3 and args[1] == "cut" and not flags:
         a, b = rows[n], rows[n + 1]
         tr = b.get("transition") or {}
         fx = f"{tr.get('fx')} {tr.get('len', 0):g} s ({rows_file} [{n + 1}].transition)" if tr.get("fx") else f"a hard cut (a transition goes in {rows_file} [{n + 1}].transition)"
-        meet = f': from shot {n} "{a.get("name", "")}" into shot {n + 1} "{b.get("name", "")}" (as the notes number them), {fx}'
+        meet = f': from shot {n} "{a.get("name", "")}" into shot {n + 1} "{b.get("name", "")}", {fx}'
     header = f"cut {n} at {c:.2f} s{meet}; 3 frames before, 3 after\nnext: bun run at {round(c, 2):g} names every row that places it"
     mode = f"cut{n}_"
 if len(args) == 1 and not flags and not Path(args[0]).exists() and not re.fullmatch(r"[\d.,]+", args[0]):
@@ -82,14 +83,6 @@ if flags or len(args) not in (0, 2):
     why = f"unknown option {flags[0]}" if flags else "the video needs its seconds too" if len(args) == 1 else f"one video at a time, got {len(args)} words"
     print(f"{why}: bun run sheet, or bun run sheet <video> 10,20.5,30 (--help for more)", file=sys.stderr)
     raise SystemExit(2)
-
-
-def say_if_stale(video):
-    """The video older than a change to the film's picture data (live-studio src/stale.mjs, as framecheck says it)."""
-    r = subprocess.run(["bun", str(Path(__file__).resolve().parents[2] / "packages/live-studio/src/stale.mjs"), str(video)],
-                       capture_output=True, text=True, timeout=60)
-    if r.stdout.strip():
-        print(f"STALE: {r.stdout.strip()}")
 
 
 def usage(why, code=2):

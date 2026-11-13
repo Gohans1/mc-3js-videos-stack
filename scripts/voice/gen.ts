@@ -19,8 +19,8 @@ import { stripAudioTags, sts, tts } from "./genvoice.ts";
 
 const HELP = `Narration takes for the lines in src/edit.json "takes", from ElevenLabs (via genvoice.pro unless ELEVENLABS_API_KEY
 is set). Run inside the film. Credits are spent only with --yes; without it every run only previews.
-  bun run voice:gen               every take with no audio yet in voice/takes, or whose words changed since: what it
-                                  would write and spend
+  bun run voice:gen               every take with no audio yet in voice/takes, or reworded since voice:gen made it: what
+                                  it would write and spend (a take whose audio's words differ is only named: give its ID)
   bun run voice:gen ID [ID ...]   those takes again, replacing their audio
   --try ID [ID ...] [--takes N]   new tries of those takes (N each, 1-20) into voice/try/<id>_<n>.mp3, the takes kept
   --guide FILE        speech-to-speech from this recording (exactly one ID; take.guide sets it per take)

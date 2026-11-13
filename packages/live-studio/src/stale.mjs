@@ -1,7 +1,8 @@
 // Is a rendered video older than the film data its picture comes from? framecheck imports it; sheet.py and jumps.py run
 // `bun stale.mjs <video>` inside the film and print what it prints. The sound timeline is left out: it never changes a frame.
+// draft.mp4 and final.mp4 are mix's: <name>_video.mp4's picture with the sound of when mix ran, so their sound counts too.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 
 export const staleVideo = (root, video) => {
   const file = resolve(root, video);
@@ -26,8 +27,31 @@ export const staleVideo = (root, video) => {
     }
   };
   if (existsSync(join(root, "src"))) walk(join(root, "src"));
-  if (!newest) return null;
   const shown = relative(root, file).replaceAll("\\", "/");
+  const picture =
+    /^(draft|final)\.mp4$/.test(basename(file)) && file.replace(/\.mp4$/, "_video.mp4");
+  if (picture) {
+    const rel = (p) => relative(root, p).replaceAll("\\", "/");
+    const mix = `bun run mix ${rel(picture)}`;
+    if (existsSync(picture) && statSync(picture).mtimeMs > made)
+      return {
+        file: rel(picture),
+        message: `${shown} has an older picture than ${rel(picture)}: ${mix} puts the new picture with the sound`,
+      };
+    if (newest)
+      return {
+        file: newest.rel,
+        message: `${shown} is older than ${newest.rel}: its frames may not show that change; bun run render clip draws the picture again, then ${mix}`,
+      };
+    const heard = [
+      sound && join(root, sound),
+      join(root, "assets/public/agent/full_voice.wav"),
+    ].find((p) => p && existsSync(p) && statSync(p).mtimeMs > made);
+    return heard
+      ? { file: rel(heard), message: `${shown} has an older sound than ${rel(heard)}: ${mix}` }
+      : null;
+  }
+  if (!newest) return null;
   // a chunk's stamp covers the whole built film (render.mjs stamp), so any change draws every chunk again
   const again = shown.endsWith("final_video.mp4")
     ? "bun run render final draws it again"

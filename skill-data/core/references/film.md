@@ -14,13 +14,13 @@ A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`
 
 ## What each file holds
 
-`bun run help` inside a film prints this film's own map (its timeline file names come from `package.json` `"live-studio"`).
+`bun run help` inside a film prints this film's own map (its timeline file names come from `package.json` `"live-studio"`). Shots count from 0 everywhere: notes, the studio, `bun run at`, the draft's strip.
 
 | File                                    | Holds                                                                               | Clock     |
 | --------------------------------------- | ----------------------------------------------------------------------------------- | --------- |
 | `src/scene.ts`                          | The film's code: `buildScene` returns `draw(t)`, which must draw any `t` on its own | Scene     |
 | `src/edit.json`                         | Narration takes and script, `voice.warp`, beats, the film's own settings            | Narration |
-| `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into the shot, `anim`                 | Narration |
+| `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into it, `anim`; shot N is row N      | Narration |
 | `src/timeline/cam.json`                 | Camera keys and cuts                                                                | Scene     |
 | `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                  | Scene     |
 | `src/timeline/text.json`, `adjust.json` | On-screen text, colour and look layers                                              | Scene     |
@@ -40,7 +40,7 @@ bun run find --jev --kind transition "a memory slipping away"   # by meaning, wh
 bun run find sit --from stand --to sitFloor  # mocap by posture
 ```
 
-Every schema is open (`looseObject`): a film may define its own transitions, anims and text voices in its `draw`.
+Every schema is open (`looseObject`): a film may make its own objects, transitions, anims and checks. Where each goes: `bun run skills get core --ref contract`.
 
 ## Try a command on a copy, never on a real film
 

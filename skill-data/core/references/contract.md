@@ -41,6 +41,22 @@ Each hook turns on one part of the studio. The template sets all of these:
 
 A film without a hook still plays; the studio says what is missing and which hook adds it.
 
+## Your own work, past the built-ins
+
+The built-ins are a starting kit, not the limit: anything Three.js can draw belongs in `src/scene.ts`. These are the doors the tools see it through:
+
+| You make                     | Where it goes                                                                                                                                                                                                                   | How you see it                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| An object, effect or rig     | Built in `buildScene`, moved in `draw(t)` from `t` alone                                                                                                                                                                        | `AT=12 bun run render stills`                                                     |
+| A name the checks can target | `[mesh, "Name"]` in `draw.tools.objects` (or set the object's `.name`)                                                                                                                                                          | `CHECK=motion:Name,12,14 bun run render stills`; also `seen`, `touch`             |
+| A line in the draft's list   | A row from `draw.describe(t)`: `LIST=1` shows only what it returns                                                                                                                                                              | `AT=12 LIST=1 bun run render stills`                                              |
+| A transition                 | `{ id, title, tip, category, glsl }`, the GLSL defining `vec4 transition(vec2 uv)` from `getFromColor`, `getToColor` and `progress`; the list goes as `makeTransitions`' last argument                                          | Its id in a shot's `transition.fx`; a render warns of an id the film lacks        |
+| A shot anim                  | `{ id, title, cat, tip, len, apply(cam, u, t, k) }` added to the `anims` the scene passes to `animate` (`in`, `out` or `combo`); `apply` moves `cam.p`, `cam.l`, `cam.fov` at progress `u` and returns how black the frame goes | Its id in a shot's `anim`; `bun run check` names a near miss of a built-in        |
+| A check of its own           | `draw.checks.name = (...args) => lines, or { still, canvas }`                                                                                                                                                                   | `CHECK=name:a,b bun run render stills`                                            |
+| A close look from set spots  | A page in `lab/` importing `live-studio/lab` (copy `templates/film/lab/showcase.ts`)                                                                                                                                            | `ENTRY=lab/x.ts bun run render stills`; `LAB_VIEW=v` reaches it as `cfg.lab.view` |
+
+`src/scene.ts` is plain JS under `// @ts-nocheck`, and `bun run check` reads only the JSON: a mistake in the code shows as an `ERROR` when a render builds the scene, so look at a still after every code change.
+
 ## Sound the studio finds
 
 | Where                                | What                                                                                                                     |

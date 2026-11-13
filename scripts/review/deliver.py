@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sound"))
 from listen import YOUTUBE, loudness  # noqa: E402
 from seconds import SAY, heard_second, meant  # noqa: E402  (listen puts scripts/ on the path)
+from stale import stale  # noqa: E402
 
 USAGE = "bun run deliver [<video>] [--youtube [<from>-<to>]] (--help for more)"
 SHORTS_LONGEST = 180
@@ -245,7 +246,7 @@ def youtube(video, span, root):
         peak = max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0))
         picture = out / f"youtube_bands_{peak}s.png"
         band_picture(video, preview, peak, picture, start)
-        shot = f", shot {1 + sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts else ""
+        shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts else ""
         print(f"BANDS {a}-{b + 1} s{shot}: the re-encode scores {after[peak]:.1f} where the upload has {before.get(peak, 0.0):.1f}; "
               f"look: {picture.relative_to(root)} (top: upload | re-encode, bottom: the same with small steps of light x16)")
     if len(spans) > 6:
@@ -313,6 +314,8 @@ def main(args):
         print(f"--youtube {span[0]:g}-{span[1]:g} runs past the video's end: it is {long:.2f} s long", file=sys.stderr)
         return 2
     summary, found = check(video, info)
+    if old := stale(video):
+        found.insert(0, ("FIX", old))
     print(summary)
     for kind, words in found:
         print(f"{kind} {words}")

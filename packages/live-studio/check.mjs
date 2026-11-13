@@ -4,6 +4,9 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ANIMS } from "film-stage/animate";
+import { TRANSITIONS } from "film-stage/transitions";
+
 import { cliArgs, needFilm } from "./src/cli.mjs";
 import { CAM_KEYS, checkFiles, SOUND_KEYS } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
@@ -126,6 +129,17 @@ const misspelt = (obj, keys) =>
     return near ? [[k, near]] : [];
   });
 
+// the known name a word is taken for a typo of: a letter off, or two swapped (a film's own names sit further off)
+const nearName = (k, names) =>
+  names.includes(k)
+    ? null
+    : names.find(
+        (n) =>
+          distance(k.toLowerCase(), n.toLowerCase()) <= 1 ||
+          (k.length === n.length &&
+            k.toLowerCase().split("").sort().join() === n.toLowerCase().split("").sort().join()),
+      );
+
 // A fault in the lanes must not hide the others (an AI fixes what it is shown and meets the rest a run later):
 // names are checked whenever the file parses; gains, keys and the end need rows of the right shape
 const soundBroken = found.find((p) => p.where === conf.soundTimeline);
@@ -233,14 +247,7 @@ if (Array.isArray(camRead))
     camRead.flatMap((key, i) =>
       key && typeof key === "object"
         ? Object.keys(key).flatMap((k) => {
-            const near = CAM_KEYS.includes(k)
-              ? null
-              : CAM_KEYS.find(
-                  (n) =>
-                    distance(k.toLowerCase(), n) <= 1 ||
-                    (k.length === n.length &&
-                      k.toLowerCase().split("").sort().join() === n.split("").sort().join()),
-                );
+            const near = nearName(k, CAM_KEYS);
             return near
               ? [`✖ [${i}] "${k}": no key the camera reads; did you mean "${near}"?`]
               : [];
@@ -248,6 +255,24 @@ if (Array.isArray(camRead))
         : [],
     ),
   );
+// a transition or anim name nothing has plays a hard cut or no move, silently; a film's own names (passed to
+// makeTransitions, or in draw.anims) are not known here, so only a near miss of a built-in is named
+const shotsRead = readJson(conf.shotsTimeline);
+if (Array.isArray(shotsRead)) {
+  const ids = (list) => list.map((x) => x.id);
+  shotsRead.forEach((shot, i) => {
+    const near = (where, fx, names) => {
+      const to = typeof fx === "string" && nearName(fx, names);
+      if (to)
+        warnings.push(
+          `⚠ ${conf.shotsTimeline} [${i}].${where} "${fx}": no built-in has that name; did you mean "${to}"? (left as it is it plays ${where === "transition" ? "a hard cut" : "no move"}, unless the film defines its own)`,
+        );
+    };
+    near("transition", shot?.transition?.fx, ids(TRANSITIONS));
+    for (const slot of ["in", "out", "combo"])
+      near(`anim.${slot}`, shot?.anim?.[slot]?.fx, ids(ANIMS[slot]));
+  });
+}
 const lanesPath = conf.soundTimeline && join(PROJECT, conf.soundTimeline);
 if (lanesPath && existsSync(lanesPath) && !soundBroken) {
   const lanes = JSON.parse(readFileSync(lanesPath, "utf8"));

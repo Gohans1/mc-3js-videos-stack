@@ -13,6 +13,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from stale import say_if_stale
+
 ROOT = Path.cwd()  # the film's folder: bun run jumps runs it there
 args = sys.argv[1:]
 if args[:1] in (["-h"], ["--help"], ["help"]):
@@ -23,14 +25,6 @@ if len(args) > 1 or (args and args[0].startswith("-")):
     print(f"{why}: bun run jumps [renders/draft_video.mp4] (--help for more)", file=sys.stderr)
     raise SystemExit(2)
 video = args[0] if args else "renders/draft_video.mp4"
-
-
-def say_if_stale(video):
-    """The video older than a change to the film's picture data (live-studio src/stale.mjs, as framecheck says it)."""
-    r = subprocess.run(["bun", str(Path(__file__).resolve().parents[2] / "packages/live-studio/src/stale.mjs"), str(video)],
-                       capture_output=True, text=True, timeout=60)
-    if r.stdout.strip():
-        print(f"STALE: {r.stdout.strip()}")
 
 
 def one_edit(a, b):

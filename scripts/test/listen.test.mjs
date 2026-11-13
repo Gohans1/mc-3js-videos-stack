@@ -316,13 +316,17 @@ test("a row that lacks what the mix reads stops mix and listen with the command 
 
 test("mix given a video that is not there did nothing: exit 2, naming the videos it could take", () => {
   const dir = mkdtempSync(join(tmpdir(), "mix-novideo-"));
+  // only a picture render takes a mix: deliver's youtube_preview.mp4 or a mixed draft.mp4 is not one
+  mkdirSync(join(dir, "renders"));
+  for (const f of ["draft_video.mp4", "draft.mp4", "youtube_preview.mp4"])
+    writeFileSync(join(dir, "renders", f), "x");
   const r = spawnSync("python", [join(SOUND, "mix.py"), "renders/nope.mp4"], {
     cwd: dir,
     encoding: "utf8",
   });
   rmSync(dir, { recursive: true, force: true });
   assert.equal(r.status, 2, r.stderr);
-  assert.match(r.stderr, /no renders\/nope\.mp4 \(the videos here: none yet\)/);
+  assert.match(r.stderr, /no renders\/nope\.mp4 \(the pictures here: renders\/draft_video\.mp4\)/);
 });
 
 // a mix stopped at the -1.5 dBTP ceiling still went out at -0.9 after the AAC encode (probe R7): the encoded file is measured.

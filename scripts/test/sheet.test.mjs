@@ -1,4 +1,4 @@
-// scripts/review/sheet.py: a cut up close names the shots either side, as the notes number them, and the rows that place it
+// scripts/review/sheet.py: a cut up close names the shots either side, and the rows that place it
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -46,7 +46,7 @@ test("sheet cut N says which shots meet there and the transition between them; a
   assert.equal(cut.status, 0, cut.stdout + cut.stderr);
   assert.match(
     cut.stdout,
-    /cut 1 at 2\.00 s: from shot 1 "his hand" into shot 2 "the hall" \(as the notes number them\), dissolve 0\.5 s \(src\/timeline\/shots\.json \[2\]\.transition\)/,
+    /cut 1 at 2\.00 s: from shot 1 "his hand" into shot 2 "the hall", dissolve 0\.5 s \(src\/timeline\/shots\.json \[2\]\.transition\)/,
   );
   assert.match(cut.stdout, /next: bun run at 2 /);
 

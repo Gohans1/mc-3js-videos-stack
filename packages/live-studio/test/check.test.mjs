@@ -93,6 +93,37 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.match(gian.stderr, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
 });
 
+test("check names a transition or anim one letter off a built-in, and leaves a film's own name alone", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { shotsTimeline: "src/timeline/shots.json" } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      { t: 0, name: "a" },
+      { t: 2, name: "b", transition: { fx: "disolve", len: 0.5 }, anim: { in: { fx: "psuh" } } },
+      { t: 4, name: "c", transition: { fx: "myWarp", len: 0.5 } },
+    ]),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  // a typo plays a hard cut and no anim, silently: only a warning, since a film may name its own
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(
+    r.stdout,
+    /⚠ src\/timeline\/shots\.json \[1\]\.transition "disolve"[^\n]*did you mean "dissolve"\?/,
+  );
+  assert.match(
+    r.stdout,
+    /⚠ src\/timeline\/shots\.json \[1\]\.anim\.in "psuh"[^\n]*did you mean "push"\?/,
+  );
+  assert.doesNotMatch(r.stdout, /myWarp/);
+});
+
 test("check refuses a sound placed after the film ends, and only warns of a gain far over the file's own level", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

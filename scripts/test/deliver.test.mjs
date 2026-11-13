@@ -1,7 +1,7 @@
 // scripts/review/deliver.py: a finished video checked against YouTube's upload spec, each fault with its fix
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -104,4 +104,20 @@ test("--youtube reads its seconds as notes print them", () => {
   const r = deliver(join(tmpdir(), "any.mp4"), "--youtube", "0:05-0:02");
   assert.equal(r.status, 2);
   assert.match(r.stderr, /--youtube 0:05-0:02: the first second must come before the second one/);
+});
+
+test("an upload older than its picture is not ready: the fix is the mix that puts the new picture on", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final.mp4");
+  make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
+  writeFileSync(join(dir, "final_video.mp4"), "x");
+  utimesSync(file, 1000, 1000);
+  const r = spawnSync("python", [DELIVER, file], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(
+    r.stdout,
+    /FIX final\.mp4 has an older picture than final_video\.mp4[^\n]*bun run mix final_video\.mp4/,
+  );
+  assert.doesNotMatch(r.stdout, /ready to upload/);
 });
