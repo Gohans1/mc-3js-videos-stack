@@ -122,7 +122,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     multisampling: 4,
   });
   const fade = makeFade(renderer);
-  const titles = makeTitles(renderer, W, H); // the titles and Cinetic annotation shapes of src/timeline/text.json, over everything
+  const titles = makeTitles(renderer, W, H, { items: EDIT.text.items }); // the titles and Cinetic annotation shapes of src/timeline/text.json, over everything; ready waits on their fonts only
   const anims = ANIMS;
   await titles.ready;
   composer.addPass(new RenderPass(scene, camera));

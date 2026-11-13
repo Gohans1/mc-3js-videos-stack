@@ -214,7 +214,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   hud.add(cell);
   renderer.autoClear = false;
   const fade = makeFade(renderer);
-  const titles = makeTitles(renderer, W, H); // the titles, arrows and circles of src/timeline/text.json, over everything
+  const titles = makeTitles(renderer, W, H, { items: EDIT.text.items }); // the titles, arrows and circles of src/timeline/text.json, over everything; ready waits on their fonts only
   await titles.ready;
   stage("light, lens, hud");
 

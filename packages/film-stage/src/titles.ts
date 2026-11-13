@@ -25,6 +25,7 @@ import { EASES, lmix } from "./camera";
 import {
   fontOf,
   FONTS,
+  fontsFor,
   isShapeKind,
   SHAPE_CATEGORIES,
   SHAPE_IN,
@@ -634,7 +635,9 @@ export function makeTitles(renderer, W, H, extra) {
   };
   document.fonts?.addEventListener?.("loadingdone", onFontsLoaded);
   const ready = Promise.all(
-    FONTS.flatMap((f) => [400, 700].map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0"))),
+    fontsFor(extra?.items).flatMap((f) =>
+      [400, 700].map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0")),
+    ),
   ).catch(() => {});
 
   const draw = (list, t, camera, tracks, timeAt) => {

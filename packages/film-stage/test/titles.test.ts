@@ -808,3 +808,13 @@ test("makeTitles draws every new voice mid-way without throwing", () => {
     (globalThis as { document?: unknown }).document = prevDoc;
   }
 });
+
+test("a film waits only on the fonts its items draw in, every font once one cycles through them", async () => {
+  const { FONTS, fontsFor } = await import("../src/titles-catalog");
+  expect(
+    fontsFor([{ font: "serif" }, { text: "no font is Inter" }, { font: "serif" }]).map((f) => f.id),
+  ).toEqual(["sans", "serif"]);
+  expect(fontsFor([])).toEqual([]);
+  expect(fontsFor([{ font: "serif", out: { fx: "fontCycle" } }])).toEqual(FONTS);
+  expect(fontsFor(undefined)).toEqual(FONTS);
+});

@@ -116,6 +116,16 @@ export const FONTS: readonly Font[] = [
 ];
 export const fontOf = (id?: string) => (FONTS.find((f) => f.id === id) ?? FONTS[0]!).css;
 
+type FontUser = { font?: string; in?: { fx?: string }; out?: { fx?: string } };
+// The faces a build waits on: the ones its items draw in (a phone skips ~0.5 MB of the rest); every face when an item's
+// fontCycle hops through them, or when the items are not given. A face picked later loads on first draw (loadingdone redraws)
+export const fontsFor = (items?: readonly FontUser[]): readonly Font[] => {
+  if (!items || items.some((it) => it.in?.fx === "fontCycle" || it.out?.fx === "fontCycle"))
+    return FONTS;
+  const ids = new Set(items.map((it) => FONTS.find((f) => f.id === it.font)?.id ?? FONTS[0]!.id));
+  return FONTS.filter((f) => ids.has(f.id));
+};
+
 export const TEXT_CATEGORIES = [
   "Clean",
   "Build & Mask",
