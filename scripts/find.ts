@@ -200,6 +200,8 @@ const CAT_WORDS: Record<string, string> = {
   "sfx/game": "arcade retro 8bit chiptune powerup coin pickup jump blip level",
   "sfx/voices": "voice announcer callout spoken shout narrator countdown",
   "sfx/footsteps": "step walk",
+  "sfx/comedy": "funny meme joke gag fail cartoon silly awkward reaction",
+  "sfx/crowd": "audience people applause clap cheer laugh boo",
   "sfx/shutter": "photo snapshot picture",
   "sfx/foley": "everyday object",
   "sfx/musical": "note instrument tone mallet pluck sparkle drip bubble bell sting stinger fanfare",

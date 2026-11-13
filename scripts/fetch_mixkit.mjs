@@ -1,12 +1,13 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { cliArgs } from "../packages/live-studio/src/cli.mjs";
 import { download, validWav } from "./download.mjs";
 import { LOCAL, ROOT } from "./vault.mjs";
 
-const HELP = `Downloads the Mixkit sound effects listed in scripts/sfx-catalogue.json into the local vault's sfx/mixkit/ (8 at a time,
-each checked as WAV; a file already there and valid is kept). From the repo root:
+const HELP = `Downloads the Mixkit sound effects listed in scripts/sfx-catalogue.json (the cinetic kit's) and scripts/sfx-picks.json
+(the vault's own) into the local vault's sfx/mixkit/ (8 at a time, each checked as WAV; a file already there and valid is
+kept). From the repo root:
   bun run fetch:sfx
 A sound that fails is named at the end: run it again to retry those. Then bun run setup:sound files them by category.`;
 cliArgs(HELP, [], 0);
@@ -15,7 +16,10 @@ const catalog = JSON.parse(readFileSync(join(ROOT, "scripts/sfx-catalogue.json")
 const out = join(LOCAL, "sfx/mixkit");
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, "catalogue.json"), JSON.stringify(catalog, null, 2));
-const queue = [...catalog.sounds];
+const picksFile = join(ROOT, "scripts/sfx-picks.json");
+const picks = existsSync(picksFile) ? JSON.parse(readFileSync(picksFile, "utf8")).sounds : [];
+const all = [...catalog.sounds, ...picks];
+const queue = [...all];
 const failures = [];
 let downloaded = 0;
 async function worker() {
@@ -34,4 +38,4 @@ if (failures.length)
   throw new Error(
     `${failures.length} sounds unavailable: ${failures.join(", ")}. Run fetch:sfx again to retry.`,
   );
-console.log(`${catalog.sounds.length} WAVs verified in ${out}; ${downloaded} downloaded.`);
+console.log(`${all.length} WAVs verified in ${out}; ${downloaded} downloaded.`);

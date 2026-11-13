@@ -429,14 +429,17 @@ export async function buildSoundVault({
   const sources = existsSync(sourcesFile) ? JSON.parse(readFileSync(sourcesFile, "utf8")) : {};
   const dropDir = pixabayDir ?? (local === LOCAL ? join(homedir(), "Downloads") : undefined);
 
-  // 1. Mixkit curated SFX (all 93 in catalogue.sounds; catalogue.rejected excluded; reuse vault/sfx/mixkit cache)
+  // 1. Mixkit curated SFX: the cinetic kit's catalogue.sounds (catalogue.rejected excluded), filed by role, and the
+  // vault's own picks (scripts/sfx-picks.json), each naming its category; reuse the vault/sfx/mixkit cache
   const catalogue = JSON.parse(readFileSync(join(root, "scripts/sfx-catalogue.json"), "utf8"));
-  const mixkitKept = catalogue.sounds ?? [];
+  const picksFile = join(root, "scripts/sfx-picks.json");
+  const picks = existsSync(picksFile) ? JSON.parse(readFileSync(picksFile, "utf8")).sounds : [];
+  const mixkitKept = [...(catalogue.sounds ?? []), ...picks];
   let mixLinked = 0,
     mixFetched = 0,
     mixReused = 0;
   for (const s of mixkitKept) {
-    const cat = MIXKIT_ID_CATEGORY[s.id] ?? MIXKIT_CATEGORY[s.role] ?? "foley";
+    const cat = s.category ?? MIXKIT_ID_CATEGORY[s.id] ?? MIXKIT_CATEGORY[s.role] ?? "foley";
     const target = join(vaultSound, "sfx", cat, `${s.id}.wav`),
       cached = join(local, "sfx/mixkit", `${s.id}.wav`);
     moveIntoCategory(vaultSound, "sfx", target);
@@ -457,7 +460,7 @@ export async function buildSoundVault({
       title: s.title,
       license: "Mixkit Sound Effects Free License",
       url: s.page,
-      for: s.ear?.query ?? s.role,
+      for: s.for ?? s.ear?.query ?? s.role,
       source: "mixkit",
       kind: "sfx",
       origin: "real",

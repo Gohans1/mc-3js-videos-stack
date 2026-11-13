@@ -167,6 +167,25 @@ test("sound fetch replaces an invalid cached response with the downloaded WAV", 
   assert.deepEqual(readFileSync(file), wav);
 });
 
+test("sound fetch also downloads the vault's own Mixkit picks", async (t) => {
+  const wav = Buffer.from(
+    "524946462800000057415645666d74201000000001000100401f0000803e000002001000646174610400000000000000",
+    "hex",
+  );
+  const f = await soundFixture(t, (_req, res) => {
+    res.end(wav);
+  });
+  const url = JSON.parse(readFileSync(join(f.root, "scripts/sfx-catalogue.json"), "utf8")).sounds[0]
+    .file_url;
+  writeFileSync(
+    join(f.root, "scripts/sfx-picks.json"),
+    JSON.stringify({ sounds: [{ id: "mixkit-1", file_url: url }] }),
+  );
+  const result = await f.fetch();
+  assert.equal(result.status, 0, result.output);
+  assert.deepEqual(readFileSync(join(f.root, "vault/sfx/mixkit/mixkit-1.wav")), wav);
+});
+
 test("pick.mjs cherry-picks blockstates, parent models, textures and .mcmeta without Python", async (t) => {
   const { zipSync, unzipSync, strToU8, strFromU8 } = await import("fflate");
   const { pickBlocks } = await import("../../packages/mc-assets/pick.mjs");
@@ -440,6 +459,56 @@ test("buildSoundVault includes all curated catalogue.sounds and ignores catalogu
   assert.equal(sources["mixkit-999"].source, "mixkit");
   assert.equal(sources["mixkit-999"].origin, "real");
   assert.equal(sources["mixkit-000"], undefined);
+});
+
+test("buildSoundVault files the vault's own Mixkit picks into their category, saying what each is for", async (t) => {
+  const { buildSoundVault } = await import("../build_sound_vault.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-sound-picks-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const local = join(root, "vault");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(join(local, "sfx/mixkit"), { recursive: true });
+  writeFileSync(
+    join(local, "sfx/mixkit/mixkit-472.wav"),
+    Buffer.from(
+      "524946462800000057415645666d74201000000001000100401f0000803e000002001000646174610400000000400040",
+      "hex",
+    ),
+  );
+  writeFileSync(join(root, "scripts/sfx-catalogue.json"), JSON.stringify({ sounds: [] }));
+  writeFileSync(
+    join(root, "scripts/sfx-picks.json"),
+    JSON.stringify({
+      sounds: [
+        {
+          id: "mixkit-472",
+          title: "Slow sad trombone fail",
+          category: "comedy",
+          for: "a fail, a punchline that flops",
+          page: "https://mixkit.co/free-sound-effects/wrong/",
+        },
+      ],
+    }),
+  );
+  await buildSoundVault({
+    root,
+    local,
+    external: join(root, "none"),
+    skipBgm: true,
+    skipEarshot: true,
+    log: () => {},
+  });
+  assert.equal(existsSync(join(local, "sound/sfx/comedy/mixkit-472.wav")), true);
+  const sources = JSON.parse(readFileSync(join(local, "sound/SOURCES.json"), "utf8"));
+  assert.deepEqual(sources["mixkit-472"], {
+    title: "Slow sad trombone fail",
+    license: "Mixkit Sound Effects Free License",
+    url: "https://mixkit.co/free-sound-effects/wrong/",
+    for: "a fail, a punchline that flops",
+    source: "mixkit",
+    kind: "sfx",
+    origin: "real",
+  });
 });
 
 test("buildSoundVault files Mixkit tones by use and moves a sound out of its old category instead of copying it", async (t) => {

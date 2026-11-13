@@ -1,0 +1,416 @@
+{
+  "about": "Mixkit sound effects the vault keeps for itself (the cinetic kit's own are scripts/sfx-catalogue.json): what most videos reach for and the kit lacks, each picked by hand from Mixkit's category pages and heard with earshot (ear: the query it was taken for, its z and verdict). bun run fetch:sfx downloads them, bun run setup:sound files each into vault/sound/sfx/<category>/. Mixkit's terms (9j) forbid mass downloads of its library: this list stays a hand-picked few, added one at a time as films need them, never a crawl of a category.",
+  "licence": {
+    "name": "Mixkit Sound Effects Free License",
+    "url": "https://mixkit.co/license/#sfxFree",
+    "terms": "https://mixkit.co/terms/",
+    "read": "2026-11-13",
+    "credit": false,
+    "limits": "use inside a larger work (a film); never redistribute the file on its own, as stock, in a tool or template; never register it with a rights-management service; no bots or scripts to mass download (terms 9j)"
+  },
+  "sounds": [
+    {
+      "id": "mixkit-472",
+      "title": "Slow sad trombone fail",
+      "category": "comedy",
+      "for": "a fail, a punchline that flops",
+      "page": "https://mixkit.co/free-sound-effects/wrong/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/472/472.wav",
+      "ear": {
+        "query": "a sad trombone wah wah fail",
+        "z": 4.91,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-471",
+      "title": "Sad game over trombone",
+      "category": "comedy",
+      "for": "a fail, a game over played for laughs",
+      "page": "https://mixkit.co/free-sound-effects/game-over/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/471/471.wav",
+      "ear": {
+        "query": "a sad trombone wah wah fail",
+        "z": 4.64,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-616",
+      "title": "Cartoon toy whistle",
+      "category": "comedy",
+      "for": "a cartoon whistle: a sneak, a silly move",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/616/616.wav",
+      "ear": {
+        "query": "a cartoon slide whistle",
+        "z": 6.83,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-406",
+      "title": "Short whistle fall",
+      "category": "comedy",
+      "for": "a slide whistle falling: a drop, a fall, a flop",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/406/406.wav",
+      "ear": {
+        "query": "a slide whistle falling",
+        "z": 3.5,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-2894",
+      "title": "Boing hit sound",
+      "category": "comedy",
+      "for": "a cartoon boing: a bonk, a bounce, a head hit",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2894/2894.wav",
+      "ear": {
+        "query": "a cartoon boing spring",
+        "z": 4.15,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-578",
+      "title": "Joke drums",
+      "category": "comedy",
+      "for": "a rimshot after a joke (ba dum tss)",
+      "page": "https://mixkit.co/free-sound-effects/drum/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/578/578.wav",
+      "ear": {
+        "query": "a rimshot joke drum",
+        "z": 5.14,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-1082",
+      "title": "Censorship beep",
+      "category": "comedy",
+      "for": "a censor bleep over a word",
+      "page": "https://mixkit.co/free-sound-effects/beep/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1082/1082.wav",
+      "ear": {
+        "query": "a censor bleep tone",
+        "z": 2.79,
+        "verdict": "plausible"
+      }
+    },
+    {
+      "id": "mixkit-1083",
+      "title": "Censorship beep long",
+      "category": "comedy",
+      "for": "a long censor bleep over a sentence",
+      "page": "https://mixkit.co/free-sound-effects/beep/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1083/1083.wav",
+      "ear": {
+        "query": "a long censor bleep tone",
+        "z": 3.27,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-1788",
+      "title": "Summer crickets loop",
+      "category": "comedy",
+      "for": "crickets: an awkward silence",
+      "page": "https://mixkit.co/free-sound-effects/crickets/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1788/1788.wav",
+      "ear": {
+        "query": "crickets chirping at night",
+        "z": 4.08,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-967",
+      "title": "Cartoon surprise gasp",
+      "category": "comedy",
+      "for": "a cartoon gasp of surprise",
+      "page": "https://mixkit.co/free-sound-effects/gasp/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/967/967.wav",
+      "ear": {
+        "query": "a surprised gasp",
+        "z": 4.99,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-964",
+      "title": "Female astonished gasp",
+      "category": "comedy",
+      "for": "a woman's gasp of surprise or shock",
+      "page": "https://mixkit.co/free-sound-effects/gasp/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/964/964.wav",
+      "ear": {
+        "query": "a woman gasping in surprise",
+        "z": 6.02,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-966",
+      "title": "Male astonished gasp",
+      "category": "comedy",
+      "for": "a man's gasp of surprise or shock",
+      "page": "https://mixkit.co/free-sound-effects/gasp/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/966/966.wav",
+      "ear": {
+        "query": "a man gasping in surprise",
+        "z": 6.34,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-518",
+      "title": "Small group cheer and applause",
+      "category": "crowd",
+      "for": "a small crowd cheering and clapping",
+      "page": "https://mixkit.co/free-sound-effects/applause/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/518/518.wav",
+      "ear": {
+        "query": "a small crowd cheering and clapping",
+        "z": 3.86,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-476",
+      "title": "Conference audience clapping strongly",
+      "category": "crowd",
+      "for": "an audience applauding",
+      "page": "https://mixkit.co/free-sound-effects/applause/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/476/476.wav",
+      "ear": {
+        "query": "an audience applauding",
+        "z": 4.06,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-462",
+      "title": "Huge crowd cheering victory",
+      "category": "crowd",
+      "for": "a huge crowd cheering a win",
+      "page": "https://mixkit.co/free-sound-effects/crowd/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/462/462.wav",
+      "ear": {
+        "query": "a huge stadium crowd cheering",
+        "z": 3,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-482",
+      "title": "One man clapping",
+      "category": "crowd",
+      "for": "one person clapping: a slow, sarcastic clap",
+      "page": "https://mixkit.co/free-sound-effects/applause/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/482/482.wav",
+      "ear": {
+        "query": "one person clapping",
+        "z": 3.13,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-424",
+      "title": "Crowd laugh",
+      "category": "crowd",
+      "for": "an audience laughing",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/424/424.wav",
+      "ear": {
+        "query": "an audience laughing",
+        "z": 5.95,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-422",
+      "title": "Small crowd laugh and applause",
+      "category": "crowd",
+      "for": "a small crowd laughing and clapping",
+      "page": "https://mixkit.co/free-sound-effects/applause/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/422/422.wav",
+      "ear": {
+        "query": "a crowd laughing and clapping",
+        "z": 5.11,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-463",
+      "title": "Crowd disappointment long boo",
+      "category": "crowd",
+      "for": "a crowd booing",
+      "page": "https://mixkit.co/free-sound-effects/lose/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/463/463.wav",
+      "ear": {
+        "query": "a crowd booing",
+        "z": 4.61,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-2870",
+      "title": "Correct answer tone",
+      "category": "notifications",
+      "for": "a correct answer ding",
+      "page": "https://mixkit.co/free-sound-effects/correct/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2870/2870.wav",
+      "ear": {
+        "query": "a correct answer ding",
+        "z": 4.37,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-952",
+      "title": "Correct answer reward",
+      "category": "notifications",
+      "for": "a correct answer reward chime",
+      "page": "https://mixkit.co/free-sound-effects/correct/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/952/952.wav",
+      "ear": {
+        "query": "a correct answer reward chime",
+        "z": 3.28,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-950",
+      "title": "Game show wrong answer buzz",
+      "category": "notifications",
+      "for": "a game show wrong answer buzzer",
+      "page": "https://mixkit.co/free-sound-effects/wrong/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/950/950.wav",
+      "ear": {
+        "query": "a game show wrong answer buzzer",
+        "z": 3.51,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-600",
+      "title": "Achievement bell",
+      "category": "notifications",
+      "for": "an achievement bell",
+      "page": "https://mixkit.co/free-sound-effects/win/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/600/600.wav",
+      "ear": {
+        "query": "an achievement bell",
+        "z": 4,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-995",
+      "title": "Classic alarm",
+      "category": "notifications",
+      "for": "an alarm bell ringing",
+      "page": "https://mixkit.co/free-sound-effects/alarm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/995/995.wav",
+      "ear": {
+        "query": "an alarm bell ringing",
+        "z": 2.78,
+        "verdict": "plausible"
+      }
+    },
+    {
+      "id": "mixkit-1643",
+      "title": "Police siren US",
+      "category": "notifications",
+      "for": "a short police siren",
+      "page": "https://mixkit.co/free-sound-effects/siren/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1643/1643.wav",
+      "ear": {
+        "query": "a police siren",
+        "z": 5.4,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-2059",
+      "title": "Game level completed",
+      "category": "game",
+      "for": "a level complete fanfare",
+      "page": "https://mixkit.co/free-sound-effects/game-over/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2059/2059.wav",
+      "ear": {
+        "query": "a level complete fanfare",
+        "z": 3.51,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-1999",
+      "title": "Gold coin prize",
+      "category": "game",
+      "for": "a coin prize: money won",
+      "page": "https://mixkit.co/free-sound-effects/money/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1999/1999.wav",
+      "ear": {
+        "query": "a coin pickup prize sound",
+        "z": 4.54,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-1996",
+      "title": "Slot machine payout alarm",
+      "category": "game",
+      "for": "a slot machine paying out: a jackpot",
+      "page": "https://mixkit.co/free-sound-effects/money/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1996/1996.wav",
+      "ear": {
+        "query": "a slot machine payout",
+        "z": 3.26,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-1993",
+      "title": "Clinking coins",
+      "category": "foley",
+      "for": "coins clinking: money, a payment",
+      "page": "https://mixkit.co/free-sound-effects/money/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1993/1993.wav",
+      "ear": {
+        "query": "coins clinking",
+        "z": 4.67,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-566",
+      "title": "Drum Roll",
+      "category": "musical",
+      "for": "a snare drum roll before a reveal",
+      "page": "https://mixkit.co/free-sound-effects/drum/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/566/566.wav",
+      "ear": {
+        "query": "a snare drum roll",
+        "z": 6.08,
+        "verdict": "strong"
+      }
+    },
+    {
+      "id": "mixkit-2902",
+      "title": "Movie impact intro presentation",
+      "category": "impacts",
+      "for": "a cinematic boom for an intro or a big claim",
+      "page": "https://mixkit.co/free-sound-effects/boom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2902/2902.wav",
+      "ear": {
+        "query": "a cinematic boom impact",
+        "z": 3.05,
+        "verdict": "strong"
+      }
+    }
+  ]
+}

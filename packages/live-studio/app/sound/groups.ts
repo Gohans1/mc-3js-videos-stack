@@ -12,6 +12,7 @@ const CATEGORY_TITLES: Record<string, string> = {
   shutter: "Camera shutter",
   "sci-fi": "Sci-fi & lasers",
   game: "Game & arcade",
+  comedy: "Comedy & memes",
 };
 
 export const MC_HEADINGS: Record<string, string> = {
