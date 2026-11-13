@@ -15,8 +15,9 @@ export const charsOf = (text) => graphemes(text.replace(/\s*\n\s*/g, " ").trim()
 export const pxOf = (it) => (it.size ?? 56) * (it.scale ?? 1);
 
 // heard: the item mapped to heard seconds. A fade or a typing is about half there at its middle, so half the In and half
-// the Out count as read; both are the item's own seconds, scaled when a Speed stretches the item
-export const readFaults = (scene, heard) => {
+// the Out count as read; both are the item's own seconds, scaled when a Speed stretches the item. The size floor holds
+// for a Short too: played full screen, a film's short side (a Short's width) is the phone's short side either way
+export const readFaults = (scene, heard, ratio = "16:9") => {
   const span = heard.to - heard.from,
     io = inOutLengths(scene),
     k = span / (scene.to - scene.from || 1);
@@ -32,7 +33,7 @@ export const readFaults = (scene, heard) => {
       : []),
     ...(px < SIZE_MIN
       ? [
-          `size ${+px.toFixed(1)} is ${((px / 1080) * 100).toFixed(1)}% of the frame height; under ${SIZE_MIN} (3.3%) words are mush on a phone (BBC subtitles: a line is 7-8%): size ${SIZE_MIN} or more`,
+          `size ${+px.toFixed(1)} is ${((px / 1080) * 100).toFixed(1)}% of the frame ${ratio === "9:16" ? "width" : "height"}; under ${SIZE_MIN} (3.3%) words are mush on a phone (BBC subtitles: a line is 7-8%): size ${SIZE_MIN} or more`,
         ]
       : []),
   ];

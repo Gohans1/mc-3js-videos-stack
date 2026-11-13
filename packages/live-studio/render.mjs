@@ -56,7 +56,8 @@ Nothing is written outside the film. Options are environment variables:
                              touch   sinking into things, hanging just off them (render/touch.ts): for one shot or move in
                                      question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)
   CHECK=text, CHECK=text:20,45  every line of on-screen text (or those between two heard seconds), at the second it is
-                             fully shown: OUTSIDE the 5% safe area, LOW contrast around its letters; renders/text_<i>.jpg
+                             fully shown: OUTSIDE the safe area (5% in; a Short's clears YouTube's buttons and title),
+                             LOW contrast around its letters; renders/text_<i>.jpg
                              for each fault (render/text.ts). Reading time and size: bun run check
   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
 Examples:

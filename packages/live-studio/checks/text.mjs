@@ -3,13 +3,19 @@
 // letters, stroke, shadow, background box), so a line anchored to a world point or animated by a film's own voice is
 // measured as drawn.
 //   measure(A, B, w, h, ink, glyphPx) -> { box: [x0, y0, x1, y1] in frame fractions, contrast } or null when nothing drew
-//   verdict({ i, text, at, px }, measured) -> { lines, faults }
+//   verdict({ i, text, at, px }, measured, ratio) -> { lines, faults }
 // The letters are the changed pixels within reach of the item's colour; the contrast is WCAG's ratio between that colour
 // and the ring just around the letters (what an edge is read against: a stroke or a shadow is in it, the sky behind is
 // too), its worst tenth. Thresholds: WCAG 1.4.3, 4.5:1 for text and 3:1 for large text, taken here as BBC's subtitle size
-// (6.25% of the frame height, 67.5 px at 1080) and up; EBU R95's graphics-safe area, 5% in from every edge.
+// (6.25% of the frame's short side, 67.5 px at 1080) and up. The safe area: EBU R95's graphics-safe area, 5% in from
+// every edge; a Short's is what YouTube's player covers, as Google's Shorts ad guidance gives it (top 10%, bottom 25%,
+// right 10%; it names no left margin, so EBU's 5% stays). Google draws it in a template image, not in text, and
+// re-lays the Shorts player now and then: recheck those numbers when its buttons move.
 
-export const SAFE = 0.05;
+export const SAFE_AREA = {
+  "16:9": { left: 0.05, right: 0.05, top: 0.05, bottom: 0.05 },
+  "9:16": { left: 0.05, right: 0.1, top: 0.1, bottom: 0.25 },
+};
 export const NEED = 4.5;
 export const NEED_LARGE = 3;
 export const LARGE_PX = 67.5;
@@ -101,7 +107,7 @@ export function measure(A, B, w, h, ink, glyphPx) {
 }
 
 const pc = (x) => `${(x * 100).toFixed(1)}%`;
-export function verdict({ i, text, at, px }, m) {
+export function verdict({ i, text, at, px }, m, ratio = "16:9") {
   const name = `items[${i}] "${text}" at ${at.toFixed(2)}`;
   if (!m)
     return {
@@ -113,16 +119,21 @@ export function verdict({ i, text, at, px }, m) {
   const faults = [],
     lines = [];
   const [x0, y0, x1, y1] = m.box;
+  const safe = SAFE_AREA[ratio] ?? SAFE_AREA["16:9"];
   const edges = [
     ["left", x0],
     ["right", 1 - x1],
     ["top", y0],
     ["bottom", 1 - y1],
-  ].filter(([, d]) => d < SAFE - 1e-9);
+  ].filter(([e, d]) => d < safe[e] - 1e-9);
   if (edges.length) {
     faults.push("OUTSIDE");
     lines.push(
-      `  OUTSIDE ${name}: ${edges.map(([e, d]) => `${pc(d)} from the ${e} edge`).join(", ")}; text stays ${pc(SAFE)} in from every edge (EBU R95's graphics-safe area): move its x or y`,
+      `  OUTSIDE ${name}: ${edges.map(([e, d]) => `${pc(d)} from the ${e} edge`).join(", ")}; ${
+        ratio === "9:16"
+          ? `in a Short, text stays ${pc(safe.right)} from the right (YouTube's like and share buttons), ${pc(safe.bottom)} from the bottom (title, channel, sound), ${pc(safe.top)} from the top (search bar) and ${pc(safe.left)} from the left`
+          : `text stays ${pc(safe.left)} in from every edge (EBU R95's graphics-safe area)`
+      }: move its x or y`,
     );
   }
   const need = px >= LARGE_PX ? NEED_LARGE : NEED;

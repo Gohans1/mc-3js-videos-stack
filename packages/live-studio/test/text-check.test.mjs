@@ -57,6 +57,16 @@ test("text past the 5% graphics-safe margin is OUTSIDE, naming the edge; text th
   assert.deepEqual(v.faults, ["OUTSIDE"]);
   assert.match(v.lines.join("\n"), /OUTSIDE items\[1\] "EDGE"[^\n]*2\.0% from the left edge/);
 
+  // 8% from the right edge: inside a 16:9 film's margin, under the like and share buttons of a Short
+  const right = measure(...line([0, 0, 0], 110), W, H, WHITE, 20);
+  assert.deepEqual(verdict({ i: 4, text: "BUTTONS", at: 1, px: 56 }, right).faults, []);
+  const short = verdict({ i: 4, text: "BUTTONS", at: 1, px: 56 }, right, "9:16");
+  assert.deepEqual(short.faults, ["OUTSIDE"]);
+  assert.match(
+    short.lines.join("\n"),
+    /OUTSIDE items\[4\] "BUTTONS"[^\n]*8\.0% from the right edge[^\n]*Short[^\n]*10\.0% from the right/,
+  );
+
   const none = measure(frame([0, 0, 0]), frame([0, 0, 0]), W, H, WHITE, 20);
   assert.equal(none, null);
   assert.match(verdict({ i: 3, text: "GONE", at: 5, px: 56 }, none).lines[0], /drew nothing/);

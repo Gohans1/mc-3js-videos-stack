@@ -39,16 +39,16 @@ CHECK=text bun run render stills             # every line, at the second it is f
 CHECK=text:20,45 bun run render stills       # the lines between two heard seconds
 ```
 
-`CHECK=text` draws each line alone and the frame without it, so it measures what is really drawn, wherever the line is anchored and however it animates. `OUTSIDE`: closer than 5% to an edge (EBU R95's graphics-safe area). `LOW`: the letters against what is just around them, the worst tenth, under 4.5:1, or 3:1 from size 67.5 up (WCAG 1.4.3). A stroke or a shadow counts, since it is around the letters. Each fault writes `renders/text_<i>.jpg`, the line boxed in yellow and the safe area dashed. A line not meant to be read (a sign in the world, a glitch) takes `"read": false` and is never judged.
+`CHECK=text` draws each line alone and the frame without it, so it measures what is really drawn, wherever the line is anchored and however it animates. `OUTSIDE`: closer than 5% to an edge (EBU R95's graphics-safe area); in a Short, under what YouTube's player draws over it: 10% on the right (like and share), 25% at the bottom (title, channel, sound), 10% at the top, 5% on the left (Google's Shorts ad guidance). A size is a share of the frame's short side, a Short's width, so the same 36 floor holds for both: full screen, that side is the phone's. `LOW`: the letters against what is just around them, the worst tenth, under 4.5:1, or 3:1 from size 67.5 up (WCAG 1.4.3). A stroke or a shadow counts, since it is around the letters. Each fault writes `renders/text_<i>.jpg`, the line boxed in yellow and the safe area dashed. A line not meant to be read (a sign in the world, a glitch) takes `"read": false` and is never judged.
 
 ## Pace
 
 ```bash
 bun run pace                                 # shot lengths, and every stretch the picture holds still, with the narration over it
-bun run pace --hold 12                       # call a hold from 12 s (default 8)
+bun run pace --hold 12                       # call a hold from 12 s (default 8, 5 in a Short)
 ```
 
-A new picture is a cut, or a third of the frame looking different from the last new picture, so a slow pan adds up to one. Read the numbers against these, never as rules: popular films since 2000 average about 4 s a shot, open on longer shots and shorten into the climax (Cutting 2016). Shots all one length read flat, so mix short, medium and long. YouTube judges an intro by who still watches at 30 s. A `HOLD` with narration running over it is where a viewer's eyes have nothing new: cut to what the words say, move the camera, or keep it when the stillness is the point. It always exits 0: the calls are yours.
+A new picture is a cut, or a third of the frame looking different from the last new picture, so a slow pan adds up to one. Read the numbers against these, never as rules: popular films since 2000 average about 4 s a shot, open on longer shots and shorten into the climax (Cutting 2016). Shots all one length read flat, so mix short, medium and long. YouTube judges an intro by who still watches at 30 s. A Short (ratio 9:16) is read against Shorts instead: popular ones average about 2.5 s a shot, viral ones a median 4.7 s with the picture changing within about 2 s, they open at full pace rather than building, and YouTube counts who stays past a Short's first seconds, so the report shows its first 3 s. A `HOLD` with narration running over it is where a viewer's eyes have nothing new: cut to what the words say, move the camera, or keep it when the stillness is the point. It always exits 0: the calls are yours.
 
 ## Rules
 

@@ -2,8 +2,11 @@
 // A new picture is a cut, or a third of the frame looking different (by over CHANGED of 255) from the last new picture,
 // so a slow pan adds up to one. The numbers to read them against: popular films since 2000 average about 4 s a shot,
 // open on longer shots and shorten into the climax (Cutting, "The evolution of pace in popular movies", 2016); YouTube
-// judges an intro by who still watches at 30 s (YouTube Help, key moments for audience retention). Measures, never verdicts:
-// a hold can be the film's best moment, so this always exits 0
+// judges an intro by who still watches at 30 s (YouTube Help, key moments for audience retention). A Short (9:16) is read
+// against Shorts instead: popular ones average about 2.5 s a shot (100 Shorts of 2024, in "Visual Storytelling Without
+// Dialogue", 2025) and viral ones a median 4.7 s with the first cut by about 2 s (Viibeo, 54 Shorts, 2026, counting cuts
+// only); YouTube's Shorts analytics count who stays past the first seconds. Measures, never verdicts: a hold can be the
+// film's best moment, so this always exits 0
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -17,7 +20,8 @@ narration says over it. Run inside the film, on a video bun run render clip made
   bun run pace                         renders/draft_video.mp4, with renders/cuts.json
   bun run pace renders/final_video.mp4 any whole-film video
   bun run pace --hold 12               call a hold from 12 s with no new picture (default 8: twice the 4 s average shot
-                                       of popular films since 2000)
+                                       of popular films since 2000; in a Short 5, twice their 2.5 s)
+A Short (package.json "live-studio".ratio "9:16") is read against Shorts: their shot lengths and its first 3 s.
 A new picture is a cut, or a third of the frame looking different from the last new picture (a slow pan adds up).
 Measures only, always exit 0: a long hold can be the point. Why these numbers: bun run skills get core --ref review.`;
 
@@ -62,12 +66,14 @@ export const paceReport = ({
   news,
   words,
   hold,
+  short = false,
 }: {
   length: number;
   cuts: number[];
   news: number[];
   words: Word[];
   hold: number;
+  short?: boolean;
 }) => {
   const edges = [0, ...cuts.filter((c) => c > 0 && c < length), length];
   const shots = edges.slice(1).map((b, i) => ({ i, a: edges[i], b, len: b - edges[i] }));
@@ -90,14 +96,15 @@ export const paceReport = ({
     .filter((g) => g.len < hold)
     .toSorted((p, q) => q.len - p.len)
     .slice(0, 3);
-  const opening = news.filter((t) => t > 0 && t < 30);
+  const opensIn = short ? 3 : 30;
+  const opening = news.filter((t) => t > 0 && t < opensIn);
   const firstCut = cuts.find((c) => c > 0);
   const worst = holds.toSorted((p, q) => q.len - p.len)[0] ?? near[0];
   return [
-    `shots: ${shots.length}, mean ${s2(mean)} s, median ${s2(median)} s (popular films since 2000: about 4 s)`,
+    `shots: ${shots.length}, mean ${s2(mean)} s, median ${s2(median)} s (${short ? "popular Shorts: about 2.5-4.7 s" : "popular films since 2000: about 4 s"})`,
     `  longest: ${longest.map((s) => `shot ${s.i} at ${s2(s.a)}-${s2(s.b)} (${s2(s.len)} s)`).join(", ")}`,
     `  lengths vary by ${Math.round(spread * 100)}% of the mean (shots all one length read flat: mix short, medium, long)`,
-    `  mean by quarter of the film: ${quarter.join(" ")} s (films tend to open on longer shots and shorten into the climax)`,
+    `  mean by quarter of the film: ${quarter.join(" ")} s (${short ? "a Short opens at full pace and keeps the picture switching steadily to the end" : "films tend to open on longer shots and shorten into the climax"})`,
     `new pictures: ${news.length - 1}, one every ${s2(length / news.length)} s`,
     ...holds.map(
       (g) =>
@@ -108,7 +115,9 @@ export const paceReport = ({
           `  longest stills under ${hold} s: ${near.map((g) => `${s2(g.a)}-${s2(g.b)} (${g.len.toFixed(1)} s)`).join(", ")}`,
         ]
       : []),
-    `first 30 s: ${opening.length} new pictures, ${firstCut === undefined ? "no cut" : `the first cut at ${s2(firstCut)}`} (YouTube judges an intro by who still watches at 30 s)`,
+    short
+      ? `first 3 s: ${opening.length} new pictures, ${news[1] === undefined ? "the picture never changes" : `the picture first changes at ${s2(news[1])}`} (YouTube counts who stays past a Short's first seconds; viral Shorts change the picture within about 2 s)`
+      : `first 30 s: ${opening.length} new pictures, ${firstCut === undefined ? "no cut" : `the first cut at ${s2(firstCut)}`} (YouTube judges an intro by who still watches at 30 s)`,
     `next: bun run at ${worst ? +((worst.a + worst.b) / 2).toFixed(2) : 0} names what plays in the longest still; AT=<s> bun run render stills to look`,
   ];
 };
@@ -117,8 +126,11 @@ export const paceReport = ({
 if (import.meta.main) {
   const argv = cliArgs(HELP, ["--hold S"], 1);
   const PROJECT = needFilm(process.env.LIVE_PROJECT);
+  const pkg = JSON.parse(readFileSync(join(PROJECT, "package.json"), "utf8"));
+  const short = ratioOf(pkg) === "9:16";
   const holdAt = argv.indexOf("--hold");
-  const hold = holdAt < 0 ? 8 : numberArg("--hold", argv[holdAt + 1] ?? "", { min: 1 });
+  const hold =
+    holdAt < 0 ? (short ? 5 : 8) : numberArg("--hold", argv[holdAt + 1] ?? "", { min: 1 });
   const arg = argv.find((a, i) => !a.startsWith("-") && argv[i - 1] !== "--hold");
   const video = resolve(PROJECT, arg ?? "renders/draft_video.mp4");
   if (!existsSync(video)) {
@@ -136,10 +148,9 @@ if (import.meta.main) {
   const stale = staleVideo(PROJECT, video);
   if (stale) console.log(`STALE: ${stale.message}`);
   // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape
-  const pkg = JSON.parse(readFileSync(join(PROJECT, "package.json"), "utf8"));
-  const tall = ratioOf(pkg) === "9:16" ? "16/9" : "9/16";
+  const tall = short ? "16/9" : "9/16";
   const w = 64,
-    h = ratioOf(pkg) === "9:16" ? 114 : 36;
+    h = short ? 114 : 36;
   // 64 pixels wide, 10 a second: a 20-minute film is about 27 MB
   const ff = spawnSync(
     "ffmpeg",
@@ -162,8 +173,9 @@ if (import.meta.main) {
     );
     process.exit(1);
   }
-  const frames = Array.from({ length: Math.floor(ff.stdout.length / (w * h)) }, (_, i) =>
-    new Uint8Array(ff.stdout.buffer, ff.stdout.byteOffset + i * w * h, w * h),
+  const frames = Array.from(
+    { length: Math.floor(ff.stdout.length / (w * h)) },
+    (_, i) => new Uint8Array(ff.stdout.buffer, ff.stdout.byteOffset + i * w * h, w * h),
   );
   let words: Word[] = [];
   try {
@@ -172,6 +184,6 @@ if (import.meta.main) {
   } catch {} // a film with no narration yet: the holds are said without words
   const length = frames.length / FPS;
   console.log(`pace of ${arg ?? "renders/draft_video.mp4"}, ${s2(length)} s heard`);
-  for (const l of paceReport({ length, cuts, news: newPictures(frames, FPS, cuts), words, hold }))
-    console.log(l);
+  const news = newPictures(frames, FPS, cuts);
+  for (const l of paceReport({ length, cuts, news, words, hold, short })) console.log(l);
 }

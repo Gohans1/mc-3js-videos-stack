@@ -332,7 +332,7 @@ if (Array.isArray(textRead?.items) && heardLength(PROJECT, conf)) {
     const h = heard?.items?.[i];
     if (!isRead(it) || !h) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
-    for (const fault of readFaults(it, h))
+    for (const fault of readFaults(it, h, conf.ratio))
       said.push(
         `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}" at ${h.from.toFixed(2)}-${h.to.toFixed(2)} heard: ${fault}`,
       );

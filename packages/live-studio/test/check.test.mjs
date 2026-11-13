@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { STUDIO } from "../src/film.mjs";
+import { readFaults } from "../src/readable.mjs";
 
 const CHECK = fileURLToPath(new URL("../check.mjs", import.meta.url));
 
@@ -253,4 +254,10 @@ test("check warns of text shown too briefly to read and text too small for a pho
     /⚠ src\/timeline\/text\.json items\[1\] "Day 3" at 4\.00-7\.00 heard: size 24 is 2\.2% of the frame height/,
   );
   assert.doesNotMatch(r.stdout, /items\[2\]|items\[3\]/);
+});
+
+test("a size is a share of the frame's short side: its height in a 16:9 film, its width in a Short", () => {
+  const day = { kind: "text", text: "Day 3", size: 24, from: 4, to: 7 };
+  assert.match(readFaults(day, day).join("\n"), /2\.2% of the frame height/);
+  assert.match(readFaults(day, day, "9:16").join("\n"), /2\.2% of the frame width/);
 });

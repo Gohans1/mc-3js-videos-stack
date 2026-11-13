@@ -40,3 +40,28 @@ test("the report names the long shot, the hold with what the narration says over
   expect(r).toMatch(/first 30 s: 4 new pictures, the first cut at 5\.00/);
   expect(r).toMatch(/\nnext: bun run at 15/);
 });
+
+test("a Short is read against Shorts: their shot length, and its first 3 s with when the picture first changes", () => {
+  const r = paceReport({
+    length: 30,
+    cuts: [4, 9],
+    news: [0, 1.5, 2.5, 4, 9],
+    words: [],
+    hold: 5,
+    short: true,
+  }).join("\n");
+  expect(r).toMatch(/popular Shorts/);
+  expect(r).toMatch(/first 3 s: 2 new pictures, the picture first changes at 1\.50/);
+  expect(r).toMatch(/HOLD 9\.00-30\.00/);
+  expect(r).not.toMatch(/first 30 s|popular films/);
+
+  const still = paceReport({
+    length: 30,
+    cuts: [],
+    news: [0, 6.9],
+    words: [],
+    hold: 5,
+    short: true,
+  });
+  expect(still.join("\n")).toMatch(/first 3 s: 0 new pictures, the picture first changes at 6\.90/);
+});
