@@ -10,7 +10,8 @@ import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 const HELP = `Fills the local vault (vault/, vault.json "root") on a new machine, from the repo root: the player rig check, mobs,
 the Mixkit sound effects (fetch:sfx), the sound vault (setup:sound) and, when the heavy external vault exists
-(vault.json "externalRoot", default E:/mc_vault, or MC_VAULT_EXTERNAL), the Minecraft sounds (setup:mc-sound).
+(vault.json "externalRoot", default E:/mc_vault, or MC_VAULT_EXTERNAL), the raw sound packs (fetch:sound-raw) and the
+Minecraft sounds (setup:mc-sound).
   bun run setup:vault
 Downloads have time limits and every file is verified (hashes, WAV format); a rerun reuses what is already there.
 Next: bun run link to connect the vault to every film.`;
@@ -55,7 +56,10 @@ copyFileSync(
 run("bun", [join(ROOT, "packages/mc-assets/mobs.ts"), assets.mobs], 600_000);
 run("bun", [join(ROOT, "scripts/fetch_mixkit.mjs")], 600_000);
 run("bun", [join(ROOT, "scripts/build_sound_vault.mjs")], 600_000);
-if (existsSync(EXTERNAL)) run("bun", [join(ROOT, "scripts/build_mc_sound_vault.mjs")], 900_000);
+if (existsSync(EXTERNAL)) {
+  run("bun", [join(ROOT, "scripts/fetch_sound_raw.mjs")], 600_000);
+  run("bun", [join(ROOT, "scripts/build_mc_sound_vault.mjs")], 900_000);
+}
 console.log(
   `Light assets verified: Minecraft ${assets.minecraft.version}, mobs ${assets.mobs}, player rig and curated sound vault.`,
 );

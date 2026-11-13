@@ -110,6 +110,7 @@ const SCRIPTS = {
       "setup:sound",
       "setup:mc-sound",
       "fetch:sfx",
+      "fetch:sound-raw",
       "test",
       "verify",
       "lint",

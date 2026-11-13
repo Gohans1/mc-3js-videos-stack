@@ -1,0 +1,85 @@
+{
+  "about": "Raw sound packs the vault's sounds are chosen from. bun run fetch:sound-raw downloads each, checks its sha256 and unpacks it into <externalRoot>/sound-raw/<source>/<id>/. A pack with byHand instead of file is handed out only to a browser: the command names its page and takes the zip from Downloads.",
+  "sources": {
+    "kenney": {
+      "name": "Kenney",
+      "licence": "CC0 1.0",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "read_at": "https://kenney.nl/assets/category:Audio",
+      "read": "2026-11-13",
+      "credit": false,
+      "note": "Kenney uploads his packs to OpenGameArt himself (author: Kenney), where they download directly",
+      "packs": [
+        {
+          "id": "interface-sounds",
+          "title": "Interface Sounds",
+          "page": "https://opengameart.org/content/interface-sounds",
+          "file": "https://opengameart.org/sites/default/files/kenney_interfaceSounds.zip",
+          "sha256": "f2193d072726d6758a5f7871b2dcc54dcce0d5c35c6f0a62f92549b327c81232"
+        },
+        {
+          "id": "ui-audio",
+          "title": "UI Audio",
+          "page": "https://opengameart.org/content/51-ui-sound-effects-buttons-switches-and-clicks",
+          "file": "https://opengameart.org/sites/default/files/UI_SFX_Set.zip",
+          "sha256": "66026b9e39859b85964dbb3ee7a2d1fc46a6a406bb3e97c8b0defee0e25fb369"
+        },
+        {
+          "id": "digital-audio",
+          "title": "Digital Audio",
+          "page": "https://opengameart.org/content/63-digital-sound-effects-lasers-phasers-space-etc",
+          "file": "https://opengameart.org/sites/default/files/Digital_SFX_Set.zip",
+          "sha256": "022f0f4b73da55989567fe2b373c8af89d74f5d015257e293cab497ca606d063"
+        },
+        {
+          "id": "rpg-audio",
+          "title": "RPG Audio",
+          "page": "https://opengameart.org/content/50-rpg-sound-effects",
+          "file": "https://opengameart.org/sites/default/files/RPGsounds_Kenney.zip",
+          "sha256": "3ae398ad63e293f9c450bda22d5d81c3af69c74df66fc1400f33c012c0bbc231"
+        },
+        {
+          "id": "sci-fi-sounds",
+          "title": "Sci-fi Sounds",
+          "page": "https://opengameart.org/content/sci-fi-sounds",
+          "file": "https://opengameart.org/sites/default/files/sci-fi_sounds.zip",
+          "sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04"
+        },
+        {
+          "id": "casino-audio",
+          "title": "Casino Audio",
+          "page": "https://opengameart.org/content/54-casino-sound-effects-cards-dice-chips",
+          "file": "https://opengameart.org/sites/default/files/kenney_casino-audio.zip",
+          "sha256": "f36250766ac5bc378c13708ddf12a23a8e54a3251f8d482c7536e51b5dbafa18"
+        },
+        {
+          "id": "music-jingles",
+          "title": "Music Jingles",
+          "page": "https://opengameart.org/content/85-short-music-jingles",
+          "file": "https://opengameart.org/sites/default/files/jingleSounds_Kenney.zip",
+          "sha256": "be324b6cf26e35c95c2a344569a2470512819d0246cc81328bef3499de3682e5"
+        },
+        {
+          "id": "voiceover-pack",
+          "title": "Voiceover Pack",
+          "page": "https://opengameart.org/content/voiceover-pack-40-lines",
+          "file": "https://opengameart.org/sites/default/files/Voiceover%20Pack.zip",
+          "sha256": "2ff0c8c51a959a754df698c4ee1e7c2db007c4abde4d600fd19545a1aea9d835"
+        },
+        {
+          "id": "voiceover-pack-fighter",
+          "title": "Voiceover Pack: Fighter",
+          "page": "https://opengameart.org/content/voiceover-pack-fighter-40-taunts",
+          "file": "https://opengameart.org/sites/default/files/kenney_voiceoverFighter.zip",
+          "sha256": "368ac0711e59521aff965a833e22e2b5218c397cf8b059ce3cb72e8d13219ee2"
+        },
+        {
+          "id": "impact-sounds",
+          "title": "Impact Sounds",
+          "page": "https://kenney.nl/assets/impact-sounds",
+          "byHand": "kenney_impact-sounds.zip"
+        }
+      ]
+    }
+  }
+}

@@ -69,6 +69,7 @@ const GROUPS = [
       "setup:sound": "rebuild vault/sound/{bgm,sfx} with credits and peaks",
       "setup:mc-sound": "rebuild the Minecraft sound vault from the game and packs",
       "fetch:sfx": "download the Mixkit sound effects",
+      "fetch:sound-raw": "download the raw sound packs (Kenney) into the external vault",
       link: "connect the vault to every film (or the films named)",
     },
   ],
