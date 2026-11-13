@@ -212,7 +212,7 @@ const CAT_WORDS: Record<string, string> = {
   "bgm/chill": "calm relaxed lofi peaceful soft",
   "bgm/cinematic": "orchestral trailer score epic dramatic",
   "bgm/electronic": "edm synth dance",
-  "mc/ambience": "atmosphere background environment",
+  "mc/ambience": "ambient atmosphere background environment",
   "mc/combat": "fight weapon attack damage",
   "mc/footsteps": "step walk",
   "mc/horror": "scary creepy spooky",
@@ -341,6 +341,8 @@ const KIND_ALIAS: Record<string, string> = Object.fromEntries(
     look: "adjust",
     motion: "mocap",
     clip: "mocap",
+    beat: "velocity",
+    pulse: "velocity",
   }).map(([w, k]) => [stem(w), k]),
 );
 const ALIAS_NOTE: Record<string, string> = {
@@ -349,6 +351,7 @@ const ALIAS_NOTE: Record<string, string> = {
   sound: "sfx, bgm and mc together",
   text: "title and caption animations",
   transition: "the cut between two shots",
+  velocity: "effects that pulse on each beat of the music",
 };
 const kindOf = (said: string, pool: Entry[]) => {
   if (pool.some((x) => kindMatches(x.kind, said))) return said;
@@ -391,7 +394,10 @@ const unknownKind = (asked: string, pool: Entry[]) => {
     ...new Set(
       pool
         .filter(
-          (x) => x.cat && (catSlug(x.cat) === slug || words(catLabel(x)).includes(stem(slug))),
+          (x) =>
+            x.cat &&
+            (catSlug(x.cat) === slug ||
+              words(`${catLabel(x)} ${CAT_WORDS[catKey(x)] ?? ""}`).includes(stem(slug))),
         )
         .map(catKey),
     ),
@@ -1601,6 +1607,11 @@ function parse(argv: string[], lists: string[] = []) {
           : next && (lists.includes(next) || (starring && !isOption(next)))
             ? (i++, next)
             : "default";
+      // a word that may be a list's name mistyped: said, since it is read as a search word
+      if (v === "default" && next && !isOption(next) && lists.length > 1)
+        notes.push(
+          `"${next}" after --fav names no favourites list (${lists.join(", ")}): read as a search word, the default list used`,
+        );
       set.set(name, v.toLowerCase());
       continue;
     }
@@ -1754,6 +1765,12 @@ export async function run(
   const listsLine = otherLists.length
     ? `other favourites lists: ${otherLists.map((l) => `${l.name} ${l.count}`).join(", ")} (this one: ${listName}; another: bun run find --fav ${otherLists[0]!.name}${query ? ` ${query}` : ""})`
     : "";
+  // without --fav: the creator's favourites are said to exist, once, so a search for anything else learns of them
+  const starredLists = lists.filter((l) => l.count);
+  const favsLine =
+    !fav && starredLists.length
+      ? `the creator's favourites: ${starredLists.map((l) => `${l.name} ${l.count}`).join(", ")} (only those: add --fav, or --fav <list>)`
+      : "";
   if (bare.length) {
     const pool = entriesOf();
     throw new FindError(
@@ -1829,7 +1846,7 @@ export async function run(
         [...SOUND, "sound"].includes(kindOf(k.split("/")[0]!, clipPool)),
       );
       throw new FindError(
-        `${body.join(" ")} filter mocap clips by the body; use --kind mocap or no --kind${soundy && set.has("--mood") ? `. For music: ${BGM_MOOD}` : ""}`,
+        `${body.join(" ")} ${body.length > 1 ? "filter" : "filters"} mocap clips by the body; use --kind mocap or no --kind${soundy && set.has("--mood") ? `. For music: ${BGM_MOOD}` : ""}`,
       );
     }
     if (jev && !query)
@@ -2101,6 +2118,7 @@ export async function run(
           ...(files.length > 1 && files.length <= 20
             ? [`      ${hearThem("<what it should sound or feel like>", files)}`]
             : []),
+          ...(favsLine ? [`      ${favsLine}`] : []),
         ].join("\n"),
       );
     }
@@ -2145,6 +2163,7 @@ export async function run(
         `      search inside it: bun run find <english words> --kind ${example ?? "<kind>/<category>"}; one in full: bun run find --show <id>`,
         `      by meaning inside one (Jev, paid): bun run find --jev --kind ${example ?? "<kind>/<category>"} "<the scene or feeling>"`,
         ...(inKinds.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool)}`] : []),
+        ...(favsLine ? [`      ${favsLine}`] : []),
       ].join("\n"),
     );
   }
@@ -2459,8 +2478,25 @@ export async function run(
     next.push(
       `narrow these ${matches.length}: ${narrow.join(" | ")}  (a filter named alone, e.g. --license, says what its values mean)`,
     );
-  if (shown.some(([, x]) => x.kind === "mocap")) next.push(mocapNext(pool));
+  if (shown.some(([, x]) => x.kind === "mocap") || kindNames?.includes("mocap")) {
+    // a feeling said as a word ("scared") is a mood checked clips are tagged with, which words never reach
+    const clipsHere = pool.filter((x) => x.kind === "mocap");
+    const moods = new Map(
+      tagged("mood", clipsHere)
+        .split(", ")
+        .map((t) => t.split(" ") as [string, string]),
+    );
+    const mood = typed
+      .map((w) => (moods.has(w.toLowerCase()) ? w.toLowerCase() : MOOD_ALIAS[stem(w)]))
+      .find((m) => m && moods.has(m));
+    if (mood)
+      next.push(
+        `${mood} is a mood clips checked by eye are tagged with: bun run find --mood ${mood} (${moods.get(mood)} clips)`,
+      );
+    if (shown.some(([, x]) => x.kind === "mocap")) next.push(mocapNext(pool));
+  }
   if (fav && listsLine && shown.length) next.push(listsLine);
+  if (favsLine) next.push(favsLine);
   const files = shown.flatMap(([, x]) =>
     SOUND.includes(x.kind) && x.data?.file ? [soundFile(x.data.file)] : [],
   );

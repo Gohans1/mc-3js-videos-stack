@@ -1012,3 +1012,35 @@ test("words no favourite has point to the lists that have them, and to the searc
       );
     },
   ));
+
+test("a word after --fav that names no list is said to be read as a search word", () =>
+  withFavorites({ default: { sounds: ["boom"] }, horror: { sounds: ["thud"] } }, async (favs) => {
+    expect(await run(["--fav", "horrror", "boom"], starredPool(), noJev, undefined, favs)).toMatch(
+      /^\("horrror" after --fav names no favourites list \(default, horror\): read as a search word/,
+    );
+  }));
+
+test("a search without --fav names the creator's favourites when there are some", () =>
+  withFavorites({ horror: { sounds: ["thud"] } }, async (favs) => {
+    expect(await run(["dissolve"], starredPool(), noJev, undefined, favs)).toMatch(
+      /the creator's favourites: horror 1 \(only those: add --fav, or --fav <list>\)/,
+    );
+  }));
+
+test("beat and ambient are read as the kind and category they mean", async () => {
+  const pool = [
+    e("pulse", "Pulse", "", "velocity"),
+    { ...e("mc-wind", "Wind", "", "mc", "ambience"), src: "minecraft" },
+  ];
+  expect(await run(["--kind", "beats"], pool, noJev)).toMatch(/--kind beats read as velocity/);
+  await expect(run(["--kind", "ambient"], pool, noJev)).rejects.toThrow(
+    /ambient is a category, not a kind: --kind mc\/ambience/,
+  );
+});
+
+test("a feeling searched among mocap clips points to the mood they are tagged with", async () => {
+  const clip = { ...e("mixamo/Cower", "Cower", "", "mocap"), data: { mood: ["scared"] } };
+  expect(await run(["frightened", "--kind", "mocap"], [clip], noJev)).toMatch(
+    /scared is a mood clips checked by eye are tagged with: bun run find --mood scared \(1 clips\)/,
+  );
+});
