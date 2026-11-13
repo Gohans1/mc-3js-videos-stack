@@ -14,6 +14,13 @@ export const VOICE_STEP: number;
 export const TAKE_ID: RegExp;
 export function assertInsideDir(baseDir: string, targetPath: string, label?: string): string;
 export function wordsCommand(takes: string[]): string[];
+export interface TakeAudio {
+  id: string;
+  audio: string;
+  aligned: boolean;
+}
+export function takeAudios(projectDir: string): TakeAudio[];
+export function unalignedTakes(projectDir: string): TakeAudio[];
 export function voiceFileOf(projectDir: string): string;
 export function planVoicePlacements(
   projectDir: string,
