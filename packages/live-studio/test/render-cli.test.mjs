@@ -1,11 +1,12 @@
 // render.mjs refuses a second past the film's end, or a CHECK range that runs backwards, before it builds anything
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 
 import { STUDIO } from "../src/film.mjs";
 
@@ -55,4 +56,34 @@ test("render refuses AT past the end and a backwards CHECK at once, saying the f
     extra.stderr,
     /CHECK motion:cam,1,2,3: motion takes 3 values, <target>,<from s>,<to s>; got 4/,
   );
+});
+
+test("a film whose code does not build is named by file and line, in plain words, with nothing rendered", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // the build comes after render finds its Chrome: the vault's, as every film names it
+  const chrome = resolve(
+    STUDIO,
+    "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
+  );
+  if (!existsSync(chrome)) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
+  );
+  const scene = join(dir, "src/scene.ts");
+  writeFileSync(scene, `${readFileSync(scene, "utf8")}\nconst twice = 1;\nconst twice = 2;\n`);
+  const out = spawnSync("bun", [RENDER, "stills"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 60000,
+    env: { ...process.env, LIVE_PROJECT: dir, AT: "1" },
+  });
+  const said = out.stdout + out.stderr;
+  assert.equal(out.status, 1, said);
+  assert.match(out.stderr, /src\/scene\.ts:\d+:\d+: Identifier `twice` has already been declared/);
+  assert.match(out.stderr, /the film's code does not build: fix it, then bun run render again/);
+  assert.equal(stripVTControlCharacters(said), said, "no colour codes");
+  assert.doesNotMatch(said, /node_modules|rolldown/);
 });

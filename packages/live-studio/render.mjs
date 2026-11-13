@@ -3,7 +3,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { extname, join, resolve } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 import { inOutLengths } from "film-stage/titles-text";
 import { build } from "vite";
@@ -401,11 +402,29 @@ const noSound = {
       ? JSON.stringify({ beds: [], sfx: [] })
       : null,
 };
+// A film's code that does not build: rolldown's own report colours every character and Bun prints rolldown's source under
+// it, so only the place and the words are said, plain
+const notBuilt = (e) => {
+  const plain = (s) => stripVTControlCharacters(String(s));
+  for (const x of e?.errors ?? [e]) {
+    const at = x?.loc?.file
+      ? `${relative(PROJECT, x.loc.file).replaceAll("\\", "/")}:${x.loc.line}:${x.loc.column + 1}: `
+      : "";
+    const [first, ...frame] = plain(x?.message ?? x).split("\n");
+    console.error(`${at}${first.replace(/^\[[A-Z_]+\]\s*/, "")}`);
+    // the code frame names the file relative to the render folder: its own lines (the source) are kept
+    console.error(frame.filter((l) => !/╭─|─╯/.test(l)).join("\n"));
+  }
+  console.error(
+    "the film's code does not build: fix it, then bun run render again (nothing was rendered)",
+  );
+  process.exit(1);
+};
 const built = await build({
   configFile: false,
   root: join(STUDIO, "render"),
   publicDir: false, // the film's assets are served from where they are, never copied
-  logLevel: "error",
+  logLevel: "silent", // a build error is said by notBuilt
   plugins: [noSound, filmPlugin({ SRC: join(PROJECT, "src"), threeFrom: threeFromOf(PROJECT) })],
   build: {
     outDir: OUT,
@@ -422,7 +441,7 @@ const built = await build({
       },
     },
   },
-});
+}).catch(notBuilt);
 const styles = (Array.isArray(built) ? built : [built])
   .flatMap((b) => b.output)
   .filter((f) => f.type === "asset" && f.fileName.endsWith(".css"))
