@@ -3,7 +3,7 @@
  "voiceGain": 0,
  "beds": [
   {
-   "name": "bgm_trailer",
+   "name": "bgm-code-switch",
    "from": 6.73,
    "to": 30.068,
    "gain": -4.9,
@@ -12,7 +12,7 @@
    "music": true,
    "try": [
     "bgm_drone",
-    "bgm_tension"
+    "bgm_suspense"
    ]
   },
   {
@@ -43,7 +43,7 @@
    "music": true
   },
   {
-   "name": "bgm_trailer",
+   "name": "bgm-code-switch",
    "from": 194.958,
    "to": 251.886,
    "gain": -6.9,
@@ -52,7 +52,7 @@
    "music": true
   },
   {
-   "name": "bgm_trailer",
+   "name": "bgm-code-switch",
    "from": 252.286,
    "to": 265.62,
    "gain": -6.9,
@@ -61,7 +61,7 @@
    "music": true
   },
   {
-   "name": "bgm_tension",
+   "name": "bgm_suspense",
    "from": 265.62,
    "to": 303.317,
    "gain": -11.2,
