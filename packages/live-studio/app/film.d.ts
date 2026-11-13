@@ -171,7 +171,6 @@ declare module "film/edit" {
 }
 
 interface Window {
-  __assets?: string;
   __live?: { t: number; shot: number; drawMs: number };
   __editor?: unknown;
   __hits?: { n: number; set: string; at: number; late: number };

@@ -1,7 +1,8 @@
 // The picture's size, and what the mouse and keys do on it, as in a 3D editor's viewport: a click picks an object (or a title,
 // text/onpicture.ts), the right button pins a note and a right drag draws one (notes/ink.ts sketch); a tap on a phone, which has
 // no right button, pins the note. Dragging and the flying keys move the free camera, and a left drag on the film's own view turns
-// the free camera on from that view.
+// the free camera on from that view. On a phone (PhoneApp) the picture is for notes only: no title is picked, no drag flies.
+import { PHONE } from "../core/device";
 import { S } from "../core/state";
 import { get } from "../core/store";
 import { sketch } from "../notes/ink";
@@ -59,7 +60,7 @@ export const attachPicture = () => {
       gesture = IDLE_VIEWPORT_GESTURE;
       return;
     } // the gizmo's handle under the pointer takes this drag
-    if (!S.tools?.free.on && textPress(e, frac(e))) {
+    if (!PHONE && !S.tools?.free.on && textPress(e, frac(e))) {
       gesture = IDLE_VIEWPORT_GESTURE;
       return;
     } // a title on the picture: picked and dragged
@@ -74,7 +75,7 @@ export const attachPicture = () => {
       id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      canWake: !!S.tools,
+      canWake: !!S.tools && !PHONE,
     });
     gesture = step.gesture;
     if (step.startSketchFrom) {
@@ -98,7 +99,7 @@ export const attachPicture = () => {
       stepCamDrag(gesture.mode, e.clientX - prev.x, e.clientY - prev.y);
       return;
     }
-    if (e.pointerType === "mouse" && !gizmoBusy()) hover(pickAt(...frac(e)));
+    if (e.pointerType === "mouse" && !PHONE && !gizmoBusy()) hover(pickAt(...frac(e)));
   });
   // A press that didn't move: anything further was the free camera being dragged
   const tappedAt = (x: number, y: number, e: MouseEvent) => {
@@ -217,7 +218,7 @@ export const attachPicture = () => {
     gesture = IDLE_VIEWPORT_GESTURE;
     const at = tappedAt(x, y, e);
     if (!at) return;
-    if (e.pointerType === "mouse") selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
+    if (e.pointerType === "mouse" && !PHONE) selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
     else pinNote(...at);
   });
 };

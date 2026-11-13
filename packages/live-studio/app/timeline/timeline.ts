@@ -451,7 +451,7 @@ const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: num
 };
 
 export const drawTimelines = () => {
-  if (!S.el) return;
+  if (!S.el?.detail) return; // no timeline in this layout (a phone's, PhoneApp)
   drawRuler();
   drawDetail();
   marks.layers();

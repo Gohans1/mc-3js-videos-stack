@@ -189,12 +189,18 @@ function ToastList() {
   ));
 }
 
-function Toaster({ children, toastManager = toast, ...props }: ToastPrimitive.Provider.Props) {
+// viewportClassName: where the toasts stack, when the page's own bottom is taken (the phone's Note button, PhoneApp)
+function Toaster({
+  children,
+  toastManager = toast,
+  viewportClassName,
+  ...props
+}: ToastPrimitive.Provider.Props & { viewportClassName?: string }) {
   return (
     <ToastProvider toastManager={toastManager} {...props}>
       {children}
       <ToastPortal>
-        <ToastViewport>
+        <ToastViewport className={viewportClassName}>
           <ToastList />
         </ToastViewport>
       </ToastPortal>

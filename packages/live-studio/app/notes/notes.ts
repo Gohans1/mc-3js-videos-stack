@@ -288,7 +288,6 @@ const noteContext = (c: ComposeCreate) => {
     beats,
     view: {
       phone: PHONE,
-      lite: !!window.__assets?.includes("lite"),
       canvas: [S.el.canvas.width, S.el.canvas.height],
       screen: [innerWidth, innerHeight],
     },

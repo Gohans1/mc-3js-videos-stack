@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -345,3 +345,84 @@ test("offline stretching preserves onset placement and the exact output duration
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a phone gets a processed sound as Opus in WebM, a small part of the float WAV", async () => {
+  const { renderAudio } = await import("../src/audio-process.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "studio-small-audio-"));
+  try {
+    const source = join(dir, "source.wav");
+    const r = spawnSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "aevalsrc=0.4*sin(2*PI*440*t)|0.4*sin(2*PI*660*t):s=48000:d=10",
+      "-c:a",
+      "pcm_f32le",
+      source,
+    ]);
+    assert.equal(r.status, 0, String(r.stderr));
+    const settings = { start: 0, duration: 10, loop: false, rate: 1 };
+    const wav = await renderAudio(source, settings, "python");
+    const small = await renderAudio(source, settings, "python", { small: true });
+    assert.equal(small.subarray(0, 4).toString("hex"), "1a45dfa3");
+    assert.ok(small.length < wav.length / 20, `${small.length} of ${wav.length} bytes`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A 2 s tone and a folder to keep processed results in, removed after
+const keptCase = async (run) => {
+  const { renderAudio } = await import("../src/audio-process.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "studio-kept-audio-"));
+  try {
+    const source = join(dir, "source.wav");
+    const r = spawnSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "aevalsrc=0.4*sin(2*PI*440*t):s=48000:d=2",
+      "-c:a",
+      "pcm_f32le",
+      source,
+    ]);
+    assert.equal(r.status, 0, String(r.stderr));
+    await run({ renderAudio, source, kept: join(dir, "kept") });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+const KEPT = { start: 0, duration: 2, loop: false, rate: 1 };
+
+test("a processed sound is kept on disk: the same source and settings come back without processing again", () =>
+  keptCase(async ({ renderAudio, source, kept }) => {
+    const first = await renderAudio(source, KEPT, "python", { small: true, kept });
+    // no Python at all the second time: only a kept file can answer
+    assert.deepEqual(
+      await renderAudio(source, KEPT, "no-such-python", { small: true, kept }),
+      first,
+    );
+    const wav = await renderAudio(source, KEPT, "python", { kept });
+    assert.equal(wav.subarray(0, 4).toString(), "RIFF");
+    assert.deepEqual(await renderAudio(source, KEPT, "no-such-python", { kept }), wav);
+  }));
+
+test("a kept sound is processed again when its settings or process.py change", () =>
+  keptCase(async ({ renderAudio, source, kept }) => {
+    await renderAudio(source, KEPT, "python", { small: true, kept });
+    await assert.rejects(
+      renderAudio(source, { ...KEPT, duration: 1 }, "no-such-python", { small: true, kept }),
+    );
+    // a DSP fix in process.py must be heard, not answered from the kept file
+    const was = statSync(PROCESS);
+    try {
+      utimesSync(PROCESS, was.atime, new Date(was.mtimeMs + 60_000));
+      await assert.rejects(renderAudio(source, KEPT, "no-such-python", { small: true, kept }));
+    } finally {
+      utimesSync(PROCESS, was.atime, was.mtime);
+    }
+  }));

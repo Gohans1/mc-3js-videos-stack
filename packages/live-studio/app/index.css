@@ -244,3 +244,19 @@
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* The phone layout (PhoneApp) clear of the notch, the rounded corners and the home bar */
+@utility safe-sides {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+@utility safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+}
+/* The phone page's height and its picture's: what the on-screen keyboard leaves (core/device.ts --app-h) */
+@utility phone-h {
+  height: var(--app-h, 100dvh);
+}
+@utility phone-picture-h {
+  max-height: calc(var(--app-h, 100dvh) * 0.58);
+}

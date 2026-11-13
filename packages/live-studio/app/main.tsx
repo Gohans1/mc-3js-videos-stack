@@ -1,6 +1,7 @@
 import "./index.css";
 import { createRoot } from "react-dom/client";
 
+import { PHONE } from "./core/device";
 import { onEvent, onHello } from "./core/events";
 import { stored } from "./core/storage";
 
@@ -19,7 +20,8 @@ const showFailure = (why: string, error: unknown) => {
 };
 
 try {
-  const { App } = await import("./App");
+  // A phone gets the review-only layout, and never downloads the editor's panels
+  const { App } = PHONE ? await import("./PhoneApp") : await import("./App");
   stored.remove("pageTries", sessionStorage);
   // A component that throws takes React's whole tree down with it: show why instead of an empty page
   createRoot(root, {

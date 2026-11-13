@@ -1,38 +1,19 @@
-import { type CSSProperties, useEffect, useRef } from "react";
+import { type CSSProperties, useRef } from "react";
 
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { Splitter, useStoredSize } from "./components/Splitter";
 import type { Bind, Elements } from "./core/state";
-import { set, showError, useStudio } from "./core/store";
+import { useStudio } from "./core/store";
 import { ReviewRoom } from "./notes/ReviewRoom";
 import { Stage } from "./picture/Stage";
+import { useBoot } from "./shell/boot";
 import { Library, Side, useEditable, useWide } from "./shell/Side";
 import { Transport } from "./shell/Transport";
 import { useStudioHotkeys } from "./shell/useStudioHotkeys";
-import { start } from "./start";
 import { PasteAttributes } from "./timeline/PasteAttributes";
 import { TimelinePanel } from "./timeline/TimelinePanel";
-
-let started = false;
-
-// A button keeps focus after a mouse click, and Space would then press it instead of playing. From the keyboard focus stays,
-// so Space presses the control as usual. A popup trigger keeps focus while its popup is open: the popup needs it
-const dropClickFocus = (e: MouseEvent) => {
-  if (!e.detail) return;
-  // Judged once the browser is done with the click: a label passes it on to its switch, which takes focus only then. By that
-  // time React has drawn the result too, so a trigger whose popup this click closed shows aria-expanded="false"
-  setTimeout(() => {
-    const at = document.activeElement;
-    if (
-      at instanceof HTMLElement &&
-      at.matches("button, summary, [role=tab], [role=switch], [role=checkbox], [role=radio]") &&
-      !at.matches("[aria-haspopup][aria-expanded=true]")
-    )
-      at.blur();
-  });
-};
 
 export function App() {
   const el = useRef({} as Elements);
@@ -50,25 +31,7 @@ export function App() {
   const review = useStudio((s) => s.review);
   const px = (n: number | null) => (n === null ? undefined : `${n}px`);
   const room: CSSProperties = { "--side-w": px(sideW), "--lib-w": px(libW), "--edit-h": px(editH) };
-  useEffect(() => {
-    if (started) return;
-    started = true;
-    start(el.current).catch((e: Error) => {
-      showError(e);
-      set({ loading: "" });
-    });
-    addEventListener("click", dropClickFocus);
-    // A slider keeps focus after a drag too, and its arrows would then move it instead of stepping the film
-    addEventListener("pointerup", () => {
-      const at = document.activeElement;
-      if (at instanceof HTMLInputElement && at.type === "range") at.blur();
-    });
-    // Chrome reports a ResizeObserver that skipped a frame as an error; it isn't one
-    addEventListener("error", (e) => {
-      if (!e.message.startsWith("ResizeObserver loop")) showError(e.error ?? e.message);
-    });
-    addEventListener("unhandledrejection", (e) => showError(e.reason));
-  }, []);
+  useBoot(el);
   return (
     <Toaster limit={3}>
       <TooltipProvider delay={500}>

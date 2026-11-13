@@ -6,7 +6,7 @@
 // A drag is heard on the next tick, nothing is remixed. The final render still comes from mix.py.
 import { DURATION } from "film/scene";
 
-import { AWAY } from "../core/device";
+import { SMALL_SOUND } from "../core/device";
 import { getFile } from "../core/net";
 import { S } from "../core/state";
 import { get, say } from "../core/store";
@@ -89,7 +89,7 @@ const sounds = new Map<string, Promise<Sound | null>>(),
   ready = new Map<string, Sound>();
 const load = (name: string) => {
   if (!sounds.has(name)) {
-    const url = `/api/sfx/${encodeURIComponent(name)}.${AWAY ? "webm" : "wav"}`; // anything but this machine gets Opus, a tenth of it
+    const url = `/api/sfx/${encodeURIComponent(name)}.${SMALL_SOUND ? "webm" : "wav"}`; // anything but this machine gets Opus, a tenth of it
     sounds.set(
       name,
       getFile(url)

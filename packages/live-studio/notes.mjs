@@ -162,8 +162,6 @@ const detail = (n, showCam) => {
       `action${suffix}: ${b.id}${b.title ? ` "${b.title}"` : ""} ${b.at}s${b.dur == null ? "" : ` +${b.dur}s`}${b.sounds?.length ? `, sounds ${b.sounds.join(", ")}` : ""}`,
     );
   }
-  if (c?.view?.lite)
-    console.log("seen on a phone with small textures: softness may not be in the film");
   if (n.freeCam) console.log("seen through the free camera");
   if (n.finalLook) console.log("seen in final quality");
   if (n.version) console.log(`said about version: ${n.version}`);

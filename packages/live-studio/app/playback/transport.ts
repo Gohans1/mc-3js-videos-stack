@@ -2,7 +2,7 @@
 // studio moves the playhead through here; while playing, the sound is the clock (tick), so picture and voice can't drift
 import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 
-import { AWAY } from "../core/device";
+import { AWAY, SMALL_SOUND } from "../core/device";
 import { shotIndex } from "../core/film";
 import { wait } from "../core/net";
 import { S } from "../core/state";
@@ -11,7 +11,7 @@ import { get, say, set } from "../core/store";
 import { FPS } from "../core/time";
 import { audioCtx } from "../sound/clock";
 
-export const MIX_URL = AWAY ? "/api/mix_small.webm" : "/api/mix.wav";
+export const MIX_URL = SMALL_SOUND ? "/api/mix_small.webm" : "/api/mix.wav";
 // The mix can be shorter than the film: the film grew and its sound wasn't remixed yet. Past the mix's end the picture keeps
 // its own clock, because playing a sound that has ended starts it over from 0, and the picture follows the sound
 const pastMix = (audio: HTMLAudioElement) =>

@@ -8,7 +8,7 @@ import { EDIT, fromSource } from "film/edit";
 // With live lanes (app/sound/mixer.ts) a lane sound's options are kind "lane": the mixer plays the pick, nothing is pre-mixed.
 import type { Variant } from "film/scene";
 
-import { AWAY } from "../core/device";
+import { SMALL_SOUND } from "../core/device";
 import { getFile, postJson } from "../core/net";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
@@ -159,7 +159,7 @@ export const loadSounds = async () => {
   const names = new Set(Object.values(EDIT.beats).flatMap((b) => b.sounds.map((s) => s[1])));
   await Promise.all(
     [...names].map(async (n) => {
-      const small = AWAY ? await getFile(`/lite/agent/sfx2/${n}.webm`) : null;
+      const small = SMALL_SOUND ? await getFile(`/lite/agent/sfx2/${n}.webm`) : null;
       const buf = await audioCtx.decodeAudioData(
         await (small?.ok ? small : await getFile(`/agent/sfx2/${n}.wav`)).arrayBuffer(),
       );

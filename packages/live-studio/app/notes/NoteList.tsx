@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { SaveStatus } from "../components/inspector";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
+import { PHONE } from "../core/device";
 import { set, useStudio } from "../core/store";
 import { rangeText, stamp } from "../core/time";
 import { frameSize } from "../picture/frame";
@@ -628,7 +629,8 @@ export function NoteList() {
         <h2 className="text-ui sideways:h-9 flex h-8 items-center px-0.5 font-semibold tabular-nums pointer-coarse:h-10">
           {check.length ? "Notes" : `To fix (${count(open, ix.open)})`}
         </h2>
-        {ix.check.length + ix.open.length + ix.done.length > 0 && (
+        {/* The Review room is the desk's big view; on a phone the list is the review (PhoneApp) */}
+        {!PHONE && ix.check.length + ix.open.length + ix.done.length > 0 && (
           <Tip label="Review room: notes and pictures, big (N)">
             <Button
               variant="quiet"

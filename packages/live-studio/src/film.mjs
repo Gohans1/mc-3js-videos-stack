@@ -725,7 +725,11 @@ export const openFilm = (projectDir, { send }) => {
     threeFrom,
     smallSfx,
     measureSound,
-    processSound: (name, settings) => renderAudio(sound.fileOf(name), settings, PYTHON),
+    processSound: (name, settings, small) =>
+      renderAudio(sound.fileOf(name), settings, PYTHON, {
+        small,
+        kept: join(WORK, "processed"),
+      }),
     analyzeBeats: (name, settings) => analyzeBeats(sound.fileOf(name), settings, PYTHON),
     liveLanes: () => LIVE && mixIsLive(),
     notes,

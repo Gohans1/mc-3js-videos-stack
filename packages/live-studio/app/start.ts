@@ -150,6 +150,18 @@ const listen = () => {
   });
 };
 
+const phoneLong = (stage: HTMLElement) => {
+  const nav = navigator as Navigator & {
+    deviceMemory?: number;
+    connection?: { saveData?: boolean };
+  };
+  if (nav.connection?.saveData || (nav.deviceMemory ?? 8) < 4) return 640;
+  const r = stage.getBoundingClientRect();
+  return Math.round(
+    Math.min(960, Math.max(640, Math.max(r.width, r.height) * Math.min(devicePixelRatio, 2))),
+  );
+};
+
 // ---------- Start, then draw whenever something changed
 export const start = async (el: Elements) => {
   S.el = el;
@@ -165,14 +177,18 @@ export const start = async (el: Elements) => {
   restoreVolume();
   listen();
   attachPicture();
-  attachTimeline();
-  attachPreviewAxis();
-  restoreInOut();
-  attachLanes();
-  attachCamRow();
-  attachKeyRows();
-  attachTextRow();
-  attachAcross();
+  // The phone's layout (PhoneApp) has no timeline: none of its rows to wire, and no In-Out loop kept from the desk that it
+  // could not show or clear
+  if (!PHONE) {
+    attachTimeline();
+    attachPreviewAxis();
+    restoreInOut();
+    attachLanes();
+    attachCamRow();
+    attachKeyRows();
+    attachTextRow();
+    attachAcross();
+  }
   attachInk({
     look: lookAtClick,
     begin: ensureNote,
@@ -186,8 +202,10 @@ export const start = async (el: Elements) => {
   FILM.applyEdit();
   S.comments = await (await getFile("/api/shots.json")).json();
   const t0 = performance.now();
-  // A phone gets fewer pixels to draw; clicks and pins are in fractions of the picture, so nothing else notices
-  const [w, h] = frameSize(PHONE ? 640 : 960);
+  // A phone draws the picture at what its screen shows of it, at most 2 device pixels a CSS pixel (past that the eye can't
+  // tell) and never past the desk's 960; one asking to save data or with under 4 GB keeps 640. Clicks and pins are in
+  // fractions of the picture, so nothing else notices
+  const [w, h] = frameSize(PHONE ? phoneLong(el.stage) : 960);
   el.canvas.width = w;
   el.canvas.height = h;
   const timeline = Promise.all([loadNotes(), loadVoice(), loadVoiceTakes()]); // the words and notes don't wait for the room

@@ -392,8 +392,10 @@ export const createApi = (film, { page, events, send }) => {
     if (!film.sound?.fileOf(settings.name))
       return c.json({ error: "This sound file is unavailable" }, 404);
     try {
-      c.header("Content-Type", "audio/wav");
-      return c.body(await film.processSound(settings.name, settings));
+      const small = c.req.query("small") === "1";
+      const body = await film.processSound(settings.name, settings, small);
+      c.header("Content-Type", small ? "audio/webm" : "audio/wav");
+      return c.body(body);
     } catch (e) {
       return c.json({ error: safeErr(e) }, 422);
     }

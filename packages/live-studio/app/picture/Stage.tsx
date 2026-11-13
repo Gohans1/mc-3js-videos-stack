@@ -63,7 +63,9 @@ function Badges() {
   );
 }
 
-export function Stage({ bind }: { bind: Bind }) {
+// phone: PhoneApp's picture, sized by its layout, and for notes only: the editing overlays stay bound (the frame loop writes
+// to them) but never show
+export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) {
   const free = useStudio((s) => s.free),
     loading = useStudio((s) => s.loading),
     error = useStudio((s) => s.error);
@@ -71,7 +73,13 @@ export function Stage({ bind }: { bind: Bind }) {
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
     // it alone), then CapCut's Color oscilloscope under it when on
-    <div className="bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-wide:col-start-2">
+    <div
+      className={
+        phone
+          ? "portrait:phone-picture-h relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-black portrait:aspect-(--frame) portrait:w-full portrait:flex-initial landscape:flex-1"
+          : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-wide:col-start-2"
+      }
+    >
       <div
         ref={bind("view")}
         className="relative flex min-h-0 w-full flex-1 items-center justify-center"
@@ -112,22 +120,25 @@ export function Stage({ bind }: { bind: Bind }) {
               ink ? "cursor-crosshair" : "pointer-events-none",
             )}
           />
-          <InkBar />
-          <PinTools />
+          {!phone && <InkBar />}
+          {!phone && <PinTools />}
           <div className="stage-caption">
             <span ref={bind("caption")} className="stage-caption-text" />
           </div>
         </div>
         {/* The player's own read-outs, over the whole player, not the frame: a 9:16 frame is too narrow to carry them */}
-        <div ref={bind("clock")} className="stage-clock">
+        <div ref={bind("clock")} hidden={phone} className="stage-clock">
           00:00.000
         </div>
         <div className="upright:inset-x-1.5 upright:top-1.5 sideways:inset-x-1.5 sideways:top-1.5 pointer-events-none absolute inset-x-2.5 top-2.5 z-2">
           <Badges />
         </div>
-        <OptionChips ref={bind("chips")} />
-        <FilmView bind={bind} />
-        <FullscreenTransport />
+        {/* the option chips (A/B/C/D) and the free camera's corner: Tailwind's [hidden] wins over contents */}
+        <div hidden={phone} className="contents">
+          <OptionChips ref={bind("chips")} />
+          <FilmView bind={bind} />
+        </div>
+        {!phone && <FullscreenTransport />}
         {loading && (
           <div
             role="status"
@@ -137,7 +148,9 @@ export function Stage({ bind }: { bind: Bind }) {
           </div>
         )}
       </div>
-      <Oscilloscope bind={bind} />
+      <div hidden={phone} className="contents">
+        <Oscilloscope bind={bind} />
+      </div>
       {error && (
         <div
           role="alert"
