@@ -13,6 +13,7 @@ export interface VoicePlacement {
 export const VOICE_STEP: number;
 export const TAKE_ID: RegExp;
 export function assertInsideDir(baseDir: string, targetPath: string, label?: string): string;
+export function wordsCommand(takes: string[]): string[];
 export function voiceFileOf(projectDir: string): string;
 export function planVoicePlacements(
   projectDir: string,

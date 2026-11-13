@@ -32,6 +32,13 @@ test("an option's value is not one of the words, and an option missing its value
   expect(r.stderr).toContain("--shot needs a value: --shot N");
 });
 
+test("--ref on a command that takes none points at the guide, where --ref lives", () => {
+  const r = run(["--ref", "sound"]);
+  expect(r.status).toBe(2);
+  expect(r.stderr).toContain("unknown option --ref");
+  expect(r.stderr).toContain("bun run skills get core --ref sound");
+});
+
 test("a film's command run outside a film did nothing: exit 2, as every wrong place does, saying where it runs", () => {
   const r = spawnSync(
     process.execPath,

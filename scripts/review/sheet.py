@@ -21,7 +21,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from seconds import heard_second  # noqa: E402
+from seconds import heard_second, meant  # noqa: E402
 
 R = Path.cwd() / "renders"  # run from the film folder
 args = sys.argv[1:]
@@ -102,7 +102,7 @@ if args:
     video = args[0]
     secs = [heard_second(s) for s in args[1].split(",")]
     if None in secs:
-        usage(f"takes heard seconds (65, 1:05 or 01:05.250), with commas; got {args[1]}")
+        usage(f"takes heard seconds (65, 1:05 or 01:05.250), with commas; got {args[1]}{next((meant(s) for s in args[1].split(',') if meant(s)), '')}")
     # a render's chunk renders/chunks/cNN.mp4 starts at NN*30 s of the film; the seconds asked are the film's
     chunk = re.search(r"[\\/]?chunks[\\/]c(\d+)\.mp4$", video)
     try:

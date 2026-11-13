@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sound"))
 from listen import YOUTUBE, loudness  # noqa: E402
-from seconds import SAY, heard_second  # noqa: E402  (listen puts scripts/ on the path)
+from seconds import SAY, heard_second, meant  # noqa: E402  (listen puts scripts/ on the path)
 
 USAGE = "bun run deliver [<video>] [--youtube [<from>-<to>]] (--help for more)"
 SHORTS_LONGEST = 180
@@ -278,7 +278,7 @@ def main(args):
                     return 2
                 i += 1
             elif nxt and not nxt.startswith("-") and not nxt.lower().endswith((".mp4", ".mov", ".mkv", ".webm")):
-                print(f"--youtube takes heard seconds as <from>-<to> ({SAY} each), like --youtube 9-15; got {nxt}", file=sys.stderr)
+                print(f"--youtube takes heard seconds as <from>-<to> ({SAY} each), like --youtube 9-15; got {nxt}{next((meant(x) for x in nxt.split('-') if meant(x)), '')}", file=sys.stderr)
                 return 2
         elif a.startswith("-"):
             print(f"unknown option {a}: {USAGE}", file=sys.stderr)

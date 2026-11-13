@@ -11,11 +11,23 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { wavInfo, wavPeaks } from "./sound.mjs";
 
 export const VOICE_STEP = 0.04;
 export const TAKE_ID = /^[A-Za-z0-9_-]{1,80}$/;
+
+// The command that writes FILE.words.json for each take: whisperX runs in the lab venv (THREEJS_LAB moves the lab), as
+// scripts/voice/words.py says. voice:gen runs it for the takes it makes; a genvoice.pro take comes with no timings
+export const wordsCommand = (takes) => {
+  const lab = process.env.THREEJS_LAB || "E:/threejs_lab";
+  return [
+    join(lab, process.platform === "win32" ? "py/venv/Scripts/python.exe" : "py/venv/bin/python"),
+    fileURLToPath(new URL("../../../scripts/voice/words.py", import.meta.url)),
+    ...takes,
+  ];
+};
 const DEFAULT_GAP = 0.4;
 const r3 = (x) => Math.round(x * 1000) / 1000;
 let tmpSeq = 0;
@@ -184,7 +196,7 @@ export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = fa
       }
     } else if (strict) {
       throw new Error(
-        `Missing word alignment "${wf}": a take from bun run voice:gen has it; for a recorded or older take, whisperX writes it: E:/threejs_lab/py/venv/Scripts/python.exe ../../scripts/voice/words.py <the take>`,
+        `Missing word alignment "${wf}": whisperX writes it (minutes on a CPU): ${wordsCommand([active.real]).join(" ")}`,
       );
     }
 

@@ -42,7 +42,10 @@ export const cliArgs = (help, options = [], words = Infinity, argv = process.arg
       continue;
     }
     const at = names.indexOf(a.split("=")[0]);
-    if (at < 0) fail(`unknown option ${a}: ${takes}`);
+    if (at < 0)
+      fail(
+        `unknown option ${a}: ${takes}${a === "--ref" ? `; the guide's topics: bun run skills get core --ref ${argv[i + 1] ?? "<topic>"}` : ""}`,
+      );
     if (a.includes("="))
       fail(`write ${a.replace("=", " ")}: a space between an option and its value, not =`);
     if (options[at].includes(" ") && (i + 1 >= argv.length || /^--?[a-z]/i.test(argv[i + 1])))

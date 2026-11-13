@@ -566,7 +566,7 @@ rmSync(OUT, { recursive: true, force: true });
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${failed ? "" : "\nnext: open them to look; many at once: bun run sheet (6 to a picture)"}`,
+    `wrote ${stillsWritten.join(" ")}${failed ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
   );
 
 // Every chunk starts on a keyframe with the same encoder settings, so the join is a lossless stream copy
@@ -615,7 +615,7 @@ if (!failed && chunks) {
         ? "ERROR join failed"
         : final
           ? `joined renders/${JOINED} (${W}x${H}, ${samples} sub-frames a frame)\nnext: bun run mix renders/${JOINED} (the soundtrack on it: renders/final.mp4, the file to upload), then bun run framecheck renders/${JOINED}`
-          : `joined renders/${JOINED}\nnext: bun run framecheck (black, flashes, jumps, freezes); frames to look at: bun run sheet renders/${JOINED} 10,20,30`,
+          : `joined renders/${JOINED}, picture only${existsSync(join(RENDERS, "draft.mp4")) ? ": renders/draft.mp4 keeps the old picture with its sound until bun run mix renders/" + JOINED : ""}\nnext: bun run framecheck (black, flashes, jumps, freezes); frames to look at: bun run sheet renders/${JOINED} 10,20,30`,
     );
     if (j.status) failed = true;
     else writeCaptions();

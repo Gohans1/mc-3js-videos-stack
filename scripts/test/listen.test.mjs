@@ -122,7 +122,7 @@ print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.
   // on sealed-room the narration 3 dB up bought 0.2 LU (its own limiter holds it): only drive closes the gap to the peaks
   assert.match(
     advice(2, 12),
-    /drive is already \+12, past which bun run check warns the hits flatten: louder means more drive anyway \(listen whether the hits still land\), or leaving it/,
+    /louder: drive is at \+12, the most before bun run check warns the hits flatten\. Either leave it \(the upload plays 2\.0 dB under the target, nothing else wrong\) or raise drive past 12 and listen whether the hits still land/,
   );
   // within YouTube's 1 LU the loudness is ready: no lever to pull
   assert.doesNotMatch(advice(0.6, 0), /stopped/);
@@ -312,4 +312,15 @@ test("a row that lacks what the mix reads stops mix and listen with the command 
     );
     assert.doesNotMatch(r.stderr, /Traceback/);
   }
+});
+
+test("mix given a video that is not there did nothing: exit 2, naming the videos it could take", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mix-novideo-"));
+  const r = spawnSync("python", [join(SOUND, "mix.py"), "renders/nope.mp4"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  rmSync(dir, { recursive: true, force: true });
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /no renders\/nope\.mp4 \(the videos here: none yet\)/);
 });

@@ -59,5 +59,8 @@ test("sheet cut N says which shots meet there and the transition between them; a
   assert.equal(clock.status, 0, clock.stdout + clock.stderr);
   const bad = sheet("renders/draft_video.mp4", "0:75");
   assert.equal(bad.status, 2, bad.stdout + bad.stderr);
-  assert.match(bad.stderr, /takes heard seconds \(65, 1:05 or 01:05\.250\), with commas; got 0:75/);
+  assert.match(
+    bad.stderr,
+    /takes heard seconds \(65, 1:05 or 01:05\.250\), with commas; got 0:75: a minute holds 0-59 s, did you mean 1:15\?/,
+  );
 });

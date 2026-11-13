@@ -25,7 +25,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from seconds import heard_second  # noqa: E402
+from seconds import heard_second, meant  # noqa: E402
 
 GOOD, LOST = 15.0, 8.0  # LU of voice over the rest: every word kept / words lost
 FLOOR = -120.0
@@ -87,8 +87,9 @@ def loudness_report(wav, target, held=0.0, drive=0.0):
         # on sealed-room each dB of drive bought 0.3-0.5 LU (9->13 +1.6, 13->16 +1.0, 9->10 +0.5): about a third, rounded up
         want = min(DRIVE_MAX, drive + math.ceil(3 * held))
         # sealed-room at +12: the narration 3 dB up bought 0.2 LU (its own limiter holds it); only drive closes the peak gap
-        lever = (f"drive is already +{drive:g}, past which bun run check warns the hits flatten: louder means more drive anyway "
-                 "(listen whether the hits still land), or leaving it" if drive >= DRIVE_MAX else
+        lever = (f"drive is at +{drive:g}, the most before bun run check warns the hits flatten. Either leave it (the upload plays "
+                 f"{held:.1f} dB under the target, nothing else wrong) or raise drive past {DRIVE_MAX} and listen whether the hits still land"
+                 if drive >= DRIVE_MAX else
                  f"set audio.json drive to {want:g} (now {drive:g}){', the most before the hits flatten' if want == DRIVE_MAX else ''}; "
                  "its limiter takes the peaks, each dB buying a third to a half of one; then bun run mix again")
         out.append(f"  stopped {held:.1f} dB short so its true peak stays under {CEILING:g} dBTP; louder: {lever}")
@@ -341,7 +342,7 @@ def main(args):
             value = a[5:] if a != "--at" else (args[i + 1] if i + 1 < len(args) else "")
             at = heard_second(value)
             if at is None:
-                print(f"--at takes a heard second (35.2, 0:35.2 or 00:35.200; the clock bun run at reads), got {value or 'nothing'}", file=sys.stderr)
+                print(f"--at takes a heard second (35.2, 0:35.2 or 00:35.200; the clock bun run at reads), got {value or 'nothing'}{meant(value)}", file=sys.stderr)
                 return 2
             i += 2 if a == "--at" else 1
         elif a in ("--sheet", "--fresh"):

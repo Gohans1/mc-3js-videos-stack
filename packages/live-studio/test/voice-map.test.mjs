@@ -15,7 +15,7 @@ import { join, resolve } from "node:path";
 import { test } from "node:test";
 
 import { openFilm, STUDIO, voiceMapOf } from "../src/film.mjs";
-import { buildVoiceMap, writeVoiceMap } from "../src/voice-map.mjs";
+import { buildVoiceMap, planVoicePlacements, writeVoiceMap } from "../src/voice-map.mjs";
 
 const writePcm16Wav = (file, samples, rate = 1000) => {
   const data = Buffer.alloc(samples.length * 2);
@@ -436,4 +436,20 @@ test("writeVoiceMap rejects out-of-root and junction-escaped output paths", (t) 
     );
     assert.equal(existsSync(join(outside, "voice_map.json")), false);
   }
+});
+
+test("a take with no word timings stops assembly with the command that writes them for that take", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-words-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src"));
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ takes: [{ id: "01", text: "Hi." }] }));
+  writeFileSync(join(dir, "voice/takes/01.mp3"), "mp3");
+  assert.throws(
+    () => planVoicePlacements(dir, { strict: true, fallbackSecondsOf: () => 1 }),
+    (e) =>
+      /scripts[\\/]voice[\\/]words\.py /.test(e.message) &&
+      e.message.includes("01.mp3") &&
+      !e.message.includes("<the take>"),
+  );
 });

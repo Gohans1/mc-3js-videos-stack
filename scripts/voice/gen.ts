@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 // Generates narration takes in src/edit.json sequentially per voice so adjacent lines share prosody context
 // (previous_text / next_text + request-id stitching), with --try [--takes N] casting and Voice Changer (--guide / take.guide).
 import {
@@ -13,7 +14,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
-import { assertInsideDir } from "../../packages/live-studio/src/voice-map.mjs";
+import { assertInsideDir, wordsCommand } from "../../packages/live-studio/src/voice-map.mjs";
 import { sts, tts } from "./genvoice.ts";
 
 const HELP = `Narration takes for the lines in src/edit.json "takes", from ElevenLabs (via genvoice.pro unless ELEVENLABS_API_KEY
@@ -337,7 +338,31 @@ if (isMain) {
     console.log(
       `nothing sent.\nnext: bun run voice:gen ${real.join(" ")} sends ${what} (${chars} characters, billed by the character)`,
     );
-  } else if (results.length)
+  }
+  // voice:assemble needs every take's word timings and a genvoice.pro take comes without them: whisperX writes them now
+  const unaligned =
+    sent && !process.argv.includes("--try")
+      ? results.map((r) => r.out).filter((out) => !existsSync(`${out}.words.json`))
+      : [];
+  if (unaligned.length) {
+    const [py, ...args] = wordsCommand(unaligned);
+    console.log(
+      `aligning the words of ${unaligned.length === 1 ? "this take" : `these ${unaligned.length} takes`} with whisperX (a few minutes on a CPU)...`,
+    );
+    // its stderr is library warnings on every run: shown only when it fails
+    const run = existsSync(py)
+      ? spawnSync(py, args, { encoding: "utf8", timeout: 20 * 60_000 })
+      : null;
+    if (run?.stdout) process.stdout.write(run.stdout);
+    if (run?.status !== 0) {
+      if (run?.stderr) console.error(run.stderr.trim().split(/\r?\n/).slice(-15).join("\n"));
+      console.error(
+        `${run ? "whisperX failed" : `no whisperX python at ${py} (THREEJS_LAB names the lab folder)`}: the audio is saved, only its word timings are missing, and bun run voice:assemble needs them: ${[py, ...args].join(" ")}`,
+      );
+      process.exit(1);
+    }
+  }
+  if (results.length && sent)
     console.log(
       process.argv.includes("--try")
         ? "next: hear the tries in the studio and keep one there (they are in voice/try), then bun run voice:assemble"

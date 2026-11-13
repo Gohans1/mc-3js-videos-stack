@@ -32,9 +32,11 @@ if __name__ == "__main__" and sys.argv[1:2] not in (["--raw"], ["--measure"]) an
         raise SystemExit(2)
     if not Path(sys.argv[1]).is_file():
         videos = sorted(p.as_posix() for p in Path("renders").glob("*.mp4")) if Path("renders").is_dir() else []
-        sys.exit(f"no {sys.argv[1]} (the videos here: {', '.join(videos) or 'none yet'}); bun run render clip makes renders/draft_video.mp4")
+        print(f"no {sys.argv[1]} (the videos here: {', '.join(videos) or 'none yet'}); bun run render clip makes renders/draft_video.mp4", file=sys.stderr)
+        raise SystemExit(2)
 if not (Path.cwd() / "src/timeline/audio.json").exists():
-    sys.exit("no src/timeline/audio.json here: run it inside a film (cd films/<name>)")
+    print("no src/timeline/audio.json here: run it inside a film (cd films/<name>)", file=sys.stderr)
+    raise SystemExit(2)
 
 ROOT = Path.cwd()  # the film's folder: bun run mix runs it there
 E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
