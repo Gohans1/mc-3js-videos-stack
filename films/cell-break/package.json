@@ -19,6 +19,7 @@
     "voice:cues": "bun ../../scripts/voice/cues.ts",
     "sheet": "python ../../scripts/review/sheet.py",
     "jumps": "python ../../scripts/review/jumps.py",
+    "pace": "bun ../../scripts/review/pace.ts",
     "deliver": "python ../../scripts/review/deliver.py",
     "sfx:get": "python ../../scripts/sound/get_sfx.py",
     "mix": "python ../../scripts/sound/mix.py",

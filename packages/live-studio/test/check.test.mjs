@@ -210,3 +210,47 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.match(named.stderr, /"door_slamm" \(sfx\[0\]\) is no sound the studio has/);
   assert.match(named.stdout + named.stderr, /⚠ sfx\[0\] "door_slamm" gain \+99 dB/);
 });
+
+// on-screen words have to be read before they go, and a line too small is mush on a phone: both warnings, never refusals
+test("check warns of text shown too briefly to read and text too small for a phone, each with the seconds it plays", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  const fade = { fx: "fade", len: 0.5 };
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        {
+          kind: "text",
+          text: "THE VAULT WAS NEVER MEANT TO OPEN AGAIN",
+          from: 2,
+          to: 3.5,
+          in: fade,
+          out: fade,
+        },
+        { kind: "text", text: "Day 3", size: 24, from: 4, to: 7 },
+        { kind: "text", text: "OK", size: 56, from: 7, to: 9 },
+        { kind: "arrow", from: 1, to: 1.2 },
+      ],
+    }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(
+    r.stdout,
+    /⚠ src\/timeline\/text\.json items\[0\] "THE VAULT WAS NEVER[^"]*" at 2\.00-3\.50 heard: readable about 1\.00 s for 39 characters; a reader needs 1\.95 s/,
+  );
+  assert.match(
+    r.stdout,
+    /⚠ src\/timeline\/text\.json items\[1\] "Day 3" at 4\.00-7\.00 heard: size 24 is 2\.2% of the frame height/,
+  );
+  assert.doesNotMatch(r.stdout, /items\[2\]|items\[3\]/);
+});

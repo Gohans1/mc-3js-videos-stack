@@ -33,11 +33,11 @@ bun run skills get core --ref sound   # one area in depth, by reference name
 
 The commonest mistake is the right row at the wrong second.
 
-| Clock             | What it is                                                            | Who uses it                                                                                  |
-| ----------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Heard seconds     | What the audience hears, after Speed and Freeze in `timing.json`      | Notes, `at`, render `AT` and `CHECK`, `framecheck`, `jumps`, `sheet`, `listen`, `voice:cues` |
-| Scene seconds     | The film before Speed and Freeze                                      | Rows in `cam.json`, key files, `audio.json`, `text.json`, `adjust.json`                      |
-| Narration seconds | The narration as recorded; `voice.warp` turns them into scene seconds | `t` in `shots.json`, beats in `src/edit.json`                                                |
+| Clock             | What it is                                                            | Who uses it                                                                                          |
+| ----------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Heard seconds     | What the audience hears, after Speed and Freeze in `timing.json`      | Notes, `at`, render `AT` and `CHECK`, `framecheck`, `jumps`, `pace`, `sheet`, `listen`, `voice:cues` |
+| Scene seconds     | The film before Speed and Freeze                                      | Rows in `cam.json`, key files, `audio.json`, `text.json`, `adjust.json`                              |
+| Narration seconds | The narration as recorded; `voice.warp` turns them into scene seconds | `t` in `shots.json`, beats in `src/edit.json`                                                        |
 
 `bun run at <heard second>` converts between them and names every file and row at that second. Run it before changing anything at a given second.
 
@@ -48,11 +48,13 @@ Inside a film:
 ```bash
 bun run find creaky door                     # 1. Find a sound, music, mocap clip, transition, anim, font or look
                                              # 2. Edit src/scene.ts or src/timeline/*.json
-bun run check                                # 3. After every JSON edit: schema, sound names, typos
+bun run check                                # 3. After every JSON edit: schema, sound names, typos, text too brief or small
 AT=12,30 bun run render stills               # 4. Look at a few frames (renders/still_<s>s.jpg)
 bun run sheet                                #    six to a picture; open them
+CHECK=text bun run render stills             #    every line of text: inside the safe area, readable over the picture
 bun run render clip                          # 5. The draft video (renders/draft_video.mp4, renders/cuts.json)
 bun run framecheck                           # 6. Black, flashes, jumps, shimmer, freezes on the encoded file
+bun run pace                                 #    Shot lengths, and where the picture holds still under the narration
 bun run mix renders/draft_video.mp4          # 7. The soundtrack on the draft (renders/draft.mp4)
 bun run listen                               # 8. Voice buried, sounds over the voice, dead air
 earshot timeline renders/draft.mp4 --cues renders/cuts.json --detail low   # 9. What each sound is, hits on the cuts
@@ -132,15 +134,15 @@ bun run skills get core --ref references/review.md --ref notes
 
 `bun run skills get core --full` prints every reference at once, several times the size of this guide.
 
-| Load                     | When you need                                                                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `references/film.md`     | A new film, which file holds what, the vault, trying a command on a copy of a film             |
-| `references/contract.md` | Writing `scene.ts`: what the studio needs from a film, the hooks on `draw`, the open schemas   |
-| `references/review.md`   | The eyes: `at`, stills, sheets, `CHECK=motion/seen/touch`, `framecheck`, `jumps`, `deliver`    |
-| `references/render.md`   | Rendering fast, re-rendering one stretch, the GPU, YouTube's spec, banding after its re-encode |
-| `references/sound.md`    | Placing sounds and music, gains, the mix, `listen` and its targets, earshot's calls            |
-| `references/voice.md`    | Narration: takes, generating, assembling, word seconds, reading pace                           |
-| `references/notes.md`    | The creator's notes: states, answering, remembering a rule                                     |
-| `references/cli.md`      | Writing or changing a repo command, and keeping these guides in step with it                   |
+| Load                     | When you need                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `references/film.md`     | A new film, which file holds what, the vault, trying a command on a copy of a film                       |
+| `references/contract.md` | Writing `scene.ts`: what the studio needs from a film, the hooks on `draw`, the open schemas             |
+| `references/review.md`   | The eyes: `at`, stills, sheets, `CHECK=motion/seen/touch/text`, `framecheck`, `jumps`, `pace`, `deliver` |
+| `references/render.md`   | Rendering fast, re-rendering one stretch, the GPU, YouTube's spec, banding after its re-encode           |
+| `references/sound.md`    | Placing sounds and music, gains, the mix, `listen` and its targets, earshot's calls                      |
+| `references/voice.md`    | Narration: takes, generating, assembling, word seconds, reading pace                                     |
+| `references/notes.md`    | The creator's notes: states, answering, remembering a rule                                               |
+| `references/cli.md`      | Writing or changing a repo command, and keeping these guides in step with it                             |
 
 A new machine, the vault and licences are in `INSTALL.md` at the repo root, a file to open rather than a `--ref`.

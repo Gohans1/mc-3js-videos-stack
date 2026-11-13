@@ -10,6 +10,7 @@
     "./fade": "./src/fade.ts",
     "./animate": "./src/animate.ts",
     "./titles": "./src/titles.ts",
+    "./titles-text": "./src/titles-text.ts",
     "./transitions": "./src/transitions.ts",
     "./velocity": "./src/velocity.ts",
     "./grade": "./src/grade.ts",

@@ -8,6 +8,7 @@ import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
 import { seenCheck } from "./seen";
+import { textCheck } from "./text";
 import { touchCheck } from "./touch";
 
 const FPS = 30;
@@ -68,6 +69,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     ),
     seen: seenCheck(render, cfg),
     touch: touchCheck(render),
+    text: textCheck(render, cfg),
   };
   for (const [name, args] of cfg.checks ?? []) {
     const fn = render.checks?.[name] ?? builtin[name];

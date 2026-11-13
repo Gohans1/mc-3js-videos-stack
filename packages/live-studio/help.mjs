@@ -49,6 +49,7 @@ const GROUPS = [
       sheet: "contact sheets of the stills or of a video's frames, to look at many at once",
       jumps: "pops in a rendered video: frames that jump away from their neighbours",
       framecheck: "the last check on the encoded video: black, flashes, jumps, shimmer, freezes",
+      pace: "how the film moves: shot lengths, and where the picture holds still under the narration",
       deliver:
         "the upload against YouTube's spec (renders/final.mp4), each fault with its fix; --youtube: how it looks after YouTube's re-encode, where it bands",
     },

@@ -52,6 +52,7 @@
     "sheet": "bun packages/live-studio/wrong-place.mjs sheet",
     "jumps": "bun packages/live-studio/wrong-place.mjs jumps",
     "framecheck": "bun packages/live-studio/wrong-place.mjs framecheck",
+    "pace": "bun packages/live-studio/wrong-place.mjs pace",
     "deliver": "bun packages/live-studio/wrong-place.mjs deliver"
   },
   "devDependencies": {

@@ -10,6 +10,7 @@ import { TRANSITIONS } from "film-stage/transitions";
 import { cliArgs, needFilm } from "./src/cli.mjs";
 import { CAM_KEYS, checkFiles, SOUND_KEYS } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
+import { isRead, readFaults } from "./src/readable.mjs";
 import { findVaults, openSound } from "./src/sound.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
 import { clockForTimeline } from "./src/timing-state.mjs";
@@ -20,7 +21,8 @@ src/edit.json or package.json "live-studio". Run inside the film.
   bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}]}
 Checks every timeline file against its schema (src/contract.ts, the studio's own), that every other .json in src/ parses,
 and every sound name in the sound timeline (beds, sfx and their "try" options) against the sounds the studio can play,
-with the nearest names.
+with the nearest names. Warns (⚠, still exit 0) of on-screen text too brief to read or too small for a phone; where it sits
+and how it reads over the picture: CHECK=text bun run render stills.
 Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
 Exit 0 ok, 1 problems found. Find a sound or preset by meaning: bun run find <words>.`;
 
@@ -318,6 +320,28 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
         ].join("\n"),
       });
   }
+}
+
+const textPath = conf.textTimeline && join(PROJECT, conf.textTimeline);
+const textRead =
+  textPath && !found.some((p) => p.where === conf.textTimeline) && readJson(conf.textTimeline);
+if (Array.isArray(textRead?.items) && heardLength(PROJECT, conf)) {
+  const heard = mapTimeline("text", textRead, clockForTimeline("text"), false, null, {});
+  const said = [];
+  textRead.items.forEach((it, i) => {
+    const h = heard?.items?.[i];
+    if (!isRead(it) || !h) return;
+    const short = it.text.replace(/\s*\n\s*/g, " ").trim();
+    for (const fault of readFaults(it, h))
+      said.push(
+        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}" at ${h.from.toFixed(2)}-${h.to.toFixed(2)} heard: ${fault}`,
+      );
+  });
+  if (said.length)
+    warnings.push(
+      ...said,
+      `  decor not meant to be read takes "read": false; where each sits and how it reads over the picture: CHECK=text bun run render stills`,
+    );
 }
 
 if (json) console.log(JSON.stringify({ ok: !found.length, problems: found, warnings }));

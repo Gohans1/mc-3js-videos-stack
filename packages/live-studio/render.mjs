@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
 
+import { inOutLengths } from "film-stage/titles-text";
 import { build } from "vite";
 
 import { cues, srt } from "./src/captions.mjs";
@@ -13,8 +14,10 @@ import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { ratioOf, sizeOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines } from "./src/narration.ts";
+import { isRead, pxOf } from "./src/readable.mjs";
 import { audioInfo } from "./src/sound.mjs";
-import { mapVoice } from "./src/timing-data.mjs";
+import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
+import { clockForTimeline } from "./src/timing-state.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
 import { writeVoiceMap } from "./src/voice-map.mjs";
 import { warp } from "./src/warp.mjs";
@@ -52,6 +55,9 @@ Nothing is written outside the film. Options are environment variables:
                              seen    how much of the frame it fills, hidden behind what, cut off, too dark (render/seen.ts)
                              touch   sinking into things, hanging just off them (render/touch.ts): for one shot or move in
                                      question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)
+  CHECK=text, CHECK=text:20,45  every line of on-screen text (or those between two heard seconds), at the second it is
+                             fully shown: OUTSIDE the 5% safe area, LOW contrast around its letters; renders/text_<i>.jpg
+                             for each fault (render/text.ts). Reading time and size: bun run check
   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
 Examples:
   AT=12,30.5 LIST=1 bun run render stills
@@ -185,7 +191,7 @@ const numbers = (name, limits) =>
   env[name].split(",").map((x, i) => numberArg(`${name} item ${i + 1}`, x.trim(), limits));
 // CHECK=<name>:<args>;...: the built-in checks take <target>,<from s>,<to s> in heard seconds (mm:ss too, as notes print
 // them; a minus is kept so the range check below can say the film starts at 0); a film's own take what it takes
-const BUILT_IN = ["motion", "seen", "touch"];
+const BUILT_IN = ["motion", "seen", "touch", "text"];
 const CHECKS = (env.CHECK ?? "")
   .split(";")
   .filter(Boolean)
@@ -199,6 +205,16 @@ const CHECKS = (env.CHECK ?? "")
               .slice(colon + 1)
               .split(",")
               .map((a) => a.trim());
+    if (name === "text") {
+      if (args.length !== 0 && args.length !== 2) {
+        console.error(
+          `CHECK ${c}: text takes nothing (every line) or <from s>,<to s>; got ${args.length} values (bun run render --help)`,
+        );
+        process.exit(2);
+      }
+      const span = args.map((v, k) => secondArg(`CHECK ${c}: ${k ? "to" : "from"}`, v));
+      return { c, name, args: ["", ...(span.length ? span : [0, Infinity])] };
+    }
     if (!BUILT_IN.includes(name))
       return { c, name, args: args.map((a) => (a !== "" && !isNaN(+a) ? +a : a)) };
     if (args.length !== 3) {
@@ -264,6 +280,7 @@ if (ends) {
   }
 }
 for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name))) {
+  if (name === "text" && args[2] === Infinity) args[2] = ends ? +ends.film.toFixed(2) : 1e9;
   const [, from, to] = args;
   if (from < 0) {
     console.error(
@@ -299,6 +316,38 @@ const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);
 
+// CHECK=text: each line to be read, at the heard second it is fully on screen (the middle of what is left between its In
+// and its Out), worked out here where the film's clocks are already set (heardLength above)
+const textCheck = CHECKS.find((x) => x.name === "text");
+const textLines = [];
+if (textCheck) {
+  const rel = pkg["live-studio"]?.textTimeline;
+  const file = rel && existsSync(join(PROJECT, rel)) ? readJson(join(PROJECT, rel), {}) : {};
+  const heard = Array.isArray(file.items)
+    ? mapTimeline("text", file, clockForTimeline("text"), false, null, {})
+    : { items: [] };
+  const [, from, to] = textCheck.args;
+  file.items?.forEach((it, i) => {
+    const h = heard.items?.[i];
+    if (!isRead(it) || !h || h.to <= from || h.from >= to) return;
+    const io = inOutLengths(it),
+      k = (h.to - h.from) / (it.to - it.from || 1),
+      a = h.from + io.in * k,
+      b = h.to - io.out * k;
+    const short = it.text.replace(/\s*\n\s*/g, " ").trim();
+    textLines.push({
+      i,
+      text: short.length > 28 ? `${short.slice(0, 27)}…` : short,
+      at: Math.round((b > a ? (a + b) / 2 : (h.from + h.to) / 2) * FPS) / FPS,
+      px: pxOf(it),
+      ink: it.color ?? "#FFFFFF",
+    });
+  });
+  if (existsSync(RENDERS))
+    for (const f of readdirSync(RENDERS))
+      if (/^text_\d+\.jpg$/.test(f)) rmSync(join(RENDERS, f), { force: true });
+}
+
 const ratio = ratioOf(pkg),
   [W, H] = sizeOf(ratio, final ? FINAL_SIZES[res][0] : 1280); // package.json "live-studio".ratio: 16:9, or 9:16 for Shorts
 const cfg = {
@@ -324,6 +373,7 @@ const cfg = {
   list: env.LIST === "1",
   inspect,
   checks: CHECKS.map(({ name, args }) => [name, args]),
+  text: textLines,
   choices: choicesFile ? readJson(choicesFile, {}) : {},
   lab: Object.fromEntries(
     Object.entries(env)
@@ -395,7 +445,7 @@ const stamp = (() => {
 // stills alone cannot show motion, contact or flicker: say what can, where every render prints
 if (!cfg.checks.length)
   console.log(
-    "checks: CHECK=motion|seen|touch:<target>,<from s>,<to s> (bun run render --help); after a clip: bun run framecheck",
+    "checks: CHECK=motion|seen|touch:<target>,<from s>,<to s>, CHECK=text (bun run render --help); after a clip: bun run framecheck, bun run pace",
   );
 
 // ---------- Serve it to a headless Chrome and keep what it posts back
