@@ -92,9 +92,9 @@ def rate(stream):
 
 
 def check(video, info):
+    """(summary line, [(FIX|ADVICE, words)]) for one video against the upload spec"""
     # the mix that wrote this file: a draft.mp4 comes from the draft, anything else is taken for the upload
     remix = f"bun run mix renders/{'draft_video' if Path(video).name == 'draft.mp4' else 'final_video'}.mp4"
-    """(summary line, [(FIX|ADVICE, words)]) for one video against the upload spec"""
     out = []
     fix = lambda words: out.append(("FIX", words))  # noqa: E731
     advise = lambda words: out.append(("ADVICE", words))  # noqa: E731
