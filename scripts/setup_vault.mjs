@@ -55,11 +55,10 @@ copyFileSync(
 );
 run("bun", [join(ROOT, "packages/mc-assets/mobs.ts"), assets.mobs], 600_000);
 run("bun", [join(ROOT, "scripts/fetch_mixkit.mjs")], 600_000);
+// the raw packs are downloaded before the sound vault is built, which files them into its categories
+if (existsSync(EXTERNAL)) run("bun", [join(ROOT, "scripts/fetch_sound_raw.mjs")], 600_000);
 run("bun", [join(ROOT, "scripts/build_sound_vault.mjs")], 600_000);
-if (existsSync(EXTERNAL)) {
-  run("bun", [join(ROOT, "scripts/fetch_sound_raw.mjs")], 600_000);
-  run("bun", [join(ROOT, "scripts/build_mc_sound_vault.mjs")], 900_000);
-}
+if (existsSync(EXTERNAL)) run("bun", [join(ROOT, "scripts/build_mc_sound_vault.mjs")], 900_000);
 console.log(
   `Light assets verified: Minecraft ${assets.minecraft.version}, mobs ${assets.mobs}, player rig and curated sound vault.`,
 );
