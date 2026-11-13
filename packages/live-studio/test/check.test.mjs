@@ -272,3 +272,45 @@ test("a size is a share of the frame's short side: its height in a 16:9 film, it
   assert.match(readFaults(day, day).join("\n"), /2\.2% of the frame height/);
   assert.match(readFaults(day, day, "9:16").join("\n"), /2\.2% of the frame width/);
 });
+
+test("a missing sound another film of the repo has is pointed to there, and every missing name says how to replace it", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const film = (name) => {
+    const dir = join(root, "films", name);
+    mkdirSync(join(dir, "src/timeline"), { recursive: true });
+    mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        "live-studio": { soundTimeline: "src/timeline/audio.json", sfx: "sound/sfx" },
+      }),
+    );
+    return dir;
+  };
+  const here = film("one"),
+    other = film("two");
+  cpSync(join(STUDIO, "demo/src"), join(here, "src"), { recursive: true });
+  const ff = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=0.5", "sound/sfx/bgm_drone.wav"],
+    {
+      cwd: other,
+    },
+  );
+  assert.equal(ff.status, 0, String(ff.stderr));
+  writeFileSync(
+    join(here, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [{ name: "bgm_drone", from: 0, to: 4, gain: 0, fadeIn: 0, fadeOut: 0 }],
+      sfx: [],
+    }),
+  );
+  const out = spawnSync("bun", [CHECK], { cwd: here, encoding: "utf8", timeout: 60000 });
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(
+    out.stderr,
+    /"bgm_drone" \(beds\[0\]\) is no sound the studio has: \.\.\/two\/sound\/sfx\/bgm_drone\.wav has it \(another film's own: copy the file and its SOURCES\.json row into sound\/sfx\/\)/,
+  );
+  assert.match(out.stderr, /replace a name: its "name" in src\/timeline\/audio\.json/);
+});

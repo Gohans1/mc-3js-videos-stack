@@ -211,7 +211,7 @@ def present(name):
     """The sound's file, or one line saying it is missing instead of a traceback from ffmpeg"""
     f = audio_file(name)
     if not f.exists():
-        raise SystemExit(f'no sound "{name}" in {SFX.relative_to(ROOT).as_posix()}/ or the vault: bun run check lists every missing name with the nearest ones')
+        raise SystemExit(f'no sound "{name}" in {SFX.relative_to(ROOT).as_posix()}/ or the vault: bun run check names every missing one, a near name or another film that has it, and how to replace it')
     return f
 
 

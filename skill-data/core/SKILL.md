@@ -115,15 +115,15 @@ bun run deliver --youtube 9-15               # how those seconds look after YouT
 
 ## Troubleshooting
 
-| You see                                       | Do                                                                                                                        |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `STALE` from `framecheck`, `sheet` or `jumps` | The video predates `src/`: `bun run render clip` again                                                                    |
-| `check` names a missing sound                 | It lists the nearest names; `bun run find <words>` searches the vault, `bun run sfx:get` fetches the film's pinned sounds |
-| A command says it runs elsewhere              | It belongs to the repo root or to a film: `cd` where it says                                                              |
-| A note's second moved after a Speed edit      | Notes keep the second they were written at; `bun run at '#N'` gives where it is heard now                                 |
-| `listen` misses a vault sound you changed     | `bun run listen --fresh`                                                                                                  |
-| `CHECK` has no such target                    | It suggests the nearest names and lists the targets; names match case                                                     |
-| `earshot` not found, or it fails              | `earshot doctor` names what is missing; setting it up: `INSTALL.md`                                                       |
+| You see                                       | Do                                                                                                                                             |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STALE` from `framecheck`, `sheet` or `jumps` | The video predates `src/`: `bun run render clip` again                                                                                         |
+| `check` names a missing sound                 | It says a near name or another film that has it; `bun run find <words>` searches the vault, `bun run sfx:get` fetches the film's pinned sounds |
+| A command says it runs elsewhere              | It belongs to the repo root or to a film: `cd` where it says                                                                                   |
+| A note's second moved after a Speed edit      | Notes keep the second they were written at; `bun run at '#N'` gives where it is heard now                                                      |
+| `listen` misses a vault sound you changed     | `bun run listen --fresh`                                                                                                                       |
+| `CHECK` has no such target                    | It suggests the nearest names and lists the targets; names match case                                                                          |
+| `earshot` not found, or it fails              | `earshot doctor` names what is missing; setting it up: `INSTALL.md`                                                                            |
 
 ## Load more when you need it
 

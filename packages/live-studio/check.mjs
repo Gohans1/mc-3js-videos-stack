@@ -21,7 +21,7 @@ src/edit.json or package.json "live-studio". Run inside the film.
   bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}]}
 Checks every timeline file against its schema (src/contract.ts, the studio's own), that every other .json in src/ parses,
 and every sound name in the sound timeline (beds, sfx and their "try" options) against the sounds the studio can play,
-with the nearest names. Warns (⚠, still exit 0) of on-screen text too brief to read or too small for a phone; where it sits
+with the nearest names or the other film whose own sound it is. Warns (⚠, still exit 0) of on-screen text too brief to read or too small for a phone; where it sits
 and how it reads over the picture: CHECK=text bun run render stills.
 Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
 Exit 0 ok, 1 problems found. Find a sound or preset by meaning: bun run find <words>.`;
@@ -172,13 +172,35 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
       where: conf.soundTimeline,
       issue: `✖ ${missing.size} of the ${used.size} sounds it names are not on this machine (${[...missing.keys()].slice(0, 5).join(", ")}, ...): most of the sound files are not here yet, so the names cannot be checked (a typo among them shows once they are). 1. bun run sfx:get fetches the film's own (CC0 from Freesound into ${conf.sfx}/); 2. cd ../.. && bun run link connects the vault; 3. bun run check again`,
     });
+  // a film's own sounds are heard by it alone: a name copied from another film is found in that film's folder
+  const siblings = readdirSync(dirname(PROJECT), { withFileTypes: true }).flatMap((d) => {
+    const dir = join(dirname(PROJECT), d.name);
+    if (!d.isDirectory() || dir === PROJECT) return [];
+    try {
+      const sfx = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"))?.["live-studio"]?.sfx;
+      return typeof sfx === "string" ? [join(dir, sfx)] : [];
+    } catch {
+      return [];
+    }
+  });
+  const elsewhere = (name) =>
+    siblings
+      .flatMap((dir) => [".wav", ".ogg"].map((ext) => join(dir, `${name}${ext}`)))
+      .find((f) => existsSync(f));
   const issues = [...(absent ? [] : missing)].map(([name, at]) => {
-    const near = nearest(name);
-    return `✖ "${name}" (${at.length > 4 ? `${at.slice(0, 4).join(" ")} and ${at.length - 4} more` : at.join(" ")}) is no sound the studio has${near.length ? `: did you mean ${near.map((n) => `"${n}"`).join(", ")}?` : ""} (bun run find ${name.replaceAll(/[_-]/g, " ")})`;
+    const other = elsewhere(name);
+    const near = other ? [] : nearest(name);
+    const where = other
+      ? `: ${relative(PROJECT, other).replaceAll("\\", "/")} has it (another film's own: copy the file and its SOURCES.json row into ${conf.sfx}/)`
+      : near.length
+        ? `: did you mean ${near.map((n) => `"${n}"`).join(", ")}?`
+        : "";
+    return `✖ "${name}" (${at.length > 4 ? `${at.slice(0, 4).join(" ")} and ${at.length - 4} more` : at.join(" ")}) is no sound the studio has${where} (bun run find ${name.replaceAll(/[_-]/g, " ")})`;
   });
   if (issues.length)
     issues.push(
       `  ${missing.size} name${missing.size === 1 ? "" : "s"}. A sound lives in ${conf.sfx}/ (the film's own: bun run sfx:get fetches the CC0 ones it pins) or the vault; pick another: bun run find <words>`,
+      `  replace a name: its "name" in ${conf.soundTimeline} (the row named above) with an id bun run find prints, or swap the clip in the studio's Sound panel`,
     );
   // a name find printed but this film cannot hear: the vault itself is out of its reach, not the name wrong
   const vaults = findVaults(PROJECT, conf);

@@ -405,7 +405,7 @@ def main(args):
                 print("  unchanged since the last listen: the kept stems (--fresh renders them anew, after a vault sound changed)", file=sys.stderr)
         except SystemExit as e:  # mix.py names a missing sound itself
             if e.code not in (0, None):
-                print(f"{e.code}\n(bun run check lists every missing sound; bun run sfx:get fetches the film's own)", file=sys.stderr)
+                print(e.code, file=sys.stderr)
                 return 1
             raise
         cuts_file = root / "renders/cuts.json"
