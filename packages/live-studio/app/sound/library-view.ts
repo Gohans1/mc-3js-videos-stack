@@ -1,4 +1,16 @@
 import { words } from "../core/search";
+import {
+  catTitle,
+  EDITION_TITLES,
+  type EditionKind,
+  editionOf,
+  MC_HEADINGS,
+  ORIGIN_TITLES,
+  originOf,
+  sentenceSlug,
+  type SoundOrigin,
+  sourceOf,
+} from "./groups";
 import type { LibraryItem } from "./sound";
 
 const NATURAL_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -21,9 +33,9 @@ const searchTokensCache = new WeakMap<
 >();
 
 export type SoundKind = "bgm" | "sfx" | "mc";
-export type SoundOrigin = "real" | "synth";
+export type { EditionKind, SoundOrigin };
+export { catTitle, editionOf, originOf, sourceOf };
 export type OriginFilter = typeof ALL | SoundOrigin;
-export type EditionKind = "vanilla" | "modded";
 export type EditionFilter = typeof ALL | EditionKind;
 export type NavGroupId = "yours" | "bgm" | "sfx" | "mc";
 export type YoursLeaf = "fav" | "voice" | "film";
@@ -139,66 +151,22 @@ const SOURCE_NAMES: Record<string, string> = {
   earshot: "Earshot",
 };
 
-const CATEGORY_TITLES: Record<string, string> = {
-  film: "This film",
-  other: "Other",
-  magic: "Magic & UI",
-  boss: "Boss",
-  musical: "Musical tones",
-  shutter: "Camera shutter",
-};
-
-const MC_HEADINGS: Record<string, string> = {
-  ambience: "Ambience & weather",
-  blocks: "Blocks & mechanisms",
-  combat: "Combat & explosions",
-  footsteps: "Footsteps",
-  horror: "Horror & caves",
-  items: "Items & gear",
-  machines: "Machines & alarms",
-  magic: "Magic, UI & notes",
-  mobs: "Mobs & creatures",
-  vehicles: "Vehicles & boats",
-};
-
-const sentenceSlug = (slug: string) =>
-  slug
-    .replace(/[-_/]+/g, " ")
-    .trim()
-    .replace(/^\w/, (c) => c.toUpperCase());
-
 const titleSlug = (slug: string) =>
   slug
     .replace(/[-_/]+/g, " ")
     .trim()
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-const SYNTH_SOURCES = new Set(["earshot"]);
-
-export const sourceOf = (item: Pick<LibraryItem, "source">): string => item.source ?? "film";
-
 export const sourceTitle = (id: string): string => SOURCE_NAMES[id] ?? titleSlug(id);
 
-export const originOf = (item: Pick<LibraryItem, "name" | "source" | "origin">): SoundOrigin => {
-  if (item.origin === "real" || item.origin === "synth") return item.origin;
-  if (SYNTH_SOURCES.has(sourceOf(item))) return "synth";
-  if (/^(?:ear|syn|synth)[-_]/i.test(item.name)) return "synth";
-  return "real";
-};
-
 export const originTitle = (id: OriginFilter): string =>
-  id === "real" ? "Real / Studio" : id === "synth" ? "Code-gen" : "All types";
-
-export const editionOf = (item: Pick<LibraryItem, "source">): EditionKind =>
-  sourceOf(item) === "minecraft" ? "vanilla" : "modded";
+  id === ALL ? "All types" : ORIGIN_TITLES[id];
 
 export const editionTitle = (id: EditionFilter): string =>
-  id === "vanilla" ? "Vanilla 26.3" : id === "modded" ? "Modded packs" : "All editions";
+  id === ALL ? "All editions" : EDITION_TITLES[id];
 
 export const catOf = (item: Pick<LibraryItem, "category" | "source">): string =>
   item.category ?? (item.source ? "other" : "film");
-
-export const catTitle = (id: string): string => CATEGORY_TITLES[id] ?? sentenceSlug(id);
 
 const formatClockSeconds = (wholeSeconds: number): string => {
   const clamped = Math.max(0, Math.floor(wholeSeconds));
