@@ -121,15 +121,6 @@ const distance = (a, b) => {
   }
   return row[b.length];
 };
-// [key, the known key it is a letter or two from] for each key of obj nothing reads
-const misspelt = (obj, keys) =>
-  Object.keys(obj).flatMap((k) => {
-    if (keys.includes(k)) return [];
-    const near = keys.find(
-      (n) => distance(k.toLowerCase(), n.toLowerCase()) <= (n.length >= 4 ? 2 : 1),
-    );
-    return near ? [[k, near]] : [];
-  });
 
 // the known name a word is taken for a typo of: a letter off, or two swapped (a film's own names sit further off)
 const nearName = (k, names) =>
@@ -226,16 +217,23 @@ const readJson = (rel) => {
     return null;
   }
 };
+// a film may put keys of its own on a sound row too (the Film tab lists them): as on a camera key, only a letter off or swapped
+// is taken for a typo
+const nearKeys = (obj, keys) =>
+  Object.keys(obj).flatMap((k) => {
+    const near = nearName(k, keys);
+    return near ? [[k, near]] : [];
+  });
 const lanesRead = readJson(conf.soundTimeline);
 if (lanesRead && typeof lanesRead === "object")
   keyTypos(
     conf.soundTimeline,
     [
-      ...misspelt(lanesRead, SOUND_KEYS.audio),
+      ...nearKeys(lanesRead, SOUND_KEYS.audio),
       ...["beds", "sfx"].flatMap((list) =>
         (Array.isArray(lanesRead[list]) ? lanesRead[list] : []).flatMap((e, i) =>
           e && typeof e === "object"
-            ? misspelt(e, SOUND_KEYS[list]).map(([k, near]) => [`${list}[${i}] "${k}"`, near])
+            ? nearKeys(e, SOUND_KEYS[list]).map(([k, near]) => [`${list}[${i}] "${k}"`, near])
             : [],
         ),
       ),

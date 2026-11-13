@@ -78,6 +78,10 @@ export const timedDraw = (draw) => {
   if (draw.variants)
     out.variants = draw.variants.map((v) => ({
       ...v,
+      // a spread reads a getter once: the pick a chip makes later must still show
+      get pick() {
+        return v.pick;
+      },
       get ranges() {
         return v.ranges.map(([a, b]) => [
           timingClock.outputAt(a),

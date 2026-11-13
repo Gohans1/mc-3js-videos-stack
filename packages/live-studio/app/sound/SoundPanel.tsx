@@ -42,6 +42,7 @@ import {
   EmptyCard,
   FieldRow,
   KeyNav,
+  NavItem,
   Reset,
   SaveStatus,
   Section,
@@ -790,30 +791,13 @@ function CategoryTree({
                       ? { group: "yours", leaf: leaf.id as YoursLeaf }
                       : { group: sec.id, leaf: leaf.id };
                   return (
-                    <button
+                    <NavItem
                       key={leaf.id}
-                      type="button"
-                      aria-current={isCurrent ? "true" : undefined}
+                      title={leaf.title}
+                      count={typed || sec.id === "yours" ? leaf.count : undefined}
+                      current={isCurrent}
                       onClick={() => onSelect(nextPick)}
-                      className={cn(
-                        "focus-visible:ring-ring flex h-7.5 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs transition-colors duration-150 outline-none focus-visible:ring-2 pointer-coarse:h-10",
-                        isCurrent
-                          ? "bg-raised-3 text-primary font-medium"
-                          : "text-foreground/90 hover:bg-card hover:text-foreground",
-                      )}
-                    >
-                      <span className="truncate">{leaf.title}</span>
-                      {(typed || sec.id === "yours") && (
-                        <span
-                          className={cn(
-                            "text-tag tabular-nums",
-                            isCurrent ? "text-primary/80" : "text-muted-foreground",
-                          )}
-                        >
-                          {leaf.count}
-                        </span>
-                      )}
-                    </button>
+                    />
                   );
                 })}
               </div>

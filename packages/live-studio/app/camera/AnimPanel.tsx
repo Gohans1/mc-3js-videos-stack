@@ -29,7 +29,7 @@ import { matcher } from "../core/search";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
-import { ownAnim } from "../own/builtins";
+import { ownAnim, THIS_FILM, withFilmChip } from "../own/builtins";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import {
   animOf,
@@ -365,20 +365,30 @@ export function AnimPanel() {
   const shot = shownShot(),
     list = anims()?.[slot] ?? NO_ANIMS,
     now = animOf(shot)[slot]?.fx ?? null;
-  const cats = useMemo(() => orderedAnimCategories(list), [list]);
+  const cats = useMemo(
+    () =>
+      withFilmChip(
+        orderedAnimCategories(list),
+        list.some((x) => ownAnim(slot, x)),
+      ),
+    [list, slot],
+  );
+  const activeCat = cats.includes(cat) ? cat : ALL;
   const shown = useMemo(() => {
     const hit = matcher(q);
     return list.filter(
       (x) =>
         hit(`${x.title} ${x.cat} ${x.tip}`) &&
-        (cat === ALL ||
-          (cat === FAV
+        (activeCat === ALL ||
+          (activeCat === FAV
             ? favs.includes(`${slot}:${x.id}`)
-            : cat === SEAM
+            : activeCat === SEAM
               ? Boolean(x.pair)
-              : x.cat === cat)),
+              : activeCat === THIS_FILM
+                ? ownAnim(slot, x)
+                : x.cat === activeCat)),
     );
-  }, [list, q, cat, favs, slot]);
+  }, [list, q, activeCat, favs, slot]);
   // Trying an effect on: its preview, then the shot plays it until the pointer leaves
   const trial = useRef<{ id: string | null; snap: string; timer: number } | null>(null);
   const leave = useCallback(() => {
@@ -404,7 +414,7 @@ export function AnimPanel() {
   };
   // A tile taken out of the list under a resting pointer (a search, a category, a star taken off in Favorites) never gets its
   // pointerleave: its trial ends here
-  const none = cat === ALL && !q.trim();
+  const none = activeCat === ALL && !q.trim();
   useEffect(() => {
     const id = trial.current?.id;
     if (id !== undefined && !(id === null ? none : shown.some((x) => x.id === id))) leave();
@@ -502,7 +512,7 @@ export function AnimPanel() {
         <ChipGroup
           scroll
           label="Category"
-          value={cat}
+          value={activeCat}
           onChange={setCat}
           items={cats.map((c) => ({
             id: c,
@@ -545,7 +555,7 @@ export function AnimPanel() {
         ))}
         {!shown.length && (
           <li className="text-ui text-muted-foreground col-span-full py-2">
-            {cat === FAV && !q.trim()
+            {activeCat === FAV && !q.trim()
               ? `No favorite ${SLOT_NAMES[slot]} animations yet. Point at one and click its star.`
               : `No ${SLOT_NAMES[slot]} animations match "${q.trim()}".`}
           </li>

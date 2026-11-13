@@ -11,7 +11,7 @@ import { SearchBox } from "../components/SearchBox";
 import { matcher } from "../core/search";
 import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
-import { ownTransition } from "../own/builtins";
+import { ownTransition, THIS_FILM, withFilmChip } from "../own/builtins";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { pickShot, playSpan, shownShot, stopSpan } from "./anim";
 import { shotsDoc } from "./shots";
@@ -286,17 +286,26 @@ export function TransitionLibrary() {
     at = SHOTS_OUT[shot]?.t,
     current = transitionOf(shot);
   const all = transitions();
-  const cats = useMemo(() => transitionCategories(all), [all]);
+  const cats = useMemo(
+    () => withFilmChip(transitionCategories(all), all.some(ownTransition)),
+    [all],
+  );
+  const activeCat = cats.includes(cat) ? cat : ALL;
   const list = useMemo(() => {
     const hit = matcher(q);
     return all.filter((fx) => {
       const fxCat = transitionCatOf(fx);
       return (
         hit(`${fx.title} ${fxCat} ${fx.tip}`) &&
-        (cat === ALL || (cat === FAV ? favs.includes(`transition:${fx.id}`) : fxCat === cat))
+        (activeCat === ALL ||
+          (activeCat === FAV
+            ? favs.includes(`transition:${fx.id}`)
+            : activeCat === THIS_FILM
+              ? ownTransition(fx)
+              : fxCat === activeCat))
       );
     });
-  }, [all, q, cat, favs]);
+  }, [all, q, activeCat, favs]);
   const leave = useCallback(() => {
     if (!trial.current) return;
     clearTimeout(trial.current.timer);
@@ -318,7 +327,7 @@ export function TransitionLibrary() {
       }, 180),
     };
   };
-  useEffect(() => leave, [leave, shot, picked, key, q, cat, favs]);
+  useEffect(() => leave, [leave, shot, picked, key, q, activeCat, favs]);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-2.5 px-3 pb-2.5">
@@ -332,7 +341,7 @@ export function TransitionLibrary() {
         <ChipGroup
           scroll
           label="Transition categories"
-          value={cat}
+          value={activeCat}
           onChange={setCat}
           items={cats.map((c) => ({
             id: c,
@@ -405,7 +414,7 @@ export function TransitionLibrary() {
         </ul>
         {!list.length && (
           <p className="text-ui text-muted-foreground py-2">
-            {cat === FAV && !q.trim()
+            {activeCat === FAV && !q.trim()
               ? "No favorites yet. Use the star on a transition to keep it here."
               : "No transitions match this search."}
           </p>

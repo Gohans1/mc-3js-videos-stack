@@ -124,6 +124,7 @@ export function Library() {
             ? cam
             : placed),
   );
+  const value = shown.some((l) => l.id === lib) ? lib : "notes";
   return (
     <aside
       aria-label="Library"
@@ -131,7 +132,7 @@ export function Library() {
     >
       <Compose />
       <Tabs.Root
-        value={lib}
+        value={value}
         onValueChange={(v) => set({ lib: v as Lib })}
         className="flex min-h-0 flex-1 flex-col"
       >
@@ -365,7 +366,8 @@ export function Side({ wide }: { wide: boolean }) {
     side = useStudio((s) => s.side);
   const layer = useStudio((s) => s.layerPicks.length > 0);
   if (wide) return <Details />;
-  const value =
+  const editable = sound || text || cam || keys || placed;
+  const raw =
     side === "anim" || side === "speed" || side === "adjust"
       ? "cam"
       : side === "textAnim"
@@ -373,105 +375,115 @@ export function Side({ wide }: { wide: boolean }) {
         : side === "voiceChanger" || side === "audioSpeed"
           ? "sound"
           : side;
+  const shown =
+    raw === "notes" ||
+    raw === "film" ||
+    (raw === "sound"
+      ? sound
+      : raw === "text"
+        ? text
+        : raw === "objects"
+          ? placed
+          : raw === "keys"
+            ? keys
+            : cam);
+  const value = shown ? raw : "notes";
   return (
     <aside className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg in-data-review:hidden in-data-side-folded:hidden">
       <Compose />
-      {sound || text || cam || keys || placed ? (
-        <Tabs.Root
-          value={value}
-          onValueChange={(v) => set({ side: v as SideTab })}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          {/* Too many for the narrow column beside a phone's picture, the tabs scroll sideways as the timeline tools do; the
-              line under them stays out of the fade, and the padding keeps the focus ring inside what the scroll clips */}
-          <div className="bg-card flex-none">
-            <Tabs.List
-              aria-label="Panels"
-              className={cn(
-                tabs,
-                "scroll-fade-x [scrollbar-width:none] justify-between gap-2 overflow-x-auto overscroll-x-contain border-b-0 py-0.5",
-              )}
-            >
-              <Tabs.Tab value="notes" className={tab}>
-                Notes
-                <NotesCount open={open} check={check} />
+      <Tabs.Root
+        value={value}
+        onValueChange={(v) => set({ side: v as SideTab })}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        {/* Too many for the narrow column beside a phone's picture, the tabs scroll sideways as the timeline tools do; the
+            line under them stays out of the fade, and the padding keeps the focus ring inside what the scroll clips */}
+        <div className="bg-card flex-none">
+          <Tabs.List
+            aria-label="Panels"
+            className={cn(
+              tabs,
+              "scroll-fade-x [scrollbar-width:none] overflow-x-auto overscroll-x-contain border-b-0 py-0.5",
+              editable && "justify-between gap-2",
+            )}
+          >
+            <Tabs.Tab value="notes" className={tab}>
+              Notes
+              <NotesCount open={open} check={check} />
+            </Tabs.Tab>
+            {sound && (
+              <Tabs.Tab value="sound" className={tab}>
+                Audio
               </Tabs.Tab>
-              {sound && (
-                <Tabs.Tab value="sound" className={tab}>
-                  Audio
-                </Tabs.Tab>
-              )}
-              {text && (
-                <Tabs.Tab value="text" className={tab}>
-                  Text
-                </Tabs.Tab>
-              )}
-              {placed && (
-                <Tabs.Tab value="objects" className={tab}>
-                  Objects
-                </Tabs.Tab>
-              )}
-              {cam && (
-                <Tabs.Tab value="cam" className={tab}>
-                  {layer ? "Adjustment" : "Camera"}
-                </Tabs.Tab>
-              )}
-              {cam && (
-                <Tabs.Tab value="transition" className={tab}>
-                  Transitions
-                </Tabs.Tab>
-              )}
-              {keys && (
-                <Tabs.Tab value="keys" className={tab}>
-                  Keyframes
-                </Tabs.Tab>
-              )}
-              <Tabs.Tab value="film" className={tab}>
-                Film
+            )}
+            {text && (
+              <Tabs.Tab value="text" className={tab}>
+                Text
               </Tabs.Tab>
-            </Tabs.List>
-          </div>
-          <Tabs.Panel value="notes" className="flex min-h-0 flex-1 flex-col">
-            <NoteList />
+            )}
+            {placed && (
+              <Tabs.Tab value="objects" className={tab}>
+                Objects
+              </Tabs.Tab>
+            )}
+            {cam && (
+              <Tabs.Tab value="cam" className={tab}>
+                {layer ? "Adjustment" : "Camera"}
+              </Tabs.Tab>
+            )}
+            {cam && (
+              <Tabs.Tab value="transition" className={tab}>
+                Transitions
+              </Tabs.Tab>
+            )}
+            {keys && (
+              <Tabs.Tab value="keys" className={tab}>
+                Keyframes
+              </Tabs.Tab>
+            )}
+            <Tabs.Tab value="film" className={tab}>
+              Film
+            </Tabs.Tab>
+          </Tabs.List>
+        </div>
+        <Tabs.Panel value="notes" className="flex min-h-0 flex-1 flex-col">
+          <NoteList />
+        </Tabs.Panel>
+        {sound && (
+          <Tabs.Panel value="sound" className={panel}>
+            <AudioTab />
           </Tabs.Panel>
-          {sound && (
-            <Tabs.Panel value="sound" className={panel}>
-              <AudioTab />
-            </Tabs.Panel>
-          )}
-          {text && (
-            <Tabs.Panel value="text" className={panel}>
-              <TextTab />
-            </Tabs.Panel>
-          )}
-          {placed && (
-            <Tabs.Panel value="objects" className={panel}>
-              <ObjectsPanel />
-            </Tabs.Panel>
-          )}
-          {cam && (
-            <Tabs.Panel value="cam" className={panel}>
-              <CameraTab />
-            </Tabs.Panel>
-          )}
-          {cam && (
-            <Tabs.Panel value="transition" className={panel}>
-              <TransitionLibrary />
-              <TransitionPanel />
-            </Tabs.Panel>
-          )}
-          {keys && (
-            <Tabs.Panel value="keys" className={panel}>
-              <KeyPanel />
-            </Tabs.Panel>
-          )}
-          <Tabs.Panel value="film" className="flex min-h-0 flex-1 flex-col">
-            <OwnPanel />
+        )}
+        {text && (
+          <Tabs.Panel value="text" className={panel}>
+            <TextTab />
           </Tabs.Panel>
-        </Tabs.Root>
-      ) : (
-        <NoteList />
-      )}
+        )}
+        {placed && (
+          <Tabs.Panel value="objects" className={panel}>
+            <ObjectsPanel />
+          </Tabs.Panel>
+        )}
+        {cam && (
+          <Tabs.Panel value="cam" className={panel}>
+            <CameraTab />
+          </Tabs.Panel>
+        )}
+        {cam && (
+          <Tabs.Panel value="transition" className={panel}>
+            <TransitionLibrary />
+            <TransitionPanel />
+          </Tabs.Panel>
+        )}
+        {keys && (
+          <Tabs.Panel value="keys" className={panel}>
+            <KeyPanel />
+          </Tabs.Panel>
+        )}
+        <Tabs.Panel value="film" className="flex min-h-0 flex-1 flex-col">
+          <OwnPanel />
+        </Tabs.Panel>
+      </Tabs.Root>
     </aside>
   );
 }

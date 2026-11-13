@@ -47,6 +47,7 @@ interface PageSlice {
     | "textAnim"
     | "film";
   lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film"; // on a wide screen: the left column's tab (side then picks the right column's)
+  filmKind: string | null; // the Film tab's open kind (own-work.ts group id, "now" for On screen); null: its first
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;
 }
@@ -75,6 +76,7 @@ export const studio = createStore<StudioState>(() => ({
   perf: "",
   side: "notes",
   lib: "notes",
+  filmKind: null,
   favorites: { sounds: [], effects: [] },
   gradeLibrary: { luts: [], presets: [] },
   ...playbackSlice,

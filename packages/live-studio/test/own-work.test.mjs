@@ -2,7 +2,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { fieldsOf, isOwnFx, otherKeys, ownWork } from "../app/own/own-work.ts";
+import {
+  fieldsOf,
+  isOwnEase,
+  isOwnFx,
+  isOwnVelocity,
+  otherKeys,
+  ownWork,
+  THIS_FILM,
+  withFilmChip,
+} from "../app/own/own-work.ts";
 
 const dissolve = {
   id: "dissolve",
@@ -20,6 +29,7 @@ const builtins = {
   },
   eases: { linear: (x) => x },
   velocityEffects: ["flash"],
+  rowKeys: { Shot: ["t", "name", "anim"], Text: ["kind", "text", "from", "to"] },
 };
 const none = { shots: [], texts: [] };
 const group = (groups, id) => groups.find((g) => g.id === id);
@@ -67,12 +77,46 @@ test("a film's own effects are listed with the heard seconds they are used at; t
   );
   // an In used only in a shot's Out slot is not used: the slots are separate lists
   assert.deepEqual(
-    group(groups, "anims").items.map((x) => [x.id, x.used]),
-    [["rise", [0]]],
+    group(groups, "animation").items.map((x) => [x.id, x.part, x.used]),
+    [["rise", "In", [0]]],
   );
   assert.deepEqual(
-    group(groups, "voices").items.map((x) => [x.id, x.used]),
-    [["stamp", [2]]],
+    group(groups, "text").items.map((x) => [x.id, x.part, x.used]),
+    [["stamp", "In", [2]]],
+  );
+});
+
+test("the kinds come in CapCut's library order, then the 3D film's own, then what the studio can't name", () => {
+  const groups = ownWork(
+    {
+      other: { zap: 1 },
+      checks: { feet: () => "ok" },
+      variants: [{ id: "chair", title: "chair", options: [], ranges: [] }],
+      objects: ["room"],
+      anims: { in: [{ id: "rise", title: "Rise" }], out: [], combo: [] },
+      transitions: [{ id: "glitch", title: "Glitch" }],
+      velocityEffects: [{ id: "smear" }],
+      shapes: [{ id: "stamp", title: "Stamp" }],
+      textEases: ["wobble"],
+      sounds: [{ name: "sfx/door.wav" }],
+    },
+    builtins,
+    none,
+  );
+  assert.deepEqual(
+    groups.map((g) => g.title),
+    [
+      "Audio",
+      "Text",
+      "Stickers",
+      "Effects",
+      "Transitions",
+      "Animation",
+      "3D",
+      "A/B choices",
+      "Checks",
+      "Other",
+    ],
   );
 });
 
@@ -86,7 +130,7 @@ test("a built-in the film hands back unchanged is not its own; one with a change
     none,
   );
   assert.equal(
-    group(groups, "anims"),
+    group(groups, "animation"),
     undefined,
     "a copy of the studio's fade is still the studio's",
   );
@@ -95,7 +139,7 @@ test("a built-in the film hands back unchanged is not its own; one with a change
   assert.equal(changed.changes, true);
 });
 
-test("eases, speed-ramp effects and render checks the film adds are listed by name", () => {
+test("eases, speed-ramp effects and render checks the film adds sit with what they move", () => {
   const groups = ownWork(
     {
       eases: { linear: builtins.eases.linear, bounce: (x) => x * x },
@@ -106,12 +150,12 @@ test("eases, speed-ramp effects and render checks the film adds are listed by na
     none,
   );
   assert.deepEqual(
-    group(groups, "eases").items.map((x) => x.id),
-    ["bounce"],
+    group(groups, "animation").items.map((x) => [x.id, x.part]),
+    [["bounce", "Camera ease"]],
   );
   assert.deepEqual(
-    group(groups, "velocity").items.map((x) => [x.id, x.title]),
-    [["smear", "Smear"]],
+    group(groups, "effects").items.map((x) => [x.id, x.title, x.part]),
+    [["smear", "Smear", "Speed ramp"]],
   );
   assert.deepEqual(
     group(groups, "checks").items.map((x) => x.id),
@@ -167,6 +211,99 @@ test("what the film hands the studio under a name the studio doesn't know is lis
   assert.equal(item.fields[0].text, "1 field");
 });
 
+test("a list of {id, title} the film hands over under a new name is a kind of its own, named after it", () => {
+  const groups = ownWork(
+    {
+      other: {
+        weatherFx: [
+          { id: "rain", title: "Rain", tip: "drops on the lens", drops: 900 },
+          { id: "fog", title: "Fog" },
+        ],
+        "tools.sparks": [{ id: "embers" }],
+        "tools.composer": { passes: [] },
+        scores: [1, 2, 3], // a list, but not of things with an id
+      },
+    },
+    builtins,
+    none,
+  );
+  assert.deepEqual(
+    groups.map((g) => [g.id, g.title, g.items.map((x) => x.title)]),
+    [
+      ["own:tools.sparks", "Sparks", ["embers"]],
+      ["own:weatherFx", "Weather fx", ["Rain", "Fog"]],
+      ["other", "Other", ["scores", "tools.composer"]],
+    ],
+  );
+  const rain = group(groups, "own:weatherFx").items[0];
+  assert.equal(rain.tip, "drops on the lens");
+  assert.deepEqual(
+    rain.fields.map((f) => [f.key, f.text]),
+    [["drops", "900"]],
+  );
+});
+
+test("a field of its own on a shot, a text or any other row is listed by name, with where it is set and its values", () => {
+  const groups = ownWork(
+    {
+      rows: [
+        { kind: "Shot", t: 0, row: { t: 0, name: "wide" } },
+        { kind: "Shot", t: 12.5, row: { t: 3, name: "close", pov: true, noHead: true } },
+        { kind: "Shot", t: 30, row: { t: 9, pov: true } },
+        { kind: "Text", t: 4, row: { kind: "text", text: "hi", from: 4, glow: 2 } },
+        { kind: "Text", t: 8, row: { kind: "text", text: "yo", from: 8, glow: 0.5 } },
+      ],
+    },
+    builtins,
+    none,
+  );
+  const fields = group(groups, "fields");
+  assert.equal(fields.title, "Custom fields");
+  assert.deepEqual(
+    fields.items.map((x) => [x.id, x.title, x.part, x.used]),
+    [
+      ["noHead", "noHead", "Shot", [12.5]],
+      ["pov", "pov", "Shot", [12.5, 30]],
+      ["glow", "glow", "Text", [4, 8]],
+    ],
+  );
+  const by = Object.fromEntries(fields.items.map((x) => [x.title, x.fields]));
+  assert.deepEqual(
+    by.pov.map((f) => [f.key, f.text]),
+    [["value", "yes"]],
+  );
+  assert.equal(by.glow[0].key, "values");
+  assert.equal(by.glow[0].text, "2, 0.5");
+});
+
+test("a field of its own inside a slot the studio reads (a shot's anim, a text's in) is listed by its path", () => {
+  const groups = ownWork(
+    {
+      rows: [
+        { kind: "Shot", t: 2, row: { t: 0, anim: { in: { fx: "fade", len: 1, wobble: 3 } } } },
+        { kind: "Shot", t: 6, row: { t: 4, anim: { in: { fx: "fade" }, beat: 2 } } },
+        { kind: "Text", t: 4, row: { kind: "text", from: 4, in: { fx: "up", jitter: 0.2 } } },
+      ],
+    },
+    {
+      ...builtins,
+      rowKeys: {
+        Shot: ["t", "anim", "anim.in.fx", "anim.in.len"],
+        Text: ["kind", "from", "in", "in.fx"],
+      },
+    },
+    none,
+  );
+  assert.deepEqual(
+    group(groups, "fields").items.map((x) => [x.title, x.part, x.used]),
+    [
+      ["anim.beat", "Shot", [6]],
+      ["anim.in.wobble", "Shot", [2]],
+      ["in.jitter", "Text", [4]],
+    ],
+  );
+});
+
 test("the film's own sounds show where they play, and the 3D it builds in code is listed by name", () => {
   const groups = ownWork(
     {
@@ -184,15 +321,18 @@ test("the film's own sounds show where they play, and the 3D it builds in code i
     },
   );
   assert.deepEqual(
-    group(groups, "sounds").items.map((x) => [x.title, x.used]),
+    group(groups, "audio").items.map((x) => [x.title, x.used]),
     [
       ["Door slam", [8, 31.5]],
       ["sfx/unused.wav", []],
     ],
   );
   assert.deepEqual(
-    group(groups, "3d").items.map((x) => x.title),
-    ["room", "CCTV camera (mc-assets pack/cctv_camera.json)"],
+    group(groups, "3d").items.map((x) => [x.title, x.part]),
+    [
+      ["room", "Object"],
+      ["CCTV camera (mc-assets pack/cctv_camera.json)", "Object"],
+    ],
   );
 });
 
@@ -228,12 +368,12 @@ test("the film's own stickers, text eases, A/B choices and materials each get th
     },
   );
   assert.deepEqual(
-    group(groups, "shapes").items.map((x) => [x.title, x.used]),
-    [["Stamp", [7]]],
+    group(groups, "stickers").items.map((x) => [x.title, x.part, x.used]),
+    [["Stamp", "Sticker", [7]]],
   );
   assert.deepEqual(
-    group(groups, "eases").items.map((x) => [x.id, x.part]),
-    [["wobble", "Text"]],
+    group(groups, "text").items.map((x) => [x.id, x.part]),
+    [["wobble", "Ease"]],
   );
   const [choice] = group(groups, "choices").items;
   assert.deepEqual(choice.used, [12, 35.5]);
@@ -242,15 +382,18 @@ test("the film's own stickers, text eases, A/B choices and materials each get th
     { key: "shown", text: "office" },
   ]);
   assert.deepEqual(
-    group(groups, "materials").items.map((x) => x.title),
-    ["CRT glass (screen.ts)"],
+    group(groups, "3d").items.map((x) => [x.title, x.part]),
+    [["CRT glass (screen.ts)", "Material"]],
   );
 });
 
-test("what the film's tools carry under a name the studio doesn't know is listed too", () => {
+test("what the film's tools carry under a name the studio doesn't know is listed too; the starter kit's own are not", () => {
   assert.deepEqual(
-    otherKeys({ scene: {}, camera: {}, objects: [], clips: {}, composer: {} }, "tools"),
-    ["clips", "composer"],
+    otherKeys(
+      { scene: {}, camera: {}, objects: [], clips: {}, composer: {}, anchor: () => {}, sparks: {} },
+      "tools",
+    ),
+    ["sparks"],
   );
 });
 
@@ -259,6 +402,22 @@ test("a picker marks an effect as the film's own by the same rule the Film tab l
   assert.equal(isOwnFx({ ...fade }, builtins.anims.in), false);
   assert.equal(isOwnFx({ ...fade, len: 2 }, builtins.anims.in), true);
   assert.equal(isOwnFx({ id: "rise", title: "Rise" }, builtins.anims.in), true);
+  assert.equal(isOwnEase("linear", builtins.eases, builtins.eases), false);
+  assert.equal(isOwnEase("linear", builtins.eases), false);
+  assert.equal(isOwnEase("bounce", builtins.eases, { bounce: (x) => x }), true);
+  assert.equal(isOwnEase("linear", builtins.eases, { linear: (x) => x * x }), true);
+  assert.equal(isOwnVelocity("flash", builtins.velocityEffects), false);
+  assert.equal(isOwnVelocity("smear", builtins.velocityEffects), true);
+  assert.equal(
+    isOwnVelocity({ id: "flash", title: "White flash" }, builtins.velocityEffects),
+    true,
+  );
+});
+
+test("a picker gets a This film chip after Favorites only when the film made some of its effects", () => {
+  const cats = ["All", "Favorites", "Basic", "Glitch"];
+  assert.deepEqual(withFilmChip(cats, true), ["All", "Favorites", THIS_FILM, "Basic", "Glitch"]);
+  assert.deepEqual(withFilmChip(cats, false), cats);
 });
 
 test("a value that can't be written out (a scene object pointing back at itself) still shows, by its size", () => {
@@ -302,5 +461,16 @@ test("an effect pointing back at itself, or a check left empty, never breaks the
 });
 
 test("a film that adds nothing of its own gives no groups", () => {
-  assert.deepEqual(ownWork({ transitions: [dissolve], anims: builtins.anims }, builtins, none), []);
+  assert.deepEqual(
+    ownWork(
+      {
+        transitions: [dissolve],
+        anims: builtins.anims,
+        rows: [{ kind: "Shot", t: 0, row: { t: 0, name: "wide" } }],
+      },
+      builtins,
+      none,
+    ),
+    [],
+  );
 });

@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 
 import { Tip } from "../components/Tip";
 import { S } from "../core/state";
+import { useStudio } from "../core/store";
+import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { addPreset, type Preset, PRESETS, SHAPES } from "./text";
 
 const familyOf = (font?: string) =>
@@ -109,18 +111,19 @@ function Look({ p }: { p: Preset }) {
   );
 }
 
-function Tile({ p }: { p: Preset }) {
+function Tile({ p, own }: { p: Preset; own?: boolean }) {
   return (
     <li>
       <Tip label={p.hint}>
         <button
           type="button"
-          aria-label={`Add ${p.title} at the playhead`}
+          aria-label={`Add ${p.title} at the playhead${own ? `, ${FILM_MADE}` : ""}`}
           onClick={() => addPreset(p)}
           className="group/tile focus-visible:ring-ring flex w-full flex-col gap-1.5 rounded-md text-start outline-none focus-visible:ring-2"
         >
           <span className="bg-backdrop relative grid aspect-video w-full place-items-center overflow-hidden rounded-md ring-1 ring-white/6 group-hover/tile:ring-white/20">
             <Look p={p} />
+            {own && <FilmMark />}
             <span
               aria-hidden
               className="bg-primary text-primary-foreground absolute end-1 bottom-1 grid size-5 place-items-center rounded-sm opacity-0 transition-opacity duration-150 group-hover/tile:opacity-100 group-focus-visible/tile:opacity-100 pointer-coarse:opacity-100"
@@ -138,6 +141,7 @@ function Tile({ p }: { p: Preset }) {
 }
 
 export function TextLibrary() {
+  useStudio((s) => s.ready);
   const extraShapes: Preset[] = (S.tools?.titles?.shapes ?? [])
     .filter((s) => !SHAPES.some((b) => b.item.kind === s.id))
     .map((s) => ({
@@ -168,7 +172,7 @@ export function TextLibrary() {
           <h3 className="text-ui font-semibold">{title}</h3>
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-x-2.5 gap-y-3">
             {list.map((p) => (
-              <Tile key={p.id} p={p} />
+              <Tile key={p.id} p={p} own={extraShapes.includes(p)} />
             ))}
           </ul>
         </section>

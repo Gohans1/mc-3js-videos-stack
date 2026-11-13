@@ -84,6 +84,45 @@ export function Segmented<T extends string>({
   );
 }
 
+// One entry of CapCut's category tree down a library's left edge (the Audio and Film tabs): the open one in the accent on a raised fill
+export function NavItem({
+  title,
+  count,
+  current,
+  onClick,
+}: {
+  title: ReactNode;
+  count?: number;
+  current: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-current={current ? "true" : undefined}
+      onClick={onClick}
+      className={cn(
+        "focus-visible:ring-ring flex h-7.5 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs transition-colors duration-150 outline-none focus-visible:ring-2 pointer-coarse:h-10",
+        current
+          ? "bg-raised-3 text-primary font-medium"
+          : "text-foreground/90 hover:bg-card hover:text-foreground",
+      )}
+    >
+      <span className="truncate">{title}</span>
+      {count !== undefined && (
+        <span
+          className={cn(
+            "text-tag tabular-nums",
+            current ? "text-primary/80" : "text-muted-foreground",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function ChipGroup<T extends string>({
   label,
   value,

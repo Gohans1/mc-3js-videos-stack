@@ -8,6 +8,10 @@ import { useCallback, useEffect, useRef } from "react";
 import { Callout } from "@/components/ui/callout";
 
 import { type Bezier, type Ease, easeFn, easeNames, easeTitle } from "../core/ease";
+import { S } from "../core/state";
+import { useStudio } from "../core/store";
+import { ownEase } from "../own/builtins";
+import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { tone } from "../timeline/canvas";
 import { NumberField } from "./NumberField";
 import { Tip } from "./Tip";
@@ -103,6 +107,7 @@ function Tile({
   tip,
   f,
   on,
+  own,
   onPick,
   mono,
 }: {
@@ -110,6 +115,7 @@ function Tile({
   tip: string;
   f: ((x: number) => number) | null;
   on: boolean;
+  own?: boolean;
   onPick: () => void;
   mono?: boolean;
 }) {
@@ -119,7 +125,7 @@ function Tile({
         <button
           type="button"
           aria-pressed={on}
-          aria-label={`${title}: ${tip}`}
+          aria-label={`${title}: ${tip}${own ? `, ${FILM_MADE}` : ""}`}
           onClick={onPick}
           className="text-foreground/80 hover:ring-border focus-visible:ring-ring aria-pressed:text-primary aria-pressed:ring-primary relative block aspect-square w-full overflow-hidden rounded-md ring-2 ring-transparent outline-none"
         >
@@ -130,6 +136,7 @@ function Tile({
               <SlidersHorizontal className="size-6" />
             </span>
           )}
+          {own && <FilmMark />}
         </button>
       </Tip>
       <span
@@ -152,7 +159,7 @@ export function EaseTiles({
   fallback,
   onPick,
   className,
-  names = easeNames(),
+  names,
 }: {
   value: Ease | undefined;
   fallback: string;
@@ -160,8 +167,10 @@ export function EaseTiles({
   className?: string;
   names?: string[];
 }) {
+  useStudio((s) => s.ready);
+  const list = names ?? easeNames();
   const curve = Array.isArray(value) ? value : null,
-    presets = names.length ? [] : CURVES;
+    presets = list.length ? [] : CURVES;
   const now = curve
     ? (presets.find((c) => c.v.join() === curve.join())?.id ?? "custom")
     : (value ?? fallback);
@@ -187,13 +196,14 @@ export function EaseTiles({
           className ?? "grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-x-2.5 gap-y-3"
         }
       >
-        {names.map((n) => (
+        {list.map((n) => (
           <Tile
             key={n}
             title={easeTitle(n, fallback)}
             tip={tipOf(n)}
             f={easeFn(n, fallback)}
             on={now === n}
+            own={ownEase(n, S.render?.eases)}
             onPick={() => pick(n)}
             mono={!TIPS[n]}
           />
@@ -216,7 +226,7 @@ export function EaseTiles({
           onPick={() => pick("custom")}
         />
       </ul>
-      {!names.length && (
+      {!list.length && (
         <Callout>Only curves here: the film doesn't share its named eases (draw.eases).</Callout>
       )}
     </>

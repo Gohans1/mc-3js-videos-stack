@@ -92,6 +92,17 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.equal(gian.status, 1, gian.stdout + gian.stderr);
   assert.match(gian.stderr, /sfx\.0\.gain|sfx\[0\]\.gain/);
   assert.match(gian.stderr, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
+
+  // a field of the film's own two letters off a mix key ("room", "from") is the film's, as on a camera key
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [{ name: "door_slam", from: 0, to: 2, gain: 0, fadeIn: 0, fadeOut: 0, room: "cell" }],
+      sfx: [],
+    }),
+  );
+  const own = check();
+  assert.equal(own.status, 0, own.stdout + own.stderr);
 });
 
 test("check names a transition or anim one letter off a built-in, and leaves a film's own name alone", (t) => {

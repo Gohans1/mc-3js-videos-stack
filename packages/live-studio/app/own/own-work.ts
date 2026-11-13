@@ -1,8 +1,8 @@
-// What a film's code adds on top of the studio's libraries (its own transitions, shot and text animations, eases, speed-ramp
-// effects, render checks, sounds, the 3D it builds, stickers, A/B choices, materials, and anything under a name the studio
-// doesn't know), for the view-only Film tab, grouped by the kind of thing it is (CapCut's library kinds, plus a 3D film's own),
-// and for the "Film" mark on the studio's pickers. The studio
-// shows these and never edits them: the film's code is the AI's to change, so nothing here may refuse or drop a field.
+// What a film's code adds on top of the studio's libraries, for the view-only Film tab and the "Film" mark on the pickers.
+// Grouped as CapCut's libraries are (Audio, Text, Stickers, Effects, Transitions, then the clip's Animation), then what only a
+// 3D film has (3D, fields of its own on the JSON rows, A/B choices, checks). A list of {id} the film hands over under a name the
+// studio doesn't know is a kind of its own, named after it; anything else unknown lands in Other. The studio shows these and
+// never edits them: the film's code is the AI's to change, so nothing here may refuse or drop a field.
 // Pure, so the tests read it without a page.
 
 type Rec = Record<string, unknown>;
@@ -37,6 +37,7 @@ export interface OwnInput {
     pick?: { title: string };
     ranges: readonly (readonly [number, number])[]; // heard seconds
   }[];
+  rows?: readonly { kind: string; t: number; row: Rec }[]; // the timeline JSON's rows (a shot, a text…) at their heard second
   other?: Rec;
 }
 export interface Builtins {
@@ -46,6 +47,7 @@ export interface Builtins {
   eases: Record<string, Fn>;
   velocityEffects: readonly string[];
   textEases?: readonly string[];
+  rowKeys?: Record<string, readonly string[]>; // by row kind, the fields the studio or its template reads
 }
 type Pick = { fx?: string } | undefined;
 export interface Usage {
@@ -70,25 +72,17 @@ export interface OwnItem {
   fields: OwnField[];
 }
 export interface OwnGroup {
-  id:
-    | "transitions"
-    | "anims"
-    | "voices"
-    | "shapes"
-    | "sounds"
-    | "3d"
-    | "materials"
-    | "choices"
-    | "eases"
-    | "velocity"
-    | "checks"
-    | "other";
+  id: string; // "audio", "text"…, or "own:<name>" for a kind the film made up
   title: string;
   items: OwnItem[];
 }
 
-// What the studio already reads from a film's draw and its tools (src/contract.ts Draw, Tools) and what makeTransitions adds
+// What the studio already reads from a film's draw and its tools (src/contract.ts Draw, Tools), what makeTransitions adds, and
+// what templates/film's scene hands over in every film (clips, composer, a props film's anchor): not the film's own work
 const TOOLS = new Set([
+  "clips",
+  "composer",
+  "anchor",
   "scene",
   "camera",
   "look",
@@ -194,6 +188,21 @@ export const isOwnFx = (x: Fx, base: readonly Fx[]) => {
   const b = base.find((y) => y.id === x.id);
   return !b || (b !== x && !same(x, b));
 };
+export const isOwnEase = (
+  id: string,
+  base: Record<string, unknown>,
+  eases?: Record<string, unknown>,
+) => !(id in base) || (!!eases && id in eases && eases[id] !== base[id]);
+export const isOwnVelocity = (fx: string | Fx, base: readonly string[]) =>
+  isOwnFx(
+    typeof fx === "string" ? { id: fx } : fx,
+    base.map((id) => ({ id })),
+  );
+// CapCut's "Yours", named as the Audio tab's: a picker's chip after Favorites keeping only the film's own, when it has any
+export const THIS_FILM = "This film";
+export const withFilmChip = (cats: string[], any: boolean) =>
+  any ? cats.flatMap((c) => (c === "Favorites" ? [c, THIS_FILM] : [c])) : cats;
+
 const own = (
   list: readonly Fx[] | undefined,
   base: readonly Fx[],
@@ -216,74 +225,145 @@ const own = (
     ];
   });
 const named = (rec: Record<string, unknown> | undefined, base: Record<string, unknown> = {}) =>
-  Object.entries(rec ?? {}).flatMap(([id, v]): OwnItem[] =>
-    base[id] === v
-      ? []
-      : [
-          {
-            id,
-            title: id,
-            ...(id in base ? { changes: true } : {}),
-            used: [],
-            fields: [valueField("value", v)].flatMap((f) => f ?? []),
-          },
-        ],
+  Object.entries(rec ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .flatMap(([id, v]): OwnItem[] =>
+      base[id] === v
+        ? []
+        : [
+            {
+              id,
+              title: id,
+              ...(id in base ? { changes: true } : {}),
+              used: [],
+              fields: [valueField("value", v)].flatMap((f) => f ?? []),
+            },
+          ],
+    );
+const parted = (items: OwnItem[], part: string) => items.map((x) => ({ ...x, part }));
+
+// A kind the film made up: a list whose every entry has an id, as the studio's own libraries are
+const isKind = (v: unknown): v is Fx[] =>
+  Array.isArray(v) &&
+  v.length > 0 &&
+  v.every(
+    (x) => !!x && typeof x === "object" && typeof (x as Rec).id === "string" && (x as Rec).id,
   );
+// "tools.clips" → "Clips", "weatherFx" → "Weather fx"
+const kindTitle = (key: string) => {
+  const w = key
+    .replace(/^tools\./, "")
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .toLowerCase();
+  return w.charAt(0).toUpperCase() + w.slice(1);
+};
+
+// The fields of its own a film puts on its timeline rows, one item per field name and row kind. A kind the studio has no
+// list of read fields for shows none of them, rather than every field as the film's own
+const short = (v: unknown) =>
+  typeof v === "boolean"
+    ? v
+      ? "yes"
+      : "no"
+    : typeof v === "number"
+      ? String(Math.round(v * 1000) / 1000)
+      : typeof v === "string" && !v.includes("\n")
+        ? v
+        : null;
+const keyOf = (v: unknown) => {
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+};
+// A slot the studio reads inside a row (a shot's anim.in) is opened when its read fields are listed by path ("anim.in.fx")
+const ownPaths = (x: Rec, read: readonly string[], at = ""): [string, unknown][] =>
+  Object.keys(x).flatMap((k): [string, unknown][] => {
+    const path = at + k,
+      v = x[k];
+    if (v === undefined) return [];
+    if (
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      read.some((r) => r.startsWith(`${path}.`))
+    )
+      return ownPaths(v as Rec, read, `${path}.`);
+    return read.includes(path) ? [] : [[path, v]];
+  });
+const rowFields = (rows: OwnInput["rows"], known: Builtins["rowKeys"]): OwnItem[] => {
+  const by = new Map<string, { kind: string; key: string; uses: { t: number; v: unknown }[] }>();
+  for (const { kind, t, row } of rows ?? []) {
+    const read = known?.[kind];
+    if (!read) continue;
+    for (const [key, v] of ownPaths(row, read)) {
+      const id = `${kind}.${key}`;
+      if (!by.has(id)) by.set(id, { kind, key, uses: [] });
+      by.get(id)!.uses.push({ t, v });
+    }
+  }
+  const kinds = [...new Set((rows ?? []).map((r) => r.kind))];
+  return [...by.entries()]
+    .sort(
+      ([, a], [, b]) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind) || a.key.localeCompare(b.key),
+    )
+    .map(([, { kind, key, uses }]) => {
+      const values = [...new Map(uses.map((u) => [keyOf(u.v), u.v])).values()];
+      const shorts = values.map(short);
+      const list = shorts.every((s) => s !== null) ? shorts.join(", ") : null;
+      const field: OwnField | null =
+        values.length === 1
+          ? valueField("value", values[0])
+          : list !== null && list.length <= 60
+            ? { key: "values", text: list }
+            : {
+                key: "values",
+                text: plural(values.length, "value"),
+                code: () =>
+                  uses.map((u) => `${u.t.toFixed(2)} s  ${short(u.v) ?? keyOf(u.v)}`).join("\n"),
+              };
+      return {
+        id: key, // the row kind is its part, so the name alone heads it
+        title: key,
+        part: kind,
+        used: seconds(uses.map((u) => u.t)),
+        fields: field ? [field] : [],
+      };
+    });
+};
 
 export const ownWork = (film: OwnInput, base: Builtins, usage: Usage): OwnGroup[] => {
   const { shots, texts } = usage;
   const slots = ["in", "out", "combo"] as const;
+  const voices = (kind: "text" | "shape") =>
+    (["in", "out"] as const).flatMap((slot) =>
+      own(
+        film.voices?.[kind][slot],
+        base.voices[kind][slot],
+        (id) =>
+          seconds(
+            texts.flatMap((it) =>
+              (it.kind === "text") === (kind === "text") && it[slot]?.fx === id ? [it.from] : [],
+            ),
+          ),
+        slot === "in" ? "In" : "Out",
+      ),
+    );
+  const unknown = Object.entries(film.other ?? {});
+  const kinds = unknown
+    .filter(([, v]) => isKind(v))
+    .map(([key, v]) => ({
+      id: `own:${key}`,
+      title: kindTitle(key),
+      items: own(v as Fx[], [], () => []),
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title));
   const groups: OwnGroup[] = [
     {
-      id: "transitions",
-      title: "Transitions",
-      items: own(film.transitions, base.transitions, (id) =>
-        seconds(shots.flatMap((s) => (s.transition?.fx === id ? [s.t] : []))),
-      ),
-    },
-    {
-      id: "anims",
-      title: "Shot animations",
-      items: slots.flatMap((slot) =>
-        own(
-          film.anims?.[slot],
-          base.anims[slot],
-          (id) => seconds(shots.flatMap((s) => (s.anim?.[slot]?.fx === id ? [s.t] : []))),
-          slot === "combo" ? "Combo" : slot === "in" ? "In" : "Out",
-        ),
-      ),
-    },
-    {
-      id: "voices",
-      title: "Text and shape animations",
-      items: (["text", "shape"] as const).flatMap((kind) =>
-        (["in", "out"] as const).flatMap((slot) =>
-          own(
-            film.voices?.[kind][slot],
-            base.voices[kind][slot],
-            (id) =>
-              seconds(
-                texts.flatMap((it) =>
-                  (it.kind === "text") === (kind === "text") && it[slot]?.fx === id
-                    ? [it.from]
-                    : [],
-                ),
-              ),
-            `${kind === "text" ? "Text" : "Shape"} ${slot === "in" ? "In" : "Out"}`,
-          ),
-        ),
-      ),
-    },
-    {
-      id: "shapes",
-      title: "Stickers and shapes",
-      items: own(film.shapes, [], (id) =>
-        seconds(texts.flatMap((it) => (it.kind === id ? [it.from] : []))),
-      ),
-    },
-    {
-      id: "sounds",
-      title: "Sounds",
+      id: "audio",
+      title: "Audio",
       items: (film.sounds ?? [])
         .map((x) => ({
           id: x.name,
@@ -294,23 +374,86 @@ export const ownWork = (film: OwnInput, base: Builtins, usage: Usage): OwnGroup[
         .sort((a, b) => Number(!a.used.length) - Number(!b.used.length)), // the ones playing first
     },
     {
-      id: "3d",
-      title: "3D in the scene",
-      items: (film.objects ?? []).map((name) => ({ id: name, title: name, used: [], fields: [] })),
+      id: "text",
+      title: "Text",
+      items: [
+        ...voices("text"),
+        ...(film.textEases ?? [])
+          .filter((id) => !base.textEases?.includes(id))
+          .map((id) => ({ id, title: id, part: "Ease", used: [], fields: [] })),
+      ],
     },
     {
-      id: "materials",
-      title: "Materials and shaders",
-      items: (film.materials ?? []).map((name) => ({
-        id: name,
-        title: name,
-        used: [],
-        fields: [],
-      })),
+      id: "stickers",
+      title: "Stickers",
+      items: [
+        ...parted(
+          own(film.shapes, [], (id) =>
+            seconds(texts.flatMap((it) => (it.kind === id ? [it.from] : []))),
+          ),
+          "Sticker",
+        ),
+        ...voices("shape"),
+      ],
     },
+    {
+      id: "effects",
+      title: "Effects",
+      items: parted(
+        own(
+          film.velocityEffects?.map((v) => (typeof v === "string" ? { id: v } : v)),
+          base.velocityEffects.map((id) => ({ id })),
+          () => [],
+        ),
+        "Speed ramp",
+      ),
+    },
+    {
+      id: "transitions",
+      title: "Transitions",
+      items: own(film.transitions, base.transitions, (id) =>
+        seconds(shots.flatMap((s) => (s.transition?.fx === id ? [s.t] : []))),
+      ),
+    },
+    {
+      id: "animation",
+      title: "Animation",
+      items: [
+        ...slots.flatMap((slot) =>
+          own(
+            film.anims?.[slot],
+            base.anims[slot],
+            (id) => seconds(shots.flatMap((s) => (s.anim?.[slot]?.fx === id ? [s.t] : []))),
+            slot === "combo" ? "Combo" : slot === "in" ? "In" : "Out",
+          ),
+        ),
+        ...parted(named(film.eases, base.eases), "Camera ease"),
+      ],
+    },
+    {
+      id: "3d",
+      title: "3D",
+      items: [
+        ...(film.objects ?? []).map((name) => ({
+          id: name,
+          title: name,
+          part: "Object",
+          used: [],
+          fields: [],
+        })),
+        ...(film.materials ?? []).map((name) => ({
+          id: name,
+          title: name,
+          part: "Material",
+          used: [],
+          fields: [],
+        })),
+      ],
+    },
+    { id: "fields", title: "Custom fields", items: rowFields(film.rows, base.rowKeys) },
     {
       id: "choices",
-      title: "Choices (A/B)",
+      title: "A/B choices",
       items: (film.variants ?? []).map((v) => ({
         id: v.id,
         title: v.title,
@@ -322,27 +465,8 @@ export const ownWork = (film: OwnInput, base: Builtins, usage: Usage): OwnGroup[
       })),
     },
     {
-      id: "eases",
-      title: "Eases",
-      items: [
-        ...named(film.eases, base.eases).map((x) => ({ ...x, part: "Camera" })),
-        ...(film.textEases ?? [])
-          .filter((id) => !base.textEases?.includes(id))
-          .map((id) => ({ id, title: id, part: "Text", used: [], fields: [] })),
-      ],
-    },
-    {
-      id: "velocity",
-      title: "Speed ramp effects",
-      items: own(
-        film.velocityEffects?.map((v) => (typeof v === "string" ? { id: v } : v)),
-        base.velocityEffects.map((id) => ({ id })),
-        () => [],
-      ),
-    },
-    {
       id: "checks",
-      title: "Render checks",
+      title: "Checks",
       items: Object.entries(film.checks ?? {}).map(([id, v]) => ({
         id,
         title: id,
@@ -350,7 +474,12 @@ export const ownWork = (film: OwnInput, base: Builtins, usage: Usage): OwnGroup[
         fields: [valueField("check", v)].flatMap((f) => f ?? []),
       })),
     },
-    { id: "other", title: "Other", items: named(film.other) },
+    ...kinds,
+    {
+      id: "other",
+      title: "Other",
+      items: named(Object.fromEntries(unknown.filter(([, v]) => !isKind(v)))),
+    },
   ];
   return groups.filter((g) => g.items.length);
 };

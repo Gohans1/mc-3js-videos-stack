@@ -27,6 +27,32 @@ test("a text or adjustment placed inside a freeze uses its own advancing clock i
   assert.deepEqual(draw(2.5), [1.25, 1.25]);
 });
 
+test("a variant picked after the film is built is the one the studio reads as shown", () => {
+  setTiming({}, 10);
+  let pick = 0;
+  const options = [
+    { id: "A", title: "slatted" },
+    { id: "B", title: "office" },
+  ];
+  const draw = Object.assign(() => {}, {
+    variants: [
+      {
+        id: "chair",
+        title: "chair",
+        options,
+        set: (id) => (pick = options.findIndex((o) => o.id === id)),
+        get pick() {
+          return options[pick];
+        },
+        ranges: [[1, 2]],
+      },
+    ],
+  });
+  const [chair] = timedDraw(draw).variants;
+  chair.set("B");
+  assert.equal(chair.pick.title, "office");
+});
+
 test("changing a visual effect does not rebuild the film or independent music clocks", () => {
   const data = { speeds: [{ from: 0, to: 5, rate: 2 }], layers: { base: {}, changes: [] } };
   setTiming(data, 10);

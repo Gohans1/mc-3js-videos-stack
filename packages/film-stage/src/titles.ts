@@ -534,7 +534,8 @@ const onScreen = (g, list, t, W, H, camera, tracks, timeAt, cache, extra) => {
 };
 
 const KNOWN_SLOT_KEYS = new Set(["fx", "len", "ease", "stagger", "tint", "hold"]);
-const KNOWN_ITEM_KEYS = new Set([
+// What the drawer reads on an item; any other field is the film's own (the studio's Film tab lists those)
+export const TEXT_ITEM_KEYS = [
   "id",
   "kind",
   "text",
@@ -569,7 +570,8 @@ const KNOWN_ITEM_KEYS = new Set([
   "background",
   "in",
   "out",
-]);
+];
+const KNOWN_ITEM_KEYS = new Set(TEXT_ITEM_KEYS);
 
 const extraFieldsKey = (obj, known) => {
   if (!obj || typeof obj !== "object") return "";

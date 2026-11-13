@@ -503,8 +503,8 @@ export const SoundTimeline = z
       });
   });
 
-// The keys the mix and the studio read on each part of the sound timeline: a key next to one of these by a letter or two is a
-// typo the loose schemas let through (bun run check names it)
+// The keys the mix and the studio read on each part of the sound timeline: a key a letter off one of these (or two letters
+// swapped) is a typo the loose schemas let through (bun run check names it)
 export const SOUND_KEYS = {
   audio: Object.keys(SoundTimeline.shape),
   beds: Object.keys(Bed.shape),
@@ -676,16 +676,22 @@ export const AdjustmentTimeline = z
       .optional(),
   })
   .refine((f: any) => unique(f.items.map((it: any) => it.id)), "adjustment ids must differ");
+const ShotRow = z.looseObject({
+  t: time,
+  name: z.string().optional(),
+  anim: Anim.optional(),
+  transition: Transition.optional(),
+  adjust: Grade.optional(),
+});
+export const SHOT_KEYS = Object.keys(ShotRow.shape);
+// The fields read inside a shot's anim slots and transition, by path ("anim.in.k")
+export const SHOT_SLOT_KEYS = [
+  ...Object.keys(Anim.shape).flatMap((s) => Object.keys(AnimFx.shape).map((k) => `anim.${s}.${k}`)),
+  ...Object.keys(Transition.shape).map((k) => `transition.${k}`),
+];
+export const ADJUSTMENT_KEYS = Object.keys(AdjustmentItem.shape);
 export const ShotsTimeline = z
-  .array(
-    z.looseObject({
-      t: time,
-      name: z.string().optional(),
-      anim: Anim.optional(),
-      transition: Transition.optional(),
-      adjust: Grade.optional(),
-    }),
-  )
+  .array(ShotRow)
   .min(1)
   .refine(
     (s) => s.every((x, i) => i === 0 || x.t > s[i - 1].t),
@@ -722,6 +728,10 @@ const TextItem = z
     read: z.boolean().optional(),
   })
   .refine((it: any) => it.to > it.from, "to must come after from");
+export const TEXT_KEYS = Object.keys(TextItem.shape);
+export const TEXT_SLOT_KEYS = ["in", "out"].flatMap((s) =>
+  Object.keys(TextFx.shape).map((k) => `${s}.${k}`),
+);
 export const TextTimeline = z.looseObject({
   items: z.array(TextItem),
   tracks: z

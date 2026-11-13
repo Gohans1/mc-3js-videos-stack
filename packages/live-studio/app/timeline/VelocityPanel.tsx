@@ -20,6 +20,8 @@ import { FieldRow, Reset, Section, SliderRow } from "../components/inspector";
 import { S } from "../core/state";
 import { say, useStudio } from "../core/store";
 import { stamp } from "../core/time";
+import { ownVelocity } from "../own/builtins";
+import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { processSpec } from "../sound/processed";
 import {
   allClips,
@@ -67,16 +69,23 @@ const resolveEffects = (
             (typeof item === "object" && item.preview) ||
             known?.preview ||
             "contrast-110 brightness-110",
+          own: ownVelocity(item),
         };
       })
-    : [...BUILTIN_EFFECTS];
+    : BUILTIN_EFFECTS.map((e) => ({ ...e, own: false }));
   if (activeEffect && !list.some((e) => e.id === activeEffect)) {
-    list.push({ id: activeEffect, title: activeEffect, preview: "contrast-110 brightness-110" });
+    list.push({
+      id: activeEffect,
+      title: activeEffect,
+      preview: "contrast-110 brightness-110",
+      own: ownVelocity(activeEffect),
+    });
   }
   return list;
 };
 
 export function VelocityPanel({ shot }: { shot: number }) {
+  useStudio((s) => s.ready);
   useStudio((s) => s.soundRev);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const value = shotVelocity(shot),
@@ -204,11 +213,11 @@ export function VelocityPanel({ shot }: { shot: number }) {
         aria-label="Velocity effects"
         className="grid grid-cols-[repeat(auto-fit,minmax(3.5rem,1fr))] gap-x-2.5 gap-y-3"
       >
-        {[{ id: null, title: "None", preview: "" }, ...effects].map((effect) => (
+        {[{ id: null, title: "None", preview: "", own: false }, ...effects].map((effect) => (
           <li key={effect.id ?? "none"} className="min-w-0">
             <button
               type="button"
-              aria-label={`Velocity ${effect.title}`}
+              aria-label={`Velocity ${effect.title}${effect.own ? `, ${FILM_MADE}` : ""}`}
               aria-pressed={(value?.effect ?? null) === effect.id}
               disabled={busy}
               onClick={() => (effect.id ? void apply(effect.id) : setShotVelocity(shot, null))}
@@ -229,6 +238,7 @@ export function VelocityPanel({ shot }: { shot: number }) {
                 ) : (
                   <CircleSlash aria-hidden className="text-muted-foreground size-6" />
                 )}
+                {effect.own && <FilmMark />}
                 {status.kind === "analyzing" && status.effect === effect.id && (
                   <LoaderCircle
                     aria-hidden

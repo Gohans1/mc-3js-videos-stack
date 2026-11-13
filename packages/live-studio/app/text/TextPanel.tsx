@@ -42,7 +42,7 @@ import { matcher } from "../core/search";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
-import { ownVoice } from "../own/builtins";
+import { ownVoice, THIS_FILM, withFilmChip } from "../own/builtins";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { frameSize } from "../picture/frame";
 import {
@@ -641,17 +641,29 @@ function Anim({ it }: { it: TextItem }) {
   const curFx = it[slot],
     now = curFx?.fx ?? null,
     fx = list.find((x) => x.id === now);
-  const cats = useMemo(() => orderedTitleCategories(list, shape), [list, shape]);
+  const cats = useMemo(
+    () =>
+      withFilmChip(
+        orderedTitleCategories(list, shape),
+        list.some((x) => ownVoice(shape, slot, x)),
+      ),
+    [list, shape, slot],
+  );
+  const activeCat = cats.includes(cat) ? cat : ALL;
   const favPrefix = `text:${shape ? "shape" : "text"}:${slot}:`;
   const shown = useMemo(() => {
     const hit = matcher(q);
     return list.filter(
       (x) =>
         hit(`${x.title} ${x.cat ?? ""} ${x.tip ?? ""}`) &&
-        (cat === ALL ||
-          (cat === FAV ? favs.includes(favPrefix + x.id) : (x.cat ?? "Custom") === cat)),
+        (activeCat === ALL ||
+          (activeCat === FAV
+            ? favs.includes(favPrefix + x.id)
+            : activeCat === THIS_FILM
+              ? ownVoice(shape, slot, x)
+              : (x.cat ?? "Custom") === activeCat)),
     );
-  }, [list, q, cat, favs, favPrefix]);
+  }, [list, q, activeCat, favs, favPrefix, shape, slot]);
 
   const playVoice = useCallback(
     (len: number, loop = false) => {
@@ -688,7 +700,7 @@ function Anim({ it }: { it: TextItem }) {
       }, 140),
     };
   };
-  const none = cat === ALL && !q.trim();
+  const none = activeCat === ALL && !q.trim();
   useEffect(() => {
     const id = trial.current?.id;
     if (id !== undefined && !(id === null ? none : shown.some((x) => x.id === id))) leave();
@@ -724,6 +736,7 @@ function Anim({ it }: { it: TextItem }) {
       value: id,
       label: id[0] ? id[0].toUpperCase() + id.slice(1) : id,
       tip: "Custom curve provided by the film",
+      own: true,
     })),
   ];
   const customEase = !baseEaseItems.some((c) => c.value === easeKey);
@@ -778,7 +791,7 @@ function Anim({ it }: { it: TextItem }) {
         <ChipGroup
           scroll
           label="Voice category"
-          value={cat}
+          value={activeCat}
           onChange={setCat}
           items={cats.map((c) => ({
             id: c,
@@ -861,7 +874,7 @@ function Anim({ it }: { it: TextItem }) {
         })}
         {!shown.length && (
           <li className="text-ui text-muted-foreground col-span-full py-2">
-            {cat === FAV && !q.trim()
+            {activeCat === FAV && !q.trim()
               ? `No favorite ${slot === "in" ? "In" : "Out"} voices yet. Point at one and click its star.`
               : `No voices match "${q.trim()}".`}
           </li>
@@ -897,8 +910,14 @@ function Anim({ it }: { it: TextItem }) {
               </SelectTrigger>
               <SelectContent>
                 {baseEaseItems.map((c) => (
-                  <SelectItem key={c.value} value={c.value} title={c.tip}>
+                  <SelectItem
+                    key={c.value}
+                    value={c.value}
+                    title={c.tip}
+                    aria-label={"own" in c ? `${c.label}, ${FILM_MADE}` : undefined}
+                  >
                     {c.label}
+                    {"own" in c && <FilmMark className="static" />}
                   </SelectItem>
                 ))}
                 {customEase && (
