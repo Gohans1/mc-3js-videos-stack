@@ -591,6 +591,10 @@ const TL: Record<string, string> = {
   tempo: "tempo",
 };
 
+// a vault file is kept relative to the repo root, a film's own to the film: said from where find runs
+const soundFile = (file: string) =>
+  existsSync(file) ? file : relative(process.cwd(), join(ROOT, file)).replaceAll("\\", "/");
+
 function detail(x: Entry): string[] {
   const d = x.data ?? {},
     side = x.kind.split("-")[1] ?? "in",
@@ -610,14 +614,11 @@ function detail(x: Entry): string[] {
         : `sfx[]: {"at": <scene seconds, not heard: bun run at <heard s> gives the scene second>, "name": "${x.id}", "gain": 0}  (gain in dB; + "rate", "pitch", "reverse", "fadeIn", "fadeOut")`,
     );
     if (d.file) {
-      // a vault file is kept relative to the repo root, a film's own to the film: say it from where find runs
-      const file = existsSync(d.file)
-        ? d.file
-        : relative(process.cwd(), join(ROOT, d.file)).replaceAll("\\", "/");
+      const file = soundFile(d.file);
       out.push(
         Bun.which("earshot")
           ? `hear it: earshot describe ${file}`
-          : `hear it: earshot describe ${file}  (earshot is not on PATH here: install it as the earshot skill's SKILL.md says, or play the file)`,
+          : `hear it: earshot describe ${file}  (earshot is not on PATH here: INSTALL.md sets it up, earshot doctor checks it)`,
       );
     }
   } else if (x.kind === "mocap") {
@@ -1152,6 +1153,13 @@ export async function run(
       "(N takes): the id shown is take 1 and plays as is; --all lists every take's id, to vary a sound that repeats.",
     );
   if (shown.some(([, x]) => x.kind === "mocap")) next.push(mocapNext(pool));
+  const files = shown.flatMap(([, x]) =>
+    SOUND.includes(x.kind) && x.data?.file ? [soundFile(x.data.file)] : [],
+  );
+  if (files.length > 1)
+    next.push(
+      `hear them (you cannot): earshot rank "${query.replaceAll('"', "")}" ${files.join(" ")} --top 3  (about 40 s, its models load each call; describe the sound, not its job; which earshot command for what: bun run skills get core --ref sound)`,
+    );
   if (next.length) out.push(`next: ${next.join("\n      ")}`);
   return out.join("\n");
 }

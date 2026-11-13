@@ -187,6 +187,31 @@ test("listen --at shows the levels around one second, half a second at a time, n
   assert.deepEqual([after.voice, after.rest, after.margin, after.was], [-20, -20, 0, -10]);
 });
 
+// listen's numbers are levels only: what is heard there, and whether hits land on the cuts, is earshot's to say
+test("listen --at hands over the earshot timeline of the same stretch of the draft with sound", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-at-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const focus = () =>
+    spawnSync(
+      "python",
+      [
+        "-c",
+        `import sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import focus; focus({"curve": [(30 + i / 10, -20, -30) for i in range(100)], "lines": [], "over": [], "buried": []}, 35.0, None, [])`,
+      ],
+      { cwd: dir, encoding: "utf8" },
+    );
+  const none = focus();
+  assert.equal(none.status, 0, none.stderr);
+  assert.match(none.stdout, /bun run mix renders\/draft_video\.mp4[^\n]*then earshot timeline/);
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "renders/draft.mp4"), "x");
+  const r = focus();
+  assert.match(
+    r.stdout,
+    /earshot timeline renders\/draft\.mp4 --cues renders\/cuts\.json --from 33 --to 37 --detail low/,
+  );
+});
+
 test("listen hears a line the bed drowns and a line it leaves clear, and the jump at a cut", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "listen-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

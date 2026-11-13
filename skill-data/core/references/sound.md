@@ -1,6 +1,6 @@
 # Sound: place, mix, and hear it in numbers
 
-An AI cannot hear, so its ears are `bun run listen`: the narration measured against everything else in LU (EBU R128), each fault with its heard second.
+An AI cannot hear, so it has two kinds of ears. `bun run listen` measures the mix: the narration against everything else in LU (EBU R128), each fault with its heard second. `earshot`, a CLI of its own, says what a sound is, how well it fits words, and where hits land on the picture (below).
 
 ## The sound loop
 
@@ -23,6 +23,26 @@ The first `listen` renders two stems at about a second per film second; later ru
 In `audio.json`, `tracks[].gain` is a whole track and a clip's `filters` is an ffmpeg EQ chain (the studio's Inspector writes it).
 
 A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` puts it on the draft, and `render clip` keeps every chunk (the sound timeline is not in a chunk's stamp).
+
+## Ears: earshot
+
+`earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the earshot skill: `.claude/skills/earshot/SKILL.md`.
+
+| You want                                    | Run inside the film                                                                                                                                                                                                                                                        |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The best of several candidates              | `earshot rank "<what it sounds like>" <file> <file> ... --top 3`; `bun run find` prints this line with the paths                                                                                                                                                           |
+| What one sound is                           | `earshot describe <file>` (`bun run find --show <id>` prints its path)                                                                                                                                                                                                     |
+| The clean moment inside a long file         | `earshot find <file> "<what it sounds like>" --top 3`; its start and end become the row's `start` and `length`                                                                                                                                                             |
+| A real recording, or code-made              | `earshot realness <file>`                                                                                                                                                                                                                                                  |
+| What plays when, and the hits on the cuts   | `earshot timeline renders/draft.mp4 --cues renders/cuts.json --from 25 --to 40 --detail low` (after `bun run mix renders/draft_video.mp4`); `bun run listen --at <s>` prints it for `s`                                                                                    |
+| The same as a picture                       | `earshot sheet renders/draft.mp4 -o renders/ear_sheet.png --cues renders/cuts.json --from 25 --to 40`, then open the PNG                                                                                                                                                   |
+| Did a sound change help                     | Copy `renders/draft.mp4` to `renders/before.mp4`, mix again, then `earshot ab renders/before.mp4 renders/draft.mp4 --query "<the sound you want>" --a-start 30 --a-end 36 --b-start 30 --b-end 36` (the stretch you changed: mix brings the whole film back to its `lufs`) |
+| A sound neither the vault nor Freesound has | `earshot sfx list --kind hit`, then `earshot sfx render <id> -o sound/sfx/<name>.wav` (`--pitch`, `--dur`): `<name>` is now this film's sound for `audio.json`                                                                                                             |
+| Is earshot set up                           | `earshot doctor`; not on PATH: `INSTALL.md`                                                                                                                                                                                                                                |
+
+Describe the sound, not its job: "a heavy iron door slamming in a stone room", not "the door for the chase". earshot says what a sound is, never whether it is right for the story: that call is the creator's. Never run `earshot llm`: it uploads the audio to Google, and only the creator can agree to that.
+
+The film's sound goes through `audio.json` and `bun run mix` only. The real-sound skill is worth reading for sourcing, licences and cue design, but its own mixer, master and mux never touch a film: the studio and `bun run check` would never see what they write.
 
 ## How mix sets the loudness
 
@@ -53,4 +73,4 @@ When mix says it stopped short, it names the `drive` value to set: the limiter t
 | `near silence`                 | Dead air; keep it only when meant                                                                                     |
 | `abrupt end`                   | Fade the beds out before the end                                                                                      |
 
-Every vault sound is cleared for YouTube; a row tagged credit needs the author in the video description. Minecraft music with a contentId gets claimed. `bun run listen --sheet` also draws a spectrogram and loudness picture (needs earshot: `INSTALL.md`).
+Every vault sound is cleared for YouTube; a row tagged credit needs the author in the video description. Minecraft music with a contentId gets claimed. `bun run listen --sheet` also draws a spectrogram and loudness picture through `earshot sheet`.

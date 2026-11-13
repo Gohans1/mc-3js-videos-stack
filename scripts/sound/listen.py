@@ -349,6 +349,10 @@ def focus(got, at, last, cuts):
         if near(c, c):
             print(f"  cut at {c:.2f}")
     print(f"next: change a row there (bun run at {at:g} names each file and row), then bun run listen --at {at:g} shows it next to this run")
+    # levels only: what each sound there is, and whether the hits land on the cuts, takes ears
+    ear = f"earshot timeline renders/draft.mp4 --cues renders/cuts.json --from {max(0, at - 2):g} --to {at + 2:g} --detail low"
+    print(f"      what is heard there and how each hit lands on the cuts (about 20 s): "
+          + (ear if Path("renders/draft.mp4").exists() else f"bun run mix renders/draft_video.mp4, then {ear}"))
     return 0
 
 
@@ -409,7 +413,7 @@ def main(args):
         if "--sheet" in args:
             earshot = shutil.which("earshot")
             if not earshot:
-                print("no earshot on PATH for the sheet: INSTALL.md says how to set it up; the numbers below stand on their own", file=sys.stderr)
+                print("no earshot on PATH for the sheet: INSTALL.md sets it up, earshot doctor checks it; the numbers below stand on their own", file=sys.stderr)
             else:
                 full = Path(tmp) / "full.wav"
                 subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(voice), "-i", str(rest), "-filter_complex", "amix=inputs=2:normalize=0", str(full)], check=True, timeout=300)

@@ -38,7 +38,7 @@ const GROUPS = [
       "sfx:get": "fetch the CC0 Freesound sounds the film pins, or search Freesound (find)",
       mix: "the soundtrack: sound/mix.wav; mix <video> puts it on the draft (renders/draft.mp4)",
       listen:
-        "ears: voice buried under beds/sfx, sounds louder than it, jumps at cuts, dead air (--sheet: a picture)",
+        "the mix in numbers: voice buried under beds/sfx, sounds louder than it, jumps at cuts, dead air (--sheet: a picture)",
     },
   ],
   [
@@ -125,6 +125,11 @@ for (const [title, cmds] of GROUPS) {
       said.add(k);
       return `  ${k.padEnd(16)}${about}`;
     });
+  // earshot is a CLI of its own, not a script here: named so an AI knows it can hear what a sound is, not only its level
+  if (film && title === "Sound" && lines.length)
+    lines.push(
+      `  ${"earshot".padEnd(16)}ears, its own CLI (not bun run): which sound fits, what plays when, hits on the cuts${Bun.which("earshot") ? "" : " (not on PATH: INSTALL.md)"}; which call for what: bun run skills get core --ref sound`,
+    );
   if (lines.length) out.push(`${out.length ? "\n" : ""}${title}`, ...lines);
 }
 const rest = Object.keys(scripts).filter((k) => !said.has(k));

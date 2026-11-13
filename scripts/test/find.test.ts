@@ -386,3 +386,28 @@ test("--show of a kind name or a bare clip name points to the right thing", asyn
     /^mocap\/stand {2}mixamo\/Walking_1/,
   );
 });
+
+// an AI cannot hear the shortlist: find hands it the one earshot call that ranks those files by the words it searched
+test("a list of sounds ends with the earshot rank that hears them, paths ready", async () => {
+  const sound = (id: string, file: string): Entry => ({
+    ...e(id, "Door · slam", "", "sfx", "foley"),
+    data: { file },
+  });
+  const out = await run(
+    ["door", "slam"],
+    [
+      sound("door-a", "vault/sound/sfx/foley/door-a.wav"),
+      sound("door-b", "vault/sound/sfx/foley/door-b.wav"),
+    ],
+    noJev,
+  );
+  expect(out).toMatch(
+    /earshot rank "door slam" \S*vault\/sound\/sfx\/foley\/door-a\.wav \S*vault\/sound\/sfx\/foley\/door-b\.wav --top 3/,
+  );
+  const one = await run(
+    ["door", "slam"],
+    [sound("door-a", "vault/sound/sfx/foley/door-a.wav")],
+    noJev,
+  );
+  expect(one).not.toMatch(/earshot rank/);
+});

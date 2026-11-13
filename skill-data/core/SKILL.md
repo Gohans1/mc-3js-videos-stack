@@ -55,9 +55,10 @@ bun run render clip                          # 5. The draft video (renders/draft
 bun run framecheck                           # 6. Black, flashes, jumps, shimmer, freezes on the encoded file
 bun run mix renders/draft_video.mp4          # 7. The soundtrack on the draft (renders/draft.mp4)
 bun run listen                               # 8. Voice buried, sounds over the voice, dead air
+earshot timeline renders/draft.mp4 --cues renders/cuts.json --detail low   # 9. What each sound is, hits on the cuts
 ```
 
-Never call something done before you have looked at the new frames or listened through `listen`. The creator reviews in the studio (`bun run studio`, then open the link it prints) and leaves notes; [the notes loop](#common-tasks) answers them.
+`listen` measures levels; `earshot` (a CLI of its own: `references/sound.md` says which call for what) hears what a sound is. Never say how something sounds, or that a sound fits, without one of them behind it. Never call something done before you have looked at the new frames and listened. The creator reviews in the studio (`bun run studio`, then open the link it prints) and leaves notes; [the notes loop](#common-tasks) answers them.
 
 ## Common tasks
 
@@ -118,6 +119,7 @@ bun run deliver --youtube 9-15               # how those seconds look after YouT
 | A note's second moved after a Speed edit      | Notes keep the second they were written at; `bun run at '#N'` gives where it is heard now                                 |
 | `listen` misses a vault sound you changed     | `bun run listen --fresh`                                                                                                  |
 | `CHECK` has no such target                    | It suggests the nearest names and lists the targets; names match case                                                     |
+| `earshot` not found, or it fails              | `earshot doctor` names what is missing; setting it up: `INSTALL.md`                                                       |
 
 ## Load more when you need it
 
@@ -136,7 +138,7 @@ bun run skills get core --ref references/review.md --ref notes
 | `references/contract.md` | Writing `scene.ts`: what the studio needs from a film, the hooks on `draw`, the open schemas   |
 | `references/review.md`   | The eyes: `at`, stills, sheets, `CHECK=motion/seen/touch`, `framecheck`, `jumps`, `deliver`    |
 | `references/render.md`   | Rendering fast, re-rendering one stretch, the GPU, YouTube's spec, banding after its re-encode |
-| `references/sound.md`    | Placing sounds and music, gains, the mix, `listen` and its targets                             |
+| `references/sound.md`    | Placing sounds and music, gains, the mix, `listen` and its targets, earshot's calls            |
 | `references/voice.md`    | Narration: takes, generating, assembling, word seconds, reading pace                           |
 | `references/notes.md`    | The creator's notes: states, answering, remembering a rule                                     |
 | `references/cli.md`      | Writing or changing a repo command, and keeping these guides in step with it                   |
