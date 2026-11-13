@@ -25,7 +25,7 @@ bun run skills get core --ref sound   # one area in depth, by reference name
 - Every error says how to fix it. Exit 2: nothing was done (a wrong word, flag or second, a missing file, a note whose state refuses it). Exit 1: the film has something to fix.
 - Output ends with a `next:` line. Run that instead of guessing.
 - A command lacks something you need (a closer look, a measure, a filter)? Neither stop nor guess: do it from the raw files (`renders/`, `src/timeline/*.json`, `vault/`), with a throwaway script outside the repo if need be, then keep it: `bun run gap "<what you needed>" --did "<what you did instead>" --cmd <command>`. Gaps kept twice become commands.
-- A timeline field no guide names (a placed mob or block, a text's stroke or background, a hard cut, a Speed or Freeze row) is in the code, at the repo root: `packages/live-studio/src/contract.ts` holds every timeline file's schema (the one `check` and the studio use); a text item's look is drawn by `packages/film-stage/src/titles.ts`, placed objects by `packages/mc-assets/src/placed.ts`. Read them there; never click the studio to learn what it writes.
+- A timeline field no guide names: `packages/live-studio/src/contract.ts` (schemas), `packages/film-stage/src/titles.ts` (text looks), `packages/mc-assets/src/placed.ts` (placed objects). Never click the studio to learn it.
 - Missing data is named with the command that makes it (no video yet: `bun run render clip`).
 - `check`, `at` and `voice:cues` take `--json`.
 - A second is a heard second, written `65`, `1:05` or `01:05.250` as notes print them: `at`, `AT=`, `CHECK=`, `sheet` and `listen --at` read all three.
