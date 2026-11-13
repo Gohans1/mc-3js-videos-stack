@@ -101,11 +101,26 @@ export const hitPulse = (u) => {
   return u < 0.18 ? SNAP_OUT(u / 0.18) : 1 - GLIDE_OUT((u - 0.18) / 0.82);
 };
 
-// How a span between two keys spends its time (the later key's `ease`), each with a job:
-//   base       smooth, linear, out, in, inout, expo
-//   arrive     snapOut, glideOut, settleOut, softOut, liftOut, jump, xpArrive (front-loaded landing into rest)
-//   reposition stdInOut, strongInOut, whipBuild, anticipate, xpTravel (in-scene reframes & wind-ups)
-//   leave      softIn, buildIn, launchIn, xpLeave (accelerating into a cut; never brake before a cut)
+// How a span between two keys spends its time (the later key's `ease`), each EASES entry with one job (bun run find
+// reads these with the curve's own shape)
+export const EASE_JOBS = {
+  base: {
+    eases: ["smooth", "linear", "out", "in", "inout", "expo"],
+    job: "any move: a general-purpose curve",
+  },
+  arrive: {
+    eases: ["snapOut", "glideOut", "settleOut", "softOut", "liftOut", "jump", "xpArrive"],
+    job: "arriving: a front-loaded landing that comes to rest on the key",
+  },
+  reposition: {
+    eases: ["stdInOut", "strongInOut", "whipBuild", "anticipate", "xpTravel"],
+    job: "repositioning inside a scene: a reframe or a wind-up that starts and stops at rest",
+  },
+  leave: {
+    eases: ["softIn", "buildIn", "launchIn", "xpLeave"],
+    job: "leaving: accelerating into a cut, never braking before it",
+  },
+};
 export const EASES = {
   smooth: (x) => x * x * (3 - 2 * x) * 0.6 + x * 0.4,
   linear: (x) => x,

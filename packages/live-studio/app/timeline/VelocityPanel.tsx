@@ -1,3 +1,4 @@
+import { VELOCITY_EFFECTS, VELOCITY_LOOKS } from "film-stage/velocity";
 import { CircleSlash, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
@@ -38,20 +39,18 @@ type Status =
   | { kind: "idle" }
   | { kind: "analyzing"; effect: Velocity["effect"] }
   | { kind: "error"; message: string };
-const BUILTIN_EFFECTS: { id: Velocity["effect"]; title: string; preview: string }[] = [
-  { id: "flash", title: "Flash", preview: "brightness-150" },
-  { id: "hitPunch", title: "Hit punch", preview: "scale-115 contrast-125 brightness-110" },
-  { id: "blurShake", title: "Blur shake", preview: "blur-[1px] scale-110" },
-  {
-    id: "shutterStreak",
-    title: "Shutter streak",
-    preview: "scale-x-115 blur-[0.8px] brightness-110",
-  },
-  { id: "fadeBlur", title: "Fade blur", preview: "blur-[1px] brightness-75" },
-  { id: "retroZoom", title: "Retro zoom", preview: "scale-125" },
-  { id: "fringeBeat", title: "Edge fringe", preview: "contrast-125 saturate-150" },
-  { id: "rainbow", title: "Rainbow", preview: "hue-rotate-90 saturate-200" },
-];
+const PREVIEW: Record<(typeof VELOCITY_EFFECTS)[number], string> = {
+  flash: "brightness-150",
+  hitPunch: "scale-115 contrast-125 brightness-110",
+  blurShake: "blur-[1px] scale-110",
+  shutterStreak: "scale-x-115 blur-[0.8px] brightness-110",
+  fadeBlur: "blur-[1px] brightness-75",
+  retroZoom: "scale-125",
+  fringeBeat: "contrast-125 saturate-150",
+  rainbow: "hue-rotate-90 saturate-200",
+};
+const BUILTIN_EFFECTS: { id: Velocity["effect"]; title: string; preview: string }[] =
+  VELOCITY_EFFECTS.map((id) => ({ id, title: VELOCITY_LOOKS[id].title, preview: PREVIEW[id] }));
 
 const resolveEffects = (
   filmEffects: readonly (string | { id: string; title?: string; preview?: string })[] | undefined,
