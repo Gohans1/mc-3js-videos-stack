@@ -247,11 +247,11 @@ test("check warns of text shown too briefly to read and text too small for a pho
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(
     r.stdout,
-    /⚠ src\/timeline\/text\.json items\[0\] "THE VAULT WAS NEVER[^"]*" at 2\.00-3\.50 heard: readable about 1\.00 s for 39 characters; a reader needs 1\.95 s/,
+    /⚠ src\/timeline\/text\.json items\[0\] "THE VAULT WAS NEVER[^"]*" at 2\.00-3\.50 heard \("from": 2\): readable about 1\.00 s for 39 characters; a reader needs 1\.95 s/,
   );
   assert.match(
     r.stdout,
-    /⚠ src\/timeline\/text\.json items\[1\] "Day 3" at 4\.00-7\.00 heard: size 24 is 2\.2% of the frame height/,
+    /⚠ src\/timeline\/text\.json items\[1\] "Day 3" at 4\.00-7\.00 heard \("from": 4\): size 24 is 2\.2% of the frame height/,
   );
   assert.doesNotMatch(r.stdout, /items\[2\]|items\[3\]/);
 });

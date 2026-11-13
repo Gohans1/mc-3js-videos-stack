@@ -7,7 +7,7 @@
 // yellow (a red line would hide in red letters), the safe area dashed.
 import { EDIT } from "film/edit";
 
-import { measure, SAFE_AREA, verdict } from "../checks/text.mjs";
+import { measure, SAFE_AREA, summary, verdict } from "../checks/text.mjs";
 import { canvas } from "./lab";
 
 export const textCheck = (render, cfg) => async () => {
@@ -66,9 +66,6 @@ export const textCheck = (render, cfg) => async () => {
   } finally {
     EDIT.text.items = all;
   }
-  out.push(
-    `text: ${lines.length} line${lines.length > 1 ? "s" : ""} read over the picture, ${faulty} at fault${faulty ? " (renders/text_<i>.jpg: the line boxed in yellow, the safe area dashed)" : ""}`,
-    `next: ${faulty ? `fix each in src/timeline/text.json, then CHECK=text bun run render stills again` : `bun run check for reading time and size`}`,
-  );
+  out.push(...summary(lines.length, faulty));
   return out;
 };

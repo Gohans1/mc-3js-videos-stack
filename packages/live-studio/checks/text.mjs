@@ -133,7 +133,11 @@ export function verdict({ i, text, at, px }, m, ratio = "16:9") {
         ratio === "9:16"
           ? `in a Short, text stays ${pc(safe.right)} from the right (YouTube's like and share buttons), ${pc(safe.bottom)} from the bottom (title, channel, sound), ${pc(safe.top)} from the top (search bar) and ${pc(safe.left)} from the left`
           : `text stays ${pc(safe.left)} in from every edge (EBU R95's graphics-safe area)`
-      }: move its x or y`,
+      }: ${
+        x1 - x0 > 1 - safe.left - safe.right
+          ? `it is wider than the safe area, so no x fits it: break it with "\\n" or a smaller size`
+          : "move its x or y"
+      }`,
     );
   }
   const need = px >= LARGE_PX ? NEED_LARGE : NEED;
@@ -153,3 +157,13 @@ export function verdict({ i, text, at, px }, m, ratio = "16:9") {
     );
   return { faults, lines };
 }
+
+export const summary = (n, faulty) => [
+  `text: ${n} line${n === 1 ? "" : "s"} read over the picture, ${faulty} at fault${faulty ? " (renders/text_<i>.jpg: the line boxed in yellow, the safe area dashed)" : ""}`,
+  ...(faulty
+    ? [
+        `  decor not meant to be read (a sign in the world, a glitch) takes "read": false and is never judged`,
+      ]
+    : []),
+  `next: ${faulty ? "fix each in src/timeline/text.json, then CHECK=text bun run render stills again" : "bun run check for reading time and size"}`,
+];

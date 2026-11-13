@@ -6,7 +6,7 @@
 // against Shorts instead: popular ones average about 2.5 s a shot (100 Shorts of 2024, in "Visual Storytelling Without
 // Dialogue", 2025) and viral ones a median 4.7 s with the first cut by about 2 s (Viibeo, 54 Shorts, 2026, counting cuts
 // only); YouTube's Shorts analytics count who stays past the first seconds. Measures, never verdicts: a hold can be the
-// film's best moment, so this always exits 0
+// film's best moment, so a measured film always exits 0 (2 only when there is nothing to measure)
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -23,7 +23,8 @@ narration says over it. Run inside the film, on a video bun run render clip made
                                        of popular films since 2000; in a Short 5, twice their 2.5 s)
 A Short (package.json "live-studio".ratio "9:16") is read against Shorts: their shot lengths and its first 3 s.
 A new picture is a cut, or a third of the frame looking different from the last new picture (a slow pan adds up).
-Measures only, always exit 0: a long hold can be the point. Why these numbers: bun run skills get core --ref review.`;
+Measures only: exit 0 once measured, whatever it finds (a long hold can be the point); 2 when there is no video or cuts.
+Why these numbers: bun run skills get core --ref review.`;
 
 export const CHANGED = 24;
 export const SHARE = 1 / 3;
@@ -100,6 +101,9 @@ export const paceReport = ({
   const opening = news.filter((t) => t > 0 && t < opensIn);
   const firstCut = cuts.find((c) => c > 0);
   const worst = holds.toSorted((p, q) => q.len - p.len)[0] ?? near[0];
+  const spoken = holds.filter((g) => said(words, g.a, g.b) !== "no narration");
+  // a Short that keeps one picture past 2 s loses the swipe there first: look at its opening before any later hold
+  const slowOpen = short && (news[1] ?? length) > 2;
   return [
     `shots: ${shots.length}, mean ${s2(mean)} s, median ${s2(median)} s (${short ? "popular Shorts: about 2.5-4.7 s" : "popular films since 2000: about 4 s"})`,
     `  longest: ${longest.map((s) => `shot ${s.i} at ${s2(s.a)}-${s2(s.b)} (${s2(s.len)} s)`).join(", ")}`,
@@ -110,6 +114,16 @@ export const paceReport = ({
       (g) =>
         `  HOLD ${s2(g.a)}-${s2(g.b)} (${g.len.toFixed(1)} s) with no new picture; narration there: ${said(words, g.a, g.b)}`,
     ),
+    ...(spoken.length
+      ? [
+          "  a hold under narration: cut to what the words say, or move the camera; keep it when the stillness is the point",
+        ]
+      : []),
+    ...(holds.length > spoken.length
+      ? [
+          "  a hold with nothing said: a cut, a camera move or something moving in the frame, or keep it as a breath before what comes",
+        ]
+      : []),
     ...(near.length
       ? [
           `  longest stills under ${hold} s: ${near.map((g) => `${s2(g.a)}-${s2(g.b)} (${g.len.toFixed(1)} s)`).join(", ")}`,
@@ -118,7 +132,9 @@ export const paceReport = ({
     short
       ? `first 3 s: ${opening.length} new pictures, ${news[1] === undefined ? "the picture never changes" : `the picture first changes at ${s2(news[1])}`} (YouTube counts who stays past a Short's first seconds; viral Shorts change the picture within about 2 s)`
       : `first 30 s: ${opening.length} new pictures, ${firstCut === undefined ? "no cut" : `the first cut at ${s2(firstCut)}`} (YouTube judges an intro by who still watches at 30 s)`,
-    `next: bun run at ${worst ? +((worst.a + worst.b) / 2).toFixed(2) : 0} names what plays in the longest still; AT=<s> bun run render stills to look`,
+    slowOpen
+      ? `next: AT=1 bun run render stills shows the opening picture; a cut, a camera move or motion inside 2 s holds the swipe`
+      : `next: bun run at ${worst ? +((worst.a + worst.b) / 2).toFixed(2) : 0} names what plays in the longest still; AT=<s> bun run render stills to look`,
   ];
 };
 

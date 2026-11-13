@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { measure, verdict } from "../checks/text.mjs";
+import { measure, summary, verdict } from "../checks/text.mjs";
 
 const W = 200,
   H = 100;
@@ -67,7 +67,21 @@ test("text past the 5% graphics-safe margin is OUTSIDE, naming the edge; text th
     /OUTSIDE items\[4\] "BUTTONS"[^\n]*8\.0% from the right edge[^\n]*Short[^\n]*10\.0% from the right/,
   );
 
+  // wider than the safe area: no move of x or y fits it, so the fix is a line break or a smaller size
+  const wide = verdict(
+    { i: 5, text: "A VERY LONG LINE", at: 3, px: 56 },
+    { box: [0.004, 0.4, 0.994, 0.6], contrast: 10 },
+  );
+  assert.match(wide.lines.join("\n"), /wider than the safe area[^\n]*"\\n"[^\n]*smaller size/);
+
   const none = measure(frame([0, 0, 0]), frame([0, 0, 0]), W, H, WHITE, 20);
   assert.equal(none, null);
   assert.match(verdict({ i: 3, text: "GONE", at: 5, px: 56 }, none).lines[0], /drew nothing/);
+});
+
+test("the summary counts the faults and, when there are some, names the way out for decor", () => {
+  assert.match(summary(4, 0).join("\n"), /4 lines read over the picture, 0 at fault/);
+  const faulty = summary(4, 2).join("\n");
+  assert.match(faulty, /2 at fault/);
+  assert.match(faulty, /"read": false/);
 });

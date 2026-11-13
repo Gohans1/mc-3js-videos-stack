@@ -37,6 +37,7 @@ test("the report names the long shot, the hold with what the narration says over
   expect(r).toMatch(/shots: 3, mean 13\.33 s/);
   expect(r).toMatch(/longest: shot 1 at 5\.00-25\.00 \(20\.00 s\)/);
   expect(r).toMatch(/HOLD 5\.00-25\.00 \(20\.0 s\)[^\n]*"the door opens\."/);
+  expect(r).toMatch(/under narration: cut to what the words say/);
   expect(r).toMatch(/first 30 s: 4 new pictures, the first cut at 5\.00/);
   expect(r).toMatch(/\nnext: bun run at 15/);
 });
@@ -64,4 +65,7 @@ test("a Short is read against Shorts: their shot length, and its first 3 s with 
     short: true,
   });
   expect(still.join("\n")).toMatch(/first 3 s: 0 new pictures, the picture first changes at 6\.90/);
+  // nothing said over a hold: the advice is about the picture, and a Short slow to change points next at its opening
+  expect(still.join("\n")).toMatch(/with nothing said: a cut, a camera move or something moving/);
+  expect(still.at(-1)).toMatch(/^next: AT=1 bun run render stills/);
 });
