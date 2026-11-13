@@ -270,7 +270,7 @@ export function kindFilter(asked: string[], pool: Entry[]) {
     if (k !== said) {
       const alsoCat = pool.filter((x) => x.cat && catSlug(x.cat) === catSlug(said)).map(catKey);
       read.push(
-        `--kind ${said} read as ${k}${ALIAS_NOTE[k] ? ` (${ALIAS_NOTE[k]})` : ""}${alsoCat.length ? `; the category is --kind ${[...new Set(alsoCat)].join(",")}` : ""}`,
+        `--kind ${said} read as ${k}${ALIAS_NOTE[k] ? ` (${ALIAS_NOTE[k]})` : ""}${stem(said) === "effect" ? " (a sound effect; a beat effect is --kind velocity, a look --kind adjust, a camera move --kind anim)" : ""}${alsoCat.length ? `; the category is --kind ${[...new Set(alsoCat)].join(",")}` : ""}`,
       );
     }
     if (!c) return (x: Entry) => kindMatches(x.kind, k);
@@ -366,7 +366,20 @@ const catList = (xs: Entry[]) => {
     })
     .join(", ");
 };
+// Narration is generated per film, never a vault entry; the vault's sfx/voices are game-announcer one-liners
+const SPOKEN = new Set(
+  words("narration narrator voiceover voice speech dialogue dialog tts spoken voiceline"),
+);
+const SPOKEN_NOTE =
+  "a spoken line (narration, voiceover, dialogue) is made, not found: in a film folder, bun run voice:gen reads the script in src/edit.json (run it bare first, a preview; --yes spends voice credits); how: bun run skills get core --ref voice. The vault's --kind sfx/voices are game-announcer one-liners only";
+// Minecraft's soundtrack and discs: scripts/build_mc_sound_vault.mjs leaves music/ and records/ out of the vault
+// A named grade the vault has no entry for: the adjust sliders or a LUT make it
+const LOOK_WORDS = new Set(words("lut luts vhs teal bleach grading"));
+const MC_MUSIC = new Set(words("c418 pigstep otherside disc jukebox records soundtrack"));
+const MC_MUSIC_NOTE =
+  'Minecraft\'s own music (its soundtrack and music discs) is not in the vault: the build leaves music/ and records/ out. Mojang clears only its "Minecraft Creator-Safe" playlist for videos (minecraft.net/en-us/article/can-i-use-minecraft-music-), so a track is picked and added by hand, with "Music courtesy of Mojang Studios". Minecraft-themed music here: bun run find --kind bgm/boss (the Wither Storm mod soundtrack, credit the mod)';
 const unknownKind = (asked: string, pool: Entry[]) => {
+  if (SPOKEN.has(stem(asked))) return `--kind ${asked}: ${SPOKEN_NOTE}`;
   // a category asked as a kind (typing, shutter, horror): the kinds that have it
   const slug = catSlug(asked);
   const asCat = [
@@ -1138,15 +1151,17 @@ function details(x: Entry): string[] {
   if (SOUND.includes(x.kind)) {
     const takes = d.takes ?? [];
     if (takes.length > 1)
-      out.push(`takes: ${takes.join(", ")} (vary a repeated sound across them)`);
+      out.push(
+        `takes: ${takes.length > 6 ? `${takes.length} of them, ${takes[0]} to ${takes.at(-1)}` : takes.join(", ")} (vary a repeated sound across them)`,
+      );
     if (d.license) out.push(`licence: ${d.license}${d.url ? `  ${d.url}` : ""}`);
     if (d.peaks?.length) out.push(`loudness: ${envelope(d.peaks)}`);
-    use(
-      "audio.json",
-      x.kind === "bgm"
-        ? `beds[]: {"name": "${x.id}", "from": 0, "to": ${num(x.secs) ?? 10}, "gain": 0, "fadeIn": 1, "fadeOut": 1}  (gain in dB; + "start", "duck", "pan"; a bed shorter than its span loops)`
-        : `sfx[]: {"at": <scene seconds, not heard: bun run at <heard s> gives the scene second>, "name": "${x.id}", "gain": 0}  (gain in dB; + "rate", "pitch", "reverse", "fadeIn", "fadeOut")`,
-    );
+    const bed = `beds[]: {"name": "${x.id}", "from": 0, "to": ${num(x.secs) ?? 10}, "gain": 0, "fadeIn": 1, "fadeOut": 1}  (gain in dB; + "start", "duck", "pan"; a bed shorter than its span loops)`;
+    const hit = `sfx[]: {"at": <scene seconds, not heard: bun run at <heard s> gives the scene second>, "name": "${x.id}", "gain": 0}  (gain in dB; + "rate", "pitch", "reverse", "fadeIn", "fadeOut")`;
+    // a long ambience is a bed under the scene as music is; a short one is a hit at a second
+    use("audio.json", x.kind === "bgm" ? bed : hit);
+    if (x.kind !== "bgm" && (x.secs ?? 0) >= 10)
+      out.push(`      or under a whole scene, looping: ${bed}`);
     if (d.file) {
       const file = soundFile(d.file);
       out.push(
@@ -1280,8 +1295,12 @@ function show(ids: string[], pool: Entry[]) {
       // library has it
       const name = low.split("/").at(-1)!;
       const bare = pool.filter((x) => x.id.toLowerCase().endsWith(`/${name}`));
-      if (!pool.some((x) => x.id.toLowerCase() === low) && bare.length === 1)
+      let readAs = "";
+      if (!pool.some((x) => x.id.toLowerCase() === low) && bare.length === 1) {
         low = bare[0]!.id.toLowerCase();
+        if (id.includes("/"))
+          readAs = `(${id} read as ${bare[0]!.id}: no clip has that id under ${id.split("/")[0]})\n`;
+      }
       // Each take is its own entry here (its own file and loudness); its family's takes come from the family name
       const hits = pool.flatMap((x) => {
         if (x.id.toLowerCase() !== low) return [];
@@ -1309,16 +1328,19 @@ function show(ids: string[], pool: Entry[]) {
         hits.length > 1
           ? [`${hits.length} kinds share the id ${hits[0]!.id}: each goes where its use line says`]
           : [];
-      return [
-        ...shared,
-        ...hits.map((x) =>
-          [
-            line(x),
-            ...(x.about && !line(x).includes(x.about) ? [`about: ${x.about}`] : []),
-            ...detail(x),
-          ].join("\n"),
-        ),
-      ].join("\n\n");
+      return (
+        readAs +
+        [
+          ...shared,
+          ...hits.map((x) =>
+            [
+              line(x),
+              ...(x.about && !line(x).includes(x.about) ? [`about: ${x.about}`] : []),
+              ...detail(x),
+            ].join("\n"),
+          ),
+        ].join("\n\n")
+      );
     })
     .concat("after pasting it in: bun run check (in the film) says whether the file still fits")
     .join("\n\n");
@@ -1820,7 +1842,7 @@ export async function run(
       !filter
         ? kf.bad.join("\n")
         : !kindFilter(kinds!, pool).bad.length
-          ? `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${bySource.filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc only." : ""}${license ? " --license sorts sounds only." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}`
+          ? `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${bySource.filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc only." : ""}${license ? " --license sorts sounds only." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}${sources?.includes("minecraft") && kinds!.some((k) => k.startsWith("bgm")) ? `\n${MC_MUSIC_NOTE}` : ""}`
           : `${filter} keeps ${counts(entries) || "nothing"}: ${kf.bad.join("; ")}`,
     );
   }
@@ -1852,7 +1874,7 @@ export async function run(
     const bySrc = tally(srcs).split(", ").filter(Boolean);
     if (!sources && bySrc.length > (terse ? 1 : 0))
       facets.push(
-        `--source ${terse && bySrc.length > 8 ? `${bySrc.slice(0, 8).join(", ")} and ${bySrc.length - 8} more` : bySrc.join(", ")}`,
+        `--source ${terse && bySrc.length > 8 ? `${bySrc.slice(0, 8).join(", ")} and ${bySrc.length - 8} more (bun run find --source lists all)` : bySrc.join(", ")}`,
       );
     const lengths = durs(xs).split(", ").filter(Boolean);
     if (!dur && lengths.length > (terse ? 1 : 0)) facets.push(`--dur ${lengths.join(", ")}`);
@@ -2197,13 +2219,22 @@ export async function run(
   }
   // a word that is a source's name ("minecraft music", "mixamo walk") is a filter, not a word in titles; asked of a kind
   // that source never fills, the vault simply has none, and says so
+  // what the vault never holds, said first: Minecraft's own music, and a spoken line
+  const saysMusic =
+    [...(kindNames ?? []), ...named].includes("bgm") || typed.some((w) => stem(w) === "music");
+  const saysMinecraft = typed.some((w) => w === "minecraft") || (kindNames ?? []).includes("mc");
+  const mcMusic = typed.some((w) => MC_MUSIC.has(stem(w))) || (saysMusic && saysMinecraft);
+  if (typed.some((w) => SPOKEN.has(stem(w)))) next.unshift(SPOKEN_NOTE);
+  if (typed.some((w) => LOOK_WORDS.has(stem(w))) && !next.some((l) => l.includes(MAKE_LOOK)))
+    next.push(MAKE_LOOK);
+  if (mcMusic) next.unshift(MC_MUSIC_NOTE);
   if (!sources) {
     const bySrc = new Map<string, Set<string>>();
     for (const x of pool)
       if (x.src) bySrc.set(x.src, (bySrc.get(x.src) ?? new Set()).add(top(x.kind)));
     for (const w of typed) {
       const kindsOf = bySrc.get(w.toLowerCase());
-      if (!kindsOf) continue;
+      if (!kindsOf || (mcMusic && w === "minecraft")) continue;
       const lacking = (kindNames ?? named).filter((k) => k !== "sound" && !kindsOf.has(k));
       next.push(
         lacking.length

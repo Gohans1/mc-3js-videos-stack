@@ -780,15 +780,15 @@ test("words that name a kind put its hits first", async () => {
 
 test("a source's name in the words is a filter, and a kind it never fills is said to be absent", async () => {
   const pool = [
-    { ...e("mc-door", "Door", "", "mc", "blocks"), src: "minecraft" },
+    { ...e("mixamo/Walk", "Walk", "", "mocap", "stand"), src: "mixamo" },
     { ...e("bgm-calm", "Calm music", "", "bgm", "chill"), src: "pixabay" },
   ];
-  const out = await run(["minecraft", "music"], pool, noJev);
+  const out = await run(["mixamo", "music"], pool, noJev);
   expect(out).toMatch(
-    /minecraft is a source with no bgm \(only mc\): the vault has no minecraft bgm\. bgm comes from: pixabay 1/,
+    /mixamo is a source with no bgm \(only mocap\): the vault has no mixamo bgm\. bgm comes from: pixabay 1/,
   );
-  expect(await run(["minecraft", "door"], pool, noJev)).toMatch(
-    /minecraft is a source: add --source minecraft/,
+  expect(await run(["mixamo", "walk"], pool, noJev)).toMatch(
+    /mixamo is a source: add --source mixamo/,
   );
 });
 
@@ -831,4 +831,32 @@ test("when every clip shown has a flaw, find says none is clean and how to get o
     clips,
   );
   expect(out).toMatch(/next: every clip shown has a FLAW seen by eye: none is clean as it is/);
+});
+
+test("narration is made with voice:gen, never found, whether asked as words or as a kind", async () => {
+  expect(await run(["narration"], vault, noJev)).toMatch(
+    /next: a spoken line .* bun run voice:gen/,
+  );
+  await expect(run(["hello", "--kind", "voice"], vault, noJev)).rejects.toThrow(
+    /--kind voice: a spoken line .*voice:gen/,
+  );
+});
+
+test("Minecraft's own music is said to be absent, however it is asked", async () => {
+  const pool = [
+    { ...e("mc-door", "Door", "", "mc", "blocks"), src: "minecraft" },
+    { ...e("bgm-boss", "Boss theme", "", "bgm", "boss"), src: "wither-storm" },
+  ];
+  for (const ask of [["minecraft", "music"], ["pigstep"], ["music", "--kind", "mc"]])
+    expect(await run(ask, pool, noJev)).toMatch(/Minecraft's own music .* is not in the vault/);
+  await expect(run(["--kind", "bgm", "--source", "minecraft"], pool, noJev)).rejects.toThrow(
+    /none of it --kind bgm[\s\S]*Minecraft's own music/,
+  );
+});
+
+test("a long sound offers a looping bed as well as a hit", async () => {
+  const amb = { ...e("mc-cave-amb", "Cave ambience", "", "mc", "ambience"), secs: 40 };
+  expect(await run(["--show", "mc-cave-amb"], [amb], noJev)).toMatch(
+    /or under a whole scene, looping: beds\[\]: \{"name": "mc-cave-amb"/,
+  );
 });
