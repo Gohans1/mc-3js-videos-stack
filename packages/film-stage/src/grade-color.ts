@@ -8,7 +8,7 @@ export const ADJUSTMENTS = [
   {
     id: "temp",
     title: "Temp",
-    tip: "White balance: warm (orange, sunset) or cool (blue, night)",
+    tip: "White balance: + warm (orange, sunset), - cool (blue, night)",
     group: "Color",
     min: -100,
     max: 100,
