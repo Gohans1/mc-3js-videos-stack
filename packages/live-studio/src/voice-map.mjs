@@ -18,12 +18,13 @@ import { wavInfo, wavPeaks } from "./sound.mjs";
 export const VOICE_STEP = 0.04;
 export const TAKE_ID = /^[A-Za-z0-9_-]{1,80}$/;
 
-// The command that writes FILE.words.json for each take: whisperX runs in the lab venv (THREEJS_LAB moves the lab), as
-// scripts/voice/words.py says. voice:gen runs it for the takes it makes; a genvoice.pro take comes with no timings
+// The command that writes FILE.words.json for each take with whisperX: WHISPERX_PYTHON names a python that has it
+// (INSTALL.md), else the lab venv (THREEJS_LAB moves the lab). voice:gen and voice:align run it
 export const wordsCommand = (takes) => {
   const lab = process.env.THREEJS_LAB || "E:/threejs_lab";
   return [
-    join(lab, process.platform === "win32" ? "py/venv/Scripts/python.exe" : "py/venv/bin/python"),
+    process.env.WHISPERX_PYTHON ||
+      join(lab, process.platform === "win32" ? "py/venv/Scripts/python.exe" : "py/venv/bin/python"),
     fileURLToPath(new URL("../../../scripts/voice/words.py", import.meta.url)),
     ...takes,
   ];
@@ -121,6 +122,24 @@ const pickSafeTakeAudio = (realTakes, id) => {
   return candidates[0] ?? null;
 };
 
+// The takes of src/edit.json with audio in voice/takes: [{ id, audio, aligned }], aligned when <audio>.words.json is beside it
+export const takeAudios = (projectDir) => {
+  const takesDir = join(resolve(projectDir), "voice/takes");
+  if (!existsSync(takesDir)) return [];
+  let takes;
+  try {
+    takes = JSON.parse(readFileSync(join(projectDir, "src/edit.json"), "utf8"))?.takes;
+  } catch {
+    return [];
+  }
+  const realTakes = realpathSync(takesDir);
+  return (Array.isArray(takes) ? takes : []).flatMap((k) => {
+    const a = typeof k?.id === "string" && TAKE_ID.test(k.id) && pickSafeTakeAudio(realTakes, k.id);
+    return a ? [{ id: k.id, audio: a.real, aligned: existsSync(`${a.real}.words.json`) }] : [];
+  });
+};
+export const unalignedTakes = (projectDir) => takeAudios(projectDir).filter((x) => !x.aligned);
+
 export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = false } = {}) => {
   const root = resolve(projectDir);
   const takesDir = join(root, "voice/takes");
@@ -163,6 +182,13 @@ export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = fa
     if (strict) throw err;
     return [];
   }
+
+  // all of them at once: one take named per run sends an AI round the loop once per take
+  const unaligned = strict ? unalignedTakes(root) : [];
+  if (unaligned.length)
+    throw new Error(
+      `${unaligned.length} take${unaligned.length === 1 ? " has" : "s have"} no word timings (${unaligned.map((x) => x.id).join(", ")}): bun run voice:align writes them with whisperX (minutes on a CPU; each take is kept as it finishes)`,
+    );
 
   const placed = [];
   let cursor = 0;

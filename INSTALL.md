@@ -13,7 +13,8 @@
 
 ## Bản quyền và Lời dẫn
 
-| Mục       | Nội dung                                                                                                                                                                                                                                                      |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bản quyền | Thư mục vault bị Git bỏ qua nên tài sản của Mojang, Mixamo và Mixkit không đi kèm mã nguồn. Giấy phép rig ghi tại packages/mc-actor/assets/CREDITS_CC_BY.txt, còn nguồn WAV ghi tại vault/sound/SOURCES.json và sound/sfx/SOURCES.json.                       |
-| Lời dẫn   | Sinh take vào voice/takes và bản thử voice/try bằng scripts/voice/gen.ts, ghép full_voice.wav kèm Phrase Bricks bằng scripts/voice/assemble.ts, và lấy mốc từ bằng scripts/voice/cues.ts. Tệp chưa căn từ dùng scripts/voice/words.py, mix.py chỉ cần ffmpeg. |
+| Mục       | Nội dung                                                                                                                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bản quyền | Thư mục vault bị Git bỏ qua nên tài sản của Mojang, Mixamo và Mixkit không đi kèm mã nguồn. Giấy phép rig ghi tại packages/mc-actor/assets/CREDITS_CC_BY.txt, còn nguồn WAV ghi tại vault/sound/SOURCES.json và sound/sfx/SOURCES.json.                                         |
+| Lời dẫn   | Sinh take vào voice/takes và bản thử voice/try bằng scripts/voice/gen.ts, ghép full_voice.wav kèm Phrase Bricks bằng scripts/voice/assemble.ts, và lấy mốc từ bằng scripts/voice/cues.ts. Take chưa có mốc từ thì bun run voice:align căn bằng whisperX, mix.py chỉ cần ffmpeg. |
+| whisperX  | Tạo venv Python 3.10 đến 3.13 bằng uv venv rồi uv pip install whisperx (3.8.6 kèm torch 2.8, GPU cần CUDA 12.8). Đặt WHISPERX_PYTHON trỏ tới python của venv đó, model large-v3 tải lần đầu vào HF_HOME.                                                                        |

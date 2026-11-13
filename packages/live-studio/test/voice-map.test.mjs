@@ -15,7 +15,13 @@ import { join, resolve } from "node:path";
 import { test } from "node:test";
 
 import { openFilm, STUDIO, voiceMapOf } from "../src/film.mjs";
-import { buildVoiceMap, planVoicePlacements, writeVoiceMap } from "../src/voice-map.mjs";
+import {
+  buildVoiceMap,
+  planVoicePlacements,
+  unalignedTakes,
+  wordsCommand,
+  writeVoiceMap,
+} from "../src/voice-map.mjs";
 
 const writePcm16Wav = (file, samples, rate = 1000) => {
   const data = Buffer.alloc(samples.length * 2);
@@ -438,18 +444,40 @@ test("writeVoiceMap rejects out-of-root and junction-escaped output paths", (t) 
   }
 });
 
-test("a take with no word timings stops assembly with the command that writes them for that take", (t) => {
+test("takes with no word timings stop assembly once, naming every one and the command that aligns them", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "voice-words-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "src"));
   mkdirSync(join(dir, "voice/takes"), { recursive: true });
-  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ takes: [{ id: "01", text: "Hi." }] }));
-  writeFileSync(join(dir, "voice/takes/01.mp3"), "mp3");
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ takes: ["01", "02", "03"].map((id) => ({ id, text: "Hi." })) }),
+  );
+  for (const id of ["01", "02", "03"]) writeFileSync(join(dir, `voice/takes/${id}.mp3`), "mp3");
+  writeFileSync(
+    join(dir, "voice/takes/02.mp3.words.json"),
+    JSON.stringify({ dur: 1, words: [{ w: "Hi.", s: 0, e: 0.5 }] }),
+  );
+  assert.deepEqual(
+    unalignedTakes(dir).map((x) => x.id),
+    ["01", "03"],
+  );
   assert.throws(
     () => planVoicePlacements(dir, { strict: true, fallbackSecondsOf: () => 1 }),
-    (e) =>
-      /scripts[\\/]voice[\\/]words\.py /.test(e.message) &&
-      e.message.includes("01.mp3") &&
-      !e.message.includes("<the take>"),
+    /2 takes have no word timings \(01, 03\): bun run voice:align/,
   );
+});
+
+test("the whisperX python is the one WHISPERX_PYTHON names", () => {
+  const was = process.env.WHISPERX_PYTHON;
+  process.env.WHISPERX_PYTHON = "/opt/wx/bin/python";
+  try {
+    const [py, script, take] = wordsCommand(["a.mp3"]);
+    assert.equal(py, "/opt/wx/bin/python");
+    assert.match(script, /scripts[\\/]voice[\\/]words\.py$/);
+    assert.equal(take, "a.mp3");
+  } finally {
+    if (was === undefined) delete process.env.WHISPERX_PYTHON;
+    else process.env.WHISPERX_PYTHON = was;
+  }
 });

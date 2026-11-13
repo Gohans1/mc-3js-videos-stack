@@ -1,5 +1,5 @@
 """Word timings for voice takes with whisperX (GPU), plus the pitch range of each take as a rough check that the acting is
-not flat. Run with the lab venv that has whisperX: E:/threejs_lab/py/venv/Scripts/python.exe voice/words.py FILE...
+not flat. Run through bun run voice:align in a film (a python with whisperX: WHISPERX_PYTHON, INSTALL.md).
 Writes FILE.words.json beside each take. Unprimed on purpose: no script is given, so a mumbled word shows up as wrong text."""
 import os
 import json
@@ -38,4 +38,5 @@ for f in sys.argv[1:]:
     st = 12 * np.log2(np.array(f0) / np.median(f0)) if f0 else np.array([0.0])
     info = {"text": " ".join(w["w"] for w in words), "dur": round(len(audio) / sr, 2), "pitch_p10_p90_st": [round(float(np.percentile(st, 10)), 1), round(float(np.percentile(st, 90)), 1)], "words": words}
     Path(f + ".words.json").write_text(json.dumps(info, indent=1), encoding="utf8")
+    print(f"  aligned {Path(f).name}: {len(words)} words", flush=True)
     print(Path(f).name, info["dur"], info["pitch_p10_p90_st"], "|", info["text"])

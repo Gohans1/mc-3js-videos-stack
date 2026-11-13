@@ -397,7 +397,7 @@ if (isMain) {
     if (run?.status !== 0) {
       if (run?.stderr) console.error(run.stderr.trim().split(/\r?\n/).slice(-15).join("\n"));
       console.error(
-        `${run ? "whisperX failed" : `no whisperX python at ${py} (THREEJS_LAB names the lab folder)`}: the audio is saved, only its word timings are missing, and bun run voice:assemble needs them: ${[py, ...args].join(" ")}`,
+        `${run ? "whisperX failed" : `no whisperX python at ${py} (WHISPERX_PYTHON names one: INSTALL.md)`}: the audio is saved, only its word timings are missing, and bun run voice:assemble needs them: bun run voice:align`,
       );
       process.exit(1);
     }

@@ -16,6 +16,7 @@
     "postinstall": "bun ../../packages/mc-assets/vendor.mjs",
     "check": "bun node_modules/live-studio/check.mjs",
     "voice:gen": "bun ../../scripts/voice/gen.ts",
+    "voice:align": "bun ../../scripts/voice/align.ts",
     "voice:assemble": "bun ../../scripts/voice/assemble.ts",
     "voice:cues": "bun ../../scripts/voice/cues.ts",
     "sheet": "python ../../scripts/review/sheet.py",
