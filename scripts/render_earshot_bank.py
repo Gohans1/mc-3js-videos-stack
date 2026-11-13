@@ -104,7 +104,8 @@ def main() -> None:
         entry = {
             "title": f"{fit_src['title']} (fit)" if fit_src.get("title") else clean_label,
             "license": f"{fit_src.get('license', 'CC0 1.0')} (Earshot fit)" if fit_src else "Earshot Forge (Synthesized / CC0)",
-            "for": row.get("notes") or row["category"],
+            # the fit's provenance (source, model, CLAP score) is in title, license and url; "for" says what it sounds like
+            "for": (row.get("notes") or "").split(", fitted from")[0].strip() or row["category"],
             "source": "earshot",
             "kind": "sfx",
             "origin": "synth",
