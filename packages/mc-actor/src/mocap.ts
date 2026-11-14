@@ -649,7 +649,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         if (placed && now.length === placed.length && now.every((x, i) => x === placed[i])) return;
         placed = now;
         player.setPose(p);
-        player.g.updateMatrixWorld(true);
+        player.updateBones(); // the solve reads his bones alone: all of him is updated once, at the end
       };
       // his legs out of each other and of his body: box legs are thicker than a human's, so knees together, legs crossed
       // or a thigh pressed to the chest ran one box through the other
@@ -975,6 +975,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
             ? e2.normalize().applyQuaternion(worldQ(b.chest, qc).invert()).clone()
             : null;
       }
+      player.g.updateMatrixWorld(true);
       return p;
     });
   // A frame with no last frame (the first, or a cut, loop or seek: the source's hips jump, and what the last frame left is

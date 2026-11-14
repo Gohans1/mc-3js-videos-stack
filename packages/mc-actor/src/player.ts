@@ -828,6 +828,30 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   };
   const soleAt = (sd, out = new THREE.Vector3()) =>
     b[`ll${sd}`].localToWorld(out.copy(LEGS[sd].sole));
+  // soleAt off matrices already updated (updateBones or g.updateMatrixWorld): localToWorld walks every parent again
+  const soleNow = (sd, out = new THREE.Vector3()) =>
+    out.copy(LEGS[sd].sole).applyMatrix4(b[`ll${sd}`].matrixWorld);
+  // g.updateMatrixWorld(true) for only g and the nodes down to his bones, parents first, with three's own sums: for hot loops
+  // that read his bones alone, as his skin, face and hands are most of the tree. Update all of him before anything else reads it
+  const toBones = new Set();
+  for (const bone of Object.values(b))
+    for (let o = bone; o; o = o.parent) {
+      toBones.add(o);
+      if (o === g) break;
+    }
+  const chain = [];
+  g.traverse((o) => {
+    if (toBones.has(o)) chain.push(o);
+  });
+  const updateBones = () => {
+    for (const o of chain) {
+      if (o.matrixAutoUpdate) o.updateMatrix();
+      if (o.matrixWorldAutoUpdate)
+        if (o.parent === null) o.matrixWorld.copy(o.matrix);
+        else o.matrixWorld.multiplyMatrices(o.parent.matrixWorld, o.matrix);
+      o.matrixWorldNeedsUpdate = false;
+    }
+  };
   // Head angles [down, to his left, 0] that turn the face to a world point, held inside a natural neck range
   const headTo = (target) => {
     b.head.getWorldPosition(S);
@@ -851,12 +875,14 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     rig,
     bones: b,
     setPose,
+    updateBones,
     face,
     hand,
     handL,
     armTo,
     legTo,
     soleAt,
+    soleNow,
     legReach: LEGS.L.L1 + LEGS.L.L2,
     headTo,
     skin: ctx,

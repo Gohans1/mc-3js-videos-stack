@@ -37,14 +37,15 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
       steve.g.position.set(...B.at);
       steve.g.rotation.y = B.yaw * THREE.MathUtils.DEG2RAD;
       steve.setPose(B.pose);
-      steve.g.updateMatrixWorld(true);
+      steve.updateBones();
       yaw[i] = B.yaw;
       if (B.gait && B.gait.w > 0.15) gait[i] = B.gait.ph;
       for (const sd of ["L", "R"]) {
-        steve.soleAt(sd, tmp).toArray(want[sd], i * 3);
-        tmp.setFromMatrixPosition(steve.bones[`ul${sd}`].matrixWorld).toArray(hips[sd], i * 3); // updated just above
+        steve.soleNow(sd, tmp).toArray(want[sd], i * 3);
+        tmp.setFromMatrixPosition(steve.bones[`ul${sd}`].matrixWorld).toArray(hips[sd], i * 3);
       }
     }
+    steve.g.updateMatrixWorld(true); // all of him, as the last sample left him
     // on the floor or not, per foot and sample: the gait's stance half while walking, else the pose's sole height
     const down = { L: new Uint8Array(n), R: new Uint8Array(n) };
     for (const sd of ["L", "R"]) {
