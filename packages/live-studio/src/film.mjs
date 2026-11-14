@@ -84,7 +84,13 @@ export const contractFiles = (project) => {
   const choices =
     ["sound_choices.json", "choices.json"].find((f) => existsSync(join(project, f))) ??
     "choices.json";
-  const own = (key, schema) => (conf[key] ? { [conf[key]]: [schema, textOf(conf[key])] } : {});
+  // a value of the wrong shape is opened by nothing here: the "live-studio" entry's own schema names it
+  const own = (key, schema) =>
+    typeof conf[key] === "string" && conf[key] ? { [conf[key]]: [schema, textOf(conf[key])] } : {};
+  const rowsOf = (edit) => {
+    const rows = conf.requiredKeyRows?.[edit];
+    return Array.isArray(rows) ? rows.filter((p) => Array.isArray(p)) : [];
+  };
   return {
     'package.json "live-studio"': [StudioConfig, JSON.stringify(conf)],
     "src/edit.json": [Edit, textOf("src/edit.json")],
@@ -99,7 +105,7 @@ export const contractFiles = (project) => {
     ...Object.fromEntries(
       Object.entries(conf.keyFiles ?? {}).map(([rel, edit]) => [
         rel,
-        [keyFileSchema(conf.requiredKeyRows?.[edit] ?? []), textOf(rel)],
+        [keyFileSchema(rowsOf(edit)), textOf(rel)],
       ]),
     ),
   };

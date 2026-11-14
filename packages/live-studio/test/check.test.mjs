@@ -630,3 +630,89 @@ test("text the edit cuts out whole is never on screen, so it is no text too brie
   assert.doesNotMatch(r.stdout, /"CUT AWAY"/);
   assert.match(r.stdout, /items\[1\] "HALF OF ME IS CUT AWAY" .*readable about/);
 });
+
+test("an import in a block comment or a string is never built, so it is no missing file", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  writeFileSync(
+    join(dir, "src/extra.ts"),
+    [
+      "/*",
+      'import old from "./old.json";',
+      "*/",
+      `export const how = "import x from './said.json'";`,
+    ].join("\n"),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+test("a package.json value of the wrong type is named as its fault, not a crash", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  const check = (conf) => {
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": conf }));
+    return spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  };
+  const num = check({ soundTimeline: 123 });
+  assert.equal(num.status, 1, num.stdout + num.stderr);
+  assert.match(num.stderr, /^package\.json\n[\s\S]*soundTimeline/);
+  assert.doesNotMatch(num.stderr, /TypeError|ERR_INVALID_ARG_TYPE/);
+  const rows = check({
+    keyFiles: { "src/timeline/steve.json": "steve" },
+    requiredKeyRows: { steve: ["moves"] },
+  });
+  assert.equal(rows.status, 1, rows.stdout + rows.stderr);
+  assert.match(rows.stderr, /requiredKeyRows/);
+  assert.doesNotMatch(rows.stderr, /TypeError|is not a function/);
+});
+
+test("sound names are said to go unchecked when package.json names no sfx folder", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { soundTimeline: "src/timeline/audio.json" } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], sfx: [{ name: "no_such_sound", at: 1, gain: 0 }] }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(
+    r.stdout,
+    /⚠ package\.json "live-studio" names no "sfx" folder, so no sound name in src\/timeline\/audio\.json is checked/,
+  );
+});
+
+test("a key whose t is not a number is named on its own row, not lost with the row", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { keyFiles: { "src/timeline/steve.json": "steve" } } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/steve.json"),
+    JSON.stringify({
+      moves: [
+        { t: 0, x: 0 },
+        { t: "5", x: 1 },
+      ],
+    }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(
+    r.stderr,
+    /src\/timeline\/steve\.json\n[\s\S]*"t" is a number of seconds[\s\S]*moves\[1\]\.t/,
+  );
+});

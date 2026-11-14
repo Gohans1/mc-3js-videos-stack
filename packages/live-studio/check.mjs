@@ -14,9 +14,11 @@ import {
   CAM_KEYS,
   checkFiles,
   CONFIG_KEYS,
+  problems as schemaProblems,
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
   SOUND_KEYS,
+  StudioConfig,
   TEXT_KEYS,
   TEXT_SLOT_KEYS,
 } from "./src/contract.ts";
@@ -80,6 +82,9 @@ if (!conf || typeof conf !== "object" || Array.isArray(conf))
   stop(
     `✖ no "live-studio": {...} in it, so the studio knows none of the film's files. git restore package.json, or compare with ${join(TEMPLATE, "package.json").replaceAll("\\", "/")}`,
   );
+// a value of the wrong shape ("soundTimeline": 123) is opened by every check after: said alone, before any is
+const confFaults = schemaProblems(StudioConfig, conf, "package.json");
+if (confFaults.length) stop(confFaults.map((p) => p.split("\n").slice(1).join("\n")).join("\n"));
 // a timeline named by its folder (src/timeline) opens as no file: every check after reads it
 const template = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8"))["live-studio"];
 const folders = [
@@ -117,16 +122,19 @@ for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFile
   }
 }
 
-// A JSON file the film's code imports and that is gone: the film no longer builds
+// A JSON file the film's code imports and that is gone: the film no longer builds. Bun's own parser reads the imports, so
+// one in a comment or a string is none; a file it cannot parse is the build's to name
 for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFileTypes: true })) {
   if (!file.isFile() || !/\.[mc]?[jt]sx?$/.test(file.name)) continue;
   const code = readFileSync(join(file.parentPath, file.name), "utf8");
-  for (const { 0: whole, 1: spec, index } of code.matchAll(
-    /from\s+["'](\.{1,2}\/[^"']+\.json)["']/g,
-  )) {
-    // an import in a comment (an old one kept for later) is never built
-    const line = code.slice(code.lastIndexOf("\n", index) + 1, index + whole.length);
-    if (/\/\/|\/\*|^\s*\*/.test(line)) continue;
+  let specs = [];
+  try {
+    specs = new Bun.Transpiler({ loader: file.name.endsWith("x") ? "tsx" : "ts" })
+      .scanImports(code)
+      .map((x) => x.path)
+      .filter((x) => /^\.{1,2}\/.*\.json$/.test(x));
+  } catch {}
+  for (const spec of specs) {
     const rel = relative(PROJECT, join(file.parentPath, spec)).replaceAll("\\", "/");
     if (existsSync(join(PROJECT, rel)) || found.some((p) => p.where === rel)) continue;
     const by = relative(PROJECT, join(file.parentPath, file.name)).replaceAll("\\", "/");
@@ -294,6 +302,11 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
 const warnings = [];
 // advice under the warnings, for a reader: text output only, never a --json warning
 const hints = [];
+// the studio opens the film's sounds through its sfx folder: without one no name can be looked up
+if (conf.soundTimeline && !conf.sfx)
+  warnings.push(
+    `⚠ package.json "live-studio" names no "sfx" folder, so no sound name in ${conf.soundTimeline} is checked (the template film's: "${template.sfx}")`,
+  );
 // a misspelt key is read by nothing: named whenever its file parses, even beside the shape faults it causes (gian for a
 // missing gain). A warning, not a problem: it is a guess, and a key of the film's own that looks like one (waves by wave)
 // has no other way to pass

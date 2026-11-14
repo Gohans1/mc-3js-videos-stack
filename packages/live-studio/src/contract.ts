@@ -772,6 +772,19 @@ export const keyRows = (v: any, path: string[] = []): string[][] => {
   const own = path.length > 0 && isTimedKey(v) ? [path] : [];
   return [...own, ...Object.entries(v).flatMap(([k, x]) => keyRows(x, [...path, k]))];
 };
+// a key whose "t" is no number ("5") makes keyRows drop its whole list, so the studio stops showing the row: named alone
+const badTimes = (v: any, path: (string | number)[] = []): (string | number)[][] =>
+  Array.isArray(v)
+    ? v.some(isTimedKey)
+      ? v.flatMap((k, i) =>
+          k && typeof k === "object" && "t" in k && !Number.isFinite(k.t)
+            ? [[...path, i, "t"]]
+            : [],
+        )
+      : v.flatMap((x, i) => badTimes(x, [...path, i]))
+    : v && typeof v === "object"
+      ? Object.entries(v).flatMap(([k, x]) => badTimes(x, [...path, k]))
+      : [];
 export const rowAt = (v: any, path: string[]): any => path.reduce((x, k) => x?.[k], v);
 const rowKeys = (v: any, path: string[]): any[] => {
   const r = rowAt(v, path);
@@ -780,6 +793,12 @@ const rowKeys = (v: any, path: string[]): any[] => {
 export const KeyFile = z
   .union([z.looseObject({}), z.array(z.unknown())])
   .superRefine((v: any, ctx) => {
+    for (const path of badTimes(v))
+      ctx.addIssue({
+        code: "custom",
+        message: `"t" is a number of seconds, not ${JSON.stringify(rowAt(v, path as string[]))}`,
+        path,
+      });
     for (const path of keyRows(v)) {
       const ks = rowKeys(v, path),
         i = ks.findIndex((k: any, j: number) => j > 0 && k.t < ks[j - 1].t);
