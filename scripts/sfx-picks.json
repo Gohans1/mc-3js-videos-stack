@@ -1626,6 +1626,1077 @@
       "page": "https://mixkit.co/free-sound-effects/drum/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/576/576.wav",
       "ear": { "query": "a snare drum roll", "z": 5.52, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-45",
+      "title": "Domestic cat hungry meow",
+      "category": "nature",
+      "for": "a cat meowing",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/45/45.wav",
+      "ear": { "query": "a cat meowing", "z": 5.89, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-86",
+      "title": "Little cat attention meow",
+      "category": "nature",
+      "for": "a cat meowing",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/86/86.wav",
+      "ear": { "query": "a cat meowing", "z": 4.97, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-87",
+      "title": "Little cat pain meow",
+      "category": "nature",
+      "for": "a cat meowing",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/87/87.wav",
+      "ear": { "query": "a cat meowing", "z": 6.04, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-91",
+      "title": "Cartoon little cat meow",
+      "category": "nature",
+      "for": "a cat meowing",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/91/91.wav",
+      "ear": { "query": "a cat meowing", "z": 5.73, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-92",
+      "title": "Cartoon kitty begging meow",
+      "category": "nature",
+      "for": "a cat meowing",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/92/92.wav",
+      "ear": { "query": "a cat meowing", "z": 6.02, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-93",
+      "title": "Sweet kitty meow",
+      "category": "nature",
+      "for": "a cat meowing",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/93/93.wav",
+      "ear": { "query": "a cat meowing", "z": 5.43, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-94",
+      "title": "Angry cartoon kitty meow",
+      "category": "nature",
+      "for": "a cat meowing",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/94/94.wav",
+      "ear": { "query": "a cat meowing", "z": 4.19, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2462",
+      "title": "Rooster crowing in the morning",
+      "category": "nature",
+      "for": "a rooster crowing: morning, waking up",
+      "page": "https://mixkit.co/free-sound-effects/morning/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2462/2462.wav",
+      "ear": { "query": "a rooster crowing", "z": 6.14, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2470",
+      "title": "Short rooster crowing",
+      "category": "nature",
+      "for": "a rooster crowing: morning, waking up",
+      "page": "https://mixkit.co/free-sound-effects/morning/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2470/2470.wav",
+      "ear": { "query": "a rooster crowing", "z": 5.7, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1759",
+      "title": "Cock calling",
+      "category": "nature",
+      "for": "a rooster crowing: morning, waking up",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1759/1759.wav",
+      "ear": { "query": "a rooster crowing", "z": 5.93, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1761",
+      "title": "Cock cry",
+      "category": "nature",
+      "for": "a rooster crowing: morning, waking up",
+      "page": "https://mixkit.co/free-sound-effects/cry/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1761/1761.wav",
+      "ear": { "query": "a rooster crowing", "z": 6.52, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1744",
+      "title": "Cow moo",
+      "category": "nature",
+      "for": "a cow mooing",
+      "page": "https://mixkit.co/free-sound-effects/cow/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1744/1744.wav",
+      "ear": { "query": "a cow mooing", "z": 5.33, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1747",
+      "title": "Cow single moo",
+      "category": "nature",
+      "for": "a cow mooing",
+      "page": "https://mixkit.co/free-sound-effects/cow/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1747/1747.wav",
+      "ear": { "query": "a cow mooing", "z": 5.92, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1748",
+      "title": "Cow dry moo",
+      "category": "nature",
+      "for": "a cow mooing",
+      "page": "https://mixkit.co/free-sound-effects/cow/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1748/1748.wav",
+      "ear": { "query": "a cow mooing", "z": 6.03, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1751",
+      "title": "Cow moo in the barn",
+      "category": "nature",
+      "for": "a cow mooing",
+      "page": "https://mixkit.co/free-sound-effects/cow/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1751/1751.wav",
+      "ear": { "query": "a cow mooing", "z": 6.02, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1760",
+      "title": "Goat single baa",
+      "category": "nature",
+      "for": "a goat bleating",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1760/1760.wav",
+      "ear": { "query": "a goat bleating", "z": 5.56, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1763",
+      "title": "Farm goat baa",
+      "category": "nature",
+      "for": "a goat bleating",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1763/1763.wav",
+      "ear": { "query": "a goat bleating", "z": 6.11, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1764",
+      "title": "Baby goat baa",
+      "category": "nature",
+      "for": "a goat bleating",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1764/1764.wav",
+      "ear": { "query": "a goat bleating", "z": 6.1, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1771",
+      "title": "Goat baa stutter",
+      "category": "nature",
+      "for": "a goat bleating",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1771/1771.wav",
+      "ear": { "query": "a goat bleating", "z": 5.78, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1741",
+      "title": "Sheep sounds",
+      "category": "nature",
+      "for": "sheep bleating",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1741/1741.wav",
+      "ear": { "query": "a sheep bleating", "z": 5.66, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3",
+      "title": "Pig grunting",
+      "category": "nature",
+      "for": "a pig grunting",
+      "page": "https://mixkit.co/free-sound-effects/pig/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3/3.wav",
+      "ear": { "query": "a pig grunting", "z": 5.14, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1772",
+      "title": "Chickens clucking short",
+      "category": "nature",
+      "for": "chickens clucking",
+      "page": "https://mixkit.co/free-sound-effects/chicken/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1772/1772.wav",
+      "ear": { "query": "chickens clucking", "z": 5.96, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1766",
+      "title": "Chickens crying",
+      "category": "nature",
+      "for": "chickens clucking",
+      "page": "https://mixkit.co/free-sound-effects/cry/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1766/1766.wav",
+      "ear": { "query": "chickens clucking", "z": 6.97, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-104",
+      "title": "Little monkey screech",
+      "category": "nature",
+      "for": "a monkey screeching",
+      "page": "https://mixkit.co/free-sound-effects/monkey/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/104/104.wav",
+      "ear": { "query": "a monkey screeching", "z": 4.56, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-105",
+      "title": "Monkey excited screech",
+      "category": "nature",
+      "for": "a monkey screeching",
+      "page": "https://mixkit.co/free-sound-effects/monkey/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/105/105.wav",
+      "ear": { "query": "a monkey screeching", "z": 4.28, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-100",
+      "title": "Cartoon monkey laugh",
+      "category": "comedy",
+      "for": "a cartoon monkey laughing: mocking, teasing",
+      "page": "https://mixkit.co/free-sound-effects/monkey/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/100/100.wav",
+      "ear": { "query": "a cartoon monkey laughing", "z": 5.15, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-102",
+      "title": "Cartoon baby monkey laugh",
+      "category": "comedy",
+      "for": "a cartoon monkey laughing: mocking, teasing",
+      "page": "https://mixkit.co/free-sound-effects/monkey/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/102/102.wav",
+      "ear": { "query": "a cartoon monkey laughing", "z": 4.84, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-107",
+      "title": "Cartoon monkey mocking laugh",
+      "category": "comedy",
+      "for": "a cartoon monkey laughing: mocking, teasing",
+      "page": "https://mixkit.co/free-sound-effects/monkey/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/107/107.wav",
+      "ear": { "query": "a cartoon monkey laughing", "z": 6.69, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-76",
+      "title": "Intense horse stallion neigh",
+      "category": "nature",
+      "for": "a horse neighing",
+      "page": "https://mixkit.co/free-sound-effects/horse/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/76/76.wav",
+      "ear": { "query": "a horse neighing", "z": 4.94, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-85",
+      "title": "Scared horse neighing",
+      "category": "nature",
+      "for": "a horse neighing",
+      "page": "https://mixkit.co/free-sound-effects/horse/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/85/85.wav",
+      "ear": { "query": "a horse neighing", "z": 5.25, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1762",
+      "title": "Stallion horse neigh",
+      "category": "nature",
+      "for": "a horse neighing",
+      "page": "https://mixkit.co/free-sound-effects/horse/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1762/1762.wav",
+      "ear": { "query": "a horse neighing", "z": 4.94, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-80",
+      "title": "Hard big horse snort",
+      "category": "nature",
+      "for": "a horse snorting",
+      "page": "https://mixkit.co/free-sound-effects/horse/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/80/80.wav",
+      "ear": { "query": "a horse snorting", "z": 5.39, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1729",
+      "title": "Lone wolf howling",
+      "category": "nature",
+      "for": "a wolf howling: night, danger",
+      "page": "https://mixkit.co/free-sound-effects/wolf/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1729/1729.wav",
+      "ear": { "query": "a wolf howling", "z": 5.66, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1775",
+      "title": "Wolf howling",
+      "category": "nature",
+      "for": "a wolf howling: night, danger",
+      "page": "https://mixkit.co/free-sound-effects/wolf/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1775/1775.wav",
+      "ear": { "query": "a wolf howling", "z": 4.48, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1774",
+      "title": "Cartoon wolf howling",
+      "category": "nature",
+      "for": "a wolf howling: night, danger",
+      "page": "https://mixkit.co/free-sound-effects/wolf/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1774/1774.wav",
+      "ear": { "query": "a wolf howling", "z": 3.49, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1776",
+      "title": "Wolves pack howling",
+      "category": "nature",
+      "for": "a wolf howling: night, danger",
+      "page": "https://mixkit.co/free-sound-effects/wolf/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1776/1776.wav",
+      "ear": { "query": "a wolf howling", "z": 4.69, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-310",
+      "title": "Donkey crying",
+      "category": "nature",
+      "for": "a donkey braying",
+      "page": "https://mixkit.co/free-sound-effects/cry/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/310/310.wav",
+      "ear": { "query": "a donkey braying", "z": 5.54, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1770",
+      "title": "Donkey scream",
+      "category": "nature",
+      "for": "a donkey braying",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1770/1770.wav",
+      "ear": { "query": "a donkey braying", "z": 5.56, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-330",
+      "title": "Annoying mosquito sound",
+      "category": "nature",
+      "for": "a mosquito or fly buzzing past",
+      "page": "https://mixkit.co/free-sound-effects/insect/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/330/330.wav",
+      "ear": { "query": "a mosquito buzzing", "z": 5.58, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-328",
+      "title": "Cartoon mosquito flying",
+      "category": "nature",
+      "for": "a mosquito or fly buzzing past",
+      "page": "https://mixkit.co/free-sound-effects/insect/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/328/328.wav",
+      "ear": { "query": "a mosquito buzzing", "z": 3.86, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2695",
+      "title": "Fly buzz trapped in a window",
+      "category": "nature",
+      "for": "a mosquito or fly buzzing past",
+      "page": "https://mixkit.co/free-sound-effects/insect/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2695/2695.wav",
+      "ear": { "query": "a fly buzzing", "z": 3.89, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-41",
+      "title": "Large fly buzzing",
+      "category": "nature",
+      "for": "a mosquito or fly buzzing past",
+      "page": "https://mixkit.co/free-sound-effects/insect/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/41/41.wav",
+      "ear": { "query": "a fly buzzing", "z": 4.55, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1926",
+      "title": "Bee buzz",
+      "category": "nature",
+      "for": "a bee buzzing",
+      "page": "https://mixkit.co/free-sound-effects/insect/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1926/1926.wav",
+      "ear": { "query": "a bee buzzing", "z": 5.52, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-42",
+      "title": "Big bee hard flying sound",
+      "category": "nature",
+      "for": "a bee buzzing",
+      "page": "https://mixkit.co/free-sound-effects/insect/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/42/42.wav",
+      "ear": { "query": "a bee buzzing", "z": 2.65, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-466",
+      "title": "Dog whimper sad",
+      "category": "nature",
+      "for": "a dog whimpering: sad, begging",
+      "page": "https://mixkit.co/free-sound-effects/dog/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/466/466.wav",
+      "ear": { "query": "a dog whimpering", "z": 5.72, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-467",
+      "title": "Dog sad whimper",
+      "category": "nature",
+      "for": "a dog whimpering: sad, begging",
+      "page": "https://mixkit.co/free-sound-effects/dog/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/467/467.wav",
+      "ear": { "query": "a dog whimpering", "z": 2.83, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-741",
+      "title": "Happy puppy barks",
+      "category": "nature",
+      "for": "a happy puppy barking",
+      "page": "https://mixkit.co/free-sound-effects/dog/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/741/741.wav",
+      "ear": { "query": "a puppy barking", "z": 4.97, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1940",
+      "title": "Game over trombone",
+      "category": "game",
+      "for": "a game over: the player loses",
+      "page": "https://mixkit.co/free-sound-effects/game-over/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1940/1940.wav",
+      "ear": { "query": "a sad trombone wah wah fail", "z": 4.91, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1941",
+      "title": "Piano game over",
+      "category": "game",
+      "for": "a game over: the player loses",
+      "page": "https://mixkit.co/free-sound-effects/game-over/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1941/1941.wav",
+      "ear": { "query": "a short sad descending melody", "z": 3.25, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1947",
+      "title": "Retro game over",
+      "category": "game",
+      "for": "a game over: the player loses",
+      "page": "https://mixkit.co/free-sound-effects/game-over/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1947/1947.wav",
+      "ear": { "query": "a video game over jingle", "z": 2.8, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-947",
+      "title": "Correct answer notification",
+      "category": "game",
+      "for": "a correct answer: right, well done",
+      "page": "https://mixkit.co/free-sound-effects/correct/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/947/947.wav",
+      "ear": { "query": "a correct answer chime", "z": 2.52, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-949",
+      "title": "Correct positive answer",
+      "category": "game",
+      "for": "a correct answer: right, well done",
+      "page": "https://mixkit.co/free-sound-effects/correct/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/949/949.wav",
+      "ear": { "query": "a correct answer chime", "z": 2.51, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-954",
+      "title": "Wrong long buzzer",
+      "category": "game",
+      "for": "a wrong answer buzzer: no, fail",
+      "page": "https://mixkit.co/free-sound-effects/wrong/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/954/954.wav",
+      "ear": { "query": "a wrong answer buzzer", "z": 4.05, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3090",
+      "title": "Game show buzz in",
+      "category": "game",
+      "for": "a wrong answer buzzer: no, fail",
+      "page": "https://mixkit.co/free-sound-effects/buzzer/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3090/3090.wav",
+      "ear": { "query": "a wrong answer buzzer", "z": 5.06, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-530",
+      "title": "Happy party horn sound",
+      "category": "comedy",
+      "for": "a party horn: celebration or a flat joke",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/530/530.wav",
+      "ear": { "query": "a party horn blowing", "z": 3.96, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-529",
+      "title": "Sad party horn sound",
+      "category": "comedy",
+      "for": "a party horn: celebration or a flat joke",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/529/529.wav",
+      "ear": { "query": "a party horn blowing", "z": 3.8, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-977",
+      "title": "Party trumpet",
+      "category": "comedy",
+      "for": "a party horn: celebration or a flat joke",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/977/977.wav",
+      "ear": { "query": "a party horn blowing", "z": 4.84, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-980",
+      "title": "Double party trumpet",
+      "category": "comedy",
+      "for": "a party horn: celebration or a flat joke",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/980/980.wav",
+      "ear": { "query": "a party horn blowing", "z": 3.75, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-978",
+      "title": "Squeezing party trumpet",
+      "category": "comedy",
+      "for": "a party horn: celebration or a flat joke",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/978/978.wav",
+      "ear": { "query": "a party horn blowing", "z": 3.41, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2989",
+      "title": "Fireworks bang in sky",
+      "category": "impacts",
+      "for": "fireworks: a celebration",
+      "page": "https://mixkit.co/free-sound-effects/fireworks/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2989/2989.wav",
+      "ear": { "query": "fireworks exploding", "z": 3.68, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3104",
+      "title": "Small firework explosion",
+      "category": "impacts",
+      "for": "fireworks: a celebration",
+      "page": "https://mixkit.co/free-sound-effects/fireworks/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3104/3104.wav",
+      "ear": { "query": "fireworks exploding", "z": 2.5, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1689",
+      "title": "Multiple fireworks explosions",
+      "category": "impacts",
+      "for": "fireworks: a celebration",
+      "page": "https://mixkit.co/free-sound-effects/fireworks/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1689/1689.wav",
+      "ear": { "query": "fireworks exploding", "z": 3.56, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2994",
+      "title": "Clear firework explosions",
+      "category": "impacts",
+      "for": "fireworks: a celebration",
+      "page": "https://mixkit.co/free-sound-effects/fireworks/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2994/2994.wav",
+      "ear": { "query": "fireworks exploding", "z": 3.67, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3103",
+      "title": "Fast whistle firework",
+      "category": "impacts",
+      "for": "fireworks: a celebration",
+      "page": "https://mixkit.co/free-sound-effects/fireworks/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3103/3103.wav",
+      "ear": { "query": "fireworks exploding", "z": 4.67, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2924",
+      "title": "Balloon deflating slowly",
+      "category": "comedy",
+      "for": "a balloon deflating: losing air, a letdown",
+      "page": "https://mixkit.co/free-sound-effects/balloon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2924/2924.wav",
+      "ear": { "query": "a balloon deflating", "z": 5.64, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1020",
+      "title": "Balloon long air release squeak",
+      "category": "comedy",
+      "for": "a balloon deflating: losing air, a letdown",
+      "page": "https://mixkit.co/free-sound-effects/balloon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1020/1020.wav",
+      "ear": { "query": "a balloon deflating", "z": 5.24, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3072",
+      "title": "Annoying ballon sounds",
+      "category": "comedy",
+      "for": "a balloon deflating: losing air, a letdown",
+      "page": "https://mixkit.co/free-sound-effects/balloon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3072/3072.wav",
+      "ear": { "query": "a balloon deflating", "z": 3.12, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-718",
+      "title": "Car horn",
+      "category": "foley",
+      "for": "a car or boat horn honk",
+      "page": "https://mixkit.co/free-sound-effects/car-horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/718/718.wav",
+      "ear": { "query": "a car horn honking", "z": 5.72, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-719",
+      "title": "Car double horn",
+      "category": "foley",
+      "for": "a car or boat horn honk",
+      "page": "https://mixkit.co/free-sound-effects/car-horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/719/719.wav",
+      "ear": { "query": "a car horn honking", "z": 5.81, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1565",
+      "title": "Classic car horn",
+      "category": "foley",
+      "for": "a car or boat horn honk",
+      "page": "https://mixkit.co/free-sound-effects/car-horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1565/1565.wav",
+      "ear": { "query": "a car horn honking", "z": 5.47, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-717",
+      "title": "Small car horn",
+      "category": "foley",
+      "for": "a car or boat horn honk",
+      "page": "https://mixkit.co/free-sound-effects/car-horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/717/717.wav",
+      "ear": { "query": "a car horn honking", "z": 3.46, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-715",
+      "title": "Clown horn at circus",
+      "category": "comedy",
+      "for": "a clown or bike horn honk: a gag",
+      "page": "https://mixkit.co/free-sound-effects/car-horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/715/715.wav",
+      "ear": { "query": "a clown horn honk", "z": 5.64, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2886",
+      "title": "Funny clown horn sounds",
+      "category": "comedy",
+      "for": "a clown or bike horn honk: a gag",
+      "page": "https://mixkit.co/free-sound-effects/car-horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2886/2886.wav",
+      "ear": { "query": "a clown horn honk", "z": 5.64, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-716",
+      "title": "Vintage bicycle horn",
+      "category": "comedy",
+      "for": "a clown or bike horn honk: a gag",
+      "page": "https://mixkit.co/free-sound-effects/car-horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/716/716.wav",
+      "ear": { "query": "a clown horn honk", "z": 5.56, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-988",
+      "title": "Alarm clock beep",
+      "category": "notifications",
+      "for": "an alarm clock: waking up",
+      "page": "https://mixkit.co/free-sound-effects/alarm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/988/988.wav",
+      "ear": { "query": "an alarm clock beeping", "z": 3.58, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1003",
+      "title": "Morning clock alarm",
+      "category": "notifications",
+      "for": "an alarm clock: waking up",
+      "page": "https://mixkit.co/free-sound-effects/alarm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1003/1003.wav",
+      "ear": { "query": "an alarm clock beeping", "z": 3.78, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1641",
+      "title": "Police siren",
+      "category": "notifications",
+      "for": "a police or ambulance siren",
+      "page": "https://mixkit.co/free-sound-effects/siren/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1641/1641.wav",
+      "ear": { "query": "a police siren", "z": 3.95, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1642",
+      "title": "Ambulance siren US",
+      "category": "notifications",
+      "for": "a police or ambulance siren",
+      "page": "https://mixkit.co/free-sound-effects/siren/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1642/1642.wav",
+      "ear": { "query": "a police siren", "z": 5.39, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1650",
+      "title": "Ambulance siren passing by",
+      "category": "notifications",
+      "for": "a police or ambulance siren",
+      "page": "https://mixkit.co/free-sound-effects/siren/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1650/1650.wav",
+      "ear": { "query": "a police siren", "z": 2.8, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2891",
+      "title": "Cartoon fart sound",
+      "category": "comedy",
+      "for": "a fart: a gag",
+      "page": "https://mixkit.co/free-sound-effects/fart/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2891/2891.wav",
+      "ear": { "query": "a fart", "z": 5.74, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3050",
+      "title": "Cartoon strong fart",
+      "category": "comedy",
+      "for": "a fart: a gag",
+      "page": "https://mixkit.co/free-sound-effects/fart/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3050/3050.wav",
+      "ear": { "query": "a fart", "z": 5.64, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3055",
+      "title": "Cartoon fart triple",
+      "category": "comedy",
+      "for": "a fart: a gag",
+      "page": "https://mixkit.co/free-sound-effects/fart/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3055/3055.wav",
+      "ear": { "query": "a fart", "z": 5.57, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3051",
+      "title": "Armhole farting",
+      "category": "comedy",
+      "for": "a fart: a gag",
+      "page": "https://mixkit.co/free-sound-effects/fart/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3051/3051.wav",
+      "ear": { "query": "a fart", "z": 4.79, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3056",
+      "title": "Cartoon fart or splat",
+      "category": "comedy",
+      "for": "a fart: a gag",
+      "page": "https://mixkit.co/free-sound-effects/fart/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3056/3056.wav",
+      "ear": { "query": "a fart", "z": 3.6, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1014",
+      "title": "Rubber duck squeak",
+      "category": "comedy",
+      "for": "a squeaky toy: a gag, a squeeze",
+      "page": "https://mixkit.co/free-sound-effects/squeak/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1014/1014.wav",
+      "ear": { "query": "a rubber squeaky toy", "z": 5.22, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2813",
+      "title": "Funny squeaky toy hits",
+      "category": "comedy",
+      "for": "a squeaky toy: a gag, a squeeze",
+      "page": "https://mixkit.co/free-sound-effects/funny/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2813/2813.wav",
+      "ear": { "query": "a rubber squeaky toy", "z": 5.68, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2816",
+      "title": "Clown squeaky toy",
+      "category": "comedy",
+      "for": "a squeaky toy: a gag, a squeeze",
+      "page": "https://mixkit.co/free-sound-effects/toy/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2816/2816.wav",
+      "ear": { "query": "a rubber squeaky toy", "z": 5.27, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1012",
+      "title": "Cartoon squeaking",
+      "category": "comedy",
+      "for": "a squeaky toy: a gag, a squeeze",
+      "page": "https://mixkit.co/free-sound-effects/squeak/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1012/1012.wav",
+      "ear": { "query": "a rubber squeaky toy", "z": 4.82, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1009",
+      "title": "Rubber squeaking",
+      "category": "comedy",
+      "for": "a squeaky toy: a gag, a squeeze",
+      "page": "https://mixkit.co/free-sound-effects/squeak/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1009/1009.wav",
+      "ear": { "query": "a rubber squeaky toy", "z": 5.01, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-154",
+      "title": "A couple of glasses clink",
+      "category": "foley",
+      "for": "glasses clinking: a toast, cheers",
+      "page": "https://mixkit.co/free-sound-effects/glass/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/154/154.wav",
+      "ear": { "query": "two glasses clinking in a toast", "z": 3.47, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2936",
+      "title": "Wine glass clink",
+      "category": "foley",
+      "for": "glasses clinking: a toast, cheers",
+      "page": "https://mixkit.co/free-sound-effects/glass/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2936/2936.wav",
+      "ear": { "query": "two glasses clinking in a toast", "z": 4.21, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2836",
+      "title": "Glasses clinking",
+      "category": "foley",
+      "for": "glasses clinking: a toast, cheers",
+      "page": "https://mixkit.co/free-sound-effects/glass/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2836/2836.wav",
+      "ear": { "query": "two glasses clinking in a toast", "z": 4.11, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-759",
+      "title": "Glass break with hammer thud",
+      "category": "foley",
+      "for": "glass breaking",
+      "page": "https://mixkit.co/free-sound-effects/break/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/759/759.wav",
+      "ear": { "query": "glass breaking", "z": 4.78, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-421",
+      "title": "Evil dwarf laugh",
+      "category": "voices",
+      "for": "an evil laugh: a villain",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/421/421.wav",
+      "ear": { "query": "an evil laugh", "z": 5.33, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-431",
+      "title": "Kid giggle laugh",
+      "category": "voices",
+      "for": "a giggle: cute, cheeky",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/431/431.wav",
+      "ear": { "query": "a child giggling", "z": 4.67, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-743",
+      "title": "Cartoon giggle",
+      "category": "voices",
+      "for": "a giggle: cute, cheeky",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/743/743.wav",
+      "ear": { "query": "a girl giggling", "z": 3.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2885",
+      "title": "Funny Giggling",
+      "category": "voices",
+      "for": "a giggle: cute, cheeky",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2885/2885.wav",
+      "ear": { "query": "a girl giggling", "z": 3.42, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2817",
+      "title": "Winding up toy",
+      "category": "foley",
+      "for": "a wind-up toy being wound",
+      "page": "https://mixkit.co/free-sound-effects/toy/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2817/2817.wav",
+      "ear": { "query": "a wind-up toy", "z": 2.84, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2468",
+      "title": "Man stretches and yawns",
+      "category": "voices",
+      "for": "a yawn: boredom, waking up",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2468/2468.wav",
+      "ear": { "query": "a person yawning", "z": 5.44, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2469",
+      "title": "Man waking up in the morning",
+      "category": "voices",
+      "for": "a yawn: boredom, waking up",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2469/2469.wav",
+      "ear": { "query": "a person yawning", "z": 4.98, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2471",
+      "title": "Man stretching in the morning",
+      "category": "voices",
+      "for": "a yawn: boredom, waking up",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2471/2471.wav",
+      "ear": { "query": "a person yawning", "z": 4.72, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-409",
+      "title": "Troll warrior laugh",
+      "category": "voices",
+      "for": "an evil laugh: a villain",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/409/409.wav",
+      "ear": { "query": "an evil laugh", "z": 6.97, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-413",
+      "title": "Little devil laughing",
+      "category": "voices",
+      "for": "an evil laugh: a villain",
+      "page": "https://mixkit.co/free-sound-effects/monster/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/413/413.wav",
+      "ear": { "query": "an evil laugh", "z": 3.78, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-420",
+      "title": "Dwarf creature laugh",
+      "category": "voices",
+      "for": "an evil laugh: a villain",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/420/420.wav",
+      "ear": { "query": "an evil laugh", "z": 5.45, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2873",
+      "title": "Creepy little creature",
+      "category": "voices",
+      "for": "an evil laugh: a villain",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2873/2873.wav",
+      "ear": { "query": "an evil laugh", "z": 3.64, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2263",
+      "title": "Child laughing happily",
+      "category": "voices",
+      "for": "a child laughing: joy, play",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2263/2263.wav",
+      "ear": { "query": "a baby laughing", "z": 4.41, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2265",
+      "title": "Happy child laughing",
+      "category": "voices",
+      "for": "a child laughing: joy, play",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2265/2265.wav",
+      "ear": { "query": "a baby laughing", "z": 5.32, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-638",
+      "title": "Ta-Da orchestral",
+      "category": "musical",
+      "for": "a ta-da: a reveal, here it is",
+      "page": "https://mixkit.co/free-sound-effects/orchestra/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/638/638.wav",
+      "ear": { "query": "a ta-da fanfare", "z": 2.81, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-636",
+      "title": "Orchestral happy prompt",
+      "category": "musical",
+      "for": "a ta-da: a reveal, here it is",
+      "page": "https://mixkit.co/free-sound-effects/orchestra/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/636/636.wav",
+      "ear": { "query": "a ta-da fanfare", "z": 2.56, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-695",
+      "title": "Orchestra positive finish",
+      "category": "musical",
+      "for": "a ta-da: a reveal, here it is",
+      "page": "https://mixkit.co/free-sound-effects/orchestra/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/695/695.wav",
+      "ear": { "query": "a ta-da fanfare", "z": 3.1, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2992",
+      "title": "Jubilant fanfare music tones",
+      "category": "musical",
+      "for": "a ta-da: a reveal, here it is",
+      "page": "https://mixkit.co/free-sound-effects/festive/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2992/2992.wav",
+      "ear": { "query": "a ta-da fanfare", "z": 3.32, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-951",
+      "title": "Positive notification",
+      "category": "game",
+      "for": "a correct answer: right, well done",
+      "page": "https://mixkit.co/free-sound-effects/game-show/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/951/951.wav",
+      "ear": { "query": "a correct answer chime", "z": 3.48, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-958",
+      "title": "Revealing bonus notification",
+      "category": "game",
+      "for": "a correct answer: right, well done",
+      "page": "https://mixkit.co/free-sound-effects/game-show/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/958/958.wav",
+      "ear": { "query": "a correct answer chime", "z": 3.69, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-512",
+      "title": "Light applause with laughter audience",
+      "category": "crowd",
+      "for": "an audience laughing: a sitcom laugh track",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/512/512.wav",
+      "ear": { "query": "an audience laughing", "z": 4.48, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-423",
+      "title": "Small man crowd laughing",
+      "category": "crowd",
+      "for": "an audience laughing: a sitcom laugh track",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/423/423.wav",
+      "ear": { "query": "an audience laughing", "z": 5.48, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-460",
+      "title": "Big crowd laughing",
+      "category": "crowd",
+      "for": "an audience laughing: a sitcom laugh track",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/460/460.wav",
+      "ear": { "query": "an audience laughing", "z": 5.27, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1081",
+      "title": "Clock alarm beep",
+      "category": "notifications",
+      "for": "an alarm clock: waking up",
+      "page": "https://mixkit.co/free-sound-effects/clock/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1081/1081.wav",
+      "ear": { "query": "an alarm clock beeping", "z": 3.85, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1769",
+      "title": "Chickens and pigeons",
+      "category": "nature",
+      "for": "chickens clucking",
+      "page": "https://mixkit.co/free-sound-effects/chicken/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1769/1769.wav",
+      "ear": { "query": "chickens clucking", "z": 7.15, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-62",
+      "title": "Wild raven bird calling",
+      "category": "nature",
+      "for": "a crow or raven calling: an omen",
+      "page": "https://mixkit.co/free-sound-effects/bird/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/62/62.wav",
+      "ear": { "query": "a crow cawing", "z": 3.49, "verdict": "strong" }
     }
   ]
 }
