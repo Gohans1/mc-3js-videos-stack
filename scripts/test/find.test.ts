@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -153,6 +153,13 @@ test("--show gives one entry in full with a line to paste, and close ids for a w
     code: 2,
     message: expect.stringMatching(/Close: dissolve/),
   });
+});
+
+test("--show of a music track says how to make music, not a sound effect", async () => {
+  const track = { ...e("bgm-calm", "Calm", "", "bgm", "chill"), src: "cinetic" };
+  const out = await run(["--show", "bgm-calm"], [track], noJev);
+  expect(out).toMatch(/make your own: music: the real-sound skill/);
+  expect(out).not.toMatch(/sfx:get/);
 });
 
 test("a word in a kind the --kind left out is pointed to, by its category", async () => {
@@ -309,6 +316,24 @@ test("presetEntries lists every transition, camera move and text voice the studi
   expect(ids("anim-in")).toEqual(new Set(ANIMS.in.map((t) => t.id)));
   expect(ids("text-in")).toEqual(new Set(TEXT_IN.map((t) => t.id)));
   expect(ids("text-out")).toEqual(new Set(TEXT_OUT.map((t) => t.id)));
+});
+
+test("every preset's source is the file that writes it, so an agent copying one opens the right file", () => {
+  const read = new Map<string, string>();
+  const away = presetEntries().filter((x) => {
+    const [pkg, file] = x.src!.split("/");
+    const path = join(import.meta.dir, `../../packages/${pkg}/src/${file}`);
+    if (!read.has(path)) read.set(path, readFileSync(path, "utf8"));
+    return !new RegExp(`["']?${x.id}["']?\\s*[:,}]|id: ["']${x.id}["']`).test(read.get(path)!);
+  });
+  expect(away.map((x) => `${x.kind} ${x.id} in ${x.src}`)).toEqual([]);
+});
+
+test("a dead end of a kind with its own make line says that line", async () => {
+  const font = { ...e("inter", "Inter", "", "font", ""), src: "film-stage/titles-catalog.ts" };
+  const out = await run(["zzqx", "--kind", "font"], [font], noJev);
+  expect(out).toMatch(/FONTS \(packages\/film-stage\/src\/titles-catalog\.ts\)/);
+  expect(out).not.toMatch(/the film's own, in src\/scene\.ts/);
 });
 
 test("every preset says what it does: Jev reads only the line, never the code", () => {
@@ -580,6 +605,14 @@ test("a category too long to read lists its first entries and the words they are
   expect(out).toMatch(/named by: say 70, wolf 35, zombie 35/);
   expect(out).toMatch(/search inside: bun run find <word> --kind mc\/mobs/);
   expect(out).not.toMatch(/one category in full: bun run find --kind mc\/mobs/);
+});
+
+test("a file's extension in its source title is not a word it is named by", async () => {
+  const takes = Array.from({ length: 50 }, (_, i) =>
+    e(`take-${i}`, i % 2 ? `Door creak ${i}.wav` : `Chair drag ${i}.mp3`, "", "sfx", "foley"),
+  );
+  const out = await run(["--kind", "sfx/foley", "-n", "10"], takes, noJev);
+  expect(out).toMatch(/named by: chair 25, creak 25, door 25, drag 25$/m);
 });
 
 test("the shapes text.json draws are found by their names", () => {
@@ -1238,6 +1271,30 @@ test("a clip whose retarget breaks on Steve says so, as the catalogue's own sear
   writeFileSync(join(dir, "review.json"), "{}");
   const [clip] = mocapEntries(dir);
   expect(clip?.note).toBe("flaw: retarget breaks on Steve: a limb flips round at 1.2 s");
+  rmSync(dir, { recursive: true });
+});
+
+test("a clip's postures start and end where --from and --to read them, unless checked by eye", () => {
+  const dir = mkdtempSync(join(tmpdir(), "find-mocap-"));
+  // measured: standing in its first 0.2 s, a run too short to make the sequence
+  const row = (ref: string) => ({
+    ref,
+    dur: 2.5,
+    start: "stand",
+    end: "sitFloor",
+    seq: ["crouch", "lie", "sitFloor"],
+  });
+  writeFileSync(
+    join(dir, "mixamo.jsonl"),
+    `${JSON.stringify(row("mixamo/Hit_c9c00001"))}\n${JSON.stringify(row("mixamo/Fixed_c9c00002"))}\n`,
+  );
+  writeFileSync(
+    join(dir, "review.json"),
+    JSON.stringify({ "mixamo/Fixed_c9c00002": { seq: ["crouch", "sitFloor"] } }),
+  );
+  const [hit, fixed] = mocapEntries(dir);
+  expect(hit?.data?.seq).toEqual(["stand", "crouch", "lie", "sitFloor"]);
+  expect(fixed?.data?.seq).toEqual(["crouch", "sitFloor"]);
   rmSync(dir, { recursive: true });
 });
 

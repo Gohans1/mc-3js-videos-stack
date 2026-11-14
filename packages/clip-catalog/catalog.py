@@ -145,7 +145,10 @@ def rows(libs):
                 if line.strip():
                     r = json.loads(line)
                     rv = review.get(r["ref"], {})
-                    row = {**r, **rv, "seen": r["ref"] in review, "fix": set(rv)}
+                    # seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
+                    body = [x for x in [r["start"], *r["seq"], r["end"]] if x]
+                    seq = [x for i, x in enumerate(body) if not i or x != body[i - 1]]
+                    row = {**r, "seq": seq, **rv, "seen": r["ref"] in review, "fix": set(rv)}
                     if r["ref"] in brk:
                         row["flaw"] = "; ".join(x for x in [rv.get("flaw"), brk[r["ref"]]] if x)
                     yield row

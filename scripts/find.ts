@@ -573,8 +573,15 @@ export function soundEntries(items: SoundItem[], fold = true): Entry[] {
 
 // Mocap clips from the catalogue clip-catalog/catalog.sh measured (vault/motion/catalog/<lib>.jsonl), with the notes
 // written by eye (review.json); category = the posture it starts and ends in. catalog.py keeps the body filters and Jev's rerank.
-type Clip = { ref: string; dur?: number; start?: string; end?: string; [k: string]: unknown };
-type Review = { desc?: string; mood?: string[]; flaw?: string };
+type Clip = {
+  ref: string;
+  dur?: number;
+  start?: string;
+  end?: string;
+  seq?: string[];
+  [k: string]: unknown;
+};
+type Review = { desc?: string; mood?: string[]; flaw?: string; seq?: string[] };
 // catalog.py's own fight words and retarget-break limits (catalog.py fights(), broken())
 const SCREEN: { fights: string[]; broken: Record<string, [number, string]> } = JSON.parse(
   readFileSync(join(ROOT, "packages/clip-catalog/screen.json"), "utf8"),
@@ -634,7 +641,15 @@ export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] 
           ...((r.flaw || (c.dur ?? 1) < 0.1) && {
             note: r.flaw ? `flaw: ${r.flaw}` : "one frame: a still pose",
           }),
-          data: { ...c, ...r, checked: c.ref in review },
+          // seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
+          data: {
+            ...c,
+            seq: [c.start, ...(c.seq ?? []), c.end].filter(
+              (x, i, a): x is string => !!x && x !== a[i - 1],
+            ),
+            ...r,
+            checked: c.ref in review,
+          },
         };
       });
   });
@@ -675,16 +690,16 @@ export function presetEntries(): Entry[] {
     ...list("anim-out", ANIMS.out, "animate"),
     ...list("anim-combo", ANIMS.combo, "animate"),
     ...list("anim-curve", ANIM_CURVES, "animate"),
-    ...list("text-in", TEXT_IN, "titles"),
-    ...list("text-out", TEXT_OUT, "titles"),
+    ...list("text-in", TEXT_IN, "titles-catalog"),
+    ...list("text-out", TEXT_OUT, "titles-catalog"),
     ...list(
       "shape",
       Object.entries(SHAPES).map(([id, s]) => ({ id, ...s, cat: "Marks" })),
       "titles-catalog",
     ),
-    ...list("shape-in", SHAPE_IN, "titles"),
-    ...list("shape-out", SHAPE_OUT, "titles"),
-    ...list("font", FONTS, "titles"),
+    ...list("shape-in", SHAPE_IN, "titles-catalog"),
+    ...list("shape-out", SHAPE_OUT, "titles-catalog"),
+    ...list("font", FONTS, "titles-catalog"),
     ...list("adjust", ADJUSTMENTS, "grade-color"),
     ...list(
       "velocity",
@@ -1024,7 +1039,11 @@ const namedBy = (xs: Entry[]) => {
   const seen = xs.flatMap((x) => [
     ...new Set(
       plain(x.title).filter(
-        (w) => w.length > 2 && !/\d/.test(w) && !same.has(w) && !STOP.has(stem(w)),
+        (w) =>
+          w.length > 2 &&
+          !/\d|^(wav|ogg|aiff?|flac)$/.test(w) &&
+          !same.has(w) &&
+          !STOP.has(stem(w)),
       ),
     ),
   ]);
@@ -1057,6 +1076,8 @@ const make = (kinds: string[] | undefined, entries: Entry[]) => {
     if (SOUND.includes(k) || k === "sound") return MAKE_SOUND;
     if (k === "mocap") return MAKE_MOCAP;
     if (k === "adjust") return MAKE_LOOK;
+    const own = ownOf(k);
+    if (own) return own;
     if (k === "text")
       return 'a plain title or caption needs no preset: text.json items[] {"kind": "text", "text": "…", "from": 0, "to": 3} (+ "in"/"out" voices: bun run find --kind text)';
     const src = entries.find((x) => kindMatches(x.kind, k))?.src;
@@ -1155,11 +1176,12 @@ const OWN: Record<string, string> = {
     'an effect: makeVelocity(renderer, {"<name>": (frame, optics) => a partial CameraOptics}) in src/scene.ts. Built-ins: packages/film-stage/src/velocity.ts',
   ease: "a curve: a function of t (0-1 to 0-1) added to EASES from film-stage/camera in src/scene.ts (cameraAt reads EASES by name; draw.eases is what the studio draws). Built-ins: packages/film-stage/src/camera.ts",
   sound: MAKE_SOUND,
+  bgm: MAKE_MUSIC,
   mocap: MAKE_MOCAP,
 };
 const ownOf = (kind: string) =>
   OWN[
-    SOUND.includes(kind)
+    kind !== "bgm" && SOUND.includes(kind)
       ? "sound"
       : kind.startsWith("anim-") && kind !== "anim-curve"
         ? "anim"
