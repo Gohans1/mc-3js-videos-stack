@@ -17,9 +17,10 @@ export interface JevQuestion<T> {
 // [share of the vote, item, fit]: fit (0-1, Jev's own yes that the item is what was wanted) only on the ones it checked
 export type JevVoted<T> = [number, T, number?];
 
-// Jev Choice: one option per item; past HEAT items the list runs in shuffled heats whose top KEEP meet in a final
-// (catalog.py rerank explains why: rounded probabilities, neighbours knocking each other out)
-const HEAT = 200,
+// Jev Choice: one option per item, CHOICE_MAX at most; a longer list runs in shuffled heats of HEAT whose top KEEP meet
+// in a final (catalog.py rerank explains why: rounded probabilities, neighbours knocking each other out)
+const CHOICE_MAX = 255,
+  HEAT = 200,
   KEEP = 8;
 // A fit at or past FIT_YES is Jev's yes, under FIT_NO its no, between them it is unsure
 export const FIT_YES = 0.7,
@@ -90,8 +91,8 @@ export async function jevRank<T>(
     read.add(q.text(x));
     list.push(x);
   }
-  // a Choice holds 255 options: the heats' winners run in heats again until they fit one final
-  while (list.length > HEAT) {
+  // the heats' winners run in heats again until they fit one final
+  while (list.length > CHOICE_MAX) {
     // Fisher-Yates on a fixed-seed Park-Miller generator: the same query ranks the same
     let seed = 7;
     const shuffled = [...list];

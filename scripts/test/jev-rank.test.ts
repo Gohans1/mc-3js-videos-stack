@@ -23,6 +23,20 @@ test("a list too long for one final of heat winners still ends in one Choice of 
   expect(Math.max(...sizes)).toBeLessThanOrEqual(255);
 });
 
+test("a list one Choice holds is voted on once", async () => {
+  let calls = 0;
+  const vote = (_: unknown, group: { t: string }[]) => (
+    calls++,
+    Promise.resolve(group.map((x): [number, { t: string }] => [0.01, x]))
+  );
+  await jevRank(
+    q,
+    Array.from({ length: 255 }, (_, i) => ({ t: `sound ${i}` })),
+    vote,
+  );
+  expect(calls).toBe(1);
+});
+
 test("entries Jev would read the same (a sound's takes) vote once", async () => {
   let seen: string[] = [];
   const vote = (_: unknown, group: { t: string }[]) => (
