@@ -1,16 +1,18 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { ANIMS } from "../../packages/film-stage/src/animate";
 import { TEXT_IN, TEXT_OUT } from "../../packages/film-stage/src/titles";
 import { TRANSITIONS } from "../../packages/film-stage/src/transitions";
 import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
 import {
+  allEntries,
   easeAbout,
   type Entry,
   markStarred,
+  mocapEntries,
   presetEntries,
   rank,
   run as findRun,
@@ -1197,6 +1199,89 @@ test("a miss shows the row whose fit it quotes", async () => {
   const out = await run(["--jev", "--kind", "sfx", "a dragon singing opera"], pool, jev);
   expect(out).toMatch(/best fit 0\.20/);
   expect(out).toMatch(/fits 0\.20 .*door-b/);
+});
+
+test("weapon and fight clips stay out of a word search, as the catalogue's own leaves them out", async () => {
+  const rifle = {
+    ...e("mixamo/Rifle_Walk_c9ce9930", "Rifle Walk", "", "mocap", "stand"),
+    src: "mixamo",
+  };
+  const relaxed = {
+    ...e("mixamo/Relaxed_Walk_c9ce0000", "Relaxed Walk", "", "mocap", "stand"),
+    src: "mixamo",
+  };
+  const out = await run(["walk"], [rifle, relaxed], noJev);
+  expect(out).toMatch(/Relaxed_Walk/);
+  expect(out).not.toMatch(/Rifle_Walk/);
+});
+
+test("a clip whose retarget breaks on Steve says so, as the catalogue's own search does", () => {
+  const dir = mkdtempSync(join(tmpdir(), "find-mocap-"));
+  writeFileSync(
+    join(dir, "mixamo.jsonl"),
+    `${JSON.stringify({ ref: "mixamo/Spin_c9c00000", dur: 2 })}\n`,
+  );
+  writeFileSync(
+    join(dir, "sweep_mixamo.jsonl"),
+    `${JSON.stringify({ clip: "Spin_c9c00000", s: { "spin forearm L": [90, 1.2], "sink (low)": [3, 0.5] } })}\n`,
+  );
+  writeFileSync(join(dir, "review.json"), "{}");
+  const [clip] = mocapEntries(dir);
+  expect(clip?.note).toBe("flaw: retarget breaks on Steve: a limb flips round at 1.2 s");
+  rmSync(dir, { recursive: true });
+});
+
+test("a sound-only filter beside a body filter is refused, never silently dropped", async () => {
+  const sit = {
+    ...e("mixamo/Sit_1", "Sit", "sits down", "mocap", "stand"),
+    data: { seq: ["stand", "sitFloor"] },
+  };
+  await expect(
+    run(["sit", "--from", "stand", "--origin", "real", "--license", "free"], [sit], noJev),
+  ).rejects.toThrow(/--origin --license .*mocap clips have none/);
+});
+
+test("a film's own sounds have their length, and its bgm folder holds music", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-film-"));
+  writeFileSync(
+    join(film, "package.json"),
+    JSON.stringify({ "live-studio": { sfx: "sound/sfx" } }),
+  );
+  // one second of 8 kHz 8-bit mono silence
+  const wav = (path: string) => {
+    const head = Buffer.alloc(44);
+    head.write("RIFF", 0);
+    head.writeUInt32LE(36 + 8000, 4);
+    head.write("WAVEfmt ", 8);
+    head.writeUInt32LE(16, 16);
+    head.writeUInt16LE(1, 20);
+    head.writeUInt16LE(1, 22);
+    head.writeUInt32LE(8000, 24);
+    head.writeUInt32LE(8000, 28);
+    head.writeUInt16LE(1, 32);
+    head.writeUInt16LE(8, 34);
+    head.write("data", 36);
+    head.writeUInt32LE(8000, 40);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, Buffer.concat([head, Buffer.alloc(8000, 128)]));
+  };
+  wav(join(film, "sound/sfx/my-hit.wav"));
+  wav(join(film, "sound/sfx/bgm/calm/my-theme.wav"));
+  const mine = allEntries(true, film).filter((x) => x.src === "this-film");
+  expect(mine.find((x) => x.id === "my-hit")?.secs).toBeCloseTo(1, 2);
+  expect(mine.find((x) => x.id === "my-theme")?.kind).toBe("bgm");
+  rmSync(film, { recursive: true });
+});
+
+test("the eases of one group are told apart at the start of their rows, not by the job they share", async () => {
+  const eases = presetEntries().filter((x) => x.cat === "arrive");
+  const out = await run(["--kind", "ease/arrive"], eases, noJev);
+  const starts = out
+    .split("\n")
+    .filter((l) => l.startsWith("ease/"))
+    .map((l) => l.split(" — ")[1]!.slice(0, 30));
+  expect(starts).toHaveLength(eases.length);
+  expect(new Set(starts).size).toBeGreaterThan(eases.length / 2);
 });
 
 test("a stray clip among sounds brings no body filters along", async () => {

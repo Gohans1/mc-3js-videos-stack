@@ -27,6 +27,7 @@ import {
   sentenceSlug,
 } from "../packages/live-studio/app/sound/groups";
 import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
+import { audioInfo } from "../packages/live-studio/src/sound.mjs";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 export type Entry = {
@@ -574,18 +575,54 @@ export function soundEntries(items: SoundItem[], fold = true): Entry[] {
 // written by eye (review.json); category = the posture it starts and ends in. catalog.py keeps the body filters and Jev's rerank.
 type Clip = { ref: string; dur?: number; start?: string; end?: string; [k: string]: unknown };
 type Review = { desc?: string; mood?: string[]; flaw?: string };
-function mocapEntries(): Entry[] {
-  const dir = join(ROOT, "vault/motion/catalog");
+// catalog.py's own fight words and retarget-break limits (catalog.py fights(), broken())
+const SCREEN: { fights: string[]; broken: Record<string, [number, string]> } = JSON.parse(
+  readFileSync(join(ROOT, "packages/clip-catalog/screen.json"), "utf8"),
+);
+// a fight word at a word's start in the clip's name (after a non-letter or a camel hump): Wheelbarrow is no arrow
+export const isFight = (ref: string) => {
+  const name = ref.split("/").at(-1)!;
+  return [...name.matchAll(/(?<![A-Za-z])[A-Za-z]|(?<=[a-z])[A-Z]/g)].some((m) =>
+    SCREEN.fights.some((w) => name.slice(m.index).toLowerCase().startsWith(w)),
+  );
+};
+// ref -> "retarget breaks on Steve: <what> at <s> s; ..." for clips whose sweep (sweep_<lib>.jsonl) crosses a limit
+const brokenOf = (dir: string, lib: string) => {
+  const f = join(dir, `sweep_${lib}.jsonl`);
+  const out = new Map<string, string>();
+  if (!existsSync(f)) return out;
+  for (const l of readFileSync(f, "utf8").split("\n")) {
+    if (!l.trim()) continue;
+    const r = JSON.parse(l) as { clip: string; s?: Record<string, [number, number]> };
+    const seen = new Map<string, number>();
+    for (const [k, [v, t]] of Object.entries(r.s ?? {}))
+      for (const [check, [limit, what]] of Object.entries(SCREEN.broken))
+        if (k.startsWith(check) && v > limit && !seen.has(what)) seen.set(what, t);
+    if (seen.size)
+      out.set(
+        `${lib}/${r.clip}`,
+        `retarget breaks on Steve: ${[...seen]
+          .toSorted((a, b) => a[1] - b[1])
+          .map(([w, t]) => `${w} at ${t} s`)
+          .join("; ")}`,
+      );
+  }
+  return out;
+};
+export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] {
   const review: Record<string, Review> = readJson(join(dir, "review.json"));
   return ["mixamo", "ual1", "ual2"].flatMap((lib) => {
     const f = join(dir, `${lib}.jsonl`);
     if (!existsSync(f)) return [];
+    const brk = brokenOf(dir, lib);
     return readFileSync(f, "utf8")
       .split("\n")
       .filter((l) => l.trim())
       .map((l) => {
         const c = JSON.parse(l) as Clip,
-          r = review[c.ref] ?? {};
+          seen = review[c.ref] ?? {},
+          flaw = [seen.flaw, brk.get(c.ref)].filter(Boolean).join("; "),
+          r = { ...seen, ...(flaw && { flaw }) };
         return {
           kind: "mocap",
           id: c.ref,
@@ -628,7 +665,7 @@ export function presetEntries(): Entry[] {
     eases.map((id) => ({
       id,
       group,
-      tip: `${easeAbout((EASES as Record<string, (t: number) => number>)[id]!)}; for ${job}`,
+      tip: easeAbout((EASES as Record<string, (t: number) => number>)[id]!, job),
     })),
   );
   return [
@@ -658,8 +695,9 @@ export function presetEntries(): Entry[] {
   ];
 }
 
-// An ease in words, read off its own curve: an editor asks for "a slow start" or "a wind-up", not for snapOut
-export function easeAbout(f: (t: number) => number): string {
+// An ease in words, read off its own curve: an editor asks for "a slow start" or "a wind-up", not for snapOut. A list
+// row cuts the end: the shape first (what tells a group's eases apart), its group's job, the numbers last
+export function easeAbout(f: (t: number) => number, job?: string): string {
   const y = Array.from({ length: 101 }, (_, i) => f(i / 100));
   const step = y.slice(1).map((v, i) => v - y[i]!);
   const top = Math.max(...step),
@@ -692,6 +730,7 @@ export function easeAbout(f: (t: number) => number): string {
     shape,
     Math.min(...y) < -0.01 && "pulls back first, a wind-up before it goes",
     Math.max(...y) > 1.01 && "overshoots the key and settles back",
+    job && `for ${job}`,
     `${Math.round(q1 * 100)}% of the way a quarter of the time in, ${Math.round(half * 100)}% at half`,
   ]
     .filter(Boolean)
@@ -730,7 +769,8 @@ function vaultSounds(): SoundItem[] {
   return out;
 }
 
-// Run from a film folder: its own sounds too, from the folder package.json "live-studio".sfx names (as the studio lists them)
+// Run from a film folder: its own sounds too, from the folder package.json "live-studio".sfx names (as the studio lists them:
+// a top folder bgm/, sfx/ or mc/ is the kind). No PEAKS.json there: the length is read off the file's header
 function filmSounds(film: string): SoundItem[] {
   const conf = readJson(join(film, "package.json"))["live-studio"];
   if (typeof conf?.sfx !== "string") return [];
@@ -749,6 +789,7 @@ function filmSounds(film: string): SoundItem[] {
         name,
         kind,
         category,
+        seconds: audioInfo(join(dir, f))?.seconds,
         source: "this-film",
         file: join(conf.sfx, f).replaceAll("\\", "/"),
       };
@@ -1002,7 +1043,7 @@ const BGM_MOOD =
 const MAKE_SOUND =
   'a sound, in the film folder: bun run sfx:get find "<words>" (a Freesound CC0 recording; pin it, then bun run sfx:get), or earshot sfx list --kind hit then earshot sfx render <id> -o sound/sfx/<name>.wav (made in code); more: the real-sound skill (licensed recordings), the earshot skill (earshot forge), bun run skills get core --ref sound';
 const MAKE_MUSIC =
-  "music: the real-sound skill (licensed tracks from composer libraries, cut at bar lines), saved in the film's sound/music/; more: bun run skills get core --ref sound";
+  "music: the real-sound skill (licensed tracks from composer libraries, cut at bar lines), saved in the film's own sound folder under bgm/ (sound/sfx/bgm/<group>/<name>.wav: a bed names it), its licence a row of sound/sfx/SOURCES.json; more: bun run skills get core --ref sound";
 const MAKE_MOCAP =
   "a move: key Steve's body by hand (steve.json moves[] pose instead of clip), or retarget a new clip into vault/motion";
 const HOOKS = "src/scene.ts (hooks: bun run skills get core --ref contract)";
@@ -1254,7 +1295,7 @@ function details(x: Entry): string[] {
       `velocity[]: {"effect": "${x.id}", "from": 0, "to": 4, "music": "<a beds[] name in audio.json>", "beats": [<its beat times in film seconds>], "frequency": 1, "speed": "normal", "intensity": 60}  (frequency 1|2 = every beat or every other; speed normal|fast|veryFast; intensity 0-100)`,
     );
     out.push(
-      `beats: echo '{"duration": <seconds>}' | python scripts/sound/beats.py <the bed's sound file> prints {"bpm", "beats"} in the track's own seconds; film second = the bed's "from" + beat - its "start" (at rate 1). The Studio's Auto mark beats, on a sound row, marks them too`,
+      `beats: echo '{"duration": <seconds>}' | python ${relative(process.cwd(), join(ROOT, "scripts/sound/beats.py")).replaceAll("\\", "/")} <the bed's sound file> prints {"bpm", "beats"} in the track's own seconds; film second = the bed's "from" + beat - its "start" (at rate 1). The Studio's Auto mark beats, on a sound row, marks them too`,
     );
   } else if (x.kind === "ease") {
     const f = (EASES as Record<string, (t: number) => number>)[x.id];
@@ -1808,6 +1849,11 @@ export async function run(
         `${body.join(" ")} ${body.length > 1 ? "filter" : "filters"} mocap clips by the body; use --kind mocap or no --kind${soundy && set.has("--mood") ? `. For music: ${BGM_MOOD}` : ""}`,
       );
     }
+    const soundOnly = ["--origin", "--license", "--edition"].filter((o) => set.has(o));
+    if (soundOnly.length)
+      throw new FindError(
+        `${soundOnly.join(" ")} filter${soundOnly.length > 1 ? "" : "s"} sounds; mocap clips have none: drop ${soundOnly.length > 1 ? "them" : "it"} (clips filter by --source and --dur)`,
+      );
     if (jev && !query)
       throw new FindError(`--jev needs the scene in words, e.g. --jev "he kneels to tie a shoe"`);
     if (set.has("--still") && set.has("--moves"))
@@ -1892,7 +1938,8 @@ export async function run(
     return HELP;
   }
 
-  const pool = entriesOf();
+  // weapons and fights are left out, as the catalogue's own search leaves them (--fights, a body filter, goes there)
+  const pool = entriesOf().filter((x) => x.kind !== "mocap" || !isFight(x.id));
   // nothing in the list in use: how a star is given, and the lists that have some
   if (fav && !pool.some((x) => x.fav))
     return noted(

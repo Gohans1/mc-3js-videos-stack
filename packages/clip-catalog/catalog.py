@@ -22,11 +22,10 @@ from pathlib import Path
 from jev import Jev
 
 ROOT = Path(__file__).resolve().parents[2] / "vault/motion"  # the repo's vault link (bun run link)
+# Fight words and retarget-break limits, shared with bun run find (scripts/find.ts reads the same file)
+SCREEN = json.loads((Path(__file__).parent / "screen.json").read_text(encoding="utf-8"))
 # matched at a word's start in the name (after _ or a camel hump): inside a word, Wheelbarrow read as arrow, Relaxed as axe
-FIGHT = re.compile(r"(?:(?<![a-z])|(?<=(?-i:[a-z]))(?=(?-i:[A-Z])))(?:"
-                   r"gun|rifle|pistol|sword|shoot|shot|aim|reload|punch|kick|boxing|fight|attack|block|arrow|archer|"
-                   r"blade|knife|axe|katana|grenade|magic|spell|zombie|mutant|sniper|stab|slash|combo|"
-                   r"strike|uppercut|jab|hook|melee|weapon|dodge|parry|hit_reaction|martial|capoeira|kata|sidekick|powershot)", re.I)
+FIGHT = re.compile(r"(?:(?<![a-z])|(?<=(?-i:[a-z]))(?=(?-i:[A-Z])))(?:" + "|".join(SCREEN["fights"]) + ")", re.I)
 LOOP_DEG, LOOP_CM, STILL_M, HAND_S = 15, 5, 0.3, 0.3
 
 
@@ -113,9 +112,7 @@ def fits(jev, scene, shown, full=False):
 
 # Retarget breaks that read on screen (clip-catalog/sweep.sh numbers; milder ones are the box body meeting itself and pass
 # by eye; a hand catching a fall jumps ~15 cm in a frame and reads right): check name start -> (limit, what a viewer sees)
-BROKEN = {"spin": (45, "a limb flips round"), "jump": (20, "a limb pops"), "direction error upper arm": (90, "an arm points the wrong way"),
-          "direction error forearm": (90, "an arm points the wrong way"), "sink": (10, "sinks into the floor"),
-          "arm below the floor": (10, "an arm goes into the floor"), "float": (20, "hangs above the floor")}
+BROKEN = SCREEN["broken"]
 
 
 def broken(lib):
