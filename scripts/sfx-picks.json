@@ -3988,6 +3988,597 @@
       "page": "https://mixkit.co/free-sound-effects/clapping/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/2167/2167.wav",
       "ear": {"query":"a face slap","z":3.39,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-699",
+      "title": "Music box tune",
+      "category": "musical",
+      "for": "a music box tune: a memory, a child's room",
+      "page": "https://mixkit.co/free-sound-effects/music/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/699/699.wav",
+      "ear": {"query":"a music box melody","z":2.6,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-697",
+      "title": "Music box notes",
+      "category": "musical",
+      "for": "a few music box notes",
+      "page": "https://mixkit.co/free-sound-effects/music/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/697/697.wav",
+      "ear": {"query":"a music box melody","z":3.35,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-700",
+      "title": "Music box lullaby",
+      "category": "musical",
+      "for": "a toy music box lullaby: a nursery, a creepy doll",
+      "maxSeconds": 20,
+      "page": "https://mixkit.co/free-sound-effects/toy/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/700/700.wav",
+      "ear": {"query":"a music box melody","z":4.3,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-584",
+      "title": "Sleigh bells",
+      "category": "musical",
+      "for": "sleigh bells: Christmas, winter",
+      "page": "https://mixkit.co/free-sound-effects/sleigh-bells/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/584/584.wav",
+      "ear": {"query":"sleigh bells jingling","z":4.89,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-945",
+      "title": "Sleigh bells suspense",
+      "category": "musical",
+      "for": "sleigh bells over suspense: a waiting game",
+      "maxSeconds": 50,
+      "page": "https://mixkit.co/free-sound-effects/game-show/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/945/945.wav",
+      "ear": {"query":"sleigh bells jingling","z":3.24,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-77",
+      "title": "Horse gallop dirt",
+      "category": "nature",
+      "for": "a horse galloping on dirt: a rider, a chase",
+      "maxSeconds": 15,
+      "page": "https://mixkit.co/free-sound-effects/horse/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/77/77.wav",
+      "ear": {"query":"a horse galloping","z":3.83,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-83",
+      "title": "Horse gallop road",
+      "category": "nature",
+      "for": "a horse galloping on concrete",
+      "maxSeconds": 15,
+      "page": "https://mixkit.co/free-sound-effects/horse/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/83/83.wav",
+      "ear": {"query":"a horse galloping","z":3.52,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-81",
+      "title": "Horse trot",
+      "category": "nature",
+      "for": "a horse trotting on a street",
+      "maxSeconds": 15,
+      "page": "https://mixkit.co/free-sound-effects/horse/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/81/81.wav",
+      "ear": {"query":"a horse galloping","z":2.58,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-392",
+      "title": "Male falling scream",
+      "category": "voices",
+      "for": "a man screaming as he falls",
+      "page": "https://mixkit.co/free-sound-effects/scream/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/392/392.wav",
+      "ear": {"query":"a man screaming as he falls","z":4.34,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1604",
+      "title": "Bike bell ring",
+      "category": "foley",
+      "for": "a bicycle bell ring",
+      "page": "https://mixkit.co/free-sound-effects/bike/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1604/1604.wav",
+      "ear": {"query":"a bicycle bell ringing","z":4.45,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1609",
+      "title": "Small bike bell",
+      "category": "foley",
+      "for": "a small bicycle bell dinging",
+      "page": "https://mixkit.co/free-sound-effects/bike/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1609/1609.wav",
+      "ear": {"query":"a bicycle bell ringing","z":5.47,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-595",
+      "title": "Bike bell rings",
+      "category": "foley",
+      "for": "a bicycle bell rung a few times",
+      "page": "https://mixkit.co/free-sound-effects/bike/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/595/595.wav",
+      "ear": {"query":"a bicycle bell ringing","z":5.34,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-287",
+      "title": "Demon ritual voice",
+      "category": "voices",
+      "for": "a deep demon voice: a curse, possession",
+      "page": "https://mixkit.co/free-sound-effects/voices/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/287/287.wav",
+      "ear": {"query":"a deep demon voice","z":4.69,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-288",
+      "title": "Dark demon voice",
+      "category": "voices",
+      "for": "a dark demon monster voice",
+      "page": "https://mixkit.co/free-sound-effects/voices/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/288/288.wav",
+      "ear": {"query":"a deep demon voice","z":5.63,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-542",
+      "title": "High heels walking",
+      "category": "footsteps",
+      "for": "high heels on pavement",
+      "page": "https://mixkit.co/free-sound-effects/footsteps/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/542/542.wav",
+      "ear": {"query":"high heels walking on pavement","z":4.6,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-419",
+      "title": "Hyena cartoon laugh",
+      "category": "comedy",
+      "for": "a hyena laugh: mocking",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/419/419.wav",
+      "ear": {"query":"a hyena laughing","z":4.38,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2995",
+      "title": "Stapler",
+      "category": "foley",
+      "for": "a stapler: office, paperwork",
+      "page": "https://mixkit.co/free-sound-effects/office/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2995/2995.wav",
+      "ear": {"query":"a stapler","z":3.11,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2085",
+      "title": "Basketball bounce",
+      "category": "foley",
+      "for": "a single basketball bounce",
+      "page": "https://mixkit.co/free-sound-effects/basketball/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2085/2085.wav",
+      "ear": {"query":"a basketball bouncing","z":3.85,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2076",
+      "title": "Basketball dribble",
+      "category": "foley",
+      "for": "a basketball bouncing on a floor",
+      "page": "https://mixkit.co/free-sound-effects/ball/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2076/2076.wav",
+      "ear": {"query":"a basketball bouncing","z":2.89,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-1857",
+      "title": "Toaster pop up",
+      "category": "foley",
+      "for": "a toaster ejecting toast",
+      "page": "https://mixkit.co/free-sound-effects/appliances/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1857/1857.wav",
+      "ear": {"query":"a toaster popping up","z":5.84,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-414",
+      "title": "Monster laugh",
+      "category": "creatures",
+      "for": "a cartoon creature laughing",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/414/414.wav",
+      "ear": {"query":"a little monster laughing","z":3.96,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2722",
+      "title": "Racing motorcycle",
+      "category": "foley",
+      "for": "a racing motorcycle engine",
+      "page": "https://mixkit.co/free-sound-effects/motorcycle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2722/2722.wav",
+      "ear": {"query":"a motorcycle revving","z":2.98,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-2731",
+      "title": "Motorcycle ride off",
+      "category": "foley",
+      "for": "a motorcycle starting and riding off",
+      "page": "https://mixkit.co/free-sound-effects/motorcycle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2731/2731.wav",
+      "ear": {"query":"a motorcycle revving","z":5.18,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-253",
+      "title": "Game unlock",
+      "category": "game",
+      "for": "a game unlock: a new item, a door opens",
+      "page": "https://mixkit.co/free-sound-effects/game/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/253/253.wav",
+      "ear": {"query":"a video game unlock sound","z":2.9,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-1540",
+      "title": "Failed car ignition",
+      "category": "foley",
+      "for": "a car that will not start: a getaway gone wrong",
+      "page": "https://mixkit.co/free-sound-effects/car/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1540/1540.wav",
+      "ear": {"query":"a car engine failing to start","z":4.05,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1756",
+      "title": "Rooster crow",
+      "category": "nature",
+      "for": "a rooster crowing with hens: morning on a farm",
+      "page": "https://mixkit.co/free-sound-effects/farm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1756/1756.wav",
+      "ear": {"query":"a rooster crowing","z":5.56,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1640",
+      "title": "Ambulance siren UK",
+      "category": "notifications",
+      "for": "a UK ambulance siren",
+      "maxSeconds": 15,
+      "page": "https://mixkit.co/free-sound-effects/siren/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1640/1640.wav",
+      "ear": {"query":"an ambulance siren","z":5.96,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1644",
+      "title": "Europe ambulance siren",
+      "category": "notifications",
+      "for": "a European ambulance siren",
+      "page": "https://mixkit.co/free-sound-effects/siren/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1644/1644.wav",
+      "ear": {"query":"an ambulance siren","z":5.69,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1558",
+      "title": "Keys jingling",
+      "category": "foley",
+      "for": "keys jingling",
+      "page": "https://mixkit.co/free-sound-effects/key/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1558/1558.wav",
+      "ear": {"query":"keys jingling","z":5.68,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2839",
+      "title": "Keys dropped",
+      "category": "foley",
+      "for": "keys dropped on the floor",
+      "page": "https://mixkit.co/free-sound-effects/key/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2839/2839.wav",
+      "ear": {"query":"keys jingling","z":4.02,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1834",
+      "title": "Vacuum cleaner",
+      "category": "foley",
+      "for": "a home vacuum cleaner running",
+      "maxSeconds": 30,
+      "page": "https://mixkit.co/free-sound-effects/appliances/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1834/1834.wav",
+      "ear": {"query":"a vacuum cleaner","z":5.47,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-298",
+      "title": "Ghostly voices",
+      "category": "voices",
+      "for": "ghostly voices passing by: a haunting",
+      "page": "https://mixkit.co/free-sound-effects/voices/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/298/298.wav",
+      "ear": {"query":"ghostly voices","z":3.11,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2062",
+      "title": "Level up",
+      "category": "game",
+      "for": "a game level up",
+      "page": "https://mixkit.co/free-sound-effects/game/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2062/2062.wav",
+      "ear": {"query":"a video game level up","z":3.31,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2063",
+      "title": "Level complete",
+      "category": "game",
+      "for": "a game level completed",
+      "page": "https://mixkit.co/free-sound-effects/game/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2063/2063.wav",
+      "ear": {"query":"a video game level up","z":3.3,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1073",
+      "title": "Shop scanner beeps",
+      "category": "notifications",
+      "for": "a shop barcode scanner beeping",
+      "page": "https://mixkit.co/free-sound-effects/supermarket/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1073/1073.wav",
+      "ear": {"query":"a barcode scanner beep","z":2.96,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-121",
+      "title": "Frying eggs",
+      "category": "foley",
+      "for": "eggs sizzling in a hot pan: cooking",
+      "maxSeconds": 35,
+      "page": "https://mixkit.co/free-sound-effects/food/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/121/121.wav",
+      "ear": {"query":"food sizzling in a frying pan","z":6.32,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-123",
+      "title": "Frying fish",
+      "category": "foley",
+      "for": "fish sizzling in a hot pan",
+      "maxSeconds": 25,
+      "page": "https://mixkit.co/free-sound-effects/food/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/123/123.wav",
+      "ear": {"query":"food sizzling in a frying pan","z":5.62,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1749",
+      "title": "Cow moo",
+      "category": "nature",
+      "for": "a cow mooing indoors",
+      "page": "https://mixkit.co/free-sound-effects/cow/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1749/1749.wav",
+      "ear": {"query":"a cow mooing","z":5.61,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1578",
+      "title": "Plane flying over",
+      "category": "foley",
+      "for": "a long airplane flyover",
+      "maxSeconds": 20,
+      "page": "https://mixkit.co/free-sound-effects/airport/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1578/1578.wav",
+      "ear": {"query":"a jet plane flying over","z":3.93,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1580",
+      "title": "Jet flying over",
+      "category": "foley",
+      "for": "a fast jet flying over",
+      "maxSeconds": 20,
+      "page": "https://mixkit.co/free-sound-effects/airport/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1580/1580.wav",
+      "ear": {"query":"a jet plane flying over","z":3.93,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2030",
+      "title": "Circus lose",
+      "category": "comedy",
+      "for": "a circus fail tune: a clown flop",
+      "page": "https://mixkit.co/free-sound-effects/lose/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2030/2030.wav",
+      "ear": {"query":"a sad losing tune, a fail","z":2.51,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-2387",
+      "title": "Paper crumpled up",
+      "category": "foley",
+      "for": "paper crumpled: a bad idea thrown away",
+      "page": "https://mixkit.co/free-sound-effects/paper/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2387/2387.wav",
+      "ear": {"query":"paper being crumpled","z":4.19,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2385",
+      "title": "Paper crinkle",
+      "category": "foley",
+      "for": "paper crinkling",
+      "page": "https://mixkit.co/free-sound-effects/paper/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2385/2385.wav",
+      "ear": {"query":"paper being crumpled","z":4.18,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-525",
+      "title": "Bottles clinking",
+      "category": "foley",
+      "for": "glasses clinking: a toast, cheers",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/525/525.wav",
+      "ear": {"query":"glasses clinking, a toast","z":3.36,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-176",
+      "title": "Short floor creak",
+      "category": "foley",
+      "for": "a short creaking floorboard",
+      "page": "https://mixkit.co/free-sound-effects/creaking-floorboard/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/176/176.wav",
+      "ear": {"query":"a creaking wooden floorboard","z":3.48,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-338",
+      "title": "Wood floor creak",
+      "category": "foley",
+      "for": "a creaky wooden floorboard",
+      "page": "https://mixkit.co/free-sound-effects/creaking-floorboard/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/338/338.wav",
+      "ear": {"query":"a creaking wooden floorboard","z":2.8,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-336",
+      "title": "Haunted floor creaks",
+      "category": "foley",
+      "for": "haunted house floorboards creaking",
+      "page": "https://mixkit.co/free-sound-effects/creaking-floorboard/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/336/336.wav",
+      "ear": {"query":"a creaking wooden floorboard","z":4.06,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-341",
+      "title": "Female mic countdown",
+      "category": "voices",
+      "for": "a woman counting down into a microphone",
+      "maxSeconds": 15,
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/341/341.wav",
+      "ear": {"query":"a voice counting down","z":5.18,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-924",
+      "title": "Megaphone countdown",
+      "category": "voices",
+      "for": "a woman counting down through a megaphone",
+      "maxSeconds": 15,
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/924/924.wav",
+      "ear": {"query":"a voice counting down","z":4.36,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2833",
+      "title": "Soda pour fizz",
+      "category": "foley",
+      "for": "soda poured and fizzing in a glass",
+      "page": "https://mixkit.co/free-sound-effects/drink/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2833/2833.wav",
+      "ear": {"query":"a soda fizzing","z":4.21,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-3181",
+      "title": "Foamy soda pour",
+      "category": "foley",
+      "for": "foamy soda poured: fizz",
+      "maxSeconds": 15,
+      "page": "https://mixkit.co/free-sound-effects/misc/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3181/3181.wav",
+      "ear": {"query":"a soda fizzing","z":5.19,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1352",
+      "title": "Telephone dial tone",
+      "category": "notifications",
+      "for": "a telephone dial tone: nobody answers",
+      "maxSeconds": 20,
+      "page": "https://mixkit.co/free-sound-effects/phone/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1352/1352.wav",
+      "ear": {"query":"a telephone dial tone","z":4.24,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1351",
+      "title": "Toy telephone ring",
+      "category": "notifications",
+      "for": "a toy telephone ringing",
+      "page": "https://mixkit.co/free-sound-effects/phone-ring/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1351/1351.wav",
+      "ear": {"query":"a rotary phone ringing","z":4.54,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2261",
+      "title": "Kids playing laughing",
+      "category": "voices",
+      "for": "kids playing and laughing",
+      "page": "https://mixkit.co/free-sound-effects/children/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2261/2261.wav",
+      "ear": {"query":"kids laughing and playing","z":5.32,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-427",
+      "title": "Children laughing",
+      "category": "voices",
+      "for": "children laughing indoors",
+      "page": "https://mixkit.co/free-sound-effects/children/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/427/427.wav",
+      "ear": {"query":"kids laughing and playing","z":4.19,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-738",
+      "title": "Cartoon whistling",
+      "category": "comedy",
+      "for": "a cartoon whistle",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/738/738.wav",
+      "ear": {"query":"a cartoon whistle","z":6.4,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-612",
+      "title": "Gentle whistle",
+      "category": "foley",
+      "for": "a man whistling gently",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/612/612.wav",
+      "ear": {"query":"a cartoon whistle","z":6.98,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-613",
+      "title": "Long whistle",
+      "category": "foley",
+      "for": "a long human whistle: amazement, a wolf whistle",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/613/613.wav",
+      "ear": {"query":"a whistle of amazement, a wolf whistle","z":4.76,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2648",
+      "title": "Game spin jump",
+      "category": "game",
+      "for": "a video game spin jump",
+      "page": "https://mixkit.co/free-sound-effects/spin/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2648/2648.wav",
+      "ear": {"query":"a cartoon spin jump","z":4.73,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2814",
+      "title": "Funny squeaky toy",
+      "category": "comedy",
+      "for": "a squeaky toy squeezed",
+      "page": "https://mixkit.co/free-sound-effects/toy/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2814/2814.wav",
+      "ear": {"query":"a squeaky toy","z":5.04,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-118",
+      "title": "Crunchy eating",
+      "category": "voices",
+      "for": "eating and biting crunchy food",
+      "page": "https://mixkit.co/free-sound-effects/food/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/118/118.wav",
+      "ear": {"query":"a crunchy bite","z":5.8,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-115",
+      "title": "Crispy bite",
+      "category": "voices",
+      "for": "biting delicious crispy food",
+      "page": "https://mixkit.co/free-sound-effects/food/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/115/115.wav",
+      "ear": {"query":"a crunchy bite","z":5.74,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-145",
+      "title": "Quick sip",
+      "category": "voices",
+      "for": "a quick sip from a drink",
+      "page": "https://mixkit.co/free-sound-effects/water/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/145/145.wav",
+      "ear": {"query":"a person sipping a drink","z":4.79,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-139",
+      "title": "Sipping water",
+      "category": "voices",
+      "for": "sipping and drinking water",
+      "page": "https://mixkit.co/free-sound-effects/water/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/139/139.wav",
+      "ear": {"query":"a person sipping a drink","z":5.32,"verdict":"strong"}
     }
   ]
 }
