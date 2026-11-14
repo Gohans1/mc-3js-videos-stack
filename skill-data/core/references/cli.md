@@ -35,7 +35,7 @@ Update every place an agent looks, in the same commit:
 ```bash
 bun run fmt                                  # or: bun fmt --no-script <files>
 bun run lint                                 # oxlint; warnings fail too
-bun run check                                # at the root: typecheck
+bun run typecheck                            # bun check, the repo and live-studio
 bun run test                                 # every package's tests
 ```
 

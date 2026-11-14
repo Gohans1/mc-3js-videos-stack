@@ -85,8 +85,6 @@ const GROUPS = [
       verify: "lint and typecheck together",
       lint: "oxlint",
       typecheck: "bun check",
-      check:
-        "the same as typecheck, here at the root (in a film, bun run check reads the film's JSON)",
       fmt: "format (bun fmt --no-script <files> for a few)",
       "fmt:check": "is everything formatted?",
     },
@@ -126,8 +124,7 @@ const said = new Set(["help", "postinstall", ...stubs]);
 const out = [];
 for (const [title, cmds] of GROUPS) {
   const lines = Object.entries(cmds)
-    // "check" is the film contract in a film and typecheck at the root
-    .filter(([k]) => k in scripts && !said.has(k) && (k !== "check" || (title === "Code") !== film))
+    .filter(([k]) => k in scripts && !said.has(k))
     .map(([k, about]) => {
       said.add(k);
       return `  ${k.padEnd(16)}${about}`;

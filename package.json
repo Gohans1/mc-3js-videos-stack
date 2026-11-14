@@ -39,7 +39,7 @@
     "test": "bun test --timeout 30000 ./packages/film-stage ./packages/film-kit ./packages/mc-actor ./packages/mc-assets ./packages/live-studio ./scripts/test",
     "lint": "oxlint packages scripts",
     "typecheck": "bun check --no-script && bun check --no-script -p packages/live-studio",
-    "check": "bun check --no-script && bun check --no-script -p packages/live-studio",
+    "check": "bun packages/live-studio/wrong-place.mjs check",
     "verify": "bun run --parallel lint typecheck",
     "fmt": "bun fmt --no-script",
     "fmt:check": "bun fmt --no-script --check",
