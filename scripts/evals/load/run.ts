@@ -431,13 +431,18 @@ try {
     console.log();
     results[`${profile.name}.cold`] = summarize(cold);
     results[`${profile.name}.warm`] = summarize(warm);
-    // The slowest files of the median cold visit: where to look next
-    const mid = [...cold].sort((a, b) => (a.ready ?? 1e9) - (b.ready ?? 1e9))[cold.length >> 1];
-    results[`${profile.name}.files`] = [
-      ...[...(mid?.files ?? [])].sort((a: any, b: any) => b[3] - a[3]).slice(0, 10),
-      ["-- heaviest:"],
-      ...[...(mid?.files ?? [])].sort((a: any, b: any) => b[1] - a[1]).slice(0, 10),
-    ];
+    // The slowest files of the median cold and warm visit: where to look next
+    for (const [kind, rows] of [
+      ["cold", cold],
+      ["warm", warm],
+    ] as const) {
+      const mid = [...rows].sort((a, b) => (a.ready ?? 1e9) - (b.ready ?? 1e9))[rows.length >> 1];
+      results[`${profile.name}.${kind}.files`] = [
+        ...[...(mid?.files ?? [])].sort((a: any, b: any) => b[3] - a[3]).slice(0, 10),
+        ["-- heaviest:"],
+        ...[...(mid?.files ?? [])].sort((a: any, b: any) => b[1] - a[1]).slice(0, 10),
+      ];
+    }
   }
   cdp.close();
   const extra = (k: string) => k.endsWith(".files") || k.endsWith(".cpu");
