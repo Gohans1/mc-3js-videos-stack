@@ -10,7 +10,7 @@ import { cliArgs, jsonFile, needFilm, secondArg } from "../packages/live-studio/
 import { checkFiles } from "../packages/live-studio/src/contract.ts";
 import { contractFiles } from "../packages/live-studio/src/film.mjs";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
-import { wholeNote } from "../packages/live-studio/src/note-state.mjs";
+import { noteState, wholeNote } from "../packages/live-studio/src/note-state.mjs";
 import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
 import {
@@ -113,7 +113,7 @@ export const noteMoment = (dir: string, ref: string) => {
   return {
     id: n.id,
     n: byAge.indexOf(n) + 1,
-    done: !!n.done,
+    state: noteState(n) as string,
     text: String(n.text ?? ""),
     written: n.t as number,
     heard: heardNow(n, film),
@@ -198,6 +198,13 @@ export const whatsAt = (dir: string, t: number) => {
     const heard = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
     // a muted track is left out of every mix (scripts/sound/mix.py MUTED)
     const muted = new Set((audio.tracks ?? []).flatMap((k: Row) => (k.mute ? [k.id] : [])));
+    // the studio's pick (choices.json, as mix.py chosen() plays it): "off" leaves a sound out, a try[] name plays instead
+    const choices = read("choices.json", {}) ?? {};
+    const picked = (row: Row): string | null => {
+      const c = choices[row.name];
+      if (c?.set === "off") return "off";
+      return c?.set && c.set !== row.name && (row.try ?? []).includes(c.set) ? c.set : null;
+    };
     const lenOf = (c: Row): number | undefined =>
       c.length ??
       (c.name in durations ? (durations[c.name]! - (c.start ?? 0)) / (c.rate ?? 1) : undefined);
@@ -222,6 +229,7 @@ export const whatsAt = (dir: string, t: number) => {
           to: c.to,
           row: audio.beds[i],
           muted: muted.has(audio.beds[i].track),
+          picked: picked(audio.beds[i]),
         });
     });
     heard.sfx.forEach((c: Row, i: number) => {
@@ -236,6 +244,7 @@ export const whatsAt = (dir: string, t: number) => {
           to: len === undefined ? null : c.at + len,
           row: audio.sfx[i],
           muted: muted.has(audio.sfx[i].track),
+          picked: picked(audio.sfx[i]),
         });
     });
   }
@@ -278,13 +287,16 @@ export const whatsAt = (dir: string, t: number) => {
           if (b >= 0 && b < v.length - 1 && changes(v[b], v[b + 1]))
             keys.push({
               file,
-              path: path.join("."),
+              path: path.join(".").replaceAll(".[", "["),
               before: b,
               after: b + 1,
               t0: v[b].t,
               t1: v[b + 1].t,
             });
+          return;
         }
+        // a list of objects holding rows (props: [{ keys: [...] }]): each is walked, named by its index
+        v.forEach((x, i) => walk(x, [...path, `[${i}]`]));
         return;
       }
       if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, [...path, k]);
@@ -315,7 +327,7 @@ export const whatsAt = (dir: string, t: number) => {
   // the script not voiced yet (src/edit.json script_lines, scene seconds as the film's list reads them)
   const scriptLines: Row[] = edit.script_lines ?? [];
   const script =
-    narration || blank
+    narration || narrationMuted || blank
       ? null
       : (scriptLines.find((l) => l.t <= scene && scene < (l.until ?? l.t)) ??
         // a later one only when no voiced line is heard before it
@@ -325,12 +337,14 @@ export const whatsAt = (dir: string, t: number) => {
         ) ??
         null);
 
-  // the open notes heard within 3 s of it now (a Speed or Freeze edit since moves where a note is heard)
+  // the notes not done heard within 3 s of it now (a Speed or Freeze edit since moves where a note is heard): open ones
+  // are the AI's to fix, check ones wait on the creator's look
   const notes = readNotes(dir).flatMap((n) => {
-    if (n.done || typeof n.t !== "number") return [];
+    const state = noteState(n) as string;
+    if (state === "done" || typeof n.t !== "number") return [];
     const heard = heardNow(n, film);
     return Math.abs(heard - t) <= 3
-      ? [{ id: n.id as string, text: String(n.text ?? ""), heard }]
+      ? [{ id: n.id as string, state, text: String(n.text ?? ""), heard }]
       : [];
   });
 
@@ -369,7 +383,7 @@ export const whatsAt = (dir: string, t: number) => {
 
 const HELP = `What the film has at one heard second (as notes, voice:cues and framecheck print them), each with the file
 and row that holds it: the shot, the camera keys, the narration word, the sounds playing, the text and looks on screen,
-the key rows moving, the open notes near it. Run inside the film.
+the key rows moving, the notes not done near it. Run inside the film.
   bun run at 35.6        or  bun run at 00:35.633  (mm:ss as notes print it)
   bun run at 35.6 --json   the same as data, every moving key row included
   bun run at '#52'       a note's moment (its #number, quoted: a bare # starts a shell comment; or its id, as mw9jknxt),
@@ -405,7 +419,7 @@ if (isMain) {
   // the note as bun run notes shows it: its state and what it asks, so its moment needs no second command
   const noteSays = () =>
     note
-      ? `note #${note.n} (${note.id}, ${note.done ? "done" : "open"}) "${note.text.length > 80 ? `${note.text.slice(0, 79)}…` : note.text}"`
+      ? `note #${note.n} (${note.id}, ${note.state}) "${note.text.length > 80 ? `${note.text.slice(0, 79)}…` : note.text}"`
       : "";
   if (/^-\.?\d/.test(arg)) {
     console.error(`${arg}: the film starts at 0; give a second from 0 on (bun run at 35.6)`);
@@ -413,7 +427,7 @@ if (isMain) {
   } else if (/^\d+,\d+$/.test(arg)) {
     console.error(`${arg}: seconds take a dot; did you mean bun run at ${arg.replace(",", ".")}?`);
     process.exit(2);
-  } else if (/^\.?\d/.test(arg)) t = secondArg("bun run at", arg);
+  } else if (/^[\d.:]+$/.test(arg)) t = secondArg("bun run at", arg);
   else {
     // a note: #N or its id
     let n: ReturnType<typeof noteMoment> = null;
@@ -517,17 +531,23 @@ if (isMain) {
         got.script.t > got.scene ? ", the next one" : ""
       }): ${String(got.script.text).slice(0, 90)}${String(got.script.text).length > 90 ? "..." : ""}`,
     );
-  const file = c.soundTimeline ?? "src/timeline/audio.json";
+  const file = c.soundTimeline;
   out.push(
-    got.sounds.length
-      ? `sound (${file}):`
-      : `sound: none playing (${file}; to add one: bun run find <words>)`,
+    !file
+      ? `sound: package.json "live-studio" names no soundTimeline, so no sound is read (the template film's: src/timeline/audio.json)`
+      : got.sounds.length
+        ? `sound (${file}):`
+        : `sound: none playing (${file}; to add one: bun run find <words>)`,
   );
   for (const s of got.sounds)
     out.push(
-      `  ${s.list}[${s.i}] ${s.name} gain ${s.row.gain ?? 0}${s.row.track ? ` track ${s.row.track}${s.muted ? " (muted: not in the mix)" : ""}` : ""}, heard ${fmt(s.from)}-${
-        s.to === null ? "? (its file is not on this machine)" : fmt(s.to)
-      }`,
+      `  ${s.list}[${s.i}] ${s.name} gain ${s.row.gain ?? 0}${s.row.track ? ` track ${s.row.track}${s.muted ? " (muted: not in the mix)" : ""}` : ""}${
+        s.picked === "off"
+          ? ", off (choices.json): not in the mix"
+          : s.picked
+            ? `, plays ${s.picked} in its place (choices.json)`
+            : ""
+      }, heard ${fmt(s.from)}-${s.to === null ? "? (its file is not on this machine)" : fmt(s.to)}`,
     );
   if (c.textTimeline)
     out.push(
@@ -555,7 +575,7 @@ if (isMain) {
   }
   if (data.notes.length)
     out.push(
-      `open notes heard within 3 s: ${data.notes.map((n) => `${n.id} at ${fmt(n.heard)} "${n.text.slice(0, 40)}"`).join("; ")} (bun run notes <id>)`,
+      `notes heard within 3 s: ${data.notes.map((n) => `${n.id} (${n.state}) at ${fmt(n.heard)} "${n.text.slice(0, 40)}"`).join("; ")} (bun run notes <id>; check = fixed, the creator looks)`,
     );
   // the cut a draft's sheet numbers (renders/cuts.json, heard seconds), when this second sits on one
   const cutsFile = join(film, "renders/cuts.json");

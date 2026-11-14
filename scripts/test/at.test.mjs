@@ -177,7 +177,7 @@ test("a note written just before a cut is in the shot it names, on every line", 
   assert.match(r.stdout, /^shot 0 \(shots 0-1\)/m);
 });
 
-test("a note's moment lists the other open notes near it, not itself", (t) => {
+test("a note's moment lists the other notes near it, not itself", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));
   const note = (id, t) => ({ id, t, scene: t, text: id, shot: 1, time: "", at: `2026-11-0${t}` });
@@ -190,8 +190,8 @@ test("a note's moment lists the other open notes near it, not itself", (t) => {
     encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /open notes heard within 3 s: other at/);
-  assert.doesNotMatch(r.stdout, /self at/);
+  assert.match(r.stdout, /notes heard within 3 s: other \(open\) at/);
+  assert.doesNotMatch(r.stdout, /self \(open\) at/);
 });
 
 test("a note whose moment a moved cut has put in the next shot says it is there now", (t) => {
@@ -532,4 +532,126 @@ test("a script line not voiced yet is the next one only when no voiced line come
   assert.equal(before.nextLine, 6);
   assert.equal(before.script, null);
   assert.equal(whatsAt(dir, 8).script?.text, "LATER LINE");
+});
+
+test("a note fixed and waiting on the creator says check, never done, and is still near its moment", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = (id, state, at) => ({
+    id,
+    t: 4,
+    scene: 8.2,
+    text: `the hand ${id}`,
+    shot: 1,
+    time: "",
+    at,
+    state,
+    done: true,
+  });
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    [note("n1", "check", "1"), note("n2", "done", "2")].map((n) => JSON.stringify(n)).join("\n"),
+  );
+  const r = spawnSync("bun", [AT, "#1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^note #1 \(n1, check\) "the hand n1"/);
+  const near = whatsAt(dir, 4).notes;
+  assert.deepEqual(
+    near.map((n) => [n.id, n.state]),
+    [["n1", "check"]],
+  );
+});
+
+test("a sound the studio's choice turns off or swaps says so, as the mix plays it", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [{ name: "hum", from: 0, to: 20, gain: -6, fadeIn: 1, fadeOut: 1, try: ["drone"] }],
+      sfx: [{ name: "door", at: 8, length: 1, gain: 0 }],
+    }),
+  );
+  writeFileSync(
+    join(dir, "choices.json"),
+    JSON.stringify({ hum: { set: "drone", gain: 1 }, door: { set: "off" } }),
+  );
+  const r = spawnSync("bun", [AT, "4.1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {2}beds\[0\] hum .*plays drone in its place \(choices\.json\)/m);
+  assert.match(r.stdout, /^ {2}sfx\[0\] door .*off \(choices\.json\): not in the mix/m);
+});
+
+test("a film naming no sound timeline says so, not that nothing plays in a file it never named", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { camTimeline: "src/timeline/cam.json" } }),
+  );
+  const r = spawnSync("bun", [AT, "4.1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^sound: package\.json "live-studio" names no soundTimeline/m);
+});
+
+test("key rows inside a list of objects are read, named by their index", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/steve.json"),
+    JSON.stringify({
+      props: [
+        {
+          id: "cup",
+          keys: [
+            { t: 7, x: 0 },
+            { t: 9, x: 2 },
+          ],
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    whatsAt(dir, 4.1).keys.map((k) => k.path),
+    ["props[0].keys"],
+  );
+});
+
+test("a voiced line on a muted track is muted narration, not a script line not voiced yet", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "voice",
+      tracks: [{ id: "v", mute: true }],
+      beds: [],
+      sfx: [{ name: "voice", at: 0, length: 15, gain: 0, track: "v" }],
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ end: 20, script_lines: [{ t: 8, until: 9, text: "THE HAND" }] }),
+  );
+  const got = whatsAt(dir, 4.1);
+  assert.equal(got.narrationMuted, "v");
+  assert.equal(got.script, null);
+});
+
+test("a note id that starts with a digit is a note, not a malformed second", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = { id: "0abc", t: 4, scene: 8.2, text: "the hand", shot: 1, time: "", at: "1" };
+  writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
+  const r = spawnSync("bun", [AT, "0abc"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^note #1 \(0abc, open\)/);
 });
