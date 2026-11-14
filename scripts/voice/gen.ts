@@ -14,6 +14,12 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
+import {
+  rhubarbPath,
+  shapeTake,
+  speakingTakes,
+  writeMouthMap,
+} from "../../packages/live-studio/src/mouth-map.mjs";
 import { assertInsideDir, wordsCommand } from "../../packages/live-studio/src/voice-map.mjs";
 import { stripAudioTags, sts, tts } from "./genvoice.ts";
 
@@ -378,6 +384,26 @@ if (isMain) {
     console.log(
       `nothing sent.\nnext: bun run voice:gen ${real.join(" ")} sends ${what} (${chars} characters, billed by the character)`,
     );
+  }
+  // a take said on screen gets its mouth shapes now (Rhubarb, local): a failure here leaves the audio and names voice:lips
+  if (sent && !process.argv.includes("--try")) {
+    const made = new Set(results.map((r) => r.out));
+    const lips = speakingTakes(film).filter((k) => made.has(k.audio) && !k.fresh);
+    if (lips.length && !existsSync(rhubarbPath()))
+      console.error(
+        `no Rhubarb Lip Sync at ${rhubarbPath()} for the mouth shapes of ${lips.map((k) => k.id).join(", ")} (INSTALL.md, the lip sync row): bun run voice:lips once it is there`,
+      );
+    else if (lips.length) {
+      for (const k of lips)
+        try {
+          console.log(
+            `take ${k.id} (by ${k.by}): ${shapeTake(k, stripAudioTags(k.text ?? "")).length} mouth shapes`,
+          );
+        } catch (e) {
+          console.error(`take ${k.id}: ${(e as Error).message}: bun run voice:lips tries again`);
+        }
+      writeMouthMap(film);
+    }
   }
   // voice:assemble needs every take's word timings and a genvoice.pro take comes without them: whisperX writes them now
   const unaligned =

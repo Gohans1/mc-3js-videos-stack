@@ -297,6 +297,9 @@ const Take = z.looseObject({
   speed: z.number().positive().optional(),
   stability: z.number().min(0).max(1).optional(),
   guide: z.string().optional(),
+  // the character who says it on screen: bun run voice:lips gives that character's mouth its shapes (src/timeline/mouth.json,
+  // read by live-studio/lips mouthCues). None: a narrator off screen
+  by: z.string().min(1).optional(),
 });
 const Beat = z.looseObject({
   title: z.string(),

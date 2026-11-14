@@ -15,6 +15,11 @@ import { fileURLToPath } from "node:url";
 
 import { cliArgs, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
 import { voiceMapOf } from "../../packages/live-studio/src/film.mjs";
+import {
+  MOUTH_MAP,
+  speakingTakes,
+  writeMouthMap,
+} from "../../packages/live-studio/src/mouth-map.mjs";
 import { compactJson } from "../../packages/live-studio/src/timeline_file.mjs";
 import {
   planVoicePlacements,
@@ -198,6 +203,10 @@ export const runAssemble = async (opts: { cwd?: string; args?: string[] } = {}) 
   edit.voice.lines = lines;
   writeAtomicText(editPath, JSON.stringify(edit, null, 1) + "\n");
   writeVoiceMap(root, voiceMapPath, placed);
+  // the takes said on screen keep their mouth shapes where the voice now places them
+  const onScreen = speakingTakes(root);
+  if (onScreen.length || existsSync(join(root, MOUTH_MAP))) writeMouthMap(root);
+  const unshaped = onScreen.filter((k) => !k.fresh).map((k) => k.id);
 
   // Slice audio.json narration into per-take draggable Phrase Bricks when narration is enabled and clips aren't custom-edited
   const pkgPath = join(root, "package.json");
@@ -247,7 +256,7 @@ export const runAssemble = async (opts: { cwd?: string; args?: string[] } = {}) 
     }
   }
 
-  return { outWav, lines, bricksWritten };
+  return { outWav, lines, bricksWritten, unshaped };
 };
 
 const HELP = `Lays the narration takes (voice/takes/<id>.mp3|wav with .words.json) onto the film: writes full_voice.wav, the
@@ -267,6 +276,10 @@ if (isMain) {
     process.exit(1);
   });
   console.log("full_voice.wav", res.lines.length, "takes,", res.bricksWritten, "phrase bricks");
+  if (res.unshaped.length)
+    console.log(
+      `takes said on screen without mouth shapes (${res.unshaped.join(", ")}): bun run voice:lips`,
+    );
   console.log(
     "next: bun run voice:cues for the second of every line and word; hear it: bun run studio. The draft video gets the new voice through bun run render clip (the picture follows the voice, so every chunk) then bun run mix renders/draft_video.mp4",
   );

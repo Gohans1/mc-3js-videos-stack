@@ -36,6 +36,8 @@ test("every film command is guarded the same: checks, renders, sound, voice, not
     "bun run sfx:get find rain | head",
     "bun run voice:gen | tail -3",
     "bun run voice:align | tail",
+    "bun run voice:lips | tail -2",
+    "bun ../../scripts/voice/lips.ts > lips.log",
     "bun run voice:assemble | tail -1",
     "bun run voice:cues | head",
     "bun run new-film x | tail",

@@ -31,6 +31,8 @@ const GROUPS = [
         "narration takes from ElevenLabs for src/edit.json takes (previews; spends credits only with --yes)",
       "voice:align":
         "word timings for takes that lack them (whisperX, local and free); voice:assemble needs them",
+      "voice:lips":
+        'lip sync: mouth shapes for the takes a character says on screen ("by"; Rhubarb, local and free)',
       "voice:assemble": "lays the takes onto the film: full_voice.wav, voice.lines, Phrase Bricks",
       "voice:cues": "the heard second of every line, word and silent gap (--json for words)",
     },

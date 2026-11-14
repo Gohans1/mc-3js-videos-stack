@@ -10,6 +10,7 @@ import { TRANSITIONS } from "film-stage/transitions";
 import { cliArgs, needFilm } from "./src/cli.mjs";
 import { CAM_KEYS, checkFiles, SOUND_KEYS } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
+import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
 import { isRead, readFaults } from "./src/readable.mjs";
 import { findVaults, openSound } from "./src/sound.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
@@ -21,7 +22,8 @@ src/edit.json or package.json "live-studio". Run inside the film.
   bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}]}
 Checks every timeline file against its schema (src/contract.ts, the studio's own), that every other .json in src/ parses,
 and every sound name in the sound timeline (beds, sfx and their "try" options) against the sounds the studio can play,
-with the nearest names or the other film whose own sound it is. Warns (⚠, still exit 0) of on-screen text too brief to read or too small for a phone; where it sits
+with the nearest names or the other film whose own sound it is, and that every take said on screen ("by") has its mouth
+shapes (bun run voice:lips). Warns (⚠, still exit 0) of on-screen text too brief to read or too small for a phone; where it sits
 and how it reads over the picture: CHECK=text bun run render stills.
 Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
 Exit 0 ok, 1 problems found. Find a sound or preset by meaning: bun run find <words>.`;
@@ -110,6 +112,10 @@ for (const p of found) {
     p.issue += `\n  a working ${file} to compare with: ${shown}`;
   }
 }
+
+// a take said on screen (src/edit.json takes[].by) moves its character's mouth only once voice:lips has heard it
+const lips = mouthFaults(PROJECT);
+if (lips.length) found.push({ where: MOUTH_MAP, issue: lips.join("\n") });
 
 const distance = (a, b) => {
   let row = Array.from({ length: b.length + 1 }, (_, j) => j);

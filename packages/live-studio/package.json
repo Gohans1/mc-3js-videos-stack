@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./edit": "./src/edit.ts",
+    "./lips": "./src/lips.ts",
     "./lab": "./render/lab.ts",
     "./src/live.mjs": "./src/live.mjs"
   },

@@ -9,6 +9,7 @@ import { activeAdjustments } from "film-stage/grade-layers";
 import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeVelocity } from "film-stage/velocity";
+import { mouthCues } from "live-studio/lips";
 import { footChecks } from "mc-actor/checks";
 import { loadClips } from "mc-actor/clips";
 import { makeFeet } from "mc-actor/feet";
@@ -217,7 +218,9 @@ export async function buildScene(canvas, W, H, draft = false) {
     perform(t);
     placed.draw(t);
     const mood = moodAt(EDIT.steve.face, t);
-    steve.face(mood, mouthAt([], 0), blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
+    // lip sync: the takes with "by": "steve" in edit.json (bun run voice:lips); any mouth of the film's own reads the same cues
+    const mouth = mouthAt(mouthCues(EDIT, "steve"), t);
+    steve.face(mood, mouth, blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
     now.mood = mood;
 
     hemi.intensity = EDIT.light.fill;
@@ -292,6 +295,9 @@ export async function buildScene(canvas, W, H, draft = false) {
           },
           {
             text: `feet planted (mc-actor/feet.ts) · face ${EDIT.steve.face.filter((f) => f.t <= t).at(-1)?.mood ?? "neutral"}`,
+          },
+          {
+            text: `mouth ${mouthCues(EDIT, "steve").findLast(([s]) => s <= t)?.[1] ?? 'X (no lip sync: takes with "by": "steve", bun run voice:lips)'} (src/timeline/mouth.json)`,
           },
         ],
       },
