@@ -1,6 +1,6 @@
 // The film contract checked without a studio; HELP below
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -80,6 +80,25 @@ if (!conf || typeof conf !== "object" || Array.isArray(conf))
   stop(
     `✖ no "live-studio": {...} in it, so the studio knows none of the film's files. git restore package.json, or compare with ${join(TEMPLATE, "package.json").replaceAll("\\", "/")}`,
   );
+// a timeline named by its folder (src/timeline) opens as no file: every check after reads it
+const template = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8"))["live-studio"];
+const folders = [
+  ...CONFIG_KEYS.filter((k) => k.endsWith("Timeline")).map((k) => [k, conf[k]]),
+  ...Object.keys(conf.keyFiles ?? {}).map((rel) => ["keyFiles", rel]),
+].filter(
+  ([, rel]) =>
+    typeof rel === "string" &&
+    statSync(join(PROJECT, rel), { throwIfNoEntry: false })?.isDirectory(),
+);
+if (folders.length)
+  stop(
+    folders
+      .map(
+        ([k, rel]) =>
+          `✖ "${k}": "${rel}" is a folder; it names one JSON file${template[k] ? ` (the template film's: "${template[k]}")` : ""}`,
+      )
+      .join("\n"),
+  );
 
 const found = checkFiles(contractFiles(PROJECT)).map((text) => {
   const [where, ...rest] = text.split("\n");
@@ -102,7 +121,12 @@ for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFile
 for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFileTypes: true })) {
   if (!file.isFile() || !/\.[mc]?[jt]sx?$/.test(file.name)) continue;
   const code = readFileSync(join(file.parentPath, file.name), "utf8");
-  for (const [, spec] of code.matchAll(/from\s+["'](\.{1,2}\/[^"']+\.json)["']/g)) {
+  for (const { 0: whole, 1: spec, index } of code.matchAll(
+    /from\s+["'](\.{1,2}\/[^"']+\.json)["']/g,
+  )) {
+    // an import in a comment (an old one kept for later) is never built
+    const line = code.slice(code.lastIndexOf("\n", index) + 1, index + whole.length);
+    if (/\/\/|\/\*|^\s*\*/.test(line)) continue;
     const rel = relative(PROJECT, join(file.parentPath, spec)).replaceAll("\\", "/");
     if (existsSync(join(PROJECT, rel)) || found.some((p) => p.where === rel)) continue;
     const by = relative(PROJECT, join(file.parentPath, file.name)).replaceAll("\\", "/");
@@ -147,7 +171,7 @@ const swapped = (a, b) => {
   return at.length === 2 && at[1] === at[0] + 1 && a[at[0]] === b[at[1]] && a[at[1]] === b[at[0]];
 };
 // the known name a word is taken for a typo of: neighbouring letters swapped (from three letters), a letter dropped or
-// added (the shorter word four letters or more), one changed (five or more). Under that a key of the film's own is a word
+// added (the shorter word four letters or more), one changed (five or more), or only the case (Fov). Under that a key of the film's own is a word
 // of its own: fog by fov, cute by cut, span by pan, uid by id, ot by to; letters further apart too (laces by scale)
 const nearName = (k, names) =>
   names.includes(k)
@@ -155,6 +179,7 @@ const nearName = (k, names) =>
     : names.find((n) => {
         const a = k.toLowerCase(),
           b = n.toLowerCase();
+        if (a === b) return true;
         if (a.length !== b.length) return Math.min(a.length, b.length) >= 4 && distance(a, b) === 1;
         return a.length >= 3 && (swapped(a, b) || (a.length >= 5 && distance(a, b) === 1));
       });
@@ -269,13 +294,14 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
 const warnings = [];
 // advice under the warnings, for a reader: text output only, never a --json warning
 const hints = [];
-// a misspelt key is read by nothing: named whenever its file parses, even beside the shape faults it causes (gian for a missing gain)
+// a misspelt key is read by nothing: named whenever its file parses, even beside the shape faults it causes (gian for a
+// missing gain). A warning, not a problem: it is a guess, and a key of the film's own that looks like one (waves by wave)
+// has no other way to pass
 const keyTypos = (where, lines) => {
   if (!lines.length) return;
-  const issue = lines.join("\n");
-  const there = found.find((p) => p.where === where);
-  if (there) there.issue = `${issue}\n${there.issue}`;
-  else found.push({ where, issue });
+  warnings.push(...lines.map((l) => `⚠ ${where} ${l}`));
+  if (!hints.some((h) => h.includes("a key of the film's own")))
+    hints.push(`  a key of the film's own is fine to leave: the studio reads only its own keys`);
 };
 const readJson = (rel) => {
   try {
@@ -306,13 +332,13 @@ if (lanesRead && typeof lanesRead === "object")
             : [],
         ),
       ),
-    ].map(([k, near]) => `✖ ${k}: no key the mix reads; did you mean "${near}"?`),
+    ].map(([k, near]) => `${k}: no key the mix reads; did you mean "${near}"?`),
   );
 // a misspelt config key leaves its file read by nothing, schema checks included
 keyTypos(
   'package.json "live-studio"',
   nearKeys(conf, CONFIG_KEYS).map(
-    ([k, near]) => `✖ "${k}": no key the studio reads; did you mean "${near}"?`,
+    ([k, near]) => `"${k}": no key the studio reads; did you mean "${near}"?`,
   ),
 );
 // a film may put keys of its own on a camera key (cell-break's live, size): only a letter off or swapped is taken for a typo
@@ -324,9 +350,7 @@ if (Array.isArray(camRead))
       key && typeof key === "object"
         ? Object.keys(key).flatMap((k) => {
             const near = nearName(k, CAM_KEYS);
-            return near
-              ? [`✖ [${i}] "${k}": no key the camera reads; did you mean "${near}"?`]
-              : [];
+            return near ? [`[${i}] "${k}": no key the camera reads; did you mean "${near}"?`] : [];
           })
         : [],
     ),
@@ -354,7 +378,7 @@ const rowTypos = (rel, rows, prefix, keys, slotKeys = []) => {
             ]
           : [],
       )
-      .map(([k, near]) => `✖ ${k}: no key the studio reads; did you mean "${near}"?`),
+      .map(([k, near]) => `${k}: no key the studio reads; did you mean "${near}"?`),
   );
 };
 rowTypos(
@@ -452,7 +476,8 @@ if (Array.isArray(textRead?.items) && filmEnds()) {
   const said = [];
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
-    if (!isRead(it, textRead.tracks) || !h) return;
+    // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
+    if (!isRead(it, textRead.tracks) || !h || h.to <= h.from) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
     for (const fault of readFaults(it, h, conf.ratio))
       said.push(

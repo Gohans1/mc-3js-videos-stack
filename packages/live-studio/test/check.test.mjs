@@ -105,7 +105,7 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.equal(own.status, 0, own.stdout + own.stderr);
 });
 
-test("a short key of the film's own one letter from a camera key (fog by fov, cute by cut) is the film's; two letters of roll swapped are a typo", (t) => {
+test("a key one letter or a case off a camera key is a warning that names it; fog by fov and cute by cut are the film's", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -123,9 +123,17 @@ test("a short key of the film's own one letter from a camera key (fog by fov, cu
   };
   const own = cam({ fog: 0.4, cute: 1 });
   assert.equal(own.status, 0, own.stdout + own.stderr);
-  const typo = cam({ rlol: 5 });
-  assert.equal(typo.status, 1, typo.stdout + typo.stderr);
-  assert.match(typo.stderr, /"rlol": no key the camera reads; did you mean "roll"\?/);
+  assert.doesNotMatch(own.stdout, /"fog"|"cute"/);
+  // a guess, never a fault: a key of the film's own that looks like a typo (waves) must not fail the film
+  const typo = cam({ rlol: 5, Fov: 40, waves: 2 });
+  assert.equal(typo.status, 0, typo.stdout + typo.stderr);
+  assert.match(
+    typo.stdout,
+    /⚠ src\/timeline\/cam\.json \[0\] "rlol": no key the camera reads; did you mean "roll"\?/,
+  );
+  assert.match(typo.stdout, /\[0\] "Fov": no key the camera reads; did you mean "fov"\?/);
+  assert.match(typo.stdout, /\[0\] "waves": .*did you mean "wave"\?/);
+  assert.match(typo.stdout, /a key of the film's own is fine to leave/);
 });
 
 test("a timing file of the wrong shape is named as a fault, not a crash", (t) => {
@@ -170,12 +178,12 @@ test("a key of the film's own near a studio key (uid by id, top by to, ot by to,
     }),
   );
   const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
-  assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stderr, /"colr": .*did you mean "color"\?/);
-  assert.doesNotMatch(r.stderr, /"uid"|"top"|"ot"|"laces"/);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /"colr": .*did you mean "color"\?/);
+  assert.doesNotMatch(r.stdout, /"uid"|"top"|"ot"|"laces"/);
 });
 
-test("a misspelt package.json live-studio key is named: its file would be read by nothing", (t) => {
+test("a misspelt package.json live-studio key is named as a warning: its file would be read by nothing", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -184,9 +192,9 @@ test("a misspelt package.json live-studio key is named: its file would be read b
     JSON.stringify({ "live-studio": { camTimline: "src/timeline/cam.json", myOwn: 1 } }),
   );
   const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
-  assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stderr, /"camTimline": .*did you mean "camTimeline"\?/);
-  assert.doesNotMatch(r.stderr, /"myOwn"/);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /"camTimline": .*did you mean "camTimeline"\?/);
+  assert.doesNotMatch(r.stdout, /"myOwn"/);
 });
 
 test("a file with faults from two checks is one problem, all its faults under it", (t) => {
@@ -228,7 +236,7 @@ test("a fault in the text file says the readability checks wait for it", (t) => 
   );
   writeFileSync(
     join(dir, "src/timeline/text.json"),
-    JSON.stringify({ items: [{ kind: "text", text: "HI", from: 0, to: 3, colr: "#fff" }] }),
+    JSON.stringify({ items: [{ kind: "text", text: "HI", from: 0, to: 3, track: "top" }] }),
   );
   const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -273,7 +281,7 @@ test("a two-letter key of the film's own (to by t) is the film's, on a camera ke
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
-test("a misspelt key on a shot, a text item or an adjustment layer is named; the film's own keys are left alone", (t) => {
+test("a misspelt key on a shot, a text item or an adjustment layer is named as a warning; the film's own keys are left alone", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -300,12 +308,12 @@ test("a misspelt key on a shot, a text item or an adjustment layer is named; the
     items: [{ id: "a", name: "warm", from: 0, to: 3, track: 0, grade: {}, timbase: "scene" }],
   });
   const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
-  assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stderr, /\[1\] "tranistion": .*did you mean "transition"\?/);
-  assert.match(r.stderr, /items\[0\] "colr": .*did you mean "color"\?/);
-  assert.match(r.stderr, /items\[0\]\.in "lne": .*did you mean "len"\?/);
-  assert.match(r.stderr, /items\[0\] "timbase": .*did you mean "timebase"\?/);
-  assert.doesNotMatch(r.stderr, /"mood"/);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /\[1\] "tranistion": .*did you mean "transition"\?/);
+  assert.match(r.stdout, /items\[0\] "colr": .*did you mean "color"\?/);
+  assert.match(r.stdout, /items\[0\]\.in "lne": .*did you mean "len"\?/);
+  assert.match(r.stdout, /items\[0\] "timbase": .*did you mean "timebase"\?/);
+  assert.doesNotMatch(r.stdout, /"mood"/);
 });
 
 test("check names a transition or anim one letter off a built-in, and leaves a film's own name alone", (t) => {
@@ -384,7 +392,7 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.equal(loud.status, 0, loud.stdout + loud.stderr);
   assert.match(loud.stdout, /⚠ beds\[0\] "door_slam" gain \+20 dB/);
 
-  // a misspelt key is read by nothing: the AI believes it changed the sound and nothing did
+  // a misspelt key is read by nothing: the AI believes it changed the sound and nothing did; a warning, as a key of the film's own looks the same
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({
@@ -395,10 +403,10 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
     }),
   );
   const typo = check();
-  assert.equal(typo.status, 1, typo.stdout + typo.stderr);
-  assert.match(typo.stderr, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
-  assert.match(typo.stderr, /⚠ lufs -3/);
-  assert.match(typo.stderr, /⚠ drive \+99 dB/);
+  assert.equal(typo.status, 0, typo.stdout + typo.stderr);
+  assert.match(typo.stdout, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
+  assert.match(typo.stdout, /⚠ lufs -3/);
+  assert.match(typo.stdout, /⚠ drive \+99 dB/);
 
   // one fault must not hide the others: an AI fixes what it is shown, runs check again and meets the next only then
   writeFileSync(
@@ -549,4 +557,76 @@ test("a missing sound another film of the repo has is pointed to there, and ever
     /"bgm_drone" \(beds\[0\]\) is no sound the studio has: \.\.\/two\/sound\/sfx\/bgm_drone\.wav has it \(another film's own: copy the file and its SOURCES\.json row into sound\/sfx\/\)/,
   );
   assert.match(out.stderr, /replace a name: its "name" in src\/timeline\/audio\.json/);
+});
+
+test("an import of a gone JSON file in a comment is no missing file: the build never reads it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  writeFileSync(
+    join(dir, "src/extra.ts"),
+    [
+      '// import old from "./old.json";',
+      '/* import gone from "./gone.json"; */',
+      'import lost from "./lost.json";',
+    ].join("\n"),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /src\/lost\.json\n✖ missing: src\/extra\.ts imports it/);
+  assert.doesNotMatch(r.stderr, /old\.json|gone\.json/);
+});
+
+test("a timeline named by a folder is a package.json fault that names the key, not a crash", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline" } }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(
+    r.stderr,
+    /^package\.json\n✖ "textTimeline": "src\/timeline" is a folder; it names one JSON file/,
+  );
+  assert.doesNotMatch(r.stderr, /EISDIR/);
+});
+
+test("text the edit cuts out whole is never on screen, so it is no text too brief to read", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        textTimeline: "src/timeline/text.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        { kind: "text", text: "CUT AWAY", from: 2, to: 4 },
+        { kind: "text", text: "HALF OF ME IS CUT AWAY", from: 4.5, to: 6 },
+      ],
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ speeds: [], freezes: [], cuts: [{ from: 1, to: 5.5 }] }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stdout, /"CUT AWAY"/);
+  assert.match(r.stdout, /items\[1\] "HALF OF ME IS CUT AWAY" .*readable about/);
 });

@@ -75,9 +75,10 @@ export const contractFiles = (project) => {
   const pkgFile = join(project, "package.json"),
     conf =
       (existsSync(pkgFile) ? JSON.parse(readFileSync(pkgFile, "utf8")) : {})["live-studio"] ?? {};
+  // a folder named in place of a file reads as absent here; bun run check names it
   const textOf = (rel) => {
     const f = join(project, rel);
-    return existsSync(f) ? readFileSync(f, "utf8") : undefined;
+    return statSync(f, { throwIfNoEntry: false })?.isFile() ? readFileSync(f, "utf8") : undefined;
   };
   // older films named it sound_choices.json
   const choices =
