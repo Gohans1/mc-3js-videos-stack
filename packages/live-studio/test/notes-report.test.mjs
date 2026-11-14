@@ -28,7 +28,11 @@ const film = (notes) => {
   return dir;
 };
 const report = (dir, ...args) =>
-  execFileSync("bun", [REPORT, ...args], { cwd: dir, encoding: "utf8" });
+  execFileSync("bun", [REPORT, ...args], {
+    cwd: dir,
+    encoding: "utf8",
+    env: { ...process.env, MC_LESSONS: join(dir, "no-lessons") },
+  });
 const written = [
   note("a", 5, "2026-11-06T10:00:00Z"),
   note("b", 10, "2026-11-06T10:01:00Z"),

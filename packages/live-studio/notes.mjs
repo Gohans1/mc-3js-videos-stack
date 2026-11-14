@@ -1,10 +1,11 @@
 // The creator's notes for the AI about to act on them; HELP below
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { cliArgs, needFilm } from "./src/cli.mjs";
+import { LESSONS, lessonsFor } from "./src/lessons.mjs";
 import { noteState, noteThread } from "./src/note-state.mjs";
 
 const ROOT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
@@ -117,11 +118,23 @@ const oneLine = (n) => {
 
 const STATE_HEAD = { open: "", check: " (WAITS FOR THE CREATOR'S CHECK)", done: " (DONE)" };
 const SCOPE = { film: "this film", all: "every film" };
-const LEARN =
-  "keep it as a rule that outlives this chat, in code where you can (a default, or a check that fails), else in the repo's skill .claude/skills/gohans-3js-videos-skills; a this-film rule stays in this film's src; then";
+const LESSONS_HERE = relative(ROOT, LESSONS).replaceAll("\\", "/");
+const LEARN = `keep it as a rule that outlives this chat, in code where you can (a default, or a check that fails), else in ${LESSONS_HERE}/<topic>.md, shared by every film (a ## heading that is the rule itself); a this-film rule stays in this film's src; then`;
 const toLearn = (n) => n.remember && !(n.learned && n.learned.at >= n.remember.at);
 
-const detail = (n, showCam) => {
+const lessonLines = (l) =>
+  !l
+    ? []
+    : l.why
+      ? [`lessons: Jev did not run (${l.why}); the files are in ${LESSONS_HERE}/`]
+      : l.picks.length
+        ? l.picks.map(
+            (p) =>
+              `lesson: ${relative(ROOT, join(LESSONS, "..", p.path)).replaceAll("\\", "/")} (${p.lines} lines) ${p.title}`,
+          )
+        : [`lessons: none in ${LESSONS_HERE}/ is about this note (Jev)`];
+
+const detail = (n, showCam, lessons) => {
   const c = n.context;
   console.log(
     `\n## #${n.n} ${n.id} ${n.time}${n.frame == null ? "" : ` frame ${n.frame},`} shot ${n.shot}${n.shotName ? `: ${n.shotName}` : ""}${STATE_HEAD[noteState(n)]}`,
@@ -179,6 +192,7 @@ const detail = (n, showCam) => {
     console.log(
       `the creator asked you to remember this (${SCOPE[n.remember.scope]}): ${LEARN} bun run note learned ${n.id} "the rule, where"`,
     );
+  for (const l of lessonLines(lessons)) console.log(l);
   if (showCam && n.cam)
     console.log(`camera: ${n.cam.line ?? "?"}${n.cam.warn ? ` (${n.cam.warn})` : ""}`);
   for (const [label, key] of [
@@ -194,7 +208,8 @@ const detail = (n, showCam) => {
 const HELP = `The creator's notes from the studio, for the AI about to act on them. Run inside the film.
   bun run notes                 the open notes, one line each, in the order written (#1 first)
   bun run notes ID [ID ...]     everything about those notes (ID: the id, as mw6hr1fm, or the number, as 3 or #3): where
-                                they tapped, the words, the actions, the version, pictures
+                                they tapped, the words, the actions, the version, pictures, and the lesson files
+                                (lessons/ at the repo root) Jev says the note needs
   bun run notes --shot 3        everything about one shot's open notes
   --done                        fixed notes too            --cam   the camera line too
 A fixed note waits for the creator's check in the studio; their answer brings it back here with their words.
@@ -271,7 +286,12 @@ if (shot !== null && !pick.length) {
   );
 }
 if (ids.length || shot !== null) {
-  for (const n of written(pick)) detail(n, values.cam);
+  // only here, where one note is read in full: the list stays one line a note, and Jev is paid only once a note's words change
+  const lessons = await lessonsFor(
+    pick.filter((n) => !n.done),
+    { cache: join(ROOT, "notes/lessons-cache.json") },
+  );
+  for (const n of written(pick)) detail(n, values.cam, lessons.get(n.id));
   const todo = pick.find((n) => !n.done);
   if (todo)
     console.log(
