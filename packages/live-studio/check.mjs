@@ -19,7 +19,7 @@ import { clockForTimeline } from "./src/timing-state.mjs";
 const HELP = `Checks the film's data the way the studio does, without opening it: run it after editing any file in src/timeline,
 src/edit.json or package.json "live-studio". Run inside the film.
   bun run check           the problems, each under the file it is in, or "ok"
-  bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}]}
+  bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}], "warnings": [text]}
 Checks every timeline file against its schema (src/contract.ts, the studio's own), that every other .json in src/ parses,
 and every sound name in the sound timeline (beds, sfx and their "try" options) against the sounds the studio can play,
 with the nearest names or the other film whose own sound it is, and that every take said on screen ("by") has its mouth
@@ -128,16 +128,18 @@ const distance = (a, b) => {
   return row[b.length];
 };
 
-// the known name a word is taken for a typo of: a letter off, or two swapped (a film's own names sit further off)
+// the known name a word is taken for a typo of: a letter dropped or added, or letters swapped; a letter changed only past
+// four letters, as a short word of the film's own sits one letter from a known one (fog by fov, cue by cut, pan by pad)
 const nearName = (k, names) =>
   names.includes(k)
     ? null
-    : names.find(
-        (n) =>
-          distance(k.toLowerCase(), n.toLowerCase()) <= 1 ||
-          (k.length === n.length &&
-            k.toLowerCase().split("").sort().join() === n.toLowerCase().split("").sort().join()),
-      );
+    : names.find((n) => {
+        const a = k.toLowerCase(),
+          b = n.toLowerCase();
+        if (a.length === b.length && a.split("").sort().join() === b.split("").sort().join())
+          return true;
+        return distance(a, b) === 1 && (a.length !== b.length || a.length >= 5);
+      });
 
 // A fault in the lanes must not hide the others (an AI fixes what it is shown and meets the rest a run later):
 // names are checked whenever the file parses; gains, keys and the end need rows of the right shape

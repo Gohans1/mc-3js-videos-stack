@@ -105,6 +105,29 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.equal(own.status, 0, own.stdout + own.stderr);
 });
 
+test("a short key of the film's own one letter from a camera key (fog by fov) is the film's; a letter dropped is a typo", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { camTimeline: "src/timeline/cam.json" } }),
+  );
+  const cam = (extra) => {
+    writeFileSync(
+      join(dir, "src/timeline/cam.json"),
+      JSON.stringify([{ t: 0, p: [0, 1, 5], l: [0, 1, 0], ...extra }]),
+    );
+    return spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  };
+  const own = cam({ fog: 0.4 });
+  assert.equal(own.status, 0, own.stdout + own.stderr);
+  const typo = cam({ fv: 40 });
+  assert.equal(typo.status, 1, typo.stdout + typo.stderr);
+  assert.match(typo.stderr, /"fv": no key the camera reads; did you mean "fov"\?/);
+});
+
 test("check names a transition or anim one letter off a built-in, and leaves a film's own name alone", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
