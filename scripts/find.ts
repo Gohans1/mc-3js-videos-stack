@@ -2438,6 +2438,23 @@ export async function run(
     if (matches.length > n)
       out.push(`${matches.length} word matches (${counts(matches)}); top ${n}:`);
     const best = matches[0];
+    // weapon and fight clips (zombie walk, jab punch) are left out of the pool, as the catalogue's own search leaves them:
+    // those with more of the words than the best shown are named by id, since --fights (catalog.py) needs every word
+    const fightLine = () => {
+      if (kinds && !kindNames?.includes("mocap")) return "";
+      const hits = rank(
+        entriesOf().filter((x) => x.kind === "mocap" && isFight(x.id)),
+        asks,
+      ).filter((x) => x.matched > (best?.matched ?? 0));
+      return hits.length
+        ? `${hits.length} weapon or fight clip${hits.length > 1 ? "s have" : " has"} more of these words (left out by default): ${hits
+            .slice(0, 3)
+            .map((x) => x.id)
+            .join(
+              ", ",
+            )}; one in full: bun run find --show <id>; with every word: bun run find ${query} --kind mocap --fights`
+        : "";
+    };
     const scene = typed.length >= 8;
     // Words first (free, instant): plain English, then the studio's groups; Jev (paid) only once both came up short
     const PLAIN =
@@ -2487,18 +2504,8 @@ export async function run(
         ? `none of the ${listName} favourites has these words${inLists.length ? `; other lists do: ${inLists.join(", ")} (bun run find ${query} --fav ${inLists[0]!.split(" ")[0]})` : ""}; ${rank(inKind(unstarred), query).length} entries outside the favourites do (bun run find ${query}${filters.replace(` ${favArg}`, "")})`
         : "";
       // the words may be a weapon's or a fight's, whose clips the pool leaves out: they exist, so nothing needs making
-      const fights =
-        !kinds || kindNames?.includes("mocap")
-          ? rank(
-              entriesOf().filter((x) => x.kind === "mocap" && isFight(x.id)),
-              query,
-            ).length
-          : 0;
-      if (fights)
-        next.push(
-          `${fights} weapon or fight clip${fights > 1 ? "s have" : " has"} these words (left out by default): bun run find ${query} --kind mocap --fights`,
-          ...(other ? [other] : []),
-        );
+      const fights = fightLine();
+      if (fights) next.push(fights, ...(other ? [other] : []));
       // the creator chose from the favourites: a miss goes back to them, not into making one
       else if (favMiss)
         next.push(
@@ -2522,6 +2529,8 @@ export async function run(
       const missing = typed.filter(
         (w) => !(slotOf.get(stem(w)) ?? [stem(w)]).some((t) => has.has(t)),
       );
+      const fights = fightLine();
+      if (fights) next.push(fights);
       const kind = guess();
       const where = spread(matches.slice(0, Math.max(n, 30)));
       if (where) next.push(where);

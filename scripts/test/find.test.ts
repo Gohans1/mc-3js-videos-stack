@@ -1365,8 +1365,21 @@ test("words only fight clips have point to --fights, not to making the move", as
     src: "mixamo",
   };
   const out = await run(["sword", "--kind", "mocap"], [sword, walk], noJev);
-  expect(out).toMatch(/1 weapon or fight clip has these words.*--fights/);
+  expect(out).toMatch(
+    /1 weapon or fight clip has more of these words \(left out by default\): mixamo\/Sword_Slash_c9ce0001;.*--fights/,
+  );
   expect(out).not.toMatch(/make it/);
+});
+
+test("a fight clip with more of the words than the top hit is named, though the top hit has some", async () => {
+  const zombie = {
+    ...e("mixamo/Zombie_Walking_c9c60315", "Zombie Walking", "", "mocap", "stand"),
+    src: "mixamo",
+  };
+  const out = await run(["zombie", "walking", "--kind", "mocap"], [zombie, walk], noJev);
+  expect(out).toMatch(/fight clip has more of these words .*mixamo\/Zombie_Walking_c9c60315/);
+  const shown = await run(["walking", "--kind", "mocap"], [zombie, walk], noJev);
+  expect(shown).not.toMatch(/fight clip/);
 });
 
 test("a clip whose retarget breaks on Steve says so, as the catalogue's own search does", () => {
