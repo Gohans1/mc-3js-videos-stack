@@ -103,18 +103,23 @@ const scheduleSearchTokenWarm = (items: readonly LibraryItem[]) => {
   if (typeof window === "undefined" || !items.length) return;
   let idx = 0;
   let cancelled = false;
-  const scheduleNext = (cb: () => void): (() => void) => {
+  // Idle time only, in small slices until the idle period is spent (no timeout: a search finds tokens not warmed yet itself,
+  // and 600 at a time on a deadline ran most of a second into a phone's page load)
+  const scheduleNext = (cb: (idle?: IdleDeadline) => void): (() => void) => {
     if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(cb, { timeout: 500 });
+      const id = window.requestIdleCallback(cb);
       return () => window.cancelIdleCallback(id);
     }
     const id = window.setTimeout(cb, 16);
     return () => window.clearTimeout(id);
   };
   let cancelStep = () => {};
-  const step = () => {
+  const step = (idle?: IdleDeadline) => {
     if (cancelled || library !== items) return;
-    idx = warmSearchTokens(items, idx, 600);
+    if (!idle) idx = warmSearchTokens(items, idx, 600);
+    else
+      do idx = warmSearchTokens(items, idx, 40);
+      while (idx < items.length && idle.timeRemaining() > 2);
     if (idx < items.length) cancelStep = scheduleNext(step);
   };
   cancelStep = scheduleNext(step);
