@@ -74,8 +74,12 @@ The creator sees all of the above in the studio's Film tab, view only, under Cap
 
 ## Rules
 
-| Rule                                                                                 | Why                                                                 |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| Never edit `notes/notes.jsonl` by hand                                               | The creator's notes and their states go only through `bun run note` |
-| Never draw a fake waveform for a missing WAV or a silence                            | The creator would trust a sound that is not there                   |
-| Dragging or copying a whole shot, and colour keyframes, are unfinished in the studio | Do them in the JSON, then `bun run check`                           |
+| Rule                                                                                                                                      | Why                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Never edit `notes/notes.jsonl` by hand                                                                                                    | The creator's notes and their states go only through `bun run note`                                   |
+| Never draw a fake waveform for a missing WAV or a silence                                                                                 | The creator would trust a sound that is not there                                                     |
+| Dragging or copying a whole shot, and colour keyframes, are unfinished in the studio                                                      | Do them in the JSON, then `bun run check`                                                             |
+| Blocks and textures from `prepareAssets([...], { cache: true })`, made once; a file of the jar by `readFile(path, assets)`                | A raw zip handed to `createScene` unpacks the 5 MB jar again on every call                            |
+| Mocap through one `loadClips(refs, steve)` in `buildScene`                                                                                | It keeps each bake between loads; `loadClip` bakes every time                                         |
+| A loop over many poses that reads only his bones: `steve.updateBones()` and `steve.soleNow()`, then one `g.updateMatrixWorld(true)` after | A full update or `getWorldPosition` per pose walks his whole tree; this was seconds of a phone's load |
+| A change to how the film loads: `bun run eval:load` at the repo root, before and after                                                    | Desk and phone, first visit and reload; phone runs swing ~30%, so repeat one                          |
