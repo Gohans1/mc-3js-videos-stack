@@ -1448,7 +1448,9 @@ function show(ids: string[], pool: Entry[]) {
       }
       const shared =
         hits.length > 1
-          ? [`${hits.length} kinds share the id ${hits[0]!.id}: each goes where its use line says`]
+          ? [
+              `${hits.length} kinds share the id ${hits[0]!.id}: each goes where its use line says (one of them: --show ${hits[0]!.id} --kind ${hits[0]!.kind})`,
+            ]
           : [];
       return (
         readAs +
@@ -1817,11 +1819,18 @@ export async function run(
   const showIds = set.get("--show")?.split(",").filter(Boolean);
   if (showIds && !showIds.length) throw new FindError("--show needs an id, e.g. --show dissolve");
   if (showIds) {
-    if (query || set.size > 1 + (nRaw ? 1 : 0))
+    const extra = [
+      query,
+      ...[...set.keys()].filter((k) => !["--show", "-n", "--kind"].includes(k)),
+    ];
+    if (extra.some(Boolean))
       throw new FindError(
-        `--show takes ids only (a comma list for several: --show dissolve,push); drop ${[query, ...[...set.keys()].filter((k) => k !== "--show" && k !== "-n")].filter(Boolean).join(" ")}`,
+        `--show takes ids and --kind only (a comma list for several: --show dissolve,push; --kind text-in for one kind's of a shared id); drop ${extra.filter(Boolean).join(" ")}`,
       );
-    return noted(show(showIds, entriesOf(false)));
+    const all = entriesOf(false);
+    const kf = asked ? kindFilter(asked, all) : undefined;
+    if (kf?.bad.length) throw new FindError(kf.bad.join("\n"));
+    return noted(show(showIds, kf ? all.filter(kf.test) : all));
   }
   if (starring) {
     const extra = [
@@ -2471,7 +2480,7 @@ export async function run(
       // the words are there, but --source/--origin/--edition took them: name the sources that have them
       const unfiltered =
         sources || origin || edition || license || dur
-          ? rank(kinds ? pool.filter(kindFilter(kinds, pool).test) : pool, query)
+          ? rank(kinds ? pool.filter(kindFilter(kinds, pool).test) : pool, asks)
           : [];
       const other = unfiltered.length
         ? `these words are in${kinds ? ` --kind ${kinds.join(",")}` : ""}, but not with${filters.replace(/ --kind \S+/, "")}: ${tally(

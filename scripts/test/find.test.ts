@@ -861,6 +861,23 @@ test("search hits end with the filters that would split them, each value with it
   );
 });
 
+test("--show with --kind shows only that kind's entry of a shared id", async () => {
+  const out = await run(["--show", "fade", "--kind", "text-in"], presetEntries(), noJev);
+  expect(out).toMatch(/^text-in\/Clean {2}fade/m);
+  expect(out).not.toMatch(/kinds share the id|anim-in|text-out/);
+});
+
+test("words the filters took are counted without the word naming the kind", async () => {
+  const pool = [
+    { ...e("bgm-boss", "Boss theme", "", "bgm", "boss"), src: "wither-storm" },
+    { ...e("bgm-cry", "Sad piano", "", "bgm", "chill"), src: "pixabay" },
+  ];
+  const out = await run(["sad", "music", "--kind", "bgm", "--source", "wither-storm"], pool, noJev);
+  expect(out).toMatch(
+    /these words are in --kind bgm, but not with --source wither-storm: --source pixabay 1 /,
+  );
+});
+
 test("a category listed whole offers Jev inside that category", async () => {
   const out = await run(["--kind", "sfx/foley"], vault, noJev);
   expect(out).toMatch(/bun run find --jev --kind sfx\/foley "<the scene or feeling>"/);
