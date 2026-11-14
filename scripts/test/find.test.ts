@@ -483,6 +483,15 @@ test("--jev over a shortened timing category votes over its entries", async () =
   expect(pool.map((x) => x.id)).toEqual(["glide"]);
 });
 
+test("--jev over a posture category beside another kind says what it refuses", async () => {
+  const clips = () => Promise.resolve("catalogue rows");
+  await expect(
+    run(["--jev", "x", "--kind", "mocap/stand-sit-floor,sfx"], [...vault, sitDown], noJev, clips),
+  ).rejects.toThrow(
+    /^--jev over mocap\/stand-sit-floor filters mocap clips by the body; ask the other kinds in a call of their own/,
+  );
+});
+
 test("--jev with no words is an error for every kind, not a silent list", async () => {
   await expect(run(["--jev", "--kind", "transition"], vault, noJev)).rejects.toThrow(
     /--jev needs the scene in words/,
@@ -622,6 +631,20 @@ test("an editor's word reaches what the vault names otherwise: a synonym, a join
   });
   expect(rank(pool, "die").map((h) => h.id)).toEqual(["mc-mob-creeper-death"]);
   expect(rank(pool, "a sound that dies")[0]?.id).toBe("mc-mob-creeper-death");
+});
+
+test("a hit with the word its neighbour joins is not said to lack it", async () => {
+  const pool = [e("mc-mob-enderdragon-end", "Enderdragon · End", "Dragon dies", "mc", "mobs")];
+  expect(await run(["ender", "dragon"], pool, noJev)).not.toMatch(/lacks/);
+});
+
+test("in, on and from tell two directions apart, and a doubled consonant before -ing is one word", () => {
+  const titles = [
+    e("fade-out", "Fade out", "Fades away, no movement", "text-out", "Clean"),
+    e("fade-in", "Fade in", "Fades up from nothing, no movement", "text-in", "Clean"),
+  ];
+  expect(rank(titles, "fade in")[0]?.id).toBe("fade-in");
+  expect(rank([e("sit", "Sit down"), e("hit", "Hit")], "sitting")[0]?.id).toBe("sit");
 });
 
 test("a kind said loosely is read as the kind, and the first line says how", async () => {
@@ -841,6 +864,15 @@ test("search hits end with the filters that would split them, each value with it
 test("a category listed whole offers Jev inside that category", async () => {
   const out = await run(["--kind", "sfx/foley"], vault, noJev);
   expect(out).toMatch(/bun run find --jev --kind sfx\/foley "<the scene or feeling>"/);
+});
+
+test("Jev offered beside a filtered list or search keeps the filters", async () => {
+  expect(await run(["--kind", "sfx", "--license", "free"], vault, noJev)).toMatch(
+    /bun run find --jev --kind sfx --license free "<the scene or feeling>"/,
+  );
+  expect(await run(["xyzzy", "--kind", "sfx", "--license", "free"], vault, noJev)).toMatch(
+    /bun run find --jev --kind sfx --license free "xyzzy"/,
+  );
 });
 
 test("--show says where a film makes its own of that kind, and a mark gets a line to paste", async () => {
@@ -1094,6 +1126,20 @@ test("--star and --unstar write the list the studio reads, or a named one", () =
     await run(["--unstar", "boom"], pool, noJev, undefined, favs);
     expect(favs.open().read()).toEqual({ sounds: [], effects: ["in:fade"] });
     expect(favs.open("horror").read().sounds).toEqual(["boom"]);
+  }));
+
+test("--star into a list name no list can have stars nothing", () =>
+  withFavorites({}, async (favs) => {
+    await expect(
+      run(
+        ["--star", "boom", "--fav", "bad name!"],
+        [e("boom", "Big boom")],
+        noJev,
+        undefined,
+        favs,
+      ),
+    ).rejects.toThrow(/"bad name!" cannot name a favourites list: a-z, 0-9 and -/);
+    expect(favs.open().read().sounds).toEqual([]);
   }));
 
 test("a bgm list says Minecraft's own music is not in the vault", async () => {

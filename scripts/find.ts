@@ -98,6 +98,8 @@ const useOf = (kind: string) =>
 const stem = (w: string) => {
   let s = w.replace(/^(.)(?:ies|ying)$/, "$1ie").replace(/ies$/, "y");
   if (s.length > 4) s = s.replace(/(?:ing|ed|es)$/, "");
+  // sitting -> sitt -> sit (Porter's 1b; ll, ss and zz stay: falling, kissing, buzzing)
+  if (s.length > 3) s = s.replace(/([^aeioulsz])\1$/, "$1");
   if (s.length > 3 && !s.endsWith("ss")) s = s.replace(/s$/, "");
   // zombie and zombies (via zomby) both end as zomb
   if (s.length > 3) s = s.replace(/(?:ie|[ye])$/, "");
@@ -117,6 +119,8 @@ const STOP = new Set(
     "a an the of by to in on for with and or at from his her their it is as into onto that this these those some something thing like when which who what how be are was were very really just quite want need i me my we you your",
   ),
 );
+// Stop words that still point a way ("fade in" vs "fade out"): never required of a hit, they only add to one that says them
+const WAYS = new Set(words("in on to from into onto"));
 
 // An editor's word for what the vault names otherwise; each counts as a match for the word asked
 const SAME: Record<string, string[]> = Object.fromEntries(
@@ -498,7 +502,10 @@ export function rank(
   const docs = pool.map(fieldWords);
   const avg = docs.reduce((s, d) => s + d.length, 0) / (docs.length || 1);
   const q = slotsOf(query);
-  const df = new Map(q.flat().map((w) => [w, docs.filter((d) => d.includes(w)).length] as const));
+  const ways = [...new Set(words(query))].filter((w) => WAYS.has(w));
+  const df = new Map(
+    [...q.flat(), ...ways].map((w) => [w, docs.filter((d) => d.includes(w)).length] as const),
+  );
   const K1 = 1.2,
     B = 0.75;
   const termScore = (d: string[], w: string) => {
@@ -514,7 +521,9 @@ export function rank(
       // a slot scores its best term: "crossfade" is matched by dissolve as fully as by its own word
       const per = q.map((slot) => Math.max(...slot.map((w) => termScore(d, w))));
       const matched = per.filter((s) => s > 0).length;
-      const bm25 = per.reduce((s, v) => s + v, 0);
+      const bm25 =
+        per.reduce((s, v) => s + v, 0) +
+        (matched ? ways.reduce((s, w) => s + termScore(d, w), 0) : 0);
       // coord (Lucene's classic similarity): a hit with 3 of 4 words outranks one rare word said often
       return { ...x, score: (bm25 * matched) / (q.length || 1), matched, of: q.length };
     })
@@ -1772,7 +1781,11 @@ export async function run(
   // The favourites list in use: default unless --fav names another; a name no list has falls back to default, said so
   // (--star into a new name makes that list)
   let listName = set.get("--fav") ?? "default";
-  if (!lists.some((l) => l.name === listName) && !(starring && LIST_NAME.test(listName))) {
+  if (starring && !LIST_NAME.test(listName))
+    throw new FindError(
+      `"${listName}" cannot name a favourites list: a-z, 0-9 and - only (e.g. --fav ${plain(listName).join("-") || "horror"})`,
+    );
+  if (!lists.some((l) => l.name === listName) && !starring) {
     notes.push(
       `no favourites list "${listName}", the default list used${starring ? " (a list name is a-z, 0-9 and -)" : ""}`,
     );
@@ -1888,7 +1901,9 @@ export async function run(
     if (askedAs && !askedAs.every((k) => k === "mocap" || k.startsWith("mocap/"))) {
       const soundy = askedAs.some((k) => [...SOUND, "sound"].includes(k.split("/")[0]!));
       throw new FindError(
-        `${body.join(" ")} ${body.length > 1 ? "filter" : "filters"} mocap clips by the body; use --kind mocap or no --kind${soundy && set.has("--mood") ? `. For music: ${BGM_MOOD}` : ""}`,
+        body.length
+          ? `${body.join(" ")} ${body.length > 1 ? "filter" : "filters"} mocap clips by the body; use --kind mocap or no --kind${soundy && set.has("--mood") ? `. For music: ${BGM_MOOD}` : ""}`
+          : `--jev over ${clipCats.join(",")} filters mocap clips by the body; ask the other kinds in a call of their own`,
       );
     }
     const soundOnly = ["--origin", "--license", "--edition"].filter((o) => set.has(o));
@@ -2110,7 +2125,9 @@ export async function run(
     noted(kf?.read.length ? `(${kf.read.join("; ")})\n${text}` : text);
   // what --kind names without its categories (sfx/typing is sfx), for the hints that speak of a kind
   const kindNames = kinds?.map((k) => k.split("/")[0]!);
-  const filters = `${kinds ? ` --kind ${kinds.join(",")}` : ""}${sources ? ` --source ${sources.join(",")}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}${fav ? ` ${favArg}` : ""}`;
+  // the filters besides --kind: Jev offered on these entries keeps them, or it votes over the whole kind
+  const narrowing = `${sources ? ` --source ${sources.join(",")}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}${fav ? ` ${favArg}` : ""}`;
+  const filters = `${kinds ? ` --kind ${kinds.join(",")}` : ""}${narrowing}`;
   // The filters these entries can still take, each value with how many it keeps (a filter already given is left out).
   // Terse (under a search): only filters that would split the hits, values without their meaning
   const filtersFor = (xs: Entry[], terse = false) => {
@@ -2151,7 +2168,7 @@ export async function run(
       );
     const kindsHere = [...new Set(inKinds.map((x) => top(x.kind)))];
     const narrowed = kinds?.some((k) => k.includes("/"));
-    const jevHere = `by meaning (Jev, paid; reads every entry of the kind or category): bun run find --jev --kind ${kinds?.join(",") ?? kindsHere.join(",")} "<the scene or feeling>"`;
+    const jevHere = `by meaning (Jev, paid; reads every entry of the kind or category): bun run find --jev --kind ${kinds?.join(",") ?? kindsHere.join(",")}${narrowing} "<the scene or feeling>"`;
     const groups =
       narrowed ||
       kindsHere.every((k) => !catList(inKinds.filter((x) => top(x.kind) === k)).includes(","))
@@ -2280,7 +2297,7 @@ export async function run(
   let shown: [string, Entry][] | undefined;
   // Jev said none of the shown is what was asked: no line may send the agent back to them
   let rejected = false;
-  const byMeaning = (kind: string) => `bun run find --jev --kind ${kind} "${query}"`;
+  const byMeaning = (kind: string) => `bun run find --jev --kind ${kind}${narrowing} "${query}"`;
   const moodAdvice = () =>
     `${BGM_MOOD}; bgm groups: ${catList(pool.filter((x) => x.kind === "bgm"))}`;
   // an ask for music, or in a mood: words cannot find a mood no group names
@@ -2500,7 +2517,11 @@ export async function run(
         );
     } else if (!jev) {
       const has = new Set(fieldWords(best));
-      const missing = typed.filter((w) => !(slotsOf(w)[0] ?? []).some((t) => has.has(t)));
+      // each word's slot as the query made it, so "ender" keeps the "enderdragon" it joins with its neighbour
+      const slotOf = new Map(slotsOf(asks).map((slot) => [slot[0]!, slot]));
+      const missing = typed.filter(
+        (w) => !(slotOf.get(stem(w)) ?? [stem(w)]).some((t) => has.has(t)),
+      );
       const kind = guess();
       const where = spread(matches.slice(0, Math.max(n, 30)));
       if (where) next.push(where);
