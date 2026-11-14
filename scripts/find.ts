@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join, relative } from "node:path";
 
+import { FIT_NO, FIT_YES, jevJudge as judgeBy } from "../packages/clip-catalog/jev";
 import { ANIM_CURVES, ANIMS } from "../packages/film-stage/src/animate";
 import { EASE_JOBS, EASES } from "../packages/film-stage/src/camera";
 import { ADJUSTMENTS } from "../packages/film-stage/src/grade-color";
@@ -821,109 +822,21 @@ const line = (x: Entry, lead = "") => {
     .join("  ");
 };
 
-// Jev Choice: one option per entry; past HEAT entries the list runs in shuffled heats whose top KEEP meet in a final
-// (catalog.py rerank explains why: rounded probabilities, neighbours knocking each other out)
-const HEAT = 200,
-  KEEP = 8,
-  POOL = 250;
-// jev.py's own notes (a route's quota spent, its cost): parallel heats repeat them, so each is printed once per run
-const jevNotes = new Set<string>();
-const jevText = (x: Entry) => `${x.kind} ${x.cat}: ${x.title}. ${x.about}`.trim();
-type Answers = Record<string, { probabilities?: Record<string, number>; noul?: number }>;
-const jevAsk = (state: unknown, questions: Record<string, unknown>) =>
-  new Promise<Answers>((done, fail) => {
-    const py = spawn("python", [join(ROOT, "packages/clip-catalog/jev.py")], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    let out = "",
-      err = "";
-    py.stdout.on("data", (d) => (out += d));
-    py.stderr.on("data", (d) => (err += d));
-    py.on("error", fail);
-    py.on("close", (code) => {
-      const said = err.split("\n").filter((l) => l.trim() && !jevNotes.has(l));
-      for (const l of said) jevNotes.add(l);
-      if (code) return fail(new Error(said.at(-1)?.trim() || `jev.py exited ${code}`));
-      if (said.length) console.error(said.join("\n"));
-      done(JSON.parse(out) as Answers);
-    });
-    py.stdin.end(JSON.stringify({ state, questions }));
-  });
-const jevChoice = async (scene: string, group: Entry[]): Promise<[number, Entry][]> => {
-  const criteria = Object.fromEntries(group.map((x, i) => [`c${i}`, jevText(x)]));
-  const probs =
-    (
-      await jevAsk(`What a film editor is looking for: ${scene}`, {
-        pick: { type: "choice", instructions: "Which entry fits best?", criteria },
-      })
-    ).pick?.probabilities ?? {};
-  return group.map((x, i) => [probs[`c${i}`] ?? 0, x]);
-};
-// A vote always picks something, even when nothing in the kind is what was asked (TypeSafe: a "none of the above" option
-// often fails; ask a companion Noul instead, as catalog.py does for mocap). So each entry shown gets its own yes/no, all
-// in one request: the probability that it really is what the editor asked for
-export const FIT_YES = 0.7,
-  FIT_NO = 0.3;
-const jevFits = async (scene: string, shown: Entry[]) => {
-  const state = {
-    wanted: `What a film editor is looking for: ${scene}`,
-    ...Object.fromEntries(shown.map((x, k) => [`entry_${k + 1}`, jevText(x)])),
-  };
-  const qs = Object.fromEntries(
-    shown.map((_, k) => [
-      `fit_${k + 1}`,
-      {
-        type: "noul",
-        instructions: `Is \`entry_${k + 1}\` what \`wanted\` asks for?`,
-        criteria: {
-          true: "The editor would use this entry as it is: it is the thing, sound, look or motion asked for",
-          false: "It is a different thing, or only loosely related to what was asked",
-        },
-      },
-    ]),
+// The word matches Jev votes over when --jev has no --kind
+const POOL = 250;
+// Jev's vote over the pool, best first, then a fit for each of the first `show`
+export const jevJudge = (scene: string, pool: Entry[], show: number): Promise<Voted[]> =>
+  judgeBy(
+    {
+      wanted: `What a film editor is looking for: ${scene}`,
+      pick: "Which entry fits best?",
+      yes: "The editor would use this entry as it is: it is the thing, sound, look or motion asked for",
+      no: "It is a different thing, or only loosely related to what was asked",
+      text: (x) => `${x.kind} ${x.cat}: ${x.title}. ${x.about}`.trim(),
+    },
+    pool,
+    show,
   );
-  const ans = await jevAsk(state, qs);
-  return shown.map((_, k) => ans[`fit_${k + 1}`]?.noul ?? 0);
-};
-
-export async function jevRank(scene: string, pool: Entry[]) {
-  let list = pool;
-  if (list.length > HEAT) {
-    // Fisher-Yates on a fixed-seed Park-Miller generator: the same query ranks the same
-    let seed = 7;
-    const shuffled = [...list];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      seed = (seed * 16807) % 2147483647;
-      const j = seed % (i + 1);
-      [shuffled[i], shuffled[j]] = [shuffled[j] as Entry, shuffled[i] as Entry];
-    }
-    const heats: Entry[][] = [];
-    for (let k = 0; k < shuffled.length; k += HEAT) heats.push(shuffled.slice(k, k + HEAT));
-    const results: [number, Entry][][] = [];
-    for (let k = 0; k < heats.length; k += 4)
-      results.push(...(await Promise.all(heats.slice(k, k + 4).map((h) => jevChoice(scene, h)))));
-    list = results.flatMap((r) =>
-      r
-        .filter(([p]) => p > 0)
-        .sort((a, b) => b[0] - a[0])
-        .slice(0, KEEP)
-        .map(([, x]) => x),
-    );
-  }
-  return jevChoice(scene, list);
-}
-
-// The vote over the pool, best first, then a fit for each of the first `show`
-export async function jevJudge(scene: string, pool: Entry[], show: number): Promise<Voted[]> {
-  const voted = (await jevRank(scene, pool)).filter(([p]) => p > 0).sort((a, b) => b[0] - a[0]);
-  const top = voted.slice(0, show);
-  if (!top.length) return voted;
-  const fits = await jevFits(
-    scene,
-    top.map(([, x]) => x),
-  );
-  return [...top.map(([p, x], i): Voted => [p, x, fits[i]]), ...voted.slice(show)];
-}
 
 const HELP = `Usage: bun run find <words> [options]     (works from a film folder too, and then also searches the film's own sounds)
        bun run find --show <id[,id]>      everything about one entry: what it does, its settings, a line to paste, how to see it
