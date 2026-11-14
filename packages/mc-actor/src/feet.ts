@@ -42,7 +42,7 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
       if (B.gait && B.gait.w > 0.15) gait[i] = B.gait.ph;
       for (const sd of ["L", "R"]) {
         steve.soleAt(sd, tmp).toArray(want[sd], i * 3);
-        steve.bones[`ul${sd}`].getWorldPosition(tmp).toArray(hips[sd], i * 3);
+        tmp.setFromMatrixPosition(steve.bones[`ul${sd}`].matrixWorld).toArray(hips[sd], i * 3); // updated just above
       }
     }
     // on the floor or not, per foot and sample: the gait's stance half while walking, else the pose's sole height

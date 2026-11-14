@@ -692,23 +692,24 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   );
 
   const R = new THREE.Quaternion(),
+    T = new THREE.Quaternion(),
     e = new THREE.Euler(),
     v = new THREE.Vector3();
+  // Each bone's turn is worked out in T and set once: three re-derives .rotation on every change to .quaternion, which was
+  // most of a mocap bake's setPose
   const setPose = (pose) => {
-    for (const [k, bone] of Object.entries(b)) {
-      bone.quaternion.copy(rest[k].q);
-      bone.position.copy(rest[k].p);
-    }
-    for (const [k, a] of Object.entries(pose)) {
-      if (k === "root" || !b[k]) continue;
-      R.setFromEuler(e.set(a[0] * D, a[1] * D, a[2] * D, "YXZ"));
-      // local = rest * C^-1 R C: R turns the joint in the character's own axes, about the joint itself
-      b[k].quaternion.copy(rest[k].q).multiply(rest[k].Ci).multiply(R).multiply(rest[k].C);
-    }
     const r = pose.root ?? {};
-    if (r.rx || r.ry || r.rz) {
-      R.setFromEuler(e.set((r.rx ?? 0) * D, (r.ry ?? 0) * D, (r.rz ?? 0) * D, "YXZ"));
-      b.root.quaternion.copy(rest.root.q).multiply(rest.root.Ci).multiply(R).multiply(rest.root.C);
+    for (const [k, bone] of Object.entries(b)) {
+      const a =
+        k === "root" ? (r.rx || r.ry || r.rz ? [r.rx ?? 0, r.ry ?? 0, r.rz ?? 0] : null) : pose[k];
+      if (a) {
+        R.setFromEuler(e.set(a[0] * D, a[1] * D, a[2] * D, "YXZ"));
+        // local = rest * C^-1 R C: R turns the joint in the character's own axes, about the joint itself
+        bone.quaternion.copy(
+          T.copy(rest[k].q).multiply(rest[k].Ci).multiply(R).multiply(rest[k].C),
+        );
+      } else bone.quaternion.copy(rest[k].q);
+      bone.position.copy(rest[k].p);
     }
     v.set(r.x ?? 0, r.y ?? 0, r.z ?? 0).applyMatrix3(rootIn);
     b.root.position.copy(rest.root.p).add(v);

@@ -50,7 +50,10 @@ export async function loadSource(ref) {
 
 // { duration, end, fps, frames, at(s) } for one clip; player: makePlayer's result (only its rest is read)
 export async function loadClip(ref, player, fps = 60) {
-  const { root, names, clip } = await loadSource(ref);
+  return bakeSource(await loadSource(ref), player, fps);
+}
+
+function bakeSource({ root, names, clip }, player, fps) {
   const rt = retargeter(skeletonSource(root, names), player);
   const mixer = new THREE.AnimationMixer(root);
   mixer.clipAction(clip).play();
@@ -69,8 +72,13 @@ export async function loadClip(ref, player, fps = 60) {
 }
 
 // Every clip the refs name, once each: { ref: loadClip's result }
+// Every file is asked for at once, so the downloads overlap the bakes; the bakes still run one at a time in the refs' order,
+// as they pose the one player. A clip that fails to load throws at its turn, as it would alone
 export async function loadClips(refs, player, fps = 60) {
+  const unique = [...new Set(refs)],
+    sources = unique.map((ref) => loadSource(ref));
+  for (const s of sources) s.catch(() => {});
   const out = {};
-  for (const ref of new Set(refs)) out[ref] = await loadClip(ref, player, fps);
+  for (const [i, ref] of unique.entries()) out[ref] = bakeSource(await sources[i], player, fps);
   return out;
 }

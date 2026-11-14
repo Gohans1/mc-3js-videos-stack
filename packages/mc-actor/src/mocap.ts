@@ -96,11 +96,22 @@ export function skeletonSource(root, names) {
     if (!bone[names[r]]) throw new Error(`mocap source has no ${r} (${names[r]})`);
   root.updateMatrixWorld(true);
   const headRest = bone[names.head].getWorldQuaternion(new THREE.Quaternion()).invert();
+  const p = new THREE.Vector3(),
+    s = new THREE.Vector3();
+  const quatNow = (r, out = new THREE.Quaternion()) => {
+    bone[names[r]].matrixWorld.decompose(p, out, s);
+    return out;
+  };
   return {
     update: () => root.updateMatrixWorld(true),
     at: (r, out = new THREE.Vector3()) => bone[names[r]].getWorldPosition(out),
     head: () => bone[names.head].getWorldQuaternion(new THREE.Quaternion()).multiply(headRest),
     quat: (r, out = new THREE.Quaternion()) => bone[names[r]].getWorldQuaternion(out),
+    // The same as of the last update(), the same numbers while nothing moved the skeleton since: at() walks every parent
+    // again on each call, which was a fifth of a clip's bake (the retargeter reads dozens of joints between two updates)
+    atNow: (r, out = new THREE.Vector3()) => out.setFromMatrixPosition(bone[names[r]].matrixWorld),
+    headNow: () => quatNow("head").multiply(headRest),
+    quatNow,
   };
 }
 
@@ -282,15 +293,16 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     }
   };
   src.update();
-  const hip0 = src.at("hips");
+  const hip0 = src.atNow("hips");
   const srcLeg =
-    src.at("hipL").distanceTo(src.at("kneeL")) + src.at("kneeL").distanceTo(src.at("ankleL"));
+    src.atNow("hipL").distanceTo(src.atNow("kneeL")) +
+    src.atNow("kneeL").distanceTo(src.atNow("ankleL"));
   const k = player.legReach / srcLeg; // the source's moves scaled to Steve's shorter legs
   // everything below reads the source's rest from the pose it is in now: it must stand upright with its limbs square to
   // +z (a T- or A-pose facing +z), so build the source before any mixer has moved it
-  const along = (a, c) => Math.abs(src.at(c).sub(src.at(a)).normalize().z);
+  const along = (a, c) => Math.abs(src.atNow(c).sub(src.atNow(a)).normalize().z);
   if (
-    src.at("neck").y - hip0.y < 0.3 * srcLeg ||
+    src.atNow("neck").y - hip0.y < 0.3 * srcLeg ||
     ["L", "R"].some(
       (sd) => along(`shoulder${sd}`, `elbow${sd}`) > 0.7 || along(`hip${sd}`, `knee${sd}`) > 0.7,
     )
@@ -301,7 +313,14 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
 
   // Steve at rest: each limb hangs straight down its upper bone
   const b = player.bones,
-    pos = (x) => x.getWorldPosition(new THREE.Vector3());
+    // every call follows a g.updateMatrixWorld(true): no need to walk the parents again, as getWorldPosition does
+    pos = (x) => new THREE.Vector3().setFromMatrixPosition(x.matrixWorld),
+    wp = new THREE.Vector3(),
+    ws = new THREE.Vector3(),
+    worldQ = (x, out) => {
+      x.matrixWorld.decompose(wp, out, ws);
+      return out;
+    };
   const a0 = {},
     chestRest = new THREE.Quaternion(),
     headRestQ = new THREE.Quaternion(),
@@ -386,7 +405,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     bz.crossVectors(bx, by);
     return new THREE.Quaternion().setFromRotationMatrix(M.makeBasis(bx, by, bz));
   };
-  const between = (r1, r2) => src.at(r2).sub(src.at(r1));
+  const between = (r1, r2) => src.atNow(r2).sub(src.atNow(r1));
 
   // The twist of a limb (where its hinge folds) is a choice of the box's roll about its own bone. Bent, the source's own
   // hinge plane fixes it. Nearly straight, that plane is noise, and the roll comes from the source's upper bone itself: its
@@ -395,10 +414,10 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   // in a frame). Bent past 40 degrees the two planes agree within ~5 (Mixamo, lab "hinge gap"); the foot's direction
   // does not (kneeling, it points back: the knee folded the wrong way round)
   const restQ = Object.fromEntries(
-    ["shoulderL", "shoulderR", "hipL", "hipR"].map((r) => [r, src.quat(r).invert()]),
+    ["shoulderL", "shoulderR", "hipL", "hipR"].map((r) => [r, src.quatNow(r).invert()]),
   );
   const hinge = (r, fold) =>
-    new THREE.Vector3(0, 0, fold).applyQuaternion(restQ[r]).applyQuaternion(src.quat(r));
+    new THREE.Vector3(0, 0, fold).applyQuaternion(restQ[r]).applyQuaternion(src.quatNow(r));
   const wrap = (x) => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
   const c = new THREE.Vector3(),
     hv = new THREE.Vector3();
@@ -465,12 +484,15 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     lowPoint = new THREE.Vector3();
   const ARMS = { L: ["uaL", "laL"], R: ["uaR", "laR"] };
   const TRUNK = Object.keys(body.box).filter((x) => x !== "head" && !x.startsWith("la"));
+  const restInv = Object.fromEntries(
+    Object.entries(body.rest).map(([key, m]) => [key, m.clone().invert()]),
+  );
   let lowestPart = "";
   const lowest = (keys = TRUNK) => {
     let y = Infinity;
     for (const key of keys) {
       const bxx = body.box[key];
-      M.copy(b[key].matrixWorld).multiply(M2.copy(body.rest[key]).invert());
+      M.copy(b[key].matrixWorld).multiply(restInv[key]);
       for (let i = 0; i < 8; i++) {
         corner
           .set(
@@ -489,13 +511,13 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     return y;
   };
   const srcLowest = () =>
-    Math.min(...Object.entries(REACH).map(([r, f]) => src.at(r).y - f * srcLeg));
-  const srcHandLow = () => Math.min(src.at("wristL").y, src.at("wristR").y) - HAND_REACH * srcLeg;
+    Math.min(...Object.entries(REACH).map(([r, f]) => src.atNow(r).y - f * srcLeg));
+  const srcHandLow = () =>
+    Math.min(src.atNow("wristL").y, src.atNow("wristR").y) - HAND_REACH * srcLeg;
   // a world point into joint `key`'s rest world, and back
   const toRest = (key, p) =>
     p.applyMatrix4(M.copy(body.rest[key]).multiply(M2.copy(b[key].matrixWorld).invert()));
-  const fromRest = (key, p) =>
-    p.applyMatrix4(M.copy(b[key].matrixWorld).multiply(M2.copy(body.rest[key]).invert()));
+  const fromRest = (key, p) => p.applyMatrix4(M.copy(b[key].matrixWorld).multiply(restInv[key]));
   const handAt = (sd, out) => fromRest(`la${sd}`, out.copy(handRest[sd]));
   const footAt = (sd, out) => fromRest(`ll${sd}`, out.copy(footRest[sd]));
   // the closest points of segments a0-a1 and b0-b1: [s, t] along each (0..1)
@@ -566,20 +588,28 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     tR = new THREE.Vector3();
   let elbowWas = {};
   const elbowNow = {};
+  const poseNumbers = (p) => {
+    const out = [];
+    for (const k in p) {
+      const a = p[k];
+      if (k === "root") out.push(k, a.x, a.y, a.z, a.rx, a.ry, a.rz);
+      else out.push(k, ...a);
+    }
+    return out;
+  };
   const solveFrame = (dt) =>
     atOrigin(() => {
-      for (const x in gap) delete gap[x];
-      src.update();
+      for (const x in gap) delete gap[x]; // the source as pose() updated it: nothing moves it until the next pose()
       frameDt = dt;
       twistWas = dt > 0 ? { ...twistNow } : {};
       eulerWas = dt > 0 ? { ...eulerNow } : {};
       elbowWas = dt > 0 ? { ...elbowNow } : {};
       const Qroot = frame(between("hips", "waist"), between("hipR", "hipL"));
       Qchest = frame(between("waist", "neck"), between("shoulderR", "shoulderL"));
-      const Qhead = src.head();
+      const Qhead = src.headNow();
       const rel = (parent, q) => new THREE.Quaternion().copy(parent).invert().multiply(q);
       const [rx, ry, rz] = deg(Qroot, "root");
-      const h = src.at("hips").sub(hip0).multiplyScalar(k);
+      const h = src.atNow("hips").sub(hip0).multiplyScalar(k);
       const p = {
         root: { x: h.x, y: h.y, z: h.z, rx, ry, rz },
         chest: deg(rel(Qroot, Qchest), "chest"),
@@ -607,7 +637,12 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
           -1,
         );
       }
+      // skipped when he already stands as p says: the head and floor fixes below often leave p as the last call placed it
+      let placed = null;
       const place = () => {
+        const now = poseNumbers(p);
+        if (placed && now.length === placed.length && now.every((x, i) => x === placed[i])) return;
+        placed = now;
         player.setPose(p);
         player.g.updateMatrixWorld(true);
       };
@@ -782,7 +817,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         for (let pass = 0, turned = 0; pass < 3; pass++) {
           place();
           if (lowest(["head"]) >= 0) break;
-          b.head.getWorldPosition(sh);
+          sh.setFromMatrixPosition(b.head.matrixWorld);
           u.copy(lowPoint).sub(sh);
           const ry = u.y,
             A = Math.hypot(u.x, u.z);
@@ -826,8 +861,8 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         // a hand far inside is one with no room at all (under his cheek on the floor, where his head is twice a human's):
         // pushing it out of one surface drives it into the other and the arm flips, so it is left where the source has it
         tg.lerp(hd, THREE.MathUtils.smoothstep(depth, TRAPPED, TRAPPED + 0.1));
-        b[`ua${sd}`].getWorldPosition(sh);
-        b[`la${sd}`].getWorldPosition(el);
+        sh.setFromMatrixPosition(b[`ua${sd}`].matrixWorld);
+        el.setFromMatrixPosition(b[`la${sd}`].matrixWorld);
         const L1 = sh.distanceTo(el),
           L2 = el.distanceTo(hd);
         // the elbow folds in the plane it has, and a straight arm in the one its upper bone's roll gives (see hinge): a
@@ -857,7 +892,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
           // flipped 150 degrees in a frame (a fall planting a hand): played in order, the elbow then keeps last frame's side
           const w = 1 - THREE.MathUtils.smoothstep(clear, 0.15, 0.4);
           if (w > 0 && elbowWas[sd]) {
-            e2.copy(elbowWas[sd]).applyQuaternion(b.chest.getWorldQuaternion(qc));
+            e2.copy(elbowWas[sd]).applyQuaternion(worldQ(b.chest, qc));
             e2.addScaledVector(u, -e2.dot(u));
             if (e2.lengthSq() > 1e-6) v.lerp(e2.normalize(), w).normalize();
           }
@@ -925,14 +960,14 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
           }
         }
         // the elbow's side of the shoulder-hand line, in his chest's frame, for the next frame (see solve)
-        b[`la${sd}`].getWorldPosition(el);
+        el.setFromMatrixPosition(b[`la${sd}`].matrixWorld);
         handAt(sd, e1);
         u.copy(e1).sub(sh).normalize();
         e2.copy(el).sub(sh);
         e2.addScaledVector(u, -e2.dot(u));
         elbowNow[sd] =
           e2.lengthSq() > 1e-6
-            ? e2.normalize().applyQuaternion(b.chest.getWorldQuaternion(qc).invert()).clone()
+            ? e2.normalize().applyQuaternion(worldQ(b.chest, qc).invert()).clone()
             : null;
       }
       return p;
@@ -952,7 +987,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     );
   const pose = (dt = 0) => {
     src.update();
-    const hipsNow = src.at("hips").multiplyScalar(k);
+    const hipsNow = src.atNow("hips").multiplyScalar(k);
     const fresh = !(dt > 0) || (hipsWas && hipsWas.distanceTo(hipsNow) > JUMP);
     hipsWas = hipsNow;
     if (!fresh) return solveFrame(dt);
@@ -969,6 +1004,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const ang = (a, c) =>
     Math.acos(THREE.MathUtils.clamp(a.clone().normalize().dot(c.clone().normalize()), -1, 1)) * D;
   const measure = () => {
+    src.update(); // a caller may have moved the source's mixer since pose(): the reads below are as of the last update()
     const dir = {};
     for (const sd of ["L", "R"]) {
       const S0 = pos(b[`ua${sd}`]),
@@ -988,7 +1024,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
       );
     dir["head facing"] = ang(
       fwd("head", headRestQ),
-      new THREE.Vector3(0, 0, 1).applyQuaternion(src.head()),
+      new THREE.Vector3(0, 0, 1).applyQuaternion(src.headNow()),
     );
     dir["hips facing"] = ang(
       fwd("root", rootRestQ),
