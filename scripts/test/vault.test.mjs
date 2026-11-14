@@ -461,6 +461,41 @@ test("buildSoundVault includes all curated catalogue.sounds and ignores catalogu
   assert.equal(sources["mixkit-000"], undefined);
 });
 
+test("buildSoundVault files a sound both lists name once, where the vault's own pick puts it", async (t) => {
+  const { buildSoundVault } = await import("../build_sound_vault.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-sound-vault-twice-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const local = join(root, "vault");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(join(local, "sfx/mixkit"), { recursive: true });
+  const wav = Buffer.from(
+    "524946462800000057415645666d74201000000001000100401f0000803e000002001000646174610400000000400040",
+    "hex",
+  );
+  writeFileSync(join(local, "sfx/mixkit/mixkit-1115.wav"), wav);
+  // the copy an earlier build filed by the catalogue's role
+  mkdirSync(join(local, "sound/sfx/clicks"), { recursive: true });
+  writeFileSync(join(local, "sound/sfx/clicks/mixkit-1115.wav"), wav);
+  const pen = { id: "mixkit-1115", title: "Pen click", page: "https://mixkit.co" };
+  writeFileSync(
+    join(root, "scripts/sfx-catalogue.json"),
+    JSON.stringify({ sounds: [{ ...pen, role: "click.soft" }] }),
+  );
+  writeFileSync(
+    join(root, "scripts/sfx-picks.json"),
+    JSON.stringify({ sounds: [{ ...pen, category: "foley" }] }),
+  );
+  await buildSoundVault({
+    root,
+    local,
+    external: join(root, "none"),
+    skipBgm: true,
+    skipEarshot: true,
+  });
+  assert.equal(existsSync(join(local, "sound/sfx/foley/mixkit-1115.wav")), true);
+  assert.equal(existsSync(join(local, "sound/sfx/clicks/mixkit-1115.wav")), false);
+});
+
 test("buildSoundVault without earshot in the external vault says where to get it", async (t) => {
   const { buildSoundVault } = await import("../build_sound_vault.mjs");
   const root = mkdtempSync(join(tmpdir(), "mc-sound-no-earshot-"));

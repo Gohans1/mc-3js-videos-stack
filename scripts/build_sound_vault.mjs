@@ -621,7 +621,10 @@ export async function buildSoundVault({
   const catalogue = JSON.parse(readFileSync(join(root, "scripts/sfx-catalogue.json"), "utf8"));
   const picksFile = join(root, "scripts/sfx-picks.json");
   const picks = existsSync(picksFile) ? JSON.parse(readFileSync(picksFile, "utf8")).sounds : [];
-  const mixkitKept = [...(catalogue.sounds ?? []), ...picks];
+  // a sound both name is filed once, as the vault's own pick says: the studio keys sounds by name, one category each
+  const mixkitKept = [
+    ...new Map([...(catalogue.sounds ?? []), ...picks].map((s) => [s.id, s])).values(),
+  ];
   const mixDir = join(local, "sfx/mixkit");
   let mixLinked = 0,
     mixReused = 0;
@@ -635,6 +638,11 @@ export async function buildSoundVault({
     );
   for (const s of mixkitKept) {
     moveIntoCategory(vaultSound, "sfx", filed(s));
+    // an earlier build's copy under another category (both lists filed it) is a second sound of the same name
+    const sfxDir = join(vaultSound, "sfx");
+    for (const cat of existsSync(sfxDir) ? readdirSync(sfxDir, { withFileTypes: true }) : [])
+      if (cat.isDirectory() && join(sfxDir, cat.name, `${s.id}.wav`) !== filed(s))
+        rmSync(join(sfxDir, cat.name, `${s.id}.wav`), { force: true });
     if (hasRiffWave(filed(s)) || hasRiffWave(join(mixDir, `${s.id}.wav`))) continue;
     await download(s.file_url, join(mixDir, `${s.id}.wav`), validWav);
     fetched.add(s);
