@@ -1628,9 +1628,10 @@ function parse(argv: string[], lists: string[] = []) {
     const arg = argv[i] ?? "";
     if (!isOption(arg)) {
       // an option quoted into the words is searched as a word ("door --kind sfx" looks for "kind")
-      const quoted = arg
-        .split(/\s+/)
-        .find((w) => w.toLowerCase().split("=")[0]! in OPTIONS || w.toLowerCase() in OPTION_ALIAS);
+      const quoted = arg.split(/\s+/).find((w) => {
+        const name = w.toLowerCase().split("=")[0]!;
+        return name in OPTIONS || name in OPTION_ALIAS;
+      });
       if (quoted && /\s/.test(arg.trim()))
         throw new FindError(
           `${quoted} sits inside the quotes ("${arg}"), so it would be searched as a word: options go outside them (bun run find ${arg.trim()})`,
@@ -1698,8 +1699,9 @@ function parse(argv: string[], lists: string[] = []) {
 // Every source by kind, biggest first; Minecraft mods by their pack name
 const sourceList = (pool: Entry[]) => {
   const by = new Map<string, string[]>();
+  // counted as a search finds them: weapon and fight clips are left out of mocap unless --fights
   for (const x of pool) {
-    if (!x.src) continue;
+    if (!x.src || (x.kind === "mocap" && isFight(x.id))) continue;
     const k = x.src.startsWith("film-stage/") ? "presets" : top(x.kind);
     by.set(k, by.get(k) ?? [])
       .get(k)!
@@ -2431,10 +2433,14 @@ export async function run(
             voted.splice(voted.indexOf(bestFit!), 1);
             voted.unshift(bestFit!);
           }
-          // the ones Jev says are not what was asked say nothing, but the first and the best fit (the one a miss quotes) stay
+          // the ones Jev says are not what was asked say nothing, but the first and the best fit (the one a miss quotes) stay;
+          // when even the best fit is a no, the ones never checked (under its top FITS_MAX) are no answer either
+          const none = bestFit?.[2] !== undefined && bestFit[2] < FIT_NO;
           const kept = voted
             .slice(0, n)
-            .filter((v, i) => i === 0 || v === bestFit || v[2] === undefined || v[2] >= FIT_NO);
+            .filter(
+              (v, i) => i === 0 || v === bestFit || (v[2] === undefined ? !none : v[2] >= FIT_NO),
+            );
           const left = Math.min(n, voted.length) - kept.length;
           out.push(
             `Jev voted among ${jevPool.length} ${kinds?.length ? "entries" : "word matches (add --kind to vote over a whole kind)"}; first column = its share of the vote${checked.length ? `, then "fits" = its own yes/no that the entry is what you asked for (0-1)` : ""}${voted.length < Math.min(n, jevPool.length) ? `; the other ${jevPool.length - voted.length} got none` : ""}${left ? `; ${left} it says are not it are left out` : ""}.`,

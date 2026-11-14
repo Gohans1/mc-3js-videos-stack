@@ -976,8 +976,18 @@ test("an option quoted into the words is refused, not searched as a word", async
   await expect(run(["door --kind sfx"], vault, noJev)).rejects.toThrow(
     /--kind sits inside the quotes \("door --kind sfx"\).*\(bun run find door --kind sfx\)/,
   );
+  // another name for an option, with its value after =, is an option too
+  await expect(run(["door --type=sfx"], vault, noJev)).rejects.toThrow(/--type=sfx sits inside/);
   // a description with a dash in it is still words
   await expect(run(["--jev", "a slow fade - then silence"], vault, noJev)).resolves.toBeDefined();
+});
+
+test("sources count mocap as a search finds it: fight clips only with --fights", async () => {
+  const pool = [
+    { ...e("mixamo/Wave", "Wave", "", "mocap", "stand"), src: "mixamo" },
+    { ...e("mixamo/Sword_Slash", "Sword Slash", "", "mocap", "stand"), src: "mixamo" },
+  ];
+  await expect(run(["--source"], pool, noJev)).rejects.toThrow(/mocap: mixamo 1\b/);
 });
 
 test("a sub-kind's categories are named under it, so a category keeps to that side", async () => {
@@ -1382,6 +1392,20 @@ test("--all is gone: a family's takes are in its --show, and a list never takes 
     /200 at most. Narrow instead/,
   );
   expect(await run(["zombie"], vault, noJev)).toMatch(/--show <id> names every take/);
+});
+
+test("when Jev rejects every hit it checked, the ones it never checked are not shown as answers", async () => {
+  const pool = Array.from({ length: 4 }, (_, i) =>
+    e(`door-${i}`, `Door ${i}`, "a door", "sfx", "foley"),
+  );
+  // two checked and rejected; the two under them got a vote but no check
+  const jev = (_: string, xs: Entry[]) =>
+    Promise.resolve(
+      xs.map((x, i): [number, Entry, number?] => [0.4 - i * 0.1, x, i < 2 ? 0.05 : undefined]),
+    );
+  const out = await run(["--jev", "--kind", "sfx", "-n", "4", "a dog barking"], pool, jev);
+  expect(out).toMatch(/NOT IN THE VAULT/);
+  expect(out).not.toMatch(/door-2|door-3/);
 });
 
 test("music Jev rejects points to making music, not to the rejects or to other kinds", async () => {
