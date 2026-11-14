@@ -1627,6 +1627,13 @@ test("a film's own sounds have their length, and its bgm folder holds music", ()
   const mine = allEntries(true, film).filter((x) => x.src === "this-film");
   expect(mine.find((x) => x.id === "my-hit")?.secs).toBeCloseTo(1, 2);
   expect(mine.find((x) => x.id === "my-theme")?.kind).toBe("bgm");
+  // a film file named as a vault sound plays instead of it (sound.mjs): one entry, no second take
+  const vault = allEntries(true, film).find(
+    (x) => x.kind === "sfx" && x.src !== "this-film" && x.takes === 1,
+  )!;
+  wav(join(film, `sound/sfx/${vault.id}.wav`));
+  const same = allEntries(true, film).filter((x) => x.id === vault.id);
+  expect(same.map((x) => [x.src, x.takes])).toEqual([["this-film", 1]]);
   rmSync(film, { recursive: true });
 });
 
@@ -1663,6 +1670,13 @@ test("an id said whole comes first, before the kind a word of it names", async (
   ];
   const out = await run(["bgm_drone"], pool, noJev);
   expect(out.split("\n")[0]).toMatch(/bgm_drone/);
+  // the word naming the kind asked is dropped from the search, never from the id said whole
+  const music = [
+    ...Array.from({ length: 5 }, (_, i) => e(`drone-${i}`, "Drone", "drone drone", "bgm", "drone")),
+    e("bgm_drone", "Bgm Drone", "", "bgm", "dark"),
+  ];
+  const asked = await run(["bgm_drone", "--kind", "bgm"], music, noJev);
+  expect(asked.split("\n")[0]).toMatch(/ bgm_drone /);
 });
 
 test("words beside body filters reach catalog.py without the words that name nothing", async () => {
@@ -1674,4 +1688,12 @@ test("words beside body filters reach catalog.py without the words that name not
   const clips = async (args: string[]) => (seen.push(args), "1 matches");
   await run(["sitting", "in", "a", "chair", "--from", "stand"], [clip], noJev, clips);
   expect(seen[0]?.slice(0, 2)).toEqual(["sitting", "chair"]);
+  // words that all name nothing, or are not English, would reach it as no words: every clip the filters pass
+  await expect(run(["like", "this", "--from", "stand"], [clip], noJev, clips)).rejects.toThrow(
+    /names no move/,
+  );
+  await expect(run(["ngồi xuống", "--from", "stand"], [clip], noJev, clips)).rejects.toThrow(
+    /English only/,
+  );
+  expect(seen).toHaveLength(1);
 });

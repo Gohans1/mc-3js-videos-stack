@@ -112,6 +112,8 @@ const plain = (text: string) =>
     .split(/[^a-z\d]+/)
     .filter(Boolean);
 const words = (text: string) => plain(text).map(stem);
+// Words are matched as English; letters outside it (Vietnamese, emoji aside) would only match stray fragments
+const isForeign = (text: string) => /[^a-z]/i.test(text.replace(/[^\p{L}]/gu, ""));
 
 // Words that name nothing: kept out of the query so "a" or "the" never matches a description
 const STOP = new Set(
@@ -871,11 +873,16 @@ export const markStarred = (xs: Entry[], favs: Favorites) => {
   });
 };
 
-export const allEntries = (fold = true, film = process.cwd()) => [
-  ...presetEntries(),
-  ...soundEntries([...filmSounds(film), ...vaultSounds()], fold),
-  ...mocapEntries(),
-];
+export const allEntries = (fold = true, film = process.cwd()) => {
+  // a film file named as a vault sound plays instead of it (live-studio/src/sound.mjs)
+  const own = filmSounds(film),
+    mine = new Set(own.map((x) => x.name));
+  return [
+    ...presetEntries(),
+    ...soundEntries([...own, ...vaultSounds().filter((x) => !mine.has(x.name))], fold),
+    ...mocapEntries(),
+  ];
+};
 
 // A description is printed only when it says at least two words the id, title and category don't (Minecraft's own
 // "for" lines just repeat the event id); every vault sound is already licence-checked, so only Content ID is flagged
@@ -2041,6 +2048,14 @@ export async function run(
     const libArg = sources ? ["--lib", sources.join(",")] : [];
     // catalog.py matches each word at a word start: a name said as Arms_Holding or sitSeat is its words
     const words = jev ? ["--jev", query] : plain(query).filter((w) => !STOP.has(stem(w)));
+    if (!jev && isForeign(query))
+      throw new FindError(
+        `words match English only: say the move in 1-3 plain English words (sit, kneel, look around), or by meaning in any language: bun run find --jev --kind mocap "${query}"`,
+      );
+    if (!words.length && query.trim())
+      throw new FindError(
+        `"${query}" names no move (filler words only): say the move (sit, kneel, look around), or drop the words to list every clip the filters pass`,
+      );
     const durArg = dur ? ["--dur", set.get("--dur")!] : [];
     // a posture beside the category is read first (standing is stand), then must be the category's own
     for (const o of clipCat ? (["--from", "--to"] as const) : []) {
@@ -2327,8 +2342,7 @@ export async function run(
       ),
     );
 
-  // Words are matched as English; letters outside it (Vietnamese, emoji aside) would only match stray fragments
-  const foreign = /[^a-z]/i.test(query.replace(/[^\p{L}]/gu, ""));
+  const foreign = isForeign(query);
   // Under --kind, a word that only names that kind ("music" with --kind bgm) matches every entry and says nothing
   const kindSaid = new Set(
     (kindNames ?? []).flatMap((k) =>
@@ -2349,7 +2363,7 @@ export async function run(
   // words naming a kind ("sad background music", "title animation") put that kind's hits first, as --kind would keep them;
   // an id said whole (bgm_drone, pasted from audio.json) before all. A clip with a FLAW keeps its place: the eval's right
   // answers often carry one (a retarget break), and sinking them lost 3 of 44
-  const whole = plain(asks).join(" ");
+  const whole = plain(query).join(" ");
   const first = (x: Entry) =>
     plain(x.id).join(" ") === whole
       ? -1
