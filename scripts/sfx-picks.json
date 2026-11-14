@@ -516,6 +516,7 @@
       "title": "Slow heartbeat",
       "category": "foley",
       "for": "a heartbeat: tension, fear, a held breath",
+      "maxSeconds": 90,
       "page": "https://mixkit.co/free-sound-effects/heartbeat/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/494/494.wav",
       "ear": { "query": "a slow heartbeat", "z": 3.73, "verdict": "strong" }
@@ -750,6 +751,7 @@
       "title": "Old clock pendulum ticking",
       "category": "foley",
       "for": "a clock ticking: waiting, time running out",
+      "maxSeconds": 90,
       "page": "https://mixkit.co/free-sound-effects/clock/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/1072/1072.wav",
       "ear": { "query": "a clock ticking", "z": 3.24, "verdict": "strong" }
@@ -1234,8 +1236,8 @@
     {
       "id": "mixkit-488",
       "title": "Cinematic transition swoosh heartbeat trailer",
-      "category": "foley",
-      "for": "a heartbeat: tension, fear, a held breath",
+      "category": "transitions",
+      "for": "a trailer transition: a swoosh into a heartbeat",
       "page": "https://mixkit.co/free-sound-effects/heartbeat/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/488/488.wav",
       "ear": { "query": "a heartbeat", "z": 3.07, "verdict": "strong" }
@@ -3219,6 +3221,276 @@
       "page": "https://mixkit.co/free-sound-effects/cartoon/?page=4",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/733/733.wav",
       "ear": { "query": "ducklings quacking", "z": 3.17, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2445",
+      "title": "Volcano lava bubble",
+      "category": "nature",
+      "for": "bubbling lava: a volcano, a nether lake",
+      "page": "https://mixkit.co/free-sound-effects/volcano/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2445/2445.wav",
+      "ear": { "query": "bubbling lava", "z": 4.71, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2447",
+      "title": "Volcano lava hiss",
+      "category": "nature",
+      "for": "lava hissing as it meets water",
+      "page": "https://mixkit.co/free-sound-effects/volcano/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2447/2447.wav",
+      "ear": { "query": "lava hissing into water", "z": 4.41, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2449",
+      "title": "Volcano lava and ash burst",
+      "category": "nature",
+      "for": "a volcano bursting: lava and ash",
+      "page": "https://mixkit.co/free-sound-effects/volcano/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2449/2449.wav",
+      "ear": { "query": "a volcano eruption burst", "z": 4.01, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-6",
+      "title": "Wild lion animal roar",
+      "category": "nature",
+      "for": "a lion or big cat roaring",
+      "page": "https://mixkit.co/free-sound-effects/lion/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/6/6.wav",
+      "ear": { "query": "a lion roaring", "z": 5.11, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-88",
+      "title": "Big wild cat scary roar",
+      "category": "nature",
+      "for": "a lion or big cat roaring",
+      "page": "https://mixkit.co/free-sound-effects/animals/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/88/88.wav",
+      "ear": { "query": "a lion roaring", "z": 4.85, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-95",
+      "title": "Big wild lion growl",
+      "category": "nature",
+      "for": "a lion or big cat growling",
+      "page": "https://mixkit.co/free-sound-effects/lion/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/95/95.wav",
+      "ear": { "query": "a big cat growling", "z": 3.03, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-96",
+      "title": "Big wild cat long purr",
+      "category": "nature",
+      "for": "a cat purring: content, cosy",
+      "page": "https://mixkit.co/free-sound-effects/cat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/96/96.wav",
+      "ear": { "query": "a cat purring", "z": 4.94, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3091",
+      "title": "Sphinx cat purr",
+      "category": "nature",
+      "for": "a cat purring: content, cosy",
+      "page": "https://mixkit.co/free-sound-effects/animals/?page=4",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3091/3091.wav",
+      "ear": { "query": "a cat purring", "z": 3.96, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2497",
+      "title": "Rattlesnake moving the tail",
+      "category": "nature",
+      "for": "a rattlesnake rattling: a warning",
+      "page": "https://mixkit.co/free-sound-effects/animals/?page=4",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2497/2497.wav",
+      "ear": { "query": "a rattlesnake rattle", "z": 2.99, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-934",
+      "title": "Store door bell ring",
+      "category": "notifications",
+      "for": "a shop door bell: someone walks in",
+      "page": "https://mixkit.co/free-sound-effects/doorbell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/934/934.wav",
+      "ear": { "query": "a shop door bell ringing", "z": 3.26, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-936",
+      "title": "Wooden store door bell ring",
+      "category": "notifications",
+      "for": "a shop door bell: someone walks in",
+      "page": "https://mixkit.co/free-sound-effects/bell/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/936/936.wav",
+      "ear": { "query": "a shop door bell ringing", "z": 2.96, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-941",
+      "title": "Ice hockey sports buzzer",
+      "category": "notifications",
+      "for": "a sports buzzer: time up, end of the round",
+      "page": "https://mixkit.co/free-sound-effects/buzzer/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/941/941.wav",
+      "ear": { "query": "a sports buzzer", "z": 5.57, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1647",
+      "title": "Basketball buzzer",
+      "category": "notifications",
+      "for": "a sports buzzer: time up, end of the round",
+      "page": "https://mixkit.co/free-sound-effects/buzzer/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1647/1647.wav",
+      "ear": { "query": "a sports buzzer", "z": 5.01, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-380",
+      "title": "Female says thank you",
+      "category": "voices",
+      "for": "a voice saying thank you",
+      "page": "https://mixkit.co/free-sound-effects/thank-you/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/380/380.wav",
+      "ear": { "query": "a voice saying thank you", "z": 3.55, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-383",
+      "title": "Old cartoon says thank you",
+      "category": "voices",
+      "for": "a voice saying thank you",
+      "page": "https://mixkit.co/free-sound-effects/thank-you/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/383/383.wav",
+      "ear": { "query": "a voice saying thank you", "z": 2.68, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-384",
+      "title": "Cartoon teen says thank you",
+      "category": "voices",
+      "for": "a voice saying thank you",
+      "page": "https://mixkit.co/free-sound-effects/thank-you/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/384/384.wav",
+      "ear": { "query": "a voice saying thank you", "z": 2.54, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2010",
+      "title": "Male voice cheer",
+      "category": "voices",
+      "for": "a man cheering: a win, yes!",
+      "page": "https://mixkit.co/free-sound-effects/voices/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2010/2010.wav",
+      "ear": { "query": "men cheering in victory", "z": 4.13, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2011",
+      "title": "Male voice cheer victory",
+      "category": "voices",
+      "for": "a man cheering: a win, yes!",
+      "page": "https://mixkit.co/free-sound-effects/voices/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2011/2011.wav",
+      "ear": { "query": "men cheering in victory", "z": 3.92, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2012",
+      "title": "Males yes victory",
+      "category": "voices",
+      "for": "a man cheering: a win, yes!",
+      "page": "https://mixkit.co/free-sound-effects/voices/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2012/2012.wav",
+      "ear": { "query": "men cheering in victory", "z": 4.24, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-345",
+      "title": "Male voices saying go",
+      "category": "voices",
+      "for": "men shouting go: a start, a charge",
+      "page": "https://mixkit.co/free-sound-effects/voices/?page=4",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/345/345.wav",
+      "ear": { "query": "men shouting go", "z": 3.39, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1311",
+      "title": "Water splash",
+      "category": "nature",
+      "for": "a splash: something or someone falls into water",
+      "page": "https://mixkit.co/free-sound-effects/splash/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1311/1311.wav",
+      "ear": { "query": "a water splash", "z": 3.78, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1304",
+      "title": "Jumping into water",
+      "category": "nature",
+      "for": "a splash: something or someone falls into water",
+      "page": "https://mixkit.co/free-sound-effects/jump/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1304/1304.wav",
+      "ear": { "query": "a water splash", "z": 4.51, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1180",
+      "title": "Jump into the water",
+      "category": "nature",
+      "for": "a splash: something or someone falls into water",
+      "page": "https://mixkit.co/free-sound-effects/splash/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1180/1180.wav",
+      "ear": { "query": "a water splash", "z": 3.32, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1198",
+      "title": "Sea water splash",
+      "category": "nature",
+      "for": "a splash: something or someone falls into water",
+      "page": "https://mixkit.co/free-sound-effects/splash/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1198/1198.wav",
+      "ear": { "query": "a water splash", "z": 4.2, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2923",
+      "title": "Jump in water",
+      "category": "nature",
+      "for": "a splash: something or someone falls into water",
+      "page": "https://mixkit.co/free-sound-effects/boat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2923/2923.wav",
+      "ear": { "query": "a water splash", "z": 3.02, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2922",
+      "title": "Fish jumping in water",
+      "category": "nature",
+      "for": "a fish leaping out of water: a bite, a catch",
+      "page": "https://mixkit.co/free-sound-effects/water/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2922/2922.wav",
+      "ear": { "query": "a fish jumping out of water", "z": 3.12, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3075",
+      "title": "Fish almost caught",
+      "category": "nature",
+      "for": "a fish leaping out of water: a bite, a catch",
+      "page": "https://mixkit.co/free-sound-effects/water/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3075/3075.wav",
+      "ear": { "query": "a fish jumping out of water", "z": 3.52, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2197",
+      "title": "Man in pain",
+      "category": "voices",
+      "for": "a cry of pain: hurt, hit",
+      "page": "https://mixkit.co/free-sound-effects/fight/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2197/2197.wav",
+      "ear": { "query": "a person crying out in pain", "z": 4.01, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2173",
+      "title": "Fighting man voice of pain",
+      "category": "voices",
+      "for": "a cry of pain: hurt, hit",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2173/2173.wav",
+      "ear": { "query": "a person crying out in pain", "z": 4.16, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2205",
+      "title": "Ah woman exclamation of pain",
+      "category": "voices",
+      "for": "a cry of pain: hurt, hit",
+      "page": "https://mixkit.co/free-sound-effects/fight/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2205/2205.wav",
+      "ear": { "query": "a person crying out in pain", "z": 4.77, "verdict": "strong" }
     }
   ]
 }
