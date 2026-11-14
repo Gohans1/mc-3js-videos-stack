@@ -6,7 +6,7 @@ import { parseArgs } from "node:util";
 
 import { cliArgs, needFilm } from "./src/cli.mjs";
 import { LESSONS, lessonsFor } from "./src/lessons.mjs";
-import { noteState, noteThread } from "./src/note-state.mjs";
+import { noteState, noteThread, wholeNote } from "./src/note-state.mjs";
 
 const ROOT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 const posix = (rel) => join(ROOT, rel).replaceAll("\\", "/");
@@ -21,9 +21,7 @@ const loadNotes = () => {
         .filter((l) => l.trim())
     : [];
   const notes = lines.map((l) => JSON.parse(l));
-  const whole = notes.filter(
-    (n) => "id" in n && "t" in n && "text" in n && "shot" in n && "time" in n,
-  );
+  const whole = notes.filter(wholeNote);
   if (whole.length !== notes.length)
     console.error(`${notes.length - whole.length} malformed notes skipped: see notes/notes.jsonl`);
   // #N counts every note, done ones too, so a note keeps its number as the round goes on

@@ -17,6 +17,7 @@ export interface ThreadLine {
 }
 export const STATES: NoteState[];
 export function noteState(n: Partial<Note>): NoteState;
+export function wholeNote(n: unknown): boolean;
 export function applyChange(
   n: Note,
   change: NoteChange,

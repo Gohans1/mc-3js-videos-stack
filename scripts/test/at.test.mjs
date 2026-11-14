@@ -87,6 +87,8 @@ test("at #N finds a note's moment after a Speed edit moved it: by its scene seco
   // kind, which keeps its scene second too
   const note = {
     t: 8.2,
+    text: "the hand",
+    time: "00:08.200",
     shot: 1,
     shotName: "his hand",
     context: { shot: { into: 0.2 } },
@@ -135,6 +137,8 @@ test("the open notes near a second are those heard near it now, not those writte
     t: 8.2,
     scene: 8.2,
     text: "the hand",
+    shot: 1,
+    time: "00:08.200",
     done: false,
     at: "2026-11-02T00:00:00Z",
   };
@@ -156,6 +160,8 @@ test("a note written just before a cut is in the shot it names, on every line", 
     id: "edge",
     t: 7.9996,
     scene: 7.9996,
+    text: "the edge",
+    time: "00:08.000",
     shot: 0,
     context: { shot: { into: 7.9996 } },
   };
@@ -179,6 +185,8 @@ test("a note whose moment a moved cut has put in the next shot says it is there 
     id: "late",
     t: 8.5,
     srcT: 8.5,
+    text: "late",
+    time: "00:08.500",
     shot: 0,
     shotName: "the room",
     context: { shot: { into: 8.5 } },
@@ -198,7 +206,15 @@ test("a note whose moment a moved cut has put in the next shot says it is there 
 test("a note's moment as --json is one JSON document, the note inside it", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));
-  const note = { id: "hand", t: 8.2, scene: 8.2, text: "the hand", at: "2026-11-02T00:00:00Z" };
+  const note = {
+    id: "hand",
+    t: 8.2,
+    scene: 8.2,
+    text: "the hand",
+    shot: 1,
+    time: "00:08.200",
+    at: "2026-11-02T00:00:00Z",
+  };
   writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
   const r = spawnSync("bun", [AT, "hand", "--json"], {
     env: { ...process.env, LIVE_PROJECT: dir },
@@ -257,6 +273,67 @@ test("a timeline the studio cannot read is named with check, never a stack trace
   });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /src\/timeline\/audio\.json.*bun run check names the fault/);
+});
+
+test("a film without an end in edit.json ends at its last camera key, a scene second the voice edit does not move", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      voice: {
+        warp: [
+          [0, 0],
+          [10, 20],
+        ],
+      },
+    }),
+  );
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  assert.equal(whatsAt(dir, 1).length, 12);
+});
+
+test("#N numbers the notes as bun run notes does: a line missing its fields is no note", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const whole = { t: 8.2, scene: 8.2, text: "the hand", shot: 1, time: "00:08.200" };
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    [
+      { id: "half", t: 1, at: "2026-11-01T00:00:00Z" },
+      { ...whole, id: "hand", at: "2026-11-02T00:00:00Z" },
+    ]
+      .map((n) => JSON.stringify(n))
+      .join("\n"),
+  );
+  const r = spawnSync("bun", [AT, "#1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^note #1 \(hand\)/m);
+});
+
+test("text inside a gap is not on screen, as the render hides it", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ gaps: [{ from: 2, to: 3 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({ items: [{ kind: "text", text: "ALWAYS", from: 0, to: 15, track: 0 }] }),
+  );
+  assert.deepEqual(whatsAt(dir, 2.5).texts, []);
+  assert.equal(whatsAt(dir, 5).texts[0]?.text, "ALWAYS");
+});
+
+test("a negative second, -.5 too, is said to be before the film, not taken for a note", (t) => {
+  const r = spawnSync("bun", [AT, "-.5"], {
+    env: { ...process.env, LIVE_PROJECT: film(t) },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /the film starts at 0/);
 });
 
 test("at refuses a second past the film's end and says how long it is", (t) => {

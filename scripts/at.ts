@@ -10,6 +10,7 @@ import { cliArgs, jsonFile, needFilm, secondArg } from "../packages/live-studio/
 import { checkFiles } from "../packages/live-studio/src/contract.ts";
 import { contractFiles } from "../packages/live-studio/src/film.mjs";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
+import { wholeNote } from "../packages/live-studio/src/note-state.mjs";
 import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
 import {
@@ -37,7 +38,9 @@ const filmOf = (dir: string) => {
   const fromSource = (s: number) => warp(edit.voice?.warp ?? [], s, 0, 1);
   const camFile = read(conf.camTimeline ?? "src/timeline/cam.json", []);
   const cam: Row[] = Array.isArray(camFile) ? camFile : (camFile.keys ?? []);
-  const sourceEnd = fromSource(edit.end ?? Math.max(0, ...cam.map((k) => k.t)));
+  // edit.end is a narration second; a camera key's t is a scene second already
+  const sourceEnd =
+    typeof edit.end === "number" ? fromSource(edit.end) : Math.max(0, ...cam.map((k) => k.t));
   setTiming(read(conf.timingTimeline, {}), sourceEnd);
   // a film keeps its shots in shotsTimeline (narration seconds) or as the camera's cuts (scene seconds)
   const shotRows: Row[] = read(conf.shotsTimeline, null);
@@ -72,6 +75,7 @@ const readNotes = (dir: string): Row[] => {
             return [];
           }
         })
+        .filter(wholeNote)
     : [];
 };
 
@@ -192,6 +196,8 @@ export const whatsAt = (dir: string, t: number) => {
     const doc = read(file, null);
     if (!doc) return [];
     const clock = clockForTimeline(kind);
+    // a gap blanks the layers too (timedDraw's layersVisible, adjustmentsVisible)
+    if (!frameVisible(clock, t)) return [];
     return (doc.items as Row[]).flatMap((it, i) => {
       const at = overlayTime(clock, t, it);
       return at >= it.from && at < it.to && !doc.tracks?.[it.track ?? 0]?.hidden
@@ -341,7 +347,7 @@ if (isMain) {
   };
   let t: number;
   let note: ReturnType<typeof noteMoment> = null;
-  if (/^-\d/.test(arg)) {
+  if (/^-\.?\d/.test(arg)) {
     console.error(`${arg}: the film starts at 0; give a second from 0 on (bun run at 35.6)`);
     process.exit(2);
   } else if (/^\d+,\d+$/.test(arg)) {
