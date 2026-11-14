@@ -23,24 +23,28 @@ export const pxOf = (it) => (it.size ?? 56) * (it.scale ?? 1);
 // heard: the item mapped to heard seconds. A fade or a typing is about half there at its middle, so half the In and half
 // the Out count as read; both are the item's own seconds, scaled when a Speed stretches the item. The size floor holds
 // for a Short too: played full screen, a film's short side (a Short's width) is the phone's short side either way
+// the size floor needs no clock: said even for a film whose length is not in its data
+export const sizeFaults = (scene, ratio = "16:9") => {
+  const px = pxOf(scene);
+  return px < SIZE_MIN
+    ? [
+        `size ${+px.toFixed(1)} is ${((px / 1080) * 100).toFixed(1)}% of the frame ${ratio === "9:16" ? "width" : "height"}; under ${SIZE_MIN} (3.3%) words are mush on a phone (BBC subtitles: a line is 7-8%): size ${SIZE_MIN} or more`,
+      ]
+    : [];
+};
 export const readFaults = (scene, heard, ratio = "16:9") => {
   const span = heard.to - heard.from,
     io = inOutLengths(scene),
     k = span / (scene.to - scene.from || 1);
   const readable = span - ((io.in + io.out) / 2) * k,
     chars = charsOf(scene.text),
-    needs = Math.max(READ_MIN, chars / READ_CPS),
-    px = pxOf(scene);
+    needs = Math.max(READ_MIN, chars / READ_CPS);
   return [
     ...(readable < needs - 0.005
       ? [
           `readable about ${readable.toFixed(2)} s for ${chars} characters; a reader needs ${needs.toFixed(2)} s (${READ_CPS} a second and at least ${READ_MIN.toFixed(2)} s, Netflix's subtitle pace): hold it longer, cut words, or a shorter In and Out`,
         ]
       : []),
-    ...(px < SIZE_MIN
-      ? [
-          `size ${+px.toFixed(1)} is ${((px / 1080) * 100).toFixed(1)}% of the frame ${ratio === "9:16" ? "width" : "height"}; under ${SIZE_MIN} (3.3%) words are mush on a phone (BBC subtitles: a line is 7-8%): size ${SIZE_MIN} or more`,
-        ]
-      : []),
+    ...sizeFaults(scene, ratio),
   ];
 };

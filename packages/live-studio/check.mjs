@@ -24,10 +24,11 @@ import {
 } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
-import { isRead, readFaults } from "./src/readable.mjs";
+import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
 import { findVaults, openSound } from "./src/sound.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
 import { clockForTimeline } from "./src/timing-state.mjs";
+import { assertInsideDir } from "./src/voice-map.mjs";
 
 const HELP = `Checks the film's data the way the studio does, without opening it: run it after editing any file in src/timeline,
 src/edit.json or package.json "live-studio". Run inside the film.
@@ -85,25 +86,29 @@ if (!conf || typeof conf !== "object" || Array.isArray(conf))
 // a value of the wrong shape ("soundTimeline": 123) is opened by every check after: said alone, before any is
 const confFaults = schemaProblems(StudioConfig, conf, "package.json");
 if (confFaults.length) stop(confFaults.map((p) => p.split("\n").slice(1).join("\n")).join("\n"));
-// a timeline named by its folder (src/timeline) opens as no file: every check after reads it
-const template = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8"))["live-studio"];
-const folders = [
+// the template film's paths, named as examples: none when the studio runs outside this repo
+const template = existsSync(join(TEMPLATE, "package.json"))
+  ? (JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8"))["live-studio"] ?? {})
+  : {};
+// the files every check after opens: one outside the film (the studio refuses it, assertInsideDir) or a folder
+// (src/timeline, read as no file) is said alone, before any is opened
+const pathFaults = [
   ...CONFIG_KEYS.filter((k) => k.endsWith("Timeline")).map((k) => [k, conf[k]]),
   ...Object.keys(conf.keyFiles ?? {}).map((rel) => ["keyFiles", rel]),
-].filter(
-  ([, rel]) =>
-    typeof rel === "string" &&
-    statSync(join(PROJECT, rel), { throwIfNoEntry: false })?.isDirectory(),
-);
-if (folders.length)
-  stop(
-    folders
-      .map(
-        ([k, rel]) =>
-          `✖ "${k}": "${rel}" is a folder; it names one JSON file${template[k] ? ` (the template film's: "${template[k]}")` : ""}`,
-      )
-      .join("\n"),
-  );
+].flatMap(([k, rel]) => {
+  if (typeof rel !== "string") return [];
+  try {
+    assertInsideDir(PROJECT, rel, "Timeline file");
+  } catch (e) {
+    return [`✖ "${k}": ${e.message}, which the studio refuses to open`];
+  }
+  return statSync(join(PROJECT, rel), { throwIfNoEntry: false })?.isDirectory()
+    ? [
+        `✖ "${k}": "${rel}" is a folder; it names one JSON file${template[k] ? ` (the template film's: "${template[k]}")` : ""}`,
+      ]
+    : [];
+});
+if (pathFaults.length) stop(pathFaults.join("\n"));
 
 const found = checkFiles(contractFiles(PROJECT)).map((text) => {
   const [where, ...rest] = text.split("\n");
@@ -305,7 +310,7 @@ const hints = [];
 // the studio opens the film's sounds through its sfx folder: without one no name can be looked up
 if (conf.soundTimeline && !conf.sfx)
   warnings.push(
-    `⚠ package.json "live-studio" names no "sfx" folder, so no sound name in ${conf.soundTimeline} is checked (the template film's: "${template.sfx}")`,
+    `⚠ package.json "live-studio" names no "sfx" folder, so no sound name in ${conf.soundTimeline} is checked${template.sfx ? ` (the template film's: "${template.sfx}")` : ""}`,
   );
 // a misspelt key is read by nothing: named whenever its file parses, even beside the shape faults it causes (gian for a
 // missing gain). A warning, not a problem: it is a guess, and a key of the film's own that looks like one (waves by wave)
@@ -484,17 +489,21 @@ const textBroken = found.find((p) => p.where === conf.textTimeline);
 if (textBroken)
   textBroken.issue += `\n  on-screen text (too brief, too small) is checked once this is fixed`;
 const textRead = textPath && !textBroken && readJson(conf.textTimeline);
-if (Array.isArray(textRead?.items) && filmEnds()) {
-  const heard = mapTimeline("text", textRead, clockForTimeline("text"), false, null, {});
+if (Array.isArray(textRead?.items)) {
+  // the heard seconds need the film's length (edit.json end); without it only the size floor is said
+  const heard = filmEnds()
+    ? mapTimeline("text", textRead, clockForTimeline("text"), false, null, {})
+    : null;
   const said = [];
   textRead.items.forEach((it, i) => {
+    if (!isRead(it, textRead.tracks)) return;
     const h = heard?.items?.[i];
     // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
-    if (!isRead(it, textRead.tracks) || !h || h.to <= h.from) return;
+    if (heard && (!h || h.to <= h.from)) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
-    for (const fault of readFaults(it, h, conf.ratio))
+    for (const fault of h ? readFaults(it, h, conf.ratio) : sizeFaults(it, conf.ratio))
       said.push(
-        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}" at ${h.from.toFixed(2)}-${h.to.toFixed(2)} heard ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
+        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${h.to.toFixed(2)} heard` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
       );
   });
   if (said.length) {

@@ -716,3 +716,46 @@ test("a key whose t is not a number is named on its own row, not lost with the r
     /src\/timeline\/steve\.json\n[\s\S]*"t" is a number of seconds[\s\S]*moves\[1\]\.t/,
   );
 });
+
+test("text too small for a phone is named even when the film's length is not in its data", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  delete edit.end;
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify(edit));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({ items: [{ kind: "text", text: "Day 3", size: 24, from: 4, to: 7 }] }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(
+    r.stdout,
+    /⚠ src\/timeline\/text\.json items\[0\] "Day 3" \("from": 4\): size 24 is/,
+  );
+});
+
+test("a timeline outside the film is a package.json fault, as the studio refuses to open it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "outside.json"), JSON.stringify({ items: [] }));
+  mkdirSync(join(dir, "film"));
+  cpSync(join(dir, "src"), join(dir, "film/src"), { recursive: true });
+  writeFileSync(
+    join(dir, "film/package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "../outside.json" } }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: join(dir, "film"), encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(
+    r.stderr,
+    /^package\.json\n✖ "textTimeline": Timeline file escapes film directory: "\.\.\/outside\.json"/,
+  );
+});
