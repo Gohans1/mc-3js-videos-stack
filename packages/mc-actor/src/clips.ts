@@ -168,7 +168,7 @@ export async function loadClips(refs, player, fps = 60) {
 // ---------- Bakes kept in the browser between loads (IndexedDB)
 // A bake is a pure function of the clip's files, the rig (makePlayer's) and the code that bakes it, so it is kept under all
 // three: the files' bytes, the rig at rest, and the bytes of the script this module was built into (live-studio's
-// src/page.mjs builds clips, mocap and player into a chunk of their own, so a film's edit leaves it) with three's revision.
+// src/page.mjs builds mc-actor into a chunk of its own, so a film's edit leaves it) with three's revision.
 // Without IndexedDB or crypto.subtle (plain http to a LAN address), or on any error, it bakes as before
 const DB = "mc-actor-bakes";
 // a hash of each part's hash, so no part is copied into one big buffer first

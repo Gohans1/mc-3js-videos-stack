@@ -11,6 +11,8 @@
 // A source is { at(role, out): world position, head(): world turn of the head }, roles below. Both face +z, left on +x, the floor at y = 0.
 import * as THREE from "three";
 
+import { updaterTo } from "./matrices";
+
 const ROLES = [
   "hips",
   "waist",
@@ -95,6 +97,11 @@ export function skeletonSource(root, names) {
   for (const r of [...ROLES, "head"])
     if (!bone[names[r]]) throw new Error(`mocap source has no ${r} (${names[r]})`);
   root.updateMatrixWorld(true);
+  // the *Now reads below see only these joints
+  const update = updaterTo(
+    root,
+    [...ROLES, "head"].map((r) => bone[names[r]]),
+  );
   const headRest = bone[names.head].getWorldQuaternion(new THREE.Quaternion()).invert();
   const p = new THREE.Vector3(),
     s = new THREE.Vector3();
@@ -103,7 +110,7 @@ export function skeletonSource(root, names) {
     return out;
   };
   return {
-    update: () => root.updateMatrixWorld(true),
+    update,
     at: (r, out = new THREE.Vector3()) => bone[names[r]].getWorldPosition(out),
     head: () => bone[names.head].getWorldQuaternion(new THREE.Quaternion()).multiply(headRest),
     quat: (r, out = new THREE.Quaternion()) => bone[names[r]].getWorldQuaternion(out),
