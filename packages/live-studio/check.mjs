@@ -141,20 +141,22 @@ const distance = (a, b) => {
   return row[b.length];
 };
 
-// the known name a word is taken for a typo of: a letter dropped or added, or letters swapped; a letter changed only past
-// four letters, as a short word of the film's own sits one letter from a known one (fog by fov, cue by cut, pan by pad);
-// a letter added or dropped, and letters swapped, only past two letters on either side: under that a key of the film's
-// own is a word of its own (to, up by t and p; uid, top by id and to; ot by to)
+// two neighbouring letters swapped (gian for gain)
+const swapped = (a, b) => {
+  const at = [...a].flatMap((c, i) => (c === b[i] ? [] : [i]));
+  return at.length === 2 && at[1] === at[0] + 1 && a[at[0]] === b[at[1]] && a[at[1]] === b[at[0]];
+};
+// the known name a word is taken for a typo of: neighbouring letters swapped (from three letters), a letter dropped or
+// added (the shorter word four letters or more), one changed (five or more). Under that a key of the film's own is a word
+// of its own: fog by fov, cute by cut, span by pan, uid by id, ot by to; letters further apart too (laces by scale)
 const nearName = (k, names) =>
   names.includes(k)
     ? null
     : names.find((n) => {
         const a = k.toLowerCase(),
           b = n.toLowerCase();
-        if (Math.min(a.length, b.length) < 3) return false;
-        if (a.length === b.length && a.split("").sort().join() === b.split("").sort().join())
-          return true;
-        return distance(a, b) === 1 && (a.length !== b.length || a.length >= 5);
+        if (a.length !== b.length) return Math.min(a.length, b.length) >= 4 && distance(a, b) === 1;
+        return a.length >= 3 && (swapped(a, b) || (a.length >= 5 && distance(a, b) === 1));
       });
 
 // A fault in the lanes must not hide the others (an AI fixes what it is shown and meets the rest a run later):
@@ -172,7 +174,18 @@ if (clockBroken)
   clockBroken.issue += `\n  sounds after the end and on-screen text (too brief, too small) are checked once this is fixed`;
 const filmEnds = () => (clockBroken ? null : heardLength(PROJECT, conf));
 
-const sound = conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
+// a sound folder the studio refuses (outside the film, a symlink): a fault, not a crash
+const sound = (() => {
+  try {
+    return conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
+  } catch (e) {
+    found.push({
+      where: 'package.json "live-studio"',
+      issue: `✖ ${e.message}, which the studio refuses too; sound names are checked once it is fixed`,
+    });
+    return null;
+  }
+})();
 const lanesFile = sound && join(PROJECT, conf.soundTimeline);
 if (lanesFile && existsSync(lanesFile) && soundParses) {
   const lanes = JSON.parse(readFileSync(lanesFile, "utf8"));
@@ -428,8 +441,10 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
 }
 
 const textPath = conf.textTimeline && join(PROJECT, conf.textTimeline);
-const textRead =
-  textPath && !found.some((p) => p.where === conf.textTimeline) && readJson(conf.textTimeline);
+const textBroken = found.find((p) => p.where === conf.textTimeline);
+if (textBroken)
+  textBroken.issue += `\n  on-screen text (too brief, too small) is checked once this is fixed`;
+const textRead = textPath && !textBroken && readJson(conf.textTimeline);
 if (Array.isArray(textRead?.items) && filmEnds()) {
   const heard = mapTimeline("text", textRead, clockForTimeline("text"), false, null, {});
   const said = [];
