@@ -2697,6 +2697,528 @@
       "page": "https://mixkit.co/free-sound-effects/bird/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/62/62.wav",
       "ear": { "query": "a crow cawing", "z": 3.49, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1871",
+      "title": "Toilet flush",
+      "category": "foley",
+      "for": "a toilet flush: a gag, flushing it away",
+      "page": "https://mixkit.co/free-sound-effects/bathroom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1871/1871.wav",
+      "ear": { "query": "a toilet flushing", "z": 4.47, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1872",
+      "title": "Hard toilet flush",
+      "category": "foley",
+      "for": "a toilet flush: a gag, flushing it away",
+      "page": "https://mixkit.co/free-sound-effects/bathroom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1872/1872.wav",
+      "ear": { "query": "a toilet flushing", "z": 5.91, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1889",
+      "title": "Bathroom toilet flush",
+      "category": "foley",
+      "for": "a toilet flush: a gag, flushing it away",
+      "page": "https://mixkit.co/free-sound-effects/bathroom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1889/1889.wav",
+      "ear": { "query": "a toilet flushing", "z": 5.74, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1821",
+      "title": "Kitchen toaster pops",
+      "category": "foley",
+      "for": "a toaster popping up: an idea, a punchline",
+      "page": "https://mixkit.co/free-sound-effects/appliances/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1821/1821.wav",
+      "ear": { "query": "a toaster popping up", "z": 3.19, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2478",
+      "title": "Man strong snore",
+      "category": "voices",
+      "for": "sleep breathing or a snore",
+      "page": "https://mixkit.co/free-sound-effects/human/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2478/2478.wav",
+      "ear": { "query": "a person snoring", "z": 3.57, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2376",
+      "title": "Short pencil writing",
+      "category": "foley",
+      "for": "a pencil writing: a note, a plan",
+      "page": "https://mixkit.co/free-sound-effects/office/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2376/2376.wav",
+      "ear": { "query": "a pencil writing on paper", "z": 3.48, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3194",
+      "title": "Writing pencil",
+      "category": "foley",
+      "for": "a pencil writing: a note, a plan",
+      "page": "https://mixkit.co/free-sound-effects/paper/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3194/3194.wav",
+      "ear": { "query": "a pencil writing on paper", "z": 4.62, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3011",
+      "title": "Explainer video writing pencil letters a",
+      "category": "foley",
+      "for": "a pencil writing: a note, a plan",
+      "page": "https://mixkit.co/free-sound-effects/write/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3011/3011.wav",
+      "ear": { "query": "a pencil writing on paper", "z": 3.24, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2378",
+      "title": "Scissors cutting paper",
+      "category": "foley",
+      "for": "scissors cutting paper",
+      "page": "https://mixkit.co/free-sound-effects/office/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2378/2378.wav",
+      "ear": { "query": "scissors cutting paper", "z": 2.51, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1564",
+      "title": "Car door slam",
+      "category": "foley",
+      "for": "a car door slam",
+      "page": "https://mixkit.co/free-sound-effects/car/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1564/1564.wav",
+      "ear": { "query": "a car door slamming", "z": 3.81, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1566",
+      "title": "Car engine start",
+      "category": "foley",
+      "for": "a car engine starting",
+      "page": "https://mixkit.co/free-sound-effects/car/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1566/1566.wav",
+      "ear": { "query": "a car engine starting", "z": 2.74, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-731",
+      "title": "Cartoon bubble pop",
+      "category": "comedy",
+      "for": "a cartoon pop: something appears or vanishes",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/731/731.wav",
+      "ear": { "query": "a cartoon bubble pop", "z": 5.02, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-151",
+      "title": "Swallowing a drink from a plastic bottle",
+      "category": "voices",
+      "for": "gulping a drink",
+      "page": "https://mixkit.co/free-sound-effects/water/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/151/151.wav",
+      "ear": { "query": "a person gulping a drink", "z": 5.74, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-144",
+      "title": "Drinking water from water bottle",
+      "category": "voices",
+      "for": "gulping a drink",
+      "page": "https://mixkit.co/free-sound-effects/water/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/144/144.wav",
+      "ear": { "query": "a person gulping a drink", "z": 6.14, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-140",
+      "title": "Sipping water from a straw",
+      "category": "voices",
+      "for": "gulping a drink",
+      "page": "https://mixkit.co/free-sound-effects/water/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/140/140.wav",
+      "ear": { "query": "a person gulping a drink", "z": 4.96, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-580",
+      "title": "School calling bell",
+      "category": "notifications",
+      "for": "a school bell: class starts or ends",
+      "page": "https://mixkit.co/free-sound-effects/bell/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/580/580.wav",
+      "ear": { "query": "a school bell ringing", "z": 3.71, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3164",
+      "title": "Video game power up",
+      "category": "game",
+      "for": "a game power-up",
+      "page": "https://mixkit.co/free-sound-effects/game/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3164/3164.wav",
+      "ear": { "query": "a video game power up", "z": 2.7, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-290",
+      "title": "Monster evil voice",
+      "category": "creatures",
+      "for": "a deep demon voice",
+      "page": "https://mixkit.co/free-sound-effects/monster/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/290/290.wav",
+      "ear": { "query": "a deep evil monster voice", "z": 6.22, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-203",
+      "title": "Creaking public toilet door",
+      "category": "foley",
+      "for": "a creaking door",
+      "page": "https://mixkit.co/free-sound-effects/bathroom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/203/203.wav",
+      "ear": { "query": "a creaking door", "z": 4.24, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-481",
+      "title": "One clap",
+      "category": "foley",
+      "for": "one hand clap: a cue, an idea",
+      "page": "https://mixkit.co/free-sound-effects/clapping/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/481/481.wav",
+      "ear": { "query": "a single hand clap", "z": 5.25, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2038",
+      "title": "Game treasure coin",
+      "category": "game",
+      "for": "a game coin or treasure pickup",
+      "page": "https://mixkit.co/free-sound-effects/coin/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2038/2038.wav",
+      "ear": { "query": "a video game coin pickup", "z": 3.33, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2657",
+      "title": "Playing a whistle toy",
+      "category": "comedy",
+      "for": "a toy whistle: a gag",
+      "page": "https://mixkit.co/free-sound-effects/blow/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2657/2657.wav",
+      "ear": { "query": "a toy whistle", "z": 4.21, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-830",
+      "title": "Hammer hit on wood",
+      "category": "foley",
+      "for": "a hammer on wood: building",
+      "page": "https://mixkit.co/free-sound-effects/construction/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/830/830.wav",
+      "ear": { "query": "a hammer hitting wood", "z": 2.81, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-836",
+      "title": "Hammer bounce in the forge",
+      "category": "foley",
+      "for": "a hammer on an anvil: a forge",
+      "page": "https://mixkit.co/free-sound-effects/hit/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/836/836.wav",
+      "ear": { "query": "a hammer hitting an anvil", "z": 4.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2654",
+      "title": "Cartoon blow impact",
+      "category": "comedy",
+      "for": "a cartoon bonk: a head hit",
+      "page": "https://mixkit.co/free-sound-effects/blow/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2654/2654.wav",
+      "ear": { "query": "a cartoon bonk hit", "z": 2.73, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-726",
+      "title": "Cartoon blood and gore hit",
+      "category": "comedy",
+      "for": "a cartoon gore splat",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=4",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/726/726.wav",
+      "ear": { "query": "a cartoon gore splat", "z": 3.99, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-862",
+      "title": "Fairy magic wand",
+      "category": "spells",
+      "for": "a magic wand sparkle",
+      "page": "https://mixkit.co/free-sound-effects/fairy/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/862/862.wav",
+      "ear": { "query": "a magic wand sparkle", "z": 2.56, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1935",
+      "title": "Payout award ding",
+      "category": "game",
+      "for": "a jackpot payout",
+      "page": "https://mixkit.co/free-sound-effects/casino/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1935/1935.wav",
+      "ear": { "query": "a slot machine payout ding", "z": 3.09, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-197",
+      "title": "Knocking on a thick wooden door",
+      "category": "foley",
+      "for": "a knock on a door",
+      "page": "https://mixkit.co/free-sound-effects/doors/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/197/197.wav",
+      "ear": { "query": "knocking on a wooden door", "z": 3.53, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-418",
+      "title": "Santa Claus Ho Ho Ho laughing",
+      "category": "voices",
+      "for": "Santa's ho ho ho",
+      "page": "https://mixkit.co/free-sound-effects/laugh/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/418/418.wav",
+      "ear": { "query": "santa claus laughing ho ho ho", "z": 5.92, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-282",
+      "title": "Robot says no",
+      "category": "voices",
+      "for": "a robot saying yes or no",
+      "page": "https://mixkit.co/free-sound-effects/robot/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/282/282.wav",
+      "ear": { "query": "a robot voice saying yes or no", "z": 3.33, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-283",
+      "title": "Robot says yes",
+      "category": "voices",
+      "for": "a robot saying yes or no",
+      "page": "https://mixkit.co/free-sound-effects/robot/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/283/283.wav",
+      "ear": { "query": "a robot voice saying yes or no", "z": 4.81, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-342",
+      "title": "Male saying no",
+      "category": "voices",
+      "for": "a man saying no",
+      "page": "https://mixkit.co/free-sound-effects/voices/?page=5",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/342/342.wav",
+      "ear": { "query": "a man shouting no", "z": 3.63, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-408",
+      "title": "Piano falling effect",
+      "category": "comedy",
+      "for": "a cartoon piano falls and crashes",
+      "page": "https://mixkit.co/free-sound-effects/falling/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/408/408.wav",
+      "ear": { "query": "a cartoon falling piano crash", "z": 2.81, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-737",
+      "title": "Cartoon catapult",
+      "category": "comedy",
+      "for": "a cartoon catapult or spring launch",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/737/737.wav",
+      "ear": { "query": "a cartoon catapult launch", "z": 3.26, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-727",
+      "title": "Clown longhorn",
+      "category": "comedy",
+      "for": "a clown or bike horn honk: a gag",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/727/727.wav",
+      "ear": { "query": "a clown horn honk", "z": 4.12, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-722",
+      "title": "Successful horns fanfare",
+      "category": "musical",
+      "for": "a fanfare: a win, an arrival",
+      "page": "https://mixkit.co/free-sound-effects/horn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/722/722.wav",
+      "ear": { "query": "a triumphant brass fanfare", "z": 4.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-588",
+      "title": "Service bell double ding",
+      "category": "notifications",
+      "for": "a service desk bell: order up, at your service",
+      "page": "https://mixkit.co/free-sound-effects/bell/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/588/588.wav",
+      "ear": { "query": "a service desk bell ding", "z": 4.1, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1101",
+      "title": "Single book paging",
+      "category": "foley",
+      "for": "a book page turning",
+      "page": "https://mixkit.co/free-sound-effects/page/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1101/1101.wav",
+      "ear": { "query": "a book page turning", "z": 4.65, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1103",
+      "title": "Stiff paper book paging",
+      "category": "foley",
+      "for": "a book page turning",
+      "page": "https://mixkit.co/free-sound-effects/page/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1103/1103.wav",
+      "ear": { "query": "a book page turning", "z": 3.4, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1099",
+      "title": "Browsing book by pages",
+      "category": "foley",
+      "for": "a book page turning",
+      "page": "https://mixkit.co/free-sound-effects/page/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1099/1099.wav",
+      "ear": { "query": "a book page turning", "z": 4.88, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1115",
+      "title": "Pen click and release",
+      "category": "foley",
+      "for": "a pen click",
+      "page": "https://mixkit.co/free-sound-effects/click/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1115/1115.wav",
+      "ear": { "query": "a ballpoint pen click", "z": 3.79, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2371",
+      "title": "Pen clicking twice",
+      "category": "foley",
+      "for": "a pen click",
+      "page": "https://mixkit.co/free-sound-effects/office/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2371/2371.wav",
+      "ear": { "query": "a ballpoint pen click", "z": 3.84, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2382",
+      "title": "Paper crumble",
+      "category": "foley",
+      "for": "paper crumpled: an idea thrown away",
+      "page": "https://mixkit.co/free-sound-effects/paper/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2382/2382.wav",
+      "ear": { "query": "paper crumpling", "z": 4.09, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2389",
+      "title": "Crumpled paper",
+      "category": "foley",
+      "for": "paper crumpled: an idea thrown away",
+      "page": "https://mixkit.co/free-sound-effects/paper/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2389/2389.wav",
+      "ear": { "query": "paper crumpling", "z": 5.41, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2996",
+      "title": "Quick paper crumple sound",
+      "category": "foley",
+      "for": "paper crumpled: an idea thrown away",
+      "page": "https://mixkit.co/free-sound-effects/paper/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2996/2996.wav",
+      "ear": { "query": "paper crumpling", "z": 5, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1334",
+      "title": "Zippo fire close",
+      "category": "foley",
+      "for": "a lighter flicked on",
+      "page": "https://mixkit.co/free-sound-effects/fire/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1334/1334.wav",
+      "ear": { "query": "a lighter flicking on", "z": 2.86, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1298",
+      "title": "Mid strength single thunder",
+      "category": "nature",
+      "for": "a thunder clap",
+      "page": "https://mixkit.co/free-sound-effects/thunder/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1298/1298.wav",
+      "ear": { "query": "a thunder clap", "z": 4.21, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1838",
+      "title": "Kitchen oven ding",
+      "category": "notifications",
+      "for": "an oven or microwave ding: it's ready",
+      "page": "https://mixkit.co/free-sound-effects/kitchen/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1838/1838.wav",
+      "ear": { "query": "an oven timer ding", "z": 2.77, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-3150",
+      "title": "Pluck up item",
+      "category": "game",
+      "for": "a game item pickup",
+      "page": "https://mixkit.co/free-sound-effects/video-game/?page=4",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3150/3150.wav",
+      "ear": { "query": "a video game item pickup", "z": 3.68, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1937",
+      "title": "Bonus collect award",
+      "category": "game",
+      "for": "a game item pickup",
+      "page": "https://mixkit.co/free-sound-effects/slot-machine/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1937/1937.wav",
+      "ear": { "query": "a video game item pickup", "z": 4.19, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2479",
+      "title": "Owl shriek",
+      "category": "nature",
+      "for": "an owl call: night",
+      "page": "https://mixkit.co/free-sound-effects/bird/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2479/2479.wav",
+      "ear": { "query": "an owl hooting", "z": 2.66, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-316",
+      "title": "Crow shor crowing",
+      "category": "nature",
+      "for": "a crow or raven calling: an omen",
+      "page": "https://mixkit.co/free-sound-effects/animals/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/316/316.wav",
+      "ear": { "query": "a crow cawing", "z": 4.71, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-299",
+      "title": "Monks voices saying amen",
+      "category": "voices",
+      "for": "monks singing amen",
+      "page": "https://mixkit.co/free-sound-effects/voices/?page=5",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/299/299.wav",
+      "ear": { "query": "monks singing amen", "z": 3.85, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3186",
+      "title": "Opening a metal vault",
+      "category": "foley",
+      "for": "a heavy vault or chest opening",
+      "page": "https://mixkit.co/free-sound-effects/metal/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3186/3186.wav",
+      "ear": { "query": "a heavy metal vault door opening", "z": 3.75, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2884",
+      "title": "Funny cartoon splash",
+      "category": "comedy",
+      "for": "a cartoon splash",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=3",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2884/2884.wav",
+      "ear": { "query": "a cartoon water splash", "z": 4.07, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-116",
+      "title": "Food can quick opening",
+      "category": "foley",
+      "for": "a can opening",
+      "page": "https://mixkit.co/free-sound-effects/food/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/116/116.wav",
+      "ear": { "query": "a can opening", "z": 2.91, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-733",
+      "title": "Cartoon ducklings",
+      "category": "nature",
+      "for": "ducklings quacking",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=4",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/733/733.wav",
+      "ear": { "query": "ducklings quacking", "z": 3.17, "verdict": "strong" }
     }
   ]
 }
