@@ -268,6 +268,47 @@ test("a torrent pack is marked done as soon as its own download ends, while anot
   assert.equal(early, true, "2015 was marked while 2016 still ran");
 });
 
+test("with torrents off, as setup:vault runs it, a torrent pack is named with its own command, not downloaded", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "sound-raw-no-torrents-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const downloads = join(root, "downloads");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(downloads);
+  const good = torrentOf([["Lib", "hit.wav"]]);
+  writeFileSync(join(downloads, "GameAudioGDCPart2.torrent"), good.bytes);
+  writeFileSync(
+    join(root, "scripts/sound-raw.json"),
+    JSON.stringify({
+      sources: {
+        sonniss: {
+          licence: "Sonniss GDC",
+          packs: [
+            {
+              id: "gdc-2016",
+              title: "GDC 2016",
+              page: "https://sonniss.com/gameaudiogdc/",
+              torrent: "GameAudioGDCPart2.torrent",
+              btih: good.btih,
+            },
+          ],
+        },
+      },
+    }),
+  );
+  let runs = 0;
+  const r = await fetchSoundRaw({
+    root,
+    external: join(root, "ext"),
+    downloads,
+    log: () => {},
+    torrents: false,
+    torrentClient: async () => runs++,
+  });
+  assert.equal(runs, 0);
+  assert.deepEqual(r.failed, []);
+  assert.match(r.waiting[0], /GDC 2016: .*bun run fetch:sound-raw/);
+});
+
 // An .ogg tone at the given peak level (dBFS), made with ffmpeg
 const lavfi = (file, expr, seconds) => {
   mkdirSync(join(file, ".."), { recursive: true });

@@ -680,7 +680,10 @@ export async function buildSoundVault({
     log(
       `Earshot SFX: ${Object.keys(out.sources).length} recipes (${out.rendered} rendered, ${out.reused} reused)`,
     );
-  }
+  } else if (!skipEarshot)
+    log(
+      `Waiting for you: earshot's sound bank and its Freesound originals: clone https://github.com/Leonxlnx/earshot into ${earshotDir} (INSTALL.md), then bun run setup:sound`,
+    );
 
   const fitFile = join(earshotDir, "earshot/forge/bank/fit.json");
   if (!skipFreesound && existsSync(fitFile)) {
@@ -741,7 +744,13 @@ export async function buildSoundVault({
         const cachedRaw = join(local, "sfx/bgm-cache", `${t.id}.mp3`);
         if (!existsSync(cachedRaw)) {
           const dropped = findPixabayDropFile(dropDir, t);
-          if (!dropped) continue;
+          if (!dropped) {
+            // Pixabay stops scripts: its tracks are downloaded by hand
+            log(
+              `Waiting for you: ${String(t.title).replaceAll("_", " ").trim()} — ${t.artist}: open ${t.page}, press Download, leave the mp3 in Downloads, then bun run setup:sound`,
+            );
+            continue;
+          }
           mkdirSync(dirname(cachedRaw), { recursive: true });
           copyFileSync(dropped, cachedRaw);
         }

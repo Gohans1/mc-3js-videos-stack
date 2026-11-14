@@ -101,12 +101,14 @@ export async function fetchSoundRaw({
   downloads = join(homedir(), "Downloads"),
   log = console.log,
   torrentClient = aria2,
+  // setup:vault leaves torrent packs (hours each) to their own run of this command
+  torrents = true,
 } = {}) {
   const { sources } = JSON.parse(readFileSync(join(root, "scripts/sound-raw.json"), "utf8"));
   const raw = join(external, "sound-raw"),
     inbox = join(raw, "inbox");
   const result = { unpacked: [], kept: [], waiting: [], failed: [] };
-  const torrents = [];
+  const queued = [];
   for (const [source, { packs }] of Object.entries(sources)) {
     for (const p of packs) {
       const dir = join(raw, source, p.id),
@@ -132,8 +134,14 @@ export async function fetchSoundRaw({
           const file = join(raw, source, ".torrents", `${p.id}.torrent`);
           mkdirSync(dirname(file), { recursive: true });
           copyFileSync(found, file);
+          if (!torrents) {
+            result.waiting.push(
+              `${p.title}: bun run fetch:sound-raw downloads it (hours; start it detached, stop any time, a rerun resumes), then bun run setup:sound`,
+            );
+            continue;
+          }
           const plan = torrentPaths(torrent, PATH_MAX - resolve(dir).length - 1);
-          torrents.push({ p, dir, file, plan, mark });
+          queued.push({ p, dir, file, plan, mark });
           continue;
         }
         if (p.file) {
@@ -163,7 +171,7 @@ export async function fetchSoundRaw({
       }
     }
   }
-  if (torrents.length) await fetchTorrents(torrents, { log, torrentClient, result });
+  if (queued.length) await fetchTorrents(queued, { log, torrentClient, result });
   return result;
 }
 

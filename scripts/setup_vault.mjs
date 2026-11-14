@@ -5,13 +5,14 @@ import { dirname, join } from "node:path";
 
 import { cliArgs } from "../packages/live-studio/src/cli.mjs";
 import { download } from "./download.mjs";
+import { fetchSoundRaw } from "./fetch_sound_raw.mjs";
 import { slimJar } from "./mc/slim_jar.mjs";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 const HELP = `Fills the local vault (vault/, vault.json "root") on a new machine, from the repo root: the player rig check, mobs,
 the Mixkit sound effects (fetch:sfx), the sound vault (setup:sound) and, when the heavy external vault exists
-(vault.json "externalRoot", default E:/mc_vault, or MC_VAULT_EXTERNAL), the raw sound packs (fetch:sound-raw) and the
-Minecraft sounds (setup:mc-sound).
+(vault.json "externalRoot", default E:/mc_vault, or MC_VAULT_EXTERNAL), the raw sound packs (fetch:sound-raw; a torrent
+pack, hours long, is named at the end for its own run) and the Minecraft sounds (setup:mc-sound).
   bun run setup:vault
 Downloads have time limits and every file is verified (hashes, WAV format); a rerun reuses what is already there.
 Next: bun run link to connect the vault to every film.`;
@@ -55,9 +56,19 @@ copyFileSync(
 );
 run("bun", [join(ROOT, "packages/mc-assets/mobs.ts"), assets.mobs], 600_000);
 run("bun", [join(ROOT, "scripts/fetch_mixkit.mjs")], 600_000);
-// the raw packs are downloaded before the sound vault is built, which files them into its categories
-if (existsSync(EXTERNAL)) run("bun", [join(ROOT, "scripts/fetch_sound_raw.mjs")], 600_000);
-run("bun", [join(ROOT, "scripts/build_sound_vault.mjs")], 600_000);
+// The raw zip packs are downloaded before the sound vault is built, which files them into its categories; a torrent
+// pack takes hours, so it is only named here, for its own run of fetch:sound-raw
+const waiting = [];
+if (existsSync(EXTERNAL)) {
+  const raw = await fetchSoundRaw({ torrents: false });
+  if (raw.failed.length)
+    throw new Error(
+      `Raw sound packs failed: ${raw.failed.join(", ")}. Run bun run setup:vault again.`,
+    );
+  waiting.push(...raw.waiting);
+}
+// No time limit: a first build decodes every raw pack (long on a hard disk) and a stopped one resumes where it was
+run("bun", [join(ROOT, "scripts/build_sound_vault.mjs")]);
 if (existsSync(EXTERNAL)) run("bun", [join(ROOT, "scripts/build_mc_sound_vault.mjs")], 900_000);
 console.log(
   `Light assets verified: Minecraft ${assets.minecraft.version}, mobs ${assets.mobs}, player rig and curated sound vault.`,
@@ -67,3 +78,4 @@ console.log(
     ? "External Minecraft sound vault verified. Run bun run link to verify and connect all heavy assets."
     : "Heavy motion, mod packs, tools and mc-sound stay in the external vault (run bun run setup:mc-sound once mounted, then bun run link).",
 );
+for (const w of waiting) console.log(`Waiting for you: ${w}`);

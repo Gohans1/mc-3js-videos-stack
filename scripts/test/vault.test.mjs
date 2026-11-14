@@ -461,6 +461,28 @@ test("buildSoundVault includes all curated catalogue.sounds and ignores catalogu
   assert.equal(sources["mixkit-000"], undefined);
 });
 
+test("buildSoundVault without earshot in the external vault says where to get it", async (t) => {
+  const { buildSoundVault } = await import("../build_sound_vault.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-sound-no-earshot-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  writeFileSync(join(root, "scripts/sfx-catalogue.json"), JSON.stringify({ sounds: [] }));
+  const lines = [];
+  await buildSoundVault({
+    root,
+    local: join(root, "vault"),
+    external: join(root, "ext"),
+    skipBgm: true,
+    log: (l) => lines.push(l),
+  });
+  assert.ok(
+    lines.some((l) =>
+      /^Waiting for you: .*github\.com\/Leonxlnx\/earshot.*ext[\\/]tools[\\/]earshot/.test(l),
+    ),
+    lines.join("\n"),
+  );
+});
+
 test("buildSoundVault files the vault's own Mixkit picks into their category, saying what each is for", async (t) => {
   const { buildSoundVault } = await import("../build_sound_vault.mjs");
   const root = mkdtempSync(join(tmpdir(), "mc-sound-picks-"));
@@ -772,8 +794,24 @@ test("buildSoundVault ingests Pixabay drop MP3s, skips disputed journey-roa, and
     }),
   );
 
-  await buildSoundVault({ root, local, external, skipEarshot: true, pixabayDir });
+  const lines = [];
+  await buildSoundVault({
+    root,
+    local,
+    external,
+    skipEarshot: true,
+    pixabayDir,
+    log: (l) => lines.push(l),
+  });
 
+  assert.ok(
+    lines.some((l) =>
+      l.startsWith(
+        "Waiting for you: AMALGAM — Rockot: open https://pixabay.com/music/future-bass-amalgam-217007/",
+      ),
+    ),
+    `a Pixabay track not dropped yet is named with its page:\n${lines.join("\n")}`,
+  );
   assert.equal(existsSync(join(local, "sfx/bgm-cache/this-minimal-technology-pure.mp3")), true);
   assert.equal(
     existsSync(join(local, "sound/bgm/electronic/bgm-this-minimal-technology-pure.wav")),
