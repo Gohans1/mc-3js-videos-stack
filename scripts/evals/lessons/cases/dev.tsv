@@ -1,0 +1,40 @@
+L01	vi	hands	-	tay cầm kiếm bị lệch khỏi tay lúc chạy
+L02	vi	walk	-	chân nhân vật trượt trên mặt đất như đi trên băng
+L03	vi	cuts	pacing	chuyển cảnh chậm quá, cắt nhanh hơn đi
+L04	vi	camera	-	camera rung lắc khó chịu dù cảnh đang yên
+L05	vi	camera	world	camera bay xuyên qua tường đoạn 0:12
+L06	vi	lighting	color	tối quá đéo thấy gì hết
+L07	vi	color	render	bầu trời bị sọc màu khi up youtube
+L08	vi	sound	-	mở cửa mà không có tiếng gì
+L09	vi	music	voice	nhạc to quá át cả giọng đọc
+L10	vi	voice	pacing	giọng đọc nhanh quá nghe không kịp
+L11	vi	lips	voice	miệng steve không khớp lời thoại
+L12	vi	lips	-	alex không nói mà miệng vẫn mấp máy
+L13	vi	pacing	cuts	shot này lướt qua nhanh quá chưa kịp nhìn
+L14	vi	text	-	chữ bị cắt mất ở mép màn hình trên điện thoại
+L15	vi	text	pacing	phụ đề hiện ngắn quá không đọc kịp
+L16	vi	faces	-	nhân vật nhìn đơ như tượng, không chớp mắt
+L17	vi	mobs	-	zombie đi nhanh như người thường
+L18	vi	mobs,sound	-	creeper nổ cái bùm mà không xì xì gì trước
+L19	vi	world	-	có block lơ lửng giữa trời
+L20	vi	render	world	hình bị nhấp nháy 1 frame ở giây 4
+L21	vi	hands,cuts	pacing	tay lệch, transition nhanh hơn
+L22	vi	pacing	-	mở đầu nhàm, 3 giây đầu chưa có gì hút người xem
+L23	en	sound	-	footsteps sound like stone but he is walking on grass
+L24	en	text	-	the title is too small to read on a phone
+L25	en	camera	-	the tilted camera makes me dizzy
+L26	vi	music	cuts	nhạc vào lệch nhịp với chỗ cắt cảnh
+L27	vi	lighting	-	đuốc trong hang không có ánh sáng ấm
+L28	vi	color	-	màu phim nhợt nhạt quá
+L29	vi	sound	lighting	đuốc cháy mà im re
+L30	vi	faces	-	nhân vật giật mình mà người không phản ứng gì
+L31	vi	walk	-	lúc đi bộ tay không vung gì cả
+L32	vi	sound	mobs	skeleton bắn tên mà không nghe tiếng
+L33	vi	camera	world	camera chui xuống đất lúc lia thấp
+L34	vi	pacing	music,sound	khoảng lặng không nhạc không tiếng dài quá
+L35	vi	-	-	đổi tên phim thành Cell Break 2
+L36	vi	-	mobs	thêm 1 con mèo ngồi ở góc phòng
+L37	vi	-	text	thumbnail youtube cần mặt nhân vật to hơn
+L38	vi	-	-	cảnh này đẹp rồi giữ nguyên nhé
+L39	en	hands	-	the sword floats a bit away from his palm
+L40	vi	camera	faces	cảnh buồn mà camera zoom vụt vào mặt nhanh quá
