@@ -1,5 +1,5 @@
 {
-  "about": "Mixkit sound effects the vault keeps for itself (the cinetic kit's own are scripts/sfx-catalogue.json): what most videos reach for and the kit lacks, each picked by hand from Mixkit's category pages and heard with earshot (ear: the query it was taken for, its z and verdict). bun run fetch:sfx downloads them, bun run setup:sound files each into vault/sound/sfx/<category>/. Mixkit's terms (9j) forbid mass downloads of its library: this list stays a hand-picked few, added one at a time as films need them, never a crawl of a category.",
+  "about": "Mixkit sound effects the vault keeps for itself (the cinetic kit's own are scripts/sfx-catalogue.json): what most videos reach for and the kit lacks, each picked by hand from Mixkit's category pages and heard with earshot (ear: the query it was taken for, its z and verdict). bun run fetch:sfx downloads them, bun run setup:sound files each into vault/sound/sfx/<category>/. Mixkit's terms (9j) forbid mass downloads of its library: this list stays hand-picked, each heard, with a few takes of one need so a film can vary them, never a crawl of a category.",
   "licence": {
     "name": "Mixkit Sound Effects Free License",
     "url": "https://mixkit.co/license/#sfxFree",
@@ -411,6 +411,492 @@
         "z": 3.05,
         "verdict": "strong"
       }
+    },
+    {
+      "id": "mixkit-703",
+      "title": "Vinyl forward and back fast scratch",
+      "category": "comedy",
+      "for": "a record scratch: the moment stops (a freeze frame)",
+      "page": "https://mixkit.co/free-sound-effects/dj-record-scratch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/703/703.wav",
+      "ear": { "query": "a record scratch", "z": 4.49, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-708",
+      "title": "DJ record swipe",
+      "category": "comedy",
+      "for": "a record scratch: the moment stops (a freeze frame)",
+      "page": "https://mixkit.co/free-sound-effects/dj-record-scratch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/708/708.wav",
+      "ear": { "query": "a record scratch", "z": 3.47, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-707",
+      "title": "Vinyl record swipe",
+      "category": "comedy",
+      "for": "a record scratch: the moment stops (a freeze frame)",
+      "page": "https://mixkit.co/free-sound-effects/dj-record-scratch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/707/707.wav",
+      "ear": { "query": "a record scratch", "z": 3.42, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-702",
+      "title": "Record player vinyl scratch",
+      "category": "comedy",
+      "for": "a record scratch: the moment stops (a freeze frame)",
+      "page": "https://mixkit.co/free-sound-effects/dj-record-scratch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/702/702.wav",
+      "ear": { "query": "a record scratch", "z": 3.06, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-705",
+      "title": "Vinyl forward and back scratch",
+      "category": "comedy",
+      "for": "a record scratch: the moment stops (a freeze frame)",
+      "page": "https://mixkit.co/free-sound-effects/dj-record-scratch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/705/705.wav",
+      "ear": { "query": "a record scratch", "z": 2.97, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-709",
+      "title": "Swell vinyl record scratch",
+      "category": "comedy",
+      "for": "a record scratch: the moment stops (a freeze frame)",
+      "page": "https://mixkit.co/free-sound-effects/dj-record-scratch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/709/709.wav",
+      "ear": { "query": "a record scratch", "z": 2.74, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-710",
+      "title": "Vinyl record small scratch",
+      "category": "comedy",
+      "for": "a record scratch: the moment stops (a freeze frame)",
+      "page": "https://mixkit.co/free-sound-effects/dj-record-scratch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/710/710.wav",
+      "ear": { "query": "a record scratch", "z": 2.51, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1095",
+      "title": "Reel to reel rewind",
+      "category": "transitions",
+      "for": "a tape rewind: a flashback, going back in time",
+      "page": "https://mixkit.co/free-sound-effects/rewind/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1095/1095.wav",
+      "ear": { "query": "a tape rewinding", "z": 3.33, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3097",
+      "title": "Cassette tape stretch",
+      "category": "transitions",
+      "for": "a tape rewind: a flashback, going back in time",
+      "page": "https://mixkit.co/free-sound-effects/tape-machine/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3097/3097.wav",
+      "ear": { "query": "a tape rewinding", "z": 3.09, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1096",
+      "title": "Reel to reel fast forward",
+      "category": "transitions",
+      "for": "a tape rewind: a flashback, going back in time",
+      "page": "https://mixkit.co/free-sound-effects/rewind/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1096/1096.wav",
+      "ear": { "query": "a tape rewinding", "z": 2.66, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-495",
+      "title": "Heartbeat medium speed",
+      "category": "foley",
+      "for": "a heartbeat: tension, fear, a held breath",
+      "page": "https://mixkit.co/free-sound-effects/heartbeat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/495/495.wav",
+      "ear": { "query": "a heartbeat", "z": 3.97, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-494",
+      "title": "Slow heartbeat",
+      "category": "foley",
+      "for": "a heartbeat: tension, fear, a held breath",
+      "page": "https://mixkit.co/free-sound-effects/heartbeat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/494/494.wav",
+      "ear": { "query": "a slow heartbeat", "z": 3.73, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-497",
+      "title": "Cinematic heartbeat ambience",
+      "category": "foley",
+      "for": "a heartbeat: tension, fear, a held breath",
+      "page": "https://mixkit.co/free-sound-effects/heartbeat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/497/497.wav",
+      "ear": { "query": "a heartbeat", "z": 3.51, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-493",
+      "title": "Fast Heartbeat",
+      "category": "foley",
+      "for": "a heartbeat: tension, fear, a held breath",
+      "page": "https://mixkit.co/free-sound-effects/heartbeat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/493/493.wav",
+      "ear": { "query": "a fast heartbeat", "z": 3.38, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-559",
+      "title": "Horror deep drum heartbeat",
+      "category": "foley",
+      "for": "a heartbeat: tension, fear, a held breath",
+      "page": "https://mixkit.co/free-sound-effects/heartbeat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/559/559.wav",
+      "ear": { "query": "a deep heartbeat drum", "z": 2.53, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-867",
+      "title": "Fairy glitter",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/867/867.wav",
+      "ear": { "query": "a magic sparkle", "z": 4.13, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-870",
+      "title": "Sparkling fairy glow",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/870/870.wav",
+      "ear": { "query": "a magic sparkle", "z": 3.91, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-866",
+      "title": "Fairy arcade sparkle",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/arcade/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/866/866.wav",
+      "ear": { "query": "a magic sparkle", "z": 3.71, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3062",
+      "title": "Magic wand sparkle",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3062/3062.wav",
+      "ear": { "query": "a magic sparkle", "z": 3.4, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-871",
+      "title": "Fairy magic sparkle",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/871/871.wav",
+      "ear": { "query": "a magic sparkle", "z": 3.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2353",
+      "title": "Magic glitter shot",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2353/2353.wav",
+      "ear": { "query": "a magic sparkle", "z": 3.25, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3083",
+      "title": "Magic sparkle touch",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3083/3083.wav",
+      "ear": { "query": "a magic sparkle", "z": 3.07, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3082",
+      "title": "Magic sparkle poof hit",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3082/3082.wav",
+      "ear": { "query": "a magic sparkle poof", "z": 3.06, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-869",
+      "title": "Fairy sparkle whoosh",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/869/869.wav",
+      "ear": { "query": "a magic sparkle", "z": 3.01, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2352",
+      "title": "Magic glitter or particles",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2352/2352.wav",
+      "ear": { "query": "a magic sparkle", "z": 2.84, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2350",
+      "title": "Magic sparkle whoosh",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2350/2350.wav",
+      "ear": { "query": "a magic sparkle whoosh", "z": 5.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-868",
+      "title": "Fairy teleport",
+      "category": "musical",
+      "for": "a magic sparkle: something appears, shines or is enchanted",
+      "page": "https://mixkit.co/free-sound-effects/magic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/868/868.wav",
+      "ear": { "query": "a magic teleport sparkle", "z": 4.64, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2608",
+      "title": "Air zoom vacuum",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2608/2608.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 3.82, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2626",
+      "title": "Futuristic zoom move",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2626/2626.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 3.62, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2624",
+      "title": "Funny magic zoom",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2624/2624.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 3.24, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2627",
+      "title": "Fast swipe zoom",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2627/2627.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 3.21, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-772",
+      "title": "Quick zoom impact",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/772/772.wav",
+      "ear": { "query": "a quick zoom whoosh hit", "z": 3.11, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2625",
+      "title": "Fast air zoom",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2625/2625.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 3.03, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2622",
+      "title": "In and out zoom sound",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2622/2622.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 2.83, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2621",
+      "title": "Ui zoom in, long sound",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2621/2621.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 2.69, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2620",
+      "title": "User interface zoom out",
+      "category": "transitions",
+      "for": "a zoom: the camera punches in or out",
+      "page": "https://mixkit.co/free-sound-effects/zoom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2620/2620.wav",
+      "ear": { "query": "a quick zoom whoosh", "z": 2.58, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1060",
+      "title": "Wall clock tick tock",
+      "category": "foley",
+      "for": "a clock ticking: waiting, time running out",
+      "page": "https://mixkit.co/free-sound-effects/clock/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1060/1060.wav",
+      "ear": { "query": "a clock ticking", "z": 3.8, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1072",
+      "title": "Old clock pendulum ticking",
+      "category": "foley",
+      "for": "a clock ticking: waiting, time running out",
+      "page": "https://mixkit.co/free-sound-effects/clock/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1072/1072.wav",
+      "ear": { "query": "a clock ticking", "z": 3.24, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1954",
+      "title": "Start match countdown",
+      "category": "notifications",
+      "for": "countdown beeps before a start",
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1954/1954.wav",
+      "ear": { "query": "countdown beeps", "z": 4.83, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-916",
+      "title": "Clock countdown bleeps",
+      "category": "notifications",
+      "for": "countdown beeps before a start",
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/916/916.wav",
+      "ear": { "query": "countdown beeps", "z": 4.57, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-922",
+      "title": "Simple countdown",
+      "category": "notifications",
+      "for": "countdown beeps before a start",
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/922/922.wav",
+      "ear": { "query": "countdown beeps", "z": 3.48, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1447",
+      "title": "Long static noise",
+      "category": "glitch",
+      "for": "TV static: a lost signal, a cut to a screen",
+      "page": "https://mixkit.co/free-sound-effects/static/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1447/1447.wav",
+      "ear": { "query": "TV static noise", "z": 3.1, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1455",
+      "title": "Static electric crackles",
+      "category": "glitch",
+      "for": "TV static: a lost signal, a cut to a screen",
+      "page": "https://mixkit.co/free-sound-effects/static/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1455/1455.wav",
+      "ear": { "query": "TV static noise", "z": 3.01, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1453",
+      "title": "Electric static",
+      "category": "glitch",
+      "for": "TV static: a lost signal, a cut to a screen",
+      "page": "https://mixkit.co/free-sound-effects/static/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1453/1453.wav",
+      "ear": { "query": "TV static noise", "z": 2.97, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1041",
+      "title": "Radio waves glitch white noise",
+      "category": "glitch",
+      "for": "TV static: a lost signal, a cut to a screen",
+      "page": "https://mixkit.co/free-sound-effects/glitch/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1041/1041.wav",
+      "ear": { "query": "TV static noise", "z": 2.69, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1457",
+      "title": "Glitch static",
+      "category": "glitch",
+      "for": "TV static: a lost signal, a cut to a screen",
+      "page": "https://mixkit.co/free-sound-effects/static/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1457/1457.wav",
+      "ear": { "query": "TV static noise", "z": 2.56, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1446",
+      "title": "Radio noise static and crackles",
+      "category": "glitch",
+      "for": "TV static: a lost signal, a cut to a screen",
+      "page": "https://mixkit.co/free-sound-effects/static/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1446/1446.wav",
+      "ear": { "query": "TV static noise", "z": 2.53, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1372",
+      "title": "Old typewriter typing",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1372/1372.wav",
+      "ear": { "query": "an old typewriter typing", "z": 5.15, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1368",
+      "title": "Typewriter return bell",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1368/1368.wav",
+      "ear": { "query": "a typewriter carriage return bell", "z": 4.07, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1381",
+      "title": "Typewriter classic return",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1381/1381.wav",
+      "ear": { "query": "an old typewriter typing", "z": 3.65, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1369",
+      "title": "Vintage typewriter hit",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1369/1369.wav",
+      "ear": { "query": "an old typewriter typing", "z": 3.59, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1384",
+      "title": "Typewriter single mechanical hit",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1384/1384.wav",
+      "ear": { "query": "an old typewriter typing", "z": 3.51, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1366",
+      "title": "Typewriter soft hit",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1366/1366.wav",
+      "ear": { "query": "an old typewriter typing", "z": 2.96, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1379",
+      "title": "Data short input on typewriter",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1379/1379.wav",
+      "ear": { "query": "an old typewriter typing", "z": 2.91, "verdict": "plausible" }
     }
   ]
 }
