@@ -120,6 +120,13 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
                   priority: 20,
                 },
                 { name: "vendor-ui", test: /[\\/]node_modules[\\/]/, priority: 10 },
+                // the mocap bake on its own: mc-actor/clips.ts keeps bakes under this chunk's bytes, which a film's edit
+                // must not change
+                {
+                  name: "mocap",
+                  test: /[\\/]packages[\\/]mc-actor[\\/]src[\\/](?:clips|mocap|player|ease)\.ts$/,
+                  priority: 15, // under vendor-three, which keeps three itself
+                },
               ],
             },
           },

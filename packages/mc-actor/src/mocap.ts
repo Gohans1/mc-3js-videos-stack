@@ -254,12 +254,17 @@ export function bakeClip(rt, setTime, duration, fps = 60) {
     setTime(Math.min(duration - 1e-4, i / fps));
     frames.push(rt.pose(i ? 1 / fps : 0));
   }
-  const at = (t) => {
+  return { frames, fps, at: framesAt(frames, fps) };
+}
+
+// at(t) over baked frames (bakeClip's, or the same kept from an earlier load: clips.ts)
+export function framesAt(frames, fps) {
+  const n = frames.length - 1;
+  return (t) => {
     const x = THREE.MathUtils.clamp(t * fps, 0, n),
       i = Math.min(Math.floor(x), n - 1);
     return slerpPose(frames[i], frames[i + 1], x - i);
   };
-  return { frames, fps, at };
 }
 
 // src: a source as above, at its rest or first frame; player: makePlayer's result, used once for the rig's rest.
