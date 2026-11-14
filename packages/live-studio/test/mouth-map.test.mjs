@@ -66,3 +66,12 @@ test("audio newer than its shapes (the take was made again) is named", (t) => {
   utimesSync(join(dir, "voice/takes/hi.mp3"), later, later);
   assert.match(mouthFaults(dir).join("\n"), /"hi".*audio changed.*bun run voice:lips/);
 });
+
+test("shapes that are no JSON or hold no cues are named, even with a map written from them", (t) => {
+  for (const bad of ["{", JSON.stringify({ shapes: [] })]) {
+    const dir = film(t, [{ id: "hi", by: "steve", start: 0 }]);
+    writeFileSync(join(dir, "voice/takes/hi.mp3.mouth.json"), bad);
+    writeMouthMap(dir);
+    assert.match(mouthFaults(dir).join("\n"), /"hi" \(by steve\).*no cues.*bun run voice:lips/);
+  }
+});

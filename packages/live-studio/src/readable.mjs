@@ -42,11 +42,14 @@ export const sizeFaults = (scene, ratio = "16:9") => {
       ]
     : [];
 };
-export const readFaults = (scene, heard, ratio = "16:9") => {
+// end: the film's end in heard seconds; an item it cuts off is read only until then, its Out as far as it plays
+export const readFaults = (scene, heard, ratio = "16:9", end = Infinity) => {
   const span = heard.to - heard.from,
     io = inOutLengths(scene),
-    k = span / (scene.to - scene.from || 1);
-  const readable = span - ((io.in + io.out) / 2) * k,
+    k = span / (scene.to - scene.from || 1),
+    to = Math.min(heard.to, end);
+  const readable =
+      to - heard.from - (io.in * k) / 2 - Math.max(0, to - (heard.to - io.out * k)) / 2,
     chars = charsOf(scene.text),
     needs = Math.max(READ_MIN, chars / READ_CPS);
   return [

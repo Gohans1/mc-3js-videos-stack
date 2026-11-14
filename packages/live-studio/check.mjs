@@ -14,6 +14,7 @@ import {
   CAM_KEYS,
   checkFiles,
   CONFIG_KEYS,
+  EDIT_KEYS,
   problems as schemaProblems,
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
@@ -21,6 +22,7 @@ import {
   StudioConfig,
   TEXT_KEYS,
   TEXT_SLOT_KEYS,
+  TIMING_KEYS,
 } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
@@ -254,7 +256,7 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
   if (absent)
     found.push({
       where: conf.soundTimeline,
-      issue: `✖ ${missing.size} of the ${used.size} sounds it names are not on this machine (${[...missing.keys()].slice(0, 5).join(", ")}, ...): most of the sound files are not here yet, so the names cannot be checked (a typo among them shows once they are). 1. bun run sfx:get fetches the film's own (CC0 from Freesound into ${conf.sfx}/); 2. ${conf.soundVault === false ? 'drop "soundVault": false from package.json to hear the vault' : "cd ../.. && bun run link connects the vault"}; 3. bun run check again`,
+      issue: `✖ ${missing.size} of the ${used.size} sounds it names are not on this machine (${[...missing.keys()].slice(0, 5).join(", ")}${missing.size > 5 ? ", ..." : ""}): most of the sound files are not here yet, so the names cannot be checked (a typo among them shows once they are). 1. bun run sfx:get fetches the film's own (CC0 from Freesound into ${conf.sfx}/); 2. ${conf.soundVault === false ? 'drop "soundVault": false from package.json to hear the vault' : "cd ../.. && bun run link connects the vault"}; 3. bun run check again`,
     });
   // a film's own sounds are heard by it alone: a name copied from another film is found in that film's folder
   const siblings = readdirSync(dirname(PROJECT), { withFileTypes: true }).flatMap((d) => {
@@ -286,13 +288,14 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
       `  ${missing.size} name${missing.size === 1 ? "" : "s"}. A sound lives in ${conf.sfx}/ (the film's own: bun run sfx:get fetches the CC0 ones it pins) or the vault; pick another: bun run find <words>`,
       `  replace a name: its "name" in ${conf.soundTimeline} (the row named above) with an id bun run find prints, or swap the clip in the studio's Sound panel`,
     );
-  // a name find printed but this film cannot hear: the vault itself is out of its reach, not the name wrong
+  // a name find printed but this film cannot hear: the vault itself is out of its reach, not the name wrong (most names
+  // missing already said how to reach it)
   const vaults = findVaults(PROJECT, conf);
-  if (missing.size && conf.soundVault === false)
+  if (missing.size && !absent && conf.soundVault === false)
     issues.push(
       `  "soundVault": false in package.json shuts the vault out: this film hears only its own ${conf.sfx}/ (drop that line to hear the vault)`,
     );
-  else if (missing.size && !vaults.length)
+  else if (missing.size && !absent && conf.soundVault !== false && !vaults.length)
     issues.push(
       `  no vault reaches this film: it is found through vault.json in a folder above the film (the repo root), so a film outside the repo hears only its own ${conf.sfx}/. Keep films in the repo's films/, or set package.json "live-studio".soundVault`,
     );
@@ -424,6 +427,21 @@ rowTypos(
   "items",
   ADJUSTMENT_KEYS,
 );
+// every top key of edit.json and timing.json is optional to the studio (timing.json's schema even drops one it does not
+// know), so a near miss ("endd", "speed") is read by nothing and no fault says so
+for (const [rel, keys] of [
+  ["src/edit.json", EDIT_KEYS],
+  [conf.timingTimeline, TIMING_KEYS],
+]) {
+  const doc = readJson(rel);
+  if (doc && typeof doc === "object" && !Array.isArray(doc))
+    keyTypos(
+      rel,
+      nearKeys(doc, keys).map(
+        ([k, near]) => `"${k}": no key the studio reads; did you mean "${near}"?`,
+      ),
+    );
+}
 // a transition or anim name nothing has plays a hard cut or no move, silently; a film's own names (passed to
 // makeTransitions, or in draw.anims) are not known here, so only a near miss of a built-in is named
 const shotsRead = readJson(conf.shotsTimeline);
@@ -445,9 +463,11 @@ if (Array.isArray(shotsRead)) {
 const lanesPath = conf.soundTimeline && join(PROJECT, conf.soundTimeline);
 if (lanesPath && existsSync(lanesPath) && !soundBroken) {
   const lanes = JSON.parse(readFileSync(lanesPath, "utf8"));
+  // a muted track is left out of every mix (scripts/sound/mix.py MUTED): its rows are never heard, so never judged
+  const muted = new Set((lanes.tracks ?? []).flatMap((k) => (k?.mute ? [k.id] : [])));
   for (const list of ["beds", "sfx"])
     (lanes[list] ?? []).forEach((e, i) => {
-      if (e.gain > 12)
+      if (e.gain > 12 && !muted.has(e.track))
         warnings.push(
           `⚠ ${list}[${i}] "${e.name}" gain +${e.gain} dB (${conf.soundTimeline}): over +12 a sound is pushed far past its file's own level and the limiter flattens it; meant? bun run listen --at <its second> hears it`,
         );
@@ -466,10 +486,14 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
     const heard = mapTimeline("sound", lanes, clockForTimeline("sound"), false, null, {});
     const late = [
       ...heard.beds.flatMap((c, i) =>
-        c.from >= length ? [["beds", i, c.name, lanes.beds[i].from, c.from]] : [],
+        c.from >= length && !muted.has(lanes.beds[i].track)
+          ? [["beds", i, c.name, lanes.beds[i].from, c.from]]
+          : [],
       ),
       ...heard.sfx.flatMap((c, i) =>
-        c.at >= length ? [["sfx", i, c.name, lanes.sfx[i].at, c.at]] : [],
+        c.at >= length && !muted.has(lanes.sfx[i].track)
+          ? [["sfx", i, c.name, lanes.sfx[i].at, c.at]]
+          : [],
       ),
     ].map(
       ([list, i, name, written, at]) =>
@@ -515,9 +539,10 @@ if (Array.isArray(textRead?.items)) {
     // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
     if (heard && (!h || h.to <= h.from)) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
-    for (const fault of h ? readFaults(it, h, conf.ratio) : sizeFaults(it, conf.ratio))
+    const cut = h && h.to > ends.layers;
+    for (const fault of h ? readFaults(it, h, conf.ratio, ends.layers) : sizeFaults(it, conf.ratio))
       said.push(
-        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${h.to.toFixed(2)} heard` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
+        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${(cut ? ends.layers : h.to).toFixed(2)} heard${cut ? ", cut by the film's end" : ""}` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
       );
   });
   if (late.length)

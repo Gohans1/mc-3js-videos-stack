@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { planVoicePlacements, takeAudios } from "./voice-map.mjs";
@@ -77,7 +77,12 @@ export const mouthFaults = (film) => {
         ? [
             `✖ take "${k.id}" (by ${k.by}): its audio changed after its mouth shapes were made: bun run voice:lips`,
           ]
-        : [],
+        : // the map skips shapes it cannot read, so a map written from them agrees and says nothing
+          !Array.isArray(readJson(k.shapes)?.cues)
+          ? [
+              `✖ take "${k.id}" (by ${k.by}): ${relative(film, k.shapes).replaceAll("\\", "/")} holds no cues (not JSON, or no "cues" list), so ${k.by}'s mouth stays shut: bun run voice:lips makes them again`,
+            ]
+          : [],
   );
   if (faults.length || !said.length) return faults;
   const now = readJson(join(film, MOUTH_MAP));

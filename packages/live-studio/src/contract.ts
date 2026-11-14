@@ -114,6 +114,7 @@ export const TimingTimeline = TimingPlan.extend({
     .partialRecord(z.enum(["text", "adjustment", "audio", "sfx", "voice"]), LayerHistory)
     .optional(),
 });
+export const TIMING_KEYS = Object.keys(TimingTimeline.shape);
 
 // ---------- src/scene.ts
 const Shot = z.looseObject({ t: time });
@@ -321,6 +322,7 @@ export const Edit = z.looseObject({
   // the film's end (narration seconds): mix.py and every check after the end read it as a number
   end: time.refine((s) => s > 0, "the film's end: seconds after 0").optional(),
 });
+export const EDIT_KEYS = Object.keys(Edit.shape);
 
 // ---------- renders/live/trials.json (written by the film's sound.py) and choices.json (written by the studio)
 const Option = z.looseObject({
@@ -775,13 +777,14 @@ export const keyRows = (v: any, path: string[] = []): string[][] => {
   return [...own, ...Object.entries(v).flatMap(([k, x]) => keyRows(x, [...path, k]))];
 };
 // a key whose "t" is no number ("5") or is missing makes keyRows drop its whole list, so the studio stops showing the row:
-// in a list where any row has a "t", every row without a number there is named
+// in a list where any row has a "t", every row without a number there is named. Like keyRows it never looks inside a
+// list of other things: what is there is no row the studio shows
 const hasT = (k: any) => !!k && typeof k === "object" && !Array.isArray(k) && "t" in k;
 const badTimes = (v: any, path: (string | number)[] = []): (string | number)[][] =>
   Array.isArray(v)
     ? v.some(hasT)
       ? v.flatMap((k, i) => (isTimedKey(k) ? [] : [[...path, i, "t"]]))
-      : v.flatMap((x, i) => badTimes(x, [...path, i]))
+      : []
     : v && typeof v === "object"
       ? Object.entries(v).flatMap(([k, x]) => badTimes(x, [...path, k]))
       : [];
