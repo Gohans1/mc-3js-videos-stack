@@ -177,6 +177,23 @@ test("a note written just before a cut is in the shot it names, on every line", 
   assert.match(r.stdout, /^shot 0 \(shots 0-1\)/m);
 });
 
+test("a note's moment lists the other open notes near it, not itself", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = (id, t) => ({ id, t, scene: t, text: id, shot: 1, time: "", at: `2026-11-0${t}` });
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    [note("self", 4.1), note("other", 5)].map((n) => JSON.stringify(n)).join("\n"),
+  );
+  const r = spawnSync("bun", [AT, "self"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /open notes heard within 3 s: other at/);
+  assert.doesNotMatch(r.stdout, /self at/);
+});
+
 test("a note whose moment a moved cut has put in the next shot says it is there now", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));

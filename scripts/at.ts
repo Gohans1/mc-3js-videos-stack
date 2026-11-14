@@ -382,7 +382,9 @@ if (isMain) {
     console.error(`the film is ${got.length.toFixed(3)} s long: give a second before that`);
     process.exit(2);
   }
-  const { conf: c, ...data } = got;
+  const { conf: c, ...all } = got;
+  // asked by a note, that note is the moment itself, not one near it
+  const data = { ...all, notes: all.notes.filter((n) => n.id !== note?.id) };
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(note ? { note, ...data } : data, null, 2));
     process.exit(0);
@@ -471,9 +473,9 @@ if (isMain) {
         `  and ${got.keys.length - shown.length} more rows (bun run at ${t} --json for all)`,
       );
   }
-  if (got.notes.length)
+  if (data.notes.length)
     out.push(
-      `open notes heard within 3 s: ${got.notes.map((n) => `${n.id} at ${fmt(n.heard)} "${n.text.slice(0, 40)}"`).join("; ")} (bun run notes <id>)`,
+      `open notes heard within 3 s: ${data.notes.map((n) => `${n.id} at ${fmt(n.heard)} "${n.text.slice(0, 40)}"`).join("; ")} (bun run notes <id>)`,
     );
   // the cut a draft's sheet numbers (renders/cuts.json, heard seconds), when this second sits on one
   const cutsFile = join(film, "renders/cuts.json");
