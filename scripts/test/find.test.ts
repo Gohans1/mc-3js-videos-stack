@@ -980,6 +980,27 @@ test("an option quoted into the words is refused, not searched as a word", async
   await expect(run(["--jev", "a slow fade - then silence"], vault, noJev)).resolves.toBeDefined();
 });
 
+test("a sub-kind's categories are named under it, so a category keeps to that side", async () => {
+  const pool = [
+    e("rise", "Rise", "", "text-in", "Build & Mask"),
+    e("pop", "Pop", "", "text-in", "Pop & Scale"),
+    e("sink", "Sink", "", "text-out", "Build & Mask"),
+  ];
+  const out = await run(["--kind", "text-in"], pool, noJev);
+  expect(out).toMatch(
+    /categories \(--kind <kind>\/<category>\): text-in\/build-mask 1, text-in\/pop-scale 1/,
+  );
+});
+
+test("a body filter named without a value says what it measures", async () => {
+  for (const [o, says] of [
+    ["--energy", /mean joint speed .*idle ~10, walk ~30, jump 200/],
+    ["--air", /yes .*off the floor.*no .*feet down/],
+    ["--look", /head turn on the neck.*degrees/],
+  ] as const)
+    await expect(run([o], vault, noJev)).rejects.toThrow(says);
+});
+
 test("words that name a kind put its hits first", async () => {
   const pool = [
     e("sad-pose", "Sad pose", "", "mocap", "stand"),

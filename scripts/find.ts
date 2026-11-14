@@ -374,8 +374,11 @@ const kindOf = (said: string, pool: Entry[]) => {
 // "sfx/typing 37, sfx/clicks 93 (Clicks) ...": a kind's categories as --kind takes them, biggest first, with the studio's
 // heading where it says more
 const catList = (xs: Entry[]) => {
+  // all of one sub-kind (--kind text-in): its categories are named under it, or text/<cat> would take text-out too
+  const one = new Set(xs.map((x) => x.kind)).size === 1 ? xs[0]?.kind : undefined;
+  const keyOf = (x: Entry) => (one ? `${one}/${catSlug(x.cat)}` : catKey(x));
   const by = new Map<string, Entry[]>();
-  for (const x of xs) if (x.cat) by.set(catKey(x), [...(by.get(catKey(x)) ?? []), x]);
+  for (const x of xs) if (x.cat) by.set(keyOf(x), [...(by.get(keyOf(x)) ?? []), x]);
   return [...by]
     .toSorted((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
     .map(([key, ys]) => {
@@ -1749,6 +1752,11 @@ const tagged = (field: string, clips: Entry[]) =>
   tally(clips.flatMap((x) => (Array.isArray(x.data?.[field]) ? (x.data[field] as string[]) : [])));
 const DUR_SAYS =
   "min-max seconds, low first, for sounds and mocap clips: --dur 0-1 a short hit, 1-5, 5-30, 30-3600 a track or long ambience";
+const ENERGY_SAYS =
+  "min-max mean joint speed in deg/s, low first, e.g. --energy 10-40 (calm idle ~10, walk ~30, jump 200)";
+const LOOK_SAYS = "the least head turn on the neck in degrees, e.g. --look 45";
+const AIR_SAYS =
+  "yes (off the floor a while: a jump, or on furniture) or no (feet down throughout)";
 // What a filter takes, from the entries here: asked by naming it without a value
 const valuesOf = (o: string, pool: Entry[]) => {
   const clips = pool.filter((x) => x.kind === "mocap");
@@ -1768,6 +1776,9 @@ const valuesOf = (o: string, pool: Entry[]) => {
   if (o in FACETS)
     return `${o}: ${buckets(o, pool)}${o === "--license" && rawLicenses(pool) ? `. Or a licence by name (--license mit): ${rawLicenses(pool)}` : ""}`;
   if (o === "--dur") return `--dur takes ${DUR_SAYS}. Here: ${durs(pool)}`;
+  if (o === "--energy") return `--energy takes ${ENERGY_SAYS}`;
+  if (o === "--look") return `--look takes ${LOOK_SAYS}`;
+  if (o === "--air") return `--air is ${AIR_SAYS}`;
   if (o === "--from" || o === "--to" || o === "--has")
     return `postures: ${postures(clips).join(" ")}`;
   if ((TAGGED as readonly string[]).includes(o))
@@ -1908,7 +1919,7 @@ export async function run(
       throw new FindError(
         o === "--dur"
           ? `--dur takes min-max seconds, low first, e.g. --dur 0-1 (a short hit), --dur 120-600 (a long track), 3-3 for exactly 3; got ${v}`
-          : `--energy takes min-max mean joint speed in deg/s, low first, e.g. --energy 10-40 (calm idle ~10, walk ~30, jump 200); got ${v}`,
+          : `--energy takes ${ENERGY_SAYS}; got ${v}`,
       );
     return [lo!, hi!] as const;
   };
@@ -1973,17 +1984,11 @@ export async function run(
       const v = set.get(o) ?? "";
       if (o === "--energy") return [o, v];
       if (o === "--look") {
-        if (!/^\d+(?:\.\d+)?$/.test(v))
-          throw new FindError(
-            `--look takes the least head turn on the neck in degrees, e.g. --look 45; got ${v}`,
-          );
+        if (!/^\d+(?:\.\d+)?$/.test(v)) throw new FindError(`--look takes ${LOOK_SAYS}; got ${v}`);
         return [o, v];
       }
       if (o === "--air") {
-        if (v !== "yes" && v !== "no")
-          throw new FindError(
-            `--air is yes (off the floor a while: a jump, or on furniture) or no (feet down throughout); got ${v}`,
-          );
+        if (v !== "yes" && v !== "no") throw new FindError(`--air is ${AIR_SAYS}; got ${v}`);
         return [o, v];
       }
       if ((TAGGED as readonly string[]).includes(o)) {
