@@ -1,9 +1,12 @@
 // src/stale.mjs: framecheck, sheet, pace and deliver say when the video they read is older than the film data it was drawn from
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { seenSound } from "../src/narration.ts";
 import { staleVideo } from "../src/stale.mjs";
 
 const film = () => {
@@ -118,6 +121,70 @@ test("a span or a final chunk older than a picture change names the render that 
     );
     expect(staleVideo(dir, "renders/final_chunks/c02.mp4")?.message).toMatch(
       /bun run render final draws it again/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// the mouths follow the narration clips (src/lips.ts): a render keeps what it drew them from in <chunks>/seen-sound.json
+test("a video drawn before a narration clip moved is stale; a gain or a bed changed since is not", () => {
+  const { dir, at } = film();
+  try {
+    const sound = (sfx, beds = []) =>
+      writeFileSync(
+        join(dir, "src/timeline/audio.json"),
+        JSON.stringify({ narration: "n", beds, sfx }),
+      );
+    mkdirSync(join(dir, "renders/chunks"));
+    writeFileSync(
+      join(dir, "renders/chunks/seen-sound.json"),
+      JSON.stringify(seenSound({ narration: "n", sfx: [{ name: "n", at: 0 }] })),
+    );
+    sound(
+      [
+        { name: "n", at: 0, gain: -3 },
+        { name: "door", at: 2 },
+      ],
+      [{ name: "rain", gain: -9 }],
+    );
+    at("src/timeline/audio.json", 5000);
+    expect(staleVideo(dir, "renders/draft_video.mp4")).toBeNull();
+
+    sound([{ name: "n", at: 1.5 }]);
+    at("src/timeline/audio.json", 5000);
+    const s = staleVideo(dir, "renders/draft_video.mp4");
+    expect(s?.file).toBe("src/timeline/audio.json");
+    expect(s?.message).toMatch(/narration clips moved[^\n]*bun run render clip draws it again/);
+
+    writeFileSync(join(dir, "renders/draft.mp4"), "x");
+    at("renders/draft.mp4", 6000);
+    expect(staleVideo(dir, "renders/draft.mp4")?.message).toMatch(
+      /narration clips moved[^\n]*bun run render clip[^\n]*then bun run mix renders\/draft_video\.mp4/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("bun stale.mjs <video>, as sheet.py and deliver.py run it, prints what aged the video", () => {
+  const { dir, at } = film();
+  try {
+    mkdirSync(join(dir, "renders/chunks"));
+    writeFileSync(join(dir, "renders/chunks/c02.mp4"), "x");
+    at("renders/chunks/c02.mp4", 2000);
+    at("src/scene.ts", 3600);
+    const r = spawnSync(
+      "bun",
+      [fileURLToPath(new URL("../src/stale.mjs", import.meta.url)), "renders/chunks/c02.mp4"],
+      {
+        cwd: dir,
+        encoding: "utf8",
+        env: { ...process.env, LIVE_PROJECT: dir },
+      },
+    );
+    expect(r.stdout).toMatch(
+      /renders\/chunks\/c02\.mp4 is older than src\/scene\.ts[^\n]*bun run render clip/,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

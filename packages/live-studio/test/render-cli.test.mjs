@@ -148,10 +148,17 @@ test("captions and final refuse the options they would ignore", (t) => {
       env: { ...process.env, LIVE_PROJECT: dir, ...env },
     });
 
+  const clip = render("clip", { CHECK: "motion:cam,1,2" });
+  assert.equal(clip.status, 2, clip.stdout + clip.stderr);
+  assert.match(clip.stderr, /CHECK goes with render stills/);
+
+  const alone = render("captions", {});
+  assert.equal(alone.status, 0, alone.stdout + alone.stderr);
+  assert.match(alone.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
+
   const captions = render("captions", { AT: "4" });
   assert.equal(captions.status, 2, captions.stdout + captions.stderr);
   assert.match(captions.stderr, /AT does nothing for render captions/);
-  assert.ok(!existsSync(join(dir, "renders/draft_video.srt")), "nothing written");
 
   // a final takes half an hour and is the upload: a check goes on the stills before it
   const final = render("final", { CHECK: "motion:cam,1,2" });

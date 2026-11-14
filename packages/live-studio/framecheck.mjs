@@ -1,10 +1,10 @@
 // The encoded draft's picture faults; HELP below says how to run it
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 import { meter } from "./checks/frames.mjs";
-import { cliArgs, envTypos, jsonFile, needFilm, numberArg } from "./src/cli.mjs";
+import { cliArgs, envTypos, jsonFile, needFilm, secondArg } from "./src/cli.mjs";
 import { ratioOf, sizeOf } from "./src/frame.ts";
 import { staleVideo } from "./src/stale.mjs";
 import { probeVideo, videoStart } from "./src/video.mjs";
@@ -62,14 +62,13 @@ const [w, h] = sizeOf(ratio, 192),
   tall = ratio === "9:16" ? "16/9" : "9/16";
 const cutsFile = join(RENDERS, "cuts.json");
 const where = videoStart(video);
-const START =
-  process.env.START !== undefined ? numberArg("START", process.env.START, { min: 0 }) : where.start;
+const START = process.env.START !== undefined ? secondArg("START", process.env.START) : where.start;
 if (START)
   console.log(
     `film seconds from ${START} s on (${process.env.START !== undefined ? "START" : `the ${where.kind}'s start`})`,
   );
 const written = existsSync(cutsFile) ? readJson(cutsFile) : [];
-if (!Array.isArray(written) || written.some((c) => typeof c !== "number")) {
+if (!Array.isArray(written) || written.some((c) => typeof c !== "number" || !(c >= 0))) {
   console.error("renders/cuts.json is no list of seconds: bun run render clip writes it again");
   process.exit(1);
 }
@@ -165,10 +164,22 @@ for (const x of faults.slice(0, 12)) {
   );
 }
 if (faults.length > 12) console.log(`${faults.length - 12} more not drawn`);
+// a mixed video (draft.mp4, final.mp4) gets its new picture through the mix again; the upload's picture goes on to deliver
+const mixed = /^(draft|final)\.mp4$/.test(basename(video));
+const remix =
+  where.final || mixed
+    ? `, then bun run mix renders/${where.final ? "final" : "draft"}_video.mp4`
+    : "";
+const upload =
+  basename(video) === "final_video.mp4"
+    ? "; then bun run mix renders/final_video.mp4, then bun run deliver (YouTube's spec)"
+    : basename(video) === "final.mp4"
+      ? "; then bun run deliver (YouTube's spec)"
+      : "";
 if (faults.length) {
   const redraw = where.span
     ? `SPAN=${where.span.join(",")} bun run render clip`
-    : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render ${where.final ? "final, then bun run mix renders/final_video.mp4" : "clip"}: chunk N is N*30 s on`;
+    : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render ${where.final ? "final" : "clip"}${remix}: chunk N is N*30 s on`;
   console.log(
     `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (${redraw}), then bun run framecheck${videoArg ? ` ${videoArg}` : ""} again`,
   );
@@ -176,5 +187,5 @@ if (faults.length) {
 // a clean file is not a good one: what the meter cannot judge is left to the eye
 else
   console.log(
-    `next: the meter judges only faults; look at it yourself: bun run sheet ${videoArg ?? "renders/draft_video.mp4"} ${[0.2, 0.5, 0.8].map((k) => +(START + (k * frames) / fps).toFixed(1)).join(",")}`,
+    `next: the meter judges only faults; look at it yourself: bun run sheet ${videoArg ?? "renders/draft_video.mp4"} ${[0.2, 0.5, 0.8].map((k) => +(START + (k * frames) / fps).toFixed(1)).join(",")}${upload}`,
   );

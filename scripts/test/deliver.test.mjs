@@ -221,6 +221,8 @@ test("--youtube re-encodes the seconds asked as YouTube would and measures their
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stderr, /re-encoding 1 s the way YouTube serves it \(AV1 4Mbps, 2560 wide\)/);
   assert.match(r.stdout, /bands \(Netflix CAMBI\)/);
+  // nothing banded in testsrc2's flat colours: the last line still says what comes next
+  assert.match(r.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
   const probe = spawnSync(
     "ffprobe",
     [

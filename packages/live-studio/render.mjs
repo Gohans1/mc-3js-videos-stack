@@ -14,7 +14,7 @@ import { cliArgs, envTypos, jsonFile, numberArg, secondArg } from "./src/cli.mjs
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
-import { narrationLines } from "./src/narration.ts";
+import { narrationLines, seenSound } from "./src/narration.ts";
 import { isRead, pxOf } from "./src/readable.mjs";
 import { audioInfo } from "./src/sound.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
@@ -120,7 +120,7 @@ const misplaced =
               ? "RES is for render final or poster"
               : full && process.env.LIST === "1"
                 ? `LIST=1 draws over drafts only; a ${what} is the picture alone`
-                : (what === "poster" || what === "final") && process.env.CHECK
+                : ["poster", "final", "clip"].includes(what) && process.env.CHECK
                   ? "CHECK goes with render stills"
                   : what === "poster" && !process.env.AT
                     ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
@@ -201,6 +201,9 @@ const writeCaptions = () => {
 };
 if (what === "captions") {
   writeCaptions();
+  console.log(
+    "next: a player shows them with renders/draft_video.mp4 (the same name); bun run voice:cues lists each line at its second",
+  );
   process.exit(0);
 }
 const pkg = readJson(join(PROJECT, "package.json"), {});
@@ -277,8 +280,6 @@ if (span && (span.length !== 2 || span[0] >= span[1])) {
   );
   process.exit(2);
 }
-const spanFrames = span && spanOf(span, FPS),
-  SPAN_FILE = spanFrames?.file;
 const final = what === "final";
 const samples = env.SAMPLES
   ? numberArg("SAMPLES", env.SAMPLES, { min: 1, max: 64, int: true })
@@ -296,6 +297,9 @@ if (full && !FINAL_SIZES[res]) {
 }
 // A second past the end, or a CHECK range that runs backwards, is refused here: the page would say it too, after the scene build
 const ends = heardLength(PROJECT, pkg["live-studio"] ?? {});
+const lastFrame = ends ? chunksOf(ends.layers, CHUNK, FPS).at(-1)[1] : Infinity;
+const spanFrames = span && spanOf(span, FPS, lastFrame),
+  SPAN_FILE = spanFrames?.file;
 if (ends) {
   // the frame each second draws, as the page counts it (render/page.ts refuses a frame past DURATION, the same length)
   const past = at.filter((s) => Math.round(s * FPS) / FPS > ends.layers + 1e-9);
@@ -305,7 +309,6 @@ if (ends) {
     );
     process.exit(2);
   }
-  const lastFrame = chunksOf(ends.layers, CHUNK, FPS).at(-1)[1];
   if (span && span[1] > ends.layers + 0.05) {
     console.error(
       `SPAN ${span.join(",")} runs past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard`,
@@ -436,19 +439,21 @@ const cfg = {
 // ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
 const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/page.ts");
 const t0 = Date.now();
-// The sound timeline never changes a frame (src/stale.mjs skips it too); only LIST=1's overlay names its rows. Left out of a
-// video's build, a gain tweak keeps every chunk's stamp, so render clip redraws nothing for it
-const soundFile =
-  video && !cfg.list && pkg["live-studio"]?.soundTimeline
-    ? resolve(PROJECT, pkg["live-studio"].soundTimeline)
+// Of the sound timeline only the narration clips change a frame (the mouths follow them, src/lips.ts) and LIST=1's overlay
+// names its rows. A video is built with that part alone (seenSound), so a gain, a bed or an effect keeps every chunk's stamp
+// and render clip redraws nothing for it; the joined video keeps it in <chunks>/seen-sound.json for src/stale.mjs
+const soundPath = pkg["live-studio"]?.soundTimeline
+  ? resolve(PROJECT, pkg["live-studio"].soundTimeline)
+  : null;
+const seenJson =
+  video && soundPath && existsSync(soundPath)
+    ? JSON.stringify(seenSound(readJson(soundPath, null)))
     : null;
+const soundFile = video && !cfg.list ? soundPath : null;
 const noSound = {
   name: "picture-without-sound",
   enforce: "pre",
-  load: (id) =>
-    soundFile && resolve(id.split("?")[0]) === soundFile
-      ? JSON.stringify({ beds: [], sfx: [] })
-      : null,
+  load: (id) => (soundFile && resolve(id.split("?")[0]) === soundFile ? seenJson : null),
 };
 // A film's code that does not build: rolldown's own report colours every character and Bun prints rolldown's source under
 // it, so only the place and the words are said, plain
@@ -466,6 +471,7 @@ const notBuilt = (e) => {
   console.error(
     "the film's code does not build: fix it, then bun run render again (nothing was rendered)",
   );
+  rmSync(OUT, { recursive: true, force: true }); // a build folder per run: a failed one is left nowhere
   process.exit(1);
 };
 const built = await build({
@@ -743,6 +749,11 @@ if (!failed && chunks) {
       console.log(
         `⚠ ${old.length === 1 ? `chunk ${old[0]} was` : `chunks ${old.join(", ")} were`} drawn before the film's last change and joined as ${old.length === 1 ? "it was" : "they were"}: CHUNKS=${old.join(",")} bun run render ${what} redraws ${old.length === 1 ? "it" : "them"} (bun run render ${what} redraws every chunk not current)`,
       );
+    // the captions go with the joined video; its next: line stays the last one printed
+    if (j.status === 0) {
+      if (seenJson) writeFileSync(join(CHUNKS, "seen-sound.json"), seenJson);
+      writeCaptions();
+    }
     console.log(
       j.status !== 0
         ? "ERROR join failed"
@@ -751,7 +762,6 @@ if (!failed && chunks) {
           : `joined renders/${JOINED}, picture only${existsSync(join(RENDERS, "draft.mp4")) ? ": renders/draft.mp4 keeps the old picture with its sound until bun run mix renders/" + JOINED : ""}\nnext: bun run framecheck (black, flashes, jumps, freezes); frames to look at: bun run sheet renders/${JOINED} ${ends ? [0.2, 0.5, 0.8].map((k) => +(k * ends.layers).toFixed(1)).join(",") : "1"}`,
     );
     if (j.status) failed = true;
-    else writeCaptions();
   }
 }
 process.exit(failed ? 1 : 0);

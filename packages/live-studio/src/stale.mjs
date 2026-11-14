@@ -1,9 +1,11 @@
 // Is a rendered video older than the film data its picture comes from? framecheck and pace import it; sheet.py and deliver.py run
-// `bun stale.mjs <video>` inside the film and print what it prints. The sound timeline is left out: it never changes a frame.
+// `bun stale.mjs <video>` inside the film and print what it prints. Of the sound timeline only the narration clips change a
+// frame (the mouths follow them): a video ages when they moved since render drew it (<chunks>/seen-sound.json, seenSound).
 // draft.mp4 and final.mp4 are mix's: <name>_video.mp4's picture with the sound of when mix ran, so their sound counts too.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 
+import { seenSound } from "./narration.ts";
 import { videoStart } from "./video.mjs";
 
 export const staleVideo = (root, video) => {
@@ -30,6 +32,20 @@ export const staleVideo = (root, video) => {
   };
   if (existsSync(join(root, "src"))) walk(join(root, "src"));
   const shown = relative(root, file).replaceAll("\\", "/");
+  const where = videoStart(shown);
+  let voiceMoved = false;
+  const drawnWith = join(
+    root,
+    "renders",
+    where.final ? "final_chunks" : "chunks",
+    "seen-sound.json",
+  );
+  if (sound && where.kind !== "span" && existsSync(drawnWith))
+    try {
+      const now = seenSound(JSON.parse(readFileSync(join(root, sound), "utf8")));
+      voiceMoved = JSON.stringify(now) !== readFileSync(drawnWith, "utf8");
+    } catch {} // a broken sound timeline is bun run check's to say
+  const moved = `the narration clips moved in ${sound} since it was drawn (the mouths follow them)`;
   const picture =
     /^(draft|final)\.mp4$/.test(basename(file)) && file.replace(/\.mp4$/, "_video.mp4");
   if (picture) {
@@ -39,6 +55,11 @@ export const staleVideo = (root, video) => {
       return {
         file: rel(picture),
         message: `${shown} has an older picture than ${rel(picture)}: ${mix} puts the new picture with the sound`,
+      };
+    if (voiceMoved)
+      return {
+        file: sound,
+        message: `${shown}: ${moved}; bun run render ${where.final ? "final" : "clip"} draws them again, then ${mix}`,
       };
     if (newest)
       return {
@@ -53,14 +74,14 @@ export const staleVideo = (root, video) => {
       ? { file: rel(heard), message: `${shown} has an older sound than ${rel(heard)}: ${mix}` }
       : null;
   }
-  if (!newest) return null;
+  if (!newest && !voiceMoved) return null;
   // a chunk's stamp covers the whole built film (render.mjs stamp), so any change draws every chunk again
-  const where = videoStart(shown);
   const again = where.final
     ? "bun run render final draws it again"
     : where.kind === "span"
       ? `SPAN=${where.span.join(",")} bun run render clip draws it again`
       : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
+  if (!newest) return { file: sound, message: `${shown}: ${moved}; ${again}` };
   return {
     file: newest.rel,
     message: `${shown} is older than ${newest.rel} (changed ${Math.max(1, Math.round((newest.m - made) / 60000))} min after it): its frames may not show that change; ${again}`,

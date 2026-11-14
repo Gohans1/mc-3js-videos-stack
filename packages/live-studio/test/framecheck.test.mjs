@@ -161,3 +161,49 @@ test("a cuts.json that is no list of seconds is a fault named, not a crash", (t)
   assert.equal(out.status, 1, out.stdout + out.stderr);
   assert.match(out.stderr, /renders\/cuts\.json is no list of seconds/);
 });
+
+test("a negative second in cuts.json is no cut: refused like any other broken cuts.json", (t) => {
+  const dir = film(t, "16:9");
+  flip(join(dir, "renders/draft_video.mp4"));
+  writeFileSync(join(dir, "renders/cuts.json"), "[-1]");
+  const out = framecheck(dir);
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(out.stderr, /renders\/cuts\.json is no list of seconds/);
+});
+
+test("what comes after a clean upload picture is the mix and deliver; a fault in a mixed draft is mixed again", (t) => {
+  const dir = film(t, "16:9");
+  const still = spawnSync("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=s=64x36:r=30:d=2",
+    "-pix_fmt",
+    "yuv420p",
+    join(dir, "renders/final_video.mp4"),
+  ]);
+  assert.equal(still.status, 0, String(still.stderr));
+  const clean = framecheck(dir, "renders/final_video.mp4");
+  assert.match(
+    clean.stdout.trim().split(/\r?\n/).at(-1),
+    /^next: [^\n]*bun run mix renders\/final_video\.mp4, then bun run deliver/,
+  );
+  flip(join(dir, "renders/draft.mp4"));
+  const mixed = framecheck(dir, "renders/draft.mp4");
+  assert.match(mixed.stdout, /bun run render clip, then bun run mix renders\/draft_video\.mp4/);
+});
+
+test("START takes heard seconds as notes print them", (t) => {
+  const dir = film(t, "16:9");
+  flip(join(dir, "renders/draft_video.mp4"));
+  const out = spawnSync("bun", [FRAMECHECK], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 60000,
+    env: { ...process.env, LIVE_PROJECT: dir, START: "1:00" },
+  });
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stdout, /JUMP 61\.00/);
+});

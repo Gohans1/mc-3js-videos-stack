@@ -1,7 +1,7 @@
 ﻿import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { narrationLines } from "../src/narration.ts";
+import { narrationLines, seenSound } from "../src/narration.ts";
 
 const lines = [
   {
@@ -48,4 +48,23 @@ test("split and duplicated narration clips retain only their own words; mute aff
   );
   assert.deepEqual(narrationLines(lines, audio, 8, true), []);
   assert.deepEqual(narrationLines(lines, { ...audio, sfx: [] }, 8), []);
+});
+
+test("what of the sound shows in the picture: where the narration clips put the voice and which tracks are muted", () => {
+  const audio = {
+    narration: "voice",
+    voiceGain: -2,
+    beds: [{ name: "rain", from: 0, to: 9, gain: -20 }],
+    sfx: [
+      { name: "voice", at: 1, start: 0.5, gain: -3, track: "v" },
+      { name: "door", at: 4, gain: -6 },
+    ],
+    tracks: [{ id: "v", mute: true, gain: -4 }],
+  };
+  assert.deepEqual(JSON.parse(JSON.stringify(seenSound(audio))), {
+    beds: [],
+    narration: "voice",
+    sfx: [{ name: "voice", at: 1, start: 0.5, track: "v" }],
+    tracks: [{ id: "v", mute: true }],
+  });
 });

@@ -9,7 +9,7 @@
 // film's best moment, so a measured film always exits 0 (2 only when there is nothing to measure)
 import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 import {
   cliArgs,
@@ -180,6 +180,12 @@ if (import.meta.main) {
     );
     process.exit(2);
   }
+  if (basename(video) === "youtube_preview.mp4") {
+    console.error(
+      `${shown} is deliver's re-encode of a stretch, from its own second 0; pace measures the whole film: bun run pace renders/draft_video.mp4`,
+    );
+    process.exit(2);
+  }
   if (!probeVideo(video)) {
     console.error(`${shown} is no video: give it a render's mp4, as renders/draft_video.mp4`);
     process.exit(2);
@@ -191,11 +197,13 @@ if (import.meta.main) {
     );
     process.exit(2);
   }
-  const cuts: number[] = readJson(cutsFile);
-  if (!Array.isArray(cuts) || cuts.some((c) => typeof c !== "number")) {
+  const written = readJson(cutsFile);
+  if (!Array.isArray(written) || written.some((c) => typeof c !== "number" || !(c >= 0))) {
     console.error("renders/cuts.json is no list of seconds: bun run render clip writes it again");
     process.exit(1);
   }
+  // render writes them in order; one edited by hand may not be, and every shot is read from one cut to the next
+  const cuts: number[] = written.toSorted((a: number, b: number) => a - b);
   const stale = staleVideo(PROJECT, video);
   if (stale) console.log(`STALE: ${stale.message}`);
   // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape

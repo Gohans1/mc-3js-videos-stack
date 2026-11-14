@@ -207,10 +207,10 @@ def band_picture(video, preview, second, out, offset, last):
                    check=True, timeout=120)
 
 
-def youtube(video, span, root):
+def youtube(video, span, root, named=""):
     info = probe(video)
     pic = next(s for s in info["streams"] if s["codec_type"] == "video")
-    long = float(info["format"]["duration"])
+    long = float(info["format"].get("duration") or pic.get("duration") or 0)
     start, end = span or (0.0, long)
     if not 0 <= start < end <= long + 0.05:
         print(f"--youtube {start:g}-{end:g} is outside the video: it is {long:.2f} s long", file=sys.stderr)
@@ -251,8 +251,12 @@ def youtube(video, span, root):
     cuts = []
     if cuts_file.exists() and video.resolve().parent == out.resolve():
         try:
-            cuts = [float(c) for c in json.loads(cuts_file.read_text(encoding="utf8"))]
-        except (ValueError, TypeError):
+            cuts = json.loads(cuts_file.read_text(encoding="utf8"))
+        except ValueError:
+            cuts = None
+        # a dict or a string would iterate into cuts nobody made
+        if not isinstance(cuts, list) or not all(type(c) in (int, float) and c >= 0 for c in cuts):
+            cuts = []
             print("renders/cuts.json is no list of seconds: the bands are named without their shots (bun run render clip writes it again)")
     peaks = [max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0)) for a, b in spans]
     for (a, b), peak in zip(spans[:6], peaks):
@@ -268,10 +272,12 @@ def youtube(video, span, root):
               "Smooth dither is too fine to survive it (on a test gradient a grain of +-3 levels was wiped out, +-8 survived this "
               "rung, nothing survived 1080p at 1 Mbps). What holds: texture in the scene itself (dust, haze with noise, textured "
               "blocks instead of a bare lit plane), or visible grain over those seconds: an Adjustment in src/timeline/adjust.json "
-              f"with grade.basic.particles (the studio's Particles slider). bun run at {peaks[0]} names the shot; then render final, "
-              f"mix, and bun run deliver --youtube {spans[0][0]}-{spans[0][1] + 1} on the same seconds until it names none")
+              "with grade.basic.particles (the studio's Particles slider).")
+        print(f"next: bun run at {peaks[0]} names the shot; then render final, mix, and bun run deliver {named}--youtube "
+              f"{spans[0][0]}-{min(spans[0][1] + 1, long):g} on the same seconds until it names none")
     else:
         print("the re-encode adds no bands a viewer would notice")
+        print("next: watch renders/youtube_preview.mp4 yourself: the meter counts only bands")
     return 0
 
 
@@ -343,7 +349,7 @@ def main(args):
         print("ready to upload" + (" (the ADVICE lines are worth a look)" if found else ""))
     # sound alone has no picture to re-encode: its FIX line already says so
     if preview and any(s["codec_type"] == "video" for s in info["streams"]):
-        code = youtube(video, span, root)
+        code = youtube(video, span, root, f"{video} " if named else "")
         if code:
             return code
     elif not fixes:

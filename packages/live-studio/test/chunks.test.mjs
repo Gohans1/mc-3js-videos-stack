@@ -20,3 +20,8 @@ test("a span is drawn from whole frames, and named at the seconds those frames s
   expect(spanOf([10.01, 12.01], 30)).toEqual({ first: 300, last: 359, file: "span_10-12.mp4" });
   expect(spanOf([10.05, 12], 30)).toEqual({ first: 302, last: 359, file: "span_10.07-12.mp4" });
 });
+
+test("a span past the film's last frame ends on it, and is named by the frames it holds", () => {
+  // a 10 s film's last frame is 299 (9.967 s): SPAN=9.9,10.05 draws 297-299, which end at 10 s
+  expect(spanOf([9.9, 10.05], 30, 299)).toEqual({ first: 297, last: 299, file: "span_9.9-10.mp4" });
+});

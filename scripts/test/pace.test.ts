@@ -127,3 +127,20 @@ test("a cuts.json that is no list of seconds is a fault named, not a crash", () 
   expect(r.status).toBe(1);
   expect(r.stderr).toMatch(/renders\/cuts\.json is no list of seconds/);
 });
+
+test("deliver's re-encoded stretch is no whole film either", () => {
+  const r = paceOn("renders/youtube_preview.mp4", clip);
+  expect(r.status).toBe(2);
+  expect(r.stderr).toMatch(
+    /youtube_preview\.mp4 is deliver's re-encode of a stretch[^\n]*renders\/draft_video\.mp4/,
+  );
+});
+
+test("cuts written by hand out of order are read in order; a negative second is no cut", () => {
+  const sorted = paceOn("renders/draft_video.mp4", clip, "[1.5, 0.5]");
+  expect(sorted.status).toBe(0);
+  expect(sorted.stdout).toMatch(/longest: shot 1 at 0\.50-1\.50 \(1\.00 s\)/);
+  const negative = paceOn("renders/draft_video.mp4", clip, "[-2]");
+  expect(negative.status).toBe(1);
+  expect(negative.stderr).toMatch(/renders\/cuts\.json is no list of seconds/);
+});

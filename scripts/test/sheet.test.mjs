@@ -48,7 +48,7 @@ test("sheet cut N says which shots meet there and the transition between them; a
     cut.stdout,
     /cut 1 at 2\.00 s: from shot 1 "his hand" into shot 2 "the hall", dissolve 0\.5 s \(src\/timeline\/shots\.json \[2\]\.transition\)/,
   );
-  assert.match(cut.stdout, /next: bun run at 2 /);
+  assert.match(cut.stdout, /bun run at 2 names every row/);
 
   const gone = sheet("renders/nope.mp4", "1");
   assert.equal(gone.status, 2, gone.stdout + gone.stderr);
@@ -223,4 +223,33 @@ test("a second under a thousandth is laid out with the others", (t) => {
   const r = sheet("renders/draft_video.mp4", "0.00005,1");
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /2 pictures/);
+});
+
+test("a cuts.json of anything but a list of seconds is refused, never read as cuts", (t) => {
+  for (const bad of ['{"1": 2}', '"123"', "[1, -2]"]) {
+    const sheet = film(t, []);
+    writeFileSync(join(sheet.dir, "renders/cuts.json"), bad);
+    const r = sheet("renders/draft_video.mp4", "shots");
+    assert.equal(r.status, 1, `${bad}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /renders\/cuts\.json is no list of seconds/);
+  }
+});
+
+test("the last line says what to do next, a cut's row lookup included; START takes heard seconds", (t) => {
+  const sheet = film(t, [1, 2]);
+  const cut = sheet("renders/draft_video.mp4", "cut", "1");
+  assert.match(
+    cut.stdout.trim().split(/\r?\n/).at(-1),
+    /^next: open it to look; bun run at 2 names every row that places it/,
+  );
+  const plain = sheet("renders/draft_video.mp4", "1");
+  assert.match(plain.stdout.trim().split(/\r?\n/).at(-1), /^next: open it to look/);
+  const r = spawnSync("python", [SHEET, "renders/draft_video.mp4", "1:01"], {
+    cwd: sheet.dir,
+    encoding: "utf8",
+    timeout: 60000,
+    env: { ...process.env, START: "1:00" },
+  });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /film seconds from 60 s on \(START\)/);
 });

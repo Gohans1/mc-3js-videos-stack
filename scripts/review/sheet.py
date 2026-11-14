@@ -43,9 +43,13 @@ def cuts_of():
     if not f.exists():
         usage("no renders/cuts.json to find the shots in: bun run render clip writes it with the video")
     try:
-        return sorted(float(c) for c in json.loads(f.read_text(encoding="utf8")))
-    except (ValueError, TypeError):
+        cuts = json.loads(f.read_text(encoding="utf8"))
+    except ValueError:
+        cuts = None
+    # a list of film seconds, as render clip writes it; a dict or a string would iterate into cuts nobody made
+    if not isinstance(cuts, list) or not all(type(c) in (int, float) and c >= 0 for c in cuts):
         usage("renders/cuts.json is no list of seconds: bun run render clip writes it again", 1)
+    return sorted(cuts)
 
 
 USE = "bun run sheet, or bun run sheet <video> 10,20.5,30 | shots | cut <n> (--help for more)"
@@ -59,7 +63,7 @@ if len(args) not in (0, 2, 3) or (len(args) == 3) != (mode == "cut"):
            "the video needs its seconds too" if len(args) == 1 else f"one video at a time, got {len(args)} words")
     usage(f"{why}: {USE}")
 
-tmp, header = None, None
+tmp, header, after = None, None, ""
 if args:
     video = args[0]
     # a render's chunk (renders/chunks or final_chunks/cNN.mp4) starts at NN*30 s, a SPAN run's renders/span_<from>-<to>.mp4 at
@@ -67,12 +71,9 @@ if args:
     chunk = re.search(r"(?:^|[\\/])(?:final_)?chunks[\\/]c(\d+)\.mp4$", video)
     span = re.search(r"(?:^|[\\/])span_(\d+(?:\.\d+)?)-\d+(?:\.\d+)?\.mp4$", video)
     if "START" in os.environ:
-        try:
-            start = float(os.environ["START"])
-            if not 0 <= start < 1e6:
-                raise ValueError
-        except ValueError:
-            usage(f"START takes the film second the video starts at, 0 or more, got {os.environ['START']!r}")
+        start = heard_second(os.environ["START"])
+        if start is None or not 0 <= start < 1e6:
+            usage(f"START takes the film second the video starts at (65, 1:05 or 01:05.250), got {os.environ['START']!r}")
     else:
         start = int(chunk.group(1)) * 30 if chunk else float(span.group(1)) if span else 0.0
         if start >= 1e6:
@@ -125,7 +126,8 @@ if args:
             tr = b.get("transition") or {}
             fx = f"{tr.get('fx')} {tr.get('len', 0):g} s ({rows_file} [{n + 1}].transition)" if tr.get("fx") else f"a hard cut (a transition goes in {rows_file} [{n + 1}].transition)"
             meet = f': from shot {n} "{a.get("name", "")}" into shot {n + 1} "{b.get("name", "")}", {fx}'
-        header = f"cut {n} at {c:.2f} s{meet}; frames from 0.25 s before to 0.35 s after\nnext: bun run at {round(c, 2):g} names every row that places it"
+        header = f"cut {n} at {c:.2f} s{meet}; frames from 0.25 s before to 0.35 s after"
+        after = f"; bun run at {round(c, 2):g} names every row that places it"
 
     else:
         secs = [heard_second(s) for s in args[1].split(",")]
@@ -134,7 +136,8 @@ if args:
         out = sorted({s for s in secs if not start <= s < start + dur})
         if out:
             usage(f"{video} holds film seconds {start:g}-{start + dur:.2f}; outside it: {', '.join(f'{s:g}' for s in out)}")
-    secs = sorted({min(s, end) for s in secs})
+    # one picture a thousandth of a second (the name it is laid out under): two asks inside one are the same frame
+    secs = sorted({round(min(s, end), 3) for s in secs})
     if start:
         print(f"film seconds from {start:g} s on ({'START' if 'START' in os.environ else 'the chunk' + chr(39) + 's start' if chunk else 'the span' + chr(39) + 's start'})")
     if header:
@@ -179,4 +182,5 @@ for i in range(0, len(files), 6):
 if tmp:
     shutil.rmtree(tmp, ignore_errors=True)
 sheets = (len(files) + 5) // 6
-print(len(files), "pictures ->", sheets, "sheet: open it to look" if sheets == 1 else "sheets: open them to look")
+print(len(files), "pictures ->", sheets, "sheet" if sheets == 1 else "sheets")
+print(f"next: open {'it' if sheets == 1 else 'them'} to look{after}")
