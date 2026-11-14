@@ -118,6 +118,7 @@ function bakeKept({ root, names, clip }, player, fps) {
   mixer.stopAllAction();
   mixer.uncacheRoot(root);
   const last = structuredClone(bake.frames.at(-1));
+  leaveAsBaked(player, last); // pose() updates his bones alone
   // the clip starts where its key puts him: its hips' first ground position is the key's `at`
   const { x: x0, z: z0 } = bake.frames[0].root;
   for (const f of bake.frames) {
