@@ -692,8 +692,9 @@ export function transitionProgress(rawProgress: number, ease?: TransitionEase) {
 const normalizeFeather = (feather?: number) =>
   typeof feather === "number" && Number.isFinite(feather) ? Math.max(0, Math.min(1, feather)) : 0.5;
 
+// a film's own transition with a built-in's id replaces it, as its own titles and sounds do
 function findTransition(fx: string, extra?: readonly TransitionDef[]): TransitionDef | null {
-  return TRANSITIONS.find((x) => x.id === fx) ?? extra?.find((x) => x.id === fx) ?? null;
+  return extra?.find((x) => x.id === fx) ?? TRANSITIONS.find((x) => x.id === fx) ?? null;
 }
 
 export function transitionLength(
@@ -759,7 +760,7 @@ export function makeTransitions(
   a.wrapS = a.wrapT = b.wrapS = b.wrapT = THREE.ClampToEdgeWrapping;
 
   const catalogue: readonly TransitionDef[] = extra?.length
-    ? [...TRANSITIONS, ...extra.filter((x) => !TRANSITIONS.some((b0) => b0.id === x.id))]
+    ? [...TRANSITIONS.filter((b0) => !extra.some((x) => x.id === b0.id)), ...extra]
     : TRANSITIONS;
 
   // Lazy-compiled display-referred shaders so startup compiles zero unused WebGL programs.

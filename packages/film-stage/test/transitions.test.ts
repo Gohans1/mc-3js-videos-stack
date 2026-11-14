@@ -100,6 +100,23 @@ test("supports custom film-defined transitions without closed-enum cages", () =>
   });
 });
 
+test("a film's own transition with a built-in's id replaces the built-in, as a film's own titles do", () => {
+  const own = [
+    {
+      id: "dissolve",
+      title: "Our dissolve",
+      tip: "Custom",
+      category: "Custom",
+      ease: "snapOut" as const,
+      glsl: "vec4 transition(vec2 uv) { return mix(getFromColor(uv), getToColor(uv), progress); }",
+    },
+  ];
+  expect(transitionAt(shots, 14, 3.5, own)?.progress).toBeCloseTo(
+    transitionProgress(0.25, "snapOut"),
+    6,
+  );
+});
+
 test("a film-defined transition's own ease is its Natural curve, and a shot's ease still overrides it", () => {
   const custom = [
     {
