@@ -327,7 +327,7 @@ test("#N numbers the notes as bun run notes does: a line missing its fields is n
     encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /^note #1 \(hand\)/m);
+  assert.match(r.stdout, /^note #1 \(hand, open\)/m);
 });
 
 test("a second inside a gap names no shot, camera key or moving row: the picture is black", (t) => {
@@ -338,6 +338,9 @@ test("a second inside a gap names no shot, camera key or moving row: the picture
   );
   const got = whatsAt(dir, 2.5);
   assert.deepEqual([got.shot, got.cam, got.cuts, got.keys], [null, null, [], []]);
+  // a draft rendered before the gap went in has a cut there
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([2.5]));
   const r = spawnSync("bun", [AT, "2.5"], {
     env: { ...process.env, LIVE_PROJECT: dir },
     encoding: "utf8",
@@ -347,7 +350,7 @@ test("a second inside a gap names no shot, camera key or moving row: the picture
     r.stdout,
     /^00:02\.500 heard \(2\.5 s\); black here, a gap in src\/timeline\/timing\.json gaps\[\]/,
   );
-  assert.doesNotMatch(r.stdout, /^(shot|camera|moving)/m);
+  assert.doesNotMatch(r.stdout, /^(shot|camera|moving|cut)/m);
 });
 
 test("a note whose moment is past the film's end now says where it was, not only how long the film is", (t) => {
@@ -360,8 +363,51 @@ test("a note whose moment is past the film's end now says where it was, not only
     encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /^note #1 \(gone\) was written at 00:30\.000 heard/);
+  assert.match(r.stdout, /^note #1 \(gone, open\) "gone" was written at 00:30\.000 heard/);
   assert.match(r.stdout, /past the film's end now \(15\.000 s\)/);
+});
+
+test("a narration on a muted track is said to be muted, not silent", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "voice",
+      tracks: [{ id: "v", mute: true }],
+      beds: [],
+      sfx: [{ name: "voice", at: 0, length: 15, gain: 0, track: "v" }],
+    }),
+  );
+  const r = spawnSync("bun", [AT, "5"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^narration: muted, its clip sits on track v, muted in src\/timeline\/audio\.json tracks\[\]/m,
+  );
+});
+
+test("at with no keyFiles says the moving rows are not read, and a note says what it asks", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { camTimeline: "src/timeline/cam.json" } }),
+  );
+  mkdirSync(join(dir, "notes"));
+  const note = { id: "n1", t: 4, scene: 8.2, text: "the hand shakes", shot: 1, time: "", at: "1" };
+  writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
+  const r = spawnSync("bun", [AT, "#1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^note #1 \(n1, open\) "the hand shakes" was written at/);
+  assert.match(
+    r.stdout,
+    /^moving: package\.json "live-studio" names no keyFiles, so no key rows are read/m,
+  );
 });
 
 test("text inside a gap is not on screen, as the render hides it", (t) => {

@@ -108,6 +108,8 @@ export const noteMoment = (dir: string, ref: string) => {
   return {
     id: n.id,
     n: byAge.indexOf(n) + 1,
+    done: !!n.done,
+    text: String(n.text ?? ""),
     written: n.t as number,
     heard: heardNow(n, film),
     how: !scene
@@ -152,6 +154,8 @@ export const whatsAt = (dir: string, t: number) => {
 
   const audio = read(conf.soundTimeline, null);
   const sounds: Row[] = [];
+  // the voice's clip on a muted track: the mix leaves it out, so its lines are not heard (voice:cues drops them too)
+  let narrationMuted: string | null = null;
   if (audio) {
     // an sfx without "length" lasts as long as its sound file, when the file is on this machine
     const vault = openSound(dir, conf);
@@ -165,6 +169,8 @@ export const whatsAt = (dir: string, t: number) => {
     const heard = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
     // a muted track is left out of every mix (scripts/sound/mix.py MUTED)
     const muted = new Set((audio.tracks ?? []).flatMap((k: Row) => (k.mute ? [k.id] : [])));
+    const voice = (audio.sfx ?? []).find((c: Row) => c.name === audio.narration);
+    if (audio.narration && voice && muted.has(voice.track)) narrationMuted = voice.track;
     heard.beds.forEach((c: Row, i: number) => {
       if (c.from <= t && t < c.to)
         sounds.push({
@@ -306,6 +312,7 @@ export const whatsAt = (dir: string, t: number) => {
     looks,
     keys,
     narration,
+    narrationMuted,
     nextLine,
     voiceFault,
     script,
@@ -349,6 +356,11 @@ if (isMain) {
   };
   let t: number;
   let note: ReturnType<typeof noteMoment> = null;
+  // the note as bun run notes shows it: its state and what it asks, so its moment needs no second command
+  const noteSays = () =>
+    note
+      ? `note #${note.n} (${note.id}, ${note.done ? "done" : "open"}) "${note.text.length > 80 ? `${note.text.slice(0, 79)}…` : note.text}"`
+      : "";
   if (/^-\.?\d/.test(arg)) {
     console.error(`${arg}: the film starts at 0; give a second from 0 on (bun run at 35.6)`);
     process.exit(2);
@@ -383,7 +395,7 @@ if (isMain) {
   if (t >= got.length) {
     if (note) {
       console.log(
-        `note #${note.n} (${note.id}) was written at ${mmss(note.written)} heard; its moment (${mmss(note.heard)}, ${note.how}) is past the film's end now (${got.length.toFixed(3)} s): what it was on has been cut or shortened since.\nnext: the note in full: bun run notes ${note.id}; if its subject is gone, ask the creator: bun run note ask ${note.id} "<your question>"`,
+        `${noteSays()} was written at ${mmss(note.written)} heard; its moment (${mmss(note.heard)}, ${note.how}) is past the film's end now (${got.length.toFixed(3)} s): what it was on has been cut or shortened since.\nnext: the note in full: bun run notes ${note.id}; if its subject is gone, ask the creator: bun run note ask ${note.id} "<your question>"`,
       );
       process.exit(0);
     }
@@ -401,8 +413,8 @@ if (isMain) {
   if (note)
     out.push(
       Math.abs(note.heard - note.written) < 0.005
-        ? `note #${note.n} (${note.id}) was written at ${mmss(note.written)} heard, still the same moment (${note.how})`
-        : `note #${note.n} (${note.id}) was written at ${mmss(note.written)} heard; that moment is heard at ${mmss(note.heard)} now (${note.how})`,
+        ? `${noteSays()} was written at ${mmss(note.written)} heard, still the same moment (${note.how})`
+        : `${noteSays()} was written at ${mmss(note.written)} heard; that moment is heard at ${mmss(note.heard)} now (${note.how})`,
     );
   out.push(
     got.blank
@@ -439,11 +451,13 @@ if (isMain) {
       }`,
     );
   out.push(
-    got.voiceFault
-      ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
-      : got.narration
-        ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
-        : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)`,
+    got.narrationMuted
+      ? `narration: muted, its clip sits on track ${got.narrationMuted}, muted in ${c.soundTimeline} tracks[]: the mix leaves the voice out`
+      : got.voiceFault
+        ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
+        : got.narration
+          ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
+          : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)`,
   );
   if (got.script)
     out.push(
@@ -473,6 +487,10 @@ if (isMain) {
     out.push(
       `looks (${c.adjustmentTimeline}): ${got.looks.map((x) => `items[${x.i}] ${x.text}`).join(", ")}`,
     );
+  if (!c.keyFiles)
+    out.push(
+      `moving: package.json "live-studio" names no keyFiles, so no key rows are read (keyFiles: {"<file>": "<what it moves>"} lists the files of {t} rows)`,
+    );
   if (got.keys.length) {
     out.push("moving (key rows, scene seconds):");
     const shown = got.keys.slice(0, 10);
@@ -489,7 +507,7 @@ if (isMain) {
     );
   // the cut a draft's sheet numbers (renders/cuts.json, heard seconds), when this second sits on one
   const cutsFile = join(film, "renders/cuts.json");
-  const cutTimes: number[] = existsSync(cutsFile) ? jsonFile(cutsFile, film) : [];
+  const cutTimes: number[] = !got.blank && existsSync(cutsFile) ? jsonFile(cutsFile, film) : [];
   const near = cutTimes.findIndex((s) => Math.abs(s - t) <= 0.3);
   if (near >= 0)
     out.push(
