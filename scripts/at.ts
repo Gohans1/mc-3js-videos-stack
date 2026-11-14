@@ -125,7 +125,9 @@ export const whatsAt = (dir: string, t: number) => {
   const { read, conf, edit, cam, sourceEnd, shots } = film;
   const length = Math.max(timingClock.duration, layerDuration());
   const scene = frameAt(timingClock, t);
-  const si = shots.filter((s) => s.t <= scene).length - 1;
+  // a gap in timing.json: the picture is black, so no shot, camera key or moving row is on screen
+  const blank = !frameVisible(timingClock, t);
+  const si = blank ? -1 : shots.filter((s) => s.t <= scene).length - 1;
   const shot = si >= 0 ? { ...shots[si]!, to: shots[si + 1]?.t ?? sourceEnd } : null;
   // the transition into shot i plays len/2 either side of its cut, clamped to its neighbours as film-stage transitionLength does
   const blend = (i: number) => {
@@ -145,8 +147,8 @@ export const whatsAt = (dir: string, t: number) => {
       now: scene >= from && scene < from + len,
     };
   };
-  const cuts = [blend(si), blend(si + 1)].filter((b) => b !== null);
-  const ci = cam.filter((k) => k.t <= scene).length - 1;
+  const cuts = blank ? [] : [blend(si), blend(si + 1)].filter((b) => b !== null);
+  const ci = blank ? -1 : cam.filter((k) => k.t <= scene).length - 1;
 
   const audio = read(conf.soundTimeline, null);
   const sounds: Row[] = [];
@@ -217,7 +219,7 @@ export const whatsAt = (dir: string, t: number) => {
     t0: number;
     t1: number;
   }[] = [];
-  for (const file of Object.keys(conf.keyFiles ?? {})) {
+  for (const file of blank ? [] : Object.keys(conf.keyFiles ?? {})) {
     const walk = (v: unknown, path: string[]) => {
       if (Array.isArray(v)) {
         if (v.length > 1 && v.every((r) => r && typeof r === "object" && typeof r.t === "number")) {
@@ -266,11 +268,12 @@ export const whatsAt = (dir: string, t: number) => {
   }
   // the script not voiced yet (src/edit.json script_lines, scene seconds as the film's list reads them)
   const scriptLines: Row[] = edit.script_lines ?? [];
-  const script = narration
-    ? null
-    : (scriptLines.find((l) => l.t <= scene && scene < (l.until ?? l.t)) ??
-      scriptLines.find((l) => l.t > scene) ??
-      null);
+  const script =
+    narration || blank
+      ? null
+      : (scriptLines.find((l) => l.t <= scene && scene < (l.until ?? l.t)) ??
+        scriptLines.find((l) => l.t > scene) ??
+        null);
 
   // the open notes heard within 3 s of it now (a Speed or Freeze edit since moves where a note is heard)
   const notes = readNotes(dir).flatMap((n) => {
@@ -285,8 +288,7 @@ export const whatsAt = (dir: string, t: number) => {
     t,
     length,
     scene,
-    // a gap in timing.json: the picture is black here
-    blank: !frameVisible(timingClock, t),
+    blank,
     shot,
     shotCount: shots.length,
     cuts,
@@ -379,6 +381,12 @@ if (isMain) {
     crashed(e);
   }
   if (t >= got.length) {
+    if (note) {
+      console.log(
+        `note #${note.n} (${note.id}) was written at ${mmss(note.written)} heard; its moment (${mmss(note.heard)}, ${note.how}) is past the film's end now (${got.length.toFixed(3)} s): what it was on has been cut or shortened since.\nnext: the note in full: bun run notes ${note.id}; if its subject is gone, ask the creator: bun run note ask ${note.id} "<your question>"`,
+      );
+      process.exit(0);
+    }
     console.error(`the film is ${got.length.toFixed(3)} s long: give a second before that`);
     process.exit(2);
   }
@@ -397,11 +405,13 @@ if (isMain) {
         : `note #${note.n} (${note.id}) was written at ${mmss(note.written)} heard; that moment is heard at ${mmss(note.heard)} now (${note.how})`,
     );
   out.push(
-    `${mmss(t)} heard (${+t.toFixed(3)} s); the picture shows scene second ${fmt(got.scene)}${
-      Math.abs(got.scene - t) > 0.005
-        ? ` (Speed/Freeze in ${c.timingTimeline ?? "timing.json"})`
-        : ""
-    }${got.blank ? `; black here, a gap in ${c.timingTimeline ?? "timing.json"} gaps[]` : ""}`,
+    got.blank
+      ? `${mmss(t)} heard (${+t.toFixed(3)} s); black here, a gap in ${c.timingTimeline ?? "timing.json"} gaps[]: no picture, so no shot or camera`
+      : `${mmss(t)} heard (${+t.toFixed(3)} s); the picture shows scene second ${fmt(got.scene)}${
+          Math.abs(got.scene - t) > 0.005
+            ? ` (Speed/Freeze in ${c.timingTimeline ?? "timing.json"})`
+            : ""
+        }`,
   );
   if (got.shot)
     out.push(

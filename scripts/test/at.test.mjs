@@ -330,6 +330,40 @@ test("#N numbers the notes as bun run notes does: a line missing its fields is n
   assert.match(r.stdout, /^note #1 \(hand\)/m);
 });
 
+test("a second inside a gap names no shot, camera key or moving row: the picture is black", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ gaps: [{ from: 2, to: 3 }] }),
+  );
+  const got = whatsAt(dir, 2.5);
+  assert.deepEqual([got.shot, got.cam, got.cuts, got.keys], [null, null, [], []]);
+  const r = spawnSync("bun", [AT, "2.5"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^00:02\.500 heard \(2\.5 s\); black here, a gap in src\/timeline\/timing\.json gaps\[\]/,
+  );
+  assert.doesNotMatch(r.stdout, /^(shot|camera|moving)/m);
+});
+
+test("a note whose moment is past the film's end now says where it was, not only how long the film is", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = { id: "gone", t: 30, scene: 30, text: "gone", shot: 1, time: "", at: "2026-11-01" };
+  writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
+  const r = spawnSync("bun", [AT, "gone"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^note #1 \(gone\) was written at 00:30\.000 heard/);
+  assert.match(r.stdout, /past the film's end now \(15\.000 s\)/);
+});
+
 test("text inside a gap is not on screen, as the render hides it", (t) => {
   const dir = film(t);
   writeFileSync(
