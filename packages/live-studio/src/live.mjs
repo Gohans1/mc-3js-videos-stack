@@ -101,9 +101,8 @@ const api = createApi(film, { page, events, send });
 film.start();
 
 // This machine only, unless asked: --lan opens it to the network for a phone, and nothing here asks for a password
-Bun.serve({
+const serve = {
   port: PORT,
-  hostname: LAN ? "0.0.0.0" : "127.0.0.1",
   idleTimeout: 255,
   async fetch(req, server) {
     server.timeout(req, 0);
@@ -124,7 +123,14 @@ Bun.serve({
     res.headers.set("x-content-type-options", "nosniff");
     return res;
   },
-});
+};
+Bun.serve({ ...serve, hostname: LAN ? "0.0.0.0" : "127.0.0.1" });
+// The browser tries localhost's IPv6 address first, and on Windows a refused one costs ~300 ms per new connection
+try {
+  Bun.serve({ ...serve, hostname: "::1" });
+} catch {
+  /* no IPv6 loopback: localhost is 127.0.0.1 alone */
+}
 console.log(`live at http://localhost:${PORT}`);
 writeFileSync(join(film.WORK, "studio.json"), JSON.stringify({ port: PORT })); // where note.mjs done finds the studio that owns the notes
 tailscaleLink();

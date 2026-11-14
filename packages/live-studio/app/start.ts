@@ -263,12 +263,16 @@ export const start = async (el: Elements) => {
     restoreDraft();
     window.__readyAt = Date.now();
     reportWeight();
+    // Only now: two extra draws a frame while the panels load slow them, most on a phone
+    warm.push(
+      ...SHOTS.map((_, i) => i).sort(
+        (a, b) => Math.abs(SHOTS[a].t - S.t) - Math.abs(SHOTS[b].t - S.t),
+      ),
+    );
   });
 };
 
-const warm = SHOTS.map((_, i) => i).sort(
-  (a, b) => Math.abs(SHOTS[a].t - S.t) - Math.abs(SHOTS[b].t - S.t),
-);
+const warm: number[] = []; // shots to draw once while idle, nearest the playhead first (frame)
 let drawMs = 0,
   frames = 0,
   fpsAt = performance.now(),
