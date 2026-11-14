@@ -76,9 +76,22 @@ const fits = async <T>(q: JevQuestion<T>, shown: T[]) => {
   return shown.map((_, k) => ans[`fit_${k + 1}`]?.noul ?? 0);
 };
 
-export async function jevRank<T>(q: JevQuestion<T>, pool: T[]) {
-  let list = pool;
-  if (list.length > HEAT) {
+// vote: Jev's Choice, or a stand-in for tests
+export async function jevRank<T>(
+  q: JevQuestion<T>,
+  pool: T[],
+  vote: (q: JevQuestion<T>, group: T[]) => Promise<[number, T][]> = choice,
+) {
+  // items Jev would read the same vote once, the first standing for the rest
+  const read = new Set<string>();
+  let list: T[] = [];
+  for (const x of pool) {
+    if (read.has(q.text(x))) continue;
+    read.add(q.text(x));
+    list.push(x);
+  }
+  // a Choice holds 255 options: the heats' winners run in heats again until they fit one final
+  while (list.length > HEAT) {
     // Fisher-Yates on a fixed-seed Park-Miller generator: the same query ranks the same
     let seed = 7;
     const shuffled = [...list];
@@ -91,7 +104,7 @@ export async function jevRank<T>(q: JevQuestion<T>, pool: T[]) {
     for (let k = 0; k < shuffled.length; k += HEAT) heats.push(shuffled.slice(k, k + HEAT));
     const results: [number, T][][] = [];
     for (let k = 0; k < heats.length; k += 4)
-      results.push(...(await Promise.all(heats.slice(k, k + 4).map((h) => choice(q, h)))));
+      results.push(...(await Promise.all(heats.slice(k, k + 4).map((h) => vote(q, h)))));
     list = results.flatMap((r) =>
       r
         .filter(([p]) => p > 0)
@@ -100,7 +113,7 @@ export async function jevRank<T>(q: JevQuestion<T>, pool: T[]) {
         .map(([, x]) => x),
     );
   }
-  return choice(q, list);
+  return vote(q, list);
 }
 
 // The vote over the pool, best first, then a fit for each of the first `show`

@@ -79,7 +79,8 @@ HEAT, KEEP, SEED, FIT_N = 200, 20, 1, 5  # rerank heats; fits checks the first F
 
 def rerank(jev, scene, hits, full=False):
     """Ranks clips by how well each acts out the scene: one Choice over their descriptions, a probability per clip. A
-    Choice holds at most 255 options, so a longer list runs in heats of HEAT whose nonzero picks meet in a final.
+    Choice holds at most 255 options, so a longer list runs in heats of HEAT whose nonzero picks meet in a final (heats
+    again while they are still too many).
     Cost is the tokens read, about one pass over the catalogue. Two traps from TypeSafe's docs and our tests:
     probabilities come rounded to 0.01 (a 200-clip heat has ~7 nonzero), so never fill a heat's picks up by list order;
     and similar clips sit together in name order and would knock each other out in one heat, so the list is shuffled
@@ -89,7 +90,7 @@ def rerank(jev, scene, hits, full=False):
         probs = jev.ask(f"A scene to act out: {scene}", {"clip": {"type": "choice", "instructions": "Which motion clip acts this scene out best?", "criteria": opts}})["clip"]["probabilities"]
         return [(probs.get(f"c{i}", 0), r) for i, r in enumerate(group)]
 
-    if len(hits) > 255:
+    while len(hits) > 255:
         order = hits[:]
         random.Random(SEED).shuffle(order)
         with ThreadPoolExecutor(4) as pool:
