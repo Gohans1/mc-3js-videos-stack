@@ -597,6 +597,7 @@ type Clip = {
 type Review = {
   desc?: string;
   mood?: string[];
+  prop?: string[];
   flaw?: string;
   start?: string;
   end?: string;
@@ -651,13 +652,18 @@ export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] 
           flaw = [seen.flaw, brk.get(c.ref)].filter(Boolean).join("; "),
           r = { ...seen, ...(flaw && { flaw }) },
           start = r.start ?? c.start,
-          end = r.end ?? c.end;
+          end = r.end ?? c.end,
+          // what he touches is searched as --prop and catalog.py's words read it: most descs never say "chair"
+          props = (r.prop ?? []).filter((p) => p !== "none"),
+          tags = [r.mood?.join(", "), props.length && `touches ${props.join(", ")}`].filter(
+            Boolean,
+          );
         return {
           kind: "mocap",
           id: c.ref,
           cat: start === end ? (start ?? "") : `${start}>${end}`,
           title: (c.ref.split("/")[1] ?? "").replace(/_[0-9a-f]{8}$/, "").replace(/_/g, " "),
-          about: [r.desc, r.mood?.length && `(${r.mood.join(", ")})`].filter(Boolean).join(" "),
+          about: [r.desc, tags.length && `(${tags.join("; ")})`].filter(Boolean).join(" "),
           src: lib,
           secs: c.dur,
           ...((r.flaw || (c.dur ?? 1) < 0.1) && {
@@ -1833,9 +1839,7 @@ export async function run(
       `"${listName}" cannot name a favourites list: a-z, 0-9 and - only (e.g. --fav ${plain(listName).join("-") || "horror"})`,
     );
   if (!lists.some((l) => l.name === listName) && !starring) {
-    notes.push(
-      `no favourites list "${listName}", the default list used${starring ? " (a list name is a-z, 0-9 and -)" : ""}`,
-    );
+    notes.push(`no favourites list "${listName}", the default list used`);
     listName = "default";
   }
   const stars = favorites.open(listName);
@@ -2127,7 +2131,7 @@ export async function run(
   // --license is a bucket (what an upload must do), else a word of a licence's own name: mit, lgpl, cc0, polyform
   const namedLicense =
     license !== undefined && !(license in LICENSES)
-      ? new RegExp(`\\b${license.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i")
+      ? new RegExp(`\\b${license.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
       : undefined;
   if (
     namedLicense &&

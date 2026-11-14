@@ -786,6 +786,8 @@ test("--license sorts sounds by what an upload must do: credit for CC BY, claim 
   expect(await ids("mod")).toEqual(["rain-lgpl"]);
   // a licence by its own name, and "gpl" is not the end of "lgpl"
   expect(await ids("lgpl")).toEqual(["rain-lgpl"]);
+  // a whole word: "cc" is CC BY's first word, not the start of CC0
+  expect(await ids("cc")).toEqual(["rain-ccby"]);
   await expect(run(["rain", "--license", "gpl"], pool, noJev)).rejects.toThrow(
     /--license is free, credit, claim, minecraft, mod .*free 1 .*mod 1 .*LGPL-3\.0-only 1/,
   );
@@ -1565,6 +1567,25 @@ test("a clip's category is its postures as checked by eye, not as measured", () 
   expect(clip?.cat).toBe("sitSeat");
   expect(clip?.data?.seq).toEqual(["sitSeat"]);
   rmSync(dir, { recursive: true });
+});
+
+test("a word search finds a clip by what it touches, as --prop does", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "find-mocap-"));
+  writeFileSync(
+    join(dir, "mixamo.jsonl"),
+    `${JSON.stringify({ ref: "mixamo/Sit_Idle_c9c00004", dur: 3 })}\n${JSON.stringify({ ref: "mixamo/Idle_c9c00005", dur: 3 })}\n`,
+  );
+  writeFileSync(
+    join(dir, "review.json"),
+    JSON.stringify({
+      "mixamo/Sit_Idle_c9c00004": { desc: "seated, still", mood: ["calm"], prop: ["chair"] },
+      "mixamo/Idle_c9c00005": { desc: "stands still", mood: ["calm"], prop: ["none"] },
+    }),
+  );
+  const pool = mocapEntries(dir);
+  rmSync(dir, { recursive: true });
+  expect(await run(["chair", "--kind", "mocap"], pool, noJev)).toMatch(/Sit_Idle_c9c00004/);
+  expect(await run(["none", "--kind", "mocap"], pool, noJev)).not.toMatch(/Idle_c9c00005/);
 });
 
 test("a sound-only filter beside a body filter is refused, never silently dropped", async () => {

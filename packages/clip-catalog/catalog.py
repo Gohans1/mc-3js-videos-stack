@@ -213,8 +213,9 @@ def main():
             said = name.lower().replace("_", " ") + " | " + r.get("desc", "").lower()
             score = sum(2 if w.search(said) else 1 for w in starts)
             hits.append((score, r, loop, tags))
-    # a one-frame clip is a still pose, never the move its name says: after every clip that moves
-    hits.sort(key=lambda h: (h[1]["dur"] < 0.1, -h[0], h[1]["dur"]))
+    # a one-frame clip is a still pose, never the move its name says: after every clip that moves; a clip with a
+    # FLAW after the equal ones without, so a list with no words opens on a usable clip, not the bind pose
+    hits.sort(key=lambda h: (h[1]["dur"] < 0.1, -h[0], bool(h[1].get("flaw")), h[1]["dur"]))
     pool = len(hits)
     fit = {}
     if a.jev and hits:
