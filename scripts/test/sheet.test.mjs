@@ -70,6 +70,7 @@ const film = (t, cuts, video = "renders/draft_video.mp4") => {
   const dir = mkdtempSync(join(tmpdir(), "sheet-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "renders/chunks"), { recursive: true });
+  mkdirSync(join(dir, "renders/final_chunks"));
   const ff = spawnSync("ffmpeg", [
     "-v",
     "error",
@@ -147,4 +148,32 @@ test("--help after the video still prints the help", (t) => {
   const r = sheet("renders/draft_video.mp4", "--help");
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /Contact sheets for self-review/);
+});
+
+test("a span or a final chunk is read on the film's clock from its name", (t) => {
+  const span = film(t, [], "renders/span_40-43.mp4");
+  const r = span("renders/span_40-43.mp4", "41");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /film seconds from 40 s on \(the span's start\)/);
+
+  const final = film(t, [], "renders/final_chunks/c02.mp4");
+  const f = final("renders/final_chunks/c02.mp4", "61");
+  assert.equal(f.status, 0, f.stdout + f.stderr);
+  assert.match(f.stdout, /film seconds from 60 s on \(the chunk's start\)/);
+});
+
+test("a span named past what START takes is a wrong word, not a crash", (t) => {
+  const sheet = film(t, [], "renders/span_9999999-9999999.mp4");
+  const r = sheet("renders/span_9999999-9999999.mp4", "1");
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stderr, /Traceback/);
+  assert.match(r.stderr, /span_9999999-9999999\.mp4 starts at film second 9999999/);
+});
+
+test("sheet shots counts the shots it lays out", (t) => {
+  // a 0.03 s shot between cuts at 1 and 1.03 is too short to show
+  const sheet = film(t, [1, 1.03]);
+  const r = sheet("renders/draft_video.mp4", "shots");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /2 shots: a frame from the middle of each/);
 });

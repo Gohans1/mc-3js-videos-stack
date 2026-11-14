@@ -8,12 +8,19 @@
 // only); YouTube's Shorts analytics count who stays past the first seconds. Measures, never verdicts: a hold can be the
 // film's best moment, so a measured film always exits 0 (2 only when there is nothing to measure)
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { cliArgs, needFilm, numberArg } from "../../packages/live-studio/src/cli.mjs";
+import {
+  cliArgs,
+  envTypos,
+  jsonFile,
+  needFilm,
+  numberArg,
+} from "../../packages/live-studio/src/cli.mjs";
 import { ratioOf } from "../../packages/live-studio/src/frame.ts";
 import { staleVideo } from "../../packages/live-studio/src/stale.mjs";
+import { probeVideo, videoStart } from "../../packages/live-studio/src/video.mjs";
 
 const HELP = `How the film moves: how long each shot runs, and every stretch where the picture holds still, with what the
 narration says over it. Run inside the film, on a video bun run render clip made.
@@ -141,16 +148,39 @@ export const paceReport = ({
 // ---------- The command
 if (import.meta.main) {
   const argv = cliArgs(HELP, ["--hold S"], 1);
+  envTypos(["LIVE_PROJECT"]);
   const PROJECT = needFilm(process.env.LIVE_PROJECT);
-  const pkg = JSON.parse(readFileSync(join(PROJECT, "package.json"), "utf8"));
+  // a broken film file is a fault in the film: named, exit 1
+  const readJson = (file: string) => {
+    try {
+      return jsonFile(file, PROJECT);
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+  };
+  const pkg = readJson(join(PROJECT, "package.json"));
   const short = ratioOf(pkg) === "9:16";
   const holdAt = argv.indexOf("--hold");
   const hold =
     holdAt < 0 ? (short ? 5 : 8) : numberArg("--hold", argv[holdAt + 1] ?? "", { min: 1 });
   const arg = argv.find((a, i) => !a.startsWith("-") && argv[i - 1] !== "--hold");
   const video = resolve(PROJECT, arg ?? "renders/draft_video.mp4");
-  if (!existsSync(video)) {
-    console.error(`no ${arg ?? "renders/draft_video.mp4"}: bun run render clip makes it`);
+  const shown = arg ?? "renders/draft_video.mp4";
+  if (!existsSync(video) || statSync(video).isDirectory()) {
+    console.error(`no video ${shown}: bun run render clip makes renders/draft_video.mp4`);
+    process.exit(2);
+  }
+  // shot lengths, the first seconds and the narration over a hold are the whole film's, from its second 0
+  const part = videoStart(video).kind;
+  if (part) {
+    console.error(
+      `${shown} is a ${part} of the film; pace measures the whole film: bun run pace renders/draft_video.mp4 (framecheck and sheet read a ${part})`,
+    );
+    process.exit(2);
+  }
+  if (!probeVideo(video)) {
+    console.error(`${shown} is no video: give it a render's mp4, as renders/draft_video.mp4`);
     process.exit(2);
   }
   const cutsFile = join(PROJECT, "renders/cuts.json");
@@ -160,7 +190,7 @@ if (import.meta.main) {
     );
     process.exit(2);
   }
-  const cuts: number[] = JSON.parse(readFileSync(cutsFile, "utf8"));
+  const cuts: number[] = readJson(cutsFile);
   const stale = staleVideo(PROJECT, video);
   if (stale) console.log(`STALE: ${stale.message}`);
   // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape
@@ -176,7 +206,7 @@ if (import.meta.main) {
       "-i",
       video,
       "-vf",
-      `fps=${FPS},crop=iw:trunc(iw*${tall}/2)*2:0:0,scale=${w}:${h}:flags=area,format=gray`,
+      `fps=${FPS},crop=iw:min(ih\\,trunc(iw*${tall}/2)*2):0:0,scale=${w}:${h}:flags=area,format=gray`,
       "-f",
       "rawvideo",
       "-",
@@ -185,7 +215,7 @@ if (import.meta.main) {
   );
   if (ff.status !== 0) {
     console.error(
-      `ffmpeg could not read ${arg ?? "renders/draft_video.mp4"}: ${String(ff.stderr).trim() || ff.error?.message}`,
+      `ffmpeg could not read ${shown}: ${String(ff.stderr).trim() || ff.error?.message}`,
     );
     process.exit(1);
   }
@@ -194,9 +224,7 @@ if (import.meta.main) {
     (_, i) => new Uint8Array(ff.stdout.buffer, ff.stdout.byteOffset + i * w * h, w * h),
   );
   if (!frames.length) {
-    console.error(
-      `${arg ?? "renders/draft_video.mp4"} has no frames to measure: bun run render clip makes it again`,
-    );
+    console.error(`${shown} has no frames to measure: bun run render clip makes it again`);
     process.exit(1);
   }
   let words: Word[] = [];
@@ -210,7 +238,7 @@ if (import.meta.main) {
     );
   }
   const length = frames.length / FPS;
-  console.log(`pace of ${arg ?? "renders/draft_video.mp4"}, ${s2(length)} s heard`);
+  console.log(`pace of ${shown}, ${s2(length)} s heard`);
   const news = newPictures(frames, FPS, cuts);
   for (const l of paceReport({ length, cuts, news, words, hold, short })) console.log(l);
 }

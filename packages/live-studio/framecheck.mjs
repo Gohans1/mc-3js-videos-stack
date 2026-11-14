@@ -1,12 +1,13 @@
 // The encoded draft's picture faults; HELP below says how to run it
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { meter } from "./checks/frames.mjs";
-import { cliArgs, envTypos, needFilm, numberArg } from "./src/cli.mjs";
+import { cliArgs, envTypos, jsonFile, needFilm, numberArg } from "./src/cli.mjs";
 import { ratioOf, sizeOf } from "./src/frame.ts";
 import { staleVideo } from "./src/stale.mjs";
+import { probeVideo, videoStart } from "./src/video.mjs";
 
 const HELP = `The last check before a video goes out, on the encoded file itself (what the audience gets): black frames, one-frame
 flashes, jumps away from cuts, shimmering, frozen stretches (checks/frames.mjs). Run inside the film.
@@ -24,6 +25,15 @@ needFilm(process.env.LIVE_PROJECT);
 const PROJECT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 const RENDERS = join(PROJECT, "renders");
 const video = resolve(PROJECT, videoArg ?? "renders/draft_video.mp4");
+// a broken film file is a fault in the film: named, exit 1
+const readJson = (file) => {
+  try {
+    return jsonFile(file, PROJECT);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
+};
 if (!existsSync(video)) {
   const videos = existsSync(RENDERS)
     ? readdirSync(RENDERS, { recursive: true })
@@ -38,54 +48,27 @@ if (!existsSync(video)) {
   process.exit(2);
 }
 
-const probe = spawnSync(
-  "ffprobe",
-  [
-    "-v",
-    "error",
-    "-select_streams",
-    "v:0",
-    "-show_entries",
-    "stream=width,height,r_frame_rate:format=format_name",
-    "-of",
-    "json",
-    video,
-  ],
-  { encoding: "utf8" },
-);
-const probed = JSON.parse(probe.stdout || "{}");
-const st = probed.streams?.[0];
-// ffprobe reads a picture as a one-frame video stream: image2, png_pipe, ...
-if (!st || /^image2|_pipe$/.test(probed.format?.format_name ?? "")) {
+const probed = probeVideo(video);
+if (!probed) {
   console.error(
     `${videoArg ?? "renders/draft_video.mp4"} is no video: give it a render's mp4, as renders/draft_video.mp4 (bun run render clip)`,
   );
   process.exit(2);
 }
-const [num, den] = st.r_frame_rate.split("/").map(Number),
-  fps = num / (den || 1);
+const { fps } = probed;
 // the picture at the top of the frame at the film's shape (a Short is 9:16), without a draft's strip under it
-const ratio = ratioOf(JSON.parse(readFileSync(join(PROJECT, "package.json"), "utf8")));
+const ratio = ratioOf(readJson(join(PROJECT, "package.json")));
 const [w, h] = sizeOf(ratio, 192),
   tall = ratio === "9:16" ? "16/9" : "9/16";
 const cutsFile = join(RENDERS, "cuts.json");
-// a render's chunk renders/chunks/cNN.mp4 starts at NN*30 s of the film (render.mjs CHUNK), a SPAN run's
-// renders/span_<from>-<to>.mp4 at <from>
-const chunkNo = /[\\/]chunks[\\/]c(\d+)\.mp4$/.exec(video)?.[1],
-  spanFrom = /span_(\d+(?:\.\d+)?)-[\d.]+\.mp4$/.exec(video)?.[1];
+const where = videoStart(video);
 const START =
-  process.env.START !== undefined
-    ? numberArg("START", process.env.START, { min: 0 })
-    : chunkNo
-      ? Number(chunkNo) * 30
-      : Number(spanFrom ?? 0);
+  process.env.START !== undefined ? numberArg("START", process.env.START, { min: 0 }) : where.start;
 if (START)
   console.log(
-    `film seconds from ${START} s on (${process.env.START !== undefined ? "START" : chunkNo ? "the chunk's start" : "the span's start"})`,
+    `film seconds from ${START} s on (${process.env.START !== undefined ? "START" : `the ${where.kind}'s start`})`,
   );
-const cuts = (existsSync(cutsFile) ? JSON.parse(readFileSync(cutsFile, "utf8")) : []).map(
-  (c) => c - START,
-);
+const cuts = (existsSync(cutsFile) ? readJson(cutsFile) : []).map((c) => c - START);
 if (!cuts.length) console.log("no renders/cuts.json: every cut will show as a JUMP");
 else
   console.log(
@@ -104,7 +87,8 @@ await new Promise((done, fail) => {
     "-i",
     video,
     "-vf",
-    `crop=iw:trunc(iw*${tall}/2)*2:0:0,scale=${w}:${h}:flags=area`,
+    // a video wider than the film's shape has no strip to cut: the whole frame (\, keeps min's comma in the filter)
+    `crop=iw:min(ih\\,trunc(iw*${tall}/2)*2):0:0,scale=${w}:${h}:flags=area`,
     "-f",
     "rawvideo",
     "-pix_fmt",
@@ -132,9 +116,10 @@ await new Promise((done, fail) => {
   });
 });
 
+// only the cuts this video holds (nearCut in checks/frames.mjs reaches 1.5 frames either side)
 const { lines, faults } = m.report(
   fps,
-  cuts.filter((c) => c >= 0),
+  cuts.filter((c) => c >= -1.5 / fps && c <= (frames + 1.5) / fps),
 );
 // film seconds in what is printed and in the file names; the video's own seconds to seek in it
 const film = (s) => (s + START).toFixed(2);
@@ -146,6 +131,7 @@ for (const l of lines)
     ),
   );
 // frames of faults since fixed would read as faults still there
+mkdirSync(RENDERS, { recursive: true });
 for (const f of readdirSync(RENDERS))
   if (/^frames_.*\.jpg$/.test(f)) rmSync(join(RENDERS, f), { force: true });
 for (const x of faults.slice(0, 12)) {
@@ -156,7 +142,9 @@ for (const x of faults.slice(0, 12)) {
     "error",
     "-y",
     "-ss",
-    Math.max(0, x.t - 1 / fps).toFixed(4),
+    // half a frame before the frame before: a seek is to the first frame at or after it, and t - 1/fps rounded to
+    // 4 places lands just past that frame a third of the time at 30 fps
+    Math.max(0, x.t - 1.5 / fps).toFixed(4),
     "-i",
     video,
     "-vf",
@@ -173,9 +161,8 @@ for (const x of faults.slice(0, 12)) {
 }
 if (faults.length > 12) console.log(`${faults.length - 12} more not drawn`);
 if (faults.length) {
-  const spanTo = spanFrom && /span_[\d.]+-([\d.]+)\.mp4$/.exec(video)[1];
-  const redraw = spanFrom
-    ? `SPAN=${spanFrom},${spanTo} bun run render clip`
+  const redraw = where.span
+    ? `SPAN=${where.span.join(",")} bun run render clip`
     : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render clip: chunk N is N*30 s on`;
   console.log(
     `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (${redraw}), then bun run framecheck${videoArg ? ` ${videoArg}` : ""} again`,

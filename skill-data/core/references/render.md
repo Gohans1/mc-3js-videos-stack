@@ -11,6 +11,7 @@ AT=12,30 bun run render stills               # renders/still_<s>s.jpg
 bun run render clip                          # renders/draft_video.mp4 and renders/cuts.json
 bun run mix renders/draft_video.mp4          # renders/draft.mp4, the draft with its sound
 bun run render final                         # renders/final_video.mp4; only when the creator asks
+AT=12 bun run render poster                  # renders/poster_12s.png: one frame at the upload's size, lossless (thumbnail, detail)
 bun run mix renders/final_video.mp4          # renders/final.mp4, the file to upload
 bun run deliver                              # against YouTube's spec; exit 0 is ready
 bun run deliver --youtube 9-15               # renders/youtube_preview.mp4 and youtube_bands_<s>s.png

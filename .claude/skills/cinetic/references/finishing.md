@@ -29,14 +29,14 @@ In Live Studio (`templates/film` / `packages/live-studio`), `bun run render` cap
 | Preview / draft          | `bun run render clip`                                                                                 | the 1280-wide draft with its time strip, for pacing, camera continuity and `bun run sheet renders/draft_video.mp4 shots`            | ~0.3×         |
 | Sharp master             | `bun run render final`, then `bun run mix renders/final_video.mp4`                                    | 1440p H.264 BT.709 with 8 sub-frames of motion blur, then the soundtrack; `bun run deliver` checks it against YouTube's spec        | 1×            |
 | Sub-frame shutter master | sharp pass → `python3 scripts/measure-speed.py` → sub-frame capture → `python3 scripts/accumulate.py` | averages sub-frames in 32-bit float and quantises once with ±1 LSB TPDF dither in smooth ramps                                      | 3–8× typical  |
-| Contact sheet            | `python3 scripts/sheet.py --video out/film.mp4 --out out/qa/sheet.png`                                | ffmpeg/OpenCV cuts labelled frame tiles directly from any rendered MP4                                                              | seconds       |
+| Contact sheet            | `python3 scripts/sheet.py out/film.mp4 --out out/qa/sheet.png`                                        | ffmpeg/OpenCV cuts labelled frame tiles directly from any rendered MP4                                                              | seconds       |
 
 ### The whole film first
 
 A run delivers a complete film inside its budget, on a busy machine too. The order that guarantees it:
 
 1. **The ending early.** Capture the closing seconds first (`AT=... bun run render stills`): the extruded 3D mark, the lockup landing and its hold must read cleanly before rendering the full timeline.
-2. **A whole draft early.** Render a fast half-size pass and cut contact sheets directly from the MP4 with `python3 scripts/sheet.py --video out/draft.mp4 --out out/qa/draft-sheet.png` (or `--frames A-B --every N` for one act) and `bash scripts/grab.sh out/draft.mp4 120,480` for exact full frames.
+2. **A whole draft early.** Render a fast half-size pass and cut contact sheets directly from the MP4 with `python3 scripts/sheet.py out/draft.mp4 --out out/qa/draft-sheet.png` (or `--frames A-B --every N` for one act) and `bash scripts/grab.sh out/draft.mp4 120,480` for exact full frames.
 3. **Targeted excerpts for fixes.** Re-render only the edited window (`SPAN=A,B bun run render clip`) while tuning camera curves, optical transitions or directional shutter smear (`film-stage/velocity.ts`).
 4. **Master + gates at the end.** Render the full master once, attach the mastered `-14 LUFS / -1.5 dBTP` soundtrack, and run `python3 scripts/probe.py`, `python3 scripts/check-sync.py` and `python3 scripts/forensics.py`.
 
@@ -48,7 +48,7 @@ Renders on an ordinary workstation are bounded by WebGL frame capture and readba
 | ---------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | New film scaffold      | `bun run new-film <slug>`                                   | clones `templates/film` with workspace links (`film-stage`, `film-kit`, `mc-actor`, `mc-assets`, `live-studio`) ready immediately |
 | Spot stills            | `AT=1.0,3.5,8.0 bun run render stills`                      | one headless Chromium session seeks to each timestamp `t` deterministically                                                       |
-| Contact sheet from MP4 | `python3 scripts/sheet.py --video out/film.mp4 --every 30`  | extracts frames directly from the rendered video with frame + timestamp labels                                                    |
+| Contact sheet from MP4 | `python3 scripts/sheet.py out/film.mp4 --every 30 --out out/qa/sheet.png` | extracts frames directly from the rendered video with frame + timestamp labels                                                    |
 | Automated frame QA     | `bun run framecheck`                                        | checks black frames, NaN transforms and WebGL errors before full master encoding                                                  |
 | Spec & sync gate       | `python3 scripts/probe.py out/film.mp4 --spec 1920x1080@60` | verifies exact resolution, fps, `yuv420p`, `bt709/bt709/bt709/tv` tags and stream duration                                        |
 
@@ -291,7 +291,7 @@ For the same reason, the poster is not decoded from the master (§8).
 
 ## 6. Audio mux
 
-Render the picture with `--muted` and mux with ffmpeg. Inline browser/muxer AAC encoding leaves 2,048 samples of encoder priming in the stream (42.7 ms, 2.6 frames at 60 fps), so the sound lands late, and late sound reads as sloppy even when nobody can say why.
+Render the picture alone (Live Studio's `render clip` and `render final` write no sound) and mux with ffmpeg (`bun run mix`). Inline browser/muxer AAC encoding leaves 2,048 samples of encoder priming in the stream (42.7 ms, 2.6 frames at 60 fps), so the sound lands late, and late sound reads as sloppy even when nobody can say why.
 
 ```bash
 ffmpeg -i picture.mp4 -ss <offset> -i public/audio/soundtrack.wav -map 0:v:0 -map 1:a:0 -c:v copy \
@@ -321,7 +321,7 @@ Before shipping deliverables with music or recorded SFX, run `python3 scripts/au
 
 | Deliverable       | How                                                                                                     | Spec and budget                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Poster            | `AT=<end_sec> bun run render stills` (lossless PNG directly from WebGL, never decoded from 4:2:0 H.264) | `poster.png` (lossless, full chroma) + `poster.jpg`; design the final frame to work as the poster |
+| Poster            | `AT=<end_sec> bun run render poster` (lossless PNG at the upload's size, never decoded from 4:2:0 H.264) | `poster.png` (lossless, full chroma) + `poster.jpg`; design the final frame to work as the poster |
 | Web loop, MP4     | `-an -movflags +faststart` + `python3 scripts/forensics.py --loop`                                      | muted, `+faststart`, loop-seam check                                                              |
 | Web loop, WebM    | `-c:v libvpx-vp9 -crf 32 -b:v 0`                                                                        | VP9 CRF 32, BT.709 tagged, Opus audio unless muted loop                                           |
 | GIF               | ffmpeg `palettegen` + `paletteuse` at 25 fps, 960 px wide                                               | two-pass palette; keep short loops under 8 MB                                                     |
@@ -329,7 +329,7 @@ Before shipping deliverables with music or recorded SFX, run `python3 scripts/au
 | Aspect variants   | dedicated 9:16, 1:1 or 4:5 camera/title framing, never blind center-crops of 16:9                       | each verified with `python3 scripts/probe.py`                                                     |
 | Brand palette     | `python3 scripts/palette.py --accent "#..."`                                                            | perceptually uniform OKLCH ink, paper, surface and accent tokens                                  |
 
-- **Poster source.** A frame decoded from an H.264 4:2:0 master softens coloured type edges and carries macroblock artefacts (§5). Always capture the poster directly as a lossless PNG still (`AT=<t> bun run render stills`).
+- **Poster source.** A frame decoded from an H.264 4:2:0 master softens coloured type edges and carries macroblock artefacts (§5). Always capture the poster directly as a lossless PNG still (`AT=<t> bun run render poster`).
 - **Loop seam.** The step from the last frame back to frame 0 must look like the steps around it: seam difference ≤ max(0.4, 1.5× the median of the 8 steps at each end), verified by `python3 scripts/forensics.py out/loop.mp4 --loop`. Design the loop on whole musical bars (`SKILL.md`), and do not duplicate frame 0 as the final frame, which hitches.
 - **GIF.** Frame delays are whole hundredths of a second, so 25 fps (4 cs) and 50 fps (2 cs) play at the true rate while 30 fps plays 11% fast. Keep GIFs to short, clean loops at 480–960 px and prefer WebM or MP4 wherever video is supported.
 - **Alpha.** Render with transparent WebGL clear alpha (`0`) to PNG frames and encode `-c:v prores_ks -profile:v 4444 -pix_fmt yuva444p10le` (or VP9 `-pix_fmt yuva420p`). Verify with `python3 scripts/probe.py --vcodec prores --pix-fmt yuva444p10le,yuva444p12le`.

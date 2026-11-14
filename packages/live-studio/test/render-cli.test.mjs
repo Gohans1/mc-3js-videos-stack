@@ -87,3 +87,63 @@ test("a film whose code does not build is named by file and line, in plain words
   assert.equal(stripVTControlCharacters(said), said, "no colour codes");
   assert.doesNotMatch(said, /node_modules|rolldown/);
 });
+
+test("SPAN is refused before any build when it is misplaced, backwards, or starts past the last frame", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  const render = (env, what = "clip") =>
+    spawnSync("bun", [RENDER, what], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 20000,
+      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+    });
+
+  const stills = render({ SPAN: "1,2" }, "stills");
+  assert.equal(stills.status, 2, stills.stdout + stills.stderr);
+  assert.match(stills.stderr, /SPAN is for render clip/);
+
+  const both = render({ SPAN: "1,2", CHUNKS: "0" });
+  assert.equal(both.status, 2, both.stdout + both.stderr);
+  assert.match(both.stderr, /SPAN and CHUNKS each pick what to draw: one at a time/);
+
+  const back = render({ SPAN: "4,2" });
+  assert.equal(back.status, 2, back.stdout + back.stderr);
+  assert.match(back.stderr, /SPAN takes two heard seconds, the first before the second/);
+
+  // a 10 s film's last frame shows 9.967 s: a span from 9.99 would draw no frame at all
+  const tail = render({ SPAN: "9.99,10.04" });
+  assert.equal(tail.status, 2, tail.stdout + tail.stderr);
+  assert.match(tail.stderr, /SPAN 9\.99,10\.04 starts after the film's last frame \(9\.97 s\)/);
+  assert.doesNotMatch(tail.stdout + tail.stderr, /build/i);
+});
+
+test("render poster takes AT, the upload's size and sub-frames, and no draft overlay", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  const render = (env) =>
+    spawnSync("bun", [RENDER, "poster"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 20000,
+      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+    });
+
+  const none = render({});
+  assert.equal(none.status, 2, none.stdout + none.stderr);
+  assert.match(none.stderr, /poster takes AT=<s>, the heard second to draw/);
+
+  const list = render({ AT: "1", LIST: "1" });
+  assert.equal(list.status, 2, list.stdout + list.stderr);
+  assert.match(list.stderr, /LIST=1 draws over drafts only/);
+
+  const res = render({ AT: "1", RES: "720" });
+  assert.equal(res.status, 2, res.stdout + res.stderr);
+  assert.match(res.stderr, /RES is 1440 \(the default; 1080 for Shorts\), 2160 or 1080/);
+});

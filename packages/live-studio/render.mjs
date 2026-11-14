@@ -28,6 +28,8 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
   bun run render stills       stills only, to renders/still_<s>s.jpg (the last run's stills are cleared first)
   bun run render clip         the film as 30 s H.264 chunks in renders/chunks/, joined into renders/draft_video.mp4
   bun run render captions     renders/draft_video.srt alone, in a second
+  AT=12 bun run render poster renders/poster_12s.png: one frame as the upload draws it (its size, no strip, 8 sub-frames),
+                              lossless; a thumbnail, or a close look at a detail the 1280 draft blurs
   bun run render final        the film for upload, only when the creator asks for it (a 30 s chunk at 16 sub-frames took
                               4.5 min on an RTX 2060, against 10 s for a draft one; the GPU fan runs loud meanwhile):
                               1440p, no strip under the picture, full-size AO, 8 sub-frames a frame (180-degree
@@ -45,8 +47,9 @@ Nothing is written outside the film. Options are environment variables:
   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
   SPAN=40,44                 clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
-  SAMPLES=16                 sub-frames a frame for clip or final (1-64; clip 1, final 8): more is smoother blur, slower
-  RES=2160                   final only: 1440 (default), 2160 or 1080 lines (the short side). YouTube re-encodes a 1440p or
+  SAMPLES=16                 sub-frames a frame for clip, final or poster (1-64; clip 1, final and poster 8): more is
+                             smoother blur, slower
+  RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side). YouTube re-encodes a 1440p or
                              bigger upload in VP9, sharper even for viewers at 1080p; a 1080p upload gets H.264. A Shorts
                              film defaults to 1080 (1080x1920, as big as Shorts play)
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
@@ -75,7 +78,7 @@ package.json "live-studio": { "chrome": path } names the headless Chrome (defaul
 Why each setting, YouTube's spec, what survives its re-encode, how to render faster: bun run skills get core --ref render.`;
 // its options are environment variables: --at 12 is the flag form an AI tries first
 const ENV_OPTIONS = ["AT", "LIST", "CHUNKS", "SPAN", "INSPECT", "CHECK", "ENTRY", "SAMPLES", "RES"];
-const TARGETS = ["stills", "clip", "captions", "all", "final"];
+const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
 const flagged = process.argv
   .slice(2)
   .map((a, i, all) => [/^--?([a-z]+)(?:=(.*))?$/i.exec(a), all[i + 1]])
@@ -95,11 +98,13 @@ envTypos([...ENV_OPTIONS, "LIVE_PROJECT"]); // any LAB_* goes to the lab page as
 if (!TARGETS.includes(what)) {
   const near = what && TARGETS.find((t) => t.startsWith(what.slice(0, 3).toLowerCase()));
   console.error(
-    `${what ? `unknown target ${what}${near ? ` (did you mean ${near}?)` : ""}` : `which render?${process.env.CHECK || process.env.AT ? ` (${process.env.CHECK ? "CHECK" : "AT"} goes with stills)` : ""}`}: bun run render stills (seconds), clip (minutes), captions, all, or final (the upload; --help for everything)`,
+    `${what ? `unknown target ${what}${near ? ` (did you mean ${near}?)` : ""}` : `which render?${process.env.CHECK || process.env.AT ? ` (${process.env.CHECK ? "CHECK" : "AT"} goes with stills)` : ""}`}: bun run render stills (seconds), clip (minutes), captions, all, final (the upload) or poster (one frame at its size; --help for everything)`,
   );
   process.exit(2);
 }
 const video = what === "clip" || what === "all" || what === "final";
+// drawn as the upload is: its size, no strip under the picture, sub-frames for motion blur
+const full = what === "final" || what === "poster";
 const misplaced =
   !video && process.env.CHUNKS
     ? "CHUNKS is for render clip or final"
@@ -109,13 +114,17 @@ const misplaced =
         ? "SPAN and CHUNKS each pick what to draw: one at a time"
         : (what === "clip" || what === "final") && process.env.AT
           ? "AT is for render stills"
-          : !video && process.env.SAMPLES
-            ? "SAMPLES is for render clip or final"
-            : what !== "final" && process.env.RES
-              ? "RES is for render final"
-              : what === "final" && process.env.LIST === "1"
-                ? "LIST=1 draws over drafts only; a final is the picture alone"
-                : null;
+          : !video && !full && process.env.SAMPLES
+            ? "SAMPLES is for render clip, final or poster"
+            : !full && process.env.RES
+              ? "RES is for render final or poster"
+              : full && process.env.LIST === "1"
+                ? `LIST=1 draws over drafts only; a ${what} is the picture alone`
+                : what === "poster" && process.env.CHECK
+                  ? "CHECK goes with render stills"
+                  : what === "poster" && !process.env.AT
+                    ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
+                    : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -268,13 +277,13 @@ const SPAN_FILE = span && `span_${span[0]}-${span[1]}.mp4`;
 const final = what === "final";
 const samples = env.SAMPLES
   ? numberArg("SAMPLES", env.SAMPLES, { min: 1, max: 64, int: true })
-  : final
+  : full
     ? 8
     : 1;
 // YouTube's upload table for 30 fps (8, 16, 35-45 Mbps), doubled: the GPU's encoder spends bits less well than x264
 const FINAL_SIZES = { 1080: [1920, 16e6], 1440: [2560, 32e6], 2160: [3840, 60e6] };
 const res = env.RES ?? (ratioOf(pkg) === "9:16" ? "1080" : "1440");
-if (final && !FINAL_SIZES[res]) {
+if (full && !FINAL_SIZES[res]) {
   console.error(
     `RES is 1440 (the default; 1080 for Shorts), 2160 or 1080, got ${JSON.stringify(env.RES)}`,
   );
@@ -290,13 +299,20 @@ if (ends) {
     );
     process.exit(2);
   }
+  const lastFrame = chunksOf(ends.layers, CHUNK, FPS).at(-1)[1];
   if (span && span[1] > ends.layers + 0.05) {
     console.error(
       `SPAN ${span.join(",")} runs past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard`,
     );
     process.exit(2);
   }
-  const count = chunksOf(ends.layers, CHUNK, 30).length;
+  if (span && Math.round(span[0] * FPS) > lastFrame) {
+    console.error(
+      `SPAN ${span.join(",")} starts after the film's last frame (${(lastFrame / FPS).toFixed(2)} s): SPAN=${Math.max(0, +(lastFrame / FPS - 1).toFixed(2))},${+(lastFrame / FPS).toFixed(2)} shows its last second`,
+    );
+    process.exit(2);
+  }
+  const count = chunksOf(ends.layers, CHUNK, FPS).length;
   const beyond = (only ?? []).filter((i) => i >= count);
   if (beyond.length) {
     console.error(
@@ -335,7 +351,7 @@ if (!existsSync(CHROME)) {
 }
 const stillsWritten = [];
 // bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
-if (at.length && existsSync(RENDERS))
+if (at.length && what !== "poster" && existsSync(RENDERS))
   for (const f of readdirSync(RENDERS))
     if (/^still_.*\.jpg$/.test(f)) rmSync(join(RENDERS, f), { force: true });
 const choicesFile = ["choices.json", "sound_choices.json"]
@@ -375,17 +391,18 @@ if (textCheck) {
 }
 
 const ratio = ratioOf(pkg),
-  [W, H] = sizeOf(ratio, final ? FINAL_SIZES[res][0] : 1280); // package.json "live-studio".ratio: 16:9, or 9:16 for Shorts
+  [W, H] = sizeOf(ratio, full ? FINAL_SIZES[res][0] : 1280); // package.json "live-studio".ratio: 16:9, or 9:16 for Shorts
 const cfg = {
   W,
   H,
   ratio,
-  draft: !final,
+  draft: !full,
   quality: 0.9,
   stills: at.map((s) => ({
-    name: `still_${s}s.jpg`,
+    name: what === "poster" ? `poster_${s}s.png` : `still_${s}s.jpg`,
     frame: Math.round(s * FPS),
   })),
+  stillSamples: what === "poster" ? samples : 1,
   clip: video
     ? {
         chunk: CHUNK,
@@ -492,7 +509,7 @@ const stamp = (() => {
   return h.digest("hex").slice(0, 16);
 })();
 // stills alone cannot show motion, contact or flicker: say what can, where every render prints
-if (!cfg.checks.length)
+if (!cfg.checks.length && what !== "poster")
   console.log(
     "checks: CHECK=motion|seen|touch:<target>,<from s>,<to s>, CHECK=text (bun run render --help); after a clip: bun run framecheck, bun run pace",
   );
@@ -556,7 +573,7 @@ const server = Bun.serve({
         }
       } else if (url.startsWith("/still/")) {
         writeFileSync(join(RENDERS, url.slice(7)), b);
-        if (url.endsWith(".jpg")) stillsWritten.push(`renders/${url.slice(7)}`);
+        if (/\.(jpg|png)$/.test(url)) stillsWritten.push(`renders/${url.slice(7)}`);
       } else if (url.startsWith("/chunk/")) {
         const i = +url.slice(7);
         writeFileSync(chunkFile(i), b);
@@ -672,10 +689,12 @@ if (stillsWritten.length)
   );
 
 if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {
-  const mid = +((span[0] + span[1]) / 2).toFixed(2);
+  // its first, middle and last frames, each a second the video holds
+  const [a, b] = cfg.clip.span,
+    look = [...new Set([a, Math.round((a + b) / 2), b].map((f) => +(f / FPS).toFixed(2)))];
   console.log(
     `wrote renders/${SPAN_FILE}, heard ${span[0]}-${span[1]} s (framecheck and sheet read its seconds from its name)
-next: bun run framecheck renders/${SPAN_FILE}; frames to look at: bun run sheet renders/${SPAN_FILE} ${span[0]},${mid},${+(span[1] - 0.05).toFixed(2)}`,
+next: bun run framecheck renders/${SPAN_FILE}; frames to look at: bun run sheet renders/${SPAN_FILE} ${look.join(",")}`,
   );
 }
 

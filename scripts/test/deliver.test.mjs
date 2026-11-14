@@ -1,7 +1,7 @@
 // scripts/review/deliver.py: a finished video checked against YouTube's upload spec, each fault with its fix
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -135,4 +135,18 @@ test("--help after the video prints the help and checks nothing", () => {
   const r = deliver(join(tmpdir(), "no-such-video.mp4"), "--help");
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /The last look before upload/);
+});
+
+test("no upload yet but its picture is there: the fix is only the mix", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "renders/final_video.mp4"), "x");
+  const r = spawnSync("python", [DELIVER], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(
+    r.stderr,
+    /renders\/final_video\.mp4 is there: bun run mix renders\/final_video\.mp4/,
+  );
+  assert.doesNotMatch(r.stderr, /render final/);
 });

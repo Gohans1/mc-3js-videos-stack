@@ -103,3 +103,23 @@ test("the upload older than a picture change is drawn again by render final, not
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a span or a final chunk older than a picture change names the render that draws it again", () => {
+  const { dir, at } = film();
+  try {
+    mkdirSync(join(dir, "renders/final_chunks"));
+    for (const f of ["renders/span_40-44.mp4", "renders/final_chunks/c02.mp4"]) {
+      writeFileSync(join(dir, f), "x");
+      at(f, 2000);
+    }
+    at("src/scene.ts", 3600);
+    expect(staleVideo(dir, "renders/span_40-44.mp4")?.message).toMatch(
+      /SPAN=40,44 bun run render clip draws it again/,
+    );
+    expect(staleVideo(dir, "renders/final_chunks/c02.mp4")?.message).toMatch(
+      /bun run render final draws it again/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

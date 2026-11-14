@@ -59,17 +59,21 @@ if len(args) not in (0, 2, 3) or (len(args) == 3) != (mode == "cut"):
 tmp, header = None, None
 if args:
     video = args[0]
-    # a render's chunk renders/chunks/cNN.mp4 starts at NN*30 s of the film, a SPAN run's renders/span_<from>-<to>.mp4 at
-    # <from>; the seconds asked are the film's
+    # a render's chunk (renders/chunks or final_chunks/cNN.mp4) starts at NN*30 s, a SPAN run's renders/span_<from>-<to>.mp4 at
+    # <from> (live-studio src/video.mjs reads the same names: change both); the seconds asked are the film's
     chunk = re.search(r"[\\/]?chunks[\\/]c(\d+)\.mp4$", video)
     span = re.search(r"span_(\d+(?:\.\d+)?)-[\d.]+\.mp4$", video)
-    try:
-        start = (float(os.environ["START"]) if "START" in os.environ else int(chunk.group(1)) * 30 if chunk
-                 else float(span.group(1)) if span else 0.0)
-        if not 0 <= start < 1e6:
-            raise ValueError
-    except ValueError:
-        usage(f"START takes the film second the video starts at, 0 or more, got {os.environ['START']!r}")
+    if "START" in os.environ:
+        try:
+            start = float(os.environ["START"])
+            if not 0 <= start < 1e6:
+                raise ValueError
+        except ValueError:
+            usage(f"START takes the film second the video starts at, 0 or more, got {os.environ['START']!r}")
+    else:
+        start = int(chunk.group(1)) * 30 if chunk else float(span.group(1)) if span else 0.0
+        if start >= 1e6:
+            usage(f"{video} starts at film second {start:.15g} by its name, past any film: START=<s> says where it starts")
     if Path(video).is_dir():
         usage(f"{video} is a folder, not a video: give it a render's mp4, as renders/draft_video.mp4")
     videos = ", ".join(sorted(p.relative_to(Path.cwd()).as_posix() for p in R.rglob("*.mp4"))[:8]) or "none yet"
@@ -91,8 +95,12 @@ if args:
         ends = cuts_of()
         before = sum(c <= start for c in ends)
         edges = [start, *[c for c in ends if start < c < start + dur], start + dur]
-        args[1] = ",".join(f"{(a + b) / 2:.2f}" for a, b in zip(edges, edges[1:]) if b - a > 0.05)
-        header = f"{len(edges) - 1} shots: a frame from the middle of each, in order (shot {before} first)"
+        # a shot under 0.05 s has no frame of its own to show; a video that short shows its one frame
+        shots = [(a, b) for a, b in zip(edges, edges[1:]) if b - a > 0.05] or [(edges[0], edges[-1])]
+        args[1] = ",".join(f"{min((a + b) / 2, end):.2f}" for a, b in shots)
+        short = len(edges) - 1 - len(shots)
+        header = (f"{len(shots)} shots: a frame from the middle of each, in order (shot {before} first"
+                  f"{f'; {short} under 0.05 s left out' if short > 0 else ''})")
     elif mode == "cut":
         ends = cuts_of()
         if not ends:
@@ -123,7 +131,7 @@ if args:
     out = [s for s in secs if not start <= s < start + dur]
     if out:
         usage(f"{video} holds film seconds {start:g}-{start + dur:.2f}; outside it: {', '.join(f'{s:g}' for s in out)}")
-    secs = [min(s, end) for s in secs]
+    secs = sorted({min(s, end) for s in secs})
     if start:
         print(f"film seconds from {start:g} s on ({'START' if 'START' in os.environ else 'the chunk' + chr(39) + 's start' if chunk else 'the span' + chr(39) + 's start'})")
     if header:

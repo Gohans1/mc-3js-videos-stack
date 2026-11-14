@@ -1,7 +1,14 @@
 // pace.ts: how long each shot runs and how long the picture holds still, from a film's cuts and its frames
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { newPictures, paceReport } from "../review/pace.ts";
+
+const PACE = fileURLToPath(new URL("../review/pace.ts", import.meta.url));
 
 const W = 8,
   H = 6;
@@ -79,4 +86,38 @@ test("a word that starts just before a hold and runs into it is said over the ho
     hold: 8,
   }).join("\n");
   expect(r).toMatch(/HOLD 10\.00-20\.00[^\n]*"listen"/);
+});
+
+// the command on a film folder with a video in renders/: pace measures whole films only
+const paceOn = (video: string, make: string[]) => {
+  const dir = mkdtempSync(join(tmpdir(), "pace-"));
+  mkdirSync(join(dir, "src"));
+  mkdirSync(join(dir, "renders/chunks"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "");
+  writeFileSync(join(dir, "package.json"), "{}");
+  writeFileSync(join(dir, "renders/cuts.json"), "[1]");
+  const ff = spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", ...make, join(dir, video)]);
+  expect(ff.status).toBe(0);
+  const r = spawnSync("bun", [PACE, video], {
+    cwd: dir,
+    encoding: "utf8",
+    env: { ...process.env, LIVE_PROJECT: dir },
+  });
+  rmSync(dir, { recursive: true, force: true });
+  return r;
+};
+const clip = ["testsrc2=s=64x36:r=30:d=2", "-pix_fmt", "yuv420p"];
+
+test("a span or a chunk is no whole film: pace refuses it, naming the video it measures", () => {
+  for (const video of ["renders/span_40-44.mp4", "renders/chunks/c02.mp4"]) {
+    const r = paceOn(video, clip);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/measures the whole film[^\n]*renders\/draft_video\.mp4/);
+  }
+});
+
+test("a picture is no video: pace refuses it", () => {
+  const r = paceOn("renders/still_1s.jpg", ["color=c=gray:s=64x36", "-frames:v", "1"]);
+  expect(r.status).toBe(2);
+  expect(r.stderr).toMatch(/still_1s\.jpg is no video/);
 });

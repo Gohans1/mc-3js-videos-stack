@@ -59,8 +59,10 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
     });
   }
-  // framecheck.mjs: a cut is not a jump. Only a clip render writes them, so they stay the cuts of the video framecheck reads
-  if (cfg.clip) await post("/still/cuts.json", JSON.stringify(SHOTS.slice(1).map((s) => s.t)));
+  // framecheck.mjs: a cut is not a jump. Only a whole clip render writes them (a SPAN run keeps draft_video.mp4 as it was),
+  // so they stay the cuts of the video framecheck reads
+  if (cfg.clip && !cfg.clip.span)
+    await post("/still/cuts.json", JSON.stringify(SHOTS.slice(1).map((s) => s.t)));
   // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
   // an item { still, canvas } is written as renders/<still>
   const builtin = {
@@ -241,7 +243,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     return out;
   };
 
-  for (const s of cfg.stills ?? []) await still(s.name, draw(s.frame, 1), cfg.quality);
+  for (const s of cfg.stills ?? [])
+    await still(s.name, draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
 
   // The film in chunks of cfg.clip.chunk seconds, each its own mp4 starting on a keyframe, so render.mjs joins them by stream copy
   const chunks = chunkCount;
@@ -283,6 +286,12 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     const started = performance.now(),
       first = cfg.clip.span[0],
       last = Math.min(cfg.clip.span[1], ranges.at(-1)[1]);
+    if (first > last) {
+      log(
+        `ERROR SPAN starts at frame ${first}, after the film's last (${last}, ${(last / FPS).toFixed(2)} s): give it a second before that`,
+      );
+      return;
+    }
     await post("/span", await encode(first, last, cfg.clip.bitrate));
     log(
       `span: ${last - first + 1} frames x${cfg.clip.samples} in ${((performance.now() - started) / 1000).toFixed(1)}s`,

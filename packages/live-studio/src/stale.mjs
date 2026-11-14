@@ -4,6 +4,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 
+import { videoStart } from "./video.mjs";
+
 export const staleVideo = (root, video) => {
   const file = resolve(root, video);
   if (!existsSync(file)) return null;
@@ -53,12 +55,13 @@ export const staleVideo = (root, video) => {
   }
   if (!newest) return null;
   // a chunk's stamp covers the whole built film (render.mjs stamp), so any change draws every chunk again
-  const span = /span_([\d.]+)-([\d.]+)\.mp4$/.exec(shown);
-  const again = shown.endsWith("final_video.mp4")
-    ? "bun run render final draws it again"
-    : span
-      ? `SPAN=${span[1]},${span[2]} bun run render clip draws it again`
-      : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
+  const where = videoStart(shown);
+  const again =
+    shown.endsWith("final_video.mp4") || where.final
+      ? "bun run render final draws it again"
+      : where.kind === "span"
+        ? `SPAN=${where.span.join(",")} bun run render clip draws it again`
+        : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
   return {
     file: newest.rel,
     message: `${shown} is older than ${newest.rel} (changed ${Math.max(1, Math.round((newest.m - made) / 60000))} min after it): its frames may not show that change; ${again}`,

@@ -13,12 +13,20 @@ window.onunhandledrejection = (e) => {
   log("ERROR " + (e.reason?.stack ?? e.reason));
 };
 
-// { W, H, ratio, draft, quality, stills: [{ name, frame }], clip, list, inspect, checks, choices, lab }: see render.mjs
+// { W, H, ratio, draft, quality, stills: [{ name, frame }], stillSamples, clip, list, inspect, checks, choices, lab }:
+// see render.mjs
 export const config = async () => (await fetch("/config")).json();
 export const canvas = () => document.getElementById("gl");
-// Written as renders/NAME
+// Written as renders/NAME: a .png lossless, anything else a JPEG
 export const still = async (name, from, quality = 0.92) =>
-  post(`/still/${name}`, await new Promise((res) => from.toBlob(res, "image/jpeg", quality)));
+  post(
+    `/still/${name}`,
+    await new Promise((res) =>
+      name.endsWith(".png")
+        ? from.toBlob(res, "image/png")
+        : from.toBlob(res, "image/jpeg", quality),
+    ),
+  );
 // Ends the run; chunks: how many clip chunks the film has, so render.mjs joins exactly those
 export const done = (chunks?: number) =>
   said.then(() => post("/done", chunks === undefined ? "" : String(chunks)));

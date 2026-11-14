@@ -50,7 +50,7 @@ const GROUPS = [
     "Look and review",
     {
       render:
-        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked); CHECK=motion:cam,40,48 charts a move's speed",
+        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move's speed",
       sheet: "contact sheets of the stills or of a video's frames, to look at many at once",
       framecheck: "the last check on the encoded video: black, flashes, jumps, shimmer, freezes",
       pace: "how the film moves: shot lengths, and where the picture holds still under the narration",

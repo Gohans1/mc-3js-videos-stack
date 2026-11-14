@@ -122,7 +122,9 @@ def check(video, info):
         advise(f"colour tagged {'/'.join(sorted(tags))}{' ' + pic['color_range'] if 'color_range' in pic else ''}: YouTube asks BT.709 limited range, "
                f"else it guesses. ffmpeg -i {video} -c copy -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:"
                "matrix_coefficients=1:video_full_range_flag=0 <out>.mp4")
-    if pic.get("r_frame_rate") != pic.get("avg_frame_rate"):
+    # a mux shifts the average a hair (mix's final.mp4: 29.998 against 30): only a real spread of frame lengths counts
+    avg, nominal = rate({"avg_frame_rate": pic.get("avg_frame_rate")}), rate({"avg_frame_rate": pic.get("r_frame_rate")})
+    if nominal and abs(avg - nominal) > nominal * 0.001:
         advise(f"variable frame rate ({pic.get('r_frame_rate')} vs {pic.get('avg_frame_rate')} on average): YouTube asks constant")
     long = float(info["format"].get("duration") or pic.get("duration") or 0)
     gap = key_gap(video, long)
@@ -197,7 +199,8 @@ def band_picture(video, preview, second, out, offset, last):
              "[a2]split[x][y];[y]gblur=sigma=8[yb];[x][yb]blend=all_expr='128+(A-B)*16'[ae];"
              "[b2]split[p][q];[q]gblur=sigma=8[qb];[p][qb]blend=all_expr='128+(A-B)*16'[be];"
              "[a][b]hstack[top];[ae][be]hstack[bottom];[top][bottom]vstack")
-    at = min(second + 0.5, last)  # the middle of the second, or the last frame when the video ends inside it
+    # the middle of the second, kept inside the stretch the preview holds (from `offset`, to the last frame)
+    at = max(min(second + 0.5, last), offset)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{at:.3f}", "-i", str(video), "-ss",
                     f"{at - offset:.3f}", "-i", str(preview), "-lavfi", graph, "-frames:v", "1", str(out)],
                    check=True, timeout=120)
@@ -244,11 +247,11 @@ def youtube(video, span, root):
           f"alone scores up to {worst_up:.1f}: CAMBI counts the steps between flat Minecraft tiles too, so that is no fault by itself. "
           "Preview: renders/youtube_preview.mp4")
     cuts_file = root / "renders/cuts.json"
-    cuts = json.loads(cuts_file.read_text(encoding="utf8")) if cuts_file.exists() and video.parent == out else []
+    cuts = json.loads(cuts_file.read_text(encoding="utf8")) if cuts_file.exists() and video.resolve().parent == out.resolve() else []
     for a, b in spans[:6]:
         peak = max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0))
         picture = out / f"youtube_bands_{peak}s.png"
-        band_picture(video, preview, peak, picture, start, end - 1 / (rate(pic) or 30))
+        band_picture(video, preview, peak, picture, start, min(end, long) - 1 / (rate(pic) or 30))
         shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts else ""
         print(f"BANDS {a}-{b + 1} s{shot}: the re-encode scores {after[peak]:.1f} where the upload has {before.get(peak, 0.0):.1f}; "
               f"look: {picture.relative_to(root)} (top: upload | re-encode, bottom: the same with small steps of light x16)")
@@ -300,8 +303,10 @@ def main(args):
     video = Path(video or "renders/final.mp4")
     if not video.is_file():
         here = sorted(p.as_posix() for p in Path("renders").glob("*.mp4")) if Path("renders").is_dir() else []
+        picture = Path("renders/final_video.mp4")
         print(f"{video} does not exist"
               + (f"; videos here: {', '.join(here)}" if named and here else
+                 f"; {picture.as_posix()} is there: bun run mix {picture.as_posix()} makes renders/final.mp4" if picture.is_file() else
                  ": bun run render final, then bun run mix renders/final_video.mp4 makes renders/final.mp4"), file=sys.stderr)
         return 2
     if not shutil.which("ffprobe"):
