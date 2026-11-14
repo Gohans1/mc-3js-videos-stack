@@ -1663,16 +1663,16 @@ function parse(argv: string[], lists: string[] = []) {
       // starring, where it names the list to make
       const next = argv[i + 1]?.toLowerCase();
       const starring = argv.some((a) => /^--(?:un)?star(?:=|$)/i.test(a));
-      const v =
-        eq > 0
-          ? arg.slice(eq + 1)
-          : next && (lists.includes(next) || (starring && !isOption(next)))
-            ? (i++, next)
-            : "default";
+      const named = eq < 0 && !!next && (lists.includes(next) || (starring && !isOption(next)));
+      const v = eq > 0 ? arg.slice(eq + 1) : named ? (i++, next!) : "default";
       // a word that may be a list's name mistyped: said, since it is read as a search word
-      if (v === "default" && next && !isOption(next) && lists.length)
+      if (eq < 0 && !named && next && !isOption(next) && lists.length)
         notes.push(
           `"${next}" after --fav names no favourites list (${lists.join(", ")}): read as a search word, the default list used`,
+        );
+      if (set.has(name) && set.get(name) !== v.toLowerCase())
+        throw new FindError(
+          `--fav given twice (${set.get(name)}, ${v.toLowerCase()}); a search reads one favourites list`,
         );
       set.set(name, v.toLowerCase());
       continue;
@@ -2040,7 +2040,7 @@ export async function run(
     });
     const libArg = sources ? ["--lib", sources.join(",")] : [];
     // catalog.py matches each word at a word start: a name said as Arms_Holding or sitSeat is its words
-    const words = jev ? ["--jev", query] : plain(query);
+    const words = jev ? ["--jev", query] : plain(query).filter((w) => !STOP.has(stem(w)));
     const durArg = dur ? ["--dur", set.get("--dur")!] : [];
     // a posture beside the category is read first (standing is stand), then must be the category's own
     for (const o of clipCat ? (["--from", "--to"] as const) : []) {
@@ -2346,9 +2346,14 @@ export async function run(
   const isStill = (x: Entry) => x.kind === "mocap" && (x.secs ?? 1) < 0.1;
   const typed = [...new Set(plain(asks))].filter((w) => !STOP.has(stem(w)) && !/^\d+$/.test(w));
   const named = kinds ? [] : [...new Set(typed.flatMap((w) => KIND_NAMED[stem(w)] ?? []))];
-  // words naming a kind ("sad background music", "title animation") put that kind's hits first, as --kind would keep them
+  // words naming a kind ("sad background music", "title animation") put that kind's hits first, as --kind would keep them;
+  // an id said whole (bgm_drone, pasted from audio.json) before all. A clip with a FLAW keeps its place: the eval's right
+  // answers often carry one (a retarget break), and sinking them lost 3 of 44
+  const whole = plain(asks).join(" ");
   const first = (x: Entry) =>
-    (isStill(x) ? 2 : 0) + (named.length && !named.includes(top(x.kind)) ? 1 : 0);
+    plain(x.id).join(" ") === whole
+      ? -1
+      : (isStill(x) ? 2 : 0) + (named.length && !named.includes(top(x.kind)) ? 1 : 0);
   const matches = ranked.toSorted((a, b) => first(a) - first(b));
   const out: string[] = [],
     next: string[] = [];

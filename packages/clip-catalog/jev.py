@@ -4,7 +4,7 @@ that must pick or check something from text imports it, e.g. clip-catalog/catalo
     from jev import Jev
     answers = Jev().ask("state text", {"q": {"type": "noul", "instructions": "...", "criteria": {"true": "...", "false": "..."}}})
 """
-import json, os, re, sys, threading, time, urllib.error, urllib.request
+import email.utils, json, os, re, sys, threading, time, urllib.error, urllib.request
 from pathlib import Path
 
 
@@ -41,6 +41,20 @@ def read_spent():
         return {}
 
 
+def retry_after(value, wait):
+    """Retry-After is seconds or an HTTP date (RFC 9110); one it cannot read waits the loop's own wait."""
+    if not value:
+        return wait
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    try:
+        return max(0.0, email.utils.parsedate_to_datetime(value).timestamp() - time.time())
+    except (TypeError, ValueError):
+        return wait
+
+
 class Jev:
     """Calls Jev (TypeSafe System One, docs.typesafe.ai) on the first route in ROUTES that still has quota (those last
     seen spent go last), with its first key the route accepts. Adds up what the paid route costs. Thread-safe: the heats
@@ -72,7 +86,7 @@ class Jev:
                         self.used = name
                     return res["answers"]
                 except urllib.error.HTTPError as e:
-                    after = float(e.headers.get("Retry-After") or wait)
+                    after = retry_after(e.headers.get("Retry-After"), wait)
                     if e.code in (401, 403):
                         with self.lock:
                             if self.routes and self.routes[0] is route:
@@ -80,9 +94,10 @@ class Jev:
                                       file=sys.stderr)
                                 self.routes.pop(0)
                         break
-                    if e.code != 429 or not wait:
+                    # a server fault (5xx) passes like a burst: one lost answer would throw away every heat paid before it
+                    if (e.code != 429 and e.code < 500) or not wait:
                         raise
-                    if after > 300:
+                    if e.code == 429 and after > 300:
                         with self.lock:
                             if any(r[0] == name for r in self.routes):
                                 back = read_spent()
@@ -95,6 +110,10 @@ class Jev:
                                 self.routes = [r for r in self.routes if r[0] != name]
                         break
                     time.sleep(after)
+                except (urllib.error.URLError, TimeoutError):
+                    if not wait:
+                        raise
+                    time.sleep(wait)
         sys.exit("Jev: every route has spent its quota (the lines above say when each is back). Zen's free quota is per "
                  "network, so more Zen keys on this machine do not help; OpenRouter credit does: OPENROUTER_API_KEY in "
                  "~/.secrets/openrouter.env" if self.keyed else

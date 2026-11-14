@@ -1646,3 +1646,32 @@ test("a stray clip among sounds brings no body filters along", async () => {
   expect(out).not.toMatch(/--from\|--to/);
   expect(await run(["walking"], [...vault, walk], noJev)).toMatch(/--from\|--to/);
 });
+
+test("--fav default names the default list, never a search word", () =>
+  withFavorites({ default: { sounds: ["boom"] }, horror: { sounds: ["thud"] } }, async (favs) => {
+    const out = await run(["--fav", "default"], starredPool(), noJev, undefined, favs);
+    expect(out).not.toMatch(/after --fav names no favourites list/);
+    await expect(
+      run(["--fav", "horror", "--fav", "default"], starredPool(), noJev, undefined, favs),
+    ).rejects.toThrow(/--fav given twice/);
+  }));
+
+test("an id said whole comes first, before the kind a word of it names", async () => {
+  const pool = [
+    ...Array.from({ length: 5 }, (_, i) => e(`bgm-${i}`, `Track ${i}`, "", "bgm", "chill")),
+    e("bgm_drone", "Bgm Drone", "a low drone", "sfx", "ambience"),
+  ];
+  const out = await run(["bgm_drone"], pool, noJev);
+  expect(out.split("\n")[0]).toMatch(/bgm_drone/);
+});
+
+test("words beside body filters reach catalog.py without the words that name nothing", async () => {
+  const clip = {
+    ...e("mixamo/Sit_c9c00006", "Sit", "", "mocap", "stand"),
+    data: { seq: ["stand", "sitSeat"] },
+  };
+  const seen: string[][] = [];
+  const clips = async (args: string[]) => (seen.push(args), "1 matches");
+  await run(["sitting", "in", "a", "chair", "--from", "stand"], [clip], noJev, clips);
+  expect(seen[0]?.slice(0, 2)).toEqual(["sitting", "chair"]);
+});
