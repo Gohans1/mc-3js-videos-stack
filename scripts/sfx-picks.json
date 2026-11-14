@@ -897,6 +897,735 @@
       "page": "https://mixkit.co/free-sound-effects/typewriter/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/1379/1379.wav",
       "ear": { "query": "an old typewriter typing", "z": 2.91, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2674",
+      "title": "Heavenly swell",
+      "category": "musical",
+      "for": "an angelic choir: a heavenly reveal, a perfect moment",
+      "page": "https://mixkit.co/free-sound-effects/swell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2674/2674.wav",
+      "ear": { "query": "an angelic choir singing aah", "z": 4.32, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-659",
+      "title": "Huge choir echo swell",
+      "category": "musical",
+      "for": "an angelic choir: a heavenly reveal, a perfect moment",
+      "page": "https://mixkit.co/free-sound-effects/choir/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/659/659.wav",
+      "ear": { "query": "an angelic choir singing aah", "z": 3.96, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-663",
+      "title": "Cinematic angelical choir transition",
+      "category": "musical",
+      "for": "an angelic choir: a heavenly reveal, a perfect moment",
+      "page": "https://mixkit.co/free-sound-effects/choir/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/663/663.wav",
+      "ear": { "query": "an angelic choir singing aah", "z": 3.16, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-654",
+      "title": "Angelical choir",
+      "category": "musical",
+      "for": "an angelic choir: a heavenly reveal, a perfect moment",
+      "page": "https://mixkit.co/free-sound-effects/choir/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/654/654.wav",
+      "ear": { "query": "an angelic choir singing aah", "z": 2.85, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-226",
+      "title": "Medieval show fanfare announcement",
+      "category": "musical",
+      "for": "a fanfare: an announcement, a triumph",
+      "page": "https://mixkit.co/free-sound-effects/game/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/226/226.wav",
+      "ear": { "query": "a trumpet fanfare", "z": 3.79, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2293",
+      "title": "Trumpet fanfare",
+      "category": "musical",
+      "for": "a fanfare: an announcement, a triumph",
+      "page": "https://mixkit.co/free-sound-effects/cinematic/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2293/2293.wav",
+      "ear": { "query": "a trumpet fanfare", "z": 3.58, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-526",
+      "title": "Party trumpet horn isolated",
+      "category": "comedy",
+      "for": "a party horn: a silly celebration",
+      "page": "https://mixkit.co/free-sound-effects/sad/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/526/526.wav",
+      "ear": { "query": "a trumpet fanfare", "z": 2.93, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2016",
+      "title": "Video game win",
+      "category": "game",
+      "for": "a win jingle: a victory, a prize",
+      "page": "https://mixkit.co/free-sound-effects/win/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2016/2016.wav",
+      "ear": { "query": "a video game win jingle", "z": 3.74, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2018",
+      "title": "Winning notification",
+      "category": "game",
+      "for": "a win jingle: a victory, a prize",
+      "page": "https://mixkit.co/free-sound-effects/win/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2018/2018.wav",
+      "ear": { "query": "a video game win jingle", "z": 3.26, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2021",
+      "title": "Instant win",
+      "category": "game",
+      "for": "a win jingle: a victory, a prize",
+      "page": "https://mixkit.co/free-sound-effects/win/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2021/2021.wav",
+      "ear": { "query": "a video game win jingle", "z": 3.21, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1990",
+      "title": "Casino win alarm and coins",
+      "category": "game",
+      "for": "a jackpot: coins pouring out",
+      "page": "https://mixkit.co/free-sound-effects/money/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1990/1990.wav",
+      "ear": { "query": "coins jingling", "z": 3.93, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2003",
+      "title": "Coins sound",
+      "category": "foley",
+      "for": "coins: money, a payment, a reward",
+      "page": "https://mixkit.co/free-sound-effects/money/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2003/2003.wav",
+      "ear": { "query": "coins jingling", "z": 4.51, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1989",
+      "title": "Money bag drop",
+      "category": "foley",
+      "for": "coins: money, a payment, a reward",
+      "page": "https://mixkit.co/free-sound-effects/money/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1989/1989.wav",
+      "ear": { "query": "coins jingling", "z": 2.67, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2189",
+      "title": "Little double kiss",
+      "category": "comedy",
+      "for": "a kiss: affection, or a mocking smooch",
+      "page": "https://mixkit.co/free-sound-effects/kiss/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2189/2189.wav",
+      "ear": { "query": "a kiss", "z": 3.77, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2194",
+      "title": "Cartoon friendly kiss",
+      "category": "comedy",
+      "for": "a kiss: affection, or a mocking smooch",
+      "page": "https://mixkit.co/free-sound-effects/kiss/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2194/2194.wav",
+      "ear": { "query": "a kiss", "z": 3.59, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2192",
+      "title": "Little cute kiss",
+      "category": "comedy",
+      "for": "a kiss: affection, or a mocking smooch",
+      "page": "https://mixkit.co/free-sound-effects/kiss/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2192/2192.wav",
+      "ear": { "query": "a kiss", "z": 3.47, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2191",
+      "title": "Big loving kiss",
+      "category": "comedy",
+      "for": "a kiss: affection, or a mocking smooch",
+      "page": "https://mixkit.co/free-sound-effects/kiss/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2191/2191.wav",
+      "ear": { "query": "a kiss", "z": 3.25, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2193",
+      "title": "Quick funny kiss",
+      "category": "comedy",
+      "for": "a kiss: affection, or a mocking smooch",
+      "page": "https://mixkit.co/free-sound-effects/kiss/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2193/2193.wav",
+      "ear": { "query": "a kiss", "z": 2.96, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-505",
+      "title": "Small group moderate applause",
+      "category": "crowd",
+      "for": "an audience applauding",
+      "page": "https://mixkit.co/free-sound-effects/applause/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/505/505.wav",
+      "ear": { "query": "an audience applauding", "z": 4.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-485",
+      "title": "Medium size crowd applause",
+      "category": "crowd",
+      "for": "an audience applauding",
+      "page": "https://mixkit.co/free-sound-effects/applause/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/485/485.wav",
+      "ear": { "query": "an audience applauding", "z": 3.76, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-975",
+      "title": "Happy crowd cheer",
+      "category": "crowd",
+      "for": "a crowd cheering",
+      "page": "https://mixkit.co/free-sound-effects/happy/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/975/975.wav",
+      "ear": { "query": "a crowd cheering", "z": 4.53, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-459",
+      "title": "Male crowd cheering short",
+      "category": "crowd",
+      "for": "a crowd cheering",
+      "page": "https://mixkit.co/free-sound-effects/crowd/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/459/459.wav",
+      "ear": { "query": "a crowd cheering", "z": 4.43, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1927",
+      "title": "Cricket chirp",
+      "category": "comedy",
+      "for": "crickets: an awkward silence",
+      "page": "https://mixkit.co/free-sound-effects/crickets/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1927/1927.wav",
+      "ear": { "query": "crickets chirping at night", "z": 4.26, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1789",
+      "title": "Summer night crickets loop",
+      "category": "nature",
+      "for": "crickets at night: a quiet night bed",
+      "page": "https://mixkit.co/free-sound-effects/crickets/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1789/1789.wav",
+      "ear": { "query": "crickets chirping at night", "z": 4.23, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1787",
+      "title": "Summer night crickets",
+      "category": "nature",
+      "for": "crickets at night: a quiet night bed",
+      "page": "https://mixkit.co/free-sound-effects/crickets/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1787/1787.wav",
+      "ear": { "query": "crickets chirping at night", "z": 4.16, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-577",
+      "title": "Tension and suspense drum roll",
+      "category": "musical",
+      "for": "a drum roll before a reveal",
+      "page": "https://mixkit.co/free-sound-effects/drum/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/577/577.wav",
+      "ear": { "query": "a snare drum roll", "z": 3.13, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2893",
+      "title": "Bad joke drums",
+      "category": "comedy",
+      "for": "a rimshot after a joke (ba dum tss)",
+      "page": "https://mixkit.co/free-sound-effects/drum/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2893/2893.wav",
+      "ear": { "query": "a rimshot joke drum", "z": 5.22, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-579",
+      "title": "Drum joke accent",
+      "category": "comedy",
+      "for": "a rimshot after a joke (ba dum tss)",
+      "page": "https://mixkit.co/free-sound-effects/drum/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/579/579.wav",
+      "ear": { "query": "a rimshot joke drum", "z": 4, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2895",
+      "title": "Metallic boing hit",
+      "category": "comedy",
+      "for": "a cartoon boing: a bonk, a bounce, a head hit",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2895/2895.wav",
+      "ear": { "query": "a cartoon boing spring", "z": 5.98, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1365",
+      "title": "Mechanical typewriter hit",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1365/1365.wav",
+      "ear": { "query": "an old typewriter typing", "z": 4.41, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1367",
+      "title": "Typewriter hard hit",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1367/1367.wav",
+      "ear": { "query": "an old typewriter typing", "z": 4.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1382",
+      "title": "Mechanical typewriter single hit",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1382/1382.wav",
+      "ear": { "query": "an old typewriter typing", "z": 3.85, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1383",
+      "title": "Typewriter return bell sound",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1383/1383.wav",
+      "ear": { "query": "an old typewriter typing", "z": 3.27, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1380",
+      "title": "Single hit on typewriter",
+      "category": "typing",
+      "for": "a typewriter: text typed on screen",
+      "page": "https://mixkit.co/free-sound-effects/typewriter/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1380/1380.wav",
+      "ear": { "query": "an old typewriter typing", "z": 3.05, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-919",
+      "title": "Soft bell countdown",
+      "category": "notifications",
+      "for": "countdown beeps before a start",
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/919/919.wav",
+      "ear": { "query": "countdown beeps", "z": 3.15, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-925",
+      "title": "Male deep voice countdown",
+      "category": "voices",
+      "for": "a voice counting down before a start",
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/925/925.wav",
+      "ear": { "query": "a man counting down", "z": 3.93, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-917",
+      "title": "Male voice countdown",
+      "category": "voices",
+      "for": "a voice counting down before a start",
+      "page": "https://mixkit.co/free-sound-effects/countdown/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/917/917.wav",
+      "ear": { "query": "a man counting down", "z": 3.87, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-488",
+      "title": "Cinematic transition swoosh heartbeat trailer",
+      "category": "foley",
+      "for": "a heartbeat: tension, fear, a held breath",
+      "page": "https://mixkit.co/free-sound-effects/heartbeat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/488/488.wav",
+      "ear": { "query": "a heartbeat", "z": 3.07, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1452",
+      "title": "Electric hiss static",
+      "category": "glitch",
+      "for": "TV static: a lost signal, a cut to a screen",
+      "page": "https://mixkit.co/free-sound-effects/static/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1452/1452.wav",
+      "ear": { "query": "TV static noise", "z": 2.88, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1066",
+      "title": "Classic clock gong",
+      "category": "foley",
+      "for": "a clock striking the hour",
+      "page": "https://mixkit.co/free-sound-effects/clock/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1066/1066.wav",
+      "ear": { "query": "a clock chiming", "z": 2.64, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-1357",
+      "title": "Old telephone ring",
+      "category": "notifications",
+      "for": "a telephone ringing: a call comes in",
+      "page": "https://mixkit.co/free-sound-effects/phone-ring/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1357/1357.wav",
+      "ear": { "query": "a telephone ringing", "z": 4.8, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1356",
+      "title": "Vintage telephone ringtone",
+      "category": "notifications",
+      "for": "a telephone ringing: a call comes in",
+      "page": "https://mixkit.co/free-sound-effects/phone-ring/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1356/1356.wav",
+      "ear": { "query": "a telephone ringing", "z": 4.58, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1350",
+      "title": "Office telephone ring",
+      "category": "notifications",
+      "for": "a telephone ringing: a call comes in",
+      "page": "https://mixkit.co/free-sound-effects/phone-ring/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1350/1350.wav",
+      "ear": { "query": "a telephone ringing", "z": 3.45, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-111",
+      "title": "Melodic classic door bell",
+      "category": "notifications",
+      "for": "a doorbell: someone at the door",
+      "page": "https://mixkit.co/free-sound-effects/doorbell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/111/111.wav",
+      "ear": { "query": "a doorbell", "z": 4.58, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-334",
+      "title": "Doorbell double press notification",
+      "category": "notifications",
+      "for": "a doorbell: someone at the door",
+      "page": "https://mixkit.co/free-sound-effects/doorbell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/334/334.wav",
+      "ear": { "query": "a doorbell", "z": 4.33, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-333",
+      "title": "Doorbell single press",
+      "category": "notifications",
+      "for": "a doorbell: someone at the door",
+      "page": "https://mixkit.co/free-sound-effects/doorbell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/333/333.wav",
+      "ear": { "query": "a doorbell", "z": 3.48, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2864",
+      "title": "Doorbell tone",
+      "category": "notifications",
+      "for": "a doorbell: someone at the door",
+      "page": "https://mixkit.co/free-sound-effects/doorbell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2864/2864.wav",
+      "ear": { "query": "a doorbell", "z": 2.58, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-614",
+      "title": "Police whistle",
+      "category": "foley",
+      "for": "a whistle blown: a referee, a police stop, a start",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/614/614.wav",
+      "ear": { "query": "a referee whistle blowing", "z": 4.33, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-605",
+      "title": "Human whistle",
+      "category": "foley",
+      "for": "a whistle blown: a referee, a police stop, a start",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/605/605.wav",
+      "ear": { "query": "a referee whistle blowing", "z": 4.21, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-615",
+      "title": "Police short whistle",
+      "category": "foley",
+      "for": "a whistle blown: a referee, a police stop, a start",
+      "page": "https://mixkit.co/free-sound-effects/whistle/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/615/615.wav",
+      "ear": { "query": "a referee whistle blowing", "z": 3.45, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2212",
+      "title": "Adult sneeze",
+      "category": "voices",
+      "for": "a sneeze",
+      "page": "https://mixkit.co/free-sound-effects/sneeze/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2212/2212.wav",
+      "ear": { "query": "a person sneezing", "z": 3.71, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2210",
+      "title": "Cartoon character cute sneeze",
+      "category": "voices",
+      "for": "a sneeze",
+      "page": "https://mixkit.co/free-sound-effects/sneeze/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2210/2210.wav",
+      "ear": { "query": "a person sneezing", "z": 2.94, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2222",
+      "title": "Man coughing loud",
+      "category": "voices",
+      "for": "a cough or a throat clear: an awkward moment",
+      "page": "https://mixkit.co/free-sound-effects/cough/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2222/2222.wav",
+      "ear": { "query": "a man coughing", "z": 5.55, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2226",
+      "title": "Male clearing the throat",
+      "category": "voices",
+      "for": "a cough or a throat clear: an awkward moment",
+      "page": "https://mixkit.co/free-sound-effects/cough/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2226/2226.wav",
+      "ear": { "query": "a man coughing", "z": 4.06, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2272",
+      "title": "Male tired yawn",
+      "category": "voices",
+      "for": "a yawn: boredom, waking up",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2272/2272.wav",
+      "ear": { "query": "a person yawning", "z": 5.65, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2275",
+      "title": "Person yawns deeply",
+      "category": "voices",
+      "for": "a yawn: boredom, waking up",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2275/2275.wav",
+      "ear": { "query": "a person yawning", "z": 5.44, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2268",
+      "title": "Cartoon vocal yawn",
+      "category": "voices",
+      "for": "a yawn: boredom, waking up",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2268/2268.wav",
+      "ear": { "query": "a person yawning", "z": 4.18, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1962",
+      "title": "Monster sleep snore",
+      "category": "voices",
+      "for": "sleep breathing or a snore",
+      "page": "https://mixkit.co/free-sound-effects/breathe/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1962/1962.wav",
+      "ear": { "query": "a person snoring", "z": 4.77, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-1909",
+      "title": "Man sleep breathe",
+      "category": "voices",
+      "for": "sleep breathing or a snore",
+      "page": "https://mixkit.co/free-sound-effects/breathe/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1909/1909.wav",
+      "ear": { "query": "a person snoring", "z": 3.34, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2236",
+      "title": "Male sleep breathe",
+      "category": "voices",
+      "for": "sleep breathing or a snore",
+      "page": "https://mixkit.co/free-sound-effects/breathe/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2236/2236.wav",
+      "ear": { "query": "a person snoring", "z": 3.22, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-150",
+      "title": "Swallowing a water drink in the throat",
+      "category": "voices",
+      "for": "gulping a drink",
+      "page": "https://mixkit.co/free-sound-effects/eat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/150/150.wav",
+      "ear": { "query": "a person gulping a drink", "z": 6.03, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-161",
+      "title": "Wallowing drink quickly",
+      "category": "voices",
+      "for": "gulping a drink",
+      "page": "https://mixkit.co/free-sound-effects/eat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/161/161.wav",
+      "ear": { "query": "a person gulping a drink", "z": 5.41, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-131",
+      "title": "Human eating a potato chip",
+      "category": "voices",
+      "for": "crunching food: eating",
+      "page": "https://mixkit.co/free-sound-effects/eat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/131/131.wav",
+      "ear": { "query": "a person crunching chips", "z": 5.04, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-122",
+      "title": "Eating crispy cookies",
+      "category": "voices",
+      "for": "crunching food: eating",
+      "page": "https://mixkit.co/free-sound-effects/eat/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/122/122.wav",
+      "ear": { "query": "a person crunching chips", "z": 4.99, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3207",
+      "title": "Soft slurp",
+      "category": "voices",
+      "for": "a slurp",
+      "page": "https://mixkit.co/free-sound-effects/drink/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3207/3207.wav",
+      "ear": { "query": "a slurp", "z": 3.87, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-391",
+      "title": "Falling male scream",
+      "category": "voices",
+      "for": "a man screaming as he falls",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/391/391.wav",
+      "ear": { "query": "a man screaming while falling", "z": 3.24, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2200",
+      "title": "Scream in pain",
+      "category": "voices",
+      "for": "a man screaming in pain",
+      "page": "https://mixkit.co/free-sound-effects/hurt/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2200/2200.wav",
+      "ear": { "query": "a man screaming while falling", "z": 3.95, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-606",
+      "title": "Cartoon whistle game over",
+      "category": "comedy",
+      "for": "a slide whistle falling: a drop, a fall, a flop",
+      "page": "https://mixkit.co/free-sound-effects/sad/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/606/606.wav",
+      "ear": { "query": "a cartoon falling slide whistle", "z": 5.89, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-395",
+      "title": "Cartoon falling whistle",
+      "category": "comedy",
+      "for": "a slide whistle falling: a drop, a fall, a flop",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/395/395.wav",
+      "ear": { "query": "a cartoon falling slide whistle", "z": 5.36, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-407",
+      "title": "Cartoon falling eco",
+      "category": "comedy",
+      "for": "a slide whistle falling: a drop, a fall, a flop",
+      "page": "https://mixkit.co/free-sound-effects/falling/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/407/407.wav",
+      "ear": { "query": "a cartoon falling slide whistle", "z": 4.95, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-405",
+      "title": "Digital cartoon falling",
+      "category": "comedy",
+      "for": "a slide whistle falling: a drop, a fall, a flop",
+      "page": "https://mixkit.co/free-sound-effects/falling/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/405/405.wav",
+      "ear": { "query": "a cartoon falling slide whistle", "z": 3.16, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-744",
+      "title": "Trombone disappoint",
+      "category": "comedy",
+      "for": "a fail, a punchline that flops",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/744/744.wav",
+      "ear": { "query": "a sad trombone wah wah fail", "z": 5.7, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-736",
+      "title": "Cartoon spring sound",
+      "category": "comedy",
+      "for": "a cartoon boing: a bonk, a bounce, a head hit",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/?page=2",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/736/736.wav",
+      "ear": { "query": "a cartoon spring boing", "z": 4.7, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-10",
+      "title": "Little cartoon creature hiccup",
+      "category": "comedy",
+      "for": "a cartoon hiccup",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/10/10.wav",
+      "ear": { "query": "a cartoon hiccup", "z": 5.44, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-587",
+      "title": "Clock tower or cathedral bell",
+      "category": "musical",
+      "for": "a church bell: a wedding, a funeral, a town",
+      "page": "https://mixkit.co/free-sound-effects/church-bell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/587/587.wav",
+      "ear": { "query": "a church bell", "z": 4.08, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-619",
+      "title": "Cinematic church bell hit",
+      "category": "musical",
+      "for": "a church bell: a wedding, a funeral, a town",
+      "page": "https://mixkit.co/free-sound-effects/church-bell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/619/619.wav",
+      "ear": { "query": "a church bell", "z": 2.87, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-931",
+      "title": "Service bell",
+      "category": "notifications",
+      "for": "a service desk bell: order up, at your service",
+      "page": "https://mixkit.co/free-sound-effects/bell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/931/931.wav",
+      "ear": { "query": "a service desk bell ding", "z": 2.94, "verdict": "plausible" }
+    },
+    {
+      "id": "mixkit-2216",
+      "title": "Young woman sneeze",
+      "category": "voices",
+      "for": "a sneeze",
+      "page": "https://mixkit.co/free-sound-effects/sneeze/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2216/2216.wav",
+      "ear": { "query": "a person sneezing", "z": 6.52, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2213",
+      "title": "Sick man sneeze",
+      "category": "voices",
+      "for": "a sneeze",
+      "page": "https://mixkit.co/free-sound-effects/sneeze/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2213/2213.wav",
+      "ear": { "query": "a person sneezing", "z": 4.82, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-2211",
+      "title": "Little child sneeze",
+      "category": "voices",
+      "for": "a sneeze",
+      "page": "https://mixkit.co/free-sound-effects/sneeze/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2211/2211.wav",
+      "ear": { "query": "a person sneezing", "z": 3.71, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-576",
+      "title": "Atmospheric wind drum roll swoosh",
+      "category": "musical",
+      "for": "a drum roll before a reveal",
+      "page": "https://mixkit.co/free-sound-effects/drum/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/576/576.wav",
+      "ear": { "query": "a snare drum roll", "z": 5.52, "verdict": "strong" }
     }
   ]
 }
