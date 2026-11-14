@@ -1695,6 +1695,7 @@ export async function run(
       .map((a) => a.replace(/^[^/]*/, (k) => k.toLowerCase())),
     sources = list(set.get("--source"));
   let kinds = asked;
+  if (set.has("--help") || set.has("-h")) return HELP;
   const nRaw = set.get("-n");
   if (nRaw !== undefined && !/^[1-9]\d*$/.test(nRaw))
     throw new FindError("-n takes a whole number of hits, 1 or more, e.g. -n 20");
@@ -1703,7 +1704,6 @@ export async function run(
     throw new FindError(
       `-n ${n} would put ${n} lines in your context; ${LIST_ALL} at most. Narrow instead: --kind <kind>/<category>, words, or by meaning: --jev --kind <kind> "<the moment>"`,
     );
-  if (set.has("--help") || set.has("-h")) return HELP;
   if (query.toLowerCase() === "help" && set.size === 0 && !bare.length) return HELP;
   const starring = set.has("--star") ? "--star" : set.has("--unstar") ? "--unstar" : undefined;
   // The favourites list in use: default unless --fav names another; a name no list has falls back to default, said so
@@ -2207,7 +2207,7 @@ export async function run(
     if (kinds?.every((k) => k.includes("/"))) return "";
     const cats = tally(xs.map((x) => (x.cat ? catKey(x) : x.kind))).split(", ");
     return cats.length > 1
-      ? `hits by category: ${cats.slice(0, 6).join(", ")}${cats.length > 6 ? ", ..." : ""}. Narrow to one: --kind ${cats[0]!.split(" ")[0]}`
+      ? `hits by category: ${cats.slice(0, 6).join(", ")}${cats.length > 6 ? ", …" : ""}. Narrow to one: --kind ${cats[0]!.split(" ")[0]}`
       : "";
   };
   const browse = () => {
@@ -2249,10 +2249,10 @@ export async function run(
             voted.splice(voted.indexOf(bestFit!), 1);
             voted.unshift(bestFit!);
           }
-          // the ones Jev says are not what was asked say nothing, but the first stays: a miss still shows the nearest
+          // the ones Jev says are not what was asked say nothing, but the first and the best fit (the one a miss quotes) stay
           const kept = voted
             .slice(0, n)
-            .filter(([, , f], i) => i === 0 || f === undefined || f >= FIT_NO);
+            .filter((v, i) => i === 0 || v === bestFit || v[2] === undefined || v[2] >= FIT_NO);
           const left = Math.min(n, voted.length) - kept.length;
           out.push(
             `Jev voted among ${jevPool.length} ${kinds?.length ? "entries" : "word matches (add --kind to vote over a whole kind)"}; first column = its share of the vote${checked.length ? `, then "fits" = its own yes/no that the entry is what you asked for (0-1)` : ""}${voted.length < Math.min(n, jevPool.length) ? `; the other ${jevPool.length - voted.length} got none` : ""}${left ? `; ${left} it says are not it are left out` : ""}.`,

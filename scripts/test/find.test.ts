@@ -1188,6 +1188,17 @@ test("hits Jev says are not what was asked are left out, but the best of them st
   expect(miss).not.toMatch(/door-b|door-c/);
 });
 
+test("a miss shows the row whose fit it quotes", async () => {
+  const pool = ["a", "b"].map((k) => e(`door-${k}`, `Door ${k}`, "door", "sfx", "foley"));
+  const jev = (_: string, xs: Entry[]) =>
+    Promise.resolve(
+      xs.map((x): [number, Entry, number] => (x.id === "door-a" ? [0.9, x, 0.04] : [0.1, x, 0.2])),
+    );
+  const out = await run(["--jev", "--kind", "sfx", "a dragon singing opera"], pool, jev);
+  expect(out).toMatch(/best fit 0\.20/);
+  expect(out).toMatch(/fits 0\.20 .*door-b/);
+});
+
 test("a stray clip among sounds brings no body filters along", async () => {
   const out = await run(["walking", "door"], [...vault, walk], noJev);
   expect(out).not.toMatch(/--from\|--to/);
