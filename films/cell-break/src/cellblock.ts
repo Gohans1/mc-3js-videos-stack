@@ -47,10 +47,13 @@ const subGeo = (geo, g) => {
   return out;
 };
 // a skinned mesh's posed vertices (Box3 and geometry alone keep the bind pose)
+// (each vertex skinned once, then laid out by the index: a box's corners are shared by 3 faces)
 const posed = (o) => {
   const idx = o.geometry.index, g = idx ? o.geometry.toNonIndexed() : o.geometry.clone();
-  const p = g.attributes.position, v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) { o.getVertexPosition(idx ? idx.getX(i) : i, v); p.setXYZ(i, v.x, v.y, v.z); }
+  const n = o.geometry.attributes.position.count, at = new Float32Array(n * 3), v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) o.getVertexPosition(i, v).toArray(at, i * 3);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const k = (idx ? idx.getX(i) : i) * 3; p.setXYZ(i, at[k], at[k + 1], at[k + 2]); }
   g.computeVertexNormals();
   return g;
 };

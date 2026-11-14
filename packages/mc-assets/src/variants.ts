@@ -22,7 +22,7 @@ export async function buildVariants(list, sources, place, rangesOf) {
     list.map(async (v) => {
       const one = async (id) => {
         const s = await createScene(
-          sources,
+          assets,
           [{ id: `${v.ns ?? "gohans"}:${id}`, pos: v.pos, properties: v.properties }],
           { lighting: "scene", animate: false },
         );

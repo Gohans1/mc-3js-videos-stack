@@ -10,8 +10,7 @@
 //   (title, chapter cards, date stamps, black and fades) on a plane in front of the camera.
 // Effects run on film time even in a still shot: the shot freezes Steve (scene.ts stillAt), not the dust in the air.
 import * as THREE from "three";
-import { unzipSync } from "fflate";
-import { createScene } from "block-model-renderer";
+import { createScene, readFile } from "block-model-renderer";
 import { buildScreen } from "mc-assets/screen";
 import { DESK, RAIL_Y, TRAP, TUNNEL } from "./world";
 
@@ -30,10 +29,9 @@ const keyAt = (keys, t) => { let k = null; for (const e of keys ?? []) if (t >= 
 // [entry, 0..1 progress] of the span (t..t+d) that holds t, or null
 const spanAt = (list, t) => { for (const e of list ?? []) if (t >= e.t && t < e.t + e.d) return [e, (t - e.t) / e.d]; return null; };
 
-export async function buildStory({ scene, camera, sources, jar, font, makeActor, clips, loose }) {
-  const unz = (path) => unzipSync(jar, { filter: (f) => f.name === path })[path];
+export async function buildStory({ scene, camera, sources, jarAssets, font, makeActor, clips, loose }) {
   const tex = async (name) => {
-    const url = URL.createObjectURL(new Blob([unz(`assets/minecraft/textures/${name}.png`)], { type: "image/png" }));
+    const url = URL.createObjectURL(new Blob([await readFile(`assets/minecraft/textures/${name}.png`, jarAssets)], { type: "image/png" }));
     const t = await new THREE.TextureLoader().loadAsync(url);
     URL.revokeObjectURL(url);
     t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
@@ -132,7 +130,7 @@ export async function buildStory({ scene, camera, sources, jar, font, makeActor,
   // its blocks thrown as item-sized drops
   const TNT_LIFT = 0.3, TNT_BLOW = 0.8;
   const trapAt = V(TRAP[0] + 0.5, TRAP[1] + 0.5, TRAP[2] + 0.5); // the trap block's middle
-  const tnt = await blocks([{ id: "tnt", pos: [0, 0, 0] }], V(TRAP[0], TRAP[1] - 1, TRAP[2]), [jar]);
+  const tnt = await blocks([{ id: "tnt", pos: [0, 0, 0] }], V(TRAP[0], TRAP[1] - 1, TRAP[2]), jarAssets);
   const tntWhite = box(1.02, 1.02, 1.02, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }));
   scene.add(tntWhite);
   const lid = new THREE.Group(); // the trap block on a pivot at its middle, so it can tip over
@@ -240,7 +238,7 @@ export async function buildStory({ scene, camera, sources, jar, font, makeActor,
   }
   for (const z of [-12, -6, 0]) for (const x of [-7, 7]) hallGlow.push({ id: "lantern", pos: [H.x + x, 3, H.z + z] });
   await blocks(hall, V(0, 0, 0));
-  await blocks(hallGlow, V(0, 0, 0), jar);
+  await blocks(hallGlow, V(0, 0, 0), jarAssets);
   const hallLamp = lamp(0xffdc9a, 40, 30, V(H.x, 6, H.z - 5));
   const CE = SETS.cellar, cel = [];
   for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) {

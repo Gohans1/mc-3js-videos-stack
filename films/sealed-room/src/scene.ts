@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { unzipSync } from "fflate";
 import { BloomEffect, BlendFunction, BrightnessContrastEffect, EffectComposer, EffectPass, HueSaturationEffect, LensDistortionEffect, NoiseEffect, RenderPass, SMAAEffect, ToneMappingEffect, ToneMappingMode, VignetteEffect } from "postprocessing";
 import { N8AOPostPass } from "n8ao";
-import { configure, createScene } from "block-model-renderer";
+import { configure, createScene, prepareAssets } from "block-model-renderer";
 import { AssetLoader, GuiObject } from "minerender";
 import { EDIT, fromSource } from "./edit";
 import { buildWorld, BED, CABINET, CHAIR, LAMP, ROOM } from "./world";
@@ -76,7 +76,10 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
   const jar = new Uint8Array(await jarFile.arrayBuffer());
   // blocks picked from the vault's vetted mod packs (pack/picks.json, mc-assets/pick.py), stacked between the props and the game
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
-  const sources = [pack, picked, jar];
+  // prepared once, with block-model-renderer's cross-call cache: a createScene handed raw zips unpacks the 5 MB jar again
+  // and decodes every texture again on each call
+  const sources = await prepareAssets([pack, picked, jar], { cache: true });
+  const jarAssets = await prepareAssets(jar, { cache: true });
   const world = await createScene(sources, buildWorld(), { lighting: "scene", animate: false });
   world.group.scale.setScalar(S);
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
@@ -131,7 +134,7 @@ export async function buildScene(canvas, W, H, draft = false, log = (m) => {}) {
     get pick() { return chairs.pick; },
     get ranges() { return chairs.ranges; },
   });
-  const lamp = await createScene(jar, LAMP.map((pos) => ({ id: "sea_lantern", pos })), { lighting: "scene", animate: false });
+  const lamp = await createScene(jarAssets, LAMP.map((pos) => ({ id: "sea_lantern", pos })), { lighting: "scene", animate: false });
   lamp.group.scale.setScalar(S);
   lamp.group.position.copy(world.group.position);
   scene.add(lamp.group);

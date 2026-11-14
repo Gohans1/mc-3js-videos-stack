@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { configure, createScene } from "block-model-renderer";
+import { configure, createScene, prepareAssets } from "block-model-renderer";
 import { unzipSync } from "fflate";
 import { animate, ANIMS } from "film-stage/animate";
 import { cameraAt, EASES } from "film-stage/camera";
@@ -82,7 +82,9 @@ export async function buildScene(canvas, W, H, draft = false) {
     );
   const jar = new Uint8Array(await jarFile.arrayBuffer());
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
-  const sources = [pack, picked, jar];
+  // prepared once, with block-model-renderer's cross-call cache: a createScene handed raw zips unpacks the 5 MB jar again
+  // and decodes every texture again on each call
+  const sources = await prepareAssets([pack, picked, jar], { cache: true });
   const world = await createScene(sources, buildWorld(), { lighting: "scene", animate: false });
   world.group.scale.setScalar(S);
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1

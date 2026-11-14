@@ -6,10 +6,9 @@
 // src/timeline/cam.json (film-stage/camera.ts). draw(t) draws any moment straight away (the studio's film contract:
 // bun run skills get core --ref contract). Mojang files come through assets/public links into the vault (bun run link).
 import * as THREE from "three";
-import { unzipSync } from "fflate";
 import { BloomEffect, EffectComposer, EffectPass, HueSaturationEffect, RenderPass, SMAAEffect, ToneMappingEffect, ToneMappingMode, VignetteEffect } from "postprocessing";
 import { N8AOPostPass } from "n8ao";
-import { configure, createScene } from "block-model-renderer";
+import { configure, createScene, prepareAssets, readFile } from "block-model-renderer";
 import { EDIT, fromSource } from "./edit";
 import { buildLights, buildLoose, buildWorld, CCTV, CCTV_AIM, DESK, RAIL_Y, ROOM_LIGHTS, TORCHES, TUNNEL } from "./world";
 import { VARIANTS } from "./variants";
@@ -65,7 +64,10 @@ export async function buildScene(canvas, W, H, draft = false) {
   if (!jarFile.ok) throw new Error("mc/client_assets.zip is missing: bun run link at the repo root (bun ../../scripts/mc/slim_jar.mjs if the vault lacks it)");
   const jar = new Uint8Array(await jarFile.arrayBuffer());
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
-  const sources = [pack, picked, jar];
+  // prepared once, with block-model-renderer's cross-call cache: a createScene handed raw zips unpacks the 5 MB jar again
+  // and decodes every texture again on each call
+  const sources = await prepareAssets([pack, picked, jar], { cache: true });
+  const jarAssets = await prepareAssets(jar, { cache: true });
   const world = await createScene(sources, buildWorld(), { lighting: "scene", animate: false });
   world.group.scale.setScalar(S);
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
@@ -88,14 +90,14 @@ export async function buildScene(canvas, W, H, draft = false) {
   moon.position.set(4.5, 2.2, 5.2);
   scene.add(moon);
   scene.add(holeLight);
-  const lights = await createScene(jar, buildLights(), { lighting: "scene", animate: false });
+  const lights = await createScene(jarAssets, buildLights(), { lighting: "scene", animate: false });
   lights.group.scale.setScalar(S);
   lights.group.position.copy(world.group.position);
   scene.add(lights.group);
 
   // Steve's skin comes out of the same zip
   const SKIN = "assets/minecraft/textures/entity/player/wide/steve.png";
-  const skinUrl = URL.createObjectURL(new Blob([unzipSync(jar, { filter: (f) => f.name === SKIN })[SKIN]], { type: "image/png" }));
+  const skinUrl = URL.createObjectURL(new Blob([await readFile(SKIN, jarAssets)], { type: "image/png" }));
   const steve = await makePlayer(await loadRig("rig/player.glb"), skinUrl, { glow: 0.03 });
   URL.revokeObjectURL(skinUrl);
   steve.setFace("noeyes"); // mc-actor FACES: the skin painted over his eyes, the floating face hidden for good
@@ -105,7 +107,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const rigFile = "rig/player.glb";
   const makeActor = async (skin, { ghost = false, shirt = null } = {}) => {
     const path = `assets/minecraft/textures/entity/player/wide/${skin}.png`;
-    let url = URL.createObjectURL(new Blob([unzipSync(jar, { filter: (f) => f.name === path })[path]], { type: "image/png" }));
+    let url = URL.createObjectURL(new Blob([await readFile(path, jarAssets)], { type: "image/png" }));
     if (shirt) url = await reshirt(url, shirt);
     const a = await makePlayer(await loadRig(rigFile), url, { glow: ghost ? 0.6 : 0.03 });
     URL.revokeObjectURL(url);
@@ -160,7 +162,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const hemi = new THREE.HemisphereLight(0xdfe6f0, 0x3a3026, C.fill);
   scene.add(hemi);
   const roomLooks = await Promise.all(ROOM_LIGHTS.map(async (L) => {
-    const g = place((await createScene(jar, L.blocks, { lighting: "scene", animate: false })).group);
+    const g = place((await createScene(jarAssets, L.blocks, { lighting: "scene", animate: false })).group);
     const lamp = new THREE.PointLight(L.id === "tube" ? 0xffc673 : 0xffa552, 0, 12, 2);
     lamp.position.set(...L.light);
     lamp.castShadow = true;
@@ -227,7 +229,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const lamps = glow.map(([c, p, i]) => { const l = new THREE.PointLight(c, i, 6, 2); l.position.set(...p); scene.add(l); return l; });
 
   // everything the story adds (story.ts), then the cell block round the cell (cellblock.ts), every cell a copy of this one
-  const story = await buildStory({ scene, camera, sources, jar, font, makeActor, clips, loose });
+  const story = await buildStory({ scene, camera, sources, jarAssets, font, makeActor, clips, loose });
   const chairObj = story.objects.find(([, label]) => label.startsWith("chair"))[0];
   const block = await buildCellBlock({ sources, scene, props: [screen.glass, chairObj, cctv], actor: await makeActor("steve"), clips: await loadClips(CROWD.map((c) => c.ref), steve), crtId: crt.pick.id });
   const ledWorld = led.getWorldPosition(V(0, 0, 0));
