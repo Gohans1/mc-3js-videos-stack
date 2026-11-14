@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import { noteScene, noteSecond } from "../packages/live-studio/app/notes/note-card-meta.ts";
 import { cliArgs, jsonFile, needFilm, secondArg } from "../packages/live-studio/src/cli.mjs";
+import { checkFiles } from "../packages/live-studio/src/contract.ts";
+import { contractFiles } from "../packages/live-studio/src/film.mjs";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
 import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
@@ -150,7 +152,9 @@ export const whatsAt = (dir: string, t: number) => {
     const durations: Record<string, number> = {};
     for (const c of audio.sfx ?? []) {
       const file = c.length === undefined && vault?.fileOf(c.name);
-      if (file) durations[c.name] = audioInfo(file)?.seconds ?? 0;
+      // a header it cannot read is a length unknown, never 0 s (that hides a sound that plays)
+      const seconds = file ? audioInfo(file)?.seconds : undefined;
+      if (seconds) durations[c.name] = seconds;
     }
     const heard = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
     // a muted track is left out of every mix (scripts/sound/mix.py MUTED)
@@ -212,7 +216,12 @@ export const whatsAt = (dir: string, t: number) => {
       if (Array.isArray(v)) {
         if (v.length > 1 && v.every((r) => r && typeof r === "object" && typeof r.t === "number")) {
           const b = v.filter((r) => r.t <= scene).length - 1;
-          if (b >= 0 && b < v.length - 1)
+          // two keys of one value hold it still: listed as moving they push the moving rows out of the 10 shown
+          const changes = (x: Row, y: Row) =>
+            [...new Set([...Object.keys(x), ...Object.keys(y)])].some(
+              (k) => k !== "t" && JSON.stringify(x[k]) !== JSON.stringify(y[k]),
+            );
+          if (b >= 0 && b < v.length - 1 && changes(v[b], v[b + 1]))
             keys.push({
               file,
               path: path.join("."),
@@ -318,6 +327,18 @@ if (isMain) {
     process.exit(2);
   }
   const film = needFilm(process.env.LIVE_PROJECT);
+  // a throw is almost always a file the studio cannot read either (audio.json beds a string): name it, not the TypeError
+  const crashed: (e: unknown) => never = (e) => {
+    const faults = checkFiles(contractFiles(film)).map((f) => f.split("\n")[0]);
+    if (!faults.length) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+    console.error(
+      `${faults.join(", ")} ${faults.length > 1 ? "do" : "does"} not fit what the studio reads: bun run check names the fault and its fix, then run at again`,
+    );
+    process.exit(2);
+  };
   let t: number;
   let note: ReturnType<typeof noteMoment> = null;
   if (/^-\d/.test(arg)) {
@@ -329,7 +350,12 @@ if (isMain) {
   } else if (/^\.?\d/.test(arg)) t = secondArg("bun run at", arg);
   else {
     // a note: #N or its id
-    const n = noteMoment(film, arg);
+    let n: ReturnType<typeof noteMoment> = null;
+    try {
+      n = noteMoment(film, arg);
+    } catch (e) {
+      crashed(e);
+    }
     if (!n) {
       console.error(
         `no note ${arg} in notes/notes.jsonl: bun run notes lists them (#N or the id), or give a second (bun run at 35.6)`,
@@ -344,8 +370,7 @@ if (isMain) {
   try {
     got = whatsAt(film, t);
   } catch (e) {
-    console.error((e as Error).message);
-    process.exit(1);
+    crashed(e);
   }
   if (t >= got.length) {
     console.error(`the film is ${got.length.toFixed(3)} s long: give a second before that`);

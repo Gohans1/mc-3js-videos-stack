@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -46,7 +46,18 @@ const film = (t) => {
       { kind: "text", text: "NEVER", from: 15, to: 16, track: 0 },
     ],
   });
-  put("src/timeline/steve.json", { moves: [{ t: 0 }, { t: 7 }, { t: 9 }] });
+  // moves walks from 7 to 9; chair holds still from 0 to 20 (two keys, one value)
+  put("src/timeline/steve.json", {
+    moves: [
+      { t: 0, x: 0 },
+      { t: 7, x: 0 },
+      { t: 9, x: 2 },
+    ],
+    chair: [
+      { t: 0, dx: 0 },
+      { t: 20, dx: 0 },
+    ],
+  });
   return dir;
 };
 
@@ -217,6 +228,35 @@ test("a sound on a muted track and a second inside a gap say what is really hear
   assert.equal(got.blank, true);
   assert.equal(got.sounds[0]?.muted, true);
   assert.equal(whatsAt(dir, 5).blank, false);
+});
+
+test("a sound whose file's length cannot be read is still heard, its end unknown", (t) => {
+  const dir = film(t);
+  const pkg = join(dir, "package.json");
+  const conf = JSON.parse(readFileSync(pkg, "utf8"));
+  conf["live-studio"].sfx = "sound/sfx";
+  writeFileSync(pkg, JSON.stringify(conf));
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  writeFileSync(join(dir, "sound/sfx/door.wav"), "not a wav header");
+  // no "length": it lasts as long as its file
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], sfx: [{ name: "door", at: 8, gain: 0 }] }),
+  );
+  const door = whatsAt(dir, 4.2).sounds.find((s) => s.name === "door");
+  assert.ok(door, "door is playing");
+  assert.equal(door.to, null);
+});
+
+test("a timeline the studio cannot read is named with check, never a stack trace", (t) => {
+  const dir = film(t);
+  writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: "bad", sfx: [] }));
+  const r = spawnSync("bun", [AT, "2"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /src\/timeline\/audio\.json.*bun run check names the fault/);
 });
 
 test("at refuses a second past the film's end and says how long it is", (t) => {
