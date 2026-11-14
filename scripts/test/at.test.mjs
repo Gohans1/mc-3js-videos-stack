@@ -783,7 +783,7 @@ test("a second said with an s (4.1s) is a second, as every other film command ta
   assert.match(r.stdout, /^00:04\.100 heard/);
 });
 
-test("the draft's cut is the nearest one, and a cuts.json that is no list is said, never a stack trace", (t) => {
+test("the draft's cut is the nearest one, and a cuts.json that is no list is no cut, never a stack trace", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "renders"));
   const run = () =>
@@ -833,4 +833,75 @@ test("a film's own transition is not called unknown, and one far from this secon
     cuts.map((c) => [c.fx, c.own]),
     [["myWipe", true]],
   );
+});
+
+test("a note with no second, or a package.json that is no JSON, is said: never a stack trace", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = { id: "n1", t: null, text: "the hand", shot: 1, time: "", at: "1" };
+  writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
+  const run = (arg) =>
+    spawnSync("bun", [AT, arg], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" });
+  const r = run("#1");
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /^note #1 \(n1\) has no second/);
+  writeFileSync(join(dir, "package.json"), '{"live-studio": {');
+  const p = run("4.1");
+  assert.equal(p.status, 2, p.stderr);
+  assert.match(p.stderr, /^package\.json .*bun run check/);
+});
+
+test("a second a hair under a minute is 01:00.000, never 00:60.000", (t) => {
+  const dir = film(t);
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 70 }));
+  const r = spawnSync("bun", [AT, "59.9999"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^01:00\.000 heard/);
+});
+
+test("a laid voice on a muted track has no takes waiting to be laid, and a newer take is still named", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "voice",
+      tracks: [{ id: "v", mute: true }],
+      beds: [],
+      sfx: [{ name: "voice", at: 0, length: 15, gain: 0, track: "v" }],
+    }),
+  );
+  mkdirSync(join(dir, "assets/public/agent"), { recursive: true });
+  writeFileSync(join(dir, "assets/public/agent/full_voice.wav"), "");
+  utimesSync(join(dir, "assets/public/agent/full_voice.wav"), 1000, 1000);
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+  writeFileSync(join(dir, "voice/takes/01.mp3"), "");
+  writeFileSync(join(dir, "voice/takes/._02.mp3"), "");
+  const got = whatsAt(dir, 4.1);
+  assert.equal(got.narrationMuted, "v");
+  assert.equal(got.unlaid, false);
+  assert.deepEqual(got.unplaced, ["01"]);
+});
+
+test("an adjustment whose grade sets nothing is said to change nothing", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].adjustmentTimeline = "src/timeline/adjust.json";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  writeFileSync(
+    join(dir, "src/timeline/adjust.json"),
+    JSON.stringify({
+      items: [
+        { id: "a", name: "Empty", from: 0, to: 20, track: 0, grade: {} },
+        { id: "b", name: "Warm", from: 0, to: 20, track: 0, grade: { temp: 20 } },
+      ],
+    }),
+  );
+  const r = spawnSync("bun", [AT, "4.1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.match(r.stdout, /^looks .*items\[0\] Empty \(its grade sets nothing\), items\[1\] Warm$/m);
 });

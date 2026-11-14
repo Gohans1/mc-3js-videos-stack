@@ -37,8 +37,11 @@ import { buildVoiceCues } from "./voice/cues.ts";
 type Row = Record<string, any>;
 const fmt = (x: number) => x.toFixed(2);
 // as notes, the studio and a draft's strip print a heard second
-const mmss = (t: number) =>
-  `${String(Math.floor(t / 60)).padStart(2, "0")}:${(t % 60).toFixed(3).padStart(6, "0")}`;
+const mmss = (t: number) => {
+  // rounded once, to the millisecond: 59.9999 rounds up to a whole minute, never to 60 s of the one before
+  const ms = Math.round(t * 1000);
+  return `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${((ms % 60000) / 1000).toFixed(3).padStart(6, "0")}`;
+};
 
 // every id: "<x>" the film's own code writes (its transitions, anims, shapes), read as text: the code is not run here
 const idsIn = (src: string) => {
@@ -304,7 +307,15 @@ export const whatsAt = (dir: string, t: number) => {
     return (doc.items as Row[]).flatMap((it, i) => {
       const at = overlayTime(clock, t, it);
       return at >= it.from && at < it.to && !it.hidden && !doc.tracks?.[it.track ?? 0]?.hidden
-        ? [{ i, text: it.text ?? it.name ?? it.kind, from: it.from, to: it.to }]
+        ? [
+            {
+              i,
+              // the grade is all an adjustment does: an empty one draws the picture as it is
+              text: `${it.text ?? it.name ?? it.kind}${kind === "adjustment" && !Object.keys(it.grade ?? {}).length ? " (its grade sets nothing)" : ""}`,
+              from: it.from,
+              to: it.to,
+            },
+          ]
         : [];
     });
   };
@@ -360,12 +371,7 @@ export const whatsAt = (dir: string, t: number) => {
     const cues = buildVoiceCues(dir);
     // a film with no voice lines is silent, not a voice turned off
     voiceOff &&= cues.lines.length > 0;
-    const takes = join(dir, "voice/takes");
-    unlaid =
-      !cues.lines.length &&
-      existsSync(takes) &&
-      readdirSync(takes).some((f) => /\.(mp3|wav)$/.test(f));
-    unplaced = cues.lines.length ? cues.unplaced : [];
+    ({ unlaid, unplaced } = cues);
     const li = cues.lines.findIndex((l) => l.s <= t && t <= l.e);
     if (li >= 0) {
       const l = cues.lines[li]!;
@@ -465,7 +471,13 @@ if (isMain) {
   const film = needFilm(process.env.LIVE_PROJECT);
   // a throw is almost always a file the studio cannot read either (audio.json beds a string): name it, not the TypeError
   const crashed: (e: unknown) => never = (e) => {
-    const faults = checkFiles(contractFiles(film)).map((f) => f.split("\n")[0]);
+    let faults: string[];
+    try {
+      faults = checkFiles(contractFiles(film)).map((f) => f.split("\n")[0]!);
+    } catch (x) {
+      // contractFiles parses package.json and only reads the rest: its own throw is package.json's
+      faults = [`package.json (${(x as Error).message})`];
+    }
     if (!faults.length) {
       console.error((e as Error).message);
       process.exit(1);
@@ -500,6 +512,12 @@ if (isMain) {
     if (!n) {
       console.error(
         `no note ${arg} in notes/notes.jsonl: bun run notes lists them (#N or the id), or give a second (bun run at 35.6)`,
+      );
+      process.exit(2);
+    }
+    if (!Number.isFinite(n.heard)) {
+      console.error(
+        `note #${n.n} (${n.id}) has no second: its "t" in notes/notes.jsonl is ${JSON.stringify(n.written ?? null)}, not the heard second the studio writes; bun run notes ${n.id} says what it asks`,
       );
       process.exit(2);
     }

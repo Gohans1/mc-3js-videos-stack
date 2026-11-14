@@ -124,7 +124,13 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
           .sort()
       : [];
 
-  return { duration: r3(clock.duration), lines, gaps, unplaced };
+  // takes made but no voice assembled from them yet: generating again would spend credits for nothing
+  const unlaid =
+    !existsSync(voiceWav) &&
+    existsSync(takesDir) &&
+    readdirSync(takesDir).some((f) => /^[^.].*\.(mp3|wav)$/.test(f));
+
+  return { duration: r3(clock.duration), lines, gaps, unplaced, unlaid };
 };
 
 const HELP = `The heard second of every narration line, word and silent gap, after the Phrase Bricks in src/timeline/audio.json
@@ -146,11 +152,8 @@ if (isMain) {
     process.exit(1);
   }
   if (!cues.lines.length) {
-    // takes made but not laid on the film yet: generating again would spend credits for nothing
-    const takes = resolve(film, "voice/takes");
-    const made = existsSync(takes) && readdirSync(takes).some((f) => /\.(mp3|wav)$/.test(f));
     console.error(
-      made
+      cues.unlaid
         ? "no narration lines on the film yet, but voice/takes has audio: bun run voice:assemble lays them on it"
         : "no narration lines yet: bun run voice:gen (what it would make), then voice:gen --yes, then voice:assemble",
     );
