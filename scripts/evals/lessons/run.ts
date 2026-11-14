@@ -5,11 +5,12 @@
 // Measured 2026-11-14: Jev 35/40 dev, 23/25 holdout-a; a local embedding (bekko-a8m) 16/25 holdout-a, rerankers lower.
 import { execSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { lessonsFor } from "../../../packages/live-studio/src/lessons.mjs";
 
-const HERE = import.meta.dir;
+const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`Usage: bun run eval:lessons [--set dev|holdout-a] [--note "<what changed>"]
