@@ -1044,3 +1044,118 @@ test("a feeling searched among mocap clips points to the mood they are tagged wi
     /scared is a mood clips checked by eye are tagged with: bun run find --mood scared \(1 clips\)/,
   );
 });
+
+test("mocap by meaning keeps the length and source filters it was given", async () => {
+  let got: string[] = [];
+  const clips = (args: string[]) => ((got = args), Promise.resolve("catalogue rows"));
+  const pool = [...vault, { ...walk, secs: 2 }];
+  await run(
+    ["--jev", "--kind", "mocap", "--dur", "1-4", "--source", "mixamo", "he walks"],
+    pool,
+    noJev,
+    clips,
+  );
+  expect(got).toEqual(
+    expect.arrayContaining(["--jev", "he walks", "--dur", "1-4", "--lib", "mixamo"]),
+  );
+});
+
+test("Jev picking a transition votes over transitions, not the eases that time them, unless eases are asked", async () => {
+  const pool = [
+    ...vault,
+    {
+      ...e("linear", "Linear", "constant speed", "transition-ease", "ease"),
+      src: "film-stage/transitions.ts",
+    },
+  ];
+  let voted: string[] = [];
+  const jev = (_: string, xs: Entry[]) => (
+    (voted = xs.map((x) => x.id)),
+    Promise.resolve(xs.map((x): [number, Entry, number] => [0.5, x, 0.9]))
+  );
+  await run(["--jev", "--kind", "transition", "a hard cut"], pool, jev);
+  expect(voted).toEqual(["dissolve"]);
+  await run(["--jev", "--kind", "transition/ease", "steady speed"], pool, jev);
+  expect(voted).toEqual(["linear"]);
+});
+
+test("a hit Jev is sure of names --show once and offers no way to make one", async () => {
+  const jev = (_: string, xs: Entry[]) =>
+    Promise.resolve(
+      xs.map((x): [number, Entry, number] => [x.id === "ear-door-knock" ? 0.9 : 0.05, x, 0.9]),
+    );
+  const out = await run(["--jev", "--kind", "sound", "someone knocks"], vault, jev);
+  expect(out).toMatch(/FOUND: ear-door-knock/);
+  expect(out).not.toMatch(/one in full/);
+  expect(out).not.toMatch(/make it|sfx:get/);
+});
+
+test("mocap hits name --show once, in the general line", async () => {
+  const out = await run(["walking"], [...vault, walk], noJev);
+  expect(out.match(/bun run find --show <id>/g)).toHaveLength(1);
+});
+
+test("Jev checks the fit of a dozen hits at most, however many are listed", async () => {
+  let show = 0;
+  const jev = (_: string, xs: Entry[], s: number) => ((show = s), Promise.resolve([]));
+  await run(["--jev", "--kind", "sound", "-n", "100", "a knock"], vault, jev);
+  expect(show).toBe(12);
+});
+
+test("words in another language never go to earshot, which hears English descriptions only", async () => {
+  const pool = [
+    {
+      ...e("door-a", "Door A", "door slam", "sfx", "foley"),
+      data: { file: "sfx/foley/door-a.wav" },
+    },
+    {
+      ...e("door-b", "Door B", "door slam", "sfx", "foley"),
+      data: { file: "sfx/foley/door-b.wav" },
+    },
+  ];
+  const jev = (_: string, xs: Entry[]) =>
+    Promise.resolve(xs.map((x): [number, Entry, number] => [0.5, x, 0.5]));
+  const out = await run(["--jev", "--kind", "sfx", "cửa đóng sầm"], pool, jev);
+  expect(out).toMatch(/earshot rank "<the sound in English words>"/);
+  expect(out).not.toMatch(/earshot rank "cửa/);
+});
+
+test("--show of an id several kinds share says each way to make your own once", async () => {
+  const pool = presetEntries().filter((x) => x.id === "fade");
+  const out = await run(["--show", "fade"], pool, noJev);
+  for (const own of new Set(
+    out.split("\n").filter((l) => l.startsWith("make your own:") && !l.includes(" as for ")),
+  ))
+    expect(out.split(own).length - 1).toBe(1);
+  expect(out).toMatch(/make your own: as for anim-in above/);
+});
+
+test("--all is gone: a family's takes are in its --show, and a list never takes more than 200 lines", async () => {
+  await expect(run(["door", "--all"], vault, noJev)).rejects.toThrow(
+    /--show <id> names every take/,
+  );
+  await expect(run(["door", "-n", "500"], vault, noJev)).rejects.toThrow(
+    /200 at most. Narrow instead/,
+  );
+  expect(await run(["zombie"], vault, noJev)).toMatch(/--show <id> names every take/);
+});
+
+test("music Jev rejects points to making music, not to the rejects or to other kinds", async () => {
+  const pool = ["a", "b"].map((k) => ({
+    ...e(`bgm-${k}`, `Track ${k}`, "a sad slow theme", "bgm", "cinematic"),
+    data: { file: `bgm/cinematic/bgm-${k}.wav` },
+  }));
+  const stand = { ...e("mx-stand", "Stand", "a sad slow idle", "mocap", "stand"), secs: 3 };
+  const jev = (_: string, xs: Entry[]) =>
+    Promise.resolve(xs.map((x): [number, Entry, number] => [0.5, x, 0.1]));
+  const out = await run(["--jev", "--kind", "bgm", "a sad slow lullaby"], [...pool, stand], jev);
+  expect(out).toMatch(/NOT IN THE VAULT/);
+  expect(out).toMatch(/real-sound/);
+  expect(out).not.toMatch(/sfx:get|outside --kind|--kind sound|--show <id>|earshot rank/);
+});
+
+test("a stray clip among sounds brings no body filters along", async () => {
+  const out = await run(["walking", "door"], [...vault, walk], noJev);
+  expect(out).not.toMatch(/--from\|--to/);
+  expect(await run(["walking"], [...vault, walk], noJev)).toMatch(/--from\|--to/);
+});

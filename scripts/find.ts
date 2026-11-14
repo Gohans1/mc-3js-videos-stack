@@ -824,6 +824,12 @@ const line = (x: Entry, lead = "") => {
 
 // The word matches Jev votes over when --jev has no --kind
 const POOL = 250;
+// Jev's yes/no fit is asked of this many hits at most, all in one request (a long -n lists more, unchecked)
+const FITS_MAX = 12;
+// A category longer than this is never offered whole (-n): 500 lines of it are ~65k characters of an agent's context
+const LIST_ALL = 200;
+// Sub-kinds that time an effect rather than being one (see the --jev pool)
+const TIMING = ["transition-ease", "anim-curve"];
 // Jev's vote over the pool, best first, then a fit for each of the first `show`
 export const jevJudge = (scene: string, pool: Entry[], show: number): Promise<Voted[]> =>
   judgeBy(
@@ -868,8 +874,7 @@ Options:
   Any filter without a value lists its values with counts: bun run find --source lists every source and mod pack.
   Other names work and the first line says how they were read: --licence, --type/--category (--kind), --pack/--mod
   (--source), --length/--duration (--dur), --limit (-n); values too: --origin recorded, --edition mods, --license cc-by
-  -n <N>           hits shown (default 12)
-  --all            every take of a sound family on its own line (default: one line per family, "(N takes)")
+  -n <N>           hits shown (default 12, at most 200)
   --jev            rank by meaning with Jev, a small AI judge that reads any language: 1-3 s, under $0.01 a search. With
                    --kind it reads every entry of those kinds; without, it only reorders the word matches. Each hit
                    shown also gets "fits" 0-1, Jev's own yes that it is what you asked for; the next: line then says
@@ -996,6 +1001,8 @@ const BGM_MOOD =
 // What to do when nothing in the vault fits, for the kinds asked
 const MAKE_SOUND =
   'a sound, in the film folder: bun run sfx:get find "<words>" (a Freesound CC0 recording; pin it, then bun run sfx:get), or earshot sfx list --kind hit then earshot sfx render <id> -o sound/sfx/<name>.wav (made in code); more: the real-sound skill (licensed recordings), the earshot skill (earshot forge), bun run skills get core --ref sound';
+const MAKE_MUSIC =
+  "music: the real-sound skill (licensed tracks from composer libraries, cut at bar lines), saved in the film's sound/music/; more: bun run skills get core --ref sound";
 const MAKE_MOCAP =
   "a move: key Steve's body by hand (steve.json moves[] pose instead of clip), or retarget a new clip into vault/motion";
 const HOOKS = "src/scene.ts (hooks: bun run skills get core --ref contract)";
@@ -1005,6 +1012,7 @@ const make = (kinds: string[] | undefined, entries: Entry[]) => {
   if (!kinds)
     return [`an effect, overlay or look: the film's own, in ${HOOKS}`, MAKE_SOUND, MAKE_MOCAP];
   const one = (k: string) => {
+    if (k === "bgm") return MAKE_MUSIC;
     if (SOUND.includes(k) || k === "sound") return MAKE_SOUND;
     if (k === "mocap") return MAKE_MOCAP;
     if (k === "adjust") return MAKE_LOOK;
@@ -1023,9 +1031,10 @@ const MOCAP_COLUMNS =
 // Postures the catalogue measured (stand, kneel, sitFloor ...) and the hint that lists them
 const postures = (pool: Entry[]) =>
   [...new Set(pool.flatMap((x) => (x.kind === "mocap" ? (x.data?.seq ?? []) : [])))].toSorted();
-const mocapNext = (pool: Entry[]) => {
+// show: name --show too, where no other line of the answer does
+const mocapNext = (pool: Entry[], show = true) => {
   const ps = postures(pool.filter((x) => x.kind === "mocap")).join(" ");
-  return `mocap: one clip in full (its timeline, where it leaves him): bun run find --show <id>. By body, any mix: --from|--to|--has <posture>${ps ? ` (${ps})` : ""}, --still|--moves, --loop, --dur 1-6, --energy 10-40, a hand --head|--up|--ground, --bend, --air yes|no, --look 45, --mood <m>, --prop <p> (clips checked by eye; --mood or --prop alone lists them), --fights (weapons, left out by default)`;
+  return `mocap: ${show ? "one clip in full (its timeline, where it leaves him): bun run find --show <id>. By body" : "clips by body"}, any mix: --from|--to|--has <posture>${ps ? ` (${ps})` : ""}, --still|--moves, --loop, --dur 1-6, --energy 10-40, a hand --head|--up|--ground, --bend, --air yes|no, --look 45, --mood <m>, --prop <p> (clips checked by eye; --mood or --prop alone lists them), --fights (weapons, left out by default)`;
 };
 // earshot rank over the files a list shows: the first few, as each call takes ~40 s whatever their number
 const HEAR_MAX = 8;
@@ -1302,6 +1311,15 @@ function star(
 }
 
 function show(ids: string[], pool: Entry[]) {
+  // kinds that share a way to make your own (anim-in and anim-out, the four title voices) say it once
+  const ownBy = new Map<string, string>();
+  const once = (x: Entry, l: string) => {
+    if (!l.startsWith("make your own:")) return l;
+    const first = ownBy.get(l);
+    if (first) return `make your own: as for ${first} above`;
+    ownBy.set(l, x.kind);
+    return l;
+  };
   return ids
     .map((id) => {
       let low = id.toLowerCase();
@@ -1350,7 +1368,7 @@ function show(ids: string[], pool: Entry[]) {
             [
               line(x),
               ...(x.about && !line(x).includes(x.about) ? [`about: ${x.about}`] : []),
-              ...detail(x),
+              ...detail(x).map((l) => once(x, l)),
             ].join("\n"),
           ),
         ].join("\n\n")
@@ -1397,7 +1415,6 @@ export class FindError extends Error {
 const OPTIONS: Record<string, string | null> = {
   "--help": null,
   "-h": null,
-  "--all": null,
   "--jev": null,
   "--fav": null,
   "--star": "--star dissolve",
@@ -1482,7 +1499,6 @@ const OPTION_ALIAS: Record<string, string> = {
   "--details": "--show",
   "--meaning": "--jev",
   "--ai": "--jev",
-  "--takes": "--all",
   "--favs": "--fav",
   "--faves": "--fav",
   "--favorite": "--fav",
@@ -1509,9 +1525,14 @@ function parse(argv: string[], lists: string[] = []) {
     const typed = (eq > 0 ? arg.slice(0, eq) : arg).toLowerCase();
     const name = OPTION_ALIAS[typed] ?? typed;
     if (name !== typed) notes.push(`${typed} read as ${name}`);
+    // every take on its own line only filled the context: one family's takes are in its --show
+    if (typed === "--all" || typed === "--takes")
+      throw new FindError(
+        `${typed} is gone: a list shows one line per sound family, "(N takes)"; bun run find --show <id> names every take`,
+      );
     if (!(name in OPTIONS))
       throw new FindError(
-        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --all --jev --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any of them without a value lists its values.`,
+        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --jev --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any of them without a value lists its values.`,
       );
     if (name === "--fav") {
       // a favourites list's name may follow (--fav horror); any other word after it is a search word, except when
@@ -1646,8 +1667,7 @@ export async function run(
   );
   // how a loose option or value was read (--licence as --license, --origin recorded as real), above the answer
   const noted = (text: string) => (notes.length ? `(${notes.join("; ")})\n${text}` : text);
-  const all = set.has("--all"),
-    jev = set.has("--jev");
+  const jev = set.has("--jev");
   const list = (v?: string) => v?.toLowerCase().split(",").filter(Boolean);
   // a category keeps its case, which marks its word breaks (mocap/sitSeat is sit-seat)
   const asked = set
@@ -1661,6 +1681,10 @@ export async function run(
   if (nRaw !== undefined && !/^[1-9]\d*$/.test(nRaw))
     throw new FindError("-n takes a whole number of hits, 1 or more, e.g. -n 20");
   const n = Number(nRaw ?? 12);
+  if (n > LIST_ALL)
+    throw new FindError(
+      `-n ${n} would put ${n} lines in your context; ${LIST_ALL} at most. Narrow instead: --kind <kind>/<category>, words, or by meaning: --jev --kind <kind> "<the moment>"`,
+    );
   if (set.has("--help") || set.has("-h")) return HELP;
   if (query.toLowerCase() === "help" && set.size === 0 && !bare.length) return HELP;
   const starring = set.has("--star") ? "--star" : set.has("--unstar") ? "--unstar" : undefined;
@@ -1850,7 +1874,7 @@ export async function run(
     return HELP;
   }
 
-  const pool = entriesOf(!all);
+  const pool = entriesOf();
   // nothing in the list in use: how a star is given, and the lists that have some
   if (fav && !pool.some((x) => x.fav))
     return noted(
@@ -2029,9 +2053,9 @@ export async function run(
           ...filtersFor(inKinds).map((f) => `filter: ${f}`),
           ...(cut ? [`named by: ${namedBy(inKinds)}`] : []),
           ...(some.some((x) => x.kind === "bgm") ? [BGM_MOOD, MC_MUSIC_NOTE] : []),
-          `next: ${cut ? `search inside: bun run find <word>${filters} (a word from "named by"); all ${inKinds.length}: -n ${inKinds.length}` : `bun run find <words>${filters} searches these`}; one in full: bun run find --show <id>`,
+          `next: ${cut ? `search inside: bun run find <word>${filters} (a word from "named by")${inKinds.length <= LIST_ALL ? `; all ${inKinds.length}: -n ${inKinds.length}` : ""}` : `bun run find <words>${filters} searches these`}; one in full: bun run find --show <id>`,
           `      ${jevHere}`,
-          ...(some.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool)}`] : []),
+          ...(some.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool, false)}`] : []),
           ...(files.length > 1 && files.length <= 20
             ? [`      ${hearThem("<what it should sound or feel like>", files)}`]
             : []),
@@ -2076,17 +2100,27 @@ export async function run(
         }),
         ...more,
         ...filtersFor(inKinds).map((f) => `filter: ${f}`),
-        `next: one category in full: bun run find --kind ${example ?? "<kind>/<category>"}${sources ? ` --source ${sources.join(",")}` : ""} (-n 500 for every entry)`,
+        `next: one category: bun run find --kind ${example ?? "<kind>/<category>"}${sources ? ` --source ${sources.join(",")}` : ""}`,
         `      search inside it: bun run find <english words> --kind ${example ?? "<kind>/<category>"}; one in full: bun run find --show <id>`,
         `      by meaning inside one (Jev, paid): bun run find --jev --kind ${example ?? "<kind>/<category>"} "<the scene or feeling>"`,
-        ...(inKinds.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool)}`] : []),
+        ...(inKinds.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool, false)}`] : []),
         ...(favsLine ? [`      ${favsLine}`] : []),
       ].join("\n"),
     );
   }
 
-  if (jev && kinds?.length === 1 && kinds[0] === "mocap" && !sources && !fav)
-    return readAs(await catalogSays(["--jev", query], pool));
+  if (jev && kinds?.length === 1 && kinds[0] === "mocap" && !fav)
+    return readAs(
+      await catalogSays(
+        [
+          "--jev",
+          query,
+          ...(dur ? ["--dur", set.get("--dur")!] : []),
+          ...(sources ? ["--lib", sources.join(",")] : []),
+        ],
+        pool,
+      ),
+    );
 
   // Words are matched as English; letters outside it (Vietnamese, emoji aside) would only match stray fragments
   const foreign = /[^a-z]/i.test(query.replace(/[^\p{L}]/gu, ""));
@@ -2114,6 +2148,8 @@ export async function run(
   const out: string[] = [],
     next: string[] = [];
   let shown: [string, Entry][] | undefined;
+  // Jev said none of the shown is what was asked: no line may send the agent back to them
+  let rejected = false;
   const byMeaning = (kind: string) => `bun run find --jev --kind ${kind} "${query}"`;
   const moodAdvice = () =>
     `${BGM_MOOD}; bgm groups: ${catList(pool.filter((x) => x.kind === "bgm"))}`;
@@ -2164,14 +2200,18 @@ export async function run(
         : `browse instead: bun run find --kind ${k} lists every one (${k} has no categories)`;
   };
   if (jev) {
-    const jevPool = kinds?.length ? inKinds : matches.slice(0, POOL);
+    // an ease times an effect and is never the effect asked for: Jev votes over eases only when --kind names them
+    // (transition/ease); with them in, "linear" outvoted every cut for "a hard cut on the beat"
+    const timing = (x: Entry) =>
+      TIMING.includes(x.kind) && !kinds!.some((k) => k.replace("/", "-").startsWith(x.kind));
+    const jevPool = kinds?.length ? inKinds.filter((x) => !timing(x)) : matches.slice(0, POOL);
     if (!jevPool.length)
       next.push(
         "--jev without --kind only reorders word matches, and none matched: add --kind <kind>.",
       );
     else {
       try {
-        const voted = (await judge(query, jevPool, n))
+        const voted = (await judge(query, jevPool, Math.min(n, FITS_MAX)))
           .filter(([p]) => p > 0)
           .sort((a, b) => b[0] - a[0]);
         if (voted.length) {
@@ -2198,31 +2238,31 @@ export async function run(
             ]);
           const best = Math.round((voted[0]?.[0] ?? 0) * 100);
           const fit = bestFit?.[2];
+          rejected = fit !== undefined && fit < FIT_NO;
           if (
             (fit !== undefined ? fit < FIT_YES : best < 50) &&
             kinds?.length === 1 &&
-            SOUND.includes(kindNames![0]!)
+            ["sfx", "mc"].includes(kindNames![0]!)
           )
             next.push(
-              `also try --kind sound: sfx, bgm and Minecraft together (a door creak may be a Minecraft block sound)`,
+              `also try --kind sound: sfx and Minecraft together (a door creak may be a Minecraft block sound)`,
             );
           next.push(
             fit !== undefined
               ? fit < FIT_NO
                 ? `NOT IN THE VAULT: Jev says none of these is what you asked for (best fit ${fit.toFixed(2)}). Do not use one as if it were. Ask once more in other words (what it is, or the feeling it should give), or make it:`
                 : fit < FIT_YES
-                  ? `UNSURE: Jev only half-believes the best of these (${bestFit![1].id}, fit ${fit.toFixed(2)}). Read it with --show ${bestFit![1].id} and use it only if it really is what the moment needs; else make it:`
-                  : `FOUND: ${voted[0]![1].id} (fit ${fit.toFixed(2)})${promoted ? `, moved above the vote's favourite ${promoted[1].id}, which Jev doubts is what you asked for (fit ${promoted[2]!.toFixed(2)})` : ""}. --show ${voted[0]![1].id} gives its settings and the line to paste. If it still does not suit the moment, make it:`
+                  ? `UNSURE: Jev half-believes the best (fit ${fit.toFixed(2)}): read it with --show ${bestFit![1].id}, use it only if it really is what the moment needs; else make it:`
+                  : `FOUND: ${voted[0]![1].id} (fit ${fit.toFixed(2)})${promoted ? `, moved above the vote's favourite ${promoted[1].id}, which Jev doubts is what you asked for (fit ${promoted[2]!.toFixed(2)})` : ""}. --show ${voted[0]![1].id} gives its settings and the line to paste.`
               : best < 20
                 ? `probably not in the vault (the best has only ${best}% of the vote). Make it:`
                 : best < 50
                   ? `unsure (the best has ${best}% of the vote): several fit about equally, or none does. Compare the top few with --show; if none fits, make it:`
                   : `Jev prefers the first (${best}% of the vote). A vote always picks something, so check it with --show; if none fits, make it:`,
-            ...make(kindNames, entries).map((m) => `  ${m}`),
+            ...(fit !== undefined && fit >= FIT_YES ? [] : make(kindNames, entries)).map(
+              (m) => `  ${m}`,
+            ),
           );
-          // a found entry needs no detour into other kinds
-          const other = fit !== undefined && fit >= FIT_YES ? "" : elsewhere();
-          if (other) next.push(other);
         } else next.push("Jev found no entry that fits; word matches below.");
       } catch (err) {
         // jev.py's own words already say which key or quota; anything else never reached it
@@ -2383,11 +2423,11 @@ export async function run(
   out.push(...shown.map(([lead, x]) => line(x, lead)), ...where(shown.map(([, x]) => x)));
   const exact = shown.find(([, x]) => x.id.toLowerCase() === query.toLowerCase());
   if (exact) next.unshift(`that is an exact id: bun run find --show ${exact[1].id}`);
-  else if (shown.length)
+  else if (shown.length && !rejected && !next.some((l) => l.includes("--show ")))
     next.push("one in full (settings, a line to paste, how to see it): bun run find --show <id>");
   if (shown.some(([, x]) => (x.takes ?? 1) > 1))
     next.push(
-      "(N takes): the id shown is take 1 and plays as is; --all lists every take's id, to vary a sound that repeats.",
+      "(N takes): the id shown is take 1 and plays as is; --show <id> names every take, to vary a sound that repeats.",
     );
   // the filters that would split these hits, so a pack, a licence or a length is never a guess
   const narrow = !jev && matches.length > 1 ? filtersFor(matches, true) : [];
@@ -2410,16 +2450,21 @@ export async function run(
       next.push(
         `${mood} is a mood clips checked by eye are tagged with: bun run find --mood ${mood} (${moods.get(mood)} clips)`,
       );
-    if (shown.some(([, x]) => x.kind === "mocap")) next.push(mocapNext(pool));
+    // the body filters only where clips are what was looked for, not a stray clip among sounds
+    if (
+      kindNames?.includes("mocap") ||
+      shown.filter(([, x]) => x.kind === "mocap").length * 2 > shown.length
+    )
+      next.push(mocapNext(pool, false));
   }
   if (fav && listsLine && shown.length) next.push(listsLine);
   if (favsLine) next.push(favsLine);
   const files = shown.flatMap(([, x]) =>
     SOUND.includes(x.kind) && x.data?.file ? [soundFile(x.data.file)] : [],
   );
-  if (files.length > 1)
+  if (files.length > 1 && !rejected)
     next.push(
-      `${hearThem(query, files)}  (about 40 s a call; describe the sound, not its job; which earshot command for what: bun run skills get core --ref sound)`,
+      `${hearThem(foreign ? "<the sound in English words>" : query, files)}  (about 40 s a call; describe the sound, not its job; which earshot command for what: bun run skills get core --ref sound)`,
     );
   if (next.length) out.push(`next: ${next.join("\n      ")}`);
   return readAs(out.join("\n"));
