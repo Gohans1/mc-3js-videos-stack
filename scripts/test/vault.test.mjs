@@ -533,6 +533,117 @@ test("buildSoundVault files the vault's own Mixkit picks into their category, sa
   });
 });
 
+test("a Mixkit pick longer than 12 s is cut at its silences into one sound per take; one with no silences, or whose maxSeconds allows it, stays whole", async (t) => {
+  const { buildSoundVault } = await import("../build_sound_vault.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-sound-long-picks-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const local = join(root, "vault");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(join(local, "sfx/mixkit"), { recursive: true });
+  const wav = (id, expr) => {
+    const r = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-y", "-f", "lavfi", "-i", `aevalsrc=${expr}:s=48000:d=14`].concat([
+        "-c:a",
+        "pcm_s16le",
+        join(local, "sfx/mixkit", `${id}.wav`),
+      ]),
+      { encoding: "utf8" },
+    );
+    assert.equal(r.status, 0, r.stderr);
+  };
+  // three 1 s calls, 5 s apart (twice: one is a rhythm to keep whole); and a 14 s bed
+  wav("mixkit-9001", "0.5*sin(2*PI*440*t)*lt(mod(t\\,6)\\,1)");
+  wav("mixkit-9003", "0.5*sin(2*PI*440*t)*lt(mod(t\\,6)\\,1)");
+  wav("mixkit-9002", "0.5*sin(2*PI*220*t)");
+  // the whole long file an earlier build filed
+  mkdirSync(join(local, "sound/sfx/nature"), { recursive: true });
+  copyFileSync(
+    join(local, "sfx/mixkit/mixkit-9001.wav"),
+    join(local, "sound/sfx/nature/mixkit-9001.wav"),
+  );
+  writeFileSync(join(root, "scripts/sfx-catalogue.json"), JSON.stringify({ sounds: [] }));
+  const pick = (id, title) => ({
+    id,
+    title,
+    category: "nature",
+    for: "a wolf howl",
+    page: "https://mixkit.co/free-sound-effects/wolf/",
+  });
+  const writePicks = (howls = {}) =>
+    writeFileSync(
+      join(root, "scripts/sfx-picks.json"),
+      JSON.stringify({
+        sounds: [
+          { ...pick("mixkit-9001", "Wolf howls"), ...howls },
+          pick("mixkit-9002", "Wind"),
+          { ...pick("mixkit-9003", "Clock ticking"), maxSeconds: 60 },
+        ],
+      }),
+    );
+  writePicks();
+  const lines = [];
+  const build = () =>
+    buildSoundVault({
+      root,
+      local,
+      external: join(root, "none"),
+      skipBgm: true,
+      skipEarshot: true,
+      log: (l) => lines.push(l),
+    });
+  await build();
+  const sources = JSON.parse(readFileSync(join(local, "sound/SOURCES.json"), "utf8"));
+  const takes = Object.keys(sources).filter((n) => n.startsWith("mixkit-9001"));
+  assert.deepEqual(takes.sort(), [
+    "mixkit-9001-take-1",
+    "mixkit-9001-take-2",
+    "mixkit-9001-take-3",
+  ]);
+  assert.deepEqual(
+    takes.map((n) => [sources[n].title, sources[n].for, sources[n].family, sources[n].variant]),
+    takes.map((n, i) => ["Wolf howls", "a wolf howl", "mixkit-9001", i + 1]),
+  );
+  for (const n of takes) {
+    const file = join(local, `sound/sfx/nature/${n}.wav`);
+    const seconds = Number(
+      spawnSync(
+        "ffprobe",
+        ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
+        { encoding: "utf8" },
+      ).stdout,
+    );
+    assert.ok(seconds > 1 && seconds < 1.5, `${n} holds one call, got ${seconds} s`);
+  }
+  assert.equal(existsSync(join(local, "sound/sfx/nature/mixkit-9001.wav")), false);
+  assert.equal(existsSync(join(local, "sound/sfx/nature/mixkit-9002.wav")), true);
+  assert.equal(sources["mixkit-9002"].family, undefined);
+  assert.equal(existsSync(join(local, "sound/sfx/nature/mixkit-9003.wav")), true);
+  assert.equal(sources["mixkit-9003"].family, undefined);
+  assert.ok(
+    lines.some((l) => /Mixkit SFX: 1 long sounds? cut into 3 takes/.test(l)),
+    lines.join("\n"),
+  );
+  assert.ok(
+    lines.some((l) => /Mixkit SFX: 1 sounds? longer than their limit kept whole/.test(l)),
+    lines.join("\n"),
+  );
+  // a second build keeps the takes as they are
+  const before = readFileSync(join(local, "sound/sfx/nature/mixkit-9001-take-2.wav"));
+  await build();
+  assert.deepEqual(readFileSync(join(local, "sound/sfx/nature/mixkit-9001-take-2.wav")), before);
+  // once its maxSeconds allows it, the pick is whole again and its takes are gone
+  writePicks({ maxSeconds: 60 });
+  await build();
+  const now = JSON.parse(readFileSync(join(local, "sound/SOURCES.json"), "utf8"));
+  assert.deepEqual(
+    Object.keys(now).filter((n) => n.startsWith("mixkit-9001")),
+    ["mixkit-9001"],
+  );
+  assert.equal(existsSync(join(local, "sound/sfx/nature/mixkit-9001.wav")), true);
+  assert.equal(existsSync(join(local, "sound/sfx/nature/mixkit-9001-take-1.wav")), false);
+});
+
 test("buildSoundVault files Mixkit tones by use and moves a sound out of its old category instead of copying it", async (t) => {
   const { buildSoundVault } = await import("../build_sound_vault.mjs");
   const root = mkdtempSync(join(tmpdir(), "mc-sound-recat-"));

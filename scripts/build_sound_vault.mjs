@@ -368,6 +368,8 @@ const TAKE = {
 };
 // Longer than this is an ambience, not a row of takes: never decoded to look for gaps
 const SPLIT_MAX_S = 300;
+// A Mixkit sound longer than this is cut into its takes: the Sonniss source's maxSeconds in scripts/sound-raw.json
+const MIXKIT_MAX_S = 12;
 async function takesOf(file) {
   const { stdout } = await run(
     "ffmpeg",
@@ -620,28 +622,50 @@ export async function buildSoundVault({
   const picksFile = join(root, "scripts/sfx-picks.json");
   const picks = existsSync(picksFile) ? JSON.parse(readFileSync(picksFile, "utf8")).sounds : [];
   const mixkitKept = [...(catalogue.sounds ?? []), ...picks];
+  const mixDir = join(local, "sfx/mixkit");
   let mixLinked = 0,
-    mixFetched = 0,
     mixReused = 0;
+  const fetched = new Set();
+  const filed = (s) =>
+    join(
+      vaultSound,
+      "sfx",
+      s.category ?? MIXKIT_ID_CATEGORY[s.id] ?? MIXKIT_CATEGORY[s.role] ?? "foley",
+      `${s.id}.wav`,
+    );
   for (const s of mixkitKept) {
-    const cat = s.category ?? MIXKIT_ID_CATEGORY[s.id] ?? MIXKIT_CATEGORY[s.role] ?? "foley";
-    const target = join(vaultSound, "sfx", cat, `${s.id}.wav`),
-      cached = join(local, "sfx/mixkit", `${s.id}.wav`);
-    moveIntoCategory(vaultSound, "sfx", target);
-    if (hasRiffWave(target)) mixReused++;
-    else if (hasRiffWave(cached)) {
-      mkdirSync(dirname(target), { recursive: true });
-      try {
-        linkSync(cached, target);
-      } catch {
-        copyFileSync(cached, target);
-      }
-      mixLinked++;
-    } else {
-      await download(s.file_url, target, validWav);
-      mixFetched++;
-    }
-    sources[s.id] = {
+    moveIntoCategory(vaultSound, "sfx", filed(s));
+    if (hasRiffWave(filed(s)) || hasRiffWave(join(mixDir, `${s.id}.wav`))) continue;
+    await download(s.file_url, join(mixDir, `${s.id}.wav`), validWav);
+    fetched.add(s);
+  }
+  // A cached sound longer than a Sonniss one may be is many calls in one file when its silences cut it into takes that
+  // each fit: one sound per take, as for a raw pack. A rhythm (ticking, a heartbeat) cuts into single beats: its pick's
+  // "maxSeconds" keeps it whole. A pick with no cached file stays as it is
+  const cache = existsSync(mixDir) ? packCache(mixDir) : null;
+  const cut = new Map();
+  let longWhole = 0;
+  await pool(
+    mixkitKept.filter((s) => cache && hasRiffWave(join(mixDir, `${s.id}.wav`))),
+    6,
+    async (s) => {
+      const seconds = await cache.seconds(`${s.id}.wav`),
+        limit = s.maxSeconds ?? MIXKIT_MAX_S;
+      if (!(seconds > limit)) return;
+      const takes = seconds <= SPLIT_MAX_S ? await cache.takes(`${s.id}.wav`) : [];
+      if (takes.length > 1 && takes.every(([a, b]) => b - a <= limit))
+        cut.set(
+          s,
+          takes.map((span) => span.map((x) => Math.round(x * 1000) / 1000)),
+        );
+      else longWhole++;
+    },
+  );
+  cache?.save();
+  for (const s of mixkitKept) {
+    const target = filed(s),
+      cached = join(mixDir, `${s.id}.wav`);
+    const entry = {
       title: s.title,
       license: "Mixkit Sound Effects Free License",
       url: s.page,
@@ -651,11 +675,50 @@ export async function buildSoundVault({
       origin: "real",
       ...(MIXKIT_SWEETENERS[s.id] && { role: MIXKIT_SWEETENERS[s.id] }),
     };
+    const spans = cut.get(s) ?? [];
+    const names = spans.map((_, i) => `${s.id}-take-${i + 1}`);
+    for (const [name, v] of Object.entries(sources)) {
+      if (v.source !== "mixkit" || v.family !== s.id || names.includes(name)) continue;
+      delete sources[name];
+      for (const cat of readdirSync(join(vaultSound, "sfx")))
+        rmSync(join(vaultSound, "sfx", cat, `${name}.wav`), { force: true });
+    }
+    if (spans.length) {
+      rmSync(target, { force: true });
+      delete sources[s.id];
+      for (const [i, span] of spans.entries()) {
+        const take = join(dirname(target), `${names[i]}.wav`);
+        moveIntoCategory(vaultSound, "sfx", take);
+        if (!hasRiffWave(take) || String(sources[names[i]]?.span) !== String(span))
+          await convertToPcmWav(cached, take, { rate: 48000, from: span[0], to: span[1] });
+        sources[names[i]] = { ...entry, family: s.id, variant: i + 1, span };
+      }
+      continue;
+    }
+    if (hasRiffWave(target)) mixReused++;
+    else {
+      mkdirSync(dirname(target), { recursive: true });
+      try {
+        linkSync(cached, target);
+      } catch {
+        copyFileSync(cached, target);
+      }
+      if (!fetched.has(s)) mixLinked++;
+    }
+    sources[s.id] = entry;
   }
   saveSources(sourcesFile, sources);
   log(
-    `Mixkit SFX: ${mixkitKept.length} curated (${mixLinked} linked, ${mixFetched} fetched, ${mixReused} reused)`,
+    `Mixkit SFX: ${mixkitKept.length} curated (${mixLinked} linked, ${fetched.size} fetched, ${mixReused} reused)`,
   );
+  if (cut.size)
+    log(
+      `Mixkit SFX: ${cut.size} long sounds cut into ${[...cut.values()].reduce((n, t) => n + t.length, 0)} takes`,
+    );
+  if (longWhole)
+    log(
+      `Mixkit SFX: ${longWhole} sounds longer than their limit kept whole: no silences cut them into takes that fit (a pick's maxSeconds in scripts/sfx-picks.json says it is meant to be long)`,
+    );
 
   // 2. Earshot 252 DSP recipes + 15 curated CC0 1.0 Freesound original recordings (fit.json)
   const earshotDir = join(external, "tools/earshot");
