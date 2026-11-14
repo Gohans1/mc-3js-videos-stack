@@ -128,6 +128,82 @@ test("a short key of the film's own one letter from a camera key (fog by fov) is
   assert.match(typo.stderr, /"fv": no key the camera reads; did you mean "fov"\?/);
 });
 
+test("a timing file of the wrong shape is named as a fault, not a crash", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        timingTimeline: "src/timeline/timing.json",
+        soundTimeline: "src/timeline/audio.json",
+      },
+    }),
+  );
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({ speeds: "bad" }));
+  writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: [], sfx: [] }));
+  // a film whose length is in its data: check then reads timing.json for the heard seconds
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(JSON.parse(r.stdout).problems[0].where, "src/timeline/timing.json");
+});
+
+test("a two-letter key of the film's own (to by t) is the film's, on a camera key", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { camTimeline: "src/timeline/cam.json" } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([{ t: 0, p: [0, 1, 5], l: [0, 1, 0], to: 3, up: [0, 1, 0] }]),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+test("a misspelt key on a shot, a text item or an adjustment layer is named; the film's own keys are left alone", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        shotsTimeline: "src/timeline/shots.json",
+        textTimeline: "src/timeline/text.json",
+        adjustmentTimeline: "src/timeline/adjust.json",
+      },
+    }),
+  );
+  const put = (f, v) => writeFileSync(join(dir, "src/timeline", f), JSON.stringify(v));
+  put("shots.json", [
+    { t: 0, name: "a" },
+    { t: 2, name: "b", tranistion: { fx: "dissolve", len: 0.5 }, mood: "calm" },
+  ]);
+  put("text.json", {
+    items: [{ kind: "text", text: "HI", from: 0, to: 3, colr: "#fff", in: { fx: "fade", lne: 1 } }],
+  });
+  put("adjust.json", {
+    items: [{ id: "a", name: "warm", from: 0, to: 3, track: 0, grade: {}, timbase: "scene" }],
+  });
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /\[1\] "tranistion": .*did you mean "transition"\?/);
+  assert.match(r.stderr, /items\[0\] "colr": .*did you mean "color"\?/);
+  assert.match(r.stderr, /items\[0\]\.in "lne": .*did you mean "len"\?/);
+  assert.match(r.stderr, /items\[0\] "timbase": .*did you mean "timebase"\?/);
+  assert.doesNotMatch(r.stderr, /"mood"/);
+});
+
 test("check names a transition or anim one letter off a built-in, and leaves a film's own name alone", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

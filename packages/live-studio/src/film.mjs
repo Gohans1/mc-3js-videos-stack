@@ -89,7 +89,7 @@ export const contractFiles = (project) => {
     "src/edit.json": [Edit, textOf("src/edit.json")],
     "renders/live/trials.json (from sound.py)": [Trials, textOf("renders/live/trials.json")],
     [choices]: [Choices, textOf(choices)],
-    ...(conf.sfx ? own("soundTimeline", SoundTimeline) : {}),
+    ...own("soundTimeline", SoundTimeline),
     ...own("camTimeline", CamTimeline),
     ...own("shotsTimeline", ShotsTimeline),
     ...own("textTimeline", TextTimeline),

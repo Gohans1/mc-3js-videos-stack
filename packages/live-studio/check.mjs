@@ -5,10 +5,20 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ANIMS } from "film-stage/animate";
+import { TEXT_ITEM_KEYS } from "film-stage/titles";
 import { TRANSITIONS } from "film-stage/transitions";
 
 import { cliArgs, needFilm } from "./src/cli.mjs";
-import { CAM_KEYS, checkFiles, SOUND_KEYS } from "./src/contract.ts";
+import {
+  ADJUSTMENT_KEYS,
+  CAM_KEYS,
+  checkFiles,
+  SHOT_KEYS,
+  SHOT_SLOT_KEYS,
+  SOUND_KEYS,
+  TEXT_KEYS,
+  TEXT_SLOT_KEYS,
+} from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
 import { isRead, readFaults } from "./src/readable.mjs";
@@ -129,7 +139,8 @@ const distance = (a, b) => {
 };
 
 // the known name a word is taken for a typo of: a letter dropped or added, or letters swapped; a letter changed only past
-// four letters, as a short word of the film's own sits one letter from a known one (fog by fov, cue by cut, pan by pad)
+// four letters, as a short word of the film's own sits one letter from a known one (fog by fov, cue by cut, pan by pad);
+// a letter added to a one-letter key is a word of its own (to, at, up by t and p)
 const nearName = (k, names) =>
   names.includes(k)
     ? null
@@ -138,7 +149,10 @@ const nearName = (k, names) =>
           b = n.toLowerCase();
         if (a.length === b.length && a.split("").sort().join() === b.split("").sort().join())
           return true;
-        return distance(a, b) === 1 && (a.length !== b.length || a.length >= 5);
+        return (
+          distance(a, b) === 1 &&
+          (a.length === b.length ? a.length >= 5 : Math.min(a.length, b.length) >= 2)
+        );
       });
 
 // A fault in the lanes must not hide the others (an AI fixes what it is shown and meets the rest a run later):
@@ -147,6 +161,14 @@ const soundBroken = found.find((p) => p.where === conf.soundTimeline);
 const soundParses = !soundBroken || !/not (valid )?JSON/.test(soundBroken.issue);
 if (soundBroken)
   soundBroken.issue += `\n  gains and sounds after the end are checked once these are fixed`;
+// the film's length is read through edit.json and timing.json: a fault in either would throw there, so the checks
+// against the end wait for it
+const clockBroken = found.find(
+  (p) => p.where === conf.timingTimeline || p.where === "src/edit.json",
+);
+if (clockBroken)
+  clockBroken.issue += `\n  sounds and text after the end are checked once this is fixed`;
+const filmEnds = () => (clockBroken ? null : heardLength(PROJECT, conf));
 
 const sound = conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
 const lanesFile = sound && join(PROJECT, conf.soundTimeline);
@@ -285,6 +307,52 @@ if (Array.isArray(camRead))
         : [],
     ),
   );
+// a shot, a text item and an adjustment layer take keys of the film's own too: only a near miss of a key the studio
+// reads is a typo, on the row and in its slots ("anim.in", "transition", a text's "in")
+const rowTypos = (rel, rows, prefix, keys, slotKeys = []) => {
+  const slots = Map.groupBy(slotKeys, (p) => p.slice(0, p.lastIndexOf(".")));
+  keyTypos(
+    rel,
+    (Array.isArray(rows) ? rows : [])
+      .flatMap((row, i) =>
+        row && typeof row === "object"
+          ? [
+              ...nearKeys(row, keys).map(([k, near]) => [`${prefix}[${i}] "${k}"`, near]),
+              ...[...slots].flatMap(([slot, paths]) => {
+                const at = slot.split(".").reduce((o, k) => o?.[k], row);
+                return at && typeof at === "object"
+                  ? nearKeys(
+                      at,
+                      paths.map((p) => p.slice(slot.length + 1)),
+                    ).map(([k, near]) => [`${prefix}[${i}].${slot} "${k}"`, near])
+                  : [];
+              }),
+            ]
+          : [],
+      )
+      .map(([k, near]) => `✖ ${k}: no key the studio reads; did you mean "${near}"?`),
+  );
+};
+rowTypos(
+  conf.shotsTimeline,
+  readJson(conf.shotsTimeline),
+  "",
+  [...SHOT_KEYS, "size", "what"],
+  SHOT_SLOT_KEYS,
+);
+rowTypos(
+  conf.textTimeline,
+  readJson(conf.textTimeline)?.items,
+  "items",
+  [...TEXT_KEYS, ...TEXT_ITEM_KEYS],
+  TEXT_SLOT_KEYS,
+);
+rowTypos(
+  conf.adjustmentTimeline,
+  readJson(conf.adjustmentTimeline)?.items,
+  "items",
+  ADJUSTMENT_KEYS,
+);
 // a transition or anim name nothing has plays a hard cut or no move, silently; a film's own names (passed to
 // makeTransitions, or in draw.anims) are not known here, so only a near miss of a built-in is named
 const shotsRead = readJson(conf.shotsTimeline);
@@ -321,7 +389,7 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
     warnings.push(
       `⚠ drive +${lanes.drive} dB (${conf.soundTimeline}): the mix's push into its limiter; over +12 every hit is flattened into the bed; the films use 0-12`,
     );
-  const ends = heardLength(PROJECT, conf);
+  const ends = filmEnds();
   if (ends) {
     const length = ends.layers;
     const heard = mapTimeline("sound", lanes, clockForTimeline("sound"), false, null, {});
@@ -353,7 +421,7 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
 const textPath = conf.textTimeline && join(PROJECT, conf.textTimeline);
 const textRead =
   textPath && !found.some((p) => p.where === conf.textTimeline) && readJson(conf.textTimeline);
-if (Array.isArray(textRead?.items) && heardLength(PROJECT, conf)) {
+if (Array.isArray(textRead?.items) && filmEnds()) {
   const heard = mapTimeline("text", textRead, clockForTimeline("text"), false, null, {});
   const said = [];
   textRead.items.forEach((it, i) => {
