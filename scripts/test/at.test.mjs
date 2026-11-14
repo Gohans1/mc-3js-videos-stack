@@ -441,3 +441,95 @@ test("at refuses a second past the film's end and says how long it is", (t) => {
   assert.equal(r.status, 2);
   assert.match(r.stderr, /15\.000 s long/);
 });
+
+test("a hidden text item is not on screen, as the render hides it", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({ items: [{ kind: "text", text: "LATER", from: 8, to: 9, hidden: true }] }),
+  );
+  assert.deepEqual(whatsAt(dir, 4.1).texts, []);
+});
+
+test("a narration split in clips is muted where the clip playing sits on a muted track", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "voice",
+      tracks: [{ id: "v", mute: true }],
+      beds: [],
+      sfx: [
+        { name: "voice", at: 0, length: 5, gain: 0, track: "a" },
+        { name: "voice", at: 6, length: 9, gain: 0, track: "v" },
+      ],
+    }),
+  );
+  assert.equal(whatsAt(dir, 2).narrationMuted, null);
+  assert.equal(whatsAt(dir, 8).narrationMuted, "v");
+});
+
+test("a Freeze is said where it holds the picture, from its first heard second", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ freezes: [{ at: 0, duration: 3 }] }),
+  );
+  const r = spawnSync("bun", [AT, "0"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /scene second 0\.00 \(a Freeze holds it, heard 0\.00-3\.00: src\/timeline\/timing\.json freezes\[0\]\)/,
+  );
+});
+
+test("a velocity effect playing is named with its row", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      velocity: [
+        {
+          effect: "retroZoom",
+          from: 1,
+          to: 3,
+          music: "hum",
+          beats: [1.5, 2],
+          frequency: 2,
+          speed: "fast",
+          intensity: 45,
+        },
+      ],
+    }),
+  );
+  const r = spawnSync("bun", [AT, "2"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^velocity: retroZoom, intensity 45, scene 1\.00-3\.00: src\/timeline\/timing\.json velocity\[0\]$/m,
+  );
+});
+
+test("a script line not voiced yet is the next one only when no voiced line comes before it", (t) => {
+  const dir = film(t);
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ end: 20, script_lines: [{ t: 13, until: 15, text: "LATER LINE" }] }),
+  );
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({ lines: [{ s: 6, e: 7, text: "hi", words: [{ w: "hi", s: 6, e: 7 }] }] }),
+  );
+  const before = whatsAt(dir, 1);
+  assert.equal(before.nextLine, 6);
+  assert.equal(before.script, null);
+  assert.equal(whatsAt(dir, 8).script?.text, "LATER LINE");
+});

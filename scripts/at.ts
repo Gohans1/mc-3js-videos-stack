@@ -19,7 +19,12 @@ import {
   setTiming,
   timingClock,
 } from "../packages/live-studio/src/timing-state.mjs";
-import { frameAt, frameVisible } from "../packages/live-studio/src/timing.mjs";
+import {
+  frameAt,
+  frameVisible,
+  freezeRange,
+  freezesOf,
+} from "../packages/live-studio/src/timing.mjs";
 import { warp } from "../packages/live-studio/src/warp.mjs";
 import { buildVoiceCues } from "./voice/cues.ts";
 
@@ -129,6 +134,30 @@ export const whatsAt = (dir: string, t: number) => {
   const scene = frameAt(timingClock, t);
   // a gap in timing.json: the picture is black, so no shot, camera key or moving row is on screen
   const blank = !frameVisible(timingClock, t);
+  const timing: Row = read(conf.timingTimeline, null) ?? {};
+  // the Freeze holding the picture here (from its first heard second, where the scene second has not yet stopped moving)
+  const fi = blank
+    ? -1
+    : freezesOf(timing).findIndex((_: Row, i: number) => {
+        const [from, to] = freezeRange(timing, timingClock, i);
+        return from <= t && t < to;
+      });
+  const held =
+    fi < 0
+      ? null
+      : {
+          row: timing.main
+            ? `main[${timing.main.flatMap((it: Row, i: number) => (it.kind === "freeze" ? [i] : []))[fi]}]`
+            : `freezes[${fi}]`,
+          range: freezeRange(timing, timingClock, fi) as [number, number],
+        };
+  // the velocity effect on the picture here (velocityAt: scene seconds)
+  const vi = blank
+    ? -1
+    : (timing.velocity ?? []).findIndex(
+        (v: Row) => v.enabled !== false && v.intensity > 0 && scene >= v.from && scene < v.to,
+      );
+  const velocity = vi < 0 ? null : { row: vi, ...timing.velocity[vi] };
   const si = blank ? -1 : shots.filter((s) => s.t <= scene).length - 1;
   const shot = si >= 0 ? { ...shots[si]!, to: shots[si + 1]?.t ?? sourceEnd } : null;
   // the transition into shot i plays len/2 either side of its cut, clamped to its neighbours as film-stage transitionLength does
@@ -169,8 +198,20 @@ export const whatsAt = (dir: string, t: number) => {
     const heard = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
     // a muted track is left out of every mix (scripts/sound/mix.py MUTED)
     const muted = new Set((audio.tracks ?? []).flatMap((k: Row) => (k.mute ? [k.id] : [])));
-    const voice = (audio.sfx ?? []).find((c: Row) => c.name === audio.narration);
-    if (audio.narration && voice && muted.has(voice.track)) narrationMuted = voice.track;
+    const lenOf = (c: Row): number | undefined =>
+      c.length ??
+      (c.name in durations ? (durations[c.name]! - (c.start ?? 0)) / (c.rate ?? 1) : undefined);
+    // the voice split in clips: the one playing here decides; between clips, muted only when every clip is
+    const voices = heard.sfx.flatMap((c: Row, i: number) =>
+      audio.narration && c.name === audio.narration ? [{ c, track: audio.sfx[i].track }] : [],
+    );
+    const here = voices.filter(({ c }: Row) => {
+      const len = lenOf(c);
+      return c.at <= t && (len === undefined || t < c.at + len);
+    });
+    const judged = here.length ? here : voices;
+    if (judged.length && judged.every((v: Row) => muted.has(v.track)))
+      narrationMuted = judged[0]!.track;
     heard.beds.forEach((c: Row, i: number) => {
       if (c.from <= t && t < c.to)
         sounds.push({
@@ -185,15 +226,14 @@ export const whatsAt = (dir: string, t: number) => {
     });
     heard.sfx.forEach((c: Row, i: number) => {
       if (c.name === audio.narration) return;
-      const len = c.length ?? ((durations[c.name] ?? 0) - (c.start ?? 0)) / (c.rate ?? 1);
-      const known = c.length !== undefined || c.name in durations;
-      if (c.at <= t && (known ? t < c.at + len : t < c.at + 1))
+      const len = lenOf(c);
+      if (c.at <= t && t < c.at + (len ?? 1))
         sounds.push({
           list: "sfx",
           i,
           name: c.name,
           from: c.at,
-          to: known ? c.at + len : null,
+          to: len === undefined ? null : c.at + len,
           row: audio.sfx[i],
           muted: muted.has(audio.sfx[i].track),
         });
@@ -208,7 +248,7 @@ export const whatsAt = (dir: string, t: number) => {
     if (!frameVisible(clock, t)) return [];
     return (doc.items as Row[]).flatMap((it, i) => {
       const at = overlayTime(clock, t, it);
-      return at >= it.from && at < it.to && !doc.tracks?.[it.track ?? 0]?.hidden
+      return at >= it.from && at < it.to && !it.hidden && !doc.tracks?.[it.track ?? 0]?.hidden
         ? [{ i, text: it.text ?? it.name ?? it.kind, from: it.from, to: it.to }]
         : [];
     });
@@ -278,7 +318,11 @@ export const whatsAt = (dir: string, t: number) => {
     narration || blank
       ? null
       : (scriptLines.find((l) => l.t <= scene && scene < (l.until ?? l.t)) ??
-        scriptLines.find((l) => l.t > scene) ??
+        // a later one only when no voiced line is heard before it
+        scriptLines.find(
+          (l) =>
+            l.t > scene && (nextLine === null || timingClock.outputAt(l.t, "before") < nextLine),
+        ) ??
         null);
 
   // the open notes heard within 3 s of it now (a Speed or Freeze edit since moves where a note is heard)
@@ -298,6 +342,8 @@ export const whatsAt = (dir: string, t: number) => {
     shot,
     shotCount: shots.length,
     cuts,
+    held,
+    velocity,
     cam:
       ci >= 0
         ? {
@@ -420,9 +466,11 @@ if (isMain) {
     got.blank
       ? `${mmss(t)} heard (${+t.toFixed(3)} s); black here, a gap in ${c.timingTimeline ?? "timing.json"} gaps[]: no picture, so no shot or camera`
       : `${mmss(t)} heard (${+t.toFixed(3)} s); the picture shows scene second ${fmt(got.scene)}${
-          Math.abs(got.scene - t) > 0.005
-            ? ` (Speed/Freeze in ${c.timingTimeline ?? "timing.json"})`
-            : ""
+          got.held
+            ? ` (a Freeze holds it, heard ${fmt(got.held.range[0])}-${fmt(got.held.range[1])}: ${c.timingTimeline ?? "timing.json"} ${got.held.row})`
+            : Math.abs(got.scene - t) > 0.005
+              ? ` (Speed/Freeze in ${c.timingTimeline ?? "timing.json"})`
+              : ""
         }`,
   );
   if (got.shot)
@@ -449,6 +497,10 @@ if (isMain) {
       `camera: ${c.camTimeline ?? "src/timeline/cam.json"} [${got.cam.before}] t=${fmt(got.cam.t0)}${
         got.cam.after === null ? " (the last key)" : ` -> [${got.cam.after}] t=${fmt(got.cam.t1)}`
       }`,
+    );
+  if (got.velocity)
+    out.push(
+      `velocity: ${got.velocity.effect}, intensity ${got.velocity.intensity}, scene ${fmt(got.velocity.from)}-${fmt(got.velocity.to)}: ${c.timingTimeline ?? "timing.json"} velocity[${got.velocity.row}]`,
     );
   out.push(
     got.narrationMuted
