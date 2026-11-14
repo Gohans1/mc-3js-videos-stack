@@ -57,8 +57,8 @@ const lines = (it) => {
   const s = it.upper ? (it.text ?? "").toUpperCase() : (it.text ?? "");
   return s.split("\n");
 };
-const fontCss = (it, px) =>
-  `${it.italic ? "italic " : ""}${it.bold ? 700 : it.font === "mono" ? 400 : 500} ${px}px ${fontOf(it.font)}`;
+const fontCss = (it, px, own?) =>
+  `${it.italic ? "italic " : ""}${it.bold ? 700 : it.font === "mono" ? 400 : 500} ${px}px ${fontOf(it.font, own)}`;
 const textSeed = (s) => {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
@@ -92,7 +92,7 @@ const measure = (g, it, W, H, camera, cache, extra) => {
   }
   const px = (it.size ?? 56) * k,
     lh = px * (it.line ?? 1.2),
-    font = fontCss(it, px),
+    font = fontCss(it, px, extra?.fonts),
     spacing = `${(it.spacing ?? 0) * px}px`;
   const ckey = `${font}|${spacing}|${it.upper ? 1 : 0}|${it.text ?? ""}`;
   let text = cache?.get(ckey);
@@ -637,7 +637,7 @@ export function makeTitles(renderer, W, H, extra) {
   };
   document.fonts?.addEventListener?.("loadingdone", onFontsLoaded);
   const ready = Promise.all(
-    fontsFor(extra?.items).flatMap((f) =>
+    fontsFor(extra?.items, extra?.fonts).flatMap((f) =>
       [400, 700].map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0")),
     ),
   ).catch(() => {});
@@ -683,7 +683,7 @@ export function makeTitles(renderer, W, H, extra) {
   };
 
   draw.ready = ready;
-  draw.fonts = FONTS;
+  draw.fonts = [...FONTS, ...(extra?.fonts ?? [])];
   draw.categories = { text: TEXT_CATEGORIES, shape: SHAPE_CATEGORIES };
   draw.eases = [
     ...TITLE_EASES,

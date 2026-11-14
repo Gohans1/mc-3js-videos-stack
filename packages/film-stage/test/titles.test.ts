@@ -134,6 +134,38 @@ test("makeTitles caches line width measurement across animated frames and invali
   }
 });
 
+test("a film's own font is drawn, loaded before the first frame and offered in the studio's list", async () => {
+  const prevDoc = (globalThis as { document?: unknown }).document;
+  const fonts: string[] = [],
+    loaded: string[] = [];
+  const ctx = new Proxy(
+    { measureText: (s: string) => ({ width: s.length * 12 }) } as Record<string, unknown>,
+    {
+      get: (o, k) => (k in o ? o[k as string] : () => {}),
+      set: (o, k, v) => ((o[k as string] = v), k === "font" && fonts.push(v), true),
+    },
+  );
+  (globalThis as { document?: unknown }).document = {
+    createElement: () => ({ width: 0, height: 0, getContext: () => ctx }),
+    fonts: { load: async (css: string) => void loaded.push(css), addEventListener() {} },
+  };
+  try {
+    const pixel = { id: "pixel", title: "Pixel", css: "'Pixel Film', monospace" };
+    const it = { kind: "text", from: 0, to: 4, text: "MINE", font: "pixel" };
+    const draw = makeTitles({ autoClear: true, render() {} }, 1920, 1080, {
+      fonts: [pixel],
+      items: [it],
+    });
+    await draw.ready;
+    expect(loaded.some((css) => css.includes("'Pixel Film'"))).toBe(true);
+    draw([it], 1);
+    expect(fonts.some((css) => css.includes("'Pixel Film'"))).toBe(true);
+    expect(draw.fonts.map((f: { id: string }) => f.id)).toContain("pixel");
+  } finally {
+    (globalThis as { document?: unknown }).document = prevDoc;
+  }
+});
+
 test("exposes categorized Cinetic typography and shape voices with unique ids and positive defaults", () => {
   expect(TEXT_CATEGORIES).toEqual([
     "Clean",

@@ -116,16 +116,22 @@ export const FONTS: readonly Font[] = [
     tip: "Mono beside Geist: numbers, code, labels",
   },
 ];
-export const fontOf = (id?: string) => (FONTS.find((f) => f.id === id) ?? FONTS[0]!).css;
+// own: a film's faces (makeTitles' 4th argument, fonts), looked up before the built-ins
+export const fontOf = (id?: string, own: readonly Font[] = []) =>
+  (own.find((f) => f.id === id) ?? FONTS.find((f) => f.id === id) ?? FONTS[0]!).css;
 
 type FontUser = { font?: string; in?: { fx?: string }; out?: { fx?: string } };
 // The faces a build waits on: the ones its items draw in (a phone skips ~0.5 MB of the rest); every face when an item's
 // fontCycle hops through them, or when the items are not given. A face picked later loads on first draw (loadingdone redraws)
-export const fontsFor = (items?: readonly FontUser[]): readonly Font[] => {
+export const fontsFor = (
+  items?: readonly FontUser[],
+  own: readonly Font[] = [],
+): readonly Font[] => {
+  const all = [...own, ...FONTS];
   if (!items || items.some((it) => it.in?.fx === "fontCycle" || it.out?.fx === "fontCycle"))
-    return FONTS;
-  const ids = new Set(items.map((it) => FONTS.find((f) => f.id === it.font)?.id ?? FONTS[0]!.id));
-  return FONTS.filter((f) => ids.has(f.id));
+    return all;
+  const ids = new Set(items.map((it) => all.find((f) => f.id === it.font)?.id ?? FONTS[0]!.id));
+  return all.filter((f) => ids.has(f.id));
 };
 
 export const TEXT_CATEGORIES = [
