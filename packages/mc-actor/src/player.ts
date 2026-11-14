@@ -301,15 +301,20 @@ const MOUTH = {
   G: [2, 0.45, 0.4, 0],
   H: [2.2, 1.1, 0.25, 0.55],
 };
+// The shape at time s of cues [[second, "A".."H"|"X"], ...] (Rhubarb's, which already anticipate vowels and put in-betweens).
+// Each move into a shape ends on its cue's second, so the mouth may lead the sound but never trails it (Williams); the lead
+// is up to 60 ms and at most half the shape before, so a 70 ms lip closure still shuts whole.
 export const mouthAt = (cues, s) => {
-  // shape at local time s, eased over 60 ms from the previous one so the lips move instead of popping
-  if (!cues?.length || s < 0) return MOUTH.X;
-  let i = 0;
+  if (!cues?.length || s < cues[0][0] - 0.06) return MOUTH.X;
+  let i = -1;
   while (i < cues.length - 1 && s >= cues[i + 1][0]) i++;
-  const cur = MOUTH[cues[i][1]] ?? MOUTH.X,
-    prev = i > 0 ? (MOUTH[cues[i - 1][1]] ?? MOUTH.X) : MOUTH.X;
-  const k = smooth((s - cues[i][0]) / 0.06);
-  return cur.map((v, j) => prev[j] + (v - prev[j]) * k);
+  const cur = i < 0 ? MOUTH.X : (MOUTH[cues[i][1]] ?? MOUTH.X);
+  const next = cues[i + 1];
+  if (!next) return cur;
+  const lead = Math.min(0.06, i < 0 ? 0.06 : (next[0] - cues[i][0]) / 2);
+  const k = smooth((s - (next[0] - lead)) / lead),
+    to = MOUTH[next[1]] ?? MOUTH.X;
+  return cur.map((v, j) => v + (to[j] - v) * k);
 };
 
 const flat = (color, glow = 0.12) =>
