@@ -1861,16 +1861,23 @@ export async function run(
     );
   const body = Object.keys(BODY).filter((o) => set.has(o));
   // a mocap category is the postures its clips start and end in, so body filters and catalog.py's Jev can take it
-  const clipCat =
-    asked?.length === 1 && asked[0]!.startsWith("mocap/")
-      ? (() => {
-          const clipPool = entriesOf().filter((x) => x.kind === "mocap");
-          const kf = kindFilter(asked, clipPool);
-          if (kf.bad.length) throw new FindError(kf.bad.join("\n"));
-          const [from = "", to = from] = clipPool.find(kf.test)?.cat.split(">") ?? [];
-          return from ? { name: asked[0]!, from, to } : undefined;
-        })()
-      : undefined;
+  // --kind as read (motion is mocap), so a body filter or the catalogue's Jev knows the clips were asked for
+  const askedAs = asked && (body.length || jev) ? kindFilter(asked, entriesOf()).as : undefined;
+  const clipCats = askedAs?.filter((k) => k.startsWith("mocap/")) ?? [];
+  const clipCat = clipCats.length
+    ? (() => {
+        const clipPool = entriesOf().filter((x) => x.kind === "mocap");
+        const kf = kindFilter(clipCats, clipPool);
+        if (kf.bad.length) throw new FindError(kf.bad.join("\n"));
+        const cats = [...new Set(clipPool.filter(kf.test).map((x) => x.cat))];
+        if (cats.length !== 1)
+          throw new FindError(
+            `${clipCats.join(",")} holds clips starting and ending in ${cats.length} ways (${cats.join(", ")}); body filters take one: --kind mocap/<one of them>, or --kind mocap with --from and --to`,
+          );
+        const [from = "", to = from] = cats[0]!.split(">");
+        return { name: clipCats.join(","), from, to };
+      })()
+    : undefined;
   if (body.length || (jev && clipCat)) {
     const clipPool = entriesOf().filter((x) => x.kind === "mocap");
     // catalog.py reads the clips' own records, which know no stars: the starred clips are few enough to list
@@ -1878,10 +1885,8 @@ export async function run(
       throw new FindError(
         `--fav does not combine with the body filters (${body.join(" ")}); the starred clips: bun run find --kind mocap ${favArg} (${clipPool.filter((x) => x.fav).length} of them)`,
       );
-    if (kinds && kinds.join() !== "mocap" && !clipCat) {
-      const soundy = kinds.some((k) =>
-        [...SOUND, "sound"].includes(kindOf(k.split("/")[0]!, clipPool)),
-      );
+    if (askedAs && !askedAs.every((k) => k === "mocap" || k.startsWith("mocap/"))) {
+      const soundy = askedAs.some((k) => [...SOUND, "sound"].includes(k.split("/")[0]!));
       throw new FindError(
         `${body.join(" ")} ${body.length > 1 ? "filter" : "filters"} mocap clips by the body; use --kind mocap or no --kind${soundy && set.has("--mood") ? `. For music: ${BGM_MOOD}` : ""}`,
       );
@@ -1897,16 +1902,6 @@ export async function run(
       throw new FindError(
         `--source ${noClips.join(",")} has no mocap clips; clips come from ${libs.join(", ")}`,
       );
-    for (const [o, want] of clipCat
-      ? ([
-          ["--from", clipCat.from],
-          ["--to", clipCat.to],
-        ] as const)
-      : [])
-      if (set.has(o) && set.get(o) !== want)
-        throw new FindError(
-          `--kind ${clipCat!.name} starts in ${clipCat!.from} and ends in ${clipCat!.to}: drop ${o} ${set.get(o)} or the category`,
-        );
     if (set.has("--still") && set.has("--moves"))
       throw new FindError(
         "--still (stays within 0.3 m) and --moves (goes further) contradict: give one",
@@ -1974,6 +1969,14 @@ export async function run(
     const libArg = sources ? ["--lib", sources.join(",")] : [];
     const words = jev ? ["--jev", query] : query.split(/\s+/).filter(Boolean);
     const durArg = dur ? ["--dur", set.get("--dur")!] : [];
+    // a posture beside the category is read first (standing is stand), then must be the category's own
+    for (const o of clipCat ? (["--from", "--to"] as const) : []) {
+      const want = o === "--from" ? clipCat!.from : clipCat!.to;
+      if (set.has(o) && args[args.indexOf(o) + 1] !== want)
+        throw new FindError(
+          `--kind ${clipCat!.name} starts in ${clipCat!.from} and ends in ${clipCat!.to}: drop ${o} ${set.get(o)} or the category`,
+        );
+    }
     const catArgs = clipCat
       ? (["--from", "--to"] as const).flatMap((o) =>
           set.has(o) ? [] : [o, o === "--from" ? clipCat.from : clipCat.to],
@@ -2329,8 +2332,13 @@ export async function run(
   if (jev) {
     // an ease times an effect and is never the effect asked for: Jev votes over eases only when --kind names them
     // (transition/ease); with them in, "linear" outvoted every cut for "a hard cut on the beat"
+    // transition/ease, or cut short as transition/eas, names the timing kind transition-ease
     const timing = (x: Entry) =>
-      TIMING.includes(x.kind) && !kinds!.some((k) => k.replace("/", "-").startsWith(x.kind));
+      TIMING.includes(x.kind) &&
+      !kinds!.some((k) => {
+        const named = k.replace("/", "-").toLowerCase();
+        return named.startsWith(x.kind) || (k.includes("/") && x.kind.startsWith(named));
+      });
     const jevPool = kinds?.length ? inKinds.filter((x) => !timing(x)) : matches.slice(0, POOL);
     if (!jevPool.length)
       next.push(

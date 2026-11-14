@@ -37,12 +37,25 @@ test("a list one Choice holds is voted on once", async () => {
   expect(calls).toBe(1);
 });
 
-test("entries Jev would read the same (a sound's takes) vote once", async () => {
+test("entries Jev would read the same (a sound's takes) vote once and come back together", async () => {
   let seen: string[] = [];
-  const vote = (_: unknown, group: { t: string }[]) => (
+  const vote = (_: unknown, group: { t: string; id: number }[]) => (
     (seen = group.map((x) => x.t)),
-    Promise.resolve(group.map((x): [number, { t: string }] => [0.5, x]))
+    Promise.resolve(group.map((x): [number, { t: string; id: number }] => [0.5, x]))
   );
-  await jevRank(q, [{ t: "door creak" }, { t: "door creak" }, { t: "door slam" }], vote);
+  const got = await jevRank(
+    q,
+    [
+      { t: "door creak", id: 1 },
+      { t: "door creak", id: 2 },
+      { t: "door slam", id: 3 },
+    ],
+    vote,
+  );
   expect(seen).toEqual(["door creak", "door slam"]);
+  expect(got.map(([p, x]) => [p, x.id])).toEqual([
+    [0.5, 1],
+    [0.5, 2],
+    [0.5, 3],
+  ]);
 });

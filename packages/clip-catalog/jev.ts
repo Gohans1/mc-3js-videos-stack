@@ -83,13 +83,17 @@ export async function jevRank<T>(
   pool: T[],
   vote: (q: JevQuestion<T>, group: T[]) => Promise<[number, T][]> = choice,
 ) {
-  // items Jev would read the same vote once, the first standing for the rest
-  const read = new Set<string>();
+  // items Jev would read the same vote once, the first standing for the rest; all come back with its share
+  const same = new Map<string, T[]>();
   let list: T[] = [];
   for (const x of pool) {
-    if (read.has(q.text(x))) continue;
-    read.add(q.text(x));
-    list.push(x);
+    const t = q.text(x);
+    const seen = same.get(t);
+    if (seen) seen.push(x);
+    else {
+      same.set(t, [x]);
+      list.push(x);
+    }
   }
   // the heats' winners run in heats again until they fit one final
   while (list.length > CHOICE_MAX) {
@@ -114,7 +118,9 @@ export async function jevRank<T>(
         .map(([, x]) => x),
     );
   }
-  return vote(q, list);
+  return (await vote(q, list)).flatMap(([p, x]) =>
+    (same.get(q.text(x)) ?? [x]).map((y): [number, T] => [p, y]),
+  );
 }
 
 // The vote over the pool, best first, then a fit for each of the first `show`

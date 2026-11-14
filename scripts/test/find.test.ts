@@ -440,7 +440,12 @@ test("a mocap category beside body filters is the postures it starts and ends in
     expect.arrayContaining(["--jev", "he sits", "--from", "stand", "--to", "sitFloor"]),
   );
   await expect(
-    run(["--kind", "mocap/stand-sit-floor", "--from", "kneel"], [...vault, sitDown], noJev, clips),
+    run(
+      ["--kind", "mocap/stand-sit-floor", "--from", "sitFloor"],
+      [...vault, sitDown],
+      noJev,
+      clips,
+    ),
   ).rejects.toThrow(/mocap\/stand-sit-floor starts in stand/);
 });
 
@@ -448,6 +453,34 @@ test("a body filter with a source that has no clips is an error naming the clip 
   await expect(
     run(["--from", "stand", "--source", "earshot"], [...vault, sitDown], noJev),
   ).rejects.toThrow(/clips come from mixamo/);
+});
+
+test("body filters take mocap by any name it goes by, and a posture said as a verb beside a category", async () => {
+  let got: string[] = [];
+  const clips = (args: string[]) => ((got = args), Promise.resolve("catalogue rows"));
+  await run(["--kind", "motion", "--still"], [...vault, sitDown], noJev, clips);
+  expect(got).toContain("--still");
+  await run(
+    ["--kind", "mocap/stand-sit-floor", "--from", "standing"],
+    [...vault, sitDown],
+    noJev,
+    clips,
+  );
+  expect(got).toEqual(expect.arrayContaining(["--from", "stand", "--to", "sitFloor"]));
+});
+
+test("--jev over a shortened timing category votes over its entries", async () => {
+  const ease = {
+    ...e("glide", "Glide Out", "eases into the shot", "transition-ease", "Ease"),
+    src: "film-stage/transitions.ts",
+  };
+  let pool: Entry[] = [];
+  const judge = (_: string, p: Entry[]) => (
+    (pool = p),
+    Promise.resolve([[0.9, ease]] as [number, Entry][])
+  );
+  await run(["--jev", "a slow arrival", "--kind", "transition/eas"], [...vault, ease], judge);
+  expect(pool.map((x) => x.id)).toEqual(["glide"]);
 });
 
 test("--jev with no words is an error for every kind, not a silent list", async () => {
