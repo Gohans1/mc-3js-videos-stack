@@ -37,7 +37,7 @@ export function InkBar() {
     <div
       role="toolbar"
       aria-label="Draw"
-      className="shadow-float upright:bottom-7.5 upright:left-1.5 sideways:bottom-7.5 pointer-events-auto absolute bottom-11 left-2.5 z-6 flex items-center gap-0.5 rounded-xl bg-black/80 p-1"
+      className="shadow-float upright:bottom-7.5 upright:left-1.5 sideways:bottom-7.5 bg-scrim-strong pointer-events-auto absolute bottom-11 left-2.5 z-6 flex items-center gap-0.5 rounded-xl p-1"
     >
       {TOOLS.map(([id, name, icon, help]) => (
         <Button
@@ -54,7 +54,7 @@ export function InkBar() {
           <ToolKey id={id} />
         </Button>
       ))}
-      <span aria-hidden className="mx-1 h-5 w-px bg-white/15" />
+      <span aria-hidden className="bg-hairline-strong mx-1 h-5 w-px" />
       <Tip label="Undo last stroke (Ctrl+Z)">
         <Button
           variant="tool"

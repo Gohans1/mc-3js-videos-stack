@@ -54,13 +54,13 @@ export function Guides() {
           d={`M0 0H${W}V${H}H0Z${clear}`}
           fillRule="evenodd"
           fillOpacity={0.35}
-          className="fill-black"
+          className="fill-stage"
         />
       )}
-      <g strokeOpacity={0.45} strokeWidth={3} fill="none" className="stroke-black">
+      <g strokeOpacity={0.45} strokeWidth={3} fill="none" className="stroke-stage">
         {lines}
       </g>
-      <g strokeOpacity={0.6} strokeWidth={1} fill="none" className="stroke-white">
+      <g strokeOpacity={0.6} strokeWidth={1} fill="none" className="stroke-picture">
         {lines}
       </g>
     </svg>

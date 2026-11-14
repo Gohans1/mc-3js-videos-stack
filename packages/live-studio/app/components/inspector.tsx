@@ -119,8 +119,8 @@ export function Segmented<T extends string>({
             "--pill-h": `${pill.h}px`,
           }}
           className={cn(
-            "segmented-pill bg-raised-3 pointer-events-none z-0",
-            vertical ? "rounded-md" : "rounded-sm",
+            "segmented-pill pointer-events-none z-0",
+            vertical ? "bg-tint rounded-md" : "bg-raised-3 rounded-sm",
           )}
         />
       )}
@@ -178,7 +178,7 @@ export function NavItem({
       className={cn(
         "focus-visible:ring-ring studio-press flex h-7.5 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs outline-none focus-visible:ring-2 pointer-coarse:h-10",
         current
-          ? "bg-raised-3 text-primary font-medium"
+          ? "bg-tint text-primary font-medium"
           : "text-foreground/90 hover:bg-card hover:text-foreground",
       )}
     >
@@ -187,7 +187,7 @@ export function NavItem({
         <span
           className={cn(
             "text-tag tabular-nums",
-            current ? "text-primary/80" : "text-muted-foreground",
+            current ? "text-primary" : "text-muted-foreground",
           )}
         >
           {count}

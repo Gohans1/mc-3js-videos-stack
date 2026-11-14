@@ -13,12 +13,12 @@ import { changeRef, removeRef, toJpeg } from "./refs";
 import type { RefPic, RefStroke } from "./slice";
 
 const COLORS = [
-  { name: "Red", value: "#ff3b30" },
-  { name: "Yellow", value: "#ffd60a" },
-  { name: "Green", value: "#30d158" },
-  { name: "Blue", value: "#0a84ff" },
-  { name: "White", value: "#ffffff" },
-  { name: "Black", value: "#111111" },
+  { name: "Red", value: "#D14D41" },
+  { name: "Yellow", value: "#D0A215" },
+  { name: "Green", value: "#879A39" },
+  { name: "Blue", value: "#4385BE" },
+  { name: "White", value: "#FFFCF0" },
+  { name: "Black", value: "#100F0F" },
 ];
 // a share of the picture's long side, so a stroke looks the same on a small or a big picture
 const SIZES = [
@@ -121,7 +121,7 @@ function Board({ r, undoRef }: { r: RefPic; undoRef: React.RefObject<(() => void
               aria-label={c.name}
               onClick={() => setColor(c.value)}
               className={cn(
-                "focus-visible:ring-ring size-7 rounded-full bg-(--swatch) ring-1 ring-white/25 outline-2 outline-offset-2 outline-transparent ring-inset focus-visible:ring-2 aria-checked:outline-white pointer-coarse:size-9",
+                "focus-visible:ring-ring ring-hairline-strong aria-checked:outline-picture size-7 rounded-full bg-(--swatch) ring-1 outline-2 outline-offset-2 outline-transparent ring-inset focus-visible:ring-2 pointer-coarse:size-9",
               )}
               style={{ "--swatch": c.value }}
             />

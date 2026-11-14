@@ -9,7 +9,7 @@
     pointer-events: none;
     padding: 2px 10px;
     border-radius: 6px;
-    background: rgb(0 0 0 / 0.6);
+    background: var(--scrim);
     color: var(--picture);
     font: 600 24px/1.25 var(--font-mono);
     font-variant-numeric: tabular-nums;
@@ -33,7 +33,7 @@
     display: none;
   }
   .stage-caption-text {
-    background: rgb(0 0 0 / 0.62);
+    background: var(--scrim);
     padding: 3px 10px;
     border-radius: 6px;
     color: var(--picture);
@@ -47,10 +47,10 @@
     margin: -11px 0 0 -11px;
     border: 2px solid var(--primary);
     border-radius: 50%;
-    box-shadow: 0 0 0 1px #000;
+    box-shadow: 0 0 0 1px var(--stage);
   }
   .pin.saved {
-    border-color: #4385be;
+    border-color: var(--ink-saved);
     width: 12px;
     height: 12px;
     margin: -8px 0 0 -8px;
@@ -67,7 +67,7 @@
     white-space: nowrap;
     padding: 2px 7px;
     border-radius: 4px;
-    background: rgb(0 0 0 / 0.8);
+    background: var(--scrim-strong);
     color: var(--foreground);
     font: 500 12px/1.35 var(--font-sans);
     font-style: normal;
@@ -89,7 +89,7 @@
     color: var(--foreground);
     font: 500 12px/1.4 var(--font-sans);
     white-space: nowrap;
-    box-shadow: 0 4px 14px rgb(0 0 0 / 0.5);
+    box-shadow: var(--shadow-float);
     outline: 1px solid var(--border);
   }
   .carry[data-over] {
@@ -105,13 +105,13 @@
     fill: var(--raised-4);
   }
   .fx-wall {
-    fill: #cecdc3;
+    fill: var(--fx-base-200);
   }
   .fx-roof {
-    fill: #66800b;
+    fill: var(--fx-green-600);
   }
   .fx-door {
-    fill: #878580;
+    fill: var(--fx-base-500);
   }
   .fx-sun {
     fill: var(--favorite);
@@ -351,7 +351,7 @@
     #d76146,
     #d92e52
   );
-  box-shadow: 0 0 0 2px #111;
+  box-shadow: 0 0 0 2px var(--stage);
 }
 .grade-wheel::after {
   content: "";
@@ -359,7 +359,7 @@
   inset: 7px;
   border-radius: 50%;
   background:
-    radial-gradient(circle, #141414, #1110),
+    radial-gradient(circle, var(--stage), transparent),
     conic-gradient(#33080d, #1e0c2d, #04162e, #09221e, #092409, #2c2908, #2d1407, #33100c, #33080d);
 }
 .grade-wheel-channel[data-channel="R"] {
@@ -372,7 +372,7 @@
   background: #00f;
 }
 .grade-wheel-value {
-  background: #1c1c1c;
+  background: var(--backdrop);
 }
 
 /* What the AI just touched (activity/activity.ts useLit, for its LIT_MS): a violet ring and glow that hold, then fade. Colour

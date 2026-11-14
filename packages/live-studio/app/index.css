@@ -31,7 +31,10 @@
   --color-ok: var(--ok);
   --color-ok-text: var(--ok-text);
   --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
   --color-warn-bg: var(--warn-bg);
+  --color-warn-card: var(--warn-card);
+  --color-warn-card-hover: var(--warn-card-hover);
   --color-favorite: var(--favorite);
   --color-peek: var(--peek);
   --color-snap: var(--snap);
@@ -41,11 +44,32 @@
   --color-ai-text: var(--ai-text);
   --color-in-out-text: var(--in-out-text);
   --color-picture: var(--picture);
+  --color-picture-foreground: var(--picture-foreground);
   --color-alarm: var(--alarm);
   --color-alarm-bg: var(--alarm-bg);
   --color-raised-4: var(--raised-4);
+  --color-stage: var(--stage);
   --color-backdrop: var(--backdrop);
   --color-tooltip: var(--tooltip);
+  --color-scrim-soft: var(--scrim-soft);
+  --color-scrim: var(--scrim);
+  --color-scrim-strong: var(--scrim-strong);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-selected: var(--surface-selected);
+  --color-hairline-subtle: var(--hairline-subtle);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-scrubber-track: var(--scrubber-track);
+  --color-scrubber-tick: var(--scrubber-tick);
+  --color-playhead: var(--playhead);
+  --color-pick: var(--pick);
+  --color-curve: var(--curve);
+  --color-md-h1: var(--md-h1);
+  --color-md-h2: var(--md-h2);
+  --color-md-h3: var(--md-h3);
+  --color-md-h4: var(--md-h4);
+  --color-md-h5: var(--md-h5);
+  --color-md-h6: var(--md-h6);
   --color-track: var(--track);
   --color-track-head: var(--track-head);
   --color-main-track: var(--main-track);
@@ -61,6 +85,7 @@
   --color-clip-label: var(--clip-label);
   --color-slider: var(--slider);
   --color-slider-fill: var(--slider-fill);
+  --color-slider-thumb: var(--slider-thumb);
   --color-label: var(--label);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -79,6 +104,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -105,19 +131,11 @@
 /* CapCut 9.7's type steps (px, so a phone's larger rem leaves them be) and the studio's floating surfaces. A name added
    here goes in lib/utils.ts too, or cn() takes text-ui for a colour and drops it beside text-primary */
 @theme {
-  --color-curve: #080808;
-  /* a Markdown heading by level, md-phone's: the Lessons tab (lessons/LessonsPanel.tsx) */
-  --color-md-h1: #d0a215;
-  --color-md-h2: #3aa99f;
-  --color-md-h3: #879a39;
-  --color-md-h4: #4385be;
-  --color-md-h5: #8b7ec8;
-  --color-md-h6: #ce5d97;
   --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
   --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
   --text-title: 15px; /* a panel's or dialog's heading */
-  --shadow-float: 0 4px 16px rgb(0 0 0 / 0.5); /* a bar over the picture */
-  --shadow-sheet: 0 8px 20px rgb(0 0 0 / 0.6); /* the note sheet over the picture on a phone */
+  --shadow-float: 0 4px 16px oklch(0.1696 0.0017 17.3 / 0.55); /* a bar over the picture */
+  --shadow-sheet: 0 8px 20px oklch(0.1696 0.0017 17.3 / 0.65); /* the note sheet over the picture on a phone */
 }
 
 /* The film's frame shape, until picture/frame.ts sets it from the film */
@@ -125,112 +143,208 @@
   --frame: 16 / 9;
 }
 
-/* CapCut 9.7 desktop's dark theme, measured pixel by pixel off the dev's screenshots of it (2026-11-09): one theme, as the
-   studio sits beside a moving picture. Where CapCut shows no such thing (a popover, a red), the nearest of its own greys */
-:root {
-  --backdrop: #1C1C1C; /* the window behind the panels: CapCut's title bar, the gaps between panels, inputs and wells */
-  --background: #262626; /* a panel, and the timeline's empty space */
-  --foreground: #DFDFDF;
-  --card: #303030; /* a panel's head and foot bars, and a card raised on a panel */
-  --card-foreground: #DFDFDF;
-  --popover: #303030;
-  --popover-foreground: #DFDFDF;
-  --primary: #00C1CD; /* CapCut's cyan: the open tab, Export, a picked tile's ring */
-  --primary-foreground: #051314; /* deep obsidian ink on cyan: 8.57:1 WCAG AA/AAA */
-  --secondary: #3B3B3B; /* a raised control: Import, Cover, the picked segment */
-  --secondary-foreground: #DFDFDF;
-  --muted: #3B3B3B;
-  --muted-foreground: #929292; /* a section's name, a hint: 4.9:1 on a panel */
-  --accent: #3B3B3B;
-  --accent-foreground: #DFDFDF;
-  --destructive: #E5484D;
-  --border: #373737; /* a divider inside a panel */
-  --input: #1C1C1C; /* a field's well, filled as CapCut's search and number boxes */
-  --ring: #00C1CD;
-  --chart-1: #00C1CD;
-  --chart-2: #D0A215;
-  --chart-3: #879A39;
-  --chart-4: #4385BE;
-  --chart-5: #CE5D97;
+/* Flexoki Dark 2.0 (Steph Ango) + shadcn semantic tokens (Blue primary #4385BE / #66A0C8 AA) */
+:root,
+.dark {
+  /* Layer 1: Flexoki 2.0 primitives (OKLCH) */
+  --fx-paper: oklch(0.9901 0.0161 95.2);
+  --fx-base-50: oklch(0.9537 0.0147 98.3);
+  --fx-base-100: oklch(0.9174 0.0149 98.3);
+  --fx-base-150: oklch(0.881 0.0137 97.5);
+  --fx-base-200: oklch(0.8463 0.0137 102.1);
+  --fx-base-300: oklch(0.7721 0.0128 96.5);
+  --fx-base-400: oklch(0.6956 0.0103 93.6);
+  --fx-base-500: oklch(0.6169 0.0078 88.7);
+  --fx-base-600: oklch(0.5375 0.0078 97.4);
+  --fx-base-700: oklch(0.4531 0.005 91.5);
+  --fx-base-800: oklch(0.3651 0.0044 67.7);
+  --fx-base-850: oklch(0.3214 0.0038 84.6);
+  --fx-base-900: oklch(0.2734 0.0023 67.7);
+  --fx-base-950: oklch(0.2228 0.0025 67.7);
+  --fx-black: oklch(0.1696 0.0017 17.3);
+
+  --fx-red-200: oklch(0.7784 0.116 30.3);
+  --fx-red-300: oklch(0.6834 0.1523 29.8);
+  --fx-red-400: oklch(0.597 0.1692 28.4);
+  --fx-red-600: oklch(0.5042 0.1648 27.8);
+  --fx-red-850: oklch(0.3121 0.088 26.2);
+  --fx-red-900: oklch(0.2639 0.0618 25.1);
+  --fx-red-950: oklch(0.2133 0.0318 23.3);
+
+  --fx-orange-400: oklch(0.6576 0.1539 49.3);
+  --fx-orange-600: oklch(0.5665 0.1523 45.0);
+  --fx-orange-800: oklch(0.3971 0.1006 46.5);
+  --fx-orange-850: oklch(0.3419 0.0807 47.5);
+
+  --fx-yellow-400: oklch(0.7346 0.1462 87.5);
+  --fx-yellow-800: oklch(0.4347 0.0884 86.9);
+  --fx-yellow-950: oklch(0.2362 0.0369 94.2);
+
+  --fx-green-300: oklch(0.7227 0.1178 117.2);
+  --fx-green-400: oklch(0.6513 0.1242 119.4);
+  --fx-green-600: oklch(0.5593 0.1335 122.9);
+  --fx-green-850: oklch(0.3376 0.0757 121.9);
+
+  --fx-cyan-200: oklch(0.8127 0.0791 179.4);
+  --fx-cyan-300: oklch(0.734 0.0968 180.7);
+  --fx-cyan-400: oklch(0.6701 0.0999 186.6);
+  --fx-cyan-800: oklch(0.3898 0.0584 186.7);
+  --fx-cyan-850: oklch(0.3371 0.0472 188.8);
+  --fx-cyan-900: oklch(0.2818 0.0354 186.4);
+
+  --fx-blue-200: oklch(0.7823 0.0622 235.9);
+  --fx-blue-300: oklch(0.6815 0.0849 239.8);
+  --fx-blue-400: oklch(0.5988 0.1104 247.0);
+  --fx-blue-600: oklch(0.4818 0.1315 254.8);
+  --fx-blue-800: oklch(0.3499 0.0862 254.2);
+  --fx-blue-850: oklch(0.3056 0.0693 253.5);
+  --fx-blue-900: oklch(0.2604 0.0486 253.2);
+  --fx-blue-950: oklch(0.2132 0.0247 249.0);
+
+  --fx-purple-300: oklch(0.7139 0.0802 295.1);
+  --fx-purple-400: oklch(0.6348 0.1098 291.0);
+
+  --fx-magenta-300: oklch(0.7155 0.1356 354.6);
+  --fx-magenta-400: oklch(0.6348 0.1565 350.5);
+  --fx-magenta-800: oklch(0.3601 0.1089 349.0);
+  --fx-magenta-850: oklch(0.313 0.087 347.6);
+
+  /* Layer 2: shadcn & studio semantic surfaces */
+  --stage: var(--fx-black); /* player letterbox, scopes container, canvas void */
+  --backdrop: var(--fx-black); /* outer shell behind panels, inputs and wells */
+  --background: var(--fx-base-950); /* panels and timeline canvas */
+  --foreground: var(--fx-base-200);
+  --card: var(--fx-base-900); /* panel headers/footers and raised cards */
+  --card-foreground: var(--fx-base-200);
+  --popover: var(--fx-base-900);
+  --popover-foreground: var(--fx-base-200);
+  /* Flexoki Blue-300 passes >=4.5:1 AA on cards/panels/buttons; Blue-400 (#4385BE) anchors --in-out & charts */
+  --primary: var(--fx-blue-300);
+  --primary-foreground: var(--fx-black);
+  --secondary: var(--fx-base-850);
+  --secondary-foreground: var(--fx-base-200);
+  --muted: var(--fx-base-850);
+  --muted-foreground: var(--fx-base-400); /* >=4.6:1 AA across card & muted */
+  --accent: var(--fx-base-850);
+  --accent-foreground: var(--fx-base-200);
+  --destructive: var(--fx-red-300); /* >=4.9:1 AA text on card/background */
+  --destructive-foreground: var(--fx-paper);
+  --border: var(--fx-base-800);
+  --input: var(--fx-black);
+  --ring: var(--fx-blue-300);
+  --chart-1: var(--fx-blue-400);
+  --chart-2: var(--fx-yellow-400);
+  --chart-3: var(--fx-green-400);
+  --chart-4: var(--fx-cyan-400);
+  --chart-5: var(--fx-magenta-400);
   --radius: 0.5rem;
-  --sidebar: #262626;
-  --sidebar-foreground: #DFDFDF;
-  --sidebar-primary: #00C1CD;
-  --sidebar-primary-foreground: #051314;
-  --sidebar-accent: #3B3B3B;
-  --sidebar-accent-foreground: #DFDFDF;
-  --sidebar-border: #373737;
-  --sidebar-ring: #00C1CD;
-  /* The studio's own, beyond shadcn's set */
-  --raised-2: #303030;
-  --raised-3: #3B3B3B;
-  --raised-4: #4F4F4F; /* a button on a head or foot bar: Modify, Apply to all, Share */
-  --accent-hover: #33CDD7;
-  --tint: #1C1C1C; /* a toggle that is on: CapCut sinks it to the window's grey and lights its icon cyan */
-  --tint-hover: #141414;
-  --ok: #879A39;
-  --ok-text: #B2C956;
-  --warn: #D0A215;
-  --warn-bg: #2A2410;
-  --favorite: #D0A215; /* a starred sound or effect, as CapCut colours its star */
-  --peek: #D0A215; /* the preview axis and the time it shows (timeline/peek.ts), yellow as CapCut draws it */
-  --snap: #004D52; /* CapCut 9.7, measured away from the playhead: renders/timing-verification/capcut-snap-nonplayhead.png */
-  --ai: #A48BFF; /* the AI at work (activity/): a violet no other part of the studio uses, as collaborators each get a colour */
-  --ai-text: #C3B3FF;
-  --in-out: #4385BE; /* the In to Out stretch (timeline/inout.ts; the ruler draws it in the same blue) */
-  --in-out-text: #92BFDB;
-  --ink: #CE5D97; /* a note's drawing while it is drawn, and the words that name it */
-  --ink-saved: #4385BE; /* a note's drawing once the note holds it */
-  --picture: #FFFFFF; /* words over the picture */
-  --alarm: #AF3029;
-  --alarm-bg: #2E1513;
-  /* Names that label a row or a field, as CapCut's Temp and Exposure: a step under content, far over hints */
-  --label: #D2D2D2;
-  --tooltip: #141414; /* CapCut's tooltip, its words in --label */
-  /* The timeline, drawn on canvases that read these (timeline/canvas.ts tone) */
-  --track: #292929; /* a row that holds clips */
-  --track-head: #2A2A2A; /* its name and buttons in the column beside it */
-  --main-track: #2F2F2F; /* the Camera row, CapCut's main track */
-  --track-line: #141414; /* the line between the name column and the rows */
-  --grid: #303030; /* a cut, faint across the rows */
-  --ruler-text: #6C6C6C; /* CapCut keeps the seconds dim, so the clips under them lead */
-  --ruler-tick: #4C4C4C;
-  --ruler-dot: #3C3C3C;
-  --playhead: rgb(
-    255 255 255 / 0.5
-  ); /* half white, as CapCut's: grey on the empty rows, tinted over a clip */
-  --pick: #FFFFFF; /* what is picked, on every row: outlined white */
-  --clip-video: #004D52; /* a shot on the Camera row, as CapCut's video clip */
-  --clip-video-tag: #1A5F64;
-  --clip-adjust: #a6883b;
-  --clip-text: #9C4937;
-  --clip-text-tag: #A65C4B;
-  --clip-audio: #0E3058;
-  --clip-audio-tag: #274569;
-  --clip-wave: #0E81B3;
-  --clip-voice: #143D3B; /* a voiceover or dialogue phrase brick on the audio lanes */
-  --clip-voice-tag: #1F5754;
-  --clip-voice-wave: #2CC4B2;
-  --clip-label: #D2D6D9; /* the words on a clip's tag */
-  --clip-video-hover: #0A5A60;
-  --clip-video-text: #8FB3B5; /* a shot's length and "hold", dim on its clip */
-  --clip-shape: #6B3F58; /* an arrow or a circle on the Text row */
-  --clip-shape-tag: #7D5069;
-  --shot-now: #404040; /* the shot under the playhead, on the strip that names shots when a film has no Camera row */
-  --stuck: #D14D41; /* a stretch held still past 6 s, under the ruler */
-  --pace: #323232; /* a voice line behind its wave, at an easy pace */
-  --pace-fast: #4A2622;
-  --pace-slow: #1E3550;
-  --pace-pick: #3D4A16; /* the line picked */
-  --beat-move: #205EA6; /* an action on the Action row, eased */
-  --beat-snap: #BC5215; /* one that snaps */
-  --beat-hold: #4A5A12; /* one that holds still */
-  --note-done: #5A5A5A; /* a done note's mark on the ruler */
-  --key-hold: #4F4F4F; /* the dotted line where a keyframe row holds still */
-  --level-near: #F08A34; /* an audio level within 1 dB of full scale: its cap, Final Cut Pro's warning */
-  --level-over: #EA3223; /* one past it: its tip */
-  --slider: #404040;
-  --slider-fill: #E0E0E0;
+  --sidebar: var(--fx-base-950);
+  --sidebar-foreground: var(--fx-base-200);
+  --sidebar-primary: var(--fx-blue-300);
+  --sidebar-primary-foreground: var(--fx-black);
+  --sidebar-accent: var(--fx-base-850);
+  --sidebar-accent-foreground: var(--fx-base-200);
+  --sidebar-border: var(--fx-base-800);
+  --sidebar-ring: var(--fx-blue-300);
+
+  /* Studio elevation, scrims & domain tokens */
+  --raised-2: var(--fx-base-900);
+  --raised-3: var(--fx-base-850);
+  --raised-4: var(--fx-base-800);
+  --accent-hover: var(--fx-cyan-300);
+  --tint: var(--fx-blue-950); /* active toggle well */
+  --tint-hover: var(--fx-black);
+  --ok: var(--fx-green-400);
+  --ok-text: var(--fx-green-300);
+  --warn: var(--fx-yellow-400);
+  --warn-foreground: var(--fx-black);
+  --warn-bg: var(--fx-yellow-950);
+  --warn-card: color-mix(in oklab, var(--warn-bg) 48%, var(--card));
+  --warn-card-hover: color-mix(in oklab, var(--warn-bg) 65%, var(--card));
+  --favorite: var(--fx-yellow-400);
+  --peek: var(--fx-yellow-400);
+  --snap: var(--fx-cyan-800);
+  --ai: var(--fx-purple-400);
+  --ai-text: var(--fx-purple-300);
+  --in-out: var(--fx-blue-400);
+  --in-out-text: var(--fx-blue-200);
+  --ink: var(--fx-magenta-400);
+  --ink-saved: var(--fx-blue-400);
+  --picture: var(--fx-paper);
+  --picture-foreground: var(--fx-black);
+  --alarm: var(--fx-red-600);
+  --alarm-bg: var(--fx-red-950);
+  --label: var(--fx-base-100);
+  --tooltip: var(--fx-black);
+  --curve: var(--fx-black);
+
+  --scrim-soft: color-mix(in oklab, var(--fx-black) 35%, transparent);
+  --scrim: color-mix(in oklab, var(--fx-black) 65%, transparent);
+  --scrim-strong: color-mix(in oklab, var(--fx-black) 82%, transparent);
+  --surface-subtle: color-mix(in oklab, var(--fx-base-200) 4%, transparent);
+  --surface-selected: color-mix(in oklab, var(--fx-base-200) 6%, transparent);
+  --hairline-subtle: color-mix(in oklab, var(--fx-base-200) 7%, transparent);
+  --hairline: color-mix(in oklab, var(--fx-base-200) 11%, transparent);
+  --hairline-strong: color-mix(in oklab, var(--fx-base-200) 18%, transparent);
+  --scrubber-track: color-mix(in oklab, var(--fx-base-200) 16%, transparent);
+  --scrubber-tick: color-mix(in oklab, var(--fx-base-200) 28%, transparent);
+
+  /* Markdown heading scale (Lessons tab) */
+  --md-h1: var(--fx-yellow-400);
+  --md-h2: var(--fx-cyan-400);
+  --md-h3: var(--fx-green-400);
+  --md-h4: var(--fx-blue-300);
+  --md-h5: var(--fx-purple-300);
+  --md-h6: var(--fx-magenta-300);
+
+  /* Timeline, lanes & meters (read by timeline/canvas.ts tone()) */
+  --track: var(--fx-base-900);
+  --track-head: var(--fx-base-900);
+  --main-track: var(--fx-base-850);
+  --track-line: var(--fx-black);
+  --grid: var(--fx-base-850);
+  --ruler-text: var(--fx-base-500);
+  --ruler-tick: var(--fx-base-700);
+  --ruler-dot: var(--fx-base-800);
+  --playhead: color-mix(in oklab, var(--fx-paper) 62%, transparent);
+  --pick: var(--fx-paper);
+  --clip-video: var(--fx-cyan-850);
+  --clip-video-tag: var(--fx-cyan-800);
+  --clip-adjust: var(--fx-yellow-800);
+  --clip-text: var(--fx-orange-850);
+  --clip-text-tag: var(--fx-orange-800);
+  --clip-audio: var(--fx-blue-850);
+  --clip-audio-tag: var(--fx-blue-800);
+  --clip-wave: var(--fx-blue-400);
+  --clip-voice: var(--fx-cyan-900);
+  --clip-voice-tag: var(--fx-cyan-850);
+  --clip-voice-wave: var(--fx-cyan-300);
+  --clip-label: var(--fx-base-50);
+  --clip-video-hover: var(--fx-cyan-800);
+  --clip-video-text: var(--fx-cyan-200);
+  --clip-shape: var(--fx-magenta-850);
+  --clip-shape-tag: var(--fx-magenta-800);
+  --clip-hover: color-mix(in oklab, var(--fx-paper) 38%, transparent);
+  --anim-shade: color-mix(in oklab, var(--fx-black) 30%, transparent);
+  --anim-light: color-mix(in oklab, var(--fx-paper) 55%, transparent);
+  --fade-shade: color-mix(in oklab, var(--fx-black) 48%, transparent);
+  --gain-curve: color-mix(in oklab, var(--fx-paper) 68%, transparent);
+  --shot-now: var(--fx-base-800);
+  --stuck: var(--fx-red-400);
+  --pace: var(--fx-base-850);
+  --pace-fast: var(--fx-red-900);
+  --pace-slow: var(--fx-blue-900);
+  --pace-pick: var(--fx-green-850);
+  --beat-move: var(--fx-blue-600);
+  --beat-snap: var(--fx-orange-600);
+  --beat-hold: var(--fx-green-600);
+  --note-done: var(--fx-base-600);
+  --key-hold: var(--fx-base-700);
+  --level-near: var(--fx-orange-400);
+  --level-over: var(--fx-red-400);
+  --slider: var(--fx-base-800);
+  --slider-fill: var(--fx-base-200);
+  --slider-thumb: var(--fx-paper);
   color-scheme: dark;
 }
 
@@ -255,7 +369,7 @@
   }
   :root {
     caret-color: var(--primary);
-    scrollbar-color: #404040 transparent; /* CapCut's scrollbar thumb */
+    scrollbar-color: var(--slider) transparent;
     -webkit-tap-highlight-color: transparent;
   }
 }

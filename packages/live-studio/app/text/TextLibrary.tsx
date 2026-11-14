@@ -101,7 +101,7 @@ function Look({ p }: { p: Preset }) {
       aria-hidden
       style={{ "--font": familyOf(it.font), "--tracking": `${it.spacing ?? 0}em` }}
       className={cn(
-        "font-(family-name:--font) tracking-(--tracking) text-white",
+        "text-picture font-(family-name:--font) tracking-(--tracking)",
         it.bold ? "font-bold" : it.font === "mono" ? "font-normal" : "font-medium",
         it.align === "left" ? "text-tag self-end justify-self-start ps-2 pb-1.5" : "text-title",
       )}
@@ -121,7 +121,7 @@ function Tile({ p, own }: { p: Preset; own?: boolean }) {
           onClick={() => addPreset(p)}
           className="group/tile focus-visible:ring-ring flex w-full flex-col gap-1.5 rounded-md text-start outline-none focus-visible:ring-2"
         >
-          <span className="bg-backdrop relative grid aspect-video w-full place-items-center overflow-hidden rounded-md ring-1 ring-white/6 group-hover/tile:ring-white/20">
+          <span className="bg-backdrop ring-hairline-subtle group-hover/tile:ring-hairline-strong relative grid aspect-video w-full place-items-center overflow-hidden rounded-md ring-1">
             <Look p={p} />
             {own && <FilmMark />}
             <span
@@ -151,7 +151,7 @@ export function TextLibrary() {
       len: 2.5,
       item: {
         kind: s.id,
-        color: "#E5484D",
+        color: "#D14D41",
         width: 10,
         w: 260,
         h: 170,

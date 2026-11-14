@@ -47,8 +47,8 @@ export const drawTextSel = () => {
   while (el.children.length < shown.length) {
     const frame = svg("svg");
     for (const [color, width] of [
-      ["#00000099", "3"],
-      ["#e8e8e8", "1"],
+      ["var(--scrim)", "3"],
+      ["var(--picture)", "1"],
     ]) {
       const line = svg("polygon");
       line.setAttribute("fill", "none");
@@ -59,8 +59,8 @@ export const drawTextSel = () => {
     for (let i = 0; i < 4; i++) {
       const dot = svg("circle");
       dot.setAttribute("r", "3.5");
-      dot.setAttribute("fill", "#e8e8e8");
-      dot.setAttribute("stroke", "#00000066");
+      dot.setAttribute("fill", "var(--picture)");
+      dot.setAttribute("stroke", "var(--scrim-soft)");
       frame.append(dot);
     }
     el.append(frame);

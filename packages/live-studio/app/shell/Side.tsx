@@ -112,7 +112,7 @@ function NotesCount({ open, check }: { open: number; check: number }) {
       )}
       {check > 0 && (
         <span
-          className="bg-warn rounded-full px-1.5 text-xs leading-4 font-semibold text-black tabular-nums"
+          className="bg-warn text-warn-foreground rounded-full px-1.5 text-xs leading-4 font-semibold tabular-nums"
           aria-label={`, ${check} to check`}
         >
           {check}

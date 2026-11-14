@@ -102,7 +102,7 @@ function Compare({ n, at }: { n: Note; at: number }) {
   }, [n, at, loading, final, pictureRev]);
   const [split, setSplit] = useState(50);
   if (!then && !now) return null;
-  const label = "rounded-sm bg-black/70 px-1.5 py-0.5 text-tag font-semibold text-picture";
+  const label = "bg-scrim-strong text-tag text-picture rounded-sm px-1.5 py-0.5 font-semibold";
   return (
     <figure
       className="bg-backdrop has-focus-visible:ring-ring outline-border/60 upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] relative mx-auto aspect-(--frame) w-full max-w-[calc(min(17rem,38dvh)*(var(--frame)))] overflow-hidden rounded-lg outline-1 -outline-offset-1 has-focus-visible:ring-2"
@@ -131,7 +131,7 @@ function Compare({ n, at }: { n: Note; at: number }) {
             aria-hidden
             className="bg-picture pointer-events-none absolute inset-y-0 left-(--split) w-0.5 shadow-md"
           >
-            <span className="bg-picture ring-background absolute top-1/2 left-1/2 grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-black shadow-md ring-2">
+            <span className="bg-picture ring-background text-picture-foreground absolute top-1/2 left-1/2 grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full shadow-md ring-2">
               <ChevronsLeftRight className="size-3.5" />
             </span>
           </div>

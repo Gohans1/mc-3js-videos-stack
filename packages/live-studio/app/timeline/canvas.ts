@@ -64,6 +64,16 @@ const TONES = [
   "ok",
   "raised-2",
   "raised-3",
+  "stage",
+  "picture",
+  "scrim",
+  "scrim-strong",
+  "hairline-strong",
+  "clip-hover",
+  "anim-shade",
+  "anim-light",
+  "fade-shade",
+  "gain-curve",
 ] as const;
 export type Tone = (typeof TONES)[number];
 let tones: Record<Tone, string> | null = null;
@@ -73,7 +83,7 @@ export const tone = (k: Tone) => {
       read = Object.fromEntries(
         TONES.map((n) => [n, css.getPropertyValue(`--${n}`).trim()]),
       ) as Record<Tone, string>;
-    if (!read.background) return "#000";
+    if (!read.background) return "#100F0F";
     tones = read;
   }
   return tones[k];

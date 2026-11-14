@@ -73,7 +73,7 @@ import {
 } from "./text-anim";
 
 const DOC = { snapshot, restore };
-const SWATCHES = ["#FFFFFF", "#100F0F", "#E5484D", "#F5C542", "#3AA99F", "#4385BE"];
+const SWATCHES = ["#FFFFFF", "#100F0F", "#D14D41", "#D0A215", "#3AA99F", "#4385BE"];
 const ALL = "All",
   FAV = "Favorites";
 const byId = (id: string | undefined) =>
@@ -141,7 +141,7 @@ function Colors({
             aria-pressed={value.toUpperCase() === c}
             onClick={() => put(c)}
             style={{ "--swatch": c }}
-            className="focus-visible:ring-ring aria-pressed:ring-primary size-6 flex-none rounded-full bg-(--swatch) ring-1 ring-white/20 outline-none focus-visible:ring-2 aria-pressed:ring-2"
+            className="focus-visible:ring-ring aria-pressed:ring-primary ring-hairline-strong size-6 flex-none rounded-full bg-(--swatch) ring-1 outline-none focus-visible:ring-2 aria-pressed:ring-2"
           />
         </Tip>
       ))}
@@ -494,7 +494,7 @@ function Shape({ it }: { it: TextItem }) {
       <Section title="Basic">
         <Colors
           label="Color"
-          value={it.color ?? "#E5484D"}
+          value={it.color ?? "#D14D41"}
           put={(c) =>
             editPicked((x) => {
               x.color = c;
@@ -586,7 +586,7 @@ function VoiceBadge({ fx, shape, kind }: { fx: TitleFxMeta | null; shape: boolea
     );
   if (id === "type" || id === "easedType")
     return (
-      <span aria-hidden className="font-mono text-sm font-semibold text-white">
+      <span aria-hidden className="text-picture font-mono text-sm font-semibold">
         Aa_
       </span>
     );
@@ -604,7 +604,7 @@ function VoiceBadge({ fx, shape, kind }: { fx: TitleFxMeta | null; shape: boolea
     );
   if (id === "lineSplitIn" || id === "lineSplitOut")
     return (
-      <span aria-hidden className="text-sm font-bold tracking-tight text-white">
+      <span aria-hidden className="text-picture text-sm font-bold tracking-tight">
         A<span className="text-primary">/</span>a
       </span>
     );
@@ -612,19 +612,19 @@ function VoiceBadge({ fx, shape, kind }: { fx: TitleFxMeta | null; shape: boolea
     return (
       <span
         aria-hidden
-        className="border-primary/80 border-b-2 pb-0.5 text-sm font-semibold text-white"
+        className="border-primary/80 text-picture border-b-2 pb-0.5 text-sm font-semibold"
       >
         Aa
       </span>
     );
   if (cat === "Pop & Scale")
     return (
-      <span aria-hidden className="text-title scale-110 font-bold text-white">
+      <span aria-hidden className="text-title text-picture scale-110 font-bold">
         Aa
       </span>
     );
   return (
-    <span aria-hidden className="text-title font-semibold text-white">
+    <span aria-hidden className="text-title text-picture font-semibold">
       Aa
     </span>
   );
@@ -826,7 +826,7 @@ function Anim({ it }: { it: TextItem }) {
                 onBlur={leave}
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring aria-pressed:text-foreground flex w-full flex-col items-center gap-1 rounded-md text-xs outline-none focus-visible:ring-2"
               >
-                <span className="bg-raised-2 in-aria-pressed:ring-primary grid aspect-square w-full place-items-center rounded-md ring-1 ring-white/6 in-aria-pressed:ring-2">
+                <span className="bg-raised-2 in-aria-pressed:ring-primary ring-hairline-subtle grid aspect-square w-full place-items-center rounded-md ring-1 in-aria-pressed:ring-2">
                   <VoiceBadge fx={null} shape={shape} kind={it.kind} />
                 </span>
                 <span className="w-full truncate text-center">None</span>
@@ -855,7 +855,7 @@ function Anim({ it }: { it: TextItem }) {
                 >
                   <span
                     className={cn(
-                      "bg-backdrop in-aria-pressed:ring-primary relative grid aspect-square w-full place-items-center rounded-md ring-1 ring-white/6 group-hover:ring-white/20 in-aria-pressed:ring-2",
+                      "bg-backdrop in-aria-pressed:ring-primary ring-hairline-subtle group-hover:ring-hairline-strong relative grid aspect-square w-full place-items-center rounded-md ring-1 in-aria-pressed:ring-2",
                     )}
                   >
                     <VoiceBadge fx={x} shape={shape} kind={it.kind} />

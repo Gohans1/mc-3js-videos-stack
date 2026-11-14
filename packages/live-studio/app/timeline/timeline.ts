@@ -465,7 +465,7 @@ const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: num
   if (!r) return;
   const x0 = Math.max(-2, X(r[0])),
     x1 = Math.min(w + 2, X(r[1]));
-  g.fillStyle = "rgba(0,0,0,.55)";
+  g.fillStyle = tone("scrim");
   if (x0 > 0) g.fillRect(0, 0, x0, h);
   if (x1 < w) g.fillRect(x1, 0, w - x1, h);
   g.fillStyle = tone("in-out");

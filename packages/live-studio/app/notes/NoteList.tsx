@@ -566,7 +566,7 @@ export function NoteStatusStrip({
             className={cn(
               "focus-visible:ring-ring studio-press text-tag flex min-h-6 cursor-pointer items-center justify-center gap-1 rounded-md px-1 font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 pointer-coarse:min-h-8",
               active
-                ? "bg-secondary text-foreground font-semibold shadow-xs ring-1 ring-white/12"
+                ? "bg-secondary text-foreground ring-hairline font-semibold shadow-xs ring-1"
                 : "text-label hover:bg-muted/45 hover:text-foreground",
             )}
           >
@@ -886,7 +886,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
               {ix.check.length > 0 && (
                 <span
                   aria-hidden
-                  className="bg-warn text-tag ms-0.5 rounded-full px-1.5 leading-4 font-semibold text-black tabular-nums"
+                  className="bg-warn text-tag text-warn-foreground ms-0.5 rounded-full px-1.5 leading-4 font-semibold tabular-nums"
                 >
                   {ix.check.length}
                 </span>

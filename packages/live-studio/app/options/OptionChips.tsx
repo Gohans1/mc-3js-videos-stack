@@ -15,7 +15,7 @@ function Chip({ group: g, range }: { group: GroupView; range: [number, number] }
     <div
       role="group"
       aria-label={`${g.title}, ${rangeText(range)}`}
-      className="upright:px-1 upright:pt-0.75 upright:pb-1 pointer-events-auto max-w-full flex-none rounded-lg bg-black/62 px-1.5 pt-1 pb-1.5"
+      className="upright:px-1 upright:pt-0.75 upright:pb-1 bg-scrim pointer-events-auto max-w-full flex-none rounded-lg px-1.5 pt-1 pb-1.5"
     >
       <p
         title={`${g.title}: ${now.title}`}

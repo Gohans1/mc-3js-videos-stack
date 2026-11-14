@@ -104,7 +104,7 @@ function ReviewScrubBar() {
   return (
     <div
       ref={barRef}
-      className="flex flex-col gap-0.5 border-b border-white/6 px-3 pt-2 pb-1"
+      className="border-hairline-subtle flex flex-col gap-0.5 border-b px-3 pt-2 pb-1"
       aria-label="Review playback scrub"
     >
       <div className="flex items-center justify-between gap-2 text-xs tabular-nums">
@@ -179,7 +179,7 @@ function ReviewScrubBar() {
           e.stopPropagation();
         }}
       >
-        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-white/14">
+        <div className="bg-scrubber-track absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full">
           <div className="bg-primary h-full w-[calc(var(--at,0)*100%)]" />
         </div>
         {SHOTS_OUT.map(
@@ -189,7 +189,7 @@ function ReviewScrubBar() {
                 key={`cut-${i}`}
                 aria-hidden
                 style={{ "--x": `${(s.t / total) * 100}%` }}
-                className="pointer-events-none absolute top-1/2 left-(--x) h-2.5 w-px -translate-x-1/2 -translate-y-1/2 bg-white/25"
+                className="bg-scrubber-tick pointer-events-none absolute top-1/2 left-(--x) h-2.5 w-px -translate-x-1/2 -translate-y-1/2"
               />
             ),
         )}
@@ -200,7 +200,11 @@ function ReviewScrubBar() {
             style={{ "--x": `${(m.t / total) * 100}%` }}
             className={cn(
               "pointer-events-none absolute top-1/2 left-(--x) -translate-x-1/2 -translate-y-1/2 rounded-full",
-              m.done ? "h-1.5 w-1 bg-white/25" : m.check ? "bg-warn h-3.5 w-1" : "bg-ink h-3.5 w-1",
+              m.done
+                ? "bg-scrubber-tick h-1.5 w-1"
+                : m.check
+                  ? "bg-warn h-3.5 w-1"
+                  : "bg-ink h-3.5 w-1",
             )}
           />
         ))}
@@ -208,7 +212,7 @@ function ReviewScrubBar() {
           <span
             aria-hidden
             style={{ "--x": `${hover.pct}%` }}
-            className="pointer-events-none absolute top-1/2 left-(--x) h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-white/55"
+            className="bg-playhead pointer-events-none absolute top-1/2 left-(--x) h-4 w-px -translate-x-1/2 -translate-y-1/2"
           />
         )}
         <span

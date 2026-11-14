@@ -216,7 +216,7 @@ const snapshot = (pin: Pin | null | undefined, at: number, marks: Mark[] = []) =
     g.beginPath();
     g.arc(pin.x * w, pin.y * h, 14, 0, 7);
     g.stroke();
-    g.strokeStyle = "#000";
+    g.strokeStyle = tone("stage");
     g.lineWidth = 1;
     g.beginPath();
     g.arc(pin.x * w, pin.y * h, 16, 0, 7);
@@ -224,9 +224,9 @@ const snapshot = (pin: Pin | null | undefined, at: number, marks: Mark[] = []) =
   }
   g.font = "bold 24px Consolas,monospace";
   g.textAlign = "right";
-  g.fillStyle = "rgba(0,0,0,.7)";
+  g.fillStyle = tone("scrim-strong");
   g.fillRect(w - 170, 8, 162, 34);
-  g.fillStyle = "#fff";
+  g.fillStyle = tone("picture");
   g.fillText(stamp(at), w - 16, 33);
   return c.toDataURL("image/jpeg", 0.85);
 };
@@ -263,11 +263,11 @@ const momentStrip = (at: number) => {
   STRIP.forEach((d, i) => {
     const x = Math.min(Math.max(0, at + d), DURATION - 0.02);
     g.drawImage(shownAt(x), i * w, 0, w, h);
-    g.fillStyle = "rgba(0,0,0,.7)";
+    g.fillStyle = tone("scrim-strong");
     g.fillRect(i * w + 4, 4, 128, 28);
-    g.fillStyle = d === 0 ? tone("primary") : "#fff";
+    g.fillStyle = d === 0 ? tone("primary") : tone("picture");
     g.fillText(stamp(x), i * w + 8, 25);
-    g.fillStyle = "#000";
+    g.fillStyle = tone("stage");
     g.fillRect(i * w, 0, 2, h);
   });
   return c.toDataURL("image/jpeg", 0.8);

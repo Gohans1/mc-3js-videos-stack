@@ -65,10 +65,10 @@ export const noteSurfaceClass = (
 ): string => {
   const base =
     state === "check"
-      ? "border-warn/35 bg-[color-mix(in_srgb,var(--warn-bg)_48%,var(--card))] hover:border-warn/55 hover:bg-[color-mix(in_srgb,var(--warn-bg)_65%,var(--card))]"
+      ? "border-warn/35 bg-warn-card hover:border-warn/55 hover:bg-warn-card-hover"
       : state === "done"
-        ? "border-white/[0.06] bg-background/60 text-foreground/80 hover:border-white/[0.12] hover:bg-card/55"
-        : "border-white/[0.08] bg-card/90 hover:border-white/[0.16] hover:bg-card";
+        ? "border-hairline-subtle bg-background/60 text-foreground/80 hover:border-hairline hover:bg-card/55"
+        : "border-hairline bg-card/90 hover:border-hairline-strong hover:bg-card";
   const ring = opts?.editing
     ? "border-warn/85 ring-1 ring-warn/30"
     : opts?.near && state === "open"
@@ -121,7 +121,8 @@ export function NoteStatusGlyph({
         : needsWork
           ? MessageSquarePlus
           : CircleDot;
-  const color = state === "check" ? "text-warn" : state === "done" ? "text-ok-text" : "text-primary";
+  const color =
+    state === "check" ? "text-warn" : state === "done" ? "text-ok-text" : "text-primary";
   return <Icon aria-hidden className={cn("size-3.5 shrink-0", color, className)} />;
 }
 
@@ -196,7 +197,7 @@ export function NoteTimeChip({
         goToNote(note);
       }}
       className={cn(
-        "text-primary/95 hover:bg-primary/12 hover:text-primary hover:border-primary/40 focus-visible:ring-ring text-tag inline-flex min-h-5.5 shrink-0 cursor-pointer items-center rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono leading-none font-medium tabular-nums transition-colors outline-none focus-visible:ring-2 pointer-coarse:min-h-9",
+        "text-primary/95 hover:bg-primary/12 hover:text-primary hover:border-primary/40 focus-visible:ring-ring text-tag border-hairline bg-surface-subtle inline-flex min-h-5.5 shrink-0 cursor-pointer items-center rounded border px-1.5 py-0.5 font-mono leading-none font-medium tabular-nums transition-colors outline-none focus-visible:ring-2 pointer-coarse:min-h-9",
         className,
       )}
     >
@@ -650,7 +651,7 @@ export function NoteThumb({
               goToNote(note);
             }}
             className={cn(
-              "group/thumb bg-backdrop hover:outline-primary/85 focus-visible:ring-ring relative flex-none cursor-pointer overflow-hidden rounded-md shadow-xs outline-1 -outline-offset-1 outline-white/12 transition-opacity duration-150 ease-out focus-visible:ring-2",
+              "group/thumb bg-backdrop hover:outline-primary/85 focus-visible:ring-ring outline-hairline relative flex-none cursor-pointer overflow-hidden rounded-md shadow-xs outline-1 -outline-offset-1 transition-opacity duration-150 ease-out focus-visible:ring-2",
               muted && "opacity-75 group-hover/card:opacity-100 hover:opacity-100",
               size === "sm"
                 ? portrait
@@ -674,7 +675,7 @@ export function NoteThumb({
         />
         <span
           aria-hidden
-          className="text-picture/85 group-hover/thumb:text-primary pointer-events-none absolute right-1 bottom-1 flex size-4 items-center justify-center rounded-sm bg-black/65 transition-colors duration-150 group-hover/thumb:bg-black/85"
+          className="text-picture/85 group-hover/thumb:text-primary bg-scrim group-hover/thumb:bg-scrim-strong pointer-events-none absolute right-1 bottom-1 flex size-4 items-center justify-center rounded-sm transition-colors duration-150"
         >
           <ZoomIn className="size-2.5" />
         </span>
@@ -690,11 +691,11 @@ export function NoteThumb({
           <PreviewCard.Popup
             data-note-preview={note.id}
             className={cn(
-              "bg-popover text-popover-foreground shadow-float motion-safe:data-closed:animate-out motion-safe:data-closed:fade-out-0 motion-safe:data-closed:zoom-out-95 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:zoom-in-95 max-w-sm origin-(--transform-origin) overflow-hidden rounded-xl p-1.5 ring-1 ring-white/15 motion-safe:duration-150",
+              "bg-popover text-popover-foreground shadow-float ring-hairline-strong motion-safe:data-closed:animate-out motion-safe:data-closed:fade-out-0 motion-safe:data-closed:zoom-out-95 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:zoom-in-95 max-w-sm origin-(--transform-origin) overflow-hidden rounded-xl p-1.5 ring-1 motion-safe:duration-150",
               portrait ? "w-60" : "w-96",
             )}
           >
-            <div className="bg-backdrop relative overflow-hidden rounded-lg outline-1 -outline-offset-1 outline-white/10">
+            <div className="bg-backdrop outline-hairline relative overflow-hidden rounded-lg outline-1 -outline-offset-1">
               <img
                 src={media.thumb}
                 width={w}

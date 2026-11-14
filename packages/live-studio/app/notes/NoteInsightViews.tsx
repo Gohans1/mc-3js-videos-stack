@@ -113,7 +113,7 @@ function TimelinePillButton({
           : "To fix";
   const toneCls =
     p.state === "check"
-      ? "bg-warn text-black border-warn font-semibold"
+      ? "bg-warn text-warn-foreground border-warn font-semibold"
       : p.state === "done"
         ? "bg-background/85 text-foreground/75 border-ok/35"
         : "bg-tint text-primary border-primary/70";

@@ -196,7 +196,7 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
         ref={bind("peek")}
         aria-hidden
         hidden
-        className="bg-peek pointer-events-none absolute left-0 z-3 w-px -translate-x-px ring-1 ring-black"
+        className="bg-peek ring-stage pointer-events-none absolute left-0 z-3 w-px -translate-x-px ring-1"
       />
       {/* CapCut's snapping line, where a dragged edge meets a mark (snapline.ts) */}
       <div

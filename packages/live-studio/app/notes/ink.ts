@@ -108,7 +108,7 @@ const label = (
   const tw = g.measureText(text).width,
     pad = 3 * scale,
     hh = 15 * scale;
-  g.fillStyle = "rgba(0,0,0,.78)";
+  g.fillStyle = tone("scrim-strong");
   g.fillRect(x, y - hh / 2, tw + pad * 2, hh);
   g.fillStyle = color;
   g.fillText(text, x + pad, y + 0.5);
@@ -158,7 +158,7 @@ export const drawMark = (
   const width = 3 * scale;
   const stroke = (draw: () => void, dashed: boolean) => {
     g.setLineDash(dashed ? [6 * scale, 5 * scale] : []);
-    g.strokeStyle = "rgba(0,0,0,.85)";
+    g.strokeStyle = tone("scrim-strong");
     g.lineWidth = width + 2.5 * scale;
     draw();
     g.stroke();
@@ -191,7 +191,7 @@ export const drawMark = (
       g.setLineDash([]);
       g.beginPath();
       g.arc(x, y, (on ? 6 : 4.5) * scale, 0, 7);
-      g.fillStyle = on ? color : "#000";
+      g.fillStyle = on ? color : tone("stage");
       g.fill();
       g.lineWidth = 2 * scale;
       g.strokeStyle = color;

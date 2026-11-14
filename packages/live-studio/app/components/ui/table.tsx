@@ -76,7 +76,7 @@ function TableRow({
       data-slot="table-row"
       data-tone={tone}
       className={cn(
-        "hover:bg-white/[0.03] has-aria-expanded:bg-white/[0.03] data-[state=selected]:bg-white/[0.05] data-[tone=check]:bg-warn-bg/35 data-[tone=check]:hover:bg-warn-bg/55 data-[tone=open]:hover:bg-white/[0.03] data-[tone=done]:bg-transparent data-[tone=done]:text-foreground/78 data-[tone=done]:hover:bg-white/[0.025] border-b border-white/[0.06] transition-colors duration-150",
+        "hover:bg-surface-subtle has-aria-expanded:bg-surface-subtle data-[state=selected]:bg-surface-selected data-[tone=check]:bg-warn-bg/35 data-[tone=check]:hover:bg-warn-bg/55 data-[tone=open]:hover:bg-surface-subtle data-[tone=done]:text-foreground/78 data-[tone=done]:hover:bg-surface-subtle border-hairline-subtle border-b transition-colors duration-150 data-[tone=done]:bg-transparent",
         className,
       )}
       {...props}
@@ -101,7 +101,10 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       data-slot="table-cell"
-      className={cn("px-2 py-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0", className)}
+      className={cn(
+        "px-2 py-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        className,
+      )}
       {...props}
     />
   );

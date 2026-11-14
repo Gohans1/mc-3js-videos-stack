@@ -21,15 +21,35 @@ import { filmPlugin } from "../src/vite_film.mjs";
 
 const STUDIO_DIR = resolve(import.meta.dir, "..");
 
-const parseHex = (hex) => {
-  const clean = hex.replace("#", "").trim();
-  const n = Number.parseInt(clean, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+const parseColor = (color) => {
+  const s = color.trim();
+  if (s.startsWith("#")) {
+    const clean = s.slice(1);
+    const n = Number.parseInt(clean, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const m = s.match(/^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/);
+  assert.ok(m, `Expected #hex or oklch() color, got: ${color}`);
+  const [L, C, H] = [+m[1], +m[2], (+m[3] * Math.PI) / 180];
+  const a = C * Math.cos(H);
+  const b = C * Math.sin(H);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const mm = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s3 = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const enc = (c) =>
+    Math.round(
+      Math.min(1, Math.max(0, c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055)) * 255,
+    );
+  return [
+    enc(+4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * s3),
+    enc(-1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * s3),
+    enc(-0.0041960863 * l - 0.7034186147 * mm + 1.707614701 * s3),
+  ];
 };
 
-const blendRgba = (fgHex, alpha, bgHex) => {
-  const fg = parseHex(fgHex);
-  const bg = parseHex(bgHex);
+const blendRgba = (fgColor, alpha, bgColor) => {
+  const fg = parseColor(fgColor);
+  const bg = parseColor(bgColor);
   return fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha)));
 };
 
@@ -113,10 +133,15 @@ describe("notes UI primitive tokens and variants", () => {
 
   test("CSS design tokens satisfy WCAG AA (>= 4.5:1) for primary, check, done, ai, and active segments", () => {
     const css = readFileSync(join(STUDIO_DIR, "app/index.css"), "utf8");
-    const token = (name) => {
-      const m = css.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`));
-      assert.ok(m, `Expected CSS variable --${name} in app/index.css`);
-      return m[1];
+    const vars = new Map();
+    for (const m of css.matchAll(/^\s*--([a-z0-9-]+):\s*([^;]+);/gm)) vars.set(m[1], m[2].trim());
+    const token = (name, seen = new Set()) => {
+      assert.ok(!seen.has(name), `Cyclic CSS variable --${name}`);
+      seen.add(name);
+      const val = vars.get(name);
+      assert.ok(val, `Expected CSS variable --${name} in app/index.css`);
+      const ref = val.match(/^var\(--([a-z0-9-]+)\)$/);
+      return ref ? token(ref[1], seen) : val;
     };
 
     const card = token("card");
@@ -136,27 +161,27 @@ describe("notes UI primitive tokens and variants", () => {
     const aiBgOnCard = blendRgba(ai, 0.14, card);
 
     assert.ok(
-      contrastRatio(parseHex(primaryFg), parseHex(primary)) >= 4.5,
-      "Primary foreground on cyan primary must pass WCAG AA",
+      contrastRatio(parseColor(primaryFg), parseColor(primary)) >= 4.5,
+      "Primary foreground on primary must pass WCAG AA",
     );
     assert.ok(
-      contrastRatio(parseHex(warn), parseHex(warnBg)) >= 4.5,
+      contrastRatio(parseColor(warn), parseColor(warnBg)) >= 4.5,
       "Check warn text on warn-bg badge must pass WCAG AA",
     );
     assert.ok(
-      contrastRatio(parseHex(okText), doneBgOnCard) >= 4.5,
+      contrastRatio(parseColor(okText), doneBgOnCard) >= 4.5,
       "Done --ok-text on ok/12 card surface must pass WCAG AA",
     );
     assert.ok(
-      contrastRatio(parseHex(okText), parseHex(bg)) >= 4.5,
+      contrastRatio(parseColor(okText), parseColor(bg)) >= 4.5,
       "Done --ok-text on background must pass WCAG AA",
     );
     assert.ok(
-      contrastRatio(parseHex(aiText), aiBgOnCard) >= 4.5,
+      contrastRatio(parseColor(aiText), aiBgOnCard) >= 4.5,
       "AI --ai-text on ai/14 card surface must pass WCAG AA",
     );
     assert.ok(
-      contrastRatio(parseHex(foreground), parseHex(secondary)) >= 7,
+      contrastRatio(parseColor(foreground), parseColor(secondary)) >= 7,
       "Active segmented pill --foreground on --secondary must pass WCAG AAA",
     );
   });
@@ -432,9 +457,9 @@ describe("notes views & ReviewRoom component rendering", () => {
       assert.ok(activeBtn, `Expected active button for status=${activeStatus}, got:\n${stripHtml}`);
       assert.match(activeBtn, /bg-secondary/);
       assert.match(activeBtn, /text-foreground/);
-      assert.match(activeBtn, /ring-white\/12/);
+      assert.match(activeBtn, /ring-hairline/);
       assert.match(activeBtn, /aria-pressed="true"/);
-      assert.doesNotMatch(stripHtml, /bg-warn text-black/);
+      assert.doesNotMatch(stripHtml, /bg-warn text-warn-foreground/);
       assert.doesNotMatch(stripHtml, /bg-tint text-primary/);
       assert.doesNotMatch(stripHtml, /bg-ok\/18 text-ok/);
       assert.match(stripHtml, /bg-warn/);

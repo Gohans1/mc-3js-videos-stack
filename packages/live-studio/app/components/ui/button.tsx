@@ -25,8 +25,8 @@ const buttonVariants = cva(
         remove: "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
         lit: "text-primary hover:bg-muted/50", // a quiet button whose thing is there now: a key at the playhead, the sound playing
         tool: "text-foreground/80 hover:bg-muted/50 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary", // the bars over the picture
-        picture: "text-picture hover:bg-white/15", // an icon on the film itself
-        scrim: "text-picture bg-black/70 hover:bg-black/85", // a chip on the film itself
+        picture: "text-picture hover:bg-hairline-strong", // an icon on the film itself
+        scrim: "text-picture bg-scrim hover:bg-scrim-strong", // a chip on the film itself
         time: "bg-tint text-primary hover:bg-tint-hover font-mono font-semibold tabular-nums", // a note's time, which seeks there
         "in-out":
           "bg-in-out/18 text-in-out-text hover:bg-in-out/30 hover:text-foreground tabular-nums",
@@ -34,14 +34,14 @@ const buttonVariants = cva(
         favorite:
           "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-pressed:text-favorite", // CapCut's star, yellow when on
         "favorite-tile":
-          "aria-pressed:text-favorite rounded-full bg-black/55 text-white/90 hover:bg-black/70", // the star over an effect's picture
+          "aria-pressed:text-favorite bg-scrim text-picture/90 hover:bg-scrim-strong rounded-full", // the star over an effect's picture
         "favorite-card":
           "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:text-favorite rounded-full", // CapCut's round star well on an audio card
         "card-action":
           "bg-backdrop text-foreground/90 hover:bg-raised-3 hover:text-foreground rounded-full", // CapCut's round + well on an audio card
         cover:
           "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary aria-pressed:ring-primary rounded-md aria-pressed:ring-1", // CapCut's 36px audio cover tile
-        approve: "bg-warn hover:bg-warn/85 font-semibold text-black", // the creator's yes to a fix waiting in yellow (To check)
+        approve: "bg-warn hover:bg-warn/85 text-warn-foreground font-semibold", // the creator's yes to a fix waiting in yellow (To check)
         warn: "border-warn/65 bg-warn-bg/90 text-warn hover:border-warn hover:bg-warn-bg border",
         choice:
           "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary", // one of a list, picked
