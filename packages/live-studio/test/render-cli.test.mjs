@@ -232,3 +232,84 @@ test("render poster draws one frame at the upload's size, no strip under it, and
   assert.equal(probe.stdout.trim(), "png,1920,1080");
   assert.ok(existsSync(join(dir, "renders/still_4s.jpg")), "the draft stills are kept");
 });
+
+// the demo with the vault's Chrome, null without it; a scene that draws `end` seconds
+const chromeFilm = (t, end, conf = {}) => {
+  const chrome = resolve(
+    STUDIO,
+    "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
+  );
+  if (!existsSync(chrome)) return null;
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  const scene = join(dir, "src/scene.ts");
+  writeFileSync(
+    scene,
+    readFileSync(scene, "utf8").replace("const END = 16;", `const END = ${end};`),
+  );
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { chrome: relative(dir, chrome), ...conf } }),
+  );
+  const render = (what, env = {}) =>
+    spawnSync("bun", [RENDER, what], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 180000,
+      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+    });
+  return { dir, render };
+};
+
+test("a render that fails ends on what to do next", (t) => {
+  const film = chromeFilm(t, 16);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const out = film.render("stills", { CHECK: "motion:nope,1,2" });
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(out.stderr, /ERROR no "nope"/);
+  assert.match(out.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
+});
+
+test("render final's captions are named as the upload's picture, never as the draft", (t) => {
+  const film = chromeFilm(t, 1);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const out = film.render("final", { RES: "1080", SAMPLES: "1" });
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.ok(existsSync(join(film.dir, "renders/final_video.srt")), out.stdout);
+  assert.ok(
+    !existsSync(join(film.dir, "renders/draft_video.srt")),
+    "the draft's captions untouched",
+  );
+});
+
+test("a CHUNKS run that joins a chunk drawn before a narration move still says the video is stale", async (t) => {
+  // the mouths follow the narration clips: a scene that reads the sound timeline draws them
+  const film = chromeFilm(t, 40, { soundTimeline: "src/timeline/audio.json" });
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const scene = join(film.dir, "src/scene.ts");
+  writeFileSync(
+    scene,
+    `import sound from "./timeline/audio.json";\nglobalThis.filmSound = sound;\n${readFileSync(scene, "utf8")}`,
+  );
+  mkdirSync(join(film.dir, "src/timeline"));
+  const audio = (at) =>
+    writeFileSync(
+      join(film.dir, "src/timeline/audio.json"),
+      JSON.stringify({ narration: "voice", sfx: [{ name: "voice", at, start: 0, length: 2 }] }),
+    );
+  audio(1);
+  const whole = film.render("clip");
+  assert.equal(whole.status, 0, whole.stdout + whole.stderr);
+  audio(35);
+  const part = film.render("clip", { CHUNKS: "0" });
+  assert.equal(part.status, 0, part.stdout + part.stderr);
+  assert.match(part.stdout, /chunk 1 was drawn before the film's last change/);
+  const { staleVideo } = await import("../src/stale.mjs");
+  assert.match(
+    staleVideo(film.dir, join(film.dir, "renders/draft_video.mp4"))?.message ?? "fresh",
+    /narration clips moved/,
+  );
+});

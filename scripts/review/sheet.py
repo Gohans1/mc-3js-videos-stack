@@ -13,6 +13,7 @@ Seconds are heard seconds: 65, 1:05 or 01:05.250. Worth a look: a note's (bun ru
 a fault's (bun run framecheck), either side of a cut (renders/cuts.json).
 Prints each sheet with the seconds on it; open them to look. Run inside the film."""
 import json
+import math
 import os
 import re
 import shutil
@@ -47,7 +48,7 @@ def cuts_of():
     except ValueError:
         cuts = None
     # a list of film seconds, as render clip writes it; a dict or a string would iterate into cuts nobody made
-    if not isinstance(cuts, list) or not all(type(c) in (int, float) and c >= 0 for c in cuts):
+    if not isinstance(cuts, list) or not all(type(c) in (int, float) and math.isfinite(c) and c >= 0 for c in cuts):
         usage("renders/cuts.json is no list of seconds: bun run render clip writes it again", 1)
     return sorted(cuts)
 

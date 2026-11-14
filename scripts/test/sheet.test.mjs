@@ -226,7 +226,7 @@ test("a second under a thousandth is laid out with the others", (t) => {
 });
 
 test("a cuts.json of anything but a list of seconds is refused, never read as cuts", (t) => {
-  for (const bad of ['{"1": 2}', '"123"', "[1, -2]"]) {
+  for (const bad of ['{"1": 2}', '"123"', "[1, -2]", "[1, Infinity]"]) {
     const sheet = film(t, []);
     writeFileSync(join(sheet.dir, "renders/cuts.json"), bad);
     const r = sheet("renders/draft_video.mp4", "shots");

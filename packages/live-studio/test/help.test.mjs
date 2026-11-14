@@ -25,6 +25,10 @@ test("a film's help names earshot beside its sound commands, and where the guide
     expect(sound).toMatch(
       /\n {2}earshot {2,}ears, its own CLI \(earshot <command> -h\)[^\n]*bun run skills get core --ref sound/,
     );
+    // asked about by the name the list gives it, it is pointed to, never "no command"
+    const one = spawnSync("bun", [HELP, "earshot"], { cwd: dir, encoding: "utf8" });
+    expect(one.status).toBe(0);
+    expect(one.stdout).toMatch(/earshot -h/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

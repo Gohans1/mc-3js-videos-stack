@@ -167,7 +167,8 @@ const RENDERS = join(PROJECT, "renders"),
   OUT = join(PROJECT, `node_modules/.vite/live-studio-render-${process.pid}`); // per run: two renders of one film must not share a build
 
 // The voice's captions at the seconds heard (src/captions.mjs), named as the video so a player picks them up with it
-const writeCaptions = () => {
+const writeCaptions = (video = "draft_video.mp4") => {
+  const name = video.replace(/\.mp4$/, ".srt");
   const map = voiceMapOf(PROJECT),
     edit = join(PROJECT, "src/edit.json");
   if (!existsSync(map)) writeVoiceMap(PROJECT, map);
@@ -196,8 +197,8 @@ const writeCaptions = () => {
   const clock = compileLayerTiming(timing, heard(editData.end ?? duration), "voice");
   const list = cues(mapVoice(narrationLines(lines, audio, duration), clock));
   mkdirSync(RENDERS, { recursive: true });
-  writeFileSync(join(RENDERS, "draft_video.srt"), srt(list));
-  console.log(`wrote renders/draft_video.srt (${list.length} captions)`);
+  writeFileSync(join(RENDERS, name), srt(list));
+  console.log(`wrote renders/${name} (${list.length} captions)`);
 };
 if (what === "captions") {
   writeCaptions();
@@ -749,10 +750,11 @@ if (!failed && chunks) {
       console.log(
         `⚠ ${old.length === 1 ? `chunk ${old[0]} was` : `chunks ${old.join(", ")} were`} drawn before the film's last change and joined as ${old.length === 1 ? "it was" : "they were"}: CHUNKS=${old.join(",")} bun run render ${what} redraws ${old.length === 1 ? "it" : "them"} (bun run render ${what} redraws every chunk not current)`,
       );
-    // the captions go with the joined video; its next: line stays the last one printed
+    // the captions go with the joined video; its next: line stays the last one printed. A chunk joined as it was may show
+    // older mouths: the record of the last whole draw stays, so src/stale.mjs still sees a narration moved since
     if (j.status === 0) {
-      if (seenJson) writeFileSync(join(CHUNKS, "seen-sound.json"), seenJson);
-      writeCaptions();
+      if (seenJson && !old.length) writeFileSync(join(CHUNKS, "seen-sound.json"), seenJson);
+      writeCaptions(JOINED);
     }
     console.log(
       j.status !== 0
@@ -764,4 +766,5 @@ if (!failed && chunks) {
     if (j.status) failed = true;
   }
 }
+if (failed) console.log("next: fix what the ERROR above says, then run the same render again");
 process.exit(failed ? 1 : 0);

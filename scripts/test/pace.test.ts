@@ -140,6 +140,11 @@ test("cuts written by hand out of order are read in order; a negative second is 
   const sorted = paceOn("renders/draft_video.mp4", clip, "[1.5, 0.5]");
   expect(sorted.status).toBe(0);
   expect(sorted.stdout).toMatch(/longest: shot 1 at 0\.50-1\.50 \(1\.00 s\)/);
+  // one cut written twice is one cut, not a shot of no length
+  const twice = paceOn("renders/draft_video.mp4", clip, "[1, 1]");
+  expect(twice.status).toBe(0);
+  expect(twice.stdout).not.toMatch(/\(0\.00 s\)/);
+  expect(twice.stdout).toMatch(/shots: 2, mean 1\.00 s/);
   const negative = paceOn("renders/draft_video.mp4", clip, "[-2]");
   expect(negative.status).toBe(1);
   expect(negative.stderr).toMatch(/renders\/cuts\.json is no list of seconds/);

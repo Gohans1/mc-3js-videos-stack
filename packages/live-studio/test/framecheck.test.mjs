@@ -206,4 +206,6 @@ test("START takes heard seconds as notes print them", (t) => {
   });
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /JUMP 61\.00/);
+  // the commands it hands on read the same seconds only with the same START
+  assert.match(out.stdout.trim().split(/\r?\n/).at(-1), /then START=60 bun run framecheck again$/);
 });

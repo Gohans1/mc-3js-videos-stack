@@ -202,8 +202,8 @@ if (import.meta.main) {
     console.error("renders/cuts.json is no list of seconds: bun run render clip writes it again");
     process.exit(1);
   }
-  // render writes them in order; one edited by hand may not be, and every shot is read from one cut to the next
-  const cuts: number[] = written.toSorted((a: number, b: number) => a - b);
+  // render writes them in order, each once; one edited by hand may not be, and every shot is read from one cut to the next
+  const cuts: number[] = [...new Set<number>(written)].toSorted((a, b) => a - b);
   const stale = staleVideo(PROJECT, video);
   if (stale) console.log(`STALE: ${stale.message}`);
   // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape

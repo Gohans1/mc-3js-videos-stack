@@ -118,6 +118,12 @@ if (asked && !asked.startsWith("-") && asked !== "help") {
     );
     process.exit(0);
   }
+  if (asked === "earshot") {
+    console.log(
+      "earshot is a CLI of its own: earshot -h, and earshot <command> -h for one command",
+    );
+    process.exit(0);
+  }
   console.error(`no command ${asked} here: bun run help lists them`);
   process.exit(2);
 }

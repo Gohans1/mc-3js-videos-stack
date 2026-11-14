@@ -165,6 +165,8 @@ for (const x of faults.slice(0, 12)) {
 }
 if (faults.length > 12) console.log(`${faults.length - 12} more not drawn`);
 // a mixed video (draft.mp4, final.mp4) gets its new picture through the mix again; the upload's picture goes on to deliver
+// a START said by hand goes on with the commands that read the same video's seconds
+const again = process.env.START !== undefined ? `START=${START} ` : "";
 const mixed = /^(draft|final)\.mp4$/.test(basename(video));
 const remix =
   where.final || mixed
@@ -181,11 +183,11 @@ if (faults.length) {
     ? `SPAN=${where.span.join(",")} bun run render clip`
     : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render ${where.final ? "final" : "clip"}${remix}: chunk N is N*30 s on`;
   console.log(
-    `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (${redraw}), then bun run framecheck${videoArg ? ` ${videoArg}` : ""} again`,
+    `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (${redraw}), then ${again}bun run framecheck${videoArg ? ` ${videoArg}` : ""} again`,
   );
 }
 // a clean file is not a good one: what the meter cannot judge is left to the eye
 else
   console.log(
-    `next: the meter judges only faults; look at it yourself: bun run sheet ${videoArg ?? "renders/draft_video.mp4"} ${[0.2, 0.5, 0.8].map((k) => +(START + (k * frames) / fps).toFixed(1)).join(",")}${upload}`,
+    `next: the meter judges only faults; look at it yourself: ${again}bun run sheet ${videoArg ?? "renders/draft_video.mp4"} ${[0.2, 0.5, 0.8].map((k) => +(START + (k * frames) / fps).toFixed(1)).join(",")}${upload}`,
   );

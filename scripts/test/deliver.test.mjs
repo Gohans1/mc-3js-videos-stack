@@ -1,7 +1,15 @@
 // scripts/review/deliver.py: a finished video checked against YouTube's upload spec, each fault with its fix
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -79,6 +87,7 @@ test("each way a file can fail the upload spec is named with the command or sett
     );
   assert.match(r.stdout, /720p/);
   assert.match(r.stdout, /bun run render final/);
+  assert.match(r.stdout.trim().split(/\r?\n/).at(-1), /^next: .*bun run deliver .*bad\.mp4 again/);
 });
 
 test("a picture with no soundtrack is sent to the mix that puts one on it", (t) => {
@@ -213,6 +222,8 @@ test("--youtube re-encodes the seconds asked as YouTube would and measures their
   mkdirSync(join(dir, "renders"));
   const file = join(dir, "renders/final.mp4");
   make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
+  // Python reads Infinity as a number: still no second of the film
+  writeFileSync(join(dir, "renders/cuts.json"), "[1, Infinity]");
   const r = spawnSync("python", [DELIVER, "--youtube", "1-2"], {
     cwd: dir,
     encoding: "utf8",
@@ -221,6 +232,7 @@ test("--youtube re-encodes the seconds asked as YouTube would and measures their
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stderr, /re-encoding 1 s the way YouTube serves it \(AV1 4Mbps, 2560 wide\)/);
   assert.match(r.stdout, /bands \(Netflix CAMBI\)/);
+  assert.match(r.stdout, /renders\/cuts\.json is no list of seconds/);
   // nothing banded in testsrc2's flat colours: the last line still says what comes next
   assert.match(r.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
   const probe = spawnSync(
@@ -237,4 +249,41 @@ test("--youtube re-encodes the seconds asked as YouTube would and measures their
     { encoding: "utf8" },
   );
   assert.match(probe.stdout, /^av1/m);
+});
+
+test("--youtube names the stretch the re-encode bands, its shot, and the picture that shows it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "renders"));
+  // a dark gradient held smooth by a fine grain: the re-encode wipes the grain and leaves the steps
+  const ff = spawnSync("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "gradients=s=2560x1440:c0=0x0a0c10:c1=0x1c2028:x0=0:y0=0:x1=2560:y1=0:d=1:r=30,noise=alls=4:allf=t",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "16",
+    "-pix_fmt",
+    "yuv420p",
+    join(dir, "renders/final.mp4"),
+  ]);
+  assert.equal(ff.status, 0, String(ff.stderr));
+  // a film of one shot: render writes no cut at all
+  writeFileSync(join(dir, "renders/cuts.json"), "[]");
+  const r = spawnSync("python", [DELIVER, "--youtube", "0-1"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 120000,
+  });
+  // no sound is a FIX of its own
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /BANDS 0-1 s, shot 0 \(renders\/cuts\.json\): the re-encode scores/);
+  assert.ok(existsSync(join(dir, "renders/youtube_bands_0s.png")), r.stdout);
+  assert.match(r.stdout.trim().split(/\r?\n/).at(-1), /^next: bun run at 0 names the shot/);
 });

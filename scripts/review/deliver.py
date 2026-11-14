@@ -15,6 +15,7 @@ asks that; ffmpeg's AAC lands under it on purpose, so the rate is shown, not jud
 as the picture, -14 LUFS (YouTube turns louder down, never quieter up) with true peak at -1 dBTP or under.
 Exit 0 ready, 1 something to fix (each FIX line), 2 a wrong word. Why these numbers: bun run skills get core --ref render."""
 import json
+import math
 import os
 import re
 import shutil
@@ -27,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sound"))
 from listen import YOUTUBE, loudness  # noqa: E402
 from seconds import SAY, heard_second, meant  # noqa: E402  (listen puts scripts/ on the path)
 from stale import stale  # noqa: E402
+from studio_tell import job  # noqa: E402
 
 USAGE = "bun run deliver [<video>] [--youtube [<from>-<to>]] (--help for more)"
 SHORTS_LONGEST = 180
@@ -214,7 +216,7 @@ def youtube(video, span, root, named=""):
     start, end = span or (0.0, long)
     if not 0 <= start < end <= long + 0.05:
         print(f"--youtube {start:g}-{end:g} is outside the video: it is {long:.2f} s long", file=sys.stderr)
-        return 2
+        return 2, []
     length = end - start
     width, bitrate = PREVIEW["wide" if pic["width"] >= pic["height"] else "upright"]
     width = min(width, pic["width"])
@@ -248,21 +250,21 @@ def youtube(video, span, root, named=""):
           f"alone scores up to {worst_up:.1f}: CAMBI counts the steps between flat Minecraft tiles too, so that is no fault by itself. "
           "Preview: renders/youtube_preview.mp4")
     cuts_file = root / "renders/cuts.json"
-    cuts = []
+    cuts = None  # no shots known; [] is a film of one shot
     if cuts_file.exists() and video.resolve().parent == out.resolve():
         try:
             cuts = json.loads(cuts_file.read_text(encoding="utf8"))
         except ValueError:
             cuts = None
         # a dict or a string would iterate into cuts nobody made
-        if not isinstance(cuts, list) or not all(type(c) in (int, float) and c >= 0 for c in cuts):
-            cuts = []
+        if not isinstance(cuts, list) or not all(type(c) in (int, float) and math.isfinite(c) and c >= 0 for c in cuts):
+            cuts = None
             print("renders/cuts.json is no list of seconds: the bands are named without their shots (bun run render clip writes it again)")
     peaks = [max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0)) for a, b in spans]
     for (a, b), peak in zip(spans[:6], peaks):
         picture = out / f"youtube_bands_{peak}s.png"
         band_picture(video, preview, peak, picture, start, min(end, long) - 1 / (rate(pic) or 30))
-        shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts else ""
+        shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts is not None else ""
         print(f"BANDS {a}-{b + 1} s{shot}: the re-encode scores {after[peak]:.1f} where the upload has {before.get(peak, 0.0):.1f}; "
               f"look: {picture.relative_to(root)} (top: upload | re-encode, bottom: the same with small steps of light x16)")
     if len(spans) > 6:
@@ -278,7 +280,7 @@ def youtube(video, span, root, named=""):
     else:
         print("the re-encode adds no bands a viewer would notice")
         print("next: watch renders/youtube_preview.mp4 yourself: the meter counts only bands")
-    return 0
+    return 0, [(a, b + 1) for a, b in spans]
 
 
 def main(args):
@@ -336,6 +338,8 @@ def main(args):
     if span and span[1] > long + 0.05:
         print(f"--youtube {span[0]:g}-{span[1]:g} runs past the video's end: it is {long:.2f} s long", file=sys.stderr)
         return 2
+    through = " and through YouTube's re-encode" if preview else ""
+    ended = job(root, "deliver", f"Checking {video.as_posix()} for upload{through}")
     summary, found = check(video, info)
     if old := stale(video):
         found.insert(0, ("FIX", old))
@@ -344,17 +348,27 @@ def main(args):
         print(f"{kind} {words}")
     fixes = sum(kind == "FIX" for kind, _ in found)
     if fixes:
-        print(f"{fixes} to fix before upload; bun run deliver {video} again after")
+        print(f"{fixes} to fix before upload")
     else:
         print("ready to upload" + (" (the ADVICE lines are worth a look)" if found else ""))
     # sound alone has no picture to re-encode: its FIX line already says so
+    bands = []
     if preview and any(s["codec_type"] == "video" for s in info["streams"]):
-        code = youtube(video, span, root, f"{video} " if named else "")
+        code, bands = youtube(video, span, root, f"{video} " if named else "")
         if code:
+            ended(f"Stopped checking {video.as_posix()}", level="fail")
             return code
-    elif not fixes:
+    elif fixes:
+        print(f"next: each FIX line says its fix; then bun run deliver {video} again")
+    else:
         print(f"next: bun run deliver {f'{video} ' if named else ''}--youtube shows how it looks after YouTube's re-encode and where it "
               f"bands (about {max(10, long * 3):.0f} s here{'; a few seconds judge it as well: --youtube <from>-<to>' if long > 60 else ''})")
+    # a whole film's seconds are the studio's; a chunk's or a span's start elsewhere, so their bands are named, not lit
+    whole = video.name in ("final.mp4", "final_video.mp4", "draft.mp4", "draft_video.mp4")
+    ended(f"{video.as_posix()}: {fixes} to fix before upload" if fixes else
+          f"{video.as_posix()}: ready to upload" + (f"; YouTube's re-encode bands {len(bands)} stretch{'es' if len(bands) > 1 else ''}" if bands else ""),
+          level="fail" if fixes else "warn" if bands else "ok",
+          **({"marks": [{"at": a, "to": b, "say": "BANDS after YouTube's re-encode"} for a, b in bands]} if whole and bands else {}))
     return 1 if fixes else 0
 
 
