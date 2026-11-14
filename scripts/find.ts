@@ -1031,10 +1031,28 @@ const MOCAP_COLUMNS =
 // Postures the catalogue measured (stand, kneel, sitFloor ...) and the hint that lists them
 const postures = (pool: Entry[]) =>
   [...new Set(pool.flatMap((x) => (x.kind === "mocap" ? (x.data?.seq ?? []) : [])))].toSorted();
-// show: name --show too, where no other line of the answer does
-const mocapNext = (pool: Entry[], show = true) => {
+// show: name --show too, where no other line of the answer does; used: the options already given, never offered again
+const mocapNext = (pool: Entry[], show = true, used: string[] = []) => {
   const ps = postures(pool.filter((x) => x.kind === "mocap")).join(" ");
-  return `mocap: ${show ? "one clip in full (its timeline, where it leaves him): bun run find --show <id>. By body" : "clips by body"}, any mix: --from|--to|--has <posture>${ps ? ` (${ps})` : ""}, --still|--moves, --loop, --dur 1-6, --energy 10-40, a hand --head|--up|--ground, --bend, --air yes|no, --look 45, --mood <m>, --prop <p> (clips checked by eye; --mood or --prop alone lists them), --fights (weapons, left out by default)`;
+  const left = (flags: string[], after = "") => {
+    const fs = flags.filter((f) => !used.includes(f));
+    return fs.length ? [`${fs.join("|")}${after}`] : [];
+  };
+  const offer = [
+    ...left(["--from", "--to", "--has"], ` <posture>${ps ? ` (${ps})` : ""}`),
+    ...left(["--still", "--moves"]),
+    ...left(["--loop"]),
+    ...left(["--dur"], " 1-6"),
+    ...left(["--energy"], " 10-40"),
+    ...left(["--head", "--up", "--ground"]).map((f) => `a hand ${f}`),
+    ...left(["--bend"]),
+    ...left(["--air"], " yes|no"),
+    ...left(["--look"], " 45"),
+    ...left(["--mood"], " <m>"),
+    ...left(["--prop"], " <p> (clips checked by eye; --mood or --prop alone lists them)"),
+    ...left(["--fights"], " (weapons, left out by default)"),
+  ];
+  return `mocap: ${show ? "one clip in full (its timeline, where it leaves him): bun run find --show <id>. By body" : "clips by body"}, any mix: ${offer.join(", ")}`;
 };
 // earshot rank over the files a list shows: the first few, as each call takes ~40 s whatever their number
 const HEAR_MAX = 8;
@@ -1746,7 +1764,7 @@ export async function run(
     try {
       const said = await clips([...args, "-n", `${n}`]);
       if (/^0 matches/m.test(said))
-        return `${said}\nnext: no clip passes every word and filter together (${args.join(" ")}). Drop one filter or widen a range (--energy, --dur), then add it back; words match from a word start in the clip's name and description.\n      by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"\n      ${mocapNext(clipPool)}\n      none fits: ${MAKE_MOCAP}`;
+        return `${said}\nnext: no clip passes every word and filter together (${args.join(" ")}). Drop one filter or widen a range (--energy, --dur), then add it back; words match from a word start in the clip's name and description.\n      by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"\n      ${mocapNext(clipPool, true, [...set.keys()])}\n      none fits: ${MAKE_MOCAP}`;
       // catalog.py prints a clip per unindented line, its FLAW (a fault seen by eye) on an indented one under it
       const rows = said.split("\n").filter((l) => /^\S+\/\S+\s/.test(l)).length,
         flawed = said.split("\n").filter((l) => /^\s+FLAW:/.test(l)).length;
@@ -1754,7 +1772,7 @@ export async function run(
         rows && flawed === rows
           ? `every clip shown has a FLAW seen by eye: none is clean as it is. Drop or loosen a filter (--mood, --to, --from, --dur) for a clean one, or by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"; else ${MAKE_MOCAP}\n      `
           : "";
-      return `${said}\n\n${MOCAP_COLUMNS}\nwhere (in ${timelineDir()}/): ${USE.mocap}\nnext: ${allFlawed}${mocapNext(clipPool)}`;
+      return `${said}\n\n${MOCAP_COLUMNS}\nwhere (in ${timelineDir()}/): ${USE.mocap}\nnext: ${allFlawed}${mocapNext(clipPool, true, [...set.keys()])}`;
     } catch (err) {
       return `the mocap catalogue failed: ${(err as Error).message}. Words alone still work: bun run find --kind mocap <words>`;
     }
@@ -2055,7 +2073,9 @@ export async function run(
           ...(some.some((x) => x.kind === "bgm") ? [BGM_MOOD, MC_MUSIC_NOTE] : []),
           `next: ${cut ? `search inside: bun run find <word>${filters} (a word from "named by")${inKinds.length <= LIST_ALL ? `; all ${inKinds.length}: -n ${inKinds.length}` : ""}` : `bun run find <words>${filters} searches these`}; one in full: bun run find --show <id>`,
           `      ${jevHere}`,
-          ...(some.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool, false)}`] : []),
+          ...(some.some((x) => x.kind === "mocap")
+            ? [`      ${mocapNext(pool, false, [...set.keys()])}`]
+            : []),
           ...(files.length > 1 && files.length <= 20
             ? [`      ${hearThem("<what it should sound or feel like>", files)}`]
             : []),
@@ -2103,7 +2123,9 @@ export async function run(
         `next: one category: bun run find --kind ${example ?? "<kind>/<category>"}${sources ? ` --source ${sources.join(",")}` : ""}`,
         `      search inside it: bun run find <english words> --kind ${example ?? "<kind>/<category>"}; one in full: bun run find --show <id>`,
         `      by meaning inside one (Jev, paid): bun run find --jev --kind ${example ?? "<kind>/<category>"} "<the scene or feeling>"`,
-        ...(inKinds.some((x) => x.kind === "mocap") ? [`      ${mocapNext(pool, false)}`] : []),
+        ...(inKinds.some((x) => x.kind === "mocap")
+          ? [`      ${mocapNext(pool, false, [...set.keys()])}`]
+          : []),
         ...(favsLine ? [`      ${favsLine}`] : []),
       ].join("\n"),
     );
@@ -2227,15 +2249,18 @@ export async function run(
             voted.splice(voted.indexOf(bestFit!), 1);
             voted.unshift(bestFit!);
           }
-          out.push(
-            `Jev voted among ${jevPool.length} ${kinds?.length ? "entries" : "word matches (add --kind to vote over a whole kind)"}; first column = its share of the vote${checked.length ? `, then "fits" = its own yes/no that the entry is what you asked for (0-1)` : ""}${voted.length < Math.min(n, jevPool.length) ? `; the other ${jevPool.length - voted.length} got none` : ""}.`,
-          );
-          shown = voted
+          // the ones Jev says are not what was asked say nothing, but the first stays: a miss still shows the nearest
+          const kept = voted
             .slice(0, n)
-            .map(([p, x, f]) => [
-              `${p.toFixed(2)}  ${f === undefined ? "" : `fits ${f.toFixed(2)}  `}`,
-              x,
-            ]);
+            .filter(([, , f], i) => i === 0 || f === undefined || f >= FIT_NO);
+          const left = Math.min(n, voted.length) - kept.length;
+          out.push(
+            `Jev voted among ${jevPool.length} ${kinds?.length ? "entries" : "word matches (add --kind to vote over a whole kind)"}; first column = its share of the vote${checked.length ? `, then "fits" = its own yes/no that the entry is what you asked for (0-1)` : ""}${voted.length < Math.min(n, jevPool.length) ? `; the other ${jevPool.length - voted.length} got none` : ""}${left ? `; ${left} it says are not it are left out` : ""}.`,
+          );
+          shown = kept.map(([p, x, f]) => [
+            `${p.toFixed(2)}  ${f === undefined ? "" : `fits ${f.toFixed(2)}  `}`,
+            x,
+          ]);
           const best = Math.round((voted[0]?.[0] ?? 0) * 100);
           const fit = bestFit?.[2];
           rejected = fit !== undefined && fit < FIT_NO;
@@ -2455,7 +2480,7 @@ export async function run(
       kindNames?.includes("mocap") ||
       shown.filter(([, x]) => x.kind === "mocap").length * 2 > shown.length
     )
-      next.push(mocapNext(pool, false));
+      next.push(mocapNext(pool, false, [...set.keys()]));
   }
   if (fav && listsLine && shown.length) next.push(listsLine);
   if (favsLine) next.push(favsLine);

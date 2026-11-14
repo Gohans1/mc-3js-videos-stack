@@ -1154,6 +1154,40 @@ test("music Jev rejects points to making music, not to the rejects or to other k
   expect(out).not.toMatch(/sfx:get|outside --kind|--kind sound|--show <id>|earshot rank/);
 });
 
+test("the mocap filters offered next leave out the ones already given", async () => {
+  const clips = () => Promise.resolve("mixamo/Sit_1  2.0s  stand>sitFloor");
+  const sit = {
+    ...e("mixamo/Sit_1", "Sit", "sits down", "mocap", "stand"),
+    src: "mixamo",
+    data: { seq: ["stand", "sitFloor"] },
+  };
+  const out = await run(
+    ["sit", "--from", "stand", "--to", "sitFloor"],
+    [...vault, sit],
+    noJev,
+    clips,
+  );
+  const offer = out.split("\n").find((l) => l.includes("any mix:"))!;
+  expect(offer).not.toMatch(/--from|--to\b/);
+  expect(offer).toMatch(/--has <posture>/);
+});
+
+test("hits Jev says are not what was asked are left out, but the best of them stays", async () => {
+  const pool = ["a", "b", "c"].map((k) => e(`door-${k}`, `Door ${k}`, "door", "sfx", "foley"));
+  const fits: Record<string, number> = { "door-a": 0.9, "door-b": 0.5, "door-c": 0.1 };
+  const jev = (_: string, xs: Entry[]) =>
+    Promise.resolve(xs.map((x): [number, Entry, number] => [fits[x.id]!, x, fits[x.id]!]));
+  const out = await run(["--jev", "--kind", "sfx", "a door"], pool, jev);
+  expect(out).toMatch(/door-a/);
+  expect(out).toMatch(/door-b/);
+  expect(out).not.toMatch(/door-c/);
+  const none = (_: string, xs: Entry[]) =>
+    Promise.resolve(xs.map((x): [number, Entry, number] => [fits[x.id]!, x, 0.1]));
+  const miss = await run(["--jev", "--kind", "sfx", "a door"], pool, none);
+  expect(miss).toMatch(/0\.90 +fits 0\.10 .*door-a/);
+  expect(miss).not.toMatch(/door-b|door-c/);
+});
+
 test("a stray clip among sounds brings no body filters along", async () => {
   const out = await run(["walking", "door"], [...vault, walk], noJev);
   expect(out).not.toMatch(/--from\|--to/);
