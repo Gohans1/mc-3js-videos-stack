@@ -119,7 +119,7 @@ const oneLine = (n) => {
 const STATE_HEAD = { open: "", check: " (WAITS FOR THE CREATOR'S CHECK)", done: " (DONE)" };
 const SCOPE = { film: "this film", all: "every film" };
 const LESSONS_HERE = relative(ROOT, LESSONS).replaceAll("\\", "/");
-const LEARN = `keep it as a rule that outlives this chat, in code where you can (a default, or a check that fails), else in ${LESSONS_HERE}/<topic>.md, shared by every film (a ## heading that is the rule itself); a this-film rule stays in this film's src; then`;
+const LEARN = `keep it as a rule that outlives this chat, in code where you can (a default, or a check that fails), else in ${LESSONS_HERE}/<topic>.md, shared by every film; a this-film rule stays in this film's src; then`;
 const toLearn = (n) => n.remember && !(n.learned && n.learned.at >= n.remember.at);
 
 const lessonLines = (l) =>
@@ -127,12 +127,9 @@ const lessonLines = (l) =>
     ? []
     : l.why
       ? [`lessons: Jev did not run (${l.why}); the files are in ${LESSONS_HERE}/`]
-      : l.picks.length
-        ? l.picks.map(
-            (p) =>
-              `lesson: ${relative(ROOT, join(LESSONS, "..", p.path)).replaceAll("\\", "/")} (${p.lines} lines) ${p.title}`,
-          )
-        : [`lessons: none in ${LESSONS_HERE}/ is about this note (Jev)`];
+      : l.paths.map(
+          (p) => `lesson: ${relative(ROOT, join(LESSONS, "..", p)).replaceAll("\\", "/")}`,
+        );
 
 const detail = (n, showCam, lessons) => {
   const c = n.context;
@@ -208,8 +205,8 @@ const detail = (n, showCam, lessons) => {
 const HELP = `The creator's notes from the studio, for the AI about to act on them. Run inside the film.
   bun run notes                 the open notes, one line each, in the order written (#1 first)
   bun run notes ID [ID ...]     everything about those notes (ID: the id, as mw6hr1fm, or the number, as 3 or #3): where
-                                they tapped, the words, the actions, the version, pictures, and the lesson files
-                                (lessons/ at the repo root) Jev says the note needs
+                                they tapped, the words, the actions, the version, pictures, and the files of
+                                lessons/ (the repo root) Jev says the note needs
   bun run notes --shot 3        everything about one shot's open notes
   --done                        fixed notes too            --cam   the camera line too
 A fixed note waits for the creator's check in the studio; their answer brings it back here with their words.

@@ -28,7 +28,7 @@ const judgeBy =
     );
   };
 
-test("a note gets the lesson files Jev says it needs, best first, with their size and title, and never a misfit", async () => {
+test("a note gets the paths of the lesson files Jev says it needs, best first, and never a misfit", async () => {
   const { dir, cache } = lessons({
     "hands.md": HANDS,
     "cuts.md": CUTS,
@@ -44,16 +44,14 @@ test("a note gets the lesson files Jev says it needs, best first, with their siz
     cache,
     judge,
   });
-  assert.deepEqual(got.get("a"), {
-    picks: [
-      { path: "lessons/hands.md", lines: 7, title: "Hands" },
-      { path: "lessons/cuts.md", lines: 4, title: "Cuts" },
-    ],
-  });
+  assert.deepEqual(got.get("a"), { paths: ["lessons/hands.md", "lessons/cuts.md"] });
 });
 
-test("Jev reads each file as its path, title and headings, not the whole text", async () => {
-  const { dir, cache } = lessons({ "hands.md": HANDS });
+test("Jev reads each file's path and words, however the file is written", async () => {
+  const { dir, cache } = lessons({
+    "hands.md": HANDS,
+    "free.md": "tay cầm đồ\n\n  phải bám   theo rig\n",
+  });
   let seen;
   await lessonsFor([note("a", "x")], {
     dir,
@@ -61,7 +59,8 @@ test("Jev reads each file as its path, title and headings, not the whole text", 
     judge: (_, pool) => ((seen = pool.map((x) => x.jev)), Promise.resolve([])),
   });
   assert.deepEqual(seen, [
-    "lessons/hands.md: Hands. Hands holding a prop follow the carry rig; Fingers stay on the prop",
+    "lessons/free.md: tay cầm đồ phải bám theo rig",
+    "lessons/hands.md: # Hands ## Hands holding a prop follow the carry rig why ## Fingers stay on the prop why",
   ]);
 });
 
@@ -71,7 +70,7 @@ test("a note read again asks Jev nothing until its words or the lessons change",
     judge = judgeBy({ "lessons/hands.md": 0.9 }, calls);
   await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
   const again = await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
-  assert.equal(again.get("a").picks[0].path, "lessons/hands.md");
+  assert.deepEqual(again.get("a").paths, ["lessons/hands.md"]);
   assert.equal(calls.length, 1);
   await lessonsFor([note("a", "tay lệch quá")], { dir, cache, judge });
   assert.equal(calls.length, 2);
