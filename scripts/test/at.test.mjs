@@ -505,14 +505,17 @@ test("a velocity effect playing is named with its row", (t) => {
       ],
     }),
   );
-  const r = spawnSync("bun", [AT, "2"], {
-    env: { ...process.env, LIVE_PROJECT: dir },
-    encoding: "utf8",
-  });
-  assert.equal(r.status, 0, r.stderr);
+  const said = (at) =>
+    spawnSync("bun", [AT, at], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" })
+      .stdout;
   assert.match(
-    r.stdout,
-    /^velocity: retroZoom, intensity 45, scene 1\.00-3\.00: src\/timeline\/timing\.json velocity\[0\]$/m,
+    said("2"),
+    /^velocity: retroZoom, intensity 45, scene 1\.00-3\.00 \(a hit on its beat plays now\): src\/timeline\/timing\.json velocity\[0\]$/m,
+  );
+  // velocityAt: a hit lasts up to 0.25 s from its beat, nothing before the first beat or between hits
+  assert.match(
+    said("1.2"),
+    /^velocity: retroZoom, .*\(no hit on this frame: it hits at its beats\)/m,
   );
 });
 
@@ -768,5 +771,66 @@ test("a draft's cut is in --json too, and said to be the last render's when the 
   assert.match(
     r.stdout,
     /^cut 0 at 4\.00 heard, into shot 1 \(renders\/cuts\.json is older than src\/[^ ]+: numbered as the last render cut it; bun run render clip writes it again\)/m,
+  );
+});
+
+test("a second said with an s (4.1s) is a second, as every other film command takes it", (t) => {
+  const r = spawnSync("bun", [AT, "4.1s"], {
+    env: { ...process.env, LIVE_PROJECT: film(t) },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^00:04\.100 heard/);
+});
+
+test("the draft's cut is the nearest one, and a cuts.json that is no list is said, never a stack trace", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "renders"));
+  const run = () =>
+    spawnSync("bun", [AT, "4.1", "--json"], {
+      env: { ...process.env, LIVE_PROJECT: dir },
+      encoding: "utf8",
+    });
+  writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([3.85, 4.15]));
+  assert.equal(JSON.parse(run().stdout).cut.index, 1);
+  writeFileSync(join(dir, "renders/cuts.json"), "{}");
+  const r = run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).cut, null);
+});
+
+test("takes not laid on the film yet are said where no narration plays, so none is made again", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+  writeFileSync(join(dir, "voice/takes/01.mp3"), "");
+  const r = spawnSync("bun", [AT, "4.1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.match(
+    r.stdout,
+    /^narration: silent here .*; voice\/takes has audio not on the film yet: bun run voice:assemble lays it/m,
+  );
+});
+
+test("a film's own transition is not called unknown, and one far from this second is not near", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      { t: 0, name: "a" },
+      { t: 4, name: "b", transition: { fx: "myWipe", len: 0.5 } },
+      { t: 12, name: "c", transition: { fx: "dissolve", len: 0.5 } },
+    ]),
+  );
+  writeFileSync(join(dir, "src/scene.ts"), 'makeTransitions(r, f, [{ id: "myWipe", glsl: "" }]);');
+  const cuts = whatsAt(dir, 4.5).cuts;
+  assert.deepEqual(
+    cuts.map((c) => [c.fx, c.own]),
+    [["myWipe", true]],
   );
 });

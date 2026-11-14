@@ -1,7 +1,7 @@
 // bun run at <second>: everything the film has at one heard second, each with the file and row that holds it. Every
 // timeline is read through its own clock as the studio plays it (src/timing-state.mjs): shots in narration seconds
 // (fromSource), camera and key files in scene seconds (before Speed/Freeze), sound/text/adjust through their layer clocks.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +14,7 @@ import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
 import { noteState, wholeNote } from "../packages/live-studio/src/note-state.mjs";
 import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
 import { staleVideo } from "../packages/live-studio/src/stale.mjs";
+import { tell } from "../packages/live-studio/src/tell.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
 import { transitionAvailable } from "../packages/live-studio/src/timing-effects.mjs";
 import {
@@ -29,6 +30,7 @@ import {
   freezesOf,
   segmentAt,
 } from "../packages/live-studio/src/timing.mjs";
+import { velocityAt } from "../packages/live-studio/src/velocity.mjs";
 import { warp } from "../packages/live-studio/src/warp.mjs";
 import { buildVoiceCues } from "./voice/cues.ts";
 
@@ -37,6 +39,17 @@ const fmt = (x: number) => x.toFixed(2);
 // as notes, the studio and a draft's strip print a heard second
 const mmss = (t: number) =>
   `${String(Math.floor(t / 60)).padStart(2, "0")}:${(t % 60).toFixed(3).padStart(6, "0")}`;
+
+// every id: "<x>" the film's own code writes (its transitions, anims, shapes), read as text: the code is not run here
+const idsIn = (src: string) => {
+  const out = new Set<string>();
+  if (!existsSync(src)) return out;
+  for (const rel of readdirSync(src, { recursive: true, encoding: "utf8" }))
+    if (/\.[mc]?[jt]sx?$/.test(rel) && statSync(join(src, rel)).isFile())
+      for (const m of readFileSync(join(src, rel), "utf8").matchAll(/\bid:\s*["'`]([^"'`]+)["'`]/g))
+        out.add(m[1]!);
+  return out;
+};
 
 // The film's files and clocks, set up as the studio plays them (setTiming is the studio's own state)
 const filmOf = (dir: string) => {
@@ -163,13 +176,23 @@ export const whatsAt = (dir: string, t: number) => {
             : `freezes[${fi}]`,
           range: freezeRange(timing, timingClock, fi) as [number, number],
         };
+  let ids: Set<string> | undefined;
+  const filmIds = () => (ids ??= idsIn(join(dir, "src")));
   // the velocity effect on the picture here (velocityAt: scene seconds)
   const vi = blank
     ? -1
     : (timing.velocity ?? []).findIndex(
         (v: Row) => v.enabled !== false && v.intensity > 0 && scene >= v.from && scene < v.to,
       );
-  const velocity = vi < 0 ? null : { row: vi, ...timing.velocity[vi] };
+  // it hits at its beats (velocityAt: up to 0.25 s from each), so a frame inside its span may show no hit
+  const velocity =
+    vi < 0
+      ? null
+      : {
+          row: vi,
+          ...timing.velocity[vi],
+          hit: velocityAt([timing.velocity[vi]], scene)?.beatIndex ?? null,
+        };
   const si = blank ? -1 : shots.filter((s) => s.t <= scene).length - 1;
   const shot = si >= 0 ? { ...shots[si]!, to: shots[si + 1]?.t ?? sourceEnd } : null;
   // the transition into shot i plays len/2 either side of its cut, clamped to its neighbours, as film-stage transitionLength
@@ -185,11 +208,15 @@ export const whatsAt = (dir: string, t: number) => {
     );
     if (len <= 0) return null;
     const from = shots[i]!.t - len / 2;
+    // near: within 1 s of it; further off it says nothing about this frame
+    if (scene < from - 1 || scene >= from + len + 1) return null;
+    const builtIn = TRANSITIONS.some((x) => x.id === tr.fx);
     return {
       row: i,
       fx: tr.fx as string,
-      // a film's own fx (makeTransitions' last argument in src/scene.ts) is not readable here: an unknown id may be one
-      builtIn: TRANSITIONS.some((x) => x.id === tr.fx),
+      builtIn,
+      // a film's own fx is makeTransitions' last argument, {id, glsl}: its id written in the film's code
+      own: !builtIn && filmIds().has(tr.fx),
       from,
       to: from + len,
       now: scene >= from && scene < from + len,
@@ -325,11 +352,20 @@ export const whatsAt = (dir: string, t: number) => {
 
   let narration: { line: number; text: string; word?: string; s: number; e: number } | null = null,
     nextLine: number | null = null,
-    voiceFault: string | null = null;
+    voiceFault: string | null = null,
+    // takes made but not laid on the film (none laid, or newer than the voice): voice:assemble, never another voice:gen
+    unlaid = false,
+    unplaced: string[] = [];
   try {
     const cues = buildVoiceCues(dir);
     // a film with no voice lines is silent, not a voice turned off
     voiceOff &&= cues.lines.length > 0;
+    const takes = join(dir, "voice/takes");
+    unlaid =
+      !cues.lines.length &&
+      existsSync(takes) &&
+      readdirSync(takes).some((f) => /\.(mp3|wav)$/.test(f));
+    unplaced = cues.lines.length ? cues.unplaced : [];
     const li = cues.lines.findIndex((l) => l.s <= t && t <= l.e);
     if (li >= 0) {
       const l = cues.lines[li]!;
@@ -396,6 +432,8 @@ export const whatsAt = (dir: string, t: number) => {
     narration,
     narrationMuted,
     voiceOff,
+    unlaid,
+    unplaced,
     nextLine,
     voiceFault,
     script,
@@ -450,7 +488,7 @@ if (isMain) {
   } else if (/^\d+,\d+$/.test(arg)) {
     console.error(`${arg}: seconds take a dot; did you mean bun run at ${arg.replace(",", ".")}?`);
     process.exit(2);
-  } else if (/^[\d.:]+$/.test(arg)) t = secondArg("bun run at", arg);
+  } else if (/^[\d.:]+s?$/.test(arg)) t = secondArg("bun run at", arg);
   else {
     // a note: #N or its id
     let n: ReturnType<typeof noteMoment> = null;
@@ -469,6 +507,11 @@ if (isMain) {
     t = +n.heard.toFixed(6);
     note = n;
   }
+  await tell(film, {
+    say: `Looking at ${mmss(t)}${note ? ` (note #${note.n})` : ""}`,
+    at: t,
+    ...(note ? { notes: [note.id] } : {}),
+  });
   let got: ReturnType<typeof whatsAt>;
   try {
     got = whatsAt(film, t);
@@ -493,12 +536,24 @@ if (isMain) {
   // the cut a draft's sheet numbers (renders/cuts.json, heard seconds, the last bun run render clip's), when this second
   // sits on one; a src file changed since may have moved it
   const cutsFile = join(film, "renders/cuts.json");
-  const cutTimes: number[] = !got.blank && existsSync(cutsFile) ? jsonFile(cutsFile, film) : [];
-  const near = cutTimes.findIndex((s) => Math.abs(s - t) <= 0.3);
+  // not a list of seconds (a broken or hand-made file): no cut is named; bun run render clip writes it again
+  let cutTimes: unknown = [];
+  try {
+    cutTimes = !got.blank && existsSync(cutsFile) ? jsonFile(cutsFile, film) : [];
+  } catch {}
+  const times = Array.isArray(cutTimes) ? cutTimes.filter((s) => typeof s === "number") : [];
+  // the nearest within 0.3 s: two cuts close together are told apart
+  const near = times.reduce(
+    (best: number, s, i) =>
+      Math.abs(s - t) <= 0.3 && (best < 0 || Math.abs(s - t) < Math.abs(times[best]! - t))
+        ? i
+        : best,
+    -1,
+  );
   const cut =
     near < 0
       ? null
-      : { index: near, at: cutTimes[near]!, stale: staleVideo(film, cutsFile)?.file ?? null };
+      : { index: near, at: times[near]!, stale: staleVideo(film, cutsFile)?.file ?? null };
   // asked by a note, that note is the moment itself, not one near it
   const data = { ...all, cut, notes: all.notes.filter((n) => n.id !== note?.id) };
   if (process.argv.includes("--json")) {
@@ -532,7 +587,7 @@ if (isMain) {
   for (const b of got.cuts)
     out.push(
       `  ${b.now ? "in" : "near"} the ${b.fx} transition into shot ${b.row}, scene ${fmt(b.from)}-${fmt(b.to)}: ${shotsFile} [${b.row}].transition${
-        b.builtIn
+        b.builtIn || b.own
           ? ""
           : ` (${b.fx} is no built-in: it plays only if src/scene.ts gives makeTransitions a transition of that id, else the cut is hard)`
       }`,
@@ -554,7 +609,11 @@ if (isMain) {
     );
   if (got.velocity)
     out.push(
-      `velocity: ${got.velocity.effect}, intensity ${got.velocity.intensity}, scene ${fmt(got.velocity.from)}-${fmt(got.velocity.to)}: ${c.timingTimeline ?? "timing.json"} velocity[${got.velocity.row}]`,
+      `velocity: ${got.velocity.effect}, intensity ${got.velocity.intensity}, scene ${fmt(got.velocity.from)}-${fmt(got.velocity.to)} (${
+        got.velocity.hit === null
+          ? "no hit on this frame: it hits at its beats"
+          : "a hit on its beat plays now"
+      }): ${c.timingTimeline ?? "timing.json"} velocity[${got.velocity.row}]`,
     );
   out.push(
     got.voiceOff
@@ -565,8 +624,16 @@ if (isMain) {
           ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
           : got.narration
             ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
-            : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)`,
+            : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)${
+                got.unlaid
+                  ? "; voice/takes has audio not on the film yet: bun run voice:assemble lays it (no new voice:gen)"
+                  : ""
+              }`,
   );
+  if (got.unplaced.length)
+    out.push(
+      `  take${got.unplaced.length > 1 ? "s" : ""} ${got.unplaced.join(", ")} newer than the film's voice: its words sit at the old take's place until bun run voice:assemble`,
+    );
   if (got.script)
     out.push(
       `  script not voiced yet (src/edit.json script_lines, scene ${fmt(got.script.t)}-${fmt(got.script.until ?? got.script.t)}${
