@@ -1170,7 +1170,7 @@ const OWN: Record<string, string> = {
   "shape-voice": VOICE_OWN,
   shape:
     'a mark: makeTitles\' 4th argument in src/scene.ts, shapes: {"<kind>": {title, tip, measure(it, k, W, H) => {w, h}, draw(g, it, m, look)}}, then text.json items[] {"kind": "<kind>", ...}. Built-ins: packages/film-stage/src/titles.ts',
-  font: "a font: {id, title, css, tip} in FONTS (packages/film-stage/src/titles-catalog.ts) plus its @fontsource import at the top of packages/film-stage/src/titles.ts; shared by every film, OFL faces only",
+  font: 'a font: {id, title, css} in fonts of makeTitles\' 4th argument in src/scene.ts, its face loaded there (@font-face or FontFace), then text.json items[].font "<id>"; for every film: FONTS in packages/film-stage/src/titles-catalog.ts plus its @fontsource import in titles.ts (OFL faces only)',
   adjust: MAKE_LOOK,
   velocity:
     'an effect: makeVelocity(renderer, {"<name>": (frame, optics) => a partial CameraOptics}) in src/scene.ts. Built-ins: packages/film-stage/src/velocity.ts',
@@ -1727,7 +1727,7 @@ const valuesOf = (o: string, pool: Entry[]) => {
   if (o === "--dur") return `--dur takes ${DUR_SAYS}. Here: ${durs(pool)}`;
   if (o === "--from" || o === "--to" || o === "--has")
     return `postures: ${postures(clips).join(" ")}`;
-  if (o === "--mood" || o === "--prop")
+  if ((TAGGED as readonly string[]).includes(o))
     return `${o} (only clips checked by eye carry it): ${tagged(o.slice(2), clips)}`;
   if (o === "--show" || o === "--star" || o === "--unstar")
     return "an id: the second column of bun run find <words>";
@@ -1855,15 +1855,30 @@ export async function run(
   };
   const dur = span("--dur");
   span("--energy");
+  if (jev && !query)
+    throw new FindError(
+      `--jev needs the scene in words, e.g. bun run find --jev --kind ${asked?.join(",") ?? "sfx"} "<the scene or feeling>"`,
+    );
   const body = Object.keys(BODY).filter((o) => set.has(o));
-  if (body.length) {
+  // a mocap category is the postures its clips start and end in, so body filters and catalog.py's Jev can take it
+  const clipCat =
+    asked?.length === 1 && asked[0]!.startsWith("mocap/")
+      ? (() => {
+          const clipPool = entriesOf().filter((x) => x.kind === "mocap");
+          const kf = kindFilter(asked, clipPool);
+          if (kf.bad.length) throw new FindError(kf.bad.join("\n"));
+          const [from = "", to = from] = clipPool.find(kf.test)?.cat.split(">") ?? [];
+          return from ? { name: asked[0]!, from, to } : undefined;
+        })()
+      : undefined;
+  if (body.length || (jev && clipCat)) {
     const clipPool = entriesOf().filter((x) => x.kind === "mocap");
     // catalog.py reads the clips' own records, which know no stars: the starred clips are few enough to list
     if (fav)
       throw new FindError(
         `--fav does not combine with the body filters (${body.join(" ")}); the starred clips: bun run find --kind mocap ${favArg} (${clipPool.filter((x) => x.fav).length} of them)`,
       );
-    if (kinds && kinds.join() !== "mocap") {
+    if (kinds && kinds.join() !== "mocap" && !clipCat) {
       const soundy = kinds.some((k) =>
         [...SOUND, "sound"].includes(kindOf(k.split("/")[0]!, clipPool)),
       );
@@ -1876,8 +1891,22 @@ export async function run(
       throw new FindError(
         `${soundOnly.join(" ")} filter${soundOnly.length > 1 ? "" : "s"} sounds; mocap clips have none: drop ${soundOnly.length > 1 ? "them" : "it"} (clips filter by --source and --dur)`,
       );
-    if (jev && !query)
-      throw new FindError(`--jev needs the scene in words, e.g. --jev "he kneels to tie a shoe"`);
+    const libs = [...new Set(clipPool.map((x) => x.src!))];
+    const noClips = sources?.filter((s) => !libs.includes(s));
+    if (noClips?.length)
+      throw new FindError(
+        `--source ${noClips.join(",")} has no mocap clips; clips come from ${libs.join(", ")}`,
+      );
+    for (const [o, want] of clipCat
+      ? ([
+          ["--from", clipCat.from],
+          ["--to", clipCat.to],
+        ] as const)
+      : [])
+      if (set.has(o) && set.get(o) !== want)
+        throw new FindError(
+          `--kind ${clipCat!.name} starts in ${clipCat!.from} and ends in ${clipCat!.to}: drop ${o} ${set.get(o)} or the category`,
+        );
     if (set.has("--still") && set.has("--moves"))
       throw new FindError(
         "--still (stays within 0.3 m) and --moves (goes further) contradict: give one",
@@ -1942,10 +1971,17 @@ export async function run(
       }
       return [o, pose];
     });
-    const libs = sources ? ["--lib", sources.join(",")] : [];
+    const libArg = sources ? ["--lib", sources.join(",")] : [];
     const words = jev ? ["--jev", query] : query.split(/\s+/).filter(Boolean);
     const durArg = dur ? ["--dur", set.get("--dur")!] : [];
-    return noted(await catalogSays([...words, ...args, ...durArg, ...libs], clipPool));
+    const catArgs = clipCat
+      ? (["--from", "--to"] as const).flatMap((o) =>
+          set.has(o) ? [] : [o, o === "--from" ? clipCat.from : clipCat.to],
+        )
+      : [];
+    return noted(
+      await catalogSays([...words, ...args, ...catArgs, ...durArg, ...libArg], clipPool),
+    );
   }
   if (
     !query &&

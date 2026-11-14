@@ -332,7 +332,7 @@ test("every preset's source is the file that writes it, so an agent copying one 
 test("a dead end of a kind with its own make line says that line", async () => {
   const font = { ...e("inter", "Inter", "", "font", ""), src: "film-stage/titles-catalog.ts" };
   const out = await run(["zzqx", "--kind", "font"], [font], noJev);
-  expect(out).toMatch(/FONTS \(packages\/film-stage\/src\/titles-catalog\.ts\)/);
+  expect(out).toMatch(/in fonts of makeTitles' 4th argument in src\/scene\.ts/);
   expect(out).not.toMatch(/the film's own, in src\/scene\.ts/);
 });
 
@@ -421,6 +421,38 @@ test("posture filters go to the mocap catalogue with the words", async () => {
   expect(out).toContain("catalogue rows");
   expect(got).toEqual(
     expect.arrayContaining(["sit", "--from", "stand", "--to", "sitFloor", "--still"]),
+  );
+});
+
+test("a mocap category beside body filters is the postures it starts and ends in", async () => {
+  let got: string[] = [];
+  const clips = (args: string[]) => ((got = args), Promise.resolve("catalogue rows"));
+  await run(["--kind", "mocap/stand-sit-floor", "--still"], [...vault, sitDown], noJev, clips);
+  expect(got).toEqual(expect.arrayContaining(["--from", "stand", "--to", "sitFloor", "--still"]));
+  // by meaning in a category: the catalogue's own Jev, which reads what was checked by eye
+  await run(
+    ["--jev", "he sits", "--kind", "mocap/stand-sit-floor"],
+    [...vault, sitDown],
+    noJev,
+    clips,
+  );
+  expect(got).toEqual(
+    expect.arrayContaining(["--jev", "he sits", "--from", "stand", "--to", "sitFloor"]),
+  );
+  await expect(
+    run(["--kind", "mocap/stand-sit-floor", "--from", "kneel"], [...vault, sitDown], noJev, clips),
+  ).rejects.toThrow(/mocap\/stand-sit-floor starts in stand/);
+});
+
+test("a body filter with a source that has no clips is an error naming the clip sources", async () => {
+  await expect(
+    run(["--from", "stand", "--source", "earshot"], [...vault, sitDown], noJev),
+  ).rejects.toThrow(/clips come from mixamo/);
+});
+
+test("--jev with no words is an error for every kind, not a silent list", async () => {
+  await expect(run(["--jev", "--kind", "transition"], vault, noJev)).rejects.toThrow(
+    /--jev needs the scene in words/,
   );
 });
 
