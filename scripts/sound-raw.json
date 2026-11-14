@@ -586,6 +586,107 @@
           "match": "(?i:foley|cloth|paper|glass|kitchen|cutlery|zipper|latch|creak|printer|abacus|floppy|pulley|knuckle|(?<![a-z])(rips?|tears?|sinks?|shakers?|pours?)(?![a-z])|seatbelt|buckle|ratchet|cash register|cash-register|(?<![a-z])(lids?|box(es)?|trash|doors?|bottles?|plates?|cups?|keys?|bags?|chairs?|drawers?|cabinets?|windows?|locks?|handles?|tools?|wood(en)?|metal(lic)?|plastic|rocks?|stones?|chains?|clocks?|tape|spray|toilet|pens?|carpet|props?|gears?|mechanisms?|pedals?|clutch)(?![a-z]))",
           "category": "foley",
           "for": "a foley handling sound"
+        },
+        { "match": "^PM_BlurryDreams_140", "category": "clicks", "for": "a UI click or button" },
+        {
+          "match": "^PM_BlurryDreams_102",
+          "category": "spells",
+          "for": "a magic spell or sparkle"
+        },
+        {
+          "match": "(?i:(vinyl|needle|record player).*scratch)",
+          "category": "comedy",
+          "for": "a record scratch: the moment stops"
+        },
+        { "match": "(?i:heart ?_?beat)", "category": "foley", "for": "a heartbeat: tension, fear" },
+        {
+          "match": "(?i:(?<!space )(?<![a-z])(horns?|honks?)(?![a-z]))",
+          "category": "foley",
+          "for": "a car or boat horn honk"
+        },
+        {
+          "match": "(?i:(?<![a-z])(skids?|skidding)(?![a-z]))",
+          "category": "foley",
+          "for": "a tire or bike skid"
+        },
+        { "match": "(?i:typewriter)", "category": "typing", "for": "a typewriter" },
+        {
+          "match": "(?i:chewing|(?<![a-z])sips?(?![a-z]))|^(TheWorkRoom Audio Post - Eating|Matt Script - The Mouth)/",
+          "category": "voices",
+          "for": "eating, chewing or sipping"
+        },
+        {
+          "match": "^(Pole Position Production - (Heckler|Saiga)|SoundMorph - INTERVENTION)",
+          "category": "weapons",
+          "for": "a weapon: shot, reload or blade"
+        },
+        {
+          "match": "(?i:^(Pole Position|FLYSOUND|SoundBits - Opel)[^/]*/.*(var_sfx|handbrake|hazard))",
+          "category": "foley",
+          "for": "a vehicle part: hatch, brake, lever or switch"
+        },
+        {
+          "match": "^(Pole Position|FLYSOUND|Sound[Hh]older - (BMW|Volkswagen|Jeep|Cars|Arvor|Brushcutter)|SoundBits - (Mercedes|Opel|Pass-By)|Airborne Sound - (Attack Aircraft|Motorsports|Race Cars|Steam Train|Vehicles|Victory Vegas|Variety 1)|Andrew Vailcross|Matt Script - 2017|Sound of Essen|Sound Spark LLC . Ambisonic|The Chris Alan|Erik Gendron|Audio Shade|Coll Anderson - Music Drive Bys|Rzpost|RZ Post|Chupapsound|3maze - 1960 Cadillac|Bombay Sonic|Carlo Ascrizzi|Membrans|Secret Source|SoundMorph - Road Riders|Game Audio Factory - G4FSFX08|Soundreorganized - Tunturi|Timothy McHugh - Over Head|JC Sound|ShapingWaves - (QUADCOPTER|LETTERPRESS)|Soundiron - Subways|Detunized - PassingTrains|Original Sounds - Docks)",
+          "skip": true
+        },
+        {
+          "match": "^(2496SoundEffects - (Ambisonic City|Surround In the City|Raw Noise)|3maze - (DRONEA|EXT|INT|Urban)|Ambisound - Domestic|Prismo Sound - (Background|Japan)|Sound Spark LLC . (FOREST|Industrial|Nature)|VSCRL FX|The Sound Keeper|George Karagioules - The Source\\.|Borys Peter|Wakerone - Traffic|Sounds Visual - The Sounds of New York|Phil Michalski|Larry Salzman|Airborne Sound - Half & Half|Alexander Kopeikin|Leslie Reid|Sound Ex Machina - Endless|Ben&MacWP|SoundsArchaic|PMSFX - Cinescapes|Bluezone Corporation - KOSMONAUT|MatiasMacSD - (Dare|DELAY|Dodge|INFILTRATION|UNSOLVED|DISTORTED|SURREAL|INFECTED)|Certified Audio - Ambient Soundscapes/Vinyl|creativeaudiopool|Eiravaein Works - Unfathomed|CFry|toneglowlibraries|Tone Glow|Detunized - (CityTraffic|DanishBunkers|WindTurbines|Distant City|AroundBridges|Computer Noises)|Giorgio Riolo|Julian Ray - Background|Kpow Sounds|RDGSFX|Collected Transients - We are|SoundBits - Just Ambience|ShapingWaves - (BERLIN|NEW YORK|PLANETS)|SoundMorph - TENSION|Eiravaein Sound - Yvaine)",
+          "skip": true
+        },
+        {
+          "match": "^(Discover Oregon|Ivo Vicic|Tonschliff|2496SoundEffects - Bits|Soundrangers - Hydrology|Soundbox Library - Mountain|Spectravelers|Ambisound - Ambisonic|Hear and Now Sound - Binaural|Olivier Girardot|Detunized - (JustWater|Urban-? ?Crows)|Varazuvi|Game Audio Factory - GAFSFX0[47]|Soundopolis - Underwater|Sonocaine)",
+          "category": "nature",
+          "for": "weather, water, fire or an animal"
+        },
+        {
+          "match": "^(Hear and Now Sound - High Voltage|Wakerone - Electric|Airborne Sound - Electric|BlueZone - Dark Mesa|ktwAudio|Soundbox Library - Electromagnetic|Soundholder - EMF|Fox Audio Post-Production - Electromagnetic|PMSFX - Obscure|Navi Retlav|SoundMorph - Lost Transmissions|Soundopolis - CB Radio|MatiasMacSD - NOISE|Detunized - (Newsreel|HumBuzz))",
+          "category": "glitch",
+          "for": "an electric crackle, noise or electromagnetic hum"
+        },
+        {
+          "match": "^(344 Audio|soniKSound|Gregor Quendel|c2caudio|BlueZone - District 10|Bluezone Corporation - Subspace|2496SoundEffects - Super Heroes|Fox Audio Post-Production - Space Racer|Julian Ray - Space|SoundMorph - (Sinematic|Users of))",
+          "category": "sci-fi",
+          "for": "a sci-fi or laser sound"
+        },
+        {
+          "match": "^(Coll Anderson - Deer|SoundMorph - Bloody|Game Audio Factory - GAFSFX01)",
+          "category": "impacts",
+          "for": "gore: flesh, blood, a horror hit"
+        },
+        {
+          "match": "^(PMSFX - (CineDrop|Cinenergy|Industrial Terror|SynthAssault|BLURRY)|Fox Audio Post-Production - Sub Sonic|BlueZone - (Invasion|Spectral|Dark Cinematic)|Bluezone Corporation - (MOVIE|Cobalt)|Bluezone - (Cinematic Tension|Scary))",
+          "category": "impacts",
+          "for": "a cinematic hit, boom or braam"
+        },
+        {
+          "match": "^(Federico Soler|Articulated Sounds - Special Double Bass|Prismo Sound - Singing|MatiasMacSD - (Flute|FEEL)|Eiravaein Works - Helina|Coll Anderson - Cymbal|BeautifulNoise|Certified Audio - Ambient Soundscapes/Church)",
+          "category": "musical",
+          "for": "a musical hit, note or tension tone"
+        },
+        {
+          "match": "^(Articulated Sounds - Universal Emotes|DsoundE)",
+          "category": "voices",
+          "for": "a human voice: shout, scream or breath"
+        },
+        {
+          "match": "^(fascinatedsound|Chris Logsdon|Noisecreations)",
+          "category": "game",
+          "for": "a game sound: win, fail, warp or text babble"
+        },
+        {
+          "match": "^TheWorkRoom Audio Post - Vuvuzela",
+          "category": "comedy",
+          "for": "a vuvuzela blast"
+        },
+        {
+          "match": "^(ShapingWaves - ALARMS|SoundBits - Computer Sound FX 2\\.0/CSFX-2_Alarms)",
+          "category": "notifications",
+          "for": "a notification or alert"
+        },
+        {
+          "match": "^(3maze - (Books|Snacks|Electric Motors|Scratch|The Closet)|Touchdown Audio|TheWorkRoom Audio Post|SoundBits|Matt Script|UberDuo|Gage Freeman|Airborne Sound - (Bathroom|Household|Office|Variety 2|Human)|Sound Ex Machina|Hear and Now Sound - Office|Christophe Davaille|Eiravaein|Starbrick|SoundMorph - ELEMENTAL|Jeffrey Mengyan|Ancora Audio|Fox Audio Post-Production - Hand Spinner|InspectorJ|Submerged Tapes|Sounds Visual - 50|Coll Anderson - House|George Karagioules|Colin Lechner|Collected Transients - Machine|Kevin Durr|Qbsound|Sergey Eybog|Soundreorganized - Everyday|Stuart Duffield|Timothy McHugh - Playing|SoundHolder - Chainsaw)",
+          "category": "foley",
+          "for": "a foley handling sound"
         }
       ],
       "note": "Royalty-free in films, no credit; never redistribute the files, edited or not, and never use them to train AI. Its sites stop bots, so each official .torrent is downloaded by hand from the page; seeding official torrents is allowed. The creator judged GDC 2015, 2016, 2018 and 2019 enough: 2017, 2020, 2021-2023, 2024 and 2026 are left out (their packs are in this file's git history; 2017's folder name also holds a tab, which aria2 refuses to load). Packs download in this order, the most short usable sounds per GB first.",
