@@ -1,7 +1,7 @@
 export declare const videoStart: (video: string) => {
   start: number;
   kind: "chunk" | "span" | null;
-  final?: boolean;
+  final: boolean;
   span?: [number, number];
 };
 export declare const probeVideo: (

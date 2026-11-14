@@ -1,7 +1,15 @@
 // render.mjs refuses a second past the film's end, or a CHECK range that runs backwards, before it builds anything
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { test } from "node:test";
@@ -31,6 +39,11 @@ test("render refuses AT past the end and a backwards CHECK at once, saying the f
   assert.equal(late.status, 2, late.stdout + late.stderr);
   assert.match(late.stderr, /AT 99 is past the film's end: it runs 0-10\.00 s heard/);
   assert.doesNotMatch(late.stdout + late.stderr, /build/i);
+
+  // 10.02 s draws frame 301, past the last one: the page refuses it, so render does before clearing the old stills
+  const hair = render({ AT: "10.02" });
+  assert.equal(hair.status, 2, hair.stdout + hair.stderr);
+  assert.match(hair.stderr, /AT 10\.02 is past the film's end/);
 
   const chunk = render({ CHUNKS: "3" }, "clip");
   assert.equal(chunk.status, 2, chunk.stdout + chunk.stderr);
@@ -122,7 +135,31 @@ test("SPAN is refused before any build when it is misplaced, backwards, or start
   assert.doesNotMatch(tail.stdout + tail.stderr, /build/i);
 });
 
-test("render poster takes AT, the upload's size and sub-frames, and no draft overlay", (t) => {
+test("captions and final refuse the options they would ignore", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  const render = (what, env) =>
+    spawnSync("bun", [RENDER, what], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 20000,
+      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+    });
+
+  const captions = render("captions", { AT: "4" });
+  assert.equal(captions.status, 2, captions.stdout + captions.stderr);
+  assert.match(captions.stderr, /AT does nothing for render captions/);
+  assert.ok(!existsSync(join(dir, "renders/draft_video.srt")), "nothing written");
+
+  // a final takes half an hour and is the upload: a check goes on the stills before it
+  const final = render("final", { CHECK: "motion:cam,1,2" });
+  assert.equal(final.status, 2, final.stdout + final.stderr);
+  assert.match(final.stderr, /CHECK goes with render stills/);
+});
+
+test("render poster refuses a missing AT, LIST=1 and an unknown RES", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -146,4 +183,45 @@ test("render poster takes AT, the upload's size and sub-frames, and no draft ove
   const res = render({ AT: "1", RES: "720" });
   assert.equal(res.status, 2, res.stdout + res.stderr);
   assert.match(res.stderr, /RES is 1440 \(the default; 1080 for Shorts\), 2160 or 1080/);
+});
+
+test("render poster draws one frame at the upload's size, no strip under it, and keeps the draft stills", (t) => {
+  const chrome = resolve(
+    STUDIO,
+    "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
+  );
+  if (!existsSync(chrome)) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
+  );
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "renders/still_4s.jpg"), "");
+  const out = spawnSync("bun", [RENDER, "poster"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 180000,
+    env: { ...process.env, LIVE_PROJECT: dir, AT: "1", RES: "1080", SAMPLES: "2" },
+  });
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stdout, /wrote renders\/poster_1s\.png \(1920x1080, 2 sub-frames\)/);
+  // a draft frame is taller than its picture by the strip; the poster is the picture alone
+  const probe = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "stream=codec_name,width,height",
+      "-of",
+      "csv=p=0",
+      join(dir, "renders/poster_1s.png"),
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(probe.stdout.trim(), "png,1920,1080");
+  assert.ok(existsSync(join(dir, "renders/still_4s.jpg")), "the draft stills are kept");
 });

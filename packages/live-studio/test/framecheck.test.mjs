@@ -117,4 +117,47 @@ test("a fault's picture is the frame before it, the frame, and the frame after",
   );
   assert.equal(px.status, 0, String(px.stderr));
   assert.ok(px.stdout[0] < 200, `the frame before is grey, got ${px.stdout[0]}`);
+  const at = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-i",
+      join(dir, "renders/frames_JUMP_1.00.jpg"),
+      "-vf",
+      "crop=8:8:740:100,scale=1:1",
+      "-f",
+      "rawvideo",
+      "-pix_fmt",
+      "gray",
+      "-",
+    ],
+    { encoding: "buffer" },
+  );
+  assert.ok(at.stdout[0] > 240, `the frame itself is white, got ${at.stdout[0]}`);
+});
+
+test("a fault in the upload's picture is drawn again by render final, never by render clip", (t) => {
+  const dir = film(t, "16:9");
+  mkdirSync(join(dir, "renders/final_chunks"));
+  flip(join(dir, "renders/final_chunks/c01.mp4"));
+  const chunk = framecheck(dir, "renders/final_chunks/c01.mp4");
+  assert.equal(chunk.status, 0, chunk.stdout + chunk.stderr);
+  assert.match(chunk.stdout, /JUMP 31\.00/);
+  assert.match(chunk.stdout, /CHUNKS=1 bun run render final/);
+  flip(join(dir, "renders/final_video.mp4"));
+  const whole = framecheck(dir, "renders/final_video.mp4");
+  assert.match(
+    whole.stdout,
+    /CHUNKS=0 bun run render final, then bun run mix renders\/final_video\.mp4/,
+  );
+});
+
+test("a cuts.json that is no list of seconds is a fault named, not a crash", (t) => {
+  const dir = film(t, "16:9");
+  flip(join(dir, "renders/draft_video.mp4"));
+  writeFileSync(join(dir, "renders/cuts.json"), "{}");
+  const out = framecheck(dir);
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(out.stderr, /renders\/cuts\.json is no list of seconds/);
 });

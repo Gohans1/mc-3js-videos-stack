@@ -1,0 +1,35 @@
+// src/video.mjs videoStart: where a render's video starts on the film's clock, read from its name, in either slash
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { videoStart } from "../src/video.mjs";
+
+test("a chunk starts at its number times 30 s, a final chunk too, whichever slash the path has", () => {
+  assert.deepEqual(videoStart("renders/chunks/c02.mp4"), {
+    start: 60,
+    kind: "chunk",
+    final: false,
+  });
+  assert.deepEqual(videoStart("C:\\films\\a\\renders\\final_chunks\\c03.mp4"), {
+    start: 90,
+    kind: "chunk",
+    final: true,
+  });
+});
+
+test("a span starts at its first second; a folder only ending in chunks holds no chunk", () => {
+  assert.deepEqual(videoStart("renders\\span_10.07-12.mp4"), {
+    start: 10.07,
+    kind: "span",
+    final: false,
+    span: [10.07, 12],
+  });
+  assert.equal(videoStart("renders/my_chunks/c02.mp4").kind, null);
+  assert.equal(videoStart("renders/myspan_1-2.mp4").kind, null);
+});
+
+test("the upload's whole picture, before and after mix, is a final from 0 s; a draft is not", () => {
+  for (const v of ["renders/final_video.mp4", "C:\\f\\renders\\final.mp4"])
+    assert.deepEqual(videoStart(v), { start: 0, kind: null, final: true });
+  assert.deepEqual(videoStart("renders/draft_video.mp4"), { start: 0, kind: null, final: false });
+});

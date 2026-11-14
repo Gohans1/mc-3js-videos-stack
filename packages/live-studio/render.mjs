@@ -12,7 +12,7 @@ import { build } from "vite";
 import { cues, srt } from "./src/captions.mjs";
 import { cliArgs, envTypos, jsonFile, numberArg, secondArg } from "./src/cli.mjs";
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
-import { chunksOf, ratioOf, sizeOf } from "./src/frame.ts";
+import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines } from "./src/narration.ts";
 import { isRead, pxOf } from "./src/readable.mjs";
@@ -120,11 +120,15 @@ const misplaced =
               ? "RES is for render final or poster"
               : full && process.env.LIST === "1"
                 ? `LIST=1 draws over drafts only; a ${what} is the picture alone`
-                : what === "poster" && process.env.CHECK
+                : (what === "poster" || what === "final") && process.env.CHECK
                   ? "CHECK goes with render stills"
                   : what === "poster" && !process.env.AT
                     ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
-                    : null;
+                    : what === "captions"
+                      ? ["AT", "LIST", "CHECK", "INSPECT", "ENTRY"]
+                          .filter((k) => process.env[k] !== undefined)
+                          .map((k) => `${k} does nothing for render captions`)[0]
+                      : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -273,7 +277,8 @@ if (span && (span.length !== 2 || span[0] >= span[1])) {
   );
   process.exit(2);
 }
-const SPAN_FILE = span && `span_${span[0]}-${span[1]}.mp4`;
+const spanFrames = span && spanOf(span, FPS),
+  SPAN_FILE = spanFrames?.file;
 const final = what === "final";
 const samples = env.SAMPLES
   ? numberArg("SAMPLES", env.SAMPLES, { min: 1, max: 64, int: true })
@@ -292,7 +297,8 @@ if (full && !FINAL_SIZES[res]) {
 // A second past the end, or a CHECK range that runs backwards, is refused here: the page would say it too, after the scene build
 const ends = heardLength(PROJECT, pkg["live-studio"] ?? {});
 if (ends) {
-  const past = at.filter((s) => s > ends.layers + 0.05);
+  // the frame each second draws, as the page counts it (render/page.ts refuses a frame past DURATION, the same length)
+  const past = at.filter((s) => Math.round(s * FPS) / FPS > ends.layers + 1e-9);
   if (past.length) {
     console.error(
       `AT ${past.join(",")} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
@@ -306,7 +312,7 @@ if (ends) {
     );
     process.exit(2);
   }
-  if (span && Math.round(span[0] * FPS) > lastFrame) {
+  if (span && spanFrames.first > lastFrame) {
     console.error(
       `SPAN ${span.join(",")} starts after the film's last frame (${(lastFrame / FPS).toFixed(2)} s): SPAN=${Math.max(0, +(lastFrame / FPS - 1).toFixed(2))},${+(lastFrame / FPS).toFixed(2)} shows its last second`,
     );
@@ -408,10 +414,7 @@ const cfg = {
         chunk: CHUNK,
         only,
         // the frames of a SPAN run, drawn as one video and none of the chunks
-        span: span && [
-          Math.round(span[0] * FPS),
-          Math.max(Math.round(span[0] * FPS), Math.round(span[1] * FPS) - 1),
-        ],
+        span: spanFrames && [spanFrames.first, spanFrames.last],
         samples,
         bitrate: final ? FINAL_SIZES[res][1] : 4e6,
         // YouTube asks for a closed GOP of half a second; a draft only needs a keyframe to start each chunk on
@@ -636,7 +639,8 @@ const launch = () => {
       `--user-data-dir=${profile}`,
       `http://127.0.0.1:${server.port}/`,
     ],
-    { stdio: "ignore" },
+    // its helper processes outlive kill() for a moment: run from the profile, never holding the film's folder open
+    { stdio: "ignore", cwd: profile },
   );
 };
 let chrome = launch(),
@@ -685,7 +689,7 @@ rmSync(OUT, { recursive: true, force: true });
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${failed ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
+    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${W}x${H}, ${samples} sub-frames)` : ""}${failed ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
   );
 
 if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {
@@ -693,7 +697,7 @@ if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {
   const [a, b] = cfg.clip.span,
     look = [...new Set([a, Math.round((a + b) / 2), b].map((f) => +(f / FPS).toFixed(2)))];
   console.log(
-    `wrote renders/${SPAN_FILE}, heard ${span[0]}-${span[1]} s (framecheck and sheet read its seconds from its name)
+    `wrote renders/${SPAN_FILE}, heard ${(a / FPS).toFixed(2)}-${((b + 1) / FPS).toFixed(2)} s, whole frames (framecheck and sheet read its seconds from its name)
 next: bun run framecheck renders/${SPAN_FILE}; frames to look at: bun run sheet renders/${SPAN_FILE} ${look.join(",")}`,
   );
 }
@@ -744,7 +748,7 @@ if (!failed && chunks) {
         ? "ERROR join failed"
         : final
           ? `joined renders/${JOINED} (${W}x${H}, ${samples} sub-frames a frame)\nnext: bun run mix renders/${JOINED} (the soundtrack on it: renders/final.mp4, the file to upload), then bun run framecheck renders/${JOINED}`
-          : `joined renders/${JOINED}, picture only${existsSync(join(RENDERS, "draft.mp4")) ? ": renders/draft.mp4 keeps the old picture with its sound until bun run mix renders/" + JOINED : ""}\nnext: bun run framecheck (black, flashes, jumps, freezes); frames to look at: bun run sheet renders/${JOINED} 10,20,30`,
+          : `joined renders/${JOINED}, picture only${existsSync(join(RENDERS, "draft.mp4")) ? ": renders/draft.mp4 keeps the old picture with its sound until bun run mix renders/" + JOINED : ""}\nnext: bun run framecheck (black, flashes, jumps, freezes); frames to look at: bun run sheet renders/${JOINED} ${ends ? [0.2, 0.5, 0.8].map((k) => +(k * ends.layers).toFixed(1)).join(",") : "1"}`,
     );
     if (j.status) failed = true;
     else writeCaptions();

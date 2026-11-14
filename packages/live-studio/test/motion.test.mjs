@@ -97,3 +97,10 @@ test("a one-sample turn is a pop, and a zoom gives its field of view and how fas
   ).join("\n");
   assert.match(zoom, /field of view 60° to 30°, changing 22\.\d°\/s at its fastest \(1\.00 s\)/);
 });
+
+test("a camera whose turn pops is never also said to have no pops, and its other lines are kept", () => {
+  const still = track(0, 1, (t) => t * 0.3);
+  const out = report("cam", still, measure(still, [0.5]), 1);
+  assert.ok(!out.includes("  no pops, no dead stops"), out.join("\n"));
+  assert.match(out.at(-1), /cuts at 0\.5\d \(left out\)/);
+});

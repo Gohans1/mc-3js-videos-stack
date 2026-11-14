@@ -20,6 +20,9 @@ export const SHIMMER_LONG = 0.3;
 export const SAME = 0.0005; // mean per-pixel difference under which two frames are the same picture
 export const FROZEN_LONG = 1;
 
+// Math.min(...xs) runs out of stack near 600 000 values in Bun (5.5 h at 30 fps)
+const least = (xs) => xs.reduce((a, b) => (b < a ? b : a), Infinity);
+const most = (xs) => xs.reduce((a, b) => (b > a ? b : a), -Infinity);
 const luma = (f, i) => (0.2126 * f[i * 3] + 0.7152 * f[i * 3 + 1] + 0.0722 * f[i * 3 + 2]) / 255;
 
 export function meter(w, h, mask = () => true) {
@@ -96,7 +99,7 @@ export function meter(w, h, mask = () => true) {
         (i) => L[i] < DARK,
         0,
         "BLACK",
-        (i, j) => `${j - i + 1} frame(s) with brightness ${f(Math.min(...L.slice(i, j + 1)))}`,
+        (i, j) => `${j - i + 1} frame(s) with brightness ${f(least(L.slice(i, j + 1)))}`,
       );
       for (let i = 1; i + 1 < n; i++) {
         const up = L[i] - L[i - 1],
@@ -113,6 +116,9 @@ export function meter(w, h, mask = () => true) {
             t: t(i),
             say: `one frame ${up > 0 ? "brighter" : "darker"}: ${f(L[i - 1])} -> ${f(L[i])} -> ${f(L[i + 1])}`,
           });
+      }
+      // a jump needs no frame after it: the video's last frame is measured too
+      for (let i = 1; i < n; i++) {
         const around = [...D.slice(Math.max(1, i - 5), i), ...D.slice(i + 1, i + 6)].sort(
           (x, y) => x - y,
         );
@@ -129,7 +135,7 @@ export function meter(w, h, mask = () => true) {
         SHIMMER_LONG,
         "SHIMMER",
         (i, j) =>
-          `up to ${f(Math.max(...S.slice(i, j + 1)) * 100)}% of the picture flickering frame to frame`,
+          `up to ${f(most(S.slice(i, j + 1)) * 100)}% of the picture flickering frame to frame`,
       );
       runs(
         (i) => i > 0 && D[i] < SAME,
@@ -153,7 +159,7 @@ export function meter(w, h, mask = () => true) {
       faults.push(...one);
       faults.sort((x, y) => x.t - y.t);
       const lines = [
-        `${n} frames, ${f(n / fps)} s at ${fps} fps: brightness ${f(Math.min(...L))}-${f(Math.max(...L))}, ${cuts.length} cuts known`,
+        `${n} frames, ${f(n / fps)} s at ${fps} fps${n ? `: brightness ${f(least(L))}-${f(most(L))}` : ""}, ${cuts.length} cuts known`,
       ];
       for (const x of faults)
         lines.push(

@@ -46,7 +46,7 @@ test("the report names the long shot, the hold with what the narration says over
   expect(r).toMatch(/HOLD 5\.00-25\.00 \(20\.0 s\)[^\n]*"the door opens\."/);
   expect(r).toMatch(/under narration: cut to what the words say/);
   expect(r).toMatch(/first 30 s: 4 new pictures, the first cut at 5\.00/);
-  expect(r).toMatch(/\nnext: bun run at 15/);
+  expect(r).toMatch(/\nnext: bun run at 15 [^\n]*; AT=15 bun run render stills to look/);
 });
 
 test("a Short is read against Shorts: their shot length, and its first 3 s with when the picture first changes", () => {
@@ -89,13 +89,13 @@ test("a word that starts just before a hold and runs into it is said over the ho
 });
 
 // the command on a film folder with a video in renders/: pace measures whole films only
-const paceOn = (video: string, make: string[]) => {
+const paceOn = (video: string, make: string[], cuts = "[1]") => {
   const dir = mkdtempSync(join(tmpdir(), "pace-"));
   mkdirSync(join(dir, "src"));
   mkdirSync(join(dir, "renders/chunks"), { recursive: true });
   writeFileSync(join(dir, "src/scene.ts"), "");
   writeFileSync(join(dir, "package.json"), "{}");
-  writeFileSync(join(dir, "renders/cuts.json"), "[1]");
+  writeFileSync(join(dir, "renders/cuts.json"), cuts);
   const ff = spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", ...make, join(dir, video)]);
   expect(ff.status).toBe(0);
   const r = spawnSync("bun", [PACE, video], {
@@ -120,4 +120,10 @@ test("a picture is no video: pace refuses it", () => {
   const r = paceOn("renders/still_1s.jpg", ["color=c=gray:s=64x36", "-frames:v", "1"]);
   expect(r.status).toBe(2);
   expect(r.stderr).toMatch(/still_1s\.jpg is no video/);
+});
+
+test("a cuts.json that is no list of seconds is a fault named, not a crash", () => {
+  const r = paceOn("renders/draft_video.mp4", clip, "{}");
+  expect(r.status).toBe(1);
+  expect(r.stderr).toMatch(/renders\/cuts\.json is no list of seconds/);
 });

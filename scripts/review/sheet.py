@@ -42,7 +42,10 @@ def cuts_of():
     f = R / "cuts.json"
     if not f.exists():
         usage("no renders/cuts.json to find the shots in: bun run render clip writes it with the video")
-    return sorted(json.loads(f.read_text(encoding="utf8")))
+    try:
+        return sorted(float(c) for c in json.loads(f.read_text(encoding="utf8")))
+    except (ValueError, TypeError):
+        usage("renders/cuts.json is no list of seconds: bun run render clip writes it again", 1)
 
 
 USE = "bun run sheet, or bun run sheet <video> 10,20.5,30 | shots | cut <n> (--help for more)"
@@ -61,8 +64,8 @@ if args:
     video = args[0]
     # a render's chunk (renders/chunks or final_chunks/cNN.mp4) starts at NN*30 s, a SPAN run's renders/span_<from>-<to>.mp4 at
     # <from> (live-studio src/video.mjs reads the same names: change both); the seconds asked are the film's
-    chunk = re.search(r"[\\/]?chunks[\\/]c(\d+)\.mp4$", video)
-    span = re.search(r"span_(\d+(?:\.\d+)?)-[\d.]+\.mp4$", video)
+    chunk = re.search(r"(?:^|[\\/])(?:final_)?chunks[\\/]c(\d+)\.mp4$", video)
+    span = re.search(r"(?:^|[\\/])span_(\d+(?:\.\d+)?)-\d+(?:\.\d+)?\.mp4$", video)
     if "START" in os.environ:
         try:
             start = float(os.environ["START"])
@@ -97,7 +100,7 @@ if args:
         edges = [start, *[c for c in ends if start < c < start + dur], start + dur]
         # a shot under 0.05 s has no frame of its own to show; a video that short shows its one frame
         shots = [(a, b) for a, b in zip(edges, edges[1:]) if b - a > 0.05] or [(edges[0], edges[-1])]
-        args[1] = ",".join(f"{min((a + b) / 2, end):.2f}" for a, b in shots)
+        secs = [min((a + b) / 2, end) for a, b in shots]
         short = len(edges) - 1 - len(shots)
         header = (f"{len(shots)} shots: a frame from the middle of each, in order (shot {before} first"
                   f"{f'; {short} under 0.05 s left out' if short > 0 else ''})")
@@ -111,7 +114,7 @@ if args:
         c = ends[n]
         if not start <= c <= start + dur:
             usage(f"cut {n} is at {c:.2f} s, outside {video} (film seconds {start:g}-{start + dur:.2f})")
-        args[1] = ",".join(f"{min(max(c + d, start), end):.3f}" for d in (-0.25, -0.15, -0.05, 0.05, 0.15, 0.35))
+        secs = [min(max(c + d, start), end) for d in (-0.25, -0.15, -0.05, 0.05, 0.15, 0.35)]
         # cut n opens shots-timeline row n+1 when the rows are the video's shots (one more row than cuts)
         conf = json.loads(Path("package.json").read_text(encoding="utf8")).get("live-studio", {}) if Path("package.json").exists() else {}
         rows_file = conf.get("shotsTimeline")
@@ -124,13 +127,13 @@ if args:
             meet = f': from shot {n} "{a.get("name", "")}" into shot {n + 1} "{b.get("name", "")}", {fx}'
         header = f"cut {n} at {c:.2f} s{meet}; frames from 0.25 s before to 0.35 s after\nnext: bun run at {round(c, 2):g} names every row that places it"
 
-    secs = [heard_second(s) for s in args[1].split(",")]
-    if None in secs:
-        usage(f"takes heard seconds (65, 1:05 or 01:05.250), with commas; got {args[1]}{next((meant(s) for s in args[1].split(',') if meant(s)), '')}")
-    secs = sorted(set(secs))
-    out = [s for s in secs if not start <= s < start + dur]
-    if out:
-        usage(f"{video} holds film seconds {start:g}-{start + dur:.2f}; outside it: {', '.join(f'{s:g}' for s in out)}")
+    else:
+        secs = [heard_second(s) for s in args[1].split(",")]
+        if None in secs:
+            usage(f"takes heard seconds (65, 1:05 or 01:05.250), with commas; got {args[1]}{next((meant(s) for s in args[1].split(',') if meant(s)), '')}")
+        out = sorted({s for s in secs if not start <= s < start + dur})
+        if out:
+            usage(f"{video} holds film seconds {start:g}-{start + dur:.2f}; outside it: {', '.join(f'{s:g}' for s in out)}")
     secs = sorted({min(s, end) for s in secs})
     if start:
         print(f"film seconds from {start:g} s on ({'START' if 'START' in os.environ else 'the chunk' + chr(39) + 's start' if chunk else 'the span' + chr(39) + 's start'})")
@@ -140,7 +143,10 @@ if args:
     # the video's frames go to a folder of their own, never over the film's rendered stills
     tmp = Path(tempfile.mkdtemp(prefix="sheet-"))
     for s in secs:
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(s - start), "-i", video, "-frames:v", "1", "-q:v", "3", str(tmp / f"still_{s:g}s.jpg")], check=True)
+        # named as render names its stills (still_12.5s.jpg), to the thousandth: :g writes 5e-05, which is no second
+        named = f"{s:.3f}".rstrip("0").rstrip(".")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{max(0.0, s - start):.6f}", "-i", video, "-frames:v", "1", "-q:v", "3",
+                        str(tmp / f"still_{named}s.jpg")], check=True)
     src, name = tmp, f"sheet_{Path(video).stem}_{'shots_' if mode == 'shots' else f'cut{args[2]}_' if mode else ''}"
 else:
     src, name = R, "sheet_"

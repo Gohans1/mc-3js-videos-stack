@@ -69,6 +69,9 @@ const GROUPS = [
     "Set up",
     {
       "new-film": "a new film from templates/film: bun run new-film <name> [port]",
+      setup:
+        "a new machine in one go: bun install, setup:vault, link (--sound-zip <zip> restores the sound)",
+      "pack:sound": "every sound of the vault in one zip, for setup --sound-zip on another machine",
       "setup:vault": "fill the vault on a new machine (downloads, verified)",
       "setup:sound": "rebuild vault/sound/{bgm,sfx} with credits and peaks",
       "setup:mc-sound": "rebuild the Minecraft sound vault from the game and packs",
@@ -86,6 +89,9 @@ const GROUPS = [
       typecheck: "bun check",
       fmt: "format (bun fmt --no-script <files> for a few)",
       "fmt:check": "is everything formatted?",
+      "eval:find": "how well find answers a set of searches, kept in scripts/evals/find/runs",
+      "eval:lessons": "how well notes ID picks the lessons for a note (Jev)",
+      "eval:load": "how fast the studio page loads, desk and phone",
     },
   ],
 ];

@@ -1,7 +1,7 @@
 // scripts/review/deliver.py: a finished video checked against YouTube's upload spec, each fault with its fix
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -149,4 +149,90 @@ test("no upload yet but its picture is there: the fix is only the mix", (t) => {
     /renders\/final_video\.mp4 is there: bun run mix renders\/final_video\.mp4/,
   );
   assert.doesNotMatch(r.stderr, /render final/);
+});
+
+test("a box past the media that says it is no size at all ends the box walk, not an endless loop", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final.mp4");
+  make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
+  // a 64-bit size of 0 read the same 16 bytes again and again
+  appendFileSync(file, Buffer.from([0, 0, 0, 1, ...Buffer.from("free"), 0, 0, 0, 0, 0, 0, 0, 0]));
+  const r = spawnSync("python", [DELIVER, file], { encoding: "utf8", timeout: 60000 });
+  assert.notEqual(r.status, null, "deliver never finished");
+  assert.match(r.stdout, /2560x1440 30 fps/);
+});
+
+test("sound alone is no video to preview: the fix is named, never a traceback", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final.mp4");
+  const ff = spawnSync("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=f=997:d=2",
+    "-c:a",
+    "aac",
+    file,
+  ]);
+  assert.equal(ff.status, 0, String(ff.stderr));
+  const r = spawnSync("python", [DELIVER, file, "--youtube"], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stderr, /Traceback/);
+  assert.match(r.stdout, /FIX no video stream/);
+});
+
+test("the summary names the sound's own codec, and a folder is said to be one", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final.mp4");
+  make(file, { audio: ["-c:a", "libmp3lame", "-ar", "48000"] });
+  assert.match(deliver(file).stdout, /, MP3 48 kHz stereo/);
+  const folder = deliver(dir);
+  assert.equal(folder.status, 2);
+  assert.match(folder.stderr, /is a folder: give it the video/);
+});
+
+test("a ready upload's next step names the video and how long --youtube takes on it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final.mp4");
+  make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
+  const r = deliver(file);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(r.stdout.includes(`next: bun run deliver ${file} --youtube`), r.stdout);
+  assert.match(r.stdout, /about 10 s here/);
+});
+
+test("--youtube re-encodes the seconds asked as YouTube would and measures their bands", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "renders"));
+  const file = join(dir, "renders/final.mp4");
+  make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
+  const r = spawnSync("python", [DELIVER, "--youtube", "1-2"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 120000,
+  });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stderr, /re-encoding 1 s the way YouTube serves it \(AV1 4Mbps, 2560 wide\)/);
+  assert.match(r.stdout, /bands \(Netflix CAMBI\)/);
+  const probe = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "stream=codec_name:format=duration",
+      "-of",
+      "csv=p=0",
+      join(dir, "renders/youtube_preview.mp4"),
+    ],
+    { encoding: "utf8" },
+  );
+  assert.match(probe.stdout, /^av1/m);
 });

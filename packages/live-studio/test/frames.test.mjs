@@ -60,3 +60,17 @@ test("pixels flipping every frame for a while shimmer", () => {
   );
   assert.ok(kinds(fs).includes("SHIMMER"));
 });
+
+test("a jump into the video's last frame is a JUMP too", () => {
+  const faults = run(30, (i) => frame(i === 29 ? 180 : 100, i));
+  assert.deepEqual(
+    faults.map((x) => [x.kind, x.t.toFixed(2)]),
+    [["JUMP", "0.97"]],
+  );
+});
+
+test("a video with no frames says so, never a brightness of Infinity", () => {
+  const { lines } = meter(W, H).report(30);
+  assert.match(lines[0], /^0 frames/);
+  assert.doesNotMatch(lines.join("\n"), /Infinity|NaN/);
+});

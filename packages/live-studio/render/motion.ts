@@ -61,12 +61,9 @@ export const motionCheck =
       });
     }
     const m = measure(samples, cuts);
-    const out = report(target, samples, m);
     const tm = isCam ? turns(samples, cuts) : null;
-    if (tm) {
-      if (tm.pops.length) out.splice(out.indexOf("  no pops, no dead stops"), 1);
-      out.push(...turnReport(tm));
-    }
+    const out = report(target, samples, m, tm?.pops.length);
+    if (tm) out.push(...turnReport(tm));
     const tag = `motion_${target}_${from}-${to}`;
     const peak = Math.max(m.peak.v, 1e-6);
     const gl = canvas();

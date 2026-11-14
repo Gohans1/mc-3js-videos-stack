@@ -68,7 +68,12 @@ if (START)
   console.log(
     `film seconds from ${START} s on (${process.env.START !== undefined ? "START" : `the ${where.kind}'s start`})`,
   );
-const cuts = (existsSync(cutsFile) ? readJson(cutsFile) : []).map((c) => c - START);
+const written = existsSync(cutsFile) ? readJson(cutsFile) : [];
+if (!Array.isArray(written) || written.some((c) => typeof c !== "number")) {
+  console.error("renders/cuts.json is no list of seconds: bun run render clip writes it again");
+  process.exit(1);
+}
+const cuts = written.map((c) => c - START);
 if (!cuts.length) console.log("no renders/cuts.json: every cut will show as a JUMP");
 else
   console.log(
@@ -163,7 +168,7 @@ if (faults.length > 12) console.log(`${faults.length - 12} more not drawn`);
 if (faults.length) {
   const redraw = where.span
     ? `SPAN=${where.span.join(",")} bun run render clip`
-    : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render clip: chunk N is N*30 s on`;
+    : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render ${where.final ? "final, then bun run mix renders/final_video.mp4" : "clip"}: chunk N is N*30 s on`;
   console.log(
     `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (${redraw}), then bun run framecheck${videoArg ? ` ${videoArg}` : ""} again`,
   );

@@ -111,6 +111,7 @@ export const paceReport = ({
   const spoken = holds.filter((g) => said(words, g.a, g.b) !== "no narration");
   // a Short that keeps one picture past 2 s loses the swipe there first: look at its opening before any later hold
   const slowOpen = short && (news[1] ?? length) > 2;
+  const mid = worst ? +((worst.a + worst.b) / 2).toFixed(2) : 0;
   return [
     `shots: ${shots.length}, mean ${s2(mean)} s, median ${s2(median)} s (${short ? "popular Shorts: about 2.5-4.7 s" : "popular films since 2000: about 4 s"})`,
     `  longest: ${longest.map((s) => `shot ${s.i} at ${s2(s.a)}-${s2(s.b)} (${s2(s.len)} s)`).join(", ")}`,
@@ -141,7 +142,7 @@ export const paceReport = ({
       : `first 30 s: ${opening.length} new pictures, ${firstCut === undefined ? "no cut" : `the first cut at ${s2(firstCut)}`} (YouTube judges an intro by who still watches at 30 s)`,
     slowOpen
       ? `next: AT=1 bun run render stills shows the opening picture; a cut, a camera move or motion inside 2 s holds the swipe`
-      : `next: bun run at ${worst ? +((worst.a + worst.b) / 2).toFixed(2) : 0} names what plays in the longest still; AT=<s> bun run render stills to look`,
+      : `next: bun run at ${mid} names what plays in the longest still; AT=${mid} bun run render stills to look`,
   ];
 };
 
@@ -191,6 +192,10 @@ if (import.meta.main) {
     process.exit(2);
   }
   const cuts: number[] = readJson(cutsFile);
+  if (!Array.isArray(cuts) || cuts.some((c) => typeof c !== "number")) {
+    console.error("renders/cuts.json is no list of seconds: bun run render clip writes it again");
+    process.exit(1);
+  }
   const stale = staleVideo(PROJECT, video);
   if (stale) console.log(`STALE: ${stale.message}`);
   // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape

@@ -14,6 +14,14 @@ export const chunksOf = (duration: number, chunk: number, fps: number): [number,
     Math.min(frames, (i + 1) * per) - 1,
   ]);
 };
+// A SPAN=<from>,<to> run's frames, and its file named at the seconds its first frame and its end show, so framecheck and
+// sheet read the video's start from its name exactly (SPAN=10.01 starts on frame 300, 10 s: span_10-...)
+export const spanOf = ([from, to]: [number, number], fps: number) => {
+  const first = Math.round(from * fps),
+    last = Math.max(first, Math.round(to * fps) - 1);
+  const s = (f: number) => +(f / fps).toFixed(2);
+  return { first, last, file: `span_${s(first)}-${s(last + 1)}.mp4` };
+};
 export const sizeOf = (ratio: Ratio, long: number): [number, number] => {
   const short = Math.round((long * 9) / 16);
   return ratio === "9:16" ? [short, long] : [long, short];

@@ -168,7 +168,8 @@ export const easeOf = (peakAt) =>
       ? "slow start, fast finish (eases in)"
       : "even (eases in and out)";
 
-export function report(name, samples, m) {
+// turnPops: a camera's turn pops (turns()), so a camera that only pops in its turn is not said to have none
+export function report(name, samples, m, turnPops = 0) {
   const f = (x) => x.toFixed(2);
   const out = [
     `${name} ${f(samples[0].t)}-${f(samples[samples.length - 1].t)} s: peak ${f(m.peak.v)} m/s at ${f(m.peak.t)}, ${m.moves.length} move(s)`,
@@ -186,6 +187,6 @@ export function report(name, samples, m) {
       `  DEAD ${s.kind.toUpperCase()} ${f(s.t)}: ${s.kind === "stop" ? `from ${f(s.v)} m/s to rest` : `from rest to ${f(s.v)} m/s`} in one sample, no ease`,
     );
   if (m.cuts.length) out.push(`  cuts at ${m.cuts.map(f).join(", ")} (left out)`);
-  if (!m.pops.length && !m.stops.length) out.push("  no pops, no dead stops");
+  if (!m.pops.length && !m.stops.length && !turnPops) out.push("  no pops, no dead stops");
   return out;
 }

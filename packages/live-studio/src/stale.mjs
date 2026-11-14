@@ -56,12 +56,11 @@ export const staleVideo = (root, video) => {
   if (!newest) return null;
   // a chunk's stamp covers the whole built film (render.mjs stamp), so any change draws every chunk again
   const where = videoStart(shown);
-  const again =
-    shown.endsWith("final_video.mp4") || where.final
-      ? "bun run render final draws it again"
-      : where.kind === "span"
-        ? `SPAN=${where.span.join(",")} bun run render clip draws it again`
-        : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
+  const again = where.final
+    ? "bun run render final draws it again"
+    : where.kind === "span"
+      ? `SPAN=${where.span.join(",")} bun run render clip draws it again`
+      : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
   return {
     file: newest.rel,
     message: `${shown} is older than ${newest.rel} (changed ${Math.max(1, Math.round((newest.m - made) / 60000))} min after it): its frames may not show that change; ${again}`,

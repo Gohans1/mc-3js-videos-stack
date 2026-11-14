@@ -177,3 +177,50 @@ test("sheet shots counts the shots it lays out", (t) => {
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /2 shots: a frame from the middle of each/);
 });
+
+test("a start between two thousandths still holds the frames cut lays out next to it", (t) => {
+  const sheet = film(t, [10.1]);
+  const r = spawnSync("python", [SHEET, "renders/draft_video.mp4", "cut", "0"], {
+    cwd: sheet.dir,
+    encoding: "utf8",
+    timeout: 60000,
+    env: { ...process.env, START: "10.0144" },
+  });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  // 0.25 and 0.15 s before the cut both fall before the video: its first frame, once
+  assert.match(r.stdout, /10\.014s, 10\.05s, 10\.15s, 10\.25s, 10\.45s/);
+});
+
+test("only a render's chunks folder makes a chunk: my_chunks/c02.mp4 starts at 0", (t) => {
+  const sheet = film(t, []);
+  mkdirSync(join(sheet.dir, "renders/my_chunks"));
+  const ff = spawnSync("ffmpeg", [
+    "-v",
+    "error",
+    "-i",
+    join(sheet.dir, "renders/draft_video.mp4"),
+    "-c",
+    "copy",
+    join(sheet.dir, "renders/my_chunks/c02.mp4"),
+  ]);
+  assert.equal(ff.status, 0, String(ff.stderr));
+  const r = sheet("renders/my_chunks/c02.mp4", "1");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stdout, /film seconds from/);
+});
+
+test("a broken renders/cuts.json is named, not a traceback", (t) => {
+  const sheet = film(t, []);
+  writeFileSync(join(sheet.dir, "renders/cuts.json"), "[1,");
+  const r = sheet("renders/draft_video.mp4", "shots");
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stderr, /Traceback/);
+  assert.match(r.stderr, /renders\/cuts\.json is no list of seconds/);
+});
+
+test("a second under a thousandth is laid out with the others", (t) => {
+  const sheet = film(t, []);
+  const r = sheet("renders/draft_video.mp4", "0.00005,1");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /2 pictures/);
+});

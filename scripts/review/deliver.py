@@ -70,7 +70,8 @@ def boxes(video):
             if size == 1:
                 skip = int.from_bytes(f.read(8), "big") - 16
             order.append(kind)
-            if size == 0:
+            # 0 runs to the file's end; a size under its own header is damage, and seeking back by it walks in a loop
+            if size == 0 or skip < 0:
                 break
             if kind == "moov":
                 walk(f.read(skip), b"moov")
@@ -168,7 +169,7 @@ def check(video, info):
             fix(f"true peak {tp:+.1f} dBTP: over -1 the AAC encode clips; {remix} again: it measures the encoded file and "
                 "lowers the mix by what the codec added")
     mbps = int(pic.get("bit_rate") or info["format"].get("bit_rate") or 0) / 1e6
-    sound = (f", AAC {int(snd.get('sample_rate', 0)) / 1000:g} kHz {'stereo' if snd.get('channels') == 2 else str(snd.get('channels')) + ' ch'}"
+    sound = (f", {snd['codec_name'].upper()} {int(snd.get('sample_rate', 0)) / 1000:g} kHz {'stereo' if snd.get('channels') == 2 else str(snd.get('channels')) + ' ch'}"
              f" {int(snd.get('bit_rate') or 0) / 1000:.0f} kbps, {i:.1f} LUFS, peak {tp:+.1f} dBTP" if snd else ", no sound")
     return f"{video}: {w}x{h} {fps:g} fps {name} {pic.get('profile', '')} {mbps:.1f} Mbps{sound}, {long:.1f} s", out
 
@@ -247,9 +248,14 @@ def youtube(video, span, root):
           f"alone scores up to {worst_up:.1f}: CAMBI counts the steps between flat Minecraft tiles too, so that is no fault by itself. "
           "Preview: renders/youtube_preview.mp4")
     cuts_file = root / "renders/cuts.json"
-    cuts = json.loads(cuts_file.read_text(encoding="utf8")) if cuts_file.exists() and video.resolve().parent == out.resolve() else []
-    for a, b in spans[:6]:
-        peak = max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0))
+    cuts = []
+    if cuts_file.exists() and video.resolve().parent == out.resolve():
+        try:
+            cuts = [float(c) for c in json.loads(cuts_file.read_text(encoding="utf8"))]
+        except (ValueError, TypeError):
+            print("renders/cuts.json is no list of seconds: the bands are named without their shots (bun run render clip writes it again)")
+    peaks = [max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0)) for a, b in spans]
+    for (a, b), peak in zip(spans[:6], peaks):
         picture = out / f"youtube_bands_{peak}s.png"
         band_picture(video, preview, peak, picture, start, min(end, long) - 1 / (rate(pic) or 30))
         shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts else ""
@@ -262,8 +268,8 @@ def youtube(video, span, root):
               "Smooth dither is too fine to survive it (on a test gradient a grain of +-3 levels was wiped out, +-8 survived this "
               "rung, nothing survived 1080p at 1 Mbps). What holds: texture in the scene itself (dust, haze with noise, textured "
               "blocks instead of a bare lit plane), or visible grain over those seconds: an Adjustment in src/timeline/adjust.json "
-              "with grade.basic.particles (the studio's Particles slider). bun run at <second> names the shot; then render final, "
-              "mix, and bun run deliver --youtube <from>-<to> on the same seconds until it names none")
+              f"with grade.basic.particles (the studio's Particles slider). bun run at {peaks[0]} names the shot; then render final, "
+              f"mix, and bun run deliver --youtube {spans[0][0]}-{spans[0][1] + 1} on the same seconds until it names none")
     else:
         print("the re-encode adds no bands a viewer would notice")
     return 0
@@ -301,6 +307,9 @@ def main(args):
     root = Path.cwd()
     named = video is not None
     video = Path(video or "renders/final.mp4")
+    if video.is_dir():
+        print(f"{video} is a folder: give it the video, as {(video / 'final.mp4').as_posix()}", file=sys.stderr)
+        return 2
     if not video.is_file():
         here = sorted(p.as_posix() for p in Path("renders").glob("*.mp4")) if Path("renders").is_dir() else []
         picture = Path("renders/final_video.mp4")
@@ -332,12 +341,14 @@ def main(args):
         print(f"{fixes} to fix before upload; bun run deliver {video} again after")
     else:
         print("ready to upload" + (" (the ADVICE lines are worth a look)" if found else ""))
-    if preview:
+    # sound alone has no picture to re-encode: its FIX line already says so
+    if preview and any(s["codec_type"] == "video" for s in info["streams"]):
         code = youtube(video, span, root)
         if code:
             return code
     elif not fixes:
-        print("next: bun run deliver --youtube shows how it looks after YouTube's re-encode and where it bands")
+        print(f"next: bun run deliver {f'{video} ' if named else ''}--youtube shows how it looks after YouTube's re-encode and where it "
+              f"bands (about {max(10, long * 3):.0f} s here{'; a few seconds judge it as well: --youtube <from>-<to>' if long > 60 else ''})")
     return 1 if fixes else 0
 
 
