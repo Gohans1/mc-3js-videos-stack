@@ -2403,8 +2403,21 @@ export async function run(
       const favMiss = fav
         ? `none of the ${listName} favourites has these words${inLists.length ? `; other lists do: ${inLists.join(", ")} (bun run find ${query} --fav ${inLists[0]!.split(" ")[0]})` : ""}; ${rank(inKind(unstarred), query).length} entries outside the favourites do (bun run find ${query}${filters.replace(` ${favArg}`, "")})`
         : "";
+      // the words may be a weapon's or a fight's, whose clips the pool leaves out: they exist, so nothing needs making
+      const fights =
+        !kinds || kindNames?.includes("mocap")
+          ? rank(
+              entriesOf().filter((x) => x.kind === "mocap" && isFight(x.id)),
+              query,
+            ).length
+          : 0;
+      if (fights)
+        next.push(
+          `${fights} weapon or fight clip${fights > 1 ? "s have" : " has"} these words (left out by default): bun run find ${query} --kind mocap --fights`,
+          ...(other ? [other] : []),
+        );
       // the creator chose from the favourites: a miss goes back to them, not into making one
-      if (favMiss)
+      else if (favMiss)
         next.push(
           favMiss,
           `if the creator asked for favourites only: say none has it and ask which to use, or which to star (bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}). The favourites in full: bun run find ${favArg}`,

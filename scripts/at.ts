@@ -348,7 +348,7 @@ if (isMain) {
   }
   const out: string[] = [];
   out.push(
-    `${mmss(t)} heard (${t} s); the picture shows scene second ${fmt(got.scene)}${
+    `${mmss(t)} heard (${+t.toFixed(3)} s); the picture shows scene second ${fmt(got.scene)}${
       Math.abs(got.scene - t) > 0.005
         ? ` (Speed/Freeze in ${c.timingTimeline ?? "timing.json"})`
         : ""

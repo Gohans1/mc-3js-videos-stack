@@ -1215,6 +1215,16 @@ test("weapon and fight clips stay out of a word search, as the catalogue's own l
   expect(out).not.toMatch(/Rifle_Walk/);
 });
 
+test("words only fight clips have point to --fights, not to making the move", async () => {
+  const sword = {
+    ...e("mixamo/Sword_Slash_c9ce0001", "Sword Slash", "", "mocap", "stand"),
+    src: "mixamo",
+  };
+  const out = await run(["sword", "--kind", "mocap"], [sword, walk], noJev);
+  expect(out).toMatch(/1 weapon or fight clip has these words.*--fights/);
+  expect(out).not.toMatch(/make it/);
+});
+
 test("a clip whose retarget breaks on Steve says so, as the catalogue's own search does", () => {
   const dir = mkdtempSync(join(tmpdir(), "find-mocap-"));
   writeFileSync(
