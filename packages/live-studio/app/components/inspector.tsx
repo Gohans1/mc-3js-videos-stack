@@ -6,7 +6,7 @@ import {
   Diamond,
   RotateCcw,
 } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,21 +37,99 @@ export function Segmented<T extends string>({
   vertical?: boolean;
 }) {
   const [back, on] = vertical ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"];
+  const groupRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const mountedRef = useRef(false);
+  const [animated, setAnimated] = useState(false);
+  const [pill, setPill] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const activeIdx = items.findIndex((x) => x.id === value);
+
+  useLayoutEffect(() => {
+    const sync = () => {
+      const btn = activeIdx >= 0 ? btnRefs.current[activeIdx] : null;
+      if (!btn) {
+        setPill(null);
+        return;
+      }
+      const next = {
+        x: btn.offsetLeft,
+        y: btn.offsetTop,
+        w: btn.offsetWidth,
+        h: btn.offsetHeight,
+      };
+      setPill((prev) =>
+        prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
+          ? prev
+          : next,
+      );
+    };
+    sync();
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      const raf = requestAnimationFrame(() => setAnimated(true));
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [activeIdx, items.length, vertical]);
+
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const btn = activeIdx >= 0 ? btnRefs.current[activeIdx] : null;
+      if (!btn) return;
+      const next = {
+        x: btn.offsetLeft,
+        y: btn.offsetTop,
+        w: btn.offsetWidth,
+        h: btn.offsetHeight,
+      };
+      setPill((prev) =>
+        prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
+          ? prev
+          : next,
+      );
+    });
+    ro.observe(group);
+    for (const el of btnRefs.current) if (el) ro.observe(el);
+    return () => ro.disconnect();
+  }, [activeIdx, items.length]);
+
   return (
     <div
+      ref={groupRef}
       role="radiogroup"
       aria-label={label}
       aria-orientation={vertical ? "vertical" : "horizontal"}
       className={cn(
+        "relative",
         vertical
           ? "flex flex-none flex-col gap-0.5"
           : "bg-card flex h-8 flex-none gap-0.5 rounded-md p-0.5",
         className,
       )}
     >
-      {items.map((x) => (
+      {pill && pill.w > 0 && pill.h > 0 && (
+        <span
+          aria-hidden
+          data-animated={animated || undefined}
+          style={{
+            "--pill-x": `${pill.x}px`,
+            "--pill-y": `${pill.y}px`,
+            "--pill-w": `${pill.w}px`,
+            "--pill-h": `${pill.h}px`,
+          }}
+          className={cn(
+            "segmented-pill bg-raised-3 pointer-events-none z-0",
+            vertical ? "rounded-md" : "rounded-sm",
+          )}
+        />
+      )}
+      {items.map((x, idx) => (
         <button
           key={x.id}
+          ref={(el) => {
+            btnRefs.current[idx] = el;
+          }}
           type="button"
           role="radio"
           aria-checked={value === x.id}
@@ -61,20 +139,16 @@ export function Segmented<T extends string>({
               d = e.key === on ? 1 : e.key === back ? -1 : 0;
             if (!d) return;
             e.preventDefault();
-            const next = items[(i + d + items.length) % items.length];
-            onChange(next.id);
-            (
-              e.currentTarget.parentElement?.children[items.indexOf(next)] as
-                HTMLElement | undefined
-            )?.focus();
+            const nextIdx = (i + d + items.length) % items.length;
+            onChange(items[nextIdx].id);
+            btnRefs.current[nextIdx]?.focus();
           }}
           tabIndex={value === x.id ? 0 : -1}
           className={cn(
-            "text-ui text-muted-foreground not-aria-checked:hover:text-foreground focus-visible:ring-ring aria-checked:bg-raised-3 flex min-w-0 items-center gap-1.5 outline-none focus-visible:ring-2",
+            "text-ui text-muted-foreground not-aria-checked:hover:text-foreground focus-visible:ring-ring studio-press relative z-1 flex min-w-0 items-center gap-1.5 outline-none focus-visible:ring-2",
             vertical
               ? "aria-checked:text-primary h-8 justify-start rounded-md px-2.5 pointer-coarse:h-10"
-              : "aria-checked:text-foreground",
-            vertical ? "" : "flex-1 justify-center rounded-sm px-2 pointer-coarse:h-10",
+              : "aria-checked:text-foreground flex-1 justify-center rounded-sm px-2 pointer-coarse:h-10",
           )}
         >
           {x.title}
@@ -102,7 +176,7 @@ export function NavItem({
       aria-current={current ? "true" : undefined}
       onClick={onClick}
       className={cn(
-        "focus-visible:ring-ring flex h-7.5 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs transition-colors duration-150 outline-none focus-visible:ring-2 pointer-coarse:h-10",
+        "focus-visible:ring-ring studio-press flex h-7.5 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs outline-none focus-visible:ring-2 pointer-coarse:h-10",
         current
           ? "bg-raised-3 text-primary font-medium"
           : "text-foreground/90 hover:bg-card hover:text-foreground",
@@ -176,7 +250,7 @@ export function ChipGroup<T extends string>({
             (e.currentTarget.parentElement?.children[nextIdx] as HTMLElement | undefined)?.focus();
           }}
           className={cn(
-            "bg-card text-muted-foreground not-aria-checked:hover:text-foreground focus-visible:ring-ring aria-checked:bg-raised-3 aria-checked:text-foreground flex flex-none items-center gap-1 rounded-full text-xs transition-colors duration-150 outline-none focus-visible:ring-2 pointer-coarse:h-9",
+            "bg-card text-muted-foreground not-aria-checked:hover:text-foreground focus-visible:ring-ring aria-checked:bg-raised-3 aria-checked:text-foreground studio-press flex flex-none items-center gap-1 rounded-full text-xs outline-none focus-visible:ring-2 pointer-coarse:h-9",
             scroll ? "h-7 px-3" : "h-6 px-2",
           )}
         >
@@ -627,7 +701,7 @@ export function EmptyCard({
   return (
     <div className={cn("bg-card text-ui rounded-xl p-3", className)}>
       <p className="font-medium">{title}</p>
-      <p className="text-muted-foreground">{children}</p>
+      <div className="text-muted-foreground">{children}</div>
     </div>
   );
 }

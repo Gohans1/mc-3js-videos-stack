@@ -35,7 +35,7 @@ import {
   Trials,
 } from "./contract.ts";
 import { ratioOf } from "./frame.ts";
-import { createNotes } from "./notes.mjs";
+import { createNotes, watchNotesFile } from "./notes.mjs";
 import { openSound } from "./sound.mjs";
 import { openTimelineFile } from "./timeline_file.mjs";
 import { layerDuration, setTiming, timingClock } from "./timing-state.mjs";
@@ -118,7 +118,8 @@ const debounce = (f, ms) => {
   };
 };
 
-export const openFilm = (projectDir, { send }) => {
+// activity: src/activity.mjs's, told of each edit made outside the studio (the AI's)
+export const openFilm = (projectDir, { send, activity }) => {
   const PROJECT = resolve(projectDir);
   const SRC = join(PROJECT, "src");
   if (!existsSync(join(SRC, "scene.ts")))
@@ -173,6 +174,7 @@ export const openFilm = (projectDir, { send }) => {
   const sound = openSound(PROJECT, pkg["live-studio"]); // null: the film has no sound lanes for the studio to edit
   const readers = new Set();
   let syncVoiceAssemble = () => {};
+  let syncNotes = () => {};
   const voice = openVoice(PROJECT, pkg["live-studio"], {
     releaseFile: (target) => {
       for (const r of readers) if (r.file === target) r.stop();
@@ -400,6 +402,9 @@ export const openFilm = (projectDir, { send }) => {
   // ---------- Watching the film's files. Code is Vite's to watch (src/vite_film.mjs); these are the files code doesn't import
   const watchers = [];
   const watch = (...a) => watchers.push(fsWatch(...a));
+  const outside = (f, say) => {
+    if (!f.ownWrite()) activity?.add({ say });
+  };
   const start = () => {
     // Windows can report a file as changed just because something read it, and every remix restarts the sound on every open page:
     // what counts is whether anything's size or time really moved. A file deleted is a change too, never a crash
@@ -441,6 +446,7 @@ export const openFilm = (projectDir, { send }) => {
           if (now !== null && now !== lanesSeen) {
             lanesSeen = now;
             if (!sound.ownWrite()) send("lanes");
+            outside(sound, "Edited the sound lanes");
           }
         }, 150),
       );
@@ -457,6 +463,7 @@ export const openFilm = (projectDir, { send }) => {
             camSeen = now;
             checkContract();
             send("cam");
+            outside(cam, "Edited the camera keys");
           }
         }, 150),
       );
@@ -471,6 +478,7 @@ export const openFilm = (projectDir, { send }) => {
             shotsSeen = now;
             checkContract();
             send("shots");
+            outside(shots, "Edited the shots");
           }
         }, 150),
       );
@@ -485,6 +493,7 @@ export const openFilm = (projectDir, { send }) => {
             textSeen = now;
             checkContract();
             send("text");
+            outside(text, "Edited the titles and text");
           }
         }, 150),
       );
@@ -499,6 +508,7 @@ export const openFilm = (projectDir, { send }) => {
             seen = now;
             checkContract();
             send("adjustment");
+            outside(adjustment, "Edited the adjustment layers");
           }
         }, 150),
       );
@@ -513,6 +523,7 @@ export const openFilm = (projectDir, { send }) => {
             seen = now;
             checkContract();
             send("timing");
+            outside(timing, "Edited the timing (speed, freezes, gaps)");
             remix();
           }
         }, 150),
@@ -529,6 +540,7 @@ export const openFilm = (projectDir, { send }) => {
             seen = now;
             checkContract();
             send("keys", i);
+            outside(k, `Edited the keys in ${basename(k.FILE)}`);
           }
         }, 150),
       );
@@ -598,10 +610,9 @@ export const openFilm = (projectDir, { send }) => {
     }
     if (!existsSync(LITE) && has("make_lite.py"))
       spawn(PYTHON, ["make_lite.py"], { cwd: PROJECT, stdio: "inherit" });
-    watch(
-      notes.file,
-      debounce(() => send("notes"), 100),
-    ); // the agent ticking a note off shows up here too
+    const notesWatcher = watchNotesFile(notes.file, () => send("notes"), { debounceMs: 80 });
+    watchers.push(notesWatcher); // external edits or atomic rewrites show up without dropping events
+    syncNotes = () => notesWatcher.sync();
     // Voice edits and takes live in edit.json: keep the mix and word map following them
     const voiceEdits = () => {
       try {
@@ -740,6 +751,7 @@ export const openFilm = (projectDir, { send }) => {
     analyzeBeats: (name, settings) => analyzeBeats(sound.fileOf(name), settings, PYTHON),
     liveLanes: () => LIVE && mixIsLive(),
     notes,
+    syncNotes: () => syncNotes(),
     readChoices,
     choose,
     ratio,

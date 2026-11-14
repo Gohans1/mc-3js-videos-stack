@@ -28,6 +28,7 @@ import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
 import { findVaults, openSound } from "./src/sound.mjs";
+import { tell } from "./src/tell.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
 import { clockForTimeline } from "./src/timing-state.mjs";
 import { assertInsideDir } from "./src/voice-map.mjs";
@@ -578,4 +579,12 @@ else {
     `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)\nnext: fix each ✖ as it says, then bun run check`,
   );
 }
+await tell(PROJECT, {
+  say: problems.length
+    ? `Checked the film's files: ${problems.length} problem${problems.length > 1 ? "s" : ""} to fix`
+    : warnings.length
+      ? `Checked the film's files: fine, ${warnings.length} warning${warnings.length > 1 ? "s" : ""} to read`
+      : "Checked the film's files: all fine",
+  level: problems.length ? "fail" : warnings.length ? "warn" : "ok",
+});
 process.exit(found.length ? 1 : 0);

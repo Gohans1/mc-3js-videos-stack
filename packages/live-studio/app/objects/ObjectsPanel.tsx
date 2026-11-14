@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { timingClock } from "../../src/timing-state.mjs";
 import { CurveEditor, EaseTiles } from "../components/EasePicker";
 import { EmptyCard, Segmented } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { NumberField } from "../components/NumberField";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
@@ -655,54 +656,62 @@ export function ObjectLibrary({ side = false }: { side?: boolean }) {
         <p className="text-muted-foreground px-0.5 text-xs">
           Drag onto the picture, or click + to add it in the middle of the view.
         </p>
-        <ul className="flex flex-col">
-          {shown.slice(0, CAP).map((x) => (
-            <li
-              key={x.what}
-              onPointerDown={press(x.what)}
-              onDragStart={(e) => e.preventDefault()}
-              className="group hover:bg-card flex min-h-11 cursor-grab touch-none items-center gap-2 rounded-lg px-1 select-none active:cursor-grabbing"
-            >
-              <Icon item={x} />
-              <span className="flex min-w-0 flex-1 flex-col py-1">
-                <span className="text-ui truncate first-letter:uppercase">{x.title}</span>
-                <span translate="no" className="text-muted-foreground truncate text-xs">
-                  {x.what}
+        <TabStage
+          activeKey={kind}
+          order={KINDS.map((k) => k.id)}
+          axis="y"
+          distance={6}
+          duration={150}
+        >
+          <ul className="flex flex-col">
+            {shown.slice(0, CAP).map((x) => (
+              <li
+                key={x.what}
+                onPointerDown={press(x.what)}
+                onDragStart={(e) => e.preventDefault()}
+                className="group hover:bg-card flex min-h-11 cursor-grab touch-none items-center gap-2 rounded-lg px-1 transition-colors duration-150 select-none active:cursor-grabbing"
+              >
+                <Icon item={x} />
+                <span className="flex min-w-0 flex-1 flex-col py-1">
+                  <span className="text-ui truncate first-letter:uppercase">{x.title}</span>
+                  <span translate="no" className="text-muted-foreground truncate text-xs">
+                    {x.what}
+                  </span>
                 </span>
-              </span>
-              <Tip label="Add in the middle of the view">
-                <Button
-                  variant="quiet"
-                  size="icon-lg"
-                  className="flex-none pointer-coarse:size-10"
-                  aria-label={`Add ${titleOf(x.what)}`}
-                  onClick={() => addInFront(x.what, lookAtClick)}
-                >
-                  <Plus />
-                </Button>
-              </Tip>
-            </li>
-          ))}
-          {items && shown.length > CAP && (
-            <li className="text-muted-foreground px-1 py-2 text-xs">
-              Showing {CAP} of {shown.length}. Type to narrow it down.
-            </li>
-          )}
-          {items && !shown.length && (
-            <li className="text-ui text-muted-foreground flex flex-col items-start gap-1.5 px-1 py-2">
-              {!items.length
-                ? "Couldn't list the film's blocks and mobs"
-                : typed
-                  ? `No ${meta.one}s match "${q.trim()}"`
-                  : `This film has no ${meta.one}s`}
-              {elsewhere.map((k) => (
-                <Button key={k.id} variant="secondary" size="md" onClick={() => setKind(k.id)}>
-                  {found[k.id].length} in {k.title}
-                </Button>
-              ))}
-            </li>
-          )}
-        </ul>
+                <Tip label="Add in the middle of the view">
+                  <Button
+                    variant="quiet"
+                    size="icon-lg"
+                    className="flex-none pointer-coarse:size-10"
+                    aria-label={`Add ${titleOf(x.what)}`}
+                    onClick={() => addInFront(x.what, lookAtClick)}
+                  >
+                    <Plus />
+                  </Button>
+                </Tip>
+              </li>
+            ))}
+            {items && shown.length > CAP && (
+              <li className="text-muted-foreground px-1 py-2 text-xs">
+                Showing {CAP} of {shown.length}. Type to narrow it down.
+              </li>
+            )}
+            {items && !shown.length && (
+              <li className="text-ui text-muted-foreground flex flex-col items-start gap-1.5 px-1 py-2">
+                {!items.length
+                  ? "Couldn't list the film's blocks and mobs"
+                  : typed
+                    ? `No ${meta.one}s match "${q.trim()}"`
+                    : `This film has no ${meta.one}s`}
+                {elsewhere.map((k) => (
+                  <Button key={k.id} variant="secondary" size="md" onClick={() => setKind(k.id)}>
+                    {found[k.id].length} in {k.title}
+                  </Button>
+                ))}
+              </li>
+            )}
+          </ul>
+        </TabStage>
       </div>
     </section>
   );

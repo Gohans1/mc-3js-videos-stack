@@ -12,6 +12,7 @@ import {
   sourceOf,
 } from "./groups";
 import type { LibraryItem } from "./sound";
+import { voiceLeafTitle } from "./voice-library-view";
 
 const NATURAL_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const SIMPLE_COLLATOR = new Intl.Collator(undefined);
@@ -37,10 +38,10 @@ export type { EditionKind, SoundOrigin };
 export { catTitle, editionOf, originOf, sourceOf };
 export type OriginFilter = typeof ALL | SoundOrigin;
 export type EditionFilter = typeof ALL | EditionKind;
-export type NavGroupId = "yours" | "bgm" | "sfx" | "mc";
+export type NavGroupId = "yours" | "bgm" | "sfx" | "mc" | "voices";
 export type YoursLeaf = "fav" | "voice" | "film";
 export type NavPick =
-  { group: "yours"; leaf: YoursLeaf } | { group: "bgm" | "sfx" | "mc"; leaf: string };
+  { group: "yours"; leaf: YoursLeaf } | { group: "bgm" | "sfx" | "mc" | "voices"; leaf: string };
 export type OpenGroups = Record<NavGroupId, boolean>;
 
 export interface NavLeaf {
@@ -89,6 +90,7 @@ export const INITIAL_OPEN_GROUPS: OpenGroups = {
   bgm: false,
   sfx: true,
   mc: false,
+  voices: false,
 };
 
 const SOURCE_ORDER = [
@@ -434,6 +436,7 @@ export const buildNavTree = (
   favs: readonly string[],
   kindOf: (item: LibraryItem) => SoundKind,
   voiceCount = 0,
+  voiceSection: { count: number; leaves: readonly NavLeaf[] } = { count: 0, leaves: [] },
 ): NavSection[] => {
   const byName = new Map<string, LibraryItem>();
   const filmItems: LibraryItem[] = [];
@@ -488,6 +491,15 @@ export const buildNavTree = (
       count: countDistinctFamilies(mc),
       leaves: categoryLeaves(mc),
     },
+    {
+      id: "voices",
+      title: "Voices",
+      one: "voice",
+      count: voiceSection.count,
+      leaves: voiceSection.leaves.length
+        ? [...voiceSection.leaves]
+        : [{ id: ALL, title: "All", count: 0 }],
+    },
   ];
 };
 
@@ -505,6 +517,7 @@ export const stepNavHeader = (
     bgm: false,
     sfx: false,
     mc: false,
+    voices: false,
     [clicked]: true,
   };
   const section = tree.find((s) => s.id === clicked);
@@ -585,6 +598,9 @@ export const searchPlaceholder = (nav: NavPick): string => {
   if (nav.group === "bgm") return "Search music";
   if (nav.group === "sfx") return "Search sound effects";
   if (nav.group === "mc") return "Search Minecraft";
+  if (nav.group === "voices") {
+    return nav.leaf === "fav" ? "Search favorite voices" : "Search English voices";
+  }
   if (nav.leaf === "voice") return "Search voiceover & script";
   return nav.leaf === "fav" ? "Search favorites" : "Search film sounds";
 };
@@ -592,6 +608,11 @@ export const searchPlaceholder = (nav: NavPick): string => {
 export const categoryHeading = (nav: NavPick): string => {
   if (nav.group === "yours") {
     return nav.leaf === "fav" ? "Favorites" : nav.leaf === "voice" ? "Voiceover" : "This film";
+  }
+  if (nav.group === "voices") {
+    if (nav.leaf === ALL) return "All English voices";
+    if (nav.leaf === "fav") return "Favorite voices";
+    return voiceLeafTitle(nav.leaf);
   }
   if (nav.group === "mc") {
     return nav.leaf === ALL ? "All Minecraft" : (MC_HEADINGS[nav.leaf] ?? catTitle(nav.leaf));
@@ -611,6 +632,7 @@ export const filterAndSortLibrary = ({
   kindOf,
   narrationName = null,
   voiceCount = 0,
+  voiceSection,
 }: {
   items: readonly LibraryItem[];
   favs: readonly string[];
@@ -622,6 +644,7 @@ export const filterAndSortLibrary = ({
   kindOf: (item: LibraryItem) => SoundKind;
   narrationName?: string | null;
   voiceCount?: number;
+  voiceSection?: { count: number; leaves: readonly NavLeaf[] };
 }) => {
   const want = words(query);
   const soundItems = narrationName ? items.filter((x) => x.name !== narrationName) : items;
@@ -631,7 +654,7 @@ export const filterAndSortLibrary = ({
         const have = itemSearchTokens(x);
         return want.every((w) => have.some((h) => h.startsWith(w)));
       });
-  const tree = buildNavTree(matched, favs, kindOf, voiceCount);
+  const tree = buildNavTree(matched, favs, kindOf, voiceCount, voiceSection);
 
   // Resolve valid leaf (if current category has 0 items under active query/library, fall back to "all" for bgm/sfx/mc)
   const section = tree.find((s) => s.id === nav.group)!;
@@ -640,7 +663,9 @@ export const filterAndSortLibrary = ({
   const activeNav: NavPick = nav.group === "yours" ? nav : { group: nav.group, leaf: validLeaf };
 
   let scoped: LibraryItem[];
-  if (activeNav.group === "yours") {
+  if (activeNav.group === "voices") {
+    scoped = [];
+  } else if (activeNav.group === "yours") {
     if (activeNav.leaf === "voice") {
       scoped = [];
     } else if (activeNav.leaf === "fav") {

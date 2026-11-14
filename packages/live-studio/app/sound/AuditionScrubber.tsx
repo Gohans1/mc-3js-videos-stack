@@ -32,6 +32,7 @@ export function AuditionScrubber({
           max={duration}
           step={0.01}
           value={at}
+          disabled={!known}
           aria-label={`Seek ${label}`}
           onValueChange={(v: number | readonly number[]) =>
             seekAudition(id, typeof v === "number" ? v : v[0], fallbackSeconds)

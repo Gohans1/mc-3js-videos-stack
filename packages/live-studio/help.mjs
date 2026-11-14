@@ -61,7 +61,7 @@ const GROUPS = [
   [
     "The creator's notes",
     {
-      notes: "the creator's open notes (ID for one in full, --shot N for a shot's)",
+      notes: "the creator's open notes (up to 25; ID for one in full, --shot N, --sort, --limit)",
       note: "answer one: bun run note done (waits for the creator's check), ask, or learned (--help)",
     },
   ],

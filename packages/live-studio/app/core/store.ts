@@ -14,6 +14,7 @@ import { type PlaybackSlice, playbackSlice } from "../playback/slice";
 import { type SoundSlice, soundSlice } from "../sound/slice";
 import { type TextSlice, textSlice } from "../text/slice";
 import { type TimelineSlice, timelineSlice } from "../timeline/slice";
+import { createNoteFocusRegistry } from "../notes/compose-motion";
 import type { Favorites } from "./favorites";
 import { type Prefs, readPrefs, savePref } from "./prefs";
 import { S } from "./state";
@@ -45,11 +46,14 @@ interface PageSlice {
     | "keys"
     | "text"
     | "textAnim"
-    | "film";
-  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film"; // on a wide screen: the left column's tab (side then picks the right column's)
+    | "film"
+    | "lessons";
+  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film" | "lessons"; // on a wide screen: the left column's tab (side then picks the right column's)
   filmKind: string | null; // the Film tab's open kind (own-work.ts group id, "now" for On screen); null: its first
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;
+  aiActivity: boolean; // what the AI is doing shown as it works (a setting, core/prefs.ts; activity/activity.ts)
+  pictureRev: number;
 }
 export type StudioState = PageSlice &
   PlaybackSlice &
@@ -79,6 +83,7 @@ export const studio = createStore<StudioState>(() => ({
   filmKind: null,
   favorites: { sounds: [], effects: [] },
   gradeLibrary: { luts: [], presets: [] },
+  pictureRev: 0,
   ...playbackSlice,
   ...pictureSlice,
   ...notesSlice,
@@ -118,6 +123,14 @@ export const say = (words: string, hold = 3000) => {
   if (hold) statusTimer = window.setTimeout(() => set({ status: "" }), hold);
 };
 
+export const invalidatePictures = () => set((s) => ({ pictureRev: s.pictureRev + 1 }));
+
+export const noteFocus = createNoteFocusRegistry();
+
 // What the engine asks of the page's own elements. A phone only raises its keyboard for a focus made inside the tap itself,
 // so the note box is focused synchronously from the engine, not from a React effect after the next render
-export const ui = { focusNote: () => {}, blurNote: () => {} };
+export const ui = {
+  focusNote: () => noteFocus.focus(),
+  blurNote: () => noteFocus.blur(),
+  cancelNoteFocus: () => noteFocus.clearPending(),
+};

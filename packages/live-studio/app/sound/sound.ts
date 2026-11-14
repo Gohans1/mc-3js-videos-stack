@@ -7,6 +7,7 @@ import { narrationLines } from "../../src/narration.ts";
 import { mapVoice } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
 import { getFile } from "../core/net";
+import { scheduleIdleBatch } from "../core/search";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
@@ -14,6 +15,7 @@ import { r3, stamp } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
 import { lanePick } from "../options/options";
 import { marks, refreshVoiceTimes } from "../timeline/timeline";
+import { createAuditionController } from "./audition-controller";
 import { type BeatMarkers, beatMarks } from "./beat-marks";
 import { type GainClip } from "./gain";
 import type { Role } from "./hit";
@@ -99,34 +101,11 @@ let cancelTokenWarm: (() => void) | null = null;
 
 const scheduleSearchTokenWarm = (items: readonly LibraryItem[]) => {
   cancelTokenWarm?.();
-  cancelTokenWarm = null;
-  if (typeof window === "undefined" || !items.length) return;
-  let idx = 0;
-  let cancelled = false;
-  // Idle time only, in small slices until the idle period is spent (no timeout: a search finds tokens not warmed yet itself,
-  // and 600 at a time on a deadline ran most of a second into a phone's page load)
-  const scheduleNext = (cb: (idle?: IdleDeadline) => void): (() => void) => {
-    if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(cb);
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = window.setTimeout(cb, 16);
-    return () => window.clearTimeout(id);
-  };
-  let cancelStep = () => {};
-  const step = (idle?: IdleDeadline) => {
-    if (cancelled || library !== items) return;
-    if (!idle) idx = warmSearchTokens(items, idx, 600);
-    else
-      do idx = warmSearchTokens(items, idx, 40);
-      while (idx < items.length && idle.timeRemaining() > 2);
-    if (idx < items.length) cancelStep = scheduleNext(step);
-  };
-  cancelStep = scheduleNext(step);
-  cancelTokenWarm = () => {
-    cancelled = true;
-    cancelStep();
-  };
+  cancelTokenWarm = scheduleIdleBatch(
+    items.length,
+    (idx, batch) => warmSearchTokens(items, idx, batch),
+    () => library === items,
+  );
 };
 
 const rebuildLibraryIndex = () => {
@@ -767,76 +746,16 @@ export const peaksOf = (name: string) => {
 };
 
 // One sound heard on its own, from the library: a second press stops it
-const audition = new Audio();
-let auditioning = "";
-let auditionRev = 0;
-let auditionTick: ReturnType<typeof setInterval> | null = null;
-const auditionSubs = new Set<() => void>();
-const notifyAudition = () => {
-  auditionRev++;
-  for (const fn of auditionSubs) fn();
-};
-const stopAuditionTick = () => {
-  if (auditionTick !== null) {
-    clearInterval(auditionTick);
-    auditionTick = null;
-  }
-};
-const startAuditionTick = () => {
-  stopAuditionTick();
-  auditionTick = setInterval(notifyAudition, 80);
-};
-export const listenUrl = (id: string, url: string) => {
-  if (auditioning === id && !audition.paused) {
-    audition.pause();
-    auditioning = "";
-    return;
-  }
-  auditioning = id;
-  audition.src = url;
-  audition.play().catch(() => {});
-};
-export const listen = (name: string) => listenUrl(name, `/api/sfx/${encodeURIComponent(name)}.wav`);
-export const listening = () => (audition.paused ? "" : auditioning);
-export const subscribeAudition = (fn: () => void) => {
-  auditionSubs.add(fn);
-  return () => {
-    auditionSubs.delete(fn);
-  };
-};
-export const auditionSnapshot = () => auditionRev;
-export const auditionProgress = (fallbackSeconds: number) => {
-  const liveDur =
-    Number.isFinite(audition.duration) && audition.duration > 0 ? audition.duration : 0;
-  const known = liveDur > 0 || fallbackSeconds > 0;
-  const duration = liveDur > 0 ? liveDur : fallbackSeconds;
-  const at = Number.isFinite(audition.currentTime)
-    ? Math.min(Math.max(0.01, duration), Math.max(0, audition.currentTime))
-    : 0;
-  return { at, duration: Math.max(0.01, duration), known };
-};
-export const seekAudition = (id: string, toSeconds: number, fallbackSeconds = seconds(id)) => {
-  if (auditioning !== id) return;
-  const { duration } = auditionProgress(fallbackSeconds);
-  const maxSeek = Math.max(0, duration - 0.02);
-  audition.currentTime = Math.min(maxSeek, Math.max(0, toSeconds));
-  notifyAudition();
-};
-audition.addEventListener("ended", () => {
-  stopAuditionTick();
-  auditioning = "";
-  notifyAudition();
-  set({ soundRev: get().soundRev + 1 });
+const auditionCtrl = createAuditionController({
+  audio: new Audio(),
+  onSoundBump: () => set({ soundRev: get().soundRev + 1 }),
+  onPlayError: (msg) => say(msg),
 });
-audition.addEventListener("play", () => {
-  startAuditionTick();
-  notifyAudition();
-  set({ soundRev: get().soundRev + 1 });
-});
-audition.addEventListener("pause", () => {
-  stopAuditionTick();
-  notifyAudition();
-  set({ soundRev: get().soundRev + 1 });
-});
-audition.addEventListener("timeupdate", notifyAudition);
-audition.addEventListener("loadedmetadata", notifyAudition);
+export const listenUrl = auditionCtrl.listenUrl;
+export const listen = auditionCtrl.listen;
+export const listening = auditionCtrl.listening;
+export const subscribeAudition = auditionCtrl.subscribeAudition;
+export const auditionSnapshot = auditionCtrl.auditionSnapshot;
+export const auditionProgress = auditionCtrl.auditionProgress;
+export const seekAudition = (id: string, toSeconds: number, fallbackSeconds = seconds(id)) =>
+  auditionCtrl.seekAudition(id, toSeconds, fallbackSeconds);

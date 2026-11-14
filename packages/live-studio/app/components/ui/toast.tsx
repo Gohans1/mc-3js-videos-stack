@@ -208,6 +208,20 @@ function Toaster({
   );
 }
 
+const showUndo = (title: string, undo: () => void, timeout = 10000) => {
+  const id = toast.add({
+    title,
+    timeout,
+    actionProps: {
+      children: "Undo",
+      onClick: () => {
+        toast.close(id);
+        undo();
+      },
+    },
+  });
+};
+
 const createToastManager = ToastPrimitive.createToastManager;
 const useToastManager = ToastPrimitive.useToastManager;
 
@@ -223,6 +237,7 @@ export {
   ToastTitle,
   ToastViewport,
   createToastManager,
+  showUndo,
   toast,
   useToastManager,
 };

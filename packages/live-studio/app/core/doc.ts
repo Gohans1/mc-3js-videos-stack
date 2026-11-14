@@ -48,6 +48,16 @@ const undos: Entry[] = [],
 // Edits made inside together() (one drag over keys in two files) are undone, redone and saved as one
 let group = 0,
   touched: Set<Side> | null = null;
+const mutListeners = new Set<() => void>();
+export const onDocMutated = (fn: () => void) => {
+  mutListeners.add(fn);
+  return () => {
+    mutListeners.delete(fn);
+  };
+};
+const emitMutated = () => {
+  for (const fn of mutListeners) fn();
+};
 const link = (sides: Iterable<Side>) => {
   const all = [...sides];
   for (const s of all) for (const o of all) if (o !== s) s.partners.add(o);
@@ -175,6 +185,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       hooks.tidy?.(data!);
       kept = JSON.stringify(data);
       hooks.changed();
+      emitMutated();
       hooks.replaced?.(old);
       side.later();
       return was;
@@ -189,6 +200,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     hooks.tidy?.(data);
     kept = JSON.stringify(data);
     hooks.changed();
+    emitMutated();
     hooks.replaced?.(old);
   };
   const release = () => {
@@ -232,6 +244,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       kept = next;
       side.unsaved = true;
       hooks.changed();
+      emitMutated();
       side.later();
     },
     preview: (change: (d: T) => void) => {

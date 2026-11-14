@@ -5,6 +5,7 @@
 // vision and the key from view while flying (Shift+K; night vision in Settings), the free camera (F, and in Settings; kept
 // while on); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
 // Settings). Play, Note, Draw, full screen and the settings never go. The widths are the bar's inside at a phone's larger text
+import { DURATION, SHOTS_OUT } from "film/scene";
 import {
   Brush,
   Ellipsis,
@@ -20,30 +21,210 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
+import { AiPresence } from "../activity/AiPresence";
 import { saveView } from "../camera/cam";
+import { useEnterMotion } from "../components/Motion";
 import { Tip } from "../components/Tip";
+import { shotIndex } from "../core/film";
+import { S } from "../core/state";
 import { set, setPref, useStudio } from "../core/store";
+import { FPS, stamp } from "../core/time";
 import { setInk } from "../notes/ink";
-import { openNote } from "../notes/notes";
+import { noteMarks, openNote, originOf } from "../notes/notes";
 import { SnapshotButtons } from "../picture/Compare";
 import { setFree } from "../picture/freecam";
-import { setVolume, toggleMute, togglePlay } from "../playback/transport";
+import { seek, setPlaying, setVolume, toggleMute, togglePlay } from "../playback/transport";
+import { skimSound } from "../sound/skim";
 import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 import { Settings } from "./Settings";
 
 // CapCut's player bar is one slim row under the picture: 32 px controls with a mouse, 40 px under a finger (Button size md)
 const square = "pointer-coarse:size-10";
 
+function ReviewScrubBar() {
+  useStudio((s) => s.notes);
+  const barRef = useRef<HTMLDivElement>(null),
+    trackRef = useRef<HTMLDivElement>(null),
+    timeRef = useRef<HTMLSpanElement>(null),
+    shotRef = useRef<HTMLSpanElement>(null);
+  const [hover, setHover] = useState<{ t: number; pct: number } | null>(null);
+  useEnterMotion(barRef, { y: 6, scale: 0.99, duration: 180 });
+
+  const total = Math.max(DURATION, 0.001);
+
+  useEffect(() => {
+    let shown = -1,
+      raf = 0;
+    const sync = () => {
+      raf = requestAnimationFrame(sync);
+      const track = trackRef.current;
+      if (!track || S.t === shown) return;
+      shown = S.t;
+      const frac = Math.min(1, Math.max(0, S.t / total));
+      track.style.setProperty("--at", String(frac));
+      track.setAttribute("aria-valuenow", S.t.toFixed(2));
+      track.setAttribute("aria-valuetext", `${stamp(S.t)} of ${stamp(DURATION)}`);
+      if (timeRef.current) timeRef.current.textContent = stamp(S.t);
+      if (shotRef.current) {
+        const i = shotIndex(S.t);
+        const name = S.comments[i];
+        shotRef.current.textContent = name ? `Shot ${i} · ${name}` : `Shot ${i}`;
+      }
+    };
+    sync();
+    return () => cancelAnimationFrame(raf);
+  }, [total]);
+
+  const timeFromPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const r = trackRef.current!.getBoundingClientRect();
+    const pct = Math.min(Math.max((e.clientX - r.left) / Math.max(r.width, 1), 0), 1);
+    return { t: pct * DURATION, pct: pct * 100 };
+  };
+
+  const finishDrag = () => {
+    if (!S.dragging) return;
+    const resume = S.dragging.resume;
+    S.dragging = null;
+    S.dirty = true;
+    trackRef.current?.removeAttribute("data-dragging");
+    if (resume) setPlaying(true);
+  };
+
+  const initialShot = shotIndex(S.t);
+  const initialShotName = S.comments[initialShot];
+  const initialFrac = Math.min(1, Math.max(0, S.t / total));
+
+  return (
+    <div
+      ref={barRef}
+      className="flex flex-col gap-0.5 border-b border-white/6 px-3 pt-2 pb-1"
+      aria-label="Review playback scrub"
+    >
+      <div className="flex items-center justify-between gap-2 text-xs tabular-nums">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="font-mono whitespace-nowrap">
+            <span ref={timeRef} className="text-primary font-semibold">
+              {stamp(S.t)}
+            </span>
+            <span className="text-muted-foreground"> / {stamp(DURATION)}</span>
+          </span>
+          <span ref={shotRef} className="text-muted-foreground truncate">
+            {initialShotName ? `Shot ${initialShot} · ${initialShotName}` : `Shot ${initialShot}`}
+          </span>
+        </div>
+        {hover && (
+          <span className="bg-card text-foreground text-tag shrink-0 rounded px-1.5 py-0.5 font-mono whitespace-nowrap">
+            {stamp(hover.t)} · Shot {shotIndex(hover.t)}
+          </span>
+        )}
+      </div>
+      <div
+        ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Review playhead"
+        aria-valuemin={0}
+        aria-valuenow={+S.t.toFixed(2)}
+        aria-valuemax={+DURATION.toFixed(2)}
+        style={{ "--at": String(initialFrac) }}
+        className="group/scrub focus-visible:ring-ring relative h-7 w-full cursor-pointer touch-none rounded-md outline-none select-none focus-visible:ring-2"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          e.currentTarget.setAttribute("data-dragging", "");
+          S.dragging = { resume: S.playing };
+          if (S.playing) setPlaying(false);
+          const next = timeFromPointer(e);
+          setHover(next);
+          seek(next.t);
+          skimSound(S.t);
+        }}
+        onPointerMove={(e) => {
+          const next = timeFromPointer(e);
+          setHover(next);
+          if (!S.dragging) return;
+          seek(next.t);
+          skimSound(S.t);
+        }}
+        onPointerLeave={() => {
+          if (!S.dragging) setHover(null);
+        }}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+        onLostPointerCapture={finishDrag}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 1 / FPS : 1;
+          const by =
+            e.key === "ArrowRight" || e.key === "ArrowUp"
+              ? step
+              : e.key === "ArrowLeft" || e.key === "ArrowDown"
+                ? -step
+                : e.key === "PageUp"
+                  ? 5
+                  : e.key === "PageDown"
+                    ? -5
+                    : 0;
+          if (by) seek(S.t + by);
+          else if (e.key === "Home") seek(0);
+          else if (e.key === "End") seek(DURATION);
+          else return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
+        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-white/14">
+          <div className="bg-primary h-full w-[calc(var(--at,0)*100%)]" />
+        </div>
+        {SHOTS_OUT.map(
+          (s, i) =>
+            s.t > 0 && (
+              <span
+                key={`cut-${i}`}
+                aria-hidden
+                style={{ "--x": `${(s.t / total) * 100}%` }}
+                className="pointer-events-none absolute top-1/2 left-(--x) h-2.5 w-px -translate-x-1/2 -translate-y-1/2 bg-white/25"
+              />
+            ),
+        )}
+        {noteMarks().map((m, i) => (
+          <span
+            key={`note-mark-${i}`}
+            aria-hidden
+            style={{ "--x": `${(m.t / total) * 100}%` }}
+            className={cn(
+              "pointer-events-none absolute top-1/2 left-(--x) -translate-x-1/2 -translate-y-1/2 rounded-full",
+              m.done ? "h-1.5 w-1 bg-white/25" : m.check ? "bg-warn h-3.5 w-1" : "bg-ink h-3.5 w-1",
+            )}
+          />
+        ))}
+        {hover && (
+          <span
+            aria-hidden
+            style={{ "--x": `${hover.pct}%` }}
+            className="pointer-events-none absolute top-1/2 left-(--x) h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-white/55"
+          />
+        )}
+        <span
+          aria-hidden
+          className="bg-primary ring-background absolute top-1/2 left-[calc(var(--at,0)*100%)] size-3.5 -translate-1/2 rounded-full shadow-md ring-2 transition-transform duration-150 ease-out group-hover/scrub:scale-115 group-data-dragging/scrub:scale-125 motion-reduce:transition-none"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function Transport() {
   const playing = useStudio((s) => s.playing),
     muted = useStudio((s) => s.muted),
-    volume = useStudio((s) => s.volume);
+    volume = useStudio((s) => s.volume),
+    review = useStudio((s) => s.review);
   const settingsOpen = useStudio((s) => s.settingsOpen),
     free = useStudio((s) => s.free),
     ink = useStudio((s) => s.ink),
@@ -54,164 +235,169 @@ export function Transport() {
     full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg px-3 py-1 in-data-wide:col-start-2">
-      <Button
-        variant="secondary"
-        size="md"
-        className="min-w-19 @max-[440px]:min-w-0"
-        aria-label={playing ? "Pause" : "Play"}
-        onClick={togglePlay}
-      >
-        {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
-        <span className="@max-[440px]:hidden">{playing ? "Pause" : "Play"}</span>
-      </Button>
-      <Button
-        size="md"
-        className="upright:flex-1 sideways:flex-1"
-        onClick={() => openNote(null)}
-        aria-label="Add note"
-      >
-        <Pencil data-icon="inline-start" />
-        <span className="@max-[420px]:hidden">Note</span>
-      </Button>
-      <Tip label="Draw on the picture (D): pen, arrow, box, or a path across seconds">
+    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 flex-col overflow-hidden rounded-b-lg in-data-review:col-start-2 in-data-wide:col-start-2">
+      {review && <ReviewScrubBar />}
+      <div className="flex min-w-0 items-center gap-1.5 px-3 py-1 @max-[300px]:gap-1 @max-[300px]:px-2">
         <Button
-          variant="quiet"
+          variant="secondary"
           size="md"
-          aria-label="Draw"
-          aria-pressed={!!ink}
-          onClick={() => setInk(ink ? null : "pen")}
+          className="min-w-19 @max-[440px]:min-w-0"
+          aria-label={playing ? "Pause" : "Play"}
+          onClick={togglePlay}
         >
-          <Brush data-icon="inline-start" />
-          <span className="@max-[700px]:hidden">Draw</span>
+          {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
+          <span className="@max-[440px]:hidden">{playing ? "Pause" : "Play"}</span>
         </Button>
-      </Tip>
-      {/* Walking the camera needs a mouse and keys, as in Settings */}
-      <Tip label="Free camera (F): drag to look, W A S D to fly, Space up, Shift down">
         <Button
-          variant="quiet"
           size="md"
-          className={cn("pointer-coarse:hidden", !free && "@max-[520px]:hidden")}
-          aria-label="Free camera"
-          aria-pressed={free}
-          onClick={() => setFree(!free)}
+          className="upright:flex-1 sideways:flex-1"
+          onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
+          aria-label="Add note"
         >
-          <Move3d data-icon="inline-start" />
-          <span className="@max-[960px]:hidden">Free camera</span>
+          <Pencil data-icon="inline-start" />
+          <span className="@max-[420px]:hidden">Note</span>
         </Button>
-      </Tip>
-      {free && (
-        <Tip label="Night vision: light up this view and clear the fog to find your way. The film's own light stays as it is">
+        <Tip label="Draw on the picture (D): pen, arrow, box, or a path across seconds">
           <Button
             variant="quiet"
             size="md"
-            className="@max-[640px]:hidden pointer-coarse:hidden"
-            aria-label="Night vision"
-            aria-pressed={night}
-            onClick={() => setPref("nightVision", !night)}
+            className={cn(!ink && "@max-[330px]:hidden")}
+            aria-label="Draw"
+            aria-pressed={!!ink}
+            onClick={() => setInk(ink ? null : "pen")}
           >
-            <MoonStar data-icon="inline-start" />
-            <span className="@max-[1240px]:hidden">Night vision</span>
+            <Brush data-icon="inline-start" />
+            <span className="@max-[700px]:hidden">Draw</span>
           </Button>
         </Tip>
-      )}
-      {free && cam && (
-        <Tip label="Add a camera keyframe at the playhead from this view (Shift+K)">
+        {/* Walking the camera needs a mouse and keys, as in Settings */}
+        <Tip label="Free camera (F): drag to look, W A S D to fly, Space up, Shift down">
           <Button
             variant="quiet"
             size="md"
-            className="@max-[640px]:hidden pointer-coarse:hidden"
-            aria-label="Add keyframe from view"
-            onClick={() => saveView()}
+            className={cn("pointer-coarse:hidden", !free && "@max-[520px]:hidden")}
+            aria-label="Free camera"
+            aria-pressed={free}
+            onClick={() => setFree(!free)}
           >
-            <Save data-icon="inline-start" />
-            <span className="@max-[1100px]:hidden">Add keyframe</span>
+            <Move3d data-icon="inline-start" />
+            <span className="@max-[960px]:hidden">Free camera</span>
           </Button>
         </Tip>
-      )}
-      <div className="upright:ml-0 sideways:ml-0 ml-auto flex items-center gap-0.5">
-        <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
-        <Tip
-          label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}
-        >
-          <Button
-            variant="quiet"
-            size="icon-lg"
-            className={cn(square, "@max-[330px]:hidden")}
-            aria-label="Guides"
-            aria-pressed={guides}
-            onClick={() => setPref("guides", !guides)}
-          >
-            <Grid3x3 />
-          </Button>
-        </Tip>
-        {canFullscreen() && (
-          <Tip label={full ? "Leave full screen (Esc)" : "Full screen preview (Ctrl+Shift+F)"}>
+        {free && (
+          <Tip label="Night vision: light up this view and clear the fog to find your way. The film's own light stays as it is">
             <Button
               variant="quiet"
-              size="icon-lg"
-              className={square}
-              aria-label={full ? "Leave full screen" : "Full screen preview"}
-              onClick={toggleFullscreen}
+              size="md"
+              className="@max-[640px]:hidden pointer-coarse:hidden"
+              aria-label="Night vision"
+              aria-pressed={night}
+              onClick={() => setPref("nightVision", !night)}
             >
-              {full ? <Minimize /> : <Maximize />}
+              <MoonStar data-icon="inline-start" />
+              <span className="@max-[1240px]:hidden">Night vision</span>
             </Button>
           </Tip>
         )}
-        <Tip label="Mute">
-          <Button
-            variant="quiet"
-            size="icon-lg"
-            className={cn(square, "pointer-coarse:@max-[384px]:hidden")}
-            aria-label="Mute"
-            aria-pressed={muted}
-            onClick={toggleMute}
+        {free && cam && (
+          <Tip label="Add a camera keyframe at the playhead from this view (Shift+K)">
+            <Button
+              variant="quiet"
+              size="md"
+              className="@max-[640px]:hidden pointer-coarse:hidden"
+              aria-label="Add keyframe from view"
+              onClick={() => saveView()}
+            >
+              <Save data-icon="inline-start" />
+              <span className="@max-[1100px]:hidden">Add keyframe</span>
+            </Button>
+          </Tip>
+        )}
+        <AiPresence className="ms-1 @max-[300px]:hidden" />
+        <div className="upright:ml-0 sideways:ml-0 ml-auto flex flex-none items-center gap-0.5">
+          <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
+          <Tip
+            label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}
           >
-            {muted ? <VolumeX /> : <Volume2 />}
-          </Button>
-        </Tip>
-        {/* Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes */}
-        <div
-          className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden"
-          title="Volume (Ctrl+↑ ↓)"
-        >
-          <Slider
-            min={0}
-            max={1}
-            step={0.05}
-            value={muted ? 0 : volume}
-            onValueChange={(v: number | readonly number[]) =>
-              setVolume(typeof v === "number" ? v : v[0])
-            }
-            aria-label="Volume"
-            format={{ style: "percent" }}
-          />
-        </div>
-      </div>
-      <Popover open={settingsOpen} onOpenChange={(open) => set({ settingsOpen: open })}>
-        <PopoverTrigger
-          render={
             <Button
               variant="quiet"
               size="icon-lg"
-              className={square}
-              title="Settings"
-              aria-label="Settings"
+              className={cn(square, "@max-[360px]:hidden")}
+              aria-label="Guides"
+              aria-pressed={guides}
+              onClick={() => setPref("guides", !guides)}
+            >
+              <Grid3x3 />
+            </Button>
+          </Tip>
+          {canFullscreen() && (
+            <Tip label={full ? "Leave full screen (Esc)" : "Full screen preview (Ctrl+Shift+F)"}>
+              <Button
+                variant="quiet"
+                size="icon-lg"
+                className={square}
+                aria-label={full ? "Leave full screen" : "Full screen preview"}
+                onClick={toggleFullscreen}
+              >
+                {full ? <Minimize /> : <Maximize />}
+              </Button>
+            </Tip>
+          )}
+          <Tip label="Mute">
+            <Button
+              variant="quiet"
+              size="icon-lg"
+              className={cn(square, "pointer-coarse:@max-[384px]:hidden")}
+              aria-label="Mute"
+              aria-pressed={muted}
+              onClick={toggleMute}
+            >
+              {muted ? <VolumeX /> : <Volume2 />}
+            </Button>
+          </Tip>
+          {/* Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes */}
+          <div
+            className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden"
+            title="Volume (Ctrl+↑ ↓)"
+          >
+            <Slider
+              min={0}
+              max={1}
+              step={0.05}
+              value={muted ? 0 : volume}
+              onValueChange={(v: number | readonly number[]) =>
+                setVolume(typeof v === "number" ? v : v[0])
+              }
+              aria-label="Volume"
+              format={{ style: "percent" }}
             />
-          }
-        >
-          <Ellipsis />
-        </PopoverTrigger>
-        <PopoverContent
-          variant="flush"
-          side="top"
-          align="end"
-          sideOffset={8}
-          className="h-[min(720px,var(--available-height))] w-[min(400px,calc(100vw-24px))]"
-        >
-          <Settings />
-        </PopoverContent>
-      </Popover>
+          </div>
+        </div>
+        <Popover open={settingsOpen} onOpenChange={(open) => set({ settingsOpen: open })}>
+          <PopoverTrigger
+            render={
+              <Button
+                variant="quiet"
+                size="icon-lg"
+                className={square}
+                title="Settings"
+                aria-label="Settings"
+              />
+            }
+          >
+            <Ellipsis />
+          </PopoverTrigger>
+          <PopoverContent
+            variant="flush"
+            side="top"
+            align="end"
+            sideOffset={8}
+            className="h-[min(720px,var(--available-height))] w-[min(400px,calc(100vw-24px))]"
+          >
+            <Settings />
+          </PopoverContent>
+        </Popover>
+      </div>
     </div>
   );
 }

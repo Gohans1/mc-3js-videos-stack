@@ -12,6 +12,7 @@ import { checkFiles } from "../packages/live-studio/src/contract.ts";
 import { contractFiles } from "../packages/live-studio/src/film.mjs";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
 import { noteState, wholeNote } from "../packages/live-studio/src/note-state.mjs";
+import { deletedSaid, findNote, noteNumbers } from "../packages/live-studio/src/notes.mjs";
 import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
 import { staleVideo } from "../packages/live-studio/src/stale.mjs";
 import { tell } from "../packages/live-studio/src/tell.mjs";
@@ -115,12 +116,11 @@ const heardNow = (n: Row, film: ReturnType<typeof filmOf>) =>
   );
 
 export const noteMoment = (dir: string, ref: string) => {
-  const notes = readNotes(dir);
-  // #N counts every note in the order written, as bun run notes numbers them
-  const byAge = notes.toSorted((a, b) =>
-    (a.at ?? "") < (b.at ?? "") ? -1 : (a.at ?? "") > (b.at ?? "") ? 1 : 0,
-  );
-  const n = /^#\d+$/.test(ref) ? byAge[+ref.slice(1) - 1] : notes.find((x) => x.id === ref);
+  const notes = readNotes(dir),
+    numbers = noteNumbers(dir);
+  const n = /^#\d+$/.test(ref)
+    ? notes.find((x) => numbers.get(x.id)?.n === +ref.slice(1))
+    : notes.find((x) => x.id === ref);
   if (!n) return null;
   const film = filmOf(dir);
   const scene = noteScene(n, film.shots);
@@ -132,7 +132,7 @@ export const noteMoment = (dir: string, ref: string) => {
       : "";
   return {
     id: n.id,
-    n: byAge.indexOf(n) + 1,
+    n: numbers.get(n.id)!.n,
     state: noteState(n) as string,
     text: String(n.text ?? ""),
     written: n.t as number,
@@ -508,6 +508,11 @@ if (isMain) {
       n = noteMoment(film, arg);
     } catch (e) {
       crashed(e);
+    }
+    const gone = n ? null : findNote(film, arg);
+    if (gone?.gone) {
+      console.error(deletedSaid(gone));
+      process.exit(2);
     }
     if (!n) {
       console.error(

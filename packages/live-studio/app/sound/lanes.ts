@@ -18,7 +18,7 @@ import { FPS, makeSnapper, r3, snappedTo, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { type Along, alongWith, inBox, pickAcross, picked as across } from "../timeline/across";
 import { bladeLine } from "../timeline/blade";
-import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -345,7 +345,6 @@ export const drawLanes = () => {
     g.fillStyle = tone("pick");
     g.fillRect(x, bladeLine.y0 - 2, 1, bladeLine.y1 - bladeLine.y0 + 4);
   }
-  drawPlayhead(g, X(S.t), h);
 };
 
 // ---------- Snapping: the playhead, cuts, word starts and the edges of every clip not being moved

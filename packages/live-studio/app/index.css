@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
 
 @import "./studio.css";
 
@@ -20,6 +21,7 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-md: "Inter Variable", "Inter", var(--font-sans);
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   --color-raised-2: var(--raised-2);
   --color-raised-3: var(--raised-3);
@@ -27,6 +29,7 @@
   --color-tint: var(--tint);
   --color-tint-hover: var(--tint-hover);
   --color-ok: var(--ok);
+  --color-ok-text: var(--ok-text);
   --color-warn: var(--warn);
   --color-warn-bg: var(--warn-bg);
   --color-favorite: var(--favorite);
@@ -34,6 +37,8 @@
   --color-snap: var(--snap);
   --color-ink: var(--ink);
   --color-in-out: var(--in-out);
+  --color-ai: var(--ai);
+  --color-ai-text: var(--ai-text);
   --color-in-out-text: var(--in-out-text);
   --color-picture: var(--picture);
   --color-alarm: var(--alarm);
@@ -101,6 +106,13 @@
    here goes in lib/utils.ts too, or cn() takes text-ui for a colour and drops it beside text-primary */
 @theme {
   --color-curve: #080808;
+  /* a Markdown heading by level, md-phone's: the Lessons tab (lessons/LessonsPanel.tsx) */
+  --color-md-h1: #d0a215;
+  --color-md-h2: #3aa99f;
+  --color-md-h3: #879a39;
+  --color-md-h4: #4385be;
+  --color-md-h5: #8b7ec8;
+  --color-md-h6: #ce5d97;
   --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
   --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
   --text-title: 15px; /* a panel's or dialog's heading */
@@ -124,7 +136,7 @@
   --popover: #303030;
   --popover-foreground: #DFDFDF;
   --primary: #00C1CD; /* CapCut's cyan: the open tab, Export, a picked tile's ring */
-  --primary-foreground: #FFFFFF; /* white on the cyan, as on CapCut's Export: only 2.2:1, kept to look as CapCut does */
+  --primary-foreground: #051314; /* deep obsidian ink on cyan: 8.57:1 WCAG AA/AAA */
   --secondary: #3B3B3B; /* a raised control: Import, Cover, the picked segment */
   --secondary-foreground: #DFDFDF;
   --muted: #3B3B3B;
@@ -144,7 +156,7 @@
   --sidebar: #262626;
   --sidebar-foreground: #DFDFDF;
   --sidebar-primary: #00C1CD;
-  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-primary-foreground: #051314;
   --sidebar-accent: #3B3B3B;
   --sidebar-accent-foreground: #DFDFDF;
   --sidebar-border: #373737;
@@ -157,11 +169,14 @@
   --tint: #1C1C1C; /* a toggle that is on: CapCut sinks it to the window's grey and lights its icon cyan */
   --tint-hover: #141414;
   --ok: #879A39;
+  --ok-text: #B2C956;
   --warn: #D0A215;
   --warn-bg: #2A2410;
   --favorite: #D0A215; /* a starred sound or effect, as CapCut colours its star */
   --peek: #D0A215; /* the preview axis and the time it shows (timeline/peek.ts), yellow as CapCut draws it */
   --snap: #004D52; /* CapCut 9.7, measured away from the playhead: renders/timing-verification/capcut-snap-nonplayhead.png */
+  --ai: #A48BFF; /* the AI at work (activity/): a violet no other part of the studio uses, as collaborators each get a colour */
+  --ai-text: #C3B3FF;
   --in-out: #4385BE; /* the In to Out stretch (timeline/inout.ts; the ruler draws it in the same blue) */
   --in-out-text: #92BFDB;
   --ink: #CE5D97; /* a note's drawing while it is drawn, and the words that name it */

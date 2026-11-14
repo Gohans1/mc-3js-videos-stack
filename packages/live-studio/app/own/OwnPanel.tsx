@@ -11,6 +11,7 @@ import { keys as camKeys } from "../camera/cam";
 import { layerItems } from "../camera/layers";
 import { shotsDoc } from "../camera/shots";
 import { ChipGroup, NavItem } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { clockText } from "../core/time";
@@ -272,15 +273,23 @@ export function OwnPanel() {
           <p className="text-muted-foreground text-xs">{aboutOf(open.id)}</p>
         </div>
         <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-1 pb-3">
-          {group ? (
-            <div key={open.id} className="divide-border flex flex-col divide-y">
-              {group.items.map((x) => (
-                <Item key={`${x.part ?? ""}:${x.id}`} x={x} />
-              ))}
-            </div>
-          ) : (
-            <OnScreen />
-          )}
+          <TabStage
+            activeKey={open.id}
+            order={kinds.map((k) => k.id)}
+            axis="y"
+            distance={6}
+            duration={150}
+          >
+            {group ? (
+              <div key={open.id} className="divide-border flex flex-col divide-y">
+                {group.items.map((x) => (
+                  <Item key={`${x.part ?? ""}:${x.id}`} x={x} />
+                ))}
+              </div>
+            ) : (
+              <OnScreen />
+            )}
+          </TabStage>
         </div>
       </div>
     </section>

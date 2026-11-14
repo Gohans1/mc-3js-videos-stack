@@ -21,6 +21,9 @@ from pathlib import Path
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 from process import render as process_audio
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from studio_tell import job  # noqa: E402
 
 # bun run mix [video]: every word checked before the mix starts (--raw and --measure are the studio's own calls)
 if __name__ == "__main__" and sys.argv[1:2] in (["-h"], ["--help"], ["help"]):
@@ -510,6 +513,8 @@ if __name__ == "__main__":
     if why := unfit():
         print(why, file=sys.stderr)
         raise SystemExit(1)
+    onto = f" onto {Path(sys.argv[1]).as_posix()}" if len(sys.argv) > 1 else ""
+    ended = job(ROOT, "mix", f"Mixing the sound{onto}")
     raw = _assert_in_root(ROOT / "sound/mix_raw.wav", "Mix raw output")
     build(raw, [c for b in A["beds"] if (c := chosen(b))], [c for s in A["sfx"] if (c := chosen(s))])
     out = _assert_in_root(ROOT / "sound/mix.wav", "Mix output")
@@ -528,7 +533,9 @@ if __name__ == "__main__":
         held, taken = fit_encoded(raw, out, float(A["lufs"]), mux)
     else:
         held, taken = level(raw, out, float(A["lufs"])), 0.0
-    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]), held, float(A.get("drive", 0)))))
+    report = loudness_report("sound/mix.wav", float(A["lufs"]), held, float(A.get("drive", 0)))
+    print("\n".join(report))
+    ended(f"Mixed the sound{onto}: {report[0].split(': ', 1)[1]}", level="ok")
     if taken:
         print(f"  the AAC encode lifted its true peak over -1 dBTP: the mix went {taken:.1f} dB lower so renders/{name} stays under")
     if len(sys.argv) > 1:

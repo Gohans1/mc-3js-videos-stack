@@ -9,6 +9,7 @@ import { get, say, set, ui } from "../core/store";
 import { SAME, stamp } from "../core/time";
 import { tone } from "../timeline/canvas";
 import { IDLE_INK_GESTURE, type InkGesture, stepInk } from "./ink-gesture";
+import type { ComposeOrigin } from "./notes";
 import { spanFade } from "./pinfade";
 import { shapeOf } from "./shape";
 import { type Compose, type Hit, type InkKind, type Mark, type Note } from "./slice";
@@ -272,10 +273,16 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
 // ---------- Drawing with the pointer. look(x, y) names what is under a point at the current frame, as a pin's tap does
 let hooks = {
   look: (_x: number, _y: number): Hit => ({ what: "" }),
-  begin: () => {},
+  begin: (_origin?: ComposeOrigin) => {},
   pause: () => {},
 };
 let live: { mark: Mark; smart: boolean } | null = null;
+const pointerOrigin = (e: PointerEvent): ComposeOrigin => ({
+  left: e.clientX,
+  top: e.clientY,
+  width: 0,
+  height: 0,
+});
 
 const at = (e: PointerEvent): [number, number] => {
   const r = S.el.ink.getBoundingClientRect();
@@ -284,9 +291,14 @@ const at = (e: PointerEvent): [number, number] => {
     +Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)).toFixed(4),
   ];
 };
-const startStroke = (kind: "pen" | "arrow" | "box", p: [number, number], smart = false) => {
+const startStroke = (
+  kind: "pen" | "arrow" | "box",
+  p: [number, number],
+  smart = false,
+  origin?: ComposeOrigin,
+) => {
   hooks.pause();
-  hooks.begin();
+  hooks.begin(origin);
   const mark: Mark = { kind, t: +S.t.toFixed(3), pts: kind === "pen" ? [p] : [p, p] };
   live = { mark, smart };
   inkMarks.push(mark);
@@ -350,7 +362,7 @@ const dropStroke = () => {
 // release made the arrow, box or pen stroke its shape reads as (shape.ts)
 export const sketch = {
   start: (e: PointerEvent, from: PointerEvent) => {
-    startStroke("pen", at(from), true);
+    startStroke("pen", at(from), true, pointerOrigin(from));
     moveStroke(e);
   },
   move: moveStroke,
@@ -386,8 +398,9 @@ export const attachInk = (opts: typeof hooks) => {
     gesture = res.gesture;
     if (res.effect === "start_path") {
       hooks.pause();
-      hooks.begin();
-    } else if (res.effect === "start_stroke" && tool && tool !== "path") startStroke(tool, at(e));
+      hooks.begin(pointerOrigin(e));
+    } else if (res.effect === "start_stroke" && tool && tool !== "path")
+      startStroke(tool, at(e), false, pointerOrigin(e));
   });
   c.addEventListener("pointermove", (e) => {
     const res = stepInk(gesture, { type: "move", id: e.pointerId, x: e.clientX, y: e.clientY });

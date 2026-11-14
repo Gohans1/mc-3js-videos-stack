@@ -38,6 +38,7 @@ const TONES = [
   "clip-voice-wave",
   "clip-label",
   "in-out",
+  "ai",
   "warn",
   "destructive",
   "slider",

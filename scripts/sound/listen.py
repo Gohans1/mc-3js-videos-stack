@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from seconds import heard_second, meant  # noqa: E402
+from studio_tell import job  # noqa: E402
 
 GOOD, LOST = 15.0, 8.0  # LU of voice over the rest: every word kept / words lost
 FLOOR = -120.0
@@ -386,6 +387,7 @@ def main(args):
     if not (root / "src/timeline/audio.json").exists():
         print("no src/timeline/audio.json: the film has no sound yet (bun run find <words> picks some)", file=sys.stderr)
         return 1
+    ended = None  # the studio's busy line, once the stems start
     with tempfile.TemporaryDirectory(prefix="listen-") as tmp:
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -396,6 +398,7 @@ def main(args):
             if at is not None and not 0 <= at <= mix.END:
                 print(f"--at {at:g} is outside the film: it is {mix.END:.2f} s long (heard)", file=sys.stderr)
                 return 2
+            ended = job(root, "listen", f"Listening to the mix{f' at {at:g} s' if at is not None else ''}", **({"at": at} if at is not None else {}))
             if "--fresh" in args:
                 shutil.rmtree(root / "renders/listen_stems", ignore_errors=True)
             print("the narration and the rest as two stems (the film's own mix graph, about a second per film second the first "
@@ -406,6 +409,8 @@ def main(args):
         except SystemExit as e:  # mix.py names a missing sound itself
             if e.code not in (0, None):
                 print(e.code, file=sys.stderr)
+                if ended:
+                    ended(f"Listening stopped: {e.code}", level="fail")
                 return 1
             raise
         cuts_file = root / "renders/cuts.json"
@@ -435,7 +440,9 @@ def main(args):
     curve_file.parent.mkdir(exist_ok=True)
     curve_file.write_text(json.dumps(got["curve"]), encoding="utf8")
     if at is not None:
-        return focus(got, at, last, cuts)
+        code = focus(got, at, last, cuts)
+        ended(f"Listened at {at:g} s")
+        return code
     lines = got["lines"]
     every = root / "renders/listen.json"
     every.write_text(json.dumps({
@@ -496,6 +503,16 @@ def main(args):
     if sheet:
         print(f"sheet: {sheet.relative_to(root).as_posix()} (open it to look; its LUFS and peaks are the stems before the master "
               "limiter and the loudness pass, so they run hotter than the upload: bun run mix prints the upload's)")
+    # the studio lights the first 20 on its ruler, the worst first: words lost, then hits lost (level jumps at cuts stay
+    # out: often the story's)
+    marks = ([{"at": x["from"], "to": x["to"], "say": f"{x['verdict'].upper()} voice {x['margin']:+.1f} LU"} for x in bad]
+             + [{"at": x["from"], "to": x["to"], "say": "LOUDER than the voice"} for x in got["over"] if x["speaking"]]
+             + [{"at": b["at"], "say": f"BURIED {b['name']}"} for b in got["buried"]]
+             + [{"at": s["from"], "to": s["to"], "say": "MONO: cancels on a phone"} for s in folded["stretches"]]
+             + [{"at": x["from"], "to": x["to"], "say": "LOUD with no voice"} for x in got["over"] if not x["speaking"]]
+             + [{"at": d["from"], "to": d["to"], "say": "near silence"} for d in got["dead"]])
+    ended(f"Heard the mix: {len(marks)} stretch{'es' if len(marks) != 1 else ''} to look at{' (the worst 20 lit)' if len(marks) > 20 else ''}"
+          if marks else "Heard the mix: every line clear, nothing buried or cancelling", level="warn" if marks else "ok", marks=marks)
     print("next: a buried or loud stretch: bun run at <second> names its rows; lower a bed's or a sound's gain in "
           "src/timeline/audio.json (a buried hit: raise its gain, or duck the bed under it), then bun run listen --at <second> shows what it did there")
     return 0

@@ -14,14 +14,14 @@ const toggleVariants = cva(
         "quiet-primary": "text-muted-foreground aria-pressed:text-primary",
         "quiet-warn": "text-muted-foreground aria-pressed:text-warn",
         segment:
-          "text-muted-foreground aria-pressed:text-foreground text-sm tabular-nums aria-pressed:font-semibold",
+          "text-muted-foreground hover:text-foreground aria-pressed:bg-secondary aria-pressed:text-foreground text-sm tabular-nums aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1 aria-pressed:ring-white/12",
         pick: "text-ui aria-pressed:border-primary aria-pressed:bg-tint border border-transparent",
         chip: "bg-secondary aria-pressed:border-primary aria-pressed:bg-tint aria-pressed:text-primary border border-transparent font-semibold tabular-nums data-[in-use=true]:shadow-[inset_0_-3px_0_var(--warn)]",
       },
       size: {
         default:
           "h-7 min-w-7 px-2 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5",
-        sm: "h-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-2 text-[0.625rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "text-tag h-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-2 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         lg: "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         "icon-sm":
           "size-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-0 [&_svg:not([class*='size-'])]:size-3",

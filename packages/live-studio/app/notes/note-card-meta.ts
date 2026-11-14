@@ -5,25 +5,31 @@ export interface NoteMediaSource {
   id: string;
   img?: string;
   crop?: unknown;
+  refs?: unknown;
 }
 
 export interface QueuedNoteMedia {
   note: { id: string };
   img?: string | null;
   crop?: string | null;
+  refs?: string[];
 }
 
 export const resolveNoteMedia = (
   note: NoteMediaSource,
   unsentQueue: readonly QueuedNoteMedia[],
-): { thumb: string | null; crop: string | null } => {
+): { thumb: string | null; crop: string | null; refs: string[] } => {
   const queued = unsentQueue.find((x) => x.note.id === note.id);
   const thumb = note.img ? `/api/note-img/${note.id}.jpg` : (queued?.img ?? null);
   const crop =
     typeof note.crop === "string" && note.crop
       ? `/api/note-img/${note.id}_crop.jpg`
       : (queued?.crop ?? null);
-  return { thumb, crop };
+  // the creator's pasted pictures, saved as notes/img/<id>_r<i>.jpg
+  const refs = Array.isArray(note.refs)
+    ? note.refs.map((r) => `/api/note-img/${String(r).split("/").pop()}`)
+    : (queued?.refs ?? []);
+  return { thumb, crop, refs };
 };
 
 // Strip developer file provenance like "silverfish (src/silverfish.ts, game model)" -> "silverfish" for compact card chips
@@ -32,6 +38,36 @@ export const pinShortLabel = (what: string | undefined | null): string | null =>
   if (!trimmed) return null;
   const match = /^(.+?)\s+\([^()]+\)$/.exec(trimmed);
   return match ? match[1].trim() : trimmed;
+};
+
+export const noteNumberMap = (
+  notes: readonly { id: string }[],
+  headerJson?: string | null,
+): Record<string, number> => {
+  if (headerJson) {
+    try {
+      const parsed = JSON.parse(headerJson) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const out: Record<string, number> = {};
+        let valid = true;
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v !== "number" || !Number.isInteger(v) || v < 1) {
+            valid = false;
+            break;
+          }
+          out[k] = v;
+        }
+        if (valid) return out;
+      }
+    } catch {
+      // ignore malformed server header and fall back to list order
+    }
+  }
+  const fallback: Record<string, number> = {};
+  notes.forEach((n, i) => {
+    fallback[n.id] = i + 1;
+  });
+  return fallback;
 };
 
 export const noteShotTitle = (

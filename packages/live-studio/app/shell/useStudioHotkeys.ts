@@ -14,7 +14,14 @@ import { S } from "../core/state";
 import { get, say, set, setPref, useStudio } from "../core/store";
 import { FPS } from "../core/time";
 import { INK_KEYS, setInk, toolsOpen, undoInk } from "../notes/ink";
-import { nextNoteTime, openNote, setReview } from "../notes/notes";
+import {
+  approveReviewCurrent,
+  cancelNote,
+  nextNoteTime,
+  openNote,
+  setReview,
+  stepReview,
+} from "../notes/notes";
 import { setGizmo } from "../objects/placed";
 import { chooseInGroup } from "../options/options";
 import { setFov, setFree } from "../picture/freecam";
@@ -98,6 +105,7 @@ const REVIEW_KEYS = new Set([
 
 export function useStudioHotkeys() {
   const settingsOpen = useStudio((s) => s.settingsOpen);
+  const composeOpen = useStudio((s) => s.compose !== null);
   const ink = useStudio((s) => s.ink),
     picks = useStudio((s) => s.clips.length),
     sound = useStudio((s) => s.sound);
@@ -125,6 +133,19 @@ export function useStudioHotkeys() {
     camPicks > 0 ||
     keyPicks > 0 ||
     textPicks > 0;
+  // A popup open on top (a "?" or a menu) takes Esc for itself first
+  const escPopups: UseHotkeyDefinition[] = [
+    {
+      hotkey: "Escape",
+      callback: () => set({ settingsOpen: false }),
+      options: { enabled: settingsOpen },
+    },
+    {
+      hotkey: "Escape",
+      callback: () => setInk(null),
+      options: { enabled: !settingsOpen && !!ink },
+    },
+  ];
   const keys: UseHotkeyDefinition[] = [
     // ---- CapCut's own
     // In the free camera Space flies up (picture/flight.ts), as in Minecraft
@@ -262,17 +283,7 @@ export function useStudioHotkeys() {
       callback: () => setGizmo("scale"),
       options: { enabled: object !== null && !free },
     },
-    // A popup open on top (a "?" or a menu) takes Esc for itself first
-    {
-      hotkey: "Escape",
-      callback: () => set({ settingsOpen: false }),
-      options: { enabled: settingsOpen },
-    },
-    {
-      hotkey: "Escape",
-      callback: () => setInk(null),
-      options: { enabled: !settingsOpen && !!ink },
-    },
+    ...escPopups,
     {
       hotkey: "Escape",
       callback: () => setBlade(false),
@@ -298,16 +309,34 @@ export function useStudioHotkeys() {
     ),
     // W A S D, Space, Shift, Q and E fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts
   ];
+  const reviewOnlyKeys: UseHotkeyDefinition[] = [
+    ...escPopups,
+    {
+      hotkey: "Escape",
+      callback: () => cancelNote(),
+      options: { enabled: !settingsOpen && !ink && composeOpen },
+    },
+    {
+      hotkey: "Escape",
+      callback: () => setReview(false),
+      options: { enabled: !settingsOpen && !ink && !composeOpen },
+    },
+    { hotkey: "ArrowUp", callback: () => void stepReview(-1) },
+    { hotkey: "ArrowDown", callback: () => void stepReview(1) },
+    { hotkey: "A", callback: () => void approveReviewCurrent() },
+  ];
   // Any modal dialog open over the page takes the keys: Delete or Space must not reach the timeline under it
   const modal = useStudio((s) => s.modal !== null);
-  // In the Review room the timeline is out of sight: only keys that watch, move the playhead or write a note, so a Delete or an
-  // undo never changes a clip nobody can see
+  // In the Review room the timeline is out of sight: only keys that watch, move the playhead, walk notes, approve, or write
   const review = useStudio((s) => s.review);
   useHotkeys(
     modal
       ? []
       : review
-        ? keys.filter((k) => typeof k.hotkey === "string" && REVIEW_KEYS.has(k.hotkey))
+        ? [
+            ...keys.filter((k) => typeof k.hotkey === "string" && REVIEW_KEYS.has(k.hotkey)),
+            ...reviewOnlyKeys,
+          ]
         : keys,
     {
       preventDefault: true,

@@ -155,7 +155,7 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
         e.result?.close?.();
         if (e.code === "ERROR") {
           error = stripVTControlCharacters(e.error.message); // the page shows it as text, and Rolldown colours it for a terminal
-          onError(error);
+          onError(error, e.error.errors?.[0]); // Rolldown's first error, as {message, id, loc}
           start(); // the page answers with the error until a save fixes it
         }
         if (e.code === "BUNDLE_END") {

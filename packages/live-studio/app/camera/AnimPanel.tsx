@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 import { FavoriteStar } from "../components/FavoriteStar";
 import { ChipGroup, EmptyCard, Segmented, SliderRow } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { matcher } from "../core/search";
@@ -502,70 +503,86 @@ export function AnimPanel() {
             </Button>
           </Tip>
         </div>
-        <SearchBox
-          name="anim-search"
-          value={q}
-          onChange={setQ}
-          label={`Search ${SLOT_NAMES[slot]} animations`}
-          placeholder={`Search ${list.length} ${SLOT_NAMES[slot]} animations…`}
-        />
-        <ChipGroup
-          scroll
-          label="Category"
-          value={activeCat}
-          onChange={setCat}
-          items={cats.map((c) => ({
-            id: c,
-            title: (
-              <>
-                {c === FAV && <Star aria-hidden className="size-3" />}
-                {c === SEAM && <Link2 aria-hidden className="size-3" />}
-                {c}
-              </>
-            ),
-          }))}
-        />
       </div>
-      <ul
-        aria-label={`${SLOT_NAMES[slot]} animations`}
-        className="scroll-fade grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-x-2.5 gap-y-3 overflow-y-auto overscroll-contain px-3 pb-3"
+      <TabStage
+        activeKey={slot}
+        order={SLOTS.map((s) => s.id)}
+        className="flex min-h-0 flex-1 flex-col"
       >
-        {none && (
-          <Tile
-            slot={slot}
-            fx={null}
-            on={!now}
-            shot={shot}
-            onPick={() => pick(null)}
-            onTry={() => tryOn(null)}
-            onLeave={leave}
+        <div className="flex flex-none flex-col gap-2.5 px-3 pb-2.5">
+          <SearchBox
+            name="anim-search"
+            value={q}
+            onChange={setQ}
+            label={`Search ${SLOT_NAMES[slot]} animations`}
+            placeholder={`Search ${list.length} ${SLOT_NAMES[slot]} animations…`}
           />
-        )}
-        {shown.map((fx) => (
-          <Tile
-            key={fx.id}
-            slot={slot}
-            fx={fx}
-            on={now === fx.id}
-            shot={shot}
-            onPick={() => pick(fx.id)}
-            onTry={() => tryOn(fx.id)}
-            onLeave={leave}
+          <ChipGroup
+            scroll
+            label="Category"
+            value={activeCat}
+            onChange={setCat}
+            items={cats.map((c) => ({
+              id: c,
+              title: (
+                <>
+                  {c === FAV && <Star aria-hidden className="size-3" />}
+                  {c === SEAM && <Link2 aria-hidden className="size-3" />}
+                  {c}
+                </>
+              ),
+            }))}
           />
-        ))}
-        {!shown.length && (
-          <li className="text-ui text-muted-foreground col-span-full py-2">
-            {activeCat === FAV && !q.trim()
-              ? `No favorite ${SLOT_NAMES[slot]} animations yet. Point at one and click its star.`
-              : `No ${SLOT_NAMES[slot]} animations match "${q.trim()}".`}
-          </li>
-        )}
-      </ul>
-      {now && (
-        <div className="flex-none border-t px-3 py-3">
-          <Amount key={`${shot}${slot}`} shot={shot} slot={slot} />
         </div>
-      )}
+        <TabStage
+          activeKey={activeCat}
+          axis="y"
+          distance={6}
+          duration={140}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <ul
+            aria-label={`${SLOT_NAMES[slot]} animations`}
+            className="scroll-fade grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-x-2.5 gap-y-3 overflow-y-auto overscroll-contain px-3 pb-3"
+          >
+            {none && (
+              <Tile
+                slot={slot}
+                fx={null}
+                on={!now}
+                shot={shot}
+                onPick={() => pick(null)}
+                onTry={() => tryOn(null)}
+                onLeave={leave}
+              />
+            )}
+            {shown.map((fx) => (
+              <Tile
+                key={fx.id}
+                slot={slot}
+                fx={fx}
+                on={now === fx.id}
+                shot={shot}
+                onPick={() => pick(fx.id)}
+                onTry={() => tryOn(fx.id)}
+                onLeave={leave}
+              />
+            ))}
+            {!shown.length && (
+              <li className="text-ui text-muted-foreground col-span-full py-2">
+                {activeCat === FAV && !q.trim()
+                  ? `No favorite ${SLOT_NAMES[slot]} animations yet. Point at one and click its star.`
+                  : `No ${SLOT_NAMES[slot]} animations match "${q.trim()}".`}
+              </li>
+            )}
+          </ul>
+        </TabStage>
+        {now && (
+          <div className="flex-none border-t px-3 py-3">
+            <Amount key={`${shot}${slot}`} shot={shot} slot={slot} />
+          </div>
+        )}
+      </TabStage>
     </div>
   );
 }

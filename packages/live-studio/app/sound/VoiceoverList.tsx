@@ -1,5 +1,5 @@
 import { Crosshair, Pause, Play, Scissors } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,14 @@ import {
   splitNarrationIntoBricks,
   voiceAuditionId,
 } from "./voice-client";
-import { parseTakeScript, shortTryLabel, voiceActorTitle, type VoiceTakeItem } from "./voice-view";
+import {
+  parseTakeScript,
+  shortTryLabel,
+  subscribeVoiceNames,
+  voiceActorTitle,
+  voiceNamesSnapshot,
+  type VoiceTakeItem,
+} from "./voice-view";
 
 const PAGE = 60;
 
@@ -40,6 +47,7 @@ export function VoiceoverList({
 }) {
   useStudio((s) => s.soundRev);
   useStudio((s) => s.timingRev);
+  useSyncExternalStore(subscribeVoiceNames, voiceNamesSnapshot);
   const [limit, setLimit] = useState(PAGE);
   const [prevQuery, setPrevQuery] = useState(query);
   const [promoting, setPromoting] = useState<string | null>(null);

@@ -12,7 +12,7 @@ import { FPS, makeSnapper, r3, snappedTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked as across } from "../timeline/across";
-import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -128,7 +128,6 @@ export const drawTextRow = () => {
     g.globalAlpha = 1;
     boxes.push({ i, x0, x1, y0: y, y1: y + CLIP_H });
   });
-  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = (skip: number[]) => {

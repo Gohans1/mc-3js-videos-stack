@@ -43,6 +43,7 @@ export interface Elements {
   textrow: HTMLCanvasElement;
   textsel: HTMLElement;
   timeline: HTMLElement;
+  playhead: HTMLElement;
   rowbox: HTMLElement;
   peek: HTMLElement;
   snap: HTMLElement;

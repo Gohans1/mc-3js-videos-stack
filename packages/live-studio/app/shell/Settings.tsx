@@ -517,6 +517,7 @@ export function Settings() {
       scopes: x.scopes,
       meter: x.meter,
       ratio: x.ratio,
+      aiActivity: x.aiActivity,
     })),
   );
   const step = (d: number) => seek(S.t + d);
@@ -627,6 +628,13 @@ export function Settings() {
               help="At the right of the timeline: the left and right peaks, the short-term loudness against the film's target (-14 LUFS for YouTube) and a red light when the sound clips. Every number is the final video's, after its loudness pass. Kept in this browser."
             />
           </div>
+          <SwitchRow
+            id="ai-activity"
+            label="Show what the AI is doing"
+            checked={s.aiActivity}
+            onChange={(on) => setPref("aiActivity", on)}
+            help="Under the picture, a dot lit while the AI works and its latest step beside it (click it for the steps before). The note it reads or answers, the lesson file it reads or writes and the seconds it looks at or renders light up for a moment. Nothing moves the playhead, scrolls or takes the focus. Kept in this browser."
+          />
           <SwitchRow
             id="try-on"
             label="Show alternatives on the picture"

@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        default: "bg-primary text-primary-foreground hover:bg-primary/85 font-semibold",
         outline:
           "border-border hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
         secondary:
@@ -21,7 +21,8 @@ const buttonVariants = cva(
         // CapCut's grey tool button: lights white on hover, cyan on a tint while it is on (aria-pressed) or its menu is open
         quiet:
           "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-tint aria-pressed:text-primary aria-pressed:hover:text-primary data-popup-open:bg-tint data-popup-open:text-primary",
-        remove: "text-muted-foreground hover:bg-muted/50 hover:text-destructive",
+        tab: "text-muted-foreground hover:bg-muted/45 hover:text-foreground aria-expanded:bg-muted/60 aria-expanded:text-foreground aria-pressed:bg-card aria-pressed:text-primary aria-pressed:ring-primary/35 aria-pressed:hover:bg-card aria-pressed:hover:text-primary aria-pressed:shadow-xs aria-pressed:ring-1",
+        remove: "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
         lit: "text-primary hover:bg-muted/50", // a quiet button whose thing is there now: a key at the playhead, the sound playing
         tool: "text-foreground/80 hover:bg-muted/50 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary", // the bars over the picture
         picture: "text-picture hover:bg-white/15", // an icon on the film itself
@@ -41,6 +42,7 @@ const buttonVariants = cva(
         cover:
           "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary aria-pressed:ring-primary rounded-md aria-pressed:ring-1", // CapCut's 36px audio cover tile
         approve: "bg-warn hover:bg-warn/85 font-semibold text-black", // the creator's yes to a fix waiting in yellow (To check)
+        warn: "border-warn/65 bg-warn-bg/90 text-warn hover:border-warn hover:bg-warn-bg border",
         choice:
           "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary", // one of a list, picked
       },
@@ -49,6 +51,7 @@ const buttonVariants = cva(
           "h-7 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         xs: "h-5 gap-1 rounded-sm px-2 text-[0.625rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-2.5",
         sm: "h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        pill: "text-tag h-6 gap-1 rounded-full px-2 [&_svg:not([class*='size-'])]:size-3",
         lg: "h-8 gap-1 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-4",
         icon: "size-7 [&_svg:not([class*='size-'])]:size-3.5",
         "icon-xs": "size-5 rounded-sm [&_svg:not([class*='size-'])]:size-2.5",

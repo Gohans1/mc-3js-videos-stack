@@ -34,7 +34,7 @@ import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
 import { bladeLine } from "../timeline/blade";
-import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
+import { keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -488,7 +488,6 @@ export const drawCamRow = () => {
     g.fillStyle = tone("pick");
     g.fillRect(x, 0, 1, h);
   }
-  drawPlayhead(g, X(S.t), h);
 };
 const closePathAndFill = (g: CanvasRenderingContext2D, style: string) => {
   g.closePath();
@@ -1017,7 +1016,7 @@ export const attachCamRow = () => {
     if (press) {
       const { shot, add } = press;
       press = null;
-      if (boxEnd()) return;
+      if (boxEnd(shot < 0 && e.type === "pointerup" ? e : undefined)) return;
       if (e.type === "pointerup" && !add) {
         if (shot < 0) {
           set(transitionSelection({ kind: "none" }, get().side));

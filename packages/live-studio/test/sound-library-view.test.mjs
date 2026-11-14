@@ -196,6 +196,12 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
           count: 0,
           leaves: [["all", 0]],
         },
+        {
+          id: "voices",
+          title: "Voices",
+          count: 0,
+          leaves: [["all", 0]],
+        },
       ],
     );
   });
@@ -227,12 +233,24 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
   test("stepNavHeader opens only the active group like CapCut 9.7 and toggles collapse on repeat clicks", () => {
     const tree = buildNavTree(SAMPLE, ["mixkit-168"], (x) => x.kind ?? "sfx");
     assert.deepEqual(INITIAL_NAV, { group: "sfx", leaf: "all" });
-    assert.deepEqual(INITIAL_OPEN_GROUPS, { yours: false, bgm: false, sfx: true, mc: false });
+    assert.deepEqual(INITIAL_OPEN_GROUPS, {
+      yours: false,
+      bgm: false,
+      sfx: true,
+      mc: false,
+      voices: false,
+    });
 
     // Clicking Music while on SFX opens Music, closes SFX, and selects Music > All immediately
     const toMusic = stepNavHeader(INITIAL_NAV, INITIAL_OPEN_GROUPS, "bgm", tree);
     assert.deepEqual(toMusic.nav, { group: "bgm", leaf: "all" });
-    assert.deepEqual(toMusic.open, { yours: false, bgm: true, sfx: false, mc: false });
+    assert.deepEqual(toMusic.open, {
+      yours: false,
+      bgm: true,
+      sfx: false,
+      mc: false,
+      voices: false,
+    });
 
     // Clicking Music again while already in Music collapses its accordion without losing selection
     const collapsed = stepNavHeader(toMusic.nav, toMusic.open, "bgm", tree);
@@ -242,7 +260,13 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     // Clicking Yours opens Yours and picks Favorites when non-empty, else Voiceover when non-empty, else This film
     const toYours = stepNavHeader(collapsed.nav, collapsed.open, "yours", tree);
     assert.deepEqual(toYours.nav, { group: "yours", leaf: "fav" });
-    assert.deepEqual(toYours.open, { yours: true, bgm: false, sfx: false, mc: false });
+    assert.deepEqual(toYours.open, {
+      yours: true,
+      bgm: false,
+      sfx: false,
+      mc: false,
+      voices: false,
+    });
 
     const voiceTree = buildNavTree(SAMPLE, [], (x) => x.kind ?? "sfx", 4);
     const toVoice = stepNavHeader(INITIAL_NAV, INITIAL_OPEN_GROUPS, "yours", voiceTree);

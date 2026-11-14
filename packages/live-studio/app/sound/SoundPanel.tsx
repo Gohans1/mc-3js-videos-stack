@@ -10,7 +10,15 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { type PointerEvent as ReactPointerEvent, useDeferredValue, useMemo, useState } from "react";
+import {
+  lazy,
+  type PointerEvent as ReactPointerEvent,
+  Suspense,
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useState,
+} from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +57,7 @@ import {
   Segmented,
   SliderRow,
 } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
@@ -130,13 +139,32 @@ import {
 import { SoundSwapPicker } from "./SoundSwapPicker";
 import { playedPart, type SyncMode, syncPoint } from "./sync";
 import { cachedVoiceClipLabel, useVoiceTakes } from "./voice-client";
+import { useVoiceLibrary } from "./voice-library-client";
+import {
+  buildVoiceUseCaseIndex,
+  DEFAULT_VOICE_FILTERS,
+  filterAndSortVoices,
+  isVoiceStarId,
+  voiceFacetOptions,
+  type VoiceFilters,
+  voiceLeavesWithFavs,
+} from "./voice-library-view";
 import { filterVoiceTakes } from "./voice-view";
 import { VoiceChanger } from "./VoiceChanger";
 import { VoiceClipSection } from "./VoiceClipSection";
 import { VoiceoverList } from "./VoiceoverList";
 
+const VoiceLibraryPane = lazy(() => import("./VoiceLibraryPane"));
+const VoiceFilterMenu = lazy(() =>
+  import("./VoiceLibraryFilters").then((m) => ({ default: m.VoiceFilterMenu })),
+);
+const VoiceFilterChips = lazy(() =>
+  import("./VoiceLibraryFilters").then((m) => ({ default: m.VoiceFilterChips })),
+);
+
 const soundDoc = { snapshot, restore };
 const PAGE = 80;
+const EMPTY_FAVS: readonly string[] = [];
 
 // real-sound's per-sound EQ: cuts (rumble, hiss) with Butterworth slopes, shelves at Q 0.7071 and peaking bands, written as the
 // ffmpeg entries mix.py renders and the mixer previews exactly (eq.ts)
@@ -729,6 +757,7 @@ function CategoryTree({
   activeNav,
   open,
   typed,
+  voicesLoaded,
   onHeader,
   onSelect,
 }: {
@@ -736,6 +765,7 @@ function CategoryTree({
   activeNav: NavPick;
   open: OpenGroups;
   typed: boolean;
+  voicesLoaded: boolean;
   onHeader: (group: NavGroupId) => void;
   onSelect: (pick: NavPick) => void;
 }) {
@@ -759,7 +789,7 @@ function CategoryTree({
               )}
             >
               <span className="truncate">{sec.title}</span>
-              {typed && (
+              {typed && (sec.id !== "voices" || voicesLoaded) && (
                 <span className="text-tag text-muted-foreground ms-auto pe-0.5 tabular-nums">
                   {sec.count}
                 </span>
@@ -813,6 +843,7 @@ function CategoryTree({
 function Library({ side }: { side: boolean }) {
   useStudio((s) => s.soundRev);
   const favs = useStudio((s) => s.favorites.sounds);
+  const effectFavs = useStudio((s) => s.favorites.effects);
   const voiceTakes = useVoiceTakes();
   const [q, setQ] = useState("");
   const deferredQ = useDeferredValue(q);
@@ -821,6 +852,9 @@ function Library({ side }: { side: boolean }) {
   const [origin, setOrigin] = useState<OriginFilter>(ALL);
   const [edition, setEdition] = useState<EditionFilter>(ALL);
   const [src, setSrc] = useState(ALL);
+  const [voiceFilters, setVoiceFilters] = useState<VoiceFilters>(DEFAULT_VOICE_FILTERS);
+  const voicesActive = open.voices || nav.group === "voices";
+  const voiceLib = useVoiceLibrary(voicesActive);
   const [limit, setLimit] = useState(PAGE);
   const [variantCursor, setVariantCursor] = useState<Record<string, number>>({});
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -830,6 +864,27 @@ function Library({ side }: { side: boolean }) {
   const matchedVoiceTakes = useMemo(
     () => filterVoiceTakes(voiceTakes, deferredQ),
     [voiceTakes, deferredQ],
+  );
+  const filmVoiceIds = useMemo(
+    () => new Set(voiceTakes.map((t) => t.voice || "ZaZosYpkIGmSqOwAlfnk")),
+    [voiceTakes],
+  );
+  const voiceFavKey = useMemo(() => effectFavs.filter(isVoiceStarId).join("\0"), [effectFavs]);
+  const voiceFavs = useMemo(
+    () => (voiceFavKey ? voiceFavKey.split("\0") : EMPTY_FAVS),
+    [voiceFavKey],
+  );
+  const voiceUseCaseIndex = useMemo(
+    () => buildVoiceUseCaseIndex(voiceLib.voices, voiceFilters, deferredQ),
+    [voiceLib.voices, voiceFilters, deferredQ],
+  );
+  const voiceLeaves = useMemo(
+    () => voiceLeavesWithFavs(voiceUseCaseIndex, voiceFavs),
+    [voiceUseCaseIndex, voiceFavs],
+  );
+  const voiceSection = useMemo(
+    () => ({ count: voiceLeaves[0]?.count ?? 0, leaves: voiceLeaves }),
+    [voiceLeaves],
   );
   const libraryItems = library;
   const narrationName = lanes?.narration ?? null;
@@ -858,6 +913,7 @@ function Library({ side }: { side: boolean }) {
         kindOf,
         narrationName,
         voiceCount: matchedVoiceTakes.length,
+        voiceSection,
       }),
     [
       libraryItems,
@@ -869,10 +925,34 @@ function Library({ side }: { side: boolean }) {
       deferredQ,
       narrationName,
       matchedVoiceTakes.length,
+      voiceSection,
     ],
   );
   const isVoiceLeaf = activeNav.group === "yours" && activeNav.leaf === "voice";
+  const isVoicesGroup = activeNav.group === "voices";
   const isFavLeaf = activeNav.group === "yours" && activeNav.leaf === "fav";
+  const activeVoiceLeafFavs = isVoicesGroup && activeNav.leaf === "fav" ? voiceFavs : EMPTY_FAVS;
+  const filteredVoices = useMemo(
+    () =>
+      isVoicesGroup
+        ? filterAndSortVoices(
+            voiceLib.voices,
+            activeNav.leaf,
+            deferredQ,
+            voiceFilters,
+            activeVoiceLeafFavs,
+          )
+        : [],
+    [isVoicesGroup, voiceLib.voices, activeNav.leaf, deferredQ, voiceFilters, activeVoiceLeafFavs],
+  );
+  const voiceFacets = useMemo(
+    () =>
+      isVoicesGroup
+        ? voiceFacetOptions(voiceLib.voices, activeNav.leaf, voiceFilters, activeVoiceLeafFavs)
+        : voiceFacetOptions([], ALL, voiceFilters, EMPTY_FAVS),
+    [isVoicesGroup, voiceLib.voices, activeNav.leaf, voiceFilters, activeVoiceLeafFavs],
+  );
+  const clearQuery = useCallback(() => setQ(""), []);
   const activeSection = tree.find((s) => s.id === activeNav.group)!;
   const groups: LibraryGroup[] = useMemo(
     () =>
@@ -886,6 +966,7 @@ function Library({ side }: { side: boolean }) {
   const heading = categoryHeading(activeNav);
   const showFilter =
     !isVoiceLeaf &&
+    !isVoicesGroup &&
     (origins.length > 0 ||
       editions.length > 0 ||
       sources.length > 0 ||
@@ -893,7 +974,9 @@ function Library({ side }: { side: boolean }) {
       activeEdition !== ALL ||
       activeSource !== ALL);
   const isFiltered =
-    !isVoiceLeaf && (activeOrigin !== ALL || activeEdition !== ALL || activeSource !== ALL);
+    !isVoiceLeaf &&
+    !isVoicesGroup &&
+    (activeOrigin !== ALL || activeEdition !== ALL || activeSource !== ALL);
   const filterTitle = isFiltered
     ? `Filter: ${[
         activeOrigin !== ALL && originTitle(activeOrigin),
@@ -903,7 +986,11 @@ function Library({ side }: { side: boolean }) {
         .filter(Boolean)
         .join(" · ")}`
     : "Filter audio";
-  const activeCount = isVoiceLeaf ? matchedVoiceTakes.length : groups.length;
+  const activeCount = isVoicesGroup
+    ? filteredVoices.length
+    : isVoiceLeaf
+      ? matchedVoiceTakes.length
+      : groups.length;
 
   const changeOrigin = (next: OriginFilter) => {
     setOrigin(next);
@@ -1049,6 +1136,19 @@ function Library({ side }: { side: boolean }) {
             ),
           },
           {
+            id: "voices" as const,
+            title: (
+              <>
+                <span className="truncate">Voices</span>
+                {typed && voiceLib.loaded && (
+                  <span className="text-tag text-muted-foreground tabular-nums">
+                    {tree.find((t) => t.id === "voices")!.count}
+                  </span>
+                )}
+              </>
+            ),
+          },
+          {
             id: "yours" as const,
             title: (
               <>
@@ -1097,6 +1197,15 @@ function Library({ side }: { side: boolean }) {
             placeholder={searchPlaceholder(activeNav)}
             className="min-w-0 flex-1"
           />
+          {isVoicesGroup && (
+            <Suspense fallback={<span className="size-7 flex-none" aria-hidden />}>
+              <VoiceFilterMenu
+                filters={voiceFilters}
+                facets={voiceFacets}
+                onChange={setVoiceFilters}
+              />
+            </Suspense>
+          )}
           {showFilter && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -1194,9 +1303,14 @@ function Library({ side }: { side: boolean }) {
             </DropdownMenu>
           )}
         </div>
-        <div className="flex min-h-5 items-center gap-1.5">
+        <div className="flex min-h-5 flex-wrap items-center gap-1.5">
           <h3 className="text-foreground min-w-0 truncate text-xs font-medium">{heading}</h3>
-          {!isVoiceLeaf && activeEdition !== ALL && (
+          {isVoicesGroup && (
+            <Suspense fallback={null}>
+              <VoiceFilterChips filters={voiceFilters} onChange={setVoiceFilters} />
+            </Suspense>
+          )}
+          {!isVoiceLeaf && !isVoicesGroup && activeEdition !== ALL && (
             <button
               type="button"
               onClick={() => changeEdition(ALL)}
@@ -1207,7 +1321,7 @@ function Library({ side }: { side: boolean }) {
               <X aria-hidden className="size-2.5" />
             </button>
           )}
-          {!isVoiceLeaf && activeOrigin !== ALL && (
+          {!isVoiceLeaf && !isVoicesGroup && activeOrigin !== ALL && (
             <button
               type="button"
               onClick={() => changeOrigin(ALL)}
@@ -1218,7 +1332,7 @@ function Library({ side }: { side: boolean }) {
               <X aria-hidden className="size-2.5" />
             </button>
           )}
-          {!isVoiceLeaf && activeSource !== ALL && (
+          {!isVoiceLeaf && !isVoicesGroup && activeSource !== ALL && (
             <button
               type="button"
               onClick={() => {
@@ -1233,276 +1347,302 @@ function Library({ side }: { side: boolean }) {
             </button>
           )}
           <span className="text-muted-foreground ms-auto flex-none text-xs tabular-nums">
-            {activeCount}
+            {activeCount.toLocaleString()}
           </span>
         </div>
       </div>
 
-      {isVoiceLeaf ? (
-        <VoiceoverList
-          takes={matchedVoiceTakes}
-          totalTakes={voiceTakes.length}
-          query={deferredQ}
-          side={side}
-          elsewhere={elsewhere}
-          onToggleGroup={toggleHeader}
-        />
-      ) : (
-        <ul
-          className={cn(
-            "flex flex-col gap-1.5",
-            side && "scroll-fade min-h-0 flex-1 overflow-y-auto px-3 pb-3",
-          )}
-        >
-          {visibleGroups.map((g) => {
-            const variantCount = g.variants.length;
-            const hasVariants = variantCount > 1;
-            const playingIdx = now ? g.variants.findIndex((v) => v.name === now) : -1;
-            const curIdx =
-              playingIdx >= 0 ? playingIdx : (variantCursor[g.key] ?? 0) % variantCount;
-            const x = g.variants[curIdx];
-            const allNames = hasVariants ? g.variants.map((v) => v.name) : [x.name];
-            const starId = hasVariants
-              ? (g.variants.find((v) => favSet.has(v.name))?.name ?? x.name)
-              : x.name;
-            const uses = useCountOfNames(allNames);
-            const itemKind = kindOf(x);
-            const isSynth = originOf(x) === "synth";
-            const isPlaying = playingIdx >= 0;
-            const showVariants = hasVariants && (isPlaying || expandedKey === g.key);
-            const showCategory = activeNav.group === "yours" || activeNav.leaf === ALL;
-            const showSource =
-              activeSource === ALL &&
-              !(activeNav.group === "yours" && activeNav.leaf === "film") &&
-              !(isSynth && showCategory && Boolean(x.category));
-            const { title, subtitle, duration } = soundCardText(x, itemKind, {
-              showCategory,
-              showSource,
-              showVariant: !hasVariants,
-            });
-            const detail = soundCardDetail(x);
-            const advanceRoundRobin = () => {
-              if (hasVariants) {
-                setVariantCursor((prev) => ({ ...prev, [g.key]: (curIdx + 1) % variantCount }));
-              }
-            };
-            return (
-              <li
-                key={g.key}
-                onPointerDown={press(x.name, allNames, title, advanceRoundRobin)}
-                onDragStart={(e) => e.preventDefault()}
-                onPointerEnter={() => lightSounds(allNames)}
-                onPointerLeave={() => lightSounds(null)}
-                onFocus={() => lightSounds(allNames)}
-                onBlur={() => lightSounds(null)}
-                className="group bg-card hover:bg-raised-3/70 flex cursor-grab touch-none flex-col gap-1 rounded-md px-2 py-1.5 transition-colors duration-150 select-none active:cursor-grabbing"
-              >
-                <div className="flex min-h-9 items-center gap-2">
-                  <Tip label={isPlaying ? "Pause preview" : "Preview audio"}>
-                    <Button
-                      variant="cover"
-                      size="cover"
-                      aria-pressed={isPlaying}
-                      aria-label={`${isPlaying ? "Stop" : "Preview"} ${title}`}
-                      onClick={() => {
-                        setExpandedKey(hasVariants ? g.key : null);
-                        listen(x.name);
-                      }}
-                    >
-                      {isPlaying ? (
-                        <Pause className="fill-current" />
-                      ) : (
-                        <Play className="fill-current" />
-                      )}
-                    </Button>
-                  </Tip>
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5" title={detail}>
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="text-ui text-foreground truncate">{title}</span>
-                      {hasVariants && (
-                        <Tip
-                          label={`Variation ${curIdx + 1} of ${variantCount} — click for next take`}
-                        >
-                          <button
-                            type="button"
-                            aria-label={`Next variation of ${title} (${curIdx + 1} of ${variantCount})`}
-                            onClick={() => {
-                              const nextIdx = (curIdx + 1) % variantCount;
-                              setExpandedKey(g.key);
-                              setVariantCursor((prev) => ({ ...prev, [g.key]: nextIdx }));
-                              listen(g.variants[nextIdx].name);
-                            }}
-                            className="bg-raised-3/85 text-tag text-muted-foreground hover:bg-raised-3 hover:text-foreground focus-visible:ring-ring inline-flex h-4 flex-none items-center rounded px-1 font-mono tabular-nums transition-colors outline-none focus-visible:ring-2"
+      <TabStage
+        activeKey={`${activeNav.group}:${activeNav.leaf}`}
+        axis="y"
+        distance={6}
+        duration={140}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        {isVoicesGroup ? (
+          <Suspense
+            fallback={
+              <div className="text-muted-foreground px-3 py-4 text-xs">Loading English voices…</div>
+            }
+          >
+            <VoiceLibraryPane
+              library={voiceLib}
+              voices={filteredVoices}
+              leaf={activeNav.leaf}
+              query={deferredQ}
+              filters={voiceFilters}
+              onChangeFilters={setVoiceFilters}
+              onClearQuery={clearQuery}
+              filmVoiceIds={filmVoiceIds}
+              side={side}
+            />
+          </Suspense>
+        ) : isVoiceLeaf ? (
+          <VoiceoverList
+            takes={matchedVoiceTakes}
+            totalTakes={voiceTakes.length}
+            query={deferredQ}
+            side={side}
+            elsewhere={elsewhere}
+            onToggleGroup={toggleHeader}
+          />
+        ) : (
+          <ul
+            className={cn(
+              "flex flex-col gap-1.5",
+              side && "scroll-fade min-h-0 flex-1 overflow-y-auto px-3 pb-3",
+            )}
+          >
+            {visibleGroups.map((g) => {
+              const variantCount = g.variants.length;
+              const hasVariants = variantCount > 1;
+              const playingIdx = now ? g.variants.findIndex((v) => v.name === now) : -1;
+              const curIdx =
+                playingIdx >= 0 ? playingIdx : (variantCursor[g.key] ?? 0) % variantCount;
+              const x = g.variants[curIdx];
+              const allNames = hasVariants ? g.variants.map((v) => v.name) : [x.name];
+              const starId = hasVariants
+                ? (g.variants.find((v) => favSet.has(v.name))?.name ?? x.name)
+                : x.name;
+              const uses = useCountOfNames(allNames);
+              const itemKind = kindOf(x);
+              const isSynth = originOf(x) === "synth";
+              const isPlaying = playingIdx >= 0;
+              const showVariants = hasVariants && (isPlaying || expandedKey === g.key);
+              const showCategory = activeNav.group === "yours" || activeNav.leaf === ALL;
+              const showSource =
+                activeSource === ALL &&
+                !(activeNav.group === "yours" && activeNav.leaf === "film") &&
+                !(isSynth && showCategory && Boolean(x.category));
+              const { title, subtitle, duration } = soundCardText(x, itemKind, {
+                showCategory,
+                showSource,
+                showVariant: !hasVariants,
+              });
+              const detail = soundCardDetail(x);
+              const advanceRoundRobin = () => {
+                if (hasVariants) {
+                  setVariantCursor((prev) => ({ ...prev, [g.key]: (curIdx + 1) % variantCount }));
+                }
+              };
+              return (
+                <li
+                  key={g.key}
+                  onPointerDown={press(x.name, allNames, title, advanceRoundRobin)}
+                  onDragStart={(e) => e.preventDefault()}
+                  onPointerEnter={() => lightSounds(allNames)}
+                  onPointerLeave={() => lightSounds(null)}
+                  onFocus={() => lightSounds(allNames)}
+                  onBlur={() => lightSounds(null)}
+                  className="group bg-card hover:bg-raised-3/70 flex cursor-grab touch-none flex-col gap-1 rounded-md px-2 py-1.5 transition-colors duration-150 select-none active:cursor-grabbing"
+                >
+                  <div className="flex min-h-9 items-center gap-2">
+                    <Tip label={isPlaying ? "Pause preview" : "Preview audio"}>
+                      <Button
+                        variant="cover"
+                        size="cover"
+                        aria-pressed={isPlaying}
+                        aria-label={`${isPlaying ? "Stop" : "Preview"} ${title}`}
+                        onClick={() => {
+                          setExpandedKey(hasVariants ? g.key : null);
+                          listen(x.name);
+                        }}
+                      >
+                        {isPlaying ? (
+                          <Pause className="fill-current" />
+                        ) : (
+                          <Play className="fill-current" />
+                        )}
+                      </Button>
+                    </Tip>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5" title={detail}>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="text-ui text-foreground truncate">{title}</span>
+                        {hasVariants && (
+                          <Tip
+                            label={`Variation ${curIdx + 1} of ${variantCount} — click for next take`}
                           >
-                            {curIdx + 1}/{variantCount}
-                          </button>
+                            <button
+                              type="button"
+                              aria-label={`Next variation of ${title} (${curIdx + 1} of ${variantCount})`}
+                              onClick={() => {
+                                const nextIdx = (curIdx + 1) % variantCount;
+                                setExpandedKey(g.key);
+                                setVariantCursor((prev) => ({ ...prev, [g.key]: nextIdx }));
+                                listen(g.variants[nextIdx].name);
+                              }}
+                              className="bg-raised-3/85 text-tag text-muted-foreground hover:bg-raised-3 hover:text-foreground focus-visible:ring-ring inline-flex h-4 flex-none items-center rounded px-1 font-mono tabular-nums transition-colors outline-none focus-visible:ring-2"
+                            >
+                              {curIdx + 1}/{variantCount}
+                            </button>
+                          </Tip>
+                        )}
+                      </span>
+                      <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+                        {isSynth && <Badge variant="synth">Code</Badge>}
+                        {x.contentId && (
+                          <Badge variant="claim" title={CONTENT_ID_NOTE}>
+                            Content ID
+                          </Badge>
+                        )}
+                        {subtitle && (
+                          <>
+                            <span className="truncate">{subtitle}</span>
+                            <span aria-hidden className="flex-none">
+                              ·
+                            </span>
+                          </>
+                        )}
+                        <span className="flex-none tabular-nums">{duration}</span>
+                      </span>
+                    </span>
+                    <span className="flex flex-none items-center gap-0.5">
+                      {uses > 0 && (
+                        <Tip
+                          label={
+                            uses > 1
+                              ? `Select its ${uses} clips on the tracks`
+                              : "Select its clip on the tracks"
+                          }
+                        >
+                          <Button
+                            variant="quiet"
+                            size="xs"
+                            className="flex-none"
+                            aria-label={`Select the ${uses > 1 ? `${uses} clips` : "clip"} of ${title}`}
+                            onClick={() => pickNamesUses(allNames, title)}
+                          >
+                            <span className="tabular-nums">{uses}×</span>
+                          </Button>
                         </Tip>
                       )}
-                    </span>
-                    <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
-                      {isSynth && <Badge variant="synth">Code</Badge>}
-                      {x.contentId && (
-                        <Badge variant="claim" title={CONTENT_ID_NOTE}>
-                          Content ID
-                        </Badge>
-                      )}
-                      {subtitle && (
-                        <>
-                          <span className="truncate">{subtitle}</span>
-                          <span aria-hidden className="flex-none">
-                            ·
-                          </span>
-                        </>
-                      )}
-                      <span className="flex-none tabular-nums">{duration}</span>
-                    </span>
-                  </span>
-                  <span className="flex flex-none items-center gap-0.5">
-                    {uses > 0 && (
+                      <FavoriteStar kind="sounds" id={starId} name={title} onCard />
                       <Tip
                         label={
-                          uses > 1
-                            ? `Select its ${uses} clips on the tracks`
-                            : "Select its clip on the tracks"
+                          hasVariants
+                            ? `Add take #${x.variant ?? curIdx + 1} to track (auto-cycles)`
+                            : "Add to track"
                         }
                       >
                         <Button
-                          variant="quiet"
-                          size="xs"
-                          className="flex-none"
-                          aria-label={`Select the ${uses > 1 ? `${uses} clips` : "clip"} of ${title}`}
-                          onClick={() => pickNamesUses(allNames, title)}
+                          variant="card-action"
+                          size="icon-sm"
+                          className="flex-none pointer-coarse:size-9"
+                          aria-label={`Add ${title} to track`}
+                          onClick={() => {
+                            addClip(x.name, S.t);
+                            advanceRoundRobin();
+                          }}
                         >
-                          <span className="tabular-nums">{uses}×</span>
+                          <Plus />
                         </Button>
                       </Tip>
-                    )}
-                    <FavoriteStar kind="sounds" id={starId} name={title} onCard />
-                    <Tip
-                      label={
-                        hasVariants
-                          ? `Add take #${x.variant ?? curIdx + 1} to track (auto-cycles)`
-                          : "Add to track"
-                      }
-                    >
-                      <Button
-                        variant="card-action"
-                        size="icon-sm"
-                        className="flex-none pointer-coarse:size-9"
-                        aria-label={`Add ${title} to track`}
-                        onClick={() => {
-                          addClip(x.name, S.t);
-                          advanceRoundRobin();
-                        }}
-                      >
-                        <Plus />
-                      </Button>
-                    </Tip>
-                  </span>
-                </div>
-                {showVariants && (
-                  <ChipGroup
-                    label={`${title} variations`}
-                    value={x.name}
-                    items={g.variants.map((v, idx) => ({
-                      id: v.name,
-                      title: `#${v.variant ?? idx + 1}`,
-                    }))}
-                    onChange={(vName) => {
-                      setExpandedKey(g.key);
-                      const idx = g.variants.findIndex((v) => v.name === vName);
-                      if (idx >= 0) setVariantCursor((prev) => ({ ...prev, [g.key]: idx }));
-                      if (now !== vName) listen(vName);
-                    }}
-                    className="ps-11 pe-1"
-                  />
-                )}
-                {isPlaying && (
-                  <AuditionScrubber
-                    id={x.name}
-                    label={title}
-                    fallbackSeconds={x.seconds}
-                    kind={itemKind}
-                  />
-                )}
+                    </span>
+                  </div>
+                  {showVariants && (
+                    <ChipGroup
+                      label={`${title} variations`}
+                      value={x.name}
+                      items={g.variants.map((v, idx) => ({
+                        id: v.name,
+                        title: `#${v.variant ?? idx + 1}`,
+                      }))}
+                      onChange={(vName) => {
+                        setExpandedKey(g.key);
+                        const idx = g.variants.findIndex((v) => v.name === vName);
+                        if (idx >= 0) setVariantCursor((prev) => ({ ...prev, [g.key]: idx }));
+                        if (now !== vName) listen(vName);
+                      }}
+                      className="ps-11 pe-1"
+                    />
+                  )}
+                  {isPlaying && (
+                    <AuditionScrubber
+                      id={x.name}
+                      label={title}
+                      fallbackSeconds={x.seconds}
+                      kind={itemKind}
+                    />
+                  )}
+                </li>
+              );
+            })}
+            {more > 0 && (
+              <li className="pt-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 w-full"
+                  onClick={() => setLimit((n) => n + PAGE)}
+                >
+                  Show more ({more} remaining of {groups.length})
+                </Button>
               </li>
-            );
-          })}
-          {more > 0 && (
-            <li className="pt-1">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8 w-full"
-                onClick={() => setLimit((n) => n + PAGE)}
-              >
-                Show more ({more} remaining of {groups.length})
-              </Button>
-            </li>
-          )}
-          {!shown.length && (
-            <li className="bg-card text-ui text-muted-foreground flex flex-col items-start gap-2 rounded-md p-3">
-              <p>
-                {!library.length
-                  ? "The film's sound folder is empty."
-                  : typed
-                    ? `No ${activeSection.one}s match "${deferredQ.trim()}".`
-                    : activeEdition !== ALL && activeSource !== ALL
-                      ? `No ${editionTitle(activeEdition)} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
-                      : activeEdition !== ALL
-                        ? `No ${editionTitle(activeEdition)} ${activeSection.one}s here.`
-                        : activeOrigin !== ALL && activeSource !== ALL
-                          ? `No ${activeOrigin === "synth" ? "code-gen" : "real / studio"} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
-                          : activeOrigin !== ALL
-                            ? `No ${activeOrigin === "synth" ? "code-gen" : "real / studio"} ${activeSection.one}s here.`
-                            : activeSource !== ALL
-                              ? `No ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
-                              : activeNav.group === "yours" && activeNav.leaf === "fav"
-                                ? "No favorite sounds yet. Click the star on any track to save it here."
-                                : activeNav.group === "yours" && activeNav.leaf === "film"
-                                  ? "This film has no custom audio files in its own sound/sfx folder yet."
-                                  : `No ${activeSection.one}s in this category.`}
-              </p>
-              {activeEdition !== ALL && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => changeEdition(ALL)}
-                >
-                  Show all editions
-                </Button>
-              )}
-              {activeOrigin !== ALL && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => changeOrigin(ALL)}
-                >
-                  Show all types
-                </Button>
-              )}
-              {activeSource !== ALL && (
-                <Button variant="secondary" size="sm" className="h-7" onClick={() => setSrc(ALL)}>
-                  Show all sources
-                </Button>
-              )}
-              {elsewhere.map((sec) => (
-                <Button
-                  key={sec.id}
-                  variant="secondary"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => toggleHeader(sec.id)}
-                >
-                  {sec.count} in {sec.title}
-                </Button>
-              ))}
-            </li>
-          )}
-        </ul>
-      )}
+            )}
+            {!shown.length && (
+              <li className="bg-card text-ui text-muted-foreground flex flex-col items-start gap-2 rounded-md p-3">
+                <p>
+                  {!library.length
+                    ? "The film's sound folder is empty."
+                    : typed
+                      ? `No ${activeSection.one}s match "${deferredQ.trim()}".`
+                      : activeEdition !== ALL && activeSource !== ALL
+                        ? `No ${editionTitle(activeEdition)} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
+                        : activeEdition !== ALL
+                          ? `No ${editionTitle(activeEdition)} ${activeSection.one}s here.`
+                          : activeOrigin !== ALL && activeSource !== ALL
+                            ? `No ${activeOrigin === "synth" ? "code-gen" : "real / studio"} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
+                            : activeOrigin !== ALL
+                              ? `No ${activeOrigin === "synth" ? "code-gen" : "real / studio"} ${activeSection.one}s here.`
+                              : activeSource !== ALL
+                                ? `No ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
+                                : activeNav.group === "yours" && activeNav.leaf === "fav"
+                                  ? "No favorite sounds yet. Click the star on any track to save it here."
+                                  : activeNav.group === "yours" && activeNav.leaf === "film"
+                                    ? "This film has no custom audio files in its own sound/sfx folder yet."
+                                    : `No ${activeSection.one}s in this category.`}
+                </p>
+                {activeEdition !== ALL && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => changeEdition(ALL)}
+                  >
+                    Show all editions
+                  </Button>
+                )}
+                {activeOrigin !== ALL && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => changeOrigin(ALL)}
+                  >
+                    Show all types
+                  </Button>
+                )}
+                {activeSource !== ALL && (
+                  <Button variant="secondary" size="sm" className="h-7" onClick={() => setSrc(ALL)}>
+                    Show all sources
+                  </Button>
+                )}
+                {elsewhere.map((sec) => (
+                  <Button
+                    key={sec.id}
+                    variant="secondary"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => toggleHeader(sec.id)}
+                  >
+                    {sec.count} in {sec.title}
+                  </Button>
+                ))}
+              </li>
+            )}
+          </ul>
+        )}
+      </TabStage>
     </div>
   );
 
@@ -1517,6 +1657,7 @@ function Library({ side }: { side: boolean }) {
           activeNav={activeNav}
           open={open}
           typed={typed}
+          voicesLoaded={voiceLib.loaded}
           onHeader={toggleHeader}
           onSelect={selectNav}
         />
