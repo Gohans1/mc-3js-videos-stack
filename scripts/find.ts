@@ -590,7 +590,15 @@ type Clip = {
   seq?: string[];
   [k: string]: unknown;
 };
-type Review = { desc?: string; mood?: string[]; flaw?: string; seq?: string[] };
+// start/end/seq: postures as checked by eye, over the measured ones
+type Review = {
+  desc?: string;
+  mood?: string[];
+  flaw?: string;
+  start?: string;
+  end?: string;
+  seq?: string[];
+};
 // catalog.py's own fight words and retarget-break limits (catalog.py fights(), broken())
 const SCREEN: { fights: string[]; broken: Record<string, [number, string]> } = JSON.parse(
   readFileSync(join(ROOT, "packages/clip-catalog/screen.json"), "utf8"),
@@ -638,11 +646,13 @@ export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] 
         const c = JSON.parse(l) as Clip,
           seen = review[c.ref] ?? {},
           flaw = [seen.flaw, brk.get(c.ref)].filter(Boolean).join("; "),
-          r = { ...seen, ...(flaw && { flaw }) };
+          r = { ...seen, ...(flaw && { flaw }) },
+          start = r.start ?? c.start,
+          end = r.end ?? c.end;
         return {
           kind: "mocap",
           id: c.ref,
-          cat: c.start === c.end ? (c.start ?? "") : `${c.start}>${c.end}`,
+          cat: start === end ? (start ?? "") : `${start}>${end}`,
           title: (c.ref.split("/")[1] ?? "").replace(/_[0-9a-f]{8}$/, "").replace(/_/g, " "),
           about: [r.desc, r.mood?.length && `(${r.mood.join(", ")})`].filter(Boolean).join(" "),
           src: lib,
@@ -653,7 +663,7 @@ export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] 
           // seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
           data: {
             ...c,
-            seq: [c.start, ...(c.seq ?? []), c.end].filter(
+            seq: [start, ...(c.seq ?? []), end].filter(
               (x, i, a): x is string => !!x && x !== a[i - 1],
             ),
             ...r,
@@ -1614,6 +1624,14 @@ function parse(argv: string[], lists: string[] = []) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
     if (!isOption(arg)) {
+      // an option quoted into the words is searched as a word ("door --kind sfx" looks for "kind")
+      const quoted = arg
+        .split(/\s+/)
+        .find((w) => w.toLowerCase().split("=")[0]! in OPTIONS || w.toLowerCase() in OPTION_ALIAS);
+      if (quoted && /\s/.test(arg.trim()))
+        throw new FindError(
+          `${quoted} sits inside the quotes ("${arg}"), so it would be searched as a word: options go outside them (bun run find ${arg.trim()})`,
+        );
       rest.push(arg);
       continue;
     }
@@ -1823,7 +1841,10 @@ export async function run(
       ? `the creator's favourites: ${starredLists.map((l) => `${l.name} ${l.count}`).join(", ")} (only those: add --fav, or --fav <list>)`
       : "";
   if (bare.length) {
-    const pool = entriesOf();
+    // values counted inside the --kind given beside, as the search would filter
+    const all = entriesOf(),
+      kf = asked && !bare.includes("--kind") ? kindFilter(asked, all) : undefined,
+      pool = kf && !kf.bad.length ? all.filter(kf.test) : all;
     throw new FindError(
       bare
         .map((o) => `${o} needs a value, e.g. ${OPTIONS[o]}. ${valuesOf(o, pool)}`.trim())
@@ -2007,7 +2028,8 @@ export async function run(
       return [o, pose];
     });
     const libArg = sources ? ["--lib", sources.join(",")] : [];
-    const words = jev ? ["--jev", query] : query.split(/\s+/).filter(Boolean);
+    // catalog.py matches each word at a word start: a name said as Arms_Holding or sitSeat is its words
+    const words = jev ? ["--jev", query] : plain(query);
     const durArg = dur ? ["--dur", set.get("--dur")!] : [];
     // a posture beside the category is read first (standing is stand), then must be the category's own
     for (const o of clipCat ? (["--from", "--to"] as const) : []) {
@@ -2270,9 +2292,9 @@ export async function run(
         }),
         ...more,
         ...filtersFor(inKinds).map((f) => `filter: ${f}`),
-        `next: one category: bun run find --kind ${example ?? "<kind>/<category>"}${sources ? ` --source ${sources.join(",")}` : ""}`,
-        `      search inside it: bun run find <english words> --kind ${example ?? "<kind>/<category>"}; one in full: bun run find --show <id>`,
-        `      by meaning inside one (Jev, paid): bun run find --jev --kind ${example ?? "<kind>/<category>"} "<the scene or feeling>"`,
+        `next: one category: bun run find --kind ${example ?? "<kind>/<category>"}${narrowing}`,
+        `      search inside it: bun run find <english words> --kind ${example ?? "<kind>/<category>"}${narrowing}; one in full: bun run find --show <id>`,
+        `      by meaning inside one (Jev, paid): bun run find --jev --kind ${example ?? "<kind>/<category>"}${narrowing} "<the scene or feeling>"`,
         ...(inKinds.some((x) => x.kind === "mocap")
           ? [`      ${mocapNext(pool, false, [...set.keys()])}`]
           : []),

@@ -798,6 +798,14 @@ test("a filter named without a value lists its values with counts", async () => 
   await expect(run(["door", "--source"], vault, noJev)).rejects.toThrow(
     /--source needs a value[\s\S]*mc: minecraft 1/,
   );
+  // counted inside the --kind asked for, as the search would filter
+  const pool = [
+    { ...e("mixamo/Wave", "Wave", "", "mocap", "stand"), secs: 3 },
+    { ...e("door-slam", "Door slam", "", "sfx", "foley"), secs: 0.5 },
+  ];
+  await expect(run(["--kind", "mocap", "--dur"], pool, noJev)).rejects.toThrow(
+    /--dur needs a value.*Here: 1-5 1$/,
+  );
 });
 
 test("another name for an option is read as the option, and the first line says so", async () => {
@@ -939,6 +947,37 @@ test("a mood or posture said another way is read as the tag the clips carry", as
   await expect(
     run(["--from", "sitting"], [{ ...clip, data: { seq: ["sitFloor", "sitSeat"] } }], noJev, clips),
   ).rejects.toThrow(/close: sitFloor, sitSeat/);
+});
+
+test("a clip's name said with underscores reaches the body filters as its words", async () => {
+  const clip = {
+    ...e("mixamo/Arms_Holding_Knee_c9c00004", "Arms Holding Knee", "", "mocap", "sitSeat"),
+    data: { seq: ["sitSeat"] },
+  };
+  const seen: string[][] = [];
+  const clips = async (args: string[]) => (seen.push(args), "1 matches");
+  await run(["Arms_Holding_Knee", "--from", "sitSeat"], [clip], noJev, clips);
+  expect(seen[0]).toEqual(["arms", "holding", "knee", "--from", "sitSeat", "-n", "12"]);
+});
+
+test("a kind too long to list names a category to go into, keeping the filters given", async () => {
+  const pool = ["foley", "impacts"].flatMap((cat) =>
+    Array.from({ length: 40 }, (_, i) => ({
+      ...e(`${cat}-${i}`, `${cat} ${i}`, "", "sfx", cat),
+      secs: 0.5,
+    })),
+  );
+  const out = await run(["--kind", "sfx", "--dur", "0-1"], pool, noJev);
+  expect(out).toMatch(/next: one category: bun run find --kind sfx\/\w+ --dur 0-1\n/);
+  expect(out).toMatch(/search inside it: bun run find <english words> --kind sfx\/\w+ --dur 0-1;/);
+});
+
+test("an option quoted into the words is refused, not searched as a word", async () => {
+  await expect(run(["door --kind sfx"], vault, noJev)).rejects.toThrow(
+    /--kind sits inside the quotes \("door --kind sfx"\).*\(bun run find door --kind sfx\)/,
+  );
+  // a description with a dash in it is still words
+  await expect(run(["--jev", "a slow fade - then silence"], vault, noJev)).resolves.toBeDefined();
 });
 
 test("words that name a kind put its hits first", async () => {
@@ -1464,6 +1503,22 @@ test("a clip's postures start and end where --from and --to read them, unless ch
   const [hit, fixed] = mocapEntries(dir);
   expect(hit?.data?.seq).toEqual(["stand", "crouch", "lie", "sitFloor"]);
   expect(fixed?.data?.seq).toEqual(["crouch", "sitFloor"]);
+  rmSync(dir, { recursive: true });
+});
+
+test("a clip's category is its postures as checked by eye, not as measured", () => {
+  const dir = mkdtempSync(join(tmpdir(), "find-mocap-"));
+  writeFileSync(
+    join(dir, "mixamo.jsonl"),
+    `${JSON.stringify({ ref: "mixamo/Knee_c9c00003", dur: 0, start: "crouch", end: "crouch" })}\n`,
+  );
+  writeFileSync(
+    join(dir, "review.json"),
+    JSON.stringify({ "mixamo/Knee_c9c00003": { start: "sitSeat", end: "sitSeat" } }),
+  );
+  const [clip] = mocapEntries(dir);
+  expect(clip?.cat).toBe("sitSeat");
+  expect(clip?.data?.seq).toEqual(["sitSeat"]);
   rmSync(dir, { recursive: true });
 });
 
