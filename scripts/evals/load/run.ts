@@ -28,8 +28,9 @@ headless Chrome, and prints the medians:
   kb         bytes over the wire                     js        JavaScript bytes over the wire     req   requests
 Profiles: desk (1600x900, localhost) and phone (412x915 touch, 4x slower CPU, 20 Mbit/s and 40 ms like Tailscale), each
 cold and warm. Each finished run adds one line to scripts/evals/load/runs/history.jsonl.
---profile also samples the CPU through the first measured cold visit of each profile and prints where its main thread
-spent the time, by function (self time; the page keeps its names, see src/page.mjs).
+--profile also samples the CPU through the first measured cold and warm visit of each profile and prints where its main
+thread spent the time, by function (self and total; the page keeps its names, see src/page.mjs), and the libraries' time
+under the page's function that called into them. Phone runs swing ~30%: repeat one before calling it a win.
 The film's own studio must not be running (one studio per film); the eval stops its studio when done.`;
 
 const args = process.argv.slice(2);
@@ -294,12 +295,17 @@ const cpuTimes = (p: CpuProfile, name: string) => {
     return `${f.url.replace(/^.*\//, "") || "(native)"}:${f.lineNumber + 1} ${f.functionName || "(anonymous)"}`;
   };
   const self = new Map<string, number>(),
-    total = new Map<string, number>();
+    total = new Map<string, number>(),
+    caller = new Map<string, number>();
   const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+  const inLib = (id: number) => /\/vendor-[\w-]+\.js$/.test(node.get(id)!.callFrame.url);
   p.samples.forEach((id, i) => {
     const ms = (p.timeDeltas[i] ?? 0) / 1000,
       seen = new Set<string>();
     add(self, keyOf(id), ms);
+    let page: number | undefined = id;
+    while (page !== undefined && inLib(page)) page = parent.get(page);
+    if (page !== id && page !== undefined) add(caller, keyOf(page), ms);
     for (let at: number | undefined = id; at !== undefined; at = parent.get(at)) {
       const k = keyOf(at);
       if (!seen.has(k)) add(total, k, ms);
@@ -312,7 +318,16 @@ const cpuTimes = (p: CpuProfile, name: string) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 30)
       .map(([k, v]) => `${v.toFixed(0).padStart(6)} ms  ${k}`);
-  return [`profile: ${file}`, "self:", ...top(self), "total:", ...top(total)];
+  // the libraries' self time (three's matrix sums, parsers...) under the page's own function that called into them
+  return [
+    `profile: ${file}`,
+    "self:",
+    ...top(self),
+    "total:",
+    ...top(total),
+    "in vendor chunks, by the page's caller:",
+    ...top(caller),
+  ];
 };
 // One context per run: its own cache, cookies and storage, so the first visit is a real first visit
 const visit = async (cdp: Cdp, profile: Profile, profileThis = false) => {
@@ -327,7 +342,7 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false) => {
   await cdp.send("Runtime.enable", {}, s);
   await profile.setup(cdp, s);
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: PROBE }, s);
-  const load = async (cpu = false) => {
+  const load = async (cpu: string | null = null) => {
     if (cpu) {
       await cdp.send("Profiler.enable", {}, s);
       await cdp.send("Profiler.setSamplingInterval", { interval: 500 }, s);
@@ -342,14 +357,14 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false) => {
         .catch(() => null);
       const v = r?.result?.value;
       if (v && (v.ready != null || v.errors.length || Date.now() - t0 > 180e3)) {
-        if (cpu) v.cpu = cpuTimes((await cdp.send("Profiler.stop", {}, s)).profile, profile.name);
+        if (cpu) v.cpu = cpuTimes((await cdp.send("Profiler.stop", {}, s)).profile, cpu);
         return v.ready != null || v.errors.length ? v : { ...v, timedOut: true };
       }
     }
   };
-  const cold = await load(profileThis);
+  const cold = await load(profileThis ? `${profile.name}-cold` : null);
   await sleep(500); // the last writes of the first visit settle into the cache
-  const warm = await load();
+  const warm = await load(profileThis ? `${profile.name}-warm` : null);
   await cdp.send("Target.closeTarget", { targetId });
   await cdp.send("Target.disposeBrowserContext", { browserContextId });
   return { cold, warm };
@@ -390,7 +405,8 @@ try {
       warm: any[] = [];
     for (let i = 0; i < RUNS; i++) {
       const r = await visit(cdp, profile, PROFILE && i === 0);
-      if (r.cold.cpu) results[`${profile.name}.cpu`] = r.cold.cpu;
+      if (r.cold.cpu) results[`${profile.name}.cold.cpu`] = r.cold.cpu;
+      if (r.warm.cpu) results[`${profile.name}.warm.cpu`] = r.warm.cpu;
       for (const [kind, v] of [
         ["cold", r.cold],
         ["warm", r.warm],
