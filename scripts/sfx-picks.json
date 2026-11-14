@@ -3491,6 +3491,503 @@
       "page": "https://mixkit.co/free-sound-effects/fight/",
       "file_url": "https://assets.mixkit.co/active_storage/sfx/2205/2205.wav",
       "ear": { "query": "a person crying out in pain", "z": 4.77, "verdict": "strong" }
+    },
+    {
+      "id": "mixkit-3037",
+      "title": "Crowd booing",
+      "category": "crowd",
+      "for": "a crowd booing: a flop, a villain, a bad call",
+      "page": "https://mixkit.co/free-sound-effects/thank-you/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3037/3037.wav",
+      "ear": {"query":"a crowd booing","z":4.22,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-586",
+      "title": "Desk bell ding",
+      "category": "notifications",
+      "for": "a hotel desk bell: service, an idea, a ding",
+      "page": "https://mixkit.co/free-sound-effects/bell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/586/586.wav",
+      "ear": {"query":"a hotel desk bell ding","z":3.61,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-603",
+      "title": "Church bells peal",
+      "category": "musical",
+      "for": "church bells pealing: a wedding, a town square",
+      "maxSeconds": 60,
+      "page": "https://mixkit.co/free-sound-effects/bell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/603/603.wav",
+      "ear": {"query":"church bells ringing","z":5.44,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-617",
+      "title": "Church bell toll",
+      "category": "musical",
+      "for": "a single deep church bell: a death, a dread",
+      "page": "https://mixkit.co/free-sound-effects/church-bell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/617/617.wav",
+      "ear": {"query":"church bells ringing","z":3.68,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-626",
+      "title": "Dramatic church bells",
+      "category": "musical",
+      "for": "dramatic church bells: doom, a big reveal",
+      "maxSeconds": 60,
+      "page": "https://mixkit.co/free-sound-effects/church-bell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/626/626.wav",
+      "ear": {"query":"church bells ringing","z":5.37,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1071",
+      "title": "Clock strikes hour",
+      "category": "musical",
+      "for": "a big clock chiming the hour: midnight, time up",
+      "maxSeconds": 30,
+      "page": "https://mixkit.co/free-sound-effects/clock/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1071/1071.wav",
+      "ear": {"query":"a clock striking the hour","z":3.93,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2475",
+      "title": "Night crickets",
+      "category": "nature",
+      "for": "crickets at night: awkward silence, a calm night",
+      "maxSeconds": 95,
+      "page": "https://mixkit.co/free-sound-effects/night/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2475/2475.wav",
+      "ear": {"query":"crickets chirping at night","z":4.53,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1782",
+      "title": "Swamp crickets",
+      "category": "nature",
+      "for": "crickets in a swamp at night",
+      "maxSeconds": 40,
+      "page": "https://mixkit.co/free-sound-effects/crickets/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1782/1782.wav",
+      "ear": {"query":"crickets chirping at night","z":4.25,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1780",
+      "title": "Single cricket chirp",
+      "category": "nature",
+      "for": "one cricket chirp: an awkward silence",
+      "page": "https://mixkit.co/free-sound-effects/crickets/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1780/1780.wav",
+      "ear": {"query":"crickets chirping at night","z":3.56,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2467",
+      "title": "Morning skylarks",
+      "category": "nature",
+      "for": "birds over a meadow in the morning",
+      "maxSeconds": 125,
+      "page": "https://mixkit.co/free-sound-effects/morning/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2467/2467.wav",
+      "ear": {"query":"birds singing in the morning","z":3.73,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2472",
+      "title": "Morning birdsong",
+      "category": "nature",
+      "for": "birds singing in the morning: a new day, waking up",
+      "maxSeconds": 215,
+      "page": "https://mixkit.co/free-sound-effects/morning/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2472/2472.wav",
+      "ear": {"query":"birds singing in the morning","z":4.37,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-17",
+      "title": "Birds in trees",
+      "category": "nature",
+      "for": "little birds singing in the trees",
+      "page": "https://mixkit.co/free-sound-effects/bird/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/17/17.wav",
+      "ear": {"query":"birds singing in the morning","z":3.32,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-67",
+      "title": "Songbird chirp",
+      "category": "nature",
+      "for": "a melodic songbird chirp",
+      "page": "https://mixkit.co/free-sound-effects/bird/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/67/67.wav",
+      "ear": {"query":"birds singing in the morning","z":3.34,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2188",
+      "title": "Long kiss",
+      "category": "comedy",
+      "for": "a long kiss: romance, a smooch",
+      "page": "https://mixkit.co/free-sound-effects/kiss/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2188/2188.wav",
+      "ear": {"query":"a kiss","z":3.57,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2196",
+      "title": "Double kiss",
+      "category": "comedy",
+      "for": "a quick double kiss: mwah",
+      "page": "https://mixkit.co/free-sound-effects/kiss/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2196/2196.wav",
+      "ear": {"query":"a kiss","z":2.94,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-2209",
+      "title": "Cartoon sneeze",
+      "category": "voices",
+      "for": "a cartoon sneeze: achoo",
+      "page": "https://mixkit.co/free-sound-effects/cartoon/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2209/2209.wav",
+      "ear": {"query":"a sneeze","z":3.52,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-965",
+      "title": "Shocked gasp",
+      "category": "comedy",
+      "for": "a woman gasping in shock",
+      "page": "https://mixkit.co/free-sound-effects/gasp/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/965/965.wav",
+      "ear": {"query":"a woman gasping in surprise","z":4.28,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-968",
+      "title": "Surprised gasp",
+      "category": "comedy",
+      "for": "a woman gasping in surprise",
+      "page": "https://mixkit.co/free-sound-effects/gasp/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/968/968.wav",
+      "ear": {"query":"a woman gasping in surprise","z":5.68,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1911",
+      "title": "Soft snoring",
+      "category": "voices",
+      "for": "someone snoring: asleep, bored",
+      "maxSeconds": 20,
+      "page": "https://mixkit.co/free-sound-effects/bedroom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1911/1911.wav",
+      "ear": {"query":"a person snoring","z":5.25,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2269",
+      "title": "Sleepy yawn",
+      "category": "voices",
+      "for": "a man yawning: sleepy, bored",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2269/2269.wav",
+      "ear": {"query":"a man yawning","z":6.05,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2274",
+      "title": "Tired yawn",
+      "category": "voices",
+      "for": "a tired man yawning",
+      "page": "https://mixkit.co/free-sound-effects/yawn/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2274/2274.wav",
+      "ear": {"query":"a man yawning","z":5.89,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-155",
+      "title": "Big gulp",
+      "category": "voices",
+      "for": "a big gulp: nervous, uh-oh",
+      "page": "https://mixkit.co/free-sound-effects/water/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/155/155.wav",
+      "ear": {"query":"a gulp, swallowing","z":6.01,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-152",
+      "title": "Small gulp",
+      "category": "voices",
+      "for": "a small gulp of a drink",
+      "page": "https://mixkit.co/free-sound-effects/water/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/152/152.wav",
+      "ear": {"query":"a gulp, swallowing","z":6.52,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-109",
+      "title": "Ding dong doorbell",
+      "category": "notifications",
+      "for": "a doorbell ding dong: someone at the door",
+      "page": "https://mixkit.co/free-sound-effects/doorbell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/109/109.wav",
+      "ear": {"query":"a doorbell ding dong","z":4.82,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-113",
+      "title": "Classic doorbell",
+      "category": "notifications",
+      "for": "a classic two-tone doorbell",
+      "page": "https://mixkit.co/free-sound-effects/doorbell/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/113/113.wav",
+      "ear": {"query":"a doorbell ding dong","z":4.32,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-979",
+      "title": "Party trumpet",
+      "category": "comedy",
+      "for": "a party horn blower: a celebration, a birthday",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/979/979.wav",
+      "ear": {"query":"a party horn blower","z":4.99,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-527",
+      "title": "Sad party horn",
+      "category": "comedy",
+      "for": "a sad party horn: a flop, a let-down",
+      "page": "https://mixkit.co/free-sound-effects/sad/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/527/527.wav",
+      "ear": {"query":"a party horn blower","z":5.96,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-973",
+      "title": "Party sad horn",
+      "category": "comedy",
+      "for": "a deflating party horn: a fail",
+      "page": "https://mixkit.co/free-sound-effects/party/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/973/973.wav",
+      "ear": {"query":"a party horn blower","z":6.1,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2991",
+      "title": "Firework bangs",
+      "category": "impacts",
+      "for": "fireworks whooshing up and banging",
+      "page": "https://mixkit.co/free-sound-effects/festive/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2991/2991.wav",
+      "ear": {"query":"fireworks bursting","z":3.14,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-3105",
+      "title": "Whistle fireworks",
+      "category": "impacts",
+      "for": "whistling fireworks popping: a celebration",
+      "page": "https://mixkit.co/free-sound-effects/fireworks/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3105/3105.wav",
+      "ear": {"query":"fireworks bursting","z":4.91,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2405",
+      "title": "Thunder strike",
+      "category": "nature",
+      "for": "a thunder strike in a storm: a dramatic reveal",
+      "page": "https://mixkit.co/free-sound-effects/storm/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2405/2405.wav",
+      "ear": {"query":"a loud thunder crack","z":3.31,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1300",
+      "title": "Close thunder",
+      "category": "nature",
+      "for": "a close thunder crack",
+      "page": "https://mixkit.co/free-sound-effects/explosion/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1300/1300.wav",
+      "ear": {"query":"a loud thunder crack","z":4.46,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-631",
+      "title": "Grand brass fanfare",
+      "category": "musical",
+      "for": "a grand brass fanfare: a win, a royal entrance",
+      "page": "https://mixkit.co/free-sound-effects/brass/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/631/631.wav",
+      "ear": {"query":"a triumphant brass fanfare","z":4.28,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2285",
+      "title": "Triumphant trumpets",
+      "category": "musical",
+      "for": "triumphant orchestra trumpets: victory",
+      "page": "https://mixkit.co/free-sound-effects/brass/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2285/2285.wav",
+      "ear": {"query":"a triumphant brass fanfare","z":3.76,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-629",
+      "title": "Majestic fanfare",
+      "category": "musical",
+      "for": "a slow majestic fanfare: a king, an arrival",
+      "page": "https://mixkit.co/free-sound-effects/orchestra/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/629/629.wav",
+      "ear": {"query":"a triumphant brass fanfare","z":4.06,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-953",
+      "title": "Correct answer",
+      "category": "game",
+      "for": "a correct answer ding",
+      "page": "https://mixkit.co/free-sound-effects/game-show/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/953/953.wav",
+      "ear": {"query":"a correct answer ding","z":2.9,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-957",
+      "title": "Correct ding",
+      "category": "game",
+      "for": "a positive correct answer chime",
+      "page": "https://mixkit.co/free-sound-effects/game-show/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/957/957.wav",
+      "ear": {"query":"a correct answer ding","z":3.49,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-479",
+      "title": "Slow clap",
+      "category": "crowd",
+      "for": "a slow clap: sarcastic applause",
+      "page": "https://mixkit.co/free-sound-effects/clapping/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/479/479.wav",
+      "ear": {"query":"a slow clap","z":2.94,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-1976",
+      "title": "Dinosaur roar",
+      "category": "creatures",
+      "for": "a dinosaur roar",
+      "page": "https://mixkit.co/free-sound-effects/roar/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1976/1976.wav",
+      "ear": {"query":"a dinosaur roar","z":5.34,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1882",
+      "title": "Rubber duck squeak",
+      "category": "comedy",
+      "for": "a rubber duck squeaked",
+      "page": "https://mixkit.co/free-sound-effects/bathroom/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1882/1882.wav",
+      "ear": {"query":"a rubber duck squeak","z":3.5,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2466",
+      "title": "Night forest owl",
+      "category": "nature",
+      "for": "an owl in a forest at night",
+      "maxSeconds": 95,
+      "page": "https://mixkit.co/free-sound-effects/morning/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2466/2466.wav",
+      "ear": {"query":"an owl hooting","z":2.56,"verdict":"plausible"}
+    },
+    {
+      "id": "mixkit-312",
+      "title": "Donkey braying",
+      "category": "nature",
+      "for": "a donkey braying: hee-haw",
+      "page": "https://mixkit.co/free-sound-effects/cry/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/312/312.wav",
+      "ear": {"query":"a donkey braying","z":5.11,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-313",
+      "title": "Sad donkey",
+      "category": "nature",
+      "for": "a donkey crying",
+      "page": "https://mixkit.co/free-sound-effects/animals/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/313/313.wav",
+      "ear": {"query":"a donkey braying","z":5.2,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-319",
+      "title": "Goat bleat",
+      "category": "nature",
+      "for": "a goat bleating",
+      "page": "https://mixkit.co/free-sound-effects/animals/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/319/319.wav",
+      "ear": {"query":"a goat bleating","z":6.3,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1076",
+      "title": "Appliance ready beep",
+      "category": "notifications",
+      "for": "an appliance beeping: done, ready",
+      "page": "https://mixkit.co/free-sound-effects/beep/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1076/1076.wav",
+      "ear": {"query":"an appliance beeping when ready","z":4.34,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1803",
+      "title": "Microwave beep",
+      "category": "notifications",
+      "for": "a microwave or oven beep",
+      "page": "https://mixkit.co/free-sound-effects/cooking/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1803/1803.wav",
+      "ear": {"query":"an appliance beeping when ready","z":4.06,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1188",
+      "title": "Seagulls",
+      "category": "nature",
+      "for": "seagulls squawking: a beach, a harbour",
+      "page": "https://mixkit.co/free-sound-effects/sea/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1188/1188.wav",
+      "ear": {"query":"seagulls calling","z":4.05,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-1991",
+      "title": "Jackpot coins",
+      "category": "game",
+      "for": "a slot machine jackpot with pouring coins: a big win",
+      "maxSeconds": 20,
+      "page": "https://mixkit.co/free-sound-effects/casino/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/1991/1991.wav",
+      "ear": {"query":"a slot machine jackpot with coins","z":3.04,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-3022",
+      "title": "Stadium goal cheer",
+      "category": "crowd",
+      "for": "a stadium crowd cheering: a goal, a win",
+      "maxSeconds": 20,
+      "page": "https://mixkit.co/free-sound-effects/soccer/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/3022/3022.wav",
+      "ear": {"query":"a stadium crowd cheering a goal","z":4.32,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-516",
+      "title": "Audience laugh",
+      "category": "crowd",
+      "for": "a small audience laughing and clapping: a sitcom joke",
+      "page": "https://mixkit.co/free-sound-effects/applause/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/516/516.wav",
+      "ear": {"query":"an audience laughing","z":4.33,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-410",
+      "title": "Hysterical laugh",
+      "category": "voices",
+      "for": "a woman laughing hysterically",
+      "page": "https://mixkit.co/free-sound-effects/laugh/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/410/410.wav",
+      "ear": {"query":"a woman laughing hysterically","z":7.73,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2257",
+      "title": "Girl says no no no",
+      "category": "voices",
+      "for": "a cartoon girl saying no no no",
+      "page": "https://mixkit.co/free-sound-effects/children/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2257/2257.wav",
+      "ear": {"query":"a child saying no no no","z":4.25,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-674",
+      "title": "Cartoon sneak",
+      "category": "comedy",
+      "for": "cartoon suspense: sneaking, tiptoeing",
+      "page": "https://mixkit.co/free-sound-effects/suspense-music/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/674/674.wav",
+      "ear": {"query":"sneaky cartoon tiptoe music","z":3.03,"verdict":"strong"}
+    },
+    {
+      "id": "mixkit-2167",
+      "title": "Face slap",
+      "category": "comedy",
+      "for": "a short slap: a face slap",
+      "page": "https://mixkit.co/free-sound-effects/clapping/",
+      "file_url": "https://assets.mixkit.co/active_storage/sfx/2167/2167.wav",
+      "ear": {"query":"a face slap","z":3.39,"verdict":"strong"}
     }
   ]
 }
