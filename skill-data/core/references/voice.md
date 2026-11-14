@@ -10,6 +10,7 @@ bun run voice:gen --yes                      # every take with no audio yet, int
 bun run voice:gen intro_2 --yes              # that take again, replacing its audio
 bun run voice:gen --try intro_2 --takes 3 --yes   # three new tries in voice/try/intro_2_<n>.mp3, the take kept
 bun run voice:align                          # word timings (whisperX, free) for takes without them; voice:gen runs it itself
+bun run voice:lips                           # lip sync for takes a character says on screen ("by": "steve"); voice:gen runs it itself
 bun run voice:assemble                       # full_voice.wav, voice.lines, one Phrase Brick per take in audio.json
 bun run voice:cues                           # the heard second of every line, word and gap, and the pace
 ```
