@@ -16,7 +16,7 @@ import {
   setTiming,
   timingClock,
 } from "../packages/live-studio/src/timing-state.mjs";
-import { frameAt } from "../packages/live-studio/src/timing.mjs";
+import { frameAt, frameVisible } from "../packages/live-studio/src/timing.mjs";
 import { warp } from "../packages/live-studio/src/warp.mjs";
 import { buildVoiceCues } from "./voice/cues.ts";
 
@@ -153,9 +153,19 @@ export const whatsAt = (dir: string, t: number) => {
       if (file) durations[c.name] = audioInfo(file)?.seconds ?? 0;
     }
     const heard = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
+    // a muted track is left out of every mix (scripts/sound/mix.py MUTED)
+    const muted = new Set((audio.tracks ?? []).flatMap((k: Row) => (k.mute ? [k.id] : [])));
     heard.beds.forEach((c: Row, i: number) => {
       if (c.from <= t && t < c.to)
-        sounds.push({ list: "beds", i, name: c.name, from: c.from, to: c.to, row: audio.beds[i] });
+        sounds.push({
+          list: "beds",
+          i,
+          name: c.name,
+          from: c.from,
+          to: c.to,
+          row: audio.beds[i],
+          muted: muted.has(audio.beds[i].track),
+        });
     });
     heard.sfx.forEach((c: Row, i: number) => {
       if (c.name === audio.narration) return;
@@ -169,6 +179,7 @@ export const whatsAt = (dir: string, t: number) => {
           from: c.at,
           to: known ? c.at + len : null,
           row: audio.sfx[i],
+          muted: muted.has(audio.sfx[i].track),
         });
     });
   }
@@ -259,6 +270,8 @@ export const whatsAt = (dir: string, t: number) => {
     t,
     length,
     scene,
+    // a gap in timing.json: the picture is black here
+    blank: !frameVisible(timingClock, t),
     shot,
     shotCount: shots.length,
     cuts,
@@ -306,6 +319,7 @@ if (isMain) {
   }
   const film = needFilm(process.env.LIVE_PROJECT);
   let t: number;
+  let note: ReturnType<typeof noteMoment> = null;
   if (/^-\d/.test(arg)) {
     console.error(`${arg}: the film starts at 0; give a second from 0 on (bun run at 35.6)`);
     process.exit(2);
@@ -324,11 +338,7 @@ if (isMain) {
     }
     // to the microsecond: rounded to the millisecond, a note just before a cut lands on it, in the next shot
     t = +n.heard.toFixed(6);
-    console.log(
-      Math.abs(n.heard - n.written) < 0.005
-        ? `note #${n.n} (${n.id}) was written at ${mmss(n.written)} heard, still the same moment (${n.how})`
-        : `note #${n.n} (${n.id}) was written at ${mmss(n.written)} heard; that moment is heard at ${mmss(n.heard)} now (${n.how})`,
-    );
+    note = n;
   }
   let got: ReturnType<typeof whatsAt>;
   try {
@@ -343,16 +353,22 @@ if (isMain) {
   }
   const { conf: c, ...data } = got;
   if (process.argv.includes("--json")) {
-    console.log(JSON.stringify(data, null, 2));
+    console.log(JSON.stringify(note ? { note, ...data } : data, null, 2));
     process.exit(0);
   }
   const out: string[] = [];
+  if (note)
+    out.push(
+      Math.abs(note.heard - note.written) < 0.005
+        ? `note #${note.n} (${note.id}) was written at ${mmss(note.written)} heard, still the same moment (${note.how})`
+        : `note #${note.n} (${note.id}) was written at ${mmss(note.written)} heard; that moment is heard at ${mmss(note.heard)} now (${note.how})`,
+    );
   out.push(
     `${mmss(t)} heard (${+t.toFixed(3)} s); the picture shows scene second ${fmt(got.scene)}${
       Math.abs(got.scene - t) > 0.005
         ? ` (Speed/Freeze in ${c.timingTimeline ?? "timing.json"})`
         : ""
-    }`,
+    }${got.blank ? `; black here, a gap in ${c.timingTimeline ?? "timing.json"} gaps[]` : ""}`,
   );
   if (got.shot)
     out.push(
@@ -400,7 +416,7 @@ if (isMain) {
   );
   for (const s of got.sounds)
     out.push(
-      `  ${s.list}[${s.i}] ${s.name} gain ${s.row.gain ?? 0}${s.row.track ? ` track ${s.row.track}` : ""}, heard ${fmt(s.from)}-${
+      `  ${s.list}[${s.i}] ${s.name} gain ${s.row.gain ?? 0}${s.row.track ? ` track ${s.row.track}${s.muted ? " (muted: not in the mix)" : ""}` : ""}, heard ${fmt(s.from)}-${
         s.to === null ? "? (its file is not on this machine)" : fmt(s.to)
       }`,
     );

@@ -184,6 +184,41 @@ test("a note whose moment a moved cut has put in the next shot says it is there 
   assert.match(r.stdout, /into shot 0 "the room".*past its end now: shot 1/);
 });
 
+test("a note's moment as --json is one JSON document, the note inside it", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = { id: "hand", t: 8.2, scene: 8.2, text: "the hand", at: "2026-11-02T00:00:00Z" };
+  writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
+  const r = spawnSync("bun", [AT, "hand", "--json"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const got = JSON.parse(r.stdout);
+  assert.equal(got.note.id, "hand");
+  assert.ok(Math.abs(got.note.heard - 4.1) < 1e-6, `heard at ${got.note.heard}`);
+});
+
+test("a sound on a muted track and a second inside a gap say what is really heard and seen", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      tracks: [{ id: "t1", mute: true }],
+      beds: [{ name: "hum", from: 0, to: 20, gain: -6, track: "t1" }],
+      sfx: [],
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ gaps: [{ from: 2, to: 3 }] }),
+  );
+  const got = whatsAt(dir, 2.5);
+  assert.equal(got.blank, true);
+  assert.equal(got.sounds[0]?.muted, true);
+  assert.equal(whatsAt(dir, 5).blank, false);
+});
+
 test("at refuses a second past the film's end and says how long it is", (t) => {
   const r = spawnSync("bun", [AT, "99"], {
     env: { ...process.env, LIVE_PROJECT: film(t) },
