@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -654,4 +654,119 @@ test("a note id that starts with a digit is a note, not a malformed second", (t)
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^note #1 \(0abc, open\)/);
+});
+
+test("a transition plays only where the render plays it: a gap at its cut or a bad len plays none, an unknown fx is said", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  const shots = (tr) =>
+    writeFileSync(
+      join(dir, "src/timeline/shots.json"),
+      JSON.stringify([
+        { t: 0, name: "the room" },
+        { t: 8, name: "his hand", transition: tr },
+      ]),
+    );
+  shots({ fx: "dissolve", len: 1 });
+  assert.deepEqual(
+    whatsAt(dir, 4).cuts.map((c) => [c.fx, c.now, c.builtIn]),
+    [["dissolve", true, true]],
+  );
+  shots({ fx: "my-wipe", len: 1 });
+  assert.deepEqual(
+    whatsAt(dir, 4).cuts.map((c) => [c.fx, c.builtIn]),
+    [["my-wipe", false]],
+  );
+  shots({ fx: "dissolve", len: -1 });
+  assert.deepEqual(whatsAt(dir, 4).cuts, []);
+  // a gap at the cut (scene 8 is heard at 4 under the 2x Speed): the render draws no transition there
+  shots({ fx: "dissolve", len: 1 });
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ speeds: [{ from: 0, to: 10, rate: 2 }], gaps: [{ from: 7.9, to: 8.1 }] }),
+  );
+  assert.deepEqual(whatsAt(dir, 3.9).cuts, []);
+});
+
+test("a note's moment past the film's end is still one JSON document under --json", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = { id: "gone", t: 30, scene: 30, text: "gone", shot: 1, time: "", at: "2026-11-01" };
+  writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
+  const r = spawnSync("bun", [AT, "gone", "--json"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const got = JSON.parse(r.stdout);
+  assert.equal(got.note.id, "gone");
+  assert.equal(got.pastEnd, true);
+  assert.equal(got.length, 15);
+});
+
+test('a voice turned off ("voice": false, no narration clip) is not heard, as the mix leaves it out', (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [] }),
+  );
+  const said = () =>
+    spawnSync("bun", [AT, "5"], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" })
+      .stdout;
+  // a film with no voice lines is silent, not a voice turned off
+  assert.match(said(), /^narration: silent here/m);
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({ lines: [{ s: 4, e: 6, text: "hi", words: [{ w: "hi", s: 4, e: 6 }] }] }),
+  );
+  assert.match(said(), /^narration: off, src\/timeline\/audio\.json "voice": false/m);
+});
+
+test("a black second names what blacks it out: a gap row of main[], a Freeze left blank, or gaps[]", (t) => {
+  const dir = film(t);
+  const said = (timing, at) => {
+    writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify(timing));
+    const r = spawnSync("bun", [AT, String(at)], {
+      env: { ...process.env, LIVE_PROJECT: dir },
+      encoding: "utf8",
+    });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.split("\n")[0];
+  };
+  const main = {
+    main: [
+      { id: "a", kind: "clip", sourceFrom: 0, sourceTo: 4 },
+      { id: "g", kind: "gap", duration: 1 },
+      { id: "b", kind: "clip", sourceFrom: 4, sourceTo: 20 },
+    ],
+  };
+  assert.match(said(main, 4.5), /black here, src\/timeline\/timing\.json main\[\] \(a gap row\)/);
+  assert.match(
+    said({ freezes: [{ at: 2, duration: 1, blank: true }] }, 2.5),
+    /black here, src\/timeline\/timing\.json freezes\[\] \(a Freeze left blank/,
+  );
+  assert.match(
+    said({ gaps: [{ from: 2, to: 3 }] }, 2.5),
+    /black here, a gap in src\/timeline\/timing\.json gaps\[\]/,
+  );
+});
+
+test("a draft's cut is in --json too, and said to be the last render's when the film changed after it", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([4]));
+  const run = (...a) =>
+    spawnSync("bun", [AT, ...a], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" });
+  assert.deepEqual(JSON.parse(run("4.1", "--json").stdout).cut, { index: 0, at: 4, stale: null });
+  const old = new Date(Date.now() - 3_600_000);
+  utimesSync(join(dir, "renders/cuts.json"), old, old);
+  const r = run("4.1");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^cut 0 at 4\.00 heard, into shot 1 \(renders\/cuts\.json is older than src\/[^ ]+: numbered as the last render cut it; bun run render clip writes it again\)/m,
+  );
 });
