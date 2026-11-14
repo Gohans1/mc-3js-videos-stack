@@ -332,7 +332,7 @@ if (textCheck) {
   const [, from, to] = textCheck.args;
   file.items?.forEach((it, i) => {
     const h = heard.items?.[i];
-    if (!isRead(it) || !h || h.to <= from || h.from >= to) return;
+    if (!isRead(it, file.tracks) || !h || h.to <= from || h.from >= to) return;
     const io = inOutLengths(it),
       k = (h.to - h.from) / (it.to - it.from || 1),
       a = h.from + io.in * k,

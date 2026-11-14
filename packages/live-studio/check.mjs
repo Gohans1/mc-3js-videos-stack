@@ -267,6 +267,8 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
 // Where the sounds sit, read through the clocks the studio plays them on (the film's end: src/edit.json end, through the
 // voice edit and Speed/Freeze). A sound after the end is never heard; a gain far over the file's own level is allowed, said once
 const warnings = [];
+// advice under the warnings, for a reader: text output only, never a --json warning
+const hints = [];
 // a misspelt key is read by nothing: named whenever its file parses, even beside the shape faults it causes (gian for a missing gain)
 const keyTypos = (where, lines) => {
   if (!lines.length) return;
@@ -450,29 +452,36 @@ if (Array.isArray(textRead?.items) && filmEnds()) {
   const said = [];
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
-    if (!isRead(it) || !h) return;
+    if (!isRead(it, textRead.tracks) || !h) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
     for (const fault of readFaults(it, h, conf.ratio))
       said.push(
         `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}" at ${h.from.toFixed(2)}-${h.to.toFixed(2)} heard ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
       );
   });
-  if (said.length)
-    warnings.push(
-      ...said,
+  if (said.length) {
+    warnings.push(...said);
+    hints.push(
       `  decor not meant to be read takes "read": false; where each sits and how it reads over the picture: CHECK=text bun run render stills`,
     );
+  }
 }
 
-if (json) console.log(JSON.stringify({ ok: !found.length, problems: found, warnings }));
-else if (!found.length)
+// one problem per file, as --help says: a file faulted by two checks (its schema, its sound names) has both under it
+const problems = [...Map.groupBy(found, (p) => p.where)].map(([where, ps]) => ({
+  where,
+  issue: ps.map((p) => p.issue).join("\n"),
+}));
+const shownWarnings = [...warnings, ...hints];
+if (json) console.log(JSON.stringify({ ok: !problems.length, problems, warnings }));
+else if (!problems.length)
   console.log(
-    `${warnings.length ? `${warnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects. Look at it: AT=<seconds> bun run render stills, or bun run studio`,
+    `${shownWarnings.length ? `${shownWarnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects. Look at it: AT=<seconds> bun run render stills, or bun run studio`,
   );
 else {
-  const files = new Set(found.map((p) => p.where.split(" ")[0]));
+  const files = new Set(problems.map((p) => p.where.split(" ")[0]));
   console.error(
-    `${found.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${warnings.length ? `\n\n${warnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)`,
+    `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)`,
   );
 }
 process.exit(found.length ? 1 : 0);

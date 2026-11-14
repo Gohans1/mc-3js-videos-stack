@@ -9,7 +9,13 @@ export const READ_CPS = 20;
 export const READ_MIN = 5 / 6;
 export const SIZE_MIN = 36;
 
-export const isRead = (it) => it?.kind === "text" && it.read !== false && !!it.text?.trim();
+// tracks: the text file's own (a hidden track's items are off screen, as a hidden item is)
+export const isRead = (it, tracks) =>
+  it?.kind === "text" &&
+  it.read !== false &&
+  !it.hidden &&
+  !tracks?.[it.track ?? 0]?.hidden &&
+  !!it.text?.trim();
 export const charsOf = (text) => graphemes(text.replace(/\s*\n\s*/g, " ").trim()).length;
 // px at 1080 on the frame's short side, as film-stage/titles.ts sizes it
 export const pxOf = (it) => (it.size ?? 56) * (it.scale ?? 1);
