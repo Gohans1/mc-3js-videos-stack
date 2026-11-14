@@ -105,7 +105,7 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.equal(own.status, 0, own.stdout + own.stderr);
 });
 
-test("a short key of the film's own one letter from a camera key (fog by fov) is the film's; a letter dropped is a typo", (t) => {
+test("a short key of the film's own one letter from a camera key (fog by fov) is the film's; a letter dropped from roll is a typo", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -123,9 +123,9 @@ test("a short key of the film's own one letter from a camera key (fog by fov) is
   };
   const own = cam({ fog: 0.4 });
   assert.equal(own.status, 0, own.stdout + own.stderr);
-  const typo = cam({ fv: 40 });
+  const typo = cam({ rol: 5 });
   assert.equal(typo.status, 1, typo.stdout + typo.stderr);
-  assert.match(typo.stderr, /"fv": no key the camera reads; did you mean "fov"\?/);
+  assert.match(typo.stderr, /"rol": no key the camera reads; did you mean "roll"\?/);
 });
 
 test("a timing file of the wrong shape is named as a fault, not a crash", (t) => {
@@ -150,6 +150,41 @@ test("a timing file of the wrong shape is named as a fault, not a crash", (t) =>
   const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.equal(JSON.parse(r.stdout).problems[0].where, "src/timeline/timing.json");
+});
+
+test("a short key of the film's own beside a short studio key (uid by id, top by to, ot by to) is the film's", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [{ kind: "text", text: "HI", from: 0, to: 3, uid: 1, top: 2, ot: 3, colr: "#fff" }],
+    }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /"colr": .*did you mean "color"\?/);
+  assert.doesNotMatch(r.stderr, /"uid"|"top"|"ot"/);
+});
+
+test("a misspelt package.json live-studio key is named: its file would be read by nothing", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { camTimline: "src/timeline/cam.json", myOwn: 1 } }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /"camTimline": .*did you mean "camTimeline"\?/);
+  assert.doesNotMatch(r.stderr, /"myOwn"/);
 });
 
 test("a two-letter key of the film's own (to by t) is the film's, on a camera key", (t) => {

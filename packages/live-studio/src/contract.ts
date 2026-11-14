@@ -351,11 +351,27 @@ export const Choices = z.record(
 );
 
 // ---------- package.json "live-studio": the paths in it are checked where they are opened (film.mjs); here what has a shape
+const filePath = z.string().min(1).optional();
+// every key the studio, its CLIs and the render read; any other is the film's own (bun run check names a near miss)
 export const StudioConfig = z.looseObject({
   ratio: z.enum(RATIOS as unknown as [string, ...string[]]).optional(),
   soundSources: z.record(z.string().regex(/^\w[\w.-]*$/), z.string().min(1)).optional(),
   requiredKeyRows: z.record(z.string(), z.array(z.array(z.string()))).optional(),
+  soundTimeline: filePath,
+  camTimeline: filePath,
+  shotsTimeline: filePath,
+  textTimeline: filePath,
+  adjustmentTimeline: filePath,
+  timingTimeline: filePath,
+  keyFiles: z.record(z.string(), z.string()).optional(),
+  sfx: filePath,
+  // what sound.py reads: a change to any of them remixes
+  sound: z.array(z.string()).optional(),
+  soundVault: z.union([z.string().min(1), z.literal(false)]).optional(),
+  liveLanes: z.boolean().optional(),
+  chrome: filePath,
 });
+export const CONFIG_KEYS = Object.keys(StudioConfig.shape);
 
 // ---------- The sound lanes (package.json "live-studio".soundTimeline), which the studio also writes: beds loop from..to, a
 // one-shot plays from at for length seconds or to its end. Gains in dB. Anything else on an entry (filters, try) is the film's

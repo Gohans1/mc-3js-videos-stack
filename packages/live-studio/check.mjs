@@ -13,6 +13,7 @@ import {
   ADJUSTMENT_KEYS,
   CAM_KEYS,
   checkFiles,
+  CONFIG_KEYS,
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
   SOUND_KEYS,
@@ -57,7 +58,9 @@ const TEMPLATE = join(
 // package.json names every other file checked: until it reads, nothing more can be said
 const stop = (issue) => {
   if (json)
-    console.log(JSON.stringify({ ok: false, problems: [{ where: "package.json", issue }] }));
+    console.log(
+      JSON.stringify({ ok: false, problems: [{ where: "package.json", issue }], warnings: [] }),
+    );
   else console.error(`package.json\n${issue}`);
   process.exit(1);
 };
@@ -140,19 +143,18 @@ const distance = (a, b) => {
 
 // the known name a word is taken for a typo of: a letter dropped or added, or letters swapped; a letter changed only past
 // four letters, as a short word of the film's own sits one letter from a known one (fog by fov, cue by cut, pan by pad);
-// a letter added to a one-letter key is a word of its own (to, at, up by t and p)
+// a letter added or dropped, and letters swapped, only past two letters on either side: under that a key of the film's
+// own is a word of its own (to, up by t and p; uid, top by id and to; ot by to)
 const nearName = (k, names) =>
   names.includes(k)
     ? null
     : names.find((n) => {
         const a = k.toLowerCase(),
           b = n.toLowerCase();
+        if (Math.min(a.length, b.length) < 3) return false;
         if (a.length === b.length && a.split("").sort().join() === b.split("").sort().join())
           return true;
-        return (
-          distance(a, b) === 1 &&
-          (a.length === b.length ? a.length >= 5 : Math.min(a.length, b.length) >= 2)
-        );
+        return distance(a, b) === 1 && (a.length !== b.length || a.length >= 5);
       });
 
 // A fault in the lanes must not hide the others (an AI fixes what it is shown and meets the rest a run later):
@@ -167,7 +169,7 @@ const clockBroken = found.find(
   (p) => p.where === conf.timingTimeline || p.where === "src/edit.json",
 );
 if (clockBroken)
-  clockBroken.issue += `\n  sounds and text after the end are checked once this is fixed`;
+  clockBroken.issue += `\n  sounds after the end and on-screen text (too brief, too small) are checked once this is fixed`;
 const filmEnds = () => (clockBroken ? null : heardLength(PROJECT, conf));
 
 const sound = conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
@@ -291,6 +293,13 @@ if (lanesRead && typeof lanesRead === "object")
       ),
     ].map(([k, near]) => `✖ ${k}: no key the mix reads; did you mean "${near}"?`),
   );
+// a misspelt config key leaves its file read by nothing, schema checks included
+keyTypos(
+  'package.json "live-studio"',
+  nearKeys(conf, CONFIG_KEYS).map(
+    ([k, near]) => `✖ "${k}": no key the studio reads; did you mean "${near}"?`,
+  ),
+);
 // a film may put keys of its own on a camera key (cell-break's live, size): only a letter off or swapped is taken for a typo
 const camRead = readJson(conf.camTimeline);
 if (Array.isArray(camRead))
