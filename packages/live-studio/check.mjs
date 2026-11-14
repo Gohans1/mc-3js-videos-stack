@@ -8,7 +8,7 @@ import { ANIMS } from "film-stage/animate";
 import { TEXT_ITEM_KEYS } from "film-stage/titles";
 import { TRANSITIONS } from "film-stage/transitions";
 
-import { cliArgs, needFilm } from "./src/cli.mjs";
+import { cliArgs, envTypos, needFilm } from "./src/cli.mjs";
 import {
   ADJUSTMENT_KEYS,
   CAM_KEYS,
@@ -43,6 +43,7 @@ Not checked here: what src/scene.ts exports and what draw(t) returns (the studio
 Exit 0 ok, 1 problems found. Find a sound or preset by meaning: bun run find <words>.`;
 
 const json = cliArgs(HELP, ["--json"], 0).includes("--json");
+envTypos(["LIVE_PROJECT"]);
 const PROJECT = needFilm(process.env.LIVE_PROJECT);
 // Bun's JSON errors carry no place; python's json says the line and column (python is the mix's own already)
 const jsonPlace = (rel) => {
@@ -253,7 +254,7 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
   if (absent)
     found.push({
       where: conf.soundTimeline,
-      issue: `✖ ${missing.size} of the ${used.size} sounds it names are not on this machine (${[...missing.keys()].slice(0, 5).join(", ")}, ...): most of the sound files are not here yet, so the names cannot be checked (a typo among them shows once they are). 1. bun run sfx:get fetches the film's own (CC0 from Freesound into ${conf.sfx}/); 2. cd ../.. && bun run link connects the vault; 3. bun run check again`,
+      issue: `✖ ${missing.size} of the ${used.size} sounds it names are not on this machine (${[...missing.keys()].slice(0, 5).join(", ")}, ...): most of the sound files are not here yet, so the names cannot be checked (a typo among them shows once they are). 1. bun run sfx:get fetches the film's own (CC0 from Freesound into ${conf.sfx}/); 2. ${conf.soundVault === false ? 'drop "soundVault": false from package.json to hear the vault' : "cd ../.. && bun run link connects the vault"}; 3. bun run check again`,
     });
   // a film's own sounds are heard by it alone: a name copied from another film is found in that film's folder
   const siblings = readdirSync(dirname(PROJECT), { withFileTypes: true }).flatMap((d) => {
@@ -287,7 +288,11 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
     );
   // a name find printed but this film cannot hear: the vault itself is out of its reach, not the name wrong
   const vaults = findVaults(PROJECT, conf);
-  if (missing.size && !vaults.length)
+  if (missing.size && conf.soundVault === false)
+    issues.push(
+      `  "soundVault": false in package.json shuts the vault out: this film hears only its own ${conf.sfx}/ (drop that line to hear the vault)`,
+    );
+  else if (missing.size && !vaults.length)
     issues.push(
       `  no vault reaches this film: it is found through vault.json in a folder above the film (the repo root), so a film outside the repo hears only its own ${conf.sfx}/. Keep films in the repo's films/, or set package.json "live-studio".soundVault`,
     );
@@ -491,13 +496,22 @@ if (textBroken)
 const textRead = textPath && !textBroken && readJson(conf.textTimeline);
 if (Array.isArray(textRead?.items)) {
   // the heard seconds need the film's length (edit.json end); without it only the size floor is said
-  const heard = filmEnds()
+  const ends = filmEnds();
+  const heard = ends
     ? mapTimeline("text", textRead, clockForTimeline("text"), false, null, {})
     : null;
-  const said = [];
+  const said = [],
+    late = [];
   textRead.items.forEach((it, i) => {
-    if (!isRead(it, textRead.tracks)) return;
     const h = heard?.items?.[i];
+    // after the end, as a sound there: decor too, since nothing past the end is drawn
+    if (h && !it.hidden && h.from >= ends.layers) {
+      late.push(
+        `✖ items[${i}] "${String(it.text ?? it.kind).split("\n")[0]}" at ${+(+it.from).toFixed(2)}: after the film ends (${ends.layers.toFixed(2)} s heard), so never on screen`,
+      );
+      return;
+    }
+    if (!isRead(it, textRead.tracks)) return;
     // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
     if (heard && (!h || h.to <= h.from)) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
@@ -506,6 +520,14 @@ if (Array.isArray(textRead?.items)) {
         `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${h.to.toFixed(2)} heard` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
       );
   });
+  if (late.length)
+    found.push({
+      where: conf.textTimeline,
+      issue: [
+        ...late,
+        "  move each earlier (bun run at <second> shows what is on screen there) or remove it",
+      ].join("\n"),
+    });
   if (said.length) {
     warnings.push(...said);
     hints.push(
@@ -523,12 +545,12 @@ const shownWarnings = [...warnings, ...hints];
 if (json) console.log(JSON.stringify({ ok: !problems.length, problems, warnings }));
 else if (!problems.length)
   console.log(
-    `${shownWarnings.length ? `${shownWarnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects. Look at it: AT=<seconds> bun run render stills, or bun run studio`,
+    `${shownWarnings.length ? `${shownWarnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects\nnext: look at it: AT=<seconds> bun run render stills, or bun run studio`,
   );
 else {
   const files = new Set(problems.map((p) => p.where.split(" ")[0]));
   console.error(
-    `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)`,
+    `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)\nnext: fix each ✖ as it says, then bun run check`,
   );
 }
 process.exit(found.length ? 1 : 0);

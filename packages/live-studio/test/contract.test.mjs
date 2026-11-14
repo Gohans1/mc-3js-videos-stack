@@ -8,6 +8,7 @@ import {
   checkFilm,
   Edit,
   Grade,
+  KeyFile,
   ShotsTimeline,
   SoundProcess,
   SoundTimeline,
@@ -587,4 +588,27 @@ test("the contract's Basic sliders are film-stage's ADJUSTMENTS, each with its o
     assert.equal(basic[a.id].safeParse(a.min).success, true, a.id);
     assert.equal(basic[a.id].safeParse(a.min - 1).success, false, a.id);
   }
+});
+
+test("edit.json end is the film's end in seconds: a string or 0 is named, as mix.py would fail on it", () => {
+  const edit = (end) => ({ voice: { edits: {}, warp: [] }, beats: {}, end });
+  assert.equal(Edit.safeParse(edit(12.5)).success, true);
+  assert.equal(Edit.safeParse({ voice: { edits: {}, warp: [] }, beats: {} }).success, true);
+  for (const bad of ["10", 0, -1])
+    assert.equal(Edit.safeParse(edit(bad)).success, false, `end ${JSON.stringify(bad)}`);
+});
+
+test('a key row whose every "t" is a string is named, not skipped as no row', () => {
+  const r = KeyFile.safeParse({
+    moves: [
+      { t: "0", x: 0 },
+      { t: "5", x: 2 },
+    ],
+  });
+  assert.equal(r.success, false);
+  assert.deepEqual(
+    r.error.issues.map((i) => i.path.join(".")),
+    ["moves.0.t", "moves.1.t"],
+  );
+  assert.equal(KeyFile.safeParse({ title: { t: "intro" }, list: ["a", "b"] }).success, true);
 });

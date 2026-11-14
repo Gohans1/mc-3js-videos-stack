@@ -25,6 +25,12 @@ export const pxOf = (it) => (it.size ?? 56) * (it.scale ?? 1);
 // for a Short too: played full screen, a film's short side (a Short's width) is the phone's short side either way
 // the size floor needs no clock: said even for a film whose length is not in its data
 export const sizeFaults = (scene, ratio = "16:9") => {
+  // titles.ts multiplies them: a word ("big", "2") draws at no size the canvas takes
+  const word = ["size", "scale"].find((k) => scene[k] != null && typeof scene[k] !== "number");
+  if (word)
+    return [
+      `"${word}" is ${JSON.stringify(scene[word])}, not a number: ${word === "size" ? "px at 1080, e.g. 56" : "a factor, e.g. 1.5"}`,
+    ];
   const px = pxOf(scene);
   return px < SIZE_MIN
     ? [

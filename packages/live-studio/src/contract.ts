@@ -318,6 +318,8 @@ export const Edit = z.looseObject({
     .refine((ts) => unique(ts.map((t) => t.id)), "take ids must differ")
     .optional(),
   beats: z.record(z.string(), Beat),
+  // the film's end (narration seconds): mix.py and every check after the end read it as a number
+  end: time.refine((s) => s > 0, "the film's end: seconds after 0").optional(),
 });
 
 // ---------- renders/live/trials.json (written by the film's sound.py) and choices.json (written by the studio)
@@ -772,10 +774,12 @@ export const keyRows = (v: any, path: string[] = []): string[][] => {
   const own = path.length > 0 && isTimedKey(v) ? [path] : [];
   return [...own, ...Object.entries(v).flatMap(([k, x]) => keyRows(x, [...path, k]))];
 };
-// a key whose "t" is no number ("5") makes keyRows drop its whole list, so the studio stops showing the row: named alone
+// a key whose "t" is no number ("5") makes keyRows drop its whole list, so the studio stops showing the row: named alone,
+// in a list with one timed key or a list whose every row has a "t"
+const hasT = (k: any) => !!k && typeof k === "object" && !Array.isArray(k) && "t" in k;
 const badTimes = (v: any, path: (string | number)[] = []): (string | number)[][] =>
   Array.isArray(v)
-    ? v.some(isTimedKey)
+    ? v.some(isTimedKey) || (v.length > 0 && v.every(hasT))
       ? v.flatMap((k, i) =>
           k && typeof k === "object" && "t" in k && !Number.isFinite(k.t)
             ? [[...path, i, "t"]]

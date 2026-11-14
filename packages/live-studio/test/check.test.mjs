@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { STUDIO } from "../src/film.mjs";
-import { readFaults } from "../src/readable.mjs";
+import { readFaults, sizeFaults } from "../src/readable.mjs";
 
 const CHECK = fileURLToPath(new URL("../check.mjs", import.meta.url));
 
@@ -64,6 +64,9 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   const good = check();
   assert.equal(good.status, 0, good.stdout + good.stderr);
   assert.match(good.stdout, /^ok/);
+  // the last line is next:, as every film command's (skill-data/core/references/cli.md)
+  assert.match(good.stdout.trim().split("\n").at(-1), /^next: look at it: AT=<seconds> bun run render stills/);
+  assert.match(bad.stderr.trim().split("\n").at(-1), /^next: fix each ✖ as it says, then bun run check/);
 
   // the keys every film's camera reads, typed and spelt (a probe's fov "wide" and "fvo" passed, a 2-number p said only "Invalid input")
   writeFileSync(
@@ -517,6 +520,14 @@ test("a size is a share of the frame's short side: its height in a 16:9 film, it
   assert.match(readFaults(day, day, "9:16").join("\n"), /2\.2% of the frame width/);
 });
 
+test("a size or scale that is no number is named, never passed as big enough", () => {
+  const day = { kind: "text", text: "Day 3", from: 4, to: 7 };
+  assert.match(sizeFaults({ ...day, size: "big" }).join("\n"), /"size" is "big", not a number/);
+  assert.match(sizeFaults({ ...day, scale: "2" }).join("\n"), /"scale" is "2", not a number/);
+  assert.deepEqual(sizeFaults({ ...day, size: 56 }), []);
+  assert.deepEqual(sizeFaults({ ...day, size: null }), []);
+});
+
 test("a missing sound another film of the repo has is pointed to there, and every missing name says how to replace it", (t) => {
   const root = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -758,4 +769,73 @@ test("a timeline outside the film is a package.json fault, as the studio refuses
     r.stderr,
     /^package\.json\n✖ "textTimeline": Timeline file escapes film directory: "\.\.\/outside\.json"/,
   );
+});
+
+test("LIVE_PROJECT spelt one letter off stops check, never checking the folder it stands in", () => {
+  const r = spawnSync("bun", [CHECK], {
+    cwd: tmpdir(),
+    env: { ...process.env, LIVE_PROJCT: "films/x" },
+    encoding: "utf8",
+    timeout: 60000,
+  });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(
+    r.stderr,
+    /LIVE_PROJCT=films\/x is no option here: did you mean LIVE_PROJECT=films\/x\?/,
+  );
+});
+
+test("text placed after the film ends is named, as a sound there is: never on screen", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        { kind: "text", text: "Day 3", size: 56, from: 2, to: 5 },
+        { kind: "text", text: "THE END", size: 56, from: 20, to: 23 },
+      ],
+    }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(
+    r.stderr,
+    /✖ items\[1\] "THE END" at 20: after the film ends \(10\.00 s heard\), so never on screen/,
+  );
+  assert.doesNotMatch(r.stderr, /items\[0\]/);
+});
+
+test('a film that shuts the vault out ("soundVault": false) is told so, not to move into the repo', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        sfx: "sound/sfx",
+        soundVault: false,
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], sfx: [{ name: "door", at: 1, gain: 0 }] }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /"soundVault": false in package\.json shuts the vault out/);
+  assert.doesNotMatch(r.stderr, /Keep films in the repo's films/);
 });
