@@ -12,7 +12,7 @@ import { build } from "vite";
 import { cues, srt } from "./src/captions.mjs";
 import { cliArgs, envTypos, jsonFile, numberArg, secondArg } from "./src/cli.mjs";
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
-import { ratioOf, sizeOf } from "./src/frame.ts";
+import { chunksOf, ratioOf, sizeOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines } from "./src/narration.ts";
 import { isRead, pxOf } from "./src/readable.mjs";
@@ -43,6 +43,8 @@ Nothing is written outside the film. Options are environment variables:
   LIST=1                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot
   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
+  SPAN=40,44                 clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
+                             try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
   SAMPLES=16                 sub-frames a frame for clip or final (1-64; clip 1, final 8): more is smoother blur, slower
   RES=2160                   final only: 1440 (default), 2160 or 1080 lines (the short side). YouTube re-encodes a 1440p or
                              bigger upload in VP9, sharper even for viewers at 1080p; a 1080p upload gets H.264. A Shorts
@@ -65,13 +67,14 @@ Nothing is written outside the film. Options are environment variables:
 Examples:
   AT=12,30.5 LIST=1 bun run render stills
   CHUNKS=3 bun run render clip
+  SPAN=40,44 bun run render clip
   $env:AT='12,30.5'; bun run render stills; Remove-Item Env:AT     the same in PowerShell, where VAR=x cmd is no syntax
   bun run render final        then bun run mix renders/final_video.mp4 puts the soundtrack on it
 package.json "live-studio": { "chrome": path } names the headless Chrome (default tools/chrome-headless-shell/...);
 { "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.
 Why each setting, YouTube's spec, what survives its re-encode, how to render faster: bun run skills get core --ref render.`;
 // its options are environment variables: --at 12 is the flag form an AI tries first
-const ENV_OPTIONS = ["AT", "LIST", "CHUNKS", "INSPECT", "CHECK", "ENTRY", "SAMPLES", "RES"];
+const ENV_OPTIONS = ["AT", "LIST", "CHUNKS", "SPAN", "INSPECT", "CHECK", "ENTRY", "SAMPLES", "RES"];
 const TARGETS = ["stills", "clip", "captions", "all", "final"];
 const flagged = process.argv
   .slice(2)
@@ -100,15 +103,19 @@ const video = what === "clip" || what === "all" || what === "final";
 const misplaced =
   !video && process.env.CHUNKS
     ? "CHUNKS is for render clip or final"
-    : (what === "clip" || what === "final") && process.env.AT
-      ? "AT is for render stills"
-      : !video && process.env.SAMPLES
-        ? "SAMPLES is for render clip or final"
-        : what !== "final" && process.env.RES
-          ? "RES is for render final"
-          : what === "final" && process.env.LIST === "1"
-            ? "LIST=1 draws over drafts only; a final is the picture alone"
-            : null;
+    : what !== "clip" && process.env.SPAN
+      ? "SPAN is for render clip"
+      : process.env.SPAN && process.env.CHUNKS
+        ? "SPAN and CHUNKS each pick what to draw: one at a time"
+        : (what === "clip" || what === "final") && process.env.AT
+          ? "AT is for render stills"
+          : !video && process.env.SAMPLES
+            ? "SAMPLES is for render clip or final"
+            : what !== "final" && process.env.RES
+              ? "RES is for render final"
+              : what === "final" && process.env.LIST === "1"
+                ? "LIST=1 draws over drafts only; a final is the picture alone"
+                : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -184,7 +191,7 @@ if (what === "captions") {
   process.exit(0);
 }
 const pkg = readJson(join(PROJECT, "package.json"), {});
-const CHROME = join(
+const CHROME = resolve(
   PROJECT,
   pkg["live-studio"]?.chrome ?? "tools/chrome-headless-shell/chrome-headless-shell.exe",
 );
@@ -248,6 +255,16 @@ const at =
         : [1]
       : env.AT.split(",").map((x, i) => secondArg(`AT item ${i + 1}`, x));
 const only = env.CHUNKS ? numbers("CHUNKS", { min: 0, int: true }) : null;
+const span = env.SPAN
+  ? env.SPAN.split(",").map((x, i) => secondArg(`SPAN item ${i + 1}`, x))
+  : null;
+if (span && (span.length !== 2 || span[0] >= span[1])) {
+  console.error(
+    `SPAN takes two heard seconds, the first before the second: SPAN=40,44 (or SPAN=0:40,0:44), got ${env.SPAN}`,
+  );
+  process.exit(2);
+}
+const SPAN_FILE = span && `span_${span[0]}-${span[1]}.mp4`;
 const final = what === "final";
 const samples = env.SAMPLES
   ? numberArg("SAMPLES", env.SAMPLES, { min: 1, max: 64, int: true })
@@ -266,24 +283,30 @@ if (final && !FINAL_SIZES[res]) {
 // A second past the end, or a CHECK range that runs backwards, is refused here: the page would say it too, after the scene build
 const ends = heardLength(PROJECT, pkg["live-studio"] ?? {});
 if (ends) {
-  const past = at.filter((s) => s > ends.film + 0.05);
+  const past = at.filter((s) => s > ends.layers + 0.05);
   if (past.length) {
     console.error(
-      `AT ${past.join(",")} is past the film's end: it runs 0-${ends.film.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
+      `AT ${past.join(",")} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
     );
     process.exit(2);
   }
-  const count = Math.max(1, Math.ceil(ends.film / CHUNK));
+  if (span && span[1] > ends.layers + 0.05) {
+    console.error(
+      `SPAN ${span.join(",")} runs past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard`,
+    );
+    process.exit(2);
+  }
+  const count = chunksOf(ends.layers, CHUNK, 30).length;
   const beyond = (only ?? []).filter((i) => i >= count);
   if (beyond.length) {
     console.error(
-      `CHUNKS ${beyond.join(",")} is past the film's end: it has chunks 0-${count - 1} (${ends.film.toFixed(2)} s, ${CHUNK} s each)`,
+      `CHUNKS ${beyond.join(",")} is past the film's end: it has chunks 0-${count - 1} (${ends.layers.toFixed(2)} s, ${CHUNK} s each)`,
     );
     process.exit(2);
   }
 }
 for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name))) {
-  if (name === "text" && args[2] === Infinity) args[2] = ends ? +ends.film.toFixed(2) : 1e9;
+  if (name === "text" && args[2] === Infinity) args[2] = ends ? +ends.layers.toFixed(2) : 1e9;
   const [, from, to] = args;
   if (from < 0) {
     console.error(
@@ -297,9 +320,9 @@ for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name)))
     );
     process.exit(2);
   }
-  if (ends && to > ends.film + 0.05) {
+  if (ends && to > ends.layers + 0.05) {
     console.error(
-      `CHECK ${c}: to ${to} is past the film's end: it runs 0-${ends.film.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
+      `CHECK ${c}: to ${to} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
     );
     process.exit(2);
   }
@@ -367,6 +390,11 @@ const cfg = {
     ? {
         chunk: CHUNK,
         only,
+        // the frames of a SPAN run, drawn as one video and none of the chunks
+        span: span && [
+          Math.round(span[0] * FPS),
+          Math.max(Math.round(span[0] * FPS), Math.round(span[1] * FPS) - 1),
+        ],
         samples,
         bitrate: final ? FINAL_SIZES[res][1] : 4e6,
         // YouTube asks for a closed GOP of half a second; a draft only needs a keyframe to start each chunk on
@@ -459,8 +487,8 @@ const stamp = (() => {
         e.isDirectory() ? walk(join(dir, e.name)) : h.update(readFileSync(join(dir, e.name))),
       );
   walk(OUT);
-  const { W, H, draft, clip, list, choices } = cfg;
-  h.update(JSON.stringify({ W, H, draft, list, choices, ...clip, only: null }));
+  const { W, H, draft, clip, list, choices, inspect } = cfg;
+  h.update(JSON.stringify({ W, H, draft, list, choices, inspect, ...clip, only: null }));
   return h.digest("hex").slice(0, 16);
 })();
 // stills alone cannot show motion, contact or flicker: say what can, where every render prints
@@ -535,6 +563,9 @@ const server = Bun.serve({
         stamps[i] = stamp;
         writeFileSync(stampsFile, JSON.stringify(stamps));
         renderedNow.add(i);
+        lastAlive = Date.now();
+      } else if (url === "/span") {
+        writeFileSync(join(RENDERS, SPAN_FILE), b);
         lastAlive = Date.now();
       } else if (url === "/alive") lastAlive = Date.now();
       else if (url === "/done") {
@@ -639,6 +670,14 @@ if (stillsWritten.length)
   console.log(
     `wrote ${stillsWritten.join(" ")}${failed ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
   );
+
+if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {
+  const mid = +((span[0] + span[1]) / 2).toFixed(2);
+  console.log(
+    `wrote renders/${SPAN_FILE}, heard ${span[0]}-${span[1]} s (framecheck and sheet read its seconds from its name)
+next: bun run framecheck renders/${SPAN_FILE}; frames to look at: bun run sheet renders/${SPAN_FILE} ${span[0]},${mid},${+(span[1] - 0.05).toFixed(2)}`,
+  );
+}
 
 // Every chunk starts on a keyframe with the same encoder settings, so the join is a lossless stream copy
 if (!failed && chunks) {

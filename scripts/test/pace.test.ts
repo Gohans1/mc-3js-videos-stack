@@ -69,3 +69,14 @@ test("a Short is read against Shorts: their shot length, and its first 3 s with 
   expect(still.join("\n")).toMatch(/with nothing said: a cut, a camera move or something moving/);
   expect(still.at(-1)).toMatch(/^next: AT=1 bun run render stills/);
 });
+
+test("a word that starts just before a hold and runs into it is said over the hold", () => {
+  const r = paceReport({
+    length: 20,
+    cuts: [],
+    news: [0, 10],
+    words: [{ w: "listen", s: 9.8, e: 10.4 }],
+    hold: 8,
+  }).join("\n");
+  expect(r).toMatch(/HOLD 10\.00-20\.00[^\n]*"listen"/);
+});

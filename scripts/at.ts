@@ -321,7 +321,7 @@ export const whatsAt = (dir: string, t: number) => {
   };
 };
 
-const HELP = `What the film has at one heard second (as notes, voice:cues, framecheck and jumps print them), each with the file
+const HELP = `What the film has at one heard second (as notes, voice:cues and framecheck print them), each with the file
 and row that holds it: the shot, the camera keys, the narration word, the sounds playing, the text and looks on screen,
 the key rows moving, the open notes near it. Run inside the film.
   bun run at 35.6        or  bun run at 00:35.633  (mm:ss as notes print it)

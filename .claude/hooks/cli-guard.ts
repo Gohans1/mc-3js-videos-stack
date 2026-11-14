@@ -2,10 +2,10 @@
 // the files they wrote and their next: lines sit anywhere in the output, so a pipe through head/tail/grep, a file read
 // in part, stderr thrown away or output caught in a variable loses some. --json output (for a script) and tee pass.
 const NAMES =
-  "find|help|skills|gap|at|check|render|framecheck|notes|note|sheet|jumps|pace|deliver|mix|listen|sfx:get|voice:gen|voice:align|voice:lips|voice:assemble|voice:cues|new-film";
+  "find|help|skills|gap|at|check|render|framecheck|notes|note|sheet|pace|deliver|mix|listen|sfx:get|voice:gen|voice:align|voice:lips|voice:assemble|voice:cues|new-film";
 // the same commands called by their files, as package.json runs them
 const FILES =
-  /\S*(?:live-studio[/\\](?:help|skills|check|render|framecheck|notes|note)\.mjs|scripts[/\\](?:find|gap|at|new_film)\.ts|scripts[/\\]review[/\\](?:sheet\.py|jumps\.py|deliver\.py|pace\.ts)|scripts[/\\]sound[/\\](?:get_sfx|mix|listen)\.py|scripts[/\\]voice[/\\](?:gen|align|lips|assemble|cues)\.ts)/;
+  /\S*(?:live-studio[/\\](?:help|skills|check|render|framecheck|notes|note)\.mjs|scripts[/\\](?:find|gap|at|new_film)\.ts|scripts[/\\]review[/\\](?:sheet\.py|deliver\.py|pace\.ts)|scripts[/\\]sound[/\\](?:get_sfx|mix|listen)\.py|scripts[/\\]voice[/\\](?:gen|align|lips|assemble|cues)\.ts)/;
 // what may come before: a subshell's (, env settings, time, nohup, timeout
 const LEAD = String.raw`^[({]?\s*(?:(?:export\s+)?\w+=\S*\s+|time\s+|nohup\s+|timeout\s+(?:-\S+\s+)*\S+\s+)*`;
 const GUIDED = new RegExp(

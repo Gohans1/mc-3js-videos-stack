@@ -4,6 +4,7 @@
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 
+import { chunksOf } from "../src/frame";
 import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
@@ -23,7 +24,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     );
     return;
   }
-  const chunkCount = Math.ceil(DURATION / (cfg.clip?.chunk ?? 30));
+  const ranges = chunksOf(DURATION, cfg.clip?.chunk ?? 30, FPS),
+    chunkCount = ranges.length;
   const beyond = (cfg.clip?.only ?? []).filter((i) => i >= chunkCount);
   if (beyond.length) {
     log(
@@ -250,6 +252,44 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     beat = performance.now();
     post("/alive", String(f));
   };
+  // frames first-last as one mp4 starting on a keyframe: a chunk, or a SPAN run's video
+  const encode = async (first, last, bitrate) => {
+    const output = new Output({
+      format: new Mp4OutputFormat({ fastStart: "in-memory" }),
+      target: new BufferTarget(),
+    });
+    const source = new VideoSampleSource({
+      codec: "avc",
+      bitrate,
+      hardwareAcceleration: "prefer-hardware",
+      keyFrameInterval: cfg.clip.keyFrameInterval,
+    });
+    output.addVideoTrack(source, { frameRate: FPS });
+    await output.start();
+    for (let f = first; f <= last; f++) {
+      const sample = new VideoSample(draw(f, cfg.clip.samples), {
+        timestamp: (f - first) / FPS,
+        duration: 1 / FPS,
+      });
+      await source.add(sample);
+      sample.close();
+      alive(f);
+    }
+    await output.finalize();
+    return output.target.buffer;
+  };
+  // a SPAN run draws one video of just those frames and leaves every chunk as it is
+  if (cfg.clip?.span) {
+    const started = performance.now(),
+      first = cfg.clip.span[0],
+      last = Math.min(cfg.clip.span[1], ranges.at(-1)[1]);
+    await post("/span", await encode(first, last, cfg.clip.bitrate));
+    log(
+      `span: ${last - first + 1} frames x${cfg.clip.samples} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
+    );
+    await done();
+    return;
+  }
   if (cfg.clip) {
     const todo = cfg.clip.only ?? Array.from({ length: chunks }, (_, i) => i);
     // a chunk already rendered from this same build and settings (render.mjs stamps them) is kept as it is
@@ -264,31 +304,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         continue;
       }
       const started = performance.now(),
-        first = index * cfg.clip.chunk * FPS,
-        last = Math.floor(Math.min(DURATION, (index + 1) * cfg.clip.chunk) * FPS - 1);
-      const output = new Output({
-        format: new Mp4OutputFormat({ fastStart: "in-memory" }),
-        target: new BufferTarget(),
-      });
-      const source = new VideoSampleSource({
-        codec: "avc",
-        bitrate: cfg.clip.bitrate,
-        hardwareAcceleration: "prefer-hardware",
-        keyFrameInterval: cfg.clip.keyFrameInterval,
-      });
-      output.addVideoTrack(source, { frameRate: FPS });
-      await output.start();
-      for (let f = first; f <= last; f++) {
-        const sample = new VideoSample(draw(f, cfg.clip.samples), {
-          timestamp: (f - first) / FPS,
-          duration: 1 / FPS,
-        });
-        await source.add(sample);
-        sample.close();
-        alive(f);
-      }
-      await output.finalize();
-      await post(`/chunk/${index}`, output.target.buffer);
+        [first, last] = ranges[index];
+      await post(`/chunk/${index}`, await encode(first, last, cfg.clip.bitrate));
       log(
         `chunk ${index}: ${last - first + 1} frames x${cfg.clip.samples} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
       );

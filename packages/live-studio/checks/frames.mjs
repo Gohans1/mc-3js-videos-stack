@@ -139,7 +139,9 @@ export function meter(w, h, mask = () => true) {
       );
       // one bad frame is one fault: a black frame is not also a flash, a flash not also the two jumps into and out of it
       const at = (kind, tt) =>
-        faults.some((x) => x.kind === kind && Math.abs(x.t - tt) < 0.5 / fps);
+        faults.some(
+          (x) => x.kind === kind && tt > x.t - 0.5 / fps && tt < (x.to ?? x.t) + 0.5 / fps,
+        );
       const one = faults.filter(
         (x) =>
           !(x.kind === "FLASH" && at("BLACK", x.t)) &&

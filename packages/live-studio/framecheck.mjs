@@ -5,13 +5,15 @@ import { join, resolve } from "node:path";
 
 import { meter } from "./checks/frames.mjs";
 import { cliArgs, envTypos, needFilm, numberArg } from "./src/cli.mjs";
+import { ratioOf, sizeOf } from "./src/frame.ts";
 import { staleVideo } from "./src/stale.mjs";
 
 const HELP = `The last check before a video goes out, on the encoded file itself (what the audience gets): black frames, one-frame
 flashes, jumps away from cuts, shimmering, frozen stretches (checks/frames.mjs). Run inside the film.
   bun run framecheck                        renders/draft_video.mp4 (make it with bun run render clip)
-  bun run framecheck renders/chunks/c02.mp4  any video of the film; a chunk starts at its film second by itself (c02: 60 s),
-                                             START=60 says it for any other video
+  bun run framecheck renders/chunks/c02.mp4  any video of the film; a chunk or a span starts at its film second by itself
+                                             (c02: 60 s, span_40-44.mp4: 40 s), START=60 says it for any other video
+A Short (package.json "live-studio".ratio "9:16") is measured at its own shape, the whole picture.
 Prints the faults and writes renders/frames_<KIND>_<s>.jpg for each (up to 12): the frame before, the frame, the frame
 after (the last run's are cleared first). Cuts come from renders/cuts.json, which every bun run render clip writes, so a cut is never a JUMP. Render without LIST=1 for
 this check (the list changes the picture). Only the picture is measured, never the draft's strip under it.`;
@@ -58,24 +60,28 @@ if (!st || /^image2|_pipe$/.test(probed.format?.format_name ?? "")) {
   console.error(
     `${videoArg ?? "renders/draft_video.mp4"} is no video: give it a render's mp4, as renders/draft_video.mp4 (bun run render clip)`,
   );
-  process.exit(1);
+  process.exit(2);
 }
 const [num, den] = st.r_frame_rate.split("/").map(Number),
   fps = num / (den || 1);
-const w = 192,
-  h = Math.round((w * 9) / 16 / 2) * 2; // the 16:9 picture at the top of the frame, without a draft's strip
+// the picture at the top of the frame at the film's shape (a Short is 9:16), without a draft's strip under it
+const ratio = ratioOf(JSON.parse(readFileSync(join(PROJECT, "package.json"), "utf8")));
+const [w, h] = sizeOf(ratio, 192),
+  tall = ratio === "9:16" ? "16/9" : "9/16";
 const cutsFile = join(RENDERS, "cuts.json");
-// a render's chunk renders/chunks/cNN.mp4 starts at NN*30 s of the film (render.mjs CHUNK)
-const chunkNo = /[\\/]chunks[\\/]c(\d+)\.mp4$/.exec(video)?.[1];
+// a render's chunk renders/chunks/cNN.mp4 starts at NN*30 s of the film (render.mjs CHUNK), a SPAN run's
+// renders/span_<from>-<to>.mp4 at <from>
+const chunkNo = /[\\/]chunks[\\/]c(\d+)\.mp4$/.exec(video)?.[1],
+  spanFrom = /span_(\d+(?:\.\d+)?)-[\d.]+\.mp4$/.exec(video)?.[1];
 const START =
   process.env.START !== undefined
     ? numberArg("START", process.env.START, { min: 0 })
     : chunkNo
       ? Number(chunkNo) * 30
-      : 0;
+      : Number(spanFrom ?? 0);
 if (START)
   console.log(
-    `film seconds from ${START} s on (${chunkNo && process.env.START === undefined ? "the chunk's start" : "START"})`,
+    `film seconds from ${START} s on (${process.env.START !== undefined ? "START" : chunkNo ? "the chunk's start" : "the span's start"})`,
   );
 const cuts = (existsSync(cutsFile) ? JSON.parse(readFileSync(cutsFile, "utf8")) : []).map(
   (c) => c - START,
@@ -98,7 +104,7 @@ await new Promise((done, fail) => {
     "-i",
     video,
     "-vf",
-    `crop=iw:trunc(iw*9/16/2)*2:0:0,scale=${w}:${h}:flags=area`,
+    `crop=iw:trunc(iw*${tall}/2)*2:0:0,scale=${w}:${h}:flags=area`,
     "-f",
     "rawvideo",
     "-pix_fmt",
@@ -166,10 +172,15 @@ for (const x of faults.slice(0, 12)) {
   );
 }
 if (faults.length > 12) console.log(`${faults.length - 12} more not drawn`);
-if (faults.length)
+if (faults.length) {
+  const spanTo = spanFrom && /span_[\d.]+-([\d.]+)\.mp4$/.exec(video)[1];
+  const redraw = spanFrom
+    ? `SPAN=${spanFrom},${spanTo} bun run render clip`
+    : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render clip: chunk N is N*30 s on`;
   console.log(
-    `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render clip: chunk N is N*30 s on), then bun run framecheck again`,
+    `next: look at the frames_*.jpg; bun run at ${film(faults[0].t)} names the shot, camera, transition and rows playing there (a planned cut or freeze is fine); fix the scene, re-render only that stretch (${redraw}), then bun run framecheck${videoArg ? ` ${videoArg}` : ""} again`,
   );
+}
 // a clean file is not a good one: what the meter cannot judge is left to the eye
 else
   console.log(

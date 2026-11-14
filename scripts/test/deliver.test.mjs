@@ -94,7 +94,7 @@ test("a picture with no soundtrack is sent to the mix that puts one on it", (t) 
 test("a wrong word or a missing file stops before any work, saying what it takes", () => {
   assert.equal(deliver("--nope").status, 2);
   const r = deliver(join(tmpdir(), "no-such-video.mp4"));
-  // nothing was done, as sheet, framecheck and jumps say it: exit 2 (exit 1 is a film with something to fix)
+  // nothing was done, as sheet and framecheck say it: exit 2 (exit 1 is a film with something to fix)
   assert.equal(r.status, 2);
   assert.match(r.stderr, /no-such-video\.mp4.*bun run mix/);
 });
@@ -120,4 +120,19 @@ test("an upload older than its picture is not ready: the fix is the mix that put
     /FIX final\.mp4 has an older picture than final_video\.mp4[^\n]*bun run mix final_video\.mp4/,
   );
   assert.doesNotMatch(r.stdout, /ready to upload/);
+});
+
+test("a video with one keyframe at its start is told its keyframes are too far apart", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "final.mp4");
+  make(file, { extra: ["-g", "1000", "-movflags", "+faststart", "-use_editlist", "0"] });
+  const r = deliver(file);
+  assert.match(r.stdout, /ADVICE keyframes 3\.0 s apart at most/);
+});
+
+test("--help after the video prints the help and checks nothing", () => {
+  const r = deliver(join(tmpdir(), "no-such-video.mp4"), "--help");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /The last look before upload/);
 });

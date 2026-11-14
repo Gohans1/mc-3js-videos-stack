@@ -46,6 +46,14 @@ test("a jump away from a cut is a JUMP, the same change on a cut is not", () => 
   assert.ok(!kinds(run(60, make, [1.0])).includes("FLASH"));
 });
 
+test("the picture coming back after several black frames is the black, not also a JUMP", () => {
+  const black = (i) => i >= 20 && i < 24;
+  assert.deepEqual(
+    kinds(run(60, (i) => frame(black(i) ? 0 : 100, i, black(i) ? () => 0 : undefined))),
+    ["BLACK"],
+  );
+});
+
 test("pixels flipping every frame for a while shimmer", () => {
   const fs = run(60, (i) =>
     frame(100, 0, (p) => (p < 20 && i > 10 && i < 40 ? (i % 2 ? 140 : 100) : null)),

@@ -79,12 +79,13 @@ def boxes(video):
     return order, edits
 
 
-def key_gap(video):
-    """The longest stretch between two keyframes, in seconds (reads only the keyframes)"""
+def key_gap(video, long):
+    """The longest stretch without a keyframe, to the video's end too, in seconds (reads only the keyframes)"""
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey", "-show_entries",
                         "frame=pts_time", "-of", "csv=p=0", str(video)], capture_output=True, text=True, timeout=600)
     keys = [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", r.stdout)]
-    return max((b - a for a, b in zip(keys, keys[1:])), default=0.0)
+    ends = [*keys, long] if keys else [0.0, long]
+    return max(b - a for a, b in zip(ends, ends[1:]))
 
 
 def rate(stream):
@@ -123,12 +124,12 @@ def check(video, info):
                "matrix_coefficients=1:video_full_range_flag=0 <out>.mp4")
     if pic.get("r_frame_rate") != pic.get("avg_frame_rate"):
         advise(f"variable frame rate ({pic.get('r_frame_rate')} vs {pic.get('avg_frame_rate')} on average): YouTube asks constant")
-    gap = key_gap(video)
+    long = float(info["format"].get("duration") or pic.get("duration") or 0)
+    gap = key_gap(video, long)
     if gap > 1.01:
         advise(f"keyframes {gap:.1f} s apart at most: YouTube asks a closed GOP of half the frame rate (0.5 s); render final keys every 0.5 s")
     if w % 2 or h % 2:
         fix(f"{w}x{h} has an odd side: 4:2:0 needs both even")
-    long = float(info["format"].get("duration") or pic.get("duration") or 0)
     if h > w:
         if w < 1080 or h * 9 != w * 16:
             fix(f"{w}x{h} upright: a Short is 1080x1920 (9:16); bun run render final with package.json live-studio.ratio 9:16")
@@ -170,8 +171,9 @@ def check(video, info):
     return f"{video}: {w}x{h} {fps:g} fps {name} {pic.get('profile', '')} {mbps:.1f} Mbps{sound}, {long:.1f} s", out
 
 
-def cambi(video, start, length, width, tmp, tag):
-    """CAMBI per sampled frame (every 5th) of a stretch of video, scaled to `width`: {second: worst}"""
+def cambi(video, start, length, width, tmp, tag, shown=None):
+    """CAMBI per sampled frame (every 5th) of a stretch of video, scaled to `width`: {second: worst}, the seconds counted
+    from `shown` (default `start`), so a preview cut from the upload keys its seconds the same way"""
     log = f"cambi_{tag}.json"
     graph = (f"[0:v]scale={width}:-2:flags=lanczos,format=yuv420p,split[a][b];"
              f"[a][b]libvmaf=feature=name=cambi:n_subsample=5:log_fmt=json:log_path={log}")
@@ -183,20 +185,21 @@ def cambi(video, start, length, width, tmp, tag):
     for f in frames:
         score = f["metrics"].get("cambi")
         if score is not None:
-            s = int(start + f["frameNum"] / fps)
+            s = int((start if shown is None else shown) + f["frameNum"] / fps)
             worst[s] = max(worst.get(s, 0.0), score)
     return worst
 
 
-def band_picture(video, preview, second, out, offset):
+def band_picture(video, preview, second, out, offset, last):
     """The upload and the re-encode side by side at one second, with a row below that exaggerates small steps of light
     (each picture minus its blur, x16) so a band shows as a contour line"""
     graph = ("[0:v]scale=960:-2,format=gray,split[a][a2];[1:v]scale=960:-2,format=gray,split[b][b2];"
              "[a2]split[x][y];[y]gblur=sigma=8[yb];[x][yb]blend=all_expr='128+(A-B)*16'[ae];"
              "[b2]split[p][q];[q]gblur=sigma=8[qb];[p][qb]blend=all_expr='128+(A-B)*16'[be];"
              "[a][b]hstack[top];[ae][be]hstack[bottom];[top][bottom]vstack")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{second + 0.5:.2f}", "-i", str(video), "-ss",
-                    f"{second + 0.5 - offset:.2f}", "-i", str(preview), "-lavfi", graph, "-frames:v", "1", str(out)],
+    at = min(second + 0.5, last)  # the middle of the second, or the last frame when the video ends inside it
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{at:.3f}", "-i", str(video), "-ss",
+                    f"{at - offset:.3f}", "-i", str(preview), "-lavfi", graph, "-frames:v", "1", str(out)],
                    check=True, timeout=120)
 
 
@@ -225,7 +228,7 @@ def youtube(video, span, root):
                    env={**os.environ, "SVT_LOG": "1"})  # SVT-AV1 prints its whole config to stderr unless told errors only
     with tempfile.TemporaryDirectory(prefix="deliver-") as tmp:
         before = cambi(video, start, length, width, tmp, "upload")
-        after = {int(s + start): v for s, v in cambi(preview, 0, length, width, tmp, "preview").items()}
+        after = cambi(preview, 0, length, width, tmp, "preview", shown=start)
     added = sorted(s for s, v in after.items() if v >= BANDS and v - before.get(s, 0.0) >= ADDED)
     spans = []
     for s in added:
@@ -245,7 +248,7 @@ def youtube(video, span, root):
     for a, b in spans[:6]:
         peak = max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0))
         picture = out / f"youtube_bands_{peak}s.png"
-        band_picture(video, preview, peak, picture, start)
+        band_picture(video, preview, peak, picture, start, end - 1 / (rate(pic) or 30))
         shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts else ""
         print(f"BANDS {a}-{b + 1} s{shot}: the re-encode scores {after[peak]:.1f} where the upload has {before.get(peak, 0.0):.1f}; "
               f"look: {picture.relative_to(root)} (top: upload | re-encode, bottom: the same with small steps of light x16)")
@@ -264,7 +267,7 @@ def youtube(video, span, root):
 
 
 def main(args):
-    if args[:1] in (["-h"], ["--help"], ["help"]):
+    if args[:1] == ["help"] or "-h" in args or "--help" in args:
         print(__doc__)
         return 0
     video, span, preview, i = None, None, False, 0

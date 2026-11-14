@@ -24,7 +24,7 @@ test("every film command is guarded the same: checks, renders, sound, voice, not
     "bun run check 2>&1 | tail -1",
     "cd films/x && bun run framecheck | grep JUMP",
     "bun run listen > listen.txt",
-    "bun run jumps | Select-String POP",
+    "bun run pace | Select-String HOLD",
     "bun run sheet | Select-Object -Last 3",
     "bun run deliver | tail",
     "bun run mix renders/draft_video.mp4 | tail -2",
@@ -50,7 +50,7 @@ test("a film command called by its file, its errors thrown away, or its output c
   for (const cmd of [
     "bun node_modules/live-studio/render.mjs stills | head",
     "bun ../../packages/live-studio/check.mjs | tail -1",
-    "python ../../scripts/review/jumps.py renders/draft_video.mp4 | tail -3",
+    "python ../../scripts/review/sheet.py renders/draft_video.mp4 shots | tail -3",
     "python -I ../../scripts/sound/mix.py renders/draft_video.mp4 > mix.txt",
     ".venv/Scripts/python.exe ../../scripts/sound/listen.py | head",
     "bun ../../scripts/voice/cues.ts | grep line",

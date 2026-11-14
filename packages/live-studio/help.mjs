@@ -52,7 +52,6 @@ const GROUPS = [
       render:
         "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked); CHECK=motion:cam,40,48 charts a move's speed",
       sheet: "contact sheets of the stills or of a video's frames, to look at many at once",
-      jumps: "pops in a rendered video: frames that jump away from their neighbours",
       framecheck: "the last check on the encoded video: black, flashes, jumps, shimmer, freezes",
       pace: "how the film moves: shot lengths, and where the picture holds still under the narration",
       deliver:
@@ -160,7 +159,7 @@ if (film) {
       f,
       `${name}: keyed rows (moves, poses, values over time)`,
     ]),
-    ["renders/", "what render, sheet, jumps, framecheck write"],
+    ["renders/", "what render, sheet, framecheck write"],
     ["notes/", "the creator's notes (read them with bun run notes)"],
   ].map(
     ([f, about]) =>

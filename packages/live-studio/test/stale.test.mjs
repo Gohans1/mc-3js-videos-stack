@@ -1,4 +1,4 @@
-// src/stale.mjs: framecheck, sheet and jumps say when the video they read is older than the film data it was drawn from
+// src/stale.mjs: framecheck, sheet, pace and deliver say when the video they read is older than the film data it was drawn from
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -85,6 +85,20 @@ test("a draft with sound is older than its picture, or than its sound, and says 
     expect(staleVideo(dir, "renders/draft.mp4")?.message).toMatch(
       /older than src\/scene\.ts[^\n]*bun run render clip[^\n]*then bun run mix renders\/draft_video\.mp4/,
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the upload older than a picture change is drawn again by render final, not render clip", () => {
+  const { dir, at } = film();
+  try {
+    writeFileSync(join(dir, "renders/final.mp4"), "x");
+    at("renders/final.mp4", 2000);
+    at("src/scene.ts", 3600);
+    const message = staleVideo(dir, "renders/final.mp4")?.message;
+    expect(message).toMatch(/bun run render final[^\n]*then bun run mix renders\/final_video\.mp4/);
+    expect(message).not.toMatch(/render clip/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

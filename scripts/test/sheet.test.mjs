@@ -64,3 +64,87 @@ test("sheet cut N says which shots meet there and the transition between them; a
     /takes heard seconds \(65, 1:05 or 01:05\.250\), with commas; got 0:75: a minute holds 0-59 s, did you mean 1:15\?/,
   );
 });
+
+// a film folder with a 3 s draft (or a chunk of one) and the cuts its render wrote
+const film = (t, cuts, video = "renders/draft_video.mp4") => {
+  const dir = mkdtempSync(join(tmpdir(), "sheet-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "renders/chunks"), { recursive: true });
+  const ff = spawnSync("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=s=320x180:r=30:d=3",
+    "-pix_fmt",
+    "yuv420p",
+    join(dir, video),
+  ]);
+  assert.equal(ff.status, 0, String(ff.stderr));
+  writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify(cuts));
+  const sheet = (...args) =>
+    spawnSync("python", [SHEET, ...args], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  return Object.assign(sheet, { dir });
+};
+
+test("sheet shots on a chunk lays out the shots of that chunk, in film seconds", (t) => {
+  const sheet = film(t, [10, 61, 62], "renders/chunks/c02.mp4");
+  const r = sheet("renders/chunks/c02.mp4", "shots");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /3 shots: a frame from the middle of each, in order \(shot 1 first\)/);
+  assert.match(r.stdout, /60\.5s, 61\.5s, 62\.5s/);
+});
+
+test("sheet cut N near the film's start shows the frames there are instead of refusing", (t) => {
+  const sheet = film(t, [0.1, 2]);
+  const r = sheet("renders/draft_video.mp4", "cut", "0");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /cut 0 at 0\.10 s/);
+});
+
+test("sheet cut on a film of one shot says so instead of naming cuts 0--1", (t) => {
+  const sheet = film(t, []);
+  const r = sheet("renders/draft_video.mp4", "cut", "0");
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /no cuts: the film is one shot/);
+});
+
+test("a video named wrong is the fault named, even before the film has cuts", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sheet-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = spawnSync("python", [SHEET, "renders/nope.mp4", "shots"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /no renders\/nope\.mp4/);
+});
+
+test("sheet lays out the render's stills and leaves any other still_*.jpg out", (t) => {
+  const sheet = film(t, []);
+  for (const name of ["still_1s.jpg", "still_2.5s.jpg", "still_test.jpg"]) {
+    const r = spawnSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=gray:s=64x36",
+      "-frames:v",
+      "1",
+      join(sheet.dir, "renders", name),
+    ]);
+    assert.equal(r.status, 0, String(r.stderr));
+  }
+  const r = sheet();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /renders\/sheet_0\.jpg {2}1s, 2\.5s\r?\n/);
+});
+
+test("--help after the video still prints the help", (t) => {
+  const sheet = film(t, []);
+  const r = sheet("renders/draft_video.mp4", "--help");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /Contact sheets for self-review/);
+});

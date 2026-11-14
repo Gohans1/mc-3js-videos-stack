@@ -20,6 +20,7 @@ bun run deliver --youtube 9-15               # renders/youtube_preview.mp4 and y
 
 | Job                    | How                                                                                                                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trying a move or a fix | `SPAN=40,44 bun run render clip` draws just those seconds to `renders/span_40-44.mp4`, in seconds, chunks untouched; `framecheck` and `sheet` read its seconds from its name                 |
 | One stretch changed    | `CHUNKS=3 bun run render clip` redraws that 30 s chunk. A plain `render clip` keeps every chunk whose code, data and settings are unchanged; a sound edit changes none (`bun run mix` alone) |
 | A crash midway         | Run the same command again: it carries on where it stopped. Chrome that draws nothing for 4 minutes is restarted (3 tries)                                                                   |
 | Only the sound changed | `bun run mix` alone; no picture is rendered                                                                                                                                                  |

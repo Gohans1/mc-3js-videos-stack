@@ -1,4 +1,4 @@
-// Is a rendered video older than the film data its picture comes from? framecheck imports it; sheet.py and jumps.py run
+// Is a rendered video older than the film data its picture comes from? framecheck and pace import it; sheet.py and deliver.py run
 // `bun stale.mjs <video>` inside the film and print what it prints. The sound timeline is left out: it never changes a frame.
 // draft.mp4 and final.mp4 are mix's: <name>_video.mp4's picture with the sound of when mix ran, so their sound counts too.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -41,7 +41,7 @@ export const staleVideo = (root, video) => {
     if (newest)
       return {
         file: newest.rel,
-        message: `${shown} is older than ${newest.rel}: its frames may not show that change; bun run render clip draws the picture again, then ${mix}`,
+        message: `${shown} is older than ${newest.rel}: its frames may not show that change; bun run render ${basename(file) === "final.mp4" ? "final" : "clip"} draws the picture again, then ${mix}`,
       };
     const heard = [
       sound && join(root, sound),
@@ -53,9 +53,12 @@ export const staleVideo = (root, video) => {
   }
   if (!newest) return null;
   // a chunk's stamp covers the whole built film (render.mjs stamp), so any change draws every chunk again
+  const span = /span_([\d.]+)-([\d.]+)\.mp4$/.exec(shown);
   const again = shown.endsWith("final_video.mp4")
     ? "bun run render final draws it again"
-    : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
+    : span
+      ? `SPAN=${span[1]},${span[2]} bun run render clip draws it again`
+      : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
   return {
     file: newest.rel,
     message: `${shown} is older than ${newest.rel} (changed ${Math.max(1, Math.round((newest.m - made) / 60000))} min after it): its frames may not show that change; ${again}`,

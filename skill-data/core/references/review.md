@@ -11,8 +11,7 @@ bun run sheet                                # every still, six to a picture
 bun run sheet renders/draft_video.mp4 shots  # the whole film at a glance: one frame from every shot
 bun run sheet renders/draft_video.mp4 cut 4  # a transition up close: 0.25 s before cut 4 to 0.35 s after, naming shot 4 and 5 and the fx
 bun run render clip                          # the draft video and renders/cuts.json
-bun run framecheck                           # black, one-frame flashes, jumps away from cuts, shimmer, freezes
-bun run jumps renders/draft_video.mp4        # frames far from their neighbours: a mob teleporting, an item snapping
+bun run framecheck                           # black, one-frame flashes, jumps away from cuts (a mob teleporting, an item snapping), shimmer, freezes
 bun run pace                                 # shot lengths, and every stretch where the picture holds still
 CHECK=text bun run render stills             # each line of text: inside the safe area, readable over the picture
 bun run deliver                              # the upload against YouTube's spec
@@ -53,13 +52,14 @@ A new picture is a cut, or a third of the frame looking different from the last 
 
 ## Rules
 
-| Rule                                        | Why                                                                                         |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `AT` and `CHECK` take heard seconds         | As notes and `at` print them; `bun run at` converts to the scene seconds of the row to edit |
-| Render without `LIST=1` before `framecheck` | The text over the picture skews the measures                                                |
-| A cut is never a `JUMP`                     | `framecheck` and `jumps` read `renders/cuts.json` from the last `render clip`               |
-| `STALE`                                     | The video predates `src/`; render the clip again, then look                                 |
-| One stretch changed                         | `CHUNKS=3 bun run render clip` re-renders only that 30 s chunk (3 is 1:30-2:00)             |
-| Commands only print paths                   | Open the pictures with your image viewer and look                                           |
+| Rule                                        | Why                                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `AT` and `CHECK` take heard seconds         | As notes and `at` print them; `bun run at` converts to the scene seconds of the row to edit                |
+| Render without `LIST=1` before `framecheck` | The text over the picture skews the measures                                                               |
+| A cut is never a `JUMP`                     | `framecheck` reads `renders/cuts.json` from the last `render clip`                                         |
+| `STALE`                                     | The video predates `src/`; render it again as the line says (`clip`, or `final` for the upload), then look |
+| Trying a move or a fix                      | `SPAN=40,44 bun run render clip` draws just those seconds: `renders/span_40-44.mp4`                        |
+| One stretch changed                         | `CHUNKS=3 bun run render clip` re-renders only that 30 s chunk (3 is 1:30-2:00)                            |
+| Commands only print paths                   | Open the pictures with your image viewer and look                                                          |
 
 Rendering fast, the GPU, YouTube's spec and banding: `bun run skills get core --ref render`.

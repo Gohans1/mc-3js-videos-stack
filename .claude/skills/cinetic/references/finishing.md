@@ -24,10 +24,10 @@ In Live Studio (`templates/film` / `packages/live-studio`), `bun run render` cap
 
 | Mode                     | Command                                                                                               | What happens                                                                                                                        | Relative cost |
 | ------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| Stills                   | `AT=0.5,2.0,4.5 bun run render stills`                                                                | captures exact timestamps at full resolution as lossless PNG stills for fast framing and lighting checks                            | seconds       |
-| Excerpt / clip           | `FROM=4 TO=8 bun run render clip`                                                                     | renders only the `[FROM, TO]` window so you can iterate on one beat or seam in seconds                                              | ~0.2×         |
-| Preview / draft          | `FPS=30 SCALE=0.5 bun run render`                                                                     | half-resolution fast pass for pacing, camera continuity and `python3 scripts/sheet.py --video <mp4>` contact sheets                 | ~0.3×         |
-| Sharp master             | `bun run render`                                                                                      | full-resolution H.264 BT.709 render with the mixed soundtrack (`sound.py` / `score.py`), verified by `probe.py` and `check-sync.py` | 1×            |
+| Stills                   | `AT=0.5,2.0,4.5 bun run render stills`                                                                | captures exact heard seconds as draft JPEG stills (time and shot under each) for fast framing and lighting checks                              | seconds       |
+| Excerpt / clip           | `SPAN=4,8 bun run render clip`                                                                        | renders only those heard seconds to `renders/span_4-8.mp4` so you can iterate on one beat or seam in seconds                        | ~0.2×         |
+| Preview / draft          | `bun run render clip`                                                                                 | the 1280-wide draft with its time strip, for pacing, camera continuity and `bun run sheet renders/draft_video.mp4 shots`            | ~0.3×         |
+| Sharp master             | `bun run render final`, then `bun run mix renders/final_video.mp4`                                    | 1440p H.264 BT.709 with 8 sub-frames of motion blur, then the soundtrack; `bun run deliver` checks it against YouTube's spec        | 1×            |
 | Sub-frame shutter master | sharp pass → `python3 scripts/measure-speed.py` → sub-frame capture → `python3 scripts/accumulate.py` | averages sub-frames in 32-bit float and quantises once with ±1 LSB TPDF dither in smooth ramps                                      | 3–8× typical  |
 | Contact sheet            | `python3 scripts/sheet.py --video out/film.mp4 --out out/qa/sheet.png`                                | ffmpeg/OpenCV cuts labelled frame tiles directly from any rendered MP4                                                              | seconds       |
 
@@ -37,7 +37,7 @@ A run delivers a complete film inside its budget, on a busy machine too. The ord
 
 1. **The ending early.** Capture the closing seconds first (`AT=... bun run render stills`): the extruded 3D mark, the lockup landing and its hold must read cleanly before rendering the full timeline.
 2. **A whole draft early.** Render a fast half-size pass and cut contact sheets directly from the MP4 with `python3 scripts/sheet.py --video out/draft.mp4 --out out/qa/draft-sheet.png` (or `--frames A-B --every N` for one act) and `bash scripts/grab.sh out/draft.mp4 120,480` for exact full frames.
-3. **Targeted excerpts for fixes.** Re-render only the edited `[FROM, TO]` window (`FROM=A TO=B bun run render clip`) while tuning camera curves, optical transitions or directional shutter smear (`film-stage/velocity.ts`).
+3. **Targeted excerpts for fixes.** Re-render only the edited window (`SPAN=A,B bun run render clip`) while tuning camera curves, optical transitions or directional shutter smear (`film-stage/velocity.ts`).
 4. **Master + gates at the end.** Render the full master once, attach the mastered `-14 LUFS / -1.5 dBTP` soundtrack, and run `python3 scripts/probe.py`, `python3 scripts/check-sync.py` and `python3 scripts/forensics.py`.
 
 ### Fast by default
@@ -58,7 +58,7 @@ Renders on an ordinary workstation are bounded by WebGL frame capture and readba
 
 **Spend heavy passes once.**
 
-- **Iterate in Live Studio & short excerpts.** Scrub live in `bun run studio` and render short `FROM/TO` clips during look-dev (`references/review-loop.md` §1).
+- **Iterate in Live Studio & short excerpts.** Scrub live in `bun run studio` and render short `SPAN=<from>,<to>` clips during look-dev (`references/review-loop.md` §1).
 - **Run full masters in the background** when rendering long 60 fps timelines, and prepare audio credits or delivery notes meanwhile.
 - **Re-render only changed act ranges** and splice on clean act boundaries (§7) when fixing a single late shot.
 
@@ -305,15 +305,12 @@ ffmpeg -i picture.mp4 -ss <offset> -i public/audio/soundtrack.wav -map 0:v:0 -ma
 
 ## 7. Chunked renders and splices
 
-- **Re-render only what changed.** Render act-sized excerpts (`FROM=A TO=B bun run render clip`) starting on clean shot/act boundaries, join lossless-compatible H.264 parts with ffmpeg's concat demuxer (`-c copy`, identical resolution/profile/BT.709 tags, each part starting on an I-frame), and mux the full soundtrack once at the end. Act boundaries are safe splice points by construction because sub-frame shutter samples never cross them.
+- **Re-render only what changed.** `bun run render clip` already draws the film in 30 s chunks, keeps every chunk whose code, data and settings are unchanged, and joins them into `renders/draft_video.mp4` by lossless stream copy (each chunk starts on a keyframe). Try a fix on its own seconds first, then redraw its chunk, then put the soundtrack on once.
 
 ```bash
-FROM=0 TO=10 OUT=out/parts/p1.mp4 bun run render clip
-FROM=10 TO=20 OUT=out/parts/p2.mp4 bun run render clip
-printf "file '%s'\n" "$PWD"/out/parts/p*.mp4 > out/parts/list.txt
-ffmpeg -f concat -safe 0 -i out/parts/list.txt -i public/audio/soundtrack.wav -map 0:v -map 1:a -c:v copy \
-  -af apad -c:a aac -b:a 320k -ar 48000 -ac 2 -t <TOTAL_SEC> -movflags +faststart out/film.mp4
-python3 scripts/check-sync.py out/film.mp4 public/audio/soundtrack.wav && python3 scripts/probe.py out/film.mp4 --spec 1920x1080@60 --frames <TOTAL>
+SPAN=40,44 bun run render clip        # just those heard seconds: renders/span_40-44.mp4
+CHUNKS=1 bun run render clip          # the chunk holding them (1 is 0:30-1:00), joined with the others
+bun run mix renders/draft_video.mp4   # the soundtrack on the joined picture
 ```
 
 - If you must splice inside an act, cut on a frame where nothing moves (a static seam frame), so the two renders cannot disagree on screen.

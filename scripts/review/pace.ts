@@ -55,7 +55,7 @@ export const newPictures = (frames: Uint8Array[], fps: number, cuts: number[]) =
 const s2 = (x: number) => x.toFixed(2);
 const said = (words: Word[], a: number, b: number) => {
   const text = words
-    .filter((w) => w.s >= a && w.s < b)
+    .filter((w) => w.e > a && w.s < b)
     .map((w) => w.w)
     .join(" ");
   return text ? `"${text.length > 70 ? `${text.slice(0, 69)}…` : text}"` : "no narration";
@@ -193,11 +193,22 @@ if (import.meta.main) {
     { length: Math.floor(ff.stdout.length / (w * h)) },
     (_, i) => new Uint8Array(ff.stdout.buffer, ff.stdout.byteOffset + i * w * h, w * h),
   );
+  if (!frames.length) {
+    console.error(
+      `${arg ?? "renders/draft_video.mp4"} has no frames to measure: bun run render clip makes it again`,
+    );
+    process.exit(1);
+  }
   let words: Word[] = [];
   try {
     const { buildVoiceCues } = await import("../voice/cues.ts");
     words = buildVoiceCues(PROJECT).lines.flatMap((l: { words?: Word[] }) => l.words ?? []);
-  } catch {} // a film with no narration yet: the holds are said without words
+  } catch (e) {
+    // a film with no narration yet has none to read; the holds are said without words either way
+    console.log(
+      `narration not read (${(e as Error).message.split("\n")[0]}): the holds are said without it; bun run voice:cues says why`,
+    );
+  }
   const length = frames.length / FPS;
   console.log(`pace of ${arg ?? "renders/draft_video.mp4"}, ${s2(length)} s heard`);
   const news = newPictures(frames, FPS, cuts);
