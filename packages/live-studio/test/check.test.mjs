@@ -65,8 +65,14 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.equal(good.status, 0, good.stdout + good.stderr);
   assert.match(good.stdout, /^ok/);
   // the last line is next:, as every film command's (skill-data/core/references/cli.md)
-  assert.match(good.stdout.trim().split("\n").at(-1), /^next: look at it: AT=<seconds> bun run render stills/);
-  assert.match(bad.stderr.trim().split("\n").at(-1), /^next: fix each ✖ as it says, then bun run check/);
+  assert.match(
+    good.stdout.trim().split("\n").at(-1),
+    /^next: look at it: AT=<seconds> bun run render stills/,
+  );
+  assert.match(
+    bad.stderr.trim().split("\n").at(-1),
+    /^next: fix each ✖ as it says, then bun run check/,
+  );
 
   // the keys every film's camera reads, typed and spelt (a probe's fov "wide" and "fvo" passed, a 2-number p said only "Invalid input")
   writeFileSync(
@@ -526,6 +532,8 @@ test("a size or scale that is no number is named, never passed as big enough", (
   assert.match(sizeFaults({ ...day, scale: "2" }).join("\n"), /"scale" is "2", not a number/);
   assert.deepEqual(sizeFaults({ ...day, size: 56 }), []);
   assert.deepEqual(sizeFaults({ ...day, size: null }), []);
+  assert.match(sizeFaults({ ...day, size: 0 }).join("\n"), /size 0 draws no text: a size above 0/);
+  assert.match(sizeFaults({ ...day, scale: -2 }).join("\n"), /size -112 draws no text/);
 });
 
 test("a missing sound another film of the repo has is pointed to there, and every missing name says how to replace it", (t) => {
@@ -812,6 +820,16 @@ test("text placed after the film ends is named, as a sound there is: never on sc
     /✖ items\[1\] "THE END" at 20: after the film ends \(10\.00 s heard\), so never on screen/,
   );
   assert.doesNotMatch(r.stderr, /items\[0\]/);
+  // a hidden track's item is off screen anyway: no fault, as a hidden item
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      tracks: { 1: { hidden: true } },
+      items: [{ kind: "text", text: "THE END", size: 56, from: 20, to: 23, track: 1 }],
+    }),
+  );
+  const hidden = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(hidden.status, 0, hidden.stdout + hidden.stderr);
 });
 
 test('a film that shuts the vault out ("soundVault": false) is told so, not to move into the repo', (t) => {

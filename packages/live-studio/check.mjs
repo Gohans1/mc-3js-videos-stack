@@ -505,9 +505,9 @@ if (Array.isArray(textRead?.items)) {
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
     // after the end, as a sound there: decor too, since nothing past the end is drawn
-    if (h && !it.hidden && h.from >= ends.layers) {
+    if (h && !it.hidden && !textRead.tracks?.[it.track ?? 0]?.hidden && h.from >= ends.layers) {
       late.push(
-        `✖ items[${i}] "${String(it.text ?? it.kind).split("\n")[0]}" at ${+(+it.from).toFixed(2)}: after the film ends (${ends.layers.toFixed(2)} s heard), so never on screen`,
+        `✖ items[${i}] "${String(it.text ?? it.kind).split("\n")[0]}" at ${+(+it.from).toFixed(2)}: after the film ends (${ends.layers.toFixed(2)} s heard), so never on screen${Math.abs(h.from - it.from) > 0.01 ? ` (it would show at ${h.from.toFixed(2)} s heard)` : ""}`,
       );
       return;
     }

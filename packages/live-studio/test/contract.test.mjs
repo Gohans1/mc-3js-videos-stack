@@ -612,3 +612,13 @@ test('a key row whose every "t" is a string is named, not skipped as no row', ()
   );
   assert.equal(KeyFile.safeParse({ title: { t: "intro" }, list: ["a", "b"] }).success, true);
 });
+
+test('a key list with one row missing its "t", or one "t" as text beside rows without, is named', () => {
+  const paths = (v) => {
+    const r = KeyFile.safeParse(v);
+    return r.success ? [] : r.error.issues.map((i) => i.path.join("."));
+  };
+  assert.deepEqual(paths({ moves: [{ t: 0, x: 0 }, { x: 1 }] }), ["moves.1.t"]);
+  assert.deepEqual(paths({ moves: [{ t: "0", x: 0 }, { x: 1 }] }), ["moves.0.t", "moves.1.t"]);
+  assert.deepEqual(paths({ props: [{ id: "cup" }, { id: "lamp" }] }), []);
+});

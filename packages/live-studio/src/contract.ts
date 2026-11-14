@@ -774,17 +774,13 @@ export const keyRows = (v: any, path: string[] = []): string[][] => {
   const own = path.length > 0 && isTimedKey(v) ? [path] : [];
   return [...own, ...Object.entries(v).flatMap(([k, x]) => keyRows(x, [...path, k]))];
 };
-// a key whose "t" is no number ("5") makes keyRows drop its whole list, so the studio stops showing the row: named alone,
-// in a list with one timed key or a list whose every row has a "t"
+// a key whose "t" is no number ("5") or is missing makes keyRows drop its whole list, so the studio stops showing the row:
+// in a list where any row has a "t", every row without a number there is named
 const hasT = (k: any) => !!k && typeof k === "object" && !Array.isArray(k) && "t" in k;
 const badTimes = (v: any, path: (string | number)[] = []): (string | number)[][] =>
   Array.isArray(v)
-    ? v.some(isTimedKey) || (v.length > 0 && v.every(hasT))
-      ? v.flatMap((k, i) =>
-          k && typeof k === "object" && "t" in k && !Number.isFinite(k.t)
-            ? [[...path, i, "t"]]
-            : [],
-        )
+    ? v.some(hasT)
+      ? v.flatMap((k, i) => (isTimedKey(k) ? [] : [[...path, i, "t"]]))
       : v.flatMap((x, i) => badTimes(x, [...path, i]))
     : v && typeof v === "object"
       ? Object.entries(v).flatMap(([k, x]) => badTimes(x, [...path, k]))
@@ -800,7 +796,10 @@ export const KeyFile = z
     for (const path of badTimes(v))
       ctx.addIssue({
         code: "custom",
-        message: `"t" is a number of seconds, not ${JSON.stringify(rowAt(v, path as string[]))}`,
+        message:
+          rowAt(v, path as string[]) === undefined
+            ? `no "t": every row of a key list has its second, or the studio drops the whole list`
+            : `"t" is a number of seconds, not ${JSON.stringify(rowAt(v, path as string[]))}`,
         path,
       });
     for (const path of keyRows(v)) {

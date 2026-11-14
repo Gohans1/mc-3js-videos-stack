@@ -32,6 +32,10 @@ export const sizeFaults = (scene, ratio = "16:9") => {
       `"${word}" is ${JSON.stringify(scene[word])}, not a number: ${word === "size" ? "px at 1080, e.g. 56" : "a factor, e.g. 1.5"}`,
     ];
   const px = pxOf(scene);
+  if (!(px > 0))
+    return [
+      `size ${+px.toFixed(1)} draws no text: a size above 0 (${SIZE_MIN} or more to read on a phone)`,
+    ];
   return px < SIZE_MIN
     ? [
         `size ${+px.toFixed(1)} is ${((px / 1080) * 100).toFixed(1)}% of the frame ${ratio === "9:16" ? "width" : "height"}; under ${SIZE_MIN} (3.3%) words are mush on a phone (BBC subtitles: a line is 7-8%): size ${SIZE_MIN} or more`,
