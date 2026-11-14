@@ -1,22 +1,63 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 import { cliArgs } from "../packages/live-studio/src/cli.mjs";
 import { download } from "./download.mjs";
 import { fetchSoundRaw } from "./fetch_sound_raw.mjs";
 import { slimJar } from "./mc/slim_jar.mjs";
-import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
+import { fetchSoundZip, restoreSound } from "./sound_zip.mjs";
+import { toolCheck } from "./tools.mjs";
+import { config, EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 const HELP = `Fills the local vault (vault/, vault.json "root") on a new machine, from the repo root: the player rig check, mobs,
 the Mixkit sound effects (fetch:sfx), the sound vault (setup:sound) and, when the heavy external vault exists
 (vault.json "externalRoot", default E:/mc_vault, or MC_VAULT_EXTERNAL), the raw sound packs (fetch:sound-raw; a torrent
-pack, hours long, is named at the end for its own run) and the Minecraft sounds (setup:mc-sound).
+pack, hours long, is named at the end for its own run) and the Minecraft sounds (setup:mc-sound). It first names every
+tool missing from PATH, and stops when one it needs is.
   bun run setup:vault
+  bun run setup:vault --sound-zip <zip>   restores every sound from bun run pack:sound's zip first, instead of the raw packs
+  bun run setup:vault --sound-zip <link>  the same zip from a link (a Google Drive share link works when it is shared
+                                          with anyone who has the link; a private one says to download it by hand)
 Downloads have time limits and every file is verified (hashes, WAV format); a rerun reuses what is already there.
-Next: bun run link to connect the vault to every film.`;
-cliArgs(HELP, [], 0);
+Next: bun run link to connect the vault to every film (bun run setup does all three).`;
+const args = cliArgs(HELP, ["--sound-zip FILE"], 0);
+// the zip, or a link to it; a link is passed here on each machine and never written into the (public) repo
+const soundZip = args.includes("--sound-zip") ? args[args.indexOf("--sound-zip") + 1] : null;
+const soundLink = soundZip && /^https?:\/\//i.test(soundZip);
+const waiting = [];
+const tools = toolCheck();
+waiting.push(...tools.later.map((t) => `install ${t}`));
+if (tools.stop.length) {
+  console.error(
+    `Install these first, then run bun run setup:vault again:\n  ${tools.stop.join("\n  ")}`,
+  );
+  process.exit(1);
+}
+if (soundZip) {
+  if (!soundLink && !existsSync(soundZip)) throw new Error(`No sound zip at ${resolve(soundZip)}`);
+  // off Windows the default "E:/mc_vault" would land inside the repo
+  if (
+    process.platform !== "win32" &&
+    !process.env.MC_VAULT_EXTERNAL &&
+    /^[a-z]:[\\/]/i.test(config.externalRoot ?? "")
+  )
+    throw new Error(
+      `vault.json "externalRoot" (${config.externalRoot}) is a Windows drive: set MC_VAULT_EXTERNAL to a folder on this machine for mc-sound`,
+    );
+  try {
+    mkdirSync(EXTERNAL, { recursive: true });
+  } catch (e) {
+    throw new Error(
+      `Cannot make the external vault ${EXTERNAL} for mc-sound (${e.message}): set MC_VAULT_EXTERNAL to a folder on a drive this machine has`,
+    );
+  }
+  const zip = soundLink ? await fetchSoundZip(soundZip, LOCAL) : resolve(soundZip);
+  await restoreSound({ zip, local: LOCAL, external: EXTERNAL });
+  // a downloaded zip has done its job: its sounds are in the vault now
+  if (soundLink) rmSync(zip);
+}
 
 const assets = JSON.parse(readFileSync(join(ROOT, "scripts/vault-assets.json"), "utf8"));
 const hash = (path, algorithm) => createHash(algorithm).update(readFileSync(path)).digest("hex");
@@ -57,9 +98,12 @@ copyFileSync(
 run("bun", [join(ROOT, "packages/mc-assets/mobs.ts"), assets.mobs], 600_000);
 run("bun", [join(ROOT, "scripts/fetch_mixkit.mjs")], 600_000);
 // The raw zip packs are downloaded before the sound vault is built, which files them into its categories; a torrent
-// pack takes hours, so it is only named here, for its own run of fetch:sound-raw
-const waiting = [];
-if (existsSync(EXTERNAL)) {
+// pack takes hours, so it is only named here, for its own run of fetch:sound-raw. A sound zip holds their sounds already
+if (soundZip)
+  console.log(
+    "Raw sound packs skipped: the sound zip holds their sounds (bun run fetch:sound-raw only to cut them again)",
+  );
+else if (existsSync(EXTERNAL)) {
   const raw = await fetchSoundRaw({ torrents: false });
   if (raw.failed.length)
     throw new Error(
@@ -69,7 +113,9 @@ if (existsSync(EXTERNAL)) {
 }
 // No time limit: a first build decodes every raw pack (long on a hard disk) and a stopped one resumes where it was
 run("bun", [join(ROOT, "scripts/build_sound_vault.mjs")]);
-if (existsSync(EXTERNAL)) run("bun", [join(ROOT, "scripts/build_mc_sound_vault.mjs")], 900_000);
+// The sound zip holds mc-sound whole; building it again would download every Modrinth pack (~600 MB) for nothing
+if (existsSync(EXTERNAL) && !soundZip)
+  run("bun", [join(ROOT, "scripts/build_mc_sound_vault.mjs")], 900_000);
 console.log(
   `Light assets verified: Minecraft ${assets.minecraft.version}, mobs ${assets.mobs}, player rig and curated sound vault.`,
 );
