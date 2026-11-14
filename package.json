@@ -34,6 +34,7 @@
     "gap": "bun scripts/gap.ts",
     "eval:find": "bun scripts/evals/find/run.ts",
     "eval:lessons": "bun scripts/evals/lessons/run.ts",
+    "eval:load": "bun scripts/evals/load/run.ts",
     "new-film": "bun scripts/new_film.ts",
     "test": "bun test --timeout 30000 ./packages/film-stage ./packages/film-kit ./packages/mc-actor ./packages/mc-assets ./packages/live-studio ./scripts/test",
     "lint": "oxlint packages scripts",
