@@ -8,9 +8,12 @@ import { join } from "node:path";
 
 const JEV_DIR = join(import.meta.dir, "../../packages/clip-catalog");
 
-// key -> how the stand-in answers it: "ok", "spent" (429, back in an hour) or "refused" (403, a key that cannot call)
-let answers: Record<string, "ok" | "spent" | "refused"> = {};
+// key -> how the stand-in answers it: "ok", "spent" (429, back in an hour), "refused" (403, a key that cannot call), or
+// a fault on the key's first call only, then ok: "busy" (429 with the Retry-After in `burst`), "down" (503)
+let answers: Record<string, "ok" | "spent" | "refused" | "busy" | "down"> = {};
+let burst = "1";
 const asked: string[] = [];
+const ok = () => Response.json({ answers: { q: { noul: 0.9 } }, usage: { cost: 0 } });
 const server = Bun.serve({
   port: 0,
   // the body read before answering: on Windows a socket closed with it unread resets, and python sees an abort
@@ -19,14 +22,38 @@ const server = Bun.serve({
     const key = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
     asked.push(key);
     const a = answers[key];
-    return a === "ok"
-      ? Response.json({ answers: { q: { noul: 0.9 } }, usage: { cost: 0 } })
-      : a === "refused"
-        ? new Response("This API key can't call models", { status: 403 })
-        : new Response("FreeUsageLimitError", { status: 429, headers: { "Retry-After": "3600" } });
+    const again = asked.filter((k) => k === key).length > 1;
+    if (a === "ok" || ((a === "busy" || a === "down") && again)) return ok();
+    return a === "busy"
+      ? new Response("RateLimitError", { status: 429, headers: { "Retry-After": burst } })
+      : a === "down"
+        ? new Response("Bad Gateway", { status: 503 })
+        : a === "refused"
+          ? new Response("This API key can't call models", { status: 403 })
+          : new Response("FreeUsageLimitError", {
+              status: 429,
+              headers: { "Retry-After": "3600" },
+            });
   },
 });
-afterAll(() => server.stop(true));
+// a server that hangs up on its first call before any answer (python raises RemoteDisconnected, not a URLError), then
+// stands in front of the one above
+let hungUp = 0;
+const flaky = Bun.listen({
+  hostname: "127.0.0.1",
+  port: 0,
+  socket: {
+    async data(socket, raw) {
+      if (hungUp++ === 0) return void socket.end();
+      const res = await ok().text();
+      socket.end(
+        `HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${res.length}\r\nConnection: close\r\n\r\n${res}`,
+      );
+      void raw;
+    },
+  },
+});
+afterAll(() => (server.stop(true), flaky.stop(true)));
 
 // a home with ~/.secrets/zen.env and paid.env holding these key lines
 const home = (zen: string, paid = "") => {
@@ -37,10 +64,13 @@ const home = (zen: string, paid = "") => {
   return dir;
 };
 // each run of jev.py is a fresh process, as jev.ts spawns it (async: the stand-in answers from this same process)
-const ask = async (dir: string) => {
+// a wait is cut to 10 ms so a retry costs no test time; one time.sleep refuses (below 0, NaN) still raises
+const ask = async (dir: string, url = server.url.href) => {
   const py = `import sys, json; sys.path.insert(0, ${JSON.stringify(JEV_DIR)}); import jev
-jev.ROUTES = [("Zen", "${server.url}systemone", "jev", "JEV_TEST_ZEN", "zen.env"),
-              ("Paid", "${server.url}systemone", "jev", "JEV_TEST_PAID", "paid.env")]
+nap = jev.time.sleep
+jev.time.sleep = lambda s: nap(min(s, 0.01)) if s >= 0 else nap(s)
+jev.ROUTES = [("Zen", "${url}systemone", "jev", "JEV_TEST_ZEN", "zen.env"),
+              ("Paid", "${url}systemone", "jev", "JEV_TEST_PAID", "paid.env")]
 print(json.dumps(jev.Jev().ask("state", {})))`;
   const env = { ...process.env, HOME: dir, USERPROFILE: dir };
   delete env.JEV_TEST_ZEN;
@@ -101,4 +131,29 @@ test("every route spent: it says when, and that more keys on one network do not 
   expect(r.code).not.toBe(0);
   expect(r.err).toContain("every route has spent its quota");
   expect(r.err).toContain("per network");
+});
+
+test("a burst limit or a server fault is waited out on the same key: one lost answer loses the heats paid before it", async () => {
+  for (const [a, after] of [
+    ["busy", "1"],
+    ["busy", "Wed, 21 Oct 2015 07:28:00 GMT"],
+    ["busy", "-5"],
+    ["busy", "nan"],
+    ["down", ""],
+  ] as const) {
+    answers = { z1: a };
+    burst = after;
+    asked.length = 0;
+    const r = await ask(home("z1\n"));
+    expect(r.code, `${a} ${after}: ${r.err}`).toBe(0);
+    expect(asked).toEqual(["z1", "z1"]);
+  }
+});
+
+test("a connection dropped before any answer is retried", async () => {
+  answers = { z1: "ok" };
+  const r = await ask(home("z1\n"), `http://127.0.0.1:${flaky.port}/`);
+  expect(r.code, r.err).toBe(0);
+  expect(JSON.parse(r.out)).toEqual({ q: { noul: 0.9 } });
+  expect(hungUp).toBe(2);
 });

@@ -4,7 +4,7 @@ that must pick or check something from text imports it, e.g. clip-catalog/catalo
     from jev import Jev
     answers = Jev().ask("state text", {"q": {"type": "noul", "instructions": "...", "criteria": {"true": "...", "false": "..."}}})
 """
-import email.utils, json, os, re, sys, threading, time, urllib.error, urllib.request
+import email.utils, http.client, json, math, os, re, sys, threading, time, urllib.error, urllib.request
 from pathlib import Path
 
 
@@ -42,11 +42,13 @@ def read_spent():
 
 
 def retry_after(value, wait):
-    """Retry-After is seconds or an HTTP date (RFC 9110); one it cannot read waits the loop's own wait."""
+    """Retry-After is seconds or an HTTP date (RFC 9110); one it cannot read (or below 0, or not finite) waits the
+    loop's own wait."""
     if not value:
         return wait
     try:
-        return float(value)
+        s = float(value)
+        return s if math.isfinite(s) and s >= 0 else wait
     except ValueError:
         pass
     try:
@@ -69,8 +71,12 @@ class Jev:
         self.spent, self.lock = 0.0, threading.Lock()
 
     def ask(self, state, questions):
-        while self.routes:
-            route = self.routes[0]
+        while True:
+            # another heat may drop the last route between a check and a read
+            with self.lock:
+                if not self.routes:
+                    break
+                route = self.routes[0]
             name, url, model, key, i, n = route
             # Cloudflare in front of Zen refuses Python's default User-Agent (error 1010)
             req = urllib.request.Request(url, data=json.dumps({"model": model, "state": state, "questions": questions}).encode(),
@@ -110,7 +116,8 @@ class Jev:
                                 self.routes = [r for r in self.routes if r[0] != name]
                         break
                     time.sleep(after)
-                except (urllib.error.URLError, TimeoutError):
+                # a connection dropped mid-answer is no URLError: urlopen passes http.client's own faults through
+                except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
                     if not wait:
                         raise
                     time.sleep(wait)
