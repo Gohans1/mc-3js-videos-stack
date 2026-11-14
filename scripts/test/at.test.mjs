@@ -116,6 +116,74 @@ test("at #N finds a note's moment after a Speed edit moved it: by its scene seco
   assert.match(r.stdout, /that moment is heard at 00:04\.100 now \(its narration second/);
 });
 
+test("the open notes near a second are those heard near it now, not those written near it before a Speed edit", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const note = {
+    id: "hand",
+    t: 8.2,
+    scene: 8.2,
+    text: "the hand",
+    done: false,
+    at: "2026-11-02T00:00:00Z",
+  };
+  writeFileSync(join(dir, "notes/notes.jsonl"), JSON.stringify(note));
+  const near = whatsAt(dir, 4.1).notes;
+  assert.deepEqual(
+    near.map((n) => n.id),
+    ["hand"],
+  );
+  assert.ok(Math.abs(near[0].heard - 4.1) < 1e-6, `heard at ${near[0].heard}`);
+  assert.deepEqual(whatsAt(dir, 8.2).notes, []);
+});
+
+test("a note written just before a cut is in the shot it names, on every line", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  // scene 7.9996, 0.0004 s before the cut into shot 1 at scene 8
+  const note = {
+    id: "edge",
+    t: 7.9996,
+    scene: 7.9996,
+    shot: 0,
+    context: { shot: { into: 7.9996 } },
+  };
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    JSON.stringify({ ...note, at: "2026-11-02T00:00:00Z" }),
+  );
+  const r = spawnSync("bun", [AT, "edge"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^shot 0 \(shots 0-1\)/m);
+});
+
+test("a note whose moment a moved cut has put in the next shot says it is there now", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  // written 8.5 s into "the room" when it ran to 9; its cut into "his hand" sits at 8 now
+  const note = {
+    id: "late",
+    t: 8.5,
+    srcT: 8.5,
+    shot: 0,
+    shotName: "the room",
+    context: { shot: { into: 8.5 } },
+  };
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    JSON.stringify({ ...note, at: "2026-11-02T00:00:00Z" }),
+  );
+  const r = spawnSync("bun", [AT, "late"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /into shot 0 "the room".*past its end now: shot 1/);
+});
+
 test("at refuses a second past the film's end and says how long it is", (t) => {
   const r = spawnSync("bun", [AT, "99"], {
     env: { ...process.env, LIVE_PROJECT: film(t) },

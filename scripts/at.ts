@@ -57,11 +57,9 @@ const filmOf = (dir: string) => {
   return { read, conf, edit, fromSource, cam, sourceEnd, shots };
 };
 
-// A note keeps the heard second it was written at; Speed or Freeze edits since move that moment. Its scene second (stored
-// by the studio since 2026-11-13) or its place in its shot finds the same picture now.
-export const noteMoment = (dir: string, ref: string) => {
+const readNotes = (dir: string): Row[] => {
   const file = join(dir, "notes/notes.jsonl");
-  const notes: Row[] = existsSync(file)
+  return existsSync(file)
     ? readFileSync(file, "utf8")
         .split(/\r?\n/)
         .filter((l) => l.trim())
@@ -73,36 +71,52 @@ export const noteMoment = (dir: string, ref: string) => {
           }
         })
     : [];
+};
+
+// A note keeps the heard second it was written at; Speed or Freeze edits since move that moment. Its scene second (stored
+// by the studio since 2026-11-13) or its place in its shot finds the same picture now.
+const heardNow = (n: Row, film: ReturnType<typeof filmOf>) =>
+  noteSecond(
+    n as { t: number },
+    (s) => timingClock.outputAt(film.fromSource(s)),
+    timingClock,
+    film.shots,
+  );
+
+export const noteMoment = (dir: string, ref: string) => {
+  const notes = readNotes(dir);
   // #N counts every note in the order written, as bun run notes numbers them
   const byAge = notes.toSorted((a, b) =>
     (a.at ?? "") < (b.at ?? "") ? -1 : (a.at ?? "") > (b.at ?? "") ? 1 : 0,
   );
   const n = /^#\d+$/.test(ref) ? byAge[+ref.slice(1) - 1] : notes.find((x) => x.id === ref);
   if (!n) return null;
-  const { shots, fromSource } = filmOf(dir);
-  const scene = noteScene(n, shots);
+  const film = filmOf(dir);
+  const scene = noteScene(n, film.shots);
+  // a cut moved since may have put its moment in the next shot: the shot it is in now, said with the one it was written in
+  const now = scene ? film.shots.filter((s) => s.t <= scene.at).length - 1 : -1;
+  const moved =
+    scene?.shot != null && now > scene.shot
+      ? `; past its end now: shot ${now} starts at ${film.shots[now]!.t.toFixed(2)}, so the moment is in shot ${now}`
+      : "";
   return {
     id: n.id,
     n: byAge.indexOf(n) + 1,
     written: n.t as number,
-    heard: noteSecond(
-      n as { t: number },
-      (s) => timingClock.outputAt(fromSource(s)),
-      timingClock,
-      shots,
-    ),
+    heard: heardNow(n, film),
     how: !scene
       ? n.srcT != null
         ? "its narration second through today's voice and Speed edits, since its shot has changed; the studio shows it there too"
         : "its heard second as written (its shot has changed since)"
       : scene.shot === null
         ? "its scene second, kept with it"
-        : `${(n.context.shot.into as number).toFixed(2)} s into shot ${scene.shot}${n.shotName ? ` "${n.shotName}"` : ""}, as when it was written`,
+        : `${(n.context.shot.into as number).toFixed(2)} s into shot ${scene.shot}${n.shotName ? ` "${n.shotName}"` : ""}, as when it was written${moved}`,
   };
 };
 
 export const whatsAt = (dir: string, t: number) => {
-  const { read, conf, edit, cam, sourceEnd, shots } = filmOf(dir);
+  const film = filmOf(dir);
+  const { read, conf, edit, cam, sourceEnd, shots } = film;
   const length = Math.max(timingClock.duration, layerDuration());
   const scene = frameAt(timingClock, t);
   const si = shots.filter((s) => s.t <= scene).length - 1;
@@ -232,20 +246,14 @@ export const whatsAt = (dir: string, t: number) => {
       scriptLines.find((l) => l.t > scene) ??
       null);
 
-  const notesFile = join(dir, "notes/notes.jsonl");
-  const notes = existsSync(notesFile)
-    ? readFileSync(notesFile, "utf8")
-        .split(/\r?\n/)
-        .filter((l) => l.trim())
-        .flatMap((l) => {
-          try {
-            return [JSON.parse(l)];
-          } catch {
-            return [];
-          }
-        })
-        .filter((n) => !n.done && typeof n.t === "number" && Math.abs(n.t - t) <= 3)
-    : [];
+  // the open notes heard within 3 s of it now (a Speed or Freeze edit since moves where a note is heard)
+  const notes = readNotes(dir).flatMap((n) => {
+    if (n.done || typeof n.t !== "number") return [];
+    const heard = heardNow(n, film);
+    return Math.abs(heard - t) <= 3
+      ? [{ id: n.id as string, text: String(n.text ?? ""), heard }]
+      : [];
+  });
 
   return {
     t,
@@ -314,7 +322,8 @@ if (isMain) {
       );
       process.exit(2);
     }
-    t = +n.heard.toFixed(3);
+    // to the microsecond: rounded to the millisecond, a note just before a cut lands on it, in the next shot
+    t = +n.heard.toFixed(6);
     console.log(
       Math.abs(n.heard - n.written) < 0.005
         ? `note #${n.n} (${n.id}) was written at ${mmss(n.written)} heard, still the same moment (${n.how})`
@@ -417,7 +426,7 @@ if (isMain) {
   }
   if (got.notes.length)
     out.push(
-      `open notes within 3 s: ${got.notes.map((n) => `${n.id} at ${fmt(n.t)} "${String(n.text).slice(0, 40)}"`).join("; ")} (bun run notes <id>)`,
+      `open notes heard within 3 s: ${got.notes.map((n) => `${n.id} at ${fmt(n.heard)} "${n.text.slice(0, 40)}"`).join("; ")} (bun run notes <id>)`,
     );
   // the cut a draft's sheet numbers (renders/cuts.json, heard seconds), when this second sits on one
   const cutsFile = join(film, "renders/cuts.json");
