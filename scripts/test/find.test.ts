@@ -861,6 +861,13 @@ test("search hits end with the filters that would split them, each value with it
   );
 });
 
+test("a transition ease or an anim curve says a film's own is a cubic-bezier in place of the name", async () => {
+  const curve = await run(["--show", "linear", "--kind", "anim-curve"], presetEntries(), noJev);
+  expect(curve).toMatch(/make your own: .*"curve": \[0\.2, 0, 0, 1\]/);
+  const ease = await run(["--show", "linear", "--kind", "transition-ease"], presetEntries(), noJev);
+  expect(ease).toMatch(/make your own: .*"ease": \[0\.2, 0, 0, 1\]/);
+});
+
 test("--show with --kind shows only that kind's entry of a shared id", async () => {
   const out = await run(["--show", "fade", "--kind", "text-in"], presetEntries(), noJev);
   expect(out).toMatch(/^text-in\/Clean {2}fade/m);
@@ -1111,6 +1118,14 @@ test("--fav reads the default list unless a list is named, and offers the others
     expect(typo).toMatch(/^\(no favourites list "horrror", the default list used\)/);
   }));
 
+test("a word after --fav that names no list is said to be read as a search word, with one list too", () =>
+  withFavorites({ default: { sounds: ["boom"] } }, async (favs) => {
+    const out = await run(["--fav", "horror"], starredPool(), noJev, undefined, favs);
+    expect(out).toMatch(
+      /"horror" after --fav names no favourites list \(default\): read as a search word/,
+    );
+  }));
+
 test("--fav with nothing starred says how a star is given", () =>
   withFavorites({}, async (favs) => {
     const out = await run(["--fav"], starredPool(), noJev, undefined, favs);
@@ -1144,6 +1159,12 @@ test("--star and --unstar write the list the studio reads, or a named one", () =
     expect(favs.open().read()).toEqual({ sounds: [], effects: ["in:fade"] });
     expect(favs.open("horror").read().sounds).toEqual(["boom"]);
   }));
+
+test("--star with commas and no id is an error, not an empty success", async () => {
+  await expect(run(["--star", ","], [e("boom", "Big boom")], noJev)).rejects.toThrow(
+    /--star needs an id/,
+  );
+});
 
 test("--star into a list name no list can have stars nothing", () =>
   withFavorites({}, async (favs) => {
@@ -1386,6 +1407,13 @@ test("words only fight clips have point to --fights, not to making the move", as
     /1 weapon or fight clip has more of these words \(left out by default\): mixamo\/Sword_Slash_c9ce0001;.*--fights/,
   );
   expect(out).not.toMatch(/make it/);
+});
+
+test("the kinds listed count mocap as a search finds it, the fight clips said apart", async () => {
+  const sword = { ...e("mixamo/Sword_Slash_c9ce0001", "Sword Slash", "", "mocap", "stand") };
+  await expect(run(["--kind"], [walk, sword], noJev)).rejects.toThrow(
+    /Kinds: mocap 1 \(and 1 weapon or fight clip, left out unless --fights\)/,
+  );
 });
 
 test("a fight clip with more of the words than the top hit is named, though the top hit has some", async () => {

@@ -1184,6 +1184,10 @@ const OWN: Record<string, string> = {
   velocity:
     'an effect: makeVelocity(renderer, {"<name>": (frame, optics) => a partial CameraOptics}) in src/scene.ts. Built-ins: packages/film-stage/src/velocity.ts',
   ease: "a curve: a function of t (0-1 to 0-1) added to EASES from film-stage/camera in src/scene.ts (cameraAt reads EASES by name; draw.eases is what the studio draws). Built-ins: packages/film-stage/src/camera.ts",
+  "transition-ease":
+    'a curve: a CSS cubic-bezier [x1, y1, x2, y2] in place of the name (x1, x2 in 0-1), e.g. "ease": [0.2, 0, 0, 1]',
+  "anim-curve":
+    'a curve: a CSS cubic-bezier [x1, y1, x2, y2] in place of the name (x1, x2 in 0-1), e.g. "curve": [0.2, 0, 0, 1]',
   sound: MAKE_SOUND,
   bgm: MAKE_MUSIC,
   mocap: MAKE_MOCAP,
@@ -1494,8 +1498,8 @@ const catalog: Catalog = (args) =>
     );
   });
 
-// A usage mistake: the CLI prints it and exits 2 instead of answering a different question than the one asked
-// exit 2: the words asked wrong; exit 1: asked right, nothing has that id
+// A usage mistake (a wrong word, value or id): the CLI prints it and exits 2, nothing done, instead of answering a
+// different question than the one asked
 export class FindError extends Error {
   constructor(
     message: string,
@@ -1638,7 +1642,7 @@ function parse(argv: string[], lists: string[] = []) {
             ? (i++, next)
             : "default";
       // a word that may be a list's name mistyped: said, since it is read as a search word
-      if (v === "default" && next && !isOption(next) && lists.length > 1)
+      if (v === "default" && next && !isOption(next) && lists.length)
         notes.push(
           `"${next}" after --fav names no favourites list (${lists.join(", ")}): read as a search word, the default list used`,
         );
@@ -1730,8 +1734,18 @@ const DUR_SAYS =
 // What a filter takes, from the entries here: asked by naming it without a value
 const valuesOf = (o: string, pool: Entry[]) => {
   const clips = pool.filter((x) => x.kind === "mocap");
-  if (o === "--kind")
-    return `Kinds: ${counts(pool)}, or sound for sfx+bgm+mc. Each takes /<category> (bun run find --kind <kind> lists them); plain names work too: music is bgm, titles is text, camera is anim`;
+  if (o === "--kind") {
+    // counted as a search finds them: weapon and fight clips are left out of mocap unless --fights
+    const fights = clips.filter((x) => isFight(x.id)).length;
+    const kinds = counts(pool.filter((x) => x.kind !== "mocap" || !isFight(x.id))).replace(
+      /\bmocap \d+/,
+      (m) =>
+        fights
+          ? `${m} (and ${fights} weapon or fight clip${fights > 1 ? "s" : ""}, left out unless --fights)`
+          : m,
+    );
+    return `Kinds: ${kinds}, or sound for sfx+bgm+mc. Each takes /<category> (bun run find --kind <kind> lists them); plain names work too: music is bgm, titles is text, camera is anim`;
+  }
   if (o === "--source") return `Sources (a comma list for several):\n  ${sourceList(pool)}`;
   if (o in FACETS)
     return `${o}: ${buckets(o, pool)}${o === "--license" && rawLicenses(pool) ? `. Or a licence by name (--license mit): ${rawLicenses(pool)}` : ""}`;
@@ -1818,6 +1832,8 @@ export async function run(
   }
   const showIds = set.get("--show")?.split(",").filter(Boolean);
   if (showIds && !showIds.length) throw new FindError("--show needs an id, e.g. --show dissolve");
+  if (starring && !set.get(starring)!.split(",").some(Boolean))
+    throw new FindError(`${starring} needs an id, e.g. ${starring} dissolve`);
   if (showIds) {
     const extra = [
       query,
