@@ -4,7 +4,7 @@ import { spring } from "math/time";
 
 import { curve } from "../src/curve";
 import { shake } from "../src/shake";
-import { follow, springTrack } from "../src/spring";
+import { follow, followTarget, springTrack } from "../src/spring";
 import { chain, quintic } from "../src/transition";
 
 const E = 1e-4;
@@ -163,4 +163,35 @@ test("shake is still before the first hit, bounded, repeatable and gone once tra
   expect(moved).toBeGreaterThan(0.5);
   expect(s(1.5)).toEqual(s(1.5));
   expect(s(2.31)).toEqual([0, 0, 0]);
+});
+
+test("followTarget chases 3D path deterministically at any t, applies offset, and anticipates with lead", () => {
+  const path = (t: number): [number, number, number] => [t * 2, 1.5, Math.sin(t)];
+  const lag = followTarget(path, { from: 0, to: 5, smooth: 0.25, offset: [0, 1, -3] });
+  const lead = followTarget(path, {
+    from: 0,
+    to: 5,
+    smooth: 0.25,
+    offset: [0, 1, -3],
+    lead: 0.4,
+  });
+  // Random-access purity (identical regardless of evaluation order)
+  const a = lag(2.7);
+  expect(lag(0.5)).toBeDefined();
+  expect(lag(2.7)).toEqual(a);
+  expect(a[1]).toBeCloseTo(2.5, 3);
+  // Lead stays ahead along +x velocity
+  expect(lead(2.0)[0]).toBeGreaterThan(lag(2.0)[0]);
+  expect(() => followTarget(path, { from: 5, to: 1 })).toThrow(/to >= from/);
+});
+
+test("follow and followTarget stay finite on a zero-duration window (from === to)", () => {
+  const zero = follow((t) => t + 3, { from: 2, to: 2, smooth: 0.2 });
+  expect(zero(1)).toBe(4);
+  expect(zero(2)).toBe(5);
+  expect(zero(3)).toBe(5);
+
+  const path = (t: number): [number, number, number] => [t * 2, 1.5, Math.sin(t)];
+  const zeroTarget = followTarget(path, { from: 2, to: 2, offset: [0, 1, 0] });
+  expect(zeroTarget(3)).toEqual([4, 2.5, Math.sin(2)]);
 });

@@ -20,15 +20,32 @@ const centred = (v?: number[]) => {
   return v.map((x) => x - m);
 };
 
-export function handheld(
-  kind: ShakeName = "THE_CLOSEUP",
-  { amount = 1, move = 1, speed = 1, offset = 0 } = {},
-) {
+type CachedTrack = {
+  fps: number;
+  n: number;
+  loc: (number[] | null)[];
+  rot: (number[] | null)[];
+};
+
+const trackCache = new Map<ShakeName, CachedTrack>();
+
+const loadTrack = (kind: ShakeName): CachedTrack => {
+  const cached = trackCache.get(kind);
+  if (cached) return cached;
   const s = DATA[kind] as Record<string, unknown> & { fps: number };
   if (!s) throw new Error(`handheld: no shake ${kind}; one of ${SHAKES.join(", ")}`);
   const loc = [0, 1, 2].map((i) => centred(s[`location${i}`] as number[] | undefined));
   const rot = [0, 1, 2].map((i) => centred(s[`rotation_euler${i}`] as number[] | undefined));
-  const n = rot[0]!.length;
+  const track: CachedTrack = { fps: s.fps, n: rot[0]!.length, loc, rot };
+  trackCache.set(kind, track);
+  return track;
+};
+
+export function handheld(
+  kind: ShakeName = "THE_CLOSEUP",
+  { amount = 1, move = 1, speed = 1, offset = 0 } = {},
+) {
+  const { fps, n, loc, rot } = loadTrack(kind);
   const sample = (v: number[] | null, f: number) => {
     if (!v) return 0;
     const i = Math.floor(f),
@@ -43,7 +60,7 @@ export function handheld(
     );
   };
   return (t: number) => {
-    const f = (t * speed + offset) * s.fps;
+    const f = (t * speed + offset) * fps;
     const r = rot.map((v) => sample(v, f) * amount);
     const pos = loc.map((v) => sample(v, f) * amount * move) as [number, number, number];
     // Blender XYZ euler: x first, then y, then z, about fixed axes = qz * qy * qx

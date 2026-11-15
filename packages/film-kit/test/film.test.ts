@@ -4,7 +4,18 @@ import { Euler, PerspectiveCamera, Quaternion, Vector3 } from "three";
 
 import DATA from "../data/shakify.json";
 import { handheld, SHAKES } from "../src/handheld";
-import { blurPx, dollyZoom, fovOf, hfovOf, mmOf, nearestPrime } from "../src/lens";
+import {
+  blurPx,
+  dofParams,
+  dollyZoom,
+  fovOf,
+  frameSubject,
+  hfovOf,
+  mmOf,
+  nearestPrime,
+  SHOT_SIZES,
+  shotSize,
+} from "../src/lens";
 import { inSafe, safe } from "../src/safe";
 
 const A = 16 / 9;
@@ -45,6 +56,9 @@ test("lens: a dolly zoom keeps the subject the same size on screen", () => {
 test("lens: thin-lens blur is zero at the focus and about 33 px for a 50 mm f/2 background", () => {
   expect(blurPx({ mm: 50, fstop: 2, focus: 2, dist: 2 })).toBeCloseTo(0, 9);
   expect(blurPx({ mm: 50, fstop: 2, focus: 2, dist: 100 })).toBeCloseTo(33.5, 0);
+  const macro = blurPx({ mm: 135, fstop: 2, focus: 0.1, dist: 5 });
+  expect(Number.isFinite(macro) && macro > 0).toBe(true);
+  expect(blurPx({ mm: 50, fstop: 0, focus: 2, dist: 5 })).toBe(0);
 });
 
 test("safe: EBU R 95 insets at 1920x1080", () => {
@@ -75,4 +89,56 @@ test("handheld: loops, is centred, passes through the recording and its quat is 
   expect(handheld("THE_CLOSEUP")(5 / 24).rot[2]).toBeCloseTo(((raw[5] - m) * 180) / Math.PI, 9);
   expect(handheld("THE_ZEEK_2D")(3).pos).toEqual([0, 0, 0]);
   expect(handheld("HANDYCAM_RUN", { amount: 0 })(3).rot.every((x) => x === 0)).toBe(true);
+});
+
+test("lens: shotSize and frameSubject place targets cleanly on screen fill, thirds, and headroom", () => {
+  expect(SHOT_SIZES.CU).toBeGreaterThan(SHOT_SIZES.MS);
+  expect(SHOT_SIZES.MS).toBeGreaterThan(SHOT_SIZES.WS);
+  const dist50 = shotSize("CU", { height: 1.8, mm: 50, aspect: A });
+  const dist24 = shotSize("CU", { height: 1.8, mm: 24, aspect: A });
+  expect(dist50).toBeGreaterThan(dist24);
+
+  const f = frameSubject([1, 1.5, 2], {
+    size: 0.5,
+    height: 1.8,
+    mm: 50,
+    aspect: A,
+    yaw: 25,
+    pitch: 10,
+    headroom: 0.1,
+    thirdX: -1 / 3,
+  });
+  expect(f.mm).toBe(50);
+  expect(f.fov).toBeCloseTo(fovOf(50, A), 9);
+  const k = threeCam({ p: f.p, l: f.l, fov: f.fov });
+  const projected = new Vector3(1, 1.5, 2).project(k);
+  expect(projected.x).toBeCloseTo(-1 / 3, 4);
+  expect(projected.y).toBeCloseTo(-0.2, 4);
+});
+
+test("lens: dofParams maps thin-lens mm and fstop to shallower 85mm bokeh and resolution-independent scale", () => {
+  expect(dofParams({ mm: 50, fstop: 0, focus: 3 })).toEqual({
+    focusDistance: 3,
+    focusRange: 0,
+    bokehScale: 0,
+  });
+  const tele = dofParams({ mm: 85, fstop: 1.8, focus: 2.5 });
+  const wide = dofParams({ mm: 24, fstop: 1.8, focus: 2.5 });
+  const stopped = dofParams({ mm: 85, fstop: 11, focus: 2.5 });
+  expect(tele.focusDistance).toBe(2.5);
+  expect(tele.focusRange).toBeLessThan(wide.focusRange);
+  expect(tele.bokehScale).toBeGreaterThan(wide.bokehScale);
+  expect(tele.bokehScale).toBeGreaterThan(stopped.bokehScale);
+  const hd = dofParams({ mm: 50, fstop: 2, focus: 2.5, widthPx: 1280 });
+  const qhd = dofParams({ mm: 50, fstop: 2, focus: 2.5, widthPx: 2560 });
+  expect(qhd.bokehScale / hd.bokehScale).toBeCloseTo(2, 6);
+
+  // 9:16 Shorts shrinks horizontal sensor width from 1920 to 1080: bokeh must scale with width (9/16), not height (16/9).
+  const landscape = dofParams({ mm: 50, fstop: 2, focus: 2.5, widthPx: 1920, heightPx: 1080 });
+  const shorts = dofParams({ mm: 50, fstop: 2, focus: 2.5, widthPx: 1080, heightPx: 1920 });
+  expect(shorts.focusRange).toBeCloseTo(landscape.focusRange, 6);
+  expect(shorts.bokehScale / landscape.bokehScale).toBeCloseTo(1080 / 1920, 6);
+
+  expect(() => shotSize("MLS" as unknown as Parameters<typeof shotSize>[0])).toThrow(/shotSize/);
+  expect(() => shotSize("MCU", { height: 0 })).toThrow(/shotSize/);
 });

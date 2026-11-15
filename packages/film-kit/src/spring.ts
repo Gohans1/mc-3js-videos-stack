@@ -61,6 +61,9 @@ export function follow(
     ratio = 1,
   }: { from: number; to: number; hz?: number; smooth?: number; ratio?: number },
 ) {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) {
+    throw new RangeError(`follow: expected finite window with to >= from (got ${from}..${to})`);
+  }
   const n = Math.ceil((to - from) * hz) + 1,
     dt = 1 / hz;
   const x = new Float64Array(n),
@@ -73,10 +76,47 @@ export function follow(
   }
   const read = (arr: Float64Array, t: number) => {
     if (t <= from) return arr === x ? target(t) : 0;
+    if (n < 2) return arr[0];
     const f = Math.min((t - from) * hz, n - 1),
       i = Math.min(Math.floor(f), n - 2),
       u = f - i;
     return arr[i] + (arr[i + 1] - arr[i]) * u;
   };
   return Object.assign((t: number) => read(x, t), { vel: (t: number) => read(v, t) });
+}
+
+export type Vec3 = readonly [number, number, number];
+
+/** Pure-t 3D spring follower with optional world offset and velocity lookahead lead (seconds). */
+export function followTarget(
+  target: (t: number) => Vec3,
+  {
+    from,
+    to,
+    hz = 120,
+    smooth = 0.15,
+    ratio = 1,
+    offset = [0, 0, 0],
+    lead = 0,
+  }: {
+    from: number;
+    to: number;
+    hz?: number;
+    smooth?: number;
+    ratio?: number;
+    offset?: Vec3;
+    lead?: number;
+  },
+): (t: number) => [number, number, number] {
+  const H = 1 / 120;
+  const aim = (axis: 0 | 1 | 2) => (t: number) => {
+    const p = target(t)[axis] + offset[axis];
+    if (!lead) return p;
+    const v = (target(t + H)[axis] - target(t - H)[axis]) / (2 * H);
+    return p + v * lead;
+  };
+  const fx = follow(aim(0), { from, to, hz, smooth, ratio }),
+    fy = follow(aim(1), { from, to, hz, smooth, ratio }),
+    fz = follow(aim(2), { from, to, hz, smooth, ratio });
+  return (t: number) => [fx(t), fy(t), fz(t)];
 }
