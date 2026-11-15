@@ -29,14 +29,23 @@ import {
 
 import { ADJUSTMENTS, type BasicGrade, colorGrade } from "./grade-color";
 import { hasSecondary, type SecondaryGrade } from "./grade-secondary";
+import { resolveGrade } from "./looks";
 import { readLUT } from "./lut";
 
 export { ADJUSTMENTS };
 export type Grade = SecondaryGrade & {
   enabled?: boolean;
+  look?: string;
   basic?: BasicGrade;
   lut?: { url: string; name: string; amount?: number; enabled?: boolean };
 };
+
+const hasActiveGrade = (
+  g: Grade,
+  hasLut = !!(g.lut && g.lut.enabled !== false && (g.lut.amount ?? 100) > 0),
+) =>
+  g.enabled !== false &&
+  (hasLut || Object.values(g.basic ?? {}).some((v) => v !== 0) || hasSecondary(g));
 
 // glfx.js unsharp mask (MIT): original + strength * (original - blurred), plus physical highlight halation on the broad pass.
 // Slider values to shader strengths. Cinetic: final soften stays under 0.8 px, a radial fringe reaches about 6 px per channel at a
@@ -239,26 +248,24 @@ function makeGradeStage(
   });
   const cache = new Map<number, { key: string; texture: LookupTexture }>();
   const apply = (shot: number, settings: Grade | undefined, t: number, bypass = false) => {
-    const basic = settings?.basic ?? {};
-    const importedLut = settings?.lut,
+    const resolved = resolveGrade(settings);
+    const basic = resolved.basic ?? {};
+    const importedLut = resolved.lut,
       texture = importedLut && imported.get(importedLut.url);
     const useCustom =
       !!texture && importedLut?.enabled !== false && (importedLut?.amount ?? 100) > 0;
-    const active =
-      !bypass &&
-      settings?.enabled !== false &&
-      (useCustom || Object.values(basic).some((v) => v !== 0) || hasSecondary(settings ?? {}));
+    const active = !bypass && hasActiveGrade(resolved, useCustom);
     detailPass.enabled =
       active && !!(basic.sharpen || basic.clarity || basic.halation || basic.soften);
     lensPass.enabled = active && !!(basic.fringe || basic.fisheye);
     customPass.enabled = active && useCustom;
     colorPass.enabled = finishPass.enabled = active;
     if (!active) return;
-    const key = JSON.stringify([basic, settings?.hsl, settings?.curves, settings?.wheels]);
+    const key = JSON.stringify([basic, resolved.hsl, resolved.curves, resolved.wheels]);
     let entry = cache.get(shot);
     if (entry?.key !== key) {
       entry?.texture.dispose();
-      entry = { key, texture: gradeLUT(basic, 32, settings) };
+      entry = { key, texture: gradeLUT(basic, 32, resolved) };
       cache.set(shot, entry);
     }
     lut.lut = entry.texture;
@@ -271,7 +278,8 @@ function makeGradeStage(
     vignette.blendMode.opacity.value = Math.abs(basic.vignette ?? 0) / 100;
     noise.blendMode.opacity.value = ((basic.particles ?? 0) / 100) * 0.35;
     dither.amount = basic.dither ?? 0;
-    (finishPass.fullscreenMaterial as EffectMaterial).time = t;
+    // Quantize grain to 24fps so multi-sample temporal accumulation in final renders preserves film grain instead of averaging it away.
+    (finishPass.fullscreenMaterial as EffectMaterial).time = Math.floor(t * 24) / 24;
   };
   apply.passes = passes;
   apply.dispose = () => {
@@ -290,7 +298,7 @@ export function makeAdjustments(composer: EffectComposer, camera: Camera) {
   const prepare = async (settings: (Grade | undefined)[]) => {
     await Promise.all(
       settings.flatMap((g) => {
-        const url = g?.lut?.url;
+        const url = resolveGrade(g).lut?.url;
         if (!url || imported.has(url)) return [];
         if (!loading.has(url))
           loading.set(
@@ -356,17 +364,7 @@ export function makeLayerAdjustments(renderer: WebGLRenderer) {
   composer.addPass(new EffectPass(camera, new FramebufferEffect(texture)));
   const apply = makeAdjustments(composer, camera);
   const draw = (layers: { grade: Grade }[], t: number, bypass = false) => {
-    if (
-      bypass ||
-      !layers.some(
-        ({ grade: g }) =>
-          g.enabled !== false &&
-          (Object.values(g.basic ?? {}).some((v) => v !== 0) ||
-            hasSecondary(g) ||
-            (g.lut && g.lut.enabled !== false && (g.lut.amount ?? 100) > 0)),
-      )
-    )
-      return;
+    if (bypass || !layers.some(({ grade: g }) => hasActiveGrade(resolveGrade(g)))) return;
     renderer.getDrawingBufferSize(size);
     if (texture.image.width !== size.x || texture.image.height !== size.y) {
       texture.dispose();

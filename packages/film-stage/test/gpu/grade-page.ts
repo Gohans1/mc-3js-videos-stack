@@ -4,7 +4,7 @@
 import { EffectComposer, EffectPass, RenderPass } from "postprocessing";
 import * as THREE from "three";
 
-import { makeAdjustments } from "../../src/grade";
+import { makeAdjustments, makeLayerAdjustments } from "../../src/grade";
 
 const W = 960,
   H = 540;
@@ -35,6 +35,7 @@ const films = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatTyp
 films.addPass(new RenderPass(scene, camera));
 films.addPass(new EffectPass(camera));
 const filmAdjust = makeAdjustments(films, camera);
+const layerAdjust = makeLayerAdjustments(renderer);
 
 // sRGB levels 100 to 104 left to right, finer than 8 bits hold: a lit floor or a sky ramp before the picture leaves the GPU
 const ramp = () => {
@@ -70,12 +71,25 @@ const texture = (name: string) => {
 };
 
 Object.assign(window, {
-  grade(picture: string, basic: Record<string, number>, film = false) {
+  grade(
+    picture: string,
+    basic: Record<string, number>,
+    film = false,
+    opts?: { t?: number; look?: string; layer?: boolean },
+  ) {
     material.map?.dispose();
     material.map = texture(picture);
     material.needsUpdate = true;
-    (film ? filmAdjust : adjust)(0, { basic }, 0);
-    (film ? films : composer).render(0);
+    const t = opts?.t ?? 0;
+    const g = { ...(opts?.look ? { look: opts.look } : {}), basic };
+    if (opts?.layer) {
+      filmAdjust(0, {}, t);
+      films.render(0);
+      layerAdjust([{ grade: g }], t);
+    } else {
+      (film ? filmAdjust : adjust)(0, g, t);
+      (film ? films : composer).render(0);
+    }
     const gl = renderer.getContext(),
       rgba = new Uint8Array(W * H * 4),
       rgb = new Uint8Array(W * H * 3);

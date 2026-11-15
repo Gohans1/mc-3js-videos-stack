@@ -18,6 +18,8 @@
     "./grade-color": "./src/grade-color.ts",
     "./grade-secondary": "./src/grade-secondary.ts",
     "./grade-wheels": "./src/grade-wheels.ts",
+    "./looks": "./src/looks.ts",
+    "./dof": "./src/dof.ts",
     "./lut": "./src/lut.ts"
   },
   "scripts": {
@@ -40,6 +42,7 @@
     "@fontsource-variable/source-serif-4": "5.3.1",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "bezier-easing": "catalog:",
+    "film-kit": "workspace:*",
     "gl-transitions": "3.1.0",
     "postprocessing": "catalog:"
   },

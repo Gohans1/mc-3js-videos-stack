@@ -537,3 +537,71 @@ test("every In, Out and Combo animation decays optical fields to zero at rest bo
     zeroOptics(run({ combo: { fx: fx.id } }, 6 - 1e-7).optics!, `combo:${fx.id}@end`);
   }
 });
+
+test("Shot.hits adds Eiserloh trauma shake purely rotationally even without anim, decays to zero, and tags optics.impulse", () => {
+  const before = cam();
+  const sHits = [
+    { t: 0 },
+    {
+      t: 2,
+      hits: [{ t: 2.5, amount: 0.8 }],
+    },
+  ];
+  animate(before, 2.2, sHits, 9);
+  expect(before.p.toArray()).toEqual(cam().p.toArray());
+  expect(before.l.toArray()).toEqual(cam().l.toArray());
+  expect(before.roll).toBe(0);
+  expect(before.optics!.impulse).toBeUndefined();
+
+  const during = cam();
+  animate(during, 2.55, sHits, 9);
+  expect(during.p.toArray()).toEqual(cam().p.toArray());
+  expect(during.l.distanceTo(cam().l) + Math.abs(during.roll)).toBeGreaterThan(1e-3);
+  expect(during.optics!.impulse).toBe("hit");
+
+  const after = cam();
+  animate(after, 3.5, sHits, 9);
+  expect(after.l.distanceTo(cam().l)).toBeLessThan(1e-6);
+  expect(after.roll).toBe(0);
+  expect(after.optics!.impulse).toBeUndefined();
+
+  // Custom decay/max/freq controls duration cleanly
+  const slow = cam();
+  const fast = cam();
+  animate(slow, 2.9, [{ t: 2, hits: [{ t: 2.5, amount: 0.6, decay: 0.5, seed: 3 }] }], 9);
+  animate(fast, 2.9, [{ t: 2, hits: [{ t: 2.5, amount: 0.6, decay: 4, seed: 3 }] }], 9);
+  expect(slow.optics!.impulse).toBe("hit");
+  expect(fast.optics!.impulse).toBeUndefined();
+
+  // Scalar max normalizes to [m, m, m] cleanly
+  const scalarMax = cam();
+  animate(scalarMax, 2.55, [{ t: 2, hits: [{ t: 2.5, amount: 0.8, max: 4, seed: 2 }] }], 9);
+  expect(scalarMax.optics!.impulse).toBe("hit");
+  expect(Math.abs(scalarMax.roll)).toBeGreaterThan(1e-4);
+});
+
+test("Cinetic whip, snap, and impact moves populate c.optics.impulse while active and clear at rest", () => {
+  expect(run({ in: { fx: "whipDipL", len: 1 } }, 2.5).optics!.impulse).toBe("whip");
+  expect(run({ in: { fx: "whipDipL", len: 1 } }, 3.0).optics!.impulse).toBeUndefined();
+
+  expect(run({ in: { fx: "snapZoomIn", len: 1 } }, 2.5).optics!.impulse).toBe("snap");
+  expect(run({ in: { fx: "snapZoomIn", len: 1 } }, 3.0).optics!.impulse).toBeUndefined();
+
+  expect(run({ in: { fx: "impactKick", len: 1 } }, 2.15).optics!.impulse).toBe("hit");
+
+  expect(run({ in: { fx: "flashCut", len: 1 } }, 2.1).optics!.impulse).toBe("whip");
+  expect(run({ out: { fx: "flashCut", len: 1 } }, 5.9).optics!.impulse).toBe("whip");
+  expect(run({ in: { fx: "flashCut", len: 1 } }, 3.0).optics!.impulse).toBeUndefined();
+
+  expect(run({ in: { fx: "blackDip", len: 1 } }, 2.1).optics!.impulse).toBe("whip");
+  expect(run({ out: { fx: "blackDip", len: 1 } }, 5.9).optics!.impulse).toBe("whip");
+  expect(run({ in: { fx: "blackDip", len: 1 } }, 3.0).optics!.impulse).toBeUndefined();
+
+  // Combo whipDip/snapZoom only tags the high-velocity middle core so CHECK=motion keeps auditing entry & settle.
+  expect(run({ combo: { fx: "whipDipL" } }, 2.4).optics!.impulse).toBeUndefined();
+  expect(run({ combo: { fx: "whipDipL" } }, 4.0).optics!.impulse).toBe("whip");
+  expect(run({ combo: { fx: "whipDipL" } }, 5.6).optics!.impulse).toBeUndefined();
+  expect(run({ combo: { fx: "snapZoomIn" } }, 2.4).optics!.impulse).toBeUndefined();
+  expect(run({ combo: { fx: "snapZoomIn" } }, 4.0).optics!.impulse).toBe("snap");
+  expect(run({ combo: { fx: "snapZoomIn" } }, 5.6).optics!.impulse).toBeUndefined();
+});

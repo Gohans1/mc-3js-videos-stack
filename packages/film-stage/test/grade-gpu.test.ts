@@ -10,9 +10,14 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(() => page?.close());
 
-const shot = async (picture: string, basic: Record<string, number> = {}, film = false) => {
+const shot = async (
+  picture: string,
+  basic: Record<string, number> = {},
+  film = false,
+  opts?: { t?: number; look?: string; layer?: boolean },
+) => {
   const r = await page.run<{ w: number; h: number; rgb: string }>(
-    `grade(${JSON.stringify(picture)}, ${JSON.stringify(basic)}, ${film})`,
+    `grade(${JSON.stringify(picture)}, ${JSON.stringify(basic)}, ${film}, ${JSON.stringify(opts ?? {})})`,
   );
   const px = Buffer.from(r.rgb, "base64");
   const at = (x: number, y: number) => [...px.subarray((y * r.w + x) * 3, (y * r.w + x) * 3 + 3)];
@@ -92,4 +97,31 @@ test("A film's picture leaves the GPU without bands: a ramp finer than 8 bits ke
       expect(Math.max(...g.map((v) => Math.abs(v - level)))).toBeLessThan(1.5);
     }
   }
+});
+
+test("Named looks activate in both makeAdjustments and makeLayerAdjustments even with empty basic sliders", async () => {
+  const base = await shot("glow", {}, true);
+  const adjusted = await shot("glow", {}, true, { look: "teal-amber" });
+  const layered = await shot("glow", {}, true, { look: "teal-amber", layer: true });
+
+  // Shadow corners cool down (blue > red), highlight centre warms up (red > blue)
+  const [br, , bb] = base.at(60, 60);
+  const [ar, , ab] = adjusted.at(60, 60);
+  const [lr, , lb] = layered.at(60, 60);
+  expect(ab! - ar!).toBeGreaterThan(bb! - br! + 3);
+  expect(lb! - lr!).toBeGreaterThan(bb! - br! + 3);
+
+  const [hr, , hb] = adjusted.at(480, 270);
+  const [lhr, , lhb] = layered.at(480, 270);
+  expect(hr! - hb!).toBeGreaterThan(10);
+  expect(lhr! - lhb!).toBeGreaterThan(10);
+});
+
+test("Film grain stays quantized on a 24fps cadence so sub-frame accumulation does not average it away", async () => {
+  const a = await shot("flat", { particles: 80 }, true, { t: 1.001 });
+  const b = await shot("flat", { particles: 80 }, true, { t: 1.015 });
+  const c = await shot("flat", { particles: 80 }, true, { t: 1.05 });
+
+  expect(a.px.equals(b.px)).toBe(true);
+  expect(a.px.equals(c.px)).toBe(false);
 });

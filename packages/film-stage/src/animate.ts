@@ -6,6 +6,7 @@
 // whole shot; all three can be on one shot. curve warps how far through it is over time, flip mirrors the move across the
 // camera's right axis, optics scales only the lens state it writes (0 keeps the picture sharp); absent keeps the tuned effect.
 // Returns how black the frame should be (0..1) and writes optical post-processing state onto `c.optics`.
+import { shake, type ShakeOpts } from "film-kit/shake";
 import * as THREE from "three";
 
 import { EASES } from "./camera";
@@ -64,6 +65,15 @@ export const ANIM_CURVES = [
     tip: "Settles with a bounce on In, or winds up into the cut on Out",
   },
 ] as const;
+export type ShotHit = {
+  t: number;
+  amount: number;
+  decay?: number;
+  freq?: number;
+  max?: number | [number, number, number];
+  seed?: number;
+};
+
 export type CameraOptics = {
   blur: number;
   exposure: number;
@@ -73,6 +83,7 @@ export type CameraOptics = {
   sweepPos: number;
   smearX: number;
   smearY: number;
+  impulse?: string;
 };
 
 const EMPTY_OPTICS: CameraOptics = {
@@ -1717,6 +1728,9 @@ const slotRamp = (u, slot, curved, inFn, outFn, comboFn = outFn) => {
   const e = curved ? u : slot === "in" ? inFn(u) : slot === "out" ? outFn(u) : comboFn(u);
   return slot === "in" ? e - 1 : e;
 };
+const setPeakImpulse = (c, kind, env, k, slot) => {
+  if (env * Math.abs(k) > (slot === "combo" ? 0.72 : 0.25)) c.optics.impulse = kind;
+};
 const CINETIC = {
   logZoomIn: (c, u, _t, k, slot, curved) => {
     const a =
@@ -1733,12 +1747,14 @@ const CINETIC = {
     logZoom(c, 0.38 * a);
     dolly(c, 0.22 * a);
     c.optics.blur = Math.max(c.optics.blur, Math.min(1, Math.sin(Math.PI * u) ** 1.6 * 0.22 * k));
+    setPeakImpulse(c, "snap", Math.sin(Math.PI * u) ** 2, k, slot);
   },
   snapZoomOut: (c, u, _t, k, slot, curved) => {
     const a = slotRamp(u, slot, curved, snapCurve, snapCurve) * k;
     logZoom(c, -0.38 * a);
     dolly(c, -0.22 * a);
     c.optics.blur = Math.max(c.optics.blur, Math.min(1, Math.sin(Math.PI * u) ** 1.6 * 0.22 * k));
+    setPeakImpulse(c, "snap", Math.sin(Math.PI * u) ** 2, k, slot);
   },
   oversizeLand: (c, u, _t, k, _slot, curved) => {
     const d = 1 - Math.exp(-5.5);
@@ -1866,6 +1882,7 @@ const CINETIC = {
     logZoom(c, -0.16 * dip);
     c.roll += deg(-4.5 * dip - 1.5 * a);
     c.optics.smearX -= 0.65 * Math.sin(Math.PI * u) ** 1.6 * k;
+    setPeakImpulse(c, "whip", Math.sin(Math.PI * u) ** 2, k, slot);
   },
   whipDipR: (c, u, _t, k, slot, curved) => {
     const wb = curved ? u : sampleTable(WHIP_BUILD, u);
@@ -1876,6 +1893,7 @@ const CINETIC = {
     logZoom(c, -0.16 * dip);
     c.roll += deg(4.5 * dip + 1.5 * a);
     c.optics.smearX += 0.65 * Math.sin(Math.PI * u) ** 1.6 * k;
+    setPeakImpulse(c, "whip", Math.sin(Math.PI * u) ** 2, k, slot);
   },
   zoomHopL: (c, u, _t, k, _slot, curved) => {
     const a = (curved ? u : sampleTable(STD_IN_OUT, u)) * k;
@@ -1938,6 +1956,7 @@ const CINETIC = {
     slide2D(c, -0.045 * env, 0.03 * env);
     logZoom(c, 0.06 * punch);
     c.roll += deg(2.2 * env);
+    if ((1 - x) * Math.abs(k) > 1e-3) c.optics.impulse = "hit";
   },
   figureEight: (c, u, _t, k) => {
     const th = 2 * Math.PI * u;
@@ -2067,6 +2086,7 @@ const CINETIC = {
         Math.min(1, (curved ? u : Math.pow(u, 1.8)) * 0.92 * k),
       );
       c.optics.smearX -= 0.75 * p * k;
+      if (Math.abs(p * k) > 0.1) c.optics.impulse = "whip";
       return;
     }
     const p = curved ? 1 - u : 1 - E_SNAP_OUT(u);
@@ -2079,17 +2099,20 @@ const CINETIC = {
       Math.min(1, (curved ? 1 - u : Math.pow(1 - u, 2.4)) * 0.92 * k),
     );
     c.optics.smearX += 0.75 * p * k;
+    if (Math.abs(p * k) > 0.1) c.optics.impulse = "whip";
   },
   blackDip: (c, u, _t, k, slot, curved, raw = u) => {
     if (slot === "out") {
       const p = curved ? u : E_LAUNCH_IN(u);
       pan2D(c, -20 * p * k, 0);
       dolly(c, 0.16 * p * k);
+      if (Math.abs(p * k) > 0.1) c.optics.impulse = "whip";
       return Math.pow(raw, 2.4) * Math.min(1, k);
     }
     const p = curved ? 1 - u : 1 - E_SNAP_OUT(u);
     pan2D(c, 20 * p * k, 0);
     dolly(c, -0.16 * p * k);
+    if (Math.abs(p * k) > 0.1) c.optics.impulse = "whip";
     return Math.max(0, 1 - raw * 2.2) * Math.min(1, k);
   },
   exposureBloom: (c, u, _t, k, slot, curved) => {
@@ -2291,6 +2314,35 @@ export function fitAnimationLengths(inLen: number, outLen: number, span: number)
   return [a * scale, b * scale];
 }
 
+const hitCache = new Map<string, ReturnType<typeof shake>[]>();
+const hitSamplers = (hits: ShotHit[]) => {
+  const key = JSON.stringify(hits);
+  let list = hitCache.get(key);
+  if (list) return list;
+  if (hitCache.size > 64) hitCache.clear();
+  const groups = new Map<string, { opts: ShakeOpts; hits: { t: number; amount: number }[] }>();
+  for (const h of hits) {
+    const max =
+      typeof h.max === "number" ? ([h.max, h.max, h.max] as [number, number, number]) : h.max;
+    const opts: ShakeOpts = {
+      ...(h.decay !== undefined ? { decay: h.decay } : {}),
+      ...(h.freq !== undefined ? { freq: h.freq } : {}),
+      ...(max !== undefined ? { max } : {}),
+      ...(h.seed !== undefined ? { seed: h.seed } : {}),
+    };
+    const gk = JSON.stringify([h.decay ?? 1, h.freq ?? 14, max ?? null, h.seed ?? 1]);
+    let g = groups.get(gk);
+    if (!g) {
+      g = { opts, hits: [] };
+      groups.set(gk, g);
+    }
+    g.hits.push({ t: h.t, amount: h.amount });
+  }
+  list = [...groups.values()].map((g) => shake(g.hits, g.opts));
+  hitCache.set(key, list);
+  return list;
+};
+
 // The shot (in `shots`, start times in the seconds draw(t) gets) at t changes the camera c {p, l, fov, roll} in place; returns
 // how black the frame should be (0 to 1). end: the film's length, where the last shot ends. `catalogue` lets a film pass its
 // own `draw.anims` with custom presets (`apply(c, u, t, k, slot, curved, raw)`) without touching film-stage.
@@ -2298,94 +2350,121 @@ export function animate(c, t, shots, end, catalogue) {
   c.optics = { ...EMPTY_OPTICS };
   let i = -1;
   for (let j = 0; j < (shots?.length ?? 0); j++) if (t >= shots[j].t) i = j;
-  const anim = shots?.[i]?.anim;
-  if (!anim) return 0;
-  const t0 = shots[i].t,
-    t1 = i + 1 < shots.length ? shots[i + 1].t : end,
-    span = Math.max(1e-3, t1 - t0);
-  const pick = (slot, id) => id && (catalogue?.[slot]?.find((x) => x.id === id) ?? FX[slot][id]);
-  const fxIn = pick("in", anim.in?.fx),
-    fxOut = pick("out", anim.out?.fx),
-    fxCombo = pick("combo", anim.combo?.fx);
+  const shot = shots?.[i];
+  const anim = shot?.anim;
   let black = 0;
-  if (fxCombo) {
-    const k = anim.combo.k ?? 1,
-      raw = THREE.MathUtils.clamp((t - t0) / span, 0, 1),
-      curved = Boolean(anim.combo.curve),
-      u = warp(anim.combo.curve, raw, "combo");
-    black = Math.max(
-      black,
-      effect(c, anim.combo, () => {
-        const cin = fxCombo.apply ?? CINETIC[fxCombo.id];
-        if (cin) return cin(c, u, t, k, "combo", curved, raw);
-        if (fxCombo.loop) {
-          LOOPS[fxCombo.loop](c, t, k);
+  if (anim) {
+    const t0 = shot.t,
+      t1 = i + 1 < shots.length ? shots[i + 1].t : end,
+      span = Math.max(1e-3, t1 - t0);
+    const pick = (slot, id) => id && (catalogue?.[slot]?.find((x) => x.id === id) ?? FX[slot][id]);
+    const fxIn = pick("in", anim.in?.fx),
+      fxOut = pick("out", anim.out?.fx),
+      fxCombo = pick("combo", anim.combo?.fx);
+    if (fxCombo) {
+      const k = anim.combo.k ?? 1,
+        raw = THREE.MathUtils.clamp((t - t0) / span, 0, 1),
+        curved = Boolean(anim.combo.curve),
+        u = warp(anim.combo.curve, raw, "combo");
+      black = Math.max(
+        black,
+        effect(c, anim.combo, () => {
+          const cin = fxCombo.apply ?? CINETIC[fxCombo.id];
+          if (cin) return cin(c, u, t, k, "combo", curved, raw);
+          if (fxCombo.loop) {
+            LOOPS[fxCombo.loop](c, t, k);
+            return 0;
+          }
+          MOVES[fxCombo.move](c, fxCombo.a * k * (curved ? u : smooth(raw)));
+          if (fxCombo.move === "whip")
+            setPeakImpulse(c, "whip", Math.sin(Math.PI * raw) ** 2, k, "combo");
           return 0;
-        }
-        MOVES[fxCombo.move](c, fxCombo.a * k * (curved ? u : smooth(raw)));
-        return 0;
-      }),
-    );
-  }
-  // An In and an Out longer together than the shot share it, each shortened in step
-  let lenIn = fxIn ? Math.max(0.01, anim.in.len ?? fxIn.len) : 0,
-    lenOut = fxOut ? Math.max(0.01, anim.out.len ?? fxOut.len) : 0;
-  if (lenIn + lenOut > span) {
-    const s = span / (lenIn + lenOut);
-    lenIn *= s;
-    lenOut *= s;
-  }
-  // e: how much of the effect is on (0 to 1). An In's camera starts back along its way of travel (way -1), an Out's goes on
-  const at = (fx, opt, u, e, way, k, slot, curved, raw) => {
-    black = Math.max(
-      black,
-      effect(c, opt, () => {
-        const cin = fx.apply ?? CINETIC[fx.id];
-        if (cin) return cin(c, THREE.MathUtils.clamp(u, 0, 1), t, k, slot, curved, raw);
-        if (e <= 0) return 0;
-        if (fx.black) return Math.min(1, e * k);
-        if (fx.jolt) {
-          jolt(c, t, e * k);
+        }),
+      );
+    }
+    // An In and an Out longer together than the shot share it, each shortened in step
+    let lenIn = fxIn ? Math.max(0.01, anim.in.len ?? fxIn.len) : 0,
+      lenOut = fxOut ? Math.max(0.01, anim.out.len ?? fxOut.len) : 0;
+    if (lenIn + lenOut > span) {
+      const s = span / (lenIn + lenOut);
+      lenIn *= s;
+      lenOut *= s;
+    }
+    // e: how much of the effect is on (0 to 1). An In's camera starts back along its way of travel (way -1), an Out's goes on
+    const at = (fx, opt, u, e, way, k, slot, curved, raw) => {
+      black = Math.max(
+        black,
+        effect(c, opt, () => {
+          const cin = fx.apply ?? CINETIC[fx.id];
+          if (cin) return cin(c, THREE.MathUtils.clamp(u, 0, 1), t, k, slot, curved, raw);
+          if (e <= 0) return 0;
+          if (fx.black) return Math.min(1, e * k);
+          if (fx.jolt) {
+            jolt(c, t, e * k);
+            if (Math.abs(e * k) > 1e-3) c.optics.impulse = "hit";
+            return 0;
+          }
+          MOVES[fx.move](c, way * fx.a * e * k);
+          if (fx.move === "whip" && Math.abs(e * k) > 0.05) c.optics.impulse = "whip";
           return 0;
-        }
-        MOVES[fx.move](c, way * fx.a * e * k);
-        return 0;
-      }),
-    );
-  };
-  if (fxIn && t < t0 + lenIn) {
-    const raw = (t - t0) / lenIn,
-      pureVeil = Boolean(fxIn.black && !fxIn.move),
-      curved = Boolean(anim.in.curve && !pureVeil);
-    const u = pureVeil ? raw : warp(anim.in.curve, raw, "in");
-    at(
-      fxIn,
-      anim.in,
-      u,
-      !curved ? leftOf(fxIn, raw) : 1 - u,
-      -1,
-      anim.in.k ?? 1,
-      "in",
-      curved,
-      raw,
-    );
+        }),
+      );
+    };
+    if (fxIn && t < t0 + lenIn) {
+      const raw = (t - t0) / lenIn,
+        pureVeil = Boolean(fxIn.black && !fxIn.move),
+        curved = Boolean(anim.in.curve && !pureVeil);
+      const u = pureVeil ? raw : warp(anim.in.curve, raw, "in");
+      at(
+        fxIn,
+        anim.in,
+        u,
+        !curved ? leftOf(fxIn, raw) : 1 - u,
+        -1,
+        anim.in.k ?? 1,
+        "in",
+        curved,
+        raw,
+      );
+    }
+    if (fxOut && t > t1 - lenOut) {
+      const raw = (t - (t1 - lenOut)) / lenOut,
+        pureVeil = Boolean(fxOut.black && !fxOut.move),
+        curved = Boolean(anim.out.curve && !pureVeil);
+      const u = pureVeil ? raw : warp(anim.out.curve, raw, "out");
+      at(
+        fxOut,
+        anim.out,
+        u,
+        !curved ? grownBy(fxOut, raw) : u,
+        1,
+        anim.out.k ?? 1,
+        "out",
+        curved,
+        raw,
+      );
+    }
   }
-  if (fxOut && t > t1 - lenOut) {
-    const raw = (t - (t1 - lenOut)) / lenOut,
-      pureVeil = Boolean(fxOut.black && !fxOut.move),
-      curved = Boolean(anim.out.curve && !pureVeil);
-    const u = pureVeil ? raw : warp(anim.out.curve, raw, "out");
-    at(
-      fxOut,
-      anim.out,
-      u,
-      !curved ? grownBy(fxOut, raw) : u,
-      1,
-      anim.out.k ?? 1,
-      "out",
-      curved,
-      raw,
-    );
+  const hits: ShotHit[] | undefined = shot?.hits;
+  if (hits?.length) {
+    let yaw = 0,
+      pitch = 0,
+      rollDeg = 0,
+      maxTrauma = 0;
+    for (const shk of hitSamplers(hits)) {
+      const tr = shk.trauma(t);
+      if (tr <= 1e-4) continue;
+      maxTrauma = Math.max(maxTrauma, tr);
+      const [y, p, r] = shk(t);
+      yaw += y;
+      pitch += p;
+      rollDeg += r;
+    }
+    if (maxTrauma > 1e-4) {
+      pan2D(c, yaw, pitch);
+      c.roll += deg(rollDeg);
+      c.optics.impulse = "hit";
+    }
   }
   return black;
 }

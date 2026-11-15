@@ -2,8 +2,20 @@ import { expect, test } from "bun:test";
 
 import { Color } from "three";
 
-import { finishStrength } from "../src/grade";
+import { finishStrength, type Grade } from "../src/grade";
 import { colorGrade } from "../src/grade-color";
+import { hasSecondary, NEUTRAL_CURVE } from "../src/grade-secondary";
+import { hasWheels } from "../src/grade-wheels";
+import {
+  LOOK_IDS,
+  LOOKS,
+  resetLookCurveChannel,
+  resetLookCurves,
+  resetLookHsl,
+  resetLookWheel,
+  resetLookWheels,
+  resolveGrade,
+} from "../src/looks";
 
 test("neutral adjustment preserves display RGB, including black and white", () => {
   const grade = colorGrade({});
@@ -142,4 +154,97 @@ test("Soften, Lens fringe and Fisheye sliders map into Cinetic's ranges", () => 
   expect(full.soften).toBeLessThanOrEqual(0.8);
   expect(full.fisheye).toBeCloseTo(0.18, 6);
   expect(full.sharpen).toBe(1);
+});
+
+test("curated LOOKS cover all locked IDs cleanly and avoid double vignette except noir", () => {
+  expect(LOOK_IDS).toEqual([
+    "docu-clean",
+    "teal-amber",
+    "noir-slate",
+    "warm-film",
+    "horror-cold",
+    "neon-pop",
+    "bleach-grit",
+  ]);
+  for (const id of LOOK_IDS) {
+    const entry = LOOKS[id];
+    expect(entry.title.length).toBeGreaterThan(0);
+    expect(entry.tip.length).toBeGreaterThan(0);
+    expect(entry.grade).toBeTruthy();
+    if (id !== "noir-slate") expect(entry.grade.basic?.vignette ?? 0).toBe(0);
+  }
+});
+
+test("resolveGrade merges look defaults beneath shot overrides and handles unknown or empty inputs", () => {
+  expect(resolveGrade(undefined)).toEqual({});
+  expect(resolveGrade({})).toEqual({});
+
+  const overridden: Grade = resolveGrade({
+    look: "teal-amber",
+    basic: { exposure: 12 },
+    wheels: { shadows: { rgb: [0, 0, 0] } },
+  });
+  expect(overridden.basic?.exposure).toBe(12);
+  expect(overridden.basic?.saturation).toBe(LOOKS["teal-amber"].grade.basic?.saturation);
+  expect(overridden.wheels?.shadows).toEqual({ rgb: [0, 0, 0] });
+  expect(overridden.wheels?.highlights).toEqual(LOOKS["teal-amber"].grade.wheels?.highlights);
+  expect(overridden.wheels?.mode).toBe(LOOKS["teal-amber"].grade.wheels?.mode);
+
+  const disabled = resolveGrade({ look: "teal-amber", enabled: false });
+  expect(disabled.enabled).toBe(false);
+
+  const unknown = resolveGrade({ look: "does-not-exist", basic: { contrast: 15 } });
+  expect(unknown.basic?.contrast).toBe(15);
+});
+
+test("partial reset helpers neutralize look-supplied curves, wheels, and HSL while keeping g.look intact", () => {
+  const g: Grade = {
+    look: "teal-amber",
+    curves: {
+      red: [
+        [0, 0],
+        [0.5, 0.7],
+        [1, 1],
+      ],
+    },
+    wheels: { mode: "log", midtones: { rgb: [0.1, 0, -0.1] } },
+    hsl: { red: { saturation: 20 } },
+  };
+  resetLookCurveChannel(g, "red");
+  expect(g.curves?.red).toBeUndefined();
+  expect(resolveGrade(g).curves?.luma).toEqual(LOOKS["teal-amber"].grade.curves?.luma);
+
+  resetLookCurveChannel(g, "luma");
+  expect(resolveGrade(g).curves?.luma).toEqual(NEUTRAL_CURVE);
+  expect(g.look).toBe("teal-amber");
+
+  const gAllCurves: Grade = {
+    look: "teal-amber",
+    curves: {
+      red: [
+        [0, 0],
+        [0.5, 0.7],
+        [1, 1],
+      ],
+    },
+  };
+  resetLookCurves(gAllCurves);
+  expect(resolveGrade(gAllCurves).curves?.luma).toEqual(NEUTRAL_CURVE);
+  expect(resolveGrade(gAllCurves).curves?.red).toBeUndefined();
+
+  resetLookWheel(g, "shadows");
+  expect(resolveGrade(g).wheels?.shadows).toEqual({ rgb: [0, 0, 0], saturation: 100 });
+  expect(resolveGrade(g).wheels?.highlights).toEqual(LOOKS["teal-amber"].grade.wheels?.highlights);
+
+  resetLookWheels(g);
+  expect(hasWheels(resolveGrade(g).wheels)).toBe(false);
+  expect(hasSecondary({ curves: resolveGrade(g).curves, wheels: resolveGrade(g).wheels })).toBe(
+    false,
+  );
+
+  resetLookHsl(g);
+  expect(g.hsl).toBeUndefined();
+  const customWithHsl: Grade = { look: "teal-amber", hsl: { cyan: { saturation: 15 } } };
+  resetLookHsl(customWithHsl);
+  expect(resolveGrade(customWithHsl).hsl).toBeUndefined();
 });
