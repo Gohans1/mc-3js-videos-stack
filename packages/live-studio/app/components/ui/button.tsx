@@ -40,11 +40,11 @@ const buttonVariants = cva(
         "card-action":
           "bg-backdrop text-foreground/90 hover:bg-raised-3 hover:text-foreground rounded-full", // CapCut's round + well on an audio card
         cover:
-          "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary aria-pressed:ring-primary rounded-md aria-pressed:ring-1", // CapCut's 36px audio cover tile
+          "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint aria-pressed:hover:text-primary-text aria-pressed:ring-primary rounded-md aria-pressed:ring-1", // CapCut's 36px audio cover tile
         approve: "bg-warn hover:bg-warn/85 text-warn-foreground font-semibold", // the creator's yes to a fix waiting in yellow (To check)
         warn: "border-warn/65 bg-warn-bg/90 text-warn hover:border-warn hover:bg-warn-bg border",
         choice:
-          "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary", // one of a list, picked
+          "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint", // one of a list, picked
       },
       size: {
         default:

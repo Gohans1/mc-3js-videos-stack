@@ -680,7 +680,7 @@ export function SaveStatus({
           ? "text-warn font-semibold"
           : state === "busy" || idleTone === "muted"
             ? "text-muted-foreground"
-            : "text-ok",
+            : "text-ok-text",
         className,
       )}
     >

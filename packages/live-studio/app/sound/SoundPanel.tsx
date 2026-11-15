@@ -785,12 +785,12 @@ function CategoryTree({
               onClick={() => onHeader(sec.id)}
               className={cn(
                 "bg-raised-3 hover:bg-raised-4 focus-visible:ring-ring flex h-8 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs font-medium transition-colors duration-150 outline-none focus-visible:ring-2 pointer-coarse:h-10",
-                isGroupActive ? "text-primary" : "text-foreground",
+                isGroupActive ? "text-primary-text" : "text-foreground",
               )}
             >
               <span className="truncate">{sec.title}</span>
               {typed && (sec.id !== "voices" || voicesLoaded) && (
-                <span className="text-tag text-muted-foreground ms-auto pe-0.5 tabular-nums">
+                <span className="text-tag text-foreground/80 ms-auto pe-0.5 tabular-nums">
                   {sec.count}
                 </span>
               )}
@@ -799,7 +799,7 @@ function CategoryTree({
                   aria-hidden
                   className={cn(
                     "size-3 flex-none",
-                    isGroupActive ? "text-primary" : "text-muted-foreground",
+                    isGroupActive ? "text-primary-text" : "text-foreground/80",
                   )}
                 />
               ) : (
@@ -807,7 +807,7 @@ function CategoryTree({
                   aria-hidden
                   className={cn(
                     "size-3 flex-none",
-                    isGroupActive ? "text-primary" : "text-muted-foreground",
+                    isGroupActive ? "text-primary-text" : "text-foreground/80",
                   )}
                 />
               )}

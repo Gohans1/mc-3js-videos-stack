@@ -337,7 +337,7 @@ function LessonList({ onOpen }: { onOpen: (path: string, matchLine: number | nul
                   )}
                 </span>
                 {news && (
-                  <span className="text-primary flex flex-none items-center gap-1 text-xs font-medium">
+                  <span className="text-primary-text flex flex-none items-center gap-1 text-xs font-medium">
                     <span aria-hidden className="bg-primary size-1.5 rounded-full" />
                     Changed
                   </span>
@@ -497,7 +497,7 @@ function LessonFileView({ path, initialLine }: { path: string; initialLine: numb
             title: (
               <span className="inline-flex items-center gap-1 tabular-nums">
                 <GitCompare aria-hidden className="size-3" />
-                <span className="text-ok">+{news.added}</span>
+                <span className="text-ok-text">+{news.added}</span>
                 <span className="text-destructive">−{news.removed}</span>
               </span>
             ),
@@ -745,7 +745,7 @@ function Changes({
                       aria-label={r.kind === "same" ? undefined : r.kind}
                       className={cn(
                         "w-2 flex-none select-none",
-                        r.kind === "added" ? "text-ok" : "text-destructive",
+                        r.kind === "added" ? "text-ok-text" : "text-destructive",
                       )}
                     >
                       {r.kind === "added" ? "+" : r.kind === "removed" ? "−" : ""}
@@ -758,9 +758,7 @@ function Changes({
                                 key={k}
                                 className={cn(
                                   "text-foreground rounded-xs",
-                                  r.kind === "added"
-                                    ? "bg-ok/35"
-                                    : "bg-destructive/35 line-through",
+                                  r.kind === "added" ? "bg-ok/35" : "bg-alarm/45 line-through",
                                 )}
                               >
                                 {p.text}

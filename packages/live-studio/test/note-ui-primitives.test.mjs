@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, test } from "bun:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -48,8 +48,8 @@ const parseColor = (color) => {
 };
 
 const blendRgba = (fgColor, alpha, bgColor) => {
-  const fg = parseColor(fgColor);
-  const bg = parseColor(bgColor);
+  const fg = Array.isArray(fgColor) ? fgColor : parseColor(fgColor);
+  const bg = Array.isArray(bgColor) ? bgColor : parseColor(bgColor);
   return fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha)));
 };
 
@@ -135,7 +135,7 @@ describe("notes UI primitive tokens and variants", () => {
     const css = readFileSync(join(STUDIO_DIR, "app/index.css"), "utf8");
     const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
     const vars = new Map();
-    for (const m of stripped.matchAll(/^\s*--([a-z0-9-]+):\s*([^;]+);/gm)) {
+    for (const m of stripped.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/gs)) {
       vars.set(m[1], m[2].trim());
     }
     const token = (name, seen = new Set()) => {
@@ -150,7 +150,11 @@ describe("notes UI primitive tokens and variants", () => {
     const card = token("card");
     const bg = token("background");
     const track = token("track");
+    const input = token("input");
     const secondary = token("secondary");
+    const raised2 = token("raised-2");
+    const raised3 = token("raised-3");
+    const raised4 = token("raised-4");
     const tint = token("tint");
     const foreground = token("foreground");
     const mutedFg = token("muted-foreground");
@@ -159,6 +163,7 @@ describe("notes UI primitive tokens and variants", () => {
     const primaryText = token("primary-text");
     const destructive = token("destructive");
     const destructiveFg = token("destructive-foreground");
+    const alarm = token("alarm");
     const ok = token("ok");
     const okText = token("ok-text");
     const ai = token("ai");
@@ -191,11 +196,14 @@ describe("notes UI primitive tokens and variants", () => {
     checkContrast(primary, card, 4.5, "Primary on card");
     checkContrast(primary, tint, 4.5, "Primary on active tint");
     checkContrast(primaryText, secondary, 4.5, "Primary text on secondary");
+    checkContrast(primaryText, raised3, 4.5, "Primary text on raised-3");
+    checkContrast(primaryText, raised4, 4.5, "Primary text on raised-4");
     checkContrast(primaryText, tint, 4.5, "Primary text on active tint");
     checkContrast(primaryText, card, 4.5, "Primary text on card");
 
     checkContrast(destructiveFg, destructive, 4.5, "Destructive foreground on destructive");
     checkContrast(destructive, card, 4.5, "Destructive text on card");
+    checkContrast(destructive, raised3, 4.5, "Destructive text on raised-3");
     checkContrast(
       destructive,
       blendRgba(destructive, 0.2, card),
@@ -211,8 +219,29 @@ describe("notes UI primitive tokens and variants", () => {
 
     checkContrast(warnFg, warn, 4.5, "Warn foreground on warn");
     checkContrast(warn, warnBg, 4.5, "Check warn text on warn-bg badge");
+    checkContrast(warn, raised2, 4.5, "Warn text on raised-2");
+    checkContrast(warn, raised3, 4.5, "Warn text on raised-3");
     checkContrast(okText, blendRgba(ok, 0.12, card), 4.5, "Done --ok-text on ok/12 card surface");
+    checkContrast(
+      okText,
+      blendRgba(ok, 0.2, bg),
+      4.5,
+      "Diff --ok-text on ok/20 hovered background",
+    );
+    checkContrast(okText, raised3, 4.5, "Done --ok-text on raised-3");
     checkContrast(okText, bg, 4.5, "Done --ok-text on background");
+    checkContrast(
+      foreground,
+      blendRgba(ok, 0.35, blendRgba(ok, 0.2, bg)),
+      4.5,
+      "Added diff mark foreground on ok/35 + ok/20 background",
+    );
+    checkContrast(
+      foreground,
+      blendRgba(alarm, 0.45, blendRgba(destructive, 0.2, bg)),
+      4.5,
+      "Removed diff mark foreground on alarm/45 + destructive/20 background",
+    );
     checkContrast(aiText, blendRgba(ai, 0.14, card), 4.5, "AI --ai-text on ai/14 card surface");
     checkContrast(inkText, blendRgba(ink, 0.15, card), 4.5, "Ink --ink-text on ink/15 card badge");
     checkContrast(
@@ -224,6 +253,13 @@ describe("notes UI primitive tokens and variants", () => {
 
     checkContrast(mutedFg, card, 4.5, "Muted foreground on card");
     checkContrast(mutedFg, secondary, 4.5, "Muted foreground on secondary");
+    checkContrast(
+      blendRgba(foreground, 0.8, raised4),
+      raised4,
+      4.5,
+      "Subtle count foreground/80 on hovered raised-4",
+    );
+    checkContrast(foreground, input, 4.5, "Switch unchecked thumb foreground on input track");
     checkContrast(rulerText, track, 4.5, "Ruler text on track");
     checkContrast(noteDone, track, 3.0, "Done note marker on track (WCAG non-text UI)");
     checkContrast(foreground, beatMove, 4.5, "Foreground on beat-move strip");
@@ -240,11 +276,31 @@ describe("notes UI primitive tokens and variants", () => {
     for (const rel of ["app/camera/ColorAdjust.tsx", "app/timeline/FilmSpeedPanel.tsx"]) {
       const src = readFileSync(join(STUDIO_DIR, rel), "utf8");
       assert.match(src, /\bbg-curve-bg\b/, `${rel} must use bg-curve-bg`);
+    }
+    assert.match(
+      readFileSync(join(STUDIO_DIR, "app/timeline/SpeedCurve.tsx"), "utf8"),
+      /\bstroke-curve-bg\b/,
+      "app/timeline/SpeedCurve.tsx must use stroke-curve-bg",
+    );
+
+    const walkFiles = (dir) =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const p = join(dir, entry.name);
+        return entry.isDirectory() ? walkFiles(p) : [p];
+      });
+    for (const file of walkFiles(join(STUDIO_DIR, "app"))) {
+      if (!/\.(?:ts|tsx|css)$/.test(file)) continue;
+      const src = readFileSync(file, "utf8");
       assert.doesNotMatch(
         src,
-        /(?:^|[\s"'`])bg-curve(?:$|[\s"'`])/,
-        `${rel} must not use colliding bg-curve`,
+        /(?:^|[\s"'`])(?:bg|stroke|fill|text|border)-curve(?=$|[\s"'`])/,
+        `${file} must not use colliding *-curve utility`,
       );
+    }
+    for (const file of walkFiles(join(STUDIO_DIR, "app/components/ui"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const src = readFileSync(file, "utf8");
+      assert.doesNotMatch(src, /\bdark:/, `${file} should use single-theme tokens without dark:`);
     }
   });
 });

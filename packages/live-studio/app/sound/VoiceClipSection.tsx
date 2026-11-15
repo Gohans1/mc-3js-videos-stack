@@ -134,7 +134,7 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
                         onClick={() => listenVoiceFile("try", tryFile)}
                         className={cn(
                           "hover:bg-raised-4 focus-visible:ring-ring inline-flex h-6 items-center gap-1 rounded-sm px-2 text-xs transition-colors outline-none focus-visible:ring-2",
-                          isPlaying ? "text-primary" : "text-foreground",
+                          isPlaying ? "text-primary-text" : "text-foreground",
                         )}
                       >
                         {isPlaying ? (
@@ -149,7 +149,7 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
                         disabled={promoting !== null}
                         aria-label={`Use ${label} for take ${singleTake.id}`}
                         onClick={() => handleUseTry(singleTake.id, tryFile)}
-                        className="text-primary hover:bg-tint focus-visible:ring-ring inline-flex h-6 items-center rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 disabled:opacity-50"
+                        className="text-primary-text hover:bg-tint focus-visible:ring-ring inline-flex h-6 items-center rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 disabled:opacity-50"
                       >
                         {busy ? "…" : "Use"}
                       </button>

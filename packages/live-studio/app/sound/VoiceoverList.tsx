@@ -209,7 +209,7 @@ export function VoiceoverList({
                         onClick={() => listenVoiceFile("try", tryFile)}
                         className={cn(
                           "text-tag hover:bg-raised-4 focus-visible:ring-ring inline-flex h-5 items-center gap-1 rounded-sm px-1.5 transition-colors outline-none focus-visible:ring-2",
-                          isTryPlaying ? "text-primary" : "text-foreground",
+                          isTryPlaying ? "text-primary-text" : "text-foreground",
                         )}
                       >
                         {isTryPlaying ? (
@@ -224,7 +224,7 @@ export function VoiceoverList({
                         disabled={promoting !== null}
                         aria-label={`Use ${label} as active take ${take.id}`}
                         onClick={() => handleUseTry(take.id, tryFile)}
-                        className="text-tag text-primary hover:bg-tint focus-visible:ring-ring inline-flex h-5 items-center rounded-sm px-1.5 font-medium transition-colors outline-none focus-visible:ring-2 disabled:opacity-50"
+                        className="text-tag text-primary-text hover:bg-tint focus-visible:ring-ring inline-flex h-5 items-center rounded-sm px-1.5 font-medium transition-colors outline-none focus-visible:ring-2 disabled:opacity-50"
                       >
                         {busy ? "…" : "Use"}
                       </button>

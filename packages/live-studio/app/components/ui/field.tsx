@@ -121,13 +121,12 @@ const fieldLabelVariants = cva("", {
     variant: {
       default: "",
       row: "text-sm font-normal",
-      tile: "w-full flex-col items-start gap-2.5 font-normal has-data-checked:bg-transparent dark:has-data-checked:bg-transparent",
-      compact:
-        "items-center gap-1.5 text-xs font-normal has-data-checked:bg-transparent dark:has-data-checked:bg-transparent",
+      tile: "w-full flex-col items-start gap-2.5 font-normal has-data-checked:bg-transparent",
+      compact: "items-center gap-1.5 text-xs font-normal has-data-checked:bg-transparent",
       inline:
-        "text-ui text-foreground/90 cursor-pointer items-center gap-1.5 font-normal has-data-checked:bg-transparent dark:has-data-checked:bg-transparent",
+        "text-ui text-foreground/90 cursor-pointer items-center gap-1.5 font-normal has-data-checked:bg-transparent",
       choice:
-        "hover:bg-raised-2 w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 font-normal has-data-checked:bg-transparent dark:has-data-checked:bg-transparent",
+        "hover:bg-raised-2 w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 font-normal has-data-checked:bg-transparent",
     },
   },
   defaultVariants: { variant: "default" },
@@ -142,7 +141,7 @@ function FieldLabel({
     <Label
       data-slot="field-label"
       className={cn(
-        "group/field-label peer/field-label has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-input/40 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/30 dark:has-data-checked:bg-primary/10 flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-md has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-2 *:data-[slot=field]:p-2",
+        "group/field-label peer/field-label has-data-checked:bg-primary/10 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-input/40 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/30 flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-md has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-2 *:data-[slot=field]:p-2",
         "has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
         fieldLabelVariants({ variant }),
         className,
