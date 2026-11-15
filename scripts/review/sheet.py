@@ -25,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from seconds import heard_second, meant  # noqa: E402
 from stale import say_if_stale  # noqa: E402
+from studio_tell import tell  # noqa: E402
 
 R = Path.cwd() / "renders"  # run from the film folder
 args = sys.argv[1:]
@@ -144,6 +145,10 @@ if args:
     if header:
         print(header)
     say_if_stale(video)
+    what = "every shot" if mode == "shots" else f"cut {args[2]}" if mode else ", ".join(f"{s:g}" for s in secs[:8]) + " s"
+    # a cut's frames are one stretch, lit on the studio's ruler; seconds far apart are named in the line only
+    lit = {"at": secs[0], "to": secs[-1]} if mode == "cut" else {"at": secs[0]} if len(secs) == 1 else {}
+    tell(Path.cwd(), f"Looking at frames of {Path(video).as_posix()}: {what}", **lit)
     # the video's frames go to a folder of their own, never over the film's rendered stills
     tmp = Path(tempfile.mkdtemp(prefix="sheet-"))
     for s in secs:
@@ -154,6 +159,7 @@ if args:
     src, name = tmp, f"sheet_{Path(video).stem}_{'shots_' if mode == 'shots' else f'cut{args[2]}_' if mode else ''}"
 else:
     src, name = R, "sheet_"
+    tell(Path.cwd(), "Looking at the rendered stills")
 # a still a render names by its second (still_12.5s.jpg); any other still_*.jpg is no frame of the film
 at_second = {f: re.fullmatch(r"still_(-?\d+(?:\.\d+)?)s\.jpg", f.name) for f in src.glob("still_*.jpg")}
 files = sorted((f for f, m in at_second.items() if m), key=lambda f: float(at_second[f].group(1)))

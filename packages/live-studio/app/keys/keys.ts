@@ -11,7 +11,7 @@ import { getFile } from "../core/net";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
-import { get, say, set } from "../core/store";
+import { get, invalidatePictures, say, set } from "../core/store";
 import { r3, SAME, stamp } from "../core/time";
 import { createTimedDoc, type TimedDoc } from "../core/timed-doc";
 import { type KeyRef } from "./slice";
@@ -139,8 +139,10 @@ const push = (f: number) => {
   const placed = S.tools?.placed;
   if (placed?.key === x.edit)
     placed.sync().then(() => {
+      S.finalAt = -1;
       S.dirty = true;
       set({ keysRev: get().keysRev + 1 });
+      invalidatePictures();
     });
 };
 // While a drag is held the rows follow the pointer but the film gets the keys only once the pointer rests: a film may rebuild

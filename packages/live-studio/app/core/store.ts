@@ -1,11 +1,13 @@
 // The page state React draws from: one Zustand store made of each feature's slice (zustand's slices pattern), so a feature's
 // fields and types live in its own folder (camera/slice.ts, notes/slice.ts…). The engine writes it; React reads it. What
 // changes every frame (the clock, captions, the timelines, the film camera corner) is drawn straight into its element instead
+import { useEffect } from "react";
 import { createStore, useStore } from "zustand";
 
 import type { GradeLibrary } from "../camera/adjust";
 import { type CameraSlice, cameraSlice } from "../camera/slice";
 import { type KeysSlice, keysSlice } from "../keys/slice";
+import { createNoteFocusRegistry } from "../notes/compose-motion";
 import { type NotesSlice, notesSlice } from "../notes/slice";
 import { type ObjectsSlice, objectsSlice } from "../objects/slice";
 import { type OptionsSlice, optionsSlice } from "../options/slice";
@@ -18,7 +20,15 @@ import type { Favorites } from "./favorites";
 import { type Prefs, readPrefs, savePref } from "./prefs";
 import { S } from "./state";
 
-export type ModalKind = "paste" | "linkage" | "savePreset" | "adjustLibrary" | null;
+export type ModalKind =
+  | "paste"
+  | "linkage"
+  | "savePreset"
+  | "adjustLibrary"
+  | "refSketch"
+  | "noteRefs"
+  | "reviewImage"
+  | null;
 
 interface PageSlice {
   ready: boolean;
@@ -45,11 +55,14 @@ interface PageSlice {
     | "keys"
     | "text"
     | "textAnim"
-    | "film";
-  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film"; // on a wide screen: the left column's tab (side then picks the right column's)
+    | "film"
+    | "lessons";
+  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film" | "lessons"; // on a wide screen: the left column's tab (side then picks the right column's)
   filmKind: string | null; // the Film tab's open kind (own-work.ts group id, "now" for On screen); null: its first
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;
+  aiActivity: boolean; // what the AI is doing shown as it works (a setting, core/prefs.ts; activity/activity.ts)
+  pictureRev: number;
 }
 export type StudioState = PageSlice &
   PlaybackSlice &
@@ -79,6 +92,7 @@ export const studio = createStore<StudioState>(() => ({
   filmKind: null,
   favorites: { sounds: [], effects: [] },
   gradeLibrary: { luts: [], presets: [] },
+  pictureRev: 0,
   ...playbackSlice,
   ...pictureSlice,
   ...notesSlice,
@@ -95,6 +109,17 @@ export const studio = createStore<StudioState>(() => ({
 export const useStudio = <T>(pick: (s: StudioState) => T) => useStore(studio, pick);
 export const set = studio.setState;
 export const get = studio.getState;
+
+/** Sync open state of note/review dialogs with store.modal so studio hotkeys stay blocked while open. */
+export function useDialogModal(kind: Exclude<ModalKind, null>, open: boolean) {
+  useEffect(() => {
+    if (open) set({ modal: kind });
+    else if (get().modal === kind) set({ modal: null });
+    return () => {
+      if (get().modal === kind) set({ modal: null });
+    };
+  }, [kind, open]);
+}
 
 // A setting this browser keeps (core/prefs.ts): shown at once, remembered for the next visit
 export const setPref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => {
@@ -118,6 +143,14 @@ export const say = (words: string, hold = 3000) => {
   if (hold) statusTimer = window.setTimeout(() => set({ status: "" }), hold);
 };
 
+export const invalidatePictures = () => set((s) => ({ pictureRev: s.pictureRev + 1 }));
+
+export const noteFocus = createNoteFocusRegistry();
+
 // What the engine asks of the page's own elements. A phone only raises its keyboard for a focus made inside the tap itself,
 // so the note box is focused synchronously from the engine, not from a React effect after the next render
-export const ui = { focusNote: () => {}, blurNote: () => {} };
+export const ui = {
+  focusNote: () => noteFocus.focus(),
+  blurNote: () => noteFocus.blur(),
+  cancelNoteFocus: () => noteFocus.clearPending(),
+};

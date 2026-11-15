@@ -12,7 +12,7 @@ import { SMALL_SOUND } from "../core/device";
 import { getFile, postJson } from "../core/net";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
-import { get, say, set } from "../core/store";
+import { get, invalidatePictures, say, set } from "../core/store";
 import { FPS } from "../core/time";
 import { addPlayer, audioCtx, master, restart, track, type Window } from "../sound/clock";
 import { type ChipView, type GroupView } from "./slice";
@@ -258,8 +258,12 @@ const setPicked = (name: string, change: Partial<Pick>) => {
   picked[name] = { ...pickOf(name), ...change };
   stored.set("picked", JSON.stringify(picked), sessionStorage);
   const g = trials[name];
-  if (g.kind === "picture") g.variant!.set(pickOf(name).set);
-  else restart();
+  if (g.kind === "picture") {
+    g.variant!.set(pickOf(name).set);
+    S.finalAt = -1;
+    S.dirty = true;
+    invalidatePictures();
+  } else restart();
   publish();
 };
 export const choose = (name: string, i: number) => {

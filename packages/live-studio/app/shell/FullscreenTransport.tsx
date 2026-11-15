@@ -49,7 +49,7 @@ function Controls() {
       role="group"
       aria-label="Full screen playback"
       className={cn(
-        "absolute bottom-[6.2%] left-1/2 z-10 flex h-11 w-[36rem] max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md bg-black/80 px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
+        "bg-scrim-strong absolute bottom-[6.2%] left-1/2 z-10 flex h-11 w-[36rem] max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
         visibility === "hidden" && "pointer-events-none opacity-0",
       )}
     >
@@ -62,7 +62,7 @@ function Controls() {
         {playing ? <Pause /> : <Play />}
       </Button>
       <span className="flex shrink-0 gap-1 tabular-nums">
-        <span className="text-primary">{timecode(frame)}</span>
+        <span className="text-primary-text">{timecode(frame)}</span>
         <span>/</span>
         <span>{timecode(Math.round(DURATION * FPS))}</span>
       </span>
@@ -76,7 +76,7 @@ function Controls() {
         value={Math.min(frame, end)}
         onValueChange={(value) => seek(Number(value) / FPS)}
       />
-      <span aria-hidden className="ml-1 h-3 border-l border-white/20" />
+      <span aria-hidden className="border-hairline-strong ml-1 h-3 border-l" />
       <Button variant="quiet" size="icon" aria-label="Leave full screen" onClick={toggleFullscreen}>
         <Minimize />
       </Button>

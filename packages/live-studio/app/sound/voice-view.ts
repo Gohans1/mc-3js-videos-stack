@@ -72,6 +72,31 @@ const KNOWN_VOICES: Record<string, string> = {
   ev2kMR9ZJZZsemuogS5u: "Jake",
   tZssYepgGaQmegsMEXjK: "True",
 };
+const dynamicVoices = new Map<string, string>();
+let dynamicVoiceRev = 0;
+const dynamicVoiceSubs = new Set<() => void>();
+
+export const subscribeVoiceNames = (fn: () => void) => {
+  dynamicVoiceSubs.add(fn);
+  return () => {
+    dynamicVoiceSubs.delete(fn);
+  };
+};
+
+export const voiceNamesSnapshot = (): number => dynamicVoiceRev;
+
+export const registerVoiceNames = (entries: ReadonlyArray<{ id: string; name: string }>) => {
+  let changed = false;
+  for (const e of entries) {
+    if (!e.id || !e.name) continue;
+    if (dynamicVoices.get(e.id) === e.name) continue;
+    dynamicVoices.set(e.id, e.name);
+    changed = true;
+  }
+  if (!changed) return;
+  dynamicVoiceRev++;
+  for (const fn of dynamicVoiceSubs) fn();
+};
 
 const AUDIO_TAG_RE = /\[([^\]\r\n]{1,400})\]/g;
 
@@ -102,7 +127,7 @@ export const parseTakeScript = (raw: string): { tags: string[]; spoken: string }
 
 export const voiceActorTitle = (voice?: string): string => {
   if (!voice) return "Seff Echo";
-  const known = KNOWN_VOICES[voice];
+  const known = KNOWN_VOICES[voice] ?? dynamicVoices.get(voice);
   if (known) return known;
   if (/^[A-Za-z0-9]{16,}$/.test(voice)) return `Voice · ${voice.slice(0, 6)}`;
   return voice;

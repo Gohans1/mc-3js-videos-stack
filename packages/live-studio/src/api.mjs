@@ -16,10 +16,14 @@ import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 
+import { Activity, createActivity } from "./activity.mjs";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
+import { openLessonFiles } from "./lesson-files.mjs";
+import { noteNumbers } from "./notes.mjs";
+import { openVoiceLibrary } from "./voice-library.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
 const MIME = {
@@ -52,6 +56,17 @@ const NoteIn = z.object({
     .array(z.object({ t: z.number().refine(Number.isFinite), img: jpeg }))
     .max(8)
     .optional(),
+  // pictures the creator pasted beside the words (a reference, a screenshot), drawn on or not
+  refs: z.array(z.string().startsWith("data:image/jpeg;base64,/9j/")).max(6).optional(),
+});
+const LessonSave = z.object({
+  path: z.string().max(200),
+  text: z.string().max(1_000_000),
+  base: z.string().nullable(),
+});
+const LessonDelete = z.object({
+  path: z.string().max(200),
+  base: z.string().nullable(),
 });
 // note-state.mjs says which of these may happen to a note now; {remove}/{restore} are the file's own
 const NoteChange = z.object({
@@ -105,31 +120,70 @@ const inside = (root, file) => {
   return r && !r.startsWith("..") && !isAbsolute(r);
 };
 
-export const createApi = (film, { page, events, send }) => {
+// activity: src/activity.mjs's, what the AI is doing; lessons: src/lesson-files.mjs's, the one live.mjs watches
+export const createApi = (
+  film,
+  {
+    page,
+    events,
+    send,
+    activity = createActivity(send),
+    lessons = openLessonFiles(),
+    voiceLibrary = openVoiceLibrary({
+      project: film?.PROJECT,
+      autoSync: false,
+      onEvent: () => send("voice-library"),
+    }),
+    favorites = openFavorites(),
+  },
+) => {
   // Text and geometry shrink a lot and pictures don't. Squeezed once per version, so the next visit costs nothing here either;
   // what barely shrinks (a zip of pictures) is remembered as not worth it and goes out as it is
   // Off the main thread (a few MB takes a second), and kept as the promise so a second visit meanwhile waits for the same work
   const packed = new Map(),
     toBr = promisify(brotliCompress),
     toGzip = promisify(gzip);
-  const squeeze = async (c, buf, tag) => {
-    const accepts = c.req.header("accept-encoding") ?? "",
-      how = /\bbr\b/.test(accepts) ? "br" : /gzip/.test(accepts) ? "gzip" : "";
+  let voiceCache = null;
+  const pickEncoding = (raw) => {
+    let hasGzip = false;
+    for (const part of String(raw ?? "")
+      .toLowerCase()
+      .split(",")) {
+      const [nameRaw, ...params] = part.trim().split(";");
+      const name = nameRaw?.trim();
+      if (name !== "br" && name !== "gzip") continue;
+      if (params.some((p) => /^q\s*=\s*0+(?:\.0*)?$/.test(p.trim()))) continue;
+      if (name === "br") return "br";
+      hasGzip = true;
+    }
+    return hasGzip ? "gzip" : "";
+  };
+  const squeeze = async (c, buf, tag, memoize = true) => {
+    const how = pickEncoding(c.req.header("accept-encoding"));
     c.header("vary", "accept-encoding");
     if (!how) return buf;
-    const key = how + tag;
-    if (!packed.has(key)) {
-      if (packed.size >= 400) packed.delete(packed.keys().next().value);
-      const work =
-        how === "br"
-          ? toBr(buf, { params: { [zlibConsts.BROTLI_PARAM_QUALITY]: 9 } })
-          : toGzip(buf);
-      packed.set(
-        key,
-        work.then((small) => (small.length < buf.length * 0.9 ? small : null)),
-      );
+    const compress = () =>
+      (how === "br"
+        ? toBr(buf, { params: { [zlibConsts.BROTLI_PARAM_QUALITY]: memoize ? 9 : 4 } })
+        : toGzip(buf)
+      ).then((small) => (small.length < buf.length * 0.9 ? small : null));
+    let small;
+    if (memoize) {
+      const key = how + tag;
+      if (!packed.has(key)) {
+        if (packed.size >= 400) packed.delete(packed.keys().next().value);
+        packed.set(
+          key,
+          compress().catch((err) => {
+            packed.delete(key);
+            throw err;
+          }),
+        );
+      }
+      small = await packed.get(key);
+    } else {
+      small = await compress();
     }
-    const small = await packed.get(key);
     if (!small) return buf;
     c.header("content-encoding", how);
     return small;
@@ -245,9 +299,19 @@ export const createApi = (film, { page, events, send }) => {
   // publish_pages.py reads /edit.json
   app.on("POST", ["/api/*", "/notes/*"], bodyLimit({ maxSize: 20 * 1024 * 1024 }));
 
-  app.get("/api/notes", (c) => fresh(c, film.notes.read()));
+  app.get("/api/notes", (c) => {
+    const dir = film.dir ?? film.PROJECT;
+    if (dir) {
+      const nums = {};
+      for (const [id, v] of noteNumbers(dir)) if (!v.gone) nums[id] = v.n;
+      c.header("x-note-numbers", JSON.stringify(nums));
+    }
+    return fresh(c, film.notes.read());
+  });
   app.post("/api/notes", zValidator("json", NoteIn), async (c) => {
     film.notes.add(c.req.valid("json"), await film.stamp());
+    film.syncNotes?.();
+    send("notes");
     return c.text("ok");
   });
   app.on(
@@ -256,15 +320,40 @@ export const createApi = (film, { page, events, send }) => {
     zValidator("json", NoteChange),
     (c) => {
       const r = film.notes.change(c.req.param("id"), c.req.valid("json"));
-      return r.ok ? c.text("ok") : c.text(r.why, 409);
+      if (!r.ok) return c.text(r.why, 409);
+      film.syncNotes?.();
+      send("notes");
+      return c.text("ok");
     },
   );
-  app.get("/api/note-img/:name{[a-z0-9]+(_crop|_strip|_f\\d)?\\.jpg}", (c) => {
+  app.get("/api/note-img/:name{[a-z0-9]+(_crop|_strip|_f\\d|_r\\d)?\\.jpg}", (c) => {
     const pic = film.notes.picture(c.req.param("name").slice(0, -4));
     if (!pic) return c.body(null, 404);
     c.header("content-type", "image/jpeg");
     c.header("cache-control", "max-age=31536000, immutable");
     return c.body(pic);
+  });
+
+  // What the AI is doing (src/activity.mjs): a line from each of the film's commands (src/tell.mjs), the latest for a new page
+  app.get("/api/activity", (c) => fresh(c, activity.state()));
+  app.post("/api/activity", zValidator("json", Activity), (c) => {
+    activity.add(c.req.valid("json"));
+    return c.text("ok");
+  });
+
+  // The repo's lessons/*.md, every film's, for the creator to read and edit (src/lesson-files.mjs): 409 is the AI's newer words
+  app.get("/api/lessons", (c) =>
+    fresh(c, { dir: lessons.dir.replaceAll("\\", "/"), files: lessons.list() }),
+  );
+  app.post("/api/lessons", zValidator("json", LessonSave), (c) => {
+    const { path, text, base } = c.req.valid("json"),
+      r = lessons.write(path, text, base);
+    return c.json(r, r.error ? 400 : r.conflict ? 409 : 200);
+  });
+  app.delete("/api/lessons", zValidator("json", LessonDelete), (c) => {
+    const { path, base } = c.req.valid("json"),
+      r = lessons.remove(path, base);
+    return c.json(r, r.error ? 400 : r.conflict ? 409 : 200);
   });
 
   app.on("GET", ["/api/edit.json", "/edit.json"], (c) => text(c, readFileSync(film.EDIT)));
@@ -280,6 +369,37 @@ export const createApi = (film, { page, events, send }) => {
     if (r.error) return c.json({ error: r.error }, r.status ?? 400);
     send("voice");
     return fresh(c, r);
+  });
+  app.get("/api/voice/library", async (c) => {
+    const metaOnly = c.req.query("meta") === "1";
+    if (!metaOnly) voiceLibrary.ensureWarm();
+    const st = voiceLibrary.state();
+    if (metaOnly) return fresh(c, st);
+    const json = voiceLibrary.payloadJson();
+    if (st.status === "ready") {
+      if (!voiceCache || voiceCache.json !== json) {
+        if (voiceCache) {
+          packed.delete(`br${voiceCache.tag}`);
+          packed.delete(`gzip${voiceCache.tag}`);
+        }
+        const buf = Buffer.from(json);
+        const tag = `"${createHash("md5").update(buf).digest("base64url")}"`;
+        voiceCache = { json, buf, tag };
+      }
+      return text(c, voiceCache.buf, "application/json", voiceCache.tag);
+    }
+    c.header("cache-control", "no-store");
+    c.header("content-type", "application/json; charset=utf-8");
+    return c.body(await squeeze(c, Buffer.from(json), null, false));
+  });
+  app.post("/api/voice/library/sync", (c) => {
+    if (!voiceLibrary.hasKey()) {
+      return c.json({ error: "Missing GENVOICE_API_KEY (or ELEVENLABS_API_KEY) on server" }, 400);
+    }
+    voiceLibrary.sync().catch(() => {
+      // Failure state is captured in voiceLibrary.state() and broadcast over SSE
+    });
+    return c.json({ started: true, ...voiceLibrary.state() }, 202);
   });
   app.get("/api/shots.json", (c) => text(c, Buffer.from(JSON.stringify(film.shotComments()))));
   app.get("/api/trials.json", (c) => {
@@ -303,7 +423,6 @@ export const createApi = (film, { page, events, send }) => {
   });
 
   // The creator's stars, kept for every film (src/favorites.mjs); every open page of this studio hears a change
-  const favorites = openFavorites();
   app.get("/api/favorites", (c) => fresh(c, favorites.shown()));
   app.post("/api/favorites", zValidator("json", FavoriteChange), (c) => {
     const all = favorites.set(c.req.valid("json"));

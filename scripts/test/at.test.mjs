@@ -330,6 +330,32 @@ test("#N numbers the notes as bun run notes does: a line missing its fields is n
   assert.match(r.stdout, /^note #1 \(hand, open\)/m);
 });
 
+test("#N counts a note the creator deleted, as bun run notes does, so the numbers after it never move", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const whole = { t: 8.2, scene: 8.2, text: "the hand", shot: 1, time: "00:08.200" };
+  writeFileSync(
+    join(dir, "notes/deleted.jsonl"),
+    JSON.stringify({ ...whole, id: "gone", at: "2026-11-01T00:00:00Z" }) + "\n",
+  );
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    JSON.stringify({ ...whole, id: "hand", at: "2026-11-02T00:00:00Z" }) + "\n",
+  );
+  const r = spawnSync("bun", [AT, "#2"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^note #2 \(hand, open\)/m);
+  const gone = spawnSync("bun", [AT, "#1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(gone.status, 2);
+  assert.match(gone.stderr, /note #1 \(gone\) was deleted by the creator/);
+});
+
 test("a second inside a gap names no shot, camera key or moving row: the picture is black", (t) => {
   const dir = film(t);
   writeFileSync(

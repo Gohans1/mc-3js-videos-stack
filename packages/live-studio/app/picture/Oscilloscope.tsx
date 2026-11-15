@@ -47,13 +47,13 @@ export function Oscilloscope({ bind }: { bind: Bind }) {
       hidden={!on}
       aria-label="Color oscilloscope"
       role="group"
-      className="upright:hidden sideways:hidden grid h-[clamp(7rem,22%,10rem)] w-full flex-none grid-cols-3 gap-1 border-t border-black bg-black p-1"
+      className="upright:hidden sideways:hidden border-stage bg-stage grid h-[clamp(7rem,22%,10rem)] w-full flex-none grid-cols-3 gap-1 border-t p-1"
     >
       {PANES.map((p) => (
         <figure
           key={p.key}
           title={p.tip}
-          className="relative m-0 min-w-0 overflow-hidden rounded-sm bg-black"
+          className="bg-stage relative m-0 min-w-0 overflow-hidden rounded-sm"
         >
           <canvas
             ref={bind(p.key)}
@@ -61,7 +61,7 @@ export function Oscilloscope({ bind }: { bind: Bind }) {
             aria-label={`${p.title}. ${p.tip}`}
             className="absolute inset-0 block size-full"
           />
-          <figcaption className="text-tag pointer-events-none absolute top-1 right-1.5 text-white/45">
+          <figcaption className="text-tag text-muted-foreground pointer-events-none absolute top-1 right-1.5">
             {p.title}
           </figcaption>
         </figure>

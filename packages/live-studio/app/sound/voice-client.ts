@@ -26,9 +26,11 @@ import {
   findTakeLineIndex,
   resizeNarrationBrickForSwap,
   sliceNarrationClip,
+  subscribeVoiceNames,
   type SwappedVoiceSpan,
   voiceClipLabel,
   voiceClipSummary,
+  voiceNamesSnapshot,
   type VoiceTakeItem,
 } from "./voice-view";
 
@@ -43,6 +45,7 @@ const notify = () => {
 };
 
 marks.voiceLoaded = notify;
+subscribeVoiceNames(notify);
 
 export const subscribeVoiceTakes = (fn: () => void) => {
   subs.add(fn);
@@ -52,7 +55,7 @@ export const subscribeVoiceTakes = (fn: () => void) => {
 };
 const voiceTakesSnapshot = () => voiceRev;
 export const useVoiceTakes = () => {
-  useSyncExternalStore(subscribeVoiceTakes, voiceTakesSnapshot);
+  useSyncExternalStore(subscribeVoiceTakes, voiceTakesSnapshot, voiceTakesSnapshot);
   return takesState;
 };
 
@@ -115,7 +118,7 @@ let labelCacheKey = "";
 let labelCache = new WeakMap<object, string>();
 
 export const cachedVoiceClipLabel = (clip: OneShot): string => {
-  const key = `${S.timesRev}:${get().soundRev}:${voiceRev}`;
+  const key = `${S.timesRev}:${get().soundRev}:${voiceRev}:${voiceNamesSnapshot()}`;
   if (key !== labelCacheKey) {
     labelCacheKey = key;
     labelCache = new WeakMap<object, string>();

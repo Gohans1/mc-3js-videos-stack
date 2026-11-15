@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { relative } from "node:path";
 
 import { cliArgs, needFilm } from "../../packages/live-studio/src/cli.mjs";
+import { startJob } from "../../packages/live-studio/src/tell.mjs";
 import { takeAudios, wordsCommand } from "../../packages/live-studio/src/voice-map.mjs";
 
 const HELP = `Writes the word timings voice:assemble needs (voice/takes/<take>.words.json) with whisperX, for every take of
@@ -44,6 +45,9 @@ if (!existsSync(py)) {
 console.log(
   `aligning ${todo.length} take${todo.length === 1 ? "" : "s"} (${todo.map((x) => x.id).join(", ")}) with whisperX; torch and the model load first (a minute, much longer off a busy hard disk), then a few seconds a take on a GPU, minutes on a CPU`,
 );
+const ended = await startJob(film, "voice:align", {
+  say: `Aligning the words of take${todo.length > 1 ? "s" : ""} ${todo.map((x) => x.id).join(", ")}`,
+});
 // stderr is library warnings on every run: shown only when it fails. A cold start (torch read off a busy hard disk) took
 // over 8 min before any take, so the limit only ends a model that is stuck
 const run = spawnSync(py, args, {
@@ -58,8 +62,16 @@ if (run.status !== 0) {
   console.error(
     `whisperX ${run.error ? `did not finish (${run.error.message})` : "failed"}: ${done.length} of ${todo.length} aligned; still without timings: ${left.join(", ")}. bun run voice:align again resumes`,
   );
+  await ended({
+    say: `Aligned ${done.length} of ${todo.length} takes: whisperX failed`,
+    level: "fail",
+  });
   process.exit(1);
 }
+await ended({
+  say: `Aligned the words of ${done.length} take${done.length > 1 ? "s" : ""}`,
+  level: "ok",
+});
 console.log(
   `wrote ${done.length} word timing file${done.length === 1 ? "" : "s"} (${relative(film, `${done[0].audio}.words.json`).replaceAll("\\", "/")}${done.length > 1 ? " and the rest beside their takes" : ""})\nnext: bun run voice:assemble`,
 );

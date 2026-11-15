@@ -2,12 +2,16 @@
 import { execFile } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
+import { createActivity } from "./activity.mjs";
 import { createApi } from "./api.mjs";
 import { cliArgs } from "./cli.mjs";
 import { openFilm } from "./film.mjs";
+import { openLessonFiles } from "./lesson-files.mjs";
 import { buildPage } from "./page.mjs";
+import { openVoiceLibrary } from "./voice-library.mjs";
 
 const HELP = `The studio for one film: a live preview the creator watches and edits, with the timeline, notes and render. Run
 inside the film (or set LIVE_PROJECT); package.json's studio script carries the film's port.
@@ -33,9 +37,10 @@ const events = new Set(); // open pages, see /api/events
 const send = (event, data = "") => {
   for (const page of events) page.writeSSE({ event, data: String(data) });
 }; // a page that left is dropped by /api/events itself
+const activity = createActivity(send);
 let film;
 try {
-  film = openFilm(process.env.LIVE_PROJECT ?? process.cwd(), { send });
+  film = openFilm(process.env.LIVE_PROJECT ?? process.cwd(), { send, activity });
 } catch (e) {
   console.error(e.message);
   process.exit(1);
@@ -57,14 +62,52 @@ try {
   /* none recorded, or it no longer answers */
 }
 
+let broken = false;
 const page = await buildPage(film, {
   // A build made only because the studio saved the sound lanes or the camera keys is no new code for the creator to load: the
   // page has them already
   onChange: (files) => {
-    const own = film.ownWrites();
-    send("code", files.length && files.every((f) => own.includes(resolve(f))) ? "own" : "");
+    const own = film.ownWrites(),
+      others = files.filter((f) => !own.includes(resolve(f)));
+    send("code", files.length && !others.length ? "own" : "");
+    // the page's build holds the studio's own code too: named as such, the film's files by their path in it
+    // one build has named the same file twice (seen: "studio Compose.tsx, studio Compose.tsx")
+    const names = [
+      ...new Set(
+        others.map((f) => {
+          const r = relative(film.PROJECT, resolve(f));
+          return r.startsWith("..") || isAbsolute(r)
+            ? `studio ${basename(f)}`
+            : r.replaceAll("\\", "/");
+        }),
+      ),
+    ];
+    if (names.length)
+      activity.add({
+        say: `Changed the code: ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`,
+      });
+    if (broken) activity.add({ say: "The film's code builds again", level: "ok" });
+    broken = false;
   },
-  onError: (message) => send("build-error", message), // Vite prints it in this terminal itself
+  onError: (message, first) => {
+    send("build-error", message); // Vite prints it in this terminal itself
+    // once as it breaks: each save while broken shows its own error on the page already
+    if (!broken) {
+      // "[builtin:vite-transform] Unexpected token": the plugin's name says nothing to the creator. A transform error has no id;
+      // loc's line is counted in the code after its TypeScript is stripped (seen 344 for 367), so no line is named
+      const what = stripVTControlCharacters(first?.message ?? "")
+          .split("\n")[0]
+          .replace(/^\[[^\]]*\]\s*/, "")
+          .trim(),
+        file = first?.id ? relative(film.PROJECT, first.id).replaceAll("\\", "/") : "",
+        where = file && !what.includes(file) ? ` (${file})` : "";
+      activity.add({
+        say: `The film's code does not build${what ? `: ${what.slice(0, 120)}` : ""}${where}`,
+        level: "fail",
+      });
+    }
+    broken = true;
+  },
 });
 
 // No password here, so nothing but this machine and names the film lists may even ask. A website can point its own name at
@@ -97,8 +140,24 @@ const fromElsewhere = (req, host) => {
   }
 };
 
-const api = createApi(film, { page, events, send });
+// The lessons the AI keeps (bun run note learned, or its own edit): an open Lessons tab reads them again
+const lessons = openLessonFiles();
+const voiceLibrary = openVoiceLibrary({
+  project: film.PROJECT,
+  onEvent: () => send("voice-library"),
+});
+const api = createApi(film, { page, events, send, activity, lessons, voiceLibrary });
 film.start();
+lessons.watch((paths) => {
+  send("lessons");
+  activity.add({
+    say:
+      paths.length === 1
+        ? `Changed the lesson ${paths[0]}`
+        : `Changed ${paths.length} lessons: ${paths.slice(0, 4).join(", ")}${paths.length > 4 ? ", …" : ""}`,
+    lessons: paths.slice(0, 20),
+  });
+});
 
 // This machine only, unless asked: --lan opens it to the network for a phone, and nothing here asks for a password
 const serve = {

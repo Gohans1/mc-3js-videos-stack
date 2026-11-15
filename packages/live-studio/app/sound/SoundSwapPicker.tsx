@@ -11,6 +11,7 @@ import { SearchBox } from "../components/SearchBox";
 import { words } from "../core/search";
 import {
   ALL,
+  cleanAudioTitle,
   collapseSwapFamilies,
   displayTitleOf,
   formatSoundDuration,
@@ -50,7 +51,7 @@ function SoundSwapList({
   onPick: (name: string) => void;
   onClose: () => void;
 }) {
-  const now = useSyncExternalStore(subscribeAudition, listening);
+  const now = useSyncExternalStore(subscribeAudition, listening, listening);
   const [q, setQ] = useState("");
   const deferredQ = useDeferredValue(q);
   const [scope, setScope] = useState<SwapScope>(initialScope);
@@ -82,7 +83,7 @@ function SoundSwapList({
   const visible = matched.slice(0, MAX_SWAP_RESULTS);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="bg-backdrop flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-2 border-b p-2.5">
         <SearchBox
           name="swap-sound-search"
@@ -98,10 +99,38 @@ function SoundSwapList({
           value={scope}
           onChange={setScope}
           items={[
-            { id: ALL, title: "All" },
-            { id: "sfx", title: "SFX" },
-            { id: "mc", title: "MC" },
-            { id: "bgm", title: "Music" },
+            {
+              id: ALL,
+              title: (
+                <span className={scope === ALL ? "text-foreground" : "text-foreground/75"}>
+                  All
+                </span>
+              ),
+            },
+            {
+              id: "sfx",
+              title: (
+                <span className={scope === "sfx" ? "text-foreground" : "text-foreground/75"}>
+                  SFX
+                </span>
+              ),
+            },
+            {
+              id: "mc",
+              title: (
+                <span className={scope === "mc" ? "text-foreground" : "text-foreground/75"}>
+                  MC
+                </span>
+              ),
+            },
+            {
+              id: "bgm",
+              title: (
+                <span className={scope === "bgm" ? "text-foreground" : "text-foreground/75"}>
+                  Music
+                </span>
+              ),
+            },
           ]}
         />
       </div>
@@ -113,25 +142,31 @@ function SoundSwapList({
           const isCurrent = x.name === value;
           const isPlaying = now === x.name;
           const takeCount = x.family ? familyItemsOf(x.name).length : 1;
-          const label =
-            takeCount > 1 && !hasDigitQuery && !isCurrent ? displayTitleOf(x) : itemVariantTitle(x);
           const itemKind = kindOf(x);
+          const rawLabel =
+            takeCount > 1 && !hasDigitQuery && !isCurrent ? displayTitleOf(x) : itemVariantTitle(x);
+          const label = cleanAudioTitle(rawLabel, { mc: itemKind === "mc" });
           return (
             <li
               key={x.name}
               className={cn(
-                "hover:bg-raised-3 flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors duration-150",
+                "hover:bg-raised-3 flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors duration-150 motion-reduce:transition-none",
                 isCurrent && "bg-raised-2",
               )}
             >
               <Button
                 variant="quiet"
                 size="icon-sm"
+                className="pointer-coarse:size-9"
                 aria-pressed={isPlaying}
-                aria-label={`${isPlaying ? "Stop" : "Preview"} ${label}`}
+                aria-label={`${isPlaying ? "Pause" : "Preview"} ${label}`}
                 onClick={() => listen(x.name)}
               >
-                {isPlaying ? <Pause className="fill-current" /> : <Play className="fill-current" />}
+                {isPlaying ? (
+                  <Pause className="fill-current" />
+                ) : (
+                  <Play className="translate-x-[0.5px] fill-current" />
+                )}
               </Button>
               <button
                 type="button"
@@ -142,18 +177,18 @@ function SoundSwapList({
                   <span
                     className={cn(
                       "truncate text-xs",
-                      isCurrent ? "text-primary font-medium" : "text-foreground",
+                      isCurrent ? "text-primary-text font-medium" : "text-foreground",
                     )}
                   >
                     {label}
                   </span>
-                  <span className="text-tag text-muted-foreground flex min-w-0 items-center gap-1">
+                  <span className="text-tag text-foreground/75 flex min-w-0 items-center gap-1">
                     {originOf(x) === "synth" && <Badge variant="synth">Code</Badge>}
                     <span className="truncate">{sourceTitle(sourceOf(x))}</span>
                     {takeCount > 1 && !hasDigitQuery && (
                       <>
                         <span aria-hidden>·</span>
-                        <span className="flex-none tabular-nums">{takeCount} takes</span>
+                        <span className="flex-none tabular-nums">{takeCount} variations</span>
                       </>
                     )}
                     <span aria-hidden>·</span>
@@ -162,18 +197,20 @@ function SoundSwapList({
                     </span>
                   </span>
                 </span>
-                {isCurrent && <Check aria-hidden className="text-primary size-3.5 flex-none" />}
+                {isCurrent && (
+                  <Check aria-hidden className="text-primary-text size-3.5 flex-none" />
+                )}
               </button>
             </li>
           );
         })}
         {!visible.length && (
-          <li className="text-muted-foreground px-2 py-4 text-center text-xs">
+          <li className="text-foreground/75 px-2 py-4 text-center text-xs">
             No sounds match &ldquo;{q.trim()}&rdquo;.
           </li>
         )}
         {matched.length > MAX_SWAP_RESULTS && (
-          <li className="text-tag text-muted-foreground px-2 py-1 text-center tabular-nums">
+          <li className="text-tag text-foreground/75 px-2 py-1 text-center tabular-nums">
             Showing {MAX_SWAP_RESULTS} of {matched.length} — type more to narrow
           </li>
         )}
@@ -196,7 +233,9 @@ export function SoundSwapPicker({
   onChange: (nextName: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const triggerLabel = currentItem ? itemVariantTitle(currentItem) : value;
+  const triggerLabel = currentItem
+    ? cleanAudioTitle(itemVariantTitle(currentItem), { mc: kindOf(currentItem) === "mc" })
+    : value;
   const initialScope: SwapScope = currentItem ? kindOf(currentItem) : ALL;
 
   return (
@@ -216,13 +255,13 @@ export function SoundSwapPicker({
         <span className="min-w-0 flex-1 truncate text-start text-xs font-normal">
           {triggerLabel}
         </span>
-        <ChevronsUpDown aria-hidden className="text-muted-foreground size-3.5 flex-none" />
+        <ChevronsUpDown aria-hidden className="text-foreground/75 size-3.5 flex-none" />
       </PopoverTrigger>
       <PopoverContent
         variant="flush"
         align="end"
         sideOffset={4}
-        className="flex max-h-[min(420px,var(--available-height))] w-80 flex-col overflow-hidden"
+        className="flex max-h-[min(420px,var(--available-height))] w-80 max-w-(--available-width) flex-col overflow-hidden"
       >
         {open && (
           <SoundSwapList

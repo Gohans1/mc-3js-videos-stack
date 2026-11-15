@@ -361,7 +361,7 @@ const boxGeometry = new LineSegmentsGeometry().fromEdgesGeometry(edges);
 cube.dispose();
 edges.dispose();
 const boxMaterial = new LineMaterial({
-  color: 0xe8e8e8,
+  color: 0xe6e4d9,
   linewidth: 1,
   depthTest: false,
   depthWrite: false,

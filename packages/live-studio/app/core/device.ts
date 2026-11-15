@@ -1,5 +1,5 @@
 // Where this page runs: a phone, and whether it is away from the studio PC (on a line that costs)
-import { useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 export const PHONE =
   matchMedia("(pointer: coarse)").matches && Math.min(innerWidth, innerHeight) < 600;
 // Anything but this machine itself is on a line that costs: small copies of everything, whatever the screen
@@ -41,3 +41,25 @@ export const useSmall = () =>
     },
     () => SMALL.matches,
   );
+const UPRIGHT_QUERY = "(max-width: 820px) and (min-height: 521px), (max-width: 559px)";
+const COARSE_QUERY = "(pointer: coarse)";
+const useMediaQuery = (query: string) => {
+  const mq = useMemo(
+    () => (typeof window !== "undefined" ? window.matchMedia?.(query) : undefined),
+    [query],
+  );
+  const subscribe = useCallback(
+    (f: () => void) => {
+      mq?.addEventListener("change", f);
+      return () => mq?.removeEventListener("change", f);
+    },
+    [mq],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => mq?.matches ?? false,
+    () => false,
+  );
+};
+export const useUpright = () => useMediaQuery(UPRIGHT_QUERY);
+export const useCoarsePointer = () => useMediaQuery(COARSE_QUERY);

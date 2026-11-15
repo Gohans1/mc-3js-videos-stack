@@ -111,7 +111,7 @@ export function TimelineBar() {
     <div
       role="toolbar"
       aria-label="Timeline tools"
-      className="scroll-fade-x sideways:hidden col-span-full -m-0.5 mb-1 flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto overscroll-x-contain p-0.5 *:shrink-0"
+      className="scroll-fade-x scroll-fade-12 sideways:hidden col-span-full -m-0.5 mb-1 flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto overscroll-x-contain p-0.5 *:shrink-0"
     >
       <Tool
         label="Select (A)"
@@ -125,10 +125,10 @@ export function TimelineBar() {
         pressed={blade}
         onClick={() => setBlade(!blade)}
       />
-      <span aria-hidden className="bg-border mx-1.5 h-5 w-px" />
+      <span aria-hidden className="bg-border mx-1 h-5 w-px" />
       <Tool label="Undo (Ctrl+Z)" icon={Undo2} onClick={undo} disabled={!canUndo()} />
       <Tool label="Redo (Ctrl+Y)" icon={Redo2} onClick={redo} disabled={!canRedo()} />
-      <span aria-hidden className="bg-border mx-1.5 h-5 w-px" />
+      <span aria-hidden className="bg-border mx-1 h-5 w-px" />
       <Tool
         label="Split at the playhead (Ctrl+B): the picked sound clips, or the shot"
         icon={Scissors}
@@ -216,7 +216,7 @@ export function TimelineBar() {
         pressed={previewAxis}
         onClick={togglePreviewAxis}
       />
-      <span aria-hidden className="bg-border mx-1.5 h-5 w-px" />
+      <span aria-hidden className="bg-border mx-1 h-5 w-px" />
       <Tool label="Zoom to fit (Shift+Z): the whole film" icon={ScanSearch} onClick={zoomToFit} />
       <Tool label="Zoom out (-)" icon={ZoomOut} onClick={() => zoomSpan(1.5)} />
       <ZoomSlider />

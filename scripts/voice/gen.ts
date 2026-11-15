@@ -20,6 +20,7 @@ import {
   speakingTakes,
   writeMouthMap,
 } from "../../packages/live-studio/src/mouth-map.mjs";
+import { startJob } from "../../packages/live-studio/src/tell.mjs";
 import { assertInsideDir, wordsCommand } from "../../packages/live-studio/src/voice-map.mjs";
 import { stripAudioTags, sts, tts } from "./genvoice.ts";
 
@@ -80,6 +81,7 @@ export interface GenRunOptions {
   cwd?: string;
   args?: string[];
   env?: Record<string, string | undefined>;
+  onTake?: (take: TakeSpec) => unknown; // as each take starts, in the order they are made
 }
 
 const hasTakeAudio = (dir: string, stem: string) =>
@@ -263,6 +265,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   for (let idx = 0; idx < ordered.length; idx++) {
     const t = ordered[idx];
     if (!wantSet.has(t.id)) continue;
+    await opts.onTake?.(t);
     const voiceId = t.voice ?? DEFAULT_NARRATOR;
     const model = t.model ?? "eleven_v4";
     const now = Date.now();
@@ -365,12 +368,24 @@ const isMain =
 if (isMain) {
   cliArgs(HELP, ["--try", "--takes N", "--guide FILE", "--dry-run", "--yes"]);
   const film = needFilm(process.env.LIVE_PROJECT);
-  const results = await runGen({ cwd: film }).catch((e: Error & { usage?: boolean }) => {
+  const sent = process.argv.includes("--yes") && !process.argv.includes("--dry-run");
+  // the creator's studio shows each take as it is voiced (src/tell.mjs); a preview spends nothing and says nothing
+  let ended: Awaited<ReturnType<typeof startJob>> | undefined;
+  const results = await runGen({
+    cwd: film,
+    onTake: sent
+      ? async (t) => {
+          ended = await startJob(film, "voice:gen", {
+            say: `Voicing take ${t.id}: "${stripAudioTags(t.text ?? "")}"`,
+          });
+        }
+      : undefined,
+  }).catch(async (e: Error & { usage?: boolean }) => {
     console.error(e.message);
+    await ended?.({ say: `Voicing stopped: ${e.message}`, level: "fail" });
     process.exit(e.usage ? 2 : 1);
   });
   for (const r of results) console.log(r.id, r.out, JSON.stringify(r.info));
-  const sent = process.argv.includes("--yes") && !process.argv.includes("--dry-run");
   if (results.length && !sent) {
     const real = [
       ...process.argv.slice(2).filter((a) => a !== "--dry-run" && a !== "--yes"),
@@ -425,9 +440,17 @@ if (isMain) {
       console.error(
         `${run ? "whisperX failed" : `no whisperX python at ${py} (WHISPERX_PYTHON names one: INSTALL.md)`}: the audio is saved, only its word timings are missing, and bun run voice:assemble needs them: bun run voice:align`,
       );
+      await ended?.({
+        say: `Voiced ${results.length} take${results.length > 1 ? "s" : ""}; their word timings are missing`,
+        level: "warn",
+      });
       process.exit(1);
     }
   }
+  await ended?.({
+    say: `Voiced ${results.length} take${results.length > 1 ? "s" : ""}: ${results.map((r) => r.id).join(", ")}`,
+    level: "ok",
+  });
   if (results.length && sent)
     console.log(
       process.argv.includes("--try")

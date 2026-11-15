@@ -12,6 +12,7 @@ import {
   sourceOf,
 } from "./groups";
 import type { LibraryItem } from "./sound";
+import { voiceLeafTitle } from "./voice-library-view";
 
 const NATURAL_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const SIMPLE_COLLATOR = new Intl.Collator(undefined);
@@ -37,10 +38,10 @@ export type { EditionKind, SoundOrigin };
 export { catTitle, editionOf, originOf, sourceOf };
 export type OriginFilter = typeof ALL | SoundOrigin;
 export type EditionFilter = typeof ALL | EditionKind;
-export type NavGroupId = "yours" | "bgm" | "sfx" | "mc";
+export type NavGroupId = "yours" | "bgm" | "sfx" | "mc" | "voices";
 export type YoursLeaf = "fav" | "voice" | "film";
 export type NavPick =
-  { group: "yours"; leaf: YoursLeaf } | { group: "bgm" | "sfx" | "mc"; leaf: string };
+  { group: "yours"; leaf: YoursLeaf } | { group: "bgm" | "sfx" | "mc" | "voices"; leaf: string };
 export type OpenGroups = Record<NavGroupId, boolean>;
 
 export interface NavLeaf {
@@ -89,6 +90,7 @@ export const INITIAL_OPEN_GROUPS: OpenGroups = {
   bgm: false,
   sfx: true,
   mc: false,
+  voices: false,
 };
 
 const SOURCE_ORDER = [
@@ -298,17 +300,17 @@ export const CONTENT_ID_NOTE =
 export const soundCardDetail = (
   item: Pick<
     LibraryItem,
-    "name" | "title" | "for" | "source" | "license" | "origin" | "variant" | "contentId"
+    "name" | "title" | "for" | "source" | "license" | "origin" | "variant" | "contentId" | "kind"
   >,
 ): string => {
   const originLabel = originTitle(originOf(item));
   const srcLabel = item.license
     ? `${sourceTitle(sourceOf(item))} (${item.license})`
     : sourceTitle(sourceOf(item));
-  const fullTitle =
-    item.variant !== undefined
-      ? `${item.title ?? displayTitleOf(item)} #${item.variant}`
-      : (item.title ?? displayTitleOf(item));
+  const cleanBase = cleanAudioTitle(item.title ?? displayTitleOf(item), {
+    mc: item.kind === "mc",
+  });
+  const fullTitle = item.variant !== undefined ? `${cleanBase} #${item.variant}` : cleanBase;
   const parts = [
     fullTitle,
     item.for,
@@ -424,8 +426,8 @@ const categoryLeaves = (items: readonly LibraryItem[]): NavLeaf[] => {
   return [
     { id: ALL, title: "All", count: countDistinctFamilies(items) },
     ...[...byCat.keys()]
-      .sort(SIMPLE_COLLATOR.compare)
-      .map((id) => ({ id, title: catTitle(id), count: byCat.get(id)!.size })),
+      .map((id) => ({ id, title: catTitle(id), count: byCat.get(id)!.size }))
+      .sort((a, b) => NATURAL_COLLATOR.compare(a.title, b.title)),
   ];
 };
 
@@ -434,6 +436,7 @@ export const buildNavTree = (
   favs: readonly string[],
   kindOf: (item: LibraryItem) => SoundKind,
   voiceCount = 0,
+  voiceSection: { count: number; leaves: readonly NavLeaf[] } = { count: 0, leaves: [] },
 ): NavSection[] => {
   const byName = new Map<string, LibraryItem>();
   const filmItems: LibraryItem[] = [];
@@ -488,6 +491,15 @@ export const buildNavTree = (
       count: countDistinctFamilies(mc),
       leaves: categoryLeaves(mc),
     },
+    {
+      id: "voices",
+      title: "Voices",
+      one: "voice",
+      count: voiceSection.count,
+      leaves: voiceSection.leaves.length
+        ? [...voiceSection.leaves]
+        : [{ id: ALL, title: "All", count: 0 }],
+    },
   ];
 };
 
@@ -505,6 +517,7 @@ export const stepNavHeader = (
     bgm: false,
     sfx: false,
     mc: false,
+    voices: false,
     [clicked]: true,
   };
   const section = tree.find((s) => s.id === clicked);
@@ -585,6 +598,9 @@ export const searchPlaceholder = (nav: NavPick): string => {
   if (nav.group === "bgm") return "Search music";
   if (nav.group === "sfx") return "Search sound effects";
   if (nav.group === "mc") return "Search Minecraft";
+  if (nav.group === "voices") {
+    return nav.leaf === "fav" ? "Search favorite voices" : "Search English voices";
+  }
   if (nav.leaf === "voice") return "Search voiceover & script";
   return nav.leaf === "fav" ? "Search favorites" : "Search film sounds";
 };
@@ -592,6 +608,11 @@ export const searchPlaceholder = (nav: NavPick): string => {
 export const categoryHeading = (nav: NavPick): string => {
   if (nav.group === "yours") {
     return nav.leaf === "fav" ? "Favorites" : nav.leaf === "voice" ? "Voiceover" : "This film";
+  }
+  if (nav.group === "voices") {
+    if (nav.leaf === ALL) return "All English voices";
+    if (nav.leaf === "fav") return "Favorite voices";
+    return voiceLeafTitle(nav.leaf);
   }
   if (nav.group === "mc") {
     return nav.leaf === ALL ? "All Minecraft" : (MC_HEADINGS[nav.leaf] ?? catTitle(nav.leaf));
@@ -611,6 +632,7 @@ export const filterAndSortLibrary = ({
   kindOf,
   narrationName = null,
   voiceCount = 0,
+  voiceSection,
 }: {
   items: readonly LibraryItem[];
   favs: readonly string[];
@@ -622,6 +644,7 @@ export const filterAndSortLibrary = ({
   kindOf: (item: LibraryItem) => SoundKind;
   narrationName?: string | null;
   voiceCount?: number;
+  voiceSection?: { count: number; leaves: readonly NavLeaf[] };
 }) => {
   const want = words(query);
   const soundItems = narrationName ? items.filter((x) => x.name !== narrationName) : items;
@@ -631,16 +654,18 @@ export const filterAndSortLibrary = ({
         const have = itemSearchTokens(x);
         return want.every((w) => have.some((h) => h.startsWith(w)));
       });
-  const tree = buildNavTree(matched, favs, kindOf, voiceCount);
+  const tree = buildNavTree(matched, favs, kindOf, voiceCount, voiceSection);
 
-  // Resolve valid leaf (if current category has 0 items under active query/library, fall back to "all" for bgm/sfx/mc)
+  // Resolve valid leaf (keep user's selected leaf for yours/voices so 0 hits doesn't snap back to "all")
   const section = tree.find((s) => s.id === nav.group)!;
-  const validLeaf =
-    nav.group === "yours" || section.leaves.some((l) => l.id === nav.leaf) ? nav.leaf : ALL;
-  const activeNav: NavPick = nav.group === "yours" ? nav : { group: nav.group, leaf: validLeaf };
+  const keepLeaf = nav.group === "yours" || nav.group === "voices";
+  const validLeaf = keepLeaf || section.leaves.some((l) => l.id === nav.leaf) ? nav.leaf : ALL;
+  const activeNav: NavPick = keepLeaf ? nav : { group: nav.group, leaf: validLeaf };
 
   let scoped: LibraryItem[];
-  if (activeNav.group === "yours") {
+  if (activeNav.group === "voices") {
+    scoped = [];
+  } else if (activeNav.group === "yours") {
     if (activeNav.leaf === "voice") {
       scoped = [];
     } else if (activeNav.leaf === "fav") {
@@ -716,4 +741,167 @@ export const filterAndSortLibrary = ({
     shown,
     elsewhere,
   };
+};
+
+const AUDIO_TITLE_ACRONYMS = new Set([
+  "acp",
+  "ai",
+  "akm",
+  "bgm",
+  "bmg",
+  "br",
+  "cctv",
+  "dj",
+  "eq",
+  "fps",
+  "fx",
+  "gpmg",
+  "hd",
+  "hk",
+  "hud",
+  "lmg",
+  "lsw",
+  "mc",
+  "ms",
+  "ost",
+  "pzm",
+  "sfx",
+  "smg",
+  "trg",
+  "tv",
+  "ui",
+  "uk",
+  "us",
+  "usas",
+  "usp",
+  "vr",
+]);
+
+const AUDIO_TITLE_MINOR_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "at",
+  "by",
+  "for",
+  "from",
+  "in",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "with",
+]);
+
+const AUDIO_TITLE_TYPOS: Record<string, string> = {
+  acess: "Access",
+  clik: "Click",
+  fuze: "Fuse",
+  lofi: "Lo-Fi",
+  mouthclicks: "Mouth Clicks",
+  reto: "Retro",
+  scifi: "Sci-Fi",
+  typying: "Typing",
+  flourescent: "Fluorescent",
+  negativebeep: "Negative Beep",
+  blastfurnace: "Blast Furnace",
+  bonemeal: "Bone Meal",
+  bowhit: "Bow Hit",
+  chestclosed: "Chest · Closed",
+  chestopen: "Chest · Open",
+  clothsweep: "Cloth Sweep",
+  copperpipe: "Copper Pipe",
+  extrathick: "Extra Thick",
+  hollowbase: "Hollow Base",
+  hollowtop: "Hollow Top",
+  irregularshape: "Irregular Shape",
+  levelup: "Level Up",
+  plasticdrawstring: "Plastic Drawstring",
+  pvcpipe: "PVC Pipe",
+  vinyltube: "Vinyl Tube",
+};
+
+const ORPHAN_STEM_SUFFIX_RE = /^(.+?\s+\S.*?)(?:,\s*[a-z]|\s+(?:x|m|v))$/i;
+const DIGIT_SMASH_UNIT_RE =
+  /^(?:khz|mhz|ghz|fps|bpm|rpm|mph|kbps|mbps|bit|bits|dbm|wav|mp3|ogg|flac|aif)$/i;
+
+const normalizeCompoundAudioWord = (word: string): string | null => {
+  if (!/[&/]/.test(word)) return null;
+  const parts = word.split(/([&/])/);
+  let changed = false;
+  const out = parts.map((part, idx) => {
+    if (part === "&" || part === "/") return part;
+    if (!part) return part;
+    const lower = part.toLowerCase();
+    const typoFix = AUDIO_TITLE_TYPOS[lower];
+    if (typoFix) {
+      changed = true;
+      return typoFix;
+    }
+    const touchesAmp = parts[idx - 1] === "&" || parts[idx + 1] === "&";
+    if (AUDIO_TITLE_ACRONYMS.has(lower) || (touchesAmp && /^[a-z]$/i.test(part))) {
+      changed = true;
+      return part.toUpperCase();
+    }
+    if (/^[a-z]+$/.test(part) || (part.length > 1 && /^[A-Z]+$/.test(part))) {
+      changed = true;
+      return lower[0].toUpperCase() + lower.slice(1);
+    }
+    return part;
+  });
+  return changed ? out.join("") : null;
+};
+
+/** Cleans raw SFX/music filenames into consistent, scannable UI display titles. */
+export const cleanAudioTitle = (raw: string, opts?: { mc?: boolean }): string => {
+  const base = raw
+    .replace(/\.(wav|mp3|ogg|flac|aif)$/i, "")
+    .replace(/[_;]+/g, " ")
+    .replace(/\s+-\s+/g, " — ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([a-z]{2,})(\d+)/g, "$1 $2")
+    .replace(/\b(\d+)([a-z]{3,})\b/gi, (m, d: string, w: string) =>
+      DIGIT_SMASH_UNIT_RE.test(w) ? m : `${d} ${w}`,
+    )
+    .replace(/(?<=[a-zA-Z])-(?=[a-zA-Z])/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(ORPHAN_STEM_SUFFIX_RE, "$1")
+    .replace(/(?:,+|(?<!\.)\.)+\s*$/, "")
+    .trim();
+  if (!base) return raw;
+  const tokens = base.split(" ");
+  const wordsOut = tokens.map((token, idx) => {
+    if (token === "—") return token;
+    const [, open = "", word = token, close = ""] =
+      token.match(/^([([{]*)(.*?)([)\]}.,:;!?]*)$/) ?? [];
+    if (!word) return token;
+    const compound = normalizeCompoundAudioWord(word);
+    if (compound) return open + compound + close;
+    const cleanKey = word.toLowerCase();
+    const typoFix = AUDIO_TITLE_TYPOS[cleanKey];
+    if (typoFix) return open + typoFix + close;
+    if (AUDIO_TITLE_ACRONYMS.has(cleanKey)) return open + word.toUpperCase() + close;
+    if (/^[A-Z]{1,3}\d+[A-Z0-9]*$|^\d+[A-Z]{1,3}$/.test(word)) return token;
+    const allCapsAlpha = word.length > 1 && /^[A-Z0-9-]+$/.test(word) && /[A-Z]{2,}/.test(word);
+    const allLowerAlpha = /^[a-z]+$/.test(word);
+    const titleCaseMinor = /^[A-Z][a-z]+$/.test(word) && AUDIO_TITLE_MINOR_WORDS.has(cleanKey);
+    if (allCapsAlpha || allLowerAlpha || titleCaseMinor) {
+      const isClauseStart = idx === 0 || tokens[idx - 1] === "—" || /^[([]/.test(token);
+      const isClauseEnd =
+        idx === tokens.length - 1 || tokens[idx + 1] === "—" || /[)\]]$/.test(token);
+      if (!isClauseStart && !isClauseEnd && AUDIO_TITLE_MINOR_WORDS.has(cleanKey)) {
+        return open + cleanKey + close;
+      }
+      return open + cleanKey[0].toUpperCase() + cleanKey.slice(1) + close;
+    }
+    return token;
+  });
+  const cleaned = wordsOut.join(" ");
+  if (opts?.mc && !cleaned.includes(" · ")) {
+    const mcMatch = cleaned.match(/^(.+?)\s+(Break|Land|Use|Open|Close|Toggle)$/);
+    if (mcMatch) return `${mcMatch[1]} · ${mcMatch[2]}`;
+  }
+  return cleaned;
 };

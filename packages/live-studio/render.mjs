@@ -17,6 +17,7 @@ import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines, seenSound } from "./src/narration.ts";
 import { isRead, pxOf } from "./src/readable.mjs";
 import { audioInfo } from "./src/sound.mjs";
+import { startJob } from "./src/tell.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
 import { clockForTimeline } from "./src/timing-state.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
@@ -440,6 +441,11 @@ const cfg = {
 // ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
 const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/page.ts");
 const t0 = Date.now();
+// the creator's studio shows the render busy, its build too, until the line at the end, or until this process is gone (src/tell.mjs)
+const ended = await startJob(PROJECT, `render ${what}`, {
+  say: `Rendering ${what}${span ? ` ${span[0]}-${span[1]} s` : at.length ? ` at ${at.join(", ")} s` : ""}`,
+  ...(span ? { at: span[0], to: span[1] } : at.length ? { at: at[0] } : {}),
+});
 // Of the sound timeline only the narration clips change a frame (the mouths follow them, src/lips.ts) and LIST=1's overlay
 // names its rows. A video is built with that part alone (seenSound), so a gain, a bed or an effect keeps every chunk's stamp
 // and render clip redraws nothing for it; the joined video keeps it in <chunks>/seen-sound.json for src/stale.mjs
@@ -458,7 +464,7 @@ const noSound = {
 };
 // A film's code that does not build: rolldown's own report colours every character and Bun prints rolldown's source under
 // it, so only the place and the words are said, plain
-const notBuilt = (e) => {
+const notBuilt = async (e) => {
   const plain = (s) => stripVTControlCharacters(String(s));
   for (const x of e?.errors ?? [e]) {
     const at = x?.loc?.file
@@ -473,6 +479,7 @@ const notBuilt = (e) => {
     "the film's code does not build: fix it, then bun run render again (nothing was rendered)",
   );
   rmSync(OUT, { recursive: true, force: true }); // a build folder per run: a failed one is left nowhere
+  await ended({ say: `Render ${what}: the film's code does not build`, level: "fail" });
   process.exit(1);
 };
 const built = await build({
@@ -767,4 +774,10 @@ if (!failed && chunks) {
   }
 }
 if (failed) console.log("next: fix what the ERROR above says, then run the same render again");
+await ended({
+  say: failed
+    ? `Render ${what} failed`
+    : `Rendered ${what} in ${((Date.now() - t0) / 1000).toFixed(0)} s${stillsWritten.length ? `: ${stillsWritten.length} picture${stillsWritten.length > 1 ? "s" : ""}` : ""}`,
+  level: failed ? "fail" : "ok",
+});
 process.exit(failed ? 1 : 0);

@@ -7,7 +7,7 @@ import { SHOTS_OUT } from "film/scene";
 import { createDoc } from "../core/doc";
 import { pruneShotSelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
-import { get, set, showError } from "../core/store";
+import { get, invalidatePictures, set, showError } from "../core/store";
 import { refreshTimes } from "../timeline/timeline";
 
 export interface ShotRow {
@@ -30,6 +30,7 @@ const changed = () => {
       .then(() => {
         S.dirty = true;
         S.finalAt = -1;
+        invalidatePictures();
       })
       .catch(showError);
 };

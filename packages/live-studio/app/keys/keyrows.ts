@@ -14,7 +14,7 @@ import { makeSnapper, snappedTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
-import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
+import { keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -151,7 +151,6 @@ export const drawKeyRows = () => {
   // Cuts, faint, over everything: a key is often put on one by eye
   g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
-  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = () => [

@@ -13,7 +13,7 @@ import { FPS, makeSnapper, r3 } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { allClips, beatTimes, span } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
-import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -104,7 +104,6 @@ function attach(canvas: HTMLCanvasElement) {
       boxes.push({ id: it.id, x0, x1, y0, y1: y0 + HEIGHT });
     }
     g.globalAlpha = 1;
-    drawPlayhead(g, X(S.t), h);
   };
   const hit = (x: number, y: number) =>
     boxes.findLast((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1);
@@ -119,7 +118,10 @@ function attach(canvas: HTMLCanvasElement) {
       box = hit(x, y);
     if (S.playing) setPlaying(false);
     canvas.setPointerCapture(e.pointerId);
-    if (!box && onPlayhead(x, w, e.pointerType === "touch")) {
+    if (
+      (!box || (x > box.x0 + 6 && x < box.x1 - 6)) &&
+      onPlayhead(x, w, e.pointerType === "touch")
+    ) {
       gesture = { kind: "scrub" };
       holdView(true);
       return;
@@ -335,7 +337,7 @@ export function LayerTrack() {
   useStudio((s) => s.layersRev);
   useEffect(() => attach(ref.current!), []);
   return (
-    <div className={`col-span-2 mb-1 grid grid-cols-subgrid ${enabled ? "" : "hidden"}`}>
+    <div className={`col-span-2 grid grid-cols-subgrid ${enabled ? "" : "hidden"}`}>
       <ul aria-label="Adjustment tracks" className="border-track-line bg-track-head border-e">
         {Array.from({ length: trackCount() }, (_, row) => {
           const track = trackCount() - row - 1,

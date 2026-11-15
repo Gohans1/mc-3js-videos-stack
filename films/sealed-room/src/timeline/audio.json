@@ -79,6 +79,7 @@
   {"at": 0, "name": "narration", "gain": 0, "length": 125.73280408754671, "dialogue": true, "track": "voice"},
   {"at": 4.259139784946236, "name": "typing_fast_short", "gain": 0, "track": "t8"},
   {"at": 4.259139784946236, "name": "typing_fast_short", "gain": 0, "track": "t9"},
+  {"at": 4.292139784946237, "name": "pop_flick", "gain": 0, "track": "t11", "length": 1.0249999999999986},
   {"at": 47.01580408754671, "name": "typing_fast_short", "gain": 0, "track": "t9"},
   {"at": 5.359139784946237, "name": "rustle_hand", "gain": -2, "track": "t5"},
   {"at": 5.859139784946237, "name": "typing_fast", "gain": 0, "track": "t4"},
@@ -103,6 +104,7 @@
    "try": ["steps_stone"],
    "track": "t6"
   },
+  {"at": 54.950234094455254, "name": "son-19-air-movement-breeze-01", "gain": 0, "track": "t11", "length": 4.704000000000022},
   {
    "at": 56.81280408754671,
    "name": "steps",
@@ -323,6 +325,7 @@
  "tracks": [
   {"id": "voice", "name": "123"},
   {"id": "t1", "name": "Bed"},
+  {"id": "t11", "name": "SFX 7"},
   {"id": "t2", "name": "Bed 2"},
   {"id": "t3", "name": "Bed 3"},
   {"id": "t4", "name": "Bed 4"},

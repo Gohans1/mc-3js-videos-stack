@@ -30,6 +30,7 @@
     "setup:vault": "bun scripts/setup_vault.mjs",
     "setup:sound": "bun scripts/build_sound_vault.mjs",
     "setup:mc-sound": "bun scripts/build_mc_sound_vault.mjs",
+    "setup:voices": "bun scripts/voice/sync.ts",
     "pack:sound": "bun scripts/pack_sound.mjs",
     "link": "bun scripts/link.ts",
     "fetch:sfx": "bun scripts/fetch_mixkit.mjs",

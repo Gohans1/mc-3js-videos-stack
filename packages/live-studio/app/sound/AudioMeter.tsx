@@ -168,7 +168,7 @@ export function AudioMeter() {
           {under && (
             <TriangleAlert
               aria-label="Quieter than the target: its peaks stop the loudness pass"
-              className="text-warn ms-auto size-3 flex-none"
+              className="text-warn-text ms-auto size-3 flex-none"
             />
           )}
           <span className="text-muted-foreground">S</span>

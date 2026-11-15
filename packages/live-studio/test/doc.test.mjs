@@ -30,7 +30,7 @@ if (typeof Bun !== "undefined") {
   });
 }
 globalThis.window = globalThis;
-const { createDoc, undo, redo } = await import("../app/core/doc.ts");
+const { createDoc, onDocMutated, undo, redo } = await import("../app/core/doc.ts");
 const { createTimedDoc } = await import("../app/core/timed-doc.ts");
 const { setTiming } = await import("../src/timing-state.mjs");
 const { TextTimeline } = await import("../src/contract.ts");
@@ -237,4 +237,53 @@ test("a save the server refuses as invalid waits for the next change instead of 
   });
   await saveNow(t);
   assert.deepEqual(files.get("f.json").data, { v: 2 });
+});
+
+test("onDocMutated ignores preview, restore, no-op edit, and unchanged external load", async (t) => {
+  const doc = await open(t, "g.json", { count: 1 });
+  let hits = 0;
+  const off = onDocMutated(() => {
+    hits += 1;
+  });
+  const snap = doc.snapshot();
+  doc.preview((d) => {
+    d.count = 2;
+  });
+  doc.restore(snap);
+  doc.edit((d) => {
+    d.count = 1;
+  });
+  await doc.load();
+  assert.equal(hits, 0);
+  off();
+});
+
+test("onDocMutated fires on edit, undo, redo, and changed external load until unsubscribed", async (t) => {
+  const doc = await open(t, "g2.json", { count: 1 });
+  let hits = 0;
+  const off = onDocMutated(() => {
+    hits += 1;
+  });
+
+  doc.edit((d) => {
+    d.count = 3;
+  });
+  assert.equal(hits, 1);
+
+  undo();
+  assert.equal(hits, 2);
+
+  redo();
+  assert.equal(hits, 3);
+
+  await saveNow(t);
+  agentWrites("g2.json", { count: 9 });
+  await doc.load();
+  assert.equal(hits, 4);
+
+  off();
+  doc.edit((d) => {
+    d.count = 10;
+  });
+  assert.equal(hits, 4);
 });

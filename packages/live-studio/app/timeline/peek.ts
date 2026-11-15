@@ -57,11 +57,22 @@ export const attachPreviewAxis = () => {
   const rows = [ruler, camrow, textrow, detail, keyrows, lanes];
   const scroller = detail.closest<HTMLElement>("[data-tracks-scroll]")!; // the rows' scroll box under the ruler, which the line runs down to its foot
   timeline.addEventListener("pointermove", (e) => {
+    const target = e.target as Element | null;
+    const dr = detail.getBoundingClientRect();
+    const inGap =
+      !!target &&
+      scroller.contains(target) &&
+      !target.closest("button, input, canvas, [role=separator]") &&
+      dr.width > 0 &&
+      e.clientX >= dr.left &&
+      e.clientX <= dr.right;
     const c =
       rows.find((r) => r === e.target) ??
-      (e.target instanceof HTMLCanvasElement && e.target.hasAttribute("data-timeline-row")
-        ? e.target
-        : null);
+      (target instanceof HTMLCanvasElement && target.hasAttribute("data-timeline-row")
+        ? target
+        : inGap
+          ? detail
+          : null);
     if (!c || e.pointerType !== "mouse" || e.buttons || !allowed()) return end();
     const r = c.getBoundingClientRect(),
       x = Math.max(0, Math.min(r.width, e.clientX - r.left));

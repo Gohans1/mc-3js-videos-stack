@@ -1,0 +1,67 @@
+@layer utilities {
+  [data-edge-left="true"]:not([data-edge-right="true"]) {
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 28px, black 100%);
+    mask-image: linear-gradient(to right, transparent 0%, black 28px, black 100%);
+  }
+
+  [data-edge-right="true"]:not([data-edge-left="true"]) {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      black 0%,
+      black calc(100% - 28px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(to right, black 0%, black calc(100% - 28px), transparent 100%);
+  }
+
+  [data-edge-left="true"][data-edge-right="true"] {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      black 28px,
+      black calc(100% - 28px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      black 28px,
+      black calc(100% - 28px),
+      transparent 100%
+    );
+  }
+
+  @media (pointer: coarse) {
+    [data-edge-left="true"]:not([data-edge-right="true"]) {
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, black 40px, black 100%);
+      mask-image: linear-gradient(to right, transparent 0%, black 40px, black 100%);
+    }
+
+    [data-edge-right="true"]:not([data-edge-left="true"]) {
+      -webkit-mask-image: linear-gradient(
+        to right,
+        black 0%,
+        black calc(100% - 40px),
+        transparent 100%
+      );
+      mask-image: linear-gradient(to right, black 0%, black calc(100% - 40px), transparent 100%);
+    }
+
+    [data-edge-left="true"][data-edge-right="true"] {
+      -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 40px,
+        black calc(100% - 40px),
+        transparent 100%
+      );
+      mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 40px,
+        black calc(100% - 40px),
+        transparent 100%
+      );
+    }
+  }
+}

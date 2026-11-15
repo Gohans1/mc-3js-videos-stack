@@ -1,9 +1,15 @@
+---
+when: narration, the voice-over: its pace, loudness, pronunciation
+---
+
 # Voice / narration
 
 ## Pace about 150 words a minute
+
 Faster than that and viewers miss words; leave a breath between sentences.
 
-## Loud and clear
-Narration sits at the top of the mix, -14 LUFS overall, never buried by effects.
+## Narration loud and clear at the top of the mix, never buried by effects
+
+-14 LUFS overall.
 
 ## Say names the same way every time

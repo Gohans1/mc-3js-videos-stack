@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const inputVariants = cva(
-  "border-input bg-input text-ui text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring w-full min-w-0 rounded-md border outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:text-[16px]",
+  "border-input bg-backdrop text-ui text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring w-full min-w-0 rounded-md border outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:text-[16px]",
   {
     variants: {
       variant: {
@@ -21,11 +21,11 @@ const inputVariants = cva(
         default: "h-8 px-2 pointer-coarse:h-10 pointer-coarse:text-base",
         tight: "h-8 px-1.5 pointer-coarse:h-10 pointer-coarse:text-base",
         xsTight: "h-8 px-1 pointer-coarse:h-10 pointer-coarse:text-base",
-        search: "h-8 ps-8.5 pe-2.5 pointer-coarse:h-10 pointer-coarse:text-base",
-        sm: "h-7 px-2",
-        smUnit: "h-7 ps-2 pe-7",
-        xs: "h-6 px-2 text-xs",
-        xsUnit: "h-6 ps-2 pe-7 text-xs",
+        search: "h-8 ps-8.5 pe-2.5 text-sm pointer-coarse:h-10 pointer-coarse:text-base",
+        sm: "h-7 px-2 pointer-coarse:text-base",
+        smUnit: "h-7 ps-2 pe-7 pointer-coarse:text-base",
+        xs: "h-6 px-2 text-xs pointer-coarse:text-base",
+        xsUnit: "h-6 ps-2 pe-7 text-xs pointer-coarse:text-base",
         wheel: "h-5 px-0.5",
       },
     },

@@ -1331,3 +1331,34 @@ test("voice:gen names the takes whose audio says other words than src/edit.json,
     { id: "02", heard: "A heavy steel door.", text: "A heavy iron door, sealed." },
   ]);
 });
+
+test("voice sync CLI prints help, rejects unknown flags with exit 2, and errors cleanly when API key is missing", (t) => {
+  const syncScript = join(ROOT, "scripts/voice/sync.ts");
+  const dir = mkdtempSync(join(tmpdir(), "voice-sync-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const help = spawnSync(process.execPath, [syncScript, "--help"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /Sync all English voices/);
+
+  const badFlag = spawnSync(process.execPath, [syncScript, "--bogus"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.equal(badFlag.status, 2);
+
+  const missingKey = spawnSync(process.execPath, [syncScript], {
+    cwd: dir,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GENVOICE_API_KEY: "",
+      ELEVENLABS_API_KEY: "",
+    },
+  });
+  assert.notEqual(missingKey.status, 0);
+  assert.match(`${missingKey.stdout}\n${missingKey.stderr}`, /API key/i);
+});

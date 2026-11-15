@@ -37,11 +37,11 @@ const BUILTIN_VOICES = new Map<string, TitleFxMeta>(
 
 export const TINT_SWATCHES = [
   DEFAULT_TINT,
-  "#38BDF8",
-  "#FDE68A",
-  "#E5484D",
+  "#4385BE",
+  "#D0A215",
+  "#D14D41",
   "#3AA99F",
-  "#A78BFA",
+  "#8B7EC8",
 ] as const;
 
 // Cinetic on-twos: a voice may step its clock every 2 or 3 film frames

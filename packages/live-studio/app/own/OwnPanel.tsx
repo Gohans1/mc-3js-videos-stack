@@ -11,6 +11,7 @@ import { keys as camKeys } from "../camera/cam";
 import { layerItems } from "../camera/layers";
 import { shotsDoc } from "../camera/shots";
 import { ChipGroup, NavItem } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { clockText } from "../core/time";
@@ -99,7 +100,9 @@ function OnScreen() {
           <dt className="text-muted-foreground text-xs font-semibold tracking-wide">{s.head}</dt>
           {s.lines.map((l, j) => (
             <dd key={j} className="text-ui text-foreground/90 break-words">
-              {l.fresh && <span className="text-primary mr-1.5 text-xs font-semibold">New </span>}
+              {l.fresh && (
+                <span className="text-primary-text mr-1.5 text-xs font-semibold">New </span>
+              )}
               {l.text}
             </dd>
           ))}
@@ -133,7 +136,7 @@ function Field({ f, bare }: { f: OwnField; bare: boolean }) {
                 {f.key}
               </span>
             )}
-            <span className="text-primary">{f.text}</span>
+            <span className="text-primary-text">{f.text}</span>
           </summary>
           {code !== null && (
             // Focusable so a keyboard can scroll a long shader
@@ -163,7 +166,7 @@ function Item({ x }: { x: OwnItem }) {
           <span className="text-muted-foreground font-mono text-xs break-all">{x.id}</span>
         )}
         {x.part && <span className="text-muted-foreground text-xs">{x.part}</span>}
-        {x.changes && <span className="text-warn text-xs">changes the studio's own</span>}
+        {x.changes && <span className="text-warn-text text-xs">changes the studio's own</span>}
       </div>
       {x.tip && <p className="text-muted-foreground text-xs">{x.tip}</p>}
       {x.used.length > 0 && (
@@ -272,15 +275,23 @@ export function OwnPanel() {
           <p className="text-muted-foreground text-xs">{aboutOf(open.id)}</p>
         </div>
         <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-1 pb-3">
-          {group ? (
-            <div key={open.id} className="divide-border flex flex-col divide-y">
-              {group.items.map((x) => (
-                <Item key={`${x.part ?? ""}:${x.id}`} x={x} />
-              ))}
-            </div>
-          ) : (
-            <OnScreen />
-          )}
+          <TabStage
+            activeKey={open.id}
+            order={kinds.map((k) => k.id)}
+            axis="y"
+            distance={6}
+            duration={150}
+          >
+            {group ? (
+              <div key={open.id} className="divide-border flex flex-col divide-y">
+                {group.items.map((x) => (
+                  <Item key={`${x.part ?? ""}:${x.id}`} x={x} />
+                ))}
+              </div>
+            ) : (
+              <OnScreen />
+            )}
+          </TabStage>
         </div>
       </div>
     </section>

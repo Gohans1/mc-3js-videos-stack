@@ -11,6 +11,7 @@ import {
   speakingTakes,
   writeMouthMap,
 } from "../../packages/live-studio/src/mouth-map.mjs";
+import { startJob } from "../../packages/live-studio/src/tell.mjs";
 import { stripAudioTags } from "./genvoice.ts";
 
 const HELP = `Lip sync: mouth shapes for every take a character speaks on screen (a take with "by": "<character>" in
@@ -48,6 +49,11 @@ if (todo.length && !existsSync(rhubarb)) {
   process.exit(1);
 }
 const failed: string[] = [];
+const ended = todo.length
+  ? await startJob(film, "voice:lips", {
+      say: `Shaping the mouths of take${todo.length > 1 ? "s" : ""} ${todo.map((k) => k.id).join(", ")}`,
+    })
+  : undefined;
 for (const k of todo) {
   const t0 = performance.now();
   try {
@@ -61,6 +67,14 @@ for (const k of todo) {
   }
 }
 const map = writeMouthMap(film);
+await ended?.(
+  failed.length
+    ? {
+        say: `Mouth shapes failed for take${failed.length > 1 ? "s" : ""} ${failed.join(", ")}`,
+        level: "fail",
+      }
+    : { say: `Shaped the mouths of ${todo.length} take${todo.length > 1 ? "s" : ""}`, level: "ok" },
+);
 const who = [...new Set(said.map((k) => k.by))];
 console.log(
   `wrote ${MOUTH_MAP}: ${map.takes.length} take${map.takes.length === 1 ? "" : "s"} for ${who.join(", ")}${todo.length ? "" : " (every take already had its shapes)"}`,

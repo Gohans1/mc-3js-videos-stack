@@ -5,6 +5,7 @@ import { buildScene, SHOTS_OUT as SHOTS } from "film/scene";
 import * as THREE from "three";
 
 import { checkFilm } from "../src/contract.ts";
+import { aiSpans, listenActivity, loadActivity } from "./activity/activity";
 import { loadCam } from "./camera/cam";
 import { attachCamRow } from "./camera/camrow";
 import { loadLayers } from "./camera/layers";
@@ -16,10 +17,11 @@ import { shotIndex } from "./core/film";
 import { getFile, postJson, wait } from "./core/net";
 import { type Elements, S } from "./core/state";
 import { stored } from "./core/storage";
-import { get, say, set, showError } from "./core/store";
+import { get, invalidatePictures, say, set, showError } from "./core/store";
 import { stamp } from "./core/time";
 import { attachKeyRows } from "./keys/keyrows";
 import { loadKeys } from "./keys/keys";
+import { lessons, loadLessons } from "./lessons/lessons";
 import { attachInk, drawInk } from "./notes/ink";
 import {
   drawnNotes,
@@ -52,6 +54,7 @@ import {
 import { attachLanes } from "./sound/lanes";
 import { invalidateSoundCaches, loadSound } from "./sound/sound";
 import { loadVoiceTakes } from "./sound/voice-client";
+import { handleVoiceLibraryEvent } from "./sound/voice-library-client";
 import { loadText } from "./text/text";
 import { attachTextRow } from "./text/textrow";
 import { attachAcross } from "./timeline/across";
@@ -128,6 +131,12 @@ const listen = () => {
   onEvent("contract", loadContract);
   onEvent("film", codeChanged); // the frame's shape changed (Settings, maybe in another page): a reload builds the scene at it
   onEvent("favorites", loadFavorites); // starred here, in another tab or on the phone
+  // the AI wrote a lesson file: a Lessons tab already read shows it (lessons.ts keeps what the creator is typing)
+  onEvent("lessons", () => {
+    if (lessons.getState().loaded) void loadLessons();
+  });
+  onEvent("voice-library", handleVoiceLibraryEvent);
+  listenActivity();
   // Back after the line dropped or the studio restarted: catch up on what changed meanwhile
   onHello((current, reconnect) => {
     if (!current) codeChanged();
@@ -136,6 +145,7 @@ const listen = () => {
       loadNotes();
       loadVoice();
       loadVoiceTakes();
+      handleVoiceLibraryEvent();
       loadContract();
       loadTrials();
       loadTiming();
@@ -146,6 +156,8 @@ const listen = () => {
       loadText();
       loadLayers();
       loadFavorites();
+      void loadActivity();
+      if (lessons.getState().loaded) void loadLessons();
     }
   });
 };
@@ -174,6 +186,7 @@ export const start = async (el: Elements) => {
   };
   marks.notes = noteMarks;
   marks.optionRanges = optionRanges;
+  marks.ai = aiSpans;
   restoreVolume();
   listen();
   attachPicture();
@@ -255,6 +268,7 @@ export const start = async (el: Elements) => {
   ]).then(() => {
     refreshTimes();
     S.dirty = true;
+    invalidatePictures();
   });
   refreshTimes();
   seek(S.t);

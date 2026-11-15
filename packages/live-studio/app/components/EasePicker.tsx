@@ -127,12 +127,12 @@ function Tile({
           aria-pressed={on}
           aria-label={`${title}: ${tip}${own ? `, ${FILM_MADE}` : ""}`}
           onClick={onPick}
-          className="text-foreground/80 hover:ring-border focus-visible:ring-ring aria-pressed:text-primary aria-pressed:ring-primary relative block aspect-square w-full overflow-hidden rounded-md ring-2 ring-transparent outline-none"
+          className="text-foreground/80 hover:ring-border focus-visible:ring-ring aria-pressed:text-primary-text aria-pressed:ring-primary relative block aspect-square w-full overflow-hidden rounded-md ring-2 ring-transparent outline-none"
         >
           {f ? (
             <Graph f={f} />
           ) : (
-            <span className="bg-raised-2 text-warn absolute inset-0 grid place-items-center">
+            <span className="bg-raised-2 text-warn-text absolute inset-0 grid place-items-center">
               <SlidersHorizontal className="size-6" />
             </span>
           )}
@@ -143,7 +143,7 @@ function Tile({
         translate={mono ? "no" : undefined}
         className={
           on
-            ? "text-primary w-full truncate text-center text-xs"
+            ? "text-primary-text w-full truncate text-center text-xs"
             : "text-foreground/85 w-full truncate text-center text-xs"
         }
       >

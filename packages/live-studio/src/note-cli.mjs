@@ -1,10 +1,9 @@
 // A note fixed, from the AI's side (note.mjs done): filed through the running studio, which owns notes.jsonl while it runs (two
 // writers would lose a note), or straight into the file when no studio is running
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
-import { createNotes } from "./notes.mjs";
+import { createNotes, deletedSaid, findNote } from "./notes.mjs";
+import { studioPort } from "./tell.mjs";
 
 const version = (project) => {
   try {
@@ -18,23 +17,10 @@ const version = (project) => {
   }
 };
 
-const studioPort = (project) => {
-  try {
-    return JSON.parse(readFileSync(join(project, "renders/live/studio.json"), "utf8")).port;
-  } catch {
-    return null;
-  }
-};
-
-// A note named by its id or by the #N bun run notes shows (every whole note, done ones too, in the order written)
+// A note named by its id or by the #N bun run notes shows (notes.mjs findNote)
 export const resolveNote = (project, key) => {
-  const all = createNotes(project).read();
-  if (all.some((n) => n.id === key)) return key;
-  const n = /^#?(\d+)$/.exec(key)?.[1];
-  const written = all
-    .filter((x) => "id" in x && "t" in x && "text" in x && "shot" in x && "time" in x)
-    .toSorted((a, b) => ((a.at ?? "") < (b.at ?? "") ? -1 : (a.at ?? "") > (b.at ?? "") ? 1 : 0));
-  const hit = n && written[Number(n) - 1];
+  const hit = findNote(project, key);
+  if (hit?.gone) throw new Error(deletedSaid(hit));
   if (!hit)
     throw new Error(
       `no such note: ${key} (the ids and #numbers: bun run notes, --done for fixed ones too)`,
@@ -56,7 +42,14 @@ export const sendChange = async (project, id, change) => {
         body: JSON.stringify(change),
         signal: AbortSignal.timeout(3000),
       });
-    } catch {} // stopped since it wrote studio.json: nobody else is writing the file
+    } catch (e) {
+      // a studio that took the change and is slow to answer (a build, a render on the same machine) may still write it: the
+      // file written too would be two writers, a fix twice or a creator's note lost
+      if (e?.name === "TimeoutError")
+        throw new Error(
+          "the studio did not answer in 3 s (busy building or rendering?) and may still take it: see whether it did (bun run notes ID) before you send it again",
+        );
+    } // else stopped since it wrote studio.json: nobody else is writing the file
     if (r && !r.ok) throw new Error(`the studio refused it: ${await r.text()}`);
     if (r) return "studio";
   }

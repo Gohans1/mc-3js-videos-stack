@@ -39,7 +39,7 @@ export function PinTools() {
         "--bar-top": `calc(${pin.y * 100}% ${below ? "+" : "-"} ${gap}px)`,
       }}
       className={cn(
-        "shadow-float pointer-events-auto absolute top-(--bar-top) left-(--bar-left) z-6 flex items-center gap-0.5 rounded-xl bg-black/90 p-1 backdrop-blur-md",
+        "shadow-float bg-scrim-strong pointer-events-auto absolute top-(--bar-top) left-(--bar-left) z-6 flex items-center gap-0.5 rounded-xl p-1 backdrop-blur-md",
         !below && "-translate-y-full",
       )}
     >
@@ -53,7 +53,7 @@ export function PinTools() {
         <Type />
         <span className="@max-[720px]:sr-only">Text</span>
       </Button>
-      <span aria-hidden className="mx-1 h-5 w-px bg-white/15" />
+      <span aria-hidden className="bg-hairline-strong mx-1 h-5 w-px" />
       {TOOLS.map(([id, name, icon, help]) => (
         <Button
           key={id}

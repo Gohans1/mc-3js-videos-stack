@@ -38,8 +38,8 @@ function Look({ fx }: { fx: TransitionMeta }) {
   const kind = transitionPreviewKind(fx);
   let overlay = <path d="M32 0H64V64H32Z" className="fill-primary/30" />;
   if (kind === "dissolve") overlay = <path d="M24 0H64V64H24Z" className="fill-primary/25" />;
-  else if (kind === "black") overlay = <path d="M26 0H64V64H26Z" className="fill-black/90" />;
-  else if (kind === "white") overlay = <path d="M26 0H64V64H26Z" className="fill-white/90" />;
+  else if (kind === "black") overlay = <path d="M26 0H64V64H26Z" className="fill-stage/90" />;
+  else if (kind === "white") overlay = <path d="M26 0H64V64H26Z" className="fill-picture/90" />;
   else if (kind === "dipGrey")
     overlay = <path d="M26 0H64V64H26Z" className="fill-muted-foreground/85" />;
   else if (kind === "wipe") overlay = <path d="M0 0H36V64H0Z" className="fill-primary/50" />;
@@ -59,13 +59,13 @@ function Look({ fx }: { fx: TransitionMeta }) {
     overlay = (
       <>
         <path d="M0 0H32V64H0Z" className="fill-primary/55" />
-        <path d="M32 4V60" className="stroke-white/80" strokeWidth="2" />
+        <path d="M32 4V60" className="stroke-picture/80" strokeWidth="2" />
       </>
     );
   else if (kind === "doorSplit")
     overlay = (
       <>
-        <path d="M0 0H18V64H0ZM46 0H64V64H46Z" className="fill-black/65" />
+        <path d="M0 0H18V64H0ZM46 0H64V64H46Z" className="fill-stage/65" />
         <path d="M18 0H46V64H18Z" className="fill-primary/40" />
       </>
     );
@@ -77,19 +77,19 @@ function Look({ fx }: { fx: TransitionMeta }) {
         cx="32"
         cy="32"
         r="17"
-        className="fill-primary/50 stroke-white/75"
+        className="fill-primary/50 stroke-picture/75"
         strokeWidth="1.5"
       />
     );
   else if (kind === "irisClose")
     overlay = (
       <>
-        <rect x="0" y="0" width="64" height="64" className="fill-black/60" />
+        <rect x="0" y="0" width="64" height="64" className="fill-stage/60" />
         <circle
           cx="32"
           cy="32"
           r="14"
-          className="fill-primary/45 stroke-white/65"
+          className="fill-primary/45 stroke-picture/65"
           strokeWidth="1.5"
         />
       </>
@@ -105,7 +105,7 @@ function Look({ fx }: { fx: TransitionMeta }) {
     overlay = (
       <path
         d="M32 13C40 12 49 18 50 27C52 35 46 47 36 50C27 52 16 46 14 36C12 26 21 15 32 13Z"
-        className="fill-primary/45 stroke-white/75"
+        className="fill-primary/45 stroke-picture/75"
         strokeWidth="1.5"
       />
     );
@@ -117,7 +117,7 @@ function Look({ fx }: { fx: TransitionMeta }) {
         width="48"
         height="40"
         rx="4"
-        className="fill-primary/35 stroke-white/80"
+        className="fill-primary/35 stroke-picture/80"
         strokeWidth="1.5"
       />
     );
@@ -126,21 +126,21 @@ function Look({ fx }: { fx: TransitionMeta }) {
       <>
         <rect x="8" y="8" width="14" height="14" className="fill-primary/60" />
         <rect x="25" y="25" width="14" height="14" className="fill-primary/45" />
-        <rect x="42" y="10" width="14" height="14" className="fill-white/50" />
-        <rect x="12" y="42" width="14" height="14" className="fill-white/40" />
+        <rect x="42" y="10" width="14" height="14" className="fill-picture/50" />
+        <rect x="12" y="42" width="14" height="14" className="fill-picture/40" />
       </>
     );
   else if (kind === "mosaicIris")
     overlay = (
       <>
         <rect x="25" y="10" width="14" height="10" className="fill-primary/65" />
-        <rect x="44" y="25" width="10" height="14" className="fill-white/55" />
+        <rect x="44" y="25" width="10" height="14" className="fill-picture/55" />
         <rect x="25" y="44" width="14" height="10" className="fill-primary/50" />
-        <rect x="10" y="25" width="10" height="14" className="fill-white/45" />
+        <rect x="10" y="25" width="10" height="14" className="fill-picture/45" />
       </>
     );
   else if (kind === "blurDissolve")
-    overlay = <circle cx="32" cy="32" r="22" className="fill-white/30" />;
+    overlay = <circle cx="32" cy="32" r="22" className="fill-picture/30" />;
   else if (kind === "exposureBloom")
     overlay = <circle cx="32" cy="28" r="24" className="fill-warn/75" />;
   else if (kind === "lightSweep")
@@ -157,9 +157,9 @@ function Look({ fx }: { fx: TransitionMeta }) {
   else if (kind === "whipStreak")
     overlay = (
       <>
-        <rect x="6" y="18" width="52" height="5" rx="2.5" className="fill-white/75" />
+        <rect x="6" y="18" width="52" height="5" rx="2.5" className="fill-picture/75" />
         <rect x="14" y="30" width="44" height="5" rx="2.5" className="fill-primary/70" />
-        <rect x="4" y="42" width="40" height="4" rx="2" className="fill-white/55" />
+        <rect x="4" y="42" width="40" height="4" rx="2" className="fill-picture/55" />
       </>
     );
   else if (kind === "zoomCross")
@@ -171,7 +171,7 @@ function Look({ fx }: { fx: TransitionMeta }) {
           width="36"
           height="36"
           rx="3"
-          className="fill-none stroke-white/75"
+          className="stroke-picture/75 fill-none"
           strokeWidth="1.5"
         />
         <rect x="23" y="23" width="18" height="18" rx="2" className="fill-primary/45" />
@@ -180,8 +180,8 @@ function Look({ fx }: { fx: TransitionMeta }) {
   else if (kind === "invertFlash")
     overlay = (
       <>
-        <rect x="22" y="0" width="20" height="64" className="fill-white/90" />
-        <path d="M22 49 34 26 42 40V64H22Z" className="fill-black/85" />
+        <rect x="22" y="0" width="20" height="64" className="fill-picture/90" />
+        <path d="M22 49 34 26 42 40V64H22Z" className="fill-stage/85" />
       </>
     );
   else if (kind === "rgbSplitCut")
@@ -194,15 +194,15 @@ function Look({ fx }: { fx: TransitionMeta }) {
   else if (kind === "topDip")
     overlay = (
       <>
-        <path d="M0 0H64V30H0Z" className="fill-black/90" />
-        <path d="M0 30H64V44H0Z" className="fill-black/45" />
+        <path d="M0 0H64V30H0Z" className="fill-stage/90" />
+        <path d="M0 30H64V44H0Z" className="fill-stage/45" />
       </>
     );
   else if (kind === "snapMorph")
     overlay = (
       <>
         <path d="M28 0H64V64H28Z" className="fill-primary/30" />
-        <circle cx="32" cy="32" r="12" className="fill-white/85" />
+        <circle cx="32" cy="32" r="12" className="fill-picture/85" />
       </>
     );
   else if (kind === "tornPaper")
@@ -211,7 +211,7 @@ function Look({ fx }: { fx: TransitionMeta }) {
         <path d="M0 0H30L36 9 27 18 35 28 26 38 34 47 28 56 33 64H0Z" className="fill-primary/55" />
         <path
           d="M30 0 36 9 27 18 35 28 26 38 34 47 28 56 33 64"
-          className="fill-none stroke-white/90"
+          className="stroke-picture/90 fill-none"
           strokeWidth="2"
         />
       </>
@@ -225,7 +225,7 @@ function Look({ fx }: { fx: TransitionMeta }) {
           y="20"
           width="16"
           height="24"
-          className="fill-muted-foreground stroke-white/80"
+          className="fill-muted-foreground stroke-picture/80"
           strokeWidth="1.5"
         />
       </>
@@ -234,8 +234,8 @@ function Look({ fx }: { fx: TransitionMeta }) {
     overlay = (
       <>
         <path d="M0 0H30V64H0Z" className="fill-primary/40" />
-        <path d="M22 0H38V64H22Z" className="fill-white/25" />
-        <rect x="4" y="18" width="40" height="28" rx="3" className="fill-white/35" />
+        <path d="M22 0H38V64H22Z" className="fill-picture/25" />
+        <rect x="4" y="18" width="40" height="28" rx="3" className="fill-picture/35" />
       </>
     );
   else if (kind === "heatBleach")
@@ -243,7 +243,7 @@ function Look({ fx }: { fx: TransitionMeta }) {
       <>
         <path d="M0 0H22V64H0Z" className="fill-warn/45" />
         <path d="M22 0H44V64H22Z" className="fill-warn/75" />
-        <path d="M44 0H64V64H44Z" className="fill-white/90" />
+        <path d="M44 0H64V64H44Z" className="fill-picture/90" />
       </>
     );
   else if (kind === "glitchBreak")
@@ -252,7 +252,7 @@ function Look({ fx }: { fx: TransitionMeta }) {
         <path d="M0 0H64V16H0Z" className="fill-accent-hover/70" />
         <path d="M0 16H64V32H0Z" className="fill-primary/70" />
         <path d="M6 32H58V48H6Z" className="fill-chart-5/70" />
-        <path d="M0 48H64V64H0Z" className="fill-white/85" />
+        <path d="M0 48H64V64H0Z" className="fill-picture/85" />
       </>
     );
   else if (kind === "cat:Mask & Iris")
