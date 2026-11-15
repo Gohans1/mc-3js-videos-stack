@@ -320,11 +320,20 @@ test("presetEntries lists every transition, camera move and text voice the studi
 
 test("every preset's source is the file that writes it, so an agent copying one opens the right file", () => {
   const read = new Map<string, string>();
+  const textOf = (p: string) => {
+    if (!read.has(p)) read.set(p, readFileSync(p, "utf8"));
+    return read.get(p)!;
+  };
   const away = presetEntries().filter((x) => {
-    const [pkg, file] = x.src!.split("/");
+    if (!x.src) return false;
+    const [pkg, file] = x.src.split("/");
     const path = join(import.meta.dir, `../../packages/${pkg}/src/${file}`);
-    if (!read.has(path)) read.set(path, readFileSync(path, "utf8"));
-    return !new RegExp(`["']?${x.id}["']?\\s*[:,}]|id: ["']${x.id}["']`).test(read.get(path)!);
+    let src = textOf(path);
+    if (file === "handheld.ts")
+      src += "\n" + textOf(join(import.meta.dir, `../../packages/${pkg}/data/shakify.json`));
+    return !new RegExp(
+      `["']?${x.id}["']?\\s*[:,}]|id: ["']${x.id}["']|export (?:async )?(?:function|const) ${x.id}\\b`,
+    ).test(src);
   });
   expect(away.map((x) => `${x.kind} ${x.id} in ${x.src}`)).toEqual([]);
 });
@@ -1696,4 +1705,109 @@ test("words beside body filters reach catalog.py without the words that name not
     /English only/,
   );
   expect(seen).toHaveLength(1);
+});
+
+test("find --kind lens exposes prime lenses, DOF/framing helpers, aliases, and pasteable snippets", async () => {
+  const presets = presetEntries();
+  const list = await run(["--kind", "lens"], presets, noJev);
+  for (const id of [
+    "14mm",
+    "18mm",
+    "24mm",
+    "35mm",
+    "50mm",
+    "85mm",
+    "135mm",
+    "shotSize",
+    "frameSubject",
+    "dollyZoom",
+    "followTarget",
+  ])
+    expect(list).toContain(id);
+
+  const alias = await run(["--kind", "dof"], presets, noJev);
+  expect(alias).toContain("read as lens");
+
+  const primeShow = await run(["--show", "50mm"], presets, noJev);
+  expect(primeShow).toContain('"mm": 50');
+  expect(primeShow).toContain('"fstop"');
+  expect(primeShow).toContain('"focus"');
+
+  const helperShow = await run(["--show", "frameSubject"], presets, noJev);
+  expect(helperShow).toContain("film-kit/lens");
+  expect(helperShow).toContain("frameSubject(");
+  expect(helperShow).not.toContain("targetBox");
+  expect(helperShow).toContain("[0, 1.5, 0]");
+
+  const followShow = await run(["--show", "followTarget"], presets, noJev);
+  expect(followShow).toContain("film-kit/spring");
+  expect(followShow).toContain("from: 0, to: 10");
+  expect(followShow).not.toContain("halfLife");
+
+  const shotShow = await run(["--show", "shotSize"], presets, noJev);
+  expect(shotShow).toContain("ECU/CU/MCU/MS/WS/EWS");
+  expect(shotShow).not.toContain("MLS");
+
+  const teleShow = await run(["--show", "85mm"], presets, noJev);
+  expect(teleShow).toContain("~14 deg V-FOV on 16:9");
+
+  const filmKitLenses = await run(["--source", "film-kit", "--kind", "lens"], presets, noJev);
+  for (const id of ["14mm", "50mm", "135mm", "frameSubject"]) expect(filmKitLenses).toContain(id);
+});
+
+test("find --kind shake exposes all SHAKES handheld presets, trauma hits, and snippets", async () => {
+  const presets = presetEntries();
+  const list = await run(["--kind", "shake"], presets, noJev);
+  for (const id of [
+    "INVESTIGATION",
+    "THE_CLOSEUP",
+    "THE_WEDDING",
+    "WALK_TO_THE_STORE",
+    "HANDYCAM_RUN",
+    "BIKE_ON_GRAVEL_2D",
+    "hits",
+    "shake",
+  ])
+    expect(list).toContain(id);
+
+  const alias = await run(["--kind", "handheld"], presets, noJev);
+  expect(alias).toContain("read as shake");
+
+  const showPreset = await run(["--show", "THE_CLOSEUP"], presets, noJev);
+  expect(showPreset).toContain('"handheld"');
+  expect(showPreset).toContain('"THE_CLOSEUP"');
+
+  const showHits = await run(["--show", "hits"], presets, noJev);
+  expect(showHits).toContain("shots.json");
+  expect(showHits).toContain('"hits"');
+
+  const showShake = await run(["--show", "shake"], presets, noJev);
+  expect(showShake).toContain("simplex2d");
+  expect(showShake).toContain("rotation-only");
+  expect(showShake).not.toContain("Perlin");
+  expect(showShake).not.toContain("translation");
+});
+
+test("find --kind look exposes all named look presets and removes stale 'no named looks' wording", async () => {
+  const presets = presetEntries();
+  const list = await run(["--kind", "look"], presets, noJev);
+  for (const id of [
+    "docu-clean",
+    "teal-amber",
+    "noir-slate",
+    "warm-film",
+    "horror-cold",
+    "neon-pop",
+    "bleach-grit",
+  ])
+    expect(list).toContain(id);
+
+  const search = await run(["teal"], presets, noJev);
+  expect(search).toContain("teal-amber");
+  expect(search).not.toContain("no named looks");
+
+  const showLook = await run(["--show", "teal-amber"], presets, noJev);
+  expect(showLook).toContain('"look": "teal-amber"');
+  expect(showLook).toContain("adjust.json");
+  expect(showLook).toContain("shots.json");
 });

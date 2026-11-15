@@ -48,7 +48,7 @@ The commonest mistake is the right row at the wrong second.
 Inside a film:
 
 ```bash
-bun run find creaky door                     # 1. Find a sound, music, mocap clip, transition, anim, font or look
+bun run find creaky door                     # 1. Find a sound, music, mocap clip, transition, anim, lens, shake, font or look
 bun run find creaky door --fav               #    Only the creator's starred ones (favorites/<list>.json): when told "use my favourites"
                                              # 2. Edit src/scene.ts or src/timeline/*.json
 bun run check                                # 3. After every JSON edit: schema, sound names, typos, text too brief or small
@@ -123,7 +123,7 @@ bun run deliver --youtube 9-15               # how those seconds look after YouT
 | A command says it runs elsewhere                        | It belongs to the repo root or to a film: `cd` where it says                                                                                   |
 | A note's second moved after a Speed edit                | Notes keep the second they were written at; `bun run at '#N'` gives where it is heard now                                                      |
 | `listen` misses a vault sound you changed               | `bun run listen --fresh`                                                                                                                       |
-| `CHECK` has no such target                              | It suggests the nearest names and lists the targets; names match case                                                                          |
+| `CHECK` has no such target                              | It suggests the nearest names (dot-paths like `Steve.head` work too) and lists targets; names match case                                       |
 | `earshot` not found, or it fails                        | `earshot doctor` names what is missing; setting it up: `INSTALL.md`                                                                            |
 
 ## Load more when you need it

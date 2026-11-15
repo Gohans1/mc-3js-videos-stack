@@ -2,7 +2,8 @@
 import { configure, createScene, prepareAssets } from "block-model-renderer";
 import { unzipSync } from "fflate";
 import { animate, ANIMS } from "film-stage/animate";
-import { cameraAt, EASES } from "film-stage/camera";
+import { cameraAt, EASES, mmOf, resolveFocusDistance } from "film-stage/camera";
+import { makeDof } from "film-stage/dof";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
 import { activeAdjustments } from "film-stage/grade-layers";
@@ -10,6 +11,7 @@ import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeVelocity } from "film-stage/velocity";
 import { mouthCues } from "live-studio/lips";
+import { findTarget } from "live-studio/targets";
 import { footChecks } from "mc-actor/checks";
 import { loadClips } from "mc-actor/clips";
 import { makeFeet } from "mc-actor/feet";
@@ -50,7 +52,11 @@ export const applyEdit = () => {
   SHOTS.splice(0, SHOTS.length, ...EDIT.shots);
   SHOTS_OUT.length = SHOTS.length;
   SHOTS.forEach((s, i) => {
-    SHOTS_OUT[i] = { ...s, t: fromSource(s.t) };
+    SHOTS_OUT[i] = {
+      ...s,
+      t: fromSource(s.t),
+      ...(s.hits ? { hits: s.hits.map((h) => ({ ...h, t: fromSource(h.t) })) } : {}),
+    };
   });
   DURATION = fromSource(EDIT.end);
 };
@@ -139,6 +145,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   ao.outputTargetInternal.texture.type = THREE.HalfFloatType; // 8-bit would band dark stone
   composer.addPass(ao);
   composer.addPass(new EffectPass(camera, new SMAAEffect()));
+  const dof = makeDof(composer, camera, { draft });
   const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
   composer.addPass(
     new EffectPass(
@@ -196,10 +203,53 @@ export async function buildScene(canvas, W, H, draft = false) {
   const lookAt = V(0, 0, 0),
     head = V(0, 0, 0);
   const velocityEffect = makeVelocity(renderer);
+  const opticsTelemetry = {};
+  const sceneObjects = [
+    [world.group, "room"],
+    [steve.g, "Steve"],
+  ];
+  const focusBox = new THREE.Box3();
+  const focusVec = V(0, 0, 0);
+  const resolveFocusTarget = (name) => {
+    const obj = findTarget({ scene, objects: sceneObjects, bones: steve.bones }, name);
+    if (!obj) return null;
+    obj.updateMatrixWorld(true);
+    if (obj.isBone && !obj.children.length) return obj.getWorldPosition(focusVec).clone();
+    focusBox.setFromObject(obj);
+    return (
+      !focusBox.isEmpty() ? focusBox.getCenter(focusVec) : obj.getWorldPosition(focusVec)
+    ).clone();
+  };
+  const syncOptics = (cam, shot, shotEntry, activeLayerLook, bypass) => {
+    const effectiveFstop = bypass ? 0 : cam.fstop;
+    const resolvedFocus = bypass
+      ? {}
+      : resolveFocusDistance(cam.focus, camera.position, resolveFocusTarget);
+    const fallbackFocus = Math.max(0.05, camera.position.distanceTo(lookAt));
+    const rawFocusM = resolvedFocus.distance ?? (effectiveFstop > 0 ? fallbackFocus : undefined);
+    const focusM = rawFocusM !== undefined ? Math.max(0.05, rawFocusM) : undefined;
+    const renderedMm = Math.round(mmOf(camera.fov, W / H) * 10) / 10;
+    Object.assign(opticsTelemetry, {
+      shot,
+      shotName: [shotEntry?.size, shotEntry?.what ?? shotEntry?.name].filter(Boolean).join(" · "),
+      mm: renderedMm,
+      fov: Math.round(camera.fov * 10) / 10,
+      fstop: effectiveFstop !== undefined ? Math.round(effectiveFstop * 10) / 10 : undefined,
+      focusM: focusM !== undefined ? Math.round(focusM * 100) / 100 : undefined,
+      focusTarget: resolvedFocus.label,
+      handheld: bypass ? undefined : cam.handheld,
+      look: bypass
+        ? undefined
+        : (activeLayerLook ??
+          (shotEntry?.adjust?.enabled !== false ? shotEntry?.adjust?.look : undefined)),
+      impulse: bypass ? undefined : cam.optics?.impulse,
+    });
+    return { effectiveFstop, focusM, fallbackFocus, renderedMm };
+  };
   let clocks;
   const frame = (t, view) => {
     const cameraTime = view === undefined ? t : viewTime(SHOTS_OUT, DURATION, view, t);
-    const cam = cameraAt(cameraTime, EDIT.cam);
+    const cam = cameraAt(cameraTime, EDIT.cam, { aspect: W / H });
     const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION, anims);
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
@@ -219,6 +269,7 @@ export async function buildScene(canvas, W, H, draft = false) {
 
     perform(t);
     placed.draw(t);
+    scene.updateMatrixWorld();
     const mood = moodAt(EDIT.steve.face, t);
     // lip sync: the takes with "by": "steve" in edit.json (bun run voice:lips); any mouth of the film's own reads the same cues
     const mouth = mouthAt(mouthCues(EDIT, "steve"), t);
@@ -228,10 +279,33 @@ export async function buildScene(canvas, W, H, draft = false) {
     hemi.intensity = EDIT.light.fill;
     key.intensity = EDIT.light.key;
     tone.saturation = EDIT.look.saturation;
-    const shot = view ?? shotAt(t);
+    const shot = Math.max(0, view ?? shotAt(t));
+    const shotEntry = SHOTS_OUT[shot];
+    const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;
+    const adjVisible = clocks?.adjustmentsVisible ?? clocks?.layersVisible ?? true;
+    const activeLayerLook =
+      !free.on && adjVisible
+        ? [...activeAdjustments(EDIT.adjustments, adjAt, clocks?.adjustmentTime)]
+            .reverse()
+            .find((it) => it.grade?.enabled !== false && it.grade?.look)?.grade?.look
+        : undefined;
+    const { effectiveFstop, focusM, fallbackFocus, renderedMm } = syncOptics(
+      cam,
+      shot,
+      shotEntry,
+      activeLayerLook,
+      free.on,
+    );
+    Object.assign(now, { optics: opticsTelemetry });
     renderer.clear();
     if (clocks?.pictureVisible !== false || free.on) {
-      adjust(shot, SHOTS_OUT[shot]?.adjust, t, free.on);
+      dof.update({
+        fstop: effectiveFstop,
+        focusDistance: focusM ?? fallbackFocus,
+        mm: renderedMm,
+        widthPx: W,
+      });
+      adjust(shot, shotEntry?.adjust, t, free.on);
       composer.render(0);
       if (!free.on) velocityEffect(clocks?.velocity ?? null, cam.optics);
       if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
@@ -264,12 +338,31 @@ export async function buildScene(canvas, W, H, draft = false) {
   draw.velocity = true;
   draw.velocityEffects = velocityEffect.effects;
   // A draft frame's list (LIST=1): what is going on at t and which file holds it
-  const mm = (fov) => Math.round(12 / Math.tan(THREE.MathUtils.degToRad(fov) / 2));
   draw.describe = (t) => {
     const idx = Math.max(0, shotAt(t)),
       s = SHOTS_OUT[idx],
       shotLabel = [s?.size, s?.what ?? s?.name].filter(Boolean).join(" · "),
-      m = now.B?.act ?? EDIT.steve.moves[0];
+      m = now.B?.act ?? EDIT.steve.moves[0],
+      lensFov = now.cam?.fov ?? 60,
+      lensMm = Math.round(mmOf(lensFov, W / H)),
+      opt = now.optics,
+      rawTarget = opt?.focusTarget?.trim() ?? "",
+      numericTarget = /^\d+(?:\.\d+)?m$/.test(rawTarget),
+      focusText =
+        rawTarget && !numericTarget
+          ? `focus ${rawTarget}${opt?.focusM != null ? ` (${opt.focusM}m)` : ""}`
+          : opt?.focusM != null
+            ? `focus ${opt.focusM}m`
+            : rawTarget
+              ? `focus ${rawTarget}`
+              : null,
+      opticsParts = [
+        opt?.fstop ? `f/${opt.fstop}` : "deep focus",
+        focusText,
+        opt?.handheld ? `handheld ${opt.handheld}` : null,
+        opt?.impulse ? `impulse ${opt.impulse}` : null,
+      ].filter(Boolean),
+      lookLine = opt?.look ? `look ${opt.look} (film-stage/looks.ts)` : null;
     return [
       {
         head: "SHOT",
@@ -284,8 +377,9 @@ export async function buildScene(canvas, W, H, draft = false) {
         head: "CAMERA",
         lines: [
           {
-            text: `lens ~${mm(now.cam?.fov ?? 60)}mm (FOV ${Math.round(now.cam?.fov ?? 60)}°) · Catmull-Rom path (film-stage/camera.ts)`,
+            text: `lens ${lensMm}mm (FOV ${Math.round(lensFov)}°) · ${opticsParts.join(" · ")}`,
           },
+          ...(lookLine ? [{ text: lookLine }] : []),
         ],
       },
       {
@@ -329,13 +423,11 @@ export async function buildScene(canvas, W, H, draft = false) {
     look: lookAt,
     rig: steve.rig,
     bones: steve.bones,
-    objects: [
-      [world.group, "room"],
-      [steve.g, "Steve"],
-    ],
+    objects: sceneObjects,
     materials: [],
     composer,
     renderer,
+    optics: opticsTelemetry,
     placed,
     targets: [
       {
@@ -361,6 +453,22 @@ export async function buildScene(canvas, W, H, draft = false) {
   draw.adjustments = {
     prepare: (grades) => Promise.all([adjust.prepare(grades), layerAdjust.prepare(grades)]),
   };
+  const initCam = EDIT.cam?.length
+    ? cameraAt(0, EDIT.cam, { aspect: W / H })
+    : { p: camera.position, l: lookAt, fov: camera.fov };
+  camera.position.copy(initCam.p);
+  lookAt.copy(initCam.l);
+  camera.fov = initCam.fov;
+  const initShot = Math.max(0, shotAt(0));
+  syncOptics(
+    initCam,
+    initShot,
+    SHOTS_OUT[initShot],
+    [...activeAdjustments(EDIT.adjustments, 0)]
+      .reverse()
+      .find((it) => it.grade?.enabled !== false && it.grade?.look)?.grade?.look,
+    false,
+  );
   draw.checks = footChecks({ perform, steve, now });
   return draw;
 }

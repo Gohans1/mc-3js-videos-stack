@@ -22,7 +22,9 @@ const HERE = dirname(fileURLToPath(import.meta.url)),
 const FIT_YES = 0.7,
   FIT_NO = 0.3;
 const KINDS = new Set(
-  "transition anim text shape font adjust velocity ease sfx bgm mc mocap sound".split(" "),
+  "transition anim text shape font adjust look lens shake velocity ease sfx bgm mc mocap sound".split(
+    " ",
+  ),
 );
 
 const HELP = `Usage: bun run eval:find [--set <name>] [--mode jev|words|both] [--kind <k>] [--fresh] [-j N] [--finish] [--note <t>]
@@ -103,7 +105,8 @@ const readCases = (set: string): Case[] => {
 };
 
 // find's hit lines: "[0.74  ][fits 0.93  ][3/4 words  ]<kind>/<cat>  <id>  ..." and mocap's "0.75  fits 0.96  <lib>/<clip>  ..."
-const KIND_HEAD = /^(transition|anim|text|shape|font|adjust|velocity|ease|sfx|bgm|mc|mocap)\b/;
+const KIND_HEAD =
+  /^(transition|anim|text|shape|font|adjust|look|lens|shake|velocity|ease|sfx|bgm|mc|mocap)\b/;
 const parseHits = (out: string): Hit[] =>
   out
     // catalog.py (mocap) is Python: \r\n on Windows

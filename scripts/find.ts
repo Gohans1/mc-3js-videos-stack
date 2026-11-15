@@ -5,9 +5,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join, relative } from "node:path";
 
 import { FIT_NO, FIT_YES, jevJudge as judgeBy } from "../packages/clip-catalog/jev";
+import { PRIME_LENSES } from "../packages/film-kit/src/lens";
 import { ANIM_CURVES, ANIMS } from "../packages/film-stage/src/animate";
-import { EASE_JOBS, EASES } from "../packages/film-stage/src/camera";
+import { EASE_JOBS, EASES, type ShakeName, SHAKES } from "../packages/film-stage/src/camera";
 import { ADJUSTMENTS } from "../packages/film-stage/src/grade-color";
+import { LOOK_IDS, LOOKS } from "../packages/film-stage/src/looks";
 import {
   FONTS,
   SHAPE_IN,
@@ -86,6 +88,10 @@ const USE: Record<string, string> = {
   shape: "text.json items[] kind arrow|circle|box|bracket|underline: .in|.out",
   font: "text.json items[].font",
   adjust: "adjust.json items[].grade.basic.<id> or shots.json shot.adjust.basic.<id>",
+  look: 'shots.json shot.adjust {"look":"teal-amber"} or adjust.json items[].grade {"look":"teal-amber"}',
+  lens: 'cam.json key {"mm":50,"fstop":2,"focus":"Steve.head"} or film-kit/lens helpers in scene.ts',
+  shake:
+    'cam.json key.handheld {"preset","amount","speed","move"} or shots.json shot.hits[] {"t","amount","decay","freq","max"}',
   velocity:
     'timing.json velocity[] {"effect","music","beats","from","to","frequency":1|2,"speed":"normal|fast|veryFast","intensity":0-100}',
   ease: "cam.json key.ease, props.json ease",
@@ -175,6 +181,9 @@ const KIND_WORDS: Record<string, string> = {
   mc: "minecraft sound",
   velocity: "beat sync",
   ease: "camera curve",
+  lens: "camera focal fov dof bokeh focus aperture framing",
+  shake: "camera handheld trauma impact hit",
+  look: "grade color lut palette cinema mood",
   adjust: "grade color look",
   font: "typeface",
   "text-in": "title caption",
@@ -350,7 +359,20 @@ const KIND_ALIAS: Record<string, string> = Object.fromEntries(
     grade: "adjust",
     color: "adjust",
     colour: "adjust",
-    look: "adjust",
+    lut: "look",
+    palette: "look",
+    dof: "lens",
+    bokeh: "lens",
+    focal: "lens",
+    focus: "lens",
+    aperture: "lens",
+    fstop: "lens",
+    fov: "lens",
+    framing: "lens",
+    handheld: "shake",
+    trauma: "shake",
+    rumble: "shake",
+    jolt: "shake",
     motion: "mocap",
     clip: "mocap",
     beat: "velocity",
@@ -360,6 +382,9 @@ const KIND_ALIAS: Record<string, string> = Object.fromEntries(
 const ALIAS_NOTE: Record<string, string> = {
   anim: "camera moves and shot animations; camera curves are --kind ease",
   bgm: "background music",
+  lens: "prime lenses, framing and DOF helpers",
+  look: "named film-stage color looks",
+  shake: "handheld presets and procedural impact trauma",
   sound: "sfx, bgm and mc together",
   text: "title and caption animations",
   transition: "the cut between two shots",
@@ -696,16 +721,114 @@ export function presetEntries(): Entry[] {
   };
   // a sub-kind with no groups of its own is one group of its kind: transition-ease is --kind transition/ease
   const sub = (kind: string) => (kind.includes("-") ? sentenceSlug(kind.split("-")[1]!) : "");
-  const list = (kind: string, xs: readonly Preset[], file: string) =>
-    xs.map((x) => ({
-      kind,
-      src: `film-stage/${file}.ts`,
-      id: x.id,
-      cat: x.category ?? x.cat ?? x.group ?? sub(kind),
-      title: x.title ?? x.id,
-      about: x.tip ?? "",
-      data: { ...x },
-    }));
+  const list = (kind: string, xs: readonly (Preset & { file?: string })[], file: string) =>
+    xs.map((x) => {
+      const f = x.file ?? file;
+      return {
+        kind,
+        ...(f && { src: f.includes("/") ? f : `film-stage/${f}.ts` }),
+        id: x.id,
+        cat: x.category ?? x.cat ?? x.group ?? sub(kind),
+        title: x.title ?? x.id,
+        about: x.tip ?? "",
+        data: { ...x },
+      };
+    });
+  const SHAKE_META: Partial<Record<ShakeName, { title: string; tip: string }>> = {
+    INVESTIGATION: {
+      title: "Investigation",
+      tip: "Attentive handheld search drift (rotate and move, 24fps Shakify)",
+    },
+    THE_CLOSEUP: {
+      title: "The Closeup",
+      tip: "Subtle breathing poise for tight character shots and dialogue (rotate and move)",
+    },
+    THE_WEDDING: {
+      title: "The Wedding",
+      tip: "Warm, balanced documentary hand sway (rotate and move)",
+    },
+    WALK_TO_THE_STORE: {
+      title: "Walk To The Store",
+      tip: "Rhythmic walking footsteps cadence (rotate and move)",
+    },
+    HANDYCAM_RUN: {
+      title: "Handycam Run",
+      tip: "Urgent jogging chase bounce (rotate and move)",
+    },
+    OUT_CAR_WINDOW: {
+      title: "Out Car Window",
+      tip: "Engine hum and high-frequency road vibration (rotate and move)",
+    },
+    BIKE_ON_GRAVEL_2D: {
+      title: "Bike On Gravel 2D",
+      tip: "Coarse chatter without translation drift (rotate only)",
+    },
+    SPACESHIP_SHAKE_2D: {
+      title: "Spaceship Shake 2D",
+      tip: "Heavy low-frequency hull rumble (rotate only)",
+    },
+    THE_ZEEK_2D: {
+      title: "The Zeek 2D",
+      tip: "Loose erratic tremble (rotate only)",
+    },
+  };
+  const lenses = [
+    ...PRIME_LENSES,
+    {
+      id: "shotSize",
+      cat: "Helpers",
+      title: "Shot Size Distance",
+      tip: "Distance in metres for ECU/CU/MCU/MS/WS/EWS from subject height and mm",
+      pkg: "film-kit/lens",
+      code: "const d = shotSize('MCU', { height: 1.8, mm: 50 });",
+    },
+    {
+      id: "frameSubject",
+      cat: "Helpers",
+      title: "Frame Subject",
+      tip: "Computes { p, l, fov, mm } around a target [x, y, z] by shot size, angle, headroom, thirdX",
+      pkg: "film-kit/lens",
+      code: "const key = frameSubject([0, 1.5, 0], { size: 'MCU', mm: 50, thirdX: -0.33 });",
+    },
+    {
+      id: "dollyZoom",
+      cat: "Helpers",
+      title: "Vertigo Dolly-Zoom",
+      tip: "New camera distance holding subject size while changing lens FOV",
+      pkg: "film-kit/lens",
+      code: "const d1 = dollyZoom(3, fovOf(35, 16 / 9), fovOf(85, 16 / 9));",
+    },
+    {
+      id: "followTarget",
+      cat: "Helpers",
+      title: "Damped Rig Follow",
+      tip: "Deterministic critically damped 3D spring lag/lead chase tracker across [from, to]",
+      pkg: "film-kit/spring",
+      code: "const rig = followTarget((t) => [x(t), 1.5, z(t)], { from: 0, to: 10, smooth: 0.25, lead: 0.15 });",
+      file: "film-kit/spring.ts",
+    },
+  ];
+  const shakes = [
+    ...SHAKES.map((id) => ({
+      id,
+      cat: "Shakify",
+      ...(SHAKE_META[id] ?? { title: id, tip: "Camera Shakify handheld loop" }),
+    })),
+    {
+      id: "hits",
+      cat: "Trauma",
+      title: "Shot Impact Trauma",
+      tip: "shots.json shot.hits[] decaying impact rattle; keeps frame exempt from motion POPS",
+      file: "film-stage/animate.ts",
+    },
+    {
+      id: "shake",
+      cat: "Trauma",
+      title: "Procedural Trauma",
+      tip: "Seeded simplex2d Eiserloh trauma^2 rotation-only ([yaw, pitch, roll] deg, no move) for custom rigs in scene.ts",
+      file: "film-kit/shake.ts",
+    },
+  ];
   const eases = Object.entries(EASE_JOBS).flatMap(([group, { eases, job }]) =>
     eases.map((id) => ({
       id,
@@ -731,6 +854,13 @@ export function presetEntries(): Entry[] {
     ...list("shape-out", SHAPE_OUT, "titles-catalog"),
     ...list("font", FONTS, "titles-catalog"),
     ...list("adjust", ADJUSTMENTS, "grade-color"),
+    ...list(
+      "look",
+      LOOK_IDS.map((id) => ({ id, cat: "Look Presets", ...LOOKS[id]! })),
+      "looks",
+    ),
+    ...list("lens", lenses, "film-kit/lens.ts"),
+    ...list("shake", shakes, "film-kit/handheld.ts"),
     ...list(
       "velocity",
       VELOCITY_EFFECTS.map((id) => ({ id, ...VELOCITY_LOOKS[id] })),
@@ -943,14 +1073,14 @@ fonts, adjust sliders, beat effects, camera eases. One line per hit: kind/catego
 description  [source], then where that id goes in the film's src/timeline and what to try next.
 
 Options:
-  --kind <k[,k]>   sfx, bgm, mc (Minecraft) or sound (all three); mocap; transition anim text shape font adjust velocity ease
+  --kind <k[,k]>   sfx, bgm, mc (Minecraft) or sound (all three); mocap; transition anim text shape font adjust look lens shake velocity ease
                    each with /<category>, the studio's groups: --kind sfx/typing, mc/horror, transition/wipe, text/pop
                    (a word of the group is enough, and plain names work: music is bgm, titles is text, camera is anim;
                    the first line says how a loose one was read). --kind <kind> alone: its groups with counts, then
                    every entry when 60 or fewer; --kind <kind>/<category>: that group, and the words its entries are
                    named by when it is long
   --source <s[,s]> where it comes from: minecraft and each mod pack by name (alexs-caves, quality-sounds ...), earshot,
-                   mixkit, mixamo, film-stage (every preset) or one preset file
+                   mixkit, mixamo, film-stage or film-kit (every preset) or one preset file
   --origin <o>     sfx and bgm: real (recordings, the studio's Real / Studio) or synth (made in code, its Code-gen)
   --edition <e>    Minecraft sounds: vanilla (the game itself) or modded (mod packs)
   --license <l>    sounds by what a YouTube upload must do: free (nothing), credit (CC BY: name the author), claim
@@ -1065,6 +1195,9 @@ const KIND_NAMED: Record<string, string> = Object.fromEntries(
     title: "text",
     caption: "text",
     subtitle: "text",
+    dof: "lens",
+    bokeh: "lens",
+    handheld: "shake",
   }).map(([w, k]) => [stem(w), k]),
 );
 
@@ -1102,7 +1235,7 @@ const MAKE_MOCAP =
   "a move: key Steve's body by hand (steve.json moves[] pose instead of clip), or retarget a new clip into vault/motion";
 const HOOKS = "src/scene.ts (hooks: bun run skills get core --ref contract)";
 const MAKE_LOOK =
-  'a look (teal and orange, VHS, bleach bypass): no named looks; mix the adjust sliders (bun run find --kind adjust) or load a .cube LUT, adjust.json items[].grade.lut {"url","name","amount"}';
+  'a named look preset: bun run find --kind look (docu-clean, teal-amber, noir-slate, warm-film, horror-cold, neon-pop, bleach-grit), mix adjust sliders (bun run find --kind adjust), or load a .cube LUT, adjust.json items[].grade.lut {"url","name","amount"}';
 const make = (kinds: string[] | undefined, entries: Entry[]) => {
   if (!kinds)
     return [`an effect, overlay or look: the film's own, in ${HOOKS}`, MAKE_SOUND, MAKE_MOCAP];
@@ -1110,7 +1243,9 @@ const make = (kinds: string[] | undefined, entries: Entry[]) => {
     if (k === "bgm") return MAKE_MUSIC;
     if (SOUND.includes(k) || k === "sound") return MAKE_SOUND;
     if (k === "mocap") return MAKE_MOCAP;
-    if (k === "adjust") return MAKE_LOOK;
+    if (k === "adjust" || k === "look") return MAKE_LOOK;
+    if (k === "lens") return USE.lens!;
+    if (k === "shake") return USE.shake!;
     const own = ownOf(k);
     if (own) return own;
     if (k === "text")
@@ -1350,6 +1485,51 @@ function details(x: Entry): string[] {
       "adjust.json",
       `items[]: {"id": "<new, unique>", "name": "${x.id}", "from": 0, "to": 4, "track": 0, "grade": {"basic": {"${x.id}": 30}}}  (or a shot's "adjust": {"basic": {...}} in shots.json)`,
     );
+  } else if (x.kind === "look") {
+    const grade = (d.grade ?? {}) as Record<string, unknown>;
+    const basic = (grade.basic ?? {}) as Record<string, number>;
+    const summary = [
+      ...Object.entries(basic).map(([k, v]) => `${k} ${v}`),
+      ...Object.entries(grade)
+        .filter(([k]) => k !== "basic")
+        .map(([k]) => k),
+    ];
+    if (summary.length) out.push(`preset keys: ${summary.join(", ")}`);
+    use("shots.json", `shot.adjust: {"look": "${x.id}"}`);
+    out.push(
+      `or ${dir}/adjust.json items[].grade: {"look": "${x.id}"} (explicit sliders override via resolveGrade)`,
+    );
+  } else if (x.kind === "lens") {
+    if (typeof d.mm === "number") {
+      const fstop = typeof d.fstop === "number" ? d.fstop : 2.8;
+      use(
+        "cam.json",
+        `[{"t": 0, "p": [0, 1.6, 4], "l": [0, 1.3, 0], "mm": ${d.mm}, "fstop": ${fstop}, "focus": "Steve.head"}]`,
+      );
+      out.push(
+        `code: import { fovOf, shotSize } from 'film-kit/lens'; shotSize('MCU', { height: 1.8, mm: ${d.mm} })`,
+      );
+    } else {
+      out.push(`use: src/scene.ts  import { ${x.id} } from '${d.pkg}'; ${d.code}`);
+    }
+  } else if (x.kind === "shake") {
+    if (x.cat === "Shakify") {
+      use(
+        "cam.json",
+        `keys[]: {..., "handheld": {"preset": "${x.id}", "amount": 0.6, "speed": 1, "move": 0.5}}`,
+      );
+      out.push('turn off on later cut: "handheld": "off" or false');
+    } else if (x.id === "hits") {
+      use(
+        "shots.json",
+        'shot: {"hits": [{"t": 1.2, "amount": 0.85, "decay": 2.5, "freq": 18, "max": 6}]}',
+      );
+      out.push("note: hits add decaying rotational trauma without triggering motion POPS");
+    } else {
+      out.push(
+        "use: src/scene.ts  import { shake } from 'film-kit/shake'; const shk = shake([{ t: 1.2, amount: 0.6 }]); const [yaw, pitch, roll] = shk(t); // degrees, rotation only",
+      );
+    }
   } else if (x.kind === "velocity") {
     use(
       "timing.json",
@@ -1715,7 +1895,8 @@ const sourceList = (pool: Entry[]) => {
   // counted as a search finds them: weapon and fight clips are left out of mocap unless --fights
   for (const x of pool) {
     if (!x.src || (x.kind === "mocap" && isFight(x.id))) continue;
-    const k = x.src.startsWith("film-stage/") ? "presets" : top(x.kind);
+    const k =
+      x.src.startsWith("film-stage/") || x.src.startsWith("film-kit/") ? "presets" : top(x.kind);
     by.set(k, by.get(k) ?? [])
       .get(k)!
       .push(x.src);
@@ -1726,7 +1907,7 @@ const sourceList = (pool: Entry[]) => {
     .toSorted(([a], [b]) => at(a) - at(b))
     .map(([k, srcs]) =>
       k === "presets"
-        ? `presets: film-stage (every preset), or one file: ${[...new Set(srcs)].join(", ")}`
+        ? `presets: film-stage or film-kit (every preset), or one file: ${[...new Set(srcs)].join(", ")}`
         : `${k}: ${tally(srcs)}`,
     )
     .join("\n  ");

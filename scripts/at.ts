@@ -3,18 +3,20 @@
 // (fromSource), camera and key files in scene seconds (before Speed/Freeze), sound/text/adjust through their layer clocks.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { shake } from "../packages/film-kit/src/shake";
+import { cameraAt } from "../packages/film-stage/src/camera";
 import { TRANSITIONS } from "../packages/film-stage/src/transitions";
 import { noteScene, noteSecond } from "../packages/live-studio/app/notes/note-card-meta.ts";
 import { cliArgs, jsonFile, needFilm, secondArg } from "../packages/live-studio/src/cli.mjs";
 import { checkFiles } from "../packages/live-studio/src/contract.ts";
 import { contractFiles } from "../packages/live-studio/src/film.mjs";
+import { sizeOf } from "../packages/live-studio/src/frame.ts";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
 import { noteState, wholeNote } from "../packages/live-studio/src/note-state.mjs";
 import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
 import { staleVideo } from "../packages/live-studio/src/stale.mjs";
-import { tell } from "../packages/live-studio/src/tell.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
 import { transitionAvailable } from "../packages/live-studio/src/timing-effects.mjs";
 import {
@@ -54,6 +56,23 @@ const idsIn = (src: string) => {
   return out;
 };
 
+/** Format a camera focus spec (number, target string, offset object, or blend) cleanly for inspection. */
+const formatFocusSpec = (focus: unknown): string | null => {
+  if (focus == null) return null;
+  if (typeof focus === "number") return `${+focus.toFixed(2)}m`;
+  if (typeof focus === "string") return focus;
+  if (typeof focus === "object") {
+    const f = focus as Record<string, any>;
+    if (typeof f.target === "string")
+      return f.offset
+        ? `${f.target} (${f.offset.map((n: number) => +Number(n).toFixed(2)).join(",")})`
+        : f.target;
+    if ("from" in f || "to" in f)
+      return `${formatFocusSpec(f.from) ?? "unset"} -> ${formatFocusSpec(f.to) ?? "unset"} (${Math.round((f.u ?? 0) * 100)}%)`;
+  }
+  return null;
+};
+
 // The film's files and clocks, set up as the studio plays them (setTiming is the studio's own state)
 const filmOf = (dir: string) => {
   const read = (f?: string, fallback: any = null) =>
@@ -70,7 +89,7 @@ const filmOf = (dir: string) => {
   // a film keeps its shots in shotsTimeline (narration seconds) or as the camera's cuts (scene seconds)
   const shotRows: Row[] = read(conf.shotsTimeline, null);
   type Shot = { index: number; t: number; name?: string; size?: string; row: number };
-  const shots: (Shot & { transition?: Row; anim?: Row })[] = shotRows
+  const shots: (Shot & { transition?: Row; anim?: Row; adjust?: Row; hits?: Row[] })[] = shotRows
     ? shotRows.map((s, i) => ({
         index: i,
         t: fromSource(s.t),
@@ -79,6 +98,10 @@ const filmOf = (dir: string) => {
         row: i,
         transition: s.transition,
         anim: s.anim,
+        ...(s.adjust ? { adjust: s.adjust } : {}),
+        ...(Array.isArray(s.hits)
+          ? { hits: s.hits.map((h: Row) => ({ ...h, t: fromSource(h.t) })) }
+          : {}),
       }))
     : cam.flatMap((k, i) =>
         i === 0 || k.cut ? [{ index: 0, t: k.t, name: k.what, size: k.size, row: i }] : [],
@@ -197,7 +220,69 @@ export const whatsAt = (dir: string, t: number) => {
           hit: velocityAt([timing.velocity[vi]], scene)?.beatIndex ?? null,
         };
   const si = blank ? -1 : shots.filter((s) => s.t <= scene).length - 1;
-  const shot = si >= 0 ? { ...shots[si]!, to: shots[si + 1]?.t ?? sourceEnd } : null;
+  const activeHits: { row: number; t: number; amount: number; decay: number; trauma: number }[] =
+    [];
+  if (si >= 0 && Array.isArray(shots[si]?.hits)) {
+    const groups = new Map<
+      string,
+      { decay: number; opts: Record<string, unknown>; rows: { row: number; h: Row }[] }
+    >();
+    shots[si]!.hits!.forEach((h, row) => {
+      if (typeof h.t !== "number" || scene < h.t) return;
+      const decay = typeof h.decay === "number" ? h.decay : 1;
+      const max =
+        typeof h.max === "number" ? ([h.max, h.max, h.max] as [number, number, number]) : h.max;
+      const key = JSON.stringify([decay, h.freq ?? 14, max ?? null, h.seed ?? 1]);
+      let g = groups.get(key);
+      if (!g) {
+        g = {
+          decay,
+          opts: {
+            decay,
+            ...(h.freq !== undefined ? { freq: h.freq } : {}),
+            ...(max !== undefined ? { max } : {}),
+            ...(h.seed !== undefined ? { seed: h.seed } : {}),
+          },
+          rows: [],
+        };
+        groups.set(key, g);
+      }
+      g.rows.push({ row, h });
+    });
+    for (const g of groups.values()) {
+      const sorted = [...g.rows].sort((a, b) => a.h.t - b.h.t);
+      sorted.forEach((entry, idx) => {
+        const trauma = +shake(
+          sorted.slice(0, idx + 1).map((x) => ({ t: x.h.t, amount: Number(x.h.amount ?? 0) })),
+          g.opts as Parameters<typeof shake>[1],
+        )
+          .trauma(scene)
+          .toFixed(3);
+        if (trauma > 1e-4)
+          activeHits.push({
+            row: entry.row,
+            t: +entry.h.t.toFixed(3),
+            amount: entry.h.amount,
+            decay: g.decay,
+            trauma,
+          });
+      });
+    }
+    activeHits.sort((a, b) => a.row - b.row);
+  }
+  const shotLook =
+    si >= 0 && shots[si]?.adjust?.enabled !== false && typeof shots[si]?.adjust?.look === "string"
+      ? shots[si]!.adjust!.look
+      : null;
+  const shot =
+    si >= 0
+      ? {
+          ...shots[si]!,
+          to: shots[si + 1]?.t ?? sourceEnd,
+          ...(shotLook ? { look: shotLook } : {}),
+          ...(activeHits.length ? { hits: activeHits } : { hits: undefined }),
+        }
+      : null;
   // the transition into shot i plays len/2 either side of its cut, clamped to its neighbours, as film-stage transitionLength
   // does; none where the render draws none (transitionAvailable: a gap, a Freeze or a cut-out at the cut)
   const blend = (i: number) => {
@@ -227,6 +312,25 @@ export const whatsAt = (dir: string, t: number) => {
   };
   const cuts = blank ? [] : [blend(si), blend(si + 1)].filter((b) => b !== null);
   const ci = blank ? -1 : cam.filter((k) => k.t <= scene).length - 1;
+  const [fw, fh] = sizeOf(conf.ratio === "9:16" ? "9:16" : "16:9", 1920);
+  const vec3Or = (v: unknown, fallback: [number, number, number]): [number, number, number] =>
+    Array.isArray(v) &&
+    v.length === 3 &&
+    v.every((n) => typeof n === "number" && Number.isFinite(n))
+      ? (v as [number, number, number])
+      : fallback;
+  const camEval =
+    ci >= 0
+      ? cameraAt(
+          scene,
+          cam.map((k) => ({
+            ...k,
+            p: vec3Or(k.p, [0, 0, 0]),
+            l: vec3Or(k.l, [0, 0, -1]),
+          })),
+          { aspect: fw / fh },
+        )
+      : null;
 
   const audio = read(conf.soundTimeline, null);
   const sounds: Row[] = [];
@@ -311,7 +415,15 @@ export const whatsAt = (dir: string, t: number) => {
             {
               i,
               // the grade is all an adjustment does: an empty one draws the picture as it is
-              text: `${it.text ?? it.name ?? it.kind}${kind === "adjustment" && !Object.keys(it.grade ?? {}).length ? " (its grade sets nothing)" : ""}`,
+              text: `${it.text ?? it.name ?? it.kind}${
+                kind === "adjustment" && it.grade?.enabled === false
+                  ? " (disabled)"
+                  : kind === "adjustment" && !Object.keys(it.grade ?? {}).length
+                    ? " (its grade sets nothing)"
+                    : kind === "adjustment" && typeof it.grade?.look === "string"
+                      ? ` (look: ${it.grade.look})`
+                      : ""
+              }`,
               from: it.from,
               to: it.to,
             },
@@ -423,12 +535,19 @@ export const whatsAt = (dir: string, t: number) => {
     held,
     velocity,
     cam:
-      ci >= 0
+      ci >= 0 && camEval
         ? {
             before: ci,
             after: ci + 1 < cam.length ? ci + 1 : null,
             t0: cam[ci]!.t,
             t1: cam[ci + 1]?.t,
+            mm: +camEval.mm.toFixed(1),
+            fov: +camEval.fov.toFixed(1),
+            ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
+            ...(formatFocusSpec(camEval.focus) !== null
+              ? { focus: formatFocusSpec(camEval.focus) }
+              : {}),
+            ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
           }
         : null,
     sounds,
@@ -449,7 +568,7 @@ export const whatsAt = (dir: string, t: number) => {
 };
 
 const HELP = `What the film has at one heard second (as notes, voice:cues and framecheck print them), each with the file
-and row that holds it: the shot, the camera keys, the narration word, the sounds playing, the text and looks on screen,
+and row that holds it: the shot (its anim, look, hits), the camera keys and optics (mm, f/stop, focus, handheld), the narration word, the sounds playing, the text and looks on screen,
 the key rows moving, the notes not done near it. Run inside the film.
   bun run at 35.6        or  bun run at 00:35.633  (mm:ss as notes print it)
   bun run at 35.6 --json   the same as data, every moving key row included
@@ -525,11 +644,17 @@ if (isMain) {
     t = +n.heard.toFixed(6);
     note = n;
   }
-  await tell(film, {
-    say: `Looking at ${mmss(t)}${note ? ` (note #${note.n})` : ""}`,
-    at: t,
-    ...(note ? { notes: [note.id] } : {}),
-  });
+  const tellPath = fileURLToPath(new URL("../packages/live-studio/src/tell.mjs", import.meta.url));
+  if (existsSync(tellPath)) {
+    const mod = (await import(pathToFileURL(tellPath).href)) as {
+      tell?: (film: string, event: { say: string; at?: number; notes?: string[] }) => Promise<void>;
+    };
+    await mod.tell?.(film, {
+      say: `Looking at ${mmss(t)}${note ? ` (note #${note.n})` : ""}`,
+      at: t,
+      ...(note ? { notes: [note.id] } : {}),
+    });
+  }
   let got: ReturnType<typeof whatsAt>;
   try {
     got = whatsAt(film, t);
@@ -619,12 +744,28 @@ if (isMain) {
           ", ",
         )} (${shotsFile} [${got.shot!.row}].anim: In plays its len from the cut, Out its len up to the next cut, Combo the whole shot)`,
     );
-  if (got.cam)
+  if (got.shot?.look)
+    out.push(`  shot look: ${got.shot.look} (${shotsFile} [${got.shot.row}].adjust.look)`);
+  if (got.shot?.hits?.length)
+    out.push(
+      `  shot hits: ${got.shot.hits
+        .map((h: Row) => `[${h.row}] t=${fmt(h.t)} amount=${h.amount} trauma=${fmt(h.trauma)}`)
+        .join(", ")} (${shotsFile} [${got.shot.row}].hits)`,
+    );
+  if (got.cam) {
     out.push(
       `camera: ${c.camTimeline ?? "src/timeline/cam.json"} [${got.cam.before}] t=${fmt(got.cam.t0)}${
         got.cam.after === null ? " (the last key)" : ` -> [${got.cam.after}] t=${fmt(got.cam.t1)}`
       }`,
     );
+    const optics = [
+      `${got.cam.mm}mm (${got.cam.fov}°)`,
+      ...(got.cam.fstop ? [`f/${got.cam.fstop}`] : []),
+      ...(got.cam.focus ? [`focus ${got.cam.focus}`] : []),
+      ...(got.cam.handheld ? [`handheld ${got.cam.handheld}`] : []),
+    ];
+    out.push(`  camera optics: ${optics.join(" · ")}`);
+  }
   if (got.velocity)
     out.push(
       `velocity: ${got.velocity.effect}, intensity ${got.velocity.intensity}, scene ${fmt(got.velocity.from)}-${fmt(got.velocity.to)} (${

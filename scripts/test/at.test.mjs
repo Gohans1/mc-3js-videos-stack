@@ -896,6 +896,7 @@ test("an adjustment whose grade sets nothing is said to change nothing", (t) => 
       items: [
         { id: "a", name: "Empty", from: 0, to: 20, track: 0, grade: {} },
         { id: "b", name: "Warm", from: 0, to: 20, track: 0, grade: { temp: 20 } },
+        { id: "c", name: "Fincher", from: 0, to: 20, track: 0, grade: { look: "noir-slate" } },
       ],
     }),
   );
@@ -903,5 +904,179 @@ test("an adjustment whose grade sets nothing is said to change nothing", (t) => 
     env: { ...process.env, LIVE_PROJECT: dir },
     encoding: "utf8",
   });
-  assert.match(r.stdout, /^looks .*items\[0\] Empty \(its grade sets nothing\), items\[1\] Warm$/m);
+  assert.match(
+    r.stdout,
+    /^looks .*items\[0\] Empty \(its grade sets nothing\), items\[1\] Warm, items\[2\] Fincher \(look: noir-slate\)$/m,
+  );
+});
+
+test("camera optics (mm, fstop, focus, handheld) and shot look + active trauma hits show up in --json and text", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      {
+        t: 0,
+        p: [0, 2, 6],
+        l: [0, 1, 0],
+        mm: 50,
+        fstop: 2,
+        focus: "Steve.head",
+        handheld: "THE_CLOSEUP",
+      },
+      {
+        t: 10,
+        p: [0, 2, 4],
+        l: [0, 1, 0],
+        mm: 85,
+        fstop: 1.4,
+        focus: { target: "desk", offset: [0, 0.2, 0] },
+      },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      {
+        t: 0,
+        name: "intro",
+        adjust: { look: "teal-amber" },
+        hits: [{ t: 4.0, amount: 0.8, decay: 2 }],
+      },
+    ]),
+  );
+  const hitNow = whatsAt(dir, 2.05);
+  assert.equal(hitNow.shot?.look, "teal-amber");
+  assert.equal(hitNow.shot?.hits?.length, 1);
+  assert.equal(hitNow.shot?.hits?.[0]?.row, 0);
+  assert.ok(Math.abs((hitNow.shot?.hits?.[0]?.trauma ?? 0) - 0.6) < 0.01);
+  assert.ok(
+    Math.abs((hitNow.cam?.mm ?? 0) - 61) < 2,
+    `interpolated 50->85mm near 4.1s, got ${hitNow.cam?.mm}`,
+  );
+  assert.ok((hitNow.cam?.fstop ?? 0) > 1.5 && (hitNow.cam?.fstop ?? 0) < 2.0);
+  assert.match(String(hitNow.cam?.focus ?? ""), /Steve\.head -> desk \(0,0\.2,0\)/);
+  assert.equal(hitNow.cam?.handheld, "THE_CLOSEUP");
+
+  const r = spawnSync("bun", [AT, "2.05"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^  shot look: teal-amber \(src\/timeline\/shots\.json \[0\]\.adjust\.look\)$/m,
+  );
+  assert.match(
+    r.stdout,
+    /^  shot hits: \[0\] t=4\.00 amount=0\.8 trauma=0\.60 \(src\/timeline\/shots\.json \[0\]\.hits\)$/m,
+  );
+  assert.match(
+    r.stdout,
+    /^  camera optics: .*mm \(.*°\) · f\/.* · focus Steve\.head -> desk \(0,0\.2,0\) \(.*%\) · handheld THE_CLOSEUP$/m,
+  );
+
+  const decayed = whatsAt(dir, 2.25);
+  assert.equal(decayed.shot?.hits?.length ?? 0, 0);
+
+  // Overlapping hits in the same decay group report cumulative capped trauma matching film-kit/shake.
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      {
+        t: 0,
+        hits: [
+          { t: 4.0, amount: 0.6 },
+          { t: 4.1, amount: 0.7 },
+        ],
+      },
+    ]),
+  );
+  const cumHit = whatsAt(dir, 2.1); // scene 4.2 s -> prev 0.5 + 0.7 capped at 1.0, decayed 0.1 s = 0.90
+  assert.ok(Math.abs((cumHit.shot?.hits?.[1]?.trauma ?? 0) - 0.9) < 0.01);
+});
+
+test("whatsAt handles camera keys using anchor objects for p and l without throwing", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      {
+        t: 0,
+        p: { eye: [0, 0.34, 0.17] },
+        l: { eye: [0, 0, 0] },
+        mm: 50,
+        fstop: 1.85,
+      },
+      {
+        t: 4,
+        p: [1, 2, 3],
+        l: [0, 1, 0],
+        mm: 50,
+        fstop: 1.85,
+      },
+    ]),
+  );
+  const state = whatsAt(dir, 0.5);
+  assert.ok(state.cam);
+  assert.equal(state.cam.fstop, 1.9);
+  const r = spawnSync("bun", [AT, "0.5", "--json"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0);
+  const parsed = JSON.parse(r.stdout);
+  assert.equal(parsed.cam.fstop, 1.9);
+  assert.equal(parsed.cam.mm, 50);
+});
+
+test("disabled shot adjust and disabled adjustment layer grade never report an active look", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  conf["live-studio"].adjustmentTimeline = "src/timeline/adjust.json";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      {
+        t: 0,
+        name: "room",
+        size: "wide (WS)",
+        adjust: { look: "teal-amber", enabled: false },
+      },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/adjust.json"),
+    JSON.stringify({
+      items: [
+        {
+          id: "a",
+          name: "Muted",
+          from: 0,
+          to: 20,
+          track: 0,
+          grade: { look: "noir-slate", enabled: false },
+        },
+      ],
+    }),
+  );
+
+  const got = whatsAt(dir, 1.0);
+  assert.ok(got.shot);
+  assert.equal(got.shot.look, undefined);
+  assert.equal(got.looks.length, 1);
+  assert.equal(got.looks[0]?.text, "Muted (disabled)");
+
+  const r = spawnSync("bun", [AT, "1.0"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Muted \(disabled\)/);
+  assert.doesNotMatch(r.stdout, /teal-amber|noir-slate/);
 });
