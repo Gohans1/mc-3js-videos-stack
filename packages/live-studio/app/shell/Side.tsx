@@ -47,7 +47,7 @@ type Lib = StudioState["lib"];
 
 // CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
 const tab =
-  "relative flex h-10 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-muted-foreground outline-none transition duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary motion-safe:active:scale-[0.97] pointer-coarse:h-11";
+  "relative flex h-10 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-muted-foreground outline-none transition duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.97] pointer-coarse:h-11";
 const coreTab =
   "border border-primary/25 bg-tint/75 px-2.5 text-foreground/95 not-data-active:hover:bg-tint data-active:bg-tint data-active:text-primary-text [&_svg]:size-3.5 [&_svg]:text-primary";
 const isCore = (id: string) => id === "notes" || id === "lessons";
@@ -141,7 +141,7 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
 ];
 const tool =
-  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary motion-safe:active:scale-[0.97] [&_svg]:size-5";
+  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.97] [&_svg]:size-5";
 const coreTool =
   "border border-primary/25 bg-tint/75 text-foreground/90 not-data-active:hover:bg-tint data-active:bg-tint data-active:text-primary-text [&_svg]:text-primary";
 export function Library() {

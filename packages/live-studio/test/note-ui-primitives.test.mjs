@@ -143,10 +143,11 @@ describe("notes UI primitive tokens and variants", () => {
       seen.add(name);
       const val = vars.get(name);
       assert.ok(val, `Expected CSS variable --${name} in app/index.css`);
-      const ref = val.match(/^var\(--([a-z0-9-]+)\)$/);
+      const ref = val.match(/^var\(\s*--([a-z0-9-]+)\s*\)$/);
       return ref ? token(ref[1], seen) : val;
     };
 
+    const backdrop = token("backdrop");
     const card = token("card");
     const bg = token("background");
     const track = token("track");
@@ -158,6 +159,7 @@ describe("notes UI primitive tokens and variants", () => {
     const tint = token("tint");
     const foreground = token("foreground");
     const mutedFg = token("muted-foreground");
+    const sliderThumb = token("slider-thumb");
     const primary = token("primary");
     const primaryFg = token("primary-foreground");
     const primaryText = token("primary-text");
@@ -259,7 +261,12 @@ describe("notes UI primitive tokens and variants", () => {
       4.5,
       "Subtle count foreground/80 on hovered raised-4",
     );
-    checkContrast(foreground, input, 4.5, "Switch unchecked thumb foreground on input track");
+    checkContrast(foreground, backdrop, 4.5, "Switch unchecked thumb foreground on backdrop track");
+    checkContrast(input, backdrop, 3.0, "Input border on backdrop surface (WCAG non-text UI)");
+    checkContrast(input, bg, 3.0, "Input border on background surface (WCAG non-text UI)");
+    checkContrast(input, card, 3.0, "Input border on card surface (WCAG non-text UI)");
+    checkContrast(input, raised3, 3.0, "Input border on raised-3 surface (WCAG non-text UI)");
+    checkContrast(sliderThumb, bg, 4.5, "Wheel arrow/slider thumb on background");
     checkContrast(rulerText, track, 4.5, "Ruler text on track");
     checkContrast(noteDone, track, 3.0, "Done note marker on track (WCAG non-text UI)");
     checkContrast(foreground, beatMove, 4.5, "Foreground on beat-move strip");
@@ -302,6 +309,41 @@ describe("notes UI primitive tokens and variants", () => {
       const src = readFileSync(file, "utf8");
       assert.doesNotMatch(src, /\bdark:/, `${file} should use single-theme tokens without dark:`);
     }
+    for (const rel of [
+      "app/components/ui/input.tsx",
+      "app/components/ui/textarea.tsx",
+      "app/components/ui/select.tsx",
+      "app/components/ui/checkbox.tsx",
+    ]) {
+      const src = readFileSync(join(STUDIO_DIR, rel), "utf8");
+      assert.doesNotMatch(
+        src,
+        /\bbg-input\b/,
+        `${rel} must use border-input on a surface token instead of bg-input`,
+      );
+    }
+    const wheelsSrc = readFileSync(join(STUDIO_DIR, "app/camera/WheelsAdjust.tsx"), "utf8");
+    assert.match(
+      wheelsSrc,
+      /\bfill-slider-thumb\b/,
+      "WheelsAdjust arrows must use fill-slider-thumb",
+    );
+    assert.match(
+      wheelsSrc,
+      /\bstroke-background\b/,
+      "WheelsAdjust arrows must outline against background",
+    );
+    assert.doesNotMatch(
+      wheelsSrc,
+      /var\(--color-primary-foreground\)/,
+      "WheelsAdjust must not fill dark-ink arrows on dark background",
+    );
+    const swapSrc = readFileSync(join(STUDIO_DIR, "app/sound/SoundSwapPicker.tsx"), "utf8");
+    assert.doesNotMatch(
+      swapSrc,
+      /hover:bg-raised-3[^\n"']*text-primary(?![a-z-])/,
+      "SoundSwapPicker current row on hover:bg-raised-3 must use text-primary-text",
+    );
   });
 });
 

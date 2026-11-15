@@ -236,7 +236,8 @@
   --destructive: var(--fx-red-200); /* >=4.7:1 AA text on card/background and destructive/20 */
   --destructive-foreground: var(--fx-black); /* 9.09:1 AA on destructive */
   --border: var(--fx-base-800);
-  --input: var(--fx-black);
+  /* >=3.4:1 UI control border across backdrop, background, card & raised-3 */
+  --input: var(--fx-base-500);
   --ring: var(--fx-blue-300);
   --chart-1: var(--fx-blue-400);
   --chart-2: var(--fx-yellow-400);

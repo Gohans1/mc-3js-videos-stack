@@ -69,7 +69,7 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
           {summary.matches.slice(0, 4).map((m, idx) => (
             <div
               key={m.id ?? idx}
-              className="bg-input/70 flex flex-col gap-1 rounded-md px-2.5 py-2"
+              className="bg-backdrop/70 flex flex-col gap-1 rounded-md px-2.5 py-2"
             >
               <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
                 {m.id && (

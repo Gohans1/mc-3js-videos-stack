@@ -198,7 +198,7 @@ function Wheel({
           <path
             d="M114,13A64,64 0 0 1 114,115"
             fill="none"
-            stroke="var(--color-muted-foreground)"
+            className="stroke-muted-foreground"
             strokeWidth="5"
             strokeLinecap="round"
           />
@@ -246,16 +246,21 @@ function Wheel({
           />
           <path
             d={arrow((saturation - 100) / 100, -1)}
-            fill="var(--color-primary-foreground)"
+            className="fill-slider-thumb stroke-background"
+            strokeWidth=".8"
             pointerEvents="none"
           />
-          <path d={arrow(p.light, 1)} fill="var(--color-primary-foreground)" pointerEvents="none" />
+          <path
+            d={arrow(p.light, 1)}
+            className="fill-slider-thumb stroke-background"
+            strokeWidth=".8"
+            pointerEvents="none"
+          />
           <circle
             cx={76 + p.x * 53}
             cy={64 + p.y * 53}
             r="3.5"
-            fill="var(--color-foreground)"
-            stroke="var(--color-primary-foreground)"
+            className="fill-foreground stroke-backdrop"
             strokeWidth=".8"
             pointerEvents="none"
           />

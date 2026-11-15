@@ -10,7 +10,7 @@ const buttonVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/85 font-semibold",
         outline:
-          "border-border bg-input/30 hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
+          "border-border bg-backdrop/60 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary-hover aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
@@ -18,9 +18,9 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/12 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/30",
         link: "text-primary underline-offset-4 hover:underline",
-        // CapCut's grey tool button: lights white on hover, cyan on a tint while it is on (aria-pressed) or its menu is open
+        // CapCut's grey tool button: lights white on hover, Flexoki blue on a tint while it is on (aria-pressed) or its menu is open
         quiet:
-          "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-tint aria-pressed:text-primary aria-pressed:hover:text-primary data-popup-open:bg-tint data-popup-open:text-primary",
+          "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint aria-pressed:hover:text-primary-text data-popup-open:bg-tint data-popup-open:text-primary-text",
         tab: "text-muted-foreground hover:bg-muted/45 hover:text-foreground aria-expanded:bg-muted/60 aria-expanded:text-foreground aria-pressed:bg-card aria-pressed:text-primary aria-pressed:ring-primary/35 aria-pressed:hover:bg-card aria-pressed:hover:text-primary aria-pressed:shadow-xs aria-pressed:ring-1",
         remove: "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
         lit: "text-primary-text hover:bg-muted/50", // a quiet button whose thing is there now: a key at the playhead, the sound playing
