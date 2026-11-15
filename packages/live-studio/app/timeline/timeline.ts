@@ -293,7 +293,7 @@ const drawDetail = () => {
       on = selected?.type === "beat" && selected.id === id;
     g.fillStyle = tone(
       m.kind === "sound"
-        ? "clip-wave"
+        ? "beat-sound"
         : HOLDS.has(id)
           ? "beat-hold"
           : m.curve === "snap"

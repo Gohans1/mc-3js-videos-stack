@@ -197,7 +197,7 @@ export function NoteTimeChip({
         goToNote(note);
       }}
       className={cn(
-        "text-primary/95 hover:bg-primary/12 hover:text-primary hover:border-primary/40 focus-visible:ring-ring text-tag border-hairline bg-surface-subtle inline-flex min-h-5.5 shrink-0 cursor-pointer items-center rounded border px-1.5 py-0.5 font-mono leading-none font-medium tabular-nums transition-colors outline-none focus-visible:ring-2 pointer-coarse:min-h-9",
+        "text-primary-text hover:bg-tint hover:text-primary-text hover:border-primary/40 focus-visible:ring-ring text-tag border-hairline bg-surface-subtle inline-flex min-h-5.5 shrink-0 cursor-pointer items-center rounded border px-1.5 py-0.5 font-mono leading-none font-medium tabular-nums transition-colors outline-none focus-visible:ring-2 pointer-coarse:min-h-9",
         className,
       )}
     >

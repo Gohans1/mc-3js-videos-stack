@@ -39,6 +39,7 @@
   --color-peek: var(--peek);
   --color-snap: var(--snap);
   --color-ink: var(--ink);
+  --color-ink-text: var(--ink-text);
   --color-in-out: var(--in-out);
   --color-ai: var(--ai);
   --color-ai-text: var(--ai-text);
@@ -63,7 +64,7 @@
   --color-scrubber-tick: var(--scrubber-tick);
   --color-playhead: var(--playhead);
   --color-pick: var(--pick);
-  --color-curve: var(--curve);
+  --color-curve-bg: var(--curve-bg);
   --color-md-h1: var(--md-h1);
   --color-md-h2: var(--md-h2);
   --color-md-h3: var(--md-h3);
@@ -109,8 +110,10 @@
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
+  --color-secondary-hover: var(--secondary-hover);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
+  --color-primary-text: var(--primary-text);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
@@ -167,7 +170,7 @@
   --fx-red-300: oklch(0.6834 0.1523 29.8);
   --fx-red-400: oklch(0.597 0.1692 28.4);
   --fx-red-600: oklch(0.5042 0.1648 27.8);
-  --fx-red-850: oklch(0.3121 0.088 26.2);
+  --fx-red-850: oklch(0.3132 0.0870 26.3);
   --fx-red-900: oklch(0.2639 0.0618 25.1);
   --fx-red-950: oklch(0.2133 0.0318 23.3);
 
@@ -183,6 +186,7 @@
   --fx-green-300: oklch(0.7227 0.1178 117.2);
   --fx-green-400: oklch(0.6513 0.1242 119.4);
   --fx-green-600: oklch(0.5593 0.1335 122.9);
+  --fx-green-800: oklch(0.3898 0.0900 122.1);
   --fx-green-850: oklch(0.3376 0.0757 121.9);
 
   --fx-cyan-200: oklch(0.8127 0.0791 179.4);
@@ -221,14 +225,16 @@
   /* Flexoki Blue-300 passes >=4.5:1 AA on cards/panels/buttons; Blue-400 (#4385BE) anchors --in-out & charts */
   --primary: var(--fx-blue-300);
   --primary-foreground: var(--fx-black);
+  --primary-text: var(--fx-blue-200); /* >=6.4:1 AA on secondary/muted/tint/card */
   --secondary: var(--fx-base-850);
+  --secondary-hover: color-mix(in oklab, var(--secondary), var(--foreground) 5%);
   --secondary-foreground: var(--fx-base-200);
   --muted: var(--fx-base-850);
   --muted-foreground: var(--fx-base-400); /* >=4.6:1 AA across card & muted */
   --accent: var(--fx-base-850);
   --accent-foreground: var(--fx-base-200);
-  --destructive: var(--fx-red-300); /* >=4.9:1 AA text on card/background */
-  --destructive-foreground: var(--fx-paper);
+  --destructive: var(--fx-red-200); /* >=4.7:1 AA text on card/background and destructive/20 */
+  --destructive-foreground: var(--fx-black); /* 9.09:1 AA on destructive */
   --border: var(--fx-base-800);
   --input: var(--fx-black);
   --ring: var(--fx-blue-300);
@@ -269,6 +275,7 @@
   --in-out: var(--fx-blue-400);
   --in-out-text: var(--fx-blue-200);
   --ink: var(--fx-magenta-400);
+  --ink-text: var(--fx-magenta-300);
   --ink-saved: var(--fx-blue-400);
   --picture: var(--fx-paper);
   --picture-foreground: var(--fx-black);
@@ -276,7 +283,7 @@
   --alarm-bg: var(--fx-red-950);
   --label: var(--fx-base-100);
   --tooltip: var(--fx-black);
-  --curve: var(--fx-black);
+  --curve-bg: var(--fx-black);
 
   --scrim-soft: color-mix(in oklab, var(--fx-black) 35%, transparent);
   --scrim: color-mix(in oklab, var(--fx-black) 65%, transparent);
@@ -303,7 +310,7 @@
   --main-track: var(--fx-base-850);
   --track-line: var(--fx-black);
   --grid: var(--fx-base-850);
-  --ruler-text: var(--fx-base-500);
+  --ruler-text: var(--fx-base-400);
   --ruler-tick: var(--fx-base-700);
   --ruler-dot: var(--fx-base-800);
   --playhead: color-mix(in oklab, var(--fx-paper) 62%, transparent);
@@ -335,10 +342,11 @@
   --pace-fast: var(--fx-red-900);
   --pace-slow: var(--fx-blue-900);
   --pace-pick: var(--fx-green-850);
-  --beat-move: var(--fx-blue-600);
-  --beat-snap: var(--fx-orange-600);
-  --beat-hold: var(--fx-green-600);
-  --note-done: var(--fx-base-600);
+  --beat-move: var(--fx-blue-800);
+  --beat-snap: var(--fx-orange-800);
+  --beat-hold: var(--fx-green-800);
+  --beat-sound: var(--fx-cyan-800);
+  --note-done: var(--fx-base-500);
   --key-hold: var(--fx-base-700);
   --level-near: var(--fx-orange-400);
   --level-over: var(--fx-red-400);

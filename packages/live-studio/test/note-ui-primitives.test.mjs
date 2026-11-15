@@ -131,10 +131,13 @@ describe("notes UI primitive tokens and variants", () => {
     assert.match(html, /text-ai-text/);
   });
 
-  test("CSS design tokens satisfy WCAG AA (>= 4.5:1) for primary, check, done, ai, and active segments", () => {
+  test("CSS design tokens satisfy WCAG AA (>= 4.5:1) and avoid variable collisions", () => {
     const css = readFileSync(join(STUDIO_DIR, "app/index.css"), "utf8");
+    const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
     const vars = new Map();
-    for (const m of css.matchAll(/^\s*--([a-z0-9-]+):\s*([^;]+);/gm)) vars.set(m[1], m[2].trim());
+    for (const m of stripped.matchAll(/^\s*--([a-z0-9-]+):\s*([^;]+);/gm)) {
+      vars.set(m[1], m[2].trim());
+    }
     const token = (name, seen = new Set()) => {
       assert.ok(!seen.has(name), `Cyclic CSS variable --${name}`);
       seen.add(name);
@@ -146,44 +149,103 @@ describe("notes UI primitive tokens and variants", () => {
 
     const card = token("card");
     const bg = token("background");
+    const track = token("track");
     const secondary = token("secondary");
+    const tint = token("tint");
     const foreground = token("foreground");
+    const mutedFg = token("muted-foreground");
     const primary = token("primary");
     const primaryFg = token("primary-foreground");
+    const primaryText = token("primary-text");
+    const destructive = token("destructive");
+    const destructiveFg = token("destructive-foreground");
     const ok = token("ok");
     const okText = token("ok-text");
     const ai = token("ai");
     const aiText = token("ai-text");
     const warn = token("warn");
+    const warnFg = token("warn-foreground");
     const warnBg = token("warn-bg");
+    const ink = token("ink");
+    const inkText = token("ink-text");
+    const inOut = token("in-out");
+    const inOutText = token("in-out-text");
+    const rulerText = token("ruler-text");
+    const noteDone = token("note-done");
+    const beatMove = token("beat-move");
+    const beatSnap = token("beat-snap");
+    const beatHold = token("beat-hold");
+    const beatSound = token("beat-sound");
 
-    const doneBgOnCard = blendRgba(ok, 0.12, card);
-    const aiBgOnCard = blendRgba(ai, 0.14, card);
+    const checkContrast = (fgColor, bgColor, minRatio, label) => {
+      const fgRgb = Array.isArray(fgColor) ? fgColor : parseColor(fgColor);
+      const bgRgb = Array.isArray(bgColor) ? bgColor : parseColor(bgColor);
+      const ratio = contrastRatio(fgRgb, bgRgb);
+      assert.ok(
+        ratio >= minRatio,
+        `${label} contrast ${ratio.toFixed(2)}:1 must be >= ${minRatio}:1`,
+      );
+    };
+
+    checkContrast(primaryFg, primary, 4.5, "Primary foreground on primary");
+    checkContrast(primary, card, 4.5, "Primary on card");
+    checkContrast(primary, tint, 4.5, "Primary on active tint");
+    checkContrast(primaryText, secondary, 4.5, "Primary text on secondary");
+    checkContrast(primaryText, tint, 4.5, "Primary text on active tint");
+    checkContrast(primaryText, card, 4.5, "Primary text on card");
+
+    checkContrast(destructiveFg, destructive, 4.5, "Destructive foreground on destructive");
+    checkContrast(destructive, card, 4.5, "Destructive text on card");
+    checkContrast(
+      destructive,
+      blendRgba(destructive, 0.2, card),
+      4.5,
+      "Destructive text on destructive/20 over card",
+    );
+    checkContrast(
+      destructive,
+      blendRgba(destructive, 0.2, bg),
+      4.5,
+      "Destructive text on destructive/20 over background",
+    );
+
+    checkContrast(warnFg, warn, 4.5, "Warn foreground on warn");
+    checkContrast(warn, warnBg, 4.5, "Check warn text on warn-bg badge");
+    checkContrast(okText, blendRgba(ok, 0.12, card), 4.5, "Done --ok-text on ok/12 card surface");
+    checkContrast(okText, bg, 4.5, "Done --ok-text on background");
+    checkContrast(aiText, blendRgba(ai, 0.14, card), 4.5, "AI --ai-text on ai/14 card surface");
+    checkContrast(inkText, blendRgba(ink, 0.15, card), 4.5, "Ink --ink-text on ink/15 card badge");
+    checkContrast(
+      inOutText,
+      blendRgba(inOut, 0.18, card),
+      4.5,
+      "In/Out text on in-out/18 card pill",
+    );
+
+    checkContrast(mutedFg, card, 4.5, "Muted foreground on card");
+    checkContrast(mutedFg, secondary, 4.5, "Muted foreground on secondary");
+    checkContrast(rulerText, track, 4.5, "Ruler text on track");
+    checkContrast(noteDone, track, 3.0, "Done note marker on track (WCAG non-text UI)");
+    checkContrast(foreground, beatMove, 4.5, "Foreground on beat-move strip");
+    checkContrast(foreground, beatSnap, 4.5, "Foreground on beat-snap strip");
+    checkContrast(foreground, beatHold, 4.5, "Foreground on beat-hold strip");
+    checkContrast(foreground, beatSound, 4.5, "Foreground on beat-sound strip");
+    checkContrast(foreground, secondary, 7.0, "Active segmented pill --foreground on --secondary");
 
     assert.ok(
-      contrastRatio(parseColor(primaryFg), parseColor(primary)) >= 4.5,
-      "Primary foreground on primary must pass WCAG AA",
+      !vars.has("curve") && !vars.has("color-curve"),
+      "--curve belongs only to ColorAdjust inline scope",
     );
-    assert.ok(
-      contrastRatio(parseColor(warn), parseColor(warnBg)) >= 4.5,
-      "Check warn text on warn-bg badge must pass WCAG AA",
-    );
-    assert.ok(
-      contrastRatio(parseColor(okText), doneBgOnCard) >= 4.5,
-      "Done --ok-text on ok/12 card surface must pass WCAG AA",
-    );
-    assert.ok(
-      contrastRatio(parseColor(okText), parseColor(bg)) >= 4.5,
-      "Done --ok-text on background must pass WCAG AA",
-    );
-    assert.ok(
-      contrastRatio(parseColor(aiText), aiBgOnCard) >= 4.5,
-      "AI --ai-text on ai/14 card surface must pass WCAG AA",
-    );
-    assert.ok(
-      contrastRatio(parseColor(foreground), parseColor(secondary)) >= 7,
-      "Active segmented pill --foreground on --secondary must pass WCAG AAA",
-    );
+    assert.equal(vars.get("color-curve-bg"), "var(--curve-bg)");
+    for (const rel of ["app/camera/ColorAdjust.tsx", "app/timeline/FilmSpeedPanel.tsx"]) {
+      const src = readFileSync(join(STUDIO_DIR, rel), "utf8");
+      assert.match(src, /\bbg-curve-bg\b/, `${rel} must use bg-curve-bg`);
+      assert.doesNotMatch(
+        src,
+        /(?:^|[\s"'`])bg-curve(?:$|[\s"'`])/,
+        `${rel} must not use colliding bg-curve`,
+      );
+    }
   });
 });
 

@@ -57,6 +57,7 @@ const TONES = [
   "beat-move",
   "beat-snap",
   "beat-hold",
+  "beat-sound",
   "note-done",
   "key-hold",
   "level-near",

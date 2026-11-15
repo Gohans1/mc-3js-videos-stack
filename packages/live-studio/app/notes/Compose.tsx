@@ -413,7 +413,9 @@ export function Compose({
           {where}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {shownDrawn && <div className="text-ui text-ink mb-1.5 tabular-nums">{shownDrawn}</div>}
+          {shownDrawn && (
+            <div className="text-ui text-ink-text mb-1.5 tabular-nums">{shownDrawn}</div>
+          )}
           {!shownDrawn && !isEdit && inOutAt(shownCompose.t) && (
             <div className="text-ui text-in-out-text mb-1.5 tabular-nums">
               About {rangeText(inOutAt(shownCompose.t)!)}, the In to Out stretch
@@ -424,11 +426,7 @@ export function Compose({
               <Alert
                 variant="warn"
                 className={
-                  dock
-                    ? cramped
-                      ? "hidden"
-                      : "mb-1.5 [@media(max-height:679px)]:hidden"
-                    : "mb-2"
+                  dock ? (cramped ? "hidden" : "mb-1.5 [@media(max-height:679px)]:hidden") : "mb-2"
                 }
               >
                 <TriangleAlert aria-hidden />

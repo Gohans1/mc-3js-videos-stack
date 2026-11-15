@@ -73,7 +73,7 @@ import {
 } from "./text-anim";
 
 const DOC = { snapshot, restore };
-const SWATCHES = ["#FFFFFF", "#100F0F", "#D14D41", "#D0A215", "#3AA99F", "#4385BE"];
+const SWATCHES = ["#FFFCF0", "#100F0F", "#D14D41", "#D0A215", "#3AA99F", "#4385BE"];
 const ALL = "All",
   FAV = "Favorites";
 const byId = (id: string | undefined) =>
@@ -322,7 +322,7 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
         </FieldRow>
         <Colors
           label="Color"
-          value={it.color ?? "#FFFFFF"}
+          value={it.color ?? "#FFFCF0"}
           put={(c) =>
             editPicked((x) => {
               x.color = c;

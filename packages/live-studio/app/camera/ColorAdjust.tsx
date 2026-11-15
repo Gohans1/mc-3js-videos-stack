@@ -194,7 +194,7 @@ function CurveEditor({
         role="group"
         aria-label={`${channel.title} curve`}
         aria-disabled={disabled}
-        className="bg-curve aspect-3/2 w-full touch-none overflow-visible rounded-sm outline-none aria-disabled:pointer-events-none aria-disabled:opacity-50"
+        className="bg-curve-bg aspect-3/2 w-full touch-none overflow-visible rounded-sm outline-none aria-disabled:pointer-events-none aria-disabled:opacity-50"
         onPointerDown={(e) => {
           if (disabled || e.button !== 0) return;
           e.preventDefault();
@@ -294,7 +294,7 @@ function CurveEditor({
               cx={4 + x * 292}
               cy={196 - y * 192}
               r={3}
-              fill={picked === i ? channel.color : "var(--color-curve)"}
+              fill={picked === i ? channel.color : "var(--color-curve-bg)"}
               stroke={channel.color}
               strokeWidth="1.5"
               className="focus:stroke-picture outline-none focus:stroke-3"

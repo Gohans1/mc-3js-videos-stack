@@ -331,7 +331,7 @@ function LessonList({ onOpen }: { onOpen: (path: string, matchLine: number | nul
                     {draft && " · unsaved words"}
                   </span>
                   {snippet && (
-                    <span className="text-primary/90 mt-0.5 block truncate text-xs">
+                    <span className="text-primary-text mt-0.5 block truncate text-xs">
                       L{matchLine}: {snippet}
                     </span>
                   )}
@@ -574,7 +574,7 @@ function LessonFileView({ path, initialLine }: { path: string; initialLine: numb
                     onClick={() => flyToHeading(h.line)}
                     className={cn(
                       "hover:bg-muted focus-visible:ring-ring flex w-full items-baseline gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-left text-xs outline-none focus-visible:ring-2",
-                      active && "bg-primary/12 ring-primary/35 ring-1 ring-inset",
+                      active && "bg-tint ring-primary/35 ring-1 ring-inset",
                     )}
                     style={{ "--indent": `${8 + (h.depth - 1) * 10}px` }}
                   >
