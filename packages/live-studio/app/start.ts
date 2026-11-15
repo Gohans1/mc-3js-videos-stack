@@ -5,7 +5,7 @@ import { buildScene, SHOTS_OUT as SHOTS } from "film/scene";
 import * as THREE from "three";
 
 import { checkFilm } from "../src/contract.ts";
-import { loadCam } from "./camera/cam";
+import { keys as camKeys, loadCam } from "./camera/cam";
 import { attachCamRow } from "./camera/camrow";
 import { loadLayers } from "./camera/layers";
 import { loadShots } from "./camera/shots";
@@ -36,6 +36,7 @@ import { captionAt } from "./picture/captions";
 import { staleFilmView } from "./picture/filmcam";
 import { frameSize, loadFilm } from "./picture/frame";
 import { fly } from "./picture/freecam";
+import { formatOpticsHud } from "./picture/hud";
 import { lookAtClick } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
 import { drawFinal, render } from "./picture/render";
@@ -113,12 +114,32 @@ const listen = () => {
     say("Sound updated");
   });
   onEvent("lanes", () => loadSound({ lanesOnly: true })); // an agent edited lanes the page plays itself: no remix, just the file again
-  onEvent("cam", loadCam); // an agent edited the camera keys: the picture takes them now, no new build to load
+  const reloadNotice =
+    (
+      rev: "camRev" | "shotsRev" | "layersRev" | "textRev",
+      msg: string,
+      load: () => Promise<unknown>,
+      after?: () => void,
+    ) =>
+    async () => {
+      const before = get()[rev];
+      await load();
+      if (get()[rev] !== before) {
+        say(msg);
+        after?.();
+      }
+    };
+  onEvent(
+    "cam",
+    reloadNotice("camRev", "Camera keys updated", loadCam, () =>
+      reportFilm(checkFilm(FILM, S.render, camKeys)),
+    ),
+  ); // an agent edited the camera keys: the picture takes them now, no new build to load
   onEvent("keys", (i) => loadKeys(Number(i))); // the same for one key file (Steve, props): which one it names
-  onEvent("shots", loadShots);
+  onEvent("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
   onEvent("timing", loadTiming);
-  onEvent("adjustment", loadLayers);
-  onEvent("text", loadText); // an agent edited the titles: the picture takes them now
+  onEvent("adjustment", reloadNotice("layersRev", "Color adjustment updated", loadLayers));
+  onEvent("text", reloadNotice("textRev", "Titles updated", loadText)); // an agent edited the titles: the picture takes them now
   onEvent("notes", loadNotes);
   onEvent("voice", () => {
     invalidateSoundCaches();
@@ -254,6 +275,7 @@ export const start = async (el: Elements) => {
     loadFavorites(),
   ]).then(() => {
     refreshTimes();
+    reportFilm(checkFilm(FILM, S.render, camKeys));
     S.dirty = true;
   });
   refreshTimes();
@@ -309,6 +331,7 @@ const frame = () => {
     const i = shotIndex(S.t);
     S.el.clock.textContent = stamp(peeked ?? S.t);
     S.el.clock.toggleAttribute("data-peek", peeked !== null);
+    S.el.hud.textContent = formatOpticsHud(S.tools?.optics);
     if (i !== shownShot) {
       shownShot = i;
       set({ shot: `shot ${i}: ${S.comments[i] ?? ""}` });

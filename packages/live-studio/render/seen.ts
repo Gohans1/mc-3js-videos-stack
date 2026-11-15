@@ -8,12 +8,17 @@
 // see-through materials (opacity under 0.5) never hide anything. Prints the numbers and faults (checks/seen.mjs), writes
 //   seen_<target>_<from>-<to>.jpg  the chart: frame share, hidden, cut off, brightness over time
 //   seen_<target>_<from>-<to>_worst.jpg  the worst frame of each fault: green outline = seen, red = hidden, with what it is
+import { blurPx } from "film-stage/dof";
 import * as THREE from "three";
 
 import { summarize } from "../checks/seen.mjs";
 import { sizeOf } from "../src/frame.ts";
 import { canvas } from "./lab";
 import { chart, findTarget, inside, label, labelOf, mark, targetHelp } from "./target";
+
+const camPos = new THREE.Vector3(),
+  targetPos = new THREE.Vector3(),
+  targetBox = new THREE.Box3();
 
 const WIDE = 3,
   TARGET = 1,
@@ -159,6 +164,28 @@ export const seenCheck = (render, cfg) => {
       }
     for (const k in by) by[k] /= Ac || 1;
     const px = FW * FH;
+    const optics = render.tools.optics;
+    let dof;
+    const [canonW] = sizeOf(cfg.ratio, 1920);
+    if (optics?.fstop > 0 && optics?.focusM > 0) {
+      render.tools.camera.updateMatrixWorld();
+      camPos.setFromMatrixPosition(render.tools.camera.matrixWorld);
+      targetBox.setFromObject(obj);
+      if (targetBox.isEmpty()) obj.getWorldPosition(targetPos);
+      else targetBox.getCenter(targetPos);
+      const targetM = Math.max(0.05, camPos.distanceTo(targetPos));
+      dof = {
+        blurPx: blurPx({
+          mm: optics.mm,
+          fstop: optics.fstop,
+          focus: optics.focusM,
+          dist: targetM,
+          width: canonW,
+        }),
+        focusM: optics.focusM,
+        targetM,
+      };
+    }
     return {
       t,
       share: V / px,
@@ -169,6 +196,7 @@ export const seenCheck = (render, cfg) => {
       frameLuma: flum / px,
       alone: A,
       masks: { all, alone },
+      ...dof,
     };
   };
 
@@ -189,18 +217,19 @@ export const seenCheck = (render, cfg) => {
     const tag = `seen_${target}_${from}-${to}`,
       gl = canvas();
 
+    const hasBlur = frames.some((x) => x.blurPx != null);
     const c = chart(gl.width, 420, {
       from,
       to,
       top: 1,
-      title: `${target}: frame share x2 (white), hidden (red), cut off (orange), brightness x2 (yellow)`,
+      title: `${target}: frame share x2 (white), hidden (red), cut off (orange), brightness x2 (yellow)${hasBlur ? ", blur/8px (cyan)" : ""}`,
     });
     const line = (key, color, k = 1) => {
       c.g.strokeStyle = color;
       c.g.lineWidth = 2.5;
       c.g.beginPath();
       frames.forEach((x, i) =>
-        (i ? c.g.lineTo : c.g.moveTo).call(c.g, c.X(x.t), c.Y(Math.min(1, x[key] * k))),
+        (i ? c.g.lineTo : c.g.moveTo).call(c.g, c.X(x.t), c.Y(Math.min(1, (x[key] ?? 0) * k))),
       );
       c.g.stroke();
     };
@@ -208,6 +237,7 @@ export const seenCheck = (render, cfg) => {
     line("hidden", "#ff4d4d");
     line("cut", "#ff9f1a");
     line("luma", "#ffd84d", 2);
+    if (hasBlur) line("blurPx", "#5ce1e6", 1 / 8);
     worst.forEach((w, i) => mark(c, w.t, "#9aa0a6", w.kind, i % 3, [3, 3]));
     lines.push({ still: `${tag}.jpg`, canvas: c.canvas });
 

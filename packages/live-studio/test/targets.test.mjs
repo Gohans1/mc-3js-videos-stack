@@ -9,6 +9,7 @@ import {
   inferTargetTransform,
   targetsForKeys,
 } from "../app/objects/targets.ts";
+import { findTarget, targetHelp } from "../render/target.ts";
 
 const mesh = () => new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
 
@@ -108,4 +109,41 @@ test("inferTargetTransform auto-enables 3D gizmo axes only for standard key fiel
     inferTargetTransform({ edit: "props", path: ["scrap"] }, { t: 10, at: [0.82, 9.47] }),
     undefined,
   );
+});
+
+test("findTarget resolves Actor.bone dot paths scoped to that actor and targetHelp suggests near dot targets", () => {
+  const scene = new THREE.Scene(),
+    camera = new THREE.PerspectiveCamera();
+  const steve = new THREE.Group(),
+    alex = new THREE.Group(),
+    desk = new THREE.Group();
+  const steveHead = new THREE.Object3D(),
+    drawer = new THREE.Group(),
+    handle = new THREE.Object3D();
+  steveHead.name = "HeadJoint";
+  drawer.name = "drawer";
+  handle.name = "handle";
+  steve.add(steveHead);
+  drawer.add(handle);
+  desk.add(drawer);
+  scene.add(steve, alex, desk);
+
+  const tools = {
+    scene,
+    camera,
+    objects: [
+      [steve, "Steve"],
+      [alex, "Alex"],
+      [desk, "desk"],
+    ],
+    bones: { head: steveHead },
+  };
+
+  assert.equal(findTarget(tools, "Steve"), steve);
+  assert.equal(findTarget(tools, "Steve.head"), steveHead);
+  assert.equal(findTarget(tools, "desk.drawer.handle"), handle);
+  assert.equal(findTarget(tools, "Alex.head"), null);
+
+  const help = targetHelp(tools, "Steve.hed");
+  assert.match(help, /did you mean "Steve\.head"/);
 });

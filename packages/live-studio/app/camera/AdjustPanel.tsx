@@ -1,5 +1,6 @@
 import type { Grade } from "film-stage/grade";
 import { ADJUSTMENTS, type BasicKey } from "film-stage/grade-color";
+import { resolveGrade } from "film-stage/looks";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { Footer, Reset, SaveStatus, Section, Segmented, SliderRow } from "../components/inspector";
+import {
+  FieldRow,
+  Footer,
+  Reset,
+  SaveStatus,
+  Section,
+  Segmented,
+  SliderRow,
+} from "../components/inspector";
 import { S } from "../core/state";
 import { get, say, set, useStudio } from "../core/store";
 import {
@@ -142,6 +151,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
   const libraryModalOpen = useStudio((s) => s.modal === "adjustLibrary");
   const shot = gradeTarget(),
     grade = gradeOf(shot),
+    resolved = resolveGrade(grade),
     layer = typeof shot === "string",
     locked = layer && layerLocked(shot),
     doc = gradeDoc(shot);
@@ -175,16 +185,16 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
           </Callout>
         )}
         {part === "hsl" ? (
-          <HSLAdjust shot={shot} grade={grade} disabled={locked} />
+          <HSLAdjust shot={shot} grade={resolved} disabled={locked} />
         ) : part === "curves" ? (
-          <CurvesAdjust shot={shot} grade={grade} disabled={locked} />
+          <CurvesAdjust shot={shot} grade={resolved} disabled={locked} />
         ) : part === "wheels" ? (
-          <WheelsAdjust shot={shot} grade={grade} disabled={locked} />
+          <WheelsAdjust shot={shot} grade={resolved} disabled={locked} />
         ) : (
           <>
             <Section
               title="Adjust"
-              on={grade.enabled !== false}
+              on={resolved.enabled !== false}
               disabled={locked}
               onCheck={(on) =>
                 change(shot, (g) => {
@@ -193,6 +203,26 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
               }
               right={<Reset label="Reset adjustments" onClick={() => resetGrade(shot)} />}
             >
+              {grade.look && (
+                <FieldRow
+                  label="Look"
+                  nav={
+                    <Reset
+                      label="Clear look"
+                      disabled={locked}
+                      onClick={() =>
+                        change(shot, (g) => {
+                          delete g.look;
+                        })
+                      }
+                    />
+                  }
+                >
+                  <span className="text-ui truncate font-mono text-xs" title={grade.look}>
+                    {grade.look}
+                  </span>
+                </FieldRow>
+              )}
               {(["Color", "Lightness", "Effects"] as const).map((group) => (
                 <div key={group} className="flex flex-col gap-1">
                   <h3 className="text-muted-foreground border-b pb-2 text-xs">{group}</h3>
@@ -200,7 +230,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
                     <SliderRow
                       key={x.id}
                       label={x.title}
-                      value={grade.basic?.[x.id] ?? 0}
+                      value={resolved.basic?.[x.id] ?? 0}
                       min={x.min}
                       max={x.max}
                       step={1}
@@ -208,7 +238,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
                       origin={0}
                       compact
                       gradient={x.group === "Color" ? x.id : undefined}
-                      disabled={grade.enabled === false}
+                      disabled={resolved.enabled === false}
                       doc={doc}
                       preview={(v) => value(shot, x.id, v, false)}
                       save={(v) => value(shot, x.id, v)}
@@ -222,7 +252,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
               right={
                 <Reset
                   label="Remove LUT"
-                  disabled={!grade.lut}
+                  disabled={!resolved.lut}
                   onClick={() =>
                     change(shot, (g) => {
                       delete g.lut;
@@ -232,7 +262,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
               }
             >
               <Select
-                value={grade.lut?.url ?? "none"}
+                value={resolved.lut?.url ?? "none"}
                 items={[
                   { value: "none", label: "None" },
                   ...library.luts.map((l) => ({ value: l.url, label: l.name })),
@@ -265,11 +295,11 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
               <div>
                 <ImportLut onError={setError} />
               </div>
-              {grade.lut && (
+              {resolved.lut && (
                 <SliderRow
                   compact
                   label="Intensity"
-                  value={grade.lut.amount ?? 100}
+                  value={resolved.lut.amount ?? 100}
                   min={0}
                   max={100}
                   step={1}
@@ -279,14 +309,14 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
                     change(
                       shot,
                       (g) => {
-                        g.lut!.amount = v;
+                        g.lut = { ...(g.lut ?? resolved.lut!), amount: v };
                       },
                       false,
                     )
                   }
                   save={(v) =>
                     change(shot, (g) => {
-                      g.lut!.amount = v;
+                      g.lut = { ...(g.lut ?? resolved.lut!), amount: v };
                     })
                   }
                 />

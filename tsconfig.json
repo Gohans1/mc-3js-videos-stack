@@ -17,6 +17,7 @@
       "mc-assets/*": ["./packages/mc-assets/src/*"],
       "live-studio/edit": ["./packages/live-studio/src/edit.ts"],
       "live-studio/lab": ["./packages/live-studio/render/lab.ts"],
+      "live-studio/targets": ["./packages/live-studio/render/target.ts"],
       "live-studio/src/*": ["./packages/live-studio/src/*"]
     }
   },

@@ -6,6 +6,7 @@
 export const HIDDEN = 0.5; // half of it behind something
 export const CUT = 0.25; // a quarter of it outside the frame
 export const DARK = 0.05; // mean brightness under this: a silhouette at best
+export const BLUR = 2; // px circle of confusion before an aimed subject reads out of focus
 export const LONG = 0.2; // s: shorter faults go by unseen (a prop swinging past)
 
 // runs of frames where test holds, at least LONG long
@@ -59,6 +60,12 @@ export const FAULTS = {
     worst: (x) => -x.luma,
     say: (x) => `brightness ${f(x.luma)} (frame ${f(x.frameLuma)})`,
   },
+  BLURRED: {
+    test: (x) => x.share > 0 && (x.blurPx ?? 0) > BLUR,
+    worst: (x) => x.blurPx ?? 0,
+    say: (x) =>
+      `out of focus (${x.blurPx.toFixed(1)} px blur, at ${x.targetM?.toFixed(1) ?? "?"} m vs focus ${x.focusM?.toFixed(1) ?? "?"} m)`,
+  },
 };
 
 export function summarize(name, frames) {
@@ -77,6 +84,7 @@ export function summarize(name, frames) {
       worst.push({ kind, t: w.t, say: say(w) });
     }
   }
-  if (!worst.length) lines.push("  always in view: never mostly hidden, cut off or too dark");
+  if (!worst.length)
+    lines.push("  always in view: never mostly hidden, cut off, too dark or out of focus");
   return { lines, worst: worst.sort((a, b) => a.t - b.t) };
 }

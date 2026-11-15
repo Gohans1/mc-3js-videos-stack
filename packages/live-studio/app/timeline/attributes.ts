@@ -32,6 +32,7 @@ import {
   type OneShot,
   pasteClipAttrs,
 } from "../sound/sound";
+import { formatOpticsAttributes } from "./cam-attributes";
 
 type Kind = "layer" | "clip" | "shot" | "cam";
 type Copied =
@@ -141,6 +142,7 @@ const animWords = (slot: Slot, a: AnimSet | undefined, len = true) =>
   a
     ? `${fxOf(slot, a.fx)?.title ?? a.fx}${len && a.len !== undefined ? ` ${a.len} s` : ""}`
     : "None";
+
 // The box's lines: what the copy holds, each one a tick, with a warning where a paste will shorten it
 export const choices = (): Choice[] => {
   const t = target();
@@ -196,14 +198,10 @@ export const choices = (): Choice[] => {
   }
   if (copied.kind === "cam" && t.kind === "cam") {
     const k = copied.k,
-      roll = k.roll,
       starts = t.is.filter((i) => !movable(i)).length;
-    const lens = [
-      k.fov !== undefined ? `FOV ${k.fov}°` : "the film's FOV",
-      roll ? `roll ${Math.round((roll * 1800) / Math.PI) / 10}°` : "no roll",
-      k.wave !== undefined ? `sway ${k.wave}×` : "the film's sway",
+    const list: Choice[] = [
+      { id: "lens", title: "Lens & optics", value: formatOpticsAttributes(k) },
     ];
-    const list: Choice[] = [{ id: "lens", title: "Lens", value: lens.join(", ") }];
     if (copied.speed)
       list.push({
         id: "speed",

@@ -56,7 +56,17 @@ export const filmPlugin = (film) => {
           source.applyEdit();
           setTiming(timing, source.DURATION);
           DURATION = Math.max(1 / 30, timingClock.duration, layerDuration());
-          SHOTS_OUT.splice(0, SHOTS_OUT.length, ...source.SHOTS_OUT.map(s => ({...s, t: timingClock.outputAt(s.t, "before")})));
+          SHOTS_OUT.splice(
+            0,
+            SHOTS_OUT.length,
+            ...source.SHOTS_OUT.map((s) => ({
+              ...s,
+              t: timingClock.outputAt(s.t, "before"),
+              ...(Array.isArray(s.hits)
+                ? { hits: s.hits.map((h) => ({ ...h, t: timingClock.outputAt(h.t, "after") })) }
+                : {}),
+            })),
+          );
         }
         applyEdit();
         export async function buildScene(...args) { return timedDraw(await source.buildScene(...args)); }

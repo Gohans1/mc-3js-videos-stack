@@ -7,6 +7,7 @@ import {
   HUES,
   NEUTRAL_CURVE,
 } from "film-stage/grade-secondary";
+import { resetLookCurveChannel, resetLookCurves, resetLookHsl } from "film-stage/looks";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Reset, Section, SliderRow, ValueBox } from "../components/inspector";
@@ -46,11 +47,7 @@ export function HSLAdjust({
         <Reset
           label="Reset HSL"
           disabled={locked}
-          onClick={() =>
-            changeGrade(shot, (g) => {
-              delete g.hsl;
-            })
-          }
+          onClick={() => changeGrade(shot, resetLookHsl)}
         />
       }
     >
@@ -182,9 +179,7 @@ function CurveEditor({
             onClick={() => {
               cancel();
               select(null);
-              changeGrade(shot, (g) => {
-                if (g.curves) delete g.curves[id];
-              });
+              changeGrade(shot, (g) => resetLookCurveChannel(g, id));
             }}
           />
         </span>
@@ -357,11 +352,7 @@ export function CurvesAdjust({
         <Reset
           label="Reset all curves"
           disabled={disabled}
-          onClick={() =>
-            changeGrade(shot, (g) => {
-              delete g.curves;
-            })
-          }
+          onClick={() => changeGrade(shot, resetLookCurves)}
         />
       }
     >

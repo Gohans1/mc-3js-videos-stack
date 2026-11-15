@@ -17,6 +17,21 @@
   .stage-clock[data-peek] {
     color: var(--peek);
   } /* the preview axis's second, not the playhead's (timeline/peek.ts) */
+  .stage-hud {
+    max-width: calc(100% - 11.5rem);
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgb(0 0 0 / 0.56);
+    color: var(--picture);
+    font: 500 11px/1.35 var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stage-hud:empty {
+    display: none;
+  }
   .stage-caption {
     position: absolute;
     inset-inline: 0;

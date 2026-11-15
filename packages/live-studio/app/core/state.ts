@@ -30,6 +30,7 @@ export interface Elements {
   final: HTMLCanvasElement;
   audio: HTMLAudioElement;
   clock: HTMLElement;
+  hud: HTMLElement;
   caption: HTMLElement;
   pins: HTMLElement;
   chips: HTMLElement;

@@ -1,5 +1,6 @@
 import type { Grade } from "film-stage/grade";
 import { WHEEL_KEYS, type WheelKey, type WheelValue } from "film-stage/grade-wheels";
+import { resetLookWheel, resetLookWheels } from "film-stage/looks";
 import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useRef } from "react";
 import { Color, LinearSRGBColorSpace } from "three";
 
@@ -182,9 +183,7 @@ function Wheel({
           label={`Reset ${title} wheel`}
           onClick={() => {
             cancel();
-            changeGrade(shot, (g) => {
-              if (g.wheels) delete g.wheels[id];
-            });
+            changeGrade(shot, (g) => resetLookWheel(g, id));
           }}
         />
       </div>
@@ -324,11 +323,7 @@ export function WheelsAdjust({
         <Reset
           label="Reset color wheels"
           disabled={locked}
-          onClick={() =>
-            changeGrade(shot, (g) => {
-              delete g.wheels;
-            })
-          }
+          onClick={() => changeGrade(shot, resetLookWheels)}
         />
       }
     >

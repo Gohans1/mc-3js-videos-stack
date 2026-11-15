@@ -120,7 +120,7 @@ test("the built film exposes output times while camera and procedural motion sam
   writeFileSync(
     join(src, "scene.ts"),
     `
-    export const SHOTS = [{t:0},{t:5}], SHOTS_OUT = SHOTS;
+    export const SHOTS = [{t:0},{t:5, hits:[{t:6, amount:0.7}]}], SHOTS_OUT = SHOTS;
     export const DURATION = 10;
     export const applyEdit = () => {};
     export const buildScene = async () => Object.assign((t) => ({camera: 2*t, actor: Math.sin(t), light: t % 1}), { tools: { tag: "scene" } });
@@ -151,6 +151,11 @@ test("the built film exposes output times while camera and procedural motion sam
     film.SHOTS_OUT.map((s) => s.t),
     [0, 2.5],
     "a freeze at a cut holds the incoming shot from the start of the freeze",
+  );
+  assert.deepEqual(
+    film.SHOTS_OUT[1].hits,
+    [{ t: 6, amount: 0.7 }],
+    "shot hits map to heard seconds alongside shot boundaries",
   );
   assert.equal(film.fromSource(7), 6.5);
   assert.equal(film.toSource(6.5), 7);

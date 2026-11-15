@@ -13,6 +13,18 @@ declare module "film/scene" {
     l: THREE.Vector3;
     fov: number;
   }
+  export interface OpticsTelemetry {
+    shot: number;
+    shotName?: string;
+    mm: number;
+    fov: number;
+    fstop?: number;
+    focusM?: number;
+    focusTarget?: string;
+    handheld?: string;
+    look?: string;
+    impulse?: string;
+  }
   export interface Tools {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -23,6 +35,7 @@ declare module "film/scene" {
     targets?: import("./objects/targets").SceneTarget[];
     renderer?: THREE.WebGLRenderer;
     materials?: [THREE.Material, string][];
+    optics?: OpticsTelemetry;
     rig?: THREE.Object3D;
     bones?: Record<string, THREE.Object3D>;
     zoomOf?: (shot: number) => number;

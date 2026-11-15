@@ -2,6 +2,7 @@
 // the camera row or on the playhead, with CapCut's ◁◇▷ (◇ keys the picture as it is) and its lens as slider rows. How the
 // camera gets into a key is Keyframe easing (SpeedPanel.tsx), a shot's In / Out / Combo the Animation tab. Each change is one undo
 // step (Ctrl+Z), shared with the sound
+import { fovOf } from "film-stage/camera";
 import { AudioLines, Hourglass, Scissors, Trash2, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -208,6 +209,7 @@ function KeySection() {
   const lens = (field: "fov" | "roll" | "wave", scale: number) => ({
     preview: (v: number) =>
       preview((ks) => {
+        if (field === "fov") delete ks[i].mm;
         ks[i][field] = v / scale;
       }),
     save: (v: number) => setLens(i, field, v / scale),
@@ -220,7 +222,12 @@ function KeySection() {
           {k && (
             <Reset
               label="Reset FOV, roll and sway to the film's own"
-              disabled={k.fov === undefined && k.roll === undefined && k.wave === undefined}
+              disabled={
+                k.fov === undefined &&
+                k.mm === undefined &&
+                k.roll === undefined &&
+                k.wave === undefined
+              }
               onClick={() => resetLens(i)}
             />
           )}
@@ -289,7 +296,12 @@ function KeySection() {
           <TimeField i={i} />
           <SliderRow
             label="FOV"
-            value={k.fov ?? 70}
+            value={
+              k.fov ??
+              (typeof k.mm === "number"
+                ? Math.round(fovOf(k.mm, S.tools?.camera?.aspect || 16 / 9) * 10) / 10
+                : 70)
+            }
             min={10}
             max={120}
             step={1}

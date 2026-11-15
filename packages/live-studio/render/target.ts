@@ -4,13 +4,41 @@
 //   target: "cam" (the film camera), a key of draw.tools.bones, any object's .name (mc-actor: handR, handL), or a
 //   draw.tools.objects label ("Steve")
 
-export const findTarget = ({ scene, camera, bones, objects }, name) =>
-  name === "cam"
-    ? camera
-    : (bones?.[name] ??
-      scene.getObjectByName(name) ??
-      objects?.find(([, label]) => label === name)?.[0] ??
-      null);
+const findChild = (parent, seg) => {
+  if (!parent) return null;
+  for (const child of parent.children ?? []) {
+    const hit = child.getObjectByName?.(seg) ?? (child.name === seg ? child : null);
+    if (hit) return hit;
+  }
+  return parent.children?.length ? null : (parent.getObjectByName?.(seg) ?? null);
+};
+
+export const findTarget = ({ scene, camera, bones, objects }, name) => {
+  if (name === "cam") return camera;
+  const direct =
+    bones?.[name] ??
+    scene?.getObjectByName?.(name) ??
+    objects?.find(([, label]) => label === name)?.[0] ??
+    null;
+  if (direct || !name?.includes(".")) return direct;
+
+  const [head, ...rest] = name.split(".");
+  if (!head || rest.some((seg) => !seg)) return null;
+  let cur =
+    bones?.[head] ??
+    objects?.find(([, label]) => label === head)?.[0] ??
+    scene?.getObjectByName?.(head) ??
+    null;
+  for (let i = 0; i < rest.length && cur; i++) {
+    const seg = rest[i];
+    const next = findChild(cur, seg);
+    if (next) cur = next;
+    else if (i === rest.length - 1 && rest.length === 1 && bones?.[seg] && inside(cur, bones[seg]))
+      cur = bones[seg];
+    else cur = null;
+  }
+  return cur;
+};
 
 // the names a target can take, the closest to a wrong one first: case, then a letter or two off
 const close = (a, b) => {
@@ -26,11 +54,32 @@ const close = (a, b) => {
   }
   return row[b.length];
 };
+const dotNames = (bones, objects) => {
+  const out = [];
+  const walk = (node, prefix) => {
+    for (const child of node?.children ?? []) {
+      const next = child.name ? `${prefix}.${child.name}` : prefix;
+      if (child.name) out.push(next);
+      walk(child, next);
+    }
+  };
+  for (const [obj, label] of objects ?? []) {
+    for (const [bName, bObj] of Object.entries(bones ?? {})) {
+      if (inside(obj, bObj)) out.push(`${label}.${bName}`);
+    }
+    walk(obj, label);
+  }
+  return out;
+};
+
 export const targetHelp = ({ bones, objects }, name, { camera = true } = {}) => {
   const names = [
-    ...(camera ? ["cam"] : []),
-    ...Object.keys(bones ?? {}),
-    ...(objects ?? []).map(([, l]) => l),
+    ...new Set([
+      ...(camera ? ["cam"] : []),
+      ...Object.keys(bones ?? {}),
+      ...(objects ?? []).map(([, l]) => l),
+      ...(name?.includes(".") ? dotNames(bones, objects) : []),
+    ]),
   ];
   const near = names
     .filter((n) => close(name, n) <= 2)

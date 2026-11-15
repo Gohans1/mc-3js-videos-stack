@@ -5,6 +5,8 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ANIMS } from "film-stage/animate";
+import { SHAKES } from "film-stage/camera";
+import { LOOK_IDS } from "film-stage/looks";
 import { TEXT_ITEM_KEYS } from "film-stage/titles";
 import { TRANSITIONS } from "film-stage/transitions";
 
@@ -15,6 +17,10 @@ import {
   checkFiles,
   CONFIG_KEYS,
   EDIT_KEYS,
+  FOCUS_KEYS,
+  GRADE_KEYS,
+  HANDHELD_KEYS,
+  HIT_KEYS,
   problems as schemaProblems,
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
@@ -367,20 +373,74 @@ keyTypos(
     ([k, near]) => `"${k}": no key the studio reads; did you mean "${near}"?`,
   ),
 );
+/** Validates a preset name field against known catalog IDs and reports near-miss suggestions. */
+const checkPreset = (where, slot, value, known, kind, { ignore = [], exact = true } = {}) => {
+  if (typeof value !== "string" || !value) return;
+  const clean = value.trim();
+  if (ignore.includes(clean.toLowerCase())) return;
+  const ok = exact
+    ? known.includes(clean)
+    : known.some((n) => n.toUpperCase() === clean.toUpperCase());
+  if (ok) return;
+  const to = nearName(clean, known);
+  found.push({
+    where,
+    issue: `✖ ${slot} "${value}": no ${kind} preset has that name${to ? `; did you mean "${to}"?` : ""} (known ${kind}s: ${known.join(", ")})`,
+  });
+};
+
 // a film may put keys of its own on a camera key (cell-break's live, size): only a letter off or swapped is taken for a typo
 const camRead = readJson(conf.camTimeline);
-if (Array.isArray(camRead))
+if (Array.isArray(camRead)) {
   keyTypos(
     conf.camTimeline,
-    camRead.flatMap((key, i) =>
-      key && typeof key === "object"
-        ? Object.keys(key).flatMap((k) => {
-            const near = nearName(k, CAM_KEYS);
-            return near ? [`[${i}] "${k}": no key the camera reads; did you mean "${near}"?`] : [];
-          })
-        : [],
-    ),
+    camRead.flatMap((key, i) => {
+      if (!key || typeof key !== "object") return [];
+      return [
+        ...nearKeys(key, CAM_KEYS).map(
+          ([k, near]) => `[${i}] "${k}": no key the camera reads; did you mean "${near}"?`,
+        ),
+        ...(key.focus && typeof key.focus === "object" && !Array.isArray(key.focus)
+          ? nearKeys(key.focus, FOCUS_KEYS).map(
+              ([k, near]) =>
+                `[${i}].focus "${k}": no key the camera reads; did you mean "${near}"?`,
+            )
+          : []),
+        ...(key.handheld && typeof key.handheld === "object" && !Array.isArray(key.handheld)
+          ? nearKeys(key.handheld, HANDHELD_KEYS).map(
+              ([k, near]) =>
+                `[${i}].handheld "${k}": no key the camera reads; did you mean "${near}"?`,
+            )
+          : []),
+      ];
+    }),
   );
+  camRead.forEach((key, i) => {
+    if (!key || typeof key !== "object") return;
+    if (key.mm !== undefined && key.fov !== undefined)
+      warnings.push(
+        `⚠ ${conf.camTimeline} [${i}]: sets both "mm" (${key.mm}) and "fov" (${key.fov}); "mm" takes precedence — drop one so there is only one truth`,
+      );
+    const hh = key.handheld;
+    if (typeof hh === "string")
+      checkPreset(conf.camTimeline, `[${i}].handheld`, hh, SHAKES, "shake", {
+        ignore: ["off", "none"],
+        exact: false,
+      });
+    else if (hh && typeof hh === "object" && !Array.isArray(hh)) {
+      if ("preset" in hh)
+        checkPreset(conf.camTimeline, `[${i}].handheld.preset`, hh.preset, SHAKES, "shake", {
+          ignore: ["off", "none"],
+          exact: false,
+        });
+      if ("kind" in hh)
+        checkPreset(conf.camTimeline, `[${i}].handheld.kind`, hh.kind, SHAKES, "shake", {
+          ignore: ["off", "none"],
+          exact: false,
+        });
+    }
+  });
+}
 // a shot, a text item and an adjustment layer take keys of the film's own too: only a near miss of a key the studio
 // reads is a typo, on the row and in its slots ("anim.in", "transition", a text's "in")
 const rowTypos = (rel, rows, prefix, keys, slotKeys = []) => {
@@ -412,7 +472,7 @@ rowTypos(
   readJson(conf.shotsTimeline),
   "",
   [...SHOT_KEYS, "size", "what"],
-  SHOT_SLOT_KEYS,
+  [...SHOT_SLOT_KEYS, ...GRADE_KEYS.map((k) => `adjust.${k}`)],
 );
 rowTypos(
   conf.textTimeline,
@@ -421,12 +481,19 @@ rowTypos(
   [...TEXT_KEYS, ...TEXT_ITEM_KEYS],
   TEXT_SLOT_KEYS,
 );
+const adjRead = readJson(conf.adjustmentTimeline);
 rowTypos(
   conf.adjustmentTimeline,
-  readJson(conf.adjustmentTimeline)?.items,
+  adjRead?.items,
   "items",
   ADJUSTMENT_KEYS,
+  GRADE_KEYS.map((k) => `grade.${k}`),
 );
+const checkLook = (where, slot, look) => checkPreset(where, slot, look, LOOK_IDS, "look");
+if (Array.isArray(adjRead?.items))
+  adjRead.items.forEach((it, i) =>
+    checkLook(conf.adjustmentTimeline, `items[${i}].grade.look`, it?.grade?.look),
+  );
 // every top key of edit.json and timing.json is optional to the studio (timing.json's schema even drops one it does not
 // know), so a near miss ("endd", "speed") is read by nothing and no fault says so
 for (const [rel, keys] of [
@@ -447,6 +514,25 @@ for (const [rel, keys] of [
 const shotsRead = readJson(conf.shotsTimeline);
 if (Array.isArray(shotsRead)) {
   const ids = (list) => list.map((x) => x.id);
+  keyTypos(
+    conf.shotsTimeline,
+    shotsRead.flatMap((shot, i) =>
+      Array.isArray(shot?.hits)
+        ? shot.hits.flatMap((hit, j) =>
+            hit && typeof hit === "object"
+              ? nearKeys(hit, HIT_KEYS).map(
+                  ([k, near]) =>
+                    `[${i}].hits[${j}] "${k}": no key the studio reads; did you mean "${near}"?`,
+                )
+              : [],
+          )
+        : [],
+    ),
+  );
+  const editEnd = (() => {
+    const end = readJson("src/edit.json")?.end;
+    return typeof end === "number" ? end : null;
+  })();
   shotsRead.forEach((shot, i) => {
     const near = (where, fx, names) => {
       const to = typeof fx === "string" && nearName(fx, names);
@@ -458,6 +544,19 @@ if (Array.isArray(shotsRead)) {
     near("transition", shot?.transition?.fx, ids(TRANSITIONS));
     for (const slot of ["in", "out", "combo"])
       near(`anim.${slot}`, shot?.anim?.[slot]?.fx, ids(ANIMS[slot]));
+    checkLook(conf.shotsTimeline, `[${i}].adjust.look`, shot?.adjust?.look);
+    const next = shotsRead[i + 1];
+    const upper = typeof next?.t === "number" ? next.t : editEnd;
+    (Array.isArray(shot?.hits) ? shot.hits : []).forEach((hit, j) => {
+      if (
+        typeof hit?.t === "number" &&
+        typeof shot?.t === "number" &&
+        (hit.t < shot.t || (typeof upper === "number" && hit.t >= upper))
+      )
+        warnings.push(
+          `⚠ ${conf.shotsTimeline} [${i}].hits[${j}].t (${hit.t}s): outside shot [${i}] (${shot.t}s..${typeof upper === "number" ? `${upper}s` : "end"})`,
+        );
+    });
   });
 }
 const lanesPath = conf.soundTimeline && join(PROJECT, conf.soundTimeline);

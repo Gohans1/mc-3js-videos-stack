@@ -100,6 +100,7 @@ const TOOLS = new Set([
   "CELL",
   "placed",
   "titles",
+  "optics",
 ]);
 const DRAW = new Set([
   "tools",

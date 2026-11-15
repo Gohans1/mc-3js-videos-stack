@@ -16,12 +16,18 @@ const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length ? s[Math.floor(s.length / 2)] : 0;
 };
+const inImpulses = (t, impulses) => impulses.some((w) => t >= w.from - 1e-9 && t <= w.to + 1e-9);
+const impulseSteps = (samples, impulses) =>
+  samples.map(
+    (s, i) => inImpulses(s.t, impulses) || (i > 0 && inImpulses(samples[i - 1].t, impulses)),
+  );
 
-export function measure(samples, cuts = []) {
+export function measure(samples, cuts = [], impulses = []) {
   const n = samples.length,
     dt = n > 1 ? samples[1].t - samples[0].t : 1;
   const cut = samples.map((s, i) => i > 0 && cuts.some((c) => samples[i - 1].t < c && c <= s.t));
-  const step = samples.map((s, i) => (i && !cut[i] ? sub(s.p, samples[i - 1].p) : null));
+  const imp = impulseSteps(samples, impulses);
+  const step = samples.map((s, i) => (i && !cut[i] && !imp[i] ? sub(s.p, samples[i - 1].p) : null));
   const speed = samples.map((_, i) => {
     const near = [step[i], step[i + 1]].filter(Boolean);
     return near.length
@@ -30,13 +36,19 @@ export function measure(samples, cuts = []) {
   });
   let peak = { t: samples[0]?.t ?? 0, v: 0 };
   speed.forEach((v, i) => {
-    if (v > peak.v) peak = { t: samples[i].t, v };
+    if (!imp[i] && v > peak.v) peak = { t: samples[i].t, v };
   });
 
   const steps = step.map((d) => (d ? len(d) : 0));
   const pops = [];
   for (let i = 1; i < n; i++) {
-    const around = median([...steps.slice(Math.max(1, i - 3), i), ...steps.slice(i + 1, i + 4)]);
+    if (imp[i]) continue;
+    const around = median(
+      [...Array(6).keys()]
+        .map((k) => (k < 3 ? i - 3 + k : i + 1 + (k - 3)))
+        .filter((k) => k >= 1 && k < n && !cut[k] && !imp[k])
+        .map((k) => steps[k]),
+    );
     if (steps[i] >= POP_STEP && steps[i] > POP_RATIO * Math.max(around, 0.002))
       pops.push({ t: samples[i].t, step: steps[i], around });
   }
@@ -48,22 +60,23 @@ export function measure(samples, cuts = []) {
     stops = [],
     stepV = steps.map((s) => s / dt);
   for (let i = 0; i < n;) {
-    if (speed[i] < STILL) {
+    if (speed[i] < STILL || imp[i]) {
       i++;
       continue;
     }
     let j = i,
       top = i;
-    while (j + 1 < n && speed[j + 1] >= STILL) {
+    while (j + 1 < n && speed[j + 1] >= STILL && !imp[j + 1]) {
       j++;
       if (speed[j] > speed[top]) top = j;
     }
     const from = samples[i].t,
       to = samples[j].t,
       dead = Math.max(STOP_FROM, speed[top] / 2);
-    if (i > 0 && i + 1 < n && stepV[i + 1] >= dead)
+    if (i > 0 && i + 1 < n && !imp[i - 1] && !imp[i + 1] && stepV[i + 1] >= dead)
       stops.push({ t: from, kind: "start", v: stepV[i + 1] });
-    if (j + 1 < n && stepV[j] >= dead) stops.push({ t: to, kind: "stop", v: stepV[j] });
+    if (j + 1 < n && !imp[j + 1] && stepV[j] >= dead)
+      stops.push({ t: to, kind: "stop", v: stepV[j] });
     if (to - from >= 0.1)
       moves.push({
         from,
@@ -81,6 +94,7 @@ export function measure(samples, cuts = []) {
     pops,
     stops,
     cuts: samples.filter((_, i) => cut[i]).map((s) => s.t),
+    impulses,
   };
 }
 
@@ -90,24 +104,29 @@ export function measure(samples, cuts = []) {
 export const WIDTH_SECONDS = 7;
 const TURN_POP = 0.5; // degrees in one sample, and POP_RATIO times the steps around it
 
-export function turns(samples, cuts = []) {
+export function turns(samples, cuts = [], impulses = []) {
   const n = samples.length,
     dt = n > 1 ? samples[1].t - samples[0].t : 1,
     deg = 180 / Math.PI;
   const cut = samples.map((s, i) => i > 0 && cuts.some((c) => samples[i - 1].t < c && c <= s.t));
+  const imp = impulseSteps(samples, impulses);
   const angle = samples.map((s, i) => {
-    if (!i || cut[i]) return 0;
+    if (!i || cut[i] || imp[i]) return 0;
     const a = samples[i - 1].q,
       d = Math.abs(a[0] * s.q[0] + a[1] * s.q[1] + a[2] * s.q[2] + a[3] * s.q[3]);
     return 2 * Math.acos(Math.min(1, d)) * deg;
   });
   const rate = (step) =>
     samples.map((_, i) => {
-      const near = [i, i + 1].filter((k) => k > 0 && k < n && !cut[k]).map((k) => step[k]);
+      const near = [i, i + 1]
+        .filter((k) => k > 0 && k < n && !cut[k] && !imp[k])
+        .map((k) => step[k]);
       return near.length ? near.reduce((a, b) => a + b) / near.length / dt : 0;
     });
   const speed = rate(angle);
-  const fovStep = samples.map((s, i) => (i && !cut[i] ? Math.abs(s.fov - samples[i - 1].fov) : 0));
+  const fovStep = samples.map((s, i) =>
+    i && !cut[i] && !imp[i] ? Math.abs(s.fov - samples[i - 1].fov) : 0,
+  );
   const fovRate = rate(fovStep);
   const top = (xs) =>
     xs.reduce((best, v, i) => (v > best.v ? { t: samples[i].t, v } : best), {
@@ -118,7 +137,13 @@ export function turns(samples, cuts = []) {
     at = speed.indexOf(peak.v);
   const pops = [];
   for (let i = 1; i < n; i++) {
-    const around = median([...angle.slice(Math.max(1, i - 3), i), ...angle.slice(i + 1, i + 4)]);
+    if (imp[i]) continue;
+    const around = median(
+      [...Array(6).keys()]
+        .map((k) => (k < 3 ? i - 3 + k : i + 1 + (k - 3)))
+        .filter((k) => k >= 1 && k < n && !cut[k] && !imp[k])
+        .map((k) => angle[k]),
+    );
     if (angle[i] >= TURN_POP && angle[i] > POP_RATIO * Math.max(around, 0.05))
       pops.push({ t: samples[i].t, step: angle[i], around });
   }
@@ -187,6 +212,10 @@ export function report(name, samples, m, turnPops = 0) {
       `  DEAD ${s.kind.toUpperCase()} ${f(s.t)}: ${s.kind === "stop" ? `from ${f(s.v)} m/s to rest` : `from rest to ${f(s.v)} m/s`} in one sample, no ease`,
     );
   if (m.cuts.length) out.push(`  cuts at ${m.cuts.map(f).join(", ")} (left out)`);
+  if (m.impulses?.length)
+    out.push(
+      `  impulse ${m.impulses.map((w) => `${f(w.from)}-${f(w.to)}${w.kind ? ` (${w.kind})` : ""}`).join(", ")} (left out)`,
+    );
   if (!m.pops.length && !m.stops.length && !turnPops) out.push("  no pops, no dead stops");
   return out;
 }

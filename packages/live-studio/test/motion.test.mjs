@@ -104,3 +104,50 @@ test("a camera whose turn pops is never also said to have no pops, and its other
   assert.ok(!out.includes("  no pops, no dead stops"), out.join("\n"));
   assert.match(out.at(-1), /cuts at 0\.5\d \(left out\)/);
 });
+
+test("explicit impulse windows exempt deliberate trauma shakes while still catching pops outside them", () => {
+  const shakeCam = [];
+  for (let t = 0; t <= 1.5 + 1e-9; t += DT) {
+    const inHit = t >= 0.4 && t <= 0.6;
+    const x = t * 0.2 + (inHit ? Math.sin(t * 90) * 0.15 : 0) + (t > 1.2 ? 0.25 : 0);
+    const yaw = t * 8 + (inHit ? Math.cos(t * 80) * 6 : 0);
+    const h = (yaw * Math.PI) / 360;
+    shakeCam.push({
+      t,
+      p: [x, 1, 0],
+      q: [0, Math.sin(h), 0, Math.cos(h)],
+      fov: 60,
+      aspect: 16 / 9,
+    });
+  }
+  const impulses = [{ from: 0.4, to: 0.6, kind: "hit" }];
+  const m = measure(shakeCam, [], impulses);
+  const tm = turns(shakeCam, [], impulses);
+  // Only the real pop outside the impulse window (~1.20 s) is flagged
+  assert.equal(m.pops.length, 1);
+  assert.ok(Math.abs(m.pops[0].t - 1.2) < 0.03, `expected pop near 1.2, got ${m.pops[0].t}`);
+  assert.equal(tm.pops.length, 0);
+  assert.ok(
+    tm.widthSeconds > 7,
+    `expected panning outside hit within 7s rule, got ${tm.widthSeconds}`,
+  );
+  const lines = [...report("cam", shakeCam, m, tm.pops.length), ...turnReport(tm)].join("\n");
+  assert.match(lines, /impulse.*0\.40-0\.60.*hit.*left out/);
+
+  // Stationary frames right before an impulse never absorb the impulse step into peak speed
+  const parkedBeforeHit = [];
+  for (let t = 0; t <= 1.0 + 1e-9; t += DT) {
+    const inHit = t >= 0.4 && t <= 0.6;
+    parkedBeforeHit.push({
+      t,
+      p: [inHit ? 0.5 : 0, 1, 0],
+      q: [0, 0, 0, 1],
+      fov: 60,
+      aspect: 16 / 9,
+    });
+  }
+  const mParked = measure(parkedBeforeHit, [], [{ from: 0.4, to: 0.6, kind: "hit" }]);
+  assert.equal(mParked.peak.v, 0);
+  const preIdx = parkedBeforeHit.findIndex((s) => Math.abs(s.t - 0.36) < 0.02);
+  assert.equal(mParked.speed[preIdx], 0);
+});

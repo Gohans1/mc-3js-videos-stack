@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { stretches, summarize } from "../checks/seen.mjs";
+import { BLUR, stretches, summarize } from "../checks/seen.mjs";
 
 const DT = 1 / 30;
 const frames = (n, at) =>
@@ -65,6 +65,26 @@ test("nothing wrong says so", () => {
       "Steve",
       frames(30, () => ({})),
     ).lines[1],
-    /always in view/,
+    /always in view.*out of focus/,
   );
+});
+
+test("an out-of-focus stretch (> BLUR px) flags BLURRED while sharp or brief racks stay clean", () => {
+  const blurred = summarize(
+    "Steve",
+    frames(60, (t) =>
+      t >= 0.5 && t <= 0.9 ? { blurPx: BLUR + 1.8, focusM: 2.0, targetM: 6.5 } : { blurPx: 0.4 },
+    ),
+  );
+  assert.deepEqual(
+    blurred.worst.map((w) => w.kind),
+    ["BLURRED"],
+  );
+  assert.match(blurred.lines.join("\n"), /BLURRED.*out of focus.*3\.8 px.*6\.5 m vs focus 2\.0 m/);
+
+  const briefRack = summarize(
+    "Steve",
+    frames(60, (t) => (t >= 0.5 && t <= 0.6 ? { blurPx: BLUR + 2, focusM: 2, targetM: 5 } : {})),
+  );
+  assert.equal(briefRack.worst.length, 0);
 });

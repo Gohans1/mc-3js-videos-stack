@@ -390,7 +390,16 @@ test("the film's own stickers, text eases, A/B choices and materials each get th
 test("what the film's tools carry under a name the studio doesn't know is listed too; the starter kit's own are not", () => {
   assert.deepEqual(
     otherKeys(
-      { scene: {}, camera: {}, objects: [], clips: {}, composer: {}, anchor: () => {}, sparks: {} },
+      {
+        scene: {},
+        camera: {},
+        objects: [],
+        clips: {},
+        composer: {},
+        anchor: () => {},
+        optics: {},
+        sparks: {},
+      },
       "tools",
     ),
     ["sparks"],

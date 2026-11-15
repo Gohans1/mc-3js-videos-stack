@@ -46,9 +46,23 @@ export const motionCheck =
     }
 
     const samples = [];
+    const impulses = [];
+    let openImp = null;
     for (let i = 0, n = Math.round((to - from) * HZ); i <= n; i++) {
       const t = from + i / HZ;
       render(t);
+      const imp = isCam ? render.tools?.optics?.impulse : undefined;
+      if (imp) {
+        if (!openImp) openImp = { from: t, to: t, kind: imp };
+        else if (openImp.kind === imp) openImp.to = t;
+        else {
+          impulses.push(openImp);
+          openImp = { from: t, to: t, kind: imp };
+        }
+      } else if (openImp) {
+        impulses.push(openImp);
+        openImp = null;
+      }
       obj.updateWorldMatrix(true, false);
       samples.push({
         t,
@@ -60,8 +74,9 @@ export const motionCheck =
         }),
       });
     }
-    const m = measure(samples, cuts);
-    const tm = isCam ? turns(samples, cuts) : null;
+    if (openImp) impulses.push(openImp);
+    const m = measure(samples, cuts, impulses);
+    const tm = isCam ? turns(samples, cuts, impulses) : null;
     const out = report(target, samples, m, tm?.pops.length);
     if (tm) out.push(...turnReport(tm));
     const tag = `motion_${target}_${from}-${to}`;
@@ -155,6 +170,8 @@ export const motionCheck =
     const c = chart(W, 420, { from, to, top, title: `${target} speed (m/s), ${from}-${to} s` }),
       { g, X, Y } = c;
     for (const cu of m.cuts) mark(c, cu, "#6b7280", "CUT", 2, [2, 3]);
+    for (const w of impulses)
+      mark(c, w.from, "#a48bff", (w.kind ?? "impulse").toUpperCase(), 2, [2, 3]);
     g.lineWidth = 2.5;
     for (let i = 1; i < samples.length; i++) {
       g.strokeStyle = hue(m.speed[i] / peak);
@@ -195,6 +212,8 @@ export const motionCheck =
         title: `cam turn (°/s, coloured) and field of view change (°/s, white), ${from}-${to} s`,
       });
       for (const cu of m.cuts) mark(k, cu, "#6b7280", "CUT", 2, [2, 3]);
+      for (const w of impulses)
+        mark(k, w.from, "#a48bff", (w.kind ?? "impulse").toUpperCase(), 1, [2, 3]);
       k.g.save();
       k.g.strokeStyle = "#ff6b6b";
       k.g.setLineDash([6, 4]);

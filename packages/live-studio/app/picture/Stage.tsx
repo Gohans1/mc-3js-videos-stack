@@ -130,7 +130,8 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         <div ref={bind("clock")} hidden={phone} className="stage-clock">
           00:00.000
         </div>
-        <div className="upright:inset-x-1.5 upright:top-1.5 sideways:inset-x-1.5 sideways:top-1.5 pointer-events-none absolute inset-x-2.5 top-2.5 z-2">
+        <div className="upright:inset-x-1.5 upright:top-1.5 sideways:inset-x-1.5 sideways:top-1.5 pointer-events-none absolute inset-x-2.5 top-2.5 z-2 flex flex-col items-start gap-1">
+          <div ref={bind("hud")} hidden={phone} className="stage-hud" />
           <Badges />
         </div>
         {/* the option chips (A/B/C/D) and the free camera's corner: Tailwind's [hidden] wins over contents */}

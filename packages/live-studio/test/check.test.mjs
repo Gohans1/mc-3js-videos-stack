@@ -924,3 +924,113 @@ test('a film that shuts the vault out ("soundVault": false) is told so, not to m
   assert.match(all.stderr, /\(a1, b2, c3, d4, e5\): most of the sound files/);
   assert.equal(all.stderr.match(/soundVault/g)?.length, 1, all.stderr);
 });
+
+test("camera lens/fov conflict, hits timing, nested typos, and unknown look presets are reported", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        camTimeline: "src/timeline/cam.json",
+        shotsTimeline: "src/timeline/shots.json",
+        adjustmentTimeline: "src/timeline/adjustment.json",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      {
+        t: 0,
+        p: [0, 1.5, 4],
+        l: [0, 1, 0],
+        mm: 35,
+        fov: 50,
+        focs: 2.5,
+        fstp: 2,
+        hanhdeld: "THE_CLOSEUP",
+      },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      ...JSON.parse(readFileSync(join(STUDIO, "demo/src/edit.json"), "utf8")),
+      end: 8,
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      {
+        t: 0,
+        adjust: { look: "teal-amber", loko: "noir-slate" },
+        htis: [],
+        hits: [{ t: 5.5, amount: 0.7 }],
+      },
+      { t: 4, hits: [{ t: 8.5, amount: 0.4 }] },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/adjustment.json"),
+    JSON.stringify({
+      items: [{ id: "a1", name: "Look", from: 0, to: 3, track: 0, grade: { loook: "teal-amber" } }],
+    }),
+  );
+
+  const warn = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(warn.status, 0, warn.stdout + warn.stderr);
+  assert.match(warn.stdout, /sets both "mm" \(35\) and "fov" \(50\)/);
+  assert.match(warn.stdout, /"focs".*did you mean "focus"/);
+  assert.match(warn.stdout, /"fstp".*did you mean "fstop"/);
+  assert.match(warn.stdout, /"hanhdeld".*did you mean "handheld"/);
+  assert.match(warn.stdout, /"htis".*did you mean "hits"/);
+  assert.match(warn.stdout, /"loko".*did you mean "look"/);
+  assert.match(warn.stdout, /"loook".*did you mean "look"/);
+  assert.match(warn.stdout, /hits\[0\]\.t.*outside shot \[0\]/);
+  assert.match(warn.stdout, /\[1\]\.hits\[0\]\.t.*outside shot \[1\] \(4s\.\.8s\)/);
+
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([{ t: 0, adjust: { look: "teal-ambr" } }, { t: 4 }]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/adjustment.json"),
+    JSON.stringify({
+      items: [{ id: "a1", name: "Look", from: 0, to: 3, track: 0, grade: { look: "neon-void" } }],
+    }),
+  );
+  const badLook = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(badLook.status, 1, badLook.stdout + badLook.stderr);
+  assert.match(badLook.stderr, /"teal-ambr".*did you mean "teal-amber"/);
+  assert.match(badLook.stderr, /"neon-void".*known looks:/);
+});
+
+test("cam.json flags unknown handheld shake presets and suggests the closest SHAKES id", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { camTimeline: "src/timeline/cam.json" } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 1, 3], l: [0, 1, 0], handheld: "the_closeupp" },
+      { t: 1, p: [0, 1, 3], l: [0, 1, 0], handheld: { kind: "THE_WEDING", amount: 0.5 } },
+      { t: 2, p: [0, 1, 3], l: [0, 1, 0], handheld: "off" },
+      { t: 3, p: [0, 1, 3], l: [0, 1, 0], handheld: "walk_to_the_store" },
+    ]),
+  );
+  const res = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(res.status, 1, res.stdout + res.stderr);
+  assert.match(res.stderr, /\[0\]\.handheld "the_closeupp".*did you mean "THE_CLOSEUP"/);
+  assert.match(res.stderr, /\[1\]\.handheld\.kind "THE_WEDING".*did you mean "THE_WEDDING"/);
+  assert.doesNotMatch(res.stderr, /"off"/);
+  assert.doesNotMatch(res.stderr, /"walk_to_the_store"/);
+});

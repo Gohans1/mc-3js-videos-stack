@@ -14,6 +14,7 @@ import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { r3, SAME, stamp } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
+import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type Point = [number, number, number] | Record<string, unknown>; // a world point, or the film's anchor ({"eye": [...]})
@@ -22,6 +23,10 @@ export interface CamKey {
   p: Point;
   l: Point;
   fov?: number;
+  mm?: number;
+  fstop?: number;
+  focus?: unknown;
+  handheld?: unknown;
   roll?: number;
   wave?: number;
   cut?: boolean;
@@ -59,7 +64,8 @@ export const loadCam = async () => {
 // What film-stage/camera.ts gives a key without an ease (core/ease.ts works out how each one spends its span)
 export const DEFAULT_EASE = "smooth";
 export const holds = (a: CamKey, b: CamKey) =>
-  JSON.stringify([a.p, a.l, a.fov]) === JSON.stringify([b.p, b.l, b.fov]);
+  JSON.stringify([a.p, a.l, a.fov, a.mm, a.fstop, a.focus, a.handheld]) ===
+  JSON.stringify([b.p, b.l, b.fov, b.mm, b.fstop, b.focus, b.handheld]);
 // The keys a key may move between: its shot's cut (or the film's start) and the next cut, never past its neighbours
 export const room = (i: number): [number, number] => [
   i > 0 ? Math.min(keys[i].t, keys[i - 1].t + SAME) : 0,
@@ -151,6 +157,7 @@ export const retime = (i: number, t: number) =>
 // fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
 export const setLens = (i: number, field: "fov" | "roll" | "wave", v: number | undefined) =>
   edit((ks) => {
+    if (field === "fov") delete ks[i].mm;
     if (v === undefined) delete ks[i][field];
     else ks[i][field] = field === "roll" ? Math.round(v * 1e4) / 1e4 : r3(v);
   });
@@ -158,6 +165,7 @@ export const setLens = (i: number, field: "fov" | "roll" | "wave", v: number | u
 export const resetLens = (i: number) =>
   edit((ks) => {
     delete ks[i].fov;
+    delete ks[i].mm;
     delete ks[i].roll;
     delete ks[i].wave;
   });
@@ -174,9 +182,9 @@ export const pasteKeyAttrs = (from: CamKey, to: number[], what: ("lens" | "speed
       const k = ks[i] as Record<string, unknown> | undefined;
       if (!k) continue;
       if (what.includes("lens"))
-        for (const f of ["fov", "roll", "wave"]) {
+        for (const f of ["fov", "mm", "fstop", "focus", "handheld", "roll", "wave"]) {
           if (from[f] === undefined) delete k[f];
-          else k[f] = from[f];
+          else k[f] = structuredClone(from[f]);
         }
       if (what.includes("speed") && movable(i)) {
         if (from.ease === undefined) delete k.ease;
@@ -237,6 +245,7 @@ const insertKey = (t: number, view: View) => {
     p: __,
     l: ___,
     fov: ____,
+    mm: ____m,
     cut: _____,
     ease: ______,
     ...sway
@@ -263,6 +272,7 @@ export const saveView = (only?: number) => {
   if (at >= 0) {
     const anchored = !Array.isArray(keys[at].p) || !Array.isArray(keys[at].l);
     edit((ks) => {
+      delete ks[at].mm;
       Object.assign(ks[at], { p, l, fov });
     });
     setKey(at);
@@ -294,6 +304,10 @@ export const rollRoom = (i: number): [number, number] => {
   return [before.t + SAME * 3, keys[i + 1] ? keys[i + 1].t - SAME : DURATION - SAME];
 };
 type Apply<T> = (change: (d: T) => void) => void;
+const setHits = (row: ShotRow, hits: ShotHit[] | undefined) => {
+  if (hits) row.hits = hits;
+  else delete row.hits;
+};
 const rollWith = (i: number, t: number, cam: Apply<CamKey[]>, shots: Apply<ShotRow[]>) => {
   const s = shotOfCut(i),
     tail = tailOf(i),
@@ -305,7 +319,14 @@ const rollWith = (i: number, t: number, cam: Apply<CamKey[]>, shots: Apply<ShotR
     ks[i].t = at;
   });
   shots((sh) => {
-    sh[s].t = r3(toSource(at));
+    if (!sh[s]) return;
+    const cutSource = r3(toSource(at));
+    sh[s].t = cutSource;
+    if (s > 0 && sh[s - 1]) {
+      const { prev, next } = repartitionAdjacentHits(sh[s - 1].hits, sh[s].hits, cutSource);
+      setHits(sh[s - 1], prev);
+      setHits(sh[s], next);
+    }
   });
 };
 export const rollCut = (i: number, t: number) =>
@@ -374,6 +395,7 @@ export const splitShot = () => {
     p: __,
     l: ___,
     fov: ____,
+    mm: ____m,
     cut: _____,
     ease: ______,
     ...sway
@@ -383,10 +405,14 @@ export const splitShot = () => {
       ks.splice(at, 0, { ...sway, t: r3(t - TAIL), ...here }, { ...sway, t, ...next, cut: true });
     });
     shotsDoc.edit((sh) => {
-      const { t: _t, name, transition: _transition, ...rest } = sh[s];
+      const splitSource = r3(toSource(t));
+      const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
+      const { before, after } = splitShotHits(hits, splitSource);
+      setHits(sh[s], before);
       sh.splice(s + 1, 0, {
         ...structuredClone(rest),
-        t: r3(toSource(t)),
+        ...(after ? { hits: after } : {}),
+        t: splitSource,
         name: secondName(name ?? `Shot ${s}`, sh),
       });
     });
@@ -410,6 +436,8 @@ const mergeShot = (i: number) => {
       if (tail >= 0) ks.splice(tail, 1);
     });
     shotsDoc.edit((sh) => {
+      const removed = sh[s];
+      if (s > 0) setHits(sh[s - 1], mergeShotHits(sh[s - 1].hits, removed?.hits));
       sh.splice(s, 1);
     });
   });

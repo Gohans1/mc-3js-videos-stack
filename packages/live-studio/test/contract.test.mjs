@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { ADJUSTMENTS } from "film-stage/grade-color";
 
 import {
+  CamTimeline,
   checkFiles,
   checkFilm,
   Edit,
@@ -623,4 +624,147 @@ test('a key list with one row missing its "t", or one "t" as text beside rows wi
   assert.deepEqual(paths({ props: [{ id: "cup" }, { id: "lamp" }] }), []);
   // keyRows stops at a list of other things: rows inside one are the film's own data, never a row the studio shows
   assert.deepEqual(paths({ groups: [{ moves: [{ t: 0 }, { t: "bad" }] }] }), []);
+});
+
+test("cam keys accept lens mm, focus targets, aperture fstop, and handheld presets while rejecting bad bounds", () => {
+  const key = (extra) => ({ t: 0, p: [0, 1.5, 4], l: [0, 1, 0], ...extra });
+  for (const ok of [
+    { mm: 35, fstop: 2.0, focus: 3.2, handheld: "THE_CLOSEUP" },
+    { mm: 50, fstop: 0, focus: 3.2 },
+    {
+      mm: 85,
+      fstop: 1.4,
+      focus: "Steve.head",
+      handheld: { preset: "THE_CLOSEUP", amount: 0.5, speed: 1.2, move: 0.4 },
+    },
+    { focus: { target: "desk.drawer", offset: [0, 0.2, 0] }, handheld: false },
+  ]) {
+    assert.equal(CamTimeline.safeParse([key(ok)]).success, true, JSON.stringify(ok));
+  }
+  for (const bad of [
+    { mm: 0 },
+    { fstop: -1.4 },
+    { focus: 0 },
+    { focus: "" },
+    { focus: { target: "" } },
+    { handheld: "" },
+    { handheld: { preset: "THE_CLOSEUP", amount: -0.2 } },
+  ]) {
+    assert.equal(CamTimeline.safeParse([key(bad)]).success, false, JSON.stringify(bad));
+  }
+});
+
+test("shots accept hits and Grade accepts look while checkFilm validates tools.optics and cam focus targets", () => {
+  assert.equal(
+    ShotsTimeline.safeParse([
+      {
+        t: 0,
+        adjust: { look: "teal-amber", basic: { contrast: 12 } },
+        hits: [{ t: 1.2, amount: 0.7, max: [2, 2, 1.5] }],
+      },
+      { t: 4, hits: [{ t: 4.5, amount: 0.4, decay: 1.5, freq: 12, max: 1.5, seed: 3 }] },
+    ]).success,
+    true,
+  );
+  for (const bad of [
+    [{ t: 0, adjust: { look: "" } }],
+    [{ t: 0, hits: [{ t: -0.5, amount: 0.5 }] }],
+    [{ t: 0, hits: [{ t: 0.5, amount: -0.1 }] }],
+  ]) {
+    assert.equal(ShotsTimeline.safeParse(bad).success, false, JSON.stringify(bad));
+  }
+
+  const head = { isObject3D: true, name: "head", children: [], getObjectByName: () => null };
+  const steve = {
+    isObject3D: true,
+    name: "Steve",
+    children: [head],
+    getObjectByName: (n) => (n === "head" ? head : null),
+  };
+  head.parent = steve;
+  const sceneObj = {
+    isObject3D: true,
+    children: [steve],
+    getObjectByName: (n) => (n === "Steve" ? steve : null),
+  };
+  steve.parent = sceneObj;
+
+  assert.deepEqual(
+    checkFilm(
+      film(),
+      draw({
+        scene: sceneObj,
+        objects: [[steve, "Steve"]],
+        bones: { head },
+        optics: {
+          shot: 0,
+          shotName: "Intro",
+          mm: 50,
+          fov: 39.6,
+          fstop: 2.0,
+          focusM: 2.5,
+          focusTarget: "Steve.head",
+          handheld: "THE_CLOSEUP",
+          look: "teal-amber",
+        },
+      }),
+      [{ t: 0, p: [0, 1, 3], l: [0, 1, 0], focus: "Steve.head" }],
+    ),
+    [],
+  );
+  assert.deepEqual(
+    checkFilm(film(), draw({ optics: { shot: 0, mm: 50, fov: 39.6, fstop: 0 } })),
+    [],
+  );
+  assert.match(checkFilm(film(), draw({ optics: {} })).join(), /tools\.optics\.(shot|mm|fov)/);
+  assert.match(
+    checkFilm(film(), draw({ optics: { shot: 0, mm: 0, fov: 39.6 } })).join(),
+    /tools\.optics\.mm/,
+  );
+  assert.match(
+    checkFilm(film(), draw({ scene: sceneObj, objects: [[steve, "Steve"]], bones: { head } }), [
+      { t: 0, p: [0, 1, 3], l: [0, 1, 0], focus: "Steve.hed" },
+    ]).join(),
+    /did you mean "Steve\.head"/,
+  );
+});
+
+test("handheld schema accepts preset or kind and requires at least one", () => {
+  const key = (extra) => ({ t: 0, p: [0, 1.5, 4], l: [0, 1, 0], ...extra });
+  assert.equal(
+    CamTimeline.safeParse([key({ handheld: { kind: "THE_CLOSEUP", amount: 0.4 } })]).success,
+    true,
+  );
+  assert.equal(CamTimeline.safeParse([key({ handheld: { amount: 0.4 } })]).success, false);
+});
+
+test("checkFilm resolves object-labeled focus targets via findTarget and reports custom camTimeline path", () => {
+  const chest = {
+    isObject3D: true,
+    name: "ChestNode",
+    children: [],
+    getObjectByName: () => null,
+  };
+  const room = {
+    isObject3D: true,
+    children: [chest],
+    getObjectByName: (n) => (n === "ChestNode" ? chest : null),
+  };
+  chest.parent = room;
+  const sceneObj = { isObject3D: true, children: [room], getObjectByName: () => null };
+  room.parent = sceneObj;
+  const camKey = { t: 0, p: [0, 1.5, 4], l: [0, 1, 0], focus: "Chest" };
+  assert.deepEqual(
+    checkFilm(film(), draw({ scene: sceneObj, objects: [[chest, "Chest"]] }), [camKey]),
+    [],
+  );
+  assert.match(
+    checkFilm(
+      film(),
+      draw({ scene: sceneObj, objects: [[chest, "Chest"]] }),
+      [{ ...camKey, focus: "Cheest" }],
+      "custom/cam.json",
+    ).join(),
+    /custom\/cam\.json \[0\]\.focus/,
+  );
 });

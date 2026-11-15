@@ -20,8 +20,8 @@ const GROUPS = [
       studio: "the live studio: preview, timeline, notes (bun run studio, then open the link)",
       check:
         "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
-      at: "what the film has at one heard second, each with its file and row: shot, camera, word, sounds, text, moving keys, notes",
-      find: "a sound, music, mocap clip, transition, text voice, font or look by words; prints where it goes",
+      at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",
+      find: "a sound, music, mocap clip, transition, anim, lens, shake, text voice, font or look preset by words; prints where it goes",
     },
   ],
   [

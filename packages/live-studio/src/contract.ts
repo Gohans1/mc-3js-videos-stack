@@ -4,6 +4,7 @@
 // each part. What a schema doesn't name is the film's own (its camera keys, audio, props): loose objects let it through.
 import * as z from "zod";
 
+import { findTarget, targetHelp } from "../render/target.ts";
 import { RATIOS } from "./frame.ts";
 
 export const DOC = "bun run skills get core --ref contract";
@@ -140,6 +141,18 @@ const TargetRow = z.object({ edit: z.string().min(1), path: z.array(z.string()) 
 const Axes = z
   .tuple([z.boolean(), z.boolean(), z.boolean()])
   .refine((axes) => axes.some(Boolean), "at least one transform axis is needed");
+const OpticsTelemetry = z.looseObject({
+  shot: z.number().int().nonnegative(),
+  shotName: z.string().optional(),
+  mm: z.number().positive(),
+  fov: z.number().positive(),
+  fstop: z.number().nonnegative().optional(),
+  focusM: z.number().positive().optional(),
+  focusTarget: z.string().optional(),
+  handheld: z.string().optional(),
+  look: z.string().optional(),
+  impulse: z.string().optional(),
+});
 export const Tools = z.looseObject({
   scene: three("isObject3D", "the THREE.Scene drawn"),
   camera: three("isCamera", "the THREE camera the film draws with"),
@@ -187,6 +200,7 @@ export const Tools = z.looseObject({
     .refine((targets) => unique(targets.map((t) => t.id)), "target ids must differ")
     .optional(),
   materials: z.array(z.tuple([three("isMaterial", "a THREE.Material"), z.string()])).optional(),
+  optics: OpticsTelemetry.optional(),
   // mc-assets/placed.ts makePlaced: what the creator drops into the scene from the Objects library, in one of the film's keyFiles
   placed: z
     .looseObject({
@@ -543,6 +557,24 @@ const point = z.union([z.tuple([z.number(), z.number(), z.number()]), z.looseObj
 });
 const unit = z.number().min(0).max(1);
 const Ease = z.union([z.string().min(1), z.tuple([unit, z.number(), unit, z.number()])]);
+const FocusTargetObj = z.looseObject({
+  target: z.string().min(1),
+  offset: z.tuple([z.number(), z.number(), z.number()]).optional(),
+});
+const FocusTarget = z.union([z.number().positive(), z.string().min(1), FocusTargetObj]);
+const HandheldShape = z.looseObject({
+  preset: z.string().min(1).optional(),
+  kind: z.string().min(1).optional(),
+  amount: z.number().nonnegative().optional(),
+  speed: z.number().positive().optional(),
+  move: z.number().nonnegative().optional(),
+  offset: z.number().optional(),
+});
+const HandheldObj = HandheldShape.refine(
+  (h: any) => typeof h.preset === "string" || typeof h.kind === "string",
+  "handheld preset or kind is required",
+);
+const Handheld = z.union([z.literal(false), z.string().min(1), HandheldObj]);
 const CamKey = z.looseObject({
   t: secs,
   p: point,
@@ -550,10 +582,16 @@ const CamKey = z.looseObject({
   cut: z.boolean().optional(),
   ease: Ease.optional(),
   fov: z.number().positive().optional(),
+  mm: z.number().positive().optional(),
+  focus: FocusTarget.optional(),
+  fstop: z.number().nonnegative().optional(),
+  handheld: Handheld.optional(),
   wave: z.number().optional(),
   roll: z.number().optional(),
 });
 export const CAM_KEYS = Object.keys(CamKey.shape);
+export const FOCUS_KEYS = Object.keys(FocusTargetObj.shape);
+export const HANDHELD_KEYS = Object.keys(HandheldShape.shape);
 export const CamTimeline = z
   .array(CamKey)
   .min(1)
@@ -632,6 +670,7 @@ const Wheels = z.looseObject({
 });
 export const Grade = z.looseObject({
   enabled: z.boolean().optional(),
+  look: z.string().min(1).optional(),
   // film-stage's ADJUSTMENTS (grade-color.ts), listed here so the server's contract loads no three.js; test/contract.test.mjs keeps them equal
   basic: z
     .looseObject({
@@ -699,13 +738,29 @@ export const AdjustmentTimeline = z
       .optional(),
   })
   .refine((f: any) => unique(f.items.map((it: any) => it.id)), "adjustment ids must differ");
+const ShotHit = z.looseObject({
+  t: secs,
+  amount: z.number().nonnegative(),
+  decay: z.number().positive().optional(),
+  freq: z.number().positive().optional(),
+  max: z
+    .union([
+      z.number().nonnegative(),
+      z.tuple([z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative()]),
+    ])
+    .optional(),
+  seed: z.number().optional(),
+});
 const ShotRow = z.looseObject({
   t: time,
   name: z.string().optional(),
   anim: Anim.optional(),
   transition: Transition.optional(),
   adjust: Grade.optional(),
+  hits: z.array(ShotHit).optional(),
 });
+export const GRADE_KEYS = Object.keys(Grade.shape);
+export const HIT_KEYS = Object.keys(ShotHit.shape);
 export const SHOT_KEYS = Object.keys(ShotRow.shape);
 // The fields read inside a shot's anim slots and transition, by path ("anim.in.k")
 export const SHOT_SLOT_KEYS = [
@@ -848,25 +903,48 @@ export const checkFiles = (files: Record<string, [z.ZodType<any>, string | undef
     return problems(schema, value, name);
   });
 
-export const checkFilm = (scene: unknown, draw: any): string[] => [
+const focusTargetFaults = (
+  tools: any,
+  cam?: any[],
+  camPath = "src/timeline/cam.json",
+): string[] => {
+  if (!tools || !Array.isArray(cam)) return [];
+  const issues: string[] = [];
+  cam.forEach((key, i) => {
+    const name =
+      typeof key?.focus === "string"
+        ? key.focus
+        : typeof key?.focus?.target === "string"
+          ? key.focus.target
+          : null;
+    if (!name || findTarget(tools, name)) return;
+    issues.push(`${camPath} [${i}].focus\n✖ ${targetHelp(tools, name, { camera: false })}`);
+  });
+  return issues;
+};
+
+export const checkFilm = (scene: unknown, draw: any, cam?: any[], camPath?: string): string[] => [
   ...problems(SceneModule, scene, "src/scene.ts exports"),
   ...(typeof draw === "function"
-    ? problems(
-        Draw,
-        {
-          tools: draw.tools,
-          describe: draw.describe,
-          checks: draw.checks,
-          variants: draw.variants,
-          anims: draw.anims,
-          transitions: draw.transitions,
-          eases: draw.eases,
-          keyEases: draw.keyEases,
-          velocity: draw.velocity,
-          velocityEffects: draw.velocityEffects,
-          adjustments: draw.adjustments,
-        },
-        "what buildScene() resolves to (draw)",
-      )
+    ? [
+        ...problems(
+          Draw,
+          {
+            tools: draw.tools,
+            describe: draw.describe,
+            checks: draw.checks,
+            variants: draw.variants,
+            anims: draw.anims,
+            transitions: draw.transitions,
+            eases: draw.eases,
+            keyEases: draw.keyEases,
+            velocity: draw.velocity,
+            velocityEffects: draw.velocityEffects,
+            adjustments: draw.adjustments,
+          },
+          "what buildScene() resolves to (draw)",
+        ),
+        ...focusTargetFaults(draw.tools, cam, camPath),
+      ]
     : ["buildScene()\n✖ must resolve to draw(t), a function"]),
 ];

@@ -6,6 +6,7 @@
     "./edit": "./src/edit.ts",
     "./lips": "./src/lips.ts",
     "./lab": "./render/lab.ts",
+    "./targets": "./render/target.ts",
     "./src/live.mjs": "./src/live.mjs"
   },
   "scripts": {
