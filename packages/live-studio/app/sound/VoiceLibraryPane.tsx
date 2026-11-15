@@ -156,7 +156,7 @@ const VoiceCard = memo(function VoiceCard({
                   aria-label={`Copy voice ID for ${voice.name}`}
                   onClick={() => void copyId()}
                 >
-                  {copied ? <Check className="text-primary" /> : <Copy />}
+                  {copied ? <Check className="text-primary-text" /> : <Copy />}
                 </Button>
               </Tip>
               <Tip label="Add voice to a new film note">

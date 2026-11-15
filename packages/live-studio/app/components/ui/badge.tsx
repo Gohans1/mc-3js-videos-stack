@@ -14,9 +14,9 @@ const badgeVariants = cva(
         destructive:
           "bg-destructive/12 text-destructive focus-visible:ring-destructive/30 [a]:hover:bg-destructive/20",
         outline:
-          "border-border bg-backdrop/60 text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
+          "border-input bg-backdrop/60 text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost: "hover:bg-muted/50 hover:text-muted-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-primary-text underline-offset-4 hover:underline",
         audio: "bg-clip-audio-tag text-clip-label",
         voice: "bg-clip-voice-tag text-clip-label",
         synth: "bg-in-out/18 text-in-out-text h-4 rounded-sm px-1 py-0 font-mono leading-none",

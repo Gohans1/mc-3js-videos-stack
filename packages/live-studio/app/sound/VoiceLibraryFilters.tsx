@@ -64,7 +64,7 @@ function VoiceFacetSubmenu({
       <DropdownMenuSubTrigger>
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {activeTitle && (
-          <span className="text-primary text-tag ml-1 max-w-22 truncate font-medium">
+          <span className="text-primary-text text-tag ml-1 max-w-22 truncate font-medium">
             {activeTitle}
           </span>
         )}

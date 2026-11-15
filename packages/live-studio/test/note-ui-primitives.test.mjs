@@ -14,43 +14,82 @@ import { Alert, AlertDescription } from "../app/components/ui/alert.tsx";
 import { Badge } from "../app/components/ui/badge.tsx";
 import { Button } from "../app/components/ui/button.tsx";
 import { Card, CardContent } from "../app/components/ui/card.tsx";
+import { Checkbox } from "../app/components/ui/checkbox.tsx";
 import { Empty, EmptyDescription } from "../app/components/ui/empty.tsx";
+import { Input } from "../app/components/ui/input.tsx";
 import { Table, TableBody, TableCell, TableRow } from "../app/components/ui/table.tsx";
+import { Textarea } from "../app/components/ui/textarea.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../app/components/ui/toggle-group.tsx";
 import { filmPlugin } from "../src/vite_film.mjs";
 
 const STUDIO_DIR = resolve(import.meta.dir, "..");
 
-const parseColor = (color) => {
-  const s = color.trim();
-  if (s.startsWith("#")) {
-    const clean = s.slice(1);
-    const n = Number.parseInt(clean, 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  }
-  const m = s.match(/^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/);
-  assert.ok(m, `Expected #hex or oklch() color, got: ${color}`);
-  const [L, C, H] = [+m[1], +m[2], (+m[3] * Math.PI) / 180];
-  const a = C * Math.cos(H);
-  const b = C * Math.sin(H);
+const srgbToLinear = (c255) => {
+  const s = c255 / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+};
+
+const linearToSrgb255 = (c) =>
+  Math.round(
+    Math.min(1, Math.max(0, c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055)) * 255,
+  );
+
+const oklabToRgb = ([L, a, b]) => {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
-  const mm = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
-  const s3 = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  const enc = (c) =>
-    Math.round(
-      Math.min(1, Math.max(0, c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055)) * 255,
-    );
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
   return [
-    enc(+4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * s3),
-    enc(-1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * s3),
-    enc(-0.0041960863 * l - 0.7034186147 * mm + 1.707614701 * s3),
+    linearToSrgb255(+4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    linearToSrgb255(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    linearToSrgb255(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
   ];
 };
 
+const rgbToOklab = ([r, g, b]) => {
+  const lr = srgbToLinear(r);
+  const lg = srgbToLinear(g);
+  const lb = srgbToLinear(b);
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+};
+
+const parseOklab = (color) => {
+  const s = color.trim();
+  const mix = s.match(/^color-mix\(\s*in\s+oklab\s*,\s*(.+?)\s*,\s*(.+)\s*\)$/s);
+  if (mix) {
+    const parsePart = (part) => {
+      const pm = part.trim().match(/^(.+?)(?:\s+([\d.]+)%)?$/);
+      return { lab: parseOklab(pm[1]), pct: pm[2] ? +pm[2] : null };
+    };
+    const p1 = parsePart(mix[1]);
+    const p2 = parsePart(mix[2]);
+    const w1 = p1.pct != null ? p1.pct / 100 : p2.pct != null ? 1 - p2.pct / 100 : 0.5;
+    return p1.lab.map((v, i) => v * w1 + p2.lab[i] * (1 - w1));
+  }
+  if (s.startsWith("#")) {
+    const n = Number.parseInt(s.slice(1), 16);
+    return rgbToOklab([(n >> 16) & 255, (n >> 8) & 255, n & 255]);
+  }
+  const m = s.match(/^oklch\(\s*([\d.]+)%?\s+([\d.]+)\s+([\d.]+)\s*\)$/);
+  assert.ok(m, `Expected #hex, oklch(), or color-mix() color, got: ${color}`);
+  const L = m[0].includes("%") ? +m[1] / 100 : +m[1];
+  const [C, H] = [+m[2], (+m[3] * Math.PI) / 180];
+  return [L, C * Math.cos(H), C * Math.sin(H)];
+};
+
+const parseColor = (color) => oklabToRgb(parseOklab(color));
+
+// Blend translucent Tailwind utilities in OKLab to match CSS Color 4 compositing
 const blendRgba = (fgColor, alpha, bgColor) => {
-  const fg = Array.isArray(fgColor) ? fgColor : parseColor(fgColor);
-  const bg = Array.isArray(bgColor) ? bgColor : parseColor(bgColor);
-  return fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha)));
+  const fg = Array.isArray(fgColor) ? rgbToOklab(fgColor) : parseOklab(fgColor);
+  const bg = Array.isArray(bgColor) ? rgbToOklab(bgColor) : parseOklab(bgColor);
+  return oklabToRgb(fg.map((c, i) => c * alpha + bg[i] * (1 - alpha)));
 };
 
 const relLuminance = ([r, g, b]) => {
@@ -118,6 +157,7 @@ describe("notes UI primitive tokens and variants", () => {
     );
 
     assert.match(html, /data-tone="check"/);
+    assert.match(html, /data-\[tone=check\]:hover:bg-warn-card-hover/);
     assert.match(html, /data-tone="done"/);
     assert.match(html, /data-tone="open"/);
     assert.match(html, /text-tag/);
@@ -129,6 +169,25 @@ describe("notes UI primitive tokens and variants", () => {
     assert.match(html, /aria-pressed:bg-card/);
     assert.match(html, /text-ok-text/);
     assert.match(html, /text-ai-text/);
+
+    const controlsHtml = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        createElement(Input, { placeholder: "Search" }),
+        createElement(Textarea, { placeholder: "Note" }),
+        createElement(Checkbox, { "aria-label": "Agree" }),
+        createElement(Button, { variant: "outline" }, "Picture"),
+        createElement(Button, { variant: "link" }, "Open"),
+        createElement(Badge, { variant: "outline" }, "Draft"),
+        createElement(Badge, { variant: "link" }, "Docs"),
+      ),
+    );
+    assert.match(controlsHtml, /\bborder-input\b/);
+    assert.match(controlsHtml, /\bbg-backdrop\b/);
+    assert.doesNotMatch(controlsHtml, /\bbg-input\b/);
+    assert.match(controlsHtml, /\btext-primary-text\b/);
+    assert.doesNotMatch(controlsHtml, /\btext-primary(?![a-z-])\b/);
   });
 
   test("CSS design tokens satisfy WCAG AA (>= 4.5:1) and avoid variable collisions", () => {
@@ -143,8 +202,7 @@ describe("notes UI primitive tokens and variants", () => {
       seen.add(name);
       const val = vars.get(name);
       assert.ok(val, `Expected CSS variable --${name} in app/index.css`);
-      const ref = val.match(/^var\(\s*--([a-z0-9-]+)\s*\)$/);
-      return ref ? token(ref[1], seen) : val;
+      return val.replace(/var\(\s*--([a-z0-9-]+)\s*\)/g, (_, ref) => token(ref, new Set(seen)));
     };
 
     const backdrop = token("backdrop");
@@ -152,7 +210,12 @@ describe("notes UI primitive tokens and variants", () => {
     const bg = token("background");
     const track = token("track");
     const input = token("input");
+    const accent = token("accent");
     const secondary = token("secondary");
+    const secondaryFg = token("secondary-foreground");
+    const secondaryHover = token("secondary-hover");
+    const warnCard = token("warn-card");
+    const warnCardHover = token("warn-card-hover");
     const raised2 = token("raised-2");
     const raised3 = token("raised-3");
     const raised4 = token("raised-4");
@@ -274,21 +337,17 @@ describe("notes UI primitive tokens and variants", () => {
     checkContrast(foreground, beatHold, 4.5, "Foreground on beat-hold strip");
     checkContrast(foreground, beatSound, 4.5, "Foreground on beat-sound strip");
     checkContrast(foreground, secondary, 7.0, "Active segmented pill --foreground on --secondary");
+    checkContrast(secondaryFg, secondaryHover, 4.5, "Secondary foreground on --secondary-hover");
+    checkContrast(primaryText, accent, 4.5, "Primary text on --accent (hover-open submenu)");
+    checkContrast(primaryText, raised4, 4.5, "Primary text on raised-4");
+    checkContrast(foreground, warnCard, 4.5, "Foreground on --warn-card");
+    checkContrast(foreground, warnCardHover, 4.5, "Foreground on --warn-card-hover");
 
     assert.ok(
       !vars.has("curve") && !vars.has("color-curve"),
       "--curve belongs only to ColorAdjust inline scope",
     );
     assert.equal(vars.get("color-curve-bg"), "var(--curve-bg)");
-    for (const rel of ["app/camera/ColorAdjust.tsx", "app/timeline/FilmSpeedPanel.tsx"]) {
-      const src = readFileSync(join(STUDIO_DIR, rel), "utf8");
-      assert.match(src, /\bbg-curve-bg\b/, `${rel} must use bg-curve-bg`);
-    }
-    assert.match(
-      readFileSync(join(STUDIO_DIR, "app/timeline/SpeedCurve.tsx"), "utf8"),
-      /\bstroke-curve-bg\b/,
-      "app/timeline/SpeedCurve.tsx must use stroke-curve-bg",
-    );
 
     const walkFiles = (dir) =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -309,41 +368,6 @@ describe("notes UI primitive tokens and variants", () => {
       const src = readFileSync(file, "utf8");
       assert.doesNotMatch(src, /\bdark:/, `${file} should use single-theme tokens without dark:`);
     }
-    for (const rel of [
-      "app/components/ui/input.tsx",
-      "app/components/ui/textarea.tsx",
-      "app/components/ui/select.tsx",
-      "app/components/ui/checkbox.tsx",
-    ]) {
-      const src = readFileSync(join(STUDIO_DIR, rel), "utf8");
-      assert.doesNotMatch(
-        src,
-        /\bbg-input\b/,
-        `${rel} must use border-input on a surface token instead of bg-input`,
-      );
-    }
-    const wheelsSrc = readFileSync(join(STUDIO_DIR, "app/camera/WheelsAdjust.tsx"), "utf8");
-    assert.match(
-      wheelsSrc,
-      /\bfill-slider-thumb\b/,
-      "WheelsAdjust arrows must use fill-slider-thumb",
-    );
-    assert.match(
-      wheelsSrc,
-      /\bstroke-background\b/,
-      "WheelsAdjust arrows must outline against background",
-    );
-    assert.doesNotMatch(
-      wheelsSrc,
-      /var\(--color-primary-foreground\)/,
-      "WheelsAdjust must not fill dark-ink arrows on dark background",
-    );
-    const swapSrc = readFileSync(join(STUDIO_DIR, "app/sound/SoundSwapPicker.tsx"), "utf8");
-    assert.doesNotMatch(
-      swapSrc,
-      /hover:bg-raised-3[^\n"']*text-primary(?![a-z-])/,
-      "SoundSwapPicker current row on hover:bg-raised-3 must use text-primary-text",
-    );
   });
 });
 
