@@ -131,14 +131,14 @@ export async function buildScene(canvas, W, H, draft = false) {
   // Tas1r2) glowing on "gene" and knocked out of the strand on "millions"; EDIT.helix holds where and when
   const helix = new THREE.Group();
   helix.name = "helix";
-  const H = EDIT.helix;
-  helix.position.set(...H.at);
+  const helixConfig = EDIT.helix;
+  helix.position.set(...helixConfig.at);
   const bead = new THREE.BoxGeometry(0.2, 0.2, 0.2);
   const lit = (c, e = 0.25) =>
     new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: e, roughness: 0.6 });
   const BASES = [0xe5484d, 0xf5c542, 0x3aa99f, 0x8b7ec8];
   const rungs = [];
-  for (let i = 0; i < H.rungs; i++) {
+  for (let i = 0; i < helixConfig.rungs; i++) {
     const row = new THREE.Group();
     row.position.y = i * 0.26;
     row.rotation.y = i * 0.55;
@@ -146,7 +146,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       b = new THREE.Mesh(bead, lit(0x4385be));
     a.position.x = -0.6;
     b.position.x = 0.6;
-    const sweet = i === H.sweet;
+    const sweet = i === helixConfig.sweet;
     const bar = new THREE.Mesh(
       new THREE.BoxGeometry(1.0, 0.09, 0.09),
       lit(sweet ? 0xff6fb5 : BASES[i % 4], sweet ? 0.5 : 0.2),
@@ -155,15 +155,15 @@ export async function buildScene(canvas, W, H, draft = false) {
     helix.add(row);
     rungs.push({ row, bar });
   }
-  const sweetBar = rungs[H.sweet].bar;
+  const sweetBar = rungs[helixConfig.sweet].bar;
   const sweetColor = new THREE.Color(0xff6fb5),
     deadColor = new THREE.Color(0x3a3a3a);
   scene.add(helix);
   const smooth01 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
   const drawHelix = (t) => {
     helix.rotation.y = t * 0.9;
-    const glow = smooth01((t - H.glow) / 0.25) * (1 - smooth01((t - H.knock) / 0.2));
-    const out = smooth01((t - H.knock) / 0.9);
+    const glow = smooth01((t - helixConfig.glow) / 0.25) * (1 - smooth01((t - helixConfig.knock) / 0.2));
+    const out = smooth01((t - helixConfig.knock) / 0.9);
     sweetBar.position.set(out * 2.2, -out * 0.6, out * 0.8);
     sweetBar.rotation.set(out * 2.4, out * 3.1, out * 1.3);
     sweetBar.scale.setScalar(1 + glow * 0.35 - out * 0.4);
