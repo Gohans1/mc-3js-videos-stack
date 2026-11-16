@@ -19,5 +19,20 @@
     "typescript/unbound-method": "off",
     "typescript/no-implied-eval": "off",
     "typescript/restrict-template-expressions": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["packages/live-studio/src/**/*.mjs"],
+      "env": {
+        "node": true,
+        "browser": true
+      },
+      "globals": {
+        "Bun": "readonly"
+      },
+      "rules": {
+        "eslint/no-undef": "error"
+      }
+    }
+  ]
 }
