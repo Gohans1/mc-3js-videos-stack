@@ -1,8 +1,20 @@
 // The title fonts as a film loads them (titles.ts imports their CSS); test/fonts.test.ts calls window.missingFonts() for the
 // FONTS whose family has no face the browser can load at a weight titles draw in.
-import { FONTS } from "../../src/titles";
+import { FONTS, preloadTitleFonts } from "../../src/titles";
 
 Object.assign(window, {
+  async preparedTitleFonts() {
+    const font = FONTS.find((f) => f.id === "serif")!;
+    const checks = () =>
+      [400, 700].map((w) => document.fonts.check(`${w} 40px ${font.css}`, "AÀaà0"));
+    const before = checks();
+    await preloadTitleFonts([{ font: "serif" }]);
+    return {
+      before,
+      after: checks(),
+      defined: [...document.fonts].some((f) => f.family.includes("Source Serif")),
+    };
+  },
   async missingFonts() {
     const missing: string[] = [];
     for (const f of FONTS)

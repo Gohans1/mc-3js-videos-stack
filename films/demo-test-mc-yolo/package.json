@@ -90,6 +90,7 @@
     "sfx": "sound/sfx",
     "liveLanes": true,
     "chrome": "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
-    "ratio": "9:16"
+    "ratio": "9:16",
+    "preload": ["mc/client_assets.zip", "vendor/bmr_assets.zip"]
   }
 }

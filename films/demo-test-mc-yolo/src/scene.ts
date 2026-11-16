@@ -1,16 +1,16 @@
 // @ts-nocheck
-import { configure, createScene } from "block-model-renderer";
+import { configure, createScene, prepareAssets, wasmStatus } from "block-model-renderer";
 import { unzipSync } from "fflate";
 import { animate, ANIMS } from "film-stage/animate";
 import { cameraAt, EASES } from "film-stage/camera";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
 import { activeAdjustments } from "film-stage/grade-layers";
-import { makeTitles } from "film-stage/titles";
+import { makeTitles, preloadTitleFonts } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeVelocity } from "film-stage/velocity";
 import { footChecks } from "mc-actor/checks";
-import { loadClips } from "mc-actor/clips";
+import { loadClips, prefetchClips } from "mc-actor/clips";
 import { makeFeet } from "mc-actor/feet";
 import { slerpPose } from "mc-actor/mocap";
 import { blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
@@ -58,6 +58,7 @@ const shotAt = (t) => SHOTS_OUT.filter((s) => t >= s.t).length - 1;
 
 export async function buildScene(canvas, W, H, draft = false) {
   configure({ THREE, assetsUrl: "vendor/bmr_assets.zip" });
+  void wasmStatus();
   const renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: false,
@@ -72,6 +73,12 @@ export async function buildScene(canvas, W, H, draft = false) {
   scene.background = new THREE.Color(0x000000);
   const camera = new THREE.PerspectiveCamera(60, W / H, 0.02, 100);
   scene.add(camera);
+  const rigP = loadRig("rig/player.glb");
+  void rigP.catch(() => {});
+  const pickedP = fetch("picked.zip").then(async (r) => new Uint8Array(await r.arrayBuffer()));
+  void pickedP.catch(() => {});
+  void preloadTitleFonts(EDIT.text.items);
+  const clipRefs = EDIT.steve.moves.filter((m) => m.clip).map((m) => m.clip);
 
   // client.jar without its Java code (scripts/mc/slim_jar.mjs), then the props and the picks stacked above it
   const jarFile = await fetch("mc/client_assets.zip");
@@ -80,8 +87,9 @@ export async function buildScene(canvas, W, H, draft = false) {
       "mc/client_assets.zip is missing: bun run link at the repo root (bun ../../scripts/mc/slim_jar.mjs if the vault lacks it)",
     );
   const jar = new Uint8Array(await jarFile.arrayBuffer());
-  const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
-  const sources = [pack, picked, jar];
+  prefetchClips(clipRefs);
+  const picked = await pickedP;
+  const sources = await prepareAssets([pack, picked, jar], { cache: true });
   const world = await createScene(sources, buildWorld(), { lighting: "scene", animate: false });
   world.group.scale.setScalar(S);
   world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
@@ -95,7 +103,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const skinUrl = URL.createObjectURL(
     new Blob([unzipSync(jar, { filter: (f) => f.name === SKIN })[SKIN]], { type: "image/png" }),
   );
-  const steve = await makePlayer(await loadRig("rig/player.glb"), skinUrl, { glow: 0.03 });
+  const steve = await makePlayer(await rigP, skinUrl, { glow: 0.03 });
   URL.revokeObjectURL(skinUrl);
   scene.add(steve.g);
   const placed = await makePlaced(scene, sources, EDIT, "placed"); // what the creator drops in from the studio's Objects tab
@@ -177,7 +185,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     multisampling: 4,
   });
   const fade = makeFade(renderer);
-  const titles = makeTitles(renderer, W, H, { items: EDIT.text.items }); // the titles and Cinetic annotation shapes of src/timeline/text.json, over everything; ready waits on their fonts only
+  const titles = makeTitles(renderer, W, H, { items: EDIT.text.items });
   const anims = ANIMS;
   await titles.ready;
   composer.addPass(new RenderPass(scene, camera));
@@ -203,7 +211,13 @@ export async function buildScene(canvas, W, H, draft = false) {
   );
   const adjust = makeAdjustments(composer, camera),
     layerAdjust = makeLayerAdjustments(renderer);
+  const previousTarget = renderer.getRenderTarget();
+  // Match the composer's output color space so Three reuses these compiled programs on the first draw.
+  renderer.setRenderTarget(composer.inputBuffer);
+  const shadersReady = renderer.compileAsync(scene, camera);
+  renderer.setRenderTarget(previousTarget);
   await Promise.all([
+    shadersReady,
     adjust.prepare(SHOTS_OUT.map((s) => s.adjust)),
     layerAdjust.prepare((EDIT.adjustments?.items ?? []).map((it) => it.grade)),
   ]);

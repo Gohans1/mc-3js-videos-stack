@@ -574,6 +574,13 @@ const mergeVoices = (base, extra) => {
   return [...base.filter((v) => !seen.has(v.id)), ...extra];
 };
 
+export const preloadTitleFonts = (items, fonts?) =>
+  Promise.all(
+    fontsFor(items, fonts).flatMap((f) =>
+      [400, 700].map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0")),
+    ),
+  ).catch(() => {});
+
 export function makeTitles(renderer, W, H, extra) {
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -602,11 +609,7 @@ export function makeTitles(renderer, W, H, extra) {
     last = "";
   };
   document.fonts?.addEventListener?.("loadingdone", onFontsLoaded);
-  const ready = Promise.all(
-    fontsFor(extra?.items, extra?.fonts).flatMap((f) =>
-      [400, 700].map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0")),
-    ),
-  ).catch(() => {});
+  const ready = preloadTitleFonts(extra?.items, extra?.fonts);
 
   const draw = (list, t, camera, tracks, timeAt) => {
     const now = onScreen(g, list, t, W, H, camera, tracks, timeAt, textCache, extra);
