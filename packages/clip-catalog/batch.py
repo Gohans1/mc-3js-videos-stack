@@ -171,7 +171,11 @@ def main():
         print(e, file=sys.stderr)
         return 1
     next_script = {"catalog": "catalog_check.py", "sweep": "sweep_report.py", "sheets": "catalog_review.py"}[a.mode]
-    print(f"next: python ../../packages/clip-catalog/{next_script}")
+    if a.mode == "sweep":
+        for lib in dict.fromkeys(libs):
+            print(f"next: python ../../packages/clip-catalog/{next_script} {lib}")
+    else:
+        print(f"next: python ../../packages/clip-catalog/{next_script}")
     return 0
 
 
