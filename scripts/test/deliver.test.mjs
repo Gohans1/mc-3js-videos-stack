@@ -15,7 +15,10 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { mediaFixture } from "./media-fixture.mjs";
+
 const DELIVER = resolve(dirname(fileURLToPath(import.meta.url)), "../review/deliver.py");
+const media = mediaFixture();
 
 // 3 s of picture and a 997 Hz tone at -14 LUFS (0.2 a channel, stereo), encoded the way each test says
 const make = (
@@ -23,10 +26,7 @@ const make = (
   { size = "2560x1440", audio = ["-c:a", "aac", "-b:a", "384k", "-ar", "48000"], extra = [] },
 ) => {
   const tone = "aevalsrc=0.2*sin(2*PI*997*t)|0.2*sin(2*PI*997*t):s=48000:d=3";
-  const r = spawnSync("ffmpeg", [
-    "-v",
-    "error",
-    "-y",
+  media(file, [
     "-f",
     "lavfi",
     "-i",
@@ -50,9 +50,7 @@ const make = (
     "tv",
     ...(audio ?? []),
     ...extra,
-    file,
   ]);
-  assert.equal(r.status, 0, String(r.stderr));
 };
 const deliver = (...args) => spawnSync("python", [DELIVER, ...args], { encoding: "utf8" });
 
@@ -66,6 +64,8 @@ test("a video made the way YouTube asks is ready, and the answer says what goes 
   assert.match(r.stdout, /2560x1440 30 fps H\.264 High/);
   assert.match(r.stdout, /ready to upload/);
   assert.doesNotMatch(r.stdout, /FIX/);
+  assert.ok(r.stdout.includes(`next: bun run deliver ${file} --youtube`), r.stdout);
+  assert.match(r.stdout, /about 10 s here/);
 });
 
 test("each way a file can fail the upload spec is named with the command or setting that fixes it", (t) => {
@@ -203,17 +203,6 @@ test("the summary names the sound's own codec, and a folder is said to be one", 
   const folder = deliver(dir);
   assert.equal(folder.status, 2);
   assert.match(folder.stderr, /is a folder: give it the video/);
-});
-
-test("a ready upload's next step names the video and how long --youtube takes on it", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const file = join(dir, "final.mp4");
-  make(file, { extra: ["-movflags", "+faststart", "-use_editlist", "0"] });
-  const r = deliver(file);
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.ok(r.stdout.includes(`next: bun run deliver ${file} --youtube`), r.stdout);
-  assert.match(r.stdout, /about 10 s here/);
 });
 
 test("--youtube re-encodes the seconds asked as YouTube would and measures their bands", (t) => {

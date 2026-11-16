@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { newPictures, paceReport } from "../review/pace.ts";
+import { mediaFixture } from "./media-fixture.mjs";
 
 const PACE = fileURLToPath(new URL("../review/pace.ts", import.meta.url));
 
@@ -96,8 +97,7 @@ const paceOn = (video: string, make: string[], cuts = "[1]") => {
   writeFileSync(join(dir, "src/scene.ts"), "");
   writeFileSync(join(dir, "package.json"), "{}");
   writeFileSync(join(dir, "renders/cuts.json"), cuts);
-  const ff = spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", ...make, join(dir, video)]);
-  expect(ff.status).toBe(0);
+  media(join(dir, video), ["-f", "lavfi", "-i", ...make]);
   const r = spawnSync("bun", [PACE, video], {
     cwd: dir,
     encoding: "utf8",
@@ -107,6 +107,7 @@ const paceOn = (video: string, make: string[], cuts = "[1]") => {
   return r;
 };
 const clip = ["testsrc2=s=64x36:r=30:d=2", "-pix_fmt", "yuv420p"];
+const media = mediaFixture();
 
 test("a span or a chunk is no whole film: pace refuses it, naming the video it measures", () => {
   for (const video of ["renders/span_40-44.mp4", "renders/chunks/c02.mp4"]) {

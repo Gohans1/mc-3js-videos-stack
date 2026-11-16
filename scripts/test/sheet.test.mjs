@@ -1,31 +1,30 @@
 // scripts/review/sheet.py: a cut up close names the shots either side, and the rows that place it
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { mediaFixture } from "./media-fixture.mjs";
+
 const SHEET = resolve(dirname(fileURLToPath(import.meta.url)), "../review/sheet.py");
+const media = mediaFixture();
 
 test("sheet cut N says which shots meet there and the transition between them; a video that is not there is a wrong word", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "sheet-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "renders"));
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
-  const ff = spawnSync("ffmpeg", [
-    "-v",
-    "error",
+  media(join(dir, "renders/draft_video.mp4"), [
     "-f",
     "lavfi",
     "-i",
     "testsrc2=s=320x180:r=30:d=3",
     "-pix_fmt",
     "yuv420p",
-    join(dir, "renders/draft_video.mp4"),
   ]);
-  assert.equal(ff.status, 0, String(ff.stderr));
   writeFileSync(join(dir, "renders/cuts.json"), "[1, 2]");
   writeFileSync(
     join(dir, "package.json"),
@@ -71,18 +70,14 @@ const film = (t, cuts, video = "renders/draft_video.mp4") => {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "renders/chunks"), { recursive: true });
   mkdirSync(join(dir, "renders/final_chunks"));
-  const ff = spawnSync("ffmpeg", [
-    "-v",
-    "error",
+  media(join(dir, video), [
     "-f",
     "lavfi",
     "-i",
     "testsrc2=s=320x180:r=30:d=3",
     "-pix_fmt",
     "yuv420p",
-    join(dir, video),
   ]);
-  assert.equal(ff.status, 0, String(ff.stderr));
   writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify(cuts));
   const sheet = (...args) =>
     spawnSync("python", [SHEET, ...args], { cwd: dir, encoding: "utf8", timeout: 60000 });
@@ -125,18 +120,14 @@ test("a video named wrong is the fault named, even before the film has cuts", (t
 test("sheet lays out the render's stills and leaves any other still_*.jpg out", (t) => {
   const sheet = film(t, []);
   for (const name of ["still_1s.jpg", "still_2.5s.jpg", "still_test.jpg"]) {
-    const r = spawnSync("ffmpeg", [
-      "-v",
-      "error",
+    media(join(sheet.dir, "renders", name), [
       "-f",
       "lavfi",
       "-i",
       "color=c=gray:s=64x36",
       "-frames:v",
       "1",
-      join(sheet.dir, "renders", name),
     ]);
-    assert.equal(r.status, 0, String(r.stderr));
   }
   const r = sheet();
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -144,8 +135,13 @@ test("sheet lays out the render's stills and leaves any other still_*.jpg out", 
 });
 
 test("--help after the video still prints the help", (t) => {
-  const sheet = film(t, []);
-  const r = sheet("renders/draft_video.mp4", "--help");
+  const dir = mkdtempSync(join(tmpdir(), "sheet-help-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = spawnSync("python", [SHEET, "renders/draft_video.mp4", "--help"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 30_000,
+  });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /Contact sheets for self-review/);
 });
@@ -194,16 +190,10 @@ test("a start between two thousandths still holds the frames cut lays out next t
 test("only a render's chunks folder makes a chunk: my_chunks/c02.mp4 starts at 0", (t) => {
   const sheet = film(t, []);
   mkdirSync(join(sheet.dir, "renders/my_chunks"));
-  const ff = spawnSync("ffmpeg", [
-    "-v",
-    "error",
-    "-i",
+  copyFileSync(
     join(sheet.dir, "renders/draft_video.mp4"),
-    "-c",
-    "copy",
     join(sheet.dir, "renders/my_chunks/c02.mp4"),
-  ]);
-  assert.equal(ff.status, 0, String(ff.stderr));
+  );
   const r = sheet("renders/my_chunks/c02.mp4", "1");
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.doesNotMatch(r.stdout, /film seconds from/);
@@ -226,8 +216,8 @@ test("a second under a thousandth is laid out with the others", (t) => {
 });
 
 test("a cuts.json of anything but a list of seconds is refused, never read as cuts", (t) => {
+  const sheet = film(t, []);
   for (const bad of ['{"1": 2}', '"123"', "[1, -2]", "[1, Infinity]"]) {
-    const sheet = film(t, []);
     writeFileSync(join(sheet.dir, "renders/cuts.json"), bad);
     const r = sheet("renders/draft_video.mp4", "shots");
     assert.equal(r.status, 1, `${bad}: ${r.stdout}${r.stderr}`);

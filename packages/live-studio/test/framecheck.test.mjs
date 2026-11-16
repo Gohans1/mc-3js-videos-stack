@@ -7,7 +7,10 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { mediaFixture } from "../../../scripts/test/media-fixture.mjs";
+
 const FRAMECHECK = fileURLToPath(new URL("../framecheck.mjs", import.meta.url));
+const media = mediaFixture();
 
 const film = (t, ratio) => {
   const dir = mkdtempSync(join(tmpdir(), "framecheck-"));
@@ -67,18 +70,14 @@ test("a picture given in place of a video is a wrong word: exit 2, nothing measu
 
 // 2 s at 30 fps, grey, turning white at the video's 1.00 s: a JUMP there
 const flip = (file) => {
-  const r = spawnSync("ffmpeg", [
-    "-v",
-    "error",
+  media(file, [
     "-f",
     "lavfi",
     "-i",
     "color=c=gray:s=64x36:r=30:d=2[a];color=c=white:s=64x36:r=30:d=2[b];[a][b]overlay=enable='gte(t,1)'",
     "-pix_fmt",
     "yuv420p",
-    file,
   ]);
-  assert.equal(r.status, 0, String(r.stderr));
 };
 
 test("a SPAN run's video is measured on the film's clock, with only the cuts inside it", (t) => {
