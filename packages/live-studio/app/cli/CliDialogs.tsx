@@ -1,5 +1,5 @@
 import { AlertTriangle, Coins, ShieldAlert, Terminal } from "lucide-react";
-import { useState } from "react";
+import { type RefObject, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import type { ResolvedCliSpec } from "../../src/cli-catalog.ts";
 import {
   getEffectLabel,
   resolveSaveTemplateTargets,
@@ -37,6 +38,108 @@ export interface CliConfirmRequest {
   cost: "free" | "optional-paid" | "paid";
   effect: "read" | "write" | "install" | "destructive" | "daemon";
   sourceLabel?: string;
+}
+
+export function CliHelpDialog({
+  returnFocusRef,
+  open,
+  spec,
+  helpCommand,
+  canRunHelp,
+  onClose,
+  onRunHelp,
+}: {
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
+  open: boolean;
+  spec: ResolvedCliSpec;
+  helpCommand: string;
+  canRunHelp: boolean;
+  onClose: () => void;
+  onRunHelp: () => void;
+}) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const groups = [
+    { title: "Arguments", fields: spec.argsDef },
+    { title: "Options", fields: spec.flagsDef },
+    { title: "Environment variables", fields: spec.envDef },
+  ];
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        data-cli-dialog
+        className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl"
+        initialFocus={headingRef}
+        finalFocus={returnFocusRef}
+        onKeyDown={stopCliHotkeyPropagation}
+      >
+        <DialogHeader className="mr-8">
+          <DialogTitle ref={headingRef} tabIndex={-1} variant="reading">
+            Guide to {spec.command.label}
+          </DialogTitle>
+          <DialogDescription variant="comfortable">
+            {spec.subcommands.at(-1)?.summary ?? spec.command.summary}
+          </DialogDescription>
+        </DialogHeader>
+        <p className="text-muted-foreground text-sm leading-normal">
+          Reading this guide does not run a command. Use Run command in the workbench when you are
+          ready.
+        </p>
+        {groups
+          .filter((group) => group.fields.length)
+          .map((group) => (
+            <section key={group.title} className="flex min-w-0 flex-col gap-3">
+              <h3 className="text-heading-foreground text-base font-semibold">{group.title}</h3>
+              <dl className="flex min-w-0 flex-col gap-3 text-sm leading-normal">
+                {group.fields.map((field) => (
+                  <div key={field.key} className="min-w-0">
+                    <dt className="font-medium">
+                      {field.label}
+                      {"flag" in field &&
+                      typeof field.flag === "string" &&
+                      !field.label.includes(field.flag)
+                        ? ` (${field.flag})`
+                        : ""}
+                    </dt>
+                    <dd className="text-muted-foreground">
+                      {field.hint ??
+                        (field.type === "boolean"
+                          ? "Turn on to include this option in the command."
+                          : field.placeholder
+                            ? `Example: ${field.placeholder}`
+                            : "Set a value to include it in the command.")}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        {spec.meta.helpMode !== "none" && (
+          <section className="border-hairline flex min-w-0 flex-col gap-2 border-t pt-3">
+            <h3 className="text-heading-foreground text-base font-semibold">Help from the CLI</h3>
+            <p className="text-muted-foreground text-sm leading-normal">
+              The button below runs this help command and shows its output. It does not run your
+              configured task.
+            </p>
+            <code className="font-mono text-sm break-words">{helpCommand}</code>
+            <Button
+              size="comfortable"
+              variant="secondary"
+              disabled={!canRunHelp}
+              onClick={onRunHelp}
+            >
+              <Terminal aria-hidden />
+              Run --help
+            </Button>
+          </section>
+        )}
+        <DialogFooter>
+          <Button size="comfortable" variant="secondary" onClick={onClose}>
+            Close guide
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function CliConfirmDialog({
@@ -55,18 +158,18 @@ export function CliConfirmDialog({
 
   return (
     <Dialog open={Boolean(request)} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent showCloseButton>
+      <DialogContent data-cli-dialog showCloseButton>
         <DialogHeader>
           <DialogTitle>
             <span className="flex items-center gap-2">
               <ShieldAlert aria-hidden className="text-warn-text size-4 shrink-0" />
-              <span>Confirm CLI run</span>
+              <span>Run {request?.title ?? "command"}?</span>
             </span>
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription variant="comfortable">
             {request?.sourceLabel
-              ? `Launching saved template "${request.sourceLabel}" needs confirmation.`
-              : `Review the exact command and target directory before executing ${request?.title ?? "command"}.`}
+              ? `Review the command saved in “${request.sourceLabel}” before running it.`
+              : "Check the command, its folder, and the changes it will make."}
           </DialogDescription>
         </DialogHeader>
 
@@ -74,16 +177,20 @@ export function CliConfirmDialog({
           <div className="flex min-w-0 flex-col gap-3">
             <Alert variant={isDestructive ? "destructive" : "warn"}>
               {isPaid ? <Coins aria-hidden /> : <AlertTriangle aria-hidden />}
-              <AlertTitle>{isPaid ? "Paid or confirmed action" : "High-impact command"}</AlertTitle>
+              <AlertTitle>{isPaid ? "Uses paid services" : "Changes files"}</AlertTitle>
               <AlertDescription>{request.reason}</AlertDescription>
             </Alert>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant={isDestructive ? "destructive" : "check"}>
+              <Badge
+                appearance="text"
+                size="comfortable"
+                variant={isDestructive ? "destructive" : "check"}
+              >
                 {getEffectLabel(request.effect)}
               </Badge>
               {isPaid && (
-                <Badge variant="check">
+                <Badge appearance="text" size="comfortable" variant="check">
                   <Coins aria-hidden />
                   {request.cost === "paid" ? "Paid API" : "Optional paid API"}
                 </Badge>
@@ -91,10 +198,10 @@ export function CliConfirmDialog({
             </div>
 
             <div className="bg-backdrop border-hairline flex min-w-0 flex-col gap-1 rounded-lg border p-2.5">
-              <span className="text-tag text-muted-foreground font-mono break-all">
-                cwd: {request.cwd}
+              <span className="text-muted-foreground font-mono text-sm break-all">
+                Runs in: {request.cwd}
               </span>
-              <pre className="text-tag text-foreground max-h-36 overflow-auto font-mono break-all whitespace-pre-wrap">
+              <pre className="text-foreground max-h-36 overflow-auto font-mono text-sm break-all whitespace-pre-wrap">
                 {request.displayCommand}
               </pre>
             </div>
@@ -102,16 +209,17 @@ export function CliConfirmDialog({
         )}
 
         <DialogFooter>
-          <Button variant="ghost" disabled={submitting} onClick={onCancel}>
+          <Button size="comfortable" variant="ghost" disabled={submitting} onClick={onCancel}>
             Cancel
           </Button>
           <Button
+            size="comfortable"
             variant={isDestructive ? "destructive" : "approve"}
             disabled={submitting}
             onClick={onConfirm}
           >
             <Terminal aria-hidden />
-            Confirm &amp; Run
+            Run command
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -171,12 +279,15 @@ export function SaveTemplatePanel({
     <>
       <div className="flex min-w-0 flex-col gap-3">
         <Field>
-          <FieldLabel htmlFor="cli-template-name">Template name</FieldLabel>
+          <FieldLabel variant="form" htmlFor="cli-template-name">
+            Template name
+          </FieldLabel>
           <Input
+            size="comfortable"
             id="cli-template-name"
             maxLength={80}
             value={name}
-            placeholder="e.g. Find stone textures (--jev)"
+            placeholder="Find stone textures"
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               stopCliInputHotkeyPropagation(e);
@@ -184,22 +295,28 @@ export function SaveTemplatePanel({
             }}
           />
           {trimmed.length >= 60 && (
-            <FieldDescription>{trimmed.length}/80 characters</FieldDescription>
+            <FieldDescription size="comfortable">{trimmed.length}/80 characters</FieldDescription>
           )}
         </Field>
 
         {supportsFilmTarget && (
           <Field>
-            <FieldLabel htmlFor="cli-template-target">Target film behavior</FieldLabel>
+            <FieldLabel variant="form" htmlFor="cli-template-target">
+              Run in
+            </FieldLabel>
             <Select
               items={targetItems}
               value={targetValue}
               onValueChange={(v) => v && setTargetValue(v)}
             >
-              <SelectTrigger id="cli-template-target" className="w-full">
+              <SelectTrigger size="comfortable" id="cli-template-target" className="w-full">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent onKeyDown={stopCliHotkeyPropagation}>
+              <SelectContent
+                finalFocus
+                className="[--text-ui:0.875rem]"
+                onKeyDown={stopCliHotkeyPropagation}
+              >
                 {targetItems.map((item) => (
                   <SelectItem key={item.value} value={item.value}>
                     {item.label}
@@ -207,15 +324,14 @@ export function SaveTemplatePanel({
                 ))}
               </SelectContent>
             </Select>
-            <FieldDescription>
-              Follow active film adapts to whichever film is open; pinned or root targets stay
-              fixed.
+            <FieldDescription size="comfortable">
+              Templates run in the current Studio project, or the repo root when supported.
             </FieldDescription>
           </Field>
         )}
 
         <div className="bg-backdrop border-hairline min-w-0 rounded-lg border p-2">
-          <pre className="text-tag text-muted-foreground max-h-24 overflow-auto font-mono break-all whitespace-pre-wrap">
+          <pre className="text-muted-foreground max-h-24 overflow-auto font-mono text-sm break-all whitespace-pre-wrap">
             {displayCommand}
           </pre>
         </div>
@@ -230,11 +346,12 @@ export function SaveTemplatePanel({
       </div>
 
       <DialogFooter>
-        <Button variant="ghost" disabled={saving} onClick={onClose}>
+        <Button size="comfortable" variant="ghost" disabled={saving} onClick={onClose}>
           Cancel
         </Button>
         {editingExisting && (
           <Button
+            size="comfortable"
             variant="secondary"
             disabled={!trimmed || saving}
             onClick={() => handleSubmit(true)}
@@ -242,8 +359,12 @@ export function SaveTemplatePanel({
             Save as new
           </Button>
         )}
-        <Button disabled={!trimmed || saving} onClick={() => handleSubmit(false)}>
-          {editingExisting ? "Update" : "Save template"}
+        <Button
+          size="comfortable"
+          disabled={!trimmed || saving}
+          onClick={() => handleSubmit(false)}
+        >
+          {editingExisting ? "Update template" : "Save template"}
         </Button>
       </DialogFooter>
     </>
@@ -252,13 +373,13 @@ export function SaveTemplatePanel({
 
 export function SaveTemplateForm(props: SaveTemplateFormProps) {
   return (
-    <DialogContent showCloseButton>
+    <DialogContent data-cli-dialog showCloseButton>
       <DialogHeader>
         <DialogTitle>
           {props.editingExisting ? "Save template changes" : "Save CLI template"}
         </DialogTitle>
-        <DialogDescription>
-          Save this exact command and flag preset for 1-click re-runs across sessions.
+        <DialogDescription variant="comfortable">
+          Keep this command and its options so you can run it again later.
         </DialogDescription>
       </DialogHeader>
 

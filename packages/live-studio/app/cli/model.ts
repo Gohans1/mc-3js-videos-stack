@@ -26,6 +26,7 @@ export interface CliCommandDraft {
   args: Record<string, CliArgValue>;
   flags: Record<string, CliArgValue>;
   env: Record<string, CliArgValue>;
+  pendingInputs: Record<string, string>;
 }
 
 export interface SelectOptionItem {
@@ -33,9 +34,48 @@ export interface SelectOptionItem {
   label: string;
 }
 
+export function asTokenArray(value: CliArgValue): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+export function resolvePendingInputs(command: CliCommand, draft: CliCommandDraft): CliCommandDraft {
+  if (!Object.keys(draft.pendingInputs).length) return draft;
+  const chain = resolveSubcommandChain(command, draft.subcommandPath);
+  const next: CliCommandDraft = {
+    ...draft,
+    args: { ...draft.args },
+    flags: { ...draft.flags },
+    env: { ...draft.env },
+    pendingInputs: {},
+  };
+  for (const [bucket, fields] of [
+    ["args", chain.argsDef],
+    ["flags", chain.flagsDef],
+    ["env", chain.envDef],
+  ] as const) {
+    for (const field of fields) {
+      const text = draft.pendingInputs[`${bucket}:${field.key}`];
+      if (!text?.trim() || (field.type !== "csv" && !("multi" in field && field.multi))) continue;
+      next[bucket][field.key] = commitMultiTokens(
+        text,
+        asTokenArray(draft[bucket][field.key]),
+        field.type === "csv",
+      );
+    }
+  }
+  return next;
+}
+
 export function createInitialDraft(
   command: CliCommand,
-  context?: CliContext | null,
+  _context?: CliContext | null,
 ): CliCommandDraft {
   const firstSub =
     command.subcommandRequired && command.subcommands?.length ? [command.subcommands[0]!.id] : [];
@@ -48,11 +88,7 @@ export function createInitialDraft(
   }
 
   const targetFilm =
-    command.cwdModes.length === 1 && command.cwdModes[0] === "root"
-      ? "root"
-      : context?.isDemo
-        ? (context.films[0] ?? "active")
-        : "active";
+    command.cwdModes.length === 1 && command.cwdModes[0] === "root" ? "root" : "active";
 
   const chain = resolveSubcommandChain(command, subcommandPath);
   const args: Record<string, CliArgValue> = {};
@@ -72,6 +108,7 @@ export function createInitialDraft(
     args,
     flags,
     env: {},
+    pendingInputs: {},
   };
 }
 
@@ -83,6 +120,7 @@ export function draftFromTemplate(template: CliTemplate, command: CliCommand): C
     args: { ...template.args },
     flags: { ...template.flags },
     env: { ...template.env },
+    pendingInputs: {},
   };
 }
 
@@ -157,6 +195,18 @@ export function isFieldValueActive(value: CliArgValue, optionalValue?: boolean):
   return true;
 }
 
+export function hasFieldValidationError(
+  def: Pick<CliArgDef | CliFlagDef | CliEnvDef, "key" | "label"> & { flag?: string },
+  errors: readonly string[],
+): boolean {
+  return errors.some(
+    (error) =>
+      error === `Missing required env: ${def.key}` ||
+      error.includes(def.label) ||
+      (def.flag !== undefined && error.includes(def.flag)),
+  );
+}
+
 export function setDraftFieldWithExclusiveClear(
   draft: CliCommandDraft,
   spec: Pick<ResolvedCliSpec, "argsDef" | "flagsDef" | "envDef">,
@@ -171,6 +221,7 @@ export function setDraftFieldWithExclusiveClear(
     args: { ...draft.args },
     flags: { ...draft.flags },
     env: { ...draft.env },
+    pendingInputs: { ...draft.pendingInputs },
   };
 
   if (value === undefined || value === false || (Array.isArray(value) && value.length === 0)) {
@@ -186,18 +237,21 @@ export function setDraftFieldWithExclusiveClear(
       if (def.exclusiveGroup === exclusiveGroup && !(bucket === "args" && def.key === key)) {
         if (isFieldValueActive(next.args[def.key])) cleared.push(def.label);
         delete next.args[def.key];
+        delete next.pendingInputs[`args:${def.key}`];
       }
     }
     for (const def of spec.flagsDef) {
       if (def.exclusiveGroup === exclusiveGroup && !(bucket === "flags" && def.key === key)) {
         if (isFieldValueActive(next.flags[def.key], def.optionalValue)) cleared.push(def.flag);
         delete next.flags[def.key];
+        delete next.pendingInputs[`flags:${def.key}`];
       }
     }
     for (const def of spec.envDef) {
       if (def.exclusiveGroup === exclusiveGroup && !(bucket === "env" && def.key === key)) {
         if (isFieldValueActive(next.env[def.key])) cleared.push(def.key);
         delete next.env[def.key];
+        delete next.pendingInputs[`env:${def.key}`];
       }
     }
   }
@@ -310,14 +364,8 @@ export function formatTargetBadgeText(
   packageDir?: string,
 ): string {
   if (cwdMode === "root") return packageDir || "repo root";
-  if (!targetFilm || targetFilm === "active" || targetFilm === "root") {
-    const resolved =
-      context?.activeFilm && (!context.isDemo || context.films.includes(context.activeFilm))
-        ? context.activeFilm
-        : context?.films[0];
-    return resolved ? `films/${resolved}` : "active film (none)";
-  }
-  return `films/${targetFilm}`;
+  const name = context?.activeFilm;
+  return name ? (context.isDemo ? name : `films/${name}`) : "Current project";
 }
 
 export function getCostLabel(meta: CliMeta): string {
@@ -334,22 +382,22 @@ export function getEffectLabel(effect: CliMeta["effect"]): string {
     case "write":
       return "Writes files";
     case "install":
-      return "Downloads / installs";
+      return "Downloads or installs";
     case "destructive":
-      return "Destructive / broad write";
+      return "Changes many files";
     case "daemon":
-      return "Long-lived server";
+      return "Runs a server";
   }
 }
 
 export function getSpeedLabel(speed: CliMeta["speed"]): string {
   switch (speed) {
     case "instant":
-      return "Instant";
+      return "Usually instant";
     case "short":
-      return "Short run";
+      return "Usually quick";
     case "long":
-      return "Slow / heavy";
+      return "May take a while";
   }
 }
 
@@ -378,27 +426,8 @@ export function resolveSaveTemplateTargets(opts: {
     return { items: [], defaultTarget: "root" };
   }
 
-  const items: SelectOptionItem[] = [{ value: "active", label: "Follow currently open film" }];
-  for (const f of opts.films) {
-    items.push({
-      value: f,
-      label: f === opts.activeFilm ? `Pin to "${f}" (active)` : `Pin to "${f}"`,
-    });
-  }
-  if (
-    opts.initialTargetFilm &&
-    opts.initialTargetFilm !== "active" &&
-    opts.initialTargetFilm !== "root" &&
-    !opts.films.includes(opts.initialTargetFilm)
-  ) {
-    items.push({
-      value: opts.initialTargetFilm,
-      label: `Pin to "${opts.initialTargetFilm}"`,
-    });
-  }
-  if (opts.supportsRootTarget) {
-    items.push({ value: "root", label: "Repo root (monorepo)" });
-  }
+  const items: SelectOptionItem[] = [{ value: "active", label: "Current Studio project" }];
+  if (opts.supportsRootTarget) items.push({ value: "root", label: "Repo root" });
 
   const defaultTarget = items.some((item) => item.value === opts.initialTargetFilm)
     ? opts.initialTargetFilm

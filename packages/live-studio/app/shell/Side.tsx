@@ -235,7 +235,7 @@ export function Library() {
   return (
     <aside
       aria-label="Library"
-      className="bg-background col-start-1 row-[1/-1] flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-lib-folded:hidden in-data-review:hidden"
+      className="bg-background col-start-1 row-[1/-1] flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-lib-folded:hidden in-data-review:hidden"
     >
       <Tabs.Root
         value={value}
@@ -580,7 +580,7 @@ export function Side({ wide }: { wide: boolean }) {
   return (
     <aside
       aria-label="Side panels"
-      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-review:hidden in-data-side-folded:hidden"
+      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-cli-side:row-span-3 in-data-review:hidden in-data-side-folded:hidden in-data-[cli-expanded=library]:hidden"
     >
       <Tabs.Root
         value={value}

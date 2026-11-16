@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Tip } from "@/components/Tip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 import type { CliRunSnapshot } from "../../src/cli-catalog.ts";
@@ -38,10 +39,25 @@ export function formatByteSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+export function CliRunAnnouncement({
+  run,
+  isStopping,
+}: {
+  run: CliRunSnapshot | null;
+  isStopping?: boolean;
+}) {
+  return (
+    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {run && <span>{run.commandId}: </span>}
+      <StatusBadge run={run} isStopping={isStopping} />
+    </div>
+  );
+}
+
 function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStopping?: boolean }) {
   if (!run) {
     return (
-      <Badge variant="tag">
+      <Badge appearance="text" size="comfortable" variant="tag">
         <Terminal aria-hidden />
         Ready
       </Badge>
@@ -49,7 +65,7 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
   }
   if (run.status === "running") {
     return (
-      <Badge variant={isStopping ? "check" : "open"}>
+      <Badge appearance="text" size="comfortable" variant={isStopping ? "check" : "open"}>
         <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
         {isStopping ? "Stopping…" : "Running"}
       </Badge>
@@ -57,7 +73,7 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
   }
   if (run.status === "stopped") {
     return (
-      <Badge variant="check">
+      <Badge appearance="text" size="comfortable" variant="check">
         <Square aria-hidden />
         Stopped{run.signal ? ` (${run.signal})` : ""}
       </Badge>
@@ -65,7 +81,7 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
   }
   if (run.status === "error") {
     return (
-      <Badge variant="destructive">
+      <Badge appearance="text" size="comfortable" variant="destructive">
         <XCircle aria-hidden />
         Failed
       </Badge>
@@ -73,7 +89,7 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
   }
   if (run.exitCode === 0) {
     return (
-      <Badge variant="done">
+      <Badge appearance="text" size="comfortable" variant="done">
         <CheckCircle2 aria-hidden />
         Exit 0
       </Badge>
@@ -81,14 +97,14 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
   }
   if (run.exitCode === 2) {
     return (
-      <Badge variant="check">
+      <Badge appearance="text" size="comfortable" variant="check">
         <AlertTriangle aria-hidden />
         Exit 2 · Usage
       </Badge>
     );
   }
   return (
-    <Badge variant="destructive">
+    <Badge appearance="text" size="comfortable" variant="destructive">
       <XCircle aria-hidden />
       Exit {run.exitCode ?? 1}
     </Badge>
@@ -109,25 +125,45 @@ export function CliRunCompactBadge({
 }) {
   if (run.status === "running") {
     return (
-      <Badge variant={isStopping ? "check" : "open"}>
+      <Badge appearance="text" size="comfortable" variant={isStopping ? "check" : "open"}>
         <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
         {isStopping ? (compact ? "Stopping" : "Stopping…") : compact ? "Live" : "Running"}
       </Badge>
     );
   }
   if (run.status === "stopped") {
-    return <Badge variant="check">Stopped</Badge>;
+    return (
+      <Badge appearance="text" size="comfortable" variant="check">
+        Stopped
+      </Badge>
+    );
   }
   if (run.status === "error") {
-    return <Badge variant="destructive">Failed</Badge>;
+    return (
+      <Badge appearance="text" size="comfortable" variant="destructive">
+        Failed
+      </Badge>
+    );
   }
   if (run.exitCode === 0) {
-    return <Badge variant="done">{donePrefix}Exit 0</Badge>;
+    return (
+      <Badge appearance="text" size="comfortable" variant="done">
+        {donePrefix}Exit 0
+      </Badge>
+    );
   }
   if (run.exitCode === 2) {
-    return <Badge variant="check">Exit 2</Badge>;
+    return (
+      <Badge appearance="text" size="comfortable" variant="check">
+        Exit 2
+      </Badge>
+    );
   }
-  return <Badge variant="destructive">Exit {run.exitCode ?? 1}</Badge>;
+  return (
+    <Badge appearance="text" size="comfortable" variant="destructive">
+      Exit {run.exitCode ?? 1}
+    </Badge>
+  );
 }
 
 export function buildVerbatimCopyText(run: CliRunSnapshot | null): string {
@@ -140,6 +176,7 @@ export function CliConsole({
   run,
   expanded,
   compact = false,
+  showHeading = false,
   isStopping = false,
   outputsHint,
   onToggleExpand,
@@ -149,6 +186,7 @@ export function CliConsole({
   run: CliRunSnapshot | null;
   expanded: boolean;
   compact?: boolean;
+  showHeading?: boolean;
   isStopping?: boolean;
   outputsHint?: string;
   onToggleExpand: () => void;
@@ -224,9 +262,15 @@ export function CliConsole({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast.add({ title: "Output copied", timeout: 5000 });
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard unavailable in restricted browser context; ignore cleanly
+      setCopied(false);
+      toast.add({
+        title: "Could not copy output",
+        description: "Allow clipboard access in your browser, then try again.",
+        timeout: 0,
+      });
     }
   };
 
@@ -242,22 +286,29 @@ export function CliConsole({
     >
       <div className="border-hairline flex min-w-0 flex-wrap items-center justify-between gap-1.5 border-b px-2.5 py-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {showHeading && (
+            <h3 className="text-heading-foreground mr-1 text-base font-semibold">Output</h3>
+          )}
           <StatusBadge run={run} isStopping={isStopping} />
           {run && (
-            <span className="text-tag text-muted-foreground font-mono tabular-nums">
+            <span className="text-muted-foreground font-mono text-sm tabular-nums">
               {formatDurationMs(elapsedMs)}
             </span>
           )}
           {byteLength > 0 && (
-            <span className="text-tag text-muted-foreground font-mono tabular-nums">
+            <span className="text-muted-foreground font-mono text-sm tabular-nums">
               {formatByteSize(byteLength)}
             </span>
           )}
-          {run?.truncated && <Badge variant="claim">2 MB cap</Badge>}
+          {run?.truncated && (
+            <Badge appearance="text" size="comfortable" variant="claim">
+              2 MB cap
+            </Badge>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isRunning && (
-            <Button variant="destructive" size="xs" disabled={isStopping} onClick={onStop}>
+            <Button variant="destructive" size="comfortable" disabled={isStopping} onClick={onStop}>
               {isStopping ? (
                 <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
               ) : (
@@ -266,10 +317,10 @@ export function CliConsole({
               {isStopping ? "Stopping…" : "Stop"}
             </Button>
           )}
-          <Tip label={wrap ? "Disable line wrap" : "Wrap long lines"}>
+          <Tip label={wrap ? "Turn off line wrap" : "Wrap long lines"}>
             <Button
               variant="quiet"
-              size="icon-xs"
+              size="icon-lg"
               aria-label={wrap ? "Disable line wrap" : "Wrap long lines"}
               aria-pressed={wrap}
               onClick={() => setWrap((w) => !w)}
@@ -280,7 +331,7 @@ export function CliConsole({
           <Tip label={copied ? "Copied output" : "Copy verbatim output"}>
             <Button
               variant="ghost"
-              size="icon-xs"
+              size="icon-lg"
               aria-label="Copy verbatim output"
               disabled={!hasText}
               onClick={copyOutput}
@@ -291,7 +342,7 @@ export function CliConsole({
           <Tip label={expanded ? "Restore builder" : "Expand output"}>
             <Button
               variant="quiet"
-              size="icon-xs"
+              size="icon-lg"
               aria-label={expanded ? "Restore builder" : "Expand output"}
               aria-pressed={expanded}
               onClick={onToggleExpand}
@@ -302,7 +353,7 @@ export function CliConsole({
           <Tip label="Clear output">
             <Button
               variant="ghost"
-              size="icon-xs"
+              size="icon-lg"
               aria-label="Clear output"
               disabled={!run || isRunning}
               onClick={onClear}
@@ -316,33 +367,38 @@ export function CliConsole({
       {run && (
         <div className="bg-surface-subtle border-hairline-subtle flex min-w-0 items-center justify-between gap-2 border-b px-2.5 py-1">
           <span
-            className="text-tag text-muted-foreground min-w-0 truncate font-mono"
+            className="text-muted-foreground min-w-0 truncate font-mono text-sm"
             title={run.cwd}
           >
-            cwd: {run.cwd}
+            Runs in: {run.cwd}
           </span>
-          {run.mode === "help" && <Badge variant="tag">--help</Badge>}
+          {run.mode === "help" && (
+            <Badge appearance="text" size="comfortable" variant="tag">
+              --help
+            </Badge>
+          )}
         </div>
       )}
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         {!run ? (
-          <div className="text-ui text-muted-foreground flex flex-1 flex-col items-center justify-center gap-1 p-4 text-center">
-            <p className="text-foreground/80 font-medium">No output captured yet</p>
-            <p className="text-tag text-muted-foreground max-w-[30ch]">
-              Run this command or click Help to see the exact non-TTY stdout/stderr the AI sees.
+          <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-1 p-4 text-center text-sm">
+            <p className="text-foreground/80 font-medium">Command output appears here</p>
+            <p className="text-muted-foreground max-w-[30ch] text-sm">
+              Run a command to see the same output the AI receives.
             </p>
           </div>
         ) : (
           <pre
             ref={preRef}
+            data-cli-output
             role="region"
             tabIndex={0}
             data-arrow-scroll
             aria-label="Verbatim command output"
             onScroll={handleScroll}
             className={cn(
-              "bg-backdrop text-tag focus-visible:ring-ring min-h-0 flex-1 overflow-auto p-2.5 font-mono leading-relaxed outline-none focus-visible:ring-2",
+              "bg-backdrop focus-visible:ring-ring min-h-0 flex-1 overflow-auto p-2.5 font-mono text-sm leading-relaxed outline-none focus-visible:ring-2",
               wrap ? "wrap-break-word whitespace-pre-wrap" : "whitespace-pre",
             )}
           >
@@ -353,7 +409,7 @@ export function CliConsole({
                 <span className="text-destructive">{run.error}</span>
               ) : (
                 <span className="text-muted-foreground">
-                  (Command finished with empty stdout/stderr)
+                  Command finished without printing output.
                 </span>
               )
             ) : (
@@ -376,7 +432,7 @@ export function CliConsole({
           <div className="pointer-events-none absolute right-2 bottom-2">
             <Button
               variant="secondary"
-              size="xs"
+              size="comfortable"
               className="pointer-events-auto"
               onClick={jumpToBottom}
             >
@@ -391,7 +447,7 @@ export function CliConsole({
         <div className="border-hairline flex min-w-0 items-center justify-between gap-2 border-t px-2.5 py-1.5">
           <span
             title={outputsHint}
-            className="text-tag text-muted-foreground min-w-0 flex-1 truncate"
+            className="text-muted-foreground min-w-0 flex-1 text-sm leading-normal"
           >
             {outputsHint}
           </span>

@@ -1,22 +1,39 @@
 import {
-  CheckCircle2,
   Clock,
   Coins,
   Download,
   Eye,
-  FolderGit2,
   KeyRound,
   Pencil,
   Server,
   ShieldAlert,
-  Square,
   TriangleAlert,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 
 import type { CliEnvKey, CliMeta } from "../../src/cli-catalog.ts";
-import { getCostLabel, getEffectLabel, getSpeedLabel } from "./model";
+import { getEffectLabel, getSpeedLabel } from "./model";
+
+const effectTones: Record<CliMeta["effect"], string> = {
+  read: "text-ok-text",
+  write: "text-warn-text",
+  install: "text-warn-text",
+  destructive: "text-destructive",
+  daemon: "text-foreground",
+};
+
+export function CliAccessLabel({ effect }: { effect: CliMeta["effect"] }) {
+  return <span className={effectTones[effect]}>{getEffectLabel(effect)}</span>;
+}
+
+export function CliCostLabel({ cost }: { cost: CliMeta["cost"] }) {
+  return (
+    <span className={cost === "free" ? "text-ok-text" : "text-warn-text"}>
+      {cost === "free" ? "Free local" : cost === "paid" ? "Paid API" : "Paid options"}
+    </span>
+  );
+}
 
 export function CliHazardBadges({
   meta,
@@ -35,7 +52,7 @@ export function CliHazardBadges({
 
   if (!showGuarded && !showPaid && !showEffect && !showSpeed && !hasMissing) {
     return compact ? null : (
-      <Badge variant="tag">
+      <Badge appearance="text" size="comfortable" variant="tag">
         <Eye aria-hidden />
         Read
       </Badge>
@@ -45,49 +62,49 @@ export function CliHazardBadges({
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
       {showGuarded && (
-        <Badge variant="claim">
+        <Badge appearance="text" size="comfortable" variant="claim">
           <ShieldAlert aria-hidden />
           Guarded
         </Badge>
       )}
       {showPaid && (
-        <Badge variant="check">
+        <Badge appearance="text" size="comfortable" variant="check">
           <Coins aria-hidden />
           {meta.cost === "paid" ? "Paid" : "Optional $"}
         </Badge>
       )}
       {hasMissing && (
-        <Badge variant="destructive">
+        <Badge appearance="text" size="comfortable" variant="destructive">
           <KeyRound aria-hidden />
           Missing key
         </Badge>
       )}
       {meta.effect === "destructive" && (
-        <Badge variant="destructive">
+        <Badge appearance="text" size="comfortable" variant="destructive">
           <TriangleAlert aria-hidden />
           Destructive
         </Badge>
       )}
       {meta.effect === "install" && (
-        <Badge variant="open">
+        <Badge appearance="text" size="comfortable" variant="open">
           <Download aria-hidden />
           Install
         </Badge>
       )}
       {meta.effect === "write" && (
-        <Badge variant="tag">
+        <Badge appearance="text" size="comfortable" variant="tag">
           <Pencil aria-hidden />
           Writes
         </Badge>
       )}
       {meta.effect === "daemon" && !showGuarded && (
-        <Badge variant="open">
+        <Badge appearance="text" size="comfortable" variant="open">
           <Server aria-hidden />
           Server
         </Badge>
       )}
       {showSpeed && (
-        <Badge variant="tag">
+        <Badge appearance="text" size="comfortable" variant="tag">
           <Clock aria-hidden />
           Slow
         </Badge>
@@ -96,110 +113,63 @@ export function CliHazardBadges({
   );
 }
 
-function getCancelBadge(meta: CliMeta): { variant: "tag" | "claim"; label: string } {
-  if (meta.cancellable) return { variant: "tag", label: "Stoppable" };
-  if (meta.effect === "read") return { variant: "tag", label: "Finishes cleanly" };
-  if (meta.effect === "daemon") return { variant: "tag", label: "Server · Stop closes" };
-  return { variant: "claim", label: "Kills process · side effects persist" };
-}
-
 export function CliBehaviorStrip({
   meta,
   targetLabel,
   missingEnvGroups,
-  compact = false,
 }: {
   meta: CliMeta;
   targetLabel: string;
   missingEnvGroups: readonly (readonly CliEnvKey[])[];
-  compact?: boolean;
 }) {
-  const effectIcon =
-    meta.effect === "destructive" ? (
-      <TriangleAlert aria-hidden />
-    ) : meta.effect === "install" ? (
-      <Download aria-hidden />
-    ) : meta.effect === "write" ? (
-      <Pencil aria-hidden />
-    ) : meta.effect === "daemon" ? (
-      <Server aria-hidden />
-    ) : (
-      <Eye aria-hidden />
-    );
-
-  const effectVariant =
-    meta.effect === "destructive"
-      ? "destructive"
-      : meta.effect === "install"
-        ? "open"
-        : meta.effect === "write"
-          ? "check"
-          : "tag";
-
-  const costVariant = meta.cost === "free" ? "done" : "check";
-
-  const costBadgeText =
-    meta.cost === "free"
-      ? "Free local"
-      : meta.costHint && meta.costHint.length <= 28
-        ? getCostLabel(meta)
-        : meta.cost === "paid"
-          ? "Paid API"
-          : "Optional paid";
-  const showCostDetail = Boolean(meta.costHint && meta.costHint.length > 28);
-  const cancelBadge = getCancelBadge(meta);
-
+  const writesFiles =
+    meta.effect === "write" || meta.effect === "install" || meta.effect === "destructive";
   return (
-    <div
-      aria-label="Command behavior and safety indicators"
-      className={`bg-card border-hairline flex min-w-0 flex-col border ${
-        compact ? "gap-1 rounded-lg p-1.5" : "gap-1.5 rounded-xl p-2"
-      }`}
-    >
-      <div className={`flex min-w-0 flex-wrap items-center ${compact ? "gap-1" : "gap-1.5"}`}>
-        <Badge variant={effectVariant}>
-          {effectIcon}
-          {getEffectLabel(meta.effect)}
-        </Badge>
-
-        <Badge variant={costVariant} title={meta.costHint}>
-          {meta.cost === "free" ? <CheckCircle2 aria-hidden /> : <Coins aria-hidden />}
-          {costBadgeText}
-        </Badge>
-
-        <Badge variant={meta.speed === "long" ? "check" : "tag"}>
-          <Clock aria-hidden />
-          {getSpeedLabel(meta.speed)}
-        </Badge>
-
-        <Badge variant={cancelBadge.variant}>
-          <Square aria-hidden />
-          {cancelBadge.label}
-        </Badge>
-
-        <Badge variant="tag" title={targetLabel} className="max-w-full min-w-0">
-          <FolderGit2 aria-hidden className="shrink-0" />
-          <span className="min-w-0 truncate">{targetLabel}</span>
-        </Badge>
-
-        {missingEnvGroups.length > 0 && (
-          <Badge variant="destructive">
-            <KeyRound aria-hidden />
-            Need {missingEnvGroups.map((g) => g.join(" or ")).join(" + ")}
-          </Badge>
-        )}
-      </div>
-
-      {showCostDetail && (
-        <p
-          title={meta.costHint}
-          className={`text-tag text-muted-foreground min-w-0 ${
-            compact ? "truncate leading-tight" : "leading-snug"
-          }`}
-        >
+    <section aria-label="Command details" className="border-hairline min-w-0 border-b pb-3">
+      <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 text-sm leading-normal">
+        <div>
+          <dt className="text-muted-foreground text-ui">Access</dt>
+          <dd className="font-medium">
+            <CliAccessLabel effect={meta.effect} />
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground text-ui">Cost</dt>
+          <dd className="font-medium">
+            <CliCostLabel cost={meta.cost} />
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground text-ui">Time</dt>
+          <dd className="text-foreground">{getSpeedLabel(meta.speed)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground text-ui">When stopped</dt>
+          <dd className="text-foreground">
+            {meta.effect === "daemon" ? "Server closes" : "Process ends"}
+          </dd>
+        </div>
+        <div className="col-span-2 min-w-0">
+          <dt className="text-muted-foreground text-ui">Runs in</dt>
+          <dd className="text-foreground font-mono break-words">{targetLabel}</dd>
+        </div>
+      </dl>
+      {writesFiles && (
+        <p className="text-muted-foreground mt-2 text-sm leading-normal">
+          Stopping does not undo saved changes.
+        </p>
+      )}
+      {meta.costHint && (
+        <p className="text-muted-foreground mt-2 text-sm leading-normal" title={meta.costHint}>
           {meta.costHint}
         </p>
       )}
-    </div>
+      {missingEnvGroups.length > 0 && (
+        <p className="text-warn-text mt-2 text-sm leading-normal">
+          Add {missingEnvGroups.map((group) => group.join(" or ")).join(" and ")} before running
+          paid options.
+        </p>
+      )}
+    </section>
   );
 }

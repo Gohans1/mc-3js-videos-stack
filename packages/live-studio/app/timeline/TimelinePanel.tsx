@@ -91,7 +91,7 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
     <div
       ref={bind("timeline")}
       className={cn(
-        "bg-background upright:mt-0 sideways:mt-0 relative col-[1/-1] row-start-3 mt-1.5 h-[min(var(--edit-h,max(20rem,42dvh)),var(--edit-max,calc(100dvh-220px)))] min-h-0 min-w-0 overflow-hidden rounded-lg select-none in-data-edit-folded:hidden in-data-review:hidden in-data-wide:col-[2/-1]",
+        "bg-background upright:mt-0 sideways:mt-0 relative col-[1/-1] row-start-3 mt-1.5 h-[min(var(--edit-h,max(20rem,42dvh)),var(--edit-max,calc(100dvh-220px)))] min-h-0 min-w-0 overflow-hidden rounded-lg select-none in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-edit-folded:hidden in-data-review:hidden in-data-wide:col-[2/-1]",
         "upright:h-auto upright:flex-none upright:overflow-visible upright:rounded-none sideways:col-[1] sideways:h-auto sideways:rounded-none",
       )}
     >

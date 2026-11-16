@@ -1,17 +1,19 @@
 import {
   ArrowLeft,
   BookmarkPlus,
+  BookOpen,
   ChevronDown,
-  HelpCircle,
   KeyRound,
   Loader2,
   Play,
   ShieldAlert,
   Square,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Segmented } from "@/components/inspector";
+import { TabStage } from "@/components/Motion";
+import { Tip } from "@/components/Tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,12 +32,18 @@ import {
   isFieldRequired,
   isFieldVisible,
 } from "../../src/cli-catalog.ts";
-import { CliBehaviorStrip } from "./CliBadges";
-import { CliConsole, CliRunCompactBadge } from "./CliConsole";
-import type { CliConfirmRequest } from "./CliDialogs";
+import { CliAccessLabel, CliBehaviorStrip, CliCostLabel } from "./CliBadges";
+import { CliConsole } from "./CliConsole";
+import { type CliConfirmRequest, CliHelpDialog } from "./CliDialogs";
 import { CliFieldControl } from "./CliFieldControl";
 import { CliLegoBar } from "./CliLegoBar";
-import { type CliCommandDraft, formatTargetBadgeText, isFieldValueActive } from "./model";
+import {
+  type CliCommandDraft,
+  formatTargetBadgeText,
+  hasFieldValidationError,
+  isFieldValueActive,
+  resolvePendingInputs,
+} from "./model";
 
 export type CliCompactTab = "builder" | "output";
 
@@ -51,17 +59,20 @@ export function nextCompactTabForChange(input: {
   if (input.focusConsoleRunId && input.nextRunId === input.focusConsoleRunId) {
     return { nextTab: "output", consumeFocus: true };
   }
-  if (input.nextRunId && input.nextRunId !== input.prevRunId) {
-    return { nextTab: "output", consumeFocus: false };
-  }
   if (input.prevScopeKey !== input.nextScopeKey) {
     return { nextTab: "builder", consumeFocus: false };
+  }
+  if (input.nextRunId && input.nextRunId !== input.prevRunId) {
+    return { nextTab: "output", consumeFocus: false };
   }
   return { nextTab: input.currentTab, consumeFocus: false };
 }
 
 export function CliWorkbench({
   catalog,
+  panelControls,
+  helpOpen,
+  onHelpOpenChange,
   command,
   draft,
   editingTemplateName,
@@ -70,7 +81,6 @@ export function CliWorkbench({
   stoppingRunId = null,
   consoleExpanded,
   focusConsoleRunId = null,
-  initialCompact = false,
   submittingRun,
   runError,
   clearedHint,
@@ -80,7 +90,7 @@ export function CliWorkbench({
   onSelectSubcommand,
   onSelectTargetFilm,
   onUpdateField,
-  onRemoveToken,
+  onUpdatePendingInput,
   onReset,
   onRun,
   onStopRun,
@@ -90,6 +100,9 @@ export function CliWorkbench({
   onOpenSaveTemplate,
 }: {
   catalog: CliCatalogResponse;
+  panelControls?: ReactNode;
+  helpOpen: boolean;
+  onHelpOpenChange: (open: boolean) => void;
   command: CliCommand;
   draft: CliCommandDraft;
   editingTemplateName: string | null;
@@ -98,7 +111,6 @@ export function CliWorkbench({
   stoppingRunId?: string | null;
   consoleExpanded: boolean;
   focusConsoleRunId?: string | null;
-  initialCompact?: boolean;
   submittingRun: boolean;
   runError: string | null;
   clearedHint: string | null;
@@ -115,8 +127,8 @@ export function CliWorkbench({
     exclusiveGroup?: string,
     optionalValue?: boolean,
   ) => void;
-  onRemoveToken: (bucket: "args" | "flags" | "env", key: string) => void;
   onReset: () => void;
+  onUpdatePendingInput: (key: string, value: string) => void;
   onRun: (request: CliRunRequest, confirmMeta?: CliConfirmRequest) => void;
   onStopRun: (runId: string) => void;
   onClearConsole: () => void;
@@ -125,19 +137,26 @@ export function CliWorkbench({
   onOpenSaveTemplate: () => void;
 }) {
   const [openDrawerKey, setOpenDrawerKey] = useState<string | null>(null);
-  const [compactPane, setCompactPane] = useState(initialCompact);
+  const [widePane, setWidePane] = useState(false);
   const validationErrorId = useId();
+  const [validationScopeKey, setValidationScopeKey] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const guideButtonRef = useRef<HTMLButtonElement>(null);
   const subPathKey = draft.subcommandPath.join("/");
   const drawerScopeKey = `${command.id}:${subPathKey}`;
+  const validationAttempted = validationScopeKey === drawerScopeKey;
   const moreOpen = openDrawerKey === drawerScopeKey;
+  const pendingInput = (bucket: "args" | "flags" | "env", key: string) => ({
+    value: draft.pendingInputs[`${bucket}:${key}`] ?? "",
+    onChange: (value: string) => onUpdatePendingInput(`${bucket}:${key}`, value),
+  });
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const measure = () => {
-      const next = el.getBoundingClientRect().height < 580;
-      setCompactPane((prev) => (prev === next ? prev : next));
+      const next = el.getBoundingClientRect().width >= 832;
+      setWidePane((prev) => (prev === next ? prev : next));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -145,21 +164,22 @@ export function CliWorkbench({
     return () => ro.disconnect();
   }, []);
 
+  const effectiveDraft = useMemo(() => resolvePendingInputs(command, draft), [command, draft]);
   const spec = useMemo(
     () =>
       buildCliInvocation(
         {
           commandId: command.id,
           subcommandPath: draft.subcommandPath,
-          args: draft.args,
-          flags: draft.flags,
-          env: draft.env,
+          args: effectiveDraft.args,
+          flags: effectiveDraft.flags,
+          env: effectiveDraft.env,
           targetFilm: draft.targetFilm,
           mode: "execute",
         },
         catalog.context,
       ),
-    [command.id, draft, catalog.context],
+    [command.id, draft.subcommandPath, draft.targetFilm, effectiveDraft, catalog.context],
   );
 
   const helpSpec = useMemo(
@@ -177,8 +197,8 @@ export function CliWorkbench({
   );
 
   const combinedValues = useMemo<Record<string, CliArgValue>>(
-    () => ({ ...draft.args, ...draft.flags, ...draft.env }),
-    [draft.args, draft.flags, draft.env],
+    () => ({ ...effectiveDraft.args, ...effectiveDraft.flags, ...effectiveDraft.env }),
+    [effectiveDraft],
   );
 
   const visibleArgs = useMemo(
@@ -189,22 +209,24 @@ export function CliWorkbench({
     () => spec.envDef.filter((e) => isFieldVisible(e.visibleWhen, combinedValues)),
     [spec.envDef, combinedValues],
   );
-  const visibleFlags = useMemo(
-    () => spec.flagsDef.filter((f) => isFieldVisible(f.visibleWhen, combinedValues)),
-    [spec.flagsDef, combinedValues],
-  );
   const commonFlags = useMemo(
-    () => visibleFlags.filter((f) => f.tier !== "advanced"),
-    [visibleFlags],
+    () => spec.flagsDef.filter((f) => f.tier !== "advanced"),
+    [spec.flagsDef],
   );
   const advancedFlags = useMemo(
-    () => visibleFlags.filter((f) => f.tier === "advanced"),
-    [visibleFlags],
+    () => spec.flagsDef.filter((f) => f.tier === "advanced"),
+    [spec.flagsDef],
+  );
+  const availableAdvancedFlags = useMemo(
+    () => advancedFlags.filter((field) => isFieldVisible(field.visibleWhen, combinedValues)),
+    [advancedFlags, combinedValues],
   );
   const activeAdvancedCount = useMemo(
     () =>
-      advancedFlags.filter((f) => isFieldValueActive(draft.flags[f.key], f.optionalValue)).length,
-    [advancedFlags, draft.flags],
+      availableAdvancedFlags.filter((f) =>
+        isFieldValueActive(effectiveDraft.flags[f.key], f.optionalValue),
+      ).length,
+    [availableAdvancedFlags, effectiveDraft.flags],
   );
 
   const consoleRun = useMemo(() => {
@@ -232,16 +254,28 @@ export function CliWorkbench({
     prevScopeRef.current = drawerScopeKey;
     if (decision.nextTab !== compactTab) {
       setCompactTab(decision.nextTab);
+      if (!widePane && decision.nextTab === "output") {
+        requestAnimationFrame(() =>
+          containerRef.current
+            ?.querySelector<HTMLElement>("[data-cli-output]")
+            ?.focus({ preventScroll: true }),
+        );
+      }
     }
     if (decision.consumeFocus) {
       onConsumeFocusRun?.();
     }
-  }, [compactTab, consoleRun?.runId, drawerScopeKey, focusConsoleRunId, onConsumeFocusRun]);
+  }, [
+    compactTab,
+    consoleRun?.runId,
+    drawerScopeKey,
+    focusConsoleRunId,
+    onConsumeFocusRun,
+    widePane,
+  ]);
 
-  const thisRunActive = activeRun?.commandId === command.id;
   const otherRunActive = Boolean(activeRun && activeRun.commandId !== command.id);
   const isStoppingThis = Boolean(activeRun && stoppingRunId === activeRun.runId);
-  const isStoppingOther = Boolean(otherRunActive && activeRun && stoppingRunId === activeRun.runId);
   const isStoppingConsole = Boolean(consoleRun && stoppingRunId === consoleRun.runId);
   const targetLabel = formatTargetBadgeText(
     spec.cwdMode,
@@ -252,8 +286,7 @@ export function CliWorkbench({
   const activeLeaf = spec.subcommands.at(-1);
   const activeSummary = activeLeaf?.summary ?? command.summary;
 
-  const canRun =
-    !submittingRun && !activeRun && !spec.guardReason && spec.validationErrors.length === 0;
+  const canRun = !submittingRun && !activeRun && !spec.guardReason;
   const canHelp =
     spec.meta.helpMode !== "none" &&
     !submittingRun &&
@@ -261,12 +294,27 @@ export function CliWorkbench({
     helpSpec.validationErrors.length === 0;
 
   const triggerExecute = () => {
+    if (spec.validationErrors.length) {
+      setValidationScopeKey(drawerScopeKey);
+      setCompactTab("builder");
+      if (
+        availableAdvancedFlags.some((field) =>
+          hasFieldValidationError(field, spec.validationErrors),
+        )
+      ) {
+        setOpenDrawerKey(drawerScopeKey);
+      }
+      requestAnimationFrame(() =>
+        containerRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+      );
+      return;
+    }
     const req: CliRunRequest = {
       commandId: command.id,
       subcommandPath: draft.subcommandPath,
-      args: draft.args,
-      flags: draft.flags,
-      env: draft.env,
+      args: effectiveDraft.args,
+      flags: effectiveDraft.flags,
+      env: effectiveDraft.env,
       targetFilm: draft.targetFilm,
       mode: "execute",
     };
@@ -296,7 +344,7 @@ export function CliWorkbench({
   };
 
   const noFieldsAtAll =
-    visibleArgs.length === 0 && visibleEnv.length === 0 && visibleFlags.length === 0;
+    spec.argsDef.length === 0 && spec.envDef.length === 0 && spec.flagsDef.length === 0;
 
   const legoBar = (
     <CliLegoBar
@@ -310,23 +358,15 @@ export function CliWorkbench({
       onSelectCommand={onSelectCommand}
       onSelectSubcommand={onSelectSubcommand}
       onSelectTargetFilm={onSelectTargetFilm}
-      onRemoveToken={onRemoveToken}
       onReset={onReset}
     />
   );
 
   const builderFieldsContent = (
     <>
-      {compactPane && legoBar}
+      {legoBar}
 
-      <p className="text-tag text-muted-foreground px-1">{activeSummary}</p>
-
-      <CliBehaviorStrip
-        meta={spec.meta}
-        targetLabel={targetLabel}
-        missingEnvGroups={spec.missingEnvGroups}
-        compact={compactPane}
-      />
+      <p className="text-label px-1 text-sm leading-normal">{activeSummary}</p>
 
       {spec.guardReason && (
         <Alert variant="warn">
@@ -334,7 +374,7 @@ export function CliWorkbench({
           <AlertTitle>Guarded in Studio</AlertTitle>
           <AlertDescription>
             {spec.guardReason}
-            {spec.meta.helpMode !== "none" ? " Help (-h) remains safe to inspect." : ""}
+            {spec.meta.helpMode !== "none" ? " Open Command guide for available options." : ""}
           </AlertDescription>
         </Alert>
       )}
@@ -353,57 +393,96 @@ export function CliWorkbench({
       {clearedHint && <Callout variant="ok">{clearedHint}</Callout>}
 
       {noFieldsAtAll ? (
-        <p className="bg-card border-hairline text-tag text-muted-foreground rounded-xl border px-3 py-2">
-          No extra arguments or flags for this command — ready to run directly.
+        <p className="bg-card border-hairline text-muted-foreground rounded-xl border px-3 py-2 text-sm">
+          This command needs no extra options. Select Run command to start it.
         </p>
       ) : (
         <div key={`${command.id}:${subPathKey}`} className="flex min-w-0 flex-col gap-2.5">
-          {visibleArgs.length > 0 && (
-            <section aria-label="Positional arguments" className="flex min-w-0 flex-col gap-1.5">
-              <h4 className="text-ui px-1 font-semibold">Arguments</h4>
-              <div className="bg-card border-hairline flex min-w-0 flex-col gap-3 rounded-xl border p-2.5">
-                {visibleArgs.map((arg) => (
-                  <CliFieldControl
-                    key={`${command.id}:${subPathKey}:arg:${arg.key}`}
-                    def={arg}
-                    value={draft.args[arg.key] ?? arg.default}
-                    context={catalog.context}
-                    requiredOverride={isFieldRequired(arg, combinedValues)}
-                    onChange={(v) => onUpdateField("args", arg.key, v, spec, arg.exclusiveGroup)}
-                  />
-                ))}
-              </div>
-            </section>
+          {spec.argsDef.length > 0 && (
+            <Collapsible open={visibleArgs.length > 0}>
+              <CollapsibleContent variant="reveal">
+                <section
+                  aria-label="Positional arguments"
+                  className="flex min-w-0 flex-col gap-1.5"
+                >
+                  <h3 className="text-heading-foreground px-1 text-base font-semibold">
+                    Arguments
+                  </h3>
+                  <div className="bg-card border-hairline grid min-w-0 grid-cols-1 gap-4 rounded-xl border p-3 @min-[480px]/cli-form:grid-cols-2">
+                    {spec.argsDef.map((arg) => (
+                      <CliFieldControl
+                        key={`${command.id}:${subPathKey}:arg:${arg.key}`}
+                        def={arg}
+                        pendingInput={pendingInput("args", arg.key)}
+                        invalid={
+                          validationAttempted && hasFieldValidationError(arg, spec.validationErrors)
+                        }
+                        errorId={validationErrorId}
+                        visible={isFieldVisible(arg.visibleWhen, combinedValues)}
+                        value={draft.args[arg.key] ?? arg.default}
+                        context={catalog.context}
+                        requiredOverride={isFieldRequired(arg, combinedValues)}
+                        onChange={(v) =>
+                          onUpdateField("args", arg.key, v, spec, arg.exclusiveGroup)
+                        }
+                      />
+                    ))}
+                  </div>
+                </section>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
-          {visibleEnv.length > 0 && (
-            <section aria-label="Environment overrides" className="flex min-w-0 flex-col gap-1.5">
-              <h4 className="text-ui px-1 font-semibold">Environment overrides</h4>
-              <div className="bg-card border-hairline flex min-w-0 flex-col gap-3 rounded-xl border p-2.5">
-                {visibleEnv.map((envDef) => (
-                  <CliFieldControl
-                    key={`${command.id}:${subPathKey}:env:${envDef.key}`}
-                    def={envDef}
-                    value={draft.env[envDef.key]}
-                    context={catalog.context}
-                    requiredOverride={isFieldRequired(envDef, combinedValues)}
-                    onChange={(v) =>
-                      onUpdateField("env", envDef.key, v, spec, envDef.exclusiveGroup)
-                    }
-                  />
-                ))}
-              </div>
-            </section>
+          {spec.envDef.length > 0 && (
+            <Collapsible open={visibleEnv.length > 0}>
+              <CollapsibleContent variant="reveal">
+                <section
+                  aria-label="Environment overrides"
+                  className="flex min-w-0 flex-col gap-1.5"
+                >
+                  <h3 className="text-heading-foreground px-1 text-base font-semibold">
+                    Environment overrides
+                  </h3>
+                  <div className="bg-card border-hairline grid min-w-0 grid-cols-1 gap-4 rounded-xl border p-3 @min-[480px]/cli-form:grid-cols-2">
+                    {spec.envDef.map((envDef) => (
+                      <CliFieldControl
+                        key={`${command.id}:${subPathKey}:env:${envDef.key}`}
+                        def={envDef}
+                        pendingInput={pendingInput("env", envDef.key)}
+                        invalid={
+                          validationAttempted &&
+                          hasFieldValidationError(envDef, spec.validationErrors)
+                        }
+                        errorId={validationErrorId}
+                        visible={isFieldVisible(envDef.visibleWhen, combinedValues)}
+                        value={draft.env[envDef.key]}
+                        context={catalog.context}
+                        requiredOverride={isFieldRequired(envDef, combinedValues)}
+                        onChange={(v) =>
+                          onUpdateField("env", envDef.key, v, spec, envDef.exclusiveGroup)
+                        }
+                      />
+                    ))}
+                  </div>
+                </section>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {commonFlags.length > 0 && (
             <section aria-label="Options" className="flex min-w-0 flex-col gap-1.5">
-              <h4 className="text-ui px-1 font-semibold">Options</h4>
-              <div className="bg-card border-hairline flex min-w-0 flex-col gap-3 rounded-xl border p-2.5">
+              <h3 className="text-heading-foreground px-1 text-base font-semibold">Options</h3>
+              <div className="bg-card border-hairline grid min-w-0 grid-cols-1 gap-4 rounded-xl border p-3 @min-[480px]/cli-form:grid-cols-2">
                 {commonFlags.map((flag) => (
                   <CliFieldControl
                     key={`${command.id}:${subPathKey}:flag:${flag.key}`}
                     def={flag}
+                    pendingInput={pendingInput("flags", flag.key)}
+                    invalid={
+                      validationAttempted && hasFieldValidationError(flag, spec.validationErrors)
+                    }
+                    errorId={validationErrorId}
+                    visible={isFieldVisible(flag.visibleWhen, combinedValues)}
                     value={draft.flags[flag.key]}
                     context={catalog.context}
                     requiredOverride={isFieldRequired(flag, combinedValues)}
@@ -433,17 +512,19 @@ export function CliWorkbench({
                   render={
                     <button
                       type="button"
-                      aria-label={`More options (${advancedFlags.length})`}
+                      aria-label={`More options (${availableAdvancedFlags.length})`}
                       className="focus-visible:ring-ring flex w-full min-w-0 items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left outline-none focus-visible:ring-2 pointer-coarse:min-h-10"
                     />
                   }
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="text-ui font-semibold">
-                      More options ({advancedFlags.length})
+                    <span className="text-sm font-semibold">
+                      More options ({availableAdvancedFlags.length})
                     </span>
                     {activeAdvancedCount > 0 && (
-                      <Badge variant="open">{activeAdvancedCount} active</Badge>
+                      <Badge appearance="text" size="comfortable" variant="open">
+                        {activeAdvancedCount} active
+                      </Badge>
                     )}
                   </span>
                   <ChevronDown
@@ -455,12 +536,33 @@ export function CliWorkbench({
                     }
                   />
                 </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="border-hairline flex min-w-0 flex-col gap-3 border-t p-2.5">
+                <CollapsibleContent
+                  variant="reveal"
+                  onTransitionEnd={(event) => {
+                    if (event.target !== event.currentTarget || event.propertyName !== "height")
+                      return;
+                    const focused = document.activeElement;
+                    if (
+                      focused instanceof HTMLElement &&
+                      event.currentTarget.contains(focused) &&
+                      focused.getAttribute("aria-invalid") === "true"
+                    ) {
+                      focused.scrollIntoView({ block: "nearest" });
+                    }
+                  }}
+                >
+                  <div className="border-hairline grid min-w-0 grid-cols-1 gap-4 border-t p-3 @min-[480px]/cli-form:grid-cols-2">
                     {advancedFlags.map((flag) => (
                       <CliFieldControl
                         key={`${command.id}:${subPathKey}:adv:${flag.key}`}
                         def={flag}
+                        pendingInput={pendingInput("flags", flag.key)}
+                        invalid={
+                          validationAttempted &&
+                          hasFieldValidationError(flag, spec.validationErrors)
+                        }
+                        errorId={validationErrorId}
+                        visible={isFieldVisible(flag.visibleWhen, combinedValues)}
                         value={draft.flags[flag.key]}
                         context={catalog.context}
                         requiredOverride={isFieldRequired(flag, combinedValues)}
@@ -496,30 +598,31 @@ export function CliWorkbench({
           </span>
           <Button
             variant="secondary"
-            size="xs"
+            size="comfortable"
             onClick={() => onSelectCommand(activeRun.commandId)}
           >
             Open
-          </Button>
-          <Button
-            variant="destructive"
-            size="xs"
-            disabled={isStoppingOther}
-            onClick={() => onStopRun(activeRun.runId)}
-          >
-            {isStoppingOther ? "Stopping…" : "Stop"}
           </Button>
         </Callout>
       )}
 
       <div className="flex min-w-0 flex-none flex-col gap-1">
+        {validationAttempted && !spec.guardReason && spec.validationErrors.length > 0 && (
+          <p role="alert" id={validationErrorId} className="text-warn-text px-0.5 text-sm">
+            {spec.validationErrors[0]}
+          </p>
+        )}
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {thisRunActive && activeRun ? (
+          {activeRun ? (
             <Button
               variant="destructive"
-              size="md"
+              size="comfortable"
               disabled={isStoppingThis}
-              onClick={() => onStopRun(activeRun.runId)}
+              focusableWhenDisabled
+              onClick={() => {
+                if (!isStoppingThis) onStopRun(activeRun.runId);
+              }}
+              className="w-35"
             >
               {isStoppingThis ? (
                 <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
@@ -530,7 +633,7 @@ export function CliWorkbench({
             </Button>
           ) : (
             <Button
-              size="md"
+              size="comfortable"
               variant={
                 spec.meta.effect === "destructive"
                   ? "destructive"
@@ -539,13 +642,16 @@ export function CliWorkbench({
                     : "default"
               }
               disabled={!canRun}
+              focusableWhenDisabled
               aria-describedby={
-                !spec.guardReason && spec.validationErrors.length > 0
+                validationAttempted && !spec.guardReason && spec.validationErrors.length > 0
                   ? validationErrorId
                   : undefined
               }
-              onClick={triggerExecute}
-              className="flex-1"
+              onClick={() => {
+                if (canRun) triggerExecute();
+              }}
+              className="w-35"
             >
               {submittingRun ? (
                 <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
@@ -554,32 +660,31 @@ export function CliWorkbench({
               ) : (
                 <Play aria-hidden />
               )}
-              {spec.requiresConfirm ? "Review & Run" : "Run"}
+              {spec.requiresConfirm ? "Review & run" : "Run command"}
             </Button>
           )}
 
-          {spec.meta.helpMode !== "none" && (
-            <Button variant="secondary" size="md" disabled={!canHelp} onClick={triggerHelp}>
-              <HelpCircle aria-hidden />
-              Help (-h)
-            </Button>
-          )}
+          <Button
+            ref={guideButtonRef}
+            variant="secondary"
+            size="comfortable"
+            onClick={() => onHelpOpenChange(true)}
+          >
+            <BookOpen aria-hidden />
+            Command guide
+          </Button>
         </div>
-
-        {!spec.guardReason && spec.validationErrors.length > 0 && (
-          <p id={validationErrorId} className="text-tag text-warn-text px-0.5">
-            {spec.validationErrors[0]}
-          </p>
-        )}
       </div>
     </>
   );
 
+  const outputOnly = consoleExpanded || (!widePane && compactTab === "output");
   const consoleSection = (
     <CliConsole
       run={consoleRun}
       expanded={consoleExpanded}
-      compact={compactPane}
+      compact
+      showHeading={widePane || consoleExpanded}
       isStopping={isStoppingConsole}
       outputsHint={spec.meta.outputsHint}
       onToggleExpand={onToggleExpandConsole}
@@ -591,85 +696,145 @@ export function CliWorkbench({
   );
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
-      {/* Top navigation & template save bar */}
+    <div
+      ref={containerRef}
+      data-cli-workbench
+      className="font-md @container/cli-workbench flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3"
+    >
       <div className="flex min-w-0 flex-none flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <Button variant="ghost" size="sm" className="shrink-0" onClick={onBack}>
-            <ArrowLeft aria-hidden />
-            All CLI
-          </Button>
-          {editingTemplateName && (
-            <Badge variant="open" title={editingTemplateName} className="max-w-full min-w-0 shrink">
-              <span className="min-w-0 truncate">{editingTemplateName}</span>
-            </Badge>
-          )}
-        </div>
-        <Button variant="subtle" size="xs" className="shrink-0" onClick={onOpenSaveTemplate}>
-          <BookmarkPlus aria-hidden />
-          {editingTemplateName ? "Update template" : "Save template"}
+        <Button variant="ghost" size="comfortable" onClick={onBack}>
+          <ArrowLeft aria-hidden />
+          Commands
         </Button>
+        <div className="flex items-center gap-2">
+          <Tip label={editingTemplateName ? "Update template" : "Save template"}>
+            <Button
+              variant="subtle"
+              size="comfortable"
+              aria-label={editingTemplateName ? "Update template" : "Save template"}
+              onClick={onOpenSaveTemplate}
+            >
+              <BookmarkPlus aria-hidden />
+              <span className="hidden @min-[420px]/cli-workbench:inline">
+                {editingTemplateName ? "Update template" : "Save template"}
+              </span>
+            </Button>
+          </Tip>
+          {panelControls}
+        </div>
       </div>
-
+      <div className={cn("flex min-w-0 flex-none flex-col gap-1", outputOnly && "sr-only")}>
+        <h2 className="text-heading-foreground font-mono text-xl leading-tight font-semibold break-words">
+          {[command.label, ...spec.subcommands.map((sub) => sub.label)].join(" ")}
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          Current Studio:{" "}
+          <span className="text-label font-medium">
+            {catalog.context.activeFilm ?? "No film open"}
+          </span>
+          {targetLabel !== catalog.context.activeFilm && <span> · {targetLabel}</span>}
+        </p>
+      </div>
       {runError && (
         <Alert variant="destructive" className="flex-none">
-          <AlertTitle>Execution failed</AlertTitle>
-          <AlertDescription>{runError}</AlertDescription>
+          <AlertTitle>Command could not run</AlertTitle>
+          <AlertDescription>
+            {runError} Check the options and your connection, then try again.
+          </AlertDescription>
         </Alert>
       )}
-
-      {consoleExpanded ? (
-        consoleSection
-      ) : compactPane ? (
-        <>
-          <Segmented
-            label="CLI pane section"
-            value={compactTab}
-            onChange={setCompactTab}
-            className="flex-none [&>button]:flex-1"
-            items={[
-              { id: "builder", title: "Configure" },
-              {
-                id: "output",
-                title: (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span>Output</span>
-                    {consoleRun && (
-                      <CliRunCompactBadge run={consoleRun} isStopping={isStoppingConsole} compact />
-                    )}
-                  </span>
-                ),
-              },
-            ]}
-          />
-          {compactTab === "builder" ? (
+      {!widePane && !consoleExpanded && (
+        <Segmented
+          label="CLI pane section"
+          value={compactTab}
+          onChange={setCompactTab}
+          tone="accent"
+          size="comfortable"
+          items={[
+            { id: "builder", title: "Configure" },
+            { id: "output", title: "Output" },
+          ]}
+        />
+      )}
+      <TabStage
+        activeKey={`${drawerScopeKey}:${compactTab}:${consoleExpanded}`}
+        animateMount
+        duration={180}
+        distance={6}
+        className={cn(
+          "min-h-0 min-w-0 flex-1 overflow-hidden",
+          widePane && !consoleExpanded
+            ? "grid grid-cols-[minmax(0,min(54%,42rem))_minmax(0,1fr)] gap-5"
+            : "flex flex-col",
+        )}
+      >
+        {consoleExpanded ? (
+          consoleSection
+        ) : widePane ? (
+          <>
             <div
+              data-cli-configure
               data-arrow-scroll
-              className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-0.5"
+              className="@container/cli-form flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto pr-1 [overflow-anchor:none]"
             >
               {builderFieldsContent}
             </div>
-          ) : (
-            consoleSection
-          )}
-          {actionSection}
-        </>
-      ) : (
-        <>
-          <div className="flex-none">{legoBar}</div>
+            <div
+              data-arrow-scroll
+              className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto [overflow-anchor:none]"
+            >
+              <CliBehaviorStrip
+                meta={spec.meta}
+                targetLabel={targetLabel}
+                missingEnvGroups={spec.missingEnvGroups}
+              />
+              <div className="flex min-h-64 flex-1 flex-col">{consoleSection}</div>
+            </div>
+          </>
+        ) : compactTab === "builder" ? (
           <div
+            data-cli-configure
             data-arrow-scroll
-            className={cn(
-              "flex min-h-0 flex-col gap-2.5 overflow-y-auto pr-0.5",
-              consoleRun ? "max-h-[44%] flex-none" : "flex-1",
-            )}
+            className="@container/cli-form flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto pr-1 [overflow-anchor:none]"
           >
             {builderFieldsContent}
+            <h3 className="text-heading-foreground border-hairline border-t pt-3 text-base font-semibold">
+              Command details
+            </h3>
+            <CliBehaviorStrip
+              meta={spec.meta}
+              targetLabel={targetLabel}
+              missingEnvGroups={spec.missingEnvGroups}
+            />
           </div>
+        ) : (
+          consoleSection
+        )}
+      </TabStage>
+      {!outputOnly && (
+        <footer
+          data-cli-actions
+          className="border-hairline flex flex-none flex-col gap-2 border-t pt-3"
+        >
+          <p className="text-label truncate text-sm" title={targetLabel}>
+            <CliAccessLabel effect={spec.meta.effect} /> · <CliCostLabel cost={spec.meta.cost} /> ·{" "}
+            {targetLabel}
+          </p>
           {actionSection}
-          {consoleSection}
-        </>
+        </footer>
       )}
+      <CliHelpDialog
+        returnFocusRef={guideButtonRef}
+        open={helpOpen}
+        spec={spec}
+        helpCommand={helpSpec.displayCommand}
+        canRunHelp={canHelp}
+        onClose={() => onHelpOpenChange(false)}
+        onRunHelp={() => {
+          onHelpOpenChange(false);
+          triggerHelp();
+        }}
+      />
     </div>
   );
 }

@@ -1,8 +1,9 @@
-import { type CSSProperties, useRef, useSyncExternalStore } from "react";
+import { type CSSProperties, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { cliStore, useCliStore } from "./cli/cli-store";
 import { Splitter, useStoredSize } from "./components/Splitter";
 import {
   clampSplitterLayout,
@@ -63,6 +64,14 @@ export function App() {
     editable,
   });
   const review = useStudio((s) => s.review);
+  const sideTab = useStudio((s) => s.side);
+  const libraryTab = useStudio((s) => s.lib);
+  const cliPanelMode = useCliStore((s) => s.panelMode);
+  const cliSelected = showLibrary ? libraryTab === "cli" : sideTab === "cli";
+  const cliExpanded = !review && cliSelected && cliPanelMode === "expanded";
+  useEffect(() => {
+    if (!cliSelected && cliPanelMode === "expanded") cliStore.setState({ panelMode: "embedded" });
+  }, [cliSelected, cliPanelMode]);
   const bounds = clampSplitterLayout({
     vw,
     vh,
@@ -90,14 +99,16 @@ export function App() {
       <TooltipProvider delay={500}>
         <div
           style={room}
+          data-cli-side={(desktop && showSideOnRight && sideTab === "cli") || undefined}
+          data-cli-expanded={cliExpanded ? (showLibrary ? "library" : "side") : undefined}
           data-side-folded={
             (desktop && (showSideOnRight || showDetails) && bounds.sideW === 0) || undefined
           }
           data-lib-folded={(showLibrary && bounds.libW === 0) || undefined}
           data-edit-folded={(desktop && bounds.editH === 0) || undefined}
-          data-wide={review ? undefined : wideAttr}
+          data-wide={review || cliExpanded ? undefined : wideAttr}
           data-review={review || undefined}
-          className="bg-backdrop upright:gap-0 upright:bg-background upright:p-0 sideways:gap-0 sideways:bg-background sideways:p-0 upright:flex upright:flex-col sideways:grid-cols-[minmax(0,1fr)_min(36%,320px)] grid h-dvh grid-cols-[minmax(0,1fr)_min(var(--side-w,360px),var(--side-max,calc(100%_-_378px)))] grid-rows-[minmax(0,1fr)_auto_auto] gap-x-1.5 overflow-hidden p-1.5 text-sm data-review:grid-cols-[min(var(--review-w,max(34rem,52%)),var(--review-max,calc(100%_-_378px)))_minmax(0,1fr)] data-review:grid-rows-[minmax(0,1fr)_auto] data-[wide=2]:grid-cols-[min(var(--lib-w,400px),var(--lib-max,calc(100%_-_378px)))_minmax(0,1fr)] data-[wide=3]:grid-cols-[min(var(--lib-w,400px),var(--lib-max,calc(100%_-_644px)))_minmax(0,1fr)_minmax(0,min(var(--side-w,340px),var(--side-max,calc(100%_-_644px))))]"
+          className="bg-backdrop upright:gap-0 upright:bg-background upright:p-0 sideways:gap-0 sideways:bg-background sideways:p-0 upright:flex upright:flex-col sideways:grid-cols-[minmax(0,1fr)_min(36%,320px)] grid h-dvh grid-cols-[minmax(0,1fr)_min(var(--side-w,360px),var(--side-max,calc(100%_-_378px)))] grid-rows-[minmax(0,1fr)_auto_auto] gap-x-1.5 overflow-hidden p-1.5 text-sm data-cli-expanded:grid data-cli-expanded:grid-cols-[minmax(0,1fr)] data-cli-expanded:grid-rows-[minmax(0,1fr)] data-review:grid-cols-[min(var(--review-w,max(34rem,52%)),var(--review-max,calc(100%_-_378px)))_minmax(0,1fr)] data-review:grid-rows-[minmax(0,1fr)_auto] data-[wide=2]:grid-cols-[min(var(--lib-w,400px),var(--lib-max,calc(100%_-_378px)))_minmax(0,1fr)] data-[wide=3]:grid-cols-[min(var(--lib-w,400px),var(--lib-max,calc(100%_-_644px)))_minmax(0,1fr)_minmax(0,min(var(--side-w,340px),var(--side-max,calc(100%_-_644px))))]"
         >
           <Stage bind={bind} />
           <Transport />
@@ -107,7 +118,7 @@ export function App() {
           {review && <ReviewRoom />}
           <PasteAttributes />
           {/* Full-height Library on the left in wide mode; timeline pushed right beside it */}
-          <div className="upright:hidden sideways:hidden pointer-events-none relative col-[1/-1] row-start-3 in-data-edit-folded:-top-[5px] in-data-review:hidden in-data-wide:col-[2/-1]">
+          <div className="upright:hidden sideways:hidden pointer-events-none relative col-[1/-1] row-start-3 in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-edit-folded:-top-[5px] in-data-review:hidden in-data-wide:col-[2/-1]">
             <Splitter
               label="Timeline height"
               across
@@ -133,7 +144,7 @@ export function App() {
           {showLibrary && (
             <div
               ref={libCell}
-              className="pointer-events-none relative z-30 col-start-1 row-[1/-1] in-data-review:hidden"
+              className="pointer-events-none relative z-30 col-start-1 row-[1/-1] in-data-cli-expanded:hidden in-data-review:hidden"
             >
               <Splitter
                 label="Library width"
@@ -151,7 +162,7 @@ export function App() {
           {review && (
             <div
               ref={reviewCell}
-              className="upright:hidden sideways:hidden pointer-events-none relative z-30 col-start-1 row-span-2 row-start-1"
+              className="upright:hidden sideways:hidden pointer-events-none relative z-30 col-start-1 row-span-2 row-start-1 in-data-cli-expanded:hidden"
             >
               <Splitter
                 label="Review width"
@@ -170,7 +181,7 @@ export function App() {
           {(showSideOnRight || showDetails) && (
             <div
               ref={sideCell}
-              className="upright:hidden sideways:hidden pointer-events-none relative z-30 col-start-2 row-span-2 row-start-1 in-data-review:hidden in-data-wide:col-start-3"
+              className="upright:hidden sideways:hidden pointer-events-none relative z-30 col-start-2 row-span-2 row-start-1 in-data-cli-expanded:hidden in-data-cli-side:row-span-3 in-data-review:hidden in-data-wide:col-start-3"
             >
               <Splitter
                 label="Panel width"

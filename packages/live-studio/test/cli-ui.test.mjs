@@ -22,11 +22,13 @@ import {
 import { CliBehaviorStrip } from "../app/cli/CliBadges.tsx";
 import { CliBrowse } from "../app/cli/CliBrowse.tsx";
 import { buildVerbatimCopyText, CliConsole } from "../app/cli/CliConsole.tsx";
+import * as cliConsole from "../app/cli/CliConsole.tsx";
 import { SaveTemplatePanel } from "../app/cli/CliDialogs.tsx";
 import { saveCliTemplate } from "../app/cli/client.ts";
 import { CliFieldControl } from "../app/cli/CliFieldControl.tsx";
 import { CliLegoBar } from "../app/cli/CliLegoBar.tsx";
 import { CliWorkbench, nextCompactTabForChange } from "../app/cli/CliWorkbench.tsx";
+import * as cliModel from "../app/cli/model.ts";
 import {
   buildTemplatePreviewCommand,
   commitMultiTokens,
@@ -94,6 +96,169 @@ const makeContext = (overrides = {}) => ({
   ...overrides,
 });
 
+test("poster validation identifies AT by its env key when the label includes units", () => {
+  const spec = buildCliInvocation(
+    { commandId: "render", args: { target: "poster" } },
+    makeContext(),
+  );
+  const at = spec.envDef.find((field) => field.key === "AT");
+  assert.ok(at);
+  assert.ok(spec.validationErrors.includes("Missing required env: AT"));
+  assert.ok(cliModel.hasFieldValidationError(at, spec.validationErrors));
+  assert.ok(
+    !cliModel.hasFieldValidationError({ key: "ENTRY", label: "Entry file" }, spec.validationErrors),
+  );
+});
+
+test("command lifecycle uses a persistent polite status without reading stdout", () => {
+  const base = {
+    runId: "announcement",
+    commandId: "help",
+    subcommandPath: [],
+    mode: "execute",
+    displayCommand: "bun run help",
+    cwd: "films/demo",
+    targetFilm: "active",
+    startedAt: 1,
+    truncated: false,
+    output: [{ seq: 1, stream: "stdout", chunk: "STDOUT_SENTINEL" }],
+  };
+  for (const [run, expected] of [
+    [null, "Ready"],
+    [{ ...base, status: "running" }, "Running"],
+    [{ ...base, status: "done", exitCode: 0 }, "Exit 0"],
+  ]) {
+    const html = renderToStaticMarkup(
+      wrapTree(createElement(cliConsole.CliRunAnnouncement, { run })),
+    );
+    assert.match(html, /role="status"/);
+    assert.match(html, /aria-live="polite"/);
+    assert.match(html, /aria-atomic="true"/);
+    assert.ok(html.includes(expected));
+    if (run) assert.ok(html.includes("help"));
+    assert.ok(!html.includes("STDOUT_SENTINEL"));
+  }
+});
+
+test("More options counts only available settings after switching asset kind", () => {
+  const context = makeContext();
+  const command = findCliCommand("find");
+  const draft = createInitialDraft(command, context);
+  draft.flags = { "--kind": ["mocap"] };
+  const mocap = buildCliInvocation({ commandId: "find", flags: draft.flags }, context);
+  const flag = mocap.flagsDef.find(
+    (field) => field.tier === "advanced" && field.visibleWhen?.unsetOrStartsWith?.includes("mocap"),
+  );
+  assert.ok(flag);
+  draft.flags[flag.key] = flag.type === "boolean" ? true : "stand";
+  draft.flags["--kind"] = ["sfx"];
+  const spec = buildCliInvocation({ commandId: "find", flags: draft.flags }, context);
+  const values = { ...draft.args, ...draft.flags, ...draft.env };
+  const available = spec.flagsDef.filter(
+    (field) => field.tier === "advanced" && isFieldVisible(field.visibleWhen, values),
+  );
+  const html = renderToStaticMarkup(
+    wrapTree(
+      createElement(
+        CliWorkbench,
+        makeWorkbenchProps(
+          { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context },
+          command,
+          draft,
+        ),
+      ),
+    ),
+  );
+  assert.ok(html.includes(`More options (${available.length})`));
+  assert.ok(!html.includes("1 active"));
+});
+
+test("invalid enum controls announce the error, requirement and field description", () => {
+  for (const optionalValue of [false, true]) {
+    const html = renderToStaticMarkup(
+      wrapTree(
+        createElement(CliFieldControl, {
+          def: {
+            key: "--mode",
+            flag: "--mode",
+            label: "Mode",
+            type: "enum",
+            options: ["fast", "full"],
+            required: true,
+            hint: "Choose how much to analyze.",
+            optionalValue,
+          },
+          value: optionalValue ? "" : undefined,
+          context: makeContext(),
+          invalid: true,
+          errorId: "cli-error",
+          onChange: () => {},
+        }),
+      ),
+    );
+    const combobox = html.match(/<button[^>]*role="combobox"[^>]*>/)?.[0];
+    assert.ok(combobox);
+    assert.match(combobox, /aria-invalid="true"/);
+    assert.match(combobox, /aria-required="true"/);
+    assert.match(combobox, /aria-describedby="cli-error [^"]+-hint"/);
+  }
+});
+
+test("command details use labelled information and explain that Stop does not undo changes", () => {
+  const html = renderToStaticMarkup(
+    wrapTree(
+      createElement(CliBehaviorStrip, {
+        meta: { effect: "write", cost: "free", speed: "short", cancellable: true },
+        targetLabel: "films/cell-break",
+        missingEnvGroups: [],
+      }),
+    ),
+  );
+  assert.ok(html.includes("<dl"));
+  assert.ok(html.includes("<dt"));
+  assert.ok(html.includes("Runs in"));
+  assert.ok(html.includes("does not undo"));
+  assert.ok(!html.includes("<button"));
+});
+
+test("pending token text joins arguments and csv flags without changing stored drafts", () => {
+  const command = findCliCommand("find");
+  const draft = createInitialDraft(command);
+  draft.args.words = ["stone"];
+  draft.flags["--show"] = ["clip:a"];
+  draft.pendingInputs = { "args:words": '"creaky door" stone', "flags:--show": "clip:b, clip:c" };
+  const resolved = cliModel.resolvePendingInputs(command, draft);
+  assert.deepEqual(resolved.args.words, ["stone", "creaky door"]);
+  assert.deepEqual(resolved.flags["--show"], ["clip:a", "clip:b", "clip:c"]);
+  assert.deepEqual(resolved.pendingInputs, {});
+  assert.deepEqual(draft.args.words, ["stone"]);
+  assert.deepEqual(draft.pendingInputs, {
+    "args:words": '"creaky door" stone',
+    "flags:--show": "clip:b, clip:c",
+  });
+});
+
+test("exclusive CSV edits preserve their pending entry and clear only the competing flag", () => {
+  const command = findCliCommand("find");
+  const draft = createInitialDraft(command);
+  draft.flags["--star"] = ["clip:a"];
+  draft.pendingInputs = { "flags:--star": "clip:b", "flags:--unstar": "clip:c" };
+  const spec = buildCliInvocation({ commandId: "find" });
+  const flag = spec.flagsDef.find((field) => field.key === "--unstar");
+  const { next } = setDraftFieldWithExclusiveClear(
+    draft,
+    spec,
+    "flags",
+    "--unstar",
+    ["clip:d"],
+    flag.exclusiveGroup,
+    flag.optionalValue,
+  );
+  assert.equal(next.flags["--star"], undefined);
+  assert.deepEqual(next.pendingInputs, { "flags:--unstar": "clip:c" });
+  assert.deepEqual(draft.pendingInputs, { "flags:--star": "clip:b", "flags:--unstar": "clip:c" });
+});
+
 test("execution errors stay visible in compact Output and expanded consoles", () => {
   const context = makeContext();
   const command = findCliCommand("help");
@@ -128,7 +293,7 @@ test("execution errors stay visible in compact Output and expanded consoles", ()
         ),
       ),
     );
-    assert.ok(html.includes("Execution failed"));
+    assert.ok(html.includes("Command could not run"));
     assert.ok(html.includes("Studio is offline"));
   }
 });
@@ -390,7 +555,7 @@ describe("CLI tab SSR UI rendering", () => {
     );
     assert.ok(html.includes("Saved templates"));
     assert.ok(html.includes("Generate Voice (--yes)"));
-    assert.ok(html.includes("Review &amp; Run"));
+    assert.ok(html.includes("Review &amp; run"));
     for (const cat of CLI_CATEGORIES) {
       assert.ok(html.includes(cat.label.replaceAll("&", "&amp;")), `Missing category ${cat.label}`);
     }
@@ -570,17 +735,17 @@ describe("CLI tab SSR UI rendering", () => {
       ),
     );
     assert.ok(stripHtml.includes("Writes files"));
-    assert.ok(stripHtml.includes("Paid · ElevenLabs"));
-    assert.ok(stripHtml.includes("Slow / heavy"));
-    assert.ok(stripHtml.includes("Stoppable"));
-    assert.ok(stripHtml.includes("Need ELEVENLABS_API_KEY"));
+    assert.ok(stripHtml.includes("Paid API"));
+    assert.ok(stripHtml.includes("May take a while"));
+    assert.ok(stripHtml.includes("Process ends"));
+    assert.ok(stripHtml.includes("Add ELEVENLABS_API_KEY"));
     assert.equal(getEffectLabel("write"), "Writes files");
-    assert.equal(getEffectLabel("destructive"), "Destructive / broad write");
+    assert.equal(getEffectLabel("destructive"), "Changes many files");
   });
 });
 
 describe("CLI store async flows, target preservation & hotkey guard", () => {
-  test("resolveSaveTemplateTargets preserves Demo pin, cross-film pin, and root", () => {
+  test("resolveSaveTemplateTargets exposes current project and supported root only", () => {
     const demoPlan = resolveSaveTemplateTargets({
       initialTargetFilm: "cell-break",
       activeFilm: null,
@@ -588,8 +753,8 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       supportsFilmTarget: true,
       supportsRootTarget: true,
     });
-    assert.equal(demoPlan.defaultTarget, "cell-break");
-    assert.ok(demoPlan.items.some((i) => i.value === "cell-break"));
+    assert.equal(demoPlan.defaultTarget, "active");
+    assert.ok(!demoPlan.items.some((i) => i.value === "cell-break"));
     assert.ok(demoPlan.items.some((i) => i.value === "root"));
 
     const crossFilmPlan = resolveSaveTemplateTargets({
@@ -599,7 +764,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       supportsFilmTarget: true,
       supportsRootTarget: false,
     });
-    assert.equal(crossFilmPlan.defaultTarget, "sealed-room");
+    assert.equal(crossFilmPlan.defaultTarget, "active");
     assert.ok(!crossFilmPlan.items.some((i) => i.value === "root"));
 
     const rootSelectedPlan = resolveSaveTemplateTargets({
@@ -1230,7 +1395,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         }),
       ),
     );
-    assert.ok(readHtml.includes("Finishes cleanly"));
+    assert.ok(readHtml.includes("Process ends"));
     assert.ok(!readHtml.includes("Kills process"));
 
     const daemonHtml = renderToStaticMarkup(
@@ -1248,7 +1413,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         }),
       ),
     );
-    assert.ok(daemonHtml.includes("Server · Stop closes"));
+    assert.ok(daemonHtml.includes("Server closes"));
     assert.ok(!daemonHtml.includes("Kills process"));
 
     const writeHtml = renderToStaticMarkup(
@@ -1266,7 +1431,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         }),
       ),
     );
-    assert.ok(writeHtml.includes("Kills process · side effects persist"));
+    assert.ok(writeHtml.includes("Stopping does not undo saved changes"));
   });
 
   test("CliFieldControl optionalValue avoids 'list values' copy on deliver --youtube and honors bareLabel/bareHint", () => {
@@ -1330,7 +1495,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         }),
       ),
     );
-    assert.ok(defaultEnumHtml.includes("(bare flag — default behavior)"));
+    assert.ok(defaultEnumHtml.includes("Use the default behavior"));
     assert.ok(!defaultEnumHtml.includes("(bare flag — list values)"));
   });
 
@@ -1376,10 +1541,10 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     assert.equal(formatTargetBadgeText("film", "root", ctx), "films/demo-film");
     assert.equal(formatTargetBadgeText("film", "active", ctx), "films/demo-film");
     assert.equal(formatTargetBadgeText("film", "", ctx), "films/demo-film");
-    assert.equal(formatTargetBadgeText("film", "other-film", ctx), "films/other-film");
+    assert.equal(formatTargetBadgeText("film", "other-film", ctx), "films/demo-film");
     assert.equal(
       formatTargetBadgeText("film", "root", { ...ctx, activeFilm: null, films: [] }),
-      "active film (none)",
+      "Current project",
     );
   });
 
@@ -1598,7 +1763,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         currentTab: "builder",
         prevRunId: "r-1",
         nextRunId: "r-1",
-        prevScopeKey: "find:",
+        prevScopeKey: "help:",
         nextScopeKey: "find:",
         focusConsoleRunId: "r-1",
       }),
@@ -1636,6 +1801,18 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         focusConsoleRunId: null,
       }),
       { nextTab: "output", consumeFocus: false },
+    );
+
+    assert.deepEqual(
+      nextCompactTabForChange({
+        currentTab: "builder",
+        prevRunId: undefined,
+        nextRunId: "old-help",
+        prevScopeKey: "find:",
+        nextScopeKey: "help:",
+        focusConsoleRunId: null,
+      }),
+      { nextTab: "builder", consumeFocus: false },
     );
 
     // Store focusConsoleRunId flow (Browse Output & Browse template Run):
@@ -1747,7 +1924,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         }),
       ),
     );
-    assert.ok(liveStripHtml.includes("Need "));
+    assert.ok(liveStripHtml.includes("Add "));
     assert.ok(liveStripHtml.includes("ELEVENLABS_API_KEY"));
   });
 
@@ -1822,7 +1999,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     assert.ok(!barHtml.includes(">repo root<"));
   });
 
-  test("CliWorkbench truncates long editingTemplateName, exposes Busy title, and passes compact to CliBehaviorStrip", () => {
+  test("CliWorkbench exposes template update, busy command and guide actions", () => {
     const ctx = makeContext();
     const catalog = { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context: ctx };
     const checkCmd = findCliCommand("check");
@@ -1876,51 +2053,9 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       ),
     );
 
-    assert.ok(html.includes(`title="${longName}"`));
-    const badgeSliceIdx = html.indexOf(`title="${longName}"`);
-    const badgeSlice = html.slice(Math.max(0, badgeSliceIdx - 220), badgeSliceIdx + 40);
-    assert.ok(badgeSlice.includes("max-w-full"));
-    assert.ok(badgeSlice.includes("min-w-0"));
-    assert.ok(badgeSlice.includes("shrink"));
-    assert.ok(html.includes(`<span class="min-w-0 truncate">${longName}</span>`));
+    assert.ok(html.includes("Update template"));
     assert.ok(html.includes(`title="${busyRun.displayCommand}"`));
-    assert.ok(/\bp-1\.5\b/.test(html));
-  });
-
-  test("CliBehaviorStrip supports compact padding and concise single-line cost detail", () => {
-    const ctx = makeContext();
-    const liveSpec = buildCliInvocation(
-      { commandId: "voice:gen", subcommandPath: [], flags: { "--yes": true } },
-      ctx,
-    );
-    assert.ok(liveSpec.meta.costHint && liveSpec.meta.costHint.length > 28);
-
-    const normalHtml = renderToStaticMarkup(
-      wrapTree(
-        createElement(CliBehaviorStrip, {
-          meta: liveSpec.meta,
-          targetLabel: "films/demo-film",
-          missingEnvGroups: liveSpec.missingEnvGroups,
-        }),
-      ),
-    );
-    assert.ok(/\bp-2\b/.test(normalHtml));
-    assert.ok(!/\bp-1\.5\b/.test(normalHtml));
-    assert.ok(!normalHtml.includes("truncate leading-tight"));
-
-    const compactHtml = renderToStaticMarkup(
-      wrapTree(
-        createElement(CliBehaviorStrip, {
-          meta: liveSpec.meta,
-          targetLabel: "films/demo-film",
-          missingEnvGroups: liveSpec.missingEnvGroups,
-          compact: true,
-        }),
-      ),
-    );
-    assert.ok(/\bp-1\.5\b/.test(compactHtml));
-    assert.ok(compactHtml.includes("truncate leading-tight"));
-    assert.ok(compactHtml.includes(`title="${liveSpec.meta.costHint}"`));
+    assert.ok(html.includes("Command guide"));
   });
 
   test("CliBrowse gives each template unique Edit/Run aria-labels and bounds long template/banner text", () => {
@@ -1934,7 +2069,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         name: longName,
         commandId: "find",
         subcommandPath: [],
-        targetFilm: longFilm,
+        targetFilm: "active",
         flags: {},
         args: { query: "rain" },
         env: {},
@@ -1994,11 +2129,10 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
 
     assert.ok(html.includes(`title="${bannerRun.displayCommand}"`));
     assert.ok(html.includes(`title="${longName}"`));
-    assert.ok(html.includes(`title="${longFilm}"`));
-    assert.ok(html.includes(`<span class="min-w-0 truncate">${longFilm}</span>`));
+    assert.ok(!html.includes(`title="${longFilm}"`));
     assert.ok(html.includes(`aria-label="Edit template ${longName}"`));
     assert.ok(html.includes(`aria-label="Run template ${longName}"`));
-    assert.ok(html.includes(`aria-label="Review &amp; Run template Deploy voice"`));
+    assert.ok(html.includes(`aria-label="Review &amp; run template Deploy voice"`));
   });
 
   test("ToastTitle and ToastDescription use min-w-0 and [overflow-wrap:anywhere] to wrap long unbreakable names", () => {
@@ -2154,7 +2288,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     );
     assert.ok(wbHtml.includes("pointer-coarse:min-h-10"));
     assert.match(wbHtml, /aria-describedby="[^"]+"/);
-    assert.ok(wbHtml.includes("Invalid number for Limit (-n): &quot;abc&quot;"));
+    assert.ok(!wbHtml.includes("Invalid number for Limit (-n): &quot;abc&quot;"));
 
     const jevDef = spec.flagsDef.find((f) => f.key === "--jev");
     const kindDef = spec.flagsDef.find((f) => f.key === "--kind");

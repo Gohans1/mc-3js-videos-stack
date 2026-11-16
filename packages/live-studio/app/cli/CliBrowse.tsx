@@ -10,7 +10,7 @@ import {
   Terminal,
   Trash2,
 } from "lucide-react";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import { SearchBox } from "@/components/SearchBox";
 import { Tip } from "@/components/Tip";
@@ -34,6 +34,7 @@ import type {
   CliRunSnapshot,
   CliTemplate,
 } from "../../src/cli-catalog.ts";
+import { TabStage } from "../components/Motion";
 import { HorizontalScrollRail } from "../sound/HorizontalScrollRail";
 import { CliHazardBadges } from "./CliBadges";
 import { CliRunCompactBadge, formatDurationMs } from "./CliConsole";
@@ -46,6 +47,7 @@ import {
 
 export function CliBrowse({
   catalog,
+  panelControls,
   templates,
   searchQuery,
   selectedCategory,
@@ -70,6 +72,7 @@ export function CliBrowse({
   onStopRun,
 }: {
   catalog: CliCatalogResponse;
+  panelControls?: ReactNode;
   templates: readonly CliTemplate[];
   searchQuery: string;
   selectedCategory: CliCategoryId | "all";
@@ -115,8 +118,14 @@ export function CliBrowse({
   }, [filteredBySearch]);
 
   const filteredTemplates = useMemo(
-    () => filterTemplates(templates, searchQuery),
-    [templates, searchQuery],
+    () =>
+      filterTemplates(
+        templates.filter((template) =>
+          ["active", "root", "", catalog.context.activeFilm].includes(template.targetFilm),
+        ),
+        searchQuery,
+      ),
+    [templates, searchQuery, catalog.context.activeFilm],
   );
 
   const filteredCommands = useMemo(
@@ -169,7 +178,25 @@ export function CliBrowse({
   ].filter((a): a is typeof a & { message: string } => Boolean(a.message));
 
   return (
-    <div data-arrow-scroll className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div
+      data-arrow-scroll
+      className="font-md flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
+    >
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 className="text-heading-foreground text-xl leading-tight font-semibold">
+            Command library
+          </h2>
+          <p className="text-muted-foreground min-w-0 text-sm">
+            Current Studio:{" "}
+            <span className="text-label font-medium">
+              {catalog.context.activeFilm ?? "No film open"}
+            </span>
+            <span> · {catalog.context.repoName}</span>
+          </p>
+        </div>
+        {panelControls}
+      </div>
       {browseAlerts.map((alert) => (
         <Alert key={alert.key} variant="destructive">
           <AlertTriangle aria-hidden />
@@ -178,13 +205,13 @@ export function CliBrowse({
           {(alert.onRetry || alert.onDismiss) && (
             <AlertAction>
               {alert.onRetry && (
-                <Button variant="ghost" size="xs" onClick={alert.onRetry}>
+                <Button variant="ghost" size="comfortable" onClick={alert.onRetry}>
                   <RefreshCw aria-hidden />
                   Retry
                 </Button>
               )}
               {alert.onDismiss && (
-                <Button variant="ghost" size="xs" onClick={alert.onDismiss}>
+                <Button variant="ghost" size="comfortable" onClick={alert.onDismiss}>
                   Dismiss
                 </Button>
               )}
@@ -203,14 +230,14 @@ export function CliBrowse({
                 donePrefix="Last · "
               />
               {bannerRun.durationMs !== undefined && (
-                <span className="text-tag text-muted-foreground font-mono tabular-nums">
+                <span className="text-muted-foreground font-mono text-sm tabular-nums">
                   {formatDurationMs(bannerRun.durationMs)}
                 </span>
               )}
             </div>
             <span
               title={bannerRun.displayCommand}
-              className="text-tag text-muted-foreground truncate font-mono"
+              className="text-muted-foreground truncate font-mono text-sm"
             >
               {bannerRun.displayCommand}
             </span>
@@ -218,7 +245,7 @@ export function CliBrowse({
           <div className="flex shrink-0 items-center gap-1">
             <Button
               variant="secondary"
-              size="xs"
+              size="comfortable"
               onClick={() => onOpenCommand(bannerRun.commandId, { focusRunId: bannerRun.runId })}
             >
               Output
@@ -226,7 +253,7 @@ export function CliBrowse({
             {bannerRun.status === "running" && (
               <Button
                 variant="destructive"
-                size="xs"
+                size="comfortable"
                 disabled={isStoppingBanner}
                 onClick={() => onStopRun(bannerRun.runId)}
               >
@@ -247,13 +274,13 @@ export function CliBrowse({
           name="cli-search"
           value={searchQuery}
           label="Search CLI commands"
-          placeholder="Search commands, flags, or descriptions…"
+          placeholder="Find a command, e.g. render or --jev"
           onChange={onSearchChange}
           onEscape={() => onSearchChange("")}
           className="min-w-0 flex-1"
         />
         {onRefreshCatalog && (
-          <Tip label="Refresh catalog & choices">
+          <Tip label="Refresh commands and choices">
             <Button
               variant="ghost"
               size="icon"
@@ -275,8 +302,8 @@ export function CliBrowse({
         className="gap-1"
       >
         <Button
-          variant="tab"
-          size="xs"
+          variant="choice"
+          size="comfortable"
           aria-pressed={selectedCategory === "all"}
           onClick={() => onSelectCategory("all")}
         >
@@ -285,8 +312,8 @@ export function CliBrowse({
         {catalog.categories.map((cat) => (
           <Button
             key={cat.id}
-            variant="tab"
-            size="xs"
+            variant="choice"
+            size="comfortable"
             aria-pressed={selectedCategory === cat.id}
             onClick={() => onSelectCategory(cat.id)}
           >
@@ -299,20 +326,20 @@ export function CliBrowse({
       {(!searchQuery.trim() || filteredTemplates.length > 0) && (
         <section aria-label="Saved templates" className="flex min-w-0 flex-col gap-2">
           <div className="flex items-center justify-between gap-2 px-1">
-            <h3 className="text-ui flex items-center gap-1.5 font-semibold">
+            <h3 className="text-heading-foreground flex items-center gap-1.5 text-lg font-semibold">
               <Bookmark aria-hidden className="text-primary-text size-3.5" />
               <span>Saved templates</span>
             </h3>
-            <span className="text-tag text-muted-foreground tabular-nums">
+            <span className="text-muted-foreground text-sm tabular-nums">
               {filteredTemplates.length}
             </span>
           </div>
 
           {filteredTemplates.length === 0 ? (
-            <p className="bg-card border-hairline text-tag text-muted-foreground rounded-xl border border-dashed px-3 py-2.5">
-              Configure any command below and click{" "}
-              <strong className="text-foreground font-medium">Save template</strong> to pin 1-click
-              re-runs here.
+            <p className="bg-card border-hairline text-muted-foreground rounded-xl border border-dashed px-3 py-2.5 text-sm">
+              Choose a command, set its options, then select{" "}
+              <strong className="text-foreground font-medium">Save template</strong> to reuse it
+              here.
             </p>
           ) : (
             <div className="flex min-w-0 flex-col gap-1.5">
@@ -339,11 +366,13 @@ export function CliBrowse({
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <span
                             title={tpl.name}
-                            className="text-ui text-foreground max-w-full truncate font-medium"
+                            className="text-heading-foreground max-w-full truncate text-base font-medium"
                           >
                             {tpl.name}
                           </span>
                           <Badge
+                            appearance="text"
+                            size="comfortable"
                             variant="tag"
                             title={templateTargetLabel}
                             className="max-w-full min-w-0 shrink"
@@ -352,6 +381,8 @@ export function CliBrowse({
                           </Badge>
                           {unavailable && (
                             <Badge
+                              appearance="text"
+                              size="comfortable"
                               variant="destructive"
                               title={`Command "${tpl.commandId}" is missing from the current CLI catalog`}
                             >
@@ -361,7 +392,7 @@ export function CliBrowse({
                         </div>
                         <code
                           title={display}
-                          className="text-tag text-muted-foreground truncate font-mono"
+                          className="text-code-foreground truncate font-mono text-sm"
                         >
                           {display}
                         </code>
@@ -373,7 +404,7 @@ export function CliBrowse({
                       <Tip label="Remove template">
                         <Button
                           variant="remove"
-                          size="icon-xs"
+                          size="icon-lg"
                           aria-label={`Delete template ${tpl.name}`}
                           onClick={() => void handleDelete(tpl)}
                         >
@@ -382,7 +413,7 @@ export function CliBrowse({
                       </Tip>
                       <Button
                         variant="secondary"
-                        size="xs"
+                        size="comfortable"
                         aria-label={`Edit template ${tpl.name}`}
                         title={unavailable ? disabledReason : undefined}
                         disabled={unavailable}
@@ -392,8 +423,8 @@ export function CliBrowse({
                         Edit
                       </Button>
                       <Button
-                        size="xs"
-                        aria-label={`${spec?.requiresConfirm ? "Review & Run" : "Run"} template ${tpl.name}`}
+                        size="comfortable"
+                        aria-label={`${spec?.requiresConfirm ? "Review & run" : "Run"} template ${tpl.name}`}
                         title={disabledReason}
                         disabled={
                           !spec ||
@@ -404,7 +435,7 @@ export function CliBrowse({
                         onClick={() => onRunTemplate(tpl)}
                       >
                         <Play aria-hidden />
-                        {spec?.requiresConfirm ? "Review & Run" : "Run"}
+                        {spec?.requiresConfirm ? "Review & run" : "Run"}
                       </Button>
                     </div>
                   </div>
@@ -423,14 +454,12 @@ export function CliBrowse({
               <Terminal aria-hidden />
             </EmptyMedia>
             <EmptyTitle>No matching CLI commands</EmptyTitle>
-            <EmptyDescription>
-              No command, subcommand, or flag matched &ldquo;{searchQuery}&rdquo;.
-            </EmptyDescription>
+            <EmptyDescription>No commands match &ldquo;{searchQuery}&rdquo;.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button
               variant="secondary"
-              size="sm"
+              size="comfortable"
               onClick={() => {
                 onSearchChange("");
                 onSelectCategory("all");
@@ -441,7 +470,12 @@ export function CliBrowse({
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="flex min-w-0 flex-col gap-4">
+        <TabStage
+          activeKey={selectedCategory}
+          duration={180}
+          distance={6}
+          className="flex min-w-0 flex-col gap-6"
+        >
           {groupedCommands.map(({ category, commands }) => (
             <section
               key={category.id}
@@ -450,12 +484,16 @@ export function CliBrowse({
             >
               <div className="flex flex-col gap-0.5 px-1">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-ui text-foreground font-semibold">{category.label}</h3>
-                  <span className="text-tag text-muted-foreground tabular-nums">
+                  <h3 className="text-heading-foreground text-lg font-semibold">
+                    {category.label}
+                  </h3>
+                  <span className="text-muted-foreground text-sm tabular-nums">
                     {commands.length}
                   </span>
                 </div>
-                <p className="text-tag text-muted-foreground">{category.description}</p>
+                <p className="text-muted-foreground text-sm leading-normal">
+                  {category.description}
+                </p>
               </div>
 
               <div className="bg-card border-hairline divide-hairline-subtle flex min-w-0 flex-col divide-y overflow-hidden rounded-xl border">
@@ -468,11 +506,13 @@ export function CliBrowse({
                   >
                     <div className="flex min-w-0 items-center justify-between gap-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        <span className="text-ui text-foreground font-mono font-semibold">
+                        <span className="text-code-foreground font-mono text-base font-semibold">
                           {cmd.label}
                         </span>
                         {cmd.subcommands?.length ? (
-                          <Badge variant="tag">{cmd.subcommands.length} sub</Badge>
+                          <Badge appearance="text" size="comfortable" variant="tag">
+                            {cmd.subcommands.length} sub
+                          </Badge>
                         ) : null}
                       </div>
                       <ChevronRight
@@ -480,14 +520,14 @@ export function CliBrowse({
                         className="text-muted-foreground size-3.5 shrink-0"
                       />
                     </div>
-                    <p className="text-tag text-muted-foreground line-clamp-2">{cmd.summary}</p>
+                    <p className="text-muted-foreground line-clamp-2 text-sm">{cmd.summary}</p>
                     <CliHazardBadges meta={cmd.meta} compact />
                   </button>
                 ))}
               </div>
             </section>
           ))}
-        </div>
+        </TabStage>
       )}
     </div>
   );

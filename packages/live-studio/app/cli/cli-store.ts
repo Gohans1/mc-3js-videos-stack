@@ -41,6 +41,8 @@ export interface CliUiState {
   templatesLoaded: boolean;
   templatesError: string | null;
   view: "browse" | "workbench";
+  panelMode: "embedded" | "expanded";
+  helpOpen: boolean;
   searchQuery: string;
   selectedCategory: CliCategoryId | "all";
   activeCommandId: string;
@@ -74,6 +76,8 @@ export const cliStore = createStore<CliUiState>(() => ({
   templatesLoaded: false,
   templatesError: null,
   view: "browse",
+  panelMode: "embedded",
+  helpOpen: false,
   searchQuery: "",
   selectedCategory: "all",
   activeCommandId: "find",
@@ -277,6 +281,7 @@ export function openCommandWorkbench(commandId: string, opts?: { focusRunId?: st
   cliStore.setState({
     view: "workbench",
     activeCommandId: commandId,
+    helpOpen: false,
     editingTemplateId: null,
     clearedHint: null,
     runError: null,
@@ -299,6 +304,7 @@ export function openTemplateInWorkbench(template: CliTemplate) {
   cliStore.setState((s) => ({
     view: "workbench",
     activeCommandId: cmd.id,
+    helpOpen: false,
     editingTemplateId: template.id,
     clearedHint: null,
     runError: null,
@@ -352,6 +358,7 @@ export function setActiveCommandSubcommand(level: number, subId: string) {
         args,
         flags,
         env: {},
+        pendingInputs: {},
       },
     },
   }));
@@ -368,6 +375,18 @@ export function setDraftTargetFilm(commandId: string, targetFilm: string) {
     },
   }));
   syncCatalogForTarget(targetFilm);
+}
+
+export function updatePendingInput(commandId: string, key: string, value: string) {
+  const cmd = findCliCommand(commandId);
+  if (!cmd) return;
+  const current = getOrCreateDraft(cmd);
+  const pendingInputs = { ...current.pendingInputs };
+  if (value) pendingInputs[key] = value;
+  else delete pendingInputs[key];
+  cliStore.setState((prev) => ({
+    drafts: { ...prev.drafts, [commandId]: { ...current, pendingInputs } },
+  }));
 }
 
 export function updateDraftField(

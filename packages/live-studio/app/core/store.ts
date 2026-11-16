@@ -29,6 +29,7 @@ export type ModalKind =
   | "noteRefs"
   | "reviewImage"
   | "cliConfirm"
+  | "cliHelp"
   | "cliTemplate"
   | null;
 
