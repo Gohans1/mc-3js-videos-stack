@@ -1,8 +1,8 @@
-"""The one way to write src/timeline/*.json (Steve's keys, camera keys, props, audio), so they stay short to read and their
+"""Optional formatting for src/timeline/*.json (Steve's keys, camera keys, props, audio), so they stay short to read and their
 diffs show only what changed: every object or list that fits in 140 columns sits on one line, longer ones open up one level.
 python ../../scripts/timeline_fmt.py            rewrites every src/timeline/*.json in this format (content unchanged)
 from timeline_fmt import save     save("steve", data) from another script"""
-import json
+import argparse, json, sys
 from pathlib import Path
 
 DIR = Path.cwd() / "src/timeline"  # run from the film folder
@@ -29,6 +29,17 @@ def save(name, data):
 
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.parse_args(["--help"] if sys.argv[1:2] == ["help"] else None)
+    if not DIR.is_dir():
+        ap.error(f"no {DIR}: cd films/<name> first")
+    data = []
     for f in sorted(DIR.glob("*.json")):
-        save(f.stem, load(f.stem))
+        try:
+            data.append((f, load(f.stem)))
+        except (OSError, ValueError) as e:
+            ap.error(f"{f}: {e}; fix the JSON before formatting")
+    for f, value in data:
+        save(f.stem, value)
         print(f.name, f.read_text(encoding="utf8").count("\n"), "lines")
+    print("next: bun run check")

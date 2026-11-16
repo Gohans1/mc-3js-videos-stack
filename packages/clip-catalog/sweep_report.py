@@ -7,9 +7,10 @@ python ../../packages/clip-catalog/sweep_report.py --diff OLD.jsonl    regressio
     old sweep aside, sweep again, then list every clip whose numbers changed at all (the lab is deterministic, so an
     untouched clip matches exactly), each check's worst value old > new
 """
-import argparse, json, re
+import argparse, sys
 
 from catalog import FIGHT, ROOT
+from batch import read_rows
 
 # check (start of its name) -> limit past which a clip is listed
 LIMITS = {
@@ -21,7 +22,10 @@ LIMITS = {
 
 
 def diff(rows, old_path):
-    old = {r["clip"]: r for r in (json.loads(l) for l in open(old_path, encoding="utf-8") if l.strip())}
+    from pathlib import Path
+    old = read_rows(Path(old_path))
+    if not old:
+        raise ValueError(f"no rows in {old_path}: pass a saved sweep JSONL")
     worst = lambda r, check: max([v for k, (v, t) in r.get("s", {}).items() if k.startswith(check)], default=0)
     same = changed = 0
     for r in rows:
@@ -38,19 +42,33 @@ def diff(rows, old_path):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("lib", nargs="?", default="mixamo")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("lib", nargs="?", default="mixamo", choices=["mixamo", "ual1", "ual2"])
     ap.add_argument("--top", type=int, default=12)
     ap.add_argument("--only")
     ap.add_argument("--fights", action="store_true", help="keep weapon and fight clips (left out by default, as the finder does)")
     ap.add_argument("--diff", metavar="OLD")
-    a = ap.parse_args()
-    rows = [json.loads(l) for l in open(ROOT / f"catalog/sweep_{a.lib}.jsonl", encoding="utf-8") if l.strip()]
-    if a.diff:
-        return diff(rows, a.diff)
+    a = ap.parse_args(["--help"] if sys.argv[1:2] == ["help"] else None)
+    if a.top <= 0:
+        ap.error("--top must be positive")
+    try:
+        rows = list(read_rows(ROOT / f"catalog/sweep_{a.lib}.jsonl").values())
+        if not rows:
+            ap.error(f"no sweep rows: inside a film run python ../../packages/clip-catalog/batch.py sweep {a.lib}")
+    except (OSError, ValueError) as e:
+        ap.error(str(e))
     if a.only:
         keep = set(a.only.split(","))
         rows = [r for r in rows if r["clip"] in keep]
+        if not rows:
+            ap.error("--only matched no clip names; use names from the sweep JSONL")
+    if a.diff:
+        try:
+            diff(rows, a.diff)
+        except (OSError, ValueError) as e:
+            ap.error(str(e))
+        print("next: inspect changed clips with ENTRY=../../packages/clip-catalog/mocap.ts bun run render stills")
+        return 0
     errors = [r for r in rows if "error" in r]
     rows = [r for r in rows if "error" not in r and (a.fights or not FIGHT.search(r["clip"]))]
     print(f"{len(rows)} clips, {len(errors)} failed" + "".join(f"\n    {e['clip']}: {e['error']}" for e in errors))
@@ -63,7 +81,9 @@ def main():
         for v, t, c, k in hits[: a.top]:
             print(f"    {v:7.1f} at {t:5.2f}s  {c}  ({k})")
     print(f"\n{len(bad)} of {len(rows)} clips past some limit")
+    print("next: inspect listed seconds in mocap.ts; limits are review hints, not creative restrictions")
+    return int(bool(errors))
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

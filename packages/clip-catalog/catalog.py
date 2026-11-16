@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from jev import Jev
+from batch import read_rows
 
 ROOT = Path(__file__).resolve().parents[2] / "vault/motion"  # the repo's vault link (bun run link)
 # Fight words and retarget-break limits, shared with bun run find (scripts/find.ts reads the same file)
@@ -141,9 +142,10 @@ def rows(libs):
         p = ROOT / "catalog" / f"{lib}.jsonl"
         brk = broken(lib)
         if p.exists():
-            for line in p.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    r = json.loads(line)
+            for r in read_rows(p).values():
+                if r:
+                    if "error" in r:
+                        continue
                     rv = review.get(r["ref"], {})
                     # seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
                     body = [x for x in [r["start"], *r["seq"], r["end"]] if x]

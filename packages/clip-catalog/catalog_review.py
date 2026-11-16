@@ -21,8 +21,8 @@ python ../../packages/clip-catalog/catalog_review.py --fix mixamo/X '{"seq": ["s
 """
 import argparse, json, sys
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
 from catalog import ROOT, has
+from batch import read_rows
 
 CAT = ROOT / "catalog"
 REVIEW, SHEETS, OUT = CAT / "review.json", CAT / "sheets", CAT / "review_pages"
@@ -49,7 +49,10 @@ def load_review():
 
 
 def save_review(rv):
-    REVIEW.write_text(json.dumps(rv, indent=1, sort_keys=True), encoding="utf-8")
+    REVIEW.parent.mkdir(parents=True, exist_ok=True)
+    tmp = REVIEW.with_suffix(".json.new")
+    tmp.write_text(json.dumps(rv, indent=1, sort_keys=True, allow_nan=False), encoding="utf-8")
+    tmp.replace(REVIEW)
 
 
 def caption(r):
@@ -61,15 +64,22 @@ def caption(r):
 def pages(missing=None):
     """the pages: clips nobody has reviewed, captioned with their measured tags; or, with `missing`, reviewed clips whose
     notes lack that field, captioned with the notes so far"""
-    rows = {json.loads(l)["ref"]: json.loads(l) for f in sorted(CAT.glob("*.jsonl")) if not f.name.startswith("sweep_") for l in f.read_text(encoding="utf-8").splitlines() if l.strip()}
+    from PIL import Image, ImageDraw, ImageFont
+    rows = catalogue()
+    if not rows:
+        raise ValueError("no measured clips: run batch.py catalog first")
     seen = load_review()
     want = (lambda ref: ref in seen and missing not in seen[ref]) if missing else (lambda ref: ref not in seen)
     refs = [ref for ref in rows if want(ref) and (SHEETS / f"{ref.replace('/', '__')}.jpg").exists()]
     cap = CAP + 18 if missing else CAP
+    absent = [ref for ref in rows if want(ref) and not (SHEETS / f"{ref.replace('/', '__')}.jpg").exists()]
+    if absent:
+        raise ValueError(f"{len(absent)} clips need sheets: run batch.py sheets first (first: {absent[0]})")
     OUT.mkdir(parents=True, exist_ok=True)
-    for old in OUT.glob("page_*.jpg"):
-        old.unlink()
-    font = ImageFont.truetype("arial.ttf", 15)
+    try:
+        font = ImageFont.truetype("arial.ttf", 15)
+    except OSError:
+        font = ImageFont.load_default(size=15)
     book = {}
     for p in range(0, len(refs), PER):
         part = refs[p : p + PER]
@@ -79,7 +89,8 @@ def pages(missing=None):
             x, y = (k % 2) * 640, (k // 2) * (360 + cap)
             page.paste(Image.open(SHEETS / f"{ref.replace('/', '__')}.jpg").resize((640, 360)), (x, y + cap))
             name, tags = caption(rows[ref])
-            lines = [f"{k + 1}. {name}"[:80]] + ([seen[ref]["desc"][i : i + 84] for i in (0, 84)] if missing else [tags[:84]])
+            desc = seen.get(ref, {}).get("desc", "")
+            lines = [f"{k + 1}. {name}"[:80]] + ([desc[i : i + 84] for i in (0, 84)] if missing else [tags[:84]])
             for j, line in enumerate(lines):
                 d.text((x + 4, y + 2 + 18 * j), line, fill="white" if j == 0 else "yellow", font=font)
         page = page.crop((0, 0, 1280, ((len(part) + 1) // 2) * (360 + cap)))
@@ -88,32 +99,88 @@ def pages(missing=None):
         book[n] = part
     (OUT / "pages.json").write_text(json.dumps(book, indent=1), encoding="utf-8")
     print(f"{len(refs)} clips to review on {len(book)} pages in {OUT}")
+    print("next: open the pages listed in pages.json; submit a page with --page N --notes notes.json (do not regenerate pages mid-review)")
+
+
+def catalogue():
+    return {ref: row for f in sorted(CAT.glob("*.jsonl")) if not f.name.startswith("sweep_")
+            for ref, row in read_rows(f).items() if "error" not in row}
+
+
+def validate(note, row, complete=False):
+    if not isinstance(note, dict):
+        raise ValueError("notes must be JSON objects")
+    allowed = (set(row) - {"ref", "error"}) | {"desc", "mood", "prop", "style", "flaw"}
+    if set(note) - allowed:
+        raise ValueError(f"unknown or protected fields: {sorted(set(note) - allowed)}")
+    for key in ["desc", "flaw"]:
+        if key in note and not isinstance(note[key], str):
+            raise ValueError(f"{key} must be text")
+    for key, vocabulary in [("mood", MOODS), ("prop", PROPS), ("style", STYLES)]:
+        if key in note:
+            value = note[key]
+            if not isinstance(value, list) or any(not isinstance(x, str) or x not in vocabulary for x in value):
+                raise ValueError(f"{key} must be an array from {sorted(vocabulary)}")
+    for key in set(note) & set(row):
+        old, new = row[key], note[key]
+        if isinstance(new, bool) != isinstance(old, bool) or not (isinstance(new, (int, float)) and isinstance(old, (int, float)) or type(new) is type(old)):
+            raise ValueError(f"{key} must have the same JSON type as the measurement")
+    postures = {"stand", "crouch", "kneel", "sitSeat", "sitFloor", "allFours", "lie"}
+    for key in ["start", "end", "seq"]:
+        if key in note:
+            values = note[key] if key == "seq" else [note[key]]
+            if any(not isinstance(v, str) or v not in postures for v in values):
+                raise ValueError(f"{key} needs postures from {sorted(postures)}")
+    if complete and not all(note.get(key) for key in ["desc", "mood", "prop", "style"]):
+        raise ValueError("needs desc, mood, prop and style")
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--page", type=int, help="page number: its verdicts from stdin, by slot")
-    ap.add_argument("--fix", nargs=2, metavar=("REF", "JSON"), help="right values for a clip's wrong fields")
-    ap.add_argument("--missing", metavar="FIELD", help="pages of reviewed clips whose notes lack FIELD")
-    a = ap.parse_args()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 epilog=f"Mood: {', '.join(sorted(MOODS))}\nProp: {', '.join(sorted(PROPS))}\nStyle: {', '.join(sorted(STYLES))}\nDescriptions stay free-form; tags aid search, never limit a film's acting.")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--page", type=int, help="zero-based page number; submit every numbered slot")
+    mode.add_argument("--fix", nargs=2, metavar=("REF", "JSON"), help="merge corrections for one known clip")
+    mode.add_argument("--missing", choices=["desc", "mood", "prop", "style", "flaw"], help="pages of reviewed clips missing this field")
+    ap.add_argument("--notes", type=Path, help="page notes JSON file (PowerShell); without it read stdin")
+    a = ap.parse_args(["--help"] if sys.argv[1:2] == ["help"] else None)
+    if a.notes and a.page is None:
+        ap.error("--notes requires --page N")
+    try:
+        return apply(a)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        ap.error(f"{e}; --help shows the workflow; no review changes saved")
+
+
+def apply(a):
+    rows = catalogue()
     if a.fix:
+        ref, text = a.fix
+        if ref not in rows:
+            raise ValueError(f"unknown clip {ref}; use a ref from the catalogue")
+        changes = json.loads(text)
+        validate(changes, rows[ref])
         rv = load_review()
-        rv[a.fix[0]] = {**rv.get(a.fix[0], {}), **json.loads(a.fix[1])}
+        rv[ref] = {**rv.get(ref, {}), **changes}
         save_review(rv)
+        print(f"{ref}: corrections saved\nnext: preview the corrected clip with ENTRY=lab/clip.ts LAB_CLIP={ref} bun run render stills")
     elif a.page is not None:
         refs = json.loads((OUT / "pages.json").read_text(encoding="utf-8"))[str(a.page)]
-        notes = json.loads(sys.stdin.read())
+        notes = json.loads(a.notes.read_text(encoding="utf-8-sig") if a.notes else sys.stdin.read())
+        if not isinstance(notes, dict) or set(notes) != {str(k + 1) for k in range(len(refs))}:
+            raise ValueError(f"page {a.page}: notes must contain exactly slots 1..{len(refs)}")
         rv = load_review()
         # every clip's notes once merged must hold desc, mood, prop and style, in the fixed words
         for k, ref in enumerate(refs):
-            n = {**rv.get(ref, {}), **notes.get(str(k + 1), {})}
-            bad = set(n.get("mood", [])) - MOODS | set(n.get("prop", [])) - PROPS | set(n.get("style", [])) - STYLES
-            if bad or not all(n.get(f) for f in ["desc", "mood", "prop", "style"]):
-                sys.exit(f"page {a.page} slot {k + 1}: needs desc, mood, prop and style (fixed words); unknown: {sorted(bad)}")
+            change = notes[str(k + 1)]
+            validate(change, rows[ref])
+            n = {**rv.get(ref, {}), **change}
+            validate(n, rows[ref], complete=True)
         for k, ref in enumerate(refs):
             rv[ref] = {**rv.get(ref, {}), **notes.get(str(k + 1), {})}
         save_review(rv)
         print(f"page {a.page}: {len(refs)} clips noted; {len(rv)} reviewed")
+        print("next: review the next page listed in pages.json; regenerate only after finishing this book")
     else:
         pages(a.missing)
 

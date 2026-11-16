@@ -3,12 +3,11 @@ Sitting must sit...): run after `bash ../../packages/clip-catalog/catalog.sh`, a
 disagrees, for a look with lab/clip.ts: a name can be wrong too (Kneeling_To_Holding_Down... ends lying), so judge by eye.
 python ../../packages/clip-catalog/catalog_check.py
 """
-import glob, json, re
-from pathlib import Path
+import argparse, re, sys
 
-from catalog import ROOT
+from catalog import ROOT, FIGHT
+from batch import read_rows
 
-FIGHT = re.compile(r"gun|rifle|pistol|sword|shoot|aim|reload|punch|kick|boxing|fight|attack|block|arrow|bow|zombie|mutant|sniper|grenade|flip", re.I)
 # name word -> postures of which one must show up in the clip (None: a check of its own below)
 RULES = [
     ({"kneel", "kneeling"}, {"kneel"}),
@@ -22,9 +21,20 @@ RULES = [
 
 
 def main():
-    rows = [json.loads(l) for f in sorted(glob.glob(str(ROOT / "catalog/*.jsonl"))) if not Path(f).name.startswith("sweep_") for l in open(f, encoding="utf-8") if l.strip()]
+    ap = argparse.ArgumentParser(description=__doc__ + "\nName disagreements are hints, not creative restrictions. Exit 1: disagreements/load failures; exit 2: missing or invalid data.")
+    ap.add_argument("--fights", action="store_true", help="include weapons and fights; the default matches the finder")
+    a = ap.parse_args(["--help"] if sys.argv[1:2] == ["help"] else None)
+    files = [p for p in sorted((ROOT / "catalog").glob("*.jsonl")) if not p.name.startswith("sweep_")]
+    if not files:
+        ap.error("no catalogue: inside a film run python ../../packages/clip-catalog/batch.py catalog first")
+    try:
+        rows = [r for p in files for r in read_rows(p).values()]
+    except (OSError, ValueError) as e:
+        ap.error(str(e))
+    if not rows:
+        ap.error("catalogue is empty: run batch.py catalog first")
     errors = [r for r in rows if "error" in r]
-    rows = [r for r in rows if "error" not in r and not FIGHT.search(r["ref"])]
+    rows = [r for r in rows if "error" not in r and (a.fights or not FIGHT.search(r["ref"].split("/", 1)[1]))]
     total = bad_total = 0
     for words, want in RULES:
         hit = [r for r in rows if words & set(re.split(r"[_\W]+", r["ref"].split("/", 1)[1].lower()))]
@@ -40,7 +50,9 @@ def main():
         for r in bad:
             print(f"    {r['ref']}  {r['dur']}s  {'>'.join(r['seq'])}  reach {r['reach']} air {r['air']} hips {r['hips']}")
     print(f"{bad_total} of {total} named clips disagree; {len(errors)} clips failed to load" + "".join(f"\n    {e['ref']}: {e['error']}" for e in errors))
+    print("next: inspect flagged clips with LAB_CLIP=<lib/name> ENTRY=lab/clip.ts bun run render stills; correct tags with catalog_review.py --fix")
+    return int(bool(bad_total or errors))
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
