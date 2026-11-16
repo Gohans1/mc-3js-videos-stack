@@ -1,0 +1,10 @@
+{
+  "run": "2026-11-16T18-47-16-174Z",
+  "source": "Captured tool output",
+  "message": "Uncaught (in promise) Error: Playback or note interaction failed",
+  "scriptLine": 23,
+  "fullOriginalLogAvailable": false,
+  "reason": "Retry reused the temporary log filename. Partial navigation, image and audio artifacts remain in the run directory; the first per-step UI flags were not returned.",
+  "probeCorrection": "Wait up to 2.5 seconds for note visibility to change, then persist the trace before asserting results.",
+  "retry": "2026-11-16T18-49-15-511Z"
+}

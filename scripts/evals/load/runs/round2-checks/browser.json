@@ -1,0 +1,199 @@
+{
+  "tool": "T3 preview",
+  "port": 4392,
+  "profile": "incognito",
+  "mobile": false,
+  "notUsedForTiming": true,
+  "settingsControls": [
+    "captions",
+    "guides",
+    "scopes",
+    "audio-meter",
+    "ai-activity",
+    "try-on",
+    "free-cam",
+    "night-vision",
+    "final"
+  ],
+  "playback": {
+    "before": 0,
+    "during": 1.301333,
+    "paused": true,
+    "after": 1.3
+  },
+  "seek": {
+    "seek": [
+      {
+        "actual": 0,
+        "requested": 0
+      },
+      {
+        "actual": 2.4,
+        "requested": 2.4
+      },
+      {
+        "actual": 4.7,
+        "requested": 4.7
+      },
+      {
+        "actual": 8.2,
+        "requested": 8.2
+      },
+      {
+        "actual": 10.5,
+        "requested": 10.5
+      },
+      {
+        "actual": 13.2,
+        "requested": 13.2
+      }
+    ],
+    "seekFunctionName": "seek"
+  },
+  "notes": {
+    "opened": {
+      "closeButtons": [
+        {
+          "label": null,
+          "text": "Cancel"
+        }
+      ],
+      "dialogs": [],
+      "fields": [
+        {
+          "label": "Note",
+          "placeholder": "Type… or paste a picture (Ctrl+V)"
+        }
+      ]
+    },
+    "cancelled": true,
+    "saved": false,
+    "visibleAfterCancel": false
+  },
+  "final": {
+    "dimensions": [
+      1080,
+      1920
+    ],
+    "finalVisible": true,
+    "loading": false
+  },
+  "panels": {
+    "alerts": [],
+    "panels": [
+      {
+        "name": "Film",
+        "panels": [
+          {
+            "label": "_r_6o_-tab-film",
+            "text": "On screenAudio3Transitions13D3Custom fields1Checks2On screenAudio3Transitions13D3Custom fields1Check"
+          },
+          {
+            "label": "_r_6s_-tab-cam",
+            "text": "Shot 0SplitNameRuns00:00.000 – 00:01.9501.9 sKeyframeStartTime00:00.000FOV°Roll°Sway×The film's slow"
+          }
+        ],
+        "selected": "true"
+      },
+      {
+        "name": "Audio",
+        "panels": [
+          {
+            "label": "_r_6o_-tab-sound",
+            "text": "YoursMusicSound effectsAllAmbienceCamera shutterClicksComedy & memesCreaturesCrowdFoleyFootstepsGame"
+          },
+          {
+            "label": "_r_6s_-tab-cam",
+            "text": "Shot 0SplitNameRuns00:00.000 – 00:01.9501.9 sKeyframeStartTime00:00.000FOV°Roll°Sway×The film's slow"
+          }
+        ],
+        "selected": "true"
+      },
+      {
+        "name": "Text",
+        "panels": [
+          {
+            "label": "_r_6o_-tab-text",
+            "text": "TextDefault textDefault textEvery frameWord riseBUILT IN 3DAccent coolSEALED ROOMPlace and timeSECTO"
+          },
+          {
+            "label": "_r_6s_-tab-cam",
+            "text": "Shot 0SplitNameRuns00:00.000 – 00:01.9501.9 sKeyframeStartTime00:00.000FOV°Roll°Sway×The film's slow"
+          }
+        ],
+        "selected": "true"
+      },
+      {
+        "name": "Objects",
+        "panels": [
+          {
+            "label": "_r_6o_-tab-objects",
+            "text": "In this film (2)catcakeBlocksMobsCustomDrag onto the picture, or click + to add it in the middle of "
+          },
+          {
+            "label": "_r_6s_-tab-cam",
+            "text": "Shot 0SplitNameRuns00:00.000 – 00:01.9501.9 sKeyframeStartTime00:00.000FOV°Roll°Sway×The film's slow"
+          }
+        ],
+        "selected": "true"
+      },
+      {
+        "name": "Transitions",
+        "panels": [
+          {
+            "label": "_r_6o_-tab-transition",
+            "text": "AllFavoritesThis filmBasicWipe & SplitMask & IrisLight & FocusSpeed & GlitchDissolveBlack FadeWhite "
+          },
+          {
+            "label": "_r_6s_-tab-cam",
+            "text": "Shot 0SplitNameRuns00:00.000 – 00:01.9501.9 sKeyframeStartTime00:00.000FOV°Roll°Sway×The film's slow"
+          }
+        ],
+        "selected": "true"
+      },
+      {
+        "name": "Camera",
+        "panels": [
+          {
+            "label": "_r_6o_-tab-transition",
+            "text": "AllFavoritesThis filmBasicWipe & SplitMask & IrisLight & FocusSpeed & GlitchDissolveBlack FadeWhite "
+          },
+          {
+            "label": "_r_6s_-tab-cam",
+            "text": "Shot 0SplitNameRuns00:00.000 – 00:01.9501.9 sKeyframeStartTime00:00.000FOV°Roll°Sway×The film's slow"
+          }
+        ],
+        "selected": "true"
+      },
+      {
+        "name": "Notes",
+        "panels": [
+          {
+            "label": "_r_6o_-tab-notes",
+            "text": "NotesNoteNo notes yet. Click the picture or press M to add one"
+          },
+          {
+            "label": "_r_6s_-tab-cam",
+            "text": "Shot 0SplitNameRuns00:00.000 – 00:01.9501.9 sKeyframeStartTime00:00.000FOV°Roll°Sway×The film's slow"
+          }
+        ],
+        "selected": "true"
+      }
+    ]
+  },
+  "firstSnapshotWarnings": [
+    "Shader X3595 gradient instruction used in loop",
+    "Shader X4000 potentially uninitialized f_transition"
+  ],
+  "finalSnapshot": {
+    "screenshotPath": "C:\\Users\\ADMIN\\.t3\\userdata\\browser-artifacts\\browser-screenshot-localhost-mwjl1qyw-71e4de81.png",
+    "consoleEntries": [],
+    "networkFailures": [],
+    "visibleText": "00:00.000\nPlay\nNote\nDraw\nFree camera\nAI idle\nCamera\nAction\nSteve\n2\nmoves\nface\nProps\n0\nObjects\n2\ncat\ncake\nFX\n0\n−∞\nS\n-22.1\nI\nNotes\nLessons\nFilm\nPorts\nAudio\nText\nObjects\nTransitions\nAdjustment\nNotes\nNote\nNo notes yet. Click the picture or press M to add one\nCamera\nSpeed\nAnimation\nAdjust\nShot 0\nSplit\nName\nRuns\n00:00.000 – 00:01.950\n1.9 s\nKeyframe\n\nStart\n\nTime\n00:00.000\nFOV\n°\nRoll\n°\nSway\n×\n\nThe film's slow drift: 0 holds still, 1 is its own\n\nUse free camera view\nHold 1 s\nKeyframe easing"
+  },
+  "limits": [
+    "Only first 40 network entries per snapshot are exposed; the load harness separately checks all recorded requests.",
+    "Keyframes tab depends on the selected context; initial loop looked for a static tab and failed. Camera keyframe controls were present; no feature edit was made.",
+    "The first evaluate timed out while the software renderer was building the scene; later interactions completed."
+  ]
+}

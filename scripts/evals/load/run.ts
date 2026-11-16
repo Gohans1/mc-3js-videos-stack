@@ -32,7 +32,11 @@ cold and warm. Each finished run adds one line to scripts/evals/load/runs/histor
 thread spent the time, by function (self and total; the page keeps its names, see src/page.mjs), and the libraries' time
 under the page's function that called into them. Phone runs swing ~30%: repeat one before calling it a win.
 --panels also measures the first opening of Settings after the warm desktop visit (cold panel cache).
+--frames 0,2.4,4.7 captures the film canvas at fixed seconds after the measured visits, once per profile.
+--audio renders the live audio lanes offline from 0 to 15 seconds after measuring, for before/after RMS comparison.
+--playback records eight seconds of real play/pause cadence and checks opening/cancelling a note after measuring.
 Raw samples are saved after each visit in scripts/evals/load/runs/<timestamp>/, even if a later visit fails.
+The complete eval stops after 20 minutes.
 The film's own studio must not be running (one studio per film); the eval stops its studio when done.`;
 
 const args = process.argv.slice(2);
@@ -44,8 +48,8 @@ const flag = (k: string) => {
   const i = args.indexOf(k);
   return i < 0 ? undefined : args[i + 1];
 };
-const KNOWN = new Set(["--film", "--runs", "--only", "--note"]);
-const switches = new Set(["--profile", "--panels"]);
+const KNOWN = new Set(["--film", "--runs", "--only", "--note", "--frames"]);
+const switches = new Set(["--profile", "--panels", "--audio", "--playback"]);
 for (let i = 0; i < args.length; i += switches.has(args[i]!) ? 1 : 2)
   if (!KNOWN.has(args[i]!) && !switches.has(args[i]!)) {
     console.error(`unknown option ${args[i]}\n\n${HELP}`);
@@ -56,6 +60,11 @@ const FILM = flag("--film") ?? "cell-break",
   ONLY = flag("--only"),
   NOTE = flag("--note") ?? "",
   PROFILE = args.includes("--profile");
+const FRAMES = flag("--frames")?.split(",").map(Number) ?? [];
+if (FRAMES.some((t) => !Number.isFinite(t) || t < 0)) {
+  console.error("--frames takes comma-separated nonnegative seconds");
+  process.exit(2);
+}
 const FILM_DIR = join(ROOT, "films", FILM);
 if (!existsSync(join(FILM_DIR, "package.json"))) {
   console.error(`no film at films/${FILM}`);
@@ -205,7 +214,7 @@ const openChrome = async () => {
         },
         fail: (error) => {
           clearTimeout(timer);
-          fail(error);
+          fail(new Error(`${method}: ${error.message}`));
         },
       });
       sock.send(JSON.stringify({ id, method, params, sessionId }));
@@ -319,7 +328,7 @@ const cpuTimes = (p: CpuProfile, name: string) => {
     total = new Map<string, number>(),
     caller = new Map<string, number>();
   const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
-  const inLib = (id: number) => /\/vendor-[\w-]+\.js$/.test(node.get(id)!.callFrame.url);
+  const inLib = (id: number) => /\/vendor-[\w~-]+\.js$/.test(node.get(id)!.callFrame.url);
   p.samples.forEach((id, i) => {
     const ms = (p.timeDeltas[i] ?? 0) / 1000,
       seen = new Set<string>();
@@ -361,15 +370,19 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
   await cdp.send("Page.enable", {}, s);
   await cdp.send("Network.enable", {}, s);
   await cdp.send("Runtime.enable", {}, s);
+  await cdp.send("Log.enable", {}, s);
   await profile.setup(cdp, s);
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: PROBE }, s);
   const network = new Map<
     string,
     { path: string; priority: string; status?: number; error?: string }
   >();
+  const preloadWarnings: string[] = [];
   const onNetwork = (m: Msg) => {
     if (m.sessionId !== s) return;
     const p = m.params;
+    if (m.method === "Log.entryAdded" && /preload/i.test(p.entry?.text ?? ""))
+      preloadWarnings.push(p.entry.text);
     if (m.method === "Network.requestWillBeSent" && p.request.url.startsWith(URL_))
       network.set(p.requestId, {
         path: new URL(p.request.url).pathname,
@@ -383,15 +396,24 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
   cdp.listeners.add(onNetwork);
   const load = async (kind: "cold" | "warm", cpu: string | null = null) => {
     network.clear();
+    preloadWarnings.length = 0;
     if (cpu) {
       await cdp.send("Profiler.enable", {}, s);
       await cdp.send("Profiler.setSamplingInterval", { interval: 500 }, s);
       await cdp.send("Profiler.start", {}, s);
     }
-    await cdp.send("Page.navigate", { url: URL_ }, s);
+    const navigation = await cdp.send("Page.navigate", { url: URL_ }, s);
+    if (!navigation.loaderId)
+      throw new Error(`Navigation did not create a document: ${JSON.stringify(navigation)}`);
     const t0 = Date.now();
     for (;;) {
       await sleep(250);
+      const frame = await cdp.send("Page.getFrameTree", {}, s);
+      if (frame.frameTree.frame.loaderId !== navigation.loaderId) {
+        if (Date.now() - t0 > 180e3)
+          throw new Error("Expected document was not committed after 180 s");
+        continue;
+      }
       const r = await cdp
         .send("Runtime.evaluate", { expression: READ, returnByValue: true }, s)
         .catch(() => null);
@@ -409,7 +431,26 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
         for (const key of ["files", "kb", "js", "req", "errors", "fcp", "lcp"])
           v[key] = settled[key];
         v.network = [...network.values()];
+        v.preloadWarnings = [...preloadWarnings];
+        const settledFrame = await cdp.send("Page.getFrameTree", {}, s);
+        if (settledFrame.frameTree.frame.loaderId !== navigation.loaderId)
+          throw new Error("The page reloaded during the measurement");
+        v.loaderId = navigation.loaderId;
+        appendFileSync(
+          join(runDir, "navigations.jsonl"),
+          JSON.stringify({ profile: profile.name, kind, ...v }) + "\n",
+        );
         if (capture) {
+          v.gpu = (
+            await cdp.send(
+              "Runtime.evaluate",
+              {
+                expression: `(() => { const g=document.querySelector('canvas').getContext('webgl2'), d=g?.getExtension('WEBGL_debug_renderer_info'); return {renderer:g?.getParameter(d?.UNMASKED_RENDERER_WEBGL??g.RENDERER), parallelShaders:!!g?.getExtension('KHR_parallel_shader_compile')}; })()`,
+                returnByValue: true,
+              },
+              s,
+            )
+          ).result.value;
           const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, s);
           writeFileSync(join(runDir, `${profile.name}-${kind}.png`), data, "base64");
           const bounds = (
@@ -464,6 +505,125 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
     if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails));
     settings = r.result.value;
   }
+  if (capture && FRAMES.length) {
+    const seen = new Map<number, number>();
+    for (const t of FRAMES) {
+      if (profile.name === "phone") {
+        const { result } = await cdp.send(
+          "Runtime.evaluate",
+          {
+            expression: `(() => { const e=document.querySelector('[role="slider"][aria-label="Playhead"]'), b=e.getBoundingClientRect(); return {x:b.x+b.width*${t}/Number(e.getAttribute('aria-valuemax')),y:b.y+b.height/2}; })()`,
+            returnByValue: true,
+          },
+          s,
+        );
+        for (const type of ["mousePressed", "mouseReleased"])
+          await cdp.send(
+            "Input.dispatchMouseEvent",
+            { type, ...result.value, button: "left", clickCount: 1 },
+            s,
+          );
+      } else {
+        const { exceptionDetails } = await cdp.send(
+          "Runtime.evaluate",
+          { expression: `window.__editor.seek(${t})` },
+          s,
+        );
+        if (exceptionDetails) throw new Error(JSON.stringify(exceptionDetails));
+      }
+      const r = await cdp.send(
+        "Runtime.evaluate",
+        {
+          expression: `(async()=>{await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const c=document.querySelector('canvas'),b=c.getBoundingClientRect();return {t:window.__live.t,clip:{x:b.x,y:b.y,width:b.width,height:b.height,scale:1}}})()`,
+          awaitPromise: true,
+          returnByValue: true,
+        },
+        s,
+      );
+      if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails));
+      if (Math.abs(r.result.value.t - t) > 0.05) throw new Error(`Seek did not reach ${t}`);
+      const shot = await cdp.send(
+        "Page.captureScreenshot",
+        { format: "png", clip: r.result.value.clip },
+        s,
+      );
+      const repeat = seen.get(t) ?? 0;
+      seen.set(t, repeat + 1);
+      const name = `${profile.name}-at-${t}${repeat ? `-repeat-${repeat}` : ""}`;
+      writeFileSync(join(runDir, `${name}.png`), shot.data, "base64");
+      appendFileSync(
+        join(runDir, "frames.jsonl"),
+        JSON.stringify({
+          profile: profile.name,
+          requested: t,
+          ...r.result.value,
+          file: `${name}.png`,
+        }) + "\n",
+      );
+    }
+  }
+  if (capture && args.includes("--audio")) {
+    const r = await cdp.send(
+      "Runtime.evaluate",
+      {
+        expression: "window.__lanesRender(0, 15)",
+        awaitPromise: true,
+        returnByValue: true,
+      },
+      s,
+    );
+    if (r.exceptionDetails || !r.result.value?.rms?.length)
+      throw new Error(
+        `Audio verification failed: ${JSON.stringify(r.exceptionDetails ?? r.result.value)}`,
+      );
+    writeFileSync(
+      join(runDir, `${profile.name}-audio.json`),
+      JSON.stringify(r.result.value, null, 2),
+    );
+  }
+  if (capture && args.includes("--playback")) {
+    const r = await cdp.send(
+      "Runtime.evaluate",
+      {
+        expression: `(async()=>{
+        const start=performance.now(), from=window.__live.t, samples=[];
+        document.querySelector('button[aria-label="Play"]').click();
+        let previous=-1;
+        while(performance.now()-start<8000){
+          await new Promise(requestAnimationFrame);
+          const v=window.__live;
+          if(v.t!==previous){samples.push({at:performance.now()-start,t:v.t,drawMs:v.drawMs});previous=v.t;}
+        }
+        const pause=document.querySelector('button[aria-label="Pause"]');
+        if(!pause)throw Error('Playback did not enter the playing state');
+        const playbackMs=performance.now()-start;
+        pause.click();
+        await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+        const stopped=window.__live.t;
+        const note=document.querySelector('button[aria-label="Add note"]')??[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Note');
+        const waitNote=async visible=>{const until=performance.now()+2500;while(!!document.querySelector('textarea[aria-label="Note"]')?.getBoundingClientRect().width!==visible&&performance.now()<until)await new Promise(r=>setTimeout(r,50));return !!document.querySelector('textarea[aria-label="Note"]')?.getBoundingClientRect().width===visible};
+        note.click();const opened=await waitNote(true);
+        const cancel=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Cancel');
+        if(!cancel)throw Error('Note cancel is missing');
+        cancel.click();const closed=await waitNote(false);
+        return {from,stopped,playbackMs,totalInteractionMs:performance.now()-start,samples,note:{opened,closed,saved:false},paused:!!document.querySelector('button[aria-label="Play"]'),errors:window.__loadEval.errors};
+      })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      },
+      s,
+    );
+    if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails));
+    writeFileSync(
+      join(runDir, `${profile.name}-playback.json`),
+      JSON.stringify(r.result.value, null, 2),
+    );
+    const v = r.result.value;
+    if (v.stopped <= v.from + 1 || !v.note.opened || !v.note.closed || !v.paused || v.errors.length)
+      throw new Error(
+        `Playback verification failed: ${JSON.stringify({ from: v.from, stopped: v.stopped, note: v.note, paused: v.paused, errors: v.errors })}`,
+      );
+  }
   await cdp.send("Target.closeTarget", { targetId });
   await cdp.send("Target.disposeBrowserContext", { browserContextId });
   cdp.listeners.delete(onNetwork);
@@ -494,6 +654,10 @@ const summarize = (rows: any[]) =>
 
 // ---------- Run
 let failed = false;
+const deadline = setTimeout(() => {
+  console.error("Load eval exceeded 20 minutes; completed visits remain in the run directory");
+  void cleanup().then(() => process.exit(124));
+}, 20 * 60_000);
 try {
   const server = await startStudio();
   console.log(`studio up in ${server} ms`);
@@ -599,6 +763,7 @@ try {
   failed = true;
   console.error((e as Error).message);
 } finally {
+  clearTimeout(deadline);
   await cleanup();
 }
 process.exit(failed ? 1 : 0);

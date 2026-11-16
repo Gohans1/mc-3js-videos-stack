@@ -1,0 +1,19 @@
+export function withSoundLevel<T extends Pick<AudioBuffer, "numberOfChannels" | "getChannelData">>(
+  buf: T,
+) {
+  let mean: number | undefined;
+  return {
+    buf,
+    get mean() {
+      if (mean !== undefined) return mean;
+      let sum = 0,
+        n = 0;
+      for (let c = 0; c < buf.numberOfChannels; c++) {
+        const d = buf.getChannelData(c);
+        for (let i = 0; i < d.length; i++) sum += d[i]! * d[i]!;
+        n += d.length;
+      }
+      return (mean = 10 * Math.log10(sum / n || 1e-12));
+    },
+  };
+}

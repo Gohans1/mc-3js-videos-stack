@@ -1,0 +1,568 @@
+{
+  "film": "demo-test-mc-yolo",
+  "runs": 2,
+  "note": "R2 B: library ZIP slices via native HTTP ranges, 64 KiB cache",
+  "failed": false,
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "HeadlessChrome/149.0.7790.0",
+    "revision": "@6c7573d43a3cbcb08ab6dee8b7b5e52695175636",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7790.0 Safari/537.36",
+    "jsVersion": "14.9.68"
+  },
+  "bun": "1.4.4",
+  "resourceSettleMs": 1000,
+  "server": 34179,
+  "desk.cold": {
+    "connect": 2,
+    "ttfb": 90,
+    "fcp": 648,
+    "lcp": 2086,
+    "picture": 3474,
+    "ready": 3826,
+    "tbt": 1282,
+    "longest": 957,
+    "req": 169,
+    "kb": 70855,
+    "js": 1212
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 87,
+    "fcp": 306,
+    "lcp": 1086,
+    "picture": 1407,
+    "ready": 1554,
+    "tbt": 271,
+    "longest": 278,
+    "req": 166,
+    "kb": 58807,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/_studio/contract-BhgtJcdD.js",
+      32725,
+      5569,
+      5576
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      4598,
+      4974
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      4932,
+      4952
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      4931,
+      4951
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      4931,
+      4947
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      4930,
+      4946
+    ],
+    [
+      "/_studio/source-serif-4-latin-wght-normal-DMe4EKeb.woff2",
+      51236,
+      2836,
+      2843
+    ],
+    [
+      "/_studio/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2",
+      15008,
+      2836,
+      2842
+    ],
+    [
+      "/_studio/ibm-plex-mono-latin-600-normal-BgSNZQsw.woff2",
+      15920,
+      2836,
+      2842
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.gltf",
+      58033,
+      2460,
+      2497
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      788,
+      2105
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      672,
+      757
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      4598,
+      4974
+    ],
+    [
+      "/mc/client_assets.zip",
+      2211228,
+      1346,
+      1458
+    ],
+    [
+      "/api/sfx/narration.wav",
+      1440378,
+      787,
+      1026
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      4931,
+      4947
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      4931,
+      4951
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      4932,
+      4952
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      4930,
+      4946
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      2460,
+      2491
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/api/mix.wav",
+      0,
+      2594,
+      2607
+    ],
+    [
+      "/_studio/contract-BhgtJcdD.js",
+      0,
+      1911,
+      1911
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1629,
+      1659
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1628,
+      1656
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1626,
+      1653
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1626,
+      1649
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      1118,
+      1119
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      1108,
+      1110
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      1098,
+      1099
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      0,
+      1088,
+      1089
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      372,
+      933
+    ],
+    [
+      "/mc/client_assets.zip",
+      2211228,
+      519,
+      588
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1626,
+      1653
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1628,
+      1656
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1629,
+      1659
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1626,
+      1649
+    ],
+    [
+      "/mc/client_assets.zip",
+      66300,
+      456,
+      459
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      710,
+      712
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      721,
+      723
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      725,
+      727
+    ]
+  ],
+  "phone.cold": {
+    "connect": 1,
+    "ttfb": 153,
+    "fcp": 1336,
+    "lcp": 1336,
+    "picture": 10792,
+    "ready": 10826,
+    "tbt": 1387,
+    "longest": 638,
+    "req": 140,
+    "kb": 11493,
+    "js": 1089
+  },
+  "phone.warm": {
+    "connect": 0,
+    "ttfb": 139,
+    "fcp": 704,
+    "lcp": 704,
+    "picture": 6802,
+    "ready": 6822,
+    "tbt": 587,
+    "longest": 556,
+    "req": 137,
+    "kb": 4776,
+    "js": 0
+  },
+  "phone.cold.files": [
+    [
+      "/_studio/contract-BhgtJcdD.js",
+      32725,
+      12117,
+      12173
+    ],
+    [
+      "/api/weight",
+      302,
+      11363,
+      11448
+    ],
+    [
+      "/api/mix_small.webm",
+      7685,
+      10580,
+      10649
+    ],
+    [
+      "/_studio/source-serif-4-latin-wght-normal-DMe4EKeb.woff2",
+      51236,
+      10375,
+      10474
+    ],
+    [
+      "/_studio/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2",
+      15008,
+      10375,
+      10458
+    ],
+    [
+      "/_studio/ibm-plex-mono-latin-600-normal-BgSNZQsw.woff2",
+      15920,
+      10375,
+      10458
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      8975,
+      9468
+    ],
+    [
+      "/motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx",
+      87687,
+      8978,
+      9137
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.gltf",
+      58033,
+      8976,
+      9108
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      1086,
+      8697,
+      8762
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.webm",
+      3896998,
+      1227,
+      4166
+    ],
+    [
+      "/mc/client_assets.zip",
+      2211228,
+      1569,
+      3405
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      8975,
+      9468
+    ],
+    [
+      "/_studio/vendor-three-BMvExMHi.js",
+      492570,
+      141,
+      668
+    ],
+    [
+      "/_studio/vendor-ui-9fysS8dF.js",
+      266755,
+      141,
+      510
+    ],
+    [
+      "/api/sfx/narration.webm",
+      190410,
+      1203,
+      1406
+    ],
+    [
+      "/vendor/bmr_assets.zip",
+      129263,
+      3595,
+      3749
+    ],
+    [
+      "/motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx",
+      87687,
+      8978,
+      9137
+    ],
+    [
+      "/_studio/timeline-CeR3dt_O.js",
+      83372,
+      146,
+      622
+    ],
+    [
+      "/api/sfx/ear-shimmer-m1.webm",
+      74654,
+      1206,
+      1388
+    ]
+  ],
+  "phone.warm.files": [
+    [
+      "/_studio/contract-BhgtJcdD.js",
+      0,
+      7780,
+      7780
+    ],
+    [
+      "/api/weight",
+      302,
+      7101,
+      7192
+    ],
+    [
+      "/api/mix_small.webm",
+      0,
+      6545,
+      6545
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      6444,
+      6445
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      6425,
+      6425
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      6407,
+      6409
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      0,
+      6367,
+      6368
+    ],
+    [
+      "/rig/player.glb",
+      0,
+      6302,
+      6304
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      6212,
+      6299
+    ],
+    [
+      "/_studio/block_model_renderer_bg-C_QWVt0J.wasm",
+      0,
+      6099,
+      6099
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/mc/client_assets.zip",
+      2211228,
+      991,
+      1948
+    ],
+    [
+      "/mc/client_assets.zip",
+      66300,
+      888,
+      972
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      2539,
+      2622
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      2641,
+      2711
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      2714,
+      2859
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      2922,
+      3000
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      3004,
+      3079
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      3082,
+      3158
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      3163,
+      3237
+    ],
+    [
+      "/mc/client_assets.zip",
+      65836,
+      3242,
+      3317
+    ]
+  ]
+}

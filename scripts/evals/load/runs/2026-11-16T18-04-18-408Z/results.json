@@ -1,0 +1,292 @@
+{
+  "film": "demo-test-mc-yolo",
+  "runs": 1,
+  "note": "R2 visual history control: unchanged B5 sources, retain first zero and repeated zero, timing diagnostic only",
+  "failed": false,
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "HeadlessChrome/149.0.7790.0",
+    "revision": "@6c7573d43a3cbcb08ab6dee8b7b5e52695175636",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7790.0 Safari/537.36",
+    "jsVersion": "14.9.68"
+  },
+  "bun": "1.4.4",
+  "resourceSettleMs": 1000,
+  "server": 4579,
+  "desk.cold": {
+    "connect": 1,
+    "ttfb": 70,
+    "fcp": 648,
+    "lcp": 1108,
+    "picture": 1900,
+    "ready": 2124,
+    "tbt": 391,
+    "longest": 209,
+    "req": 142,
+    "kb": 71276,
+    "js": 1153
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 69,
+    "fcp": 264,
+    "lcp": 264,
+    "picture": 1158,
+    "ready": 1362,
+    "tbt": 175,
+    "longest": 169,
+    "req": 138,
+    "kb": 54207,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/api/mix.wav",
+      2880378,
+      3357,
+      3387
+    ],
+    [
+      "/_studio/contract-Dpsvi_jB.js",
+      32733,
+      2487,
+      2489
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      2128,
+      2145
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      2127,
+      2144
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      2126,
+      2143
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      2126,
+      2141
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      781,
+      2131
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      1086,
+      1351,
+      1354
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      610,
+      1341,
+      1343
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      830,
+      1329,
+      1331
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      781,
+      2131
+    ],
+    [
+      "/mc/client_assets.zip",
+      5202112,
+      74,
+      393
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      634,
+      722
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      3357,
+      3387
+    ],
+    [
+      "/api/sfx/narration.wav",
+      1440378,
+      779,
+      875
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      2126,
+      2143
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      2127,
+      2144
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      2128,
+      2145
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      2126,
+      2141
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      995,
+      1062
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      354,
+      1772
+    ],
+    [
+      "/_studio/contract-Dpsvi_jB.js",
+      0,
+      1631,
+      1631
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1384,
+      1599
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1383,
+      1598
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1382,
+      1591
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1382,
+      1589
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      937,
+      938
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      927,
+      928
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      917,
+      918
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      0,
+      906,
+      907
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      354,
+      1772
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1382,
+      1591
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1383,
+      1598
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1384,
+      1599
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1382,
+      1589
+    ],
+    [
+      "/",
+      11248,
+      0,
+      70
+    ],
+    [
+      "/api/text",
+      4072,
+      85,
+      96
+    ],
+    [
+      "/api/shots",
+      1904,
+      85,
+      94
+    ],
+    [
+      "/api/cam",
+      1307,
+      85,
+      96
+    ],
+    [
+      "/api/voice",
+      1146,
+      85,
+      95
+    ]
+  ]
+}

@@ -1,0 +1,568 @@
+{
+  "film": "demo-test-mc-yolo",
+  "runs": 1,
+  "note": "R2 E retry: entry-aware UI; previous harness ended with Bun Promise was collected",
+  "failed": false,
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "HeadlessChrome/149.0.7790.0",
+    "revision": "@6c7573d43a3cbcb08ab6dee8b7b5e52695175636",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7790.0 Safari/537.36",
+    "jsVersion": "14.9.68"
+  },
+  "bun": "1.4.4",
+  "resourceSettleMs": 1000,
+  "server": 10669,
+  "desk.cold": {
+    "connect": 1,
+    "ttfb": 77,
+    "fcp": 504,
+    "lcp": 1204,
+    "picture": 1916,
+    "ready": 2147,
+    "tbt": 435,
+    "longest": 246,
+    "req": 156,
+    "kb": 68476,
+    "js": 1164
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 96,
+    "fcp": 320,
+    "lcp": 320,
+    "picture": 1116,
+    "ready": 1252,
+    "tbt": 211,
+    "longest": 232,
+    "req": 153,
+    "kb": 54208,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/_studio/contract-A9kNlkwD.js",
+      32725,
+      2601,
+      2605
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      600,
+      2385
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      2149,
+      2170
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      2149,
+      2169
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      2148,
+      2167
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      2149,
+      2166
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      1086,
+      1415,
+      1417
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      610,
+      1404,
+      1409
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      830,
+      1391,
+      1393
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      483,
+      1381,
+      1390
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      600,
+      2385
+    ],
+    [
+      "/mc/client_assets.zip",
+      5202112,
+      467,
+      845
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      490,
+      564
+    ],
+    [
+      "/api/sfx/narration.wav",
+      1440378,
+      598,
+      850
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      2149,
+      2166
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      2149,
+      2169
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      2149,
+      2170
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      2148,
+      2167
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      975,
+      1154
+    ],
+    [
+      "/api/sfx/ear-shimmer-m1.wav",
+      768344,
+      598,
+      810
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/_studio/contract-A9kNlkwD.js",
+      0,
+      1718,
+      1718
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      367,
+      1682
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1291,
+      1310
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1291,
+      1310
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1292,
+      1310
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1291,
+      1306
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      874,
+      875
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      864,
+      864
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      854,
+      854
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      0,
+      844,
+      844
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      367,
+      1682
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1291,
+      1310
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1291,
+      1310
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1292,
+      1310
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1291,
+      1306
+    ],
+    [
+      "/",
+      12782,
+      0,
+      97
+    ],
+    [
+      "/api/text",
+      4072,
+      116,
+      164
+    ],
+    [
+      "/api/shots",
+      1904,
+      116,
+      129
+    ],
+    [
+      "/api/cam",
+      1307,
+      116,
+      132
+    ],
+    [
+      "/api/voice",
+      1146,
+      116,
+      132
+    ]
+  ],
+  "phone.cold": {
+    "connect": 1,
+    "ttfb": 121,
+    "fcp": 1996,
+    "lcp": 1996,
+    "picture": 9778,
+    "ready": 9804,
+    "tbt": 1726,
+    "longest": 616,
+    "req": 121,
+    "kb": 11896,
+    "js": 1011
+  },
+  "phone.warm": {
+    "connect": 0,
+    "ttfb": 98,
+    "fcp": 708,
+    "lcp": 708,
+    "picture": 2091,
+    "ready": 2096,
+    "tbt": 606,
+    "longest": 490,
+    "req": 114,
+    "kb": 29,
+    "js": 0
+  },
+  "phone.cold.files": [
+    [
+      "/_studio/contract-A9kNlkwD.js",
+      32725,
+      10453,
+      10514
+    ],
+    [
+      "/api/weight",
+      302,
+      9811,
+      9910
+    ],
+    [
+      "/api/mix_small.webm",
+      7685,
+      9237,
+      9308
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      1086,
+      8241,
+      8304
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      610,
+      8162,
+      8224
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      830,
+      8058,
+      8116
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      483,
+      7982,
+      8054
+    ],
+    [
+      "/_studio/block_model_renderer_bg-C_QWVt0J.wasm",
+      53892,
+      7671,
+      7745
+    ],
+    [
+      "/api/sound/process",
+      41992,
+      7527,
+      7661
+    ],
+    [
+      "/api/sound/process",
+      40074,
+      7529,
+      7661
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/mc/client_assets.zip",
+      5202112,
+      1986,
+      6062
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.webm",
+      3896998,
+      2009,
+      5803
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      6367,
+      6891
+    ],
+    [
+      "/_studio/vendor-three-BRlio_pQ.js",
+      494663,
+      163,
+      1089
+    ],
+    [
+      "/api/sfx/narration.webm",
+      190410,
+      2007,
+      2421
+    ],
+    [
+      "/vendor/bmr_assets.zip",
+      129263,
+      6361,
+      6579
+    ],
+    [
+      "/motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx",
+      87687,
+      6370,
+      6564
+    ],
+    [
+      "/_studio/timeline-CfS9RRRn.js",
+      83167,
+      163,
+      816
+    ],
+    [
+      "/api/sfx/ear-shimmer-m1.webm",
+      74654,
+      2008,
+      2387
+    ],
+    [
+      "/rig/player.glb",
+      70280,
+      1983,
+      2128
+    ]
+  ],
+  "phone.warm.files": [
+    [
+      "/_studio/contract-A9kNlkwD.js",
+      0,
+      2495,
+      2495
+    ],
+    [
+      "/api/weight",
+      302,
+      2097,
+      2177
+    ],
+    [
+      "/api/mix_small.webm",
+      0,
+      1624,
+      1625
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      1562,
+      1563
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      1549,
+      1550
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      1528,
+      1530
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      0,
+      1517,
+      1518
+    ],
+    [
+      "/_studio/block_model_renderer_bg-C_QWVt0J.wasm",
+      0,
+      1424,
+      1424
+    ],
+    [
+      "/vendor/bmr_assets.zip",
+      0,
+      1204,
+      1205
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.webm",
+      0,
+      793,
+      916
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      13855,
+      0,
+      111
+    ],
+    [
+      "/api/text",
+      4072,
+      149,
+      240
+    ],
+    [
+      "/api/shots",
+      1904,
+      145,
+      195
+    ],
+    [
+      "/api/cam",
+      1307,
+      148,
+      236
+    ],
+    [
+      "/api/voice",
+      1146,
+      147,
+      236
+    ],
+    [
+      "/api/keys/0",
+      936,
+      718,
+      772
+    ],
+    [
+      "/api/adjustment",
+      917,
+      150,
+      238
+    ],
+    [
+      "/api/keys/2",
+      867,
+      719,
+      772
+    ],
+    [
+      "/api/timing",
+      695,
+      145,
+      194
+    ],
+    [
+      "/api/keys",
+      578,
+      148,
+      236
+    ]
+  ]
+}

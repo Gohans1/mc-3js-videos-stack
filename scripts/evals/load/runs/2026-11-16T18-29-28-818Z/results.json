@@ -1,0 +1,944 @@
+{
+  "film": "demo-test-mc-yolo",
+  "runs": 5,
+  "note": "R2 B6: public wasmStatus warmup and version-matched bundled assets preload; unchanged quality/audio/late metadata reads; repeated zero retained",
+  "failed": false,
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "HeadlessChrome/149.0.7790.0",
+    "revision": "@6c7573d43a3cbcb08ab6dee8b7b5e52695175636",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7790.0 Safari/537.36",
+    "jsVersion": "14.9.68"
+  },
+  "bun": "1.4.4",
+  "resourceSettleMs": 1000,
+  "server": 5400,
+  "desk.cold.cpu": [
+    "profile: C:\\Users\\ADMIN\\.t3\\worktrees\\gohans-monorepo-3js-mc\\perf-live-studio-hill-c-f1c8c73c6e94307b\\scripts\\evals\\load\\runs\\2026-11-16T18-29-28-818Z\\desk-cold.cpuprofile",
+    "self:",
+    "    82 ms  vendor-three-D9ffWwbh.js:4169 onFirstUse",
+    "    59 ms  textrow-C3f-tEyJ.js:1 (anonymous)",
+    "    47 ms  start-D8DfjOtu.js:2 fit",
+    "    45 ms  (native):0 (garbage collector)",
+    "    33 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "    27 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "    27 ms  vendor-three-D9ffWwbh.js:4390 xn",
+    "    22 ms  timeline-BypvR5vO.js:550 drawRuler",
+    "    21 ms  vendor-three-D9ffWwbh.js:4390 ms",
+    "    20 ms  vendor-three-D9ffWwbh.js:4390 ss",
+    "    17 ms  timeline-BypvR5vO.js:550 getAudio",
+    "    16 ms  vendor-three-D9ffWwbh.js:1 (anonymous)",
+    "    16 ms  vendor-three-D9ffWwbh.js:3 multiplyMatrices",
+    "    16 ms  vendor-ui~PhoneApp~App~Settings~NoteInsightViews~LazyNoteViews~LazyPanels~VoiceLibraryFilte~ehobscis-BnFtzbD_.js:1 (anonymous)",
+    "    15 ms  vendor-ui~index-DUyclUhJ.js:8 renderWithHooks",
+    "    15 ms  vendor-three-D9ffWwbh.js:3 compose",
+    "    14 ms  timeline-BypvR5vO.js:550 (anonymous)",
+    "    13 ms  store-C11_4HqG.js:1 (anonymous)",
+    "    13 ms  timeline-BypvR5vO.js:550 isElementShown",
+    "    12 ms  lanes-Dtx8Qv9W.js:1 drawClip",
+    "    11 ms  vendor-three-D9ffWwbh.js:5175 (anonymous)",
+    "    10 ms  vendor-three-D9ffWwbh.js:4390 Nn",
+    "     9 ms  (native):0 fetch",
+    "     9 ms  mocap-BRrrQgXj.js:1 slerpYXZDeg",
+    "     9 ms  mocap-BRrrQgXj.js:1 parseGltf",
+    "     9 ms  vendor-three-D9ffWwbh.js:4390 We",
+    "     8 ms  vendor-ui~PhoneApp~App~Settings~NoteInsightViews~LazyNoteViews~LazyPanels~VoiceLibraryFilte~ehobscis-BnFtzbD_.js:1 mergeObjects",
+    "     8 ms  mocap-BRrrQgXj.js:1 gltfFiles",
+    "     8 ms  vendor-three-D9ffWwbh.js:4750 Pi",
+    "     8 ms  vendor-three-D9ffWwbh.js:5175 get",
+    "total:",
+    "   434 ms  vendor-ui~index-DUyclUhJ.js:8 performWorkOnRoot",
+    "   357 ms  vendor-ui~index-DUyclUhJ.js:8 flushSyncWorkAcrossRoots_impl",
+    "   356 ms  vendor-ui~index-DUyclUhJ.js:8 performSyncWorkOnRoot",
+    "   351 ms  vendor-ui~index-DUyclUhJ.js:8 (anonymous)",
+    "   344 ms  vendor-ui~index-DUyclUhJ.js:8 processRootScheduleInMicrotask",
+    "   251 ms  start-D8DfjOtu.js:2 start",
+    "   248 ms  vendor-ui~index-DUyclUhJ.js:8 renderRootSync",
+    "   247 ms  vendor-ui~index-DUyclUhJ.js:8 performUnitOfWork",
+    "   247 ms  vendor-ui~index-DUyclUhJ.js:8 workLoopSync",
+    "   227 ms  start-D8DfjOtu.js:2 frame",
+    "   227 ms  start-D8DfjOtu.js:2 loop",
+    "   224 ms  vendor-ui~index-DUyclUhJ.js:8 beginWork",
+    "   218 ms  render-BTGXPQg0.js:1 render",
+    "   215 ms  timeline-BypvR5vO.js:548 (anonymous)",
+    "   214 ms  timeline-BypvR5vO.js:403 draw",
+    "   196 ms  vendor-ui~index-DUyclUhJ.js:8 renderWithHooks",
+    "   186 ms  vendor-ui~index-DUyclUhJ.js:8 commitRoot",
+    "   186 ms  vendor-ui~index-DUyclUhJ.js:8 completeRoot",
+    "   186 ms  vendor-ui~index-DUyclUhJ.js:8 completeRootWhenReady",
+    "   170 ms  timeline-BypvR5vO.js:537 frame",
+    "   148 ms  timeline-BypvR5vO.js:550 drawTimelines",
+    "   148 ms  vendor-ui~index-DUyclUhJ.js:8 commitHookEffectListMount",
+    "   144 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "   138 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.render",
+    "   135 ms  vendor-ui~index-DUyclUhJ.js:8 commitLayoutEffectOnFiber",
+    "   135 ms  vendor-ui~index-DUyclUhJ.js:8 flushLayoutEffects",
+    "   135 ms  vendor-ui~index-DUyclUhJ.js:8 recursivelyTraverseLayoutEffects",
+    "   134 ms  vendor-three-D9ffWwbh.js:4859 render",
+    "   129 ms  App-DMP8A2qI.js:2 (anonymous)",
+    "   115 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.renderBufferDirect",
+    "in vendor chunks, by the page's caller:",
+    "   115 ms  timeline-BypvR5vO.js:537 frame",
+    "    69 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "    43 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "    31 ms  mocap-BRrrQgXj.js:1 fbxOf",
+    "    15 ms  timeline-BypvR5vO.js:47 draw",
+    "    13 ms  timeline-BypvR5vO.js:1 (anonymous)",
+    "     9 ms  mocap-BRrrQgXj.js:1 loadMob",
+    "     8 ms  mocap-BRrrQgXj.js:1 parseGltf",
+    "     6 ms  timeline-BypvR5vO.js:31 update",
+    "     6 ms  timeline-BypvR5vO.js:537 blur",
+    "     5 ms  mocap-BRrrQgXj.js:1 bakeKept",
+    "     3 ms  timeline-BypvR5vO.js:47 makeGradeStage",
+    "     3 ms  render-BTGXPQg0.js:1 (anonymous)",
+    "     3 ms  mocap-BRrrQgXj.js:1 atNow",
+    "     3 ms  mocap-BRrrQgXj.js:1 setPose",
+    "     3 ms  mocap-BRrrQgXj.js:1 legsAt",
+    "     3 ms  mocap-BRrrQgXj.js:1 deg",
+    "     3 ms  timeline-BypvR5vO.js:47 (anonymous)",
+    "     3 ms  mocap-BRrrQgXj.js:1 doLeg",
+    "     2 ms  mocap-BRrrQgXj.js:1 quatNow",
+    "     2 ms  mocap-BRrrQgXj.js:1 lowest",
+    "     2 ms  mocap-BRrrQgXj.js:1 hinge",
+    "     2 ms  mocap-BRrrQgXj.js:1 toMat",
+    "     2 ms  timeline-BypvR5vO.js:537 drawOptics",
+    "     2 ms  mocap-BRrrQgXj.js:1 animate",
+    "     2 ms  mocap-BRrrQgXj.js:1 makePlayer",
+    "     1 ms  timeline-BypvR5vO.js:14 (anonymous)",
+    "     1 ms  timeline-BypvR5vO.js:47 gradeLUT",
+    "     1 ms  mocap-BRrrQgXj.js:1 bake",
+    "     1 ms  mocap-BRrrQgXj.js:1 jointQuat"
+  ],
+  "desk.warm.cpu": [
+    "profile: C:\\Users\\ADMIN\\.t3\\worktrees\\gohans-monorepo-3js-mc\\perf-live-studio-hill-c-f1c8c73c6e94307b\\scripts\\evals\\load\\runs\\2026-11-16T18-29-28-818Z\\desk-warm.cpuprofile",
+    "self:",
+    "   118 ms  (native):0 getProgramInfoLog",
+    "    32 ms  (native):0 (garbage collector)",
+    "    26 ms  vendor-three-D9ffWwbh.js:4390 xn",
+    "    17 ms  vendor-three-D9ffWwbh.js:4390 ms",
+    "    17 ms  timeline-BypvR5vO.js:550 drawRuler",
+    "    15 ms  (native):0 getBoundingClientRect",
+    "    13 ms  (native):0 texSubImage2D",
+    "    12 ms  (native):0 getContext",
+    "    12 ms  (native):0 AudioContext",
+    "    12 ms  (native):0 arrayBuffer",
+    "    11 ms  timeline-BypvR5vO.js:550 (anonymous)",
+    "    10 ms  vendor-three-D9ffWwbh.js:0 (anonymous)",
+    "     9 ms  vendor-three-D9ffWwbh.js:2 strFromU8",
+    "     9 ms  (native):0 decode",
+    "     8 ms  (native):0 fetch",
+    "     7 ms  (native):0 getShaderInfoLog",
+    "     7 ms  timeline-BypvR5vO.js:47 gradeLUT",
+    "     7 ms  (native):0 appendChild",
+    "     7 ms  (native):0 (anonymous)",
+    "     6 ms  (native):0 putImageData",
+    "     6 ms  vendor-three-D9ffWwbh.js:4390 Nn",
+    "     5 ms  rolldown-runtime-BsASzDio.js:1 (anonymous)",
+    "     5 ms  vendor-three-D9ffWwbh.js:4135 replaceLightNums",
+    "     5 ms  vendor-ui~index~PhoneApp~App~Settings~render~NoteInsightViews~LazyNoteViews~LazyPanels~Voic~lntacc5w-BE1kRy6C.js:1 e.createElement",
+    "     5 ms  vendor-three-D9ffWwbh.js:4423 Ct",
+    "     5 ms  vendor-ui~PhoneApp~App~Settings~NoteInsightViews~LazyNoteViews~LazyPanels~VoiceLibraryFilte~ehobscis-BnFtzbD_.js:1 (anonymous)",
+    "     5 ms  (native):0 getExtension",
+    "     5 ms  mocap-BRrrQgXj.js:1 slerpYXZDeg",
+    "     5 ms  vendor-ui~PhoneApp~App~Settings~NoteInsightViews~LazyNoteViews~LazyPanels~VoiceLibraryFilte~ehobscis-BnFtzbD_.js:1 mergeCached",
+    "     5 ms  vendor-ui~index-DUyclUhJ.js:9 updateProperties",
+    "total:",
+    "   268 ms  vendor-ui~index-DUyclUhJ.js:8 performWorkOnRoot",
+    "   256 ms  start-D8DfjOtu.js:2 frame",
+    "   256 ms  start-D8DfjOtu.js:2 loop",
+    "   252 ms  render-BTGXPQg0.js:1 render",
+    "   251 ms  timeline-BypvR5vO.js:548 (anonymous)",
+    "   250 ms  timeline-BypvR5vO.js:403 draw",
+    "   231 ms  vendor-ui~index-DUyclUhJ.js:8 performSyncWorkOnRoot",
+    "   231 ms  vendor-ui~index-DUyclUhJ.js:8 flushSyncWorkAcrossRoots_impl",
+    "   231 ms  vendor-ui~index-DUyclUhJ.js:8 (anonymous)",
+    "   224 ms  vendor-ui~index-DUyclUhJ.js:8 processRootScheduleInMicrotask",
+    "   209 ms  timeline-BypvR5vO.js:537 frame",
+    "   186 ms  vendor-ui~index-DUyclUhJ.js:8 performUnitOfWork",
+    "   186 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.render",
+    "   186 ms  vendor-ui~index-DUyclUhJ.js:8 workLoopSync",
+    "   186 ms  vendor-ui~index-DUyclUhJ.js:8 renderRootSync",
+    "   180 ms  vendor-three-D9ffWwbh.js:4859 render",
+    "   175 ms  start-D8DfjOtu.js:2 start",
+    "   173 ms  vendor-ui~index-DUyclUhJ.js:8 beginWork",
+    "   172 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.renderBufferDirect",
+    "   166 ms  vendor-three-D9ffWwbh.js:4227 setProgram",
+    "   152 ms  vendor-ui~index-DUyclUhJ.js:8 renderWithHooks",
+    "   149 ms  vendor-three-D9ffWwbh.js:4227 renderObject",
+    "   149 ms  vendor-three-D9ffWwbh.js:4227 renderObjects",
+    "   149 ms  vendor-three-D9ffWwbh.js:4227 renderScene",
+    "   133 ms  vendor-three-D9ffWwbh.js:4169 onFirstUse",
+    "   133 ms  vendor-three-D9ffWwbh.js:4176 WebGLProgram.getUniforms",
+    "   118 ms  (native):0 getProgramInfoLog",
+    "   115 ms  vendor-three-D9ffWwbh.js:4909 render",
+    "    83 ms  vendor-ui~index-DUyclUhJ.js:8 commitRoot",
+    "    83 ms  vendor-ui~index-DUyclUhJ.js:8 completeRoot",
+    "in vendor chunks, by the page's caller:",
+    "    40 ms  timeline-BypvR5vO.js:537 frame",
+    "    32 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "     4 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "     4 ms  timeline-BypvR5vO.js:47 draw",
+    "     4 ms  timeline-BypvR5vO.js:1 (anonymous)",
+    "     3 ms  mocap-BRrrQgXj.js:1 loadMob",
+    "     3 ms  mocap-BRrrQgXj.js:1 jointQuat",
+    "     3 ms  mocap-BRrrQgXj.js:1 bake",
+    "     2 ms  timeline-BypvR5vO.js:403 draw",
+    "     2 ms  timeline-BypvR5vO.js:47 makeGradeStage",
+    "     2 ms  timeline-BypvR5vO.js:14 (anonymous)",
+    "     2 ms  mocap-BRrrQgXj.js:1 makePlayer",
+    "     1 ms  timeline-BypvR5vO.js:537 drawHelix",
+    "     1 ms  timeline-BypvR5vO.js:48 draw",
+    "     1 ms  timeline-BypvR5vO.js:47 (anonymous)",
+    "     1 ms  render-BTGXPQg0.js:0 (anonymous)",
+    "     1 ms  timeline-BypvR5vO.js:537 draw",
+    "     1 ms  timeline-BypvR5vO.js:47 gradeLUT",
+    "     1 ms  mocap-BRrrQgXj.js:1 add",
+    "     1 ms  timeline-BypvR5vO.js:48 makeTitles",
+    "     0 ms  mocap-BRrrQgXj.js:1 doLeg",
+    "     0 ms  timeline-BypvR5vO.js:47 apply"
+  ],
+  "desk.cold": {
+    "connect": 1,
+    "ttfb": 67,
+    "fcp": 480,
+    "lcp": 888,
+    "picture": 1595,
+    "ready": 1826,
+    "tbt": 357,
+    "longest": 188,
+    "req": 142,
+    "kb": 71276,
+    "js": 1153
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 65,
+    "fcp": 260,
+    "lcp": 260,
+    "picture": 1085,
+    "ready": 1188,
+    "tbt": 143,
+    "longest": 176,
+    "req": 139,
+    "kb": 54207,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/api/mix.wav",
+      2880378,
+      2471,
+      2548
+    ],
+    [
+      "/_studio/contract-CHhyDiTS.js",
+      32732,
+      2190,
+      2192
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1832,
+      1852
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1833,
+      1852
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1831,
+      1851
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1831,
+      1851
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      1086,
+      1104,
+      1106
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      610,
+      1094,
+      1095
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      830,
+      1083,
+      1084
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      483,
+      1074,
+      1075
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      547,
+      957
+    ],
+    [
+      "/mc/client_assets.zip",
+      5202112,
+      67,
+      500
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      424,
+      508
+    ],
+    [
+      "/api/mix.wav",
+      2880378,
+      2471,
+      2548
+    ],
+    [
+      "/api/sfx/narration.wav",
+      1440378,
+      544,
+      617
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1831,
+      1851
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1832,
+      1852
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1833,
+      1852
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1831,
+      1851
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      788,
+      811
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/api/mix.wav",
+      0,
+      1845,
+      1849
+    ],
+    [
+      "/_studio/contract-CHhyDiTS.js",
+      0,
+      1570,
+      1570
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1273,
+      1292
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1273,
+      1291
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1272,
+      1290
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1272,
+      1288
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      867,
+      868
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      856,
+      857
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      846,
+      846
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/version.json",
+      0,
+      835,
+      836
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.wav",
+      50925738,
+      332,
+      740
+    ],
+    [
+      "/api/sound/process",
+      1183880,
+      1272,
+      1290
+    ],
+    [
+      "/api/sound/process",
+      1153928,
+      1273,
+      1291
+    ],
+    [
+      "/api/sound/process",
+      1123976,
+      1273,
+      1292
+    ],
+    [
+      "/api/sound/process",
+      1093640,
+      1272,
+      1288
+    ],
+    [
+      "/",
+      11435,
+      0,
+      76
+    ],
+    [
+      "/api/text",
+      4072,
+      96,
+      108
+    ],
+    [
+      "/api/shots",
+      1904,
+      96,
+      105
+    ],
+    [
+      "/api/cam",
+      1307,
+      96,
+      107
+    ],
+    [
+      "/api/voice",
+      1146,
+      96,
+      107
+    ]
+  ],
+  "phone.cold.cpu": [
+    "profile: C:\\Users\\ADMIN\\.t3\\worktrees\\gohans-monorepo-3js-mc\\perf-live-studio-hill-c-f1c8c73c6e94307b\\scripts\\evals\\load\\runs\\2026-11-16T18-29-28-818Z\\phone-cold.cpuprofile",
+    "self:",
+    "   227 ms  timeline-BypvR5vO.js:550 (anonymous)",
+    "   136 ms  vendor-three-D9ffWwbh.js:4390 xn",
+    "   105 ms  (native):0 (garbage collector)",
+    "   100 ms  vendor-three-D9ffWwbh.js:4390 ss",
+    "   100 ms  vendor-three-D9ffWwbh.js:4390 ms",
+    "    99 ms  Compose-CrOomQob.js:2 (anonymous)",
+    "    75 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "    73 ms  vendor-three-D9ffWwbh.js:4169 onFirstUse",
+    "    60 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "    58 ms  vendor-three-D9ffWwbh.js:5175 (anonymous)",
+    "    58 ms  store-C11_4HqG.js:1 (anonymous)",
+    "    55 ms  vendor-three-D9ffWwbh.js:4390 Nn",
+    "    51 ms  vendor-three-D9ffWwbh.js:1 (anonymous)",
+    "    43 ms  mocap-BRrrQgXj.js:1 bake",
+    "    42 ms  mocap-BRrrQgXj.js:1 gltfFiles",
+    "    37 ms  mocap-BRrrQgXj.js:1 slerpYXZDeg",
+    "    35 ms  (native):0 fetch",
+    "    32 ms  vendor-three-D9ffWwbh.js:3 multiplyMatrices",
+    "    31 ms  vendor-three-D9ffWwbh.js:4815 Xo",
+    "    29 ms  vendor-three-D9ffWwbh.js:4203 texSubImage2D",
+    "    28 ms  vendor-three-D9ffWwbh.js:2 strFromU8",
+    "    28 ms  vendor-three-D9ffWwbh.js:4750 Pi",
+    "    27 ms  mocap-BRrrQgXj.js:1 slerpPose",
+    "    26 ms  vendor-three-D9ffWwbh.js:5175 get",
+    "    26 ms  vendor-three-D9ffWwbh.js:4423 G",
+    "    24 ms  vendor-three-D9ffWwbh.js:3 applyMatrix4",
+    "    24 ms  vendor-three-D9ffWwbh.js:4390 _t",
+    "    23 ms  vendor-three-D9ffWwbh.js:5175 getString",
+    "    23 ms  vendor-ui~index-DUyclUhJ.js:8 renderWithHooks",
+    "    23 ms  vendor-three-D9ffWwbh.js:4390 Ps",
+    "total:",
+    "   769 ms  start-D8DfjOtu.js:2 loop",
+    "   768 ms  start-D8DfjOtu.js:2 frame",
+    "   753 ms  render-BTGXPQg0.js:1 render",
+    "   745 ms  timeline-BypvR5vO.js:548 (anonymous)",
+    "   741 ms  timeline-BypvR5vO.js:403 draw",
+    "   680 ms  start-D8DfjOtu.js:2 start",
+    "   612 ms  timeline-BypvR5vO.js:537 frame",
+    "   427 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "   405 ms  vendor-three-D9ffWwbh.js:4390 (anonymous)",
+    "   394 ms  vendor-three-D9ffWwbh.js:4390 Ve",
+    "   390 ms  vendor-three-D9ffWwbh.js:4815 (anonymous)",
+    "   383 ms  vendor-three-D9ffWwbh.js:4390 to",
+    "   383 ms  vendor-three-D9ffWwbh.js:4815 prepareEntry",
+    "   371 ms  vendor-ui~index-DUyclUhJ.js:8 performWorkOnRoot",
+    "   361 ms  vendor-three-D9ffWwbh.js:4859 render",
+    "   339 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.render",
+    "   312 ms  vendor-ui~index-DUyclUhJ.js:1 performWorkUntilDeadline",
+    "   310 ms  vendor-ui~index-DUyclUhJ.js:8 performWorkOnRootViaSchedulerTask",
+    "   299 ms  mocap-BRrrQgXj.js:1 bakeKept",
+    "   284 ms  timeline-BypvR5vO.js:550 (anonymous)",
+    "   267 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "   260 ms  mocap-BRrrQgXj.js:1 bakeClip",
+    "   242 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.renderBufferDirect",
+    "   237 ms  vendor-three-D9ffWwbh.js:5175 (anonymous)",
+    "   230 ms  vendor-three-D9ffWwbh.js:4390 ms",
+    "   207 ms  vendor-ui~index-DUyclUhJ.js:8 renderRootSync",
+    "   206 ms  vendor-ui~index-DUyclUhJ.js:8 performUnitOfWork",
+    "   206 ms  vendor-ui~index-DUyclUhJ.js:8 workLoopSync",
+    "   203 ms  vendor-three-D9ffWwbh.js:4909 render",
+    "   199 ms  timeline-BypvR5vO.js:537 perform",
+    "in vendor chunks, by the page's caller:",
+    "   317 ms  timeline-BypvR5vO.js:537 frame",
+    "   182 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "   116 ms  mocap-BRrrQgXj.js:1 fbxOf",
+    "   114 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "    39 ms  timeline-BypvR5vO.js:1 (anonymous)",
+    "    35 ms  mocap-BRrrQgXj.js:1 loadMob",
+    "    30 ms  timeline-BypvR5vO.js:47 draw",
+    "    22 ms  render-BTGXPQg0.js:1 (anonymous)",
+    "    15 ms  mocap-BRrrQgXj.js:1 bakeKept",
+    "    15 ms  timeline-BypvR5vO.js:47 makeGradeStage",
+    "    14 ms  mocap-BRrrQgXj.js:1 parseGltf",
+    "    11 ms  mocap-BRrrQgXj.js:1 bake",
+    "    11 ms  timeline-BypvR5vO.js:31 update",
+    "    11 ms  mocap-BRrrQgXj.js:1 lowest",
+    "    10 ms  timeline-BypvR5vO.js:47 (anonymous)",
+    "    10 ms  mocap-BRrrQgXj.js:1 animate",
+    "     9 ms  mocap-BRrrQgXj.js:1 jointQuat",
+    "     8 ms  timeline-BypvR5vO.js:537 blur",
+    "     8 ms  mocap-BRrrQgXj.js:1 at",
+    "     8 ms  timeline-BypvR5vO.js:14 (anonymous)",
+    "     6 ms  mocap-BRrrQgXj.js:1 doLeg",
+    "     6 ms  mocap-BRrrQgXj.js:1 setPose",
+    "     6 ms  mocap-BRrrQgXj.js:1 quatNow",
+    "     5 ms  mocap-BRrrQgXj.js:1 toMat",
+    "     5 ms  timeline-BypvR5vO.js:47 gradeLUT",
+    "     4 ms  timeline-BypvR5vO.js:537 drawOptics",
+    "     4 ms  mocap-BRrrQgXj.js:1 makePlayer",
+    "     4 ms  mocap-BRrrQgXj.js:1 limb",
+    "     3 ms  mocap-BRrrQgXj.js:1 roundedBox",
+    "     3 ms  mocap-BRrrQgXj.js:1 worldQ"
+  ],
+  "phone.warm.cpu": [
+    "profile: C:\\Users\\ADMIN\\.t3\\worktrees\\gohans-monorepo-3js-mc\\perf-live-studio-hill-c-f1c8c73c6e94307b\\scripts\\evals\\load\\runs\\2026-11-16T18-29-28-818Z\\phone-warm.cpuprofile",
+    "self:",
+    "   188 ms  timeline-BypvR5vO.js:550 (anonymous)",
+    "   134 ms  (native):0 arrayBuffer",
+    "   107 ms  (native):0 getProgramInfoLog",
+    "    95 ms  vendor-three-D9ffWwbh.js:4390 xn",
+    "    56 ms  vendor-three-D9ffWwbh.js:4390 ms",
+    "    53 ms  (native):0 (garbage collector)",
+    "    51 ms  vendor-three-D9ffWwbh.js:0 (anonymous)",
+    "    45 ms  mocap-BRrrQgXj.js:1 slerpYXZDeg",
+    "    44 ms  (native):0 getBoundingClientRect",
+    "    42 ms  (native):0 texSubImage2D",
+    "    40 ms  (native):0 decode",
+    "    37 ms  vendor-three-D9ffWwbh.js:3 multiplyMatrices",
+    "    35 ms  mocap-BRrrQgXj.js:1 bake",
+    "    30 ms  (native):0 fetch",
+    "    25 ms  (native):0 appendChild",
+    "    21 ms  vendor-three-D9ffWwbh.js:3 setRGB",
+    "    21 ms  timeline-BypvR5vO.js:1 (anonymous)",
+    "    20 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.renderBufferDirect",
+    "    19 ms  vendor-three-D9ffWwbh.js:4390 We",
+    "    19 ms  (native):0 getContext",
+    "    18 ms  (native):0 getShaderInfoLog",
+    "    18 ms  vendor-three-D9ffWwbh.js:4910 createNeutral",
+    "    16 ms  (native):0 shaderSource",
+    "    16 ms  mocap-BRrrQgXj.js:1 slerpPose",
+    "    16 ms  (native):0 (anonymous)",
+    "    16 ms  vendor-three-D9ffWwbh.js:3 compose",
+    "    15 ms  vendor-three-D9ffWwbh.js:3 LinearToSRGB",
+    "    15 ms  vendor-three-D9ffWwbh.js:4176 getParameters",
+    "    15 ms  vendor-three-D9ffWwbh.js:4227 setProgram",
+    "    15 ms  (native):0 putImageData",
+    "total:",
+    "   988 ms  start-D8DfjOtu.js:2 frame",
+    "   988 ms  start-D8DfjOtu.js:2 loop",
+    "   983 ms  render-BTGXPQg0.js:1 render",
+    "   977 ms  timeline-BypvR5vO.js:548 (anonymous)",
+    "   975 ms  timeline-BypvR5vO.js:403 draw",
+    "   786 ms  timeline-BypvR5vO.js:537 frame",
+    "   547 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.render",
+    "   542 ms  vendor-three-D9ffWwbh.js:4859 render",
+    "   526 ms  start-D8DfjOtu.js:2 start",
+    "   385 ms  vendor-three-D9ffWwbh.js:4227 WebGLRenderer.renderBufferDirect",
+    "   339 ms  vendor-three-D9ffWwbh.js:4227 renderScene",
+    "   335 ms  vendor-three-D9ffWwbh.js:4227 renderObjects",
+    "   333 ms  vendor-three-D9ffWwbh.js:4227 renderObject",
+    "   326 ms  vendor-three-D9ffWwbh.js:4227 setProgram",
+    "   289 ms  vendor-three-D9ffWwbh.js:4909 render",
+    "   282 ms  vendor-three-D9ffWwbh.js:5175 render",
+    "   261 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "   226 ms  timeline-BypvR5vO.js:403 capture",
+    "   225 ms  timeline-BypvR5vO.js:550 (anonymous)",
+    "   221 ms  vendor-three-D9ffWwbh.js:4390 (anonymous)",
+    "   207 ms  timeline-BypvR5vO.js:537 perform",
+    "   203 ms  vendor-three-D9ffWwbh.js:4390 Ve",
+    "   202 ms  vendor-three-D9ffWwbh.js:4815 (anonymous)",
+    "   199 ms  vendor-three-D9ffWwbh.js:4390 to",
+    "   199 ms  vendor-three-D9ffWwbh.js:4815 prepareEntry",
+    "   181 ms  mocap-BRrrQgXj.js:1 feetAt",
+    "   175 ms  timeline-BypvR5vO.js:537 (anonymous)",
+    "   174 ms  timeline-BypvR5vO.js:47 draw",
+    "   173 ms  mocap-BRrrQgXj.js:1 bake",
+    "   156 ms  vendor-three-D9ffWwbh.js:4169 onFirstUse",
+    "in vendor chunks, by the page's caller:",
+    "   288 ms  timeline-BypvR5vO.js:537 frame",
+    "    79 ms  timeline-BypvR5vO.js:537 buildScene$1",
+    "    51 ms  timeline-BypvR5vO.js:1 (anonymous)",
+    "    29 ms  timeline-BypvR5vO.js:47 draw",
+    "    17 ms  mocap-BRrrQgXj.js:1 loadMob",
+    "    15 ms  timeline-BypvR5vO.js:31 update",
+    "    14 ms  mocap-BRrrQgXj.js:1 makePlayer",
+    "    13 ms  mocap-BRrrQgXj.js:1 doLeg",
+    "    13 ms  timeline-BypvR5vO.js:47 gradeLUT",
+    "    13 ms  timeline-BypvR5vO.js:47 makeGradeStage",
+    "    11 ms  mocap-BRrrQgXj.js:1 jointQuat",
+    "    11 ms  mocap-BRrrQgXj.js:1 (anonymous)",
+    "    10 ms  timeline-BypvR5vO.js:47 (anonymous)",
+    "     7 ms  mocap-BRrrQgXj.js:1 legsAt",
+    "     7 ms  render-BTGXPQg0.js:0 (anonymous)",
+    "     6 ms  timeline-BypvR5vO.js:14 (anonymous)",
+    "     5 ms  timeline-BypvR5vO.js:537 shoulder",
+    "     5 ms  mocap-BRrrQgXj.js:1 animate",
+    "     4 ms  mocap-BRrrQgXj.js:1 bake",
+    "     4 ms  timeline-BypvR5vO.js:48 draw",
+    "     4 ms  mocap-BRrrQgXj.js:1 legTo",
+    "     4 ms  timeline-BypvR5vO.js:47 apply",
+    "     3 ms  timeline-BypvR5vO.js:537 blur",
+    "     3 ms  timeline-BypvR5vO.js:537 drawOptics",
+    "     3 ms  mocap-BRrrQgXj.js:1 parentTurn",
+    "     2 ms  mocap-BRrrQgXj.js:1 at",
+    "     2 ms  render-BTGXPQg0.js:1 drawGizmo",
+    "     2 ms  timeline-BypvR5vO.js:47 makeLayerAdjustments",
+    "     2 ms  timeline-BypvR5vO.js:403 draw",
+    "     2 ms  mocap-BRrrQgXj.js:1 cameraAt"
+  ],
+  "phone.cold": {
+    "connect": 1,
+    "ttfb": 130,
+    "fcp": 1824,
+    "lcp": 1824,
+    "picture": 7940,
+    "ready": 7987,
+    "tbt": 1329,
+    "longest": 513,
+    "req": 111,
+    "kb": 11901,
+    "js": 1017
+  },
+  "phone.warm": {
+    "connect": 0,
+    "ttfb": 118,
+    "fcp": 952,
+    "lcp": 952,
+    "picture": 2778,
+    "ready": 3191,
+    "tbt": 647,
+    "longest": 405,
+    "req": 108,
+    "kb": 176,
+    "js": 0
+  },
+  "phone.cold.files": [
+    [
+      "/_studio/contract-CHhyDiTS.js",
+      32732,
+      8662,
+      8735
+    ],
+    [
+      "/api/weight",
+      302,
+      7992,
+      8075
+    ],
+    [
+      "/api/mix_small.webm",
+      7685,
+      7430,
+      7498
+    ],
+    [
+      "/api/sound/process",
+      41992,
+      7247,
+      7360
+    ],
+    [
+      "/api/sound/process",
+      40074,
+      7249,
+      7359
+    ],
+    [
+      "/api/sound/process",
+      35170,
+      7249,
+      7359
+    ],
+    [
+      "/api/sound/process",
+      35067,
+      7246,
+      7311
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      1086,
+      6061,
+      6127
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      610,
+      5985,
+      6052
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      830,
+      5851,
+      5910
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/mc/client_assets.zip",
+      5202112,
+      165,
+      4486
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.webm",
+      3896998,
+      1976,
+      5071
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      5017,
+      5489
+    ],
+    [
+      "/_studio/vendor-three-D9ffWwbh.js",
+      494690,
+      189,
+      1267
+    ],
+    [
+      "/api/sfx/narration.webm",
+      190410,
+      1974,
+      2356
+    ],
+    [
+      "/vendor/bmr_assets.zip",
+      129263,
+      166,
+      393
+    ],
+    [
+      "/motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx",
+      87687,
+      5019,
+      5162
+    ],
+    [
+      "/_studio/timeline-BypvR5vO.js",
+      83218,
+      189,
+      861
+    ],
+    [
+      "/api/sfx/ear-shimmer-m1.webm",
+      74654,
+      1974,
+      2321
+    ],
+    [
+      "/rig/player.glb",
+      70280,
+      1893,
+      2053
+    ]
+  ],
+  "phone.warm.files": [
+    [
+      "/_studio/contract-CHhyDiTS.js",
+      0,
+      4011,
+      4011
+    ],
+    [
+      "/api/sound/process",
+      41992,
+      3523,
+      3658
+    ],
+    [
+      "/api/sound/process",
+      35067,
+      3521,
+      3644
+    ],
+    [
+      "/api/sound/process",
+      40074,
+      3524,
+      3644
+    ],
+    [
+      "/api/sound/process",
+      35170,
+      3527,
+      3643
+    ],
+    [
+      "/api/weight",
+      302,
+      3196,
+      3285
+    ],
+    [
+      "/api/mix_small.webm",
+      0,
+      2291,
+      2291
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      2157,
+      2157
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      2146,
+      2146
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      2118,
+      2118
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sound/process",
+      41992,
+      3523,
+      3658
+    ],
+    [
+      "/api/sound/process",
+      40074,
+      3524,
+      3644
+    ],
+    [
+      "/api/sound/process",
+      35170,
+      3527,
+      3643
+    ],
+    [
+      "/api/sound/process",
+      35067,
+      3521,
+      3644
+    ],
+    [
+      "/",
+      12508,
+      0,
+      106
+    ],
+    [
+      "/api/text",
+      4072,
+      235,
+      327
+    ],
+    [
+      "/api/shots",
+      1904,
+      232,
+      281
+    ],
+    [
+      "/api/cam",
+      1307,
+      234,
+      324
+    ],
+    [
+      "/api/voice",
+      1146,
+      233,
+      324
+    ],
+    [
+      "/api/keys/0",
+      936,
+      1117,
+      1158
+    ]
+  ]
+}

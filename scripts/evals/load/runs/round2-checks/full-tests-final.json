@@ -1,0 +1,23 @@
+{
+  "started": "2026-11-16T18:37:06.111Z",
+  "before": {
+    "films/demo-test-mc-yolo/src/scene.ts": "f893ace6c8f2846d2cb1b89e7eb53650609775dedf0ced12672a0a12358b5100",
+    "films/demo-test-mc-yolo/package.json": "e358fd3274baeb5f2985fbd0d349eb847f27c47dc2111b060e5c8addeaedb8fb",
+    "packages/film-stage/src/titles.ts": "47a8c38ddc4a52e5997eb6652456e5a80ff61e48b4b8e023996be652b3e76dec",
+    "packages/live-studio/src/api.mjs": "7bdda2b8ec0be1d6bd7f717a0953f59b53e5e4f3c0304b6c7720b7683c6a6491",
+    "packages/live-studio/src/film.mjs": "e846691b7193a9b8b6cd3142ec0860f5c3cd98e2c59bdf749fe7e9794ae3843a",
+    "packages/live-studio/src/contract.ts": "a71297e15d5304751ba7251479a3425378e3595dbeeb664bc9674b6ca2a8acaf",
+    "packages/live-studio/src/page.mjs": "7874db6180371700ea4fa904ec31b6f0e5da8331849c89f3a2d475935a74abc1"
+  },
+  "finished": "2026-11-16T18:46:23.010Z",
+  "exit": 1,
+  "after": {
+    "films/demo-test-mc-yolo/src/scene.ts": "f893ace6c8f2846d2cb1b89e7eb53650609775dedf0ced12672a0a12358b5100",
+    "films/demo-test-mc-yolo/package.json": "e358fd3274baeb5f2985fbd0d349eb847f27c47dc2111b060e5c8addeaedb8fb",
+    "packages/film-stage/src/titles.ts": "47a8c38ddc4a52e5997eb6652456e5a80ff61e48b4b8e023996be652b3e76dec",
+    "packages/live-studio/src/api.mjs": "7bdda2b8ec0be1d6bd7f717a0953f59b53e5e4f3c0304b6c7720b7683c6a6491",
+    "packages/live-studio/src/film.mjs": "e846691b7193a9b8b6cd3142ec0860f5c3cd98e2c59bdf749fe7e9794ae3843a",
+    "packages/live-studio/src/contract.ts": "a71297e15d5304751ba7251479a3425378e3595dbeeb664bc9674b6ca2a8acaf",
+    "packages/live-studio/src/page.mjs": "7874db6180371700ea4fa904ec31b6f0e5da8331849c89f3a2d475935a74abc1"
+  }
+}

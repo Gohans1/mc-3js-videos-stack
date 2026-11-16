@@ -1,0 +1,484 @@
+studio up in 32049 ms
+.
+.
+raw results: C:\Users\ADMIN\.t3\worktrees\gohans-monorepo-3js-mc\perf-live-studio-hill-c-f1c8c73c6e94307b\scripts\evals\load\runs\2026-11-16T18-49-15-511Z
+desk.cold   connect 1  ttfb 698  fcp 1216  lcp 2624  picture 3342  ready 3565  tbt 469  longest 268  req 128  kb 18789  js 1214
+desk.warm   connect 0  ttfb 110  fcp 404  lcp 860  picture 1181  ready 1297  tbt 202  longest 222  req 125  kb 7284  js 0
+phone.cold  connect 1  ttfb 288  fcp 1516  lcp 1516  picture 9585  ready 9617  tbt 1230  longest 556  req 101  kb 11972  js 1091
+phone.warm  connect 0  ttfb 203  fcp 756  lcp 756  picture 2744  ready 3013  tbt 629  longest 589  req 98  kb 173  js 0
+
+desk.cold.files (path, bytes, start ms, end ms), latest to end first:
+  /_studio/contract-BUUnIzdC.js  32725  3922  3924
+  /api/sound/process  1153928  3568  3587
+  /api/sound/process  1123976  3568  3586
+  /api/sound/process  1183880  3568  3584
+  /api/sound/process  1093640  3567  3583
+  /_studio/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2  15008  3065  3068
+  /_studio/ibm-plex-mono-latin-600-normal-BgSNZQsw.woff2  15920  3065  3068
+  /_studio/source-serif-4-latin-wght-normal-DMe4EKeb.woff2  51236  3065  3068
+  /motion/ual1/AnimationLibrary_Godot_Standard.gltf  58033  2763  2784
+  /motion/ual1/AnimationLibrary_Godot_Standard.bin  861536  2763  2783
+  -- heaviest:
+  /mc/client_assets.zip  5202112  1175  1602
+  /api/mix.wav  2880378  1199  1287
+  /api/sfx/narration.wav  1440378  1320  1360
+  /api/sound/process  1183880  3568  3584
+  /api/sound/process  1153928  3568  3587
+  /api/sound/process  1123976  3568  3586
+  /api/sound/process  1093640  3567  3583
+  /motion/ual1/AnimationLibrary_Godot_Standard.bin  861536  2763  2783
+  /api/sfx/ear-shimmer-m1.wav  768344  1321  2061
+  /_studio/vendor-three-R65BaBxy.js  495192  740  780
+
+desk.warm.files (path, bytes, start ms, end ms), latest to end first:
+  /_studio/contract-BUUnIzdC.js  0  1676  1676
+  /api/sound/process  1123976  1349  1365
+  /api/sound/process  1153928  1348  1364
+  /api/sound/process  1183880  1348  1363
+  /api/sound/process  1093640  1347  1362
+  /mcasset/1.21.11/entity-models/animations/minecraft/cat.json  0  888  888
+  /mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png  0  878  878
+  /mcasset/1.21.11/entity-models/minecraft/cat.json  0  866  867
+  /mcasset/1.21.11/entity-models/version.json  0  857  858
+  /rig/player.glb  0  826  829
+  -- heaviest:
+  /api/mix.wav  2880378  385  433
+  /api/sound/process  1183880  1348  1363
+  /api/sound/process  1153928  1348  1364
+  /api/sound/process  1123976  1349  1365
+  /api/sound/process  1093640  1347  1362
+  /  8253  0  111
+  /api/text  4072  215  221
+  /api/shots  1904  215  220
+  /api/cam  1307  215  221
+  /api/voice  1146  215  220
+
+phone.cold.files (path, bytes, start ms, end ms), latest to end first:
+  /_studio/contract-BUUnIzdC.js  32725  10356  10415
+  /api/weight  302  9622  9708
+  /api/mix_small.webm  7685  9066  9136
+  /_studio/source-serif-4-latin-wght-normal-DMe4EKeb.woff2  51236  8936  9025
+  /_studio/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2  15008  8935  9010
+  /_studio/ibm-plex-mono-latin-600-normal-BgSNZQsw.woff2  15920  8935  9010
+  /motion/ual1/AnimationLibrary_Godot_Standard.bin  861536  7880  8358
+  /motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx  87687  7880  8025
+  /motion/ual1/AnimationLibrary_Godot_Standard.gltf  58033  7880  8001
+  /mcasset/1.21.11/entity-models/animations/minecraft/cat.json  1086  7633  7692
+  -- heaviest:
+  /mc/client_assets.zip  5202112  1502  5553
+  /api/sfx/bgm-deep-urban.webm  3896998  1570  5162
+  /motion/ual1/AnimationLibrary_Godot_Standard.bin  861536  7880  8358
+  /_studio/vendor-three-R65BaBxy.js  495192  310  831
+  /_studio/vendor-ui-Ba8lnTTb.js  266719  310  639
+  /api/sfx/narration.webm  190410  1561  1851
+  /vendor/bmr_assets.zip  129263  6035  6145
+  /motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx  87687  7880  8025
+  /_studio/timeline-BLGqatOM.js  82973  314  814
+  /api/sfx/ear-shimmer-m1.webm  74654  1565  1835
+
+phone.warm.files (path, bytes, start ms, end ms), latest to end first:
+  /_studio/contract-BUUnIzdC.js  0  3665  3665
+  /api/sound/process  41992  3415  3536
+  /api/sound/process  40074  3417  3536
+  /api/sound/process  35170  3419  3521
+  /api/sound/process  35067  3413  3475
+  /api/weight  302  3015  3097
+  /api/mix_small.webm  0  2213  2213
+  /mcasset/1.21.11/entity-models/animations/minecraft/cat.json  0  1881  1882
+  /mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png  0  1870  1870
+  /mcasset/1.21.11/entity-models/minecraft/cat.json  0  1857  1858
+  -- heaviest:
+  /api/sound/process  41992  3415  3536
+  /api/sound/process  40074  3417  3536
+  /api/sound/process  35170  3419  3521
+  /api/sound/process  35067  3413  3475
+  /  9326  0  217
+  /api/text  4072  331  443
+  /api/shots  1904  330  375
+  /api/cam  1307  331  442
+  /api/voice  1146  331  442
+  /api/keys/0  936  773  815
+
+desk.cold.cpu, until ready:
+profile: C:\Users\ADMIN\.t3\worktrees\gohans-monorepo-3js-mc\perf-live-studio-hill-c-f1c8c73c6e94307b\scripts\evals\load\runs\2026-11-16T18-49-15-511Z\desk-cold.cpuprofile
+self:
+   170 ms  vendor-three-R65BaBxy.js:4169 onFirstUse
+   101 ms  (native):0 (garbage collector)
+    60 ms  textrow-BjJ6w_Y3.js:1 (anonymous)
+    53 ms  vendor-three-R65BaBxy.js:4390 xn
+    49 ms  timeline-BLGqatOM.js:550 (anonymous)
+    46 ms  start-CeV5eO6f.js:2 fit
+    36 ms  vendor-three-R65BaBxy.js:4390 ss
+    34 ms  vendor-three-R65BaBxy.js:4390 ms
+    28 ms  mocap-AR5VRfEl.js:1 (anonymous)
+    22 ms  timeline-BLGqatOM.js:550 drawRuler
+    22 ms  vendor-ui-Ba8lnTTb.js:137 (anonymous)
+    20 ms  vendor-three-R65BaBxy.js:1 (anonymous)
+    17 ms  store-DpH6TS6r.js:1 (anonymous)
+    17 ms  vendor-three-R65BaBxy.js:4390 Nn
+    16 ms  timeline-BLGqatOM.js:550 isElementShown
+    15 ms  vendor-ui-Ba8lnTTb.js:8 renderWithHooks
+    14 ms  timeline-BLGqatOM.js:550 getAudio
+    13 ms  vendor-three-R65BaBxy.js:3 multiplyMatrices
+    12 ms  mocap-AR5VRfEl.js:1 slerpYXZDeg
+    12 ms  vendor-three-R65BaBxy.js:5175 removeAll
+    12 ms  vendor-three-R65BaBxy.js:4203 texSubImage2D
+    11 ms  vendor-three-R65BaBxy.js:5175 (anonymous)
+    10 ms  (native):9 poll
+    10 ms  (native):0 fetch
+    10 ms  timeline-BLGqatOM.js:1 (anonymous)
+    10 ms  lanes-DMxp3FlU.js:1 drawClip
+     9 ms  vendor-ui-Ba8lnTTb.js:137 FastComponent
+     9 ms  mocap-AR5VRfEl.js:1 parseGltf
+     9 ms  vendor-ui-Ba8lnTTb.js:137 buildLucideIconNode
+     8 ms  mocap-AR5VRfEl.js:1 makePlayer
+total:
+   448 ms  vendor-ui-Ba8lnTTb.js:8 performWorkOnRoot
+   448 ms  start-CeV5eO6f.js:2 frame
+   448 ms  start-CeV5eO6f.js:2 loop
+   432 ms  render-DD8lKJx4.js:1 render
+   426 ms  timeline-BLGqatOM.js:548 (anonymous)
+   424 ms  timeline-BLGqatOM.js:403 draw
+   367 ms  vendor-ui-Ba8lnTTb.js:8 performSyncWorkOnRoot
+   367 ms  vendor-ui-Ba8lnTTb.js:8 flushSyncWorkAcrossRoots_impl
+   365 ms  vendor-ui-Ba8lnTTb.js:8 (anonymous)
+   353 ms  vendor-ui-Ba8lnTTb.js:8 processRootScheduleInMicrotask
+   333 ms  timeline-BLGqatOM.js:537 frame
+   297 ms  start-CeV5eO6f.js:2 start
+   285 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.render
+   258 ms  vendor-three-R65BaBxy.js:4859 render
+   257 ms  vendor-ui-Ba8lnTTb.js:8 performUnitOfWork
+   256 ms  vendor-ui-Ba8lnTTb.js:8 renderRootSync
+   256 ms  vendor-ui-Ba8lnTTb.js:8 workLoopSync
+   247 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.renderBufferDirect
+   236 ms  vendor-ui-Ba8lnTTb.js:8 beginWork
+   235 ms  vendor-three-R65BaBxy.js:4227 setProgram
+   218 ms  vendor-three-R65BaBxy.js:4227 renderScene
+   217 ms  vendor-three-R65BaBxy.js:4227 renderObject
+   217 ms  vendor-three-R65BaBxy.js:4227 renderObjects
+   213 ms  vendor-ui-Ba8lnTTb.js:8 renderWithHooks
+   192 ms  vendor-ui-Ba8lnTTb.js:8 commitRoot
+   192 ms  vendor-ui-Ba8lnTTb.js:8 completeRoot
+   192 ms  vendor-ui-Ba8lnTTb.js:8 completeRootWhenReady
+   172 ms  vendor-three-R65BaBxy.js:4169 onFirstUse
+   172 ms  vendor-three-R65BaBxy.js:4176 WebGLProgram.getUniforms
+   161 ms  timeline-BLGqatOM.js:550 drawTimelines
+in vendor chunks, by the page's caller:
+   226 ms  timeline-BLGqatOM.js:537 frame
+    41 ms  timeline-BLGqatOM.js:537 buildScene$1
+    40 ms  mocap-AR5VRfEl.js:1 (anonymous)
+    31 ms  mocap-AR5VRfEl.js:1 fbxOf
+    25 ms  timeline-BLGqatOM.js:47 draw
+    24 ms  timeline-BLGqatOM.js:403 draw
+    21 ms  timeline-BLGqatOM.js:1 (anonymous)
+     9 ms  refs-Czd7idHg.js:1 Button
+     9 ms  timeline-BLGqatOM.js:48 draw
+     9 ms  mocap-AR5VRfEl.js:1 loadMob
+     8 ms  mocap-AR5VRfEl.js:1 parseGltf
+     7 ms  timeline-BLGqatOM.js:537 blur
+     7 ms  timeline-BLGqatOM.js:31 update
+     6 ms  mocap-AR5VRfEl.js:1 bakeKept
+     6 ms  timeline-BLGqatOM.js:47 gradeLUT
+     6 ms  mocap-AR5VRfEl.js:1 lowest
+     5 ms  mocap-AR5VRfEl.js:1 jointQuat
+     5 ms  render-DD8lKJx4.js:1 (anonymous)
+     5 ms  mocap-AR5VRfEl.js:1 deg
+     5 ms  timeline-BLGqatOM.js:47 makeGradeStage
+     4 ms  mocap-AR5VRfEl.js:1 animate
+     3 ms  toggle-group-BD_hlztx.js:1 Toggle
+     3 ms  store-DpH6TS6r.js:1 useStudio
+     3 ms  Tip-BZWYhgUS.js:1 TooltipContent
+     3 ms  rolldown-runtime-BsASzDio.js:1 (anonymous)
+     3 ms  timeline-BLGqatOM.js:47 (anonymous)
+     3 ms  mocap-AR5VRfEl.js:1 quatNow
+     3 ms  mocap-AR5VRfEl.js:1 atNow
+     3 ms  studio-core-BkSnbxGz.js:1 (anonymous)
+     3 ms  mocap-AR5VRfEl.js:1 makePlayer
+
+desk.warm.cpu, until ready:
+profile: C:\Users\ADMIN\.t3\worktrees\gohans-monorepo-3js-mc\perf-live-studio-hill-c-f1c8c73c6e94307b\scripts\evals\load\runs\2026-11-16T18-49-15-511Z\desk-warm.cpuprofile
+self:
+   149 ms  (native):0 getProgramInfoLog
+    52 ms  vendor-three-R65BaBxy.js:4390 xn
+    30 ms  vendor-three-R65BaBxy.js:4390 ms
+    30 ms  (native):0 (garbage collector)
+    24 ms  (native):0 decode
+    21 ms  timeline-BLGqatOM.js:550 drawRuler
+    13 ms  (native):0 getBoundingClientRect
+    12 ms  (native):0 AudioContext
+    11 ms  (native):0 getContext
+    10 ms  vendor-three-R65BaBxy.js:0 (anonymous)
+    10 ms  vendor-ui-Ba8lnTTb.js:137 (anonymous)
+    10 ms  (native):0 getShaderInfoLog
+     9 ms  mocap-AR5VRfEl.js:1 slerpYXZDeg
+     9 ms  (native):0 texSubImage2D
+     9 ms  timeline-BLGqatOM.js:550 (anonymous)
+     9 ms  vendor-three-R65BaBxy.js:2 strFromU8
+     9 ms  vendor-three-R65BaBxy.js:4390 Nn
+     8 ms  vendor-ui-Ba8lnTTb.js:137 mergeClassList
+     8 ms  (native):0 fetch
+     7 ms  vendor-three-R65BaBxy.js:4125 setValueV3fArray
+     7 ms  (native):0 appendChild
+     7 ms  vendor-ui-Ba8lnTTb.js:137 TooltipTrigger
+     7 ms  vendor-ui-Ba8lnTTb.js:137 mutablyMergeInto
+     7 ms  vendor-ui-Ba8lnTTb.js:9 updateProperties
+     6 ms  vendor-ui-Ba8lnTTb.js:137 FastComponent
+     6 ms  vendor-three-R65BaBxy.js:4390 ss
+     6 ms  (native):0 getProgramParameter
+     6 ms  (native):0 getExtension
+     6 ms  vendor-ui-Ba8lnTTb.js:137 mergeObjects
+     6 ms  mocap-AR5VRfEl.js:1 bake
+total:
+   303 ms  start-CeV5eO6f.js:2 frame
+   303 ms  start-CeV5eO6f.js:2 loop
+   299 ms  render-DD8lKJx4.js:1 render
+   297 ms  timeline-BLGqatOM.js:548 (anonymous)
+   295 ms  timeline-BLGqatOM.js:403 draw
+   272 ms  vendor-ui-Ba8lnTTb.js:8 performWorkOnRoot
+   257 ms  timeline-BLGqatOM.js:537 frame
+   237 ms  vendor-ui-Ba8lnTTb.js:8 performSyncWorkOnRoot
+   237 ms  vendor-ui-Ba8lnTTb.js:8 flushSyncWorkAcrossRoots_impl
+   233 ms  vendor-ui-Ba8lnTTb.js:8 (anonymous)
+   231 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.render
+   231 ms  vendor-ui-Ba8lnTTb.js:8 processRootScheduleInMicrotask
+   225 ms  vendor-three-R65BaBxy.js:4859 render
+   217 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.renderBufferDirect
+   212 ms  start-CeV5eO6f.js:2 start
+   209 ms  vendor-three-R65BaBxy.js:4227 setProgram
+   199 ms  vendor-three-R65BaBxy.js:4227 renderObjects
+   199 ms  vendor-three-R65BaBxy.js:4227 renderScene
+   198 ms  vendor-three-R65BaBxy.js:4227 renderObject
+   183 ms  vendor-ui-Ba8lnTTb.js:8 renderRootSync
+   183 ms  vendor-ui-Ba8lnTTb.js:8 workLoopSync
+   182 ms  vendor-ui-Ba8lnTTb.js:8 performUnitOfWork
+   172 ms  vendor-three-R65BaBxy.js:4169 onFirstUse
+   172 ms  vendor-three-R65BaBxy.js:4176 WebGLProgram.getUniforms
+   170 ms  vendor-ui-Ba8lnTTb.js:8 beginWork
+   153 ms  vendor-ui-Ba8lnTTb.js:8 renderWithHooks
+   151 ms  vendor-three-R65BaBxy.js:4909 render
+   149 ms  (native):0 getProgramInfoLog
+   130 ms  vendor-three-R65BaBxy.js:4390 (anonymous)
+   126 ms  vendor-three-R65BaBxy.js:4750 qo
+in vendor chunks, by the page's caller:
+    46 ms  timeline-BLGqatOM.js:537 frame
+    20 ms  timeline-BLGqatOM.js:537 buildScene$1
+     9 ms  refs-Czd7idHg.js:1 Button
+     7 ms  timeline-BLGqatOM.js:1 (anonymous)
+     4 ms  mocap-AR5VRfEl.js:1 (anonymous)
+     4 ms  mocap-AR5VRfEl.js:1 loadMob
+     4 ms  mocap-AR5VRfEl.js:1 bake
+     3 ms  timeline-BLGqatOM.js:47 gradeLUT
+     3 ms  mocap-AR5VRfEl.js:1 doLeg
+     3 ms  timeline-BLGqatOM.js:47 makeGradeStage
+     3 ms  timeline-BLGqatOM.js:47 draw
+     2 ms  toggle-group-BD_hlztx.js:1 Toggle
+     2 ms  mocap-AR5VRfEl.js:1 jointQuat
+     2 ms  render-DD8lKJx4.js:0 (anonymous)
+     2 ms  NoteList-CCDp897P.js:2 NoteList
+     1 ms  store-DpH6TS6r.js:1 useStudio
+     1 ms  App-B-Kwf2av.js:2 TabUnderline
+     1 ms  mocap-AR5VRfEl.js:1 flat
+     1 ms  mocap-AR5VRfEl.js:1 setPose
+     1 ms  notes-CnxzXy5-.js:1 (anonymous)
+     1 ms  timeline-BLGqatOM.js:537 perform
+     1 ms  timeline-BLGqatOM.js:537 lit
+     1 ms  mocap-AR5VRfEl.js:1 animate
+     1 ms  timeline-BLGqatOM.js:47 (anonymous)
+     1 ms  timeline-BLGqatOM.js:537 blur
+     1 ms  timeline-BLGqatOM.js:48 draw
+     1 ms  timeline-BLGqatOM.js:47 makeLayerAdjustments
+     1 ms  mocap-AR5VRfEl.js:1 makePlayer
+     1 ms  App-B-Kwf2av.js:2 useStudioHotkeys
+     1 ms  notes-CnxzXy5-.js:1 changed
+
+phone.cold.cpu, until ready:
+profile: C:\Users\ADMIN\.t3\worktrees\gohans-monorepo-3js-mc\perf-live-studio-hill-c-f1c8c73c6e94307b\scripts\evals\load\runs\2026-11-16T18-49-15-511Z\phone-cold.cpuprofile
+self:
+   165 ms  (native):0 (garbage collector)
+   154 ms  timeline-BLGqatOM.js:550 (anonymous)
+   147 ms  vendor-three-R65BaBxy.js:4390 ss
+   138 ms  vendor-three-R65BaBxy.js:4390 xn
+   119 ms  vendor-three-R65BaBxy.js:4169 onFirstUse
+   105 ms  Compose-DODZF9kF.js:2 (anonymous)
+    98 ms  timeline-BLGqatOM.js:550 getAudio
+    96 ms  vendor-three-R65BaBxy.js:4390 ms
+    89 ms  mocap-AR5VRfEl.js:1 (anonymous)
+    67 ms  vendor-three-R65BaBxy.js:4390 Nn
+    60 ms  vendor-three-R65BaBxy.js:1 (anonymous)
+    50 ms  store-DpH6TS6r.js:1 (anonymous)
+    47 ms  vendor-three-R65BaBxy.js:3 multiplyMatrices
+    41 ms  vendor-three-R65BaBxy.js:5175 (anonymous)
+    34 ms  mocap-AR5VRfEl.js:1 parseGltf
+    30 ms  mocap-AR5VRfEl.js:1 gltfFiles
+    27 ms  vendor-three-R65BaBxy.js:5175 getString
+    27 ms  vendor-three-R65BaBxy.js:4750 qo
+    26 ms  (native):0 fetch
+    25 ms  vendor-ui-Ba8lnTTb.js:137 (anonymous)
+    25 ms  vendor-three-R65BaBxy.js:5175 get
+    25 ms  vendor-three-R65BaBxy.js:4390 to
+    25 ms  timeline-BLGqatOM.js:537 buildScene$1
+    24 ms  vendor-three-R65BaBxy.js:4815 Xo
+    24 ms  mocap-AR5VRfEl.js:1 slerpYXZDeg
+    23 ms  vendor-three-R65BaBxy.js:4203 texSubImage2D
+    23 ms  vendor-three-R65BaBxy.js:5175 parse
+    22 ms  vendor-three-R65BaBxy.js:4390 We
+    22 ms  mocap-AR5VRfEl.js:1 bake
+    21 ms  (native):1 (anonymous)
+total:
+   651 ms  start-CeV5eO6f.js:2 frame
+   651 ms  start-CeV5eO6f.js:2 loop
+   642 ms  render-DD8lKJx4.js:1 render
+   635 ms  timeline-BLGqatOM.js:548 (anonymous)
+   632 ms  timeline-BLGqatOM.js:403 draw
+   561 ms  start-CeV5eO6f.js:2 start
+   532 ms  timeline-BLGqatOM.js:537 frame
+   510 ms  vendor-three-R65BaBxy.js:4750 qo
+   479 ms  vendor-three-R65BaBxy.js:4390 (anonymous)
+   478 ms  vendor-three-R65BaBxy.js:4390 Ve
+   476 ms  vendor-three-R65BaBxy.js:4815 M0
+   467 ms  vendor-three-R65BaBxy.js:4390 to
+   467 ms  vendor-three-R65BaBxy.js:4815 prepareEntry
+   393 ms  vendor-three-R65BaBxy.js:4859 render
+   384 ms  mocap-AR5VRfEl.js:1 (anonymous)
+   373 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.render
+   341 ms  vendor-ui-Ba8lnTTb.js:8 performWorkOnRoot
+   300 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.renderBufferDirect
+   292 ms  vendor-ui-Ba8lnTTb.js:1 performWorkUntilDeadline
+   290 ms  vendor-ui-Ba8lnTTb.js:8 performWorkOnRootViaSchedulerTask
+   283 ms  timeline-BLGqatOM.js:550 (anonymous)
+   270 ms  vendor-three-R65BaBxy.js:4227 setProgram
+   259 ms  vendor-three-R65BaBxy.js:4909 render
+   241 ms  vendor-three-R65BaBxy.js:4227 renderScene
+   236 ms  vendor-three-R65BaBxy.js:4227 renderObject
+   236 ms  vendor-three-R65BaBxy.js:4227 renderObjects
+   232 ms  vendor-three-R65BaBxy.js:4390 ms
+   222 ms  mocap-AR5VRfEl.js:1 bakeKept
+   214 ms  vendor-three-R65BaBxy.js:4390 Nn
+   212 ms  vendor-three-R65BaBxy.js:5175 (anonymous)
+in vendor chunks, by the page's caller:
+   355 ms  timeline-BLGqatOM.js:537 frame
+   149 ms  mocap-AR5VRfEl.js:1 fbxOf
+   108 ms  mocap-AR5VRfEl.js:1 (anonymous)
+    97 ms  timeline-BLGqatOM.js:537 buildScene$1
+    45 ms  mocap-AR5VRfEl.js:1 loadMob
+    33 ms  timeline-BLGqatOM.js:1 (anonymous)
+    28 ms  timeline-BLGqatOM.js:47 draw
+    20 ms  mocap-AR5VRfEl.js:1 parseGltf
+    20 ms  render-DD8lKJx4.js:1 (anonymous)
+    16 ms  NoteList-CCDp897P.js:2 NoteList
+    12 ms  mocap-AR5VRfEl.js:1 bakeKept
+    12 ms  mocap-AR5VRfEl.js:1 setPose
+    10 ms  timeline-BLGqatOM.js:537 blur
+     9 ms  store-DpH6TS6r.js:1 useStudio
+     9 ms  timeline-BLGqatOM.js:31 update
+     8 ms  mocap-AR5VRfEl.js:1 jointQuat
+     8 ms  timeline-BLGqatOM.js:47 (anonymous)
+     8 ms  rolldown-runtime-BsASzDio.js:1 (anonymous)
+     7 ms  mocap-AR5VRfEl.js:1 doLeg
+     7 ms  refs-Czd7idHg.js:1 Button
+     6 ms  NoteList-CCDp897P.js:2 Stage
+     6 ms  timeline-BLGqatOM.js:47 makeGradeStage
+     5 ms  timeline-BLGqatOM.js:14 (anonymous)
+     5 ms  index-Dlh89B8l.js:1 (anonymous)
+     5 ms  studio-core-BkSnbxGz.js:1 (anonymous)
+     5 ms  store-DpH6TS6r.js:1 invalidatePictures
+     4 ms  mocap-AR5VRfEl.js:1 makePlayer
+     4 ms  notes-CnxzXy5-.js:1 changed
+     4 ms  timeline-BLGqatOM.js:47 gradeLUT
+     4 ms  mocap-AR5VRfEl.js:1 limb
+
+phone.warm.cpu, until ready:
+profile: C:\Users\ADMIN\.t3\worktrees\gohans-monorepo-3js-mc\perf-live-studio-hill-c-f1c8c73c6e94307b\scripts\evals\load\runs\2026-11-16T18-49-15-511Z\phone-warm.cpuprofile
+self:
+   218 ms  vendor-three-R65BaBxy.js:4390 xn
+   141 ms  (native):0 getProgramInfoLog
+   140 ms  vendor-three-R65BaBxy.js:4390 ms
+   136 ms  timeline-BLGqatOM.js:550 (anonymous)
+   114 ms  (native):0 decode
+    83 ms  vendor-three-R65BaBxy.js:4390 Nn
+    66 ms  (native):0 (garbage collector)
+    38 ms  (native):0 getBoundingClientRect
+    35 ms  (native):0 getContext
+    32 ms  mocap-AR5VRfEl.js:1 slerpYXZDeg
+    30 ms  vendor-three-R65BaBxy.js:3 getX
+    29 ms  mocap-AR5VRfEl.js:1 bake
+    28 ms  vendor-three-R65BaBxy.js:0 (anonymous)
+    28 ms  (native):0 texSubImage2D
+    27 ms  (native):0 appendChild
+    23 ms  mocap-AR5VRfEl.js:1 slerpPose
+    23 ms  vendor-three-R65BaBxy.js:3 multiplyMatrices
+    21 ms  mocap-AR5VRfEl.js:2 bodyAt
+    19 ms  (native):0 fetch
+    18 ms  vendor-three-R65BaBxy.js:4390 ss
+    16 ms  vendor-three-R65BaBxy.js:4423 G
+    15 ms  vendor-three-R65BaBxy.js:4390 to
+    13 ms  vendor-three-R65BaBxy.js:2 strFromU8
+    13 ms  vendor-three-R65BaBxy.js:4390 We
+    11 ms  vendor-three-R65BaBxy.js:4135 replaceLightNums
+    11 ms  vendor-three-R65BaBxy.js:3 SRGBToLinear
+    11 ms  (native):0 AudioContext
+    11 ms  (native):0 getShaderInfoLog
+    11 ms  (native):0 getProgramParameter
+    11 ms  vendor-three-R65BaBxy.js:4390 _t
+total:
+   677 ms  start-CeV5eO6f.js:2 frame
+   677 ms  start-CeV5eO6f.js:2 loop
+   675 ms  render-DD8lKJx4.js:1 render
+   671 ms  timeline-BLGqatOM.js:548 (anonymous)
+   670 ms  timeline-BLGqatOM.js:403 draw
+   589 ms  vendor-three-R65BaBxy.js:4750 qo
+   582 ms  vendor-three-R65BaBxy.js:4390 (anonymous)
+   576 ms  timeline-BLGqatOM.js:537 frame
+   575 ms  vendor-three-R65BaBxy.js:4390 Ve
+   574 ms  vendor-three-R65BaBxy.js:4390 to
+   574 ms  vendor-three-R65BaBxy.js:4815 prepareEntry
+   574 ms  vendor-three-R65BaBxy.js:4815 M0
+   559 ms  start-CeV5eO6f.js:2 start
+   404 ms  vendor-three-R65BaBxy.js:4859 render
+   400 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.render
+   348 ms  vendor-three-R65BaBxy.js:4390 ms
+   331 ms  vendor-three-R65BaBxy.js:4227 WebGLRenderer.renderBufferDirect
+   312 ms  vendor-three-R65BaBxy.js:4227 setProgram
+   277 ms  vendor-three-R65BaBxy.js:4227 renderScene
+   274 ms  vendor-three-R65BaBxy.js:4227 renderObjects
+   273 ms  vendor-three-R65BaBxy.js:4227 renderObject
+   246 ms  vendor-three-R65BaBxy.js:4909 render
+   219 ms  vendor-three-R65BaBxy.js:4390 xn
+   213 ms  vendor-three-R65BaBxy.js:4390 Nn
+   197 ms  vendor-three-R65BaBxy.js:5175 render
+   183 ms  timeline-BLGqatOM.js:537 perform
+   181 ms  vendor-three-R65BaBxy.js:4176 WebGLProgram.getUniforms
+   181 ms  vendor-three-R65BaBxy.js:4169 onFirstUse
+   180 ms  mocap-AR5VRfEl.js:1 feetAt
+   171 ms  mocap-AR5VRfEl.js:1 bake
+in vendor chunks, by the page's caller:
+   154 ms  timeline-BLGqatOM.js:537 frame
+    58 ms  timeline-BLGqatOM.js:537 buildScene$1
+    22 ms  timeline-BLGqatOM.js:31 update
+    21 ms  timeline-BLGqatOM.js:1 (anonymous)
+    15 ms  mocap-AR5VRfEl.js:1 loadMob
+    12 ms  mocap-AR5VRfEl.js:1 (anonymous)
+    11 ms  timeline-BLGqatOM.js:47 draw
+    11 ms  render-DD8lKJx4.js:0 (anonymous)
+    11 ms  mocap-AR5VRfEl.js:1 bake
+     8 ms  mocap-AR5VRfEl.js:1 animate
+     7 ms  timeline-BLGqatOM.js:47 makeGradeStage
+     7 ms  timeline-BLGqatOM.js:47 (anonymous)
+     5 ms  mocap-AR5VRfEl.js:1 doLeg
+     5 ms  mocap-AR5VRfEl.js:1 jointQuat
+     5 ms  NoteList-CCDp897P.js:2 NoteList
+     4 ms  timeline-BLGqatOM.js:537 blur
+     4 ms  mocap-AR5VRfEl.js:1 legsAt
+     3 ms  refs-Czd7idHg.js:1 Button
+     3 ms  timeline-BLGqatOM.js:14 (anonymous)
+     3 ms  studio-core-BkSnbxGz.js:0 (anonymous)
+     2 ms  Tip-BZWYhgUS.js:1 TooltipContent
+     2 ms  render-DD8lKJx4.js:1 drawGizmo
+     2 ms  rolldown-runtime-BsASzDio.js:1 (anonymous)
+     2 ms  timeline-BLGqatOM.js:537 lit
+     2 ms  timeline-BLGqatOM.js:47 makeLayerAdjustments
+     1 ms  index-Dlh89B8l.js:0 (anonymous)
+     1 ms  timeline-BLGqatOM.js:548 syncFilmMeta
+     1 ms  empty-BB08JgYe.js:1 Empty
+     1 ms  timeline-BLGqatOM.js:537 rnd
+     1 ms  render-DD8lKJx4.js:1 makeBox

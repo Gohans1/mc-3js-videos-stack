@@ -1,0 +1,314 @@
+{
+  "before": "2026-11-16T18-26-06-029Z",
+  "after": "2026-11-16T18-29-28-818Z",
+  "visits": [
+    {
+      "run": "2026-11-16T18-26-06-029Z",
+      "measured": 20,
+      "documentIdentityChecked": true,
+      "duplicateJarRequests": 0
+    },
+    {
+      "run": "2026-11-16T18-29-28-818Z",
+      "measured": 20,
+      "documentIdentityChecked": true,
+      "duplicateJarRequests": 0
+    }
+  ],
+  "rows": [
+    {
+      "profile": "desk",
+      "cache": "cold",
+      "metric": "picture",
+      "unit": "ms",
+      "before": 2356,
+      "after": 1595,
+      "changePercent": -32.30050933786078,
+      "speedup": 1.477115987460815
+    },
+    {
+      "profile": "desk",
+      "cache": "cold",
+      "metric": "ready",
+      "unit": "ms",
+      "before": 2633,
+      "after": 1826,
+      "changePercent": -30.649449297379416,
+      "speedup": 1.4419496166484118
+    },
+    {
+      "profile": "desk",
+      "cache": "cold",
+      "metric": "tbt",
+      "unit": "ms",
+      "before": 534,
+      "after": 357,
+      "changePercent": -33.146067415730336,
+      "speedup": 1.495798319327731
+    },
+    {
+      "profile": "desk",
+      "cache": "cold",
+      "metric": "longest",
+      "unit": "ms",
+      "before": 307,
+      "after": 188,
+      "changePercent": -38.762214983713356,
+      "speedup": 1.6329787234042554
+    },
+    {
+      "profile": "desk",
+      "cache": "cold",
+      "metric": "js",
+      "unit": "KiB",
+      "before": 1214,
+      "after": 1153,
+      "changePercent": -5.0247116968698515,
+      "speedup": 1.0529054640069384
+    },
+    {
+      "profile": "desk",
+      "cache": "warm",
+      "metric": "picture",
+      "unit": "ms",
+      "before": 1585,
+      "after": 1085,
+      "changePercent": -31.545741324921135,
+      "speedup": 1.4608294930875576
+    },
+    {
+      "profile": "desk",
+      "cache": "warm",
+      "metric": "ready",
+      "unit": "ms",
+      "before": 1758,
+      "after": 1188,
+      "changePercent": -32.42320819112628,
+      "speedup": 1.47979797979798
+    },
+    {
+      "profile": "desk",
+      "cache": "warm",
+      "metric": "tbt",
+      "unit": "ms",
+      "before": 250,
+      "after": 143,
+      "changePercent": -42.8,
+      "speedup": 1.7482517482517483
+    },
+    {
+      "profile": "desk",
+      "cache": "warm",
+      "metric": "longest",
+      "unit": "ms",
+      "before": 241,
+      "after": 176,
+      "changePercent": -26.970954356846473,
+      "speedup": 1.3693181818181819
+    },
+    {
+      "profile": "desk",
+      "cache": "warm",
+      "metric": "js",
+      "unit": "KiB",
+      "before": 0,
+      "after": 0,
+      "changePercent": null,
+      "speedup": null
+    },
+    {
+      "profile": "phone",
+      "cache": "cold",
+      "metric": "picture",
+      "unit": "ms",
+      "before": 10615,
+      "after": 7940,
+      "changePercent": -25.200188412623646,
+      "speedup": 1.3369017632241813
+    },
+    {
+      "profile": "phone",
+      "cache": "cold",
+      "metric": "ready",
+      "unit": "ms",
+      "before": 10652,
+      "after": 7987,
+      "changePercent": -25.01877581674803,
+      "speedup": 1.3336672092149744
+    },
+    {
+      "profile": "phone",
+      "cache": "cold",
+      "metric": "tbt",
+      "unit": "ms",
+      "before": 1688,
+      "after": 1329,
+      "changePercent": -21.267772511848342,
+      "speedup": 1.2701279157261098
+    },
+    {
+      "profile": "phone",
+      "cache": "cold",
+      "metric": "longest",
+      "unit": "ms",
+      "before": 695,
+      "after": 513,
+      "changePercent": -26.18705035971223,
+      "speedup": 1.354775828460039
+    },
+    {
+      "profile": "phone",
+      "cache": "cold",
+      "metric": "js",
+      "unit": "KiB",
+      "before": 1091,
+      "after": 1017,
+      "changePercent": -6.782768102658112,
+      "speedup": 1.072763028515241
+    },
+    {
+      "profile": "phone",
+      "cache": "warm",
+      "metric": "picture",
+      "unit": "ms",
+      "before": 3257,
+      "after": 2778,
+      "changePercent": -14.706785385323919,
+      "speedup": 1.1724262059035278
+    },
+    {
+      "profile": "phone",
+      "cache": "warm",
+      "metric": "ready",
+      "unit": "ms",
+      "before": 3264,
+      "after": 3191,
+      "changePercent": -2.236519607843137,
+      "speedup": 1.0228768411156377
+    },
+    {
+      "profile": "phone",
+      "cache": "warm",
+      "metric": "tbt",
+      "unit": "ms",
+      "before": 564,
+      "after": 647,
+      "changePercent": 14.71631205673759,
+      "speedup": 0.8717156105100463
+    },
+    {
+      "profile": "phone",
+      "cache": "warm",
+      "metric": "longest",
+      "unit": "ms",
+      "before": 481,
+      "after": 405,
+      "changePercent": -15.8004158004158,
+      "speedup": 1.1876543209876542
+    },
+    {
+      "profile": "phone",
+      "cache": "warm",
+      "metric": "js",
+      "unit": "KiB",
+      "before": 0,
+      "after": 0,
+      "changePercent": null,
+      "speedup": null
+    }
+  ],
+  "frames": [
+    {
+      "file": "desk-cold-frame.png",
+      "exact": true
+    },
+    {
+      "file": "desk-warm-frame.png",
+      "exact": true
+    },
+    {
+      "file": "desk-at-0.png",
+      "exact": true
+    },
+    {
+      "file": "desk-at-2.4.png",
+      "exact": true
+    },
+    {
+      "file": "desk-at-4.7.png",
+      "exact": true
+    },
+    {
+      "file": "desk-at-8.2.png",
+      "exact": true
+    },
+    {
+      "file": "desk-at-10.5.png",
+      "exact": true
+    },
+    {
+      "file": "desk-at-13.2.png",
+      "exact": true
+    },
+    {
+      "file": "desk-at-0-repeat-1.png",
+      "exact": true
+    },
+    {
+      "file": "phone-cold-frame.png",
+      "exact": true
+    },
+    {
+      "file": "phone-warm-frame.png",
+      "exact": true
+    },
+    {
+      "file": "phone-at-0.png",
+      "exact": true
+    },
+    {
+      "file": "phone-at-2.4.png",
+      "exact": true
+    },
+    {
+      "file": "phone-at-4.7.png",
+      "exact": true
+    },
+    {
+      "file": "phone-at-8.2.png",
+      "exact": true
+    },
+    {
+      "file": "phone-at-10.5.png",
+      "exact": true
+    },
+    {
+      "file": "phone-at-13.2.png",
+      "exact": true
+    },
+    {
+      "file": "phone-at-0-repeat-1.png",
+      "exact": true
+    }
+  ],
+  "audio": [
+    {
+      "profile": "desk",
+      "halfSecondRmsAndPeakIdentical": true,
+      "rawPcmCompared": false
+    },
+    {
+      "profile": "phone",
+      "halfSecondRmsAndPeakIdentical": true,
+      "rawPcmCompared": false
+    }
+  ],
+  "imagesExact": true,
+  "targetTwofoldEveryFirstPicture": false,
+  "limits": [
+    "Phone is Chrome CPU/network/touch emulation, not a physical phone.",
+    "Other sessions share this host; observed timing differences are not a guaranteed speedup.",
+    "Resource timing ends one second after ready; total bytes are not the complete session's traffic.",
+    "No assertion is made about an absolute optimization ceiling."
+  ]
+}

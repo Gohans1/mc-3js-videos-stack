@@ -1,0 +1,8 @@
+﻿import { zipAssetsFromSlices } from "block-model-renderer";
+
+import { openRangeFile } from "./range-file";
+
+export async function loadAssetPack(url: string) {
+  const { slice, size } = await openRangeFile(url);
+  return zipAssetsFromSlices(slice, size);
+}
