@@ -301,7 +301,7 @@ describe("PortsPanel read-only rendering and URL safety", () => {
     assert.match(html, /1 check/);
     assert.match(html, /4 done/);
     assert.match(html, /https:\/\/anphat\.taild3d41b\.ts\.net:8447/);
-    assert.match(html, /Warn: host not in \.live_hosts/);
+    assert.match(html, /Host not allowed. Ask AI to enable this link for this film./);
     assert.match(html, /Unknown film/);
     assert.match(html, /Worktree unknown/);
     assert.match(html, /No Tailscale route/);
@@ -309,6 +309,9 @@ describe("PortsPanel read-only rendering and URL safety", () => {
     assert.match(html, /Port 4999 timed out/);
     assert.match(html, /target="_blank"/);
     assert.match(html, /rel="noopener noreferrer"/);
+    const localLink = html.match(/<a\b[^>]*href="http:\/\/localhost:4325"[^>]*>[\s\S]*?<\/a>/)?.[0];
+    assert.ok(localLink, "studio URL must remain a native link");
+    assert.match(localLink, />http:\/\/localhost:4325</, "the URL itself opens the studio");
 
     // URL safety & read-only guarantees
     assert.equal(html.includes("javascript:"), false, "must never render javascript: URLs");
