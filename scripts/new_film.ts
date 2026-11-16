@@ -21,6 +21,7 @@ const HELP = `A new film from templates/film, from the repo root: copies the tem
   bun run new-film <name> [studio port]     name: lowercase-with-dashes; port: the studio's (default one above the films' highest)
 Example: bun run new-film cave-escape 47920
 Requires a prepared vault (new machine: bun run setup). Downloads dependencies; each child step has a 5-minute limit.
+The film name must also be unused by any existing workspace package.
 Rejects ports already assigned to another film; an unrelated running service can still occupy the port.
 If a step fails, the film is kept and the error prints the recovery command. Rerunning new-film never overwrites it.
 next: cd films/<name> and run bun run check, then bun run studio. Data rules: bun run skills get core --ref contract.`;
@@ -51,6 +52,17 @@ const studio = join(ROOT, "packages/live-studio");
 const films = (existsSync(FILMS) ? readdirSync(FILMS) : []).filter((f) =>
   existsSync(join(FILMS, f, "package.json")),
 );
+const packageFiles = [
+  join(ROOT, "package.json"),
+  ...films.map((f) => join(FILMS, f, "package.json")),
+  ...readdirSync(join(ROOT, "packages")).map((p) => join(ROOT, "packages", p, "package.json")),
+].filter(existsSync);
+if (packageFiles.some((file) => jsonFile(file, ROOT).name === name)) {
+  console.error(
+    `workspace package "${name}" exists already; choose another film name.\nnext: bun run new-film <different-name> [port]`,
+  );
+  process.exit(2);
+}
 const used = films
   .map((f) =>
     Number(

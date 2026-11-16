@@ -86,7 +86,7 @@ test("init help and rejected arguments leave an existing project untouched", () 
   }
 });
 
-test("init previews a new project without creating it, then creates it and preserves custom files on rerun", () => {
+test("init previews a new project without creating it and preserves an existing project's custom files on rerun", () => {
   const root = fixture();
   try {
     for (const flag of ["--dry-run", "--dry"]) {
@@ -142,6 +142,26 @@ test("new-film rejects a duplicate port and automatic overflow before copying", 
       expect(r.status, r.stderr).toBe(2);
       expect(existsSync(join(root, "films/fresh"))).toBe(false);
       expect(r.stderr).toContain("port");
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("new-film rejects existing workspace package names before copying", () => {
+  const root = fixture();
+  try {
+    put(root, "films/old/package.json", { name: "different-name" });
+    put(root, "package.json", {
+      name: "fixture-root",
+      private: true,
+      workspaces: ["packages/*", "films/*"],
+    });
+    for (const name of ["live-studio", "different-name", "fixture-root"]) {
+      const r = run(root, "scripts/new_film.ts", [name]);
+      expect(r.status, r.stderr).toBe(2);
+      expect(r.stderr).toContain("workspace");
+      expect(existsSync(join(root, "films", name))).toBe(false);
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
