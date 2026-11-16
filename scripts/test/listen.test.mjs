@@ -1,12 +1,54 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const SOUND = resolve(dirname(fileURLToPath(import.meta.url)), "../sound");
+
+test("partial narration alternatives stay in the voice stem and out of SFX hits", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-partial-voice-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const name of ["narr", "alt"])
+    makeWav(join(dir, `sound/sfx/${name}.wav`), "0.2*sin(2*PI*440*t)", 1);
+  writeFilm(dir, {
+    audio: {
+      narration: "narr",
+      beds: [],
+      sfx: [
+        { name: "narr", at: 0, length: 0.5, gain: 0, try: ["alt"] },
+        { name: "narr", at: 2, length: 0.5, gain: 0 },
+      ],
+    },
+  });
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ narr: { set: "alt" } }));
+  const r = spawnSync(
+    "python",
+    [
+      "-c",
+      `import sys,pathlib,json,subprocess,array,math
+sys.path.insert(0,sys.argv[1])
+import listen
+out=pathlib.Path('stems'); out.mkdir()
+voice,rest,hits=listen.stems(out)
+def rms(file):
+    raw=subprocess.run(['ffmpeg','-v','error','-i',str(file),'-ss','0.1','-t','0.2','-ac','1','-f','f32le','-'],capture_output=True,check=True,timeout=20).stdout
+    samples=array.array('f'); samples.frombytes(raw)
+    return math.sqrt(sum(x*x for x in samples)/len(samples))
+print(json.dumps({'voice':rms(voice),'rest':rms(rest),'hits':hits}))`,
+      SOUND,
+    ],
+    { cwd: dir, encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  const got = JSON.parse(r.stdout);
+  assert.ok(got.voice > 0.05);
+  assert.ok(got.rest < 1e-5);
+  assert.deepEqual(got.hits, []);
+});
 
 const tone = (file, expr) => {
   const r = spawnSync("ffmpeg", [
@@ -413,4 +455,335 @@ print(json.dumps({"taken": taken, "tp": loudness(out.replace(".wav", ".m4a"))[2]
     assert.ok(got.taken > 0, `${hz} Hz: the codec pushed the peak over -1 first: ${r.stdout}`);
     assert.ok(got.tp <= -1, `${hz} Hz: the encoded file ends at or under -1 dBTP: ${got.tp}`);
   }
+});
+
+const writeFilm = (dir, { end = 4, pkg = {}, audio, timing, edit } = {}) => {
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "renders"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "");
+  writeFileSync(join(dir, "package.json"), JSON.stringify(pkg));
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify(edit ?? { end, voice: { warp: [], lines: [] } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify(audio ?? { lufs: -14, drive: 0, voice: false, beds: [], sfx: [] }),
+  );
+  if (timing !== undefined) {
+    writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify(timing));
+  }
+};
+
+const runListen = (cwd, args = [], env = process.env) =>
+  spawnSync("python", [join(SOUND, "listen.py"), ...args], {
+    cwd,
+    encoding: "utf8",
+    env,
+  });
+
+const makeWav = (file, expr, dur = 4) => {
+  mkdirSync(dirname(file), { recursive: true });
+  const r = spawnSync("ffmpeg", [
+    "-v",
+    "error",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    `aevalsrc=${expr}:s=48000:c=stereo:d=${dur}`,
+    "-c:a",
+    "pcm_s16le",
+    file,
+  ]);
+  assert.equal(r.status, 0, String(r.stderr));
+};
+
+test("listen CLI arg validation exits 0 for help anywhere and 2 for invalid flags, seconds, or cwd before stems", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = spawnSync(
+    "python",
+    [
+      "-c",
+      `import sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import main
+assert main(["--fresh", "--help"]) == 0
+for args in (["--bogus"], ["-x"], ["--at"], ["--at", "abc"], ["--at", "-1"], ["--at", "#1"], ["--at", "1:75"], ["extra"], []):
+    assert main(args) == 2, args`,
+    ],
+    { cwd: dir, encoding: "utf8" },
+  );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("listen honors custom live-studio.soundTimeline and exits 2 before stems when missing or --at is past end", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-custom-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFilm(dir, {
+    end: 2,
+    pkg: { name: "custom", "live-studio": { soundTimeline: "custom/audio.json" } },
+  });
+  rmSync(join(dir, "src/timeline/audio.json"));
+  const missing = runListen(dir, []);
+  assert.equal(missing.status, 2, missing.stderr);
+  assert.match(missing.stderr, /custom\/audio\.json/);
+
+  mkdirSync(join(dir, "custom"), { recursive: true });
+  writeFileSync(
+    join(dir, "custom/audio.json"),
+    JSON.stringify({ lufs: -14, drive: 0, voice: false, beds: [], sfx: [] }),
+  );
+  const past = runListen(dir, ["--at", "9"]);
+  assert.equal(past.status, 2, past.stderr);
+  assert.equal(existsSync(join(dir, "renders/listen_stems")), false);
+
+  const ok = runListen(dir, []);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(
+    JSON.parse(readFileSync(join(dir, "renders/listen.json"), "utf8")).abrupt_end,
+    false,
+  );
+});
+
+test("listen rejects broken film JSON cleanly with file location and no traceback", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-json-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const [name, rel] of [
+    ["pkg", "package.json"],
+    ["audio", "src/timeline/audio.json"],
+    ["edit", "src/edit.json"],
+    ["choices", "choices.json"],
+    ["timing", "src/timeline/timing.json"],
+  ]) {
+    const f = join(dir, name);
+    writeFilm(f, {
+      pkg: { name: "j", "live-studio": { timingTimeline: "src/timeline/timing.json" } },
+      timing: { cuts: [], speeds: [], freezes: [] },
+    });
+    writeFileSync(join(f, rel), "{bad");
+    const r = runListen(f, []);
+    assert.equal(r.status, 1, `${name}: ${r.stderr}`);
+    assert.match(r.stderr, /not valid JSON/);
+    assert.doesNotMatch(r.stderr, /Traceback/);
+  }
+});
+
+test("listen warns and ignores corrupt cuts.json or listen_curve.json without tracebacks", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-bad-cuts-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFilm(dir, { end: 1 });
+  writeFileSync(join(dir, "renders/cuts.json"), "[true]");
+  writeFileSync(join(dir, "renders/listen_curve.json"), "{bad");
+  const badCuts = runListen(dir, []);
+  assert.equal(badCuts.status, 0, badCuts.stderr);
+  assert.doesNotMatch(badCuts.stderr, /Traceback/);
+  assert.match(badCuts.stdout, /no renders\/cuts\.json/);
+});
+
+test("listen omits the missing-cuts notice when renders/cuts.json is validly empty []", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-empty-cuts-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFilm(dir, { end: 1 });
+  writeFileSync(join(dir, "renders/cuts.json"), "[]");
+  const emptyCuts = runListen(dir, []);
+  assert.equal(emptyCuts.status, 0, emptyCuts.stderr);
+  assert.doesNotMatch(emptyCuts.stdout, /no renders\/cuts\.json/);
+});
+
+test("listen respects timing cuts, start/rate hits, and muted tracks without negative stretches", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-timing-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  makeWav(join(dir, "sound/sfx/bed.wav"), "0.08*sin(2*PI*300*t)", 4);
+  makeWav(join(dir, "sound/sfx/gone.wav"), "0.25*sin(2*PI*600*t)", 0.4);
+  makeWav(join(dir, "sound/sfx/hit.wav"), "0.25*sin(2*PI*600*t)", 3);
+  makeWav(
+    join(dir, "assets/public/agent/full_voice.wav"),
+    "0.1*sin(2*PI*1000*t)*between(t\\,2.0\\,3.2)",
+    4,
+  );
+  writeFilm(dir, {
+    end: 4,
+    pkg: {
+      name: "t",
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    },
+    timing: { cuts: [{ from: 0.4, to: 1.4 }], speeds: [], freezes: [] },
+    audio: {
+      lufs: -14,
+      drive: 0,
+      voice: true,
+      tracks: [{ id: "t1" }, { id: "t_mute", mute: true }, { id: "t2" }],
+      beds: [
+        { name: "bed", from: 0, to: 4, gain: -10, fadeIn: 0, fadeOut: 0.2, track: "t1" },
+        { name: "bed", from: 0, to: 4, gain: 0, fadeIn: 0, fadeOut: 0, track: "t_mute" },
+      ],
+      sfx: [
+        { name: "gone", at: 0.6, gain: 0, track: "t2" },
+        { name: "hit", at: 2.5, start: 1.0, rate: 2.0, gain: -20, track: "t2" },
+        { name: "hit", at: 4.5, gain: 0, track: "t2" },
+      ],
+    },
+  });
+
+  const first = runListen(dir, []);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /beds\[0\] bed/);
+  assert.doesNotMatch(first.stdout, /beds\[1\]/);
+  assert.doesNotMatch(first.stdout, /-\d+\.\d{2}-/);
+  const stamp = JSON.parse(readFileSync(join(dir, "renders/listen_stems/stamp.json"), "utf8"));
+  assert.equal(stamp.hits.length, 1);
+  assert.equal(stamp.hits[0][2], "hit");
+  assert.ok(
+    Math.abs(stamp.hits[0][1] - 1.0) < 1e-6,
+    `expected (3-1)/2 = 1.0, got ${stamp.hits[0][1]}`,
+  );
+});
+
+test("listen kept_stems ignores sound/mix.wav", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-cache-mix-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  makeWav(join(dir, "sound/sfx/hit.wav"), "0.25*sin(2*PI*600*t)", 1);
+  writeFilm(dir, {
+    end: 2,
+    audio: {
+      lufs: -14,
+      drive: 0,
+      voice: false,
+      beds: [],
+      sfx: [{ name: "hit", at: 0.2, gain: 0 }],
+    },
+  });
+
+  const r1 = runListen(dir, ["--at", "0.5"]);
+  assert.equal(r1.status, 0, r1.stderr);
+
+  writeFileSync(join(dir, "sound/mix.wav"), "x");
+  const r2 = runListen(dir, ["--at", "0.5"]);
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.match(r2.stderr, /unchanged since the last listen/);
+});
+
+test("listen kept_stems invalidates when choices.json changes", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-cache-choice-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  makeWav(join(dir, "sound/sfx/hit.wav"), "0.25*sin(2*PI*600*t)", 1);
+  writeFilm(dir, {
+    end: 2,
+    audio: {
+      lufs: -14,
+      drive: 0,
+      voice: false,
+      beds: [],
+      sfx: [{ name: "hit", at: 0.2, gain: 0 }],
+    },
+  });
+
+  const r1 = runListen(dir, ["--at", "0.5"]);
+  assert.equal(r1.status, 0, r1.stderr);
+  assert.equal(
+    JSON.parse(readFileSync(join(dir, "renders/listen_stems/stamp.json"), "utf8")).hits.length,
+    1,
+  );
+
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ hit: { set: "off" } }));
+  const r2 = runListen(dir, ["--at", "0.5"]);
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.doesNotMatch(r2.stderr, /unchanged since the last listen/);
+  assert.equal(
+    JSON.parse(readFileSync(join(dir, "renders/listen_stems/stamp.json"), "utf8")).hits.length,
+    0,
+  );
+});
+
+test("listen --at clamps out-of-film bins and shorter last curves", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-bounds-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const curve = Array.from({ length: 40 }, (_, i) => [+(i * 0.1).toFixed(1), -20, -25]);
+  const rWas = spawnSync(
+    "python",
+    [
+      "-c",
+      `import json, sys; sys.path.insert(0, ${JSON.stringify(SOUND)}); from listen import levels_around; print(json.dumps(levels_around(json.loads(sys.argv[1]), 5.0, json.loads(sys.argv[2]))))`,
+      JSON.stringify(Array.from({ length: 80 }, (_, i) => [+(i * 0.1).toFixed(1), -20, -25])),
+      JSON.stringify(curve),
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(rWas.status, 0, rWas.stderr);
+  const wasRows = JSON.parse(rWas.stdout);
+  assert.ok(wasRows.filter((row) => row.from < 4).every((row) => row.was === -25));
+  assert.ok(wasRows.filter((row) => row.from >= 4).every((row) => row.was === null));
+
+  makeWav(join(dir, "sound/sfx/bed.wav"), "0.08*sin(2*PI*300*t)", 3);
+  writeFilm(dir, {
+    end: 3,
+    audio: {
+      lufs: -14,
+      drive: 0,
+      voice: false,
+      beds: [{ name: "bed", from: 0, to: 3, gain: -12, fadeIn: 0, fadeOut: 0 }],
+      sfx: [],
+    },
+  });
+  writeFileSync(join(dir, "renders/listen_curve.json"), JSON.stringify(curve.slice(0, 10)));
+  const at0 = runListen(dir, ["--at", "0"]);
+  assert.equal(at0.status, 0, at0.stderr);
+  assert.doesNotMatch(at0.stdout, /-0\.50-/);
+  const atEnd = runListen(dir, ["--at", "3"]);
+  assert.equal(atEnd.status, 0, atEnd.stderr);
+  assert.doesNotMatch(atEnd.stdout, /was -120\.0/);
+  assert.doesNotMatch(atEnd.stdout, /3\.00-3\.50/);
+});
+
+test("listen failed builds close build.log on Windows and end the studio job with level fail", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "listen-fail-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const events = [];
+  const srv = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      events.push(JSON.parse(body));
+      res.end("{}");
+    });
+  });
+  await new Promise((res) => srv.listen(0, "127.0.0.1", res));
+  t.after(() => srv.close());
+
+  writeFilm(dir, {
+    end: 2,
+    audio: {
+      lufs: -14,
+      drive: 0,
+      voice: false,
+      beds: [{ name: "missing_sound", from: 0, to: 2, gain: -10, fadeIn: 0, fadeOut: 0 }],
+      sfx: [],
+    },
+  });
+  const port = srv.address().port;
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(join(dir, "renders/live/studio.json"), JSON.stringify({ port }));
+  const failRun = await new Promise((resolveRun, rejectRun) => {
+    const child = spawn("python", [join(SOUND, "listen.py")], {
+      cwd: dir,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "",
+      stderr = "";
+    child.stdout.on("data", (c) => (stdout += c));
+    child.stderr.on("data", (c) => (stderr += c));
+    child.on("error", rejectRun);
+    child.on("close", (status) => resolveRun({ status, stdout, stderr }));
+  });
+  assert.equal(failRun.status, 1, failRun.stderr);
+  assert.doesNotMatch(failRun.stderr, /Traceback|PermissionError/);
+  assert.ok(
+    events.length >= 2 && events.at(-1).job?.end === true && events.at(-1).level === "fail",
+    `expected job fail events, got ${JSON.stringify(events)}`,
+  );
 });

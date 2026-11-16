@@ -9,7 +9,7 @@
     pointer-events: none;
     padding: 2px 10px;
     border-radius: 6px;
-    background: rgb(0 0 0 / 0.6);
+    background: var(--scrim);
     color: var(--picture);
     font: 600 24px/1.25 var(--font-mono);
     font-variant-numeric: tabular-nums;
@@ -48,7 +48,7 @@
     display: none;
   }
   .stage-caption-text {
-    background: rgb(0 0 0 / 0.62);
+    background: var(--scrim);
     padding: 3px 10px;
     border-radius: 6px;
     color: var(--picture);
@@ -62,10 +62,10 @@
     margin: -11px 0 0 -11px;
     border: 2px solid var(--primary);
     border-radius: 50%;
-    box-shadow: 0 0 0 1px #000;
+    box-shadow: 0 0 0 1px var(--stage);
   }
   .pin.saved {
-    border-color: #4385be;
+    border-color: var(--ink-saved);
     width: 12px;
     height: 12px;
     margin: -8px 0 0 -8px;
@@ -82,7 +82,7 @@
     white-space: nowrap;
     padding: 2px 7px;
     border-radius: 4px;
-    background: rgb(0 0 0 / 0.8);
+    background: var(--scrim-strong);
     color: var(--foreground);
     font: 500 12px/1.35 var(--font-sans);
     font-style: normal;
@@ -90,6 +90,54 @@
   .pin i.up {
     top: auto;
     bottom: calc(100% + 6px);
+  }
+  /* Stacked whole-frame open notes shown briefly over the player during playback and fading out together without occluding one another */
+  .pin-stack {
+    position: absolute;
+    left: 10px;
+    top: 48px;
+    max-width: min(260px, calc(100% - 120px));
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    pointer-events: none;
+  }
+  html[data-phone] .pin-stack {
+    left: 6px;
+    top: 6px;
+    max-width: min(220px, calc(100% - 80px));
+    gap: 3px;
+  }
+  .pin-frame {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--scrim-strong);
+    color: var(--foreground);
+    font: 500 12px/1.35 var(--font-sans);
+  }
+  html[data-phone] .pin-frame,
+  html[data-phone] .pin i {
+    max-width: min(200px, calc(100cqw - 12px));
+    padding: 1px 6px;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .pin-frame span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pin-frame-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 9999px;
+    background: var(--ink-saved);
   }
   /* A sound carried from the library to a lane (sound/lanes.ts) */
   .carry {
@@ -104,7 +152,7 @@
     color: var(--foreground);
     font: 500 12px/1.4 var(--font-sans);
     white-space: nowrap;
-    box-shadow: 0 4px 14px rgb(0 0 0 / 0.5);
+    box-shadow: var(--shadow-float);
     outline: 1px solid var(--border);
   }
   .carry[data-over] {
@@ -120,13 +168,13 @@
     fill: var(--raised-4);
   }
   .fx-wall {
-    fill: #cecdc3;
+    fill: var(--fx-base-200);
   }
   .fx-roof {
-    fill: #66800b;
+    fill: var(--fx-green-600);
   }
   .fx-door {
-    fill: #878580;
+    fill: var(--fx-base-500);
   }
   .fx-sun {
     fill: var(--favorite);
@@ -366,7 +414,7 @@
     #d76146,
     #d92e52
   );
-  box-shadow: 0 0 0 2px #111;
+  box-shadow: 0 0 0 2px var(--stage);
 }
 .grade-wheel::after {
   content: "";
@@ -374,7 +422,7 @@
   inset: 7px;
   border-radius: 50%;
   background:
-    radial-gradient(circle, #141414, #1110),
+    radial-gradient(circle, var(--stage), transparent),
     conic-gradient(#33080d, #1e0c2d, #04162e, #09221e, #092409, #2c2908, #2d1407, #33100c, #33080d);
 }
 .grade-wheel-channel[data-channel="R"] {
@@ -387,5 +435,182 @@
   background: #00f;
 }
 .grade-wheel-value {
-  background: #1c1c1c;
+  background: var(--backdrop);
+}
+
+/* What the AI just touched (activity/activity.ts useLit, for its LIT_MS): a violet ring and glow that hold, then fade. Colour
+   only, nothing moves or changes size, so a list being read never shifts and reduced motion keeps it as it is */
+@layer components {
+  :root {
+    --ai-lit-ms: 12000ms;
+  }
+  @keyframes ai-lit {
+    0% {
+      box-shadow:
+        inset 0 0 0 1.5px var(--lit-color, var(--primary)),
+        inset 0 0 18px color-mix(in oklab, var(--lit-color, var(--primary)) 14%, transparent),
+        0 0 0 1px color-mix(in oklab, var(--lit-color, var(--primary)) 45%, transparent),
+        0 0 14px 1px color-mix(in oklab, var(--lit-color, var(--primary)) 28%, transparent);
+    }
+    72% {
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow:
+        inset 0 0 0 1.5px color-mix(in oklab, var(--lit-color, var(--primary)) 90%, transparent),
+        inset 0 0 12px color-mix(in oklab, var(--lit-color, var(--primary)) 10%, transparent),
+        0 0 0 1px color-mix(in oklab, var(--lit-color, var(--primary)) 32%, transparent),
+        0 0 8px 0 color-mix(in oklab, var(--lit-color, var(--primary)) 18%, transparent);
+    }
+    100% {
+      box-shadow:
+        inset 0 0 0 1.5px transparent,
+        inset 0 0 12px transparent,
+        0 0 0 1px transparent,
+        0 0 8px 0 transparent;
+    }
+  }
+  @keyframes ai-lit-row {
+    0%,
+    72% {
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+      background-color: color-mix(in oklab, var(--lit-color, var(--primary)) 12%, transparent);
+      box-shadow:
+        inset 0 1.5px 0 var(--lit-color, var(--primary)),
+        inset 0 -1.5px 0 var(--lit-color, var(--primary));
+    }
+    100% {
+      background-color: transparent;
+      box-shadow:
+        inset 0 1.5px 0 transparent,
+        inset 0 -1.5px 0 transparent;
+    }
+  }
+  .tab-indicator {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: var(--active-tab-width, 0px);
+    transform: translate3d(var(--active-tab-left, 0px), 0px, 0);
+    transition:
+      transform 190ms cubic-bezier(0.23, 1, 0.32, 1),
+      width 190ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .tab-pill-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--active-tab-width, 0px);
+    height: var(--active-tab-height, 0px);
+    transform: translate3d(var(--active-tab-left, 0px), var(--active-tab-top, 0px), 0);
+    transition:
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      width 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      height 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .segmented-pill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--pill-w, 0px);
+    height: var(--pill-h, 0px);
+    transform: translate3d(var(--pill-x, 0px), var(--pill-y, 0px), 0);
+  }
+  .segmented-pill[data-animated] {
+    transition:
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      width 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      height 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .studio-press {
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      box-shadow 150ms ease,
+      transform 150ms ease-out;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .studio-press:not(:disabled):not([aria-disabled="true"]):not([aria-haspopup]):active {
+      transform: scale(0.96);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tab-indicator,
+    .tab-pill-indicator,
+    .segmented-pill[data-animated],
+    .studio-press {
+      transition: none;
+    }
+    .studio-press:not(:disabled):not([aria-disabled="true"]):not([aria-haspopup]):active {
+      transform: none;
+    }
+  }
+}
+
+/* Kept in @layer utilities so border-* and ring-* card utilities never suppress the AI highlight or focus ring */
+@layer utilities {
+  [data-ai-lit][data-tone="check"] {
+    --lit-color: var(--warn);
+  }
+  [data-ai-lit][data-tone="ai"] {
+    --lit-color: var(--ai);
+  }
+  [data-ai-lit][data-tone="open"] {
+    --lit-color: var(--primary);
+  }
+  [data-ai-lit][data-tone="done"] {
+    --lit-color: var(--ok);
+  }
+  [data-ai-lit][data-ai-lit] {
+    border-color: color-mix(in oklab, var(--lit-color, var(--primary)) 72%, transparent);
+    animation: ai-lit var(--ai-lit-ms) linear both;
+  }
+  [data-ai-lit][data-ai-lit]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  [data-slot="table-row"][data-ai-lit] > td {
+    animation: ai-lit-row var(--ai-lit-ms) linear both;
+  }
+  [data-slot="table-row"][data-ai-lit] > td:first-child {
+    border-start-start-radius: 6px;
+    border-end-start-radius: 6px;
+  }
+  [data-slot="table-row"][data-ai-lit] > td:last-child {
+    border-start-end-radius: 6px;
+    border-end-end-radius: 6px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-ai-lit][data-ai-lit] {
+      animation: none;
+      border-color: var(--lit-color, var(--primary));
+      box-shadow:
+        inset 0 0 0 1.5px var(--lit-color, var(--primary)),
+        inset 0 0 14px color-mix(in oklab, var(--lit-color, var(--primary)) 10%, transparent);
+    }
+    [data-slot="table-row"][data-ai-lit] > td {
+      animation: none;
+      background-color: color-mix(in oklab, var(--lit-color, var(--primary)) 12%, transparent);
+      box-shadow:
+        inset 0 1.5px 0 var(--lit-color, var(--primary)),
+        inset 0 -1.5px 0 var(--lit-color, var(--primary));
+    }
+  }
+}
+
+.tl-lane {
+  --tl-step: 36px;
+  --tl-pill-offset: 4px;
+  --tl-stem-offset: 30px;
+  height: calc(var(--tl-rows, 1) * var(--tl-step) + 4px);
+}
+.tl-pill {
+  top: calc(var(--tl-row, 0) * var(--tl-step) + var(--tl-pill-offset));
+}
+.tl-stem {
+  top: calc(var(--tl-row, 0) * var(--tl-step) + var(--tl-stem-offset));
+}
+@media (pointer: coarse) {
+  .tl-lane {
+    --tl-step: 56px;
+    --tl-stem-offset: 47px;
+  }
 }

@@ -4,7 +4,7 @@ import { type RefObject, useEffect } from "react";
 
 import type { Elements } from "../core/state";
 import { set, showError } from "../core/store";
-import { start } from "../start";
+import { preloadStart, warmBootRequests } from "../core/warmup";
 
 let started = false;
 
@@ -29,10 +29,13 @@ export const useBoot = (el: RefObject<Elements>) =>
   useEffect(() => {
     if (started) return;
     started = true;
-    start(el.current).catch((e: Error) => {
-      showError(e);
-      set({ loading: "" });
-    });
+    warmBootRequests();
+    preloadStart()
+      .then(({ start }) => start(el.current))
+      .catch((e: Error) => {
+        showError(e);
+        set({ loading: "" });
+      });
     addEventListener("click", dropClickFocus);
     // A slider keeps focus after a drag too, and its arrows would then move it instead of stepping the film
     addEventListener("pointerup", () => {

@@ -1,4 +1,4 @@
-import { bisector } from "d3-array";
+import { bisector } from "./bisect.mjs";
 
 const segmentAt = bisector((s) => s.to).right;
 

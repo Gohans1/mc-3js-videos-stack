@@ -1,24 +1,38 @@
 // Draft renders of any film from inside it; HELP below says everything it takes
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
-import { inOutLengths } from "film-stage/titles-text";
 import { build } from "vite";
 
 import { cues, srt } from "./src/captions.mjs";
-import { cliArgs, envTypos, jsonFile, numberArg, secondArg } from "./src/cli.mjs";
+import { cliArgs, envTypos, jsonFile, needFilm, numberArg, secondArg } from "./src/cli.mjs";
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines, seenSound } from "./src/narration.ts";
-import { isRead, pxOf } from "./src/readable.mjs";
+import {
+  fallbackTimingDuration,
+  heardInOut,
+  isRead,
+  pxOf,
+  textCheckSample,
+} from "./src/readable.mjs";
 import { audioInfo } from "./src/sound.mjs";
+import { startJob } from "./src/tell.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
-import { clockForTimeline } from "./src/timing-state.mjs";
+import { clockForTimeline, setTiming } from "./src/timing-state.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
 import { writeVoiceMap } from "./src/voice-map.mjs";
 import { warp } from "./src/warp.mjs";
@@ -134,11 +148,7 @@ if (misplaced) {
   process.exit(2);
 }
 
-const PROJECT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
-if (!existsSync(join(PROJECT, "src/scene.ts"))) {
-  console.error(`${PROJECT} has no src/scene.ts: run this inside a film`);
-  process.exit(1);
-}
+const PROJECT = needFilm(resolve(process.env.LIVE_PROJECT ?? process.cwd()));
 // A film file read here: absent gives the fallback, broken stops the render naming it (a stack trace said nothing)
 const readJson = (file, fallback) => {
   if (!existsSync(file)) return fallback;
@@ -150,7 +160,10 @@ const readJson = (file, fallback) => {
   }
 };
 // a page of the film's own: a wrong path would only fail deep in the bundler
-if (process.env.ENTRY && !existsSync(resolve(PROJECT, process.env.ENTRY))) {
+if (
+  process.env.ENTRY &&
+  !statSync(resolve(PROJECT, process.env.ENTRY), { throwIfNoEntry: false })?.isFile()
+) {
   const lab = existsSync(join(PROJECT, "lab"))
     ? readdirSync(join(PROJECT, "lab")).filter((f) => /\.[jt]s$/.test(f))
     : [];
@@ -179,12 +192,7 @@ const writeCaptions = (video = "draft_video.mp4") => {
   const editData = readJson(edit, {});
   const w = editData.voice?.warp ?? [];
   const heard = (s) => warp(w, s, 0, 1);
-  const lines = (JSON.parse(readFileSync(map, "utf8")).lines ?? []).map((l) => ({
-    ...l,
-    s: heard(l.s),
-    e: heard(l.e),
-    words: l.words.map((v) => ({ ...v, s: heard(v.s), e: heard(v.e) })),
-  }));
+  const lines = JSON.parse(readFileSync(map, "utf8")).lines ?? [];
   const packageFile = join(PROJECT, "package.json");
   const conf = readJson(packageFile, {})["live-studio"] ?? {};
   const audio = conf.soundTimeline ? readJson(join(PROJECT, conf.soundTimeline), null) : null;
@@ -375,22 +383,35 @@ const textLines = [];
 if (textCheck) {
   const rel = pkg["live-studio"]?.textTimeline;
   const file = rel && existsSync(join(PROJECT, rel)) ? readJson(join(PROJECT, rel), {}) : {};
+  if (!ends) {
+    const timingRel = pkg["live-studio"]?.timingTimeline;
+    const timing =
+      timingRel && existsSync(join(PROJECT, timingRel))
+        ? readJson(join(PROJECT, timingRel), {})
+        : {};
+    const editData = existsSync(join(PROJECT, "src/edit.json"))
+      ? readJson(join(PROJECT, "src/edit.json"), {})
+      : {};
+    setTiming(
+      timing,
+      warp(editData.voice?.warp ?? [], fallbackTimingDuration(file.items, timing), 0, 1),
+    );
+  }
+  const textClock = clockForTimeline("text");
   const heard = Array.isArray(file.items)
-    ? mapTimeline("text", file, clockForTimeline("text"), false, null, {})
+    ? mapTimeline("text", file, textClock, false, null, {})
     : { items: [] };
   const [, from, to] = textCheck.args;
   file.items?.forEach((it, i) => {
     const h = heard.items?.[i];
-    if (!isRead(it, file.tracks) || !h || h.to <= from || h.from >= to) return;
-    const io = inOutLengths(it),
-      k = (h.to - h.from) / (it.to - it.from || 1),
-      a = h.from + io.in * k,
-      b = h.to - io.out * k;
+    if (!isRead(it, file.tracks) || !h) return;
+    const at = textCheckSample(h, heardInOut(it, h, textClock), from, to, FPS, textClock);
+    if (at === null) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
     textLines.push({
       i,
       text: short.length > 28 ? `${short.slice(0, 27)}…` : short,
-      at: Math.round((b > a ? (a + b) / 2 : (h.from + h.to) / 2) * FPS) / FPS,
+      at,
       px: pxOf(it),
       ink: it.color ?? "#FFFFFF",
     });
@@ -440,6 +461,11 @@ const cfg = {
 // ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
 const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/page.ts");
 const t0 = Date.now();
+// the creator's studio shows the render busy, its build too, until the line at the end, or until this process is gone (src/tell.mjs)
+const ended = await startJob(PROJECT, `render ${what}`, {
+  say: `Rendering ${what}${span ? ` ${span[0]}-${span[1]} s` : at.length ? ` at ${at.join(", ")} s` : ""}`,
+  ...(span ? { at: span[0], to: span[1] } : at.length ? { at: at[0] } : {}),
+});
 // Of the sound timeline only the narration clips change a frame (the mouths follow them, src/lips.ts) and LIST=1's overlay
 // names its rows. A video is built with that part alone (seenSound), so a gain, a bed or an effect keeps every chunk's stamp
 // and render clip redraws nothing for it; the joined video keeps it in <chunks>/seen-sound.json for src/stale.mjs
@@ -458,7 +484,7 @@ const noSound = {
 };
 // A film's code that does not build: rolldown's own report colours every character and Bun prints rolldown's source under
 // it, so only the place and the words are said, plain
-const notBuilt = (e) => {
+const notBuilt = async (e) => {
   const plain = (s) => stripVTControlCharacters(String(s));
   for (const x of e?.errors ?? [e]) {
     const at = x?.loc?.file
@@ -473,6 +499,7 @@ const notBuilt = (e) => {
     "the film's code does not build: fix it, then bun run render again (nothing was rendered)",
   );
   rmSync(OUT, { recursive: true, force: true }); // a build folder per run: a failed one is left nowhere
+  await ended({ say: `Render ${what}: the film's code does not build`, level: "fail" });
   process.exit(1);
 };
 const built = await build({
@@ -532,10 +559,21 @@ const MIME = {
   ".css": "text/css",
   ".woff2": "font/woff2",
   ".woff": "font/woff",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
   ".wasm": "application/wasm",
   ".png": "image/png",
   ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".gltf": "application/json",
   ".glb": "model/gltf-binary",
+  ".bin": "application/octet-stream",
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".webm": "audio/webm",
 }; // wasm: instantiateStreaming refuses anything else
 const chunkFile = (i) => join(CHUNKS, `c${String(i).padStart(2, "0")}.mp4`);
 const stampsFile = join(CHUNKS, "stamps.json");
@@ -561,12 +599,17 @@ const pageConfig = () =>
       }
     : cfg;
 let finish,
+  closing = false,
   failed = false,
   chunks = null,
   lastAlive = null;
 const finished = new Promise((done) => {
   finish = done;
 });
+const close = () => {
+  closing = true;
+  finish();
+};
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
@@ -579,7 +622,7 @@ const server = Bun.serve({
         (m.startsWith("ERROR") ? console.error : console.log)(m);
         if (m.startsWith("ERROR")) {
           failed = true;
-          finish();
+          close();
         }
       } else if (url.startsWith("/still/")) {
         writeFileSync(join(RENDERS, url.slice(7)), b);
@@ -597,7 +640,7 @@ const server = Bun.serve({
       } else if (url === "/alive") lastAlive = Date.now();
       else if (url === "/done") {
         chunks = b.length ? +b.toString() : null;
-        finish();
+        close();
       }
       return new Response("ok");
     }
@@ -606,7 +649,7 @@ const server = Bun.serve({
       return new Response(
         "<!doctype html>" +
           styles +
-          '<canvas id="gl"></canvas><script>onerror = (m, s, l, c, e) => { fetch("/log", { method: "POST", body: "ERROR " + (e && e.stack || m) }); };</script><script type="module" src="/page.js"></script>',
+          '<canvas id="gl"></canvas><script>onerror = (m, s, l, c, e) => { fetch("/log", { method: "POST", body: "ERROR " + (e && e.stack || m) }); }; onunhandledrejection = (e) => { fetch("/log", { method: "POST", body: "ERROR " + (e.reason && e.reason.stack || e.reason) }); };</script><script type="module" src="/page.js"></script>',
         { headers: { "content-type": "text/html" } },
       );
     if (url === "/config")
@@ -626,11 +669,12 @@ const server = Bun.serve({
 });
 // a profile per attempt: a killed Chrome's helper processes can hold the last one's lock for a while
 const profiles = [];
+const stopping = new WeakSet();
 const launch = () => {
   const profile = join(tmpdir(), `live_render_${process.pid}_${profiles.length}`);
   profiles.push(profile);
   mkdirSync(profile, { recursive: true });
-  return spawn(
+  const proc = spawn(
     CHROME,
     [
       "--headless",
@@ -649,6 +693,17 @@ const launch = () => {
     // its helper processes outlive kill() for a moment: run from the profile, never holding the film's folder open
     { stdio: "ignore", cwd: profile },
   );
+  proc.on("error", (err) => {
+    if (closing || stopping.has(proc)) return;
+    stopping.add(proc);
+    stuck(`Chrome could not start (${err.message})`);
+  });
+  proc.on("exit", (code, signal) => {
+    if (closing || stopping.has(proc)) return;
+    stopping.add(proc);
+    stuck(`Chrome exited (${signal ?? `code ${code}`}) before finishing`);
+  });
+  return proc;
 };
 let chrome = launch(),
   attempt = 1;
@@ -659,6 +714,7 @@ const stuck = (why) => {
       `${why}: Chrome restarted (attempt ${attempt} of 3), the chunks finished so far are kept`,
     );
     lastAlive = null;
+    stopping.add(chrome);
     chrome.kill();
     chrome = launch();
   } else {
@@ -666,7 +722,7 @@ const stuck = (why) => {
       `ERROR ${why}${cfg.clip ? ", three times" : ""}. ${cfg.clip ? `The same command again renders only the chunks not finished (renders/${CHUNKS.slice(RENDERS.length + 1)}/stamps.json); ` : ""}a GPU that hangs again: close what else uses it`,
     );
     failed = true;
-    finish();
+    close();
   }
 };
 // Once frames flow the page says so every few seconds, and 4 minutes of quiet is a hang (a GPU reset, a lost context);
@@ -696,7 +752,7 @@ rmSync(OUT, { recursive: true, force: true });
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${W}x${H}, ${samples} sub-frames)` : ""}${failed ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
+    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${W}x${H}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
   );
 
 if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {
@@ -758,13 +814,19 @@ if (!failed && chunks) {
     }
     console.log(
       j.status !== 0
-        ? "ERROR join failed"
+        ? `ERROR join failed${j.error ? ` (${j.error.message})` : j.signal ? ` (${j.signal})` : ""}`
         : final
           ? `joined renders/${JOINED} (${W}x${H}, ${samples} sub-frames a frame)\nnext: bun run mix renders/${JOINED} (the soundtrack on it: renders/final.mp4, the file to upload), then bun run framecheck renders/${JOINED}`
-          : `joined renders/${JOINED}, picture only${existsSync(join(RENDERS, "draft.mp4")) ? ": renders/draft.mp4 keeps the old picture with its sound until bun run mix renders/" + JOINED : ""}\nnext: bun run framecheck (black, flashes, jumps, freezes); frames to look at: bun run sheet renders/${JOINED} ${ends ? [0.2, 0.5, 0.8].map((k) => +(k * ends.layers).toFixed(1)).join(",") : "1"}`,
+          : `joined renders/${JOINED}, picture only${existsSync(join(RENDERS, "draft.mp4")) ? ": renders/draft.mp4 keeps the old picture with its sound until bun run mix renders/" + JOINED : ""}\nnext: bun run framecheck (black, flashes, jumps, shimmer, freezes); frames to look at: bun run sheet renders/${JOINED} ${ends ? [0.2, 0.5, 0.8].map((k) => +(k * ends.layers).toFixed(1)).join(",") : "1"}`,
     );
-    if (j.status) failed = true;
+    if (j.status !== 0) failed = true;
   }
 }
 if (failed) console.log("next: fix what the ERROR above says, then run the same render again");
+await ended({
+  say: failed
+    ? `Render ${what} failed`
+    : `Rendered ${what} in ${((Date.now() - t0) / 1000).toFixed(0)} s${stillsWritten.length ? `: ${stillsWritten.length} picture${stillsWritten.length > 1 ? "s" : ""}` : ""}`,
+  level: failed ? "fail" : "ok",
+});
 process.exit(failed ? 1 : 0);

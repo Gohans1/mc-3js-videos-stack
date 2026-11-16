@@ -1,8 +1,8 @@
 import type { TransitionEase } from "film-stage/transitions";
-import { SHOTS_OUT } from "film/scene";
 
 import { effectLength, effectSpan, transitionAvailable } from "../../src/timing-effects.mjs";
 import { timingClock } from "../../src/timing-state.mjs";
+import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { originalShot } from "../timeline/timing";

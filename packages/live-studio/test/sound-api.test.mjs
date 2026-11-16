@@ -131,3 +131,183 @@ test("GET /api/sound compresses large library payloads with Brotli, supports If-
   });
   assert.equal(badTryRes.status, 404);
 });
+
+test("GET / drops cached ?v= boot tags when film-local SFX overrides change resolved path or source .wav", async (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), "studio-sfx-tag-evict-"));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const vaultWav = join(tmp, "vault-hit.wav");
+  const localWav = join(tmp, "local-hit.wav");
+  const smallWebm = join(tmp, "hit.webm");
+  writeFileSync(vaultWav, Buffer.from("RIFFvault000"));
+  writeFileSync(localWav, Buffer.from("RIFFlocalOverride000"));
+  writeFileSync(smallWebm, Buffer.from("webm-small-v1"));
+
+  let currentWav = vaultWav;
+  const app = createApi(
+    {
+      NAME: "tag-test",
+      ratio: () => "16:9",
+      sound: {
+        read: () => ({ version: "v1", data: { beds: [], sfx: [] } }),
+        fileOf: (name) => (name === "hit" ? currentWav : null),
+      },
+      smallSfx: async (name) => (name === "hit" ? smallWebm : null),
+      openRead: (file, range) => createReadStream(file, range),
+      PUBLIC: tmp,
+    },
+    {
+      page: {
+        dir: tmp,
+        html: () => "<!doctype html><html><head></head><body></body></html>",
+      },
+      events: new Set(),
+      build: () => "b1",
+    },
+  );
+
+  const extractTags = async () => {
+    const res = await app.request("/");
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    const match = html.match(/window\.__STUDIO_BOOT=(\{.*?\});/);
+    assert.ok(match, "expected __STUDIO_BOOT in GET / response");
+    return JSON.parse(match[1]).tags;
+  };
+
+  assert.equal((await app.request("/api/sfx/hit.wav")).status, 200);
+  assert.equal((await app.request("/api/sfx/hit.webm")).status, 200);
+  const tagsBefore = await extractTags();
+  assert.ok(tagsBefore["/api/sfx/hit.wav"]);
+  assert.ok(tagsBefore["/api/sfx/hit.webm"]);
+
+  // Switch fileOf("hit") to a film-local override: both .wav and .webm boot tags must be evicted
+  currentWav = localWav;
+  const tagsAfterPathChange = await extractTags();
+  assert.equal(tagsAfterPathChange["/api/sfx/hit.wav"], undefined);
+  assert.equal(tagsAfterPathChange["/api/sfx/hit.webm"], undefined);
+
+  // Re-prime .webm tag, then mutate localWav size/mtime without touching smallWebm -> .webm tag must evict
+  assert.equal((await app.request("/api/sfx/hit.webm")).status, 200);
+  assert.ok((await extractTags())["/api/sfx/hit.webm"]);
+  writeFileSync(localWav, Buffer.from("RIFFlocalOverrideModifiedSize0000"));
+  assert.equal((await extractTags())["/api/sfx/hit.webm"], undefined);
+});
+
+test("GET /api/sound?used=1 returns only referenced sounds and ?library=1 returns full library with 304", async () => {
+  let libraryCalls = 0;
+  const fullLibrary = [
+    { name: "bed_a", seconds: 5, title: "Bed A", source: "mixkit", kind: "bed", origin: "real" },
+    {
+      name: "sfx_used",
+      seconds: 0.5,
+      title: "Used",
+      source: "mixkit",
+      kind: "sfx",
+      origin: "real",
+    },
+    { name: "sfx_try", seconds: 0.5, title: "Try", source: "mixkit", kind: "sfx", origin: "real" },
+    {
+      name: "sfx_unused",
+      seconds: 0.5,
+      title: "Unused",
+      source: "mixkit",
+      kind: "sfx",
+      origin: "real",
+    },
+  ];
+  const app = createApi(
+    {
+      sound: {
+        read: () => ({
+          version: "v2",
+          data: {
+            beds: [{ name: "bed_a", from: 0, to: 4, gain: 0 }],
+            sfx: [{ name: "sfx_used", at: 1, gain: 0, try: ["sfx_try"] }],
+          },
+        }),
+        library: () => {
+          libraryCalls++;
+          return fullLibrary;
+        },
+        fileOf: () => null,
+      },
+      liveLanes: () => false,
+      PUBLIC: ".",
+    },
+    { page: { dir: "." }, events: new Set() },
+  );
+
+  const usedRes = await app.request("/api/sound?used=1");
+  assert.equal(usedRes.status, 200);
+  const usedBody = await usedRes.json();
+  assert.deepEqual(
+    usedBody.library.map((x) => x.name),
+    ["bed_a", "sfx_used", "sfx_try"],
+  );
+  assert.equal(usedBody.version, "v2");
+
+  const libRes = await app.request("/api/sound?library=1");
+  assert.equal(libRes.status, 200);
+  const libEtag = libRes.headers.get("etag");
+  assert.ok(libEtag);
+  const libBody = await libRes.json();
+  assert.equal(libBody.library.length, 4);
+  assert.equal(libraryCalls, 2);
+
+  assert.equal(
+    (await app.request("/api/sound?library=1", { headers: { "if-none-match": libEtag } })).status,
+    304,
+  );
+});
+
+test("GET / evicts /api/mix_small.webm ?v= boot tag when film.MIX changes without a sound.json version bump", async (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), "studio-mix-small-tag-"));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const mixWav = join(tmp, "mix.wav");
+  const mixSmall = join(tmp, "mix_small.webm");
+  writeFileSync(mixWav, Buffer.from("RIFFmix-v1"));
+  writeFileSync(mixSmall, Buffer.from("webm-small-v1"));
+
+  let smallCalls = 0;
+  const app = createApi(
+    {
+      NAME: "mix-tag-test",
+      ratio: () => "16:9",
+      MIX: mixWav,
+      MIX_SMALL: mixSmall,
+      sound: {
+        read: () => ({ version: "same-ver", data: { beds: [], sfx: [] } }),
+        fileOf: () => null,
+      },
+      smallMix: async () => {
+        smallCalls++;
+      },
+      openRead: (file, range) => createReadStream(file, range),
+      PUBLIC: tmp,
+    },
+    {
+      page: {
+        dir: tmp,
+        html: () => "<!doctype html><html><head></head><body></body></html>",
+      },
+      events: new Set(),
+      build: () => "b1",
+    },
+  );
+
+  const extractTags = async () => {
+    const res = await app.request("/");
+    assert.equal(res.status, 200);
+    const match = (await res.text()).match(/window\.__STUDIO_BOOT=(\{.*?\});/);
+    return JSON.parse(match[1]).tags;
+  };
+
+  const first = await app.request("/api/mix_small.webm");
+  assert.equal(first.status, 200);
+  assert.equal(smallCalls, 1);
+  assert.ok((await extractTags())["/api/mix_small.webm"]);
+
+  // Mutate mix.wav (e.g. voice render or remix without sound.json version change) while mix_small.webm hasn't rebuilt yet
+  writeFileSync(mixWav, Buffer.from("RIFFmix-v2-different-audio-length"));
+  assert.equal((await extractTags())["/api/mix_small.webm"], undefined);
+});

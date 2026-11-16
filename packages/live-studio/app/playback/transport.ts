@@ -1,15 +1,15 @@
-// The playhead and the sound it plays by: seek, play and pause, speed, volume and where the mix comes from. Every part of the
-// studio moves the playhead through here; while playing, the sound is the clock (tick), so picture and voice can't drift
-import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-
 import { AWAY, SMALL_SOUND } from "../core/device";
 import { shotIndex } from "../core/film";
+// The playhead and the sound it plays by: seek, play and pause, speed, volume and where the mix comes from. Every part of the
+// studio moves the playhead through here; while playing, the sound is the clock (tick), so picture and voice can't drift
+import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { wait } from "../core/net";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, say, set } from "../core/store";
 import { FPS } from "../core/time";
-import { audioCtx } from "../sound/clock";
+import { ensureBeatSounds, warmTrialAudio } from "../options/options";
+import { resumeAudio, syncMonitorGain } from "../sound/clock";
 
 export const MIX_URL = SMALL_SOUND ? "/api/mix_small.webm" : "/api/mix.wav";
 // The mix can be shorter than the film: the film grew and its sound wasn't remixed yet. Past the mix's end the picture keeps
@@ -70,7 +70,9 @@ export const setPlaying = (p: boolean) => {
     looping = inside();
     syncClock();
     if (!startSound()) say("The sound ends before the film; wait for the remix");
-    audioCtx.resume();
+    resumeAudio();
+    void warmTrialAudio();
+    void ensureBeatSounds();
   } else {
     endShuttle();
     audio.pause();
@@ -89,7 +91,9 @@ export const shuttleOn = (d: -1 | 1) => {
     audio.playbackRate = v; // the lanes follow it (sound/clock.ts)
     syncClock();
     if (audio.paused && !startSound()) say("The sound ends before the film; wait for the remix");
-    audioCtx.resume();
+    resumeAudio();
+    void warmTrialAudio();
+    void ensureBeatSounds();
   } else {
     audio.pause();
     backFrom = S.t;
@@ -175,7 +179,17 @@ const keepSound = () => {
   const a = S.el?.audio;
   if (S.playing && shuttle >= 0 && a?.paused && a.readyState > 0) startSound();
 };
-setInterval(keepSound, 1000);
+let soundTimer = 0;
+const syncSoundTimer = () => {
+  if (S.playing) {
+    if (!soundTimer) soundTimer = window.setInterval(keepSound, 1000);
+  } else if (soundTimer) {
+    clearInterval(soundTimer);
+    soundTimer = 0;
+  }
+};
+S.watch("playing", syncSoundTimer);
+if (S.playing) syncSoundTimer();
 document.addEventListener("pointerdown", keepSound);
 
 // Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes.
@@ -184,6 +198,7 @@ let heardLevel = 1;
 const showVolume = () => {
   const a = S.el.audio;
   set({ muted: a.muted, volume: a.volume });
+  syncMonitorGain();
   stored.set("volume", String(heardLevel));
 };
 export const setVolume = (v: number) => {

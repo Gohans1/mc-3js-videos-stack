@@ -1,10 +1,10 @@
 import type { AdjustmentFile, AdjustmentLayer } from "film-stage/grade-layers";
 import { EDIT } from "film/edit";
-import { DURATION } from "film/scene";
 
+import { DURATION } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
-import { get, set, showError } from "../core/store";
+import { get, invalidatePictures, set, showError } from "../core/store";
 import { FPS, r3 } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
 
@@ -31,6 +31,7 @@ const changed = () => {
     .then(() => {
       S.dirty = true;
       S.finalAt = -1;
+      invalidatePictures();
     })
     .catch(showError);
 };

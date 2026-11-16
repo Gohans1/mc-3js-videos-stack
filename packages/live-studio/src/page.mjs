@@ -2,20 +2,159 @@
 // of either. A page only hears about a build that came out different, so a saved comment or a save of the same text reloads
 // nothing. Built, not served by Vite's dev server: that server reloads every open page whenever its connection drops, and a
 // phone's connection drops each time its screen locks.
-import { readdirSync, readFileSync, rmSync, statSync, utimesSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { promisify, stripVTControlCharacters } from "node:util";
 import { brotliCompress as brotliCb, constants, gzip as gzipCb } from "node:zlib";
 
+import { build as buildCn } from "cn/build";
 import { build } from "vite";
 
 import { STUDIO } from "./film.mjs";
 import { filmPlugin } from "./vite_film.mjs";
 
+const CN_CSS = join(STUDIO, "app/index.css");
+const CN_TABLES = join(STUDIO, "app/lib/cn-tables.ts");
+let lastCheckedCssMtime = 0;
+let cnBuildInFlight = null;
+
+const normalizeLf = (text) => text.replaceAll("\r\n", "\n");
+const cnTranspiler = globalThis.Bun?.Transpiler
+  ? new globalThis.Bun.Transpiler({ loader: "ts", minifyWhitespace: true })
+  : null;
+const canonicalCn = (text) => {
+  const lf = normalizeLf(text);
+  try {
+    return cnTranspiler ? cnTranspiler.transformSync(lf) : lf;
+  } catch {
+    return lf;
+  }
+};
+
+export const syncCnTables = async ({
+  cssPath = CN_CSS,
+  outPath = CN_TABLES,
+  cwd = STUDIO,
+} = {}) => {
+  const tmpDir = mkdtempSync(join(tmpdir(), "studio-cn-"));
+  try {
+    const tmpOut = join(tmpDir, basename(outPath));
+    const { source } = await buildCn({
+      cwd,
+      css: cssPath,
+      full: true,
+      out: tmpOut,
+    });
+    let prev = null;
+    try {
+      prev = readFileSync(outPath, "utf8");
+    } catch {
+      /* missing output file: write fresh */
+    }
+    if (prev !== null && canonicalCn(prev) === canonicalCn(source)) return false;
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, source);
+    return true;
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+};
+
+// Regenerate precompiled cn tables only when app/index.css (@theme tokens) is newer on disk.
+const cnTablesPlugin = () => ({
+  name: "live-studio:cn-tables",
+  async buildStart() {
+    let cssMtime = 0;
+    try {
+      cssMtime = statSync(CN_CSS).mtimeMs;
+    } catch {
+      return;
+    }
+    if (cssMtime <= lastCheckedCssMtime) return;
+    let outMtime = 0;
+    try {
+      outMtime = statSync(CN_TABLES).mtimeMs;
+    } catch {
+      /* missing: regenerate below */
+    }
+    if (cssMtime <= outMtime) {
+      lastCheckedCssMtime = cssMtime;
+      return;
+    }
+    await (cnBuildInFlight ??= syncCnTables().finally(() => {
+      cnBuildInFlight = null;
+    }));
+    lastCheckedCssMtime = cssMtime;
+  },
+});
+
+const desktopPreloadPlugin = () => ({
+  name: "live-studio:desktop-preload",
+  transformIndexHtml: {
+    order: "post",
+    handler(html, ctx) {
+      const bundle = ctx.bundle;
+      if (!bundle) return html;
+      const chunks = new Map();
+      let entry = null;
+      for (const item of Object.values(bundle)) {
+        if (item.type !== "chunk") continue;
+        chunks.set(item.fileName, item);
+        if (item.isEntry) entry = item;
+      }
+      if (!entry) return html;
+      const base = new Set();
+      const walkStatic = (name, into) => {
+        if (into.has(name)) return;
+        into.add(name);
+        const c = chunks.get(name);
+        if (!c) return;
+        for (const dep of c.imports) walkStatic(dep, into);
+      };
+      walkStatic(entry.fileName, base);
+      const collectBranch = (skipRe) => {
+        const seen = new Set(base);
+        for (const name of base) {
+          const c = chunks.get(name);
+          if (!c) continue;
+          for (const dyn of c.dynamicImports) {
+            if (!skipRe.test(dyn)) walkStatic(dyn, seen);
+          }
+        }
+        const out = [];
+        for (const name of seen) {
+          if (!base.has(name)) out.push(`/${name}`);
+        }
+        return out;
+      };
+      const desktop = collectBranch(/(?:^|\/)PhoneApp-/);
+      const phone = collectBranch(/(?:^|\/)App-/);
+      if (!desktop.length && !phone.length) return html;
+      const esc = (v) => JSON.stringify(v).replace(/</g, "\\u003c");
+      const tag = `<script>{const p=matchMedia("(pointer: coarse) and (max-width: 599px), (pointer: coarse) and (max-height: 599px)").matches?${esc(phone)}:${esc(desktop)};for(const h of p){const l=document.createElement("link");l.rel="modulepreload";l.crossOrigin="";l.href=h;document.head.appendChild(l)}}</script>`;
+      return html.includes('<link rel="stylesheet"')
+        ? html.replace('<link rel="stylesheet"', `${tag}<link rel="stylesheet"`)
+        : html.replace("</head>", `${tag}</head>`);
+    },
+  },
+});
+
 const brotli = promisify(brotliCb),
   gzip = promisify(gzipCb);
-const BROTLI_OPTS = { params: { [constants.BROTLI_PARAM_QUALITY]: 9 } };
+// Quality 5 matches api.mjs for large assets (~4-7x faster than q=9 with ~3% size cost on localhost/LAN).
+const BROTLI_OPTS = { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } };
+const GZIP_OPTS = { level: 4 };
 
 // Precompresses hashed _studio/ text assets once with Brotli-9 + Gzip. Unchanged chunks (like vendor-three and vendor-ui on a
 // scene.ts save) keep their hash, so we only refresh their .br/.gz mtimes for clearOld() instead of re-squeezing ~2.5 MB of JS.
@@ -43,7 +182,7 @@ const precompress = (outDir) => ({
       jobs.push(
         Promise.all([
           brotli(raw, BROTLI_OPTS).then((b) => writeFile(br, b)),
-          gzip(raw).then((g) => writeFile(gz, g)),
+          gzip(raw, GZIP_OPTS).then((g) => writeFile(gz, g)),
         ]),
       );
     }
@@ -62,6 +201,14 @@ export const pathPattern = (f) =>
       .split(/[\\/]/)
       .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
       .join("[\\\\/]")}$`,
+    "i",
+  );
+const pathPrefixPattern = (d) =>
+  new RegExp(
+    `^${d
+      .split(/[\\/]/)
+      .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("[\\\\/]")}(?:[\\\\/]|$)`,
     "i",
   );
 
@@ -102,7 +249,7 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
       configFile: join(STUDIO, "vite.config.ts"),
       logLevel: "warn",
       // Squeezed once per content hash beside each file, so a phone over Tailscale downloads about a quarter and scene saves skip unchanged vendor chunks
-      plugins: [filmPlugin(film), precompress(dir)],
+      plugins: [cnTablesPlugin(), filmPlugin(film), desktopPreloadPlugin(), precompress(dir)],
       build: {
         outDir: dir,
         emptyOutDir: false, // see clearOld
@@ -115,17 +262,35 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
             codeSplitting: {
               groups: [
                 {
+                  name: "vite-helpers",
+                  test: /\0vite[\\/]preload-helper|preload-helper/,
+                  priority: 40,
+                },
+                {
                   name: "vendor-three",
-                  test: /[\\/]node_modules[\\/](?:three|three-mesh-bvh|postprocessing|n8ao|gl-transitions|block-model-renderer|minerender|fflate|math)[\\/]/,
+                  test: /[\\/]node_modules[\\/](?:three|three-mesh-bvh|postprocessing|n8ao|three-good-godrays|gl-transitions|block-model-renderer|minerender|fflate|math)[\\/]/,
+                  priority: 30,
+                },
+                {
+                  name: "vendor-ui",
+                  test: (id) =>
+                    /[\\/]node_modules[\\/]/.test(id) &&
+                    !/[\\/]node_modules[\\/](?:zod|diff|d3-shape|d3-path|bezier-easing-editor|perfect-freehand|@base-ui[\\/]react[\\/](?:select|switch))[\\/]/.test(
+                      id,
+                    ),
                   priority: 20,
                 },
-                { name: "vendor-ui", test: /[\\/]node_modules[\\/]/, priority: 10 },
+                {
+                  name: "studio-core",
+                  test: /[\\/]packages[\\/]live-studio[\\/](?:app[\\/](?:core[\\/](?:events|storage|net|time|device|warmup|boot)\.ts|lib[\\/](?:utils|cn-tables)\.ts)|src[\\/](?:frame|contract-keys)\.ts)$/,
+                  priority: 15,
+                },
                 // mc-actor (film-free) on its own: its clips.ts keeps mocap bakes under this chunk's bytes, which a film's
                 // edit must not change
                 {
                   name: "mocap",
                   test: /[\\/]packages[\\/]mc-actor[\\/]src[\\/]/,
-                  priority: 5, // under the vendor chunks, which keep the libraries it imports
+                  priority: 10, // under the vendor chunks, which keep the libraries it imports
                 },
               ],
             },
@@ -142,7 +307,18 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
         chunkSizeWarningLimit: Infinity,
         // A save of a file the page loads itself (camera keys, Steve's keys...) builds nothing: a build takes ~3 s of the machine
         // the film plays on, which the creator felt as a second of lag after every edit
-        watch: { exclude: film.handEdited.map(pathPattern) },
+        watch: {
+          exclude: [
+            ...film.handEdited.map(pathPattern),
+            /[\\/]node_modules[\\/]/,
+            /[\\/]\.git[\\/]/,
+            ...(film.PROJECT
+              ? ["assets", "renders", "vault", ".venv"].map((d) =>
+                  pathPrefixPattern(join(film.PROJECT, d)),
+                )
+              : []),
+          ],
+        },
       },
     }).then((watcher) => {
       page.watcher = watcher;
@@ -155,7 +331,7 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
         e.result?.close?.();
         if (e.code === "ERROR") {
           error = stripVTControlCharacters(e.error.message); // the page shows it as text, and Rolldown colours it for a terminal
-          onError(error);
+          onError(error, e.error.errors?.[0]); // Rolldown's first error, as {message, id, loc}
           start(); // the page answers with the error until a save fixes it
         }
         if (e.code === "BUNDLE_END") {

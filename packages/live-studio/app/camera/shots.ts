@@ -2,12 +2,12 @@
 // an agent's edit wins): a cut moved on the camera row (cam.ts rollCut), a shot renamed in the Camera tab. Each change puts a fresh
 // copy in EDIT.shots and runs the film's applyEdit, which rebuilds SHOTS and SHOTS_OUT from it in place.
 import { EDIT } from "film/edit";
-import { SHOTS_OUT } from "film/scene";
 
 import { createDoc } from "../core/doc";
+import { SHOTS_OUT } from "../core/filmMeta";
 import { pruneShotSelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
-import { get, set, showError } from "../core/store";
+import { get, invalidatePictures, set, showError } from "../core/store";
 import { refreshTimes } from "../timeline/timeline";
 
 export interface ShotRow {
@@ -30,6 +30,7 @@ const changed = () => {
       .then(() => {
         S.dirty = true;
         S.finalAt = -1;
+        invalidatePictures();
       })
       .catch(showError);
 };

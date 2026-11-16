@@ -5,7 +5,7 @@ import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const checkboxVariants = cva(
-  "peer bg-raised-4 text-primary-foreground focus-visible:ring-ring focus-visible:ring-offset-background data-checked:bg-primary data-indeterminate:bg-primary grid shrink-0 place-items-center outline-none focus-visible:ring-2 focus-visible:ring-offset-2 in-disabled:pointer-events-none in-disabled:opacity-50 data-disabled:cursor-not-allowed data-disabled:opacity-50 pointer-coarse:size-5",
+  "peer border-input bg-backdrop text-primary-foreground focus-visible:ring-ring focus-visible:ring-offset-background data-checked:border-primary data-checked:bg-primary data-indeterminate:border-primary data-indeterminate:bg-primary grid shrink-0 place-items-center border outline-none focus-visible:ring-2 focus-visible:ring-offset-2 in-disabled:pointer-events-none in-disabled:opacity-50 data-disabled:cursor-not-allowed data-disabled:opacity-50 pointer-coarse:size-5",
   {
     variants: {
       size: {

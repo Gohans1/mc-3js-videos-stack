@@ -16,10 +16,15 @@ import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 
+import { Activity, createActivity } from "./activity.mjs";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
+import { openLessonFiles } from "./lesson-files.mjs";
+import { noteNumbers } from "./notes.mjs";
+import { createPortsService } from "./ports.mjs";
+import { openVoiceLibrary } from "./voice-library.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
 const MIME = {
@@ -30,10 +35,14 @@ const MIME = {
   ".bin": "application/octet-stream",
   ".js": "text/javascript",
   ".json": "application/json",
+  ".wasm": "application/wasm",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
   ".mp3": "audio/mpeg",
   ".ogg": "audio/ogg",
   ".wav": "audio/wav",
   ".webm": "audio/webm",
+  ".mp4": "video/mp4",
   ".jar": "application/java-archive",
 };
 // The page sends null for a picture it could not make (no pin, no crop): the words still count
@@ -52,6 +61,17 @@ const NoteIn = z.object({
     .array(z.object({ t: z.number().refine(Number.isFinite), img: jpeg }))
     .max(8)
     .optional(),
+  // pictures the creator pasted beside the words (a reference, a screenshot), drawn on or not
+  refs: z.array(z.string().startsWith("data:image/jpeg;base64,/9j/")).max(6).optional(),
+});
+const LessonSave = z.object({
+  path: z.string().max(200),
+  text: z.string().max(1_000_000),
+  base: z.string().nullable(),
+});
+const LessonDelete = z.object({
+  path: z.string().max(200),
+  base: z.string().nullable(),
 });
 // note-state.mjs says which of these may happen to a note now; {remove}/{restore} are the file's own
 const NoteChange = z.object({
@@ -105,41 +125,191 @@ const inside = (root, file) => {
   return r && !r.startsWith("..") && !isAbsolute(r);
 };
 
-export const createApi = (film, { page, events, send }) => {
+// activity: src/activity.mjs's, what the AI is doing; lessons: src/lesson-files.mjs's, the one live.mjs watches
+export const createApi = (
+  film,
+  {
+    page,
+    events,
+    send,
+    activity = createActivity(send),
+    lessons = openLessonFiles(),
+    voiceLibrary = openVoiceLibrary({
+      project: film?.PROJECT,
+      autoSync: false,
+      onEvent: () => send("voice-library"),
+    }),
+    favorites = openFavorites(),
+    port = null,
+    ports = null,
+  },
+) => {
+  const portsService = ports ?? createPortsService({ repoRoot: film?.PROJECT, selfPort: port });
   // Text and geometry shrink a lot and pictures don't. Squeezed once per version, so the next visit costs nothing here either;
   // what barely shrinks (a zip of pictures) is remembered as not worth it and goes out as it is
   // Off the main thread (a few MB takes a second), and kept as the promise so a second visit meanwhile waits for the same work
   const packed = new Map(),
     toBr = promisify(brotliCompress),
     toGzip = promisify(gzip);
-  const squeeze = async (c, buf, tag) => {
-    const accepts = c.req.header("accept-encoding") ?? "",
-      how = /\bbr\b/.test(accepts) ? "br" : /gzip/.test(accepts) ? "gzip" : "";
+  let voiceCache = null;
+  const pickEncoding = (raw) => {
+    let hasGzip = false;
+    for (const part of String(raw ?? "")
+      .toLowerCase()
+      .split(",")) {
+      const [nameRaw, ...params] = part.trim().split(";");
+      const name = nameRaw?.trim();
+      if (name !== "br" && name !== "gzip") continue;
+      if (params.some((p) => /^q\s*=\s*0+(?:\.0*)?$/.test(p.trim()))) continue;
+      if (name === "br") return "br";
+      hasGzip = true;
+    }
+    return hasGzip ? "gzip" : "";
+  };
+  const squeeze = async (c, buf, tag, memoize = true) => {
+    const how = pickEncoding(c.req.header("accept-encoding"));
     c.header("vary", "accept-encoding");
     if (!how) return buf;
-    const key = how + tag;
-    if (!packed.has(key)) {
-      if (packed.size >= 400) packed.delete(packed.keys().next().value);
-      const work =
-        how === "br"
-          ? toBr(buf, { params: { [zlibConsts.BROTLI_PARAM_QUALITY]: 9 } })
-          : toGzip(buf);
-      packed.set(
-        key,
-        work.then((small) => (small.length < buf.length * 0.9 ? small : null)),
-      );
+    const brQuality = memoize ? (buf.length > 262_144 ? 5 : 9) : 4;
+    const compress = () =>
+      (how === "br"
+        ? toBr(buf, { params: { [zlibConsts.BROTLI_PARAM_QUALITY]: brQuality } })
+        : toGzip(buf)
+      ).then((small) => (small.length < buf.length * 0.9 ? small : null));
+    let small;
+    if (memoize) {
+      const key = how + tag;
+      if (!packed.has(key)) {
+        if (packed.size >= 400) packed.delete(packed.keys().next().value);
+        packed.set(
+          key,
+          compress().catch((err) => {
+            packed.delete(key);
+            throw err;
+          }),
+        );
+      }
+      small = await packed.get(key);
+    } else {
+      small = await compress();
     }
-    const small = await packed.get(key);
     if (!small) return buf;
     c.header("content-encoding", how);
     return small;
   };
+  // Track served versioned URLs so '/' can hand the browser current ?v= stamps with zero 304 roundtrips
+  const servedTags = new Map();
+  const currentSoundVersion = () => film.sound?.read?.()?.version ?? null;
+  const statMeta = (p) => {
+    try {
+      const st = statSync(p);
+      return { size: st.size, mtimeMs: Math.round(st.mtimeMs) };
+    } catch {
+      return null;
+    }
+  };
+  const recordTag = (
+    reqPath,
+    tag,
+    { file = null, isFileTag = false, onSound = false, sfxName = null, sourceFile = null } = {},
+  ) => {
+    if (!reqPath) return;
+    const st = file ? statMeta(file) : null;
+    if (file && !st) return;
+    const resolvedSource = sourceFile ?? (sfxName ? (film.sound?.fileOf?.(sfxName) ?? null) : null);
+    const sourceSt = resolvedSource ? statMeta(resolvedSource) : null;
+    if (servedTags.size >= 400 && !servedTags.has(reqPath))
+      servedTags.delete(servedTags.keys().next().value);
+    servedTags.set(reqPath, {
+      tag,
+      file,
+      isFileTag,
+      size: st?.size ?? null,
+      mtimeMs: st?.mtimeMs ?? null,
+      sfxName,
+      sourceFile: resolvedSource,
+      sourceSize: sourceSt?.size ?? null,
+      sourceMtimeMs: sourceSt?.mtimeMs ?? null,
+      soundVer: onSound ? currentSoundVersion() : undefined,
+    });
+  };
+  const currentTags = () => {
+    const out = {},
+      soundVer = currentSoundVersion();
+    for (const [reqPath, entry] of servedTags) {
+      if (entry.soundVer !== undefined && entry.soundVer !== soundVer) {
+        servedTags.delete(reqPath);
+        continue;
+      }
+      if (entry.sfxName) {
+        const curSource = film.sound?.fileOf?.(entry.sfxName) ?? null;
+        if (curSource !== entry.sourceFile) {
+          servedTags.delete(reqPath);
+          continue;
+        }
+      }
+      if (entry.sourceFile && entry.sourceFile !== entry.file) {
+        const cst = statMeta(entry.sourceFile);
+        if (!cst || cst.size !== entry.sourceSize || cst.mtimeMs !== entry.sourceMtimeMs) {
+          servedTags.delete(reqPath);
+          continue;
+        }
+      }
+      if (entry.file) {
+        const st = statMeta(entry.file);
+        if (!st) {
+          servedTags.delete(reqPath);
+          continue;
+        }
+        if (st.size !== entry.size || st.mtimeMs !== entry.mtimeMs) {
+          if (entry.isFileTag) {
+            entry.size = st.size;
+            entry.mtimeMs = st.mtimeMs;
+            entry.tag = `${st.size}-${st.mtimeMs}`;
+          } else {
+            servedTags.delete(reqPath);
+            continue;
+          }
+        }
+      }
+      out[reqPath] = entry.tag;
+    }
+    return out;
+  };
+  const filmMeta = () => ({
+    name: film.NAME,
+    ratio: film.ratio(),
+    video: Boolean(film.videoSource?.()),
+    project: film?.PROJECT ?? null,
+    port: port ?? null,
+    has: film.features?.() ?? {
+      cam: !!film.cam,
+      shots: !!film.shots,
+      text: !!film.text,
+      adjustment: !!film.adjustment,
+      timing: !!film.timing,
+      keys: (film.keyFiles?.length ?? 0) > 0,
+      sound: !!film.sound,
+      voice: !!film.voice,
+      voiceMap: film.VOICE_MAP ? existsSync(film.VOICE_MAP) : false,
+      trials: true,
+      choices: true,
+      mix: film.MIX ? existsSync(film.MIX) : false,
+    },
+  });
+
   // Unchanged means no download, and asking costs a few bytes
-  const text = async (c, buf, type = "application/json", knownTag) => {
+  const text = async (c, buf, type = "application/json", knownTag, tagOpts) => {
     const tag = knownTag ?? `"${createHash("md5").update(buf).digest("base64url")}"`;
-    c.header("etag", tag);
-    c.header("cache-control", "no-cache");
-    if (c.req.header("if-none-match") === tag) return c.body(null, 304);
+    const rawTag = tag.slice(1, -1);
+    if (tagOpts) recordTag(tagOpts.path ?? c.req.path, rawTag, tagOpts);
+    if (c.req.query("v") === rawTag) {
+      c.header("cache-control", "public, max-age=31536000, immutable");
+    } else {
+      c.header("etag", tag);
+      c.header("cache-control", "no-cache");
+      if (c.req.header("if-none-match") === tag) return c.body(null, 304);
+    }
     c.header("content-type", type);
     return c.body(await squeeze(c, buf, tag));
   };
@@ -147,21 +317,45 @@ export const createApi = (film, { page, events, send }) => {
     c.header("cache-control", "no-store");
     return c.json(data);
   };
+  const safeErr = (e, fallback = "Audio processing failed") =>
+    String(e?.message || fallback)
+      .replace(
+        /[A-Za-z]:[\\/][^\s"']+|\/(?:Users|home|tmp|var|etc|private|mnt)[\\/][^\s"']+/g,
+        "<path>",
+      )
+      .slice(0, 240);
   const fileOrMissing = (c, file) =>
-    existsSync(file) ? text(c, readFileSync(file)) : c.body(null, 404);
+    existsSync(file)
+      ? text(c, readFileSync(file), "application/json", undefined, {
+          path: c.req.path,
+          file,
+          onSound: true,
+        })
+      : c.body(null, 404);
 
   // A film file, with byte ranges (seeking in the sound needs them) and an etag so a reload on a phone fetches nothing again
-  const sendFile = async (c, file, { store = false, pack = false } = {}) => {
+  const sendFile = async (
+    c,
+    file,
+    { store = false, pack = false, onSound = false, sfxName = null, sourceFile = null } = {},
+  ) => {
     const { size, mtimeMs } = statSync(file);
     c.header("content-type", MIME[extname(file)] ?? "application/octet-stream");
     c.header("accept-ranges", "bytes");
     const range = c.req.header("range");
-    if (store) c.header("cache-control", "no-store");
-    else {
-      const tag = `"${size}-${Math.round(mtimeMs)}"`;
+    const rawTag = `${size}-${Math.round(mtimeMs)}`;
+    const tag = `"${rawTag}"`;
+    recordTag(c.req.path, rawTag, { file, isFileTag: true, onSound, sfxName, sourceFile });
+    if (c.req.query("v") === rawTag) {
+      c.header("cache-control", "public, max-age=31536000, immutable");
+    } else if (store) {
+      c.header("cache-control", "no-store");
+    } else {
       c.header("etag", tag);
       c.header("cache-control", "no-cache"); // a re-made copy shows up at once
       if (c.req.header("if-none-match") === tag && !range) return c.body(null, 304);
+    }
+    if (!store) {
       // A copy squeezed once at its best (scripts/mc/slim_jar.mjs writes one for the Minecraft jar): too big to squeeze per
       // request, and it shrinks most when squeezed whole. Only while it is newer than the file it copies
       const br = `${file}.br`;
@@ -196,10 +390,16 @@ export const createApi = (film, { page, events, send }) => {
   const app = new Hono();
 
   // The page names the build it came from, so after the studio restarts it can tell whether it is still the current one
-  const build = () =>
-    createHash("md5")
-      .update(page.html() ?? "")
-      .digest("base64url");
+  let lastBuiltHtml = null,
+    lastBuildTag = "";
+  const build = () => {
+    const src = page.html() ?? "";
+    if (src !== lastBuiltHtml) {
+      lastBuiltHtml = src;
+      lastBuildTag = createHash("md5").update(src).digest("base64url");
+    }
+    return lastBuildTag;
+  };
   app.get("/", (c) => {
     c.header("cache-control", "no-cache");
     const built = page.html();
@@ -214,7 +414,18 @@ export const createApi = (film, { page, events, send }) => {
           >The film's code has an error, so the page can't be built yet. It reloads once it's fixed.<br><br>${page.error() ?? ""}</pre>`,
         503,
       );
-    return c.html(built.replace("</head>", `<meta name="live-build" content="${build()}"></head>`));
+    const bootJson = JSON.stringify({
+      film: filmMeta(),
+      contract: film.contract?.() ?? { files: [] },
+      hasPageProblems: film.hasPageProblems?.() ?? false,
+      tags: currentTags(),
+    }).replace(/</g, "\\u003c");
+    const headScript = `<meta name="live-build" content="${build()}"><script>window.__STUDIO_BOOT=${bootJson};(()=>{const b=window.__STUDIO_BOOT,h=b.film&&b.film.has,t=b.tags||{},p=window.__PREFETCH={};const f=(u)=>{p[u]=fetch(!u.includes("?")&&t[u]?u+"?v="+t[u]:u).then((r)=>(r.ok||r.status===404)?r:null,()=>null)};for(const u of["/api/shots.json","/api/notes","/api/favorites","/api/activity"])f(u);if(h)for(const[k,u]of[["timing","/api/timing"],["shots","/api/shots"],["voiceMap","/api/voice_map.json"],["voice","/api/voice"],["cam","/api/cam"],["keys","/api/keys"],["text","/api/text"],["adjustment","/api/adjustment"],["sound","/api/sound?used=1"],["trials","/api/trials.json"],["choices","/api/choices.json"]])if(h[k])f(u)})();</script>`;
+    return c.html(
+      built.includes('<script type="module"')
+        ? built.replace('<script type="module"', `${headScript}<script type="module"`)
+        : built.replace("</head>", `${headScript}</head>`),
+    );
   });
   app.get(
     "/_studio/*",
@@ -245,9 +456,19 @@ export const createApi = (film, { page, events, send }) => {
   // publish_pages.py reads /edit.json
   app.on("POST", ["/api/*", "/notes/*"], bodyLimit({ maxSize: 20 * 1024 * 1024 }));
 
-  app.get("/api/notes", (c) => fresh(c, film.notes.read()));
+  app.get("/api/notes", (c) => {
+    const dir = film.dir ?? film.PROJECT;
+    if (dir) {
+      const nums = {};
+      for (const [id, v] of noteNumbers(dir)) if (!v.gone) nums[id] = v.n;
+      c.header("x-note-numbers", JSON.stringify(nums));
+    }
+    return fresh(c, film.notes.read());
+  });
   app.post("/api/notes", zValidator("json", NoteIn), async (c) => {
     film.notes.add(c.req.valid("json"), await film.stamp());
+    film.syncNotes?.();
+    send("notes");
     return c.text("ok");
   });
   app.on(
@@ -256,10 +477,13 @@ export const createApi = (film, { page, events, send }) => {
     zValidator("json", NoteChange),
     (c) => {
       const r = film.notes.change(c.req.param("id"), c.req.valid("json"));
-      return r.ok ? c.text("ok") : c.text(r.why, 409);
+      if (!r.ok) return c.text(r.why, 409);
+      film.syncNotes?.();
+      send("notes");
+      return c.text("ok");
     },
   );
-  app.get("/api/note-img/:name{[a-z0-9]+(_crop|_strip|_f\\d)?\\.jpg}", (c) => {
+  app.get("/api/note-img/:name{[a-z0-9]+(_crop|_strip|_f\\d|_r\\d)?\\.jpg}", (c) => {
     const pic = film.notes.picture(c.req.param("name").slice(0, -4));
     if (!pic) return c.body(null, 404);
     c.header("content-type", "image/jpeg");
@@ -267,12 +491,34 @@ export const createApi = (film, { page, events, send }) => {
     return c.body(pic);
   });
 
+  // What the AI is doing (src/activity.mjs): a line from each of the film's commands (src/tell.mjs), the latest for a new page
+  app.get("/api/activity", (c) => fresh(c, activity.state()));
+  app.post("/api/activity", zValidator("json", Activity), (c) => {
+    activity.add(c.req.valid("json"));
+    return c.text("ok");
+  });
+
+  // The repo's lessons/*.md, every film's, for the creator to read and edit (src/lesson-files.mjs): 409 is the AI's newer words
+  app.get("/api/lessons", (c) =>
+    fresh(c, { dir: lessons.dir.replaceAll("\\", "/"), files: lessons.list() }),
+  );
+  app.post("/api/lessons", zValidator("json", LessonSave), (c) => {
+    const { path, text, base } = c.req.valid("json"),
+      r = lessons.write(path, text, base);
+    return c.json(r, r.error ? 400 : r.conflict ? 409 : 200);
+  });
+  app.delete("/api/lessons", zValidator("json", LessonDelete), (c) => {
+    const { path, base } = c.req.valid("json"),
+      r = lessons.remove(path, base);
+    return c.json(r, r.error ? 400 : r.conflict ? 409 : 200);
+  });
+
   app.on("GET", ["/api/edit.json", "/edit.json"], (c) => text(c, readFileSync(film.EDIT)));
   app.get("/api/voice_map.json", (c) => fileOrMissing(c, film.VOICE_MAP));
   app.get("/api/voice", (c) => (film.voice ? fresh(c, film.voice.read()) : c.body(null, 404)));
   app.get("/api/voice/audio/:kind/:file", (c) => {
     const f = film.voice?.audioFile(c.req.param("kind"), c.req.param("file"));
-    return f ? sendFile(c, f) : c.body(null, 404);
+    return f ? sendFile(c, f, { onSound: true }) : c.body(null, 404);
   });
   app.post("/api/voice/use-try", zValidator("json", VoiceUseTry), async (c) => {
     if (!film.voice) return c.body(null, 404);
@@ -280,6 +526,37 @@ export const createApi = (film, { page, events, send }) => {
     if (r.error) return c.json({ error: r.error }, r.status ?? 400);
     send("voice");
     return fresh(c, r);
+  });
+  app.get("/api/voice/library", async (c) => {
+    const metaOnly = c.req.query("meta") === "1";
+    if (!metaOnly) voiceLibrary.ensureWarm();
+    const st = voiceLibrary.state();
+    if (metaOnly) return fresh(c, st);
+    const json = voiceLibrary.payloadJson();
+    if (st.status === "ready") {
+      if (!voiceCache || voiceCache.json !== json) {
+        if (voiceCache) {
+          packed.delete(`br${voiceCache.tag}`);
+          packed.delete(`gzip${voiceCache.tag}`);
+        }
+        const buf = Buffer.from(json);
+        const tag = `"${createHash("md5").update(buf).digest("base64url")}"`;
+        voiceCache = { json, buf, tag };
+      }
+      return text(c, voiceCache.buf, "application/json", voiceCache.tag);
+    }
+    c.header("cache-control", "no-store");
+    c.header("content-type", "application/json; charset=utf-8");
+    return c.body(await squeeze(c, Buffer.from(json), null, false));
+  });
+  app.post("/api/voice/library/sync", (c) => {
+    if (!voiceLibrary.hasKey()) {
+      return c.json({ error: "Missing GENVOICE_API_KEY (or ELEVENLABS_API_KEY) on server" }, 400);
+    }
+    voiceLibrary.sync().catch(() => {
+      // Failure state is captured in voiceLibrary.state() and broadcast over SSE
+    });
+    return c.json({ started: true, ...voiceLibrary.state() }, 202);
   });
   app.get("/api/shots.json", (c) => text(c, Buffer.from(JSON.stringify(film.shotComments()))));
   app.get("/api/trials.json", (c) => {
@@ -292,7 +569,17 @@ export const createApi = (film, { page, events, send }) => {
   );
   app.get("/api/contract.json", (c) => fresh(c, film.contract()));
   // The film's frame shape (frame.ts), which the page needs before it builds the scene; Settings change it
-  app.get("/api/film.json", (c) => fresh(c, { name: film.NAME, ratio: film.ratio() }));
+  app.get("/api/film.json", (c) => fresh(c, filmMeta()));
+  app.get("/api/ports", async (c) => {
+    const refresh = c.req.query("refresh");
+    const forceRefresh = refresh === "1" || refresh === "true";
+    try {
+      return fresh(c, await portsService.getSnapshot({ currentPort: port, forceRefresh }));
+    } catch (e) {
+      c.header("cache-control", "no-store");
+      return c.json({ error: safeErr(e, "Failed to scan studio ports") }, 500);
+    }
+  });
   app.post("/api/film", zValidator("json", FilmChange), (c) => {
     film.setRatio(c.req.valid("json").ratio);
     return c.text("ok");
@@ -303,7 +590,6 @@ export const createApi = (film, { page, events, send }) => {
   });
 
   // The creator's stars, kept for every film (src/favorites.mjs); every open page of this studio hears a change
-  const favorites = openFavorites();
   app.get("/api/favorites", (c) => fresh(c, favorites.shown()));
   app.post("/api/favorites", zValidator("json", FavoriteChange), (c) => {
     const all = favorites.set(c.req.valid("json"));
@@ -348,14 +634,33 @@ export const createApi = (film, { page, events, send }) => {
   // The sound lanes, when the film names them (src/sound.mjs). A save names the version it was made on: 409 means the file
   // changed meanwhile (an agent fixing a note), and the page loads that one instead of writing over it
   const noSound = (c) => c.body(null, 404);
-  const safeErr = (e) =>
-    String(e?.message ?? "Audio processing failed")
-      .replace(
-        /[A-Za-z]:[\\/][^\s"']+|\/(?:Users|home|tmp|var|etc|private|mnt)[\\/][^\s"']+/g,
-        "<path>",
-      )
-      .slice(0, 240);
   let soundCache = null;
+  let soundUsedCache = null;
+  let soundLibCache = null;
+  const usedSoundLibrary = (data, lib) => {
+    const names = new Set();
+    if (data?.narration) names.add(data.narration);
+    for (const list of [data?.beds, data?.sfx]) {
+      if (!Array.isArray(list)) continue;
+      for (const item of list) {
+        if (item?.name) names.add(item.name);
+        if (item?.beatSource) names.add(item.beatSource);
+        if (Array.isArray(item?.try)) for (const alt of item.try) names.add(alt);
+      }
+    }
+    const families = new Set();
+    for (const item of lib) {
+      if (names.has(item.name) && item.family) families.add(item.family);
+    }
+    return lib.filter(
+      (item) =>
+        names.has(item.name) ||
+        (item.family && families.has(item.family)) ||
+        !item.source ||
+        item.source === "film" ||
+        Boolean(item.role),
+    );
+  };
   app.get("/api/sound", (c) => {
     const s = film.sound?.read();
     if (!s) return noSound(c);
@@ -364,6 +669,36 @@ export const createApi = (film, { page, events, send }) => {
       return text(c, Buffer.from(JSON.stringify({ ...s, live })));
     }
     const library = film.sound.library();
+    if (c.req.query("library") === "1") {
+      if (soundLibCache?.library !== library) {
+        const buf = Buffer.from(JSON.stringify({ library }));
+        soundLibCache = {
+          library,
+          buf,
+          etag: `"${createHash("md5").update(buf).digest("base64url")}"`,
+        };
+      }
+      return text(c, soundLibCache.buf, "application/json", soundLibCache.etag);
+    }
+    if (c.req.query("used") === "1") {
+      if (
+        soundUsedCache?.version !== s.version ||
+        soundUsedCache.live !== live ||
+        soundUsedCache.library !== library
+      ) {
+        const buf = Buffer.from(
+          JSON.stringify({ ...s, library: usedSoundLibrary(s.data, library), live }),
+        );
+        soundUsedCache = {
+          version: s.version,
+          live,
+          library,
+          buf,
+          etag: `"${createHash("md5").update(buf).digest("base64url")}"`,
+        };
+      }
+      return text(c, soundUsedCache.buf, "application/json", soundUsedCache.etag);
+    }
     if (
       soundCache?.version !== s.version ||
       soundCache.live !== live ||
@@ -523,29 +858,61 @@ export const createApi = (film, { page, events, send }) => {
     const p = film.sound?.peaksAsync
       ? await film.sound.peaksAsync(name)
       : film.sound?.peaks?.(name);
-    return p ? text(c, Buffer.from(JSON.stringify(p))) : noSound(c);
+    return p
+      ? text(c, Buffer.from(JSON.stringify(p)), "application/json", undefined, {
+          path: c.req.path,
+          file: film.sound?.fileOf?.(name),
+          onSound: true,
+          sfxName: name,
+        })
+      : noSound(c);
   });
   app.get("/api/sfx/:name{[A-Za-z0-9_.-]+[.]wav}", (c) => {
-    const f = film.sound?.fileOf(c.req.param("name").slice(0, -4));
-    return f ? sendFile(c, f) : noSound(c);
+    const name = c.req.param("name").slice(0, -4);
+    const f = film.sound?.fileOf(name);
+    return f ? sendFile(c, f, { onSound: true, sfxName: name }) : noSound(c);
   });
   app.get("/api/sfx/:name{[A-Za-z0-9_.-]+[.]ogg}", (c) => {
-    const f = film.sound?.fileOf(c.req.param("name").slice(0, -4));
-    return f ? sendFile(c, f) : noSound(c);
+    const name = c.req.param("name").slice(0, -4);
+    const f = film.sound?.fileOf(name);
+    return f ? sendFile(c, f, { onSound: true, sfxName: name }) : noSound(c);
   });
   app.get("/api/sfx/:name{[A-Za-z0-9_.-]+[.]webm}", async (c) => {
-    const f = await film.smallSfx(c.req.param("name").slice(0, -5));
-    return f ? sendFile(c, f) : noSound(c);
+    const name = c.req.param("name").slice(0, -5);
+    const f = await film.smallSfx(name);
+    return f ? sendFile(c, f, { onSound: true, sfxName: name }) : noSound(c);
   });
 
   app.get("/api/mix.wav", (c) =>
-    existsSync(film.MIX) ? sendFile(c, film.MIX, { store: true }) : c.body(null, 404),
+    existsSync(film.MIX)
+      ? sendFile(c, film.MIX, { store: true, onSound: true })
+      : c.body(null, 404),
   );
   app.get("/api/mix_small.webm", async (c) => {
     if (!existsSync(film.MIX)) return c.body(null, 404);
     await film.smallMix();
-    return existsSync(film.MIX_SMALL) ? sendFile(c, film.MIX_SMALL) : c.body(null, 404);
+    return existsSync(film.MIX_SMALL)
+      ? sendFile(c, film.MIX_SMALL, { onSound: true, sourceFile: film.MIX })
+      : c.body(null, 404);
   }); // no ffmpeg, no small copy: the page plays the full mix
+  app.get("/api/video.mp4", async (c) => {
+    let target;
+    try {
+      target = await film.smallVideo?.();
+    } catch (err) {
+      send("video-failed");
+      throw err;
+    }
+    if (!target || !existsSync(target)) {
+      send("video-failed");
+      return c.body(null, 404);
+    }
+    if (c.req.method === "GET" && !c.req.header("range")) send("video-ready");
+    const safeName = (film.NAME || "film").replace(/[^\w.-]+/g, "_") || "film";
+    const suffix = !film.VIDEO_SMALL || target === film.VIDEO_SMALL ? "-540p" : "";
+    c.header("content-disposition", `attachment; filename="${safeName}${suffix}.mp4"`);
+    return sendFile(c, target);
+  });
 
   // The film's own files, last
   app.get("*", (c) => {

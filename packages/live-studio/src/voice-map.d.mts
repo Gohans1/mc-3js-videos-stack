@@ -42,4 +42,10 @@ export function writeVoiceMap(
   projectDir: string,
   outFile: string,
   precomputedPlacements?: readonly VoicePlacement[],
-): { step: number; peaks: number[]; lines: NarrationLine[]; words: number };
+): {
+  step: number;
+  peaks: number[];
+  lines: NarrationLine[];
+  words: number;
+  placements?: Pick<VoicePlacement, "id" | "start" | "spokenEnd" | "naturalEnd">[];
+};

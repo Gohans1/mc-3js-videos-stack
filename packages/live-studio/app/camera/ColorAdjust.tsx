@@ -6,7 +6,7 @@ import {
   type HueKey,
   HUES,
   NEUTRAL_CURVE,
-} from "film-stage/grade-secondary";
+} from "film-stage/grade-meta";
 import { resetLookCurveChannel, resetLookCurves, resetLookHsl } from "film-stage/looks";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -60,7 +60,7 @@ export function HSLAdjust({
             aria-checked={hue === color.id}
             aria-label={color.title}
             tabIndex={hue === color.id ? 0 : -1}
-            className="focus-visible:ring-ring grid size-6 flex-none place-items-center rounded-full outline-none focus-visible:ring-2 aria-checked:ring-1 aria-checked:ring-white"
+            className="focus-visible:ring-ring aria-checked:ring-picture grid size-6 flex-none place-items-center rounded-full outline-none focus-visible:ring-2 aria-checked:ring-1"
             onClick={() => setHue(color.id)}
             onKeyDown={(e) => {
               const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
@@ -112,10 +112,10 @@ export function HSLAdjust({
 }
 
 const CHANNELS: { id: CurveKey; title: string; color: string }[] = [
-  { id: "luma", title: "Luma", color: "#ffffff" },
-  { id: "red", title: "Red (R)", color: "#ff3030" },
-  { id: "green", title: "Green (G)", color: "#3fdd58" },
-  { id: "blue", title: "Blue (B)", color: "#459bff" },
+  { id: "luma", title: "Luma", color: "var(--picture)" },
+  { id: "red", title: "Red (R)", color: "var(--fx-red-400)" },
+  { id: "green", title: "Green (G)", color: "var(--fx-green-400)" },
+  { id: "blue", title: "Blue (B)", color: "var(--fx-blue-400)" },
 ];
 type Drag =
   { state: "idle" } | { state: "dragging"; before: string; index: number; points: CurvePoint[] };
@@ -189,7 +189,7 @@ function CurveEditor({
         role="group"
         aria-label={`${channel.title} curve`}
         aria-disabled={disabled}
-        className="bg-curve aspect-3/2 w-full touch-none overflow-visible rounded-sm outline-none aria-disabled:pointer-events-none aria-disabled:opacity-50"
+        className="bg-curve-bg aspect-3/2 w-full touch-none overflow-visible rounded-sm outline-none aria-disabled:pointer-events-none aria-disabled:opacity-50"
         onPointerDown={(e) => {
           if (disabled || e.button !== 0) return;
           e.preventDefault();
@@ -289,10 +289,10 @@ function CurveEditor({
               cx={4 + x * 292}
               cy={196 - y * 192}
               r={3}
-              fill={picked === i ? channel.color : "#080808"}
+              fill={picked === i ? channel.color : "var(--color-curve-bg)"}
               stroke={channel.color}
               strokeWidth="1.5"
-              className="outline-none focus:stroke-white focus:stroke-3"
+              className="focus:stroke-picture outline-none focus:stroke-3"
             />
           </g>
         ))}

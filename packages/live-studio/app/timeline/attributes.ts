@@ -5,7 +5,6 @@
 // 9.7's own (its Resources/po/en.po, pc_copy_*): one source only, same kind only, and fades or animations too long for a clip
 // shortened to fit it
 import type { Grade } from "film-stage/grade";
-import { SHOTS_OUT } from "film/scene";
 
 import {
   animFit,
@@ -20,6 +19,7 @@ import { type CamKey, DEFAULT_EASE, keys as camKeys, movable, pasteKeyAttrs } fr
 import { layerItems, layerLocked, layersDoc } from "../camera/layers";
 import { together } from "../core/doc";
 import { easeTitle } from "../core/ease";
+import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import type { ClipRef } from "../sound/slice";

@@ -7,15 +7,17 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { shake } from "../packages/film-kit/src/shake";
 import { cameraAt } from "../packages/film-stage/src/camera";
+import { hasGradeEffect } from "../packages/film-stage/src/grade";
 import { TRANSITIONS } from "../packages/film-stage/src/transitions";
 import { noteScene, noteSecond } from "../packages/live-studio/app/notes/note-card-meta.ts";
 import { cliArgs, jsonFile, needFilm, secondArg } from "../packages/live-studio/src/cli.mjs";
 import { checkFiles } from "../packages/live-studio/src/contract.ts";
 import { contractFiles } from "../packages/live-studio/src/film.mjs";
-import { sizeOf } from "../packages/live-studio/src/frame.ts";
+import { ratioOf, sizeOf } from "../packages/live-studio/src/frame.ts";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
 import { noteState, wholeNote } from "../packages/live-studio/src/note-state.mjs";
-import { audioInfo, openSound } from "../packages/live-studio/src/sound.mjs";
+import { deletedSaid, findNote, noteNumbers } from "../packages/live-studio/src/notes.mjs";
+import { openSound, pickSoundClip, probeAudio } from "../packages/live-studio/src/sound.mjs";
 import { staleVideo } from "../packages/live-studio/src/stale.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
 import { transitionAvailable } from "../packages/live-studio/src/timing-effects.mjs";
@@ -30,6 +32,7 @@ import {
   frameVisible,
   freezeRange,
   freezesOf,
+  playRanges,
   segmentAt,
 } from "../packages/live-studio/src/timing.mjs";
 import { velocityAt } from "../packages/live-studio/src/velocity.mjs";
@@ -85,7 +88,8 @@ const filmOf = (dir: string) => {
   // edit.end is a narration second; a camera key's t is a scene second already
   const sourceEnd =
     typeof edit.end === "number" ? fromSource(edit.end) : Math.max(0, ...cam.map((k) => k.t));
-  setTiming(read(conf.timingTimeline, {}), sourceEnd);
+  const timingSpec = read(conf.timingTimeline, {});
+  setTiming(timingSpec, sourceEnd);
   // a film keeps its shots in shotsTimeline (narration seconds) or as the camera's cuts (scene seconds)
   const shotRows: Row[] = read(conf.shotsTimeline, null);
   type Shot = { index: number; t: number; name?: string; size?: string; row: number };
@@ -107,7 +111,7 @@ const filmOf = (dir: string) => {
         i === 0 || k.cut ? [{ index: 0, t: k.t, name: k.what, size: k.size, row: i }] : [],
       );
   shots.forEach((s, i) => (s.index = i));
-  return { read, conf, edit, fromSource, cam, sourceEnd, shots };
+  return { read, conf, edit, timingSpec, fromSource, cam, sourceEnd, shots };
 };
 
 const readNotes = (dir: string): Row[] => {
@@ -138,12 +142,11 @@ const heardNow = (n: Row, film: ReturnType<typeof filmOf>) =>
   );
 
 export const noteMoment = (dir: string, ref: string) => {
-  const notes = readNotes(dir);
-  // #N counts every note in the order written, as bun run notes numbers them
-  const byAge = notes.toSorted((a, b) =>
-    (a.at ?? "") < (b.at ?? "") ? -1 : (a.at ?? "") > (b.at ?? "") ? 1 : 0,
-  );
-  const n = /^#\d+$/.test(ref) ? byAge[+ref.slice(1) - 1] : notes.find((x) => x.id === ref);
+  const notes = readNotes(dir),
+    numbers = noteNumbers(dir);
+  const n = /^#\d+$/.test(ref)
+    ? notes.find((x) => numbers.get(x.id)?.n === +ref.slice(1))
+    : notes.find((x) => x.id === ref);
   if (!n) return null;
   const film = filmOf(dir);
   const scene = noteScene(n, film.shots);
@@ -155,7 +158,7 @@ export const noteMoment = (dir: string, ref: string) => {
       : "";
   return {
     id: n.id,
-    n: byAge.indexOf(n) + 1,
+    n: numbers.get(n.id)!.n,
     state: noteState(n) as string,
     text: String(n.text ?? ""),
     written: n.t as number,
@@ -178,21 +181,24 @@ export const whatsAt = (dir: string, t: number) => {
   // a gap in timing.json: the picture is black, so no shot, camera key or moving row is on screen
   const blank = !frameVisible(timingClock, t);
   const timing: Row = read(conf.timingTimeline, null) ?? {};
-  // what blacks it out: a gap row of main[], a Freeze left blank or its pads, else gaps[]
+  // what blacks it out: past the picture's end, a gap row of main[], a Freeze left blank or its pads, else gaps[]
   const blackBy = !blank
     ? null
-    : timing.main
-      ? "main[] (a gap row)"
-      : segmentAt(timingClock, t)?.kind === "freeze"
-        ? "freezes[] (a Freeze left blank, or its padBefore/padAfter)"
-        : "gaps[]";
+    : t >= timingClock.duration && !segmentAt(timingClock, t)
+      ? "picture ended"
+      : timing.main
+        ? "main[] (a gap row)"
+        : segmentAt(timingClock, t)?.kind === "freeze"
+          ? "freezes[] (a Freeze left blank, or its padBefore/padAfter)"
+          : "gaps[]";
   // the Freeze holding the picture here (from its first heard second, where the scene second has not yet stopped moving)
-  const fi = blank
-    ? -1
-    : freezesOf(timing).findIndex((_: Row, i: number) => {
-        const [from, to] = freezeRange(timing, timingClock, i);
-        return from <= t && t < to;
-      });
+  const fi =
+    blank || segmentAt(timingClock, t)?.kind !== "freeze"
+      ? -1
+      : freezesOf(timing).findIndex((_: Row, i: number) => {
+          const [from, to] = freezeRange(timing, timingClock, i);
+          return from <= t && t < to;
+        });
   const held =
     fi < 0
       ? null
@@ -310,9 +316,9 @@ export const whatsAt = (dir: string, t: number) => {
       now: scene >= from && scene < from + len,
     };
   };
-  const cuts = blank ? [] : [blend(si), blend(si + 1)].filter((b) => b !== null);
+  const cuts = blank ? [] : shots.map((_, i) => blend(i)).filter((b) => b !== null);
   const ci = blank ? -1 : cam.filter((k) => k.t <= scene).length - 1;
-  const [fw, fh] = sizeOf(conf.ratio === "9:16" ? "9:16" : "16:9", 1920);
+  const [fw, fh] = sizeOf(ratioOf({ "live-studio": conf }), 1920);
   const vec3Or = (v: unknown, fallback: [number, number, number]): [number, number, number] =>
     Array.isArray(v) &&
     v.length === 3 &&
@@ -320,7 +326,7 @@ export const whatsAt = (dir: string, t: number) => {
       ? (v as [number, number, number])
       : fallback;
   const camEval =
-    ci >= 0
+    !blank && cam.length
       ? cameraAt(
           scene,
           cam.map((k) => ({
@@ -336,44 +342,105 @@ export const whatsAt = (dir: string, t: number) => {
   const sounds: Row[] = [];
   // the voice's clip on a muted track: the mix leaves it out, so its lines are not heard (voice:cues drops them too)
   let narrationMuted: string | null = null;
+  let narrationOff: string | null = null;
   // no narration clip: the voice is full_voice.wav, which "voice": false leaves out of the mix (mix.py)
-  let voiceOff = Boolean(audio && !audio.narration && audio.voice === false);
+  const rawVoiceOff = Boolean(audio && !audio.narration && audio.voice === false);
+  let voiceOff = rawVoiceOff;
+  let choicesFile: string | undefined;
   if (audio) {
-    // an sfx without "length" lasts as long as its sound file, when the file is on this machine
-    const vault = openSound(dir, conf);
-    const durations: Record<string, number> = {};
-    for (const c of audio.sfx ?? []) {
-      const file = c.length === undefined && vault?.fileOf(c.name);
-      // a header it cannot read is a length unknown, never 0 s (that hides a sound that plays)
-      const seconds = file ? audioInfo(file)?.seconds : undefined;
-      if (seconds) durations[c.name] = seconds;
+    // the studio's pick (choices.json, or legacy sound_choices.json, as mix.py chosen() plays it): "off" leaves a sound out, a try[] name plays instead
+    choicesFile = ["choices.json", "sound_choices.json"].find((f) => existsSync(join(dir, f)));
+    const choices = (choicesFile ? read(choicesFile, {}) : {}) ?? {};
+    if (audio.narration && choices[audio.narration]?.set === "off")
+      narrationOff = choicesFile ?? "choices.json";
+    const chosen = (row: Row) => pickSoundClip({ ...row, name: row.name }, choices[row.name]);
+    const picked = (row: Row): string | null => {
+      const c = chosen(row);
+      return c ? (c.name !== row.name ? c.name : null) : "off";
+    };
+    // an sfx without "length" lasts as long as the sound file that plays (including a try[] swap), and explicit length still stops at start >= file EOF or file EOF / rate (mix.py)
+    const vault = openSound(dir, { ...conf, sfx: conf.sfx ?? "sound/sfx" });
+    const soundClock = clockForTimeline("sound");
+    const clipClockFor = (c: Row, list: "beds" | "sfx") =>
+      (
+        soundClock as unknown as {
+          forClip?: (row: Row, l: string, d: Row) => typeof soundClock;
+        }
+      ).forClip?.(c, list, audio) ?? soundClock;
+    const sourceLengths = new Map<number, number>();
+    const soundIn = {
+      ...audio,
+      sfx: (audio.sfx ?? []).map((c: Row, i: number) => {
+        const effective = chosen(c) ?? c;
+        // as_option (mix.py) drops start when swapping a clip to a try[] option, playing the replacement from 0
+        const swapped = effective.name !== c.name;
+        const file = vault?.fileOf(effective.name);
+        // a header it cannot read is a length unknown, never 0 s (that hides a sound that plays)
+        const seconds = file ? probeAudio(file)?.seconds : undefined;
+        const effStart = effective.start ?? 0;
+        const avail =
+          seconds === undefined ? undefined : Math.max(0, (seconds - effStart) / (c.rate ?? 1));
+        if (avail !== undefined) sourceLengths.set(i, avail);
+        const length = c.length ?? avail;
+        return {
+          ...c,
+          ...(swapped ? { start: effective.start } : {}),
+          ...(length !== undefined ? { length } : {}),
+        };
+      }),
+    };
+    const heard = mapTimeline("sound", soundIn, soundClock, false, null, {});
+    const audible = new Map<Row, { from: number; to: number }[]>();
+    for (const [i, length] of sourceLengths) {
+      const c = heard.sfx[i];
+      const segments = c.__timing?.timeline as Parameters<typeof playRanges>[0]["segments"];
+      if (segments?.length) {
+        const ranges = playRanges({ segments }, 0, length)
+          .map((r) => ({ from: r.from, to: Math.min(r.to, c.length ?? Infinity) }))
+          .filter((r) => r.to > r.from);
+        audible.set(c, ranges);
+        c.length = Math.max(0, ...ranges.map((r) => r.to));
+      } else c.length = Math.min(c.length ?? length, length);
     }
-    const heard = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
+    const playingAt = (c: Row, list: "beds" | "sfx", start: number): boolean => {
+      const ranges = audible.get(c);
+      if (ranges) return ranges.some((r) => r.from <= t - start && t - start < r.to);
+      const tl = c.__timing?.timeline as Row[] | undefined;
+      if (tl?.length) {
+        const rel = t - start;
+        return tl.some(
+          (seg) =>
+            seg.kind === "play" &&
+            !seg.blank &&
+            seg.sourceTo > seg.sourceFrom &&
+            seg.from <= rel &&
+            rel < seg.to,
+        );
+      }
+      // Missing-file sfx with empty timeline still follows the clip clock's freeze/gap silence
+      const clipClock = clipClockFor(c, list);
+      if (!frameVisible(clipClock, t)) return false;
+      return !(clipClock as unknown as { segments: Row[] }).segments.some(
+        (seg) => seg.kind === "freeze" && seg.from <= t && t < seg.to,
+      );
+    };
     // a muted track is left out of every mix (scripts/sound/mix.py MUTED)
     const muted = new Set((audio.tracks ?? []).flatMap((k: Row) => (k.mute ? [k.id] : [])));
-    // the studio's pick (choices.json, as mix.py chosen() plays it): "off" leaves a sound out, a try[] name plays instead
-    const choices = read("choices.json", {}) ?? {};
-    const picked = (row: Row): string | null => {
-      const c = choices[row.name];
-      if (c?.set === "off") return "off";
-      return c?.set && c.set !== row.name && (row.try ?? []).includes(c.set) ? c.set : null;
-    };
-    const lenOf = (c: Row): number | undefined =>
-      c.length ??
-      (c.name in durations ? (durations[c.name]! - (c.start ?? 0)) / (c.rate ?? 1) : undefined);
-    // the voice split in clips: the one playing here decides; between clips, muted only when every clip is
+    // the voice clip covering t decides whether narration is muted here (unclipped seconds leave unvoiced script lines visible)
     const voices = heard.sfx.flatMap((c: Row, i: number) =>
-      audio.narration && c.name === audio.narration ? [{ c, track: audio.sfx[i].track }] : [],
+      audio.narration && c.name === audio.narration && picked(audio.sfx[i]) !== "off"
+        ? [{ c, i, track: audio.sfx[i].track }]
+        : [],
     );
-    const here = voices.filter(({ c }: Row) => {
-      const len = lenOf(c);
-      return c.at <= t && (len === undefined || t < c.at + len);
-    });
-    const judged = here.length ? here : voices;
-    if (judged.length && judged.every((v: Row) => muted.has(v.track)))
-      narrationMuted = judged[0]!.track;
+    const here = voices.filter(
+      ({ c }: Row) =>
+        c.at <= t &&
+        (c.length === undefined || (c.length > 0 && t < c.at + c.length)) &&
+        playingAt(c, "sfx", c.at),
+    );
+    if (here.length && here.every((v: Row) => muted.has(v.track))) narrationMuted = here[0]!.track;
     heard.beds.forEach((c: Row, i: number) => {
-      if (c.from <= t && t < c.to)
+      if (c.from <= t && t < c.to && playingAt(c, "beds", c.from))
         sounds.push({
           list: "beds",
           i,
@@ -387,14 +454,14 @@ export const whatsAt = (dir: string, t: number) => {
     });
     heard.sfx.forEach((c: Row, i: number) => {
       if (c.name === audio.narration) return;
-      const len = lenOf(c);
-      if (c.at <= t && t < c.at + (len ?? 1))
+      const endAt = c.length === undefined ? c.at + 1 : c.length > 0 ? c.at + c.length : c.at;
+      if (c.at <= t && t < endAt && playingAt(c, "sfx", c.at))
         sounds.push({
           list: "sfx",
           i,
           name: c.name,
           from: c.at,
-          to: len === undefined ? null : c.at + len,
+          to: c.length === undefined ? null : c.at + c.length,
           row: audio.sfx[i],
           muted: muted.has(audio.sfx[i].track),
           picked: picked(audio.sfx[i]),
@@ -410,15 +477,18 @@ export const whatsAt = (dir: string, t: number) => {
     if (!frameVisible(clock, t)) return [];
     return (doc.items as Row[]).flatMap((it, i) => {
       const at = overlayTime(clock, t, it);
-      return at >= it.from && at < it.to && !it.hidden && !doc.tracks?.[it.track ?? 0]?.hidden
+      return at >= it.from &&
+        at < it.to &&
+        (kind === "text" ? !it.hidden : true) &&
+        !doc.tracks?.[it.track ?? 0]?.hidden
         ? [
             {
               i,
-              // the grade is all an adjustment does: an empty one draws the picture as it is
+              // the grade is all an adjustment does: an inactive or zeroed one draws the picture as it is
               text: `${it.text ?? it.name ?? it.kind}${
                 kind === "adjustment" && it.grade?.enabled === false
                   ? " (disabled)"
-                  : kind === "adjustment" && !Object.keys(it.grade ?? {}).length
+                  : kind === "adjustment" && !hasGradeEffect(it.grade)
                     ? " (its grade sets nothing)"
                     : kind === "adjustment" && typeof it.grade?.look === "string"
                       ? ` (look: ${it.grade.look})`
@@ -446,7 +516,7 @@ export const whatsAt = (dir: string, t: number) => {
   for (const file of blank ? [] : Object.keys(conf.keyFiles ?? {})) {
     const walk = (v: unknown, path: string[]) => {
       if (Array.isArray(v)) {
-        if (v.length > 1 && v.every((r) => r && typeof r === "object" && typeof r.t === "number")) {
+        if (v.length > 1 && v.every((r) => r && typeof r === "object" && Number.isFinite(r.t))) {
           const b = v.filter((r) => r.t <= scene).length - 1;
           // two keys of one value hold it still: listed as moving they push the moving rows out of the 10 shown
           const changes = (x: Row, y: Row) =>
@@ -482,43 +552,56 @@ export const whatsAt = (dir: string, t: number) => {
   try {
     const cues = buildVoiceCues(dir);
     // a film with no voice lines is silent, not a voice turned off
-    voiceOff &&= cues.lines.length > 0;
-    ({ unlaid, unplaced } = cues);
-    const li = cues.lines.findIndex((l) => l.s <= t && t <= l.e);
-    if (li >= 0) {
-      const l = cues.lines[li]!;
-      narration = {
-        line: li + 1,
-        text: l.text,
-        word: l.words.find((w) => w.s <= t && t <= w.e)?.w,
-        s: l.s,
-        e: l.e,
-      };
-    } else nextLine = cues.lines.find((l) => l.s > t)?.s ?? null;
+    voiceOff &&= cues.hasLines ?? cues.lines.length > 0;
+    unlaid = !rawVoiceOff && !narrationOff && cues.unlaid;
+    unplaced = rawVoiceOff || narrationOff ? [] : cues.unplaced;
+    if (!voiceOff && !narrationOff && !unlaid) {
+      const li = cues.lines.findIndex((l) => l.s <= t && t <= l.e);
+      if (li >= 0) {
+        const l = cues.lines[li]!;
+        narration = {
+          line: li + 1,
+          text: l.text,
+          word: l.words.find((w) => w.s <= t && t <= w.e)?.w,
+          s: l.s,
+          e: l.e,
+        };
+      } else nextLine = cues.lines.find((l) => l.s > t)?.s ?? null;
+    }
   } catch (e) {
     // a film with no narration has no lines and no error: a throw is a fault, so the voice may be playing here unseen
     voiceFault = (e as Error).message;
+  } finally {
+    // buildVoiceCues mutates the shared timingClock singleton to voice sourceDur: restore the film's clock for script/notes below
+    setTiming(film.timingSpec, film.sourceEnd);
   }
   // the script not voiced yet (src/edit.json script_lines, scene seconds as the film's list reads them)
   const scriptLines: Row[] = edit.script_lines ?? [];
+  const nextScript = () =>
+    scriptLines
+      .flatMap((l) => {
+        const s0 = timingClock.outputAt(l.t, "after");
+        const shown =
+          l.until != null ? timingClock.outputAt(l.until, "before") > s0 : timingClock.visible(l.t);
+        return shown && s0 > t && (nextLine === null || s0 < nextLine) ? [{ l, s0 }] : [];
+      })
+      .sort((a, b) => a.s0 - b.s0)[0]?.l ?? null;
   const script =
-    narration || narrationMuted || voiceOff || blank
+    narration || narrationMuted || voiceOff || narrationOff || blank
       ? null
-      : (scriptLines.find((l) => l.t <= scene && scene < (l.until ?? l.t)) ??
-        // a later one only when no voiced line is heard before it
-        scriptLines.find(
-          (l) =>
-            l.t > scene && (nextLine === null || timingClock.outputAt(l.t, "before") < nextLine),
+      : (scriptLines.find((l) =>
+          l.until != null ? l.t <= scene && scene < l.until : Math.abs(l.t - scene) < 0.001,
         ) ??
-        null);
+        // a later one only when no voiced line is heard before it
+        nextScript());
 
   // the notes not done heard within 3 s of it now (a Speed or Freeze edit since moves where a note is heard): open ones
   // are the AI's to fix, check ones wait on the creator's look
   const notes = readNotes(dir).flatMap((n) => {
     const state = noteState(n) as string;
-    if (state === "done" || typeof n.t !== "number") return [];
+    if (state === "done") return [];
     const heard = heardNow(n, film);
-    return Math.abs(heard - t) <= 3
+    return Number.isFinite(heard) && heard >= 0 && Math.abs(heard - t) <= 3
       ? [{ id: n.id as string, state, text: String(n.text ?? ""), heard }]
       : [];
   });
@@ -534,28 +617,29 @@ export const whatsAt = (dir: string, t: number) => {
     cuts,
     held,
     velocity,
-    cam:
-      ci >= 0 && camEval
-        ? {
-            before: ci,
-            after: ci + 1 < cam.length ? ci + 1 : null,
-            t0: cam[ci]!.t,
-            t1: cam[ci + 1]?.t,
-            mm: +camEval.mm.toFixed(1),
-            fov: +camEval.fov.toFixed(1),
-            ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
-            ...(formatFocusSpec(camEval.focus) !== null
-              ? { focus: formatFocusSpec(camEval.focus) }
-              : {}),
-            ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
-          }
-        : null,
+    cam: camEval
+      ? {
+          before: ci >= 0 ? ci : null,
+          after: ci < 0 ? 0 : ci + 1 < cam.length && !cam[ci + 1]?.cut ? ci + 1 : null,
+          t0: ci >= 0 ? cam[ci]!.t : null,
+          t1: ci < 0 ? cam[0]!.t : !cam[ci + 1]?.cut ? cam[ci + 1]?.t : undefined,
+          ...(ci >= 0 && cam[ci + 1]?.cut ? { heldBeforeCut: true } : {}),
+          mm: +camEval.mm.toFixed(1),
+          fov: +camEval.fov.toFixed(1),
+          ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
+          ...(formatFocusSpec(camEval.focus) !== null
+            ? { focus: formatFocusSpec(camEval.focus) }
+            : {}),
+          ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
+        }
+      : null,
     sounds,
     texts,
     looks,
     keys,
     narration,
     narrationMuted,
+    narrationOff,
     voiceOff,
     unlaid,
     unplaced,
@@ -564,6 +648,7 @@ export const whatsAt = (dir: string, t: number) => {
     script,
     notes,
     conf,
+    choicesFile,
   };
 };
 
@@ -628,15 +713,20 @@ if (isMain) {
     } catch (e) {
       crashed(e);
     }
+    const gone = n ? null : findNote(film, arg);
+    if (gone?.gone) {
+      console.error(deletedSaid(gone));
+      process.exit(2);
+    }
     if (!n) {
       console.error(
         `no note ${arg} in notes/notes.jsonl: bun run notes lists them (#N or the id), or give a second (bun run at 35.6)`,
       );
       process.exit(2);
     }
-    if (!Number.isFinite(n.heard)) {
+    if (!Number.isFinite(n.heard) || n.heard < 0) {
       console.error(
-        `note #${n.n} (${n.id}) has no second: its "t" in notes/notes.jsonl is ${JSON.stringify(n.written ?? null)}, not the heard second the studio writes; bun run notes ${n.id} says what it asks`,
+        `note #${n.n} (${n.id}) has no second: its "t" in notes/notes.jsonl is ${JSON.stringify(n.written ?? null)}, not the heard second >= 0 the studio writes; bun run notes ${n.id} says what it asks`,
       );
       process.exit(2);
     }
@@ -661,6 +751,8 @@ if (isMain) {
   } catch (e) {
     crashed(e);
   }
+  const hasWritten = (n: NonNullable<typeof note>) =>
+    typeof n.written === "number" && Number.isFinite(n.written) && n.written >= 0;
   if (t >= got.length) {
     if (note && process.argv.includes("--json")) {
       console.log(JSON.stringify({ note, pastEnd: true, length: got.length }, null, 2));
@@ -668,14 +760,14 @@ if (isMain) {
     }
     if (note) {
       console.log(
-        `${noteSays()} was written at ${mmss(note.written)} heard; its moment (${mmss(note.heard)}, ${note.how}) is past the film's end now (${got.length.toFixed(3)} s): what it was on has been cut or shortened since.\nnext: the note in full: bun run notes ${note.id}; if its subject is gone, ask the creator: bun run note ask ${note.id} "<your question>"`,
+        `${noteSays()} ${hasWritten(note) ? `was written at ${mmss(note.written)} heard` : `had no "t"`}; its moment (${mmss(note.heard)}, ${note.how}) is past the film's end now (${got.length.toFixed(3)} s): what it was on has been cut or shortened since.\nnext: the note in full: bun run notes ${note.id}; if its subject is gone, ask the creator: bun run note ask ${note.id} "<your question>"`,
       );
       process.exit(0);
     }
     console.error(`the film is ${got.length.toFixed(3)} s long: give a second before that`);
     process.exit(2);
   }
-  const { conf: c, ...all } = got;
+  const { conf: c, choicesFile, ...all } = got;
   // the cut a draft's sheet numbers (renders/cuts.json, heard seconds, the last bun run render clip's), when this second
   // sits on one; a src file changed since may have moved it
   const cutsFile = join(film, "renders/cuts.json");
@@ -706,13 +798,21 @@ if (isMain) {
   const out: string[] = [];
   if (note)
     out.push(
-      Math.abs(note.heard - note.written) < 0.005
-        ? `${noteSays()} was written at ${mmss(note.written)} heard, still the same moment (${note.how})`
-        : `${noteSays()} was written at ${mmss(note.written)} heard; that moment is heard at ${mmss(note.heard)} now (${note.how})`,
+      !hasWritten(note)
+        ? `${noteSays()} had no "t"; its moment is heard at ${mmss(note.heard)} now (${note.how})`
+        : Math.abs(note.heard - note.written) < 0.005
+          ? `${noteSays()} was written at ${mmss(note.written)} heard, still the same moment (${note.how})`
+          : `${noteSays()} was written at ${mmss(note.written)} heard; that moment is heard at ${mmss(note.heard)} now (${note.how})`,
     );
   out.push(
     got.blank
-      ? `${mmss(t)} heard (${+t.toFixed(3)} s); black here, ${got.blackBy === "gaps[]" ? "a gap in " : ""}${c.timingTimeline ?? "timing.json"} ${got.blackBy}: no picture, so no shot or camera`
+      ? `${mmss(t)} heard (${+t.toFixed(3)} s); black here, ${
+          got.blackBy === "gaps[]"
+            ? `a gap in ${c.timingTimeline ?? "timing.json"} gaps[]`
+            : got.blackBy === "picture ended"
+              ? "the picture has ended (another layer plays past it)"
+              : `${c.timingTimeline ?? "timing.json"} ${got.blackBy}`
+        }: no picture, so no shot or camera`
       : `${mmss(t)} heard (${+t.toFixed(3)} s); the picture shows scene second ${fmt(got.scene)}${
           got.held
             ? ` (a Freeze holds it, heard ${fmt(got.held.range[0])}-${fmt(got.held.range[1])}: ${c.timingTimeline ?? "timing.json"} ${got.held.row})`
@@ -746,6 +846,8 @@ if (isMain) {
     );
   if (got.shot?.look)
     out.push(`  shot look: ${got.shot.look} (${shotsFile} [${got.shot.row}].adjust.look)`);
+  else if (got.shot?.adjust && got.shot.adjust.enabled !== false && hasGradeEffect(got.shot.adjust))
+    out.push(`  shot adjust: custom grade (${shotsFile} [${got.shot.row}].adjust)`);
   if (got.shot?.hits?.length)
     out.push(
       `  shot hits: ${got.shot.hits
@@ -754,8 +856,16 @@ if (isMain) {
     );
   if (got.cam) {
     out.push(
-      `camera: ${c.camTimeline ?? "src/timeline/cam.json"} [${got.cam.before}] t=${fmt(got.cam.t0)}${
-        got.cam.after === null ? " (the last key)" : ` -> [${got.cam.after}] t=${fmt(got.cam.t1)}`
+      `camera: ${c.camTimeline ?? "src/timeline/cam.json"} ${
+        got.cam.before === null
+          ? `holds [0] t=${fmt(got.cam.t1)} (before the first key)`
+          : `[${got.cam.before}] t=${fmt(got.cam.t0)}${
+              got.cam.after === null
+                ? got.cam.heldBeforeCut
+                  ? " (held before a cut)"
+                  : " (the last key)"
+                : ` -> [${got.cam.after}] t=${fmt(got.cam.t1)}`
+            }`
       }`,
     );
     const optics = [
@@ -777,28 +887,35 @@ if (isMain) {
   out.push(
     got.voiceOff
       ? `narration: off, ${c.soundTimeline} "voice": false and no "narration" clip: the mix leaves the voice out`
-      : got.narrationMuted
-        ? `narration: muted, its clip sits on track ${got.narrationMuted}, muted in ${c.soundTimeline} tracks[]: the mix leaves the voice out`
-        : got.voiceFault
-          ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
-          : got.narration
-            ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
-            : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)${
-                got.unlaid
-                  ? "; voice/takes has audio not on the film yet: bun run voice:assemble lays it (no new voice:gen)"
-                  : ""
-              }`,
+      : got.narrationOff
+        ? `narration: off (${got.narrationOff} turns the narration clip off): the mix leaves the voice out`
+        : got.narrationMuted
+          ? `narration: muted, its clip sits on track ${got.narrationMuted}, muted in ${c.soundTimeline} tracks[]: the mix leaves the voice out`
+          : got.voiceFault
+            ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
+            : got.narration
+              ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
+              : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)${
+                  got.unlaid
+                    ? "; voice/takes has audio not on the film yet: bun run voice:assemble lays it (no new voice:gen)"
+                    : ""
+                }`,
   );
   if (got.unplaced.length)
     out.push(
       `  take${got.unplaced.length > 1 ? "s" : ""} ${got.unplaced.join(", ")} newer than the film's voice: its words sit at the old take's place until bun run voice:assemble`,
     );
-  if (got.script)
+  if (got.script) {
+    const atHere =
+      got.script.until != null
+        ? got.script.t <= got.scene && got.scene < got.script.until
+        : Math.abs(got.script.t - got.scene) < 0.001;
     out.push(
       `  script not voiced yet (src/edit.json script_lines, scene ${fmt(got.script.t)}-${fmt(got.script.until ?? got.script.t)}${
-        got.script.t > got.scene ? ", the next one" : ""
+        atHere ? "" : ", the next one"
       }): ${String(got.script.text).slice(0, 90)}${String(got.script.text).length > 90 ? "..." : ""}`,
     );
+  }
   const file = c.soundTimeline;
   out.push(
     !file
@@ -811,9 +928,9 @@ if (isMain) {
     out.push(
       `  ${s.list}[${s.i}] ${s.name} gain ${s.row.gain ?? 0}${s.row.track ? ` track ${s.row.track}${s.muted ? " (muted: not in the mix)" : ""}` : ""}${
         s.picked === "off"
-          ? ", off (choices.json): not in the mix"
+          ? `, off (${choicesFile ?? "choices.json"}): not in the mix`
           : s.picked
-            ? `, plays ${s.picked} in its place (choices.json)`
+            ? `, plays ${s.picked} in its place (${choicesFile ?? "choices.json"})`
             : ""
       }, heard ${fmt(s.from)}-${s.to === null ? "? (its file is not on this machine)" : fmt(s.to)}`,
     );

@@ -1,20 +1,56 @@
 // The film's frame shape (src/frame.mjs: package.json "live-studio".ratio, 16:9 or 9:16) and name, asked for before the scene is
 // built. Every size the page draws the picture at comes from frameSize; CSS reads --frame (index.css) for boxes that follow it
 import { type Ratio, sizeOf } from "../../src/frame.ts";
+import { bootData, type FilmFeatures } from "../core/boot";
 import { getFile, postJson } from "../core/net";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { reloadNow } from "../playback/transport";
 
-export const loadFilm = async () => {
-  const r = await getFile("/api/film.json");
-  const { name = "film", ratio = "16:9" }: { name?: string; ratio?: Ratio } = r.ok
-    ? await r.json()
-    : {};
+const ALL_FEATURES: FilmFeatures = {
+  cam: true,
+  shots: true,
+  text: true,
+  adjustment: true,
+  timing: true,
+  keys: true,
+  sound: true,
+  voice: true,
+  voiceMap: true,
+  trials: true,
+  choices: true,
+  mix: true,
+};
+let cachedFeatures: FilmFeatures = bootData()?.film?.has ?? ALL_FEATURES;
+let usedBootFilm = false;
+
+export const filmFeatures = (): FilmFeatures => cachedFeatures;
+
+const applyFilmMeta = (data: {
+  name?: string;
+  ratio?: string;
+  video?: boolean;
+  has?: FilmFeatures;
+}) => {
+  const name = data.name ?? "film";
+  const ratio = (data.ratio as Ratio | undefined) ?? "16:9";
+  const video = Boolean(data.video);
+  if (data.has) cachedFeatures = data.has;
   S.film = name;
   document.title = `${name} · Studio`; // two films open side by side tell their tabs apart
-  set({ ratio });
+  set({ ratio, hasVideo: video });
   document.documentElement.style.setProperty("--frame", ratio.replace(":", " / "));
+};
+
+export const loadFilm = async () => {
+  const inline = !usedBootFilm ? bootData()?.film : undefined;
+  if (inline?.name && inline.ratio) {
+    usedBootFilm = true;
+    applyFilmMeta(inline);
+    return;
+  }
+  const r = await getFile("/api/film.json");
+  applyFilmMeta(r.ok ? await r.json() : {});
 };
 // [width, height] with the long side this long
 export const frameSize = (long: number) => sizeOf(get().ratio, long);

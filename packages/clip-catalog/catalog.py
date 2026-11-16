@@ -57,7 +57,8 @@ def describe(r, full=False):
     if r.get("desc"):
         head = f"{r['desc']} [mood: {', '.join(r.get('mood', []))}; touches: {', '.join(r.get('prop', []))}" + (f"; acted: {', '.join(r['style'])}" if r.get("style") else "") + (f"; flaw: {r['flaw']}" if r.get("flaw") else "") + "]"
     else:
-        head = f"{r['ref'].split('/', 1)[1].rsplit('_', 1)[0].replace('_', ' ')} (not checked by eye)" + (f" [flaw: {r['flaw']}]" if r.get("flaw") else "")
+        name = re.sub(r"_[0-9a-f]{8}$", "", r["ref"].split("/", 1)[1]).replace("_", " ")
+        head = f"{name} (not checked by eye)" + (f" [flaw: {r['flaw']}]" if r.get("flaw") else "")
     loop = r["loop"][0] < LOOP_DEG and r["loop"][1] < LOOP_CM
     facts = (f"{r['dur']} s; starts {r['start']}, ends {r['end']}; ends {r['reach']} m from the start, facing {abs(r['turn'])} deg "
              f"{'left' if r['turn'] > 0 else 'right'} of his first facing; {'loops seamlessly' if loop else 'does not loop'}")
@@ -95,7 +96,9 @@ def rerank(jev, scene, hits, full=False):
         with ThreadPoolExecutor(4) as pool:
             heats = pool.map(choice, [order[k : k + HEAT] for k in range(0, len(order), HEAT)])
         hits = [r for heat in heats for p, r in sorted(heat, key=lambda x: -x[0])[:KEEP] if p > 0]
-    return sorted(choice(hits), key=lambda x: -x[0])
+    if not hits:
+        return []
+    return [(p, r) for p, r in sorted(choice(hits), key=lambda x: -x[0]) if p > 0]
 
 
 def fits(jev, scene, shown, full=False):
@@ -136,7 +139,7 @@ def rows(libs):
     # measured tags, with the fixes recorded by eye (clip-catalog/catalog_review.py) over them; `seen`: someone has checked
     # the clip. A sweep break joins the clip's flaw, so the finder shows it and Jev weighs it
     rp = ROOT / "catalog" / "review.json"
-    review = json.loads(rp.read_text(encoding="utf-8")) if rp.exists() else {}
+    review = json.loads(rp.read_text(encoding="utf-8-sig")) if rp.exists() else {}
     for lib in libs:
         p = ROOT / "catalog" / f"{lib}.jsonl"
         brk = broken(lib)
@@ -144,11 +147,14 @@ def rows(libs):
             for line in p.read_text(encoding="utf-8").splitlines():
                 if line.strip():
                     r = json.loads(line)
+                    if "error" in r:
+                        continue
                     rv = review.get(r["ref"], {})
+                    row = {**r, **rv, "seen": r["ref"] in review, "fix": set(rv)}
                     # seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
-                    body = [x for x in [r["start"], *r["seq"], r["end"]] if x]
-                    seq = [x for i, x in enumerate(body) if not i or x != body[i - 1]]
-                    row = {**r, "seq": seq, **rv, "seen": r["ref"] in review, "fix": set(rv)}
+                    if not rv.get("seq"):
+                        body = [x for x in [row.get("start"), *row.get("seq", []), row.get("end")] if x]
+                        row["seq"] = [x for i, x in enumerate(body) if not i or x != body[i - 1]]
                     if r["ref"] in brk:
                         row["flaw"] = "; ".join(x for x in [rv.get("flaw"), brk[r["ref"]]] if x)
                     yield row
@@ -183,18 +189,30 @@ def main():
     kw = keywords()
     span = lambda s: [float(x) for x in s.split("-")]
     words = [w.lower() for w in a.words]
-    # a word matches from a word start ("sit" finds sitting, never disposition)
-    starts = [re.compile(r"\b" + re.escape(w)) for w in words]
+    def _stem(w):
+        s = re.sub(r"ies$", "y", re.sub(r"^(.)(?:ies|ying)$", r"\1ie", w))
+        if len(s) > 4:
+            s = re.sub(r"(?:ing|ed|es)$", "", s)
+        if len(s) > 3:
+            s = re.sub(r"([^aeioulsz])\1$", r"\1", s)
+        if len(s) > 3 and not s.endswith("ss"):
+            s = re.sub(r"s$", "", s)
+        if len(s) > 3:
+            s = re.sub(r"(?:ie|[ye])$", "", s)
+        return s
+    # match either from a word start ("sit" finds sitting, never disposition) or by shared light stem ("sitting" finds Sit)
+    queries = [(re.compile(r"\b" + re.escape(w)), _stem(w)) for w in words]
+    tok_stems = lambda t: {_stem(tok) for tok in re.split(r"[^a-z\d]+", t) if tok}
+    plain_name = lambda n: re.sub(r"([a-z])([A-Z])", r"\1 \2", n).replace("_", " ").lower()
     hits = []
     for r in rows(a.lib.split(",")):
-        if "error" in r:
-            continue
         lib, name = r["ref"].split("/", 1)
         tags = kw.get(name[-8:], set()) if lib == "mixamo" else set()
-        text = " | ".join([name.lower().replace("_", " "), *sorted(tags), r.get("desc", "").lower(), *r.get("mood", []), *r.get("prop", []), *r.get("style", [])])
+        text = " | ".join([plain_name(name), *sorted(tags), r.get("desc", "").lower(), *r.get("mood", []), *(p for p in r.get("prop", []) if p != "none"), *r.get("style", [])])
         if not a.fights and FIGHT.search(name):
             continue
-        if not all(w.search(text) for w in starts):
+        text_stems = tok_stems(text)
+        if not all(p.search(text) or s in text_stems for p, s in queries):
             continue
         loop = r["loop"][0] < LOOP_DEG and r["loop"][1] < LOOP_CM
         checks = [
@@ -210,8 +228,9 @@ def main():
         ]
         if all(f() for on, f in checks if on):
             # words in the name or the eye-checked description outrank Mixamo's search keywords
-            said = name.lower().replace("_", " ") + " | " + r.get("desc", "").lower()
-            score = sum(2 if w.search(said) else 1 for w in starts)
+            said = plain_name(name) + " | " + r.get("desc", "").lower()
+            said_stems = tok_stems(said)
+            score = sum(2 if p.search(said) or s in said_stems else 1 for p, s in queries)
             hits.append((score, r, loop, tags))
     # a one-frame clip is a still pose, never the move its name says: after every clip that moves; a clip with a
     # FLAW after the equal ones without, so a list with no words opens on a usable clip, not the bind pose
@@ -223,16 +242,17 @@ def main():
         by = {id(h[1]): h for h in hits}
         hits = [(p, *by[id(r)][1:]) for p, r in rerank(jev, a.jev, [h[1] for h in hits], a.timeline)]
         shown = [h[1] for h in hits[: min(a.n, FIT_N)]]
-        fit = dict(zip(map(id, shown), fits(jev, a.jev, shown, a.timeline)))
-        print(f"Jev via {jev.used}" + (f", cost ${jev.spent:.4f}" if jev.spent else "") + "; rank = Choice probability, fits = "
-              "its own yes/no", file=sys.stderr)
-        # TypeSafe's starting thresholds for a Noul: yes above 0.7, no below 0.3
-        best = max(fit.values())
-        if best < 0.3:
-            print(f"Jev: no shown clip fits (best {best:.2f}): the vault may have nothing for this scene", file=sys.stderr)
-        elif best <= 0.7:
-            print(f"Jev: unsure any shown clip fits (best {best:.2f}): see the top few before using one; if none acts it out, "
-                  "key the pose by hand (steve.json moves[] pose) or retarget a new clip into vault/motion", file=sys.stderr)
+        if shown:
+            fit = dict(zip(map(id, shown), fits(jev, a.jev, shown, a.timeline)))
+            print(f"Jev via {jev.used}" + (f", cost ${jev.spent:.4f}" if jev.spent else "") + "; rank = Choice probability, fits = "
+                  "its own yes/no", file=sys.stderr)
+            # TypeSafe's starting thresholds for a Noul: yes above 0.7, no below 0.3
+            best = max(fit.values())
+            if best < 0.3:
+                print(f"Jev: no shown clip fits (best {best:.2f}): the vault may have nothing for this scene", file=sys.stderr)
+            elif best <= 0.7:
+                print(f"Jev: unsure any shown clip fits (best {best:.2f}): see the top few before using one; if none acts it out, "
+                      "key the pose by hand (steve.json moves[] pose) or retarget a new clip into vault/motion", file=sys.stderr)
     for score, r, loop, tags in hits[: a.n]:
         hands = " ".join(f"{k} {r[k]}s" for k in ["head", "up", "ground", "bend", "air"] if has(r, k))
         print(f"{f'{score:.2f}  ' if a.jev else ''}{f'fits {fit[id(r)]:.2f}  ' if id(r) in fit else ''}{r['ref']}  {r['dur']}s  {'>'.join(r['seq'])}  travel {r['travel'][0]},{r['travel'][1]} turn {r['turn']}"

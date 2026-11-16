@@ -1,3 +1,8 @@
+export function pickSoundClip<T extends { name: string; start?: number; try?: readonly string[] }>(
+  clip: T,
+  choice?: { set?: string },
+): (Omit<T, "name" | "start"> & { name: string; start?: number }) | null;
+
 export interface SoundLibraryEntry {
   name: string;
   seconds: number;
@@ -41,6 +46,9 @@ export function oggInfo(
 export function audioInfo(
   file: string,
 ): { tag?: number; channels: number; rate: number; bits: number; seconds: number } | null;
+export function probeAudio(
+  file: string,
+): { tag?: number; channels?: number; rate?: number; bits?: number; seconds: number } | null;
 export function wavPeaks(
   file: string,
   step?: number,
@@ -68,3 +76,17 @@ export function audioPeaksAsync(
 ): Promise<{ step: number; peaks: number[] } | null>;
 export function openSound(project: string, conf?: Record<string, unknown>): OpenSoundHandle | null;
 export declare const findVaults: (project: string, conf: Record<string, unknown>) => string[];
+export function walkAudio(
+  root: string,
+  vaultDir: string | null,
+  realBound: string,
+): Map<
+  string,
+  {
+    file: string;
+    kind?: "bgm" | "sfx" | "mc";
+    category?: string;
+    fromVault: boolean;
+    vaultDir: string | null;
+  }
+>;

@@ -203,9 +203,12 @@ export const seenCheck = (render, cfg) => {
   return async (target, from, to, step = 1 / 30) => {
     if (typeof target !== "string" || !(to > from) || !(step > 0))
       return ["ERROR usage: CHECK=seen:<target>,<from s>,<to s>"];
-    const obj = findTarget(render.tools, target);
-    if (!obj || target === "cam") return [targetHelp(render.tools, target, { camera: false })];
-    if (!render.tools.camera.isPerspectiveCamera)
+    const tools = render.tools ?? {};
+    if (!tools.scene || !tools.camera)
+      return ["ERROR CHECK=seen requires draw.tools.scene and draw.tools.camera on the film"];
+    const obj = findTarget(tools, target);
+    if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
+    if (!tools.camera.isPerspectiveCamera)
       return ["ERROR seen: the film camera is not a PerspectiveCamera"];
     const frames = [];
     for (let i = 0, n = Math.round((to - from) / step); i <= n; i++) {

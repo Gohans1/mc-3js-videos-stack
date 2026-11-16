@@ -1,5 +1,4 @@
-import { bisectRight } from "d3-array";
-
+import { bisectRight } from "./bisect.mjs";
 import { smoothSpeedCurve } from "./speed-curve.mjs";
 import { compileTiming } from "./timing.mjs";
 

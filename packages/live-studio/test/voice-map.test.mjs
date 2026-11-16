@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +19,9 @@ import { openFilm, STUDIO, voiceMapOf } from "../src/film.mjs";
 import {
   buildVoiceMap,
   planVoicePlacements,
+  takeAudios,
   unalignedTakes,
+  voiceFileOf,
   wordsCommand,
   writeVoiceMap,
 } from "../src/voice-map.mjs";
@@ -479,5 +482,133 @@ test("the whisperX python is the one WHISPERX_PYTHON names", () => {
   } finally {
     if (was === undefined) delete process.env.WHISPERX_PYTHON;
     else process.env.WHISPERX_PYTHON = was;
+  }
+});
+
+test("voiceFileOf reads default src/timeline/audio.json narration key when soundTimeline is omitted and preserves escaping soundSources", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-file-of-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ narration: "voice" }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { soundSources: { voice: "sound/voice_track.wav" } } }),
+  );
+  assert.equal(voiceFileOf(dir), join(dir, "sound/voice_track.wav"));
+
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { soundSources: { voice: "../escaped/voice.wav" } } }),
+  );
+  assert.equal(voiceFileOf(dir), resolve(dir, "../escaped/voice.wav"));
+});
+
+test("takeAudios and planVoicePlacements enforce confinement and strict checks while keeping non-strict callers tolerant", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-map-hardening-"));
+  const outside = mkdtempSync(join(tmpdir(), "voice-map-hard-out-"));
+  t.after(() => {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+  mkdirSync(join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "02", text: "Second.", start: 4 },
+        { id: "01", text: "First.", start: 0 },
+      ],
+    }),
+  );
+  writePcm16Wav(join(dir, "voice/takes/01.wav"), Array(800).fill(5000), 1000);
+  writePcm16Wav(join(dir, "voice/takes/02.wav"), Array(800).fill(5000), 1000);
+
+  // null / invalid / stale .words.json: non-strict tolerates without crashing; takeAudios flags unaligned
+  writeFileSync(join(dir, "voice/takes/01.wav.words.json"), "null");
+  writeFileSync(
+    join(dir, "voice/takes/02.wav.words.json"),
+    JSON.stringify({ dur: 0.8, words: [{ w: "Second.", s: 0.1, e: 0.5 }] }),
+  );
+  const older = new Date(Date.now() - 60_000);
+  utimesSync(join(dir, "voice/takes/02.wav.words.json"), older, older);
+
+  const audios = takeAudios(dir);
+  assert.deepEqual(
+    audios.map((x) => [x.id, x.aligned]),
+    [
+      ["02", false],
+      ["01", false],
+    ],
+  );
+  assert.deepEqual(
+    unalignedTakes(dir).map((x) => x.id),
+    ["02", "01"],
+  );
+
+  // Non-strict planVoicePlacements tolerates null words JSON and sorts chronologically
+  const tolerant = planVoicePlacements(dir, { fallbackSecondsOf: () => 0.8 });
+  assert.deepEqual(
+    tolerant.map((p) => p.id),
+    ["01", "02"],
+  );
+
+  // Fix alignments and touch words newer than wav -> strict places chronologically
+  const later = new Date(Date.now() + 60_000);
+  writeFileSync(
+    join(dir, "voice/takes/01.wav.words.json"),
+    JSON.stringify({ dur: 0.8, words: [{ w: "First.", s: 0.1, e: 0.6 }] }),
+  );
+  utimesSync(join(dir, "voice/takes/01.wav.words.json"), later, later);
+  utimesSync(join(dir, "voice/takes/02.wav.words.json"), later, later);
+  const strictSorted = planVoicePlacements(dir, { strict: true });
+  assert.deepEqual(
+    strictSorted.map((p) => [p.id, p.start]),
+    [
+      ["01", 0],
+      ["02", 4],
+    ],
+  );
+
+  // Duplicate IDs & overlapping spoken takes rejected in strict, while non-strict keeps working
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "01", text: "First.", start: 0 },
+        { id: "02", text: "Overlap.", start: 0.2 },
+      ],
+    }),
+  );
+  assert.equal(planVoicePlacements(dir).length, 2);
+  assert.throws(() => planVoicePlacements(dir, { strict: true }), /Overlapping voice takes/i);
+
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      takes: [
+        { id: "01", text: "A." },
+        { id: "01", text: "B." },
+      ],
+    }),
+  );
+  assert.throws(() => planVoicePlacements(dir, { strict: true }), /Duplicate take id "01"/);
+
+  // Junction escape on voice/takes makes takeAudios return [] and strict throw
+  rmSync(join(dir, "voice/takes"), { recursive: true, force: true });
+  let linked = false;
+  try {
+    symlinkSync(outside, join(dir, "voice/takes"), "junction");
+    linked = true;
+  } catch {
+    linked = false;
+  }
+  if (linked) {
+    assert.deepEqual(takeAudios(dir), []);
+    assert.throws(
+      () => planVoicePlacements(dir, { strict: true }),
+      /Voice folders must stay inside/i,
+    );
   }
 });

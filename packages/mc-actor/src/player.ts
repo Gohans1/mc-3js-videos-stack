@@ -62,15 +62,25 @@ export const squat = (a) => ({
   root: { y: -2 * LEG * (1 - Math.cos(a * D)) },
 });
 const merge = (...ps) => {
-  const out = { root: {} };
-  for (const p of ps)
-    for (const [k, v] of Object.entries(p)) {
+  const root = {};
+  const out = { root };
+  for (let n = 0; n < ps.length; n++) {
+    const p = ps[n];
+    for (const k in p) {
+      const v = p[k];
+      if (!v) continue;
       if (k === "root") {
-        for (const [a, b] of Object.entries(v)) out.root[a] = (out.root[a] ?? 0) + b;
-        continue;
+        for (const a in v) root[a] = (root[a] ?? 0) + v[a];
+      } else {
+        const cur = out[k];
+        if (cur) {
+          cur[0] += v[0];
+          cur[1] += v[1];
+          cur[2] += v[2];
+        } else out[k] = [v[0], v[1], v[2]];
       }
-      out[k] = out[k] ? out[k].map((x, i) => x + v[i]) : v.slice();
     }
+  }
   return out;
 };
 
@@ -251,16 +261,26 @@ export const idlePose = (t, seed) =>
 
 // Blend b over a by weight k, joint by joint
 export const blendPose = (a, b, k) => {
-  const out = { root: { ...a.root } };
-  for (const [j, v] of Object.entries(a)) if (j !== "root") out[j] = v.slice();
-  for (const [j, v] of Object.entries(b)) {
+  const ok = 1 - k;
+  const root = a.root ? { ...a.root } : {};
+  const out = { root };
+  for (const j in a) {
+    if (j === "root") continue;
+    const v = a[j];
+    out[j] = [v[0], v[1], v[2]];
+  }
+  for (const j in b) {
+    const v = b[j];
     if (j === "root") {
-      for (const [r, x] of Object.entries(v))
-        out.root[r] = THREE.MathUtils.lerp(out.root[r] ?? 0, x, k);
+      for (const r in v) root[r] = (root[r] ?? 0) * ok + v[r] * k;
       continue;
     }
-    const base = out[j] ?? [0, 0, 0];
-    out[j] = base.map((x, i) => THREE.MathUtils.lerp(x, v[i], k));
+    const cur = out[j];
+    if (cur) {
+      cur[0] = cur[0] * ok + v[0] * k;
+      cur[1] = cur[1] * ok + v[1] * k;
+      cur[2] = cur[2] * ok + v[2] * k;
+    } else out[j] = [v[0] * k, v[1] * k, v[2] * k];
   }
   return out;
 };
@@ -308,14 +328,28 @@ const MOUTH = {
 export const mouthAt = (cues, s) => {
   if (!cues?.length || s < cues[0][0] - 0.06) return MOUTH.X;
   let i = -1;
-  while (i < cues.length - 1 && s >= cues[i + 1][0]) i++;
+  if (s >= cues[0][0]) {
+    let lo = 0,
+      hi = cues.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (s >= cues[mid][0]) lo = mid;
+      else hi = mid - 1;
+    }
+    i = lo;
+  }
   const cur = i < 0 ? MOUTH.X : (MOUTH[cues[i][1]] ?? MOUTH.X);
   const next = cues[i + 1];
   if (!next) return cur;
   const lead = Math.min(0.06, i < 0 ? 0.06 : (next[0] - cues[i][0]) / 2);
   const k = smooth((s - (next[0] - lead)) / lead),
     to = MOUTH[next[1]] ?? MOUTH.X;
-  return cur.map((v, j) => v + (to[j] - v) * k);
+  return [
+    cur[0] + (to[0] - cur[0]) * k,
+    cur[1] + (to[1] - cur[1]) * k,
+    cur[2] + (to[2] - cur[2]) * k,
+    cur[3] + (to[3] - cur[3]) * k,
+  ];
 };
 
 const flat = (color, glow = 0.12) =>
@@ -365,9 +399,10 @@ const faceFrame = (root, head) => {
 
 const makeFace = (root, head, skin) => {
   const { px, localPx, up, right, add } = faceFrame(root, head);
+  const patch = skin.getImageData(8, 8, 8, 8).data;
   const pix = (x, y) => {
-    const d = skin.getImageData(8 + x, 8 + y, 1, 1).data;
-    return new THREE.Color(`rgb(${d[0]},${d[1]},${d[2]})`);
+    const i = (y * 8 + x) * 4;
+    return new THREE.Color(`rgb(${patch[i]},${patch[i + 1]},${patch[i + 2]})`);
   };
   const skinCol = pix(1, 5),
     irisCol = pix(2, 4),
@@ -445,7 +480,7 @@ const makeFace = (root, head, skin) => {
     at(o, o.userData.p0, x, -(y - 6));
   };
   const rot = new THREE.Quaternion(),
-    fwdAxis = new THREE.Vector3();
+    fwdAxis = new THREE.Vector3().crossVectors(right, up).normalize();
   const meshes = [
     ...eyes.flatMap((e) => [e.white, e.iris, e.pupil, e.top, e.low]),
     ...brows.map((b) => b.m),
@@ -458,18 +493,20 @@ const makeFace = (root, head, skin) => {
   // mood: blended mood values; m: mouth [w, h, teeth, tongue]; blink 0..1; look [x, y] in -1..1
   return Object.assign(
     (mood, m, blink, look) => {
+      const gx = Math.max(-1, Math.min(1, look[0])),
+        gy = Math.max(-1, Math.min(1, look[1]));
+      const lx = gx * 0.5,
+        ly = gy * 0.12;
       for (const e of eyes) {
-        const sd = e.side < 0 ? "R" : "L",
-          o = { ...mood, ...mood[sd] };
-        const gx = Math.max(-1, Math.min(1, look[0])),
-          gy = Math.max(-1, Math.min(1, look[1]));
-        const x = gx * 0.5,
-          y = gy * 0.12;
-        at(e.iris, e.iris0, x, y);
-        at(e.pupil, e.pupil0, x, y);
-        e.pupil.scale.copy(e.pupilS).multiplyScalar(o.pupil);
-        const cover = Math.min(1, Math.max(1 - o.open, blink)),
-          under = o.squint * 0.45 * (1 - cover);
+        const ov = mood[e.side < 0 ? "R" : "L"];
+        const pupil = ov?.pupil ?? mood.pupil;
+        const open = ov?.open ?? mood.open;
+        const squint = ov?.squint ?? mood.squint;
+        at(e.iris, e.iris0, lx, ly);
+        at(e.pupil, e.pupil0, lx, ly);
+        e.pupil.scale.copy(e.pupilS).multiplyScalar(pupil);
+        const cover = Math.min(1, Math.max(1 - open, blink)),
+          under = squint * 0.45 * (1 - cover);
         // each lid reaches LIP past the white, so no sliver of white shows round its edge from a low or high camera
         const top = cover * H + LIP,
           low = under * H + LIP;
@@ -481,12 +518,12 @@ const makeFace = (root, head, skin) => {
         at(e.low, e.low0, 0, -H / 2 - LIP + low / 2);
       }
       for (const b of brows) {
-        const sd = b.side < 0 ? "R" : "L",
-          o = { ...mood, ...mood[sd] };
-        b.m.position.copy(b.base).addScaledVector(up, (o.y - 0.3 * blink) * localPx);
+        const ov = mood[b.side < 0 ? "R" : "L"];
+        const by = ov?.y ?? mood.y;
+        const tilt = ov?.tilt ?? mood.tilt;
+        b.m.position.copy(b.base).addScaledVector(up, (by - 0.3 * blink) * localPx);
         // tilt > 0 lifts the inner end (the end nearer the nose)
-        fwdAxis.crossVectors(right, up).normalize();
-        rot.setFromAxisAngle(fwdAxis, -b.side * o.tilt * D);
+        rot.setFromAxisAngle(fwdAxis, -b.side * tilt * D);
         b.m.quaternion.copy(rot).multiply(b.q);
       }
       const [w, h, th, tg] = m,
@@ -496,12 +533,13 @@ const makeFace = (root, head, skin) => {
       rect(tongue, 0, 6 + h - tg / 2, w * 0.7, Math.min(tg, h));
       // shut mouth: the skin's own painted mouth shows; a smile or frown adds a line and turned corners over it
       const shut = h < 0.2,
-        lw = 2;
+        lw = 2,
+        cw = Math.max(w, lw) / 2 + 0.25,
+        cSize = Math.abs(smile) > 0.15 ? 0.5 : 0,
+        cy = 6.55 - smile * 0.45;
       rect(line, 0, 6.55, shut && Math.abs(smile) > 0.15 ? lw : 0, 0.35);
-      const cw = Math.max(w, lw) / 2 + 0.25;
-      corners.forEach((c, i) =>
-        rect(c, (i ? 1 : -1) * cw, 6.55 - smile * 0.45, Math.abs(smile) > 0.15 ? 0.5 : 0, 0.5),
-      );
+      rect(corners[0], -cw, cy, cSize, cSize);
+      rect(corners[1], cw, cy, cSize, cSize);
     },
     { meshes },
   );
@@ -563,18 +601,37 @@ export const centroidUv = (m) => {
 };
 
 // ---- one character ----
-export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
-  const img = await loadImage(skinUrl);
+export async function makePlayer(
+  template,
+  skinUrl,
+  { glow = 0.08, face: initialFace = "game" } = {},
+) {
+  const initMeta = FACES.find((f) => f.id === initialFace);
+  if (!initMeta)
+    throw new Error(`no face "${initialFace}" (FACES: ${FACES.map((f) => f.id).join(", ")})`);
+  const img = typeof skinUrl === "string" ? await loadImage(skinUrl) : skinUrl;
   const canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(img, 0, 0);
-  const map = new THREE.CanvasTexture(canvas);
-  map.flipY = false; // the rig's UVs are glTF's, top-left origin
-  map.magFilter = map.minFilter = THREE.NearestFilter;
-  map.generateMipmaps = false;
-  map.colorSpace = THREE.SRGBColorSpace;
+  const skinTex = (c) => {
+    const t = new THREE.CanvasTexture(c);
+    Object.assign(t, {
+      flipY: false, // the rig's UVs are glTF's, top-left origin
+      magFilter: THREE.NearestFilter,
+      minFilter: THREE.NearestFilter,
+      generateMipmaps: false,
+      colorSpace: THREE.SRGBColorSpace,
+    });
+    return t;
+  };
+  let rawMap = null;
+  const getRawMap = () => (rawMap ??= skinTex(canvas));
+  const faceTex = {
+    [initialFace]: initMeta.colour ? skinTex(paintFace(ctx, initMeta)) : getRawMap(),
+  };
+  const map = faceTex[initialFace];
   // a touch of self light from the skin itself, so faces still read under the night's single sodium lamp
   const look = {
     map,
@@ -610,44 +667,41 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
   const rest = {};
   for (const [k, bone] of Object.entries(b)) {
     const C = bone.getWorldQuaternion(new THREE.Quaternion());
-    rest[k] = { q: bone.quaternion.clone(), p: bone.position.clone(), C, Ci: C.clone().invert() };
+    const Ci = C.clone().invert();
+    rest[k] = {
+      q: bone.quaternion.clone(),
+      p: bone.position.clone(),
+      C,
+      Ci,
+      qCi: bone.quaternion.clone().multiply(Ci),
+    };
   }
   // the hips' parent is rotated and scaled: a move in character metres becomes this in its own units
   b.root.parent.updateWorldMatrix(true, false);
   const rootIn = new THREE.Matrix3().setFromMatrix4(
     new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert(),
   );
-  const gameFace = makeFace(rig, b.head, ctx);
-  // the faces to switch between, one texture each (FACES); a blank one hides the floating face and ignores face()
-  const skinTex = (c) => {
-    const t = new THREE.CanvasTexture(c);
-    Object.assign(t, {
-      flipY: false,
-      magFilter: THREE.NearestFilter,
-      minFilter: THREE.NearestFilter,
-      generateMipmaps: false,
-      colorSpace: THREE.SRGBColorSpace,
-    });
-    return t;
-  };
-  const faceTex = Object.fromEntries(
-    FACES.map((f) => [f.id, f.colour ? skinTex(paintFace(ctx, f)) : map]),
-  );
-  let faceId = "game";
+  let gameFace = initialFace === "game" ? makeFace(rig, b.head, ctx) : null;
+  const ensureGameFace = () => (gameFace ??= makeFace(rig, b.head, ctx));
+  let faceId = initialFace;
   const setFace = (id) => {
-    if (!faceTex[id])
-      throw new Error(`no face "${id}" (FACES: ${FACES.map((f) => f.id).join(", ")})`);
+    const f = FACES.find((x) => x.id === id);
+    if (!f) throw new Error(`no face "${id}" (FACES: ${FACES.map((x) => x.id).join(", ")})`);
     faceId = id;
+    const tex = (faceTex[id] ??= f.colour ? skinTex(paintFace(ctx, f)) : getRawMap());
     for (const m of [inner, outer]) {
-      m.map = m.emissiveMap = faceTex[id];
+      m.map = m.emissiveMap = tex;
       m.needsUpdate = true;
     }
-    const f = FACES.find((x) => x.id === id);
-    for (const o of gameFace.meshes) o.visible = id === "game" || !!f.hold; // the next face() call shuts what should be shut
-    if (f.hold) gameFace(...f.hold);
+    if (id === "game" || f.hold || gameFace) {
+      const gf = ensureGameFace();
+      for (const o of gf.meshes) o.visible = id === "game" || !!f.hold; // the next face() call shuts what should be shut
+      if (f.hold) gf(...f.hold);
+    }
   };
+  if (initMeta.hold) ensureGameFace()(...initMeta.hold);
   const face = (...a) => {
-    if (faceId === "game") gameFace(...a);
+    if (faceId === "game") ensureGameFace()(...a);
   };
   const hand = new THREE.Group(); // the right hand's grip, for held items
   hand.name = "handR"; // so live-studio's CHECK=motion:handR,from,to finds it
@@ -692,28 +746,95 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
     ]),
   );
 
+  const boneEntries = Object.entries(b);
+  const rotRoot = [0, 0, 0];
   const R = new THREE.Quaternion(),
     T = new THREE.Quaternion(),
     e = new THREE.Euler(),
     v = new THREE.Vector3();
+  const jointQuat = (k, a) => {
+    R.setFromEuler(e.set(a[0] * D, a[1] * D, a[2] * D, "YXZ"));
+    // local = rest * C^-1 R C: R turns the joint in the character's own axes, about the joint itself
+    return T.copy(rest[k].qCi).multiply(R).multiply(rest[k].C);
+  };
   // Each bone's turn is worked out in T and set once: three re-derives .rotation on every change to .quaternion, which was
   // most of a mocap bake's setPose
   const setPose = (pose) => {
     const r = pose.root ?? {};
-    for (const [k, bone] of Object.entries(b)) {
-      const a =
-        k === "root" ? (r.rx || r.ry || r.rz ? [r.rx ?? 0, r.ry ?? 0, r.rz ?? 0] : null) : pose[k];
-      if (a) {
-        R.setFromEuler(e.set(a[0] * D, a[1] * D, a[2] * D, "YXZ"));
-        // local = rest * C^-1 R C: R turns the joint in the character's own axes, about the joint itself
-        bone.quaternion.copy(
-          T.copy(rest[k].q).multiply(rest[k].Ci).multiply(R).multiply(rest[k].C),
-        );
-      } else bone.quaternion.copy(rest[k].q);
+    for (let i = 0; i < boneEntries.length; i++) {
+      const [k, bone] = boneEntries[i];
+      let a;
+      if (k === "root") {
+        if (r.rx || r.ry || r.rz) {
+          rotRoot[0] = r.rx ?? 0;
+          rotRoot[1] = r.ry ?? 0;
+          rotRoot[2] = r.rz ?? 0;
+          a = rotRoot;
+        } else a = null;
+      } else a = pose[k];
+      const rq = rest[k].q;
+      if (a) bone.quaternion.copy(jointQuat(k, a));
+      else {
+        const bq = bone.quaternion;
+        if (bq.x !== rq.x || bq.y !== rq.y || bq.z !== rq.z || bq.w !== rq.w) bq.copy(rq);
+      }
       bone.position.copy(rest[k].p);
     }
     v.set(r.x ?? 0, r.y ?? 0, r.z ?? 0).applyMatrix3(rootIn);
     b.root.position.copy(rest.root.p).add(v);
+  };
+  // Pure Matrix4 leg FK for feet.ts bake(): skips Euler sync callbacks on Object3D.rotation and all upper-body bones
+  const fastLegsOk =
+    !!b.root?.parent &&
+    b.ulL.parent === b.root &&
+    b.ulR.parent === b.root &&
+    b.llL.parent === b.ulL &&
+    b.llR.parent === b.ulR;
+  const rootParentLocal = b.root.parent ? b.root.parent.matrixWorld.clone() : new THREE.Matrix4();
+  const UP = new THREE.Vector3(0, 1, 0);
+  const gPos = new THREE.Vector3(),
+    gQuat = new THREE.Quaternion(),
+    legPos = new THREE.Vector3();
+  const mG = new THREE.Matrix4(),
+    mRoot = new THREE.Matrix4(),
+    mBone = new THREE.Matrix4(),
+    mUl = new THREE.Matrix4(),
+    mLl = new THREE.Matrix4();
+  const legsAt = (at, yawDeg, pose, wantL, wantR, hipL, hipR, off) => {
+    const r = pose.root ?? {};
+    gPos.set(at[0], at[1], at[2]);
+    gQuat.setFromAxisAngle(UP, yawDeg * D);
+    mG.compose(gPos, gQuat, g.scale);
+    mRoot.multiplyMatrices(mG, rootParentLocal);
+    const rootQ =
+      r.rx || r.ry || r.rz
+        ? jointQuat(
+            "root",
+            ((rotRoot[0] = r.rx ?? 0), (rotRoot[1] = r.ry ?? 0), (rotRoot[2] = r.rz ?? 0), rotRoot),
+          )
+        : rest.root.q;
+    v.set(r.x ?? 0, r.y ?? 0, r.z ?? 0).applyMatrix3(rootIn);
+    legPos.copy(rest.root.p).add(v);
+    mBone.compose(legPos, rootQ, b.root.scale);
+    mRoot.multiply(mBone);
+    const doLeg = (ulK, llK, sole, wOut, hOut) => {
+      const ua = pose[ulK];
+      mBone.compose(rest[ulK].p, ua ? jointQuat(ulK, ua) : rest[ulK].q, b[ulK].scale);
+      mUl.multiplyMatrices(mRoot, mBone);
+      const ue = mUl.elements;
+      hOut[off] = ue[12];
+      hOut[off + 1] = ue[13];
+      hOut[off + 2] = ue[14];
+      const la = pose[llK];
+      mBone.compose(rest[llK].p, la ? jointQuat(llK, la) : rest[llK].q, b[llK].scale);
+      mLl.multiplyMatrices(mUl, mBone);
+      v.copy(sole).applyMatrix4(mLl);
+      wOut[off] = v.x;
+      wOut[off + 1] = v.y;
+      wOut[off + 2] = v.z;
+    };
+    doLeg("ulL", "llL", LEGS.L.sole, wantL, hipL);
+    doLeg("ulR", "llR", LEGS.R.sole, wantR, hipR);
   };
   // The joint's parent turn now, relative to its rest, as a world rotation (includes the character's yaw and lean)
   const Q = new THREE.Quaternion(),
@@ -852,11 +973,28 @@ export async function makePlayer(template, skinUrl, { glow = 0.08 } = {}) {
       m.emissive.setRGB(1, on ? 0.3 : 1, on ? 0.3 : 1);
     }
   };
+  const legsSig = () => {
+    const parts = [`${g.scale.x},${g.scale.y},${g.scale.z}`];
+    for (const n of rootParentLocal.elements) parts.push(String(n));
+    for (const k of ["root", "ulL", "ulR", "llL", "llR"]) {
+      const rk = rest[k],
+        s = b[k].scale;
+      parts.push(
+        `${k}:${rk.p.x},${rk.p.y},${rk.p.z},${rk.q.x},${rk.q.y},${rk.q.z},${rk.q.w},${s.x},${s.y},${s.z}`,
+      );
+    }
+    parts.push(
+      `${LEGS.L.sole.x},${LEGS.L.sole.y},${LEGS.L.sole.z},${LEGS.R.sole.x},${LEGS.R.sole.y},${LEGS.R.sole.z}`,
+    );
+    return parts.join("|");
+  };
   return {
     g,
     rig,
     bones: b,
     setPose,
+    legsAt: fastLegsOk ? legsAt : null,
+    legsSig,
     updateBones,
     face,
     hand,

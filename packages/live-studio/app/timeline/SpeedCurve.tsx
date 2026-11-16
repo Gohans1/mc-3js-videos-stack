@@ -168,7 +168,11 @@ export function SpeedCurve({
               rx="2"
               className={`${i === selectedIndex ? "fill-foreground" : "fill-muted-foreground"} group-focus-visible:stroke-primary`}
             />
-            <path d={`M${xOf(x)} ${yOf(rate) - 7}v14`} className="stroke-curve" strokeWidth="2" />
+            <path
+              d={`M${xOf(x)} ${yOf(rate) - 7}v14`}
+              className="stroke-curve-bg"
+              strokeWidth="2"
+            />
           </g>
         ))}
       </svg>

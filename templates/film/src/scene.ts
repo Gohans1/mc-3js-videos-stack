@@ -36,6 +36,9 @@ import {
 // MCprep's rig (mc-actor/player.ts) acting from src/timeline/steve.json (mc-actor/perform.ts, feet.ts); the camera follows
 // src/timeline/cam.json (film-stage/camera.ts). draw(t) draws any moment straight away (the studio's film contract:
 // bun run skills get core --ref contract). Mojang files come through assets/public links into the vault (bun run link).
+// Pre-installed extras: rigid-body physics via @dimforge/rapier3d-compat (pre-bake in Bun to src/timeline/*.json for
+// deterministic draw(t)); ambient occlusion & post FX via n8ao (N8AOPostPass) + postprocessing (EffectComposer, below);
+// volumetric godrays via three-good-godrays (GodraysPass; PointLight or DirectionalLight only, not SpotLight, before ToneMappingEffect).
 import * as THREE from "three";
 
 import { EDIT, fromSource } from "./edit";

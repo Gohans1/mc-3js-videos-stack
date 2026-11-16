@@ -73,8 +73,10 @@ export const applyChange = (n, change, at = new Date().toISOString()) => {
   return why ? { ok: false, why } : { ok: true };
 };
 
-// The conversation on a note, oldest first: the creator's note, then each fix or question from the AI and each answer back
-export const noteThread = (n) => [
+// The conversation on a note, oldest first: the creator's note, then each fix or question from the AI and each answer back.
+// rewordings: each time the creator changed the note's words too, as {reworded, text: the words before}, for the AI to tell
+// which words a fix answered
+export const noteThread = (n, { rewordings = false } = {}) => [
   { by: "creator", text: n.text, at: n.at ?? "" },
   ...[
     ...(n.fixes ?? []).map((f) => ({
@@ -85,5 +87,12 @@ export const noteThread = (n) => [
       checkpoint: f.checkpoint,
     })),
     ...(n.asks ?? []).map((a) => ({ by: "creator", text: a.text, at: a.at })),
+    ...(rewordings
+      ? (n.edits ?? []).map((e) => ({ by: "creator", text: e.was, at: e.at ?? "", reworded: true }))
+      : []),
   ].toSorted((a, b) => (a.at > b.at) - (a.at < b.at)),
 ];
+
+// A narrated word further than this (s) from a note's second is not what the note is about: across a silence the nearest one
+// can be a minute away
+export const WORD_NEAR = 1.5;

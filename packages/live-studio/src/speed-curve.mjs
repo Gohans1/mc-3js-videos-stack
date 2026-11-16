@@ -1,5 +1,3 @@
-import { curveMonotoneX } from "d3-shape";
-
 const lerp = (a, b, u) => a + (b - a) * u;
 const valueAt = ([a, b, c, d], u) =>
   (1 - u) ** 3 * a + 3 * (1 - u) ** 2 * u * b + 3 * (1 - u) * u * u * c + u ** 3 * d;
@@ -11,39 +9,77 @@ const controls = (value, i) => {
   return [a, ...(value.handles?.[i] ?? [lerp(a, b, 1 / 3), lerp(a, b, 2 / 3)]), b];
 };
 
+// Steffen (1990) monotone cubic Hermite slopes, matching d3-shape curveMonotoneX without pulling d3-shape into boot chunks
+const sign = (x) => (x < 0 ? -1 : 1);
+const slope3 = (x0, y0, x1, y1, x2, y2) => {
+  const h0 = x1 - x0,
+    h1 = x2 - x1,
+    s0 = (y1 - y0) / (h0 || (h1 < 0 && -0)),
+    s1 = (y2 - y1) / (h1 || (h0 < 0 && -0)),
+    p = (s0 * h1 + s1 * h0) / (h0 + h1);
+  return (sign(s0) + sign(s1)) * Math.min(Math.abs(s0), Math.abs(s1), 0.5 * Math.abs(p)) || 0;
+};
+const slope2 = (x0, y0, x1, y1, t) => {
+  const h = x1 - x0;
+  return h ? (3 * ((y1 - y0) / h) - t) / 2 : t;
+};
+
 export const smoothSpeedCurve = (curve) => {
-  const handles = [];
-  let last = curve[0][1];
-  const path = curveMonotoneX({
-    moveTo: (_x, y) => {
-      last = y;
-    },
-    lineTo: (_x, y) => {
-      handles.push([lerp(last, y, 1 / 3), lerp(last, y, 2 / 3)]);
-      last = y;
-    },
-    bezierCurveTo: (_x1, y1, _x2, y2, _x, y) => {
-      handles.push([y1, y2]);
-      last = y;
-    },
-    closePath: () => {},
-  });
-  path.lineStart();
-  curve.forEach(([x, y]) => path.point(x, y));
-  path.lineEnd();
-  return { curve, handles };
+  const out = [],
+    handles = [];
+  let x0 = NaN,
+    x1 = NaN,
+    y0 = NaN,
+    y1 = NaN,
+    t0 = NaN,
+    point = 0;
+  const emitSegment = (s0, s1) => {
+    const dx = (x1 - x0) / 3;
+    handles.push([y0 + dx * s0, y1 - dx * s1]);
+  };
+  for (let i = 0; i < curve.length; i++) {
+    const x = +curve[i][0],
+      y = +curve[i][1];
+    if (x === x1 && y === y1) continue;
+    out.push([x, y]);
+    let t1 = NaN;
+    if (point === 0) point = 1;
+    else if (point === 1) point = 2;
+    else if (point === 2) {
+      point = 3;
+      t1 = slope3(x0, y0, x1, y1, x, y);
+      emitSegment(slope2(x0, y0, x1, y1, t1), t1);
+    } else {
+      t1 = slope3(x0, y0, x1, y1, x, y);
+      emitSegment(t0, t1);
+    }
+    x0 = x1;
+    x1 = x;
+    y0 = y1;
+    y1 = y;
+    t0 = t1;
+  }
+  if (point === 2) handles.push([lerp(y0, y1, 1 / 3), lerp(y0, y1, 2 / 3)]);
+  else if (point === 3) emitSegment(t0, slope2(x0, y0, x1, y1, t0));
+  return { curve: out, handles };
 };
 
 export const sampleSpeedCurve = (value, u) => {
+  const curve = value?.curve;
+  if (!curve?.length) return 1;
+  if (curve.length === 1 || u <= curve[0][0]) return +curve[0][1];
+  const last = curve[curve.length - 1];
+  if (u >= last[0]) return +last[1];
   const i = Math.min(
-    value.curve.length - 2,
+    curve.length - 2,
     Math.max(
       0,
-      value.curve.findLastIndex((p) => p[0] <= u),
+      curve.findLastIndex((p) => p[0] <= u),
     ),
   );
-  const a = value.curve[i][0],
-    b = value.curve[i + 1][0];
+  const a = curve[i][0],
+    b = curve[i + 1][0];
+  if (b <= a) return +curve[i][1];
   return valueAt(controls(value, i), Math.max(0, Math.min(1, (u - a) / (b - a))));
 };
 

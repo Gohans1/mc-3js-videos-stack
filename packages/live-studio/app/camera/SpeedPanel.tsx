@@ -3,14 +3,14 @@ import { EmptyCard, Section } from "../components/inspector";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
-import { useFrame } from "../core/useFrame";
+import { useFrameKey } from "../core/useFrameKey";
 import { DEFAULT_EASE, keys, preview, restore, setEase, shownKey, snapshot } from "./cam";
 
 const camDoc = { snapshot, restore };
 
 export function CameraEasePanel() {
   useStudio((s) => s.camRev);
-  useFrame();
+  useFrameKey(() => shownKey(S.t));
   const i = shownKey(S.t),
     k = keys[i];
   if (!k || i === 0 || k.cut) {

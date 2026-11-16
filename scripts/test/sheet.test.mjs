@@ -253,3 +253,36 @@ test("the last line says what to do next, a cut's row lookup included; START tak
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /film seconds from 60 s on \(START\)/);
 });
+
+test("sheet cut tolerates broken package.json or shotsTimeline metadata instead of crashing", (t) => {
+  const sheet = film(t, [1, 2]);
+  writeFileSync(join(sheet.dir, "package.json"), "{not-json");
+  const brokenPkg = sheet("renders/draft_video.mp4", "cut", "1");
+  assert.equal(brokenPkg.status, 0, brokenPkg.stdout + brokenPkg.stderr);
+  assert.doesNotMatch(brokenPkg.stderr, /Traceback/);
+
+  mkdirSync(join(sheet.dir, "src/timeline"), { recursive: true });
+  writeFileSync(
+    join(sheet.dir, "package.json"),
+    JSON.stringify({ "live-studio": { shotsTimeline: "src/timeline/shots.json" } }),
+  );
+  writeFileSync(
+    join(sheet.dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      { t: 0, name: "a" },
+      { t: 1, name: "b" },
+      { t: 2, name: "c", transition: { fx: "wipe", len: null } },
+    ]),
+  );
+  const nullLen = sheet("renders/draft_video.mp4", "cut", "1");
+  assert.equal(nullLen.status, 0, nullLen.stdout + nullLen.stderr);
+  assert.match(nullLen.stdout, /wipe 0 s/);
+});
+
+test("bare bun run sheet without renders/still_*.jpg exits 2 with a clear hint", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sheet-no-stills-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = spawnSync("python", [SHEET], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /no renders\/still_\*\.jpg/);
+});

@@ -1,5 +1,3 @@
-import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-
 // CapCut's In and Out points (I, O; in either order): a stretch of the film marked on the ruler, the rest dimmed. CapCut
 // exports only that stretch; the studio has no export, so here a note written inside it is about the whole stretch (its range,
 // as a note drawn across seconds has), which the AI reads instead of one moment, and played from inside it the film loops it
@@ -7,6 +5,7 @@ import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 // picked shot or the shot at the playhead (CapCut's Select by clip); Alt+X clears it. Kept for the tab, as the playhead is
 import { layerItems } from "../camera/layers";
 import { shotEnd, shotIndex } from "../core/film";
+import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, say, set } from "../core/store";

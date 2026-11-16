@@ -100,8 +100,10 @@ export const touchCheck = (render) => {
   return async (target, from, to, step = 1 / 30) => {
     if (typeof target !== "string" || !(to > from) || !(step > 0))
       return ["ERROR usage: CHECK=touch:<target>,<from s>,<to s>"];
-    const tools = render.tools,
-      { scene, camera, objects, bones } = tools;
+    const tools = render.tools ?? {};
+    if (!tools.scene || !tools.camera)
+      return ["ERROR CHECK=touch requires draw.tools.scene and draw.tools.camera on the film"];
+    const { scene, camera, objects, bones } = tools;
     const obj = findTarget(tools, target);
     if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
     let owner = obj; // the nearest draw.tools.objects entry around the target: the actor, never a surface for itself

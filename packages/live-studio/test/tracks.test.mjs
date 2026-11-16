@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   addTrack,
   freeTrack,
+  missingSoundNames,
   normalize,
   placeShift,
   shiftRoom,
@@ -191,4 +192,24 @@ test("a pasted clip gets a new track just below its own only when no track of it
     l.tracks.map((t) => t.id),
     ["t1", id, "t2", "t3"],
   );
+});
+
+test("missingSoundNames flags unknown narration, bed, sfx, beatSource and alternative sound names", () => {
+  assert.deepEqual(
+    missingSoundNames(null, () => true),
+    [],
+  );
+  const known = new Set(["hum", "slam"]);
+  const missing = missingSoundNames(
+    {
+      narration: "off",
+      beds: [
+        { name: "hum", beatSource: "kick-loop" },
+        { name: "ambient-pad", try: ["slam", "backup-pad"] },
+      ],
+      sfx: [{ name: "slam" }, { name: "laser", try: ["zap", "off"] }],
+    },
+    (n) => known.has(n),
+  );
+  assert.deepEqual(missing, ["kick-loop", "ambient-pad", "backup-pad", "laser", "zap"]);
 });

@@ -28,6 +28,31 @@ export interface Tracked {
 }
 export type SpanOf = (r: Ref) => [number, number];
 
+export function missingSoundNames(
+  l: {
+    narration?: string;
+    beds?: readonly { name?: string; beatSource?: string; try?: readonly string[] }[];
+    sfx?: readonly { name?: string; beatSource?: string; try?: readonly string[] }[];
+  } | null,
+  known: (name: string) => boolean,
+): string[] {
+  if (!l) return [];
+  const missing: string[] = [];
+  const check = (name?: string) => {
+    if (name && name !== "off" && !known(name)) missing.push(name);
+  };
+  check(l.narration);
+  for (const list of [l.beds, l.sfx]) {
+    if (!list) continue;
+    for (const item of list) {
+      check(item.name);
+      check(item.beatSource);
+      if (item.try) for (const alt of item.try) check(alt);
+    }
+  }
+  return missing;
+}
+
 const KIND_NAME: Record<List, string> = { beds: "Bed", sfx: "SFX" };
 const TOUCH = 0.02; // clips this close still count as end to end, not overlapping
 

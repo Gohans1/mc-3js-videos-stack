@@ -27,8 +27,10 @@ export const textCheck = (render, cfg) => async () => {
     g.drawImage(canvas(), 0, 0, W, H);
     return g.getImageData(0, 0, W, H).data;
   };
-  const all = EDIT.text.items,
+  const all = EDIT.text?.items,
     out = [];
+  if (!all)
+    return ['text: film has no EDIT.text.items to toggle (omit textTimeline or set "read": false)'];
   let faulty = 0;
   try {
     for (const line of lines) {

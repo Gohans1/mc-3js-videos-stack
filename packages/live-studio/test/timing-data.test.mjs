@@ -288,3 +288,54 @@ test("trimming a sped-up audio clip advances the WAV source by the actual source
     gainKeys: [{ t: 1, gain: -6 }],
   });
 });
+
+test("repeated source narration maps each occurrence and speed to its heard placement", () => {
+  const lines = [{ text: "hello", s: 0.2, e: 0.8, words: [{ w: "hello", s: 0.2, e: 0.8 }] }];
+  for (const rate of [1, 2]) {
+    const clock = compileTiming(
+      {
+        main: [
+          { id: "a", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+          { id: "b", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+        ],
+        speeds: [{ from: 0, to: 2, rate }],
+      },
+      2,
+    );
+    const mapped = mapVoice(lines, clock);
+    assert.deepEqual(
+      mapped.map((line) => [line.s, line.e]),
+      [
+        [0.2 / rate, 0.8 / rate],
+        [2.2 / rate, 2.8 / rate],
+      ],
+    );
+    assert.deepEqual(
+      mapped.map((line) => line.words.map((word) => [word.s, word.e])),
+      [[[0.2 / rate, 0.8 / rate]], [[2.2 / rate, 2.8 / rate]]],
+    );
+  }
+});
+
+test("zero-length aligned words retain their point in each narration placement", () => {
+  const clock = compileTiming(
+    {
+      main: [
+        { id: "a", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+        { id: "b", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+      ],
+    },
+    2,
+  );
+  const mapped = mapVoice(
+    [{ text: "point", s: 0.2, e: 0.8, words: [{ w: "point", s: 0.5, e: 0.5 }] }],
+    clock,
+  );
+  assert.deepEqual(
+    mapped.map((line) => [line.words[0].s, line.words[0].e]),
+    [
+      [0.5, 0.5],
+      [2.5, 2.5],
+    ],
+  );
+});

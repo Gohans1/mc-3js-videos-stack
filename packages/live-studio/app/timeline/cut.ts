@@ -4,11 +4,11 @@ import { removeCamKeys, removeKey, splitShot } from "../camera/cam";
 import { layerItems, removeLayers, splitLayers, trimLayers } from "../camera/layers";
 import { setTransition, transitionOf } from "../camera/transitions";
 import { together } from "../core/doc";
+import { engine } from "../core/engine";
 import { S } from "../core/state";
 import { get, say } from "../core/store";
 import { SAME } from "../core/time";
 import { removeKeys } from "../keys/keys";
-import { removeObject } from "../objects/placed";
 import {
   allClips,
   locked,
@@ -120,7 +120,7 @@ export const deleteSelected = () => {
     !keyPicks.length &&
     !textPicks.length
   ) {
-    if (object) removeObject(object);
+    if (object) engine.removeObject(object);
     return;
   }
   together(() => {

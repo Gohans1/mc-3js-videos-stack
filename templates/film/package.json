@@ -30,6 +30,7 @@
     "link": "bun node_modules/live-studio/wrong-place.mjs link",
     "setup:vault": "bun node_modules/live-studio/wrong-place.mjs setup:vault",
     "setup:sound": "bun node_modules/live-studio/wrong-place.mjs setup:sound",
+    "setup:voices": "bun node_modules/live-studio/wrong-place.mjs setup:voices",
     "setup:mc-sound": "bun node_modules/live-studio/wrong-place.mjs setup:mc-sound",
     "fetch:sfx": "bun node_modules/live-studio/wrong-place.mjs fetch:sfx",
     "setup": "bun node_modules/live-studio/wrong-place.mjs setup",
@@ -46,6 +47,7 @@
     "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "catalog:",
     "block-model-renderer": "catalog:",
     "fflate": "catalog:",
     "film-kit": "workspace:*",
@@ -54,9 +56,10 @@
     "math": "catalog:",
     "mc-actor": "workspace:*",
     "mc-assets": "workspace:*",
-    "n8ao": "2.0.1",
+    "n8ao": "catalog:",
     "postprocessing": "catalog:",
-    "three": "catalog:"
+    "three": "catalog:",
+    "three-good-godrays": "catalog:"
   },
   "live-studio": {
     "sound": [

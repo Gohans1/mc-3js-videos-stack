@@ -1,3 +1,5 @@
+import { BLADE_CURSOR } from "../components/cursor";
+import { together } from "../core/doc";
 // The sound tracks under the timeline, CapCut style, on the same seconds as the stretch drawn above them (timeline.ts): one row
 // per track of audio.json (sound/tracks.ts), its name, mute and lock in the column beside it (sound/TrackHeads.tsx).
 // A clip is dragged to move (up or down onto another track, or below the last one for a new track), by an edge to trim, and
@@ -8,20 +10,18 @@
 // drops the pick and moves the playhead there (rowbox.ts boxEnd); a touch dragged over empty space scrubs instead.
 // A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
 // In split mode (blade.ts) a click on a clip cuts it there instead.
-import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-
-import { BLADE_CURSOR } from "../components/cursor";
-import { together } from "../core/doc";
+import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { FPS, makeSnapper, r3, snappedTo, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { type Along, alongWith, inBox, pickAcross, picked as across } from "../timeline/across";
 import { bladeLine } from "../timeline/blade";
-import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import { isElementShown, onShownResize } from "../timeline/visible";
 import { GAIN_KEY_EPS, gainAt, gainPoints, toggleGainKey } from "./gain";
 import { needsProcessing, processed, processSpec } from "./processed";
 import { type ClipRef } from "./slice";
@@ -150,7 +150,7 @@ const drawClip = (
   // Fades as a darkened corner, with their handles on the clip the pointer is over or that is picked
   const fi = c.fadeIn ?? 0,
     fo = c.fadeOut ?? 0;
-  g.fillStyle = "rgba(0,0,0,.45)";
+  g.fillStyle = tone("fade-shade");
   if (fi > 0) {
     g.beginPath();
     g.moveTo(x0, y);
@@ -168,7 +168,7 @@ const drawClip = (
   if (on || (hover && same(hover, ref))) {
     const from = Math.max(0, (cx0 - x0) / px),
       to = Math.min(span(ref)[1] - span(ref)[0], (cx1 - x0) / px);
-    g.strokeStyle = "rgba(255,255,255,.65)";
+    g.strokeStyle = tone("gain-curve");
     g.lineWidth = 1;
     g.beginPath();
     for (const [i, k] of gainPoints(c, from, to).entries()) {
@@ -253,7 +253,7 @@ const drawClip = (
 
 export const drawLanes = () => {
   const c = S.el?.lanes;
-  if (!c || !lanes || !c.getClientRects().length) return;
+  if (!c || !lanes || !isElementShown(c)) return;
   const height = lanesHeight();
   if (c.style.height !== `${height}px`) c.style.height = `${height}px`; // the resize observer draws it at that size
   const { g, w, h } = sized(c);
@@ -340,12 +340,11 @@ export const drawLanes = () => {
   }
   if (get().blade && bladeLine.row === "lanes") {
     const x = Math.round(X(bladeLine.t));
-    g.fillStyle = "#000";
+    g.fillStyle = tone("stage");
     g.fillRect(x - 1, bladeLine.y0 - 3, 3, bladeLine.y1 - bladeLine.y0 + 6);
     g.fillStyle = tone("pick");
     g.fillRect(x, bladeLine.y0 - 2, 1, bladeLine.y1 - bladeLine.y0 + 4);
   }
-  drawPlayhead(g, X(S.t), h);
 };
 
 // ---------- Snapping: the playhead, cuts, word starts and the edges of every clip not being moved
@@ -887,7 +886,7 @@ export const attachLanes = () => {
   c.addEventListener("pointercancel", up);
   c.addEventListener("lostpointercapture", up);
   c.addEventListener("wheel", timelineWheel, { passive: false });
-  new ResizeObserver(drawLanes).observe(c);
+  onShownResize(c, drawLanes);
 };
 
 // ---------- A sound carried from the library: a label follows the pointer, and letting go over a track puts it there

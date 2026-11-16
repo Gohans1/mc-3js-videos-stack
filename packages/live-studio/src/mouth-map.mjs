@@ -4,23 +4,43 @@
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
-  mkdirSync,
+  lstatSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
-  renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { planVoicePlacements, takeAudios } from "./voice-map.mjs";
+import { assertInsideDir, planVoicePlacements, takeAudios, writeAtomicSync } from "./voice-map.mjs";
 
 export const MOUTH_MAP = "src/timeline/mouth.json";
 export const mouthFileOf = (audio) => `${audio}.mouth.json`;
+
+const isSymbolicLink = (file) => {
+  try {
+    return lstatSync(file).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+
+const isCue = (c) =>
+  Array.isArray(c) &&
+  typeof c[0] === "number" &&
+  Number.isFinite(c[0]) &&
+  c[0] >= 0 &&
+  typeof c[1] === "string" &&
+  /^[A-HX]$/.test(c[1]);
+
+const isCueList = (cues) =>
+  Array.isArray(cues) &&
+  cues.length > 0 &&
+  cues.every((c, i) => isCue(c) && (i === 0 || c[0] >= cues[i - 1][0]));
 
 const readJson = (file) => {
   try {
@@ -29,22 +49,46 @@ const readJson = (file) => {
     return null;
   }
 };
-const writeAtomic = (file, data) => {
-  mkdirSync(dirname(file), { recursive: true });
-  const part = `${file}.${process.pid}.part`;
-  writeFileSync(part, data);
-  renameSync(part, file);
+
+const readMouthCues = (shapes) => {
+  if (!existsSync(shapes) || isSymbolicLink(shapes)) return null;
+  const parsed = readJson(shapes);
+  const cues = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed.cues : null;
+  return isCueList(cues) ? cues : null;
+};
+
+const writeAtomic = (file, data, baseDir = null) => {
+  const target = baseDir ? assertInsideDir(baseDir, file, "Mouth file") : file;
+  if (isSymbolicLink(target)) {
+    throw new Error(`Mouth file cannot traverse symlink or junction: "${file}"`);
+  }
+  writeAtomicSync(target, data);
 };
 
 // The takes said on screen, with their audio: [{ id, by, text, language, audio, shapes, fresh }]
 export const speakingTakes = (film) => {
-  const takes = readJson(join(film, "src/edit.json"))?.takes;
+  const root = resolve(film);
+  let editFile;
+  try {
+    editFile = assertInsideDir(root, "src/edit.json", "src/edit.json");
+  } catch {
+    return [];
+  }
+  const takes = readJson(editFile)?.takes;
   const byId = new Map((Array.isArray(takes) ? takes : []).map((k) => [k?.id, k]));
-  return takeAudios(film).flatMap(({ id, audio }) => {
+  return takeAudios(root).flatMap(({ id, audio }) => {
     const k = byId.get(id);
     if (typeof k?.by !== "string" || !k.by) return [];
     const shapes = mouthFileOf(audio);
-    const fresh = existsSync(shapes) && statSync(shapes).mtimeMs >= statSync(audio).mtimeMs;
+    const cues = readMouthCues(shapes);
+    let fresh = false;
+    if (cues) {
+      try {
+        fresh = statSync(shapes).mtimeMs >= statSync(audio).mtimeMs;
+      } catch {
+        fresh = false;
+      }
+    }
     return [{ id, by: k.by, text: k.text, language: k.language, audio, shapes, fresh }];
   });
 };
@@ -54,38 +98,39 @@ const mapOf = (film) => {
   const has = new Map(speakingTakes(film).map((k) => [k.id, k]));
   const takes = planVoicePlacements(film).flatMap((p) => {
     const k = has.get(p.id);
-    const cues = k && existsSync(k.shapes) ? readJson(k.shapes)?.cues : null;
-    return Array.isArray(cues) ? [{ id: p.id, at: p.start, cues }] : [];
+    const cues = k ? readMouthCues(k.shapes) : null;
+    return cues ? [{ id: p.id, at: p.start, cues }] : [];
   });
   return { takes };
 };
 
 export const writeMouthMap = (film) => {
   const map = mapOf(film);
-  writeAtomic(join(film, MOUTH_MAP), `${JSON.stringify(map)}\n`);
+  writeAtomic(join(film, MOUTH_MAP), `${JSON.stringify(map)}\n`, film);
   return map;
 };
 
 export const mouthFaults = (film) => {
   const said = speakingTakes(film);
   const faults = said.flatMap((k) =>
-    !existsSync(k.shapes)
+    !existsSync(k.shapes) && !isSymbolicLink(k.shapes)
       ? [
           `✖ take "${k.id}" (by ${k.by}) has no mouth shapes, so ${k.by}'s mouth stays shut while it plays: bun run voice:lips`,
         ]
-      : !k.fresh
+      : // check cues before freshness so corrupt/empty shapes still tell the author to regenerate them
+        !readMouthCues(k.shapes)
         ? [
-            `✖ take "${k.id}" (by ${k.by}): its audio changed after its mouth shapes were made: bun run voice:lips`,
+            `✖ take "${k.id}" (by ${k.by}): ${relative(film, k.shapes).replaceAll("\\", "/")} holds no cues (not JSON, or no "cues" list), so ${k.by}'s mouth stays shut: bun run voice:lips makes them again`,
           ]
-        : // the map skips shapes it cannot read, so a map written from them agrees and says nothing
-          !Array.isArray(readJson(k.shapes)?.cues)
+        : !k.fresh
           ? [
-              `✖ take "${k.id}" (by ${k.by}): ${relative(film, k.shapes).replaceAll("\\", "/")} holds no cues (not JSON, or no "cues" list), so ${k.by}'s mouth stays shut: bun run voice:lips makes them again`,
+              `✖ take "${k.id}" (by ${k.by}): its audio changed after its mouth shapes were made: bun run voice:lips`,
             ]
           : [],
   );
   if (faults.length || !said.length) return faults;
-  const now = readJson(join(film, MOUTH_MAP));
+  const mapFile = join(film, MOUTH_MAP);
+  const now = !isSymbolicLink(mapFile) ? readJson(mapFile) : null;
   if (JSON.stringify(now?.takes) !== JSON.stringify(mapOf(film).takes))
     faults.push(
       `✖ ${MOUTH_MAP} is behind the takes (one moved, was added or got new shapes): bun run voice:lips rewrites it in a moment`,
@@ -120,7 +165,10 @@ export const shapeTake = (take, line, rhubarb = rhubarbPath()) => {
       encoding: "utf8",
       timeout: 120_000,
     });
-    if (ff.status !== 0) throw new Error(`ffmpeg could not read ${take.audio}: ${ff.stderr}`);
+    if (ff.error || ff.status !== 0) {
+      const why = ff.error ? ff.error.message : ff.stderr?.trim() || `exit ${ff.status}`;
+      throw new Error(`ffmpeg could not read ${take.audio}: ${why}`);
+    }
     if (line) writeFileSync(dialog, line);
     const english = !take.language || /^en\b/i.test(take.language);
     const run = spawnSync(
@@ -138,11 +186,22 @@ export const shapeTake = (take, line, rhubarb = rhubarbPath()) => {
       ],
       { encoding: "utf8", timeout: 10 * 60_000 },
     );
-    if (run.status !== 0 || !existsSync(out))
-      throw new Error(
-        `Rhubarb ${run.error ? `did not finish (${run.error.message})` : `failed: ${run.stderr.trim()}`}`,
-      );
-    const cues = readJson(out).mouthCues.map((c) => [c.start, c.value]);
+    if (run.error || run.status !== 0 || !existsSync(out)) {
+      const why = run.error
+        ? `did not finish (${run.error.message})`
+        : run.status !== 0
+          ? `failed: ${run.stderr?.trim() || `exit ${run.status}`}`
+          : "wrote no output file";
+      throw new Error(`Rhubarb ${why}`);
+    }
+    const parsed = readJson(out);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.mouthCues)) {
+      throw new Error(`Rhubarb produced invalid output JSON for ${take.id ?? take.audio}`);
+    }
+    const cues = parsed.mouthCues.map((c) => [c?.start, c?.value]);
+    if (!isCueList(cues)) {
+      throw new Error(`Rhubarb produced no usable mouth cues for ${take.id ?? take.audio}`);
+    }
     writeAtomic(take.shapes, `${JSON.stringify({ tool: "Rhubarb Lip Sync", line, cues })}\n`);
     return cues;
   } finally {

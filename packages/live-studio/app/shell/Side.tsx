@@ -1,51 +1,79 @@
+import {
+  Blend,
+  BookOpenText,
+  Boxes,
+  Clapperboard,
+  type LucideIcon,
+  MessageSquareText,
+  Music2,
+  Network,
+  SlidersHorizontal,
+  Type,
+} from "lucide-react";
+import { Fragment, lazy, Suspense, useSyncExternalStore } from "react";
+
 // The panels beside the picture, laid out as CapCut's. On a wide screen the libraries are on the left (the note being written,
 // then a toolbar of icons over their names: Notes, Audio, Text, Objects) and the details on the right, whose text tabs are those
 // of what is selected, as CapCut's are: a clip, Audio; a text or shape, Text | Animation; an object, Object; keys, Keyframes; nothing (the camera, CapCut's main
 // track), Camera, Speed and Animation for the shot or key picked, or on the playhead. Narrower, one column on the right (under
 // the picture on an upright phone) holds both: the note being written, then a tab each for the notes, the sound, the objects,
 // the text, the camera (Camera | Speed | Animation under it) and the keys, each with its details above its library.
-import { Tabs } from "@base-ui/react/tabs";
-import {
-  Blend,
-  Boxes,
-  Clapperboard,
-  type LucideIcon,
-  MessageSquareText,
-  Music2,
-  SlidersHorizontal,
-  Type,
-} from "lucide-react";
-import { useSyncExternalStore } from "react";
-
+import { Tabs } from "@/components/Tabs";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import { noteState } from "../../src/note-state.mjs";
-import { AdjustLibrary } from "../camera/AdjustLibrary";
-import { AdjustPanel } from "../camera/AdjustPanel";
-import { AnimPanel } from "../camera/AnimPanel";
+import { useActivity } from "../activity/activity";
 import { CamPanel } from "../camera/CamPanel";
-import { TransitionLibrary } from "../camera/TransitionLibrary";
-import { TransitionPanel } from "../camera/TransitionPanel";
 import { Segmented } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { set, studio, type StudioState, useStudio } from "../core/store";
-import { KeyPanel } from "../keys/KeyPanel";
-import { Compose } from "../notes/Compose";
 import { NoteList } from "../notes/NoteList";
-import { ObjectsPanel } from "../objects/ObjectsPanel";
-import { OwnPanel } from "../own/OwnPanel";
-import { SoundPanel } from "../sound/SoundPanel";
-import { TextLibrary } from "../text/TextLibrary";
-import { TextPanel } from "../text/TextPanel";
-import { FilmSpeedPanel as SpeedPanel } from "../timeline/FilmSpeedPanel";
+
+const loadPanels = () => import("./LazyPanels");
+const AdjustLibrary = lazy(() => loadPanels().then((m) => ({ default: m.AdjustLibrary })));
+const AdjustPanel = lazy(() => loadPanels().then((m) => ({ default: m.AdjustPanel })));
+const AnimPanel = lazy(() => loadPanels().then((m) => ({ default: m.AnimPanel })));
+const TransitionLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TransitionLibrary })));
+const TransitionPanel = lazy(() => loadPanels().then((m) => ({ default: m.TransitionPanel })));
+const KeyPanel = lazy(() => loadPanels().then((m) => ({ default: m.KeyPanel })));
+const LessonsPanel = lazy(() => loadPanels().then((m) => ({ default: m.LessonsPanel })));
+const ObjectsPanel = lazy(() => loadPanels().then((m) => ({ default: m.ObjectsPanel })));
+const OwnPanel = lazy(() => loadPanels().then((m) => ({ default: m.OwnPanel })));
+const PortsPanel = lazy(() => loadPanels().then((m) => ({ default: m.PortsPanel })));
+const SoundPanel = lazy(() => loadPanels().then((m) => ({ default: m.SoundPanel })));
+const TextLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TextLibrary })));
+const TextPanel = lazy(() => loadPanels().then((m) => ({ default: m.TextPanel })));
+const SpeedPanel = lazy(() => loadPanels().then((m) => ({ default: m.FilmSpeedPanel })));
 
 type SideTab = StudioState["side"];
 type Lib = StudioState["lib"];
+type CoreTab = "notes" | "lessons" | "film" | "ports";
 
-// CapCut's text tabs: the open one in the accent. The bar under it is ours (dev's call): the color alone is hard to see at a glance
+// CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
 const tab =
-  "relative flex h-10 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary data-active:after:absolute data-active:after:inset-x-0 data-active:after:bottom-0 data-active:after:h-0.5 data-active:after:rounded-full data-active:after:bg-primary pointer-coarse:h-11";
-const tabs = "flex flex-none items-center gap-5 overflow-x-auto bg-card px-3"; // CapCut's panel head: a lighter bar, no line under it
+  "relative flex h-10 upright:h-9 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-foreground/65 outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] pointer-coarse:h-11";
+const coreTab =
+  "px-2.5 upright:px-2 not-data-active:hover:text-foreground data-active:bg-tint data-active:text-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary-text";
+const isCore = (id: string): id is CoreTab =>
+  id === "notes" || id === "lessons" || id === "film" || id === "ports";
+const tabs =
+  "relative flex flex-none items-center gap-4 overflow-x-auto bg-card px-3 upright:gap-2 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
+
+function TabUnderline({ inset = false }: { inset?: boolean }) {
+  return (
+    <Tabs.Indicator
+      aria-hidden
+      className={cn(
+        "tab-indicator pointer-events-none h-0.5",
+        inset ? "px-2.5" : "bg-primary rounded-full",
+      )}
+    >
+      {inset && <span className="bg-primary block size-full rounded-full" />}
+    </Tabs.Indicator>
+  );
+}
 
 const WIDE = matchMedia("(min-width: 1280px) and (min-height: 640px)");
 export const useWide = () =>
@@ -56,66 +84,143 @@ export const useWide = () =>
     },
     () => WIDE.matches,
   );
-// A note opened (a pin, N) shows the notes in the left column too
+// Switching between wide (Library + Details) and narrow (Side) keeps core tabs aligned
 studio.subscribe((s, was) => {
-  if (s.side === "notes" && was.side !== "notes") set({ lib: "notes" });
+  if (s.side !== was.side) {
+    if (isCore(s.side) && s.lib !== s.side) set({ lib: s.side });
+  } else if (s.lib !== was.lib) {
+    if (isCore(s.lib) && s.side !== s.lib) set({ side: s.lib });
+  }
 });
 
-const useParts = () => ({
-  sound: useStudio((s) => s.sound),
-  text: useStudio((s) => s.text),
-  cam: useStudio((s) => s.cam),
-  keys: useStudio((s) => !!s.keyFiles?.length),
-  placed: useStudio((s) => s.placed),
-  open: useStudio((s) => s.notes.filter((n) => noteState(n) === "open").length),
-  check: useStudio((s) => s.notes.filter((n) => noteState(n) === "check").length),
-});
+const useParts = () => {
+  const notes = useStudio((s) => s.notes);
+  let open = 0,
+    check = 0,
+    asking = 0;
+  for (const n of notes) {
+    const st = noteState(n);
+    if (st === "open") open++;
+    else if (st === "check") {
+      if (n.fixes?.at(-1)?.ask) asking++;
+      else check++;
+    }
+  }
+  return {
+    sound: useStudio((s) => s.sound),
+    text: useStudio((s) => s.text),
+    cam: useStudio((s) => s.cam),
+    keys: useStudio((s) => !!s.keyFiles?.length),
+    placed: useStudio((s) => s.placed),
+    open,
+    check,
+    asking,
+  };
+};
 // Whether the film gives the studio anything to edit, so a wide screen has a details column to show
 export const useEditable = () => {
   const p = useParts();
   return p.sound || p.text || p.cam || p.keys || p.placed;
 };
 
-// The AI's notes to fix in the accent, the creator's to check in yellow
-function NotesCount({ open, check }: { open: number; check: number }) {
+// Pending notes ordered by triage urgency (To check amber · AI asks purple · To fix cyan) in one restrained obsidian counter pill
+function NotesCount({ open, check, asking }: { open: number; check: number; asking: number }) {
+  if (open <= 0 && check <= 0 && asking <= 0) return null;
+  const parts: {
+    key: string;
+    textCls: string;
+    dotCls: string;
+    count: number;
+    label: string;
+  }[] = [
+    ...(check > 0
+      ? [
+          {
+            key: "check",
+            textCls: "text-warn-text",
+            dotCls: "bg-warn",
+            count: check,
+            label: `${check} to check`,
+          },
+        ]
+      : []),
+    ...(asking > 0
+      ? [
+          {
+            key: "asking",
+            textCls: "text-ai-text",
+            dotCls: "bg-ai",
+            count: asking,
+            label: `${asking} asking`,
+          },
+        ]
+      : []),
+    ...(open > 0
+      ? [
+          {
+            key: "open",
+            textCls: "text-primary-text",
+            dotCls: "bg-primary",
+            count: open,
+            label: `${open} to fix`,
+          },
+        ]
+      : []),
+  ];
   return (
-    <>
-      {open > 0 && (
-        <span className="text-primary tabular-nums" aria-label={`, ${open} to fix`}>
-          {open}
-        </span>
-      )}
-      {check > 0 && (
-        <span
-          className="bg-warn rounded-full px-1.5 text-xs leading-4 font-semibold text-black tabular-nums"
-          aria-label={`, ${check} to check`}
-        >
-          {check}
-        </span>
-      )}
-    </>
+    <span
+      title={parts.map((p) => p.label).join(" · ")}
+      className="bg-backdrop/90 text-tag border-hairline inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono leading-none tabular-nums"
+    >
+      {parts.map((p, i) => (
+        <Fragment key={p.key}>
+          {i > 0 && (
+            <span aria-hidden className="text-muted-foreground/50">
+              /
+            </span>
+          )}
+          <span className={cn(p.textCls, "inline-flex items-center gap-1 font-semibold")}>
+            <span aria-hidden className={cn(p.dotCls, "size-1.5 rounded-full")} />
+            {p.count}
+            <span className="sr-only">, {p.label}</span>
+          </span>
+        </Fragment>
+      ))}
+    </span>
   );
 }
+
+// A tab lit while the AI is at a note or lesson file under it (activity/activity.ts), unless it is the tab open: then the card
+// or the file itself is lit
+const useAiTabs = () => {
+  const lit = useActivity((s) => s.lit);
+  return (id: string, open: string) => (id !== open && `tab:${id}` in lit) || undefined;
+};
 
 // Wide: the left column. CapCut's toolbar: an icon over each library's name
 const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "notes", title: "Notes", icon: MessageSquareText },
+  { id: "lessons", title: "Lessons", icon: BookOpenText },
+  { id: "film", title: "Film", icon: Clapperboard },
+  { id: "ports", title: "Ports", icon: Network },
   { id: "sound", title: "Audio", icon: Music2 },
   { id: "text", title: "Text", icon: Type },
   { id: "objects", title: "Objects", icon: Boxes },
   { id: "transition", title: "Transitions", icon: Blend },
   { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
-  { id: "film", title: "Film", icon: Clapperboard },
 ];
 const tool =
-  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary data-active:after:absolute data-active:after:inset-x-3 data-active:after:-bottom-1 data-active:after:h-0.5 data-active:after:rounded-full data-active:after:bg-primary [&_svg]:size-5";
+  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] [&_svg]:size-5";
+const coreTool =
+  "data-active:bg-tint data-active:text-foreground data-active:[&_svg]:text-primary-text";
 export function Library() {
-  const { sound, text, cam, placed, open, check } = useParts(),
-    lib = useStudio((s) => s.lib);
+  const { sound, text, cam, placed, open, check, asking } = useParts(),
+    lib = useStudio((s) => s.lib),
+    aiTab = useAiTabs();
+  const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
   const shown = LIBS.filter(
     (l) =>
-      l.id === "notes" ||
-      l.id === "film" ||
+      isCore(l.id) ||
       (l.id === "sound"
         ? sound
         : l.id === "text"
@@ -128,9 +233,8 @@ export function Library() {
   return (
     <aside
       aria-label="Library"
-      className="bg-background col-start-1 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg in-data-lib-folded:hidden in-data-review:hidden"
+      className="bg-background col-start-1 row-[1/-1] flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-lib-folded:hidden in-data-review:hidden"
     >
-      <Compose />
       <Tabs.Root
         value={value}
         onValueChange={(v) => set({ lib: v as Lib })}
@@ -140,49 +244,69 @@ export function Library() {
         <div className="bg-card flex-none">
           <Tabs.List
             aria-label="Libraries"
-            className="scroll-fade-x flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain px-2 pt-1 pb-1"
+            className="scroll-fade-x relative flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain px-2 pt-1 pb-1"
           >
+            <TabUnderline inset />
             {shown.map((l) => (
-              <Tabs.Tab key={l.id} value={l.id} className={cn(tool, "flex-none")}>
-                <l.icon aria-hidden />
-                <span className="flex items-center gap-1">
-                  {l.title}
-                  {l.id === "notes" && <NotesCount open={open} check={check} />}
-                </span>
-              </Tabs.Tab>
+              <Fragment key={l.id}>
+                <Tabs.Tab
+                  value={l.id}
+                  data-tone={l.id === "notes" ? notesTone : undefined}
+                  data-ai-lit={aiTab(l.id, value)}
+                  className={cn(tool, "flex-none", isCore(l.id) && coreTool)}
+                >
+                  <l.icon aria-hidden />
+                  <span className="flex items-center gap-1">
+                    {l.title}
+                    {l.id === "notes" && <NotesCount open={open} check={check} asking={asking} />}
+                  </span>
+                </Tabs.Tab>
+                {l.id === "ports" && shown.some((x) => !isCore(x.id)) && (
+                  <Separator
+                    orientation="vertical"
+                    className="mx-1 h-7 data-vertical:self-center"
+                  />
+                )}
+              </Fragment>
             ))}
           </Tabs.List>
         </div>
-        <Tabs.Panel value="notes" className="flex min-h-0 flex-1 flex-col">
-          <NoteList />
-        </Tabs.Panel>
-        {sound && (
-          <Tabs.Panel value="sound" className="flex min-h-0 flex-1 flex-col">
-            <SoundPanel part="library" />
-          </Tabs.Panel>
-        )}
-        {text && (
-          <Tabs.Panel value="text" className={panel}>
-            <TextLibrary />
-          </Tabs.Panel>
-        )}
-        {placed && (
-          <Tabs.Panel value="objects" className={panel}>
-            <ObjectsPanel part="library" />
-          </Tabs.Panel>
-        )}
-        {cam && (
-          <Tabs.Panel value="transition" className={panel}>
-            <TransitionLibrary />
-          </Tabs.Panel>
-        )}
-        {cam && (
-          <Tabs.Panel value="adjust" className={panel}>
-            <AdjustLibrary />
-          </Tabs.Panel>
-        )}
-        <Tabs.Panel value="film" className="flex min-h-0 flex-1 flex-col">
-          <OwnPanel />
+        <Tabs.Panel value={value} className="flex min-h-0 flex-1 flex-col">
+          <TabStage
+            activeKey={value}
+            order={shown.map((l) => l.id)}
+            className="relative flex min-h-0 flex-1 flex-col"
+          >
+            <Suspense fallback={null}>
+              {value === "notes" ? (
+                <NoteList composeDock />
+              ) : value === "sound" && sound ? (
+                <SoundPanel part="library" />
+              ) : value === "text" && text ? (
+                <div className={panel}>
+                  <TextLibrary />
+                </div>
+              ) : value === "objects" && placed ? (
+                <div className={panel}>
+                  <ObjectsPanel part="library" />
+                </div>
+              ) : value === "transition" && cam ? (
+                <div className={panel}>
+                  <TransitionLibrary />
+                </div>
+              ) : value === "adjust" && cam ? (
+                <div className={panel}>
+                  <AdjustLibrary />
+                </div>
+              ) : value === "film" ? (
+                <OwnPanel />
+              ) : value === "ports" ? (
+                <PortsPanel />
+              ) : (
+                <LessonsPanel />
+              )}
+            </Suspense>
+          </TabStage>
         </Tabs.Panel>
       </Tabs.Root>
     </aside>
@@ -230,13 +354,13 @@ function Details() {
   const { sound, text, cam, keys, placed } = useParts(),
     side = useStudio((s) => s.side);
   const has: Record<Group, boolean> = {
+    cam,
+    transition: cam,
+    adjustment: cam,
     sound,
     text,
     objects: placed,
     keys,
-    cam,
-    transition: cam,
-    adjustment: cam,
   };
   const picked = useStudio(groupOf),
     group = has[picked] ? picked : (Object.keys(has) as Group[]).find((g) => has[g])!;
@@ -245,7 +369,7 @@ function Details() {
   return (
     <aside
       aria-label="Details"
-      className="bg-background col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg in-data-review:hidden in-data-side-folded:hidden"
+      className="bg-background col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-review:hidden in-data-side-folded:hidden"
     >
       <Tabs.Root
         value={value}
@@ -253,6 +377,7 @@ function Details() {
         className="flex min-h-0 flex-1 flex-col"
       >
         <Tabs.List aria-label="Details" className={tabs}>
+          <TabUnderline />
           {list.map((x) => (
             <Tabs.Tab key={x.id} value={x.id} className={tab}>
               {x.title}
@@ -260,28 +385,38 @@ function Details() {
           ))}
         </Tabs.List>
         <Tabs.Panel value={value} className={panel}>
-          {value === "sound" || value === "voiceChanger" || value === "audioSpeed" ? (
-            <SoundPanel
-              part="clip"
-              tab={value === "voiceChanger" ? "voice" : value === "audioSpeed" ? "speed" : "basic"}
-            />
-          ) : value === "text" || value === "textAnim" ? (
-            <TextPanel part={value} />
-          ) : value === "objects" ? (
-            <ObjectsPanel part="object" />
-          ) : value === "keys" ? (
-            <KeyPanel />
-          ) : value === "transition" ? (
-            <TransitionPanel />
-          ) : value === "adjust" ? (
-            <AdjustPanel />
-          ) : value === "anim" ? (
-            <AnimPanel />
-          ) : value === "speed" ? (
-            <SpeedPanel />
-          ) : (
-            <CamPanel />
-          )}
+          <TabStage
+            activeKey={value}
+            order={list.map((x) => x.id)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <Suspense fallback={null}>
+              {value === "sound" || value === "voiceChanger" || value === "audioSpeed" ? (
+                <SoundPanel
+                  part="clip"
+                  tab={
+                    value === "voiceChanger" ? "voice" : value === "audioSpeed" ? "speed" : "basic"
+                  }
+                />
+              ) : value === "text" || value === "textAnim" ? (
+                <TextPanel part={value} />
+              ) : value === "objects" ? (
+                <ObjectsPanel part="object" />
+              ) : value === "keys" ? (
+                <KeyPanel />
+              ) : value === "transition" ? (
+                <TransitionPanel />
+              ) : value === "adjust" ? (
+                <AdjustPanel />
+              ) : value === "anim" ? (
+                <AnimPanel />
+              ) : value === "speed" ? (
+                <SpeedPanel />
+              ) : (
+                <CamPanel />
+              )}
+            </Suspense>
+          </TabStage>
         </Tabs.Panel>
       </Tabs.Root>
     </aside>
@@ -300,9 +435,17 @@ function AudioTab() {
         onChange={(v) => set({ side: v })}
         items={GROUPS.sound}
       />
-      <SoundPanel
-        tab={part === "voiceChanger" ? "voice" : part === "audioSpeed" ? "speed" : "basic"}
-      />
+      <TabStage
+        activeKey={part}
+        order={GROUPS.sound.map((x) => x.id)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <Suspense fallback={null}>
+          <SoundPanel
+            tab={part === "voiceChanger" ? "voice" : part === "audioSpeed" ? "speed" : "basic"}
+          />
+        </Suspense>
+      </TabStage>
     </>
   );
 }
@@ -321,10 +464,20 @@ function TextTab() {
         onChange={(v) => set({ side: v })}
         items={GROUPS.text}
       />
-      <TextPanel part={part} />
+      <TabStage
+        activeKey={part}
+        order={GROUPS.text.map((x) => x.id)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <Suspense fallback={null}>
+          <TextPanel part={part} />
+        </Suspense>
+      </TabStage>
     </>
   ) : (
-    <TextLibrary />
+    <Suspense fallback={null}>
+      <TextLibrary />
+    </Suspense>
   );
 }
 
@@ -348,23 +501,33 @@ function CameraTab() {
           items={GROUPS.cam}
         />
       )}
-      {part === "anim" ? (
-        <AnimPanel />
-      ) : part === "speed" ? (
-        <SpeedPanel />
-      ) : part === "adjust" ? (
-        <AdjustPanel library />
-      ) : (
-        <CamPanel />
-      )}
+      <TabStage
+        activeKey={part}
+        order={GROUPS.cam.map((x) => x.id)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <Suspense fallback={null}>
+          {part === "anim" ? (
+            <AnimPanel />
+          ) : part === "speed" ? (
+            <SpeedPanel />
+          ) : part === "adjust" ? (
+            <AdjustPanel library />
+          ) : (
+            <CamPanel />
+          )}
+        </Suspense>
+      </TabStage>
     </>
   );
 }
 
 export function Side({ wide }: { wide: boolean }) {
-  const { sound, text, cam, keys, placed, open, check } = useParts(),
+  const { sound, text, cam, keys, placed, open, check, asking } = useParts(),
     side = useStudio((s) => s.side);
-  const layer = useStudio((s) => s.layerPicks.length > 0);
+  const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
+  const layer = useStudio((s) => s.layerPicks.length > 0),
+    aiTab = useAiTabs();
   if (wide) return <Details />;
   const editable = sound || text || cam || keys || placed;
   const raw =
@@ -376,8 +539,7 @@ export function Side({ wide }: { wide: boolean }) {
           ? "sound"
           : side;
   const shown =
-    raw === "notes" ||
-    raw === "film" ||
+    isCore(raw) ||
     (raw === "sound"
       ? sound
       : raw === "text"
@@ -388,9 +550,23 @@ export function Side({ wide }: { wide: boolean }) {
             ? keys
             : cam);
   const value = shown ? raw : "notes";
+  const sideOrder: SideTab[] = [
+    "notes",
+    "lessons",
+    "film",
+    "ports",
+    "sound",
+    "text",
+    "objects",
+    "keys",
+    "transition",
+    "cam",
+  ];
   return (
-    <aside className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-lg in-data-review:hidden in-data-side-folded:hidden">
-      <Compose />
+    <aside
+      aria-label="Side panels"
+      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-review:hidden in-data-side-folded:hidden"
+    >
       <Tabs.Root
         value={value}
         onValueChange={(v) => set({ side: v as SideTab })}
@@ -407,10 +583,36 @@ export function Side({ wide }: { wide: boolean }) {
               editable && "justify-between gap-2",
             )}
           >
-            <Tabs.Tab value="notes" className={tab}>
+            <TabUnderline />
+            <Tabs.Tab
+              value="notes"
+              data-tone={notesTone}
+              data-ai-lit={aiTab("notes", value)}
+              className={cn(tab, coreTab)}
+            >
+              <MessageSquareText aria-hidden />
               Notes
-              <NotesCount open={open} check={check} />
+              <NotesCount open={open} check={check} asking={asking} />
             </Tabs.Tab>
+            <Tabs.Tab
+              value="lessons"
+              data-ai-lit={aiTab("lessons", value)}
+              className={cn(tab, coreTab)}
+            >
+              <BookOpenText aria-hidden />
+              Lessons
+            </Tabs.Tab>
+            <Tabs.Tab value="film" className={cn(tab, coreTab)}>
+              <Clapperboard aria-hidden />
+              Film
+            </Tabs.Tab>
+            <Tabs.Tab value="ports" className={cn(tab, coreTab)}>
+              <Network aria-hidden />
+              Ports
+            </Tabs.Tab>
+            {(sound || text || placed || keys || cam) && (
+              <Separator orientation="vertical" className="mx-0.5 h-5 data-vertical:self-center" />
+            )}
             {sound && (
               <Tabs.Tab value="sound" className={tab}>
                 Audio
@@ -426,9 +628,9 @@ export function Side({ wide }: { wide: boolean }) {
                 Objects
               </Tabs.Tab>
             )}
-            {cam && (
-              <Tabs.Tab value="cam" className={tab}>
-                {layer ? "Adjustment" : "Camera"}
+            {keys && (
+              <Tabs.Tab value="keys" className={tab}>
+                Keyframes
               </Tabs.Tab>
             )}
             {cam && (
@@ -436,52 +638,49 @@ export function Side({ wide }: { wide: boolean }) {
                 Transitions
               </Tabs.Tab>
             )}
-            {keys && (
-              <Tabs.Tab value="keys" className={tab}>
-                Keyframes
+            {cam && (
+              <Tabs.Tab value="cam" className={tab}>
+                {layer ? "Adjustment" : "Camera"}
               </Tabs.Tab>
             )}
-            <Tabs.Tab value="film" className={tab}>
-              Film
-            </Tabs.Tab>
           </Tabs.List>
         </div>
-        <Tabs.Panel value="notes" className="flex min-h-0 flex-1 flex-col">
-          <NoteList />
-        </Tabs.Panel>
-        {sound && (
-          <Tabs.Panel value="sound" className={panel}>
-            <AudioTab />
-          </Tabs.Panel>
-        )}
-        {text && (
-          <Tabs.Panel value="text" className={panel}>
-            <TextTab />
-          </Tabs.Panel>
-        )}
-        {placed && (
-          <Tabs.Panel value="objects" className={panel}>
-            <ObjectsPanel />
-          </Tabs.Panel>
-        )}
-        {cam && (
-          <Tabs.Panel value="cam" className={panel}>
-            <CameraTab />
-          </Tabs.Panel>
-        )}
-        {cam && (
-          <Tabs.Panel value="transition" className={panel}>
-            <TransitionLibrary />
-            <TransitionPanel />
-          </Tabs.Panel>
-        )}
-        {keys && (
-          <Tabs.Panel value="keys" className={panel}>
-            <KeyPanel />
-          </Tabs.Panel>
-        )}
-        <Tabs.Panel value="film" className="flex min-h-0 flex-1 flex-col">
-          <OwnPanel />
+        <Tabs.Panel
+          value={value}
+          className={isCore(value) ? "flex min-h-0 flex-1 flex-col" : panel}
+        >
+          <TabStage
+            activeKey={value}
+            order={sideOrder}
+            className="relative flex min-h-0 flex-1 flex-col"
+          >
+            <Suspense fallback={null}>
+              {value === "notes" ? (
+                <NoteList composeDock />
+              ) : value === "sound" && sound ? (
+                <AudioTab />
+              ) : value === "text" && text ? (
+                <TextTab />
+              ) : value === "objects" && placed ? (
+                <ObjectsPanel />
+              ) : value === "cam" && cam ? (
+                <CameraTab />
+              ) : value === "transition" && cam ? (
+                <>
+                  <TransitionLibrary />
+                  <TransitionPanel />
+                </>
+              ) : value === "keys" && keys ? (
+                <KeyPanel />
+              ) : value === "film" ? (
+                <OwnPanel />
+              ) : value === "ports" ? (
+                <PortsPanel />
+              ) : (
+                <LessonsPanel />
+              )}
+            </Suspense>
+          </TabStage>
         </Tabs.Panel>
       </Tabs.Root>
     </aside>

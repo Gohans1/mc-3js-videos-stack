@@ -1,9 +1,11 @@
+import "./core/boot";
 import "./index.css";
 import { createRoot } from "react-dom/client";
 
 import { PHONE } from "./core/device";
 import { onEvent, onHello } from "./core/events";
 import { stored } from "./core/storage";
+import { preloadStart, warmBootRequests } from "./core/warmup";
 
 const root = document.getElementById("root")!;
 // What stopped the page, with the way back: a fixed save, or the studio coming back with other code, reloads it
@@ -20,6 +22,9 @@ const showFailure = (why: string, error: unknown) => {
 };
 
 try {
+  // Start scene chunk and API prefetches immediately alongside the UI bundle instead of waiting for React mount.
+  warmBootRequests();
+  void preloadStart();
   // A phone gets the review-only layout, and never downloads the editor's panels
   const { App } = PHONE ? await import("./PhoneApp") : await import("./App");
   stored.remove("pageTries", sessionStorage);
