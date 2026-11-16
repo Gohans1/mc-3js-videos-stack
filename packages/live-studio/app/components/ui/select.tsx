@@ -34,7 +34,7 @@ function SelectTrigger({
   children,
   ...props
 }: SelectPrimitive.Trigger.Props & {
-  size?: "sm" | "default";
+  size?: "sm" | "default" | "comfortable";
 }) {
   return (
     <SelectPrimitive.Trigger
@@ -42,6 +42,7 @@ function SelectTrigger({
       data-size={size}
       className={cn(
         "border-input bg-backdrop/75 hover:bg-backdrop text-ui/relaxed focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:border-destructive/50 aria-invalid:ring-destructive/40 data-placeholder:text-muted-foreground flex w-fit items-center justify-between gap-1.5 rounded-md border px-2 py-1.5 whitespace-nowrap transition-colors outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-2 data-[size=default]:h-7 data-[size=sm]:h-6 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 motion-reduce:transition-none pointer-coarse:min-h-10 pointer-coarse:data-[size=default]:h-10 pointer-coarse:data-[size=sm]:h-10 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        size === "comfortable" && "h-9 text-base leading-normal sm:text-sm pointer-coarse:h-11",
         className,
       )}
       {...props}

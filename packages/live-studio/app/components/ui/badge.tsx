@@ -36,6 +36,14 @@ const badgeVariants = cva(
         done: "border-ok/25 bg-ok/10 text-ok-text text-tag h-auto px-1.5 py-0.5 font-medium [&>svg]:size-3!",
         ai: "border-ai/28 bg-ai/12 text-ai-text text-tag h-auto px-1.5 py-0.5 font-medium [&>svg]:size-3!",
       },
+      appearance: {
+        default: "",
+        text: "h-auto rounded-none border-0 bg-transparent px-0 py-0 shadow-none",
+      },
+      size: {
+        default: "",
+        comfortable: "h-auto min-h-6 text-[0.8125rem] leading-normal [&>svg]:size-3.5!",
+      },
     },
     defaultVariants: {
       variant: "default",
@@ -46,6 +54,8 @@ const badgeVariants = cva(
 function Badge({
   className,
   variant = "default",
+  size = "default",
+  appearance = "default",
   render,
   ...props
 }: useRender.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
@@ -53,7 +63,7 @@ function Badge({
     defaultTagName: "span",
     props: mergeProps<"span">(
       {
-        className: cn(badgeVariants({ variant }), className),
+        className: cn(badgeVariants({ variant, size, appearance }), className),
       },
       props,
     ),

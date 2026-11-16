@@ -121,6 +121,7 @@ const fieldLabelVariants = cva("", {
     variant: {
       default: "",
       row: "text-sm font-normal",
+      form: "text-foreground text-sm font-medium",
       tile: "w-full flex-col items-start gap-2.5 font-normal has-data-checked:bg-transparent",
       compact: "items-center gap-1.5 text-xs font-normal has-data-checked:bg-transparent",
       inline:
@@ -164,13 +165,18 @@ function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
+function FieldDescription({
+  className,
+  size = "default",
+  ...props
+}: React.ComponentProps<"p"> & { size?: "default" | "comfortable" }) {
   return (
     <p
       data-slot="field-description"
       className={cn(
         "text-muted-foreground text-left text-xs/relaxed leading-normal font-normal group-has-data-horizontal/field:text-balance [[data-variant=legend]+&]:-mt-1.5",
         "last:mt-0 nth-last-2:-mt-1",
+        size === "comfortable" && "text-sm leading-normal",
         "[&>a:hover]:text-primary-text [&>a]:underline [&>a]:underline-offset-4",
         className,
       )}

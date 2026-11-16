@@ -28,6 +28,8 @@ export function Segmented<T extends string>({
   label,
   className,
   vertical,
+  tone = "neutral",
+  size = "default",
 }: {
   value: T;
   items: { id: T; title: ReactNode }[];
@@ -35,6 +37,8 @@ export function Segmented<T extends string>({
   label: string;
   className?: string;
   vertical?: boolean;
+  tone?: "neutral" | "accent";
+  size?: "default" | "comfortable";
 }) {
   const [back, on] = vertical ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"];
   const groupRef = useRef<HTMLDivElement>(null);
@@ -104,7 +108,10 @@ export function Segmented<T extends string>({
         "relative",
         vertical
           ? "flex flex-none flex-col gap-0.5"
-          : "bg-backdrop/90 border-hairline flex h-8 flex-none gap-0.5 rounded-md border p-0.5",
+          : cn(
+              "bg-backdrop/90 border-hairline flex flex-none gap-0.5 rounded-md border p-0.5",
+              size === "comfortable" ? "h-10 pointer-coarse:h-12" : "h-8",
+            ),
         className,
       )}
     >
@@ -122,7 +129,9 @@ export function Segmented<T extends string>({
             "segmented-pill pointer-events-none z-0 shadow-xs ring-1",
             vertical
               ? "bg-tint ring-primary/25 rounded-md"
-              : "bg-secondary ring-hairline-strong rounded-sm",
+              : tone === "accent"
+                ? "bg-tint ring-primary rounded-sm"
+                : "bg-secondary ring-hairline-strong rounded-sm",
           )}
         />
       )}
@@ -151,6 +160,8 @@ export function Segmented<T extends string>({
             vertical
               ? "aria-checked:text-primary-text h-8 min-w-0 justify-start rounded-md px-2.5 pointer-coarse:h-10"
               : "aria-checked:text-foreground shrink-0 justify-center rounded-sm px-2.5 aria-checked:font-semibold pointer-coarse:h-10",
+            tone === "accent" && "aria-checked:text-primary-text",
+            size === "comfortable" && "min-h-9 flex-1 text-sm pointer-coarse:min-h-11",
           )}
         >
           {x.title}

@@ -54,6 +54,8 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint", // one of a list, picked
       },
       size: {
+        comfortable:
+          "h-9 gap-1.5 px-2 text-sm leading-normal pointer-coarse:h-11 [&_svg:not([class*='size-'])]:size-4",
         default:
           "h-7 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 pointer-coarse:h-10 [&_svg:not([class*='size-'])]:size-3.5",
         tab: "text-ui/relaxed h-7 gap-1 px-2 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 pointer-coarse:h-10 [&_svg:not([class*='size-'])]:size-3.5",

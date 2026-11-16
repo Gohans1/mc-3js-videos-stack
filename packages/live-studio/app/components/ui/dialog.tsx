@@ -124,7 +124,9 @@ function DialogFooter({
 }
 
 const dialogTitleVariants = cva("", {
-  variants: { variant: { default: "", compact: "text-xs font-normal" } },
+  variants: {
+    variant: { default: "", compact: "text-xs font-normal", reading: "text-xl outline-none" },
+  },
   defaultVariants: { variant: "default" },
 });
 function DialogTitle({
@@ -146,7 +148,7 @@ function DialogTitle({
 }
 
 const dialogDescriptionVariants = cva("", {
-  variants: { variant: { default: "", compact: "text-xs" } },
+  variants: { variant: { default: "", compact: "text-xs", comfortable: "text-sm leading-normal" } },
   defaultVariants: { variant: "default" },
 });
 function DialogDescription({
