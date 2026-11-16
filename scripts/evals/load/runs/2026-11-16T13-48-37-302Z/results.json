@@ -1,0 +1,559 @@
+{
+  "film": "../scripts/evals/load/fixture",
+  "runs": 3,
+  "note": "round 7 hotkeys without capturing React dependencies",
+  "failed": false,
+  "server": 31086,
+  "desk.cold": {
+    "connect": 5,
+    "ttfb": 83,
+    "fcp": 900,
+    "lcp": 900,
+    "picture": 871,
+    "ready": 923,
+    "tbt": 332,
+    "longest": 372,
+    "req": 44,
+    "kb": 708,
+    "js": 623
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 78,
+    "fcp": 348,
+    "lcp": 348,
+    "picture": 321,
+    "ready": 583,
+    "tbt": 96,
+    "longest": 146,
+    "req": 44,
+    "kb": 6,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      733,
+      878
+    ],
+    [
+      "/_studio/start-BG9l69sM.js",
+      12282,
+      103,
+      425
+    ],
+    [
+      "/_studio/render-DBTv5W5u.js",
+      7742,
+      104,
+      425
+    ],
+    [
+      "/_studio/placed-data-CQQCnlQl.js",
+      2032,
+      104,
+      425
+    ],
+    [
+      "/_studio/voice-library-client-ZOuaCId0.js",
+      2028,
+      104,
+      425
+    ],
+    [
+      "/_studio/field-k_oqbrjN.js",
+      1739,
+      103,
+      424
+    ],
+    [
+      "/_studio/lessons-CX0YJbZU.js",
+      2692,
+      104,
+      424
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      102,
+      403
+    ],
+    [
+      "/_studio/lanes-CiC0TcUB.js",
+      26396,
+      102,
+      398
+    ],
+    [
+      "/_studio/text-byRJcPRl.js",
+      11913,
+      102,
+      397
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/_studio/vendor-ui-DI4QD1iN.js",
+      169661,
+      93,
+      141
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      102,
+      403
+    ],
+    [
+      "/_studio/App-DpRg31Rt.js",
+      63438,
+      100,
+      180
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      733,
+      878
+    ],
+    [
+      "/_studio/index-yb4tINdS.css",
+      31289,
+      93,
+      131
+    ],
+    [
+      "/_studio/timeline-DeqIu51o.js",
+      30216,
+      101,
+      246
+    ],
+    [
+      "/_studio/lanes-CiC0TcUB.js",
+      26396,
+      102,
+      398
+    ],
+    [
+      "/_studio/notes-D2ZDvaQF.js",
+      23367,
+      101,
+      245
+    ],
+    [
+      "/_studio/NoteList-CoQlJe4C.js",
+      15851,
+      101,
+      177
+    ],
+    [
+      "/_studio/start-BG9l69sM.js",
+      12282,
+      103,
+      425
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/_studio/contract-CFB1ZQ5c.js",
+      0,
+      586,
+      586
+    ],
+    [
+      "/api/voice",
+      330,
+      327,
+      358
+    ],
+    [
+      "/api/activity",
+      366,
+      327,
+      347
+    ],
+    [
+      "/api/notes",
+      302,
+      327,
+      344
+    ],
+    [
+      "/api/favorites",
+      373,
+      327,
+      344
+    ],
+    [
+      "/api/shots.json",
+      300,
+      327,
+      338
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      0,
+      338,
+      338
+    ],
+    [
+      "/_studio/placed-data-CQQCnlQl.js",
+      0,
+      336,
+      336
+    ],
+    [
+      "/_studio/voice-library-client-ZOuaCId0.js",
+      0,
+      336,
+      336
+    ],
+    [
+      "/_studio/lessons-CX0YJbZU.js",
+      0,
+      336,
+      336
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      4870,
+      0,
+      309
+    ],
+    [
+      "/api/favorites",
+      373,
+      327,
+      344
+    ],
+    [
+      "/api/activity",
+      366,
+      327,
+      347
+    ],
+    [
+      "/api/voice",
+      330,
+      327,
+      358
+    ],
+    [
+      "/api/notes",
+      302,
+      327,
+      344
+    ],
+    [
+      "/api/shots.json",
+      300,
+      327,
+      338
+    ],
+    [
+      "/_studio/index-CJeGKPIM.js",
+      0,
+      319,
+      319
+    ],
+    [
+      "/_studio/rolldown-runtime-Dalm4fpH.js",
+      0,
+      319,
+      319
+    ],
+    [
+      "/_studio/vendor-ui-DI4QD1iN.js",
+      0,
+      319,
+      319
+    ],
+    [
+      "/_studio/vite-helpers-SyqyQxtk.js",
+      0,
+      319,
+      319
+    ]
+  ],
+  "phone.cold": {
+    "connect": 4,
+    "ttfb": 6,
+    "fcp": 2704,
+    "lcp": 2704,
+    "picture": 3248,
+    "ready": 3471,
+    "tbt": 1452,
+    "longest": 621,
+    "req": 39,
+    "kb": 603,
+    "js": 519
+  },
+  "phone.warm": {
+    "connect": 0,
+    "ttfb": 5,
+    "fcp": 792,
+    "lcp": 792,
+    "picture": 775,
+    "ready": 854,
+    "tbt": 396,
+    "longest": 412,
+    "req": 41,
+    "kb": 7,
+    "js": 0
+  },
+  "phone.cold.files": [
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      2619,
+      2782
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      107,
+      1678
+    ],
+    [
+      "/_studio/lanes-CiC0TcUB.js",
+      26396,
+      107,
+      1610
+    ],
+    [
+      "/_studio/lessons-CX0YJbZU.js",
+      2692,
+      107,
+      1610
+    ],
+    [
+      "/_studio/voice-library-client-ZOuaCId0.js",
+      2028,
+      107,
+      1609
+    ],
+    [
+      "/_studio/text-byRJcPRl.js",
+      11913,
+      107,
+      1576
+    ],
+    [
+      "/_studio/textrow-1ATJH6Dz.js",
+      9826,
+      107,
+      1563
+    ],
+    [
+      "/_studio/render-DBTv5W5u.js",
+      7742,
+      107,
+      1557
+    ],
+    [
+      "/_studio/placed-data-CQQCnlQl.js",
+      2032,
+      107,
+      1544
+    ],
+    [
+      "/_studio/start-BG9l69sM.js",
+      12282,
+      107,
+      1392
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/_studio/vendor-ui-DI4QD1iN.js",
+      169661,
+      81,
+      327
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      107,
+      1678
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      2619,
+      2782
+    ],
+    [
+      "/_studio/index-yb4tINdS.css",
+      31289,
+      81,
+      205
+    ],
+    [
+      "/_studio/timeline-DeqIu51o.js",
+      30216,
+      106,
+      888
+    ],
+    [
+      "/_studio/lanes-CiC0TcUB.js",
+      26396,
+      107,
+      1610
+    ],
+    [
+      "/_studio/notes-D2ZDvaQF.js",
+      23367,
+      106,
+      889
+    ],
+    [
+      "/_studio/NoteList-CoQlJe4C.js",
+      15851,
+      106,
+      1375
+    ],
+    [
+      "/_studio/start-BG9l69sM.js",
+      12282,
+      107,
+      1392
+    ],
+    [
+      "/_studio/text-byRJcPRl.js",
+      11913,
+      107,
+      1576
+    ]
+  ],
+  "phone.warm.files": [
+    [
+      "/_studio/contract-CFB1ZQ5c.js",
+      0,
+      962,
+      962
+    ],
+    [
+      "/api/weight",
+      302,
+      859,
+      940
+    ],
+    [
+      "/api/shots.json",
+      300,
+      150,
+      218
+    ],
+    [
+      "/api/notes",
+      302,
+      152,
+      212
+    ],
+    [
+      "/api/favorites",
+      373,
+      153,
+      211
+    ],
+    [
+      "/api/activity",
+      366,
+      155,
+      211
+    ],
+    [
+      "/api/voice",
+      330,
+      155,
+      211
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      0,
+      175,
+      175
+    ],
+    [
+      "/_studio/text-byRJcPRl.js",
+      0,
+      163,
+      163
+    ],
+    [
+      "/_studio/placed-data-CQQCnlQl.js",
+      0,
+      163,
+      163
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      4870,
+      0,
+      67
+    ],
+    [
+      "/api/favorites",
+      373,
+      153,
+      211
+    ],
+    [
+      "/api/activity",
+      366,
+      155,
+      211
+    ],
+    [
+      "/api/voice",
+      330,
+      155,
+      211
+    ],
+    [
+      "/api/notes",
+      302,
+      152,
+      212
+    ],
+    [
+      "/api/weight",
+      302,
+      859,
+      940
+    ],
+    [
+      "/api/shots.json",
+      300,
+      150,
+      218
+    ],
+    [
+      "/_studio/index-CJeGKPIM.js",
+      0,
+      142,
+      142
+    ],
+    [
+      "/_studio/rolldown-runtime-Dalm4fpH.js",
+      0,
+      142,
+      142
+    ],
+    [
+      "/_studio/vendor-ui-DI4QD1iN.js",
+      0,
+      142,
+      142
+    ]
+  ]
+}

@@ -1,0 +1,15 @@
+bun test v1.4.4 (38afee6c8)
+bun :
+At line:2 char:429
++ ... get.patch"; bun test --timeout 30000 packages/live-studio/test/page.t ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+packages\live-studio\test\page.test.mjs:
+(pass) the initial UI vendor code fits a 240 KiB Brotli budget [1.54ms]
+
+ 1 pass
+ 8 filtered out
+ 0 fail
+Ran 1 test across 1 file. [5.83s]

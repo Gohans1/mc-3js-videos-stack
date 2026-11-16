@@ -1,0 +1,134 @@
+{
+  "scope": "Đóng gói app production, tải PC/mobile, cache, Settings và kiểm tra hồi quy UI; chưa phải kiểm chứng toàn bộ phim Minecraft hoặc thiết bị thật.",
+  "baselineSnapshot": "53c0979",
+  "applicationCommits": [
+    "34db68c perf(studio): precompress page chunks at Brotli quality six",
+    "5226025 perf(studio): load Settings independently of editor panels",
+    "09f6151 perf(studio): shrink page code while preserving diagnostic names"
+  ],
+  "baselineSuite": {
+    "command": "bun run test",
+    "passed": 1638,
+    "failed": 6,
+    "seconds": 1322.07,
+    "log": "verification/baseline-tests.log",
+    "failures": [
+      "Beat analysis: timeout 30 giây.",
+      "Gain render: lệch kỳ vọng clock của speed/freeze.",
+      "Voice lips: mouthCues trả 2.5 thay vì 5.",
+      "YouTube encode: timeout 30 giây.",
+      "Sheet cut: timeout 30 giây.",
+      "Sheet shots chunk: timeout 30 giây."
+    ]
+  },
+  "checks": {
+    "rootLint": {
+      "command": "bun run lint",
+      "exit": 0
+    },
+    "studioTypes": {
+      "command": "bun check --no-script -p packages/live-studio",
+      "exit": 0,
+      "files": 283
+    },
+    "rootTypes": {
+      "command": "bun check --no-script",
+      "baselineErrors": 45,
+      "finalErrors": 45,
+      "identical": true,
+      "newErrors": 0
+    },
+    "staticUi": {
+      "passed": 24,
+      "failed": 0
+    },
+    "realChromiumDom": {
+      "passed": 24,
+      "failed": 0
+    },
+    "productionBudget": {
+      "baselineBytes": 287430,
+      "limitBytes": 245760,
+      "redFailed": true,
+      "greenPassed": true
+    },
+    "q6BuildAndVendorCache": {
+      "passed": 2,
+      "failed": 0
+    },
+    "rebuild": {
+      "baselineMs": 6503.17,
+      "candidateMs": 6774.47,
+      "bothPassed": true
+    }
+  },
+  "verificationLimits": [
+    "Một lượt chạy 8 file UI cùng lúc bị timeout ở setup; đã giữ log và chạy riêng lại UI/DOM thành công.",
+    "Lượt page suite có 8 pass và 1 timeout 20 giây; trường hợp đó chạy riêng lại pass ở cả baseline và candidate.",
+    "Root verify chưa xanh do 45 lỗi type có sẵn; toàn bộ danh sách chẩn đoán baseline và cuối khớp nhau.",
+    "Preview production có cảnh báo GPU ReadPixels; không có lỗi JavaScript hoặc request lỗi trong bước kiểm tra thao tác."
+  ],
+  "productionBrowser": {
+    "tool": "T3 preview",
+    "checked": [
+      "Settings mở đủ nội dung và đóng được.",
+      "Nút Next shot chuyển tới t=4, shot=1.",
+      "Phím ArrowDown chuyển tiếp tới t=8, shot=2.",
+      "Tên hàm window.__editor.seek.name vẫn là seek."
+    ],
+    "closed": true
+  },
+  "frames": [
+    {
+      "profile": "desk",
+      "cache": "cold",
+      "file": "desk-cold-frame.png",
+      "beforeSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "afterSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "equal": true
+    },
+    {
+      "profile": "desk",
+      "cache": "warm",
+      "file": "desk-warm-frame.png",
+      "beforeSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "afterSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "equal": true
+    },
+    {
+      "profile": "phone",
+      "cache": "cold",
+      "file": "phone-cold-frame.png",
+      "beforeSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "afterSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "equal": true
+    },
+    {
+      "profile": "phone",
+      "cache": "warm",
+      "file": "phone-warm-frame.png",
+      "beforeSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "afterSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "equal": true
+    }
+  ],
+  "sourceSha256": {
+    "packages/live-studio/src/page.mjs": "8657eb153050e766d57b6ddc17780a92a35c03010b920fb9eefbb7aa2bcd4083",
+    "packages/live-studio/app/shell/Transport.tsx": "ee396d6c0df2f76a1e230c755b7430e56946f2e626c3d962b9cbe93a2b34efe9",
+    "packages/live-studio/app/shell/LazyPanels.tsx": "4e7bbfdc24f45af324a14f7e99660ad4c46154a5467af758fecfe1bac1d1255d",
+    "packages/live-studio/test/page.test.mjs": "b59c420be968e6fdc9a60af3431e5e8daf8ef303ae491644a0e6b0bbdebfc8c4",
+    "scripts/evals/load/run.ts": "3d5bf971fcd0f419ff34450a7eb92875a7bdd6b7cd8065ff4c4ca30cb2b1c45c"
+  },
+  "missingFilmAssets": [
+    "/rig/player.glb",
+    "/mc/client_assets.zip",
+    "/mcasset/1.21.11/assets/minecraft/textures/font/ascii.png",
+    "/motion/mixamo/*.fbx",
+    "/motion/ual1/AnimationLibrary_Godot_Standard.gltf"
+  ],
+  "fixture": "Bốn shot của demo có sẵn, không có asset ngoài hoặc audio; không dùng để khẳng định thời gian dựng scene Minecraft.",
+  "toolNotes": [
+    "CodeGraph CLI có chỉ mục nhưng không liệt kê đủ caller của barrel; đã đối chiếu rg và kiểm tra trình duyệt.",
+    "Có session khác chạy test/build cùng máy; không quy toàn bộ chênh lệch thời gian thành hiệu quả của code."
+  ]
+}

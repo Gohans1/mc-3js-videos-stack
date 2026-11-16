@@ -1,0 +1,160 @@
+{
+  "scope": "Tối ưu cách đóng gói và tải app; không thay đổi logic tính năng hoặc chất lượng renderer.",
+  "snapshot": "53c0979 là snapshot thay đổi có sẵn của user trước công việc tối ưu, không phải code mới của lượt này.",
+  "commands": {
+    "measure": "bun run eval:load --film ../scripts/evals/load/fixture --runs 5 --panels",
+    "profile": "bun run eval:load --film ../scripts/evals/load/fixture --runs 1 --profile"
+  },
+  "attempts": [
+    {
+      "id": "2026-11-16T13-26-48-544Z",
+      "note": "snapshot baseline repeat with raw samples",
+      "decision": "baseline",
+      "reason": "Lượt dò mobile; chưa dùng làm đối chứng cuối.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-26-48-544Z/results.json",
+      "samples": "2026-11-16T13-26-48-544Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-28-30-046Z",
+      "note": "baseline desktop and first Settings open",
+      "decision": "baseline",
+      "reason": "Đo mở Settings lần đầu để định vị chi phí panel.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-28-30-046Z/results.json",
+      "samples": "2026-11-16T13-28-30-046Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-30-13-353Z",
+      "note": "round 1 direct panel imports",
+      "decision": "reverted",
+      "reason": "Tách toàn bộ panel tăng số chunk dùng chung và dữ liệu tải đầu.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-30-13-353Z/results.json",
+      "samples": "2026-11-16T13-30-13-353Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-33-24-731Z",
+      "note": "round 2 shared app chunk with direct panel imports",
+      "decision": "reverted",
+      "reason": "Gom app dùng chung giảm request nhưng buộc mobile nạp thêm code; không giữ.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-33-24-731Z/results.json",
+      "samples": "2026-11-16T13-33-24-731Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-35-47-613Z",
+      "note": "round 3 entry aware shared app chunks 20KB merge",
+      "decision": "reverted",
+      "reason": "Gom theo entry chưa cải thiện tổng thể; không giữ.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-35-47-613Z/results.json",
+      "samples": "2026-11-16T13-35-47-613Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-37-17-768Z",
+      "note": "round 4 isolate Settings only; reject broad panel splitting",
+      "decision": "kept",
+      "reason": "Chỉ tách Settings: giảm dữ liệu mở panel, ít tác động phần khởi động.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-37-17-768Z/results.json",
+      "samples": "2026-11-16T13-37-17-768Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-39-38-450Z",
+      "note": "round 5 minify bindings with function and class names preserved",
+      "decision": "kept",
+      "reason": "Nén biến nội bộ, giữ tên hàm/lớp; giảm dữ liệu PC và mobile.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-39-38-450Z/results.json",
+      "samples": "2026-11-16T13-39-38-450Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-41-14-590Z",
+      "note": "controlled baseline app 53c0979; no concurrent test/build workload",
+      "decision": "baseline",
+      "reason": "Đối chứng thử; sau đó phát hiện session khác đang gây nhiễu máy.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-41-14-590Z/results.json",
+      "samples": "2026-11-16T13-41-14-590Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-42-27-146Z",
+      "note": "controlled candidate Settings plus named minification; no concurrent test/build workload",
+      "decision": "diagnostic",
+      "reason": "Đã lưu nhưng không dùng để khẳng định thời gian cải thiện do code.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-42-27-146Z/results.json",
+      "samples": "2026-11-16T13-42-27-146Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-47-05-509Z",
+      "note": "round 6 separate desktop hotkeys from phone vendor code; other sessions active on host",
+      "decision": "reverted",
+      "reason": "Nhóm hotkeys kéo theo dependency dùng chung, không giảm tải đáng kể.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-47-05-509Z/results.json",
+      "samples": "2026-11-16T13-47-05-509Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-48-37-302Z",
+      "note": "round 7 hotkeys without capturing React dependencies",
+      "decision": "reverted",
+      "reason": "Tách hotkeys không có bằng chứng lợi ích tổng thể ổn định; có lượt chờ dài và nhiễu host.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-48-37-302Z/results.json",
+      "samples": "2026-11-16T13-48-37-302Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-56-46-272Z",
+      "note": "final A baseline 53c0979; 1s resource settle; shared host load not controlled",
+      "decision": "final-before",
+      "reason": "Đối chứng cuối, cùng phép đo 1 giây chốt resource timing.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-56-46-272Z/results.json",
+      "samples": "2026-11-16T13-56-46-272Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-59-56-695Z",
+      "note": "final B Settings isolated plus named minification; 1s resource settle; shared host load not controlled",
+      "decision": "kept-checkpoint",
+      "reason": "Settings riêng và minify giữ tên; sau đó đo thêm Q6.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-59-56-695Z/results.json",
+      "samples": "2026-11-16T13-59-56-695Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T14-29-18-937Z",
+      "note": "final harness smoke after screenshot type fix and fixture lint cleanup",
+      "decision": "diagnostic",
+      "reason": "Giữ dữ liệu thô để đối chiếu.",
+      "failed": false,
+      "runs": 1,
+      "results": "2026-11-16T14-29-18-937Z/results.json",
+      "samples": "2026-11-16T14-29-18-937Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T14-31-35-666Z",
+      "note": "final C named minification and isolated Settings plus Brotli Q6; 1s settle",
+      "decision": "final-after",
+      "reason": "Bản giữ lại: Settings riêng, minify giữ tên và Brotli Q6; không giảm chất lượng hình.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T14-31-35-666Z/results.json",
+      "samples": "2026-11-16T14-31-35-666Z/samples.jsonl"
+    }
+  ]
+}

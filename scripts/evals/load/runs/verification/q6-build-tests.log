@@ -1,0 +1,16 @@
+bun test v1.4.4 (38afee6c8)
+bun :
+At line:2 char:48
++ ... js" "$pwd"; bun test --timeout 30000 packages/live-studio/test/page.t ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+packages\live-studio\test\page.test.mjs:
+(pass) the initial UI vendor code fits a 240 KiB Brotli budget [1.35ms]
+(pass) vendor chunks stay cached across film edits with fresh .br and .gz siblings [3179.67ms]
+
+ 2 pass
+ 7 filtered out
+ 0 fail
+Ran 2 tests across 1 file. [6.22s]

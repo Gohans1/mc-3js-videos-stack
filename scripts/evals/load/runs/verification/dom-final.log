@@ -1,0 +1,63 @@
+bun test v1.4.4 (38afee6c8)
+bun :
+At line:2 char:1
++ bun test --timeout 30000 packages/live-studio/test/note-ui-dom.test.m ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+packages\live-studio\test\note-ui-dom.test.mjs:
+(pass) notes UI mounted Chrome DOM interactions > restores keyboard focus on Escape across Filter, Sort, Table More,
+and Review Remember menus [2024.52ms]
+(pass) notes UI mounted Chrome DOM interactions > preserves Edit parity across check/done states and cancels clean
+Compose via Escape [391.55ms]
+(pass) notes UI mounted Chrome DOM interactions > Board keyboard Move transitions state and Calendar formats human day
+aria-labels [1094.73ms]
+(pass) notes UI mounted Chrome DOM interactions > switches Review 0/N badge from warn accent to calm neutral colors
+when filtered out [421.40ms]
+(pass) notes UI mounted Chrome DOM interactions > Table supports ArrowDown/End/Home row navigation and RefSketch
+supports roving radiogroup + drawing + undo [679.95ms]
+(pass) notes UI mounted Chrome DOM interactions > disambiguates same-timestamp #N action labels and renders Flat list
+explicit state pills [770.09ms]
+(pass) notes UI mounted Chrome DOM interactions > Feed normalizes external sort to Latest activity and Calendar
+navigates with ArrowRight [642.65ms]
+(pass) notes UI mounted Chrome DOM interactions > ReviewRoom restores trigger focus on close and avoids duplicate AI
+alert when no visuals precede Thread [343.25ms]
+(pass) notes UI mounted Chrome DOM interactions > cramped docked Compose sets inert on NoteList, anchors to bottom,
+and restores focus on Escape [950.08ms]
+(pass) notes UI mounted Chrome DOM interactions > upright Compose docks flush to bottom edge without exposing cards
+underneath [1132.19ms]
+(pass) notes UI mounted Chrome DOM interactions > enforces Flexoki heading scale, Inter italic face, 65ch measure cap,
+and selectable prose [958.31ms]
+(pass) notes UI mounted Chrome DOM interactions > keeps Gallery tab unclipped at 380px, prevents List chip overlap,
+and shows Needs work in Compose edit [388.12ms]
+(pass) notes UI mounted Chrome DOM interactions > DialogContent font='md' propagates Inter font to RefSketch dialog
+title and restores focus [713.59ms]
+(pass) notes UI mounted Chrome DOM interactions > preserves 320px narrow fit and 1280px wrapping, badges, Kbd Inter
+font, Board single-line headers, and Timeline pills [978.78ms]
+(pass) notes UI mounted Chrome DOM interactions > Table virtualization aligns visible columns below 520px and keeps
+label dimmer than foreground [810.59ms]
+
+packages\live-studio\test\phone-ui-dom.test.mjs:
+(pass) phone mobile UI real Chromium DOM interactions > renders default compact list view hiding view/filter bars,
+zero horizontal overflow, compact targets, and 3-5 visible notes under live preview [207.76ms]
+(pass) phone mobile UI real Chromium DOM interactions > prompts confirmation before triggering /api/video.mp4 download
+[435.96ms]
+(pass) phone mobile UI real Chromium DOM interactions > renders all overlapping pinned & whole-frame notes
+simultaneously without label overlap and fades them out over time [138.85ms]
+(pass) phone mobile UI real Chromium DOM interactions > blocks download cleanly on API errors or stale hasVideo, and
+clears Preparing 540p video… on SSE video-ready / video-failed [840.84ms]
+(pass) phone mobile UI real Chromium DOM interactions > DoneCard clamps to 1 line, Done/Check cards expose focusable
+open buttons, CheckActions stay compact, and 9:16 portrait thumbs stay >= 24px wide [193.30ms]
+(pass) phone mobile UI real Chromium DOM interactions > draws 7 simultaneous bottom-edge drawn marks in ink.ts cleanly
+without label loss or blank-note scrims [219.33ms]
+(pass) phone mobile UI real Chromium DOM interactions > PhoneHeaderStatus keeps reload pill >= 24px and preserves
+status while saved=fail, and untitled CheckCard stays dense with 16px compose textarea [212.21ms]
+(pass) phone mobile UI real Chromium DOM interactions > narrow 9:16 portrait stage keeps long pin and ink labels
+strictly inside container bounds [157.87ms]
+(pass) phone mobile UI real Chromium DOM interactions > landscape phone layout fits cleanly without horizontal
+overflow or view/filter clutter [170.69ms]
+
+ 24 pass
+ 0 fail
+Ran 24 tests across 2 files. [30.18s]

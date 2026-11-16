@@ -1,0 +1,39 @@
+{
+  "rawBytes": 2462542,
+  "files": 36,
+  "iterations": 3,
+  "scope": "Code và CSS tải đầu; không bao gồm font, API, asset phim. CPU bao gồm kiểm tra giải nén khớp dữ liệu gốc ở mọi mẫu.",
+  "decision": "Giữ Q6: giảm 6362 byte so với Q5 ở chi phí tương đương trong ba mẫu; Q11 tốn khoảng 40 lần CPU. Asset cũ còn cache hợp lệ có thể giữ bản nén trước, asset nén mới dùng Q6.",
+  "result": [
+    {
+      "quality": 5,
+      "bytes": 656900,
+      "wallMedianMs": 92.02590000000001,
+      "cpuMedianMs": 110
+    },
+    {
+      "quality": 6,
+      "bytes": 650538,
+      "wallMedianMs": 90.4794,
+      "cpuMedianMs": 94
+    },
+    {
+      "quality": 7,
+      "bytes": 645862,
+      "wallMedianMs": 123.03050000000007,
+      "cpuMedianMs": 109
+    },
+    {
+      "quality": 9,
+      "bytes": 642131,
+      "wallMedianMs": 157.60749999999985,
+      "cpuMedianMs": 157
+    },
+    {
+      "quality": 11,
+      "bytes": 590614,
+      "wallMedianMs": 4334.437800000001,
+      "cpuMedianMs": 3782
+    }
+  ]
+}

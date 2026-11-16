@@ -1,0 +1,15 @@
+{"quality":5,"iteration":1,"bytes":656900,"wallMs":99.9432,"cpuMs":140}
+{"quality":5,"iteration":2,"bytes":656900,"wallMs":92.02590000000001,"cpuMs":78}
+{"quality":5,"iteration":3,"bytes":656900,"wallMs":83.35479999999998,"cpuMs":110}
+{"quality":6,"iteration":1,"bytes":650538,"wallMs":90.4794,"cpuMs":109}
+{"quality":6,"iteration":2,"bytes":650538,"wallMs":89.3526,"cpuMs":94}
+{"quality":6,"iteration":3,"bytes":650538,"wallMs":92.26359999999994,"cpuMs":94}
+{"quality":7,"iteration":1,"bytes":645862,"wallMs":129.96029999999996,"cpuMs":78}
+{"quality":7,"iteration":2,"bytes":645862,"wallMs":123.03050000000007,"cpuMs":109}
+{"quality":7,"iteration":3,"bytes":645862,"wallMs":121.73309999999992,"cpuMs":110}
+{"quality":9,"iteration":1,"bytes":642131,"wallMs":159.09719999999993,"cpuMs":171}
+{"quality":9,"iteration":2,"bytes":642131,"wallMs":157.60749999999985,"cpuMs":125}
+{"quality":9,"iteration":3,"bytes":642131,"wallMs":149.83870000000002,"cpuMs":157}
+{"quality":11,"iteration":1,"bytes":590614,"wallMs":4094.0652,"cpuMs":3780}
+{"quality":11,"iteration":2,"bytes":590614,"wallMs":4334.437800000001,"cpuMs":3782}
+{"quality":11,"iteration":3,"bytes":590614,"wallMs":4359.0808,"cpuMs":3891}
