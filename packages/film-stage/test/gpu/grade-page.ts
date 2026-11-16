@@ -98,9 +98,10 @@ Object.assign(window, {
     const invalidates = [];
     for (const settings of [
       { basic: { contrast: 26 } },
-      { basic: { contrast: 26 }, hsl: { red: { saturation: 30 } } },
+      { basic: { contrast: 25, fade: 20 } },
+      { basic: { contrast: 25 }, hsl: { red: { saturation: 30 } } },
       {
-        basic: { contrast: 26 },
+        basic: { contrast: 25 },
         curves: {
           red: [
             [0, 0],
@@ -109,8 +110,9 @@ Object.assign(window, {
           ],
         },
       },
-      { basic: { contrast: 26 }, wheels: { offset: { rgb: [0.1, 0, 0] } } },
+      { basic: { contrast: 25 }, wheels: { offset: { rgb: [0.1, 0, 0] } } },
     ] as Parameters<typeof filmAdjust>[1][]) {
+      filmAdjust(0, { basic: { contrast: 25 } }, 0);
       const previous = colorLut();
       filmAdjust(0, settings, 0);
       invalidates.push(previous !== colorLut());

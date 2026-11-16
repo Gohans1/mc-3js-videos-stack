@@ -1,0 +1,292 @@
+{
+  "film": "demo-test-mc-yolo",
+  "runs": 3,
+  "note": "Round: background lane audio uses low fetch priority until the first scene",
+  "failed": false,
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "HeadlessChrome/149.0.7790.0",
+    "revision": "@6c7573d43a3cbcb08ab6dee8b7b5e52695175636",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7790.0 Safari/537.36",
+    "jsVersion": "14.9.68"
+  },
+  "bun": "1.4.4",
+  "resourceSettleMs": 1000,
+  "server": 3348,
+  "phone.cold": {
+    "connect": 1,
+    "ttfb": 38,
+    "fcp": 1484,
+    "lcp": 1484,
+    "picture": 10505,
+    "ready": 10545,
+    "tbt": 1590,
+    "longest": 705,
+    "req": 101,
+    "kb": 11970,
+    "js": 1091
+  },
+  "phone.warm": {
+    "connect": 0,
+    "ttfb": 37,
+    "fcp": 668,
+    "lcp": 668,
+    "picture": 3017,
+    "ready": 3032,
+    "tbt": 503,
+    "longest": 442,
+    "req": 98,
+    "kb": 171,
+    "js": 0
+  },
+  "phone.cold.files": [
+    [
+      "/_studio/contract-CP2TDsa3.js",
+      32724,
+      11238,
+      11306
+    ],
+    [
+      "/api/weight",
+      302,
+      10550,
+      10622
+    ],
+    [
+      "/api/mix_small.webm",
+      7685,
+      9925,
+      9993
+    ],
+    [
+      "/_studio/source-serif-4-latin-wght-normal-DMe4EKeb.woff2",
+      51236,
+      9803,
+      9903
+    ],
+    [
+      "/_studio/ibm-plex-mono-latin-600-normal-BgSNZQsw.woff2",
+      15920,
+      9802,
+      9887
+    ],
+    [
+      "/_studio/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2",
+      15008,
+      9802,
+      9886
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      8407,
+      8909
+    ],
+    [
+      "/motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx",
+      87687,
+      8411,
+      8568
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.gltf",
+      58033,
+      8409,
+      8537
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      1086,
+      8001,
+      8064
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/mc/client_assets.zip",
+      5202112,
+      1648,
+      5648
+    ],
+    [
+      "/api/sfx/bgm-deep-urban.webm",
+      3896998,
+      1780,
+      5306
+    ],
+    [
+      "/motion/ual1/AnimationLibrary_Godot_Standard.bin",
+      861536,
+      8407,
+      8909
+    ],
+    [
+      "/_studio/vendor-three-R65BaBxy.js",
+      495192,
+      102,
+      643
+    ],
+    [
+      "/_studio/vendor-ui-Ba8lnTTb.js",
+      266719,
+      105,
+      429
+    ],
+    [
+      "/api/sfx/narration.webm",
+      190410,
+      1761,
+      2034
+    ],
+    [
+      "/vendor/bmr_assets.zip",
+      129263,
+      6101,
+      6219
+    ],
+    [
+      "/motion/mixamo/Being_Surprised_And_Looking_Right_c9c8214a.fbx",
+      87687,
+      8411,
+      8568
+    ],
+    [
+      "/_studio/timeline-BqEfcEFk.js",
+      83018,
+      128,
+      599
+    ],
+    [
+      "/api/sfx/ear-shimmer-m1.webm",
+      74654,
+      1765,
+      1987
+    ]
+  ],
+  "phone.warm.files": [
+    [
+      "/_studio/contract-CP2TDsa3.js",
+      0,
+      3701,
+      3701
+    ],
+    [
+      "/api/sound/process",
+      40074,
+      3128,
+      3226
+    ],
+    [
+      "/api/sound/process",
+      35170,
+      3131,
+      3210
+    ],
+    [
+      "/api/sound/process",
+      41992,
+      3039,
+      3148
+    ],
+    [
+      "/api/sound/process",
+      35067,
+      3038,
+      3137
+    ],
+    [
+      "/api/weight",
+      302,
+      3035,
+      3117
+    ],
+    [
+      "/api/mix_small.webm",
+      0,
+      2614,
+      2615
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/animations/minecraft/cat.json",
+      0,
+      1890,
+      1891
+    ],
+    [
+      "/mcasset/1.21.11/assets/minecraft/textures/entity/cat/black.png",
+      0,
+      1878,
+      1878
+    ],
+    [
+      "/mcasset/1.21.11/entity-models/minecraft/cat.json",
+      0,
+      1860,
+      1861
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/api/sound/process",
+      41992,
+      3039,
+      3148
+    ],
+    [
+      "/api/sound/process",
+      40074,
+      3128,
+      3226
+    ],
+    [
+      "/api/sound/process",
+      35170,
+      3131,
+      3210
+    ],
+    [
+      "/api/sound/process",
+      35067,
+      3038,
+      3137
+    ],
+    [
+      "/",
+      7204,
+      0,
+      60
+    ],
+    [
+      "/api/text",
+      4072,
+      111,
+      216
+    ],
+    [
+      "/api/shots",
+      1904,
+      110,
+      167
+    ],
+    [
+      "/api/cam",
+      1307,
+      111,
+      215
+    ],
+    [
+      "/api/voice",
+      1146,
+      110,
+      215
+    ],
+    [
+      "/api/keys/0",
+      936,
+      611,
+      656
+    ]
+  ]
+}

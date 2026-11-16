@@ -32,7 +32,7 @@ type Shot = Awaited<ReturnType<typeof shot>>;
 test("Finishing sliders reuse their color LUT while color and secondary edits invalidate it", async () => {
   const result = await page.run<{ finishLuts: number; invalidates: boolean[] }>("finishLutTrial()");
   expect(result.finishLuts).toBe(1);
-  expect(result.invalidates).toEqual([true, true, true, true]);
+  expect(result.invalidates).toEqual([true, true, true, true, true]);
 });
 
 const spread = (pixels: number[][]) => {

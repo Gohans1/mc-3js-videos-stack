@@ -363,7 +363,26 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
   await cdp.send("Runtime.enable", {}, s);
   await profile.setup(cdp, s);
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: PROBE }, s);
+  const network = new Map<
+    string,
+    { path: string; priority: string; status?: number; error?: string }
+  >();
+  const onNetwork = (m: Msg) => {
+    if (m.sessionId !== s) return;
+    const p = m.params;
+    if (m.method === "Network.requestWillBeSent" && p.request.url.startsWith(URL_))
+      network.set(p.requestId, {
+        path: new URL(p.request.url).pathname,
+        priority: p.request.initialPriority,
+      });
+    const entry = network.get(p?.requestId);
+    if (!entry) return;
+    if (m.method === "Network.responseReceived") entry.status = p.response.status;
+    if (m.method === "Network.loadingFailed") entry.error = p.errorText;
+  };
+  cdp.listeners.add(onNetwork);
   const load = async (kind: "cold" | "warm", cpu: string | null = null) => {
+    network.clear();
     if (cpu) {
       await cdp.send("Profiler.enable", {}, s);
       await cdp.send("Profiler.setSamplingInterval", { interval: 500 }, s);
@@ -380,14 +399,16 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
       if (!v && Date.now() - t0 > 180e3) throw new Error(`${profile.name}: no metrics after 180 s`);
       if (v && (v.ready != null || v.errors.length || Date.now() - t0 > 180e3)) {
         if (cpu) v.cpu = cpuTimes((await cdp.send("Profiler.stop", {}, s)).profile, cpu);
-        if (v.errors.length) return v;
-        if (v.ready == null || v.picture == null) return { ...v, timedOut: true };
+        if (v.errors.length) return { ...v, network: [...network.values()] };
+        if (v.ready == null || v.picture == null)
+          return { ...v, timedOut: true, network: [...network.values()] };
         await sleep(1000);
         const settled = (
           await cdp.send("Runtime.evaluate", { expression: READ, returnByValue: true }, s)
         ).result.value;
         for (const key of ["files", "kb", "js", "req", "errors", "fcp", "lcp"])
           v[key] = settled[key];
+        v.network = [...network.values()];
         if (capture) {
           const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, s);
           writeFileSync(join(runDir, `${profile.name}-${kind}.png`), data, "base64");
@@ -445,6 +466,7 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
   }
   await cdp.send("Target.closeTarget", { targetId });
   await cdp.send("Target.disposeBrowserContext", { browserContextId });
+  cdp.listeners.delete(onNetwork);
   return { cold, warm, settings };
 };
 

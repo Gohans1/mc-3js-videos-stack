@@ -6,7 +6,7 @@
   "method": "Cùng studio production và phim demo tự chứa; PC 1600×900; mobile 412×915, CPU 4×, mạng 20 Mbps/40 ms. Giữ cache cho lượt warm; mỗi cặp có browser context riêng.",
   "networkAccounting": "Chờ thêm 1 giây sau ready để thu đủ resource timing; không cộng thời gian này vào ready/picture/TBT.",
   "limitations": [
-    "Không đo được dựng phim cell-break vì rig, texture và mocap trong vault đang thiếu.",
+    "This self-contained fixture measures app packaging only; the real Minecraft film is measured separately in minecraft.json. Cell-break still lacks 14 original Mixamo clips.",
     "Máy có session khác chạy test/build; thời gian là quan sát lab, không khẳng định toàn bộ chênh lệch do code.",
     "Chưa đo điện thoại vật lý và mạng Tailscale thật."
   ],

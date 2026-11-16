@@ -1,0 +1,38 @@
+bun test v1.4.4 (38afee6c8)
+bun :
+At line:2 char:1
++ bun test packages/film-stage/test/grade-gpu.test.ts packages/film-sta ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+packages\film-stage\test\grade-gpu.test.ts:
+(pass) Finishing sliders reuse their color LUT while color and secondary edits invalidate it [53.37ms]
+(pass) Fisheye pushes the picture out from the centre [525.11ms]
+(pass) Lens fringe splits red from blue toward the corners and hardly at the centre [366.59ms]
+(pass) Halation warms bright areas and leaves dark ones alone [463.99ms]
+(pass) Sharpen raises fine contrast and Soften lowers it [706.05ms]
+(pass) Smooth dither moves flat grey by a level or two, the same way every frame [543.45ms]
+(pass) Smooth dither stays a level or two in the dark, where banding shows, instead of turning to grain [224.84ms]
+(pass) A film's picture leaves the GPU without bands: a ramp finer than 8 bits keeps its in-between levels [485.71ms]
+(pass) Named looks activate in both makeAdjustments and makeLayerAdjustments even with empty basic sliders [749.64ms]
+(pass) Film grain stays quantized on a 24fps cadence so sub-frame accumulation does not average it away [548.15ms]
+
+packages\film-stage\test\grade.test.ts:
+(pass) neutral adjustment preserves display RGB, including black and white [2.10ms]
+(pass) one stop doubles linear light, without doubling gamma-encoded RGB [0.22ms]
+(pass) white balance follows temperature and tint, while black stays black [0.24ms]
+(pass) desaturation makes neutral colors; tonal adjustments preserve their target ranges [0.10ms]
+(pass) HSL selects the original hue, wraps red and leaves grey and other colors unchanged [0.46ms]
+(pass) curves interpolate their points, hold endpoints and apply master before RGB [0.56ms]
+(pass) primary wheels target black, mid-grey and white with a reversible intensity [0.40ms]
+(pass) log wheels isolate tonal ranges; offset saturation removes chroma and limits stay finite [0.26ms]
+(pass) Soften, Lens fringe and Fisheye sliders map into Cinetic's ranges [0.08ms]
+(pass) curated LOOKS cover all locked IDs cleanly and avoid double vignette except noir [0.07ms]
+(pass) resolveGrade merges look defaults beneath shot overrides and handles unknown or empty inputs [0.12ms]
+(pass) partial reset helpers neutralize look-supplied curves, wheels, and HSL while keeping g.look intact [0.55ms]
+
+ 22 pass
+ 0 fail
+ 2418 expect() calls
+Ran 22 tests across 2 files. [5.31s]

@@ -1,0 +1,440 @@
+{
+  "files": [
+    "C:\\Users\\ADMIN\\.t3\\worktrees\\gohans-monorepo-3js-mc\\perf-live-studio-hill-c-f1c8c73c6e94307b\\vault\\motion\\mixamo\\Big_Yawn_While_Standing_c9c98361.fbx",
+    "C:\\Users\\ADMIN\\AppData\\Local\\Temp\\studio-mixamo-yawn.fbx"
+  ],
+  "clips": [
+    [
+      {
+        "name": "mixamo.com",
+        "duration": 8.333333015441895,
+        "tracks": 53
+      }
+    ],
+    [
+      {
+        "name": "mixamo.com",
+        "duration": 8.333333015441895,
+        "tracks": 53
+      }
+    ]
+  ],
+  "trackDifferences": [
+    {
+      "name": "mixamorigHips.position",
+      "delta": 4.426597595214844
+    },
+    {
+      "name": "mixamorigHips.quaternion",
+      "delta": 0.00672120600938797
+    },
+    {
+      "name": "mixamorigSpine.quaternion",
+      "delta": 0.019559938460588455
+    },
+    {
+      "name": "mixamorigSpine1.quaternion",
+      "delta": 0.0014281310141086578
+    },
+    {
+      "name": "mixamorigSpine2.quaternion",
+      "delta": 0.044792986125685275
+    },
+    {
+      "name": "mixamorigNeck.quaternion",
+      "delta": 0.015927573200315237
+    },
+    {
+      "name": "mixamorigHead.quaternion",
+      "delta": 0.04017539322376251
+    },
+    {
+      "name": "mixamorigRightShoulder.quaternion",
+      "delta": 0.05515731871128082
+    },
+    {
+      "name": "mixamorigRightArm.quaternion",
+      "delta": 0.01349349319934845
+    },
+    {
+      "name": "mixamorigRightHand.quaternion",
+      "delta": 0.0000032261013984680176
+    },
+    {
+      "name": "mixamorigRightHandThumb1.quaternion",
+      "delta": 0.0008292421698570251
+    },
+    {
+      "name": "mixamorigRightHandThumb2.quaternion",
+      "delta": 0.0011621266603469849
+    },
+    {
+      "name": "mixamorigRightHandThumb3.quaternion",
+      "delta": 0.0008073756471276283
+    },
+    {
+      "name": "mixamorigRightHandIndex1.quaternion",
+      "delta": 0.0000026151537895202637
+    },
+    {
+      "name": "mixamorigRightHandIndex2.quaternion",
+      "delta": 0.0000021085143089294434
+    },
+    {
+      "name": "mixamorigRightHandIndex3.quaternion",
+      "delta": 0.0000017117708921432495
+    },
+    {
+      "name": "mixamorigRightHandMiddle1.quaternion",
+      "delta": 0.000002428889274597168
+    },
+    {
+      "name": "mixamorigRightHandMiddle2.quaternion",
+      "delta": 0.0000027194619178771973
+    },
+    {
+      "name": "mixamorigRightHandMiddle3.quaternion",
+      "delta": 0.0000018831342458724976
+    },
+    {
+      "name": "mixamorigRightHandRing1.quaternion",
+      "delta": 0.0000027939677238464355
+    },
+    {
+      "name": "mixamorigRightHandRing2.quaternion",
+      "delta": 0.000003073364496231079
+    },
+    {
+      "name": "mixamorigRightHandRing3.quaternion",
+      "delta": 0.000002000480890274048
+    },
+    {
+      "name": "mixamorigRightHandPinky1.quaternion",
+      "delta": 0.000003293156623840332
+    },
+    {
+      "name": "mixamorigRightHandPinky2.quaternion",
+      "delta": 0.0000033564865589141846
+    },
+    {
+      "name": "mixamorigRightHandPinky3.quaternion",
+      "delta": 0.0000022687017917633057
+    },
+    {
+      "name": "mixamorigLeftShoulder.quaternion",
+      "delta": 0.05156859755516052
+    },
+    {
+      "name": "mixamorigLeftArm.quaternion",
+      "delta": 0.013258203864097595
+    },
+    {
+      "name": "mixamorigLeftHandThumb1.quaternion",
+      "delta": 0.0007181987166404724
+    },
+    {
+      "name": "mixamorigLeftHandThumb2.quaternion",
+      "delta": 0.0010332539677619934
+    },
+    {
+      "name": "mixamorigLeftHandThumb3.quaternion",
+      "delta": 0.0007441826164722443
+    },
+    {
+      "name": "mixamorigRightUpLeg.quaternion",
+      "delta": 0.034165105782449245
+    },
+    {
+      "name": "mixamorigRightLeg.quaternion",
+      "delta": 0.04998115450143814
+    },
+    {
+      "name": "mixamorigRightFoot.quaternion",
+      "delta": 0.07105851173400879
+    },
+    {
+      "name": "mixamorigRightToeBase.quaternion",
+      "delta": 0.10738426446914673
+    },
+    {
+      "name": "mixamorigLeftUpLeg.quaternion",
+      "delta": 1.960453450679779
+    },
+    {
+      "name": "mixamorigLeftLeg.quaternion",
+      "delta": 0.013003826141357422
+    },
+    {
+      "name": "mixamorigLeftFoot.quaternion",
+      "delta": 0.08543065190315247
+    },
+    {
+      "name": "mixamorigLeftToeBase.quaternion",
+      "delta": 0.10754942893981934
+    }
+  ],
+  "boneDifferences": [
+    {
+      "name": "mixamorigHips",
+      "delta": 4.482999999967149
+    },
+    {
+      "name": "mixamorigSpine",
+      "delta": 1.2273000000000003
+    },
+    {
+      "name": "mixamorigSpine1",
+      "delta": 1.7293000000000092
+    },
+    {
+      "name": "mixamorigSpine2",
+      "delta": 4.136699999999962
+    },
+    {
+      "name": "mixamorigNeck",
+      "delta": 1.8375000000000057
+    },
+    {
+      "name": "mixamorigHead",
+      "delta": 0.979899999999958
+    },
+    {
+      "name": "mixamorigHeadTop_End",
+      "delta": 3.486500000000002
+    },
+    {
+      "name": "mixamorigRightShoulder",
+      "delta": 2.089400000000012
+    },
+    {
+      "name": "mixamorigRightArm",
+      "delta": 2.084099999999994
+    },
+    {
+      "name": "mixamorigRightForeArm",
+      "delta": 0.43680000000001584
+    },
+    {
+      "name": "mixamorigRightHand",
+      "delta": 0.7142999999999944
+    },
+    {
+      "name": "mixamorigRightHandThumb1",
+      "delta": 1.3239999999999839
+    },
+    {
+      "name": "mixamorigRightHandThumb2",
+      "delta": 0.5560000000000143
+    },
+    {
+      "name": "mixamorigRightHandThumb3",
+      "delta": 0.9658000000000082
+    },
+    {
+      "name": "mixamorigRightHandThumb4",
+      "delta": 0.8840999999999797
+    },
+    {
+      "name": "mixamorigRightHandIndex1",
+      "delta": 3.158299999999997
+    },
+    {
+      "name": "mixamorigRightHandIndex2",
+      "delta": 0.19199999999997885
+    },
+    {
+      "name": "mixamorigRightHandIndex3",
+      "delta": 0.5652000000000044
+    },
+    {
+      "name": "mixamorigRightHandIndex4",
+      "delta": 0.30579999999999075
+    },
+    {
+      "name": "mixamorigRightHandMiddle1",
+      "delta": 3.242999999999995
+    },
+    {
+      "name": "mixamorigRightHandMiddle2",
+      "delta": 0.08599999999998431
+    },
+    {
+      "name": "mixamorigRightHandMiddle3",
+      "delta": 0.5098000000000127
+    },
+    {
+      "name": "mixamorigRightHandMiddle4",
+      "delta": 0.7335999999999956
+    },
+    {
+      "name": "mixamorigRightHandRing1",
+      "delta": 3.0433999999999912
+    },
+    {
+      "name": "mixamorigRightHandRing2",
+      "delta": 0.22189999999999088
+    },
+    {
+      "name": "mixamorigRightHandRing3",
+      "delta": 0.4175999999999789
+    },
+    {
+      "name": "mixamorigRightHandRing4",
+      "delta": 1.021300000000025
+    },
+    {
+      "name": "mixamorigRightHandPinky1",
+      "delta": 2.8314999999999912
+    },
+    {
+      "name": "mixamorigRightHandPinky2",
+      "delta": 0.5367000000000104
+    },
+    {
+      "name": "mixamorigRightHandPinky3",
+      "delta": 0.4947999999999979
+    },
+    {
+      "name": "mixamorigRightHandPinky4",
+      "delta": 0.8081000000000245
+    },
+    {
+      "name": "mixamorigLeftShoulder",
+      "delta": 2.0893000000000086
+    },
+    {
+      "name": "mixamorigLeftArm",
+      "delta": 2.0846
+    },
+    {
+      "name": "mixamorigLeftForeArm",
+      "delta": 0.4367999999999981
+    },
+    {
+      "name": "mixamorigLeftHand",
+      "delta": 0.7143000000000157
+    },
+    {
+      "name": "mixamorigLeftHandThumb1",
+      "delta": 1.322700000000026
+    },
+    {
+      "name": "mixamorigLeftHandThumb2",
+      "delta": 0.5578999999999823
+    },
+    {
+      "name": "mixamorigLeftHandThumb3",
+      "delta": 0.9637000000000104
+    },
+    {
+      "name": "mixamorigLeftHandThumb4",
+      "delta": 0.878499999999979
+    },
+    {
+      "name": "mixamorigLeftHandIndex1",
+      "delta": 3.1573000000000206
+    },
+    {
+      "name": "mixamorigLeftHandIndex2",
+      "delta": 0.19200000000000728
+    },
+    {
+      "name": "mixamorigLeftHandIndex3",
+      "delta": 0.5651999999999902
+    },
+    {
+      "name": "mixamorigLeftHandIndex4",
+      "delta": 0.3031000000000006
+    },
+    {
+      "name": "mixamorigLeftHandMiddle1",
+      "delta": 3.242100000000022
+    },
+    {
+      "name": "mixamorigLeftHandMiddle2",
+      "delta": 0.08599999999998431
+    },
+    {
+      "name": "mixamorigLeftHandMiddle3",
+      "delta": 0.5097999999999843
+    },
+    {
+      "name": "mixamorigLeftHandMiddle4",
+      "delta": 0.7272999999999854
+    },
+    {
+      "name": "mixamorigLeftHandRing1",
+      "delta": 3.042500000000018
+    },
+    {
+      "name": "mixamorigLeftHandRing2",
+      "delta": 0.45119999999998583
+    },
+    {
+      "name": "mixamorigLeftHandRing3",
+      "delta": 0.35729999999999507
+    },
+    {
+      "name": "mixamorigLeftHandRing4",
+      "delta": 1.015800000000013
+    },
+    {
+      "name": "mixamorigLeftHandPinky1",
+      "delta": 2.830400000000026
+    },
+    {
+      "name": "mixamorigLeftHandPinky2",
+      "delta": 0.5367000000000104
+    },
+    {
+      "name": "mixamorigLeftHandPinky3",
+      "delta": 0.4948000000000121
+    },
+    {
+      "name": "mixamorigLeftHandPinky4",
+      "delta": 0.7983999999999725
+    },
+    {
+      "name": "mixamorigRightUpLeg",
+      "delta": 1.4568
+    },
+    {
+      "name": "mixamorigRightLeg",
+      "delta": 3.772100000000016
+    },
+    {
+      "name": "mixamorigRightFoot",
+      "delta": 2.4287999999999954
+    },
+    {
+      "name": "mixamorigRightToeBase",
+      "delta": 1.904699999999993
+    },
+    {
+      "name": "mixamorigRightToe_End",
+      "delta": 0.7219000000000069
+    },
+    {
+      "name": "mixamorigLeftUpLeg",
+      "delta": 1.4568
+    },
+    {
+      "name": "mixamorigLeftLeg",
+      "delta": 3.771999999999977
+    },
+    {
+      "name": "mixamorigLeftFoot",
+      "delta": 2.428800000000024
+    },
+    {
+      "name": "mixamorigLeftToeBase",
+      "delta": 1.9046999999999947
+    },
+    {
+      "name": "mixamorigLeftToe_End",
+      "delta": 0.7218999999999962
+    }
+  ],
+  "maxTrackDelta": 4.426597595214844,
+  "maxRestDelta": 4.482999999967149
+}
