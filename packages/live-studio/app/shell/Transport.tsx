@@ -51,7 +51,7 @@ import { seek, setPlaying, setVolume, toggleMute, togglePlay } from "../playback
 import { skimSound } from "../sound/skim";
 import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 
-const Settings = lazy(() => import("./LazyPanels").then((m) => ({ default: m.Settings })));
+const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Settings })));
 
 // CapCut's player bar is one slim row under the picture: 32 px controls with a mouse, 40 px under a finger (Button size md)
 const square = "pointer-coarse:size-10";
