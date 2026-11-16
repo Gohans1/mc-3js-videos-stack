@@ -73,8 +73,10 @@ def pages(missing=None):
     refs = [ref for ref in rows if want(ref) and (SHEETS / f"{ref.replace('/', '__')}.jpg").exists()]
     cap = CAP + 18 if missing else CAP
     absent = [ref for ref in rows if want(ref) and not (SHEETS / f"{ref.replace('/', '__')}.jpg").exists()]
-    if absent:
+    if absent and not refs:
         raise ValueError(f"{len(absent)} clips need sheets: run batch.py sheets first (first: {absent[0]})")
+    if absent:
+        print(f"{len(absent)} clips still lack sheets; reviewing the available ones now. Later: run batch.py sheets")
     OUT.mkdir(parents=True, exist_ok=True)
     try:
         font = ImageFont.truetype("arial.ttf", 15)

@@ -62,7 +62,7 @@ Các đường dẫn dưới đây tính từ thư mục phim; thêm --help đ�
 | Runtime renderer | bun ../../packages/mc-assets/vendor.mjs sao chép WASM và entity pack đã cài vào assets/public; postinstall của phim tự gọi. Chạy lại sau nâng cấp block-model-renderer, không sửa file vendor bằng tay. |
 | Format tùy chọn | bun ../../scripts/timeline_fmt.ts hoặc python ../../scripts/timeline_fmt.py giữ bố cục gọn 140 cột; đều đọc hết JSON trước khi ghi. Hàm load/save/dump vẫn import được, schema mở và code riêng vẫn dùng bình thường. |
 | Lệnh riêng phim | bun run help đọc scripts từ package.json của phim; đọc --help và file thực thi trước khi chạy lệnh như bake:physics. Bake phải nói rõ file bị ghi và giây scene/narration/heard; đây là bước chuẩn bị riêng của phim, không phải quy trình bắt buộc cho mọi phim. |
-| Dữ liệu và công cụ | Vault không nằm trong Git; phục hồi motion/rig/game bằng setup:vault và link nếu thiếu. Python tạo ảnh cần Pillow, cài bằng uv pip install pillow vào venv đang dùng; đánh giá Jev cần route/key riêng như jev.py chỉ rõ. |
+| Dữ liệu và công cụ | Vault không nằm trong Git; chép kho motion nặng từ máy cũ vào externalRoot của vault.json rồi chạy setup:vault và link, không có bước tự tải motion. Python tạo ảnh cần Pillow, cài bằng uv pip install pillow vào venv đang dùng; đánh giá Jev cần route/key riêng như jev.py chỉ rõ. |
 
 ## Try a command on a copy, never on a real film
 

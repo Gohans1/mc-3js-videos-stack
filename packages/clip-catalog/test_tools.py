@@ -12,6 +12,42 @@ import catalog_review as review
 
 
 class Tools(unittest.TestCase):
+    def test_sheets_reject_old_render_after_sheet_failure(self):
+        from batch import run_batch
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "renders").mkdir()
+            (root / "renders/sheet_mixamo__Idle.jpg").write_bytes(b"old sheet")
+            with self.assertRaises(RuntimeError):
+                run_batch([sys.executable, "-c", 'print("SHEET FAIL mixamo/Idle: load error")'],
+                          root, root / "catalog/mixamo.jsonl", "sheets", "mixamo", ["Idle"], 15)
+            self.assertFalse((root / "catalog/sheets/mixamo__Idle.jpg").exists())
+
+    def test_sheets_can_move_from_another_volume(self):
+        from batch import run_batch
+        import os
+        other_volume = "E:/" if os.name == "nt" and Path("E:/").is_dir() else None
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory(dir=other_volume) as dest:
+            root = Path(d)
+            (root / "renders").mkdir()
+            code = 'from pathlib import Path; Path("renders/sheet_mixamo__Idle.jpg").write_bytes(b"new sheet")'
+            run_batch([sys.executable, "-c", code], root, Path(dest) / "catalog/mixamo.jsonl", "sheets", "mixamo", ["Idle"], 15)
+            self.assertEqual((Path(dest) / "catalog/sheets/mixamo__Idle.jpg").read_bytes(), b"new sheet")
+
+    def test_review_builds_available_pages_without_requiring_all_sheets(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as d:
+            cat = Path(d)
+            sheets, pages = cat / "sheets", cat / "review_pages"
+            sheets.mkdir()
+            rows = [dict(ref="mixamo/" + name, dur=1, start="stand", end="stand", seq=["stand"], reach=0, turn=0)
+                    for name in ["Idle", "Walk"]]
+            (cat / "mixamo.jsonl").write_text('\n'.join(json.dumps(r) for r in rows), encoding="utf8")
+            Image.new("RGB", (640, 360)).save(sheets / "mixamo__Idle.jpg")
+            with patch.multiple(review, CAT=cat, REVIEW=cat / "review.json", SHEETS=sheets, OUT=pages):
+                review.pages()
+            self.assertEqual(json.loads((pages / "pages.json").read_text(encoding="utf8")), {"0": ["mixamo/Idle"]})
+
     def test_eval_resumes_completed_scenes_and_retries_failures(self):
         import catalog_eval
         with tempfile.TemporaryDirectory() as d:

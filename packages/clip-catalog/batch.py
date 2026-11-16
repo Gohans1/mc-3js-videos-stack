@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import struct
 import subprocess
 import sys
@@ -72,6 +73,9 @@ def run_batch(command, cwd, output, mode, lib, names, timeout):
     log_path = log_dir / f"{mode}_{lib}_{time.time_ns()}.log"
     env = {k: v for k, v in os.environ.items() if not k.startswith("LAB_")}
     env.update(ENTRY=str(HERE / ENTRIES[mode]), LAB_LIB=lib, LAB_CLIPS=",".join(names))
+    if mode == "sheets":
+        for name in names:
+            (cwd / "renders" / f"sheet_{lib}__{name}.jpg").unlink(missing_ok=True)
     reason = None
     with log_path.open("w", encoding="utf8") as log:
         proc = subprocess.Popen(command, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT,
@@ -87,17 +91,23 @@ def run_batch(command, cwd, output, mode, lib, names, timeout):
             stop(proc)
     failed = []
     got = set()
+    lines = log_path.read_text(encoding="utf8", errors="replace").splitlines()
     if mode == "sheets":
+        failed = [name for name in names if any(line.startswith(f"SHEET FAIL {lib}/{name}:") for line in lines)]
         sheets = output.parent / "sheets"
         sheets.mkdir(exist_ok=True)
         for name in names:
             source = cwd / "renders" / f"sheet_{lib}__{name}.jpg"
-            if source.exists():
-                source.replace(sheets / f"{lib}__{name}.jpg")
+            if source.exists() and name not in failed:
+                destination = sheets / f"{lib}__{name}.jpg"
+                tmp = destination.with_suffix(".jpg.new")
+                shutil.copyfile(source, tmp)
+                tmp.replace(destination)
+                source.unlink()
                 got.add(name)
     else:
         with output.open("a", encoding="utf8", newline="\n") as out:
-            for line in log_path.read_text(encoding="utf8", errors="replace").splitlines():
+            for line in lines:
                 if not line.startswith("ROW "):
                     continue
                 row = json.loads(line[4:])
@@ -148,15 +158,16 @@ def main():
             if remaining is not None:
                 remaining -= len(todo)
             jobs.append((lib, out, todo))
+    except (OSError, ValueError) as e:
+        ap.error(str(e))
+    try:
         for lib, out, todo in jobs:
             print(f"{lib}: {len(todo)} pending; at most {a.timeout}s per chunk; logs: {cat / 'logs'}", flush=True)
             size = 20 if a.mode == "sweep" else 40
             for i in range(0, len(todo), size):
                 run_batch(["bun", "run", "render", "stills"], cwd, out, a.mode, lib, todo[i:i + size], a.timeout)
                 print(f"{lib}: {min(i + size, len(todo))}/{len(todo)} saved", flush=True)
-    except (OSError, ValueError) as e:
-        ap.error(str(e))
-    except RuntimeError as e:
+    except (OSError, ValueError, RuntimeError) as e:
         print(e, file=sys.stderr)
         return 1
     next_script = {"catalog": "catalog_check.py", "sweep": "sweep_report.py", "sheets": "catalog_review.py"}[a.mode]

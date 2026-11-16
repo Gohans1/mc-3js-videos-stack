@@ -1,7 +1,7 @@
 """Compare Jev's mocap picks for plain-English scenes, then judge the changed picks by eye.
 python ../../packages/clip-catalog/catalog_eval.py OUT.txt [-n 5] [--timeline] [--limit N] [--resume]
 Runs from any directory. Sends scene words and catalogue descriptions to Jev's configured providers;
-may use paid fallback, once per scene (~$0.002/search, ~5x with --timeline; provider rates can change).
+may use paid fallback once per scene; --timeline consumes more quota (route and spend cap: jev.py).
 Default scenes: catalog_eval.txt. OUT.txt.jsonl checkpoints every scene; --resume retries failed/missing scenes.
 Use a new output path when code/data changes, so comparisons cannot mix versions. Each scene has a timeout.
 """
@@ -48,7 +48,6 @@ def main():
             if not records:
                 progress.write(json.dumps(settings) + "\n")
                 progress.flush()
-            failed = False
             for k, scene in enumerate(pending):
                 command = [sys.executable, str(HERE / "catalog.py"), "--jev", scene, "-n", str(a.n)]
                 if a.timeline:
@@ -59,7 +58,6 @@ def main():
                 except subprocess.TimeoutExpired:
                     record = {"scene": scene, "output": "", "error": f"timed out after {a.timeout}s"}
                 latest[scene] = record
-                failed |= bool(record["error"])
                 progress.write(json.dumps(record, ensure_ascii=False) + "\n")
                 progress.flush()
                 save_output(a.out, scenes, latest)
