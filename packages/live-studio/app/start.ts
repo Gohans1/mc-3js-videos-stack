@@ -55,6 +55,8 @@ import {
 import { attachLanes } from "./sound/lanes";
 import { invalidateSoundCaches, loadSound } from "./sound/sound";
 import { loadVoiceTakes } from "./sound/voice-client";
+import { handleVoiceLibraryEvent } from "./sound/voice-library-client";
+import { handleVoicePlaygroundEvent } from "./sound/voice-playground-client";
 import { loadText } from "./text/text";
 import { attachTextRow } from "./text/textrow";
 import { attachAcross } from "./timeline/across";
@@ -154,7 +156,9 @@ const listen = () => {
   onEvent("lessons", () => {
     if (lessons.getState().loaded) void loadLessons();
   });
-  listenActivity(); // starred here, in another tab or on the phone
+  onEvent("voice-library", handleVoiceLibraryEvent);
+  onEvent("voice-playground", handleVoicePlaygroundEvent);
+  listenActivity();
   // Back after the line dropped or the studio restarted: catch up on what changed meanwhile
   onHello((current, reconnect) => {
     if (!current) codeChanged();
@@ -163,6 +167,8 @@ const listen = () => {
       loadNotes();
       loadVoice();
       loadVoiceTakes();
+      handleVoiceLibraryEvent();
+      handleVoicePlaygroundEvent();
       loadContract();
       loadTrials();
       loadTiming();

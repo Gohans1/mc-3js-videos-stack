@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 // The page state React draws from: one Zustand store made of each feature's slice (zustand's slices pattern), so a feature's
 // fields and types live in its own folder (camera/slice.ts, notes/slice.ts…). The engine writes it; React reads it. What
 // changes every frame (the clock, captions, the timelines, the film camera corner) is drawn straight into its element instead
@@ -18,7 +19,16 @@ import type { Favorites } from "./favorites";
 import { type Prefs, readPrefs, savePref } from "./prefs";
 import { S } from "./state";
 
-export type ModalKind = "paste" | "linkage" | "savePreset" | "adjustLibrary" | null;
+export type ModalKind =
+  | "paste"
+  | "linkage"
+  | "savePreset"
+  | "adjustLibrary"
+  | "refSketch"
+  | "noteRefs"
+  | "reviewImage"
+  | "voicePlayground"
+  | null;
 
 interface PageSlice {
   ready: boolean;
@@ -123,3 +133,13 @@ export const say = (words: string, hold = 3000) => {
 // What the engine asks of the page's own elements. A phone only raises its keyboard for a focus made inside the tap itself,
 // so the note box is focused synchronously from the engine, not from a React effect after the next render
 export const ui = { focusNote: () => {}, blurNote: () => {} };
+
+export function useDialogModal(kind: Exclude<ModalKind, null>, open: boolean) {
+  useEffect(() => {
+    if (open) set({ modal: kind });
+    else if (get().modal === kind) set({ modal: null });
+    return () => {
+      if (get().modal === kind) set({ modal: null });
+    };
+  }, [kind, open]);
+}

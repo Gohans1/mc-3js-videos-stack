@@ -1,14 +1,17 @@
-import { createActivity } from "./activity.mjs";
 // The studio for one film; HELP below
 import { execFile } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 
+import { createActivity } from "./activity.mjs";
 import { createApi } from "./api.mjs";
 import { cliArgs } from "./cli.mjs";
 import { openFilm } from "./film.mjs";
+import { openLessonFiles } from "./lesson-files.mjs";
 import { buildPage } from "./page.mjs";
+import { openVoiceLibrary } from "./voice-library.mjs";
+import { openVoicePlayground } from "./voice-playground.mjs";
 
 const HELP = `The studio for one film: a live preview the creator watches and edits, with the timeline, notes and render. Run
 inside the film (or set LIVE_PROJECT); package.json's studio script carries the film's port.
@@ -107,7 +110,21 @@ const voiceLibrary = openVoiceLibrary({
   project: film.PROJECT,
   onEvent: () => send("voice-library"),
 });
-const api = createApi(film, { page, events, send, activity, lessons, voiceLibrary });
+const voicePlayground = openVoicePlayground({
+  project: film.PROJECT,
+  voice: film.voice,
+  onEvent: (payload) => send("voice-playground", JSON.stringify(payload)),
+  onVoiceChanged: () => send("voice"),
+});
+const api = createApi(film, {
+  page,
+  events,
+  send,
+  activity,
+  lessons,
+  voiceLibrary,
+  voicePlayground,
+});
 film.start();
 const watchLessons = (store, scope, label) =>
   store.watch((paths) => {

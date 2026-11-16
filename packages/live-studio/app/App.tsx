@@ -1,4 +1,4 @@
-import { type CSSProperties, useRef, useSyncExternalStore } from "react";
+import { type CSSProperties, lazy, Suspense, useRef, useSyncExternalStore } from "react";
 
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,8 +25,15 @@ import { useBoot } from "./shell/boot";
 import { Library, Side, useEditable, useWide } from "./shell/Side";
 import { Transport } from "./shell/Transport";
 import { useStudioHotkeys } from "./shell/useStudioHotkeys";
+import { useVoicePlaygroundSelector } from "./sound/voice-playground-client";
 import { PasteAttributes } from "./timeline/PasteAttributes";
 import { TimelinePanel } from "./timeline/TimelinePanel";
+
+const VoicePlaygroundWorkbenchDialog = lazy(() =>
+  import("./sound/VoicePlaygroundWorkspace").then((m) => ({
+    default: m.VoicePlaygroundWorkbenchDialog,
+  })),
+);
 
 const subscribeViewport = (onChange: () => void) => {
   window.addEventListener("resize", onChange);
@@ -46,6 +53,7 @@ export function App() {
     if (node) el.current[key] = node;
   };
   useStudioHotkeys();
+  const pgEverOpened = useVoicePlaygroundSelector((s) => s.everOpened, false);
   const { vw, vh } = useViewport();
   const desktop = isDesktopViewport(vw, vh);
   const [rawSideW, setSideW] = useStoredSize("studio.sideWidth"),
@@ -257,6 +265,11 @@ export function App() {
           )}
         </div>
         <audio ref={bind("audio")} preload="auto" />
+        {pgEverOpened && (
+          <Suspense fallback={null}>
+            <VoicePlaygroundWorkbenchDialog />
+          </Suspense>
+        )}
       </TooltipProvider>
     </Toaster>
   );

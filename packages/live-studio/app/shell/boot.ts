@@ -19,6 +19,7 @@ const dropClickFocus = (e: MouseEvent) => {
     if (
       at instanceof HTMLElement &&
       at.matches("button, summary, [role=tab], [role=switch], [role=checkbox], [role=radio]") &&
+      !at.closest('[role="dialog"], [role="alertdialog"]') &&
       !at.matches("[aria-haspopup][aria-expanded=true]")
     )
       at.blur();

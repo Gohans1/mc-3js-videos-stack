@@ -27,6 +27,7 @@ const overlayVariants = cva("", {
     variant: {
       default: "",
       settings: "bg-transparent supports-backdrop-filter:backdrop-blur-none",
+      workbench: "",
     },
   },
   defaultVariants: { variant: "default" },
@@ -40,7 +41,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-black/80 duration-100 supports-backdrop-filter:backdrop-blur-xs",
+        "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 bg-scrim-strong fixed inset-0 isolate z-50 duration-100 supports-backdrop-filter:backdrop-blur-xs",
         overlayVariants({ variant }),
         className,
       )}
@@ -50,8 +51,15 @@ function DialogOverlay({
 }
 
 const dialogVariants = cva("", {
-  variants: { variant: { default: "", settings: "bg-background gap-0 rounded-sm p-0" } },
-  defaultVariants: { variant: "default" },
+  variants: {
+    variant: {
+      default: "",
+      settings: "bg-background gap-0 rounded-sm p-0",
+      workbench: "bg-background gap-0 rounded-sm p-0",
+    },
+    font: { default: "", md: "font-md" },
+  },
+  defaultVariants: { variant: "default", font: "default" },
 });
 
 function DialogContent({
@@ -59,6 +67,7 @@ function DialogContent({
   children,
   showCloseButton = true,
   variant,
+  font,
   ...props
 }: DialogPrimitive.Popup.Props &
   VariantProps<typeof dialogVariants> & {
@@ -70,8 +79,8 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 ring-1 duration-100 outline-none sm:max-w-sm",
-          dialogVariants({ variant }),
+          "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl p-4 ring-1 duration-100 outline-none sm:max-w-sm",
+          dialogVariants({ variant, font }),
           className,
         )}
         {...props}
@@ -120,7 +129,13 @@ function DialogFooter({
 }
 
 const dialogTitleVariants = cva("", {
-  variants: { variant: { default: "", compact: "text-xs font-normal" } },
+  variants: {
+    variant: {
+      default: "",
+      compact: "text-xs font-normal",
+      workbench: "text-base font-semibold tracking-tight",
+    },
+  },
   defaultVariants: { variant: "default" },
 });
 function DialogTitle({

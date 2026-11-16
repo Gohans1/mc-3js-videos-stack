@@ -13,7 +13,10 @@ function Slider({
   appearance = "default",
   "aria-label": ariaLabel,
   ...props
-}: SliderPrimitive.Root.Props & { origin?: number; appearance?: "default" | "adjust" | "scrub" }) {
+}: SliderPrimitive.Root.Props & {
+  origin?: number;
+  appearance?: "default" | "adjust" | "scrub" | "accent";
+}) {
   // A single number is one thumb; only an empty slider shows a range
   const _values = [value, defaultValue].find((v) => v != null) ?? [min, max];
   const thumbs = Array.isArray(_values) ? _values.length : 1;
@@ -58,7 +61,7 @@ function Slider({
               data-slot="slider-range"
               className={cn(
                 "select-none data-horizontal:h-full data-vertical:w-full",
-                appearance === "scrub" ? "bg-primary" : "bg-slider-fill",
+                appearance === "scrub" || appearance === "accent" ? "bg-primary" : "bg-slider-fill",
               )}
             />
           )}

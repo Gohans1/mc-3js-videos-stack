@@ -1,9 +1,8 @@
-import { Activity, createActivity } from "./activity.mjs";
 import { createHash } from "node:crypto";
 // What the studio page asks the server for, as one Hono app: the built page (src/page.mjs) at / and /_studio/, its data and
 // live events under /api/, and everything else from the film's own files (assets/public as /, small phone copies as /lite/).
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, isAbsolute, join, relative, resolve } from "node:path";
+import { extname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import { brotliCompress, constants as zlibConsts, gzip } from "node:zlib";
@@ -17,6 +16,7 @@ import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 
+import { Activity, createActivity } from "./activity.mjs";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
@@ -30,6 +30,9 @@ import {
   inspectorInfo,
 } from "./lesson-inspector.mjs";
 import { writeLessonJson } from "./lesson-settings.mjs";
+import { openVoiceLibrary } from "./voice-library.mjs";
+import { inside, SAFE_MEDIA_FILE, SAFE_REMOTE_ID_RE } from "./voice-playground-genvoice.mjs";
+import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
 const MIME = {
@@ -44,6 +47,8 @@ const MIME = {
   ".ogg": "audio/ogg",
   ".wav": "audio/wav",
   ".webm": "audio/webm",
+  ".m4a": "audio/mp4",
+  ".srt": "text/plain; charset=utf-8",
   ".jar": "application/java-archive",
 };
 // The page sends null for a picture it could not make (no pin, no crop): the words still count
@@ -120,14 +125,134 @@ const VoiceUseTry = z.object({
   takeId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
   tryFile: z.string().regex(/^[A-Za-z0-9_-]{1,120}\.(mp3|wav)$/),
 });
+const PlaygroundVoiceSettings = z
+  .object({
+    stability: z.number().min(0).max(1).optional(),
+    similarity_boost: z.number().min(0).max(1).optional(),
+    style: z.number().min(0).max(1).optional(),
+    use_speaker_boost: z.boolean().optional(),
+    speed: z.number().min(0.7).max(1.2).optional(),
+  })
+  .optional();
+const PlaygroundConfig = z.object({
+  apiKey: z.string().max(500).optional(),
+  apiBase: z.string().max(500).optional(),
+  clearOverride: z.boolean().optional(),
+});
+const PlaygroundTts = z.object({
+  voiceId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid voiceId"),
+  voiceName: z.string().max(200).optional(),
+  modelId: z.string().max(120).optional(),
+  languageCode: z.string().max(40).optional(),
+  text: z.string().min(1).max(40_000),
+  voiceSettings: PlaygroundVoiceSettings,
+  previousText: z.string().max(5000).optional(),
+  nextText: z.string().max(5000).optional(),
+  seed: z.number().int().min(0).max(4294967295).optional(),
+  outputFormat: z.string().max(40).optional(),
+  applyTextNormalization: z.enum(["auto", "on", "off"]).optional(),
+  exportTranscript: z.boolean().optional(),
+  variations: z.number().int().min(1).max(3).optional(),
+  name: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+  sourceTakeId: z.string().max(80).optional(),
+  fromTemplateId: z.string().max(120).optional(),
+});
+const PlaygroundDialogueSpeaker = z.object({
+  voice_id: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid speaker voice_id"),
+  voice_name: z.string().max(200).optional(),
+  model_id: z.string().max(120).optional(),
+  language_code: z.string().max(40).optional(),
+  voice_settings: PlaygroundVoiceSettings,
+});
+const PlaygroundDialogue = z.object({
+  text: z.string().min(1).max(40_000),
+  speakers: z.record(z.string().min(1).max(120), PlaygroundDialogueSpeaker),
+  pause_between_turns: z.number().min(0).max(3).optional(),
+  exportTranscript: z.boolean().optional(),
+  name: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+});
+const PlaygroundVoiceChanger = z.object({
+  sourceFile: z.string().regex(SAFE_MEDIA_FILE).optional(),
+  sourceItemId: z.string().max(120).optional(),
+  sourceTakeKind: z.enum(["takes", "try"]).optional(),
+  sourceTakeFile: z.string().max(240).optional(),
+  voiceId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid voiceId"),
+  voiceName: z.string().max(200).optional(),
+  modelId: z.string().max(120).optional(),
+  removeBackgroundNoise: z.boolean().optional(),
+  voiceSettings: PlaygroundVoiceSettings,
+  seed: z.number().int().min(0).max(4294967295).optional(),
+  name: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+});
+const PlaygroundStt = z.object({
+  itemId: z.string().max(120).optional(),
+  sourceItemId: z.string().max(120).optional(),
+  sourceTakeKind: z.enum(["takes", "try"]).optional(),
+  sourceTakeFile: z.string().max(240).optional(),
+  languageCode: z.string().max(40).optional(),
+  timestampsGranularity: z.enum(["none", "word", "character"]).optional(),
+  diarize: z.boolean().optional(),
+  numSpeakers: z.number().int().min(1).max(32).optional(),
+  diarizationThreshold: z.number().min(0).max(1.5).optional(),
+  tagAudioEvents: z.boolean().optional(),
+  noVerbatim: z.boolean().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  seed: z.number().int().min(0).max(2147483647).optional(),
+  fileFormat: z.enum(["pcm_s16le_16", "other"]).optional(),
+  useMultiChannel: z.boolean().optional(),
+  keyterms: z.array(z.string().max(49)).max(1000).optional(),
+  entityDetection: z.array(z.string().min(1).max(40)).max(20).optional(),
+  entityRedaction: z.array(z.string().min(1).max(40)).max(20).optional(),
+  entityRedactionMode: z.enum(["redacted", "entity_type", "enumerated_entity_type"]).optional(),
+  additionalFormats: z
+    .array(z.enum(["srt", "txt", "segmented_json", "docx", "pdf", "html"]))
+    .max(10)
+    .optional(),
+});
+const PlaygroundPatch = z.object({
+  favorite: z.boolean().optional(),
+  isTemplate: z.boolean().optional(),
+  templateName: z.string().max(120).optional(),
+  title: z.string().max(120).optional(),
+  notes: z.string().max(2000).optional(),
+  tags: z.array(z.string().max(200)).max(40).optional(),
+});
+const PlaygroundRetry = z.object({
+  voiceId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid voiceId").optional(),
+  voiceName: z.string().max(200).optional(),
+  speakerKey: z.string().max(120).optional(),
+  speakers: z.record(z.string().min(1).max(120), PlaygroundDialogueSpeaker).optional(),
+  pauseBetweenTurns: z.number().min(0).max(3).optional(),
+  modelId: z.string().max(120).optional(),
+  languageCode: z.string().max(40).optional(),
+  text: z.string().max(40_000).optional(),
+  voiceSettings: PlaygroundVoiceSettings,
+  previousText: z.string().max(5000).optional(),
+  nextText: z.string().max(5000).optional(),
+  seed: z.number().int().min(0).max(4294967295).optional(),
+  outputFormat: z.string().max(40).optional(),
+  applyTextNormalization: z.enum(["auto", "on", "off"]).optional(),
+  removeBackgroundNoise: z.boolean().optional(),
+  exportTranscript: z.boolean().optional(),
+  variations: z.number().int().min(1).max(3).optional(),
+  name: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+});
+const PlaygroundPromote = z.object({
+  itemId: z.string().min(1).max(120),
+  takeId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
+});
+const PlaygroundImportRemote = z.object({
+  taskId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid taskId"),
+  kind: z.enum(["tts", "dialogue", "voice_changer"]).optional(),
+});
 
 // Formats that are compressed inside already: trying them again only costs time on a first visit
 const PACKED = /\.(png|jpe?g|webp|avif|gif|webm|mp3|mp4|m4a|ogg|opus|flac|woff2|ktx2)$/i;
 const PACK_MAX = 16 * 1024 * 1024; // bigger is held in memory per version: slim it in the film instead
-const inside = (root, file) => {
-  const r = relative(root, file);
-  return r && !r.startsWith("..") && !isAbsolute(r);
-};
 
 // activity: src/activity.mjs's, what the AI is doing; lessons: src/lesson-files.mjs's, the one live.mjs watches
 export const createApi = (
@@ -141,6 +266,17 @@ export const createApi = (
       all: openLessonFiles(),
       film: film?.PROJECT ? openLessonFiles(join(film.PROJECT, "lessons")) : null,
     },
+    voiceLibrary = openVoiceLibrary({
+      project: film?.PROJECT,
+      autoSync: false,
+      onEvent: () => send("voice-library"),
+    }),
+    voicePlayground = openVoicePlayground({
+      project: film?.PROJECT,
+      voice: film?.voice,
+      onEvent: (payload) => send("voice-playground", JSON.stringify(payload)),
+      onVoiceChanged: () => send("voice"),
+    }),
     favorites = openFavorites(),
   },
 ) => {
@@ -279,9 +415,33 @@ export const createApi = (
       events.delete(stream);
     }),
   );
+  const jsonBodyLimit = (maxSize, label) =>
+    bodyLimit({
+      maxSize,
+      onError: (c) => c.json({ error: `Payload exceeds ${label} limit` }, 413),
+    });
+  const formatZodIssue = (error) => {
+    const first = error?.issues?.[0];
+    const path = first?.path?.join(".") || "input";
+    return `${path}: ${first?.message ?? "Invalid input"}`;
+  };
+  const jsonValidator = (schema) =>
+    zValidator("json", schema, (result, c) => {
+      if (!result.success) return c.json({ error: formatZodIssue(result.error) }, 400);
+    });
+  const defaultPostBodyLimit = jsonBodyLimit(20 * 1024 * 1024, "20 MB");
   // The films' own scripts still call two paths from before /api/: checkpoint.py marks notes done at /notes/:id, and
   // publish_pages.py reads /edit.json
-  app.on("POST", ["/api/*", "/notes/*"], bodyLimit({ maxSize: 20 * 1024 * 1024 }));
+  app.on("POST", ["/api/*", "/notes/*"], (c, next) => {
+    // Voice Changer (55 MB) and STT (95 MB) declare higher route limits below.
+    if (
+      c.req.path === "/api/voice/playground/voice-changer" ||
+      c.req.path === "/api/voice/playground/stt"
+    ) {
+      return next();
+    }
+    return defaultPostBodyLimit(c, next);
+  });
 
   app.get("/api/notes", (c) => fresh(c, film.notes.read()));
   app.post("/api/notes", zValidator("json", NoteIn), async (c) => {
@@ -400,6 +560,296 @@ export const createApi = (
     if (r.error) return c.json({ error: r.error }, r.status ?? 400);
     send("voice");
     return fresh(c, r);
+  });
+  let voiceCache = null;
+  app.get("/api/voice/library", async (c) => {
+    const metaOnly = c.req.query("meta") === "1";
+    if (!metaOnly) voiceLibrary.ensureWarm();
+    const st = voiceLibrary.state();
+    if (metaOnly) return fresh(c, st);
+    const json = voiceLibrary.payloadJson();
+    if (st.status === "ready") {
+      if (!voiceCache || voiceCache.json !== json) {
+        if (voiceCache) {
+          packed.delete(`br${voiceCache.tag}`);
+          packed.delete(`gzip${voiceCache.tag}`);
+        }
+        const buf = Buffer.from(json);
+        const tag = `"${createHash("md5").update(buf).digest("base64url")}"`;
+        voiceCache = { json, buf, tag };
+      }
+      return text(c, voiceCache.buf, "application/json", voiceCache.tag);
+    }
+    c.header("cache-control", "no-store");
+    c.header("content-type", "application/json; charset=utf-8");
+    return c.body(await squeeze(c, Buffer.from(json), null, false));
+  });
+  app.post("/api/voice/library/sync", (c) => {
+    if (!voiceLibrary.hasKey()) {
+      return c.json({ error: "Missing GENVOICE_API_KEY (or ELEVENLABS_API_KEY) on server" }, 400);
+    }
+    voiceLibrary.sync().catch(() => {
+      // Failure state is captured in voiceLibrary.state() and broadcast over SSE
+    });
+    return c.json({ started: true, ...voiceLibrary.state() }, 202);
+  });
+
+  // GenVoice (ElevenLabs v4 wrapper) Voice Playground API: config, catalog, async TTS/Dialogue/STS/STT, archive, templates
+  app.get("/api/voice/playground/status", async (c) =>
+    fresh(c, await voicePlayground.getStatus({ live: c.req.query("live") === "1" })),
+  );
+  app.post("/api/voice/playground/config", jsonValidator(PlaygroundConfig), async (c) => {
+    try {
+      return fresh(c, await voicePlayground.setConfig(c.req.valid("json")));
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Invalid Playground config" }, e?.status ?? 400);
+    }
+  });
+  app.get("/api/voice/playground/catalog", async (c) =>
+    fresh(c, await voicePlayground.getCatalog({ refresh: c.req.query("refresh") === "1" })),
+  );
+  app.get("/api/voice/playground/shared-voices", async (c) => {
+    try {
+      const q = c.req.query();
+      return fresh(c, await voicePlayground.searchSharedVoices(q));
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Shared voices search failed" }, e?.status ?? 400);
+    }
+  });
+  app.get("/api/voice/playground/items", (c) =>
+    fresh(c, { items: voicePlayground.listItems(), jobs: voicePlayground.listJobs() }),
+  );
+  app.post("/api/voice/playground/tts", jsonValidator(PlaygroundTts), async (c) => {
+    try {
+      return c.json(await voicePlayground.startTts(c.req.valid("json")), 202);
+    } catch (e) {
+      return c.json({ error: e?.message ?? "TTS launch failed" }, e?.status ?? 400);
+    }
+  });
+  app.post("/api/voice/playground/dialogue", jsonValidator(PlaygroundDialogue), async (c) => {
+    try {
+      return c.json(await voicePlayground.startDialogue(c.req.valid("json")), 202);
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Dialogue launch failed" }, e?.status ?? 400);
+    }
+  });
+  const parseJsonStrict = (raw, field, fallback) => {
+    if (raw == null) return fallback;
+    if (typeof raw !== "string") {
+      throw Object.assign(new Error(`${field} must be JSON text`), { status: 400 });
+    }
+    if (!raw.trim()) return fallback;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw Object.assign(new Error(`Invalid JSON in ${field}`), { status: 400 });
+    }
+  };
+  const parseFiniteField = (raw, field) => {
+    if (raw == null || raw === "") return undefined;
+    if (typeof raw !== "string" || !raw.trim()) {
+      throw Object.assign(new Error(`${field} must be a valid number`), { status: 400 });
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      throw Object.assign(new Error(`${field} must be a finite number`), { status: 400 });
+    }
+    return n;
+  };
+  const formStr = (raw) => (typeof raw === "string" ? raw.trim() : "");
+  const validateSchema = (schema, candidate) => {
+    const parsed = schema.safeParse(candidate);
+    if (!parsed.success) {
+      throw Object.assign(new Error(formatZodIssue(parsed.error)), {
+        status: 400,
+      });
+    }
+    return parsed.data;
+  };
+  app.post(
+    "/api/voice/playground/voice-changer",
+    jsonBodyLimit(55 * 1024 * 1024, "55 MB"),
+    async (c) => {
+      try {
+        const ct = (c.req.header("content-type") ?? "").toLowerCase();
+        let payload;
+        if (ct.includes("multipart/form-data")) {
+          const form = await c.req.formData();
+          const file = form.get("audio");
+          const bytes = file instanceof File ? Buffer.from(await file.arrayBuffer()) : undefined;
+          const valid = validateSchema(PlaygroundVoiceChanger, {
+            sourceFile: formStr(form.get("sourceFile")) || undefined,
+            sourceItemId: formStr(form.get("sourceItemId")) || undefined,
+            sourceTakeKind: formStr(form.get("sourceTakeKind")) || undefined,
+            sourceTakeFile: formStr(form.get("sourceTakeFile")) || undefined,
+            voiceId: formStr(form.get("voiceId")),
+            voiceName: formStr(form.get("voiceName")) || undefined,
+            modelId: formStr(form.get("modelId")) || undefined,
+            removeBackgroundNoise:
+              form.get("removeBackgroundNoise") !== null
+                ? form.get("removeBackgroundNoise") === "true"
+                : undefined,
+            voiceSettings: parseJsonStrict(form.get("voiceSettings"), "voiceSettings", {}),
+            seed: parseFiniteField(form.get("seed"), "seed"),
+            name: formStr(form.get("name")) || undefined,
+            notes: formStr(form.get("notes")) || undefined,
+          });
+          payload = {
+            ...valid,
+            fileBytes: bytes,
+            fileName: file instanceof File ? file.name : undefined,
+            mimeType: file instanceof File ? file.type : undefined,
+          };
+        } else {
+          payload = validateSchema(PlaygroundVoiceChanger, await c.req.json());
+        }
+        return c.json(await voicePlayground.startVoiceChanger(payload), 202);
+      } catch (e) {
+        return c.json({ error: e?.message ?? "Voice changer failed" }, e?.status ?? 400);
+      }
+    },
+  );
+  const parseFormStringArray = (form, field, fallback) => {
+    if (!form.has(field)) return fallback;
+    const rawValues = form.getAll(field);
+    const items = [];
+    for (const entry of rawValues) {
+      if (typeof entry !== "string") {
+        throw Object.assign(new Error(`Invalid ${field} value`), { status: 400 });
+      }
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+      if (rawValues.length === 1 && trimmed.startsWith("[")) {
+        let parsed;
+        try {
+          parsed = JSON.parse(trimmed);
+        } catch {
+          throw Object.assign(new Error(`Invalid JSON in ${field}`), { status: 400 });
+        }
+        if (!Array.isArray(parsed) || parsed.some((v) => typeof v !== "string")) {
+          throw Object.assign(new Error(`Invalid ${field} array`), { status: 400 });
+        }
+        return parsed.map((v) => v.trim()).filter(Boolean);
+      }
+      items.push(trimmed);
+    }
+    return items;
+  };
+  app.post("/api/voice/playground/stt", jsonBodyLimit(95 * 1024 * 1024, "95 MB"), async (c) => {
+    try {
+      const ct = (c.req.header("content-type") ?? "").toLowerCase();
+      let payload;
+      if (ct.includes("multipart/form-data")) {
+        const form = await c.req.formData();
+        const file = form.get("file");
+        const bytes = file instanceof File ? Buffer.from(await file.arrayBuffer()) : undefined;
+        const valid = validateSchema(PlaygroundStt, {
+          itemId: formStr(form.get("itemId")) || undefined,
+          sourceItemId: formStr(form.get("sourceItemId")) || undefined,
+          sourceTakeKind: formStr(form.get("sourceTakeKind")) || undefined,
+          sourceTakeFile: formStr(form.get("sourceTakeFile")) || undefined,
+          languageCode: formStr(form.get("languageCode")) || undefined,
+          timestampsGranularity: formStr(form.get("timestampsGranularity")) || "word",
+          diarize: form.get("diarize") !== null ? form.get("diarize") === "true" : undefined,
+          numSpeakers: parseFiniteField(form.get("numSpeakers"), "numSpeakers"),
+          diarizationThreshold: parseFiniteField(
+            form.get("diarizationThreshold"),
+            "diarizationThreshold",
+          ),
+          tagAudioEvents:
+            form.get("tagAudioEvents") !== null ? form.get("tagAudioEvents") === "true" : undefined,
+          noVerbatim:
+            form.get("noVerbatim") !== null ? form.get("noVerbatim") === "true" : undefined,
+          temperature: parseFiniteField(form.get("temperature"), "temperature"),
+          seed: parseFiniteField(form.get("seed"), "seed"),
+          fileFormat: formStr(form.get("fileFormat")) || undefined,
+          useMultiChannel:
+            form.get("useMultiChannel") !== null
+              ? form.get("useMultiChannel") === "true"
+              : undefined,
+          keyterms: parseFormStringArray(form, "keyterms", undefined),
+          entityDetection: parseFormStringArray(form, "entityDetection", undefined),
+          entityRedaction: parseFormStringArray(form, "entityRedaction", undefined),
+          entityRedactionMode: formStr(form.get("entityRedactionMode")) || undefined,
+          additionalFormats: parseFormStringArray(form, "additionalFormats", ["srt"]),
+        });
+        payload = {
+          ...valid,
+          fileBytes: bytes,
+          fileName: file instanceof File ? file.name : undefined,
+          mimeType: file instanceof File ? file.type : undefined,
+        };
+      } else {
+        payload = validateSchema(PlaygroundStt, await c.req.json());
+      }
+      return c.json(await voicePlayground.runSpeechToText(payload));
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Speech-to-text failed" }, e?.status ?? 400);
+    }
+  });
+  app.patch("/api/voice/playground/items/:id", jsonValidator(PlaygroundPatch), async (c) => {
+    try {
+      const item = await voicePlayground.patchItem(c.req.param("id"), c.req.valid("json"));
+      return item ? fresh(c, { item }) : c.json({ error: "Playground item not found" }, 404);
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Failed to update item" }, e?.status ?? 500);
+    }
+  });
+  app.delete("/api/voice/playground/items/:id", async (c) => {
+    try {
+      const ok = await voicePlayground.deleteItem(c.req.param("id"));
+      return ok ? fresh(c, { ok: true }) : c.json({ error: "Playground item not found" }, 404);
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Failed to delete item" }, e?.status ?? 500);
+    }
+  });
+  app.post("/api/voice/playground/items/:id/retry", jsonValidator(PlaygroundRetry), async (c) => {
+    try {
+      const r = await voicePlayground.retryItem(c.req.param("id"), c.req.valid("json"));
+      return r ? c.json(r, 202) : c.json({ error: "Playground item not found" }, 404);
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Retry failed" }, e?.status ?? 400);
+    }
+  });
+  app.get("/api/voice/playground/remote-history", async (c) => {
+    try {
+      const page = parseFiniteField(c.req.query("page"), "page") ?? 0;
+      const pageSize = parseFiniteField(c.req.query("pageSize"), "pageSize") ?? 30;
+      return fresh(c, await voicePlayground.fetchRemoteHistory({ page, pageSize }));
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Could not fetch GenVoice history" }, e?.status ?? 400);
+    }
+  });
+  app.post(
+    "/api/voice/playground/remote-history/import",
+    jsonValidator(PlaygroundImportRemote),
+    async (c) => {
+      try {
+        const { taskId, kind } = c.req.valid("json");
+        return fresh(c, await voicePlayground.importRemoteTask(taskId, kind));
+      } catch (e) {
+        return c.json({ error: e?.message ?? "Import failed" }, e?.status ?? 400);
+      }
+    },
+  );
+  app.post("/api/voice/playground/promote", jsonValidator(PlaygroundPromote), async (c) => {
+    try {
+      const r = await voicePlayground.promoteToFilmTake(c.req.valid("json"));
+      return r.error ? c.json({ error: r.error }, r.status ?? 400) : fresh(c, r);
+    } catch (e) {
+      return c.json({ error: e?.message ?? "Failed to promote voice item" }, e?.status ?? 500);
+    }
+  });
+  app.get("/api/voice/playground/audio/:file", (c) => {
+    const f = voicePlayground.audioFile(c.req.param("file"));
+    return f ? sendFile(c, f) : c.body(null, 404);
+  });
+  app.get("/api/voice/playground/srt/:file", (c) => {
+    const f = voicePlayground.srtFile(c.req.param("file"));
+    if (!f) return c.body(null, 404);
+    c.header("cache-control", "no-store");
+    c.header("content-type", "text/plain; charset=utf-8");
+    return c.body(readFileSync(f, "utf8"));
   });
   app.get("/api/shots.json", (c) => text(c, Buffer.from(JSON.stringify(film.shotComments()))));
   app.get("/api/trials.json", (c) => {

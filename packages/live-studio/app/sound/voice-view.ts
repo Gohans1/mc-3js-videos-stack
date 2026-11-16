@@ -2,6 +2,7 @@ import { matcher } from "../core/search";
 import type { BeatMarkers } from "./beat-marks";
 import type { GainClip } from "./gain";
 import { type AudioProcessing, trimSource } from "./retime";
+import { AUDIO_TAG_RE, stripDialogueSpeakerBrackets } from "./voice-tags";
 
 export interface VoiceTakeItem {
   id: string;
@@ -62,7 +63,7 @@ export const SLOW_WPM = 130;
 export const FAST_WPM = 280;
 export const MIN_PACE_WORDS = 4;
 
-const KNOWN_VOICES: Record<string, string> = {
+export const KNOWN_VOICES: Record<string, string> = {
   ZaZosYpkIGmSqOwAlfnk: "Seff Echo",
   "99Hm6N8psCBzc1JwEVR2": "Riley",
   FyrYFW3P9GUxA348YGWu: "Madison",
@@ -72,8 +73,33 @@ const KNOWN_VOICES: Record<string, string> = {
   ev2kMR9ZJZZsemuogS5u: "Jake",
   tZssYepgGaQmegsMEXjK: "True",
 };
+const dynamicVoices = new Map<string, string>();
+let dynamicVoiceRev = 0;
+const dynamicVoiceSubs = new Set<() => void>();
 
-const AUDIO_TAG_RE = /\[([^\]\r\n]{1,400})\]/g;
+export const subscribeVoiceNames = (fn: () => void) => {
+  dynamicVoiceSubs.add(fn);
+  return () => {
+    dynamicVoiceSubs.delete(fn);
+  };
+};
+
+export const voiceNamesSnapshot = (): number => dynamicVoiceRev;
+
+export const registerVoiceNames = (entries: ReadonlyArray<{ id: string; name: string }>) => {
+  let changed = false;
+  for (const e of entries) {
+    if (!e.id || !e.name) continue;
+    if (dynamicVoices.get(e.id) === e.name) continue;
+    dynamicVoices.set(e.id, e.name);
+    changed = true;
+  }
+  if (!changed) return;
+  dynamicVoiceRev++;
+  for (const fn of dynamicVoiceSubs) fn();
+};
+
+export const voiceAuditionId = (kind: "takes" | "try", file: string) => `voice:${kind}:${file}`;
 
 export const shortTryLabel = (takeId: string, tryFile: string): string => {
   const withoutExt = tryFile.replace(/\.(mp3|wav)$/i, "");
@@ -86,7 +112,7 @@ export const shortTryLabel = (takeId: string, tryFile: string): string => {
 export const parseTakeScript = (raw: string): { tags: string[]; spoken: string } => {
   const tags: string[] = [];
   const seen = new Set<string>();
-  const spoken = raw
+  const spoken = stripDialogueSpeakerBrackets(raw)
     .replace(AUDIO_TAG_RE, (_, inner: string) => {
       const cleaned = inner.trim().replace(/\s+/g, " ");
       if (cleaned && !seen.has(cleaned)) {
@@ -102,7 +128,7 @@ export const parseTakeScript = (raw: string): { tags: string[]; spoken: string }
 
 export const voiceActorTitle = (voice?: string): string => {
   if (!voice) return "Seff Echo";
-  const known = KNOWN_VOICES[voice];
+  const known = KNOWN_VOICES[voice] ?? dynamicVoices.get(voice);
   if (known) return known;
   if (/^[A-Za-z0-9]{16,}$/.test(voice)) return `Voice · ${voice.slice(0, 6)}`;
   return voice;

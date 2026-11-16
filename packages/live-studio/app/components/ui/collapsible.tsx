@@ -1,0 +1,41 @@
+"use client";
+
+import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
+import { cva, type VariantProps } from "class-variance-authority";
+
+import { cn } from "@/lib/utils";
+
+const contentVariants = cva("", {
+  variants: {
+    variant: {
+      default: "",
+      animated:
+        "h-(--collapsible-panel-height) overflow-hidden transition-[height,opacity] duration-200 ease-out data-ending-style:h-0 data-ending-style:opacity-0 data-starting-style:h-0 data-starting-style:opacity-0 motion-reduce:transition-none",
+    },
+  },
+  defaultVariants: { variant: "default" },
+});
+
+function Collapsible({ ...props }: CollapsiblePrimitive.Root.Props) {
+  return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />;
+}
+
+function CollapsibleTrigger({ ...props }: CollapsiblePrimitive.Trigger.Props) {
+  return <CollapsiblePrimitive.Trigger data-slot="collapsible-trigger" {...props} />;
+}
+
+function CollapsibleContent({
+  className,
+  variant,
+  ...props
+}: CollapsiblePrimitive.Panel.Props & VariantProps<typeof contentVariants>) {
+  return (
+    <CollapsiblePrimitive.Panel
+      data-slot="collapsible-content"
+      className={cn(contentVariants({ variant }), className)}
+      {...props}
+    />
+  );
+}
+
+export { Collapsible, CollapsibleTrigger, CollapsibleContent };

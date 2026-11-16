@@ -43,6 +43,9 @@ export interface VoiceController {
   >;
 }
 
+export function mp3Seconds(file: string, size: number): number;
+export function runFfmpeg(args: string[], timeoutMs?: number): Promise<boolean>;
+
 export function openVoice(
   project: string,
   conf?: Record<string, unknown>,

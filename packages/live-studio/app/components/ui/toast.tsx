@@ -194,12 +194,16 @@ function Toaster({
   children,
   toastManager = toast,
   viewportClassName,
+  portalContainer,
   ...props
-}: ToastPrimitive.Provider.Props & { viewportClassName?: string }) {
+}: ToastPrimitive.Provider.Props & {
+  viewportClassName?: string;
+  portalContainer?: ToastPrimitive.Portal.Props["container"];
+}) {
   return (
     <ToastProvider toastManager={toastManager} {...props}>
       {children}
-      <ToastPortal>
+      <ToastPortal container={portalContainer}>
         <ToastViewport className={viewportClassName}>
           <ToastList />
         </ToastViewport>

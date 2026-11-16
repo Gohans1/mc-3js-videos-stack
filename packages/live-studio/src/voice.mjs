@@ -44,7 +44,7 @@ const copyAtomic = (src, dest) => {
   renameSync(part, dest);
 };
 
-const runFfmpeg = (args, timeoutMs = 60_000) =>
+export const runFfmpeg = (args, timeoutMs = 60_000) =>
   new Promise((done) => {
     const child = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
     let finished = false;
@@ -84,7 +84,7 @@ const MP3_BR_V1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 
 const MP3_BR_V2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0];
 const MP3_SR_BASE = [44100, 48000, 32000];
 
-const mp3Seconds = (file, size) => {
+export const mp3Seconds = (file, size) => {
   if (size < 4) return 0;
   const fd = openSync(file, "r");
   try {

@@ -883,3 +883,21 @@ export const drawPins = () => {
       pinEls.delete(key);
     }
 };
+
+export const mergeVoiceNoteDraft = (draft: string, voiceName: string, voiceId: string): string => {
+  const line = `Use voice: ${voiceName} (${voiceId})`;
+  const cur = draft.trim();
+  if (!cur) return line;
+  return cur.split(/[\s()]+/).includes(voiceId) ? draft : `${cur}\n${line}`;
+};
+export const openVoiceNote = (voiceName: string, voiceId: string) => {
+  if (get().compose?.kind === "edit") {
+    set({ settingsOpen: false, side: "notes", lib: "notes" });
+    ui.focusNote();
+    say("Save or cancel the note edit before adding a voice to a new note");
+    return;
+  }
+  openNote(null, true);
+  const next = mergeVoiceNoteDraft(get().draft, voiceName, voiceId);
+  if (next !== get().draft) setDraft(next);
+};

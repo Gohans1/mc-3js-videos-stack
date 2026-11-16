@@ -1,16 +1,32 @@
 import {
   ChevronDown,
-  ChevronUp,
-  ListFilter,
+  Maximize2,
+  Music,
   Pause,
   Play,
   Plus,
   Redo2,
+  RefreshCw,
+  Search,
+  SearchX,
+  Sparkles,
   Trash2,
   Undo2,
   X,
 } from "lucide-react";
-import { type PointerEvent as ReactPointerEvent, useDeferredValue, useMemo, useState } from "react";
+import {
+  lazy,
+  type PointerEvent as ReactPointerEvent,
+  Suspense,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,31 +41,39 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TooltipProvider } from "@/components/ui/tooltip";
 // The sound tab: the clip picked on the lanes (its level, fades, length, which file), then every sound in the film and vault,
 // organized as CapCut 9.7's Audio library (Yours, Music, Sound effects, Minecraft). A library card is dragged onto a lane, or + puts it at
-// the playhead; the cover button auditions it with an inline scrubber; pointing lights its clips, clicking selects them.
+// the playhead; the cover button auditions it with the bottom bar; pointing lights its clips, clicking selects them.
 import { cn } from "@/lib/utils";
 
+import type { SharedVoiceEntry } from "../../src/voice-library.mjs";
 import { FavoriteStar } from "../components/FavoriteStar";
 import {
   ChipGroup,
   EmptyCard,
   FieldRow,
   KeyNav,
-  NavItem,
   Reset,
   SaveStatus,
   Section,
   Segmented,
   SliderRow,
 } from "../components/inspector";
-import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
 import { S } from "../core/state";
@@ -57,14 +81,18 @@ import { say, useStudio } from "../core/store";
 import { FPS, r3, stamp } from "../core/time";
 import { useFrame } from "../core/useFrame";
 import { seek, setPlaying } from "../playback/transport";
+import { AudioFilterChip } from "./AudioFilterChip";
 import { AudioSpeed } from "./AudioSpeed";
-import { AuditionScrubber } from "./AuditionScrubber";
+import { AuditionDock } from "./AuditionDock";
 import { type Band, readEq, type Slope, withBands, withCut, withShelf, withWidth } from "./eq";
+import { FilterTriggerButton } from "./FilterTriggerButton";
 import { GAIN_KEY_EPS, gainAt, toggleGainKey, writeGain } from "./gain";
+import { HorizontalScrollRail } from "./HorizontalScrollRail";
 import { startCarry } from "./lanes";
 import {
   ALL,
   categoryHeading,
+  cleanAudioTitle,
   CONTENT_ID_NOTE,
   type EditionFilter,
   editionOf,
@@ -95,6 +123,7 @@ import { NormalizeClip } from "./NormalizeClip";
 import { type ClipRef } from "./slice";
 import {
   addClip,
+  auditionTarget,
   clipOf,
   cutAfter,
   edit,
@@ -124,19 +153,48 @@ import {
   setTrack,
   snapshot,
   span,
+  subscribeAudition,
   swapSound,
   useCountOfNames,
 } from "./sound";
 import { SoundSwapPicker } from "./SoundSwapPicker";
 import { playedPart, type SyncMode, syncPoint } from "./sync";
 import { cachedVoiceClipLabel, useVoiceTakes } from "./voice-client";
+import { syncVoiceLibraryNow, useVoiceLibrary } from "./voice-library-client";
+import {
+  buildVoiceUseCaseIndex,
+  DEFAULT_VOICE_FILTERS,
+  EMPTY_VOICE_FACETS,
+  filterAndSortVoices,
+  isVoiceStarId,
+  voiceFacetOptions,
+  type VoiceFilters,
+  voiceLeavesWithFavs,
+} from "./voice-library-view";
+import {
+  setPlaygroundInlineOpen,
+  setPlaygroundWorkbenchOpen,
+  useVoicePlaygroundSelector,
+} from "./voice-playground-client";
 import { filterVoiceTakes } from "./voice-view";
 import { VoiceChanger } from "./VoiceChanger";
 import { VoiceClipSection } from "./VoiceClipSection";
 import { VoiceoverList } from "./VoiceoverList";
 
+const VoicePlaygroundInline = lazy(() =>
+  import("./VoicePlaygroundWorkspace").then((m) => ({ default: m.VoicePlaygroundInline })),
+);
+const VoiceLibraryPane = lazy(() => import("./VoiceLibraryPane"));
+const VoiceFilterMenu = lazy(() =>
+  import("./VoiceLibraryFilters").then((m) => ({ default: m.VoiceFilterMenu })),
+);
+const VoiceFilterChips = lazy(() =>
+  import("./VoiceLibraryFilters").then((m) => ({ default: m.VoiceFilterChips })),
+);
+
 const soundDoc = { snapshot, restore };
-const PAGE = 80;
+const PAGE = 96;
+const EMPTY_FAVS: readonly string[] = [];
 
 // real-sound's per-sound EQ: cuts (rumble, hiss) with Butterworth slopes, shelves at Q 0.7071 and peaking bands, written as the
 // ffmpeg entries mix.py renders and the mixer previews exactly (eq.ts)
@@ -685,7 +743,7 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
               </Tip>
             </div>
             {c.try?.length ? (
-              <p className="text-warn text-xs">
+              <p className="text-warn-text text-xs">
                 {c.try.length} alternatives to try. Switch them with the chips on the picture; Use
                 keeps one.
               </p>
@@ -723,12 +781,152 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
   );
 }
 
+const audioDisplayTitle = cleanAudioTitle;
+
+function AudioSearchBox({
+  name,
+  value,
+  onChange,
+  onClear,
+  onEscape,
+  label,
+  placeholder,
+  className,
+}: {
+  name: string;
+  value: string;
+  onChange: (q: string) => void;
+  onClear: () => void;
+  onEscape?: () => void;
+  label: string;
+  placeholder: string;
+  className?: string;
+}) {
+  const id = useId();
+  return (
+    <label
+      htmlFor={id}
+      className={cn(
+        "border-input bg-backdrop focus-within:border-ring focus-within:ring-ring flex h-8 flex-none items-center gap-1.5 rounded-md border ps-2.5 pe-1 focus-within:ring-1 pointer-coarse:h-10",
+        className,
+      )}
+    >
+      <Search aria-hidden className="text-foreground/70 size-4 flex-none" />
+      <input
+        id={id}
+        type="text"
+        role="searchbox"
+        name={name}
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder={placeholder}
+        aria-label={label}
+        className="text-ui text-foreground placeholder:text-foreground/65 min-w-0 flex-1 bg-transparent pe-1 outline-none pointer-coarse:text-base"
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Escape") {
+            if (value) {
+              e.preventDefault();
+              onClear();
+            } else {
+              onEscape?.();
+            }
+          }
+        }}
+      />
+      {value && (
+        <Button
+          type="button"
+          variant="tool"
+          size="icon-sm"
+          className="flex-none pointer-coarse:size-9"
+          aria-label="Clear search"
+          onClick={onClear}
+        >
+          <X />
+        </Button>
+      )}
+    </label>
+  );
+}
+
+function AudioCategoryChips({
+  label,
+  value,
+  items,
+  showCounts,
+  showActiveCount = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  items: readonly NavSection["leaves"][number][];
+  showCounts: boolean;
+  showActiveCount?: boolean;
+  onChange: (id: string) => void;
+}) {
+  const edgesKey = `${label}:${items.map((x) => `${x.id}:${x.count}`).join(",")}:${showCounts}:${showActiveCount}`;
+
+  return (
+    <HorizontalScrollRail
+      label={label}
+      leftLabel="Scroll categories left"
+      rightLabel="Scroll categories right"
+      edgesKey={edgesKey}
+      className="gap-1 @[441px]:gap-1.5"
+    >
+      {items.map((x, idx) => (
+        <button
+          key={x.id}
+          type="button"
+          role="radio"
+          aria-checked={value === x.id}
+          tabIndex={value === x.id ? 0 : -1}
+          onClick={() => onChange(x.id)}
+          onKeyDown={(e) => {
+            let nextIdx: number | null = null;
+            if (e.key === "ArrowRight") nextIdx = (idx + 1) % items.length;
+            else if (e.key === "ArrowLeft") nextIdx = (idx - 1 + items.length) % items.length;
+            else if (e.key === "Home") nextIdx = 0;
+            else if (e.key === "End") nextIdx = items.length - 1;
+            if (nextIdx === null) return;
+            e.preventDefault();
+            onChange(items[nextIdx].id);
+            (e.currentTarget.parentElement?.children[nextIdx] as HTMLElement | undefined)?.focus();
+          }}
+          className={cn(
+            "focus-visible:ring-ring studio-press flex h-7 flex-none items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:h-9",
+            value === x.id
+              ? "border-primary/45 bg-tint text-primary-text"
+              : "border-border/50 text-foreground/80 hover:border-border/80 hover:text-foreground bg-transparent",
+          )}
+        >
+          <span>{x.title}</span>
+          {(showCounts || (showActiveCount && value === x.id)) && (
+            <span
+              className={cn(
+                "text-tag tabular-nums",
+                value === x.id ? "text-primary-text" : "text-foreground/70",
+              )}
+            >
+              {x.count.toLocaleString()}
+            </span>
+          )}
+        </button>
+      ))}
+    </HorizontalScrollRail>
+  );
+}
+
 // CapCut 9.7's collapsible left category accordion tree (Yours v, Music ^, Sound effects v)
 function CategoryTree({
   tree,
   activeNav,
   open,
   typed,
+  voicesLoaded,
   onHeader,
   onSelect,
 }: {
@@ -736,13 +934,14 @@ function CategoryTree({
   activeNav: NavPick;
   open: OpenGroups;
   typed: boolean;
+  voicesLoaded: boolean;
   onHeader: (group: NavGroupId) => void;
   onSelect: (pick: NavPick) => void;
 }) {
   return (
     <nav
       aria-label="Audio categories"
-      className="border-border flex w-[134px] flex-none flex-col gap-1.5 overflow-y-auto border-e px-1.5 py-2.5 @max-[320px]:hidden"
+      className="border-border/50 flex w-40 flex-none flex-col gap-1 overflow-y-auto overscroll-contain border-e px-2 py-2.5 @max-[440px]:hidden"
     >
       {tree.map((sec) => {
         const isGroupActive = activeNav.group === sec.id;
@@ -754,50 +953,64 @@ function CategoryTree({
               aria-expanded={isOpen}
               onClick={() => onHeader(sec.id)}
               className={cn(
-                "bg-raised-3 hover:bg-raised-4 focus-visible:ring-ring flex h-8 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs font-medium transition-colors duration-150 outline-none focus-visible:ring-2 pointer-coarse:h-10",
-                isGroupActive ? "text-primary" : "text-foreground",
+                "hover:bg-card/80 focus-visible:ring-ring studio-press flex h-7 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs font-medium transition-colors duration-150 outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:h-10",
+                isGroupActive && !isOpen
+                  ? "bg-raised-3/70 text-primary-text"
+                  : isGroupActive
+                    ? "text-foreground"
+                    : "text-foreground/75 hover:text-foreground",
               )}
             >
               <span className="truncate">{sec.title}</span>
-              {typed && (
-                <span className="text-tag text-muted-foreground ms-auto pe-0.5 tabular-nums">
-                  {sec.count}
+              {typed && (sec.id !== "voices" || voicesLoaded) && (
+                <span className="text-tag text-foreground/70 ms-auto pe-0.5 tabular-nums">
+                  {sec.count.toLocaleString()}
                 </span>
               )}
-              {isOpen ? (
-                <ChevronUp
-                  aria-hidden
-                  className={cn(
-                    "size-3 flex-none",
-                    isGroupActive ? "text-primary" : "text-muted-foreground",
-                  )}
-                />
-              ) : (
-                <ChevronDown
-                  aria-hidden
-                  className={cn(
-                    "size-3 flex-none",
-                    isGroupActive ? "text-primary" : "text-muted-foreground",
-                  )}
-                />
-              )}
+              <ChevronDown
+                aria-hidden
+                className={cn(
+                  "size-3 flex-none transition-transform duration-150 motion-reduce:transition-none",
+                  isOpen && "rotate-180",
+                  isGroupActive ? "text-primary-text" : "text-foreground/70",
+                )}
+              />
             </button>
             {isOpen && (
-              <div className="flex flex-col gap-0.5 pt-0.5">
+              <div className="border-border/40 ms-1.5 flex flex-col gap-0.5 border-s ps-1.5 pt-0.5 pb-1">
                 {sec.leaves.map((leaf) => {
                   const isCurrent = isGroupActive && activeNav.leaf === leaf.id;
                   const nextPick: NavPick =
                     sec.id === "yours"
                       ? { group: "yours", leaf: leaf.id as YoursLeaf }
                       : { group: sec.id, leaf: leaf.id };
+                  const showCount =
+                    (typed && (sec.id !== "voices" || voicesLoaded)) || sec.id === "yours";
                   return (
-                    <NavItem
+                    <button
                       key={leaf.id}
-                      title={leaf.title}
-                      count={typed || sec.id === "yours" ? leaf.count : undefined}
-                      current={isCurrent}
+                      type="button"
+                      aria-current={isCurrent ? "true" : undefined}
                       onClick={() => onSelect(nextPick)}
-                    />
+                      className={cn(
+                        "focus-visible:ring-ring studio-press flex h-7 w-full items-center justify-between gap-1.5 rounded-md px-2 text-start text-xs transition-colors duration-150 outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:h-9",
+                        isCurrent
+                          ? "bg-raised-3 text-primary-text font-medium"
+                          : "text-foreground/80 hover:bg-card/80 hover:text-foreground",
+                      )}
+                    >
+                      <span className="truncate">{leaf.title}</span>
+                      {showCount && (
+                        <span
+                          className={cn(
+                            "text-tag tabular-nums",
+                            isCurrent ? "text-primary-text" : "text-foreground/70",
+                          )}
+                        >
+                          {leaf.count.toLocaleString()}
+                        </span>
+                      )}
+                    </button>
                   );
                 })}
               </div>
@@ -813,6 +1026,7 @@ function CategoryTree({
 function Library({ side }: { side: boolean }) {
   useStudio((s) => s.soundRev);
   const favs = useStudio((s) => s.favorites.sounds);
+  const effectFavs = useStudio((s) => s.favorites.effects);
   const voiceTakes = useVoiceTakes();
   const [q, setQ] = useState("");
   const deferredQ = useDeferredValue(q);
@@ -821,15 +1035,95 @@ function Library({ side }: { side: boolean }) {
   const [origin, setOrigin] = useState<OriginFilter>(ALL);
   const [edition, setEdition] = useState<EditionFilter>(ALL);
   const [src, setSrc] = useState(ALL);
+  const [voiceFilters, setVoiceFilters] = useState<VoiceFilters>(DEFAULT_VOICE_FILTERS);
+  const typed = deferredQ.trim() !== "";
+  const now = useSyncExternalStore(subscribeAudition, listening, listening);
+  const targetNow = useSyncExternalStore(subscribeAudition, auditionTarget, auditionTarget);
+  const activeTarget = targetNow || now;
+  const voicesActive =
+    open.voices || nav.group === "voices" || typed || activeTarget.startsWith("gv:");
+  const voiceLib = useVoiceLibrary(voicesActive);
   const [limit, setLimit] = useState(PAGE);
   const [variantCursor, setVariantCursor] = useState<Record<string, number>>({});
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [copiedVoiceId, setCopiedVoiceId] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const favSet = useMemo(() => new Set(favs), [favs]);
-  const now = listening();
-  const typed = deferredQ.trim() !== "";
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    },
+    [],
+  );
+
+  const handleCopyVoiceId = useCallback((voice: SharedVoiceEntry) => {
+    const write = navigator.clipboard?.writeText(voice.id);
+    if (!write) {
+      say(`Voice ID: ${voice.id}`);
+      return;
+    }
+    void write.then(
+      () => {
+        setCopiedVoiceId(voice.id);
+        say(`Copied voice ID for ${voice.name}`);
+        if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = setTimeout(() => {
+          setCopiedVoiceId(null);
+          copyTimerRef.current = null;
+        }, 1400);
+      },
+      () => {
+        say(`Voice ID: ${voice.id}`);
+      },
+    );
+  }, []);
   const matchedVoiceTakes = useMemo(
     () => filterVoiceTakes(voiceTakes, deferredQ),
     [voiceTakes, deferredQ],
+  );
+  const filmVoiceIds = useMemo(
+    () => new Set(voiceTakes.map((t) => t.voice || "ZaZosYpkIGmSqOwAlfnk")),
+    [voiceTakes],
+  );
+  const voiceFavKey = useMemo(() => effectFavs.filter(isVoiceStarId).join("\0"), [effectFavs]);
+  const voiceFavs = useMemo(
+    () => (voiceFavKey ? voiceFavKey.split("\0") : EMPTY_FAVS),
+    [voiceFavKey],
+  );
+  const facetVoiceFilters = useMemo<VoiceFilters>(
+    () => ({
+      v4Mode: voiceFilters.v4Mode,
+      category: voiceFilters.category,
+      gender: voiceFilters.gender,
+      age: voiceFilters.age,
+      accent: voiceFilters.accent,
+      descriptive: voiceFilters.descriptive,
+      access: voiceFilters.access,
+      sort: "usage1y",
+    }),
+    [
+      voiceFilters.v4Mode,
+      voiceFilters.category,
+      voiceFilters.gender,
+      voiceFilters.age,
+      voiceFilters.accent,
+      voiceFilters.descriptive,
+      voiceFilters.access,
+    ],
+  );
+  const voiceUseCaseIndex = useMemo(
+    () => buildVoiceUseCaseIndex(voicesActive ? voiceLib.voices : [], facetVoiceFilters, deferredQ),
+    [voicesActive, voiceLib.voices, facetVoiceFilters, deferredQ],
+  );
+  const voiceLeaves = useMemo(
+    () => voiceLeavesWithFavs(voiceUseCaseIndex, voiceFavs),
+    [voiceUseCaseIndex, voiceFavs],
+  );
+  const voiceSection = useMemo(
+    () => ({ count: voiceLeaves[0]?.count ?? 0, leaves: voiceLeaves }),
+    [voiceLeaves],
   );
   const libraryItems = library;
   const narrationName = lanes?.narration ?? null;
@@ -858,6 +1152,7 @@ function Library({ side }: { side: boolean }) {
         kindOf,
         narrationName,
         voiceCount: matchedVoiceTakes.length,
+        voiceSection,
       }),
     [
       libraryItems,
@@ -869,10 +1164,50 @@ function Library({ side }: { side: boolean }) {
       deferredQ,
       narrationName,
       matchedVoiceTakes.length,
+      voiceSection,
     ],
   );
   const isVoiceLeaf = activeNav.group === "yours" && activeNav.leaf === "voice";
+  const isVoicesGroup = activeNav.group === "voices";
   const isFavLeaf = activeNav.group === "yours" && activeNav.leaf === "fav";
+  const activeVoiceLeafFavs = isVoicesGroup && activeNav.leaf === "fav" ? voiceFavs : EMPTY_FAVS;
+  const filteredVoices = useMemo(
+    () =>
+      isVoicesGroup
+        ? filterAndSortVoices(
+            voiceLib.voices,
+            activeNav.leaf,
+            deferredQ,
+            voiceFilters,
+            activeVoiceLeafFavs,
+          )
+        : [],
+    [isVoicesGroup, voiceLib.voices, activeNav.leaf, deferredQ, voiceFilters, activeVoiceLeafFavs],
+  );
+  const voiceFacets = useMemo(
+    () =>
+      isVoicesGroup
+        ? voiceFacetOptions(
+            voiceLib.voices,
+            activeNav.leaf,
+            facetVoiceFilters,
+            activeVoiceLeafFavs,
+            deferredQ,
+          )
+        : EMPTY_VOICE_FACETS,
+    [
+      isVoicesGroup,
+      voiceLib.voices,
+      activeNav.leaf,
+      facetVoiceFilters,
+      activeVoiceLeafFavs,
+      deferredQ,
+    ],
+  );
+  const clearQuery = useCallback(() => {
+    setQ("");
+    setLimit(PAGE);
+  }, []);
   const activeSection = tree.find((s) => s.id === activeNav.group)!;
   const groups: LibraryGroup[] = useMemo(
     () =>
@@ -886,6 +1221,7 @@ function Library({ side }: { side: boolean }) {
   const heading = categoryHeading(activeNav);
   const showFilter =
     !isVoiceLeaf &&
+    !isVoicesGroup &&
     (origins.length > 0 ||
       editions.length > 0 ||
       sources.length > 0 ||
@@ -893,7 +1229,9 @@ function Library({ side }: { side: boolean }) {
       activeEdition !== ALL ||
       activeSource !== ALL);
   const isFiltered =
-    !isVoiceLeaf && (activeOrigin !== ALL || activeEdition !== ALL || activeSource !== ALL);
+    !isVoiceLeaf &&
+    !isVoicesGroup &&
+    (activeOrigin !== ALL || activeEdition !== ALL || activeSource !== ALL);
   const filterTitle = isFiltered
     ? `Filter: ${[
         activeOrigin !== ALL && originTitle(activeOrigin),
@@ -903,7 +1241,12 @@ function Library({ side }: { side: boolean }) {
         .filter(Boolean)
         .join(" · ")}`
     : "Filter audio";
-  const activeCount = isVoiceLeaf ? matchedVoiceTakes.length : groups.length;
+  const activeCount = isVoicesGroup
+    ? filteredVoices.length
+    : isVoiceLeaf
+      ? matchedVoiceTakes.length
+      : groups.length;
+  const pgInlineOpen = useVoicePlaygroundSelector((s) => s.inlineOpen, false);
 
   const changeOrigin = (next: OriginFilter) => {
     setOrigin(next);
@@ -1003,72 +1346,53 @@ function Library({ side }: { side: boolean }) {
     };
 
   const compactNav = (
-    <div className={cn("flex flex-col gap-1.5", side && "@min-[321px]:hidden")}>
+    <div className={cn("flex flex-col gap-1 @[441px]:gap-1.5", side && "@min-[441px]:hidden")}>
       <Segmented
         label="Audio section"
         value={activeNav.group}
         onChange={(g) => toggleHeader(g)}
-        items={[
-          {
-            id: "bgm" as const,
+        items={(
+          [
+            { id: "yours", label: "Yours" },
+            { id: "bgm", label: "Music" },
+            { id: "sfx", label: "SFX" },
+            { id: "mc", label: "MC" },
+            { id: "voices", label: "Voices" },
+          ] as const
+        ).map(({ id, label }) => {
+          const count =
+            id === "voices" && isVoicesGroup
+              ? filteredVoices.length
+              : tree.find((t) => t.id === id)!.count;
+          return {
+            id,
             title: (
               <>
-                <span className="truncate">Music</span>
-                {typed && (
-                  <span className="text-tag text-muted-foreground tabular-nums">
-                    {tree.find((t) => t.id === "bgm")!.count}
+                <span
+                  className={cn(
+                    "truncate",
+                    activeNav.group === id ? "text-primary-text font-medium" : "text-foreground/75",
+                  )}
+                >
+                  {label}
+                </span>
+                {typed && (id !== "voices" || voiceLib.loaded) && (
+                  <span className="text-tag text-foreground/70 hidden tabular-nums @min-[380px]:inline">
+                    {count.toLocaleString()}
                   </span>
                 )}
               </>
             ),
-          },
-          {
-            id: "sfx" as const,
-            title: (
-              <>
-                <span className="truncate">SFX</span>
-                {typed && (
-                  <span className="text-tag text-muted-foreground tabular-nums">
-                    {tree.find((t) => t.id === "sfx")!.count}
-                  </span>
-                )}
-              </>
-            ),
-          },
-          {
-            id: "mc" as const,
-            title: (
-              <>
-                <span className="truncate">MC</span>
-                {typed && (
-                  <span className="text-tag text-muted-foreground tabular-nums">
-                    {tree.find((t) => t.id === "mc")!.count}
-                  </span>
-                )}
-              </>
-            ),
-          },
-          {
-            id: "yours" as const,
-            title: (
-              <>
-                <span className="truncate">Yours</span>
-                {typed && (
-                  <span className="text-tag text-muted-foreground tabular-nums">
-                    {tree.find((t) => t.id === "yours")!.count}
-                  </span>
-                )}
-              </>
-            ),
-          },
-        ]}
+          };
+        })}
       />
       {activeSection.leaves.length > 1 && (
-        <ChipGroup
-          scroll
+        <AudioCategoryChips
           label="Audio category"
           value={activeNav.leaf}
           items={activeSection.leaves}
+          showCounts={typed || activeNav.group === "yours"}
+          showActiveCount
           onChange={(leaf) =>
             selectNav(
               activeNav.group === "yours"
@@ -1081,453 +1405,705 @@ function Library({ side }: { side: boolean }) {
     </div>
   );
 
+  const expandedGroup: LibraryGroup | null = useMemo(
+    () =>
+      !isVoicesGroup && !isVoiceLeaf && expandedKey
+        ? (groups.find((g) => g.key === expandedKey) ?? null)
+        : null,
+    [expandedKey, groups, isVoiceLeaf, isVoicesGroup],
+  );
+
+  const expandedVariantsRef = useRef<readonly string[] | null>(null);
+  useEffect(() => {
+    expandedVariantsRef.current = expandedGroup ? expandedGroup.variants.map((v) => v.name) : null;
+  }, [expandedGroup]);
+
+  useEffect(
+    () =>
+      subscribeAudition(() => {
+        const nextTarget = auditionTarget();
+        const allowed = expandedVariantsRef.current;
+        if (nextTarget && allowed && !allowed.includes(nextTarget)) {
+          setExpandedKey(null);
+        }
+      }),
+    [],
+  );
+
+  const compactHideRow4 =
+    activeSection.leaves.length > 1 &&
+    !isVoicesGroup &&
+    (isVoiceLeaf || (activeEdition === ALL && activeOrigin === ALL && activeSource === ALL));
+
   const listPane = (
     <div className={cn("flex min-w-0 flex-1 flex-col", side ? "min-h-0" : "gap-2 px-3")}>
-      <div className={cn("flex flex-none flex-col gap-2", side && "px-3 pt-2.5 pb-2")}>
+      <div
+        className={cn(
+          "flex flex-none flex-col gap-1.5 @[560px]:gap-2",
+          side && "border-border/50 border-b px-3 pt-1.5 pb-1.5 @[560px]:pt-2.5 @[560px]:pb-2",
+        )}
+      >
         {compactNav}
         <div className="flex items-center gap-1.5">
-          <SearchBox
+          <AudioSearchBox
             name="sound-search"
             value={q}
             onChange={(v) => {
               setQ(v);
               setLimit(PAGE);
             }}
+            onClear={() => {
+              setQ("");
+              setLimit(PAGE);
+            }}
             label={searchPlaceholder(activeNav)}
             placeholder={searchPlaceholder(activeNav)}
             className="min-w-0 flex-1"
           />
+          {isVoicesGroup && (
+            <Suspense fallback={<span className="size-7 flex-none" aria-hidden />}>
+              <VoiceFilterMenu
+                filters={voiceFilters}
+                facets={voiceFacets}
+                onChange={setVoiceFilters}
+              />
+            </Suspense>
+          )}
           {showFilter && (
-            <DropdownMenu>
+            <DropdownMenu open={filterMenuOpen} onOpenChange={setFilterMenuOpen}>
               <DropdownMenuTrigger
                 render={
-                  <Button
-                    variant="quiet"
-                    size="filter"
+                  <FilterTriggerButton
+                    active={isFiltered}
+                    open={filterMenuOpen}
                     title={filterTitle}
-                    aria-label="Filter audio"
-                    aria-pressed={isFiltered}
-                    className="flex-none"
+                    aria-label={filterTitle}
                   />
                 }
-              >
-                <ListFilter className="size-4" />
-                <ChevronDown className="size-3" />
-              </DropdownMenuTrigger>
+              />
               <DropdownMenuContent
                 align="end"
-                className="max-h-80 w-56 overflow-y-auto overscroll-contain"
+                className="w-56 max-w-(--available-width) overflow-hidden"
               >
-                {editions.length > 0 && (
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Edition</DropdownMenuLabel>
-                    <DropdownMenuRadioGroup
-                      value={activeEdition}
-                      onValueChange={(v) => changeEdition(v as EditionFilter)}
-                    >
-                      {editions.map((ed) => (
-                        <DropdownMenuRadioItem
-                          key={ed.id}
-                          value={ed.id}
-                          disabled={ed.count === 0 && activeEdition !== ed.id}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{ed.title}</span>
-                          <span className="text-muted-foreground text-xs tabular-nums">
-                            {ed.count}
-                          </span>
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuGroup>
-                )}
-                {origins.length > 0 && (
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Type</DropdownMenuLabel>
-                    <DropdownMenuRadioGroup
-                      value={activeOrigin}
-                      onValueChange={(v) => changeOrigin(v as OriginFilter)}
-                    >
-                      {origins.map((o) => (
-                        <DropdownMenuRadioItem
-                          key={o.id}
-                          value={o.id}
-                          disabled={o.count === 0 && activeOrigin !== o.id}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{o.title}</span>
-                          <span className="text-muted-foreground text-xs tabular-nums">
-                            {o.count}
-                          </span>
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuGroup>
-                )}
-                {(origins.length > 0 || editions.length > 0) && sources.length > 0 && (
-                  <DropdownMenuSeparator />
-                )}
-                {sources.length > 0 && (
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Source</DropdownMenuLabel>
-                    <DropdownMenuRadioGroup
-                      value={activeSource}
-                      onValueChange={(v) => {
-                        setSrc(v);
-                        setLimit(PAGE);
-                      }}
-                    >
-                      {sources.map((s) => (
-                        <DropdownMenuRadioItem
-                          key={s.id}
-                          value={s.id}
-                          disabled={s.count === 0 && activeSource !== s.id}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{s.title}</span>
-                          <span className="text-muted-foreground text-xs tabular-nums">
-                            {s.count}
-                          </span>
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuGroup>
-                )}
+                <div className="bg-backdrop -m-1 max-h-[min(20rem,calc(var(--available-height)-0.5rem))] overflow-y-auto overscroll-contain rounded-lg p-1">
+                  {editions.length > 0 && (
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>
+                        <span className="text-foreground/70">Edition</span>
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={activeEdition}
+                        onValueChange={(v) => changeEdition(v as EditionFilter)}
+                      >
+                        {editions.map((ed) => (
+                          <DropdownMenuRadioItem
+                            key={ed.id}
+                            value={ed.id}
+                            disabled={ed.count === 0 && activeEdition !== ed.id}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{ed.title}</span>
+                            <span className="text-foreground/70 text-xs tabular-nums">
+                              {ed.count.toLocaleString()}
+                            </span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                  )}
+                  {origins.length > 0 && (
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>
+                        <span className="text-foreground/70">Type</span>
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={activeOrigin}
+                        onValueChange={(v) => changeOrigin(v as OriginFilter)}
+                      >
+                        {origins.map((o) => (
+                          <DropdownMenuRadioItem
+                            key={o.id}
+                            value={o.id}
+                            disabled={o.count === 0 && activeOrigin !== o.id}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{o.title}</span>
+                            <span className="text-foreground/70 text-xs tabular-nums">
+                              {o.count.toLocaleString()}
+                            </span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                  )}
+                  {(origins.length > 0 || editions.length > 0) && sources.length > 0 && (
+                    <DropdownMenuSeparator />
+                  )}
+                  {sources.length > 0 && (
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>
+                        <span className="text-foreground/70">Source</span>
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={activeSource}
+                        onValueChange={(v) => {
+                          setSrc(v);
+                          setLimit(PAGE);
+                        }}
+                      >
+                        {sources.map((s) => (
+                          <DropdownMenuRadioItem
+                            key={s.id}
+                            value={s.id}
+                            disabled={s.count === 0 && activeSource !== s.id}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{s.title}</span>
+                            <span className="text-foreground/70 text-xs tabular-nums">
+                              {s.count.toLocaleString()}
+                            </span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                  )}
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
         </div>
-        <div className="flex min-h-5 items-center gap-1.5">
+        {compactHideRow4 && (
+          <div className="sr-only @min-[441px]:hidden">
+            <h3>{heading}</h3>
+            <span aria-live="polite">{activeCount.toLocaleString()}</span>
+          </div>
+        )}
+        <div
+          className={cn(
+            "flex min-h-5 flex-wrap items-center gap-1.5",
+            compactHideRow4 && "@max-[440px]:hidden",
+          )}
+        >
           <h3 className="text-foreground min-w-0 truncate text-xs font-medium">{heading}</h3>
-          {!isVoiceLeaf && activeEdition !== ALL && (
-            <button
-              type="button"
-              onClick={() => changeEdition(ALL)}
-              aria-label={`Clear ${editionTitle(activeEdition)} filter`}
-              className="bg-tint text-tag text-primary hover:bg-tint-hover focus-visible:ring-ring inline-flex h-5 flex-none items-center gap-1 rounded-full px-2 font-medium outline-none focus-visible:ring-2"
-            >
-              <span>{editionTitle(activeEdition)}</span>
-              <X aria-hidden className="size-2.5" />
-            </button>
+          {isVoicesGroup && (
+            <Suspense fallback={null}>
+              <VoiceFilterChips filters={voiceFilters} onChange={setVoiceFilters} />
+            </Suspense>
           )}
-          {!isVoiceLeaf && activeOrigin !== ALL && (
-            <button
-              type="button"
-              onClick={() => changeOrigin(ALL)}
-              aria-label={`Clear ${originTitle(activeOrigin)} filter`}
-              className="bg-tint text-tag text-primary hover:bg-tint-hover focus-visible:ring-ring inline-flex h-5 flex-none items-center gap-1 rounded-full px-2 font-medium outline-none focus-visible:ring-2"
-            >
-              <span>{originTitle(activeOrigin)}</span>
-              <X aria-hidden className="size-2.5" />
-            </button>
+          {!isVoiceLeaf && !isVoicesGroup && activeEdition !== ALL && (
+            <AudioFilterChip
+              label={editionTitle(activeEdition)}
+              onClear={() => changeEdition(ALL)}
+            />
           )}
-          {!isVoiceLeaf && activeSource !== ALL && (
-            <button
-              type="button"
-              onClick={() => {
+          {!isVoiceLeaf && !isVoicesGroup && activeOrigin !== ALL && (
+            <AudioFilterChip label={originTitle(activeOrigin)} onClear={() => changeOrigin(ALL)} />
+          )}
+          {!isVoiceLeaf && !isVoicesGroup && activeSource !== ALL && (
+            <AudioFilterChip
+              label={sourceTitle(activeSource)}
+              onClear={() => {
                 setSrc(ALL);
                 setLimit(PAGE);
               }}
-              aria-label={`Clear ${sourceTitle(activeSource)} filter`}
-              className="bg-tint text-tag text-primary hover:bg-tint-hover focus-visible:ring-ring inline-flex h-5 flex-none items-center gap-1 rounded-full px-2 font-medium outline-none focus-visible:ring-2"
-            >
-              <span>{sourceTitle(activeSource)}</span>
-              <X aria-hidden className="size-2.5" />
-            </button>
+            />
           )}
-          <span className="text-muted-foreground ms-auto flex-none text-xs tabular-nums">
-            {activeCount}
-          </span>
+          <div className="ms-auto flex flex-none items-center gap-2">
+            <span aria-live="polite" className="text-foreground/70 text-xs tabular-nums">
+              {activeCount.toLocaleString()}
+              {isVoicesGroup &&
+                voiceFilters.v4Mode === "v4" &&
+                voiceLib.totalEnglish > activeCount && (
+                  <span className="@max-[420px]:hidden">
+                    {" "}
+                    v4 · {voiceLib.totalEnglish.toLocaleString()} synced
+                  </span>
+                )}
+            </span>
+            {(isVoicesGroup || isVoiceLeaf) && (
+              <>
+                <Tip label="Toggle inline GenVoice ElevenLabs v4 Voice Playground">
+                  <Button
+                    variant="tool"
+                    size="sm"
+                    aria-pressed={pgInlineOpen}
+                    onClick={() => setPlaygroundInlineOpen(!pgInlineOpen)}
+                    className="h-6 flex-none pointer-coarse:min-h-9"
+                    aria-label="Toggle Voice Playground"
+                  >
+                    <Sparkles className="size-3" />
+                    <span>Playground</span>
+                  </Button>
+                </Tip>
+                <Tip label="Open full GenVoice Workbench Dialog">
+                  <Button
+                    variant="tool"
+                    size="icon-sm"
+                    onClick={() => setPlaygroundWorkbenchOpen(true)}
+                    className="h-6 w-6 flex-none pointer-coarse:min-h-9"
+                    aria-label="Open Voice Playground Workbench"
+                  >
+                    <Maximize2 className="size-3" />
+                  </Button>
+                </Tip>
+              </>
+            )}
+            {isVoicesGroup && (
+              <Tip
+                label={
+                  voiceLib.syncedAt
+                    ? `Sync English voice catalog from ElevenLabs (${voiceLib.totalEnglish.toLocaleString()} cached)`
+                    : "Sync English voice catalog from ElevenLabs"
+                }
+              >
+                <Button
+                  variant="tool"
+                  size="sm"
+                  className="h-6 flex-none pointer-coarse:min-h-9"
+                  disabled={voiceLib.status === "syncing"}
+                  onClick={() => void syncVoiceLibraryNow()}
+                  aria-label="Sync voices"
+                >
+                  <RefreshCw
+                    aria-hidden
+                    className={cn(
+                      "size-3",
+                      voiceLib.status === "syncing" && "animate-spin motion-reduce:animate-none",
+                    )}
+                  />
+                  <span>{voiceLib.status === "syncing" ? "Syncing" : "Sync"}</span>
+                </Button>
+              </Tip>
+            )}
+          </div>
         </div>
       </div>
 
-      {isVoiceLeaf ? (
-        <VoiceoverList
-          takes={matchedVoiceTakes}
-          totalTakes={voiceTakes.length}
-          query={deferredQ}
-          side={side}
-          elsewhere={elsewhere}
-          onToggleGroup={toggleHeader}
-        />
-      ) : (
-        <ul
-          className={cn(
-            "flex flex-col gap-1.5",
-            side && "scroll-fade min-h-0 flex-1 overflow-y-auto px-3 pb-3",
-          )}
-        >
-          {visibleGroups.map((g) => {
-            const variantCount = g.variants.length;
-            const hasVariants = variantCount > 1;
-            const playingIdx = now ? g.variants.findIndex((v) => v.name === now) : -1;
-            const curIdx =
-              playingIdx >= 0 ? playingIdx : (variantCursor[g.key] ?? 0) % variantCount;
-            const x = g.variants[curIdx];
-            const allNames = hasVariants ? g.variants.map((v) => v.name) : [x.name];
-            const starId = hasVariants
-              ? (g.variants.find((v) => favSet.has(v.name))?.name ?? x.name)
-              : x.name;
-            const uses = useCountOfNames(allNames);
-            const itemKind = kindOf(x);
-            const isSynth = originOf(x) === "synth";
-            const isPlaying = playingIdx >= 0;
-            const showVariants = hasVariants && (isPlaying || expandedKey === g.key);
-            const showCategory = activeNav.group === "yours" || activeNav.leaf === ALL;
-            const showSource =
-              activeSource === ALL &&
-              !(activeNav.group === "yours" && activeNav.leaf === "film") &&
-              !(isSynth && showCategory && Boolean(x.category));
-            const { title, subtitle, duration } = soundCardText(x, itemKind, {
-              showCategory,
-              showSource,
-              showVariant: !hasVariants,
-            });
-            const detail = soundCardDetail(x);
-            const advanceRoundRobin = () => {
-              if (hasVariants) {
-                setVariantCursor((prev) => ({ ...prev, [g.key]: (curIdx + 1) % variantCount }));
-              }
-            };
-            return (
-              <li
-                key={g.key}
-                onPointerDown={press(x.name, allNames, title, advanceRoundRobin)}
-                onDragStart={(e) => e.preventDefault()}
-                onPointerEnter={() => lightSounds(allNames)}
-                onPointerLeave={() => lightSounds(null)}
-                onFocus={() => lightSounds(allNames)}
-                onBlur={() => lightSounds(null)}
-                className="group bg-card hover:bg-raised-3/70 flex cursor-grab touch-none flex-col gap-1 rounded-md px-2 py-1.5 transition-colors duration-150 select-none active:cursor-grabbing"
-              >
-                <div className="flex min-h-9 items-center gap-2">
-                  <Tip label={isPlaying ? "Pause preview" : "Preview audio"}>
-                    <Button
-                      variant="cover"
-                      size="cover"
-                      aria-pressed={isPlaying}
-                      aria-label={`${isPlaying ? "Stop" : "Preview"} ${title}`}
-                      onClick={() => {
-                        setExpandedKey(hasVariants ? g.key : null);
-                        listen(x.name);
-                      }}
-                    >
-                      {isPlaying ? (
-                        <Pause className="fill-current" />
-                      ) : (
-                        <Play className="fill-current" />
-                      )}
-                    </Button>
-                  </Tip>
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5" title={detail}>
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="text-ui text-foreground truncate">{title}</span>
-                      {hasVariants && (
-                        <Tip
-                          label={`Variation ${curIdx + 1} of ${variantCount} — click for next take`}
-                        >
-                          <button
-                            type="button"
-                            aria-label={`Next variation of ${title} (${curIdx + 1} of ${variantCount})`}
-                            onClick={() => {
-                              const nextIdx = (curIdx + 1) % variantCount;
-                              setExpandedKey(g.key);
-                              setVariantCursor((prev) => ({ ...prev, [g.key]: nextIdx }));
-                              listen(g.variants[nextIdx].name);
-                            }}
-                            className="bg-raised-3/85 text-tag text-muted-foreground hover:bg-raised-3 hover:text-foreground focus-visible:ring-ring inline-flex h-4 flex-none items-center rounded px-1 font-mono tabular-nums transition-colors outline-none focus-visible:ring-2"
-                          >
-                            {curIdx + 1}/{variantCount}
-                          </button>
-                        </Tip>
-                      )}
-                    </span>
-                    <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
-                      {isSynth && <Badge variant="synth">Code</Badge>}
-                      {x.contentId && (
-                        <Badge variant="claim" title={CONTENT_ID_NOTE}>
-                          Content ID
-                        </Badge>
-                      )}
-                      {subtitle && (
-                        <>
-                          <span className="truncate">{subtitle}</span>
-                          <span aria-hidden className="flex-none">
-                            ·
-                          </span>
-                        </>
-                      )}
-                      <span className="flex-none tabular-nums">{duration}</span>
-                    </span>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {(isVoicesGroup || isVoiceLeaf) && pgInlineOpen && (
+          <Suspense fallback={null}>
+            <VoicePlaygroundInline />
+          </Suspense>
+        )}
+        {isVoicesGroup ? (
+          <Suspense
+            fallback={
+              <div className="text-foreground/70 px-3 py-4 text-xs">Loading English voices…</div>
+            }
+          >
+            <VoiceLibraryPane
+              library={voiceLib}
+              voices={filteredVoices}
+              leaf={activeNav.leaf}
+              query={deferredQ}
+              filters={voiceFilters}
+              onChangeFilters={setVoiceFilters}
+              onClearQuery={clearQuery}
+              filmVoiceIds={filmVoiceIds}
+              hasVoiceFavs={voiceFavs.length > 0}
+              copiedId={copiedVoiceId}
+              onCopyId={handleCopyVoiceId}
+              side={side}
+            />
+          </Suspense>
+        ) : isVoiceLeaf ? (
+          <VoiceoverList
+            takes={matchedVoiceTakes}
+            totalTakes={voiceTakes.length}
+            query={deferredQ}
+            side={side}
+            elsewhere={elsewhere}
+            onToggleGroup={toggleHeader}
+            onClearQuery={() => {
+              setQ("");
+              setLimit(PAGE);
+            }}
+          />
+        ) : shown.length === 0 ? (
+          <div
+            className={cn(
+              "flex items-center justify-center px-3 py-6",
+              side && "min-h-0 flex-1 overflow-y-auto",
+            )}
+          >
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  {!library.length || (activeNav.group === "yours" && activeNav.leaf === "film") ? (
+                    <Music />
+                  ) : (
+                    <SearchX />
+                  )}
+                </EmptyMedia>
+                <EmptyTitle>
+                  {!library.length
+                    ? "No audio in library"
+                    : typed
+                      ? `No matching ${activeSection.one}s`
+                      : activeNav.group === "yours" && activeNav.leaf === "fav"
+                        ? "No favorites yet"
+                        : activeNav.group === "yours" && activeNav.leaf === "film"
+                          ? "No film-specific audio yet"
+                          : `No ${activeSection.one}s found`}
+                </EmptyTitle>
+                <EmptyDescription>
+                  <span className="text-foreground/75">
+                    {!library.length
+                      ? "This film's audio library is empty."
+                      : typed
+                        ? `No results for "${deferredQ.trim()}". Try another keyword or switch categories.`
+                        : activeEdition !== ALL && activeSource !== ALL
+                          ? `No ${editionTitle(activeEdition)} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
+                          : activeEdition !== ALL
+                            ? `No ${editionTitle(activeEdition)} ${activeSection.one}s here.`
+                            : activeOrigin !== ALL && activeSource !== ALL
+                              ? `No ${activeOrigin === "synth" ? "code-generated" : "real / studio"} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
+                              : activeOrigin !== ALL
+                                ? `No ${activeOrigin === "synth" ? "code-generated" : "real / studio"} ${activeSection.one}s here.`
+                                : activeSource !== ALL
+                                  ? `No ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
+                                  : activeNav.group === "yours" && activeNav.leaf === "fav"
+                                    ? "Click the star on any track to save it to Favorites."
+                                    : activeNav.group === "yours" && activeNav.leaf === "film"
+                                      ? "No custom audio files have been added to this film yet."
+                                      : `No ${activeSection.one}s in this category.`}
                   </span>
-                  <span className="flex flex-none items-center gap-0.5">
-                    {uses > 0 && (
-                      <Tip
-                        label={
-                          uses > 1
-                            ? `Select its ${uses} clips on the tracks`
-                            : "Select its clip on the tracks"
-                        }
-                      >
-                        <Button
-                          variant="quiet"
-                          size="xs"
-                          className="flex-none"
-                          aria-label={`Select the ${uses > 1 ? `${uses} clips` : "clip"} of ${title}`}
-                          onClick={() => pickNamesUses(allNames, title)}
-                        >
-                          <span className="tabular-nums">{uses}×</span>
-                        </Button>
-                      </Tip>
-                    )}
-                    <FavoriteStar kind="sounds" id={starId} name={title} onCard />
-                    <Tip
-                      label={
-                        hasVariants
-                          ? `Add take #${x.variant ?? curIdx + 1} to track (auto-cycles)`
-                          : "Add to track"
-                      }
-                    >
+                </EmptyDescription>
+              </EmptyHeader>
+              {(typed ||
+                activeEdition !== ALL ||
+                activeOrigin !== ALL ||
+                activeSource !== ALL ||
+                elsewhere.length > 0) && (
+                <EmptyContent>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {typed && (
                       <Button
-                        variant="card-action"
-                        size="icon-sm"
-                        className="flex-none pointer-coarse:size-9"
-                        aria-label={`Add ${title} to track`}
+                        variant="secondary"
+                        size="sm"
                         onClick={() => {
-                          addClip(x.name, S.t);
-                          advanceRoundRobin();
+                          setQ("");
+                          setLimit(PAGE);
                         }}
                       >
-                        <Plus />
+                        Clear search
+                      </Button>
+                    )}
+                    {activeEdition !== ALL && (
+                      <Button variant="secondary" size="sm" onClick={() => changeEdition(ALL)}>
+                        Show all editions
+                      </Button>
+                    )}
+                    {activeOrigin !== ALL && (
+                      <Button variant="secondary" size="sm" onClick={() => changeOrigin(ALL)}>
+                        Show all types
+                      </Button>
+                    )}
+                    {activeSource !== ALL && (
+                      <Button variant="secondary" size="sm" onClick={() => setSrc(ALL)}>
+                        Show all sources
+                      </Button>
+                    )}
+                    {elsewhere.map((sec) => (
+                      <Button
+                        key={sec.id}
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => toggleHeader(sec.id)}
+                      >
+                        {sec.count.toLocaleString()} in {sec.title}
+                      </Button>
+                    ))}
+                  </div>
+                </EmptyContent>
+              )}
+            </Empty>
+          </div>
+        ) : (
+          <ul
+            className={cn(
+              "grid auto-rows-max content-start items-stretch gap-2",
+              activeNav.group === "bgm"
+                ? "grid-cols-[repeat(auto-fill,minmax(min(100%,21rem),1fr))]"
+                : activeNav.group === "mc"
+                  ? "grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))]"
+                  : "grid-cols-[repeat(auto-fill,minmax(min(100%,18.5rem),1fr))]",
+              side && "scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3",
+            )}
+          >
+            {visibleGroups.map((g) => {
+              const variantCount = g.variants.length;
+              const hasVariants = variantCount > 1;
+              const activeTarget = targetNow || now;
+              const playingIdx = now ? g.variants.findIndex((v) => v.name === now) : -1;
+              const targetIdx = activeTarget
+                ? g.variants.findIndex((v) => v.name === activeTarget)
+                : -1;
+              const curIdx =
+                playingIdx >= 0
+                  ? playingIdx
+                  : targetIdx >= 0
+                    ? targetIdx
+                    : (variantCursor[g.key] ?? 0) % variantCount;
+              const x = g.variants[curIdx];
+              const allNames = hasVariants ? g.variants.map((v) => v.name) : [x.name];
+              const starId = hasVariants
+                ? (g.variants.find((v) => favSet.has(v.name))?.name ?? x.name)
+                : x.name;
+              const isFav = favSet.has(starId);
+              const uses = useCountOfNames(allNames);
+              const itemKind = kindOf(x);
+              const isSynth = originOf(x) === "synth";
+              const isPlaying = playingIdx >= 0;
+              const isTarget = targetIdx >= 0;
+              const showCategory = activeNav.group === "yours" || activeNav.leaf === ALL;
+              const showSource =
+                activeSource === ALL &&
+                !(activeNav.group === "yours" && activeNav.leaf === "film") &&
+                !(isSynth && showCategory && Boolean(x.category));
+              const {
+                title: rawTitle,
+                subtitle,
+                duration,
+              } = soundCardText(x, itemKind, {
+                showCategory,
+                showSource,
+                showVariant: !hasVariants,
+              });
+              const title = audioDisplayTitle(rawTitle, { mc: itemKind === "mc" });
+              const detail = soundCardDetail(x);
+              const advanceRoundRobin = () => {
+                if (hasVariants) {
+                  setVariantCursor((prev) => ({ ...prev, [g.key]: (curIdx + 1) % variantCount }));
+                }
+              };
+              return (
+                <li
+                  key={g.key}
+                  onPointerDown={press(x.name, allNames, title, advanceRoundRobin)}
+                  onDragStart={(e) => e.preventDefault()}
+                  onPointerEnter={() => lightSounds(allNames)}
+                  onPointerLeave={() => lightSounds(null)}
+                  onFocus={() => lightSounds(allNames)}
+                  onBlur={() => lightSounds(null)}
+                  className={cn(
+                    "group flex min-w-0 cursor-grab touch-none flex-col rounded-lg border px-2.5 py-2 transition-colors duration-150 select-none active:cursor-grabbing motion-reduce:transition-none",
+                    isPlaying
+                      ? "border-primary/75 bg-raised-3"
+                      : isTarget
+                        ? "border-primary/45 bg-raised-3"
+                        : "bg-card/85 hover:border-raised-4/50 hover:bg-raised-3 focus-within:border-raised-4/60 focus-within:bg-raised-3 border-border",
+                  )}
+                >
+                  <div className="flex min-h-11 flex-1 items-start gap-2">
+                    <Tip label={isPlaying ? "Pause preview" : "Preview audio"}>
+                      <Button
+                        variant="cover"
+                        size="cover"
+                        className="mt-0.5 flex-none"
+                        aria-pressed={isPlaying}
+                        aria-label={`${isPlaying ? "Pause" : "Preview"} ${title}`}
+                        onClick={() => {
+                          setExpandedKey(hasVariants ? g.key : null);
+                          listen(x.name);
+                        }}
+                      >
+                        {isPlaying ? (
+                          <Pause className="fill-current" />
+                        ) : (
+                          <Play className="translate-x-[0.5px] fill-current" />
+                        )}
                       </Button>
                     </Tip>
+                    <div
+                      className="flex min-w-0 flex-1 flex-col justify-between gap-0.5 self-stretch"
+                      title={detail}
+                    >
+                      <div className="relative flex min-h-6 items-start gap-1">
+                        <span className="text-ui text-foreground line-clamp-2 min-w-0 flex-1 py-0.5 leading-snug font-medium">
+                          {title}
+                        </span>
+                        {isFav ? (
+                          <span className="inline-flex flex-none">
+                            <FavoriteStar kind="sounds" id={starId} name={title} onCard />
+                          </span>
+                        ) : (
+                          <>
+                            <span className="hidden flex-none pointer-coarse:inline-flex">
+                              <FavoriteStar kind="sounds" id={starId} name={title} onCard />
+                            </span>
+                            <span className="from-raised-3 pointer-events-none absolute end-7 top-0 flex h-6 items-center bg-linear-to-l from-75% to-transparent ps-4 opacity-0 transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 motion-reduce:transition-none pointer-coarse:hidden">
+                              <FavoriteStar kind="sounds" id={starId} name={title} onCard />
+                            </span>
+                          </>
+                        )}
+                        <span className="flex flex-none transition-opacity duration-150 motion-reduce:transition-none">
+                          <Tip
+                            label={
+                              hasVariants
+                                ? `Add variation #${x.variant ?? curIdx + 1} to track (auto-cycles)`
+                                : "Add to track"
+                            }
+                          >
+                            <Button
+                              variant="card-action"
+                              size="icon-sm"
+                              className="flex-none pointer-coarse:size-9"
+                              aria-label={`Add ${title} to track`}
+                              onClick={() => {
+                                addClip(x.name, S.t);
+                                advanceRoundRobin();
+                              }}
+                            >
+                              <Plus />
+                            </Button>
+                          </Tip>
+                        </span>
+                      </div>
+                      <div className="mt-auto flex min-h-6 items-center justify-between gap-1.5">
+                        <span className="text-foreground/70 text-tag flex min-w-0 flex-1 items-center gap-1 leading-none">
+                          {(isSynth || x.contentId || subtitle) && (
+                            <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+                              {isSynth && <Badge variant="synth">Code</Badge>}
+                              {x.contentId && (
+                                <Badge variant="claim" title={CONTENT_ID_NOTE}>
+                                  Content ID
+                                </Badge>
+                              )}
+                              {subtitle && <span className="min-w-0 truncate">{subtitle}</span>}
+                            </span>
+                          )}
+                          {subtitle && (
+                            <span aria-hidden className="flex-none">
+                              ·
+                            </span>
+                          )}
+                          <span className="flex-none whitespace-nowrap tabular-nums">
+                            {duration}
+                          </span>
+                        </span>
+                        {(hasVariants || uses > 0) && (
+                          <span className="flex flex-none items-center gap-1">
+                            {hasVariants && (
+                              <Tip
+                                label={`Variation ${curIdx + 1} of ${variantCount} — click for next`}
+                              >
+                                <button
+                                  type="button"
+                                  aria-label={`Next variation of ${title} (${curIdx + 1} of ${variantCount})`}
+                                  onClick={() => {
+                                    const nextIdx = (curIdx + 1) % variantCount;
+                                    setExpandedKey(g.key);
+                                    setVariantCursor((prev) => ({ ...prev, [g.key]: nextIdx }));
+                                    listen(g.variants[nextIdx].name);
+                                  }}
+                                  className={cn(
+                                    "text-tag text-foreground/80 hover:bg-raised-4 hover:text-foreground focus-visible:ring-ring studio-press inline-flex h-6 flex-none items-center rounded-md border px-1.5 font-mono tabular-nums transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:min-h-9 pointer-coarse:px-2",
+                                    isPlaying || isTarget
+                                      ? "bg-raised-4/75 border-border/60"
+                                      : "bg-raised-3 group-hover:bg-raised-4/75 border-transparent",
+                                  )}
+                                >
+                                  {curIdx + 1}/{variantCount}
+                                </button>
+                              </Tip>
+                            )}
+                            {uses > 0 && (
+                              <Tip
+                                label={
+                                  uses > 1
+                                    ? `Select its ${uses} clips on the tracks`
+                                    : "Select its clip on the tracks"
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    "focus-visible:ring-ring studio-press text-tag inline-flex h-6 flex-none items-center rounded-md px-2 font-medium tabular-nums transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:min-h-9",
+                                    isTarget
+                                      ? "bg-tint text-primary-text"
+                                      : isPlaying
+                                        ? "bg-raised-4/75 text-foreground hover:bg-tint hover:text-primary-text"
+                                        : "bg-raised-3 group-hover:bg-raised-4/75 text-foreground/85 hover:bg-tint hover:text-primary-text",
+                                  )}
+                                  aria-label={`Select the ${uses > 1 ? `${uses} clips` : "clip"} of ${title}`}
+                                  onClick={() => pickNamesUses(allNames, title)}
+                                >
+                                  {uses}×
+                                </button>
+                              </Tip>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+            {more > 0 && (
+              <li className="col-span-full pt-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 w-full pointer-coarse:min-h-9"
+                  onClick={() => setLimit((n) => n + PAGE)}
+                >
+                  <span className="truncate tabular-nums">
+                    Show more ({more.toLocaleString()} remaining of {groups.length.toLocaleString()}
+                    )
                   </span>
-                </div>
-                {showVariants && (
-                  <ChipGroup
-                    label={`${title} variations`}
-                    value={x.name}
-                    items={g.variants.map((v, idx) => ({
-                      id: v.name,
-                      title: `#${v.variant ?? idx + 1}`,
-                    }))}
-                    onChange={(vName) => {
-                      setExpandedKey(g.key);
-                      const idx = g.variants.findIndex((v) => v.name === vName);
-                      if (idx >= 0) setVariantCursor((prev) => ({ ...prev, [g.key]: idx }));
-                      if (now !== vName) listen(vName);
-                    }}
-                    className="ps-11 pe-1"
-                  />
-                )}
-                {isPlaying && (
-                  <AuditionScrubber
-                    id={x.name}
-                    label={title}
-                    fallbackSeconds={x.seconds}
-                    kind={itemKind}
-                  />
-                )}
+                </Button>
               </li>
-            );
-          })}
-          {more > 0 && (
-            <li className="pt-1">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8 w-full"
-                onClick={() => setLimit((n) => n + PAGE)}
-              >
-                Show more ({more} remaining of {groups.length})
-              </Button>
-            </li>
-          )}
-          {!shown.length && (
-            <li className="bg-card text-ui text-muted-foreground flex flex-col items-start gap-2 rounded-md p-3">
-              <p>
-                {!library.length
-                  ? "The film's sound folder is empty."
-                  : typed
-                    ? `No ${activeSection.one}s match "${deferredQ.trim()}".`
-                    : activeEdition !== ALL && activeSource !== ALL
-                      ? `No ${editionTitle(activeEdition)} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
-                      : activeEdition !== ALL
-                        ? `No ${editionTitle(activeEdition)} ${activeSection.one}s here.`
-                        : activeOrigin !== ALL && activeSource !== ALL
-                          ? `No ${activeOrigin === "synth" ? "code-gen" : "real / studio"} ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
-                          : activeOrigin !== ALL
-                            ? `No ${activeOrigin === "synth" ? "code-gen" : "real / studio"} ${activeSection.one}s here.`
-                            : activeSource !== ALL
-                              ? `No ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
-                              : activeNav.group === "yours" && activeNav.leaf === "fav"
-                                ? "No favorite sounds yet. Click the star on any track to save it here."
-                                : activeNav.group === "yours" && activeNav.leaf === "film"
-                                  ? "This film has no custom audio files in its own sound/sfx folder yet."
-                                  : `No ${activeSection.one}s in this category.`}
-              </p>
-              {activeEdition !== ALL && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => changeEdition(ALL)}
-                >
-                  Show all editions
-                </Button>
-              )}
-              {activeOrigin !== ALL && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => changeOrigin(ALL)}
-                >
-                  Show all types
-                </Button>
-              )}
-              {activeSource !== ALL && (
-                <Button variant="secondary" size="sm" className="h-7" onClick={() => setSrc(ALL)}>
-                  Show all sources
-                </Button>
-              )}
-              {elsewhere.map((sec) => (
-                <Button
-                  key={sec.id}
-                  variant="secondary"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => toggleHeader(sec.id)}
-                >
-                  {sec.count} in {sec.title}
-                </Button>
-              ))}
-            </li>
-          )}
-        </ul>
-      )}
+            )}
+          </ul>
+        )}
+      </div>
+      <AuditionDock
+        libraryItems={libraryItems}
+        voices={voiceLib.voices}
+        voiceTakes={voiceTakes}
+        expandedGroup={expandedGroup}
+        variantCursor={variantCursor}
+        copiedId={copiedVoiceId}
+        sticky={!side}
+        onSelectVariant={(groupKey, idx) => {
+          setExpandedKey(groupKey);
+          setVariantCursor((prev) => ({ ...prev, [groupKey]: idx }));
+        }}
+        onAdvanceVariant={(groupKey, nextIdx) =>
+          setVariantCursor((prev) => ({ ...prev, [groupKey]: nextIdx }))
+        }
+        onCopyVoiceId={handleCopyVoiceId}
+        onClearExpanded={() => setExpandedKey(null)}
+      />
     </div>
   );
 
   if (side) {
     return (
-      <section
-        aria-label="Sound library"
-        className="@container flex min-h-0 flex-1 overflow-hidden"
-      >
-        <CategoryTree
-          tree={tree}
-          activeNav={activeNav}
-          open={open}
-          typed={typed}
-          onHeader={toggleHeader}
-          onSelect={selectNav}
-        />
-        {listPane}
-      </section>
+      <TooltipProvider delay={350} closeDelay={100}>
+        <section
+          aria-label="Sound library"
+          className="@container flex min-h-0 flex-1 overflow-hidden"
+        >
+          <CategoryTree
+            tree={tree}
+            activeNav={activeNav}
+            open={open}
+            typed={typed}
+            voicesLoaded={voiceLib.loaded}
+            onHeader={toggleHeader}
+            onSelect={selectNav}
+          />
+          {listPane}
+        </section>
+      </TooltipProvider>
     );
   }
   return (
-    <section aria-label="Sound library" className="flex flex-col">
-      {listPane}
-    </section>
+    <TooltipProvider delay={350} closeDelay={100}>
+      <section aria-label="Sound library" className="@container flex flex-col">
+        {listPane}
+      </section>
+    </TooltipProvider>
   );
 }
 
