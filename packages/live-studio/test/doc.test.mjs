@@ -30,7 +30,7 @@ if (typeof Bun !== "undefined") {
   });
 }
 globalThis.window = globalThis;
-const { createDoc, undo, redo, together } = await import("../app/core/doc.ts");
+const { createDoc, undo, redo, together, flushDocs } = await import("../app/core/doc.ts");
 const { createTimedDoc } = await import("../app/core/timed-doc.ts");
 const { setTiming } = await import("../src/timing-state.mjs");
 const { TextTimeline } = await import("../src/contract.ts");
@@ -68,6 +68,59 @@ const saveNow = async (t) => {
   t.mock.timers.tick(300);
   for (let i = 0; i < 5; i++) await settle();
 };
+
+test("flushing before a revision saves the committed document without waiting for its timer", async (t) => {
+  const doc = await open(t, "flush", { camera: 50 });
+  doc.edit((d) => {
+    d.camera = 60;
+  });
+  await flushDocs();
+  assert.equal(files.get("flush").data.camera, 60);
+});
+
+test("flushing an in-flight edit leaves no delayed save to conflict with a restored version", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  agentWrites("flush-pending", { camera: 50 });
+  let state = null;
+  const doc = createDoc("flush-pending", {
+    label: "camera",
+    changed: () => {},
+    saved: (value) => {
+      state = value;
+    },
+  });
+  await doc.load();
+  const post = globalThis.fake.post;
+  let release;
+  t.after(() => {
+    globalThis.fake.post = post;
+  });
+  let first = true;
+  globalThis.fake.post = async (url, body) => {
+    if (first) {
+      first = false;
+      await new Promise((done) => {
+        release = done;
+      });
+    }
+    return post(url, body);
+  };
+  doc.edit((d) => {
+    d.camera = 60;
+  });
+  t.mock.timers.tick(300);
+  await settle();
+  doc.edit((d) => {
+    d.camera = 65;
+  });
+  const flushed = flushDocs();
+  release();
+  await flushed;
+  agentWrites("flush-pending", { camera: 40 });
+  await saveNow(t);
+  assert.equal(state, null, "no stale timer reports a save failure after restoration");
+  assert.equal(files.get("flush-pending").data.camera, 40);
+});
 
 test("a server merge updates the page without losing an edit made while saving", async (t) => {
   const doc = await open(t, "merge.json", { camera: 50, music: "old" });

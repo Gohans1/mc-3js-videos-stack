@@ -14,7 +14,7 @@ import {
   watch as fsWatch,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { analyzeBeats, renderAudio } from "./audio-process.mjs";
@@ -35,6 +35,7 @@ import {
   Trials,
 } from "./contract.ts";
 import { ratioOf } from "./frame.ts";
+import { openFilmHistory } from "./history.mjs";
 import { createNotes } from "./notes.mjs";
 import { openSound } from "./sound.mjs";
 import { openTimelineFile } from "./timeline_file.mjs";
@@ -209,6 +210,23 @@ export const openFilm = (projectDir, { send }) => {
   const handEdited = [sound, cam, shots, text, adjustment, timing, ...keyFiles]
     .filter(Boolean)
     .map((f) => f.FILE); // the page loads these itself on every change (/api)
+  const editable = [sound, cam, shots, text, adjustment, timing, ...keyFiles].filter(Boolean);
+  const history = openFilmHistory(PROJECT, {
+    beforeCapture: () => {
+      return editable.flatMap((file) => {
+        try {
+          file.read();
+          return [];
+        } catch (error) {
+          return [`${relative(PROJECT, file.FILE)}: ${error.message}`];
+        }
+      });
+    },
+    afterRestore: () => {
+      for (const file of editable) file.reloadProtection();
+    },
+    changed: () => send("history"),
+  });
   // "live-studio": { liveLanes: true }: the page plays the lanes itself and the film's sound.py, given --live-lanes, leaves them
   // out of the mix, so a lane edit is heard at once. A mix made before the switch still holds them: the marker says it was remade
   const LIVE = !!(sound && pkg["live-studio"]?.liveLanes);
@@ -401,12 +419,19 @@ export const openFilm = (projectDir, { send }) => {
   const watchers = [];
   const watch = (...a) => watchers.push(fsWatch(...a));
   const start = () => {
+    history.start();
     for (const file of [sound, cam, shots, text, adjustment, timing, ...keyFiles].filter(Boolean)) {
       if (!existsSync(dirname(file.FILE))) continue;
-      watch(dirname(file.FILE), debounce(() => {
-        try { file.read(); }
-        catch (error) { console.error(`Edit protection: ${error.message}`); }
-      }, 50));
+      watch(
+        dirname(file.FILE),
+        debounce(() => {
+          try {
+            file.read();
+          } catch (error) {
+            console.error(`Edit protection: ${error.message}`);
+          }
+        }, 50),
+      );
     }
     // Windows can report a file as changed just because something read it, and every remix restarts the sound on every open page:
     // what counts is whether anything's size or time really moved. A file deleted is a change too, never a crash
@@ -769,11 +794,15 @@ export const openFilm = (projectDir, { send }) => {
     keyFiles,
     ownWrites,
     handEdited,
+    history,
     contract: () => ({ files: fileProblems }),
     pageSays,
     openRead,
     smallMix,
     start,
-    stop: () => watchers.splice(0).forEach((w) => w.close()),
+    stop: () => {
+      history.close();
+      watchers.splice(0).forEach((w) => w.close());
+    },
   };
 };

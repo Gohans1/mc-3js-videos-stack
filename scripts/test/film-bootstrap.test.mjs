@@ -36,6 +36,8 @@ const fixture = () => {
     "scripts/vault.mjs",
     "packages/live-studio/init.mjs",
     "packages/live-studio/src/cli.mjs",
+    "packages/live-studio/src/edit-protection.mjs",
+    "packages/live-studio/src/merge-edits.mjs",
     "packages/mc-assets/pick.mjs",
   ])
     put(root, file, readFileSync(join(ROOT, file), "utf8"));

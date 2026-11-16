@@ -40,6 +40,7 @@ import { inside, SAFE_MEDIA_FILE, SAFE_REMOTE_ID_RE } from "./voice-playground-g
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 import { mountCollaboration } from "./collaboration-api.mjs";
+import { mountHistory } from "./history-api.mjs";
 
 const MIME = {
   ".gltf": "application/json",
@@ -1359,6 +1360,7 @@ export const createApi = (
       ...film.keyFiles.map((k, i) => [`keys/${i}`, k]),
     ]).get(name);
   mountCollaboration(app, named);
+  mountHistory(app, film);
   app.post("/api/together", zValidator("json", TogetherSave), (c) => {
     const files = c.req.valid("json").files.map((f) => ({ ...f, file: named(f.name) }));
     if (files.some((f) => !f.file)) return noSound(c);

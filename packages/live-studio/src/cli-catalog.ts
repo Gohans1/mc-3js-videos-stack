@@ -395,7 +395,74 @@ const bareListCopy = (itemsName: string): Pick<CliFlagDef, "bareLabel" | "bareHi
 
 const renderTargetValues = ["stills", "clip", "captions", "poster", "all", "final"] as const;
 
-export const CLI_COMMANDS: readonly CliCommand[] = [
+export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
+  {
+    id: "help",
+    label: "help",
+    category: "daily",
+    summary: "List commands in this folder, or print where to find help for a named command.",
+    runner: "bun-script",
+    target: "help",
+    cwdModes: ["film", "root"],
+    args: [
+      {
+        key: "command",
+        label: "Command to look up (optional)",
+        type: "string",
+        placeholder: "find",
+        hint: "Leave blank to list commands. Enter find to print where its help is; this does not run find.",
+      },
+    ],
+    meta: {
+      effect: "read",
+      cost: "free",
+      speed: "instant",
+      cancellable: false,
+      helpMode: "flag",
+    },
+  },
+
+  {
+    id: "history",
+    label: "history",
+    category: "daily",
+    summary: "Save and restore editing versions of one film without changing monorepo Git.",
+    runner: "bun-file",
+    target: "packages/live-studio/history.mjs",
+    cwdModes: ["film", "root"],
+    flags: [{ key: "--film", flag: "--film", label: "Film path", type: "string" }],
+    subcommands: [
+      {
+        id: "list",
+        label: "list",
+        summary: "List versions and the current fingerprint.",
+        flags: [{ key: "--before", flag: "--before", label: "Before sequence", type: "number" }],
+        meta: { effect: "read" },
+      },
+      {
+        id: "save",
+        label: "save",
+        summary: "Keep a named version of editing files on disk.",
+        args: [{ key: "name", label: "Version name", type: "string", required: true }],
+      },
+      {
+        id: "restore",
+        label: "restore",
+        summary: "Restore a version, keeping a recovery snapshot first.",
+        args: [{ key: "id", label: "Version ID", type: "string", required: true }],
+        flags: [
+          {
+            key: "--base",
+            flag: "--base",
+            label: "Current fingerprint",
+            type: "string",
+            required: true,
+          },
+        ],
+      },
+    ],
+    meta: { effect: "write", cost: "free", speed: "short", cancellable: false, helpMode: "flag" },
+  },
   {
     id: "collab",
     label: "collab",
@@ -423,32 +490,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       },
     ],
     meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "flag" },
-  },
-  // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
-  {
-    id: "help",
-    label: "help",
-    category: "daily",
-    summary: "List commands in this folder, or print where to find help for a named command.",
-    runner: "bun-script",
-    target: "help",
-    cwdModes: ["film", "root"],
-    args: [
-      {
-        key: "command",
-        label: "Command to look up (optional)",
-        type: "string",
-        placeholder: "find",
-        hint: "Leave blank to list commands. Enter find to print where its help is; this does not run find.",
-      },
-    ],
-    meta: {
-      effect: "read",
-      cost: "free",
-      speed: "instant",
-      cancellable: false,
-      helpMode: "flag",
-    },
   },
   {
     id: "skills",

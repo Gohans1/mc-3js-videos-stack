@@ -77,7 +77,35 @@ export const openEditProtection = (project, rel) => {
       return data;
     },
     report: () => ({ protected: state.guards.map((g) => pointer(g.path)), notices: state.notices }),
+    reload() {
+      if (existsSync(file)) state = JSON.parse(readFileSync(file, "utf8"));
+    },
+    reset(version, data) {
+      state.guards = data === undefined ? [] : [{ path: [], value: structuredClone(data) }];
+      state.versions = data === undefined ? [] : [{ version, data: structuredClone(data) }];
+      state.latest = state.versions[0] ?? null;
+      save();
+    },
   };
+};
+
+export const resetProtectedFiles = (project, names) => {
+  const updates = [];
+  for (const rel of names) {
+    const key = createHash("sha256").update(rel).digest("hex");
+    if (!existsSync(join(project, ".studio/collaboration", `${key}.json`))) continue;
+    const content = existsSync(join(project, rel)) ? readFileSync(join(project, rel)) : null;
+    let data;
+    try {
+      data = content ? JSON.parse(content.toString("utf8")) : undefined;
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+    const version = content ? createHash("md5").update(content).digest("base64url") : "";
+    const protection = openEditProtection(project, rel);
+    updates.push(() => protection.reset(version, data));
+  }
+  for (const update of updates) update();
 };
 
 export const warnProtectedEdits = (project) => {

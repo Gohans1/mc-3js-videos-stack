@@ -36,7 +36,10 @@ interface Side {
   saved?: (state: "busy" | "fail" | null) => void;
   swap: (snap: string) => string; // undo/redo: put snap in, give back what it held
   accept: (sent: unknown, data: unknown) => void;
+  cancelTimer: () => void;
 }
+const sides = new Set<Side>();
+const pending = new Set<Promise<void>>();
 
 type Entry = { side: Side; snap: string; group: number };
 const undos: Entry[] = [],
@@ -82,7 +85,7 @@ const teamOf = (side: Side) => {
   return [...team];
 };
 
-const save = async (me: Side) => {
+const saveTeam = async (me: Side) => {
   const team = teamOf(me);
   if (team.some((s) => s.saving)) {
     me.later();
@@ -150,6 +153,27 @@ const save = async (me: Side) => {
   for (const s of team) if (s.unsaved) s.later();
 };
 
+const save = (side: Side) => {
+  side.cancelTimer();
+  if (!side.unsaved) return Promise.resolve();
+  const request = saveTeam(side);
+  pending.add(request);
+  request.then(
+    () => pending.delete(request),
+    () => pending.delete(request),
+  );
+  return request;
+};
+export const flushDocs = async () => {
+  for (const side of sides) side.cancelTimer();
+  await Promise.all(pending);
+  for (const side of sides) if (side.unsaved) await save(side);
+  if ([...sides].some((side) => side.unsaved || side.saving))
+    throw new Error(
+      "Some edits could not be saved. Resolve the save error before saving or restoring a version.",
+    );
+};
+
 type Got<T> = { version: string; data: T };
 
 export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
@@ -175,6 +199,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     },
     load: () => load(),
     saved: hooks.saved,
+    cancelTimer: () => clearTimeout(timer),
     accept: (sent, canonical) => {
       if (equalJson(sent, canonical)) return;
       const old = data;
@@ -210,6 +235,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       return was;
     },
   };
+  sides.add(side);
   const take = (got: Got<T>) => {
     if (side.version && side.version !== got.version) forget(side);
     side.version = got.version;

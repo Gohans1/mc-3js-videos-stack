@@ -38,10 +38,11 @@ function fixture(t) {
       copyFileSync(join(scripts, file), join(root, "scripts", file));
   // every script's --help and option check (packages/live-studio/src/cli.mjs)
   mkdirSync(join(root, "packages/live-studio/src"), { recursive: true });
-  copyFileSync(
-    join(scripts, "../packages/live-studio/src/cli.mjs"),
-    join(root, "packages/live-studio/src/cli.mjs"),
-  );
+  for (const file of ["cli.mjs", "edit-protection.mjs", "merge-edits.mjs"])
+    copyFileSync(
+      join(scripts, "../packages/live-studio/src", file),
+      join(root, "packages/live-studio/src", file),
+    );
   writeFileSync(
     join(root, "vault.json"),
     JSON.stringify({

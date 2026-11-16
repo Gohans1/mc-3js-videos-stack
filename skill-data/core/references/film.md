@@ -30,6 +30,13 @@ Asset và code phải là file/thư mục thật trên C:, không tạo junction
 
 Dùng Git for Windows từ 2.54 trở lên; bản cũ có thể xoá đích junction khi dọn WT, kể cả cùng ổ C:. Trước khi xoá WT, duyệt không theo link và gỡ từng link không đệ quy, rồi kiểm tra dữ liệu đích vẫn nguyên; chỉ xoá branch đã merge hoặc đã sao lưu xác thực.
 
+## Lưu các hướng dựng
+
+Film → Versions lưu bản đặt tên và các bản tự lưu; trước khi khôi phục luôn có bản dự phòng của trạng thái hiện tại.
+Lệnh bun run history --film films/tên list, save hoặc restore giữ code, timeline được cấu hình và lựa chọn pack/picks.json; media và package chung không được đóng băng nên đây không phải bản render tái lập tuyệt đối.
+
+Lịch sử cục bộ nằm trong .studio/history.sqlite; đóng Studio rồi sao lưu cả .studio khi chuyển máy.
+
 ## Dữ liệu phim
 
 A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`: drafts at 720x1280, the final at 1080x1920.

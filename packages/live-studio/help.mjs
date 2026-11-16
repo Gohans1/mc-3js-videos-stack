@@ -21,6 +21,7 @@ const GROUPS = [
         "this film's physics cache: --help names inputs, output, clocks and cost; rerun after changing its simulation",
       studio: "the live studio: preview, timeline, notes (bun run studio, then open the link)",
       collab: "read protected Studio edits; write intentional AI changes with an explicit current base (--help)",
+      history: "named versions and autosaves for one film; restore with a recovery version kept first (--help)",
       check:
         "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
       at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",

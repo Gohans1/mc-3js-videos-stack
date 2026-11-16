@@ -1,6 +1,7 @@
 // Timeline reads protect unacknowledged Studio edits; intentional agent writes require the current version.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import { problems } from "./contract.ts";
 import { openEditProtection } from "./edit-protection.mjs";
@@ -35,7 +36,7 @@ export const compactJson = (v, ind = 0) => {
 // rel: the file's path in the film, as package.json names it; schema: its zod schema in contract.ts
 export const openTimelineFile = (project, rel, schema) => {
   const FILE = assertInsideDir(project, rel, "Timeline file");
-  const protection = openEditProtection(project, rel);
+  const protection = openEditProtection(project, relative(project, FILE).replaceAll("\\", "/"));
   const version = (buf = readFileSync(FILE)) => createHash("md5").update(buf).digest("base64url");
   let written = null; // what the studio itself last wrote, so its own save is not mistaken for someone else's edit
   const read = () => {
@@ -99,5 +100,5 @@ export const openTimelineFile = (project, rel, schema) => {
     return { version: written, data: result.data, retained: result.retained };
   };
   const ownWrite = () => existsSync(FILE) && version() === written;
-  return { FILE, read, check, write, ownWrite, collaboration: protection.report };
+  return { FILE, read, check, write, ownWrite, collaboration: protection.report, reloadProtection: protection.reload };
 };

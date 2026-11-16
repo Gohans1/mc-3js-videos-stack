@@ -29,6 +29,7 @@ Chọn các bước phục vụ cảnh đang dựng, không cần chạy cả ch
 | Tìm chất liệu, preset           | bun run find <words>; nguồn khác hoặc tự tạo khi phù hợp, kiểm tra giấy phép   |
 | Dựng cảnh và hiệu ứng riêng     | src/scene.ts; bun run skills get core --ref contract                           |
 | Chỉnh dữ liệu                   | Các file timeline ghi trong package.json của phim; bun run check sau khi chỉnh |
+| Giữ một hướng dựng              | Film → Versions; bun run history --film films/tên --help |
 | Xem tại giây nghe thấy          | bun run at 35.6; AT=35.6 bun run render stills; mở ảnh được in ra              |
 | Xem chuyển động                 | SPAN=40,44 bun run render clip; mở video                                       |
 | Xem nhiều khung hình            | bun run sheet                                                                  |

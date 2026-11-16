@@ -26,7 +26,7 @@ cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
 const scene = join(dir, "src/scene.ts"),
   original = readFileSync(scene, "utf8");
 const heard = [];
-let page;
+let page, film;
 const cycle = (trigger, file) =>
   new Promise((done, fail) => {
     let changed = !file,
@@ -71,7 +71,8 @@ before(async () => {
     scene,
     `import { gunzip } from "nodeish";\nexport const unzip = gunzip;\n${original}`,
   );
-  page = await buildPage(openFilm(dir, { send() {} }), {
+  film = openFilm(dir, { send() {} });
+  page = await buildPage(film, {
     onChange: () => heard.push("change"),
     onError: (m) => heard.push(`error ${m}`),
   });
@@ -79,6 +80,7 @@ before(async () => {
 });
 after(async () => {
   await page.close();
+  film.stop();
   rmSync(dir, { recursive: true, force: true });
 });
 

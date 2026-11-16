@@ -110,6 +110,8 @@ const spec = pkg.dependencies?.["live-studio"]?.startsWith("workspace:")
   : "link:live-studio";
 pkg.dependencies = { ...pkg.dependencies, "live-studio": spec };
 const SCRIPTS = {
+  history: "bun node_modules/live-studio/history.mjs",
+  collab: "bun node_modules/live-studio/collab.mjs",
   studio: "bun node_modules/live-studio/src/live.mjs", // add the film's port, e.g. 4324
   notes: "bun node_modules/live-studio/notes.mjs",
   note: "bun node_modules/live-studio/note.mjs",
