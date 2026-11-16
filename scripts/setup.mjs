@@ -14,12 +14,21 @@ to install first), then bun run link.
                                           that will not serve says to download the zip in a browser and pass its path
 The heavy external vault (vault.json "external": motion, packs, tools) has no download: copy it from the old machine into
 vault.json "externalRoot" (or MC_VAULT_EXTERNAL); until then setup stops before link and names what is missing.
-A step that fails stops it and says why; run it again once fixed: every step reuses what is already there.`;
+A missing external folder exits 1 (setup is incomplete). A failed step stops it; rerun after fixing it.
+The dependency install has a 5-minute limit; vault downloads/builds take longer and reuse completed files on rerun.
+next: bun run new-film <name> after setup succeeds.`;
 const args = cliArgs(HELP, ["--sound-zip FILE"], 0);
 const step = (what, argv) => {
-  const r = spawnSync("bun", argv, { cwd: ROOT, stdio: "inherit", windowsHide: true });
+  const r = spawnSync("bun", argv, {
+    cwd: ROOT,
+    stdio: "inherit",
+    windowsHide: true,
+    timeout: argv[0] === "install" ? 300_000 : 3_600_000,
+  });
   if (r.error || r.status !== 0) {
-    console.error(`${what} failed: fix what it says above, then bun run setup again`);
+    console.error(
+      `${what} failed${r.error ? `: ${r.error.message}` : ""}: fix what it says above.\nnext: bun run setup${args.length ? " with the same --sound-zip argument" : ""}`,
+    );
     process.exit(r.status || 1);
   }
 };
@@ -35,7 +44,8 @@ if (missing.length) {
     );
   if (missing.includes("mc-sound"))
     console.log(`Waiting for you: bun run setup:mc-sound builds ${join(EXTERNAL, "mc-sound")}`);
-  console.log("Then bun run link connects the vault to the films.");
-  process.exit(0);
+  console.log("Setup incomplete.\nnext: restore the missing folders, then bun run link");
+  process.exit(1);
 }
 step("bun run link", ["scripts/link.ts"]);
+console.log("Setup complete.\nnext: bun run new-film <name>");

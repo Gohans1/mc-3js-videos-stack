@@ -68,7 +68,8 @@ const GROUPS = [
   [
     "Set up",
     {
-      "new-film": "a new film from templates/film: bun run new-film <name> [port]",
+      "new-film":
+        "create from templates/film, install dependencies, link vault and build picks: bun run new-film <name> [port]; prepared vault required",
       setup:
         "a new machine in one go: bun install, setup:vault, link (--sound-zip <zip> restores the sound)",
       "pack:sound": "every sound of the vault in one zip, for setup --sound-zip on another machine",
@@ -77,7 +78,7 @@ const GROUPS = [
       "setup:mc-sound": "rebuild the Minecraft sound vault from the game and packs",
       "fetch:sfx": "download the Mixkit sound effects",
       "fetch:sound-raw": "download the raw sound packs (Kenney) into the external vault",
-      link: "connect the vault to every film (or the films named)",
+      link: "reconnect the prepared vault and rebuild picks for every film (or those named); no install or download",
     },
   ],
   [

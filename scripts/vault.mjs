@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  statSync,
   symlinkSync,
   unlinkSync,
 } from "node:fs";
@@ -21,6 +22,31 @@ export const LOCAL = vaultPath(config.root);
 export const EXTERNAL = vaultPath(
   process.env.MC_VAULT_EXTERNAL ?? config.externalRoot ?? config.root,
 );
+
+export function checkVault() {
+  if (lstatSync(LOCAL, { throwIfNoEntry: false })?.isSymbolicLink())
+    throw new Error(
+      `Local vault must be a real directory: ${LOCAL}. Preserve its light assets before replacing the old link.`,
+    );
+  for (const name of config.external ?? [])
+    if (!statSync(resolve(EXTERNAL, name), { throwIfNoEntry: false })?.isDirectory())
+      throw new Error(
+        `Missing external vault/${name}: ${EXTERNAL}. Restore it there or set MC_VAULT_EXTERNAL; then bun run link.`,
+      );
+  for (const sub of Object.values(config.film_links)) {
+    const external = (config.external ?? []).includes(sub);
+    const target = resolve(external ? EXTERNAL : LOCAL, sub);
+    if (!statSync(target, { throwIfNoEntry: false })?.isDirectory())
+      throw new Error(
+        `Missing asset directory: ${target}. Run bun run setup:vault, then bun run link.`,
+      );
+  }
+  for (const file of config.requiredFiles ?? [])
+    if (!statSync(resolve(LOCAL, file), { throwIfNoEntry: false })?.isFile())
+      throw new Error(
+        `Missing vault file: ${resolve(LOCAL, file)}. Run bun run setup:vault, then bun run link.`,
+      );
+}
 
 export function linkDirectory(path, target) {
   path = resolve(path);

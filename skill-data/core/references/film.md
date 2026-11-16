@@ -1,14 +1,30 @@
-# A film: making one, what each file holds, the vault
+# Phim mới, dữ liệu và vault
 
-## Create and connect
+## Tạo và kết nối
 
-At the repo root:
+Máy mới chạy bun run setup tại thư mục gốc trước; thiếu kho ngoài thì lệnh thoát 1 và chỉ cách khôi phục. Máy đã sẵn sàng chỉ cần bun run new-film cave-escape 47920 rồi chuyển vào films/cave-escape, chạy bun run check và bun run studio.
 
-```bash
-bun run new-film cave-escape 47920           # templates/film -> films/cave-escape, studio port optional
-bun run setup:vault                          # a new machine: the light vault, every file verified
-bun run link                                 # connect the vault to every film (or: bun run link sealed-room)
-```
+new-film tự sao template, cài dependency, nối vault và dựng picked.zip; không cần chạy setup:vault hoặc link lần nữa. Cổng có thể bỏ qua, mặc định cao hơn cổng đã gán cho các phim; chỉ xem là chạy được sau khi mở URL Studio và thấy cảnh.
+
+## Chọn đúng lệnh
+
+| Lệnh tại thư mục gốc | Vai trò |
+| --- | --- |
+| bun run setup | Chuẩn bị máy: bun install, setup:vault, link; tải tài nguyên và tái sử dụng kết quả khi chạy lại. |
+| bun run setup:vault | Chỉ tải và dựng vault; cần cài dependency trước bằng bun install. |
+| bun run new-film cave-escape | Tạo phim mới hoàn chỉnh từ template, không ghi đè phim đã có. |
+| bun run link cave-escape | Nối lại vault và dựng picks sau khi đổi kho hoặc pack/picks.json; không cài dependency hay tải tài nguyên. |
+| bun packages/live-studio/init.mjs PROJECT | Nối project mới hoặc có sẵn vào Studio và cài dependency; không nối vault hay dựng picks. Xem trước bằng --dry-run; phim trong repo ưu tiên new-film. |
+
+## Tiếp tục khi lỗi
+
+Phim đã được sao nhưng bước sau thất bại: giữ thư mục, sửa lỗi rồi chạy bun packages/live-studio/init.mjs films/cave-escape và bun run link cave-escape tại thư mục gốc. Sau đó vào phim chạy bun run check và bun run studio; không chạy new-film cùng tên để ghi đè.
+
+Thiếu kho nhẹ: bun run setup:vault; thiếu kho ngoài: khôi phục vào externalRoot trong vault.json hoặc đặt MC_VAULT_EXTERNAL trong cùng terminal trước khi chạy link. Kho ngoài gồm dữ liệu riêng không đi cùng Git; INSTALL.md ghi cách chuẩn bị và giấy phép.
+
+PowerShell: chuyển thư mục và chạy từng lệnh riêng; để đổi kho dùng $env:MC_VAULT_EXTERNAL='D:/mc_vault'. Bun cài dependency cho toàn bộ workspace và cập nhật bun.lock ở gốc; không tạo lockfile riêng trong phim.
+
+## Dữ liệu phim
 
 A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`: drafts at 720x1280, the final at 1080x1920.
 
