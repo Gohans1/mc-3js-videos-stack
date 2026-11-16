@@ -152,11 +152,11 @@ const desktopPreloadPlugin = () => ({
 
 const brotli = promisify(brotliCb),
   gzip = promisify(gzipCb);
-// Quality 5 matches api.mjs for large assets (~4-7x faster than q=9 with ~3% size cost on localhost/LAN).
-const BROTLI_OPTS = { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } };
+// Q6 saves ~1% vs Q5 in the load eval at similar CPU cost; Q11 costs ~40x more CPU.
+const BROTLI_OPTS = { params: { [constants.BROTLI_PARAM_QUALITY]: 6 } };
 const GZIP_OPTS = { level: 4 };
 
-// Precompresses hashed _studio/ text assets once with Brotli-5 + Gzip. Unchanged chunks (like vendor-three and vendor-ui on a
+// Precompresses hashed _studio/ text assets once with Brotli-6 + Gzip. Unchanged chunks (like vendor-three and vendor-ui on a
 // scene.ts save) keep their hash, so we only refresh their .br/.gz mtimes for clearOld() instead of re-squeezing ~2.5 MB of JS.
 const precompress = (outDir) => ({
   name: "live-studio-precompress",
