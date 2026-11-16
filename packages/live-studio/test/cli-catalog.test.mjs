@@ -155,6 +155,12 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
     const catalogBunTargets = new Set(
       CLI_COMMANDS.filter((c) => c.runner === "bun-script").map((c) => c.target),
     );
+    for (const command of CLI_COMMANDS)
+      if (
+        command.runner === "bun-file" &&
+        rootPkg.scripts?.[command.id] === `bun ${command.target}`
+      )
+        catalogBunTargets.add(command.id);
     const catalogPkgScripts = new Set(
       CLI_COMMANDS.filter((c) => c.runner === "package-script").map(
         (c) => `${c.packageDir}:${c.target}`,

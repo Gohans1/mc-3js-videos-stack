@@ -52,7 +52,8 @@ test("a moved cut is written only over the version the page saw, with the shots'
     { t: 0, name: "má»Ÿ", pov: true },
     { t: 4.5, name: "cá»­a" },
   ]);
-  assert.deepEqual(shots.write(version, data), { conflict: true });
+  assert.ok(shots.write(version, data).version);
+  assert.deepEqual(shots.write("unknown", data), { conflict: true });
 });
 
 test("a cut moved on the camera row saves cam and shots together: both or neither", async () => {

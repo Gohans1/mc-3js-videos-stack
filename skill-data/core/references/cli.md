@@ -40,3 +40,8 @@ Python giữ cùng hành vi bằng parser hiện có. Kiểm tra cả vị trí 
 | Review khi được yêu cầu | Reviewer độc lập kiểm chứng lại kết quả; giải quyết Critical và Required trước khi kết thúc        |
 
 packages/live-studio/test/skills.test.mjs kiểm tra đường dẫn reference và tên lệnh được guide nhắc tới. Test này chưa chứng minh mọi ví dụ hoặc workflow đều đúng; vẫn phải đối chiếu code và chạy lệnh tương ứng.
+
+## Giữ chỉnh sửa trong Studio
+
+Studio giữ các trường người đã chỉnh trước ghi file trực tiếp chưa xác nhận; danh sách chưa có ID ổn định hoặc vừa đổi cấu trúc được giữ cả khối, và đầu vào bị giữ lại nằm ở .studio/collaboration/notices.jsonl.
+AI dùng bun run collab --film films/tên read cam rồi write cam đường-dẫn-json với base và data để sửa có chủ ý; Studio phải đang chạy và bản trả về mới là kết quả đã lưu.

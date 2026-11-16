@@ -24,6 +24,7 @@
   },
   "type": "module",
   "scripts": {
+    "collab": "bun packages/live-studio/collab.mjs",
     "help": "bun packages/live-studio/help.mjs",
     "skills": "bun packages/live-studio/skills.mjs",
     "setup": "bun scripts/setup.mjs",

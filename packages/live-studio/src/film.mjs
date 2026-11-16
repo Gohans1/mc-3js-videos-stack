@@ -401,6 +401,13 @@ export const openFilm = (projectDir, { send }) => {
   const watchers = [];
   const watch = (...a) => watchers.push(fsWatch(...a));
   const start = () => {
+    for (const file of [sound, cam, shots, text, adjustment, timing, ...keyFiles].filter(Boolean)) {
+      if (!existsSync(dirname(file.FILE))) continue;
+      watch(dirname(file.FILE), debounce(() => {
+        try { file.read(); }
+        catch (error) { console.error(`Edit protection: ${error.message}`); }
+      }, 50));
+    }
     // Windows can report a file as changed just because something read it, and every remix restarts the sound on every open page:
     // what counts is whether anything's size or time really moved. A file deleted is a change too, never a crash
     const stampOf = (p) => {

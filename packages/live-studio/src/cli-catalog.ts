@@ -396,6 +396,34 @@ const bareListCopy = (itemsName: string): Pick<CliFlagDef, "bareLabel" | "bareHi
 const renderTargetValues = ["stills", "clip", "captions", "poster", "all", "final"] as const;
 
 export const CLI_COMMANDS: readonly CliCommand[] = [
+  {
+    id: "collab",
+    label: "collab",
+    category: "daily",
+    summary: "Read protected Studio edits and save intentional AI revisions with an explicit base.",
+    runner: "bun-file",
+    target: "packages/live-studio/collab.mjs",
+    cwdModes: ["root", "film"],
+    flags: [{ key: "--film", flag: "--film", label: "Film path", type: "string" }],
+    subcommands: [
+      {
+        id: "read",
+        label: "read",
+        summary: "Read the canonical document and retained-write notices.",
+        args: [{ key: "name", label: "Document", type: "string", required: true }],
+      },
+      {
+        id: "write",
+        label: "write",
+        summary: "Save a JSON envelope with the base version read earlier.",
+        args: [
+          { key: "name", label: "Document", type: "string", required: true },
+          { key: "input", label: "JSON envelope path", type: "string", required: true },
+        ],
+      },
+    ],
+    meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "flag" },
+  },
   // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
   {
     id: "help",
@@ -3118,8 +3146,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     id: "setup:vault",
     label: "setup:vault",
     category: "setup",
-    summary:
-      "Populate the local runtime vault; raw downloads and backups use externalRoot.",
+    summary: "Populate the local runtime vault; raw downloads and backups use externalRoot.",
     runner: "bun-script",
     target: "setup:vault",
     cwdModes: ["root"],

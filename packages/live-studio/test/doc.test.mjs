@@ -30,7 +30,7 @@ if (typeof Bun !== "undefined") {
   });
 }
 globalThis.window = globalThis;
-const { createDoc, undo, redo } = await import("../app/core/doc.ts");
+const { createDoc, undo, redo, together } = await import("../app/core/doc.ts");
 const { createTimedDoc } = await import("../app/core/timed-doc.ts");
 const { setTiming } = await import("../src/timing-state.mjs");
 const { TextTimeline } = await import("../src/contract.ts");
@@ -68,6 +68,145 @@ const saveNow = async (t) => {
   t.mock.timers.tick(300);
   for (let i = 0; i < 5; i++) await settle();
 };
+
+test("a server merge updates the page without losing an edit made while saving", async (t) => {
+  const doc = await open(t, "merge.json", { camera: 50, music: "old" });
+  const original = globalThis.fake.post;
+  t.after(() => {
+    globalThis.fake.post = original;
+  });
+  let reply;
+  globalThis.fake.post = () =>
+    new Promise((done) => {
+      reply = done;
+    });
+  doc.edit((d) => {
+    d.camera = 60;
+  });
+  t.mock.timers.tick(300);
+  await settle();
+  doc.edit((d) => {
+    d.camera = 65;
+  });
+  reply(Response.json({ version: "merged", data: { camera: 60, music: "new" }, retained: [] }));
+  for (let i = 0; i < 5; i++) await settle();
+  assert.deepEqual(doc.data, { camera: 65, music: "new" });
+  undo();
+  assert.deepEqual(doc.data, { camera: 60, music: "new" });
+  undo();
+  assert.deepEqual(doc.data, { camera: 50, music: "new" });
+});
+
+test("a merge preserves both halves of grouped undo", async (t) => {
+  const a = await open(t, "group-a", { camera: 50, music: "old" });
+  files.set("group-b", { version: "group-base", data: { cut: 5 } });
+  const b = createDoc("group-b", { label: "cut", changed: () => {} });
+  await b.load();
+  const post = globalThis.fake.post;
+  t.after(() => {
+    globalThis.fake.post = post;
+  });
+  globalThis.fake.post = async () =>
+    Response.json({
+      versions: { "group-a": "a-new", "group-b": "b-new" },
+      files: { "group-a": { camera: 60, music: "new" }, "group-b": { cut: 6 } },
+    });
+  together(() => {
+    a.edit((d) => {
+      d.camera = 60;
+    });
+    b.edit((d) => {
+      d.cut = 6;
+    });
+  });
+  await saveNow(t);
+  undo();
+  assert.deepEqual(a.data, { camera: 50, music: "new" });
+  assert.deepEqual(b.data, { cut: 5 });
+});
+
+test("Undo after an AI reorder keeps the AI order and independent values", async (t) => {
+  const doc = await open(t, "reorder", {
+    items: [
+      { id: "A", x: 0 },
+      { id: "B", x: 0 },
+    ],
+    music: "old",
+  });
+  const post = globalThis.fake.post;
+  t.after(() => {
+    globalThis.fake.post = post;
+  });
+  globalThis.fake.post = async () =>
+    Response.json({
+      version: "reordered",
+      data: {
+        items: [
+          { id: "B", x: 20 },
+          { id: "A", x: 10 },
+        ],
+        music: "new",
+      },
+    });
+  doc.edit((d) => {
+    d.items[0].x = 10;
+  });
+  await saveNow(t);
+  undo();
+  assert.deepEqual(doc.data, {
+    items: [
+      { id: "B", x: 20 },
+      { id: "A", x: 0 },
+    ],
+    music: "new",
+  });
+});
+
+test("a canonical reply during a timed drag cannot turn stale preview fields into new edits", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  setTiming({}, 10);
+  const base = {
+    items: [
+      { id: "A", name: "Original", from: 0, to: 2, track: 0, grade: { basic: { exposure: 0 } } },
+    ],
+  };
+  agentWrites("adjustment", base);
+  const doc = createTimedDoc("adjustment", { label: "grade", changed: () => {} });
+  await doc.load();
+  const post = globalThis.fake.post;
+  t.after(() => {
+    globalThis.fake.post = post;
+  });
+  let reply;
+  globalThis.fake.post = () =>
+    new Promise((done) => {
+      reply = done;
+    });
+  doc.edit((d) => {
+    d.items[0].grade.basic.exposure = 1;
+  });
+  t.mock.timers.tick(300);
+  await settle();
+  const before = doc.snapshot();
+  doc.preview((d) => {
+    d.items[0].to = 3;
+  });
+  const canonical = structuredClone(base);
+  canonical.items[0].name = "Agent renamed";
+  canonical.items[0].grade.basic.exposure = 1;
+  reply(Response.json({ version: "merged-drag", data: canonical }));
+  for (let i = 0; i < 5; i++) await settle();
+  const next = JSON.parse(doc.snapshot());
+  doc.restore(before);
+  doc.edit((d) => {
+    d.items = next.items;
+  });
+  assert.equal(doc.data.items[0].name, "Agent renamed");
+  assert.equal(doc.data.items[0].to, 3);
+  undo();
+  assert.equal(doc.data.items[0].name, "Agent renamed");
+  assert.equal(doc.data.items[0].to, 2);
+});
 
 test("a text drag commits its displayed snapshot once, then undo restores the original source interval", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -129,7 +268,7 @@ test("resetting an unchanged value neither consumes Undo nor discards Redo or se
   assert.equal(doc.data.rate, 2);
 });
 
-test("an agent's version arriving during a drag waits, and the drag's edit gives way to it", async (t) => {
+test("an unknown base refuses the save without discarding the person's unsaved drag", async (t) => {
   const doc = await open(t, "b.json", { t: 1 });
   const snap = doc.snapshot();
   doc.preview((d) => {
@@ -154,7 +293,7 @@ test("an agent's version arriving during a drag waits, and the drag's edit gives
     { t: 1, note: "agent" },
     "the save was refused, the agent's file stands",
   );
-  assert.deepEqual(doc.data, { t: 1, note: "agent" }, "and the page shows it");
+  assert.deepEqual(doc.data, { t: 3 }, "the person's edit stays available for recovery");
 });
 
 test("a drag back where it started still holds the agent's version off, and its drop still gives way", async (t) => {

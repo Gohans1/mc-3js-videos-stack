@@ -44,7 +44,7 @@ test("film timing persists speed and freeze, rejecting overlapping speeds and st
     TimingTimeline.safeParse({ speeds: [{ ...data.speeds[0], handles: [] }] }).success,
     false,
   );
-  assert.equal((await post(before.version, {})).status, 409);
+  assert.equal((await post("unknown", {})).status, 409);
   const invalid = { speeds: [data.speeds[0], { from: 8, to: 12, rate: 2 }] };
   assert.equal((await post(timing.read().version, invalid)).status, 400);
   assert.deepEqual(timing.read().data, data);

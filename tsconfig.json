@@ -22,6 +22,7 @@
     }
   },
   "include": [
+    "packages/live-studio/app/*.d.ts",
     "packages/film-kit/src",
     "packages/film-stage/src",
     "packages/mc-actor/src",

@@ -7,6 +7,7 @@ __pycache__/
 *.pem
 *.key
 /vault
+**/.studio/
 
 # a junction to .claude/skills for other agent tools
 /.agents/
