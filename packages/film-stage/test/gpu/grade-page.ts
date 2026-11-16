@@ -1,7 +1,7 @@
 // The grade as a film runs it (makeAdjustments on a postprocessing composer) over a known picture; test/grade-gpu.test.ts
 // calls window.grade(picture, basic, film) and reads the frame back as base64 RGB, top row first. film: the composer ends on an
 // EffectPass, as every film's does (scene.ts: look, feed), instead of on the RenderPass.
-import { EffectComposer, EffectPass, RenderPass } from "postprocessing";
+import { EffectComposer, EffectPass, LUT3DEffect, RenderPass } from "postprocessing";
 import * as THREE from "three";
 
 import { makeAdjustments, makeLayerAdjustments } from "../../src/grade";
@@ -71,6 +71,52 @@ const texture = (name: string) => {
 };
 
 Object.assign(window, {
+  finishLutTrial(repeats = 2) {
+    const colorLut = () =>
+      films.passes
+        .flatMap((pass) => (pass instanceof EffectPass ? pass.effects : []))
+        .find((effect) => effect instanceof LUT3DEffect)!.lut;
+    const start = performance.now();
+    filmAdjust(0, { basic: { contrast: 25 } }, 0);
+    const textures = new Set([colorLut()]);
+    for (const key of [
+      "sharpen",
+      "clarity",
+      "soften",
+      "halation",
+      "fringe",
+      "fisheye",
+      "vignette",
+      "particles",
+      "dither",
+    ])
+      for (let i = 0; i < repeats; i++) {
+        filmAdjust(0, { basic: { contrast: 25, [key]: 20 + (i % 60) } }, 0);
+        textures.add(colorLut());
+      }
+    const ms = performance.now() - start;
+    const invalidates = [];
+    for (const settings of [
+      { basic: { contrast: 26 } },
+      { basic: { contrast: 26 }, hsl: { red: { saturation: 30 } } },
+      {
+        basic: { contrast: 26 },
+        curves: {
+          red: [
+            [0, 0],
+            [0.5, 0.6],
+            [1, 1],
+          ],
+        },
+      },
+      { basic: { contrast: 26 }, wheels: { offset: { rgb: [0.1, 0, 0] } } },
+    ] as Parameters<typeof filmAdjust>[1][]) {
+      const previous = colorLut();
+      filmAdjust(0, settings, 0);
+      invalidates.push(previous !== colorLut());
+    }
+    return { ms, finishLuts: textures.size, invalidates };
+  },
   grade(
     picture: string,
     basic: Record<string, number>,
