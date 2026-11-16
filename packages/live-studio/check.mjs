@@ -33,7 +33,8 @@ import {
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
-import { findVaults, openSound } from "./src/sound.mjs";
+import { findVaults, openSound, probeAudio } from "./src/sound.mjs";
+import { tell } from "./src/tell.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
 import { clockForTimeline } from "./src/timing-state.mjs";
 import { assertInsideDir } from "./src/voice-map.mjs";
@@ -43,10 +44,11 @@ src/edit.json or package.json "live-studio". Run inside the film.
   bun run check           the problems, each under the file it is in, or "ok"
   bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}], "warnings": [text]}
 Checks every timeline file against its schema (src/contract.ts, the studio's own), that every other .json in src/ parses,
-and every sound name in the sound timeline (beds, sfx and their "try" options) against the sounds the studio can play,
-with the nearest names or the other film whose own sound it is, and that every take said on screen ("by") has its mouth
-shapes (bun run voice:lips). Warns (⚠, still exit 0) of on-screen text too brief to read or too small for a phone; where it sits
-and how it reads over the picture: CHECK=text bun run render stills.
+every "look" and "handheld" preset name and misspelt keys, every sound name in the sound timeline (beds, sfx and their "try"
+options) against the sounds the studio can play (with the nearest names or the other film whose own sound it is), and that
+every take said on screen ("by") has its mouth shapes (bun run voice:lips). Warns (⚠, still exit 0) of camera keys setting
+both "mm" and "fov", shot "hits[].t" outside its shot, and on-screen text too brief to read or too small for a phone; where
+it sits and how it reads over the picture: CHECK=text bun run render stills.
 Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
 Exit 0 ok, 1 problems found. Find a sound or preset by meaning: bun run find <words>.`;
 
@@ -102,21 +104,38 @@ const template = existsSync(join(TEMPLATE, "package.json"))
 // the files every check after opens: one outside the film (the studio refuses it, assertInsideDir) or a folder
 // (src/timeline, read as no file) is said alone, before any is opened
 const pathFaults = [
-  ...CONFIG_KEYS.filter((k) => k.endsWith("Timeline")).map((k) => [k, conf[k]]),
-  ...Object.keys(conf.keyFiles ?? {}).map((rel) => ["keyFiles", rel]),
-].flatMap(([k, rel]) => {
+  ...CONFIG_KEYS.filter((k) => k.endsWith("Timeline")).map((k) => [k, conf[k], true]),
+  ...Object.keys(conf.keyFiles ?? {}).map((rel) => ["keyFiles", rel, true]),
+  ...(typeof conf.sfx === "string" ? [["sfx", conf.sfx, false]] : []),
+  ...Object.values(conf.soundSources ?? {}).map((rel) => ["soundSources", rel, true]),
+  ...["choices.json", "sound_choices.json"].filter((rel) => existsSync(join(PROJECT, rel))).map((rel) => ["choices", rel, true]),
+].flatMap(([k, rel, expectFile]) => {
   if (typeof rel !== "string") return [];
   try {
-    assertInsideDir(PROJECT, rel, "Timeline file");
+    assertInsideDir(
+      PROJECT,
+      rel,
+      k === "sfx" ? "SFX folder" : k === "soundSources" ? "Sound source file" : "Timeline file",
+    );
   } catch (e) {
     return [`✖ "${k}": ${e.message}, which the studio refuses to open`];
   }
-  return statSync(join(PROJECT, rel), { throwIfNoEntry: false })?.isDirectory()
+  const stat = statSync(join(PROJECT, rel), { throwIfNoEntry: false });
+  if (expectFile && stat?.isDirectory())
+    return [
+      `✖ "${k}": "${rel}" is a folder; it names one ${k === "soundSources" ? "audio" : "JSON"} file${template[k] ? ` (the template film's: "${template[k]}")` : ""}`,
+    ];
+  return k === "sfx" && stat?.isFile()
     ? [
-        `✖ "${k}": "${rel}" is a folder; it names one JSON file${template[k] ? ` (the template film's: "${template[k]}")` : ""}`,
+        `✖ "${k}": "${rel}" is a file; it names a folder${typeof template[k] === "string" ? ` (the template film's: "${template[k]}")` : ""}`,
       ]
     : [];
 });
+try {
+  findVaults(PROJECT, conf);
+} catch (e) {
+  pathFaults.push(`✖ "soundVault": ${e.message}, which the studio refuses to open`);
+}
 if (pathFaults.length) stop(pathFaults.join("\n"));
 
 const found = checkFiles(contractFiles(PROJECT)).map((text) => {
@@ -158,6 +177,25 @@ for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFile
     });
   }
 }
+if (
+  typeof conf.timingTimeline === "string" &&
+  conf.timingTimeline &&
+  !existsSync(join(PROJECT, conf.timingTimeline)) &&
+  !found.some((p) => p.where === conf.timingTimeline)
+)
+  found.push({
+    where: conf.timingTimeline,
+    issue: `✖ missing: package.json "live-studio" names timingTimeline here (Vite and mix.py open it). Deleted or moved? git restore ${conf.timingTimeline}, write {}, or remove timingTimeline from package.json`,
+  });
+if (
+  conf.soundTimeline &&
+  !existsSync(join(PROJECT, "src/edit.json")) &&
+  !found.some((p) => p.where === "src/edit.json")
+)
+  found.push({
+    where: "src/edit.json",
+    issue: `✖ missing: package.json "live-studio" names soundTimeline, and mix.py reads src/edit.json. Deleted or moved? git restore src/edit.json, or write it anew`,
+  });
 
 for (const p of found) {
   const file = p.where.split(" ")[0];
@@ -210,8 +248,6 @@ const nearName = (k, names) =>
 // names are checked whenever the file parses; gains, keys and the end need rows of the right shape
 const soundBroken = found.find((p) => p.where === conf.soundTimeline);
 const soundParses = !soundBroken || !/not (valid )?JSON/.test(soundBroken.issue);
-if (soundBroken)
-  soundBroken.issue += `\n  gains and sounds after the end are checked once these are fixed`;
 // the film's length is read through edit.json and timing.json: a fault in either would throw there, so the checks
 // against the end wait for it
 const clockBroken = found.find(
@@ -233,10 +269,15 @@ const sound = (() => {
     return null;
   }
 })();
+let soundDurations = {};
 const lanesFile = sound && join(PROJECT, conf.soundTimeline);
 if (lanesFile && existsSync(lanesFile) && soundParses) {
   const lanes = JSON.parse(readFileSync(lanesFile, "utf8"));
-  const names = sound.library().map((x) => x.name),
+  const libItems = sound.library();
+  soundDurations = Object.fromEntries(
+    libItems.filter((x) => x.seconds > 0).map((x) => [x.name, x.seconds]),
+  );
+  const names = libItems.map((x) => x.name),
     known = new Set(names);
   const nearest = (name) =>
     names
@@ -265,20 +306,23 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
       issue: `✖ ${missing.size} of the ${used.size} sounds it names are not on this machine (${[...missing.keys()].slice(0, 5).join(", ")}${missing.size > 5 ? ", ..." : ""}): most of the sound files are not here yet, so the names cannot be checked (a typo among them shows once they are). 1. bun run sfx:get fetches the film's own (CC0 from Freesound into ${conf.sfx}/); 2. ${conf.soundVault === false ? 'drop "soundVault": false from package.json to hear the vault' : "cd ../.. && bun run link connects the vault"}; 3. bun run check again`,
     });
   // a film's own sounds are heard by it alone: a name copied from another film is found in that film's folder
-  const siblings = readdirSync(dirname(PROJECT), { withFileTypes: true }).flatMap((d) => {
-    const dir = join(dirname(PROJECT), d.name);
-    if (!d.isDirectory() || dir === PROJECT) return [];
-    try {
-      const sfx = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"))?.["live-studio"]?.sfx;
-      return typeof sfx === "string" ? [join(dir, sfx)] : [];
-    } catch {
-      return [];
-    }
-  });
-  const elsewhere = (name) =>
-    siblings
+  let siblingDirs;
+  const elsewhere = (name) => {
+    siblingDirs ??= readdirSync(dirname(PROJECT), { withFileTypes: true }).flatMap((d) => {
+      const dir = join(dirname(PROJECT), d.name);
+      if (!d.isDirectory() || dir === PROJECT) return [];
+      try {
+        const sfx = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"))?.["live-studio"]
+          ?.sfx;
+        return typeof sfx === "string" ? [join(dir, sfx)] : [];
+      } catch {
+        return [];
+      }
+    });
+    return siblingDirs
       .flatMap((dir) => [".wav", ".ogg"].map((ext) => join(dir, `${name}${ext}`)))
       .find((f) => existsSync(f));
+  };
   const issues = [...(absent ? [] : missing)].map(([name, at]) => {
     const other = elsewhere(name);
     const near = other ? [] : nearest(name);
@@ -313,7 +357,20 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
     issues.push(
       "  the Minecraft sounds (vault/mc-sound) are not on this machine: cd ../.. && bun run setup:mc-sound --help",
     );
+  for (const name of used) {
+    if (!known.has(name)) continue;
+    const file = sound.fileOf(name);
+    const info = file ? probeAudio(file) : null;
+    if (file && !(info && info.seconds > 0))
+      issues.push(
+        `✖ "${name}" (${relative(PROJECT, file).replaceAll("\\", "/")}): corrupt, empty (0 s), or unreadable audio file (mix.py / ffmpeg will fail)`,
+      );
+  }
   if (issues.length) found.push({ where: conf.soundTimeline, issue: issues.join("\n") });
+}
+if (soundBroken) {
+  const tail = found.findLast((p) => p.where === conf.soundTimeline);
+  if (tail) tail.issue += `\n  gains and sounds after the end are checked once these are fixed`;
 }
 
 // Where the sounds sit, read through the clocks the studio plays them on (the film's end: src/edit.json end, through the
@@ -377,12 +434,19 @@ keyTypos(
 const checkPreset = (where, slot, value, known, kind, { ignore = [], exact = true } = {}) => {
   if (typeof value !== "string" || !value) return;
   const clean = value.trim();
-  if (ignore.includes(clean.toLowerCase())) return;
+  const match = exact ? value : clean;
+  if (ignore.includes(match.toLowerCase())) return;
   const ok = exact
-    ? known.includes(clean)
-    : known.some((n) => n.toUpperCase() === clean.toUpperCase());
+    ? known.includes(match)
+    : known.some((n) => n.toUpperCase() === match.toUpperCase());
   if (ok) return;
-  const to = nearName(clean, known);
+  const to =
+    clean !== value &&
+    (exact ? known.includes(clean) : known.some((n) => n.toUpperCase() === clean.toUpperCase()))
+      ? exact
+        ? clean
+        : (known.find((n) => n.toUpperCase() === clean.toUpperCase()) ?? clean)
+      : nearName(clean, known);
   found.push({
     where,
     issue: `✖ ${slot} "${value}": no ${kind} preset has that name${to ? `; did you mean "${to}"?` : ""} (known ${kind}s: ${known.join(", ")})`,
@@ -428,13 +492,9 @@ if (Array.isArray(camRead)) {
         exact: false,
       });
     else if (hh && typeof hh === "object" && !Array.isArray(hh)) {
-      if ("preset" in hh)
-        checkPreset(conf.camTimeline, `[${i}].handheld.preset`, hh.preset, SHAKES, "shake", {
-          ignore: ["off", "none"],
-          exact: false,
-        });
-      if ("kind" in hh)
-        checkPreset(conf.camTimeline, `[${i}].handheld.kind`, hh.kind, SHAKES, "shake", {
+      const slot = hh.preset != null ? "preset" : hh.kind != null ? "kind" : null;
+      if (slot)
+        checkPreset(conf.camTimeline, `[${i}].handheld.${slot}`, hh[slot], SHAKES, "shake", {
           ignore: ["off", "none"],
           exact: false,
         });
@@ -546,7 +606,19 @@ if (Array.isArray(shotsRead)) {
       near(`anim.${slot}`, shot?.anim?.[slot]?.fx, ids(ANIMS[slot]));
     checkLook(conf.shotsTimeline, `[${i}].adjust.look`, shot?.adjust?.look);
     const next = shotsRead[i + 1];
-    const upper = typeof next?.t === "number" ? next.t : editEnd;
+    const upper =
+      typeof editEnd === "number" && typeof next?.t === "number"
+        ? Math.min(next.t, editEnd)
+        : typeof next?.t === "number"
+          ? next.t
+          : editEnd;
+    if (typeof editEnd === "number" && typeof shot?.t === "number" && shot.t >= editEnd) {
+      warnings.push(
+        `⚠ ${conf.shotsTimeline} [${i}].t (${shot.t}s): at or after edit.end (${editEnd}s)`,
+      );
+      return;
+    }
+    if (typeof upper === "number" && typeof shot?.t === "number" && upper <= shot.t) return;
     (Array.isArray(shot?.hits) ? shot.hits : []).forEach((hit, j) => {
       if (
         typeof hit?.t === "number" &&
@@ -579,24 +651,62 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
     warnings.push(
       `⚠ drive +${lanes.drive} dB (${conf.soundTimeline}): the mix's push into its limiter; over +12 every hit is flattened into the bed; the films use 0-12`,
     );
+  const defaultVoice = join(PROJECT, "assets/public/agent/full_voice.wav");
+  if (lanes.voice === true && !lanes.narration && !existsSync(defaultVoice))
+    found.push({
+      where: conf.soundTimeline,
+      issue: `✖ "voice": true without "narration", and assets/public/agent/full_voice.wav does not exist (set "voice": false, name "narration", or run bun run voice:assemble)`,
+    });
+  else if (lanes.voice !== false && !lanes.narration && existsSync(defaultVoice)) {
+    let issue;
+    try {
+      assertInsideDir(PROJECT, defaultVoice, "Voice audio");
+    } catch (e) {
+      issue = `✖ ${e.message}, which mix.py refuses to open`;
+    }
+    if (!issue && !(probeAudio(defaultVoice)?.seconds > 0))
+      issue = `✖ assets/public/agent/full_voice.wav: corrupt, empty (0 s), or unreadable audio file (mix.py / ffmpeg will fail)`;
+    if (issue) found.push({ where: conf.soundTimeline, issue });
+  }
+  (lanes.sfx ?? []).forEach((e, i) => {
+    if (
+      !muted.has(e.track) &&
+      typeof e.start === "number" &&
+      typeof soundDurations[e.name] === "number" &&
+      soundDurations[e.name] > 0 &&
+      e.start >= soundDurations[e.name]
+    )
+      found.push({
+        where: conf.soundTimeline,
+        issue: `✖ sfx[${i}] "${e.name}" has start ${e.start}: at or past the file's ${soundDurations[e.name].toFixed(2)} s, so nothing plays`,
+      });
+  });
   const ends = filmEnds();
   if (ends) {
-    const length = ends.layers;
-    const heard = mapTimeline("sound", lanes, clockForTimeline("sound"), false, null, {});
+    const soundClock = clockForTimeline("sound");
+    const clipEnd = (clip, list) => {
+      const clock = soundClock?.forClip ? soundClock.forClip(clip, list, lanes) : soundClock;
+      return clock ? Math.min(ends.layers, clock.duration) : ends.layers;
+    };
+    const heard = mapTimeline("sound", lanes, soundClock, false, null, soundDurations);
     const late = [
-      ...heard.beds.flatMap((c, i) =>
-        c.from >= length && !muted.has(lanes.beds[i].track)
-          ? [["beds", i, c.name, lanes.beds[i].from, c.from]]
-          : [],
-      ),
-      ...heard.sfx.flatMap((c, i) =>
-        c.at >= length && !muted.has(lanes.sfx[i].track)
-          ? [["sfx", i, c.name, lanes.sfx[i].at, c.at]]
-          : [],
-      ),
+      ...heard.beds.flatMap((c, i) => {
+        const end = clipEnd(lanes.beds[i], "beds");
+        return c.to > c.from && c.from >= end && !muted.has(lanes.beds[i].track)
+          ? [["beds", i, c.name, lanes.beds[i].from, c.from, end]]
+          : [];
+      }),
+      ...heard.sfx.flatMap((c, i) => {
+        const end = clipEnd(lanes.sfx[i], "sfx");
+        return !(c.length !== undefined && c.length <= 0) &&
+          c.at >= end &&
+          !muted.has(lanes.sfx[i].track)
+          ? [["sfx", i, c.name, lanes.sfx[i].at, c.at, end]]
+          : [];
+      }),
     ].map(
-      ([list, i, name, written, at]) =>
-        `✖ ${list}[${i}] "${name}" at ${+written.toFixed(2)}: after the film ends (${length.toFixed(2)} s heard), so never heard${Math.abs(at - written) > 0.01 ? ` (it plays at ${at.toFixed(2)} s heard)` : ""}`,
+      ([list, i, name, written, at, end]) =>
+        `✖ ${list}[${i}] "${name}" at ${+written.toFixed(2)}: after the film ends (${end.toFixed(2)} s heard), so never heard${Math.abs(at - written) > 0.01 ? ` (it plays at ${at.toFixed(2)} s heard)` : ""}`,
     );
     if (late.length)
       found.push({
@@ -620,28 +730,30 @@ const textRead = textPath && !textBroken && readJson(conf.textTimeline);
 if (Array.isArray(textRead?.items)) {
   // the heard seconds need the film's length (edit.json end); without it only the size floor is said
   const ends = filmEnds();
-  const heard = ends
-    ? mapTimeline("text", textRead, clockForTimeline("text"), false, null, {})
-    : null;
+  const textClock = ends ? clockForTimeline("text") : null;
+  const textEnd = textClock ? Math.min(ends.layers, textClock.duration) : ends?.layers;
+  const heard = textClock ? mapTimeline("text", textRead, textClock, false, null, {}) : null;
   const said = [],
     late = [];
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
+    // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
+    if (heard && (!h || h.to <= h.from)) return;
     // after the end, as a sound there: decor too, since nothing past the end is drawn
-    if (h && !it.hidden && !textRead.tracks?.[it.track ?? 0]?.hidden && h.from >= ends.layers) {
+    if (h && !it.hidden && !textRead.tracks?.[it.track ?? 0]?.hidden && h.from >= textEnd) {
       late.push(
-        `✖ items[${i}] "${String(it.text ?? it.kind).split("\n")[0]}" at ${+(+it.from).toFixed(2)}: after the film ends (${ends.layers.toFixed(2)} s heard), so never on screen${Math.abs(h.from - it.from) > 0.01 ? ` (it would show at ${h.from.toFixed(2)} s heard)` : ""}`,
+        `✖ items[${i}] "${String(it.text ?? it.kind).split("\n")[0]}" at ${+(+it.from).toFixed(2)}: after the film ends (${textEnd.toFixed(2)} s heard), so never on screen${Math.abs(h.from - it.from) > 0.01 ? ` (it would show at ${h.from.toFixed(2)} s heard)` : ""}`,
       );
       return;
     }
     if (!isRead(it, textRead.tracks)) return;
-    // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
-    if (heard && (!h || h.to <= h.from)) return;
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
-    const cut = h && h.to > ends.layers;
-    for (const fault of h ? readFaults(it, h, conf.ratio, ends.layers) : sizeFaults(it, conf.ratio))
+    const cut = h && h.to > textEnd;
+    for (const fault of h
+      ? readFaults(it, h, conf.ratio, textEnd, textClock)
+      : sizeFaults(it, conf.ratio))
       said.push(
-        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${(cut ? ends.layers : h.to).toFixed(2)} heard${cut ? ", cut by the film's end" : ""}` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
+        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${(cut ? textEnd : h.to).toFixed(2)} heard${cut ? ", cut by the film's end" : ""}` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
       );
   });
   if (late.length)
@@ -657,6 +769,33 @@ if (Array.isArray(textRead?.items)) {
     hints.push(
       `  decor not meant to be read takes "read": false; where each sits and how it reads over the picture: CHECK=text bun run render stills`,
     );
+  }
+}
+
+if (
+  conf.adjustmentTimeline &&
+  Array.isArray(adjRead?.items) &&
+  !found.some((p) => p.where === conf.adjustmentTimeline)
+) {
+  const ends = filmEnds();
+  if (ends) {
+    const adjClock = clockForTimeline("adjustment");
+    const adjEnd = adjClock ? Math.min(ends.layers, adjClock.duration) : ends.layers;
+    const heard = adjClock ? mapTimeline("adjustment", adjRead, adjClock, false, null, {}) : null;
+    const late = adjRead.items.flatMap((it, i) => {
+      const h = heard?.items?.[i];
+      if (!h || h.to <= h.from || adjRead.tracks?.[it.track ?? 0]?.hidden) return [];
+      return h.from >= adjEnd
+        ? [
+            `✖ items[${i}] "${it.name}" at ${+(+it.from).toFixed(2)}: after the film ends (${adjEnd.toFixed(2)} s heard), so never active${Math.abs(h.from - it.from) > 0.01 ? ` (it would play at ${h.from.toFixed(2)} s heard)` : ""}`,
+          ]
+        : [];
+    });
+    if (late.length)
+      found.push({
+        where: conf.adjustmentTimeline,
+        issue: [...late, "  move each earlier or remove it"].join("\n"),
+      });
   }
 }
 
@@ -677,4 +816,12 @@ else {
     `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)\nnext: fix each ✖ as it says, then bun run check`,
   );
 }
+await tell(PROJECT, {
+  say: problems.length
+    ? `Checked the film's files: ${problems.length} problem${problems.length > 1 ? "s" : ""} to fix`
+    : warnings.length
+      ? `Checked the film's files: fine, ${warnings.length} warning${warnings.length > 1 ? "s" : ""} to read`
+      : "Checked the film's files: all fine",
+  level: problems.length ? "fail" : warnings.length ? "warn" : "ok",
+});
 process.exit(found.length ? 1 : 0);

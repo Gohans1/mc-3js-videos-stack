@@ -29,7 +29,7 @@
       }
     },
     {
-      "files": ["app/notes/NoteList.tsx"],
+      "files": ["app/notes/NoteList.tsx", "app/components/VirtualList.tsx"],
       "rules": {
         "react/incompatible-library": "off"
       }

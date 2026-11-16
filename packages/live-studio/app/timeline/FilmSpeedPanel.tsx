@@ -17,6 +17,7 @@ import {
   SliderRow,
   ValueBox,
 } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { useFrame } from "../core/useFrame";
@@ -122,8 +123,21 @@ export function CurvePicture({ curve }: { curve: Curve }) {
   );
 }
 export function FilmSpeedPanel() {
-  const enabled = useStudio((s) => s.timing),
-    freezePick = useStudio((s) => s.freezePick),
+  const enabled = useStudio((s) => s.timing);
+  // The scroller lives here, not in CameraEasePanel: inside the Camera tab's own scroller a second overscroll-contain one swallowed the wheel
+  if (!enabled)
+    return (
+      <div
+        data-arrow-scroll
+        className="scroll-fade flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 *:shrink-0"
+      >
+        <CameraEasePanel />
+      </div>
+    );
+  return <TimingSpeedPanel />;
+}
+function TimingSpeedPanel() {
+  const freezePick = useStudio((s) => s.freezePick),
     saved = useStudio((s) => s.timingSaved);
   useStudio((s) => s.timingRev);
   useStudio((s) => s.shotPick);
@@ -137,16 +151,6 @@ export function FilmSpeedPanel() {
       speedPreview.current = null;
     },
   };
-  // The scroller lives here, not in CameraEasePanel: inside the Camera tab's own scroller a second overscroll-contain one swallowed the wheel
-  if (!enabled)
-    return (
-      <div
-        data-arrow-scroll
-        className="scroll-fade flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 *:shrink-0"
-      >
-        <CameraEasePanel />
-      </div>
-    );
   const freezes = freezesOf(timing);
   const freeze = freezePick === null ? null : freezes[freezePick];
   if (freeze && !freeze.blank)
@@ -217,107 +221,111 @@ export function FilmSpeedPanel() {
           { id: "velocity", title: "Velocity effects" },
         ]}
       />
-      {tab === "standard" && (
-        <Section
-          title="Speed"
-          right={<Reset label="Reset speed" onClick={() => setShotSpeed(shot, null)} />}
-        >
-          <SliderRow
-            label="Shot speed"
-            value={rate}
-            min={0.1}
-            max={10}
-            step={0.01}
-            digits={2}
-            unit="×"
-            doc={speedDoc}
-            preview={(v) => {
-              if (speedPreview.current) timingDoc.restore(speedPreview.current);
-              setShotSpeed(shot, { rate: v }, true);
-            }}
-            save={(v) => setShotSpeed(shot, { rate: v })}
-          />
-          <FieldRow label="Duration">
-            <span className="text-ui tabular-nums">{(to - from).toFixed(2)}s</span>
-            <ArrowRight className="text-muted-foreground mx-2 size-4 flex-1" />
-            <ValueBox
-              name="Shot duration"
-              value={duration}
-              step={1 / 30}
+      <TabStage activeKey={tab} order={["standard", "curve", "velocity"]}>
+        {tab === "standard" && (
+          <Section
+            title="Speed"
+            right={<Reset label="Reset speed" onClick={() => setShotSpeed(shot, null)} />}
+          >
+            <SliderRow
+              label="Shot speed"
+              value={rate}
+              min={0.1}
+              max={10}
+              step={0.01}
               digits={2}
-              unit="s"
-              min={(to - from) / 10 + held}
-              max={(to - from) * 10 + held}
-              onSave={(v) =>
-                setShotSpeed(shot, { rate: Math.max(0.1, Math.min(10, (to - from) / (v - held))) })
-              }
+              unit="×"
+              doc={speedDoc}
+              preview={(v) => {
+                if (speedPreview.current) timingDoc.restore(speedPreview.current);
+                setShotSpeed(shot, { rate: v }, true);
+              }}
+              save={(v) => setShotSpeed(shot, { rate: v })}
             />
-          </FieldRow>
-        </Section>
-      )}
-      {tab === "curve" && (
-        <>
-          <ul aria-label="Speed curves" className="grid grid-cols-4 gap-x-2.5 gap-y-3 px-3 py-2">
-            {[
-              { title: "None", curve: null },
-              { title: "Custom", curve: curve ?? flat },
-              ...presets,
-            ].map((p) => {
-              const selected =
-                p.title === "None"
-                  ? !speed || !!shotVelocity(shot)
-                  : p.title === "Custom"
-                    ? !!curve && !matched
-                    : matched === p.title;
-              return (
-                <li key={p.title} className="flex min-w-0 flex-col items-center gap-1">
-                  <button
-                    type="button"
-                    aria-label={`Speed curve ${p.title}`}
-                    aria-pressed={selected}
-                    onClick={() =>
-                      setShotSpeed(
-                        shot,
-                        p.curve ? smoothSpeedCurve(structuredClone(p.curve)) : null,
-                      )
-                    }
-                    className="bg-raised-2 text-warn hover:ring-border focus-visible:ring-ring aria-pressed:ring-primary relative grid aspect-square w-full place-items-center overflow-hidden rounded-md ring-2 ring-transparent outline-none"
-                  >
-                    {p.title === "None" ? (
-                      <CircleSlash className="text-muted-foreground size-6" />
-                    ) : p.title === "Custom" ? (
-                      <SlidersHorizontal className="size-6" />
-                    ) : (
-                      <CurvePicture curve={p.curve!} />
-                    )}
-                  </button>
-                  <span className="w-full truncate text-center text-xs">{p.title}</span>
-                </li>
-              );
-            })}
-          </ul>
-          {curve && (
-            <div className="bg-curve mx-3 my-3 overflow-hidden rounded-md">
-              <p className="text-ui flex justify-between border-b px-3 py-2 tabular-nums">
-                <span>Duration</span>
-                <span>
-                  {(to - from).toFixed(2)}s → {duration.toFixed(2)}s
-                </span>
-              </p>
-              <SpeedCurve
-                key={shot}
-                value={curve}
-                handles={speed?.handles}
-                playhead={(timingClock.sourceAt(S.t) - from) / (to - from)}
-                doc={timingDoc}
-                preview={(value) => setShotSpeed(shot, smoothSpeedCurve(value), true)}
-                save={(value) => setShotSpeed(shot, smoothSpeedCurve(value))}
+            <FieldRow label="Duration">
+              <span className="text-ui tabular-nums">{(to - from).toFixed(2)}s</span>
+              <ArrowRight className="text-muted-foreground mx-2 size-4 flex-1" />
+              <ValueBox
+                name="Shot duration"
+                value={duration}
+                step={1 / 30}
+                digits={2}
+                unit="s"
+                min={(to - from) / 10 + held}
+                max={(to - from) * 10 + held}
+                onSave={(v) =>
+                  setShotSpeed(shot, {
+                    rate: Math.max(0.1, Math.min(10, (to - from) / (v - held))),
+                  })
+                }
               />
-            </div>
-          )}
-        </>
-      )}
-      {tab === "velocity" && <VelocityPanel key={shot} shot={shot} />}
+            </FieldRow>
+          </Section>
+        )}
+        {tab === "curve" && (
+          <>
+            <ul aria-label="Speed curves" className="grid grid-cols-4 gap-x-2.5 gap-y-3 px-3 py-2">
+              {[
+                { title: "None", curve: null },
+                { title: "Custom", curve: curve ?? flat },
+                ...presets,
+              ].map((p) => {
+                const selected =
+                  p.title === "None"
+                    ? !speed || !!shotVelocity(shot)
+                    : p.title === "Custom"
+                      ? !!curve && !matched
+                      : matched === p.title;
+                return (
+                  <li key={p.title} className="flex min-w-0 flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={`Speed curve ${p.title}`}
+                      aria-pressed={selected}
+                      onClick={() =>
+                        setShotSpeed(
+                          shot,
+                          p.curve ? smoothSpeedCurve(structuredClone(p.curve)) : null,
+                        )
+                      }
+                      className="bg-raised-2 text-warn-text hover:ring-border focus-visible:ring-ring aria-pressed:ring-primary relative grid aspect-square w-full place-items-center overflow-hidden rounded-md ring-2 ring-transparent outline-none"
+                    >
+                      {p.title === "None" ? (
+                        <CircleSlash className="text-muted-foreground size-6" />
+                      ) : p.title === "Custom" ? (
+                        <SlidersHorizontal className="size-6" />
+                      ) : (
+                        <CurvePicture curve={p.curve!} />
+                      )}
+                    </button>
+                    <span className="w-full truncate text-center text-xs">{p.title}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {curve && (
+              <div className="bg-curve-bg mx-3 my-3 overflow-hidden rounded-md">
+                <p className="text-ui flex justify-between border-b px-3 py-2 tabular-nums">
+                  <span>Duration</span>
+                  <span>
+                    {(to - from).toFixed(2)}s → {duration.toFixed(2)}s
+                  </span>
+                </p>
+                <SpeedCurve
+                  key={shot}
+                  value={curve}
+                  handles={speed?.handles}
+                  playhead={(timingClock.sourceAt(S.t) - from) / (to - from)}
+                  doc={timingDoc}
+                  preview={(value) => setShotSpeed(shot, smoothSpeedCurve(value), true)}
+                  save={(value) => setShotSpeed(shot, smoothSpeedCurve(value))}
+                />
+              </div>
+            )}
+          </>
+        )}
+        {tab === "velocity" && <VelocityPanel key={shot} shot={shot} />}
+      </TabStage>
     </div>
   );
 }

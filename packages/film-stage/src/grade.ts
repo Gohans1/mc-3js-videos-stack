@@ -355,6 +355,8 @@ class FramebufferEffect extends TextureEffect {
 }
 
 // The shared layer sits above the finished picture, including transitions and titles.
+export const hasGradeEffect = (g?: Grade | null) => !!g && hasActiveGrade(resolveGrade(g));
+
 // A GPU framebuffer copy preserves that order without reading pixels back to the CPU.
 export function makeLayerAdjustments(renderer: WebGLRenderer) {
   const size = renderer.getDrawingBufferSize(new Vector2());
@@ -364,7 +366,7 @@ export function makeLayerAdjustments(renderer: WebGLRenderer) {
   composer.addPass(new EffectPass(camera, new FramebufferEffect(texture)));
   const apply = makeAdjustments(composer, camera);
   const draw = (layers: { grade: Grade }[], t: number, bypass = false) => {
-    if (bypass || !layers.some(({ grade: g }) => hasActiveGrade(resolveGrade(g)))) return;
+    if (bypass || !layers.some(({ grade: g }) => hasGradeEffect(g))) return;
     renderer.getDrawingBufferSize(size);
     if (texture.image.width !== size.x || texture.image.height !== size.y) {
       texture.dispose();

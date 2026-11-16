@@ -4,6 +4,7 @@
 // step (Ctrl+Z), shared with the sound
 import { fovOf } from "film-stage/camera";
 import { AudioLines, Hourglass, Scissors, Trash2, Video } from "lucide-react";
+import { lazy, Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,23 @@ import { S } from "../core/state";
 import { get, useStudio } from "../core/store";
 import { SAME, stamp } from "../core/time";
 import { useFrame } from "../core/useFrame";
+import { useFrameKey } from "../core/useFrameKey";
+
+let keyTimesRev = -1,
+  keyTimesArr: number[] = [];
+const keyTimes = () => {
+  const rev = get().camRev;
+  if (keyTimesRev !== rev) {
+    keyTimesRev = rev;
+    keyTimesArr = keys.map((x) => x.t);
+  }
+  return keyTimesArr;
+};
+
+function PlayheadStamp() {
+  useFrame();
+  return <span className="tabular-nums">{stamp(S.t)}</span>;
+}
 import { keyNav } from "../keys/keynav";
 import { seek } from "../playback/transport";
 import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
@@ -50,7 +68,10 @@ import {
   splitShot,
 } from "./cam";
 import { renameShot } from "./shots";
-import { CameraEasePanel } from "./SpeedPanel";
+
+const CameraEasePanel = lazy(() =>
+  import("../shell/LazyPanels").then((m) => ({ default: m.CameraEasePanel })),
+);
 
 // The shot name field, which the camera row's Rename (CameraTrack.tsx) focuses
 export const SHOT_NAME_ID = "shot-name";
@@ -188,16 +209,17 @@ function TimeField({ i }: { i: number }) {
 
 const DEG = 180 / Math.PI;
 function KeySection() {
-  useFrame();
+  useFrameKey(() => {
+    const i = shownKey(S.t);
+    const k = keys[i];
+    const nav = keyNav(keyTimes(), S.t, SAME);
+    return `${get().camRev}:${i}:${nav.prev}:${nav.next}:${!!k && Math.abs(k.t - S.t) < SAME ? 1 : 0}`;
+  });
   const free = useStudio((s) => s.free),
     shots = useStudio((s) => s.shots);
   const i = shownKey(S.t),
     k = keys[i],
-    nav = keyNav(
-      keys.map((x) => x.t),
-      S.t,
-      SAME,
-    );
+    nav = keyNav(keyTimes(), S.t, SAME);
   const here = !!k && Math.abs(k.t - S.t) < SAME,
     cut = !!k?.cut;
   const go = (t: number | null) => {
@@ -266,7 +288,7 @@ function KeySection() {
               {!here && (
                 <span className="text-muted-foreground">
                   {" "}
-                  · picked, the playhead is at <span className="tabular-nums">{stamp(S.t)}</span>
+                  · picked, the playhead is at <PlayheadStamp />
                 </span>
               )}
             </p>
@@ -400,7 +422,7 @@ export function CamPanel() {
   useStudio((s) => s.camRev);
   useStudio((s) => s.shotPick);
   const picks = useStudio((s) => s.camPicks);
-  useFrame();
+  useFrameKey(() => shownShot());
   if (!keys.length) return null;
   return (
     <div
@@ -411,7 +433,9 @@ export function CamPanel() {
       <ShotSection shot={shownShot()} />
       {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}
       <Section title="Keyframe easing" closed>
-        <CameraEasePanel />
+        <Suspense fallback={null}>
+          <CameraEasePanel />
+        </Suspense>
       </Section>
     </div>
   );

@@ -1,210 +1,190 @@
-// The side list: notes still to fix, then the fixed ones folded away under them. CapCut has no notes list, so it follows
-// Frame.io's comments panel: a search over the words, what was tapped and the shot, a Show menu (drawn notes, this shot) and a
-// Sort menu (film order, newest, oldest). Both To-fix and Done cards share one scannable anatomy with a compact frame thumbnail
-// that enlarges in a floating portal on hover. Only the cards in view are built (@tanstack/react-virtual): a film with thousands
-// of notes plays as smoothly as one with none. In film order the list keeps the note at the playhead in view, unless a finger or
-// wheel moved it in the last few seconds or a note is being edited.
-import { PreviewCard } from "@base-ui/react/preview-card";
 import { defaultRangeExtractor, type Range, useVirtualizer } from "@tanstack/react-virtual";
 import {
-  Check,
-  CheckCircle2,
+  ArrowUpDown,
+  BarChart3,
+  CalendarDays,
+  ChevronDown,
   ChevronRight,
   ClipboardCheck,
-  Crosshair,
+  Columns3,
+  GanttChart,
+  LayoutGrid,
+  LayoutList,
+  List,
   ListFilter,
-  MessageCircleQuestion,
-  PenLine,
+  Loader2,
+  type LucideIcon,
+  MessagesSquare,
+  Pencil,
+  Plus,
   RotateCcw,
-  Video,
-  X,
-  ZoomIn,
+  Table2,
+  Trash2,
 } from "lucide-react";
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  memo,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
+import { Tabs } from "@/components/Tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/ui/callout";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  INITIAL_VIRTUAL_RECT,
+  measureVirtualElement,
+  observeVirtualRect,
+  scrollVirtualElement,
+} from "@/components/virtual-utils";
 import { cn } from "@/lib/utils";
 
-import { SaveStatus } from "../components/inspector";
+import { useLit, useLitAny } from "../activity/activity";
+import { type SaveState, SaveStatus } from "../components/inspector";
+import { prefersReduced, TabStage } from "../components/Motion";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
-import { PHONE } from "../core/device";
-import { set, useStudio } from "../core/store";
-import { rangeText, stamp } from "../core/time";
-import { frameSize } from "../picture/frame";
-import { inkWords } from "./ink";
-import { noteRangePill, noteShotTitle, pinShortLabel } from "./note-card-meta";
+import { PHONE, useUpright } from "../core/device";
+import { S } from "../core/state";
+import { set, setPref, useStudio } from "../core/store";
+import { stamp } from "../core/time";
+import { reloadNow } from "../playback/transport";
+import { Compose } from "./Compose";
+import { noteActionTarget, noteShotTitle } from "./note-card-meta";
 import {
-  approveNote,
+  ActiveFilterChips,
+  CheckActions,
+  Empty,
+  ExpandableNoteText,
+  InlineFeedbackBox,
+  NoteCardHeader,
+  NoteDoneActions,
+  NoteFollowups,
+  NoteOpenActions,
+  NoteStatusGlyph,
+  noteSurfaceClass,
+  NoteTags,
+  NoteThumb,
+  openNoteRow,
+} from "./note-parts";
+import {
+  buildShotFilterOptions,
+  combineFilteredNotes,
+  countNoteFacets,
+  EXTRA_NOTE_VIEWS,
+  isCreatorNeedsWork,
+  isNoteAsking,
+  isOverflowNoteView,
+  NOTE_FACETS,
+  NOTE_VIEWS,
+  type NoteView,
+  PRIMARY_NOTE_VIEWS,
+} from "./note-views-model";
+const loadNoteViews = () => import("./LazyNoteViews");
+const NoteBoardView = lazy(() => loadNoteViews().then((m) => ({ default: m.NoteBoardView })));
+const NoteGalleryView = lazy(() => loadNoteViews().then((m) => ({ default: m.NoteGalleryView })));
+const NoteListView = lazy(() => loadNoteViews().then((m) => ({ default: m.NoteListView })));
+const NoteTableView = lazy(() => loadNoteViews().then((m) => ({ default: m.NoteTableView })));
+const NoteCalendarView = lazy(() => loadNoteViews().then((m) => ({ default: m.NoteCalendarView })));
+const NoteChartView = lazy(() => loadNoteViews().then((m) => ({ default: m.NoteChartView })));
+const NoteFeedView = lazy(() =>
+  import("./NoteInsightViews").then((m) => ({ default: m.NoteFeedView })),
+);
+const NoteTimelineView = lazy(() =>
+  import("./NoteInsightViews").then((m) => ({ default: m.NoteTimelineView })),
+);
+import {
+  clearNoteFilters,
   editOldNote,
-  goToNote,
-  noteMedia,
+  noteNum,
+  openNote,
+  originOf,
   type Placed,
   removeNote,
   reopenNote,
-  reviewNote,
   setReview,
   shownNotes,
 } from "./notes";
-import { type Fix, type Mark, type Note, type NoteShow, type NoteSort } from "./slice";
+import { type NoteFacet, type NoteScope, type NoteSort, type NoteStatusFilter } from "./slice";
 
 const HOLD_LIST = 4000;
-const cardBase =
-  "group/card relative rounded-xl border p-2.5 shadow-xs transition-colors duration-150 ease-out";
-const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+const EMPTY_FACETS: NoteFacet[] = [];
 
-const Empty = ({ children }: { children: ReactNode }) => (
-  <div className="text-muted-foreground px-0.5 py-2">{children}</div>
-);
+const NOTE_VIEW_META: Record<NoteView, { label: string; icon: LucideIcon; tip: string }> = {
+  cards: { label: "Cards", icon: LayoutList, tip: "Detailed card stream" },
+  list: { label: "List", icon: List, tip: "Compact scannable rows" },
+  board: { label: "Board", icon: Columns3, tip: "Kanban columns by status or shot" },
+  gallery: { label: "Gallery", icon: LayoutGrid, tip: "Visual frame & pin grid" },
+  table: { label: "Table", icon: Table2, tip: "Sortable spreadsheet table" },
+  timeline: { label: "Timeline", icon: GanttChart, tip: "Chronological shot tracks" },
+  calendar: { label: "Calendar", icon: CalendarDays, tip: "Month calendar by date" },
+  feed: { label: "Feed", icon: MessagesSquare, tip: "Full conversation thread stream" },
+  chart: { label: "Chart", icon: BarChart3, tip: "Bar & donut breakdowns" },
+};
 
-function FixCallout({ fix }: { fix: Fix }) {
+function DenseNoteBody({
+  note,
+  t,
+  shotFull,
+  clampLines,
+  showOpenButton = false,
+  openLabel,
+  openTitle,
+  onOpen,
+  muted,
+  actions,
+}: {
+  note: Placed["n"];
+  t: number;
+  shotFull: string;
+  clampLines: 1 | 2;
+  showOpenButton?: boolean;
+  openLabel: string;
+  openTitle?: string;
+  onOpen: (el: HTMLElement) => void;
+  muted?: boolean;
+  actions?: ReactNode;
+}) {
   return (
-    <Callout variant="ok" className="mt-2">
-      <CheckCircle2 aria-hidden />
-      <div className="min-w-0 flex-1 wrap-anywhere">
-        <span className="text-foreground/95">{fix.what}</span>
-        <span className="text-tag text-label/75 ms-1.5 inline-block font-mono tabular-nums">
-          {fix.checkpoint ? `${fix.checkpoint} · ` : ""}
-          {day.format(new Date(fix.at))}
-        </span>
-      </div>
-    </Callout>
-  );
-}
-
-function NoteTags({ note }: { note: Note }) {
-  const pinName = pinShortLabel(note.pin?.what);
-  const range = noteRangePill(note);
-  const marks = note.marks as Mark[] | undefined;
-  const hasMarks = Boolean(marks?.length);
-  if (!pinName && !range && !note.freeCam && !hasMarks) return null;
-  return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1">
-      {pinName && (
-        <Badge variant="tag" title={note.pin!.what} className="max-w-44">
-          <Crosshair aria-hidden className="text-primary" />
-          <span className="truncate">{pinName}</span>
-        </Badge>
-      )}
-      {range && <Badge variant="inOut">{rangeText(range)}</Badge>}
-      {note.freeCam && (
-        <Badge variant="tag">
-          <Video aria-hidden className="text-warn" />
-          Free cam
-        </Badge>
-      )}
-      {hasMarks && (
-        <Badge variant="ink">
-          <PenLine aria-hidden />
-          <span className="wrap-anywhere">{inkWords(marks!)}</span>
-        </Badge>
-      )}
-    </div>
-  );
-}
-
-// Compact frame thumbnail shared by both To-fix and Done cards; hovering opens a full-detail floating frame preview
-function NoteThumb({ note, t, shotFull }: { note: Note; t: number; shotFull: string }) {
-  const media = noteMedia(note);
-  if (!media.thumb) return null;
-  const [w, h] = frameSize(960);
-  const portrait = h > w;
-  const pinName = pinShortLabel(note.pin?.what);
-  const timeText = stamp(t);
-  return (
-    <PreviewCard.Root>
-      <PreviewCard.Trigger
-        delay={100}
-        closeDelay={75}
-        render={
-          <button
-            type="button"
-            aria-label={`Preview frame at ${timeText} (click to jump)`}
-            onClick={(e) => {
-              e.stopPropagation();
-              goToNote(note);
-            }}
-            className={cn(
-              "group/thumb bg-backdrop hover:outline-primary/85 focus-visible:ring-ring relative flex-none cursor-pointer overflow-hidden rounded-md shadow-xs outline-1 -outline-offset-1 outline-white/12 transition-colors duration-150 ease-out focus-visible:ring-2",
-              portrait ? "h-16 w-auto" : "aspect-video w-21",
-            )}
-          />
-        }
-      >
-        <img
-          src={media.thumb}
-          loading="lazy"
-          decoding="async"
-          width={w}
-          height={h}
-          alt=""
-          className="block size-full object-cover"
+    <div className="mt-1 flex items-center gap-1.5">
+      <div className="min-w-0 flex-1">
+        <ExpandableNoteText
+          text={note.text}
+          dense
+          showOpenButton={showOpenButton}
+          clampLines={clampLines}
+          openLabel={openLabel}
+          openTitle={openTitle}
+          onOpen={onOpen}
         />
-        <span
-          aria-hidden
-          className="text-picture/85 group-hover/thumb:text-primary pointer-events-none absolute right-1 bottom-1 flex size-4 items-center justify-center rounded-sm bg-black/65 transition-colors duration-150 group-hover/thumb:bg-black/85"
-        >
-          <ZoomIn className="size-2.5" />
-        </span>
-      </PreviewCard.Trigger>
-      <PreviewCard.Portal>
-        <PreviewCard.Positioner
-          side="right"
-          align="center"
-          sideOffset={10}
-          collisionPadding={12}
-          className="isolate z-50"
-        >
-          <PreviewCard.Popup
-            data-note-preview={note.id}
-            className={cn(
-              "bg-popover text-popover-foreground shadow-float motion-safe:data-closed:animate-out motion-safe:data-closed:fade-out-0 motion-safe:data-closed:zoom-out-95 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:zoom-in-95 max-w-sm origin-(--transform-origin) overflow-hidden rounded-xl p-1.5 ring-1 ring-white/15 motion-safe:duration-150",
-              portrait ? "w-60" : "w-96",
-            )}
-          >
-            <div className="bg-backdrop relative overflow-hidden rounded-lg outline-1 -outline-offset-1 outline-white/10">
-              <img
-                src={media.thumb}
-                width={w}
-                height={h}
-                alt={`Frame at ${timeText}`}
-                className={cn("block", portrait ? "mx-auto max-h-80 w-auto" : "h-auto w-full")}
-              />
-              {note.pin && media.crop && (
-                <img
-                  src={media.crop}
-                  width={480}
-                  height={480}
-                  alt={`Pinned detail: ${note.pin.what}`}
-                  className="border-primary/75 bg-backdrop pointer-events-none absolute bottom-1.5 left-1.5 size-14 rounded-md border object-cover shadow-md"
-                />
-              )}
-            </div>
-            <div className="mt-1.5 flex items-center gap-1.5 px-1 pb-0.5 text-xs">
-              <span className="text-primary font-mono font-semibold tabular-nums">{timeText}</span>
-              <span className="text-label min-w-0 flex-1 truncate">{shotFull}</span>
-              {pinName && (
-                <Badge variant="tag" className="max-w-32 shrink-0">
-                  <span className="truncate">{pinName}</span>
-                </Badge>
-              )}
-            </div>
-          </PreviewCard.Popup>
-        </PreviewCard.Positioner>
-      </PreviewCard.Portal>
-    </PreviewCard.Root>
+        <NoteTags note={note} dense />
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5 empty:hidden">
+        <NoteThumb note={note} t={t} shotFull={shotFull} size="sm" dense muted={muted} />
+        {actions}
+      </div>
+    </div>
   );
 }
 
@@ -219,247 +199,439 @@ const NoteCard = memo(function NoteCard({
 }) {
   const shotTitle = noteShotTitle(n.shot, n.shotName);
   const timeText = stamp(t);
+  const target = noteActionTarget(noteNum(n.id), timeText);
+  const lit = useLit(`note:${n.id}`);
+  const needsWork = isCreatorNeedsWork(n, "open");
   return (
     <article
       data-note={n.id}
-      className={cn(
-        cardBase,
-        "border-border/80 bg-card hover:border-foreground/20 hover:bg-raised-3/50 cursor-pointer",
-        near && !editing && "border-primary/85 bg-card ring-primary/25 shadow-sm ring-1",
-        editing && "border-warn/85 bg-card ring-warn/30 ring-1",
-      )}
-      onClick={() => editOldNote(n)}
+      data-tone="open"
+      data-ai-lit={lit || undefined}
+      className={noteSurfaceClass("open", { near, editing, dense: PHONE })}
     >
-      <div className="flex min-h-7 items-center gap-2 pointer-coarse:min-h-10">
-        <Tip label="Jump here">
-          <Button
-            variant="time"
-            size="sm"
-            className="pointer-coarse:h-9"
-            onClick={(e) => {
-              e.stopPropagation();
-              goToNote(n);
-            }}
-          >
-            {timeText}
-          </Button>
-        </Tip>
-        <span className="min-w-0 flex-1 truncate text-xs" title={shotTitle.full}>
-          <span className="text-foreground/95 font-semibold">{shotTitle.primary}</span>
-          {shotTitle.secondary && <span className="text-label/80"> · {shotTitle.secondary}</span>}
-        </span>
-        <Button
-          variant="remove"
-          size="icon-sm"
-          className="-me-1 pointer-coarse:size-9"
-          title="Delete note"
-          aria-label={`Delete note at ${timeText}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            removeNote(n);
-          }}
-        >
-          <X />
-        </Button>
-      </div>
-      <div className="mt-1.5 flex items-start gap-2.5">
-        <div className="min-w-0 flex-1">
-          {/* The words are the way to edit from the keyboard; a click anywhere else on the card does the same */}
-          <button
-            type="button"
-            className="text-ui text-foreground focus-visible:ring-ring block w-full rounded-sm text-left leading-relaxed wrap-anywhere whitespace-pre-wrap outline-none focus-visible:ring-2"
-            aria-label={`Edit note at ${timeText}: ${n.text || "drawing only"}`}
-          >
-            {n.text || <span className="text-label italic">(drawing only)</span>}
-          </button>
-          <NoteTags note={n} />
-        </div>
-        <NoteThumb note={n} t={t} shotFull={shotTitle.full} />
-      </div>
-      {n.fixes?.length ? <FixCallout fix={n.fixes.at(-1)!} /> : null}
+      <NoteCardHeader
+        note={n}
+        t={t}
+        state="open"
+        needsWork={needsWork}
+        shotPrimary={shotTitle.primary}
+        shotSecondary={shotTitle.secondary}
+        shotFull={shotTitle.full}
+        lit={lit}
+        dense={PHONE}
+      />
+      {PHONE ? (
+        <>
+          <DenseNoteBody
+            note={n}
+            t={t}
+            shotFull={shotTitle.full}
+            clampLines={2}
+            openLabel={`Edit note ${target}: ${n.text || "no words"}`}
+            onOpen={(el) => editOldNote(n, originOf(el))}
+            actions={
+              <>
+                <Button
+                  variant="subtle"
+                  size="phone-icon"
+                  aria-label={`Edit note ${target}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    editOldNote(n, originOf(e.currentTarget));
+                  }}
+                >
+                  <Pencil aria-hidden />
+                </Button>
+                <Button
+                  variant="remove"
+                  size="phone-icon"
+                  aria-label={`Delete note ${target}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeNote(n);
+                  }}
+                >
+                  <Trash2 aria-hidden />
+                </Button>
+              </>
+            }
+          />
+          <NoteFollowups note={n} state="open" compact />
+        </>
+      ) : (
+        <>
+          <div className="mt-1.5 flex items-start gap-2.5">
+            <div className="min-w-0 flex-1">
+              <ExpandableNoteText
+                text={n.text}
+                clampLines={3}
+                openLabel={`Edit note ${target}: ${n.text || "no words"}`}
+                onOpen={(el) => editOldNote(n, originOf(el))}
+              />
+              <NoteTags note={n} />
+            </div>
+            <NoteThumb note={n} t={t} shotFull={shotTitle.full} />
+          </div>
+          <NoteFollowups note={n} state="open" />
+          <NoteOpenActions note={n} t={t} />
+        </>
+      )}
     </article>
   );
 });
 
-// A fixed note keeps what was asked, what the frame looked like and what was done. It's a record: the way back is "Reopen"
+// A fixed note keeps what was asked, what the frame looked like and what was done. It stays calmer than active work so eyes skip past it.
 const DoneCard = memo(function DoneCard({ p: { n, t } }: { p: Placed }) {
   const shotTitle = noteShotTitle(n.shot, n.shotName);
   const timeText = stamp(t);
+  const target = noteActionTarget(noteNum(n.id), timeText);
+  const lit = useLit(`note:${n.id}`);
   return (
     <article
       data-note={n.id}
-      className={cn(cardBase, "border-border/55 bg-card/85 hover:border-border")}
+      data-tone="done"
+      data-ai-lit={lit || undefined}
+      className={noteSurfaceClass("done", { dense: PHONE })}
     >
-      <div className="flex min-h-7 items-center gap-2 pointer-coarse:min-h-10">
-        <Tip label="Jump here">
-          <Button
-            variant="time"
-            size="sm"
-            className="pointer-coarse:h-9"
-            onClick={() => goToNote(n)}
-          >
-            {timeText}
-          </Button>
-        </Tip>
-        <span className="min-w-0 flex-1 truncate text-xs" title={shotTitle.full}>
-          <span className="text-foreground/90 font-semibold">{shotTitle.primary}</span>
-          {shotTitle.secondary && <span className="text-label/75"> · {shotTitle.secondary}</span>}
-        </span>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="pointer-coarse:h-9"
-          onClick={() => reopenNote(n)}
-        >
-          <RotateCcw aria-hidden className="text-label size-3" />
-          Reopen
-        </Button>
-      </div>
-      <div className="mt-1.5 flex items-start gap-2.5">
-        <div className="min-w-0 flex-1">
-          <div className="text-ui text-foreground/90 leading-relaxed wrap-anywhere whitespace-pre-wrap">
-            {n.text || <span className="text-label italic">(drawing only)</span>}
+      <NoteCardHeader
+        note={n}
+        t={t}
+        state="done"
+        shotPrimary={shotTitle.primary}
+        shotSecondary={shotTitle.secondary}
+        shotFull={shotTitle.full}
+        lit={lit}
+        dense={PHONE}
+      />
+      {PHONE ? (
+        <>
+          <DenseNoteBody
+            note={n}
+            t={t}
+            shotFull={shotTitle.full}
+            clampLines={1}
+            showOpenButton
+            muted
+            openLabel={`Jump to ${target}: ${n.text || "no words"}`}
+            openTitle="Jump to frame"
+            onOpen={(el) => openNoteRow(n, "done", el)}
+            actions={
+              <>
+                <Button
+                  variant="subtle"
+                  size="phone-icon"
+                  aria-label={`Edit note ${target}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    editOldNote(n, originOf(e.currentTarget));
+                  }}
+                >
+                  <Pencil aria-hidden />
+                </Button>
+                <Button
+                  variant="subtle"
+                  size="phone-icon"
+                  aria-label={`Reopen note ${target}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    reopenNote(n);
+                  }}
+                >
+                  <RotateCcw aria-hidden />
+                </Button>
+              </>
+            }
+          />
+          <NoteFollowups note={n} state="done" compact />
+        </>
+      ) : (
+        <>
+          <div className="mt-1.5 flex items-start gap-2.5">
+            <div className="min-w-0 flex-1">
+              <ExpandableNoteText
+                text={n.text}
+                clampLines={2}
+                openLabel={`Open note ${target}: ${n.text || "no words"}`}
+                onOpen={(el) => openNoteRow(n, "done", el)}
+              />
+              <NoteTags note={n} />
+            </div>
+            <NoteThumb note={n} t={t} shotFull={shotTitle.full} muted />
           </div>
-          <NoteTags note={n} />
-        </div>
-        <NoteThumb note={n} t={t} shotFull={shotTitle.full} />
-      </div>
-      {n.fixes?.map((f) => (
-        <FixCallout key={f.at} fix={f} />
-      ))}
+          <NoteFollowups note={n} state="done" />
+          <NoteDoneActions note={n} t={t} approved={n.approved} />
+        </>
+      )}
     </article>
   );
 });
 
-// The AI answered: a fix waiting for the creator's yes, or a question waiting for their words. Yellow until they act on it
+// The AI answered: a fix waiting for the creator's yes, or a question waiting for their words. Warm surface until acted on
 const CheckCard = memo(function CheckCard({ p: { n, t } }: { p: Placed }) {
   const shotTitle = noteShotTitle(n.shot, n.shotName);
   const timeText = stamp(t);
+  const target = noteActionTarget(noteNum(n.id), timeText);
+  const lit = useLit(`note:${n.id}`);
   const fix = n.fixes?.at(-1);
+  const [replying, setReplying] = useState(false);
   return (
     <article
       data-note={n.id}
-      className={cn(cardBase, "border-warn/60 bg-warn-bg hover:border-warn/85 cursor-pointer")}
-      onClick={() => reviewNote(n)}
+      data-tone={fix?.ask ? "ai" : "check"}
+      data-ai-lit={lit || undefined}
+      className={noteSurfaceClass("check", { asking: !!fix?.ask, dense: PHONE })}
     >
-      <div className="flex min-h-7 items-center gap-2 pointer-coarse:min-h-10">
-        <Tip label="Jump here">
-          <Button
-            variant="time"
-            size="sm"
-            className="pointer-coarse:h-9"
-            onClick={(e) => {
-              e.stopPropagation();
-              goToNote(n);
-            }}
-          >
-            {timeText}
-          </Button>
-        </Tip>
-        <span className="min-w-0 flex-1 truncate text-xs" title={shotTitle.full}>
-          <span className="text-foreground/95 font-semibold">{shotTitle.primary}</span>
-          {shotTitle.secondary && <span className="text-label/80"> · {shotTitle.secondary}</span>}
-        </span>
-      </div>
-      <div className="mt-1.5 flex items-start gap-2.5">
-        <div className="min-w-0 flex-1">
-          <div className="text-ui text-foreground/90 line-clamp-2 leading-relaxed wrap-anywhere">
-            {n.text || <span className="text-label italic">(drawing only)</span>}
+      <NoteCardHeader
+        note={n}
+        t={t}
+        state="check"
+        asking={!!fix?.ask}
+        shotPrimary={shotTitle.primary}
+        shotSecondary={shotTitle.secondary}
+        shotFull={shotTitle.full}
+        lit={lit}
+        dense={PHONE}
+      />
+      {PHONE ? (
+        <DenseNoteBody
+          note={n}
+          t={t}
+          shotFull={shotTitle.full}
+          clampLines={2}
+          showOpenButton
+          openLabel={`Jump to ${target}: ${n.text || "no words"}`}
+          openTitle="Jump to frame"
+          onOpen={(el) => openNoteRow(n, "check", el)}
+        />
+      ) : (
+        <div className="mt-1.5 flex items-start gap-2.5">
+          <div className="min-w-0 flex-1">
+            <ExpandableNoteText
+              text={n.text}
+              clampLines={3}
+              openLabel={`Open note ${target}: ${n.text || "no words"}`}
+              onOpen={(el) => openNoteRow(n, "check", el)}
+            />
+            <NoteTags note={n} />
           </div>
-          <div className="text-ui text-warn mt-1.5 flex items-start gap-1.5 wrap-anywhere">
-            {fix?.ask ? (
-              <MessageCircleQuestion aria-hidden className="mt-0.5 size-3.5 flex-none" />
-            ) : (
-              <ClipboardCheck aria-hidden className="mt-0.5 size-3.5 flex-none" />
-            )}
-            <span className="min-w-0">
-              {fix?.ask ? "The AI asks: " : "The AI says it is fixed: "}
-              <span className="text-foreground">{fix?.what}</span>
-            </span>
-          </div>
+          <NoteThumb note={n} t={t} shotFull={shotTitle.full} />
         </div>
-        <NoteThumb note={n} t={t} shotFull={shotTitle.full} />
-      </div>
-      <div className="mt-2 flex gap-2">
-        {!fix?.ask && (
-          <Button
-            variant="approve"
-            size="md"
-            onClick={(e) => {
-              e.stopPropagation();
-              approveNote(n);
-            }}
-          >
-            <Check aria-hidden />
-            Approve
-          </Button>
-        )}
-        <Button
-          variant="secondary"
-          size="md"
-          onClick={(e) => {
-            e.stopPropagation();
-            reviewNote(n);
-          }}
-        >
-          {fix?.ask ? "Answer" : "Review"}
-        </Button>
-      </div>
+      )}
+      <NoteFollowups note={n} state="check" compact={PHONE} />
+      <CheckActions
+        note={n}
+        ask={!!fix?.ask}
+        replying={replying}
+        onToggleReply={() => setReplying((r) => !r)}
+        dense={PHONE}
+        showEdit
+      />
+      {replying && (
+        <InlineFeedbackBox note={n} ask={!!fix?.ask} onDone={() => setReplying(false)} />
+      )}
     </article>
   );
 });
 
-const SHOWS: { value: NoteShow; title: string }[] = [
-  { value: "all", title: "All notes" },
-  { value: "drawn", title: "Drawn on" },
-  { value: "shot", title: "In this shot" },
-];
 const SORTS: { value: NoteSort; title: string }[] = [
   { value: "film", title: "Film order" },
-  { value: "newest", title: "Newest first" },
-  { value: "oldest", title: "Oldest first" },
+  { value: "activity", title: "Latest activity" },
+  { value: "newest", title: "Newest created" },
+  { value: "oldest", title: "Oldest created" },
 ];
-function ShowMenu() {
-  const show = useStudio((s) => s.noteShow),
-    sort = useStudio((s) => s.noteSort),
-    changed = show !== "all" || sort !== "film";
-  const label = `Show and sort notes${changed ? `: ${SHOWS.find((x) => x.value === show)!.title}, ${SORTS.find((x) => x.value === sort)!.title}` : ""}`;
+
+function FilterMenu({
+  allItems,
+}: {
+  allItems: readonly {
+    n: Placed["n"];
+    t: number;
+    span: Placed["span"];
+    words: string;
+    state: "check" | "open" | "done";
+  }[];
+}) {
+  const scope = useStudio((s) => s.noteScope),
+    shot = useStudio((s) => s.noteShot),
+    facets = useStudio((s) => s.noteFacets);
+  const facetCounts = useMemo(() => countNoteFacets(allItems), [allItems]);
+  const shotOptions = useMemo(() => buildShotFilterOptions(allItems), [allItems]);
+  const activeCount = (scope !== "all" ? 1 : 0) + (shot !== null ? 1 : 0) + facets.length;
+  const threadFacets = NOTE_FACETS.filter((f) => f.group === "thread");
+  const mediaFacets = NOTE_FACETS.filter((f) => f.group === "media");
+  const toggleFacet = (id: NoteFacet) => {
+    set({
+      noteFacets: facets.includes(id) ? facets.filter((f) => f !== id) : [...facets, id],
+    });
+  };
+  const [menuOpen, setMenuOpen] = useState(false);
+  const label = activeCount > 0 ? `Filter notes (${activeCount} active)` : "Filter notes";
+
   return (
-    <DropdownMenu>
-      <Tip label={label}>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      <Tip label={label} side="bottom" open={menuOpen ? false : undefined}>
         <DropdownMenuTrigger
           render={
             <Button
-              variant={changed ? "lit" : "quiet"}
-              size="icon-lg"
+              variant={activeCount > 0 ? "lit" : "subtle"}
+              size="md"
               aria-label={label}
-              className="relative flex-none pointer-coarse:size-10"
+              className="flex-none"
             />
           }
         >
-          <ListFilter />
-          {changed && (
-            <span aria-hidden className="bg-primary absolute top-1 right-1 size-1.5 rounded-full" />
-          )}
+          <ListFilter aria-hidden data-icon="inline-start" />
+          <span className="hidden @[320px]:inline">Filter</span>
+          {activeCount > 0 && <Badge variant="count">{activeCount}</Badge>}
         </DropdownMenuTrigger>
       </Tip>
-      <DropdownMenuContent align="end" className="w-auto min-w-44">
+      <DropdownMenuContent
+        align="end"
+        finalFocus={(closedBy) => closedBy === "keyboard"}
+        font="md"
+        className="w-auto min-w-56"
+      >
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Show</DropdownMenuLabel>
+          <DropdownMenuLabel>Scope</DropdownMenuLabel>
           <DropdownMenuRadioGroup
-            value={show}
-            onValueChange={(v) => set({ noteShow: v as NoteShow })}
+            value={scope}
+            onValueChange={(v) => set({ noteScope: v as NoteScope })}
           >
-            {SHOWS.map((x) => (
-              <DropdownMenuRadioItem key={x.value} value={x.value}>
-                {x.title}
-              </DropdownMenuRadioItem>
-            ))}
+            <DropdownMenuRadioItem value="all">All film</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="shot">In current shot (playhead)</DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        {shotOptions.length > 1 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <span>
+                    {shot !== null
+                      ? `Shot: ${shotOptions.find((s) => s.shot === shot)?.label ?? `Shot ${shot}`}`
+                      : "Filter by shot"}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent
+                  font="md"
+                  className="max-h-72 overflow-y-auto overscroll-contain"
+                >
+                  <DropdownMenuRadioGroup
+                    value={shot === null ? "all" : String(shot)}
+                    onValueChange={(v) => set({ noteShot: v === "all" ? null : Number(v) })}
+                  >
+                    <DropdownMenuRadioItem value="all">
+                      All shots ({allItems.length})
+                    </DropdownMenuRadioItem>
+                    {shotOptions.map((opt) => (
+                      <DropdownMenuRadioItem key={opt.shot} value={String(opt.shot)}>
+                        <span className="flex flex-1 items-center justify-between gap-3">
+                          <span className="truncate">{opt.label}</span>
+                          <span className="text-label font-mono text-xs tabular-nums">
+                            {opt.count}
+                          </span>
+                        </span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuGroup>
+          </>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Attention & thread</DropdownMenuLabel>
+          {threadFacets.map((f) => (
+            <DropdownMenuCheckboxItem
+              key={f.id}
+              checked={facets.includes(f.id)}
+              onCheckedChange={() => toggleFacet(f.id)}
+            >
+              <span className="flex flex-1 items-center justify-between gap-3">
+                <span>{f.label}</span>
+                <span className="text-label font-mono text-xs tabular-nums">
+                  {facetCounts[f.id]}
+                </span>
+              </span>
+            </DropdownMenuCheckboxItem>
+          ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Sort notes to fix</DropdownMenuLabel>
+          <DropdownMenuLabel>Context & attachments</DropdownMenuLabel>
+          {mediaFacets.map((f) => (
+            <DropdownMenuCheckboxItem
+              key={f.id}
+              checked={facets.includes(f.id)}
+              onCheckedChange={() => toggleFacet(f.id)}
+            >
+              <span className="flex flex-1 items-center justify-between gap-3">
+                <span>{f.label}</span>
+                <span className="text-label font-mono text-xs tabular-nums">
+                  {facetCounts[f.id]}
+                </span>
+              </span>
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuGroup>
+        {activeCount > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => set({ noteScope: "all", noteShot: null, noteFacets: [] })}
+              >
+                Reset filters
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const SORT_FIXED_REASON: Partial<Record<NoteView, string>> = {
+  table: "Table sorts by clicking any column header",
+  timeline: "Timeline orders notes chronologically along the film",
+  calendar: "Calendar groups notes by date created",
+  feed: "Feed toggles between Latest activity and Film order",
+  chart: "Chart orders buckets by count",
+};
+
+function SortMenu({ fixedReason }: { fixedReason?: string }) {
+  const sort = useStudio((s) => s.noteSort);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const active = SORTS.find((x) => x.value === sort) ?? SORTS[0];
+  const label = `Sort notes: ${active.title}`;
+  if (fixedReason) return null;
+  return (
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      <Tip label={label} side="bottom" open={menuOpen ? false : undefined}>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant={sort !== "film" ? "lit" : "subtle"}
+              size="md"
+              aria-label={label}
+              className="flex-none"
+            />
+          }
+        >
+          <ArrowUpDown aria-hidden data-icon="inline-start" />
+          <span className="hidden @[320px]:inline">{active.title}</span>
+        </DropdownMenuTrigger>
+      </Tip>
+      <DropdownMenuContent
+        align="end"
+        finalFocus={(closedBy) => closedBy === "keyboard"}
+        font="md"
+        className="w-auto min-w-44"
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Sort order</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={sort}
             onValueChange={(v) => set({ noteSort: v as NoteSort })}
@@ -477,47 +649,445 @@ function ShowMenu() {
 }
 
 type Row =
-  | { key: string; kind: "open" | "check" | "done"; p: Placed }
-  | { key: string; kind: "checkHead" | "openHead" | "none" | "fold" | "noneDone" };
+  | { key: string; kind: "open" | "check" | "asking" | "done"; p: Placed }
+  | {
+      key: string;
+      kind: "askHead" | "checkHead" | "openHead" | "none" | "fold" | "noneDone";
+    };
 
-export function NoteList() {
+const PHONE_ROW_HEIGHT: Partial<Record<Row["kind"], number>> = {
+  done: 58,
+  check: 100,
+  asking: 100,
+  fold: 30,
+  askHead: 22,
+  checkHead: 22,
+  openHead: 22,
+};
+
+const DESKTOP_ROW_HEIGHT: Partial<Record<Row["kind"], number>> = {
+  done: 146,
+  check: 168,
+  asking: 168,
+  askHead: 28,
+  checkHead: 28,
+  openHead: 28,
+};
+
+const STATUS_FILTERS: { id: NoteStatusFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "check", label: "To check" },
+  { id: "asking", label: "AI asks" },
+  { id: "open", label: "To fix" },
+  { id: "done", label: "Done" },
+];
+
+const STATUS_TOGGLE_VARIANT: Record<
+  NoteStatusFilter,
+  "status-all" | "status-check" | "status-asking" | "status-open" | "status-done"
+> = {
+  all: "status-all",
+  check: "status-check",
+  asking: "status-asking",
+  open: "status-open",
+  done: "status-done",
+};
+
+const GROUP_HEAD = {
+  askHead: {
+    label: "AI asks",
+    tone: "text-ai-text",
+    state: "check" as const,
+    asking: true,
+  },
+  checkHead: {
+    label: "To check",
+    tone: "text-warn-text",
+    state: "check" as const,
+    asking: false,
+  },
+  openHead: {
+    label: "To fix",
+    tone: "text-primary-text",
+    state: "open" as const,
+    asking: false,
+  },
+};
+
+export function NoteViewBar({
+  view,
+  onChange,
+}: {
+  view: NoteView;
+  onChange: (next: NoteView) => void;
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const upright = useUpright();
+  const overflowActive = isOverflowNoteView(view, upright);
+  return (
+    <div className="bg-backdrop/90 border-hairline upright:w-fit upright:max-w-full upright:flex-nowrap flex flex-wrap items-center gap-0.5 rounded-lg border p-0.5">
+      <Tabs.Root
+        value={overflowActive ? null : view}
+        onValueChange={(v) => {
+          if (v) onChange(v as NoteView);
+        }}
+        className="upright:flex-none upright:min-w-0 min-w-fit flex-1"
+      >
+        <Tabs.List
+          aria-label="Notes layout view"
+          className="scroll-fade-x upright:overflow-x-auto relative flex [scrollbar-width:none] items-center gap-0.5 overscroll-x-contain"
+        >
+          <Tabs.Indicator
+            aria-hidden
+            className="tab-pill-indicator bg-secondary ring-hairline-strong z-0 rounded-md shadow-xs ring-1"
+          />
+          {PRIMARY_NOTE_VIEWS.map((id) => {
+            const { label, icon: Icon, tip } = NOTE_VIEW_META[id];
+            return (
+              <Tip key={id} label={tip} side="bottom">
+                <Tabs.Tab
+                  value={id}
+                  data-note-view-tab={id}
+                  className={cn(
+                    "text-muted-foreground not-data-active:hover:text-foreground focus-visible:ring-ring data-active:[&_svg]:text-primary-text studio-press not-data-active:hover:bg-surface-subtle data-active:text-foreground text-ui relative z-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 font-medium whitespace-nowrap outline-none focus-visible:ring-2 data-active:font-semibold motion-reduce:transition-none pointer-coarse:h-10",
+                    id === "gallery" && "upright:hidden",
+                  )}
+                >
+                  <Icon aria-hidden className="size-3.5" />
+                  <span>{label}</span>
+                </Tabs.Tab>
+              </Tip>
+            );
+          })}
+        </Tabs.List>
+      </Tabs.Root>
+      <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+        <Tip label="More note views" side="bottom" open={moreOpen ? false : undefined}>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="tab"
+                size="tab"
+                aria-label={
+                  overflowActive
+                    ? `${NOTE_VIEW_META[view].label} — more note views`
+                    : "More note views"
+                }
+                aria-pressed={overflowActive}
+                className="shrink-0"
+              />
+            }
+          >
+            {overflowActive ? (
+              <>
+                {(() => {
+                  const ActiveIcon = NOTE_VIEW_META[view].icon;
+                  return (
+                    <ActiveIcon
+                      aria-hidden
+                      data-icon="inline-start"
+                      className="text-primary-text"
+                    />
+                  );
+                })()}
+                <span>{NOTE_VIEW_META[view].label}</span>
+              </>
+            ) : (
+              <span>More</span>
+            )}
+            <ChevronDown aria-hidden data-icon="inline-end" className="text-muted-foreground" />
+          </DropdownMenuTrigger>
+        </Tip>
+        <DropdownMenuContent
+          align="end"
+          finalFocus={(closedBy) => closedBy === "keyboard"}
+          font="md"
+          className="w-auto min-w-44"
+        >
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>More views</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={view} onValueChange={(v) => onChange(v as NoteView)}>
+              {EXTRA_NOTE_VIEWS.map((id) => {
+                const { label, icon: Icon, tip } = NOTE_VIEW_META[id];
+                return (
+                  <DropdownMenuRadioItem key={id} value={id} title={tip} closeOnClick>
+                    <span className="flex items-center gap-2">
+                      <Icon aria-hidden className="text-label" />
+                      <span>{label}</span>
+                    </span>
+                  </DropdownMenuRadioItem>
+                );
+              })}
+              <DropdownMenuSeparator className="upright:block hidden" />
+              {(() => {
+                const { label, icon: Icon, tip } = NOTE_VIEW_META.gallery;
+                return (
+                  <DropdownMenuRadioItem
+                    key="gallery"
+                    value="gallery"
+                    title={tip}
+                    closeOnClick
+                    className="upright:flex hidden"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Icon aria-hidden className="text-label" />
+                      <span>{label}</span>
+                    </span>
+                  </DropdownMenuRadioItem>
+                );
+              })()}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+export function NoteStatusStrip({
+  status,
+  counts,
+  onChange,
+}: {
+  status: NoteStatusFilter;
+  counts: { all: number; check: number; open: number; done: number; asking?: number };
+  onChange: (next: NoteStatusFilter) => void;
+}) {
+  return (
+    <ToggleGroup
+      variant="strip"
+      spacing={0.5}
+      aria-label="Filter notes by status"
+      value={[status]}
+      onValueChange={(next) => {
+        const picked = next[0] as NoteStatusFilter | undefined;
+        if (picked) onChange(picked);
+      }}
+    >
+      {STATUS_FILTERS.map((sf) => {
+        const active = status === sf.id;
+        const nCount = sf.id === "asking" ? (counts.asking ?? 0) : counts[sf.id];
+        return (
+          <ToggleGroupItem
+            key={sf.id}
+            value={sf.id}
+            variant={STATUS_TOGGLE_VARIANT[sf.id]}
+            size="strip"
+            data-status-filter={sf.id}
+          >
+            {sf.id !== "all" && (
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full transition-opacity motion-reduce:transition-none",
+                  sf.id === "check"
+                    ? "bg-warn"
+                    : sf.id === "asking"
+                      ? "bg-ai"
+                      : sf.id === "open"
+                        ? "bg-primary"
+                        : "bg-ok",
+                  !active && nCount === 0 && "opacity-45",
+                )}
+              />
+            )}
+            <span className="truncate">{sf.label}</span>
+            <span
+              className={cn(
+                "font-mono tabular-nums",
+                active
+                  ? "font-semibold text-current opacity-90"
+                  : sf.id === "check" && nCount > 0
+                    ? "text-warn-text font-semibold"
+                    : sf.id === "asking" && nCount > 0
+                      ? "text-ai-text font-semibold"
+                      : sf.id === "open" && nCount > 0
+                        ? "text-primary-text font-semibold"
+                        : sf.id === "done" && nCount > 0
+                          ? "text-ok-text/85 font-medium"
+                          : "text-label",
+              )}
+            >
+              {nCount}
+            </span>
+          </ToggleGroupItem>
+        );
+      })}
+    </ToggleGroup>
+  );
+}
+
+function PhoneHeaderStatus({ saved, idleText }: { saved: SaveState; idleText: string }) {
+  const newBuild = useStudio((s) => s.newBuild);
+  const loading = useStudio((s) => s.loading);
+  const status = useStudio((s) => s.status);
+  const contract = useStudio((s) => s.contract.length);
+
+  const reloadPill = newBuild ? (
+    <button
+      type="button"
+      onClick={reloadNow}
+      className="bg-accent text-accent-foreground focus-visible:ring-ring inline-flex min-h-7 shrink-0 cursor-pointer items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-2"
+    >
+      New version · Reload
+    </button>
+  ) : null;
+
+  const liveNotice = loading ? (
+    <span
+      role="status"
+      className="text-muted-foreground inline-flex min-w-0 items-center gap-1 text-xs"
+    >
+      <Loader2 className="size-3 shrink-0 motion-safe:animate-spin" aria-hidden />
+      <span className="truncate">{loading}</span>
+    </span>
+  ) : status ? (
+    <span role="status" className="text-muted-foreground min-w-0 truncate text-xs">
+      {status}
+    </span>
+  ) : contract > 0 ? (
+    <span
+      role="status"
+      className="bg-warn-bg text-warn-text rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap"
+    >
+      {contract} {contract === 1 ? "issue" : "issues"}
+    </span>
+  ) : null;
+
+  const saveNotice = (
+    <SaveStatus
+      state={saved}
+      idleTone="ok"
+      idleText={idleText}
+      failText="Not sent. Retrying…"
+      className={saved === "fail" ? "whitespace-normal" : "whitespace-nowrap"}
+    />
+  );
+
+  return (
+    <div className="ms-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1.5 text-end">
+      {reloadPill}
+      {saved === "busy" || saved === "fail" ? (
+        <>
+          {liveNotice}
+          {saveNotice}
+        </>
+      ) : (
+        (liveNotice ?? (newBuild ? null : saveNotice))
+      )}
+    </div>
+  );
+}
+
+export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
   const notes = useStudio((s) => s.notes),
     saved = useStudio((s) => s.saved),
-    nearNote = useStudio((s) => s.nearNote);
+    nearNote = useStudio((s) => s.nearNote),
+    rawView = useStudio((s) => s.noteView);
   const editing = useStudio((s) => (s.compose?.kind === "edit" ? s.compose.id : undefined)),
-    q = useStudio((s) => s.noteSearch),
-    show = useStudio((s) => s.noteShow),
-    sort = useStudio((s) => s.noteSort);
-  useStudio((s) => (s.noteShow === "shot" ? s.shot : "")); // "In this shot" follows the playhead from shot to shot
+    composeNew = useStudio((s) => s.compose?.kind === "create"),
+    rawQ = useStudio((s) => s.noteSearch),
+    rawStatus = useStudio((s) => s.noteStatus),
+    rawScope = useStudio((s) => s.noteScope),
+    rawShot = useStudio((s) => s.noteShot),
+    rawFacets = useStudio((s) => s.noteFacets),
+    rawSort = useStudio((s) => s.noteSort);
+  const view: NoteView = PHONE ? "cards" : rawView,
+    q = PHONE ? "" : rawQ,
+    status: NoteStatusFilter = PHONE ? "all" : rawStatus,
+    scope: NoteScope = PHONE ? "all" : rawScope,
+    shot = PHONE ? null : rawShot,
+    facets = PHONE ? EMPTY_FACETS : rawFacets,
+    sort: NoteSort = PHONE ? "film" : rawSort;
+  useStudio((s) => (!PHONE && s.noteScope === "shot" ? s.shot : "")); // "In current shot" follows the playhead from shot to shot
   const [doneOpen, setDoneOpen] = useState(false);
+  const [crampedOverlay, setCrampedOverlay] = useState(false);
   const list = useRef<HTMLDivElement>(null),
     touched = useRef(-1e9),
     focused = useRef<string | null>(null);
-  const { open, check, done, ix } = shownNotes(),
-    narrowed = !!q.trim() || show !== "all";
+  const filtered = shownNotes(),
+    ix = filtered.ix,
+    open = PHONE ? ix.open : filtered.open,
+    check = PHONE ? ix.check : filtered.check,
+    done = PHONE ? ix.done : filtered.done,
+    narrowed = !!q.trim() || scope !== "all" || shot !== null || facets.length > 0,
+    anyFiltered = narrowed || status !== "all";
+  const allRawItems = useMemo(
+    () => combineFilteredNotes({ check: ix.check, open: ix.open, done: ix.done }),
+    [ix],
+  );
+  const allItems = useMemo(
+    () => combineFilteredNotes({ check, open, done }, status),
+    [check, open, done, status],
+  );
+  const doneLitKeys = useMemo(() => ix.done.map((p) => `note:${p.n.id}`), [ix.done]);
+  const doneLit = useLitAny(doneLitKeys);
+  const doneLearnedCount = useMemo(
+    () => ix.done.filter((p) => Boolean(p.n.learned?.what)).length,
+    [ix.done],
+  );
+  const shotOptions = useMemo(() => buildShotFilterOptions(allRawItems), [allRawItems]);
+  const readyCheck = useMemo(() => check.filter((p) => !isNoteAsking(p.n, "check")), [check]);
+  const askNotes = useMemo(() => check.filter((p) => isNoteAsking(p.n, "check")), [check]);
+  const ixReadyCheck = useMemo(
+    () => ix.check.filter((p) => !isNoteAsking(p.n, "check")),
+    [ix.check],
+  );
+  const ixAskNotes = useMemo(() => ix.check.filter((p) => isNoteAsking(p.n, "check")), [ix.check]);
 
   const rows = useMemo(() => {
-    const r: Row[] = check.length
-      ? [
-          { key: "checkHead", kind: "checkHead" },
-          ...check.map((p): Row => ({ key: p.n.id, kind: "check", p })),
-          { key: "openHead", kind: "openHead" },
-        ]
-      : [];
-    r.push(
-      ...(open.length
-        ? open.map((p): Row => ({ key: p.n.id, kind: "open", p }))
-        : [{ key: "none", kind: "none" } as Row]),
-    );
-    if (notes.length) r.push({ key: "fold", kind: "fold" });
-    if (notes.length && doneOpen)
+    if (status === "check") {
+      return readyCheck.length
+        ? (readyCheck.map((p): Row => ({ key: p.n.id, kind: "check", p })) as Row[])
+        : ([{ key: "none", kind: "none" }] as Row[]);
+    }
+    if (status === "asking") {
+      return askNotes.length
+        ? (askNotes.map((p): Row => ({ key: p.n.id, kind: "asking", p })) as Row[])
+        : ([{ key: "none", kind: "none" }] as Row[]);
+    }
+    if (status === "open") {
+      return open.length
+        ? (open.map((p): Row => ({ key: p.n.id, kind: "open", p })) as Row[])
+        : ([{ key: "none", kind: "none" }] as Row[]);
+    }
+    if (status === "done") {
+      return done.length
+        ? (done.map((p): Row => ({ key: p.n.id, kind: "done", p })) as Row[])
+        : ([{ key: "noneDone", kind: "noneDone" }] as Row[]);
+    }
+    const r: Row[] = [];
+    if (readyCheck.length) {
       r.push(
-        ...(done.length
-          ? done.map((p): Row => ({ key: p.n.id, kind: "done", p }))
-          : [{ key: "noneDone", kind: "noneDone" } as Row]),
+        { key: "checkHead", kind: "checkHead" },
+        ...readyCheck.map((p): Row => ({ key: p.n.id, kind: "check", p })),
       );
+    }
+    if (askNotes.length) {
+      r.push(
+        { key: "askHead", kind: "askHead" },
+        ...askNotes.map((p): Row => ({ key: p.n.id, kind: "asking", p })),
+      );
+    }
+    if (open.length) {
+      r.push(
+        { key: "openHead", kind: "openHead" },
+        ...open.map((p): Row => ({ key: p.n.id, kind: "open", p })),
+      );
+    } else if (!readyCheck.length && !askNotes.length) {
+      r.push({ key: "none", kind: "none" });
+    }
+    if (notes.length && (!narrowed || done.length > 0)) {
+      r.push({ key: "fold", kind: "fold" });
+      if (doneOpen)
+        r.push(
+          ...(done.length
+            ? done.map((p): Row => ({ key: p.n.id, kind: "done", p }))
+            : [{ key: "noneDone", kind: "noneDone" } as Row]),
+        );
+    }
     return r;
-  }, [open, check, done, doneOpen, notes.length]);
+  }, [status, open, readyCheck, askNotes, done, doneOpen, narrowed, notes.length]);
   const rowOf = useMemo(() => new Map(rows.map((r, i) => [r.key, i])), [rows]);
 
   // The card holding the keyboard's focus stays built when it scrolls out of view, or the focus would drop to the page
@@ -536,59 +1106,123 @@ export function NoteList() {
     getScrollElement: () => list.current,
     getItemKey: (i) => rows[i].key,
     rangeExtractor,
-    gap: 8,
+    gap: PHONE ? 5 : 8,
     overscan: 6,
+    initialRect: INITIAL_VIRTUAL_RECT,
+    observeElementRect: observeVirtualRect,
+    measureElement: measureVirtualElement,
+    scrollToFn: scrollVirtualElement,
+    useFlushSync: false,
     estimateSize: (i) =>
-      ({ done: 132, check: 150, checkHead: 28, openHead: 28 })[rows[i].kind as string] ?? 96,
+      (PHONE ? PHONE_ROW_HEIGHT : DESKTOP_ROW_HEIGHT)[rows[i].kind] ?? (PHONE ? 64 : 116),
   });
 
+  const didMount = useRef(false);
+  const lastNear = useRef<string | null>(null);
+  const lastNearRow = useRef<number | null>(null);
+  const lastTime = useRef(0);
+
   useEffect(() => {
-    const box = list.current,
-      i = rowOf.get(nearNote ?? "");
+    const curT = S.t;
+    const i = rowOf.get(nearNote ?? "");
+    if (!didMount.current) {
+      didMount.current = true;
+      lastNear.current = nearNote ?? null;
+      lastNearRow.current = i ?? null;
+      lastTime.current = curT;
+      return;
+    }
+    const timeMoved = Math.abs(curT - lastTime.current) > 0.01;
+    lastTime.current = curT;
+    const prevNear = lastNear.current;
+    const prevRow = lastNearRow.current;
+    lastNear.current = nearNote ?? null;
+    lastNearRow.current = i ?? null;
+    const box = list.current;
     if (
+      (prevNear === (nearNote ?? null) && prevRow === (i ?? null)) ||
       !box ||
       i === undefined ||
+      (!timeMoved && prevNear === null) ||
+      (!timeMoved && prevRow === (i ?? null) && i > 2) ||
       sort !== "film" ||
       editing ||
       performance.now() - touched.current < HOLD_LIST
     )
       return;
-    const to = v.getOffsetForIndex(i, "center")?.[0] ?? box.scrollTop;
-    v.scrollToIndex(i, {
-      align: "center",
-      behavior: Math.abs(to - box.scrollTop) > 500 ? "auto" : "smooth",
+    const targetIdx = i <= 2 ? 0 : i;
+    if (targetIdx === 0) {
+      box.scrollTop = 0;
+      return;
+    }
+    const align = "auto";
+    const to = v.getOffsetForIndex(targetIdx, align)?.[0] ?? box.scrollTop;
+    v.scrollToIndex(targetIdx, {
+      align,
+      behavior: prefersReduced() || Math.abs(to - box.scrollTop) > 500 ? "auto" : "smooth",
     }); // a long way is a jump, not a slide past everything
   }, [nearNote, editing, sort, rowOf, v]);
 
-  const clear = () => set({ noteSearch: "", noteShow: "all" });
   const count = (shownHere: Placed[], all: Placed[]) =>
     narrowed ? `${shownHere.length} of ${all.length}` : all.length;
+  const totalShown = check.length + open.length + done.length;
+  const statusCounts: Record<NoteStatusFilter, number> & { asking: number } = {
+    all: totalShown,
+    check: readyCheck.length,
+    asking: askNotes.length,
+    open: open.length,
+    done: done.length,
+  };
+
   const row = (r: Row): ReactNode => {
     if (r.kind === "open")
       return <NoteCard p={r.p} near={r.p.n.id === nearNote} editing={r.p.n.id === editing} />;
     if (r.kind === "done") return <DoneCard p={r.p} />;
-    if (r.kind === "check") return <CheckCard p={r.p} />;
-    if (r.kind === "checkHead")
+    if (r.kind === "check" || r.kind === "asking") return <CheckCard p={r.p} />;
+    if (r.kind === "askHead" || r.kind === "checkHead" || r.kind === "openHead") {
+      const h = GROUP_HEAD[r.kind];
+      const nCount =
+        r.kind === "askHead"
+          ? count(askNotes, ixAskNotes)
+          : r.kind === "checkHead"
+            ? count(readyCheck, ixReadyCheck)
+            : count(open, ix.open);
       return (
-        <h3 className="text-ui text-warn flex h-7 items-center px-0.5 font-semibold tabular-nums">
-          To check ({count(check, ix.check)})
+        <h3
+          className={cn(
+            "flex items-center gap-1.5 px-0.5 font-semibold text-balance tabular-nums",
+            PHONE ? "h-5.5 text-xs" : "h-7 text-base",
+            h.tone,
+          )}
+        >
+          <NoteStatusGlyph state={h.state} asking={h.asking} />
+          <span>{h.label}</span>
+          <span
+            className={cn(
+              "text-muted-foreground font-mono font-medium tabular-nums",
+              PHONE ? "text-tag" : "text-ui",
+            )}
+          >
+            {nCount}
+          </span>
         </h3>
       );
-    if (r.kind === "openHead")
-      return (
-        <h3 className="text-ui flex h-7 items-center px-0.5 font-semibold tabular-nums">
-          To fix ({count(open, ix.open)})
-        </h3>
-      );
+    }
     if (r.kind === "none") {
-      if (narrowed && ix.open.length)
+      if (anyFiltered && notes.length > 0)
         return (
           <Empty>
-            No {show === "drawn" ? "drawn notes" : "notes"} to fix
-            {show === "shot" ? " in this shot" : ""}
-            {q.trim() ? ` match “${q.trim()}”` : ""}.{" "}
-            <Button variant="link" size="inline" onClick={clear}>
-              Show all notes
+            {status === "check"
+              ? narrowed
+                ? "Nothing waiting to check matching filters."
+                : "Nothing waiting to check."
+              : status === "asking"
+                ? narrowed
+                  ? "No AI questions matching filters."
+                  : "No AI questions waiting."
+                : "No open notes match your filters."}{" "}
+            <Button variant="link" size="inline" onClick={clearNoteFilters}>
+              Reset filters
             </Button>
           </Empty>
         );
@@ -596,120 +1230,285 @@ export function NoteList() {
         <Empty>
           {ix.done.length
             ? "Nothing left to fix"
-            : "No notes yet. Click the picture or press M to add one"}
+            : PHONE
+              ? "No notes yet. Tap the picture or Note to add one"
+              : "No notes yet. Click the picture or press M to add one"}
         </Empty>
       );
     }
     if (r.kind === "noneDone")
       return (
-        <p className="text-ui text-muted-foreground px-2.5">
-          {narrowed && ix.done.length ? "No fixed notes match." : "Notes the AI fixes move here."}
-        </p>
+        <Empty>
+          {anyFiltered && ix.done.length ? (
+            <>
+              No fixed notes match.{" "}
+              <Button variant="link" size="inline" onClick={clearNoteFilters}>
+                Reset filters
+              </Button>
+            </>
+          ) : (
+            "Notes you approve land here."
+          )}
+        </Empty>
       );
-    // Folded by default: they are answered, and the list is for what still needs doing. Shown at 0 too, so the creator knows where fixed notes will go
+    // Folded by default in All mode so active work leads; Done tab shows them directly expanded.
     return (
-      <button
-        type="button"
-        aria-expanded={doneOpen}
-        onClick={() => setDoneOpen(!doneOpen)}
-        className="text-ui text-muted-foreground hover:bg-card hover:text-foreground focus-visible:ring-ring mt-1 flex min-h-9 w-full items-center gap-2 rounded-xl px-2.5 font-semibold outline-none focus-visible:ring-2 pointer-coarse:min-h-10"
-      >
-        <ChevronRight
-          aria-hidden
-          className={cn("size-3.5 motion-safe:transition-transform", doneOpen && "rotate-90")}
-        />
-        Done ({narrowed ? `${done.length} of ${ix.done.length}` : ix.done.length})
-      </button>
+      <h3 className={PHONE ? "mt-0.5" : "mt-1"}>
+        <button
+          type="button"
+          aria-expanded={doneOpen}
+          data-tone="done"
+          data-ai-lit={(!doneOpen && doneLit) || undefined}
+          onClick={() => setDoneOpen(!doneOpen)}
+          className={cn(
+            "text-label hover:text-foreground focus-visible:ring-ring border-hairline-subtle bg-surface-subtle hover:bg-hairline flex w-full cursor-pointer items-center border font-semibold transition-colors duration-150 outline-none focus-visible:ring-2 motion-reduce:transition-none",
+            PHONE
+              ? "min-h-7.5 gap-1.5 rounded-md px-2 text-xs"
+              : "min-h-8.5 gap-2 rounded-lg px-2.5 text-base pointer-coarse:min-h-10",
+          )}
+        >
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              "size-3.5 duration-150 motion-safe:transition-transform motion-reduce:transition-none",
+              doneOpen && "rotate-90",
+            )}
+          />
+          <NoteStatusGlyph state="done" />
+          <span>Done</span>
+          <span
+            className={cn(
+              "text-muted-foreground font-mono font-medium tabular-nums",
+              PHONE ? "text-tag" : "text-ui",
+            )}
+          >
+            {narrowed ? `${done.length} of ${ix.done.length}` : ix.done.length}
+          </span>
+          {!doneOpen && doneLearnedCount > 0 && (
+            <span className="text-ok-text text-xs font-medium">· {doneLearnedCount} learned</span>
+          )}
+        </button>
+      </h3>
     );
   };
 
   return (
-    <section aria-label="Notes" className="flex min-h-0 flex-1 flex-col">
-      <div className="upright:py-1.5 sideways:py-1 flex flex-none flex-wrap items-center gap-x-1 px-3 pt-2.5 pb-2">
-        <h2 className="text-ui sideways:h-9 flex h-8 items-center px-0.5 font-semibold tabular-nums pointer-coarse:h-10">
-          {check.length ? "Notes" : `To fix (${count(open, ix.open)})`}
-        </h2>
-        {/* The Review room is the desk's big view; on a phone the list is the review (PhoneApp) */}
-        {!PHONE && ix.check.length + ix.open.length + ix.done.length > 0 && (
-          <Tip label="Review room: notes and pictures, big (N)">
-            <Button
-              variant="quiet"
-              size="md"
-              aria-label={`Review room${ix.check.length ? `, ${ix.check.length} to check` : ""}`}
-              onClick={() => setReview(true)}
-            >
-              <ClipboardCheck aria-hidden />
-              Review
-              {ix.check.length > 0 && (
-                <span
-                  aria-hidden
-                  className="bg-warn ms-0.5 rounded-full px-1.5 text-xs font-semibold text-black tabular-nums"
-                >
-                  {ix.check.length}
-                </span>
-              )}
-            </Button>
-          </Tip>
-        )}
-        <SaveStatus
-          state={saved}
-          idleTone="ok"
-          idleText={notes.length ? "All changes saved" : ""}
-          failText="Not sent. Kept on this device, retrying…"
-          className={cn(
-            "flex-1 text-end",
-            saved === "fail" ? "whitespace-normal" : "whitespace-nowrap",
-          )}
-        />
-      </div>
-      {notes.length > 0 && (
-        <div className="upright:pb-1.5 sideways:pb-1 flex flex-none items-center gap-1 px-3 pb-2">
-          <SearchBox
-            name="note-search"
-            value={q}
-            onChange={(x) => set({ noteSearch: x })}
-            label="Search notes"
-            placeholder={`Search ${notes.length} notes…`}
-            className="min-w-0 flex-1"
-          />
-          <ShowMenu />
-        </div>
-      )}
+    <section
+      aria-label="Notes"
+      className="font-md @container relative flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+    >
       <div
-        ref={list}
-        data-arrow-scroll
-        className="scroll-fade min-h-0 flex-1 overflow-auto overscroll-contain px-3 pb-3"
-        onPointerDown={() => {
-          touched.current = performance.now();
-        }}
-        onWheel={() => {
-          touched.current = performance.now();
-        }}
-        onTouchMove={() => {
-          touched.current = performance.now();
-        }}
+        inert={crampedOverlay || undefined}
+        aria-hidden={crampedOverlay || undefined}
+        className="flex min-h-0 flex-1 flex-col"
       >
-        <div className="relative h-(--total) w-full" style={{ "--total": `${v.getTotalSize()}px` }}>
-          {v.getVirtualItems().map((it) => (
+        <div
+          className={cn(
+            "upright:px-2.5 upright:py-1 sideways:py-1 flex flex-none flex-wrap items-center gap-1.5",
+            PHONE ? "px-2.5 pt-1 pb-0.5" : "px-3 pt-2 pb-1",
+          )}
+        >
+          <h2
+            className={cn(
+              "flex shrink-0 items-center px-0.5 font-semibold tracking-tight text-balance whitespace-nowrap tabular-nums",
+              PHONE ? "min-h-5 text-sm" : "upright:min-h-6 min-h-7 text-lg",
+            )}
+          >
+            <span>Notes</span>
+            {notes.length > 0 && (
+              <span
+                className={cn(
+                  "text-label font-mono font-medium tabular-nums",
+                  PHONE ? "ms-1 text-xs" : "text-ui ms-1.5",
+                )}
+              >
+                ({notes.length})
+              </span>
+            )}
+          </h2>
+          {!PHONE && (
+            <Tip label="Add a note at the playhead (M)">
+              <Button
+                variant={composeNew ? "lit" : notes.length === 0 ? "default" : "subtle"}
+                size="md"
+                aria-label="New note"
+                aria-pressed={composeNew}
+                onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
+              >
+                <Plus aria-hidden data-icon="inline-start" />
+                Note
+              </Button>
+            </Tip>
+          )}
+          {/* The Review room is the desk's big view; highlights when notes await check */}
+          {!PHONE && ix.check.length + ix.open.length + ix.done.length > 0 && (
+            <Tip label="Review room: notes and pictures, big (N)">
+              <Button
+                variant={check.length > 0 ? "approve" : "subtle"}
+                size="md"
+                aria-label={
+                  narrowed && check.length !== ix.check.length
+                    ? `Review room, ${check.length} of ${ix.check.length} to check match filters`
+                    : `Review room${ix.check.length ? `, ${ix.check.length} to check` : ""}`
+                }
+                onClick={(e) => setReview(true, e.currentTarget)}
+              >
+                <ClipboardCheck aria-hidden data-icon="inline-start" />
+                Review
+                {ix.check.length > 0 && (
+                  <Badge
+                    variant={check.length > 0 ? "count-warn" : "count-muted"}
+                    aria-hidden
+                    className="ms-0.5"
+                  >
+                    {narrowed && check.length !== ix.check.length
+                      ? `${check.length}/${ix.check.length}`
+                      : ix.check.length}
+                  </Badge>
+                )}
+              </Button>
+            </Tip>
+          )}
+          {PHONE ? (
+            <PhoneHeaderStatus saved={saved} idleText={notes.length ? "Saved" : ""} />
+          ) : (
+            <SaveStatus
+              state={saved}
+              idleTone="ok"
+              idleText={notes.length ? "Saved" : ""}
+              failText="Not sent. Retrying…"
+              className={cn(
+                "ms-auto text-end",
+                saved === "fail" ? "whitespace-normal" : "whitespace-nowrap",
+              )}
+            />
+          )}
+        </div>
+
+        {notes.length > 0 && !PHONE && (
+          <div className="upright:gap-1 upright:px-2.5 upright:pb-1 flex flex-none flex-col gap-1.5 px-3 pb-1.5">
+            <NoteViewBar view={view} onChange={(v) => setPref("noteView", v)} />
+            <NoteStatusStrip
+              status={status}
+              counts={statusCounts}
+              onChange={(s) => set({ noteStatus: s })}
+            />
+
+            <div className="flex flex-wrap items-center gap-1">
+              <SearchBox
+                name="note-search"
+                value={q}
+                onChange={(x) => set({ noteSearch: x })}
+                label="Search notes"
+                placeholder="Search #id, note…"
+                className="min-w-40 flex-1"
+              />
+              <FilterMenu allItems={allRawItems} />
+              <SortMenu fixedReason={SORT_FIXED_REASON[view]} />
+            </div>
+
+            <ActiveFilterChips includeSearch shotOptions={shotOptions} />
+          </div>
+        )}
+
+        <TabStage
+          activeKey={notes.length === 0 ? "cards" : view}
+          order={NOTE_VIEWS}
+          className={cn(
+            "border-hairline-subtle flex min-h-0 flex-1 flex-col border-t",
+            PHONE ? "pt-1" : "pt-2",
+          )}
+        >
+          {view === "cards" || notes.length === 0 ? (
             <div
-              key={it.key}
-              data-index={it.index}
-              ref={v.measureElement}
-              className="absolute inset-x-0 top-0 translate-y-(--start)"
-              style={{ "--start": `${it.start}px` }}
-              onFocus={() => {
-                focused.current = rows[it.index].key;
+              ref={list}
+              data-arrow-scroll
+              className={cn(
+                "scroll-fade min-h-0 flex-1 overflow-auto overscroll-contain",
+                PHONE ? "px-2.5 pb-2" : "px-3 pb-6",
+              )}
+              onPointerDown={() => {
+                touched.current = performance.now();
               }}
-              onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null))
-                  focused.current = null;
+              onWheel={() => {
+                touched.current = performance.now();
+              }}
+              onTouchMove={() => {
+                touched.current = performance.now();
               }}
             >
-              {row(rows[it.index])}
+              <div
+                className="relative h-(--total) w-full"
+                style={{ "--total": `${v.getTotalSize()}px` }}
+              >
+                {v.getVirtualItems().map((it) => (
+                  <div
+                    key={it.key}
+                    data-index={it.index}
+                    ref={v.measureElement}
+                    className="absolute inset-x-0 top-0 translate-y-(--start)"
+                    style={{ "--start": `${it.start}px` }}
+                    onFocus={() => {
+                      focused.current = rows[it.index].key;
+                    }}
+                    onBlur={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                        focused.current = null;
+                    }}
+                  >
+                    {row(rows[it.index])}
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          ) : allItems.length === 0 && (view !== "board" || anyFiltered) ? (
+            <div className="min-h-0 flex-1 px-3 py-2">
+              <Empty>
+                {anyFiltered ? (
+                  <>
+                    No notes match{q.trim() ? ` “${q.trim()}”` : " current filters"}.{" "}
+                    <Button variant="link" size="inline" onClick={clearNoteFilters}>
+                      Reset filters
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    No notes yet.{" "}
+                    <Button
+                      variant="link"
+                      size="inline"
+                      onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
+                    >
+                      Add note
+                    </Button>
+                  </>
+                )}
+              </Empty>
+            </div>
+          ) : (
+            <Suspense fallback={null}>
+              {view === "board" ? (
+                <NoteBoardView items={allItems} statusFilter={status} />
+              ) : view === "table" ? (
+                <NoteTableView items={allItems} />
+              ) : view === "list" ? (
+                <NoteListView items={allItems} />
+              ) : view === "gallery" ? (
+                <NoteGalleryView items={allItems} />
+              ) : view === "timeline" ? (
+                <NoteTimelineView items={allItems} />
+              ) : view === "calendar" ? (
+                <NoteCalendarView items={allItems} />
+              ) : view === "feed" ? (
+                <NoteFeedView items={allItems} />
+              ) : (
+                <NoteChartView items={allItems} />
+              )}
+            </Suspense>
+          )}
+        </TabStage>
       </div>
+      {composeDock && <Compose dock onCrampedOverlayChange={setCrampedOverlay} />}
     </section>
   );
 }

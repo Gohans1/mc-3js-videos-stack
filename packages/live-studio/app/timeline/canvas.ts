@@ -38,6 +38,7 @@ const TONES = [
   "clip-voice-wave",
   "clip-label",
   "in-out",
+  "ai",
   "warn",
   "destructive",
   "slider",
@@ -56,6 +57,7 @@ const TONES = [
   "beat-move",
   "beat-snap",
   "beat-hold",
+  "beat-sound",
   "note-done",
   "key-hold",
   "level-near",
@@ -63,6 +65,16 @@ const TONES = [
   "ok",
   "raised-2",
   "raised-3",
+  "stage",
+  "picture",
+  "scrim",
+  "scrim-strong",
+  "hairline-strong",
+  "clip-hover",
+  "anim-shade",
+  "anim-light",
+  "fade-shade",
+  "gain-curve",
 ] as const;
 export type Tone = (typeof TONES)[number];
 let tones: Record<Tone, string> | null = null;
@@ -72,7 +84,7 @@ export const tone = (k: Tone) => {
       read = Object.fromEntries(
         TONES.map((n) => [n, css.getPropertyValue(`--${n}`).trim()]),
       ) as Record<Tone, string>;
-    if (!read.background) return "#000";
+    if (!read.background) return "#100F0F";
     tones = read;
   }
   return tones[k];
@@ -84,14 +96,62 @@ export const drawPlayhead = (g: CanvasRenderingContext2D, x: number, h: number) 
 };
 
 // The canvas sized to its box in CSS pixels and drawn sharp at the screen's pixel ratio
+interface CanvasBox {
+  w: number;
+  h: number;
+  d: number;
+  sh: string;
+  g: CanvasRenderingContext2D;
+  stale: boolean;
+}
+const canvasBoxes = new WeakMap<HTMLCanvasElement, CanvasBox>();
+const canvasRo =
+  typeof ResizeObserver !== "undefined"
+    ? new ResizeObserver((entries) => {
+        for (const e of entries) {
+          const box = canvasBoxes.get(e.target as HTMLCanvasElement);
+          if (box) box.stale = true;
+        }
+      })
+    : null;
+
 export const sized = (c: HTMLCanvasElement) => {
-  const r = c.getBoundingClientRect(),
-    d = devicePixelRatio || 1;
-  if (c.width !== Math.round(r.width * d) || c.height !== Math.round(r.height * d)) {
-    c.width = Math.round(r.width * d);
-    c.height = Math.round(r.height * d);
+  const d = devicePixelRatio || 1;
+  const sh = c.style.height;
+  let entry = canvasBoxes.get(c);
+  if (!entry) {
+    const r = c.getBoundingClientRect();
+    entry = {
+      w: r.width,
+      h: r.height,
+      d,
+      sh,
+      g: c.getContext("2d")!,
+      stale: false,
+    };
+    canvasBoxes.set(c, entry);
+    canvasRo?.observe(c);
+  } else if (
+    !canvasRo ||
+    entry.stale ||
+    entry.sh !== sh ||
+    entry.d !== d ||
+    entry.w === 0 ||
+    entry.h === 0
+  ) {
+    const r = c.getBoundingClientRect();
+    entry.w = r.width;
+    entry.h = r.height;
+    entry.d = d;
+    entry.sh = sh;
+    entry.stale = false;
   }
-  const g = c.getContext("2d")!;
-  g.setTransform(d, 0, 0, d, 0, 0);
-  return { g, w: r.width, h: r.height };
+  const pw = Math.round(entry.w * d),
+    ph = Math.round(entry.h * d);
+  if (c.width !== pw || c.height !== ph) {
+    c.width = pw;
+    c.height = ph;
+  }
+  entry.g.setTransform(d, 0, 0, d, 0, 0);
+  return { g: entry.g, w: entry.w, h: entry.h };
 };

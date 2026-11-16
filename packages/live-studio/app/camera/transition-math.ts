@@ -1,5 +1,9 @@
-import type { TransitionEase } from "film-stage/transitions";
-import { TRANSITION_CATEGORIES, TRANSITION_EASES, TRANSITIONS } from "film-stage/transitions";
+import {
+  TRANSITION_CATEGORIES,
+  TRANSITION_EASES,
+  type TransitionEase,
+  TRANSITIONS,
+} from "film-stage/transitions-meta";
 
 export interface TransitionData {
   fx: string;

@@ -71,3 +71,10 @@ test("hand and look keys: a point, an anchor name or null; nothing else", () => 
     "hands[0] (t 0) R",
   );
 });
+
+test("walk moves tolerate an invalid preceding move entry without throwing on null.clip", () => {
+  const message = err(() =>
+    P().bodyAt([null as never, { t: 1, at: [0, 0, 0], yaw: 0, pose: "stand", walk: true }], 0),
+  );
+  expect(message).toContain("moves[0]");
+});

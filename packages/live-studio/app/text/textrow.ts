@@ -1,21 +1,21 @@
+import { together } from "../core/doc";
 // CapCut's text tracks, over the camera row (its main track) on the same seconds as every other row: track 0 at the bottom, each
 // one above drawn over it on the picture. An item is dragged to move (up or down onto another track, above the top one for a new
 // track), by an edge to trim, with Alt held for a copy, and snaps to the playhead, cuts, words and other items' edges (Shift: no
 // snap). A box dragged over empty space picks what it touches here and on the rows below (timeline/rowbox.ts, across.ts); a click
 // on empty space drops the pick and moves the playhead there. Items are added from the Text library (TextLibrary.tsx).
-import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-
-import { together } from "../core/doc";
+import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { FPS, makeSnapper, r3, snappedTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked as across } from "../timeline/across";
-import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import { isElementShown, onShownResize } from "../timeline/visible";
 import {
   edit,
   isShape,
@@ -36,7 +36,6 @@ export const ROW_H = 28;
 const CLIP_H = 24,
   EDGE = 6;
 // A shape has no CapCut clip to copy: plum, apart from the text clips' orange-brown (index.css --clip-text)
-const ANIM_SHADE = "rgba(0,0,0,.28)"; // over the stretch an item animates in or out
 
 type Box = { i: number; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
@@ -50,7 +49,7 @@ const trackAt = (y: number) => rows() - 1 - Math.floor(y / ROW_H);
 
 export const drawTextRow = () => {
   const c = S.el?.textrow;
-  if (!c || !get().text || !c.getClientRects().length) return;
+  if (!c || !get().text || !isElementShown(c)) return;
   const height = textRowHeight();
   if (c.style.height !== `${height}px`) c.style.height = `${height}px`;
   const { g, w, h } = sized(c);
@@ -89,7 +88,7 @@ export const drawTextRow = () => {
     const ai = it.in?.fx ? (it.in.len ?? 0.5) : 0,
       ao = it.out?.fx ? (it.out.len ?? 0.5) : 0,
       k = ai + ao > span ? span / (ai + ao) : 1;
-    g.fillStyle = ANIM_SHADE;
+    g.fillStyle = tone("anim-shade");
     if (ai) g.fillRect(x0, y + CLIP_H - 5, ai * k * px, 5);
     if (ao) g.fillRect(x1 - ao * k * px, y + CLIP_H - 5, ao * k * px, 5);
     g.save();
@@ -119,7 +118,7 @@ export const drawTextRow = () => {
       g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4);
       g.stroke();
     } else if (hover === i) {
-      g.strokeStyle = "rgba(255,255,255,.35)";
+      g.strokeStyle = tone("clip-hover");
       g.lineWidth = 1;
       g.beginPath();
       g.roundRect(cx0 - 0.5, y - 0.5, cx1 - cx0 + 1, CLIP_H + 1, 3.5);
@@ -128,7 +127,6 @@ export const drawTextRow = () => {
     g.globalAlpha = 1;
     boxes.push({ i, x0, x1, y0: y, y1: y + CLIP_H });
   });
-  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = (skip: number[]) => {
@@ -414,5 +412,5 @@ export const attachTextRow = () => {
     }
   });
   c.addEventListener("wheel", timelineWheel, { passive: false });
-  new ResizeObserver(drawTextRow).observe(c);
+  onShownResize(c, drawTextRow);
 };

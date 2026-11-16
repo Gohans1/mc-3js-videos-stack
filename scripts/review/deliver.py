@@ -228,13 +228,21 @@ def youtube(video, span, root, named=""):
     print(f"re-encoding {length:.0f} s the way YouTube serves it (AV1 {bitrate}bps, {width} wide) and measuring bands in both, "
           f"about {max(10, length * 3):.0f} s{' (a few seconds judge banding as well: --youtube <from>-<to>)' if length > 60 else ''} ...",
           file=sys.stderr)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(length), "-i", str(video), "-map", "0:v:0",
-                    "-map", "0:a:0?", "-vf", f"scale={width}:-2:flags=lanczos", "-c:v", "libsvtav1", "-preset", "10", "-b:v",
-                    bitrate, "-c:a", "aac", "-b:a", "128k", str(preview)], check=True, timeout=600 + length * 20,
-                   env={**os.environ, "SVT_LOG": "1"})  # SVT-AV1 prints its whole config to stderr unless told errors only
-    with tempfile.TemporaryDirectory(prefix="deliver-") as tmp:
-        before = cambi(video, start, length, width, tmp, "upload")
-        after = cambi(preview, 0, length, width, tmp, "preview", shown=start)
+    try:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(length), "-i", str(video), "-map", "0:v:0",
+                        "-map", "0:a:0?", "-vf", f"scale={width}:-2:flags=lanczos", "-c:v", "libsvtav1", "-preset", "10", "-b:v",
+                        bitrate, "-c:a", "aac", "-b:a", "128k", str(preview)], check=True, timeout=600 + length * 20,
+                       env={**os.environ, "SVT_LOG": "1"})  # SVT-AV1 prints its whole config to stderr unless told errors only
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        print(f"YouTube re-encode failed: {e}", file=sys.stderr)
+        return 1, []
+    try:
+        with tempfile.TemporaryDirectory(prefix="deliver-") as tmp:
+            before = cambi(video, start, length, width, tmp, "upload")
+            after = cambi(preview, 0, length, width, tmp, "preview", shown=start)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        print(f"CAMBI banding measurement failed: {e}", file=sys.stderr)
+        return 1, []
     added = sorted(s for s, v in after.items() if v >= BANDS and v - before.get(s, 0.0) >= ADDED)
     spans = []
     for s in added:
@@ -263,10 +271,14 @@ def youtube(video, span, root, named=""):
     peaks = [max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0)) for a, b in spans]
     for (a, b), peak in zip(spans[:6], peaks):
         picture = out / f"youtube_bands_{peak}s.png"
-        band_picture(video, preview, peak, picture, start, min(end, long) - 1 / (rate(pic) or 30))
+        try:
+            band_picture(video, preview, peak, picture, start, min(end, long) - 1 / (rate(pic) or 30))
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            print(f"band comparison image failed: {e}", file=sys.stderr)
+            return 1, []
         shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts is not None else ""
         print(f"BANDS {a}-{b + 1} s{shot}: the re-encode scores {after[peak]:.1f} where the upload has {before.get(peak, 0.0):.1f}; "
-              f"look: {picture.relative_to(root)} (top: upload | re-encode, bottom: the same with small steps of light x16)")
+              f"look: {picture.relative_to(root).as_posix()} (top: upload | re-encode, bottom: the same with small steps of light x16)")
     if len(spans) > 6:
         print(f"  and {len(spans) - 6} more stretches")
     if spans:
@@ -333,7 +345,7 @@ def main(args):
         info = probe(video)
     except SystemExit as e:
         print(e.code, file=sys.stderr)
-        return 1
+        return 2
     long = float(info["format"].get("duration") or 0)
     if span and span[1] > long + 0.05:
         print(f"--youtube {span[0]:g}-{span[1]:g} runs past the video's end: it is {long:.2f} s long", file=sys.stderr)

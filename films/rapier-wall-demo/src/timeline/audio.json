@@ -1,0 +1,26 @@
+{
+  "narration": "narration",
+  "voice": false,
+  "voiceGain": 0,
+  "beds": [
+    {
+      "name": "bgm-convergence",
+      "from": 0,
+      "to": 9.5,
+      "start": 10,
+      "gain": -11,
+      "fadeIn": 0.35,
+      "fadeOut": 1.0
+    }
+  ],
+  "sfx": [
+    { "at": 0.15, "start": 0, "length": 2.08, "name": "mc-random-fuse", "gain": -5, "fadeOut": 0.12 },
+    { "at": 2.25, "length": 0.65, "name": "mc-random-explode-1", "gain": -5, "fadeOut": 0.22 },
+    { "at": 2.26, "length": 0.6, "name": "son-18-explosion-large-07", "gain": -8, "fadeOut": 0.22 },
+    { "at": 2.37, "length": 0.55, "name": "son-15-debris-brick-rbd-02", "gain": -4, "fadeOut": 0.2 },
+    { "at": 4.1, "start": 0.05, "length": 0.48, "name": "son-19-dropping-wood-pile-79", "gain": 0, "fadeOut": 0.18 },
+    { "at": 5.02, "length": 0.65, "name": "son-18-brick-impact-debris-02", "gain": 2, "fadeOut": 0.2 }
+  ],
+  "lufs": -14,
+  "drive": 8
+}

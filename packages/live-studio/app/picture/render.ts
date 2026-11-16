@@ -5,7 +5,7 @@ import { buildScene } from "film/scene";
 import { drawCamPath } from "../camera/campath";
 import { AWAY } from "../core/device";
 import { S } from "../core/state";
-import { get, set } from "../core/store";
+import { get, invalidatePictures, set } from "../core/store";
 import { drawGizmo } from "../objects/placed";
 import { setPlaying } from "../playback/transport";
 import { drawTextSel } from "../text/onpicture";
@@ -60,16 +60,19 @@ export const drawFinal = () => {
   drawGizmo(S.finalRender!.tools);
   S.finalAt = S.t;
   S.el.final.hidden = false;
+  if (!S.playing && get().review) invalidatePictures();
 };
 export const setFinal = async (on: boolean) => {
   if (AWAY) return;
   set({ final: on });
   if (!on) {
     S.el.final.hidden = true;
+    invalidatePictures();
     return;
   }
   if (S.playing) setPlaying(false);
   await buildFinal();
   S.finalAt = -1;
   S.dirty = true;
+  invalidatePictures();
 };

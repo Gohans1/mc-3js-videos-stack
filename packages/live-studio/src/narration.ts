@@ -13,6 +13,7 @@ export interface NarrationLine {
 
 export interface NarrationAudio {
   narration?: string;
+  voice?: boolean;
   sfx: {
     name: string;
     at: number;
@@ -24,6 +25,14 @@ export interface NarrationAudio {
   }[];
   tracks?: { id: string; mute?: boolean }[];
 }
+
+export const narrationClipLength = (
+  clip: NarrationAudio["sfx"][number],
+  duration: number,
+): number => {
+  const available = Math.max(0, (duration - (clip.start ?? 0)) / (clip.rate ?? 1));
+  return Math.max(0, Math.min(clip.length ?? available, duration > 0 ? available : Infinity));
+};
 
 export const narrationLines = (
   lines: NarrationLine[],
@@ -38,8 +47,9 @@ export const narrationLines = (
     if (clip.name !== audio.narration || (audible && muted.has(clip.track ?? ""))) continue;
     const rate = clip.rate ?? 1,
       start = clip.start ?? 0,
-      length = clip.length ?? (duration - start) / rate,
+      length = narrationClipLength(clip, duration),
       end = start + length * rate;
+    if (length <= 0) continue;
     const at = (s: number) => clip.at + (clip.reverse ? end - s : s - start) / rate;
     const range = (s: number, e: number): [number, number] =>
       [at(Math.max(start, s)), at(Math.min(end, e))].sort((a, b) => a - b) as [number, number];

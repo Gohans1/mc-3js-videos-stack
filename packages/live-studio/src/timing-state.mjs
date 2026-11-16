@@ -47,7 +47,13 @@ export const setTiming = (data, sourceDuration = timingClock.sourceDuration) => 
     audioClock = {
       ...layerClocks.sfx,
       forClip: (clip, list, data) =>
-        layerClocks[clip.name === data.narration ? "voice" : list === "beds" ? "audio" : "sfx"],
+        layerClocks[
+          clip._narration || clip.name === data.narration
+            ? "voice"
+            : list === "beds"
+              ? "audio"
+              : "sfx"
+        ],
     };
     layersKey = nextLayers;
   }

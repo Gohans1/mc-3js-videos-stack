@@ -227,28 +227,164 @@ const REACH = {
 
 // b over a by weight k, each joint's turn (and the root's) as a quaternion slerp, root place by lerp. A joint one pose
 // leaves out is at rest there
-const qa = new THREE.Quaternion(),
-  qb = new THREE.Quaternion(),
-  ea = new THREE.Euler();
-const qOf = (a, out) =>
-  out.setFromEuler(ea.set((a[0] ?? 0) / D, (a[1] ?? 0) / D, (a[2] ?? 0) / D, "YXZ"));
-const degOf = (q) => {
-  ea.setFromQuaternion(q, "YXZ");
-  return [ea.x * D, ea.y * D, ea.z * D];
+const HALF_RAD = Math.PI / 360;
+const slerpYXZDeg = (ax, ay, az, bx, by, bz, k) => {
+  let qax, qay, qaz, qaw;
+  if (ax === 0 && ay === 0 && az === 0) {
+    qax = 0;
+    qay = 0;
+    qaz = 0;
+    qaw = 1;
+  } else {
+    const x1 = ax * HALF_RAD,
+      y1 = ay * HALF_RAD,
+      z1 = az * HALF_RAD;
+    const c1 = Math.cos(x1),
+      c2 = Math.cos(y1),
+      c3 = Math.cos(z1);
+    const s1 = Math.sin(x1),
+      s2 = Math.sin(y1),
+      s3 = Math.sin(z1);
+    qax = s1 * c2 * c3 + c1 * s2 * s3;
+    qay = c1 * s2 * c3 - s1 * c2 * s3;
+    qaz = c1 * c2 * s3 - s1 * s2 * c3;
+    qaw = c1 * c2 * c3 + s1 * s2 * s3;
+  }
+  let rx = qax,
+    ry = qay,
+    rz = qaz,
+    rw = qaw;
+  if (k !== 0) {
+    let qbx, qby, qbz, qbw;
+    if (bx === 0 && by === 0 && bz === 0) {
+      qbx = 0;
+      qby = 0;
+      qbz = 0;
+      qbw = 1;
+    } else {
+      const x2 = bx * HALF_RAD,
+        y2 = by * HALF_RAD,
+        z2 = bz * HALF_RAD;
+      const c1 = Math.cos(x2),
+        c2 = Math.cos(y2),
+        c3 = Math.cos(z2);
+      const s1 = Math.sin(x2),
+        s2 = Math.sin(y2),
+        s3 = Math.sin(z2);
+      qbx = s1 * c2 * c3 + c1 * s2 * s3;
+      qby = c1 * s2 * c3 - s1 * c2 * s3;
+      qbz = c1 * c2 * s3 - s1 * s2 * c3;
+      qbw = c1 * c2 * c3 + s1 * s2 * s3;
+    }
+    if (k === 1) {
+      rx = qbx;
+      ry = qby;
+      rz = qbz;
+      rw = qbw;
+    } else {
+      let cosHalf = rw * qbw + rx * qbx + ry * qby + rz * qbz;
+      if (cosHalf < 0) {
+        qbx = -qbx;
+        qby = -qby;
+        qbz = -qbz;
+        qbw = -qbw;
+        cosHalf = -cosHalf;
+      }
+      if (cosHalf < 1.0) {
+        const sqrSin = 1.0 - cosHalf * cosHalf;
+        if (sqrSin <= Number.EPSILON) {
+          const s = 1 - k;
+          rw = s * rw + k * qbw;
+          rx = s * rx + k * qbx;
+          ry = s * ry + k * qby;
+          rz = s * rz + k * qbz;
+          const invLen = 1 / Math.sqrt(rx * rx + ry * ry + rz * rz + rw * rw);
+          rx *= invLen;
+          ry *= invLen;
+          rz *= invLen;
+          rw *= invLen;
+        } else {
+          const sinHalf = Math.sqrt(sqrSin);
+          const halfTheta = Math.atan2(sinHalf, cosHalf);
+          const ra = Math.sin((1 - k) * halfTheta) / sinHalf;
+          const rb = Math.sin(k * halfTheta) / sinHalf;
+          rw = rw * ra + qbw * rb;
+          rx = rx * ra + qbx * rb;
+          ry = ry * ra + qby * rb;
+          rz = rz * ra + qbz * rb;
+        }
+      }
+    }
+  }
+  // quaternion -> YXZ Euler degrees, matching THREE.Matrix4 + Euler.setFromRotationMatrix("YXZ")
+  const x2 = rx + rx,
+    y2 = ry + ry,
+    z2 = rz + rz;
+  const xx = rx * x2,
+    xy = rx * y2,
+    xz = rx * z2;
+  const yy = ry * y2,
+    yz = ry * z2,
+    zz = rz * z2;
+  const wx = rw * x2,
+    wy = rw * y2,
+    wz = rw * z2;
+  const m23 = yz - wx;
+  const clamped = m23 < -1 ? -1 : m23 > 1 ? 1 : m23;
+  const ex = Math.asin(-clamped);
+  let ey, ez;
+  if (Math.abs(m23) < 0.9999999) {
+    ey = Math.atan2(xz + wy, 1 - (xx + yy));
+    ez = Math.atan2(xy + wz, 1 - (xx + zz));
+  } else {
+    ey = Math.atan2(-(xz - wy), 1 - (yy + zz));
+    ez = 0;
+  }
+  return [ex * D, ey * D, ez * D];
 };
 export function slerpPose(a, b, k) {
   const out = {};
-  for (const j of new Set([...Object.keys(a), ...Object.keys(b)])) {
+  for (const j in a) {
     if (j === "root") continue;
-    out[j] = degOf(qOf(a[j] ?? [], qa).slerp(qOf(b[j] ?? [], qb), k));
+    const va = a[j],
+      vb = b[j];
+    out[j] = slerpYXZDeg(
+      va[0] ?? 0,
+      va[1] ?? 0,
+      va[2] ?? 0,
+      vb ? (vb[0] ?? 0) : 0,
+      vb ? (vb[1] ?? 0) : 0,
+      vb ? (vb[2] ?? 0) : 0,
+      k,
+    );
   }
-  const ra = a.root ?? {},
-    rb = b.root ?? {};
-  const [rx, ry, rz] = degOf(
-    qOf([ra.rx, ra.ry, ra.rz], qa).slerp(qOf([rb.rx, rb.ry, rb.rz], qb), k),
+  for (const j in b) {
+    if (j === "root" || j in a) continue;
+    const vb = b[j];
+    out[j] = slerpYXZDeg(0, 0, 0, vb[0] ?? 0, vb[1] ?? 0, vb[2] ?? 0, k);
+  }
+  const ra = a.root,
+    rb = b.root;
+  const rr = slerpYXZDeg(
+    ra?.rx ?? 0,
+    ra?.ry ?? 0,
+    ra?.rz ?? 0,
+    rb?.rx ?? 0,
+    rb?.ry ?? 0,
+    rb?.rz ?? 0,
+    k,
   );
-  out.root = { rx, ry, rz };
-  for (const r of ["x", "y", "z"]) out.root[r] = THREE.MathUtils.lerp(ra[r] ?? 0, rb[r] ?? 0, k);
+  const ax = ra?.x ?? 0,
+    ay = ra?.y ?? 0,
+    az = ra?.z ?? 0;
+  out.root = {
+    rx: rr[0],
+    ry: rr[1],
+    rz: rr[2],
+    x: ax + ((rb?.x ?? 0) - ax) * k,
+    y: ay + ((rb?.y ?? 0) - ay) * k,
+    z: az + ((rb?.z ?? 0) - az) * k,
+  };
   return out;
 }
 
@@ -291,8 +427,12 @@ export function framesAt(frames, fps) {
 //    contact points elsewhere than a human's) or sinking into it;
 //  - his own body: a hand that would end inside his head (twice a human's), body or legs stops on their surface, the arm
 //    re-solved as two bones in the plane of its own elbow, so a hand on the face rests on the face. Untouched otherwise.
+const playerBoxes = new WeakMap();
+
 export function retargeter(src, player, { floor = true, own = true } = {}) {
+  let bonesVer = 0;
   const atOrigin = (fn) => {
+    bonesVer++;
     const p0 = player.g.position.clone(),
       q0 = player.g.quaternion.clone();
     player.g.position.set(0, 0, 0);
@@ -351,7 +491,9 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
       chestRest.copy(b.chest.getWorldQuaternion(new THREE.Quaternion())).invert();
       headRestQ.copy(b.head.getWorldQuaternion(new THREE.Quaternion())).invert();
       rootRestQ.copy(b.root.getWorldQuaternion(new THREE.Quaternion())).invert();
-      return bodyBoxes(player);
+      return (
+        playerBoxes.get(player) ?? ((bx) => (playerBoxes.set(player, bx), bx))(bodyBoxes(player))
+      );
     });
   const handRest = Object.fromEntries(
     ["L", "R"].map((sd) => {
@@ -386,14 +528,31 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const wrap180 = (x) => THREE.MathUtils.euclideanModulo(x + 180, 360) - 180;
   const deg = (q, key) => {
     e.setFromQuaternion(q, "YXZ");
-    let out = [e.x * D, e.y * D, e.z * D];
+    let x = e.x * D,
+      y = e.y * D,
+      z = e.z * D;
     const was = key && eulerWas[key];
     if (was) {
-      const alt = [wrap180(180 - out[0]), wrap180(out[1] + 180), wrap180(out[2] + 180)];
-      const cost = (c) => c.reduce((sum, x, i) => sum + Math.abs(wrap180(x - was[i])), 0);
-      if (cost(alt) < cost(out)) out = alt;
-      out = out.map((x, i) => was[i] + wrap180(x - was[i]));
+      const w0 = was[0],
+        w1 = was[1],
+        w2 = was[2];
+      const ax = wrap180(180 - x),
+        ay = wrap180(y + 180),
+        az = wrap180(z + 180);
+      const cOut =
+        Math.abs(wrap180(x - w0)) + Math.abs(wrap180(y - w1)) + Math.abs(wrap180(z - w2));
+      const cAlt =
+        Math.abs(wrap180(ax - w0)) + Math.abs(wrap180(ay - w1)) + Math.abs(wrap180(az - w2));
+      if (cAlt < cOut) {
+        x = ax;
+        y = ay;
+        z = az;
+      }
+      x = w0 + wrap180(x - w0);
+      y = w1 + wrap180(y - w1);
+      z = w2 + wrap180(z - w2);
     }
+    const out = [x, y, z];
     if (key) eulerNow[key] = out;
     return out;
   };
@@ -527,9 +686,28 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const srcHandLow = () =>
     Math.min(src.atNow("wristL").y, src.atNow("wristR").y) - HAND_REACH * srcLeg;
   // a world point into joint `key`'s rest world, and back
-  const toRest = (key, p) =>
-    p.applyMatrix4(M.copy(body.rest[key]).multiply(M2.copy(b[key].matrixWorld).invert()));
-  const fromRest = (key, p) => p.applyMatrix4(M.copy(b[key].matrixWorld).multiply(restInv[key]));
+  const toMats = {},
+    fromMats = {};
+  const toMat = (key) => {
+    let entry = toMats[key];
+    if (!entry) entry = toMats[key] = { ver: -1, m: new THREE.Matrix4() };
+    if (entry.ver !== bonesVer) {
+      entry.ver = bonesVer;
+      entry.m.copy(body.rest[key]).multiply(M2.copy(b[key].matrixWorld).invert());
+    }
+    return entry.m;
+  };
+  const fromMat = (key) => {
+    let entry = fromMats[key];
+    if (!entry) entry = fromMats[key] = { ver: -1, m: new THREE.Matrix4() };
+    if (entry.ver !== bonesVer) {
+      entry.ver = bonesVer;
+      entry.m.copy(b[key].matrixWorld).multiply(restInv[key]);
+    }
+    return entry.m;
+  };
+  const toRest = (key, p) => p.applyMatrix4(toMat(key));
+  const fromRest = (key, p) => p.applyMatrix4(fromMat(key));
   const handAt = (sd, out) => fromRest(`la${sd}`, out.copy(handRest[sd]));
   const footAt = (sd, out) => fromRest(`ll${sd}`, out.copy(footRest[sd]));
   // the closest points of segments a0-a1 and b0-b1: [s, t] along each (0..1)
@@ -600,15 +778,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     tR = new THREE.Vector3();
   let elbowWas = {};
   const elbowNow = {};
-  const poseNumbers = (p) => {
-    const out = [];
-    for (const k in p) {
-      const a = p[k];
-      if (k === "root") out.push(k, a.x, a.y, a.z, a.rx, a.ry, a.rz);
-      else out.push(k, ...a);
-    }
-    return out;
-  };
   const solveFrame = (dt) =>
     atOrigin(() => {
       for (const x in gap) delete gap[x]; // the source as pose() updated it: nothing moves it until the next pose()
@@ -651,14 +820,46 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
       }
       // skipped when he already stands as p says: the head and floor fixes below often leave p as the last call placed it
       let placed = null;
+      const samePlaced = () => {
+        if (!placed) return false;
+        let i = 0;
+        for (const k in p) {
+          const a = p[k];
+          if (k === "root") {
+            if (
+              placed[i++] !== k ||
+              placed[i++] !== a.x ||
+              placed[i++] !== a.y ||
+              placed[i++] !== a.z ||
+              placed[i++] !== a.rx ||
+              placed[i++] !== a.ry ||
+              placed[i++] !== a.rz
+            )
+              return false;
+          } else if (
+            placed[i++] !== k ||
+            placed[i++] !== a[0] ||
+            placed[i++] !== a[1] ||
+            placed[i++] !== a[2]
+          )
+            return false;
+        }
+        return i === placed.length;
+      };
       const place = () => {
-        const now = poseNumbers(p);
-        if (placed && now.length === placed.length && now.every((x, i) => x === placed[i])) return;
-        placed = now;
+        if (samePlaced()) return;
+        const next = [];
+        for (const k in p) {
+          const a = p[k];
+          if (k === "root") next.push(k, a.x, a.y, a.z, a.rx, a.ry, a.rz);
+          else next.push(k, a[0], a[1], a[2]);
+        }
+        placed = next;
         player.setPose(p);
         // the solve reads his bones alone; the rest of him keeps older matrices until a full update (the renderer's, or
         // clips.ts leaveAsBaked after a bake)
         player.updateBones();
+        bonesVer++;
       };
       // his legs out of each other and of his body: box legs are thicker than a human's, so knees together, legs crossed
       // or a thigh pressed to the chest ran one box through the other
@@ -1018,6 +1219,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const ang = (a, c) =>
     Math.acos(THREE.MathUtils.clamp(a.clone().normalize().dot(c.clone().normalize()), -1, 1)) * D;
   const measure = () => {
+    bonesVer++;
     src.update(); // a caller may have moved the source's mixer since pose(): the reads below are as of the last update()
     const dir = {};
     for (const sd of ["L", "R"]) {
@@ -1073,12 +1275,23 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     };
   };
   // how deep a world point (a ball of radius r) is in any of the given joints' boxes (posed as now), for checks
-  const depth = (p, keys, r) =>
-    Math.max(
+  const depth = (p, keys, r) => {
+    bonesVer++;
+    return Math.max(
       0,
       ...keys
         .filter((x) => body.box[x])
         .map((x) => -roundedBox(toRest(x, lp.copy(p)), body.box[x], r, grad)),
     );
-  return { pose, measure, depth, k, hand: (sd) => handAt(sd, new THREE.Vector3()) };
+  };
+  return {
+    pose,
+    measure,
+    depth,
+    k,
+    hand: (sd) => {
+      bonesVer++;
+      return handAt(sd, new THREE.Vector3());
+    },
+  };
 }

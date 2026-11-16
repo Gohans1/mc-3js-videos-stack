@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "studio-sealed-room",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "--cwd=C:/Users/ADMIN/Desktop/gohans-monorepo-3js-mc/films/sealed-room",
+        "node_modules/live-studio/src/live.mjs",
+        "4324"
+      ],
+      "port": 4324
+    }
+  ]
+}

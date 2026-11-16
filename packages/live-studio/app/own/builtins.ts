@@ -1,6 +1,6 @@
 // The studio's own libraries, what a film's effects are told apart from (the Film tab and the "Film" mark on the pickers)
-import { ANIMS } from "film-stage/animate";
-import { EASES } from "film-stage/camera";
+import { ANIMS } from "film-stage/animate-meta";
+import { EASES } from "film-stage/camera-meta";
 import {
   SHAPE_IN,
   SHAPE_OUT,
@@ -8,9 +8,9 @@ import {
   TEXT_ITEM_KEYS,
   TEXT_OUT,
   TITLE_EASES,
-} from "film-stage/titles";
-import { TRANSITIONS } from "film-stage/transitions";
-import { VELOCITY_EFFECTS } from "film-stage/velocity";
+} from "film-stage/titles-catalog";
+import { TRANSITIONS } from "film-stage/transitions-meta";
+import { VELOCITY_EFFECTS } from "film-stage/velocity-meta";
 
 import {
   ADJUSTMENT_KEYS,
@@ -20,7 +20,7 @@ import {
   SOUND_KEYS,
   TEXT_KEYS,
   TEXT_SLOT_KEYS,
-} from "../../src/contract.ts";
+} from "../../src/contract-keys.ts";
 import { type Builtins, isOwnEase, isOwnFx, isOwnVelocity } from "./own-work";
 
 export const BUILTINS = {

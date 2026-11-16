@@ -1,0 +1,46 @@
+{
+  "at": [0.95, 0, 3.1],
+  "yaw": 48,
+  "moves": [
+    {
+      "t": 0,
+      "at": [0.95, 0, 3.1],
+      "yaw": 48,
+      "pose": "stand",
+      "do": "watches the cracked breach wall"
+    },
+    {
+      "t": 1.55,
+      "at": [0.95, 0, 3.1],
+      "yaw": 44,
+      "pose": "brace",
+      "do": "crouches and braces for the blast"
+    },
+    {
+      "t": 3.85,
+      "at": [0.95, 0, 3.1],
+      "yaw": 38,
+      "pose": "stand",
+      "do": "stands back up after debris settles"
+    },
+    {
+      "t": 4.55,
+      "at": [2.05, 0, 4.35],
+      "yaw": 22,
+      "pose": "stand",
+      "walk": true,
+      "do": "walks forward toward the sunlit breach"
+    }
+  ],
+  "hands": [],
+  "look": [
+    { "t": 0, "at": [3.5, 1.35, 6.2] },
+    { "t": 4.55, "at": [3.5, 1.25, 9.0] }
+  ],
+  "face": [
+    { "t": 0, "mood": "determined" },
+    { "t": 1.55, "mood": "scared" },
+    { "t": 2.35, "mood": "surprised" },
+    { "t": 6.2, "mood": "proud" }
+  ]
+}

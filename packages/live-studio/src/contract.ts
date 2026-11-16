@@ -5,7 +5,31 @@
 import * as z from "zod";
 
 import { findTarget, targetHelp } from "../render/target.ts";
+import {
+  ADJUSTMENT_KEYS,
+  CAM_KEYS,
+  isTimedKey,
+  keyRows,
+  rowAt,
+  SHOT_KEYS,
+  SHOT_SLOT_KEYS,
+  SOUND_KEYS,
+  TEXT_KEYS,
+  TEXT_SLOT_KEYS,
+} from "./contract-keys.ts";
 import { RATIOS } from "./frame.ts";
+
+export {
+  ADJUSTMENT_KEYS,
+  CAM_KEYS,
+  keyRows,
+  rowAt,
+  SHOT_KEYS,
+  SHOT_SLOT_KEYS,
+  SOUND_KEYS,
+  TEXT_KEYS,
+  TEXT_SLOT_KEYS,
+};
 
 export const DOC = "bun run skills get core --ref contract";
 
@@ -33,7 +57,7 @@ const speedCurve = z
     "curve positions must increase from 0 to 1",
   );
 const speedRange = z
-  .object({
+  .looseObject({
     ...timeRange,
     rate: speedRate.optional(),
     curve: speedCurve.optional(),
@@ -47,27 +71,29 @@ const speedRange = z
     (s) => !s.handles || (s.curve && s.handles.length === s.curve.length - 1),
     "each curve span needs one pair of speed handles",
   );
-const cutRange = z.object(timeRange).refine((s) => s.to > s.from, "cut end must follow its start");
+const cutRange = z
+  .looseObject(timeRange)
+  .refine((s) => s.to > s.from, "cut end must follow its start");
 const disjoint = (xs: { from: number; to: number }[]) =>
   xs.every((a, i) => xs.every((b, j) => i === j || a.to <= b.from || b.to <= a.from));
 const MainItem = z.discriminatedUnion("kind", [
   z
-    .object({
+    .looseObject({
       id: z.string().min(1),
       kind: z.literal("clip"),
       sourceFrom: z.number().nonnegative(),
       sourceTo: z.number().positive(),
     })
     .refine((c) => c.sourceTo > c.sourceFrom, "main clip needs a positive source range"),
-  z.object({
+  z.looseObject({
     id: z.string().min(1),
     kind: z.literal("freeze"),
     frame: z.number().nonnegative(),
     duration: z.number().positive(),
   }),
-  z.object({ id: z.string().min(1), kind: z.literal("gap"), duration: z.number().positive() }),
+  z.looseObject({ id: z.string().min(1), kind: z.literal("gap"), duration: z.number().positive() }),
 ]);
-const TimingPlan = z.object({
+const TimingPlan = z.looseObject({
   main: z
     .array(MainItem)
     .refine((items) => unique(items.map((it) => it.id)), "main clip ids must differ")
@@ -75,7 +101,7 @@ const TimingPlan = z.object({
   speeds: z.array(speedRange).refine(disjoint, "speed ranges must not overlap").optional(),
   freezes: z
     .array(
-      z.object({
+      z.looseObject({
         at: z.number().nonnegative(),
         frame: z.number().nonnegative().optional(),
         duration: z.number().positive(),
@@ -103,9 +129,9 @@ const Velocity = z
     enabled: z.boolean().optional(),
   })
   .refine((v) => v.to > v.from, "velocity needs a positive range");
-const LayerHistory = z.object({
+const LayerHistory = z.looseObject({
   base: TimingPlan,
-  changes: z.array(z.object({ before: TimingPlan, after: TimingPlan })),
+  changes: z.array(z.looseObject({ before: TimingPlan, after: TimingPlan })),
 });
 const OverlayTimebase = LayerHistory.extend({ sourceDuration: z.number().nonnegative() });
 export const TimingTimeline = TimingPlan.extend({
@@ -327,6 +353,7 @@ export const Edit = z.looseObject({
   voice: z.looseObject({
     edits: z.record(z.string(), z.unknown()),
     warp: z.array(z.tuple([time, time])),
+    lines: z.array(z.tuple([time, time])).optional(),
   }),
   takes: z
     .array(Take)
@@ -542,11 +569,7 @@ export const SoundTimeline = z
 
 // The keys the mix and the studio read on each part of the sound timeline: a key a letter off one of these (or two letters
 // swapped) is a typo the loose schemas let through (bun run check names it)
-export const SOUND_KEYS = {
-  audio: Object.keys(SoundTimeline.shape),
-  beds: Object.keys(Bed.shape),
-  sfx: Object.keys(Shot1.shape),
-};
+// (SOUND_KEYS exported from ./contract-keys.ts)
 
 // ---------- The camera keys (package.json "live-studio".camTimeline), which the studio also writes: one entry per key, in time
 // order, t in the seconds draw(t) is given. p and l are a point [x, y, z] or the film's own anchor ({"eye": [...]}); ease is a
@@ -588,8 +611,8 @@ const CamKey = z.looseObject({
   handheld: Handheld.optional(),
   wave: z.number().optional(),
   roll: z.number().optional(),
+  bob: z.number().finite().optional(),
 });
-export const CAM_KEYS = Object.keys(CamKey.shape);
 export const FOCUS_KEYS = Object.keys(FocusTargetObj.shape);
 export const HANDHELD_KEYS = Object.keys(HandheldShape.shape);
 export const CamTimeline = z
@@ -752,7 +775,7 @@ const ShotHit = z.looseObject({
   seed: z.number().optional(),
 });
 const ShotRow = z.looseObject({
-  t: time,
+  t: secs,
   name: z.string().optional(),
   anim: Anim.optional(),
   transition: Transition.optional(),
@@ -761,13 +784,6 @@ const ShotRow = z.looseObject({
 });
 export const GRADE_KEYS = Object.keys(Grade.shape);
 export const HIT_KEYS = Object.keys(ShotHit.shape);
-export const SHOT_KEYS = Object.keys(ShotRow.shape);
-// The fields read inside a shot's anim slots and transition, by path ("anim.in.k")
-export const SHOT_SLOT_KEYS = [
-  ...Object.keys(Anim.shape).flatMap((s) => Object.keys(AnimFx.shape).map((k) => `anim.${s}.${k}`)),
-  ...Object.keys(Transition.shape).map((k) => `transition.${k}`),
-];
-export const ADJUSTMENT_KEYS = Object.keys(AdjustmentItem.shape);
 export const ShotsTimeline = z
   .array(ShotRow)
   .min(1)
@@ -806,10 +822,7 @@ const TextItem = z
     read: z.boolean().optional(),
   })
   .refine((it: any) => it.to > it.from, "to must come after from");
-export const TEXT_KEYS = Object.keys(TextItem.shape);
-export const TEXT_SLOT_KEYS = ["in", "out"].flatMap((s) =>
-  Object.keys(TextFx.shape).map((k) => `${s}.${k}`),
-);
+// TEXT_KEYS, TEXT_SLOT_KEYS exported from ./contract-keys.ts
 export const TextTimeline = z.looseObject({
   items: z.array(TextItem),
   tracks: z
@@ -823,14 +836,7 @@ export const TextTimeline = z.looseObject({
 // ---------- Key files (package.json "live-studio".keyFiles: { file: the EDIT key the film reads it from }): every list of
 // {t, ...} or single timed {t, ...} event object in the file, at any depth through objects, is a row of keys the studio shows
 // and retimes (Steve's moves, a drawer's opening, a single desk drop); each list row stays in time order
-const isTimedKey = (k: any): k is { t: number } =>
-  !!k && typeof k === "object" && !Array.isArray(k) && Number.isFinite(k.t);
-export const keyRows = (v: any, path: string[] = []): string[][] => {
-  if (Array.isArray(v)) return v.length && v.every(isTimedKey) ? [path] : [];
-  if (!v || typeof v !== "object") return [];
-  const own = path.length > 0 && isTimedKey(v) ? [path] : [];
-  return [...own, ...Object.entries(v).flatMap(([k, x]) => keyRows(x, [...path, k]))];
-};
+// isTimedKey, keyRows, rowAt exported from ./contract-keys.ts
 // a key whose "t" is no number ("5") or is missing makes keyRows drop its whole list, so the studio stops showing the row:
 // in a list where any row has a "t", every row without a number there is named. Like keyRows it never looks inside a
 // list of other things: what is there is no row the studio shows
@@ -843,7 +849,6 @@ const badTimes = (v: any, path: (string | number)[] = []): (string | number)[][]
     : v && typeof v === "object"
       ? Object.entries(v).flatMap(([k, x]) => badTimes(x, [...path, k]))
       : [];
-export const rowAt = (v: any, path: string[]): any => path.reduce((x, k) => x?.[k], v);
 const rowKeys = (v: any, path: string[]): any[] => {
   const r = rowAt(v, path);
   return Array.isArray(r) ? r : isTimedKey(r) ? [r] : [];

@@ -1,4 +1,4 @@
-import { VELOCITY_EFFECTS, VELOCITY_LOOKS } from "film-stage/velocity";
+import { VELOCITY_EFFECTS, VELOCITY_LOOKS } from "film-stage/velocity-meta";
 import { CircleSlash, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 

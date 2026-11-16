@@ -15,7 +15,7 @@ const frustum = new THREE.CameraHelper(ghost);
 frustum.setColors(
   new THREE.Color(0xec8b49),
   new THREE.Color(0xec8b49),
-  new THREE.Color(0xffffff),
+  new THREE.Color(0xfffcf0),
   new THREE.Color(0xec8b49),
   new THREE.Color(0xec8b49),
 );
@@ -24,13 +24,13 @@ const paths = new THREE.Group();
 overlay.add(paths);
 const NOW = new THREE.LineBasicMaterial({ color: 0xec8b49, depthTest: false });
 const OTHER = new THREE.LineBasicMaterial({
-  color: 0x8a8a8a,
+  color: 0x878580,
   transparent: true,
   opacity: 0.45,
   depthTest: false,
 });
 const DOTS = new THREE.PointsMaterial({
-  color: 0xffffff,
+  color: 0xfffcf0,
   size: 6,
   sizeAttenuation: false,
   depthTest: false,

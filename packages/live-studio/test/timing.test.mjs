@@ -306,6 +306,32 @@ test("unchanged film time is an identity map, including clip tails beyond the pi
   }
 });
 
+test("audio starting inside a repeated picture clip preserves the gap before its next placement", () => {
+  const clock = compileTiming(
+    {
+      main: [
+        { id: "first", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+        { id: "repeat", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+      ],
+    },
+    4,
+  );
+  const timeline = clipTiming(clock, 1, 3);
+  assert.deepEqual(
+    timeline.map(({ kind, from, to }) => ({ kind, from, to })),
+    [
+      { kind: "play", from: 0, to: 1 },
+      { kind: "freeze", from: 1, to: 2 },
+      { kind: "play", from: 2, to: 3 },
+    ],
+  );
+  assert.equal(
+    SoundProcess.safeParse({ name: "fixture", start: 0, duration: 2, loop: false, timeline })
+      .success,
+    true,
+  );
+});
+
 test("a trimmed audio clip gets local playback ranges and silence only for freezes inside it", () => {
   const clock = compileTiming(
     { speeds: [{ from: 5, to: 10, rate: 2 }], freezes: [{ at: 6, duration: 3 }] },

@@ -35,7 +35,7 @@ import {
   Trials,
 } from "./contract.ts";
 import { ratioOf } from "./frame.ts";
-import { createNotes } from "./notes.mjs";
+import { createNotes, watchNotesFile } from "./notes.mjs";
 import { openSound } from "./sound.mjs";
 import { openTimelineFile } from "./timeline_file.mjs";
 import { layerDuration, setTiming, timingClock } from "./timing-state.mjs";
@@ -80,35 +80,39 @@ export const contractFiles = (project) => {
     const f = join(project, rel);
     return statSync(f, { throwIfNoEntry: false })?.isFile() ? readFileSync(f, "utf8") : undefined;
   };
-  // older films named it sound_choices.json
-  const choices =
-    ["sound_choices.json", "choices.json"].find((f) => existsSync(join(project, f))) ??
-    "choices.json";
+  // older films named it sound_choices.json; validate every present choices file so a legacy one never hides a broken choices.json
+  const choiceFiles = ["choices.json", "sound_choices.json"].filter((f) =>
+    existsSync(join(project, f)),
+  );
   // a value of the wrong shape is opened by nothing here: the "live-studio" entry's own schema names it
   const own = (key, schema) =>
-    typeof conf[key] === "string" && conf[key] ? { [conf[key]]: [schema, textOf(conf[key])] } : {};
+    typeof conf[key] === "string" && conf[key] ? [[conf[key], [schema, textOf(conf[key])]]] : [];
   const rowsOf = (edit) => {
     const rows = conf.requiredKeyRows?.[edit];
     return Array.isArray(rows) ? rows.filter((p) => Array.isArray(p)) : [];
   };
-  return {
-    'package.json "live-studio"': [StudioConfig, JSON.stringify(conf)],
-    "src/edit.json": [Edit, textOf("src/edit.json")],
-    "renders/live/trials.json (from sound.py)": [Trials, textOf("renders/live/trials.json")],
-    [choices]: [Choices, textOf(choices)],
+  const entries = [
+    ['package.json "live-studio"', [StudioConfig, JSON.stringify(conf)]],
+    ["src/edit.json", [Edit, textOf("src/edit.json")]],
+    ["renders/live/trials.json (from sound.py)", [Trials, textOf("renders/live/trials.json")]],
+    ...(choiceFiles.length ? choiceFiles : ["choices.json"]).map((f) => [f, [Choices, textOf(f)]]),
     ...own("soundTimeline", SoundTimeline),
     ...own("camTimeline", CamTimeline),
     ...own("shotsTimeline", ShotsTimeline),
     ...own("textTimeline", TextTimeline),
     ...own("adjustmentTimeline", AdjustmentTimeline),
     ...own("timingTimeline", TimingTimeline),
-    ...Object.fromEntries(
-      Object.entries(conf.keyFiles ?? {}).map(([rel, edit]) => [
+    ...Object.entries(conf.keyFiles ?? {}).map(([rel, edit]) => [
         rel,
         [keyFileSchema(rowsOf(edit)), textOf(rel)],
       ]),
-    ),
-  };
+  ];
+  const files = new Map();
+  for (const [file, [schema, text]] of entries) {
+    const previous = files.get(file);
+    files.set(file, [previous ? previous[0].and(schema) : schema, text]);
+  }
+  return Object.fromEntries(files);
 };
 const debounce = (f, ms) => {
   let h;
@@ -118,7 +122,8 @@ const debounce = (f, ms) => {
   };
 };
 
-export const openFilm = (projectDir, { send }) => {
+// activity: src/activity.mjs's, told of each edit made outside the studio (the AI's)
+export const openFilm = (projectDir, { send, activity }) => {
   const PROJECT = resolve(projectDir);
   const SRC = join(PROJECT, "src");
   if (!existsSync(join(SRC, "scene.ts")))
@@ -136,6 +141,8 @@ export const openFilm = (projectDir, { send }) => {
   const WORK = join(PROJECT, "renders/live");
   const MIX = join(WORK, "mix_dry.wav"); // without the sounds being tried: the page plays those itself
   const MIX_SMALL = join(WORK, "mix_small.webm"); // the same mix for anything but this machine: a fifteenth of the size, and Opus stays on the clock where mp3 ran up to 30ms off
+  const RENDERS = join(PROJECT, "renders");
+  const VIDEO_SMALL = join(WORK, "video_small.mp4"); // 540p H.264/AAC faststart copy so a phone downloads a draft at a fraction of the size
   const LITE = join(WORK, "lite"); // small copies of the assets, see make_lite.py
   const TRIALS = join(WORK, "trials.json");
   const EDIT = join(SRC, "edit.json");
@@ -143,7 +150,7 @@ export const openFilm = (projectDir, { send }) => {
   const VOICE = voiceFileOf(PROJECT);
   // What was picked in the studio ("Use"), {group: {set, gain}}, read by the film's own renders; older films named it sound_choices.json
   const CHOICES =
-    [join(PROJECT, "sound_choices.json"), join(PROJECT, "choices.json")].find(existsSync) ??
+    [join(PROJECT, "choices.json"), join(PROJECT, "sound_choices.json")].find(existsSync) ??
     join(PROJECT, "choices.json");
   // A machine's private name (Tailscale) has no place in the studio's public repo: the film lists the names it is reached by
   const HOSTS_FILE = join(PROJECT, ".live_hosts");
@@ -173,6 +180,7 @@ export const openFilm = (projectDir, { send }) => {
   const sound = openSound(PROJECT, pkg["live-studio"]); // null: the film has no sound lanes for the studio to edit
   const readers = new Set();
   let syncVoiceAssemble = () => {};
+  let syncNotes = () => {};
   const voice = openVoice(PROJECT, pkg["live-studio"], {
     releaseFile: (target) => {
       for (const r of readers) if (r.file === target) r.stop();
@@ -332,21 +340,120 @@ export const openFilm = (projectDir, { send }) => {
     console.log("could not replace", target);
     return false;
   };
-  let smallMixing = null;
+  const newestOf = (names) => {
+    let best = null,
+      bestMtime = -1;
+    for (const name of names) {
+      const file = join(RENDERS, name);
+      if (!existsSync(file)) continue;
+      const mtime = statSync(file).mtimeMs;
+      if (mtime > bestMtime) {
+        best = file;
+        bestMtime = mtime;
+      }
+    }
+    return best;
+  };
+  const videoSource = () =>
+    newestOf(["final.mp4", "draft.mp4"]) ?? newestOf(["final_video.mp4", "draft_video.mp4"]);
+  let smallVideoing = null;
+  const smallVideo = () => {
+    const source = videoSource();
+    if (!source) return Promise.resolve(null);
+    if (existsSync(VIDEO_SMALL) && statSync(VIDEO_SMALL).mtimeMs >= statSync(source).mtimeMs)
+      return Promise.resolve(VIDEO_SMALL);
+    const fresh = VIDEO_SMALL + ".new.mp4";
+    return (smallVideoing ??= new Promise((done) => {
+      mkdirSync(WORK, { recursive: true });
+      const proc = spawn(
+        "ffmpeg",
+        [
+          "-y",
+          "-v",
+          "error",
+          "-i",
+          source,
+          "-vf",
+          "scale=w='if(gte(iw,ih),-2,trunc(min(540,iw)/2)*2)':h='if(gte(iw,ih),trunc(min(540,ih)/2)*2,-2)'",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "25",
+          "-maxrate",
+          "1000k",
+          "-bufsize",
+          "2000k",
+          "-profile:v",
+          "main",
+          "-pix_fmt",
+          "yuv420p",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "96k",
+          "-ac",
+          "2",
+          "-movflags",
+          "+faststart",
+          fresh,
+        ],
+        { stdio: "inherit" },
+      );
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        if (!ok) rmSync(fresh, { force: true });
+        smallVideoing = null;
+        done(ok ? VIDEO_SMALL : source);
+      };
+      proc.on("error", () => finish(false));
+      proc.on("close", async (code) =>
+        finish(!code && existsSync(fresh) && (await swapIn(fresh, VIDEO_SMALL))),
+      );
+    }));
+  };
+  let smallMixing = null,
+    smallSource = null,
+    smallBuildSeq = 0,
+    mixSeq = 0;
   const smallMix = () => {
-    if (existsSync(MIX_SMALL) && statSync(MIX_SMALL).mtimeMs >= statSync(MIX).mtimeMs)
+    if (!existsSync(MIX)) return Promise.resolve();
+    const mixSt = statSync(MIX);
+    const sameSource = smallSource
+      ? smallBuildSeq === mixSeq &&
+        smallSource.size === mixSt.size &&
+        smallSource.mtimeMs === mixSt.mtimeMs
+      : statSync(MIX_SMALL, { throwIfNoEntry: false })?.mtimeMs >= mixSt.mtimeMs;
+    if (existsSync(MIX_SMALL) && sameSource) {
+      smallSource ??= { size: mixSt.size, mtimeMs: mixSt.mtimeMs };
+      smallBuildSeq = mixSeq;
       return Promise.resolve();
+    }
     // Made beside it and swapped in whole: a phone may be halfway through downloading the old one
     const fresh = MIX_SMALL + ".new.webm";
+    const builtForSeq = mixSeq;
     return (smallMixing ??= new Promise((done) =>
       spawn(
         "ffmpeg",
         ["-v", "error", "-y", "-i", MIX, "-ac", "1", "-c:a", "libopus", "-b:a", "48k", fresh],
         { stdio: "inherit" },
       )
-        .on("error", (e) => console.log("ffmpeg is needed for the small mix:", e.message))
+        .on("error", (e) => {
+          console.log("ffmpeg is needed for the small mix:", e.message);
+          smallMixing = null;
+          done();
+        })
         .on("close", async (code) => {
-          if (!code) await swapIn(fresh, MIX_SMALL);
+          if (!code) {
+            await swapIn(fresh, MIX_SMALL);
+            if (builtForSeq === mixSeq) {
+              smallBuildSeq = builtForSeq;
+              smallSource = { size: mixSt.size, mtimeMs: mixSt.mtimeMs };
+            }
+          }
           smallMixing = null;
           done();
         }),
@@ -370,6 +477,8 @@ export const openFilm = (projectDir, { send }) => {
       stdio: "inherit",
     }).on("close", async (code) => {
       if (!code && (await swapIn(fresh, MIX))) {
+        mixSeq++;
+        smallSource = null;
         if (LIVE) writeFileSync(LIVE_MARK, "");
         else rmSync(LIVE_MARK, { force: true });
       }
@@ -400,6 +509,9 @@ export const openFilm = (projectDir, { send }) => {
   // ---------- Watching the film's files. Code is Vite's to watch (src/vite_film.mjs); these are the files code doesn't import
   const watchers = [];
   const watch = (...a) => watchers.push(fsWatch(...a));
+  const outside = (f, say) => {
+    if (!f.ownWrite()) activity?.add({ say });
+  };
   const start = () => {
     // Windows can report a file as changed just because something read it, and every remix restarts the sound on every open page:
     // what counts is whether anything's size or time really moved. A file deleted is a change too, never a crash
@@ -441,6 +553,7 @@ export const openFilm = (projectDir, { send }) => {
           if (now !== null && now !== lanesSeen) {
             lanesSeen = now;
             if (!sound.ownWrite()) send("lanes");
+            outside(sound, "Edited the sound lanes");
           }
         }, 150),
       );
@@ -457,6 +570,7 @@ export const openFilm = (projectDir, { send }) => {
             camSeen = now;
             checkContract();
             send("cam");
+            outside(cam, "Edited the camera keys");
           }
         }, 150),
       );
@@ -471,6 +585,7 @@ export const openFilm = (projectDir, { send }) => {
             shotsSeen = now;
             checkContract();
             send("shots");
+            outside(shots, "Edited the shots");
           }
         }, 150),
       );
@@ -485,6 +600,7 @@ export const openFilm = (projectDir, { send }) => {
             textSeen = now;
             checkContract();
             send("text");
+            outside(text, "Edited the titles and text");
           }
         }, 150),
       );
@@ -499,6 +615,7 @@ export const openFilm = (projectDir, { send }) => {
             seen = now;
             checkContract();
             send("adjustment");
+            outside(adjustment, "Edited the adjustment layers");
           }
         }, 150),
       );
@@ -513,6 +630,7 @@ export const openFilm = (projectDir, { send }) => {
             seen = now;
             checkContract();
             send("timing");
+            outside(timing, "Edited the timing (speed, freezes, gaps)");
             remix();
           }
         }, 150),
@@ -529,6 +647,7 @@ export const openFilm = (projectDir, { send }) => {
             seen = now;
             checkContract();
             send("keys", i);
+            outside(k, `Edited the keys in ${basename(k.FILE)}`);
           }
         }, 150),
       );
@@ -598,10 +717,9 @@ export const openFilm = (projectDir, { send }) => {
     }
     if (!existsSync(LITE) && has("make_lite.py"))
       spawn(PYTHON, ["make_lite.py"], { cwd: PROJECT, stdio: "inherit" });
-    watch(
-      notes.file,
-      debounce(() => send("notes"), 100),
-    ); // the agent ticking a note off shows up here too
+    const notesWatcher = watchNotesFile(notes.file, () => send("notes"), { debounceMs: 80 });
+    watchers.push(notesWatcher); // external edits or atomic rewrites show up without dropping events
+    syncNotes = () => notesWatcher.sync();
     // Voice edits and takes live in edit.json: keep the mix and word map following them
     const voiceEdits = () => {
       try {
@@ -725,6 +843,7 @@ export const openFilm = (projectDir, { send }) => {
     WORK,
     MIX,
     MIX_SMALL,
+    VIDEO_SMALL,
     LITE,
     EDIT,
     VOICE_MAP,
@@ -740,10 +859,25 @@ export const openFilm = (projectDir, { send }) => {
     analyzeBeats: (name, settings) => analyzeBeats(sound.fileOf(name), settings, PYTHON),
     liveLanes: () => LIVE && mixIsLive(),
     notes,
+    syncNotes: () => syncNotes(),
     readChoices,
     choose,
     ratio,
     setRatio,
+    features: () => ({
+      cam: !!cam,
+      shots: !!shots,
+      text: !!text,
+      adjustment: !!adjustment,
+      timing: !!timing,
+      keys: keyFiles.length > 0,
+      sound: !!sound,
+      voice: !!voice,
+      voiceMap: existsSync(VOICE_MAP),
+      trials: existsSync(TRIALS),
+      choices: existsSync(CHOICES),
+      mix: existsSync(MIX),
+    }),
     trials,
     shotComments,
     stamp,
@@ -757,10 +891,13 @@ export const openFilm = (projectDir, { send }) => {
     keyFiles,
     ownWrites,
     handEdited,
-    contract: () => ({ files: fileProblems }),
+    contract: () => ({ files: fileProblems ?? [] }),
+    hasPageProblems: () => pageProblems === null || pageProblems.length > 0,
     pageSays,
     openRead,
     smallMix,
+    videoSource,
+    smallVideo,
     start,
     stop: () => watchers.splice(0).forEach((w) => w.close()),
   };

@@ -35,6 +35,7 @@ import {
   SliderRow,
   ValueBox,
 } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import type { Ease } from "../core/ease";
@@ -72,7 +73,7 @@ import {
 } from "./text-anim";
 
 const DOC = { snapshot, restore };
-const SWATCHES = ["#FFFFFF", "#100F0F", "#E5484D", "#F5C542", "#3AA99F", "#4385BE"];
+const SWATCHES = ["#FFFCF0", "#100F0F", "#D14D41", "#D0A215", "#3AA99F", "#4385BE"];
 const ALL = "All",
   FAV = "Favorites";
 const byId = (id: string | undefined) =>
@@ -140,7 +141,7 @@ function Colors({
             aria-pressed={value.toUpperCase() === c}
             onClick={() => put(c)}
             style={{ "--swatch": c }}
-            className="focus-visible:ring-ring aria-pressed:ring-primary size-6 flex-none rounded-full bg-(--swatch) ring-1 ring-white/20 outline-none focus-visible:ring-2 aria-pressed:ring-2"
+            className="focus-visible:ring-ring aria-pressed:ring-primary ring-hairline-strong size-6 flex-none rounded-full bg-(--swatch) ring-1 outline-none focus-visible:ring-2 aria-pressed:ring-2"
           />
         </Tip>
       ))}
@@ -321,7 +322,7 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
         </FieldRow>
         <Colors
           label="Color"
-          value={it.color ?? "#FFFFFF"}
+          value={it.color ?? "#FFFCF0"}
           put={(c) =>
             editPicked((x) => {
               x.color = c;
@@ -493,7 +494,7 @@ function Shape({ it }: { it: TextItem }) {
       <Section title="Basic">
         <Colors
           label="Color"
-          value={it.color ?? "#E5484D"}
+          value={it.color ?? "#D14D41"}
           put={(c) =>
             editPicked((x) => {
               x.color = c;
@@ -569,7 +570,7 @@ function VoiceBadge({ fx, shape, kind }: { fx: TitleFxMeta | null; shape: boolea
   if (!fx) return <Ban aria-hidden className="text-muted-foreground size-5" />;
   if (shape)
     return (
-      <span aria-hidden className="text-title text-primary font-semibold">
+      <span aria-hidden className="text-title text-primary-text font-semibold">
         {shapeGlyph(kind)}
       </span>
     );
@@ -585,7 +586,7 @@ function VoiceBadge({ fx, shape, kind }: { fx: TitleFxMeta | null; shape: boolea
     );
   if (id === "type" || id === "easedType")
     return (
-      <span aria-hidden className="font-mono text-sm font-semibold text-white">
+      <span aria-hidden className="text-picture font-mono text-sm font-semibold">
         Aa_
       </span>
     );
@@ -597,33 +598,33 @@ function VoiceBadge({ fx, shape, kind }: { fx: TitleFxMeta | null; shape: boolea
     );
   if (id === "hueSweepIn")
     return (
-      <span aria-hidden className="text-title text-warn font-bold">
+      <span aria-hidden className="text-title text-warn-text font-bold">
         Aa
       </span>
     );
   if (id === "lineSplitIn" || id === "lineSplitOut")
     return (
-      <span aria-hidden className="text-sm font-bold tracking-tight text-white">
-        A<span className="text-primary">/</span>a
+      <span aria-hidden className="text-picture text-sm font-bold tracking-tight">
+        A<span className="text-primary-text">/</span>a
       </span>
     );
   if (cat === "Build & Mask")
     return (
       <span
         aria-hidden
-        className="border-primary/80 border-b-2 pb-0.5 text-sm font-semibold text-white"
+        className="border-primary/80 text-picture border-b-2 pb-0.5 text-sm font-semibold"
       >
         Aa
       </span>
     );
   if (cat === "Pop & Scale")
     return (
-      <span aria-hidden className="text-title scale-110 font-bold text-white">
+      <span aria-hidden className="text-title text-picture scale-110 font-bold">
         Aa
       </span>
     );
   return (
-    <span aria-hidden className="text-title font-semibold text-white">
+    <span aria-hidden className="text-title text-picture font-semibold">
       Aa
     </span>
   );
@@ -758,7 +759,7 @@ function Anim({ it }: { it: TextItem }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-none flex-col gap-2.5 px-3 pb-2.5">
+      <div className="flex flex-none px-3 pb-2.5">
         <Segmented
           label="Animation part"
           value={slot}
@@ -781,200 +782,209 @@ function Anim({ it }: { it: TextItem }) {
             ),
           }))}
         />
-        <SearchBox
-          name="text-anim-search"
-          value={q}
-          onChange={setQ}
-          label={`Search ${slot === "in" ? "In" : "Out"} voices`}
-          placeholder={`Search ${list.length} ${slot === "in" ? "In" : "Out"} voices…`}
-        />
-        <ChipGroup
-          scroll
-          label="Voice category"
-          value={activeCat}
-          onChange={setCat}
-          items={cats.map((c) => ({
-            id: c,
-            title: (
-              <>
-                {c === FAV && <Star aria-hidden className="size-3" />}
-                {c}
-              </>
-            ),
-          }))}
-        />
       </div>
-      <ul
-        aria-label={`${slot === "in" ? "In" : "Out"} animations`}
-        className="scroll-fade grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-x-2.5 gap-y-3 overflow-y-auto overscroll-contain px-3 pb-3"
-      >
-        {none && (
-          <li
-            className="flex min-w-0 flex-col items-center gap-1"
-            onPointerEnter={(e) => e.pointerType === "mouse" && tryOn(null)}
-            onPointerLeave={leave}
-          >
-            <button
-              type="button"
-              aria-pressed={!now}
-              onClick={() => pick(null)}
-              onFocus={() => tryOn(null)}
-              onBlur={leave}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring aria-pressed:text-foreground flex w-full flex-col items-center gap-1 rounded-md text-xs outline-none focus-visible:ring-2"
-            >
-              <span className="bg-raised-2 in-aria-pressed:ring-primary grid aspect-square w-full place-items-center rounded-md ring-1 ring-white/6 in-aria-pressed:ring-2">
-                <VoiceBadge fx={null} shape={shape} kind={it.kind} />
-              </span>
-              <span className="w-full truncate text-center">None</span>
-            </button>
-          </li>
-        )}
-        {shown.map((x) => {
-          const favId = favPrefix + x.id;
-          const isFav = favs.includes(favId);
-          return (
+      <TabStage activeKey={slot} order={["in", "out"]} className="flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-none flex-col gap-2.5 px-3 pb-2.5">
+          <SearchBox
+            name="text-anim-search"
+            value={q}
+            onChange={setQ}
+            label={`Search ${slot === "in" ? "In" : "Out"} voices`}
+            placeholder={`Search ${list.length} ${slot === "in" ? "In" : "Out"} voices…`}
+          />
+          <ChipGroup
+            scroll
+            label="Voice category"
+            value={activeCat}
+            onChange={setCat}
+            items={cats.map((c) => ({
+              id: c,
+              title: (
+                <>
+                  {c === FAV && <Star aria-hidden className="size-3" />}
+                  {c}
+                </>
+              ),
+            }))}
+          />
+        </div>
+        <ul
+          aria-label={`${slot === "in" ? "In" : "Out"} animations`}
+          className="scroll-fade grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-x-2.5 gap-y-3 overflow-y-auto overscroll-contain px-3 pb-3"
+        >
+          {none && (
             <li
-              key={x.id}
-              className="group relative flex min-w-0 flex-col items-center gap-1"
-              onPointerEnter={(e) => e.pointerType === "mouse" && tryOn(x)}
+              className="flex min-w-0 flex-col items-center gap-1"
+              onPointerEnter={(e) => e.pointerType === "mouse" && tryOn(null)}
               onPointerLeave={leave}
             >
               <button
                 type="button"
-                aria-pressed={now === x.id}
-                onClick={() => pick(x)}
-                onFocus={() => tryOn(x)}
+                aria-pressed={!now}
+                onClick={() => pick(null)}
+                onFocus={() => tryOn(null)}
                 onBlur={leave}
-                title={x.tip ?? x.title}
-                aria-label={ownVoice(shape, slot, x) ? `${x.title}, ${FILM_MADE}` : undefined}
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring aria-pressed:text-foreground flex w-full flex-col items-center gap-1 rounded-md text-xs outline-none focus-visible:ring-2"
               >
-                <span
-                  className={cn(
-                    "bg-backdrop in-aria-pressed:ring-primary relative grid aspect-square w-full place-items-center rounded-md ring-1 ring-white/6 group-hover:ring-white/20 in-aria-pressed:ring-2",
-                  )}
-                >
-                  <VoiceBadge fx={x} shape={shape} kind={it.kind} />
-                  {ownVoice(shape, slot, x) && <FilmMark />}
+                <span className="bg-raised-2 in-aria-pressed:ring-primary ring-hairline-subtle grid aspect-square w-full place-items-center rounded-md ring-1 in-aria-pressed:ring-2">
+                  <VoiceBadge fx={null} shape={shape} kind={it.kind} />
                 </span>
-                <span className={cn("w-full truncate text-center", now === x.id && "text-primary")}>
-                  {x.title}
-                </span>
+                <span className="w-full truncate text-center">None</span>
               </button>
-              <FavoriteStar
-                kind="effects"
-                id={favId}
-                name={`${slot === "in" ? "In" : "Out"} ${x.title}`}
-                onTile
-                reveal={!isFav}
-                className="absolute top-[calc(100%-2.6rem)] left-0.5"
-              />
             </li>
-          );
-        })}
-        {!shown.length && (
-          <li className="text-ui text-muted-foreground col-span-full py-2">
-            {activeCat === FAV && !q.trim()
-              ? `No favorite ${slot === "in" ? "In" : "Out"} voices yet. Point at one and click its star.`
-              : `No voices match "${q.trim()}".`}
-          </li>
-        )}
-      </ul>
-      {curFx && (
-        <div className="flex flex-none flex-col gap-2 border-t px-3 py-3">
-          <Slide
-            label="Duration"
-            get={(x) => x[slot]?.len ?? fx?.len ?? 0.5}
-            put={(x, v) => {
-              if (x[slot]) x[slot] = tidyTitleFx({ ...x[slot]!, len: +v.toFixed(2) }, fx);
-            }}
-            min={0.1}
-            max={5}
-            step={0.05}
-            digits={2}
-            unit="s"
-          />
-          <FieldRow label="Curve">
-            <Select
-              value={easeKey}
-              items={easeItems}
-              onValueChange={(v) => {
-                if (v !== easeKey) {
-                  setVoiceOpt({ ease: v === "auto" ? undefined : (v as Ease) });
-                  playVoice(curFx.len ?? fx?.len ?? 0.5);
-                }
-              }}
-            >
-              <SelectTrigger aria-label="Voice curve" className="h-7 min-w-0 flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {baseEaseItems.map((c) => (
-                  <SelectItem
-                    key={c.value}
-                    value={c.value}
-                    title={c.tip}
-                    aria-label={"own" in c ? `${c.label}, ${FILM_MADE}` : undefined}
+          )}
+          {shown.map((x) => {
+            const favId = favPrefix + x.id;
+            const isFav = favs.includes(favId);
+            return (
+              <li
+                key={x.id}
+                className="group relative flex min-w-0 flex-col items-center gap-1"
+                onPointerEnter={(e) => e.pointerType === "mouse" && tryOn(x)}
+                onPointerLeave={leave}
+              >
+                <button
+                  type="button"
+                  aria-pressed={now === x.id}
+                  onClick={() => pick(x)}
+                  onFocus={() => tryOn(x)}
+                  onBlur={leave}
+                  title={x.tip ?? x.title}
+                  aria-label={ownVoice(shape, slot, x) ? `${x.title}, ${FILM_MADE}` : undefined}
+                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring aria-pressed:text-foreground flex w-full flex-col items-center gap-1 rounded-md text-xs outline-none focus-visible:ring-2"
+                >
+                  <span
+                    className={cn(
+                      "bg-backdrop in-aria-pressed:ring-primary ring-hairline-subtle group-hover:ring-hairline-strong relative grid aspect-square w-full place-items-center rounded-md ring-1 in-aria-pressed:ring-2",
+                    )}
                   >
-                    {c.label}
-                    {"own" in c && <FilmMark className="static" />}
-                  </SelectItem>
-                ))}
-                {customEase && (
-                  <SelectItem value={easeKey} title="Custom curve written by the film">
-                    {easeItems.at(-1)!.label}
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </FieldRow>
-          <FieldRow label="Timing">
-            <ChipGroup
-              label="Voice timing"
-              value={String(curFx.hold ?? 1)}
-              items={[
-                ...TITLE_HOLDS.map((h) => ({ id: h.id as string, title: h.title })),
-                ...(curFx.hold && !TITLE_HOLDS.some((h) => h.id === String(curFx.hold))
-                  ? [{ id: String(curFx.hold), title: `Every ${curFx.hold} frames` }]
-                  : []),
-              ]}
-              onChange={(v) => {
-                setVoiceOpt({ hold: Number(v) });
-                playVoice(curFx.len ?? fx?.len ?? 0.5);
-              }}
-            />
-          </FieldRow>
-          {!shape && (voiceSupportsStagger(fx ?? now) || curFx.stagger !== undefined) && (
-            <SliderRow
-              label="Stagger"
-              value={(curFx.stagger ?? defaultStagger) * 100}
-              min={0}
-              max={100}
-              step={5}
-              digits={0}
-              unit="%"
-              doc={DOC}
-              preview={(v) => {
-                stopSpan();
-                setVoiceOpt({ stagger: v / 100 }, true);
-              }}
-              save={(v) => setVoiceOpt({ stagger: v / 100 })}
-              hint="How tightly or widely words overlap across the arrival or drop-out"
-            />
+                    <VoiceBadge fx={x} shape={shape} kind={it.kind} />
+                    {ownVoice(shape, slot, x) && <FilmMark />}
+                  </span>
+                  <span
+                    className={cn(
+                      "w-full truncate text-center",
+                      now === x.id && "text-primary-text",
+                    )}
+                  >
+                    {x.title}
+                  </span>
+                </button>
+                <FavoriteStar
+                  kind="effects"
+                  id={favId}
+                  name={`${slot === "in" ? "In" : "Out"} ${x.title}`}
+                  onTile
+                  reveal={!isFav}
+                  className="absolute top-[calc(100%-2.6rem)] left-0.5"
+                />
+              </li>
+            );
+          })}
+          {!shown.length && (
+            <li className="text-ui text-muted-foreground col-span-full py-2">
+              {activeCat === FAV && !q.trim()
+                ? `No favorite ${slot === "in" ? "In" : "Out"} voices yet. Point at one and click its star.`
+                : `No voices match "${q.trim()}".`}
+            </li>
           )}
-          {!shape && (voiceSupportsTint(fx ?? now) || Boolean(curFx.tint)) && (
-            <Colors
-              label="Tint"
-              value={curFx.tint ?? defaultTint}
-              palette={TINT_SWATCHES}
-              put={(c) => {
-                setVoiceOpt({ tint: c });
-                playVoice(curFx.len ?? fx?.len ?? 0.5);
+        </ul>
+        {curFx && (
+          <div className="flex flex-none flex-col gap-2 border-t px-3 py-3">
+            <Slide
+              label="Duration"
+              get={(x) => x[slot]?.len ?? fx?.len ?? 0.5}
+              put={(x, v) => {
+                if (x[slot]) x[slot] = tidyTitleFx({ ...x[slot]!, len: +v.toFixed(2) }, fx);
               }}
+              min={0.1}
+              max={5}
+              step={0.05}
+              digits={2}
+              unit="s"
             />
-          )}
-        </div>
-      )}
+            <FieldRow label="Curve">
+              <Select
+                value={easeKey}
+                items={easeItems}
+                onValueChange={(v) => {
+                  if (v !== easeKey) {
+                    setVoiceOpt({ ease: v === "auto" ? undefined : (v as Ease) });
+                    playVoice(curFx.len ?? fx?.len ?? 0.5);
+                  }
+                }}
+              >
+                <SelectTrigger aria-label="Voice curve" className="h-7 min-w-0 flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {baseEaseItems.map((c) => (
+                    <SelectItem
+                      key={c.value}
+                      value={c.value}
+                      title={c.tip}
+                      aria-label={"own" in c ? `${c.label}, ${FILM_MADE}` : undefined}
+                    >
+                      {c.label}
+                      {"own" in c && <FilmMark className="static" />}
+                    </SelectItem>
+                  ))}
+                  {customEase && (
+                    <SelectItem value={easeKey} title="Custom curve written by the film">
+                      {easeItems.at(-1)!.label}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+            <FieldRow label="Timing">
+              <ChipGroup
+                label="Voice timing"
+                value={String(curFx.hold ?? 1)}
+                items={[
+                  ...TITLE_HOLDS.map((h) => ({ id: h.id as string, title: h.title })),
+                  ...(curFx.hold && !TITLE_HOLDS.some((h) => h.id === String(curFx.hold))
+                    ? [{ id: String(curFx.hold), title: `Every ${curFx.hold} frames` }]
+                    : []),
+                ]}
+                onChange={(v) => {
+                  setVoiceOpt({ hold: Number(v) });
+                  playVoice(curFx.len ?? fx?.len ?? 0.5);
+                }}
+              />
+            </FieldRow>
+            {!shape && (voiceSupportsStagger(fx ?? now) || curFx.stagger !== undefined) && (
+              <SliderRow
+                label="Stagger"
+                value={(curFx.stagger ?? defaultStagger) * 100}
+                min={0}
+                max={100}
+                step={5}
+                digits={0}
+                unit="%"
+                doc={DOC}
+                preview={(v) => {
+                  stopSpan();
+                  setVoiceOpt({ stagger: v / 100 }, true);
+                }}
+                save={(v) => setVoiceOpt({ stagger: v / 100 })}
+                hint="How tightly or widely words overlap across the arrival or drop-out"
+              />
+            )}
+            {!shape && (voiceSupportsTint(fx ?? now) || Boolean(curFx.tint)) && (
+              <Colors
+                label="Tint"
+                value={curFx.tint ?? defaultTint}
+                palette={TINT_SWATCHES}
+                put={(c) => {
+                  setVoiceOpt({ tint: c });
+                  playVoice(curFx.len ?? fx?.len ?? 0.5);
+                }}
+              />
+            )}
+          </div>
+        )}
+      </TabStage>
     </div>
   );
 }

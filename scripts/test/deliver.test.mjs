@@ -100,12 +100,20 @@ test("a picture with no soundtrack is sent to the mix that puts one on it", (t) 
   assert.match(r.stdout, /FIX.*no sound.*bun run mix/);
 });
 
-test("a wrong word or a missing file stops before any work, saying what it takes", () => {
+test("a wrong word, missing file, or corrupt non-video stops before any work (exit 2)", (t) => {
   assert.equal(deliver("--nope").status, 2);
   const r = deliver(join(tmpdir(), "no-such-video.mp4"));
   // nothing was done, as sheet and framecheck say it: exit 2 (exit 1 is a film with something to fix)
   assert.equal(r.status, 2);
   assert.match(r.stderr, /no-such-video\.mp4.*bun run mix/);
+
+  const dir = mkdtempSync(join(tmpdir(), "deliver-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const junk = join(dir, "broken.mp4");
+  writeFileSync(junk, "not an mp4");
+  const bad = deliver(junk);
+  assert.equal(bad.status, 2, bad.stdout + bad.stderr);
+  assert.match(bad.stderr, /is no video ffprobe can read/);
 });
 
 test("--youtube reads its seconds as notes print them", () => {
@@ -262,7 +270,7 @@ test("--youtube names the stretch the re-encode bands, its shot, and the picture
     "-f",
     "lavfi",
     "-i",
-    "gradients=s=2560x1440:c0=0x0a0c10:c1=0x1c2028:x0=0:y0=0:x1=2560:y1=0:d=1:r=30,noise=alls=4:allf=t",
+    "gradients=s=1280x720:c0=0x0a0c10:c1=0x1c2028:x0=0:y0=0:x1=1280:y1=0:d=1:r=30,noise=alls=4:allf=t",
     "-c:v",
     "libx264",
     "-preset",

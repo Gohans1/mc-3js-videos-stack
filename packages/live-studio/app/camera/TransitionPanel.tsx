@@ -1,6 +1,4 @@
-import type { TransitionEase } from "film-stage/transitions";
-import { TRANSITION_EASES } from "film-stage/transitions";
-import { DURATION } from "film/scene";
+import { TRANSITION_EASES, type TransitionEase } from "film-stage/transitions-meta";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +13,7 @@ import {
 
 import { FieldRow, Footer, Reset, Section, SliderRow } from "../components/inspector";
 import { Tip } from "../components/Tip";
+import { DURATION } from "../core/filmMeta";
 import { useStudio } from "../core/store";
 import { playSpan, shownShot, stopSpan } from "./anim";
 import { shotsDoc } from "./shots";

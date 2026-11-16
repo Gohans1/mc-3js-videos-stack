@@ -1,1 +1,19 @@
 {"set":"holdout-a","right":23,"all":25,"commit":"ffa595a","at":"2026-11-14T06:45:56.542Z","note":"baseline: Jev, key rotation"}
+{"set":"dev","right":29,"all":40,"commit":"3c5771c","at":"2026-11-14T10:07:46.649Z","note":"Jev reads frontmatter + headings only"}
+{"set":"holdout-a","right":19,"all":25,"commit":"3c5771c","at":"2026-11-14T10:08:34.168Z","note":"Jev reads frontmatter + headings only"}
+{"set":"dev","right":32,"all":40,"commit":"3c5771c","at":"2026-11-14T10:14:14.025Z","note":"headings-only; sample lessons rewritten: when: frontmatter + one rule per heading"}
+{"set":"holdout-a","right":23,"all":25,"commit":"3c5771c","at":"2026-11-14T10:14:58.211Z","note":"headings-only; sample lessons rewritten: when: frontmatter + one rule per heading"}
+{"set":"dev","right":33,"all":40,"commit":"26ec20a","at":"2026-11-14T10:36:00.643Z","note":"Jev picks heading parts (file:lines), sure/maybe"}
+{"set":"holdout-a","right":20,"all":25,"commit":"4d69e18","at":"2026-11-14T10:36:45.449Z","note":"Jev picks heading parts (file:lines), sure/maybe"}
+{"set":"dev","right":35,"sure":29,"all":40,"commit":"4d69e18","at":"2026-11-14T10:38:27.185Z","note":"heading parts, scored all and sure-only"}
+{"set":"holdout-a","right":21,"sure":19,"all":25,"commit":"4d69e18","at":"2026-11-14T10:39:12.637Z","note":"heading parts, scored all and sure-only"}
+{"set":"dev","right":33,"sure":32,"all":40,"commit":"4d69e18","at":"2026-11-14T10:49:09.549Z","note":"every heading a part (parents too)"}
+{"set":"holdout-a","right":20,"sure":19,"all":25,"commit":"4d69e18","at":"2026-11-14T10:49:53.054Z","note":"every heading a part (parents too)"}
+{"set":"dev","right":34,"sure":33,"all":40,"commit":"6e38c41","at":"2026-11-14T11:22:39.615Z","note":"B: Jev picks files; notes prints every heading by line"}
+{"set":"holdout-a","right":23,"sure":19,"all":25,"commit":"6e38c41","at":"2026-11-14T11:23:24.090Z","note":"B: Jev picks files; notes prints every heading by line"}
+{"set":"dev","right":11,"sure":35,"all":40,"commit":"6e38c41","at":"2026-11-14T11:30:29.243Z","note":"docs pattern: note as state, one Noul per file in one request, structured record"}
+{"set":"holdout-a","right":9,"sure":20,"all":25,"commit":"6e38c41","at":"2026-11-14T11:30:50.407Z","note":"docs pattern: note as state, one Noul per file in one request, structured record"}
+{"set":"dev","right":11,"sure":27,"all":40,"commit":"6e38c41","at":"2026-11-14T11:31:43.787Z","note":"Noul per file: hold a rule for the thing + criteria"}
+{"set":"dev","right":17,"sure":33,"all":40,"commit":"6e38c41","at":"2026-11-14T11:32:45.441Z","note":"Noul per file: address the subject + criteria"}
+{"set":"dev","right":35,"sure":32,"all":40,"commit":"6e38c41","at":"2026-11-14T11:35:08.218Z","note":"B restored after Noul-per-file trial"}
+{"set":"holdout-a","right":23,"sure":18,"all":25,"commit":"6e38c41","at":"2026-11-14T11:35:52.185Z","note":"B restored after Noul-per-file trial"}

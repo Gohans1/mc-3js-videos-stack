@@ -1,5 +1,4 @@
-import { bisector } from "d3-array";
-
+import { bisector } from "./bisect.mjs";
 import { clipTiming, compileTiming, freezeRange, playRanges } from "./timing.mjs";
 
 const outputIndex = bisector((s) => s.to).right;

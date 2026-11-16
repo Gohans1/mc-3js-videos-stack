@@ -7,13 +7,15 @@ export function Tip({
   label,
   children,
   side,
+  open,
 }: {
   label: ReactNode;
   children: ReactElement;
   side?: "top" | "bottom" | "left" | "right";
+  open?: boolean;
 }) {
   return (
-    <Tooltip>
+    <Tooltip open={open}>
       <TooltipTrigger render={children} />
       <TooltipContent side={side}>{label}</TooltipContent>
     </Tooltip>
