@@ -306,8 +306,7 @@ export const findVaults = (project, conf) => {
       const vcfg = readJsonCached(vf),
         vroot = resolve(d, vcfg.root ?? "vault");
       const mcLocal = join(vroot, "mc-sound");
-      const mcExt = vcfg.externalRoot ? resolve(d, vcfg.externalRoot, "mc-sound") : null;
-      const mcDir = existsSync(mcLocal) ? mcLocal : mcExt && existsSync(mcExt) ? mcExt : null;
+      const mcDir = existsSync(mcLocal) ? mcLocal : null;
       const sndDir = existsSync(join(vroot, "sound")) ? join(vroot, "sound") : null;
       return [mcDir, sndDir].filter(Boolean);
     }

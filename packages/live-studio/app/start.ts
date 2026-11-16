@@ -1,27 +1,29 @@
-import { listenActivity, loadActivity } from "./activity/activity";
-import { lessons, loadLessons } from "./lessons/lessons";
 import * as FILM from "film/scene";
 import { buildScene, SHOTS_OUT as SHOTS } from "film/scene";
 // The studio page's start: the film is built, every part attached and loaded, the server's saves listened to; from then on
 // one frame is drawn whenever something changed
 import * as THREE from "three";
 
-import { checkFilm } from "../src/contract.ts";
+import { aiSpans, listenActivity, loadActivity } from "./activity/activity";
 import { keys as camKeys, loadCam } from "./camera/cam";
 import { attachCamRow } from "./camera/camrow";
 import { loadLayers } from "./camera/layers";
-import { loadShots } from "./camera/shots";
+import { loadShots, shotsDoc } from "./camera/shots";
+import { bootData, invalidateTagPrefix, versionUrl } from "./core/boot";
 import { AWAY, PHONE } from "./core/device";
+import { registerEngine } from "./core/engine";
 import { onEvent, onHello } from "./core/events";
 import { loadFavorites } from "./core/favorites";
 import { shotIndex } from "./core/film";
-import { getFile, postJson, wait } from "./core/net";
-import { type Elements, S } from "./core/state";
+import { applyEdit, setFilmSource } from "./core/filmMeta";
+import { clearPrefetch, getFile, postJson, prefetchFile, wait } from "./core/net";
+import { type Elements, onWake, S, wake } from "./core/state";
 import { stored } from "./core/storage";
-import { get, say, set, showError } from "./core/store";
+import { get, invalidatePictures, say, set, showError } from "./core/store";
 import { stamp } from "./core/time";
 import { attachKeyRows } from "./keys/keyrows";
-import { loadKeys } from "./keys/keys";
+import { loadKeys, prepareKeys } from "./keys/keys";
+import { lessons, loadLessons } from "./lessons/lessons";
 import { attachInk, drawInk } from "./notes/ink";
 import {
   drawnNotes,
@@ -33,15 +35,27 @@ import {
   noteMarks,
   restoreDraft,
 } from "./notes/notes";
-import { followChips, loadSounds, loadTrials, optionRanges } from "./options/options";
+import {
+  addInFront,
+  cancelPreviewTransform,
+  isGizmoDragging,
+  nativeTransform,
+  previewTransform,
+  removeObject,
+  select as selectObject,
+  setGizmo,
+  shownTransform,
+  startObjectCarry,
+} from "./objects/placed";
+import { followChips, loadTrials, optionRanges } from "./options/options";
 import { captionAt } from "./picture/captions";
 import { staleFilmView } from "./picture/filmcam";
-import { frameSize, loadFilm } from "./picture/frame";
-import { fly } from "./picture/freecam";
+import { filmFeatures, frameSize, loadFilm } from "./picture/frame";
+import { flight, fly, setFov, setFree } from "./picture/freecam";
 import { formatOpticsHud } from "./picture/hud";
 import { lookAtClick } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
-import { drawFinal, render } from "./picture/render";
+import { drawFinal, finalCanvas, render, setFinal } from "./picture/render";
 import { measureScopes } from "./picture/scopes";
 import {
   loadMix,
@@ -65,17 +79,38 @@ import { attachPreviewAxis, peekTime } from "./timeline/peek";
 import { attachTimeline, drawTimelines, loadVoice, marks, refreshTimes } from "./timeline/timeline";
 import { loadTiming } from "./timeline/timing";
 
+registerEngine({
+  render,
+  finalCanvas,
+  setFinal,
+  setFree,
+  setFov,
+  setGizmo,
+  isGizmoDragging,
+  removeObject,
+  selectObject,
+  shownTransform,
+  previewTransform,
+  cancelPreviewTransform,
+  nativeTransform,
+  startObjectCarry: (what, e) => startObjectCarry(what, e, lookAtClick),
+  addObjectInFront: (what) => addInFront(what, lookAtClick),
+});
+
 addEventListener("resize", () => {
   S.dirty = true;
 });
 
 // ---------- The film contract (contract.ts; bun run skills get core --ref contract): the server checks the film's files, this page its code
 let filmProblems: string[] = [],
-  fileProblems: string[] = [];
+  fileProblems: string[] = [],
+  postedProblems = false;
 const showContract = () => set({ contract: [...fileProblems, ...filmProblems] });
 const reportFilm = (list: string[]) => {
   filmProblems = list;
   showContract();
+  if (!list.length && !postedProblems && !bootData()?.hasPageProblems) return;
+  postedProblems = true;
   postJson("/api/contract", { problems: list }).catch(() => {});
 };
 // Everything a page away from this PC fetched, at its size on the wire even when it came from the cache this time: what a
@@ -91,12 +126,22 @@ const reportWeight = () => {
     .map(({ url, bytes }) => ({ path: url.pathname, bytes }));
   postJson("/api/weight", { files }).catch(() => {});
 };
-const loadContract = async () => {
+const loadContract = async (initial = false) => {
+  const inline = initial ? bootData()?.contract : undefined;
+  if (inline) {
+    fileProblems = inline.files ?? [];
+    showContract();
+    return;
+  }
   const r = await fetch("/api/contract.json").catch(() => null);
   if (!r?.ok) return;
   fileProblems = (await r.json()).files ?? [];
   showContract();
 };
+const runFilmCheck = () =>
+  void import("../src/contract.ts")
+    .then(({ checkFilm }) => reportFilm(checkFilm(FILM, S.render, camKeys)))
+    .catch(() => {});
 
 // ---------- The film's saves, from the studio's server (app/core/events.ts)
 const listen = () => {
@@ -112,9 +157,12 @@ const listen = () => {
   );
   onEvent("sound-start", () => say("Mixing sound…"));
   onEvent("sound", () => {
+    invalidateTagPrefix("/api/mix");
+    invalidateTagPrefix("/api/sfx/");
+    invalidateTagPrefix("/api/voice");
     loadMix();
     loadTrials();
-    loadSound();
+    loadSound({ usedOnly: true });
     say("Sound updated");
   });
   onEvent("lanes", () => loadSound({ lanesOnly: true })); // an agent edited lanes the page plays itself: no remix, just the file again
@@ -133,12 +181,7 @@ const listen = () => {
         after?.();
       }
     };
-  onEvent(
-    "cam",
-    reloadNotice("camRev", "Camera keys updated", loadCam, () =>
-      reportFilm(checkFilm(FILM, S.render, camKeys)),
-    ),
-  ); // an agent edited the camera keys: the picture takes them now, no new build to load
+  onEvent("cam", reloadNotice("camRev", "Camera keys updated", loadCam, runFilmCheck)); // an agent edited the camera keys: the picture takes them now, no new build to load
   onEvent("keys", (i) => loadKeys(Number(i))); // the same for one key file (Steve, props): which one it names
   onEvent("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
   onEvent("timing", loadTiming);
@@ -146,13 +189,16 @@ const listen = () => {
   onEvent("text", reloadNotice("textRev", "Titles updated", loadText)); // an agent edited the titles: the picture takes them now
   onEvent("notes", loadNotes);
   onEvent("voice", () => {
+    invalidateTagPrefix("/api/voice");
+    invalidateTagPrefix("/api/mix");
     invalidateSoundCaches();
     loadVoice();
     loadVoiceTakes();
   });
-  onEvent("contract", loadContract);
+  onEvent("contract", () => loadContract());
   onEvent("film", codeChanged); // the frame's shape changed (Settings, maybe in another page): a reload builds the scene at it
-  onEvent("favorites", loadFavorites);
+  onEvent("favorites", loadFavorites); // starred here, in another tab or on the phone
+  // the AI wrote a lesson file: a Lessons tab already read shows it (lessons.ts keeps what the creator is typing)
   onEvent("lessons", () => {
     if (lessons.getState().loaded) void loadLessons();
   });
@@ -164,6 +210,9 @@ const listen = () => {
     if (!current) codeChanged();
     // Not the mix: that is the whole WAV again on every phone unlock. The rest answers "unchanged" for a few bytes
     if (reconnect) {
+      clearPrefetch();
+      invalidateTagPrefix("/api/voice");
+      invalidateTagPrefix("/api/sfx/");
       loadNotes();
       loadVoice();
       loadVoiceTakes();
@@ -172,7 +221,7 @@ const listen = () => {
       loadContract();
       loadTrials();
       loadTiming();
-      loadSound();
+      loadSound({ usedOnly: true });
       loadCam();
       loadKeys();
       loadShots();
@@ -209,6 +258,7 @@ export const start = async (el: Elements) => {
   };
   marks.notes = noteMarks;
   marks.optionRanges = optionRanges;
+  marks.ai = aiSpans;
   restoreVolume();
   listen();
   attachPicture();
@@ -232,10 +282,20 @@ export const start = async (el: Elements) => {
     },
   });
   fit();
-  if (!AWAY) el.audio.src = MIX_URL; // on a phone line the room comes first, or the sound eats the bandwidth while the picture stays black
+  const has = filmFeatures();
+  if (!AWAY && has.mix) el.audio.src = versionUrl(MIX_URL); // on a phone line the room comes first, or the sound eats the bandwidth while the picture stays black
   flushNotes();
-  FILM.applyEdit();
-  S.comments = await (await getFile("/api/shots.json")).json();
+  setFilmSource(FILM);
+  applyEdit();
+  const comments = getFile("/api/shots.json")
+    .then(async (r) => {
+      if (!r.ok || shotsDoc.data) return;
+      S.comments = await r.json();
+      shownShot = -1;
+      refreshTimes();
+      S.dirty = true;
+    })
+    .catch(() => {});
   const t0 = performance.now();
   // A phone draws the picture at what its screen shows of it, at most 2 device pixels a CSS pixel (past that the eye can't
   // tell) and never past the desk's 960; one asking to save data or with under 4 GB keeps 640. Clicks and pins are in
@@ -243,7 +303,40 @@ export const start = async (el: Elements) => {
   const [w, h] = frameSize(PHONE ? phoneLong(el.stage) : 960);
   el.canvas.width = w;
   el.canvas.height = h;
-  const timeline = Promise.all([loadNotes(), loadVoice(), loadVoiceTakes()]); // the words and notes don't wait for the room
+  const timeline = Promise.all([
+    loadNotes(),
+    has.voiceMap
+      ? loadVoice()
+      : Promise.resolve().then(() => {
+          S.voiceReady = true;
+          S.dirty = true;
+        }),
+    has.voice ? loadVoiceTakes() : Promise.resolve(),
+  ]); // the words and notes don't wait for the room
+  const timingReady = has.timing ? loadTiming() : Promise.resolve(set({ timing: false }));
+  const contractReady = loadContract(true);
+  const earlyExtras = Promise.all([
+    has.shots ? loadShots() : Promise.resolve(set({ shots: false })),
+    loadFavorites(),
+  ]);
+  const earlySound = Promise.all([timingReady, timeline]).then(() =>
+    loadSound({ usedOnly: true, initial: true }),
+  );
+  const editingReady = timingReady.then(() =>
+    Promise.all([
+      has.cam ? loadCam() : Promise.resolve(set({ cam: false })),
+      has.keys ? loadKeys() : Promise.resolve(set({ keyFiles: [] })),
+      has.text ? loadText() : Promise.resolve(set({ text: false })),
+      has.adjustment ? loadLayers() : Promise.resolve(set({ layers: false })),
+    ]),
+  );
+  if (has.cam) prefetchFile("/api/cam");
+  if (has.keys) void prepareKeys();
+  if (has.text) prefetchFile("/api/text");
+  if (has.adjustment) prefetchFile("/api/adjustment");
+  if (has.sound) prefetchFile("/api/sound?used=1");
+  if (has.trials) prefetchFile("/api/trials.json");
+  if (has.choices) prefetchFile("/api/choices.json");
   try {
     S.render = await buildScene(el.canvas, w, h, true);
   } catch (e) {
@@ -268,43 +361,42 @@ export const start = async (el: Elements) => {
     );
   }
   stored.remove("loadTries", sessionStorage);
-  if (AWAY) loadWholeMix();
+  if (AWAY && has.mix) loadWholeMix();
   S.tools = S.render.tools;
   set({ placed: !!S.tools.placed });
-  reportFilm(checkFilm(FILM, S.render));
-  loadContract();
   set({ loading: "", ready: true });
   say(`Loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-  await loadTiming();
+  await timingReady;
   const extras = Promise.all([
+    comments,
+    contractReady,
+    earlyExtras,
     timeline,
-    loadTrials(),
-    loadSounds(),
-    loadSound(),
-    loadCam(),
-    loadKeys(),
-    loadShots(),
-    loadText(),
-    loadLayers(),
-    loadFavorites(),
+    loadTrials(true),
+    earlySound,
+    editingReady,
   ]).then(() => {
     refreshTimes();
-    reportFilm(checkFilm(FILM, S.render, camKeys));
     S.dirty = true;
+    invalidatePictures();
   });
   refreshTimes();
   seek(S.t);
+  loopStarted = true;
   loop();
   extras.then(() => {
     restoreDraft();
     window.__readyAt = Date.now();
     reportWeight();
+    const idle = window.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 250));
+    idle(runFilmCheck, { timeout: 600 });
     // Only now: two extra draws a frame while the panels load slow them, most on a phone
     warm.push(
       ...SHOTS.map((_, i) => i).sort(
         (a, b) => Math.abs(SHOTS[a].t - S.t) - Math.abs(SHOTS[b].t - S.t),
       ),
     );
+    wake("render");
   });
 };
 
@@ -317,17 +409,59 @@ let drawMs = 0,
 // The playhead is kept for the next reload, not for this frame: a storage write per frame is a browser call per frame
 let keptAt = -1e9,
   keptT = -1;
+let loopStarted = false,
+  inFrame = false,
+  loopKind: 0 | 1 | 2 = 0,
+  loopId = 0;
+const needFrame = () => S.dirty || S.viewMoved || S.playing || warm.length > 0 || flight.active();
+const cancelLoop = () => {
+  if (loopKind === 1) cancelAnimationFrame(loopId);
+  else if (loopKind === 2) clearTimeout(loopId);
+  loopKind = 0;
+  loopId = 0;
+};
+const scheduleLoop = () => {
+  if (!loopStarted || inFrame || loopKind || !needFrame()) return;
+  // A page in the background gets no animation frames, and the sound would carry on without the picture
+  if (document.hidden) {
+    loopKind = 2;
+    loopId = window.setTimeout(loop, 100);
+  } else {
+    loopKind = 1;
+    loopId = requestAnimationFrame(loop);
+  }
+};
+onWake("render", () => {
+  if (!inFrame && !loopKind) lastFrame = performance.now();
+  scheduleLoop();
+});
+document.addEventListener("visibilitychange", () => {
+  cancelLoop();
+  if (!document.hidden && !loopKind) lastFrame = performance.now();
+  scheduleLoop();
+});
 // A film that throws at one moment still lets the dev move to another: the error shows and the next frame comes anyway
 const loop = () => {
+  loopKind = 0;
+  loopId = 0;
+  inFrame = true;
   try {
     frame();
   } catch (e) {
     showError(e);
+  } finally {
+    inFrame = false;
   }
-  // A page in the background gets no animation frames, and the sound would carry on without the picture
-  if (document.hidden) setTimeout(loop, 100);
-  else requestAnimationFrame(loop);
+  scheduleLoop();
 };
+let lastClockEl: HTMLElement | null = null;
+let lastClockText: string | null = null;
+let lastPeekState: boolean | null = null;
+let lastCaptionEl: HTMLElement | null = null;
+let lastCaptionText: string | null = null;
+let lastHudEl: HTMLElement | null = null;
+let lastHudText: string | null = null;
+
 const frame = () => {
   const dt = Math.min(0.1, (performance.now() - lastFrame) / 1000); // a frame after a stall moves a little, never across the room
   lastFrame = performance.now();
@@ -342,19 +476,52 @@ const frame = () => {
     followChips();
     drawMs = drawMs * 0.9 + (performance.now() - a) * 0.1;
     frames++;
+    const showTime = peeked ?? S.t;
+    const isPeek = peeked !== null;
     const i = shotIndex(S.t);
-    S.el.clock.textContent = stamp(peeked ?? S.t);
-    S.el.clock.toggleAttribute("data-peek", peeked !== null);
-    S.el.hud.textContent = formatOpticsHud(S.tools?.optics);
     if (i !== shownShot) {
       shownShot = i;
       set({ shot: `shot ${i}: ${S.comments[i] ?? ""}` });
     }
-    S.el.caption.textContent = get().captions ? (captionAt(peeked ?? S.t) ?? "") : "";
     drawTimelines();
-    S.el.pins.hidden = S.el.ink.hidden = S.el.chips.hidden = peeked !== null; // the playhead's, not the peeked frame's
+    if (S.el.pins.hidden !== isPeek) S.el.pins.hidden = isPeek; // the playhead's, not the peeked frame's
+    if (S.el.ink.hidden !== isPeek) S.el.ink.hidden = isPeek;
+    if (S.el.chips.hidden !== isPeek) S.el.chips.hidden = isPeek;
     drawPins();
     drawInk(drawnNotes);
+    // Commit HUD text after layout-reading draws above to prevent forced reflow during playback.
+    if (lastClockEl !== S.el.clock) {
+      lastClockEl = S.el.clock;
+      lastClockText = null;
+      lastPeekState = null;
+    }
+    const nextClock = stamp(showTime);
+    if (lastClockText !== nextClock) {
+      S.el.clock.textContent = nextClock;
+      lastClockText = nextClock;
+    }
+    if (lastPeekState !== isPeek) {
+      S.el.clock.toggleAttribute("data-peek", isPeek);
+      lastPeekState = isPeek;
+    }
+    if (lastCaptionEl !== S.el.caption) {
+      lastCaptionEl = S.el.caption;
+      lastCaptionText = null;
+    }
+    const nextCaption = get().captions ? (captionAt(showTime) ?? "") : "";
+    if (lastCaptionText !== nextCaption) {
+      S.el.caption.textContent = nextCaption;
+      lastCaptionText = nextCaption;
+    }
+    if (lastHudEl !== S.el.hud) {
+      lastHudEl = S.el.hud;
+      lastHudText = null;
+    }
+    const nextHud = formatOpticsHud(S.tools?.optics);
+    if (S.el.hud && lastHudText !== nextHud) {
+      S.el.hud.textContent = nextHud;
+      lastHudText = nextHud;
+    }
     let finalNow = false;
     if (get().final && S.finalRender) {
       if (S.playing || S.dragging || peeked !== null) {
@@ -368,6 +535,7 @@ const frame = () => {
     // The scopes read the frame on screen: the final-quality one when it shows (only when drawn now), else the draft
     measureScopes(finalNow ? S.el.final : S.el.final.hidden ? S.el.canvas : null);
     followNotes();
+    wake("rendered");
     const keptNow = performance.now();
     // A jump is kept at once; while playing or scrubbing, a few writes a second say the same thing as a frame's
     if (Math.abs(S.t - keptT) > 1 || keptNow - keptAt > 500) {
@@ -383,8 +551,8 @@ const frame = () => {
     render(S.t);
   }
   const now = performance.now();
-  if (now - fpsAt > 500) {
-    const fps = (frames * 1000) / (now - fpsAt);
+  if (now - fpsAt > 500 || (!S.playing && get().perf.includes("fps"))) {
+    const fps = (frames * 1000) / Math.max(1, now - fpsAt);
     frames = 0;
     fpsAt = now;
     set({ perf: `${S.playing ? fps.toFixed(0) + " fps, " : ""}${drawMs.toFixed(0)} ms/frame` });

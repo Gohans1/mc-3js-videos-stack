@@ -4,25 +4,36 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const toggleVariants = cva(
-  "group/toggle hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring aria-pressed:focus-visible:ring-ring aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-pressed:bg-muted data-[state=on]:bg-muted dark:aria-invalid:ring-destructive/40 inline-flex items-center justify-center gap-1 rounded-md text-xs font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 aria-pressed:focus-visible:ring-[3px] motion-safe:enabled:active:scale-[0.96] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/toggle hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/40 aria-pressed:bg-muted data-[state=on]:bg-muted inline-flex items-center justify-center gap-1 rounded-md text-xs font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 motion-safe:enabled:active:scale-[0.96] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: "bg-transparent",
-        outline: "border-input-border hover:bg-muted border bg-transparent",
+        outline: "border-input hover:bg-muted border bg-transparent",
         quiet: "text-muted-foreground aria-pressed:text-foreground",
-        "quiet-primary": "text-muted-foreground aria-pressed:text-primary",
+        "quiet-primary": "text-muted-foreground aria-pressed:text-primary-text",
         "quiet-warn": "text-muted-foreground aria-pressed:text-warn-text",
         segment:
-          "text-muted-foreground hover:text-foreground text-sm tabular-nums aria-pressed:bg-white/[0.13] aria-pressed:font-semibold aria-pressed:text-white aria-pressed:shadow-xs aria-pressed:ring-1 aria-pressed:ring-white/[0.22]",
+          "text-muted-foreground hover:text-foreground aria-pressed:bg-secondary aria-pressed:text-foreground aria-pressed:ring-hairline-strong text-sm tabular-nums aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
         pick: "text-ui aria-pressed:border-primary aria-pressed:bg-tint border border-transparent",
-        chip: "bg-secondary aria-pressed:border-primary aria-pressed:bg-tint aria-pressed:text-primary border border-transparent font-semibold tabular-nums data-[in-use=true]:shadow-[inset_0_-3px_0_var(--warn)]",
+        chip: "bg-secondary aria-pressed:border-primary aria-pressed:bg-tint aria-pressed:text-primary-text border border-transparent font-semibold tabular-nums data-[in-use=true]:shadow-[inset_0_-3px_0_var(--warn)]",
+        "status-all":
+          "studio-press text-label hover:text-foreground hover:bg-surface-subtle aria-pressed:bg-secondary aria-pressed:text-foreground aria-pressed:ring-hairline-strong aria-pressed:hover:bg-secondary aria-pressed:hover:text-foreground shrink-0 cursor-pointer gap-1 font-medium ring-1 ring-transparent aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
+        "status-check":
+          "studio-press text-label hover:text-foreground hover:bg-surface-subtle aria-pressed:bg-warn/[0.16] aria-pressed:text-warn-text aria-pressed:ring-warn/45 aria-pressed:hover:bg-warn/[0.16] aria-pressed:hover:text-warn-text shrink-0 cursor-pointer gap-1 font-medium ring-1 ring-transparent aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
+        "status-asking":
+          "studio-press text-label hover:text-foreground hover:bg-surface-subtle aria-pressed:bg-ai/[0.16] aria-pressed:text-ai-text aria-pressed:ring-ai/45 aria-pressed:hover:bg-ai/[0.16] aria-pressed:hover:text-ai-text shrink-0 cursor-pointer gap-1 font-medium ring-1 ring-transparent aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
+        "status-open":
+          "studio-press text-label hover:text-foreground hover:bg-surface-subtle aria-pressed:bg-primary/[0.16] aria-pressed:text-primary-text aria-pressed:ring-primary/45 aria-pressed:hover:bg-primary/[0.16] aria-pressed:hover:text-primary-text shrink-0 cursor-pointer gap-1 font-medium ring-1 ring-transparent aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
+        "status-done":
+          "studio-press text-label hover:text-foreground hover:bg-surface-subtle aria-pressed:bg-ok/[0.16] aria-pressed:text-ok-text aria-pressed:ring-ok/45 aria-pressed:hover:bg-ok/[0.16] aria-pressed:hover:text-ok-text shrink-0 cursor-pointer gap-1 font-medium ring-1 ring-transparent aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
       },
       size: {
         default:
-          "h-7 min-w-7 px-2 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 pointer-coarse:min-h-10",
-        sm: "text-tag h-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-2 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 pointer-coarse:min-h-10 [&_svg:not([class*='size-'])]:size-3",
-        lg: "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 pointer-coarse:min-h-10",
+          "h-7 min-w-7 px-2 has-data-[icon=inline-end]:pe-1.5 has-data-[icon=inline-start]:ps-1.5 pointer-coarse:min-h-10",
+        sm: "h-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-2 text-xs has-data-[icon=inline-end]:pe-1.5 has-data-[icon=inline-start]:ps-1.5 pointer-coarse:min-h-10 [&_svg:not([class*='size-'])]:size-3",
+        strip: "text-ui h-auto min-h-7 rounded-md px-2 @[440px]:flex-1 pointer-coarse:min-h-10",
+        lg: "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pe-2 has-data-[icon=inline-start]:ps-2 pointer-coarse:min-h-10",
         "icon-sm":
           "size-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-0 pointer-coarse:size-10 pointer-coarse:min-w-10 [&_svg:not([class*='size-'])]:size-3",
         chip: "text-ui upright:min-h-7 upright:min-w-7 upright:px-1.5 upright:text-xs min-h-7.5 min-w-7.5 px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10",
@@ -38,6 +49,13 @@ const toggleVariants = cva(
       size: "default",
       tone: "neutral",
     },
+    compoundVariants: [
+      {
+        variant: "segment",
+        size: "sm",
+        className: "text-sm",
+      },
+    ],
   },
 );
 

@@ -25,10 +25,11 @@ function fixture(t) {
   for (const dir of [
     "scripts",
     "vault/jar",
-    "external/motion",
-    "external/packs",
-    "external/tools",
-    "external/mc-sound",
+    "vault/motion",
+    "vault/packs",
+    "vault/tools",
+    "vault/mc-sound",
+    "external",
     "films/demo/assets/public",
   ])
     mkdirSync(join(root, dir), { recursive: true });
@@ -46,13 +47,13 @@ function fixture(t) {
     JSON.stringify({
       root: "./vault",
       externalRoot: "./external",
-      external: ["motion", "packs", "tools", "mc-sound"],
+      requiredDirectories: ["motion", "packs", "tools", "mc-sound"],
       film_links: { mc: "jar", motion: "motion" },
     }),
   );
   writeFileSync(join(root, "vault/jar/model.txt"), "local");
-  writeFileSync(join(root, "external/motion/clip.txt"), "external");
-  writeFileSync(join(root, "external/mc-sound/SOURCES.json"), "{}");
+  writeFileSync(join(root, "vault/motion/clip.txt"), "motion");
+  writeFileSync(join(root, "vault/mc-sound/SOURCES.json"), "{}");
   writeFileSync(join(root, "films/demo/package.json"), "{}");
   return {
     root,
@@ -65,7 +66,7 @@ function fixture(t) {
   };
 }
 
-test("link resolves local light assets and external motion, and can run again", (t) => {
+test("link makes independent real asset copies and can refresh unchanged copies", (t) => {
   const { root, run } = fixture(t);
   for (let i = 0; i < 2; i++) {
     const result = run();
@@ -76,11 +77,92 @@ test("link resolves local light assets and external motion, and can run again", 
     );
     assert.equal(
       readFileSync(join(root, "films/demo/assets/public/motion/clip.txt"), "utf8"),
-      "external",
+      "motion",
     );
     assert.equal(readFileSync(join(root, "vault/mc-sound/SOURCES.json"), "utf8"), "{}");
   }
   assert.equal(lstatSync(join(root, "vault")).isSymbolicLink(), false);
+  assert.equal(lstatSync(join(root, "films/demo/assets/public/mc")).isSymbolicLink(), false);
+  assert.equal(lstatSync(join(root, "films/demo/assets/public/motion")).isSymbolicLink(), false);
+  writeFileSync(join(root, "vault/jar/model.txt"), "updated");
+  assert.equal(run().status, 0);
+  assert.equal(
+    readFileSync(join(root, "films/demo/assets/public/mc/model.txt"), "utf8"),
+    "updated",
+  );
+  rmSync(join(root, "films/demo/assets/public/motion"), { recursive: true });
+  assert.equal(readFileSync(join(root, "vault/motion/clip.txt"), "utf8"), "motion");
+});
+
+test("refresh refuses a modified film asset and preserves both versions", (t) => {
+  const { root, run } = fixture(t);
+  assert.equal(run().status, 0);
+  const filmFile = join(root, "films/demo/assets/public/mc/model.txt");
+  writeFileSync(filmFile, "custom film asset");
+  writeFileSync(join(root, "vault/jar/model.txt"), "new shared asset");
+  assert.notEqual(run().status, 0);
+  assert.equal(readFileSync(filmFile, "utf8"), "custom film asset");
+  assert.equal(readFileSync(join(root, "vault/jar/model.txt"), "utf8"), "new shared asset");
+});
+
+test("refresh refuses a nested junction without writing into its target", (t) => {
+  const { root, run } = fixture(t);
+  mkdirSync(join(root, "vault/jar/nested"));
+  writeFileSync(join(root, "vault/jar/nested/model.txt"), "original");
+  assert.equal(run().status, 0);
+  const nested = join(root, "films/demo/assets/public/mc/nested");
+  rmSync(nested, { recursive: true });
+  const outside = join(root, "outside");
+  mkdirSync(outside);
+  writeFileSync(join(outside, "model.txt"), "original");
+  symlinkSync(outside, nested, "junction");
+  writeFileSync(join(root, "vault/jar/nested/model.txt"), "updated");
+  assert.notEqual(run().status, 0);
+  assert.equal(readFileSync(join(outside, "model.txt"), "utf8"), "original");
+});
+
+test("refresh updates an untouched copy after its source was temporarily removed", (t) => {
+  const { root, run } = fixture(t);
+  const source = join(root, "vault/jar/model.txt");
+  const dest = join(root, "films/demo/assets/public/mc/model.txt");
+  assert.equal(run().status, 0);
+  rmSync(source);
+  assert.equal(run().status, 0);
+  assert.equal(readFileSync(dest, "utf8"), "local");
+  writeFileSync(source, "returned");
+  const refreshed = run();
+  assert.equal(refreshed.status, 0, refreshed.stderr);
+  assert.equal(readFileSync(dest, "utf8"), "returned");
+});
+
+test("sound build reads the local Earshot tool while the archive is empty", async (t) => {
+  const { buildSoundVault } = await import("../build_sound_vault.mjs");
+  const { root } = fixture(t);
+  const local = join(root, "vault");
+  const bank = join(local, "tools/earshot/earshot/forge");
+  mkdirSync(bank, { recursive: true });
+  writeFileSync(join(bank, "bank.py"), "local bank fixture");
+  writeFileSync(join(root, "scripts/sfx-catalogue.json"), JSON.stringify({ sounds: [] }));
+  writeFileSync(
+    join(root, "scripts/render_earshot_bank.py"),
+    [
+      "import json, sys",
+      "from pathlib import Path",
+      "assert (Path(sys.argv[1]) / 'earshot/forge/bank.py').read_text() == 'local bank fixture'",
+      "print(json.dumps({'sources': {'local-bank': {'title': 'Local bank', 'license': 'CC0 1.0'}}, 'rendered': 1, 'reused': 0}))",
+    ].join("\n"),
+  );
+  await buildSoundVault({
+    root,
+    local,
+    external: join(root, "external"),
+    skipBgm: true,
+    skipFreesound: true,
+    log: () => {},
+  });
+  const sources = JSON.parse(readFileSync(join(local, "sound/SOURCES.json"), "utf8"));
+  assert.equal(sources["local-bank"]?.title, "Local bank");
+  assert.equal(existsSync(join(root, "external/tools")), false);
 });
 
 test("link repairs an existing link to the old vault without changing its files", (t) => {
@@ -496,7 +578,7 @@ test("buildSoundVault files a sound both lists name once, where the vault's own 
   assert.equal(existsSync(join(local, "sound/sfx/clicks/mixkit-1115.wav")), false);
 });
 
-test("buildSoundVault without earshot in the external vault says where to get it", async (t) => {
+test("buildSoundVault without earshot in the local vault says where to get it", async (t) => {
   const { buildSoundVault } = await import("../build_sound_vault.mjs");
   const root = mkdtempSync(join(tmpdir(), "mc-sound-no-earshot-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -512,7 +594,7 @@ test("buildSoundVault without earshot in the external vault says where to get it
   });
   assert.ok(
     lines.some((l) =>
-      /^Waiting for you: .*github\.com\/Leonxlnx\/earshot.*ext[\\/]tools[\\/]earshot/.test(l),
+      /^Waiting for you: .*github\.com\/Leonxlnx\/earshot.*vault[\\/]tools[\\/]earshot/.test(l),
     ),
     lines.join("\n"),
   );
@@ -794,7 +876,7 @@ test("buildSoundVault ingests Pixabay drop MP3s, skips disputed journey-roa, and
     pixabayDir = join(root, "downloads");
   mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, ".agents/skills/cinetic/assets/music"), { recursive: true });
-  mkdirSync(join(external, "tools/earshot/earshot/forge/bank"), { recursive: true });
+  mkdirSync(join(local, "tools/earshot/earshot/forge/bank"), { recursive: true });
   mkdirSync(pixabayDir, { recursive: true });
 
   const toneMp3 = join(pixabayDir, "coma-media-this-minimal-technology_pure-12327.mp3");
@@ -910,7 +992,7 @@ test("buildSoundVault ingests Pixabay drop MP3s, skips disputed journey-roa, and
     }),
   );
   writeFileSync(
-    join(external, "tools/earshot/earshot/forge/bank/fit.json"),
+    join(local, "tools/earshot/earshot/forge/bank/fit.json"),
     JSON.stringify({
       entries: {
         "fit/click/floss_lid": {

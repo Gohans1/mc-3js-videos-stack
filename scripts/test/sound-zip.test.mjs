@@ -29,8 +29,7 @@ test("the sound zip holds every sound of the vault at its vault path and restore
     "sfx/mixkit/mixkit-472.wav": "trombone",
     "mc-sound/mc/mob/zombie/say1.ogg": "zombie",
   };
-  for (const [rel, text] of Object.entries(sounds))
-    put(join(rel.startsWith("mc-sound/") ? old.external : old.local, rel), text);
+  for (const [rel, text] of Object.entries(sounds)) put(join(old.local, rel), text);
   // a build's cache and a download cut short are not sounds
   put(join(old.local, "sfx/mixkit/.sort-cache.json"), "{}");
   put(join(old.local, "sound/sfx/comedy/mixkit-9.wav.123.part.wav"), "half");
@@ -38,15 +37,13 @@ test("the sound zip holds every sound of the vault at its vault path and restore
   const zip = join(root, "mc-films-sound.zip");
   const packed = await packSound({ ...old, out: zip, log: () => {} });
   assert.equal(packed.files, 5);
+  assert.equal(existsSync(old.external), false);
 
   const fresh = { local: join(root, "new/vault"), external: join(root, "new/ext") };
   await restoreSound({ zip, ...fresh, log: () => {} });
   for (const [rel, text] of Object.entries(sounds))
-    assert.equal(
-      readFileSync(join(rel.startsWith("mc-sound/") ? fresh.external : fresh.local, rel), "utf8"),
-      text,
-      rel,
-    );
+    assert.equal(readFileSync(join(fresh.local, rel), "utf8"), text, rel);
+  assert.equal(existsSync(fresh.external), false);
   assert.equal(existsSync(join(fresh.local, "sfx/mixkit/.sort-cache.json")), false);
   assert.equal(existsSync(join(fresh.local, "sound/sfx/comedy/mixkit-9.wav.123.part.wav")), false);
 

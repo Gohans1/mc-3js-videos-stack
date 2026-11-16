@@ -24,7 +24,7 @@
   --color-input-border: var(--input-border);
   --color-destructive-text: var(--destructive-text);
 
-  --font-heading: var(--font-sans);
+  --font-heading: inherit;
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-md: "Inter Variable", "Inter", var(--font-sans);
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -123,6 +123,8 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-text: var(--primary-text);
+  --color-heading-foreground: var(--heading-foreground);
+  --color-code-foreground: var(--code-foreground);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
@@ -232,6 +234,8 @@
   --backdrop: var(--fx-black); /* outer shell behind panels, inputs and wells */
   --background: var(--fx-base-950); /* panels and timeline canvas */
   --foreground: var(--fx-base-200);
+  --heading-foreground: var(--fx-paper);
+  --code-foreground: var(--fx-cyan-200);
   --card: var(--fx-base-900); /* panel headers/footers and raised cards */
   --card-foreground: var(--fx-base-200);
   --popover: var(--fx-base-900);
@@ -300,7 +304,7 @@
   --picture-foreground: var(--fx-black);
   --alarm: var(--fx-red-600);
   --alarm-bg: var(--fx-red-950);
-  --label: var(--fx-base-100);
+  --label: var(--fx-base-300);
   --tooltip: var(--fx-black);
   --curve-bg: var(--fx-black);
 
@@ -415,4 +419,26 @@
 }
 @utility phone-picture-h {
   max-height: calc(var(--app-h, 100dvh) * 0.58);
+}
+
+.cli-reveal {
+  height: var(--collapsible-panel-height);
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    height 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 160ms ease;
+}
+.cli-reveal[data-starting-style],
+.cli-reveal[data-ending-style] {
+  height: 0;
+  opacity: 0;
+}
+.cli-reveal[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cli-reveal {
+    transition: none;
+  }
 }

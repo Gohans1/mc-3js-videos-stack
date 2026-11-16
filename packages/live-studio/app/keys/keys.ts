@@ -5,13 +5,13 @@
 // Keys only move in time between the keys around them: their order is the film's.
 import { EDIT } from "film/edit";
 
-import { keyRows, rowAt } from "../../src/contract.ts";
+import { keyRows, rowAt } from "../../src/contract-keys.ts";
 import { together } from "../core/doc";
-import { getFile } from "../core/net";
+import { getFile, prefetchFile } from "../core/net";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
-import { get, say, set } from "../core/store";
+import { get, invalidatePictures, say, set } from "../core/store";
 import { r3, SAME, stamp } from "../core/time";
 import { createTimedDoc, type TimedDoc } from "../core/timed-doc";
 import { type KeyRef } from "./slice";
@@ -139,8 +139,10 @@ const push = (f: number) => {
   const placed = S.tools?.placed;
   if (placed?.key === x.edit)
     placed.sync().then(() => {
+      S.finalAt = -1;
       S.dirty = true;
       set({ keysRev: get().keysRev + 1 });
+      invalidatePictures();
     });
 };
 // While a drag is held the rows follow the pointer but the film gets the keys only once the pointer rests: a film may rebuild
@@ -190,13 +192,11 @@ const replaced = (f: number, was: unknown) => {
   if (picks.some((p) => p.f === f) && lengths(was) !== lengths(files[f].doc.data))
     set({ keyPicks: picks.filter((p) => p.f !== f) });
 };
-// On start, and each file again when an agent edits it (the "keys" event names which)
-export const loadKeys = async (which?: number) => {
-  if (which !== undefined) {
-    await files[which]?.doc.load();
-    return;
-  }
-  if (!files.length) {
+let initFiles: Promise<void> | null = null,
+  filesLoaded = false;
+const ensureFiles = () => {
+  if (filesLoaded) return Promise.resolve();
+  return (initFiles ??= (async () => {
     const r = await getFile("/api/keys");
     const list: { file: string; edit: string; requiredRows: string[][] }[] = r.ok
       ? await r.json()
@@ -210,7 +210,22 @@ export const loadKeys = async (which?: number) => {
         replaced: (was) => replaced(f, was),
       }),
     }));
+    if (r.ok) filesLoaded = true;
+  })().finally(() => {
+    initFiles = null;
+  }));
+};
+export const prepareKeys = async () => {
+  await ensureFiles();
+  for (let f = 0; f < files.length; f++) prefetchFile(`/api/keys/${f}`);
+};
+// On start, and each file again when an agent edits it (the "keys" event names which)
+export const loadKeys = async (which?: number) => {
+  if (which !== undefined) {
+    await files[which]?.doc.load();
+    return;
   }
+  await ensureFiles();
   await Promise.all(files.map((x) => x.doc.load()));
   set({ keyFiles: files.map((x) => x.file) });
 };

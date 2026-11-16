@@ -49,9 +49,13 @@ const fixture = () => {
     join(root, "packages/mc-assets/node_modules"),
     process.platform === "win32" ? "junction" : "dir",
   );
-  put(root, "vault.json", { root: "./vault", external: ["packs"], film_links: { mc: "jar" } });
+  put(root, "vault.json", {
+    root: "./vault",
+    requiredDirectories: ["packs"],
+    film_links: { mc: "jar" },
+  });
   mkdirSync(join(root, "vault/jar"), { recursive: true });
-  mkdirSync(join(root, "external/packs"), { recursive: true });
+  mkdirSync(join(root, "vault/packs"), { recursive: true });
   mkdirSync(join(root, "films"), { recursive: true });
   put(root, "templates/film/package.json", {
     name: "__NAME__",
@@ -178,7 +182,6 @@ test("new-film checks the vault before copying; link checks all asset targets be
     put(root, "films/test/package.json", { name: "test" });
     const linked = run(root, "scripts/link.ts", ["test"]);
     expect(linked.status).toBe(1);
-    expect(existsSync(join(root, "vault/packs"))).toBe(false);
     expect(linked.stderr).toContain("setup:vault");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -192,7 +195,7 @@ test("new-film installs workspace dependencies, builds picks, and link is repeat
     expect(r.status, r.stderr).toBe(0);
     const film = join(root, "films/fresh");
     expect(json(join(film, "package.json")).scripts.studio).toContain("47920");
-    expect(realpathSync(join(film, "assets/public/mc"))).toBe(
+    expect(realpathSync(join(film, "assets/public/mc"))).not.toBe(
       realpathSync(join(root, "vault/jar")),
     );
     expect(existsSync(join(film, "assets/public/picked.zip"))).toBe(true);
@@ -225,28 +228,24 @@ test("empty asset folders do not count as a prepared vault", () => {
       expect(r.stderr).toContain("setup:vault");
     }
     expect(existsSync(join(root, "films/fresh"))).toBe(false);
-    expect(existsSync(join(root, "vault/packs"))).toBe(false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("setup returns failure when external assets are missing, then succeeds and connects after restore", () => {
+test("setup returns failure when local assets are missing, then succeeds after restore", () => {
   const root = fixture();
   try {
     // Downloads are replaced at the network boundary; install and link still run for real.
     put(root, "scripts/setup_vault.mjs", "console.log('fixture vault prepared');");
-    rmSync(join(root, "external/packs"), { recursive: true });
+    rmSync(join(root, "vault/packs"), { recursive: true });
     const missing = run(root, "scripts/setup.mjs");
     expect(missing.status).toBe(1);
     expect(missing.stdout).toContain("next:");
-    expect(existsSync(join(root, "vault/packs"))).toBe(false);
-    mkdirSync(join(root, "external/packs"), { recursive: true });
+    mkdirSync(join(root, "vault/packs"), { recursive: true });
     const ready = run(root, "scripts/setup.mjs");
     expect(ready.status, ready.stderr).toBe(0);
-    expect(realpathSync(join(root, "vault/packs"))).toBe(
-      realpathSync(join(root, "external/packs")),
-    );
+    expect(existsSync(join(root, "vault/packs"))).toBe(true);
     expect(ready.stdout).toContain("next:");
   } finally {
     rmSync(root, { recursive: true, force: true });

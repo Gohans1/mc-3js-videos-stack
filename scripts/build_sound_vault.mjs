@@ -29,7 +29,7 @@ bun run fetch:sound-raw unpacked, filed by each pack's sort rules in scripts/sou
   bun run setup:sound
 A rebuild that re-files a sound moves it, so it never sits in two categories; a raw pack's sound its rules no longer
 take leaves the vault. Look a sound up: bun run find <words>.`;
-cliArgs(HELP, [], 0);
+if (import.meta.main) cliArgs(HELP, [], 0);
 
 const run = promisify(execFile);
 
@@ -241,7 +241,7 @@ const peakOf = async (raw, seek = []) => {
   return peaks.length ? Math.max(...peaks) : -1;
 };
 // from/to: one take of a longer file, faded in 3 ms and out 10 ms so its cut never clicks
-async function convertToPcmWav(
+export async function convertToPcmWav(
   raw,
   target,
   { rate = 44100, channels, normalize = false, from, to } = {},
@@ -729,7 +729,7 @@ export async function buildSoundVault({
     );
 
   // 2. Earshot 252 DSP recipes + 15 curated CC0 1.0 Freesound original recordings (fit.json)
-  const earshotDir = join(external, "tools/earshot");
+  const earshotDir = join(local, "tools/earshot");
   if (!skipEarshot && existsSync(join(earshotDir, "earshot/forge/bank.py"))) {
     const py = process.platform === "win32" ? "python" : "python3";
     const res = spawnSync(

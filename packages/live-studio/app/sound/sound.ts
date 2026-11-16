@@ -1,11 +1,10 @@
-// The film's sound lanes (src/sound.mjs on the server), edited by hand like the camera keys (doc.ts: undo, saving, an agent's
-// edit wins): beds that loop from..to and one-shots at a time, both from the film's sfx folder. The film's own sound watcher
-// remixes on a save, or, with live lanes (mixer.ts), the page plays the change itself and nothing is remixed.
-import { DURATION } from "film/scene";
-
 import { narrationLines } from "../../src/narration.ts";
 import { mapVoice } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
+// The film's sound lanes (src/sound.mjs on the server), edited by hand like the camera keys (doc.ts: undo, saving, an agent's
+// edit wins): beds that loop from..to and one-shots at a time, both from the film's sfx folder. The film's own sound watcher
+// remixes on a save, or, with live lanes (mixer.ts), the page plays the change itself and nothing is remixed.
+import { DURATION } from "../core/filmMeta";
 import { getFile } from "../core/net";
 import { scheduleIdleBatch } from "../core/search";
 import { transitionSelection } from "../core/selection";
@@ -14,6 +13,7 @@ import { get, say, set } from "../core/store";
 import { r3, stamp } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
 import { lanePick } from "../options/options";
+import { filmFeatures } from "../picture/frame";
 import { marks, refreshVoiceTimes } from "../timeline/timeline";
 import { createAuditionController } from "./audition-controller";
 import { type BeatMarkers, beatMarks } from "./beat-marks";
@@ -28,6 +28,7 @@ import {
   addTrack,
   fits,
   freeTrack,
+  missingSoundNames,
   normalize,
   placeShift,
   refs,
@@ -78,7 +79,7 @@ export interface LibraryItem {
   for?: string;
   kind?: "bgm" | "sfx" | "mc";
   role?: Role;
-  origin?: "real" | "synth";
+  origin?: "real" | "synth" | "unknown";
   category?: string;
   source?: string;
   family?: string;
@@ -98,6 +99,9 @@ let libraryDurations: Record<string, number> = {};
 let clipUseCounts = new Map<string, number>();
 
 let cancelTokenWarm: (() => void) | null = null;
+let fullLibraryLoaded = false;
+let fullLibraryLoading: Promise<void> | null = null;
+let wantTokenWarm = false;
 
 const scheduleSearchTokenWarm = (items: readonly LibraryItem[]) => {
   cancelTokenWarm?.();
@@ -122,7 +126,7 @@ const rebuildLibraryIndex = () => {
   for (const list of fam.values()) list.sort(compareVariants);
   libraryByFamily = fam;
   libraryDurations = durs;
-  scheduleSearchTokenWarm(library);
+  if (wantTokenWarm) scheduleSearchTokenWarm(library);
 };
 
 const rebuildClipUseCounts = () => {
@@ -226,38 +230,95 @@ export const clipTitle = (c: ClipRef) => {
   return `${x.name} ${stamp(span(c)[0])}`;
 };
 
-const sameLibrary = (a: readonly LibraryItem[], b: readonly LibraryItem[]) =>
-  a.length === b.length &&
-  a.every(
-    (x, i) =>
-      x.name === b[i].name &&
-      x.seconds === b[i].seconds &&
-      x.title === b[i].title &&
-      x.kind === b[i].kind &&
-      x.source === b[i].source &&
-      x.origin === b[i].origin &&
-      x.category === b[i].category &&
-      x.family === b[i].family &&
-      x.variant === b[i].variant &&
-      x.contentId === b[i].contentId,
-  );
+const anyItemChanged = (prev: readonly LibraryItem[], next: readonly LibraryItem[]) => {
+  if (!prev.length) return false;
+  const byName = new Map(next.map((x) => [x.name, x]));
+  return prev.some((a) => {
+    const b = byName.get(a.name);
+    return (
+      !b ||
+      a.seconds !== b.seconds ||
+      a.title !== b.title ||
+      a.kind !== b.kind ||
+      a.source !== b.source ||
+      a.origin !== b.origin ||
+      a.category !== b.category ||
+      a.family !== b.family ||
+      a.variant !== b.variant ||
+      a.contentId !== b.contentId
+    );
+  });
+};
 
 // ---------- Loading: on start, after any remix and when an agent edits the file (the "lanes" event)
-export const loadSound = async (opts?: { lanesOnly?: boolean }) => {
+export const ensureSoundLibrary = (): Promise<void> => {
+  wantTokenWarm = true;
+  if (fullLibraryLoaded) {
+    scheduleSearchTokenWarm(library);
+    return Promise.resolve();
+  }
+  if (!fullLibraryLoading) {
+    fullLibraryLoading = getFile("/api/sound?library=1")
+      .then(async (r) => {
+        if (!r.ok) return;
+        const got: { library?: LibraryItem[] } = await r.json();
+        if (!Array.isArray(got.library)) return;
+        if (library.length && anyItemChanged(library, got.library)) forgetSounds();
+        library = got.library;
+        fullLibraryLoaded = true;
+        rebuildLibraryIndex();
+        doc.refresh();
+        set({ soundRev: get().soundRev + 1 });
+      })
+      .finally(() => {
+        fullLibraryLoading = null;
+      });
+  }
+  return fullLibraryLoading;
+};
+
+export const loadSound = async (opts?: {
+  lanesOnly?: boolean;
+  usedOnly?: boolean;
+  initial?: boolean;
+}) => {
   marks.voice = (lines) =>
     mapVoice(
       narrationLines(lines, doc.source, seconds(lanes?.narration ?? "")),
       clockForTimeline("voice"),
     );
-  const r = await doc.load(opts?.lanesOnly && library.length > 0 ? "?lanes=1" : "");
+  if (opts?.initial && !filmFeatures().sound) {
+    set({ sound: false });
+    return;
+  }
+  const query =
+    opts?.lanesOnly && library.length > 0
+      ? "?lanes=1"
+      : opts?.usedOnly && !fullLibraryLoaded
+        ? "?used=1"
+        : "";
+  let got: { data?: Lanes; library?: LibraryItem[]; live?: boolean } = {};
+  const r = await doc.load(query, (raw) => {
+    got = raw as { data?: Lanes; library?: LibraryItem[]; live?: boolean };
+  });
   if (!r) {
     set({ sound: false });
     return;
   }
-  const got: { library?: LibraryItem[]; live?: boolean } = await r.json();
-  if (Array.isArray(got.library)) {
-    if (library.length && !sameLibrary(library, got.library)) forgetSounds();
+  const latestLanes = got.data ?? lanes;
+  if (
+    query === "?lanes=1" &&
+    !fullLibraryLoaded &&
+    missingSoundNames(latestLanes, (name) => libraryByName.has(name)).length > 0
+  ) {
+    await doc.load("?used=1", (raw) => {
+      got = raw as { data?: Lanes; library?: LibraryItem[]; live?: boolean };
+    });
+  }
+  if (Array.isArray(got.library) && (!fullLibraryLoaded || query === "")) {
+    if (library.length && anyItemChanged(library, got.library)) forgetSounds();
     library = got.library;
+    if (query === "") fullLibraryLoaded = true;
     rebuildLibraryIndex();
   }
   set({ sound: true, liveLanes: !!got.live });

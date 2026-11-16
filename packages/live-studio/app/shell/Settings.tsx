@@ -4,6 +4,7 @@ import { ChevronRight, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Kbd } from "@/components/ui/kbd";
@@ -14,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ import { copyCam } from "../camera/camline";
 import { HelpTip } from "../components/HelpTip";
 import { Tip } from "../components/Tip";
 import { AWAY } from "../core/device";
+import { engine } from "../core/engine";
 import { FLY_SPEED } from "../core/prefs";
 import { S } from "../core/state";
 import { set, setPref, useStudio } from "../core/store";
@@ -31,11 +32,9 @@ import { FPS, rangeText } from "../core/time";
 import { copyAll } from "../notes/notes";
 import { choose, pinPick, setGain, whereNext } from "../options/options";
 import { frameSize, setRatio } from "../picture/frame";
-import { setFree } from "../picture/freecam";
-import { setFinal } from "../picture/render";
 import { exportStill } from "../picture/still";
 import { jumpShot, seek, setPlaying } from "../playback/transport";
-import { audioCtx } from "../sound/clock";
+import { resumeAudio } from "../sound/clock";
 import { zoomSpan } from "../timeline/timeline";
 import { Speed } from "./Speed";
 
@@ -67,7 +66,7 @@ const Section = ({
     <h3
       className={cn(
         "text-ui flex min-h-5 items-center gap-1.5 px-1 font-semibold",
-        warn && "text-warn",
+        warn && "text-warn-text",
       )}
     >
       {title}
@@ -126,7 +125,7 @@ function Options() {
   const go = () => {
     const at = whereNext(g.name);
     if (at === null) return;
-    audioCtx.resume();
+    resumeAudio();
     seek(at);
     if (!S.playing) setPlaying(true);
   };
@@ -178,7 +177,7 @@ function Options() {
               {i} {o.off ? "Off" : o.title}
             </span>
             {o.id === g.chosen && (
-              <span className="text-warn text-xs font-semibold whitespace-nowrap">in use</span>
+              <span className="text-warn-text text-xs font-semibold whitespace-nowrap">in use</span>
             )}
           </Button>
         ))}
@@ -517,6 +516,7 @@ export function Settings() {
       scopes: x.scopes,
       meter: x.meter,
       ratio: x.ratio,
+      aiActivity: x.aiActivity,
     })),
   );
   const step = (d: number) => seek(S.t + d);
@@ -628,6 +628,13 @@ export function Settings() {
             />
           </div>
           <SwitchRow
+            id="ai-activity"
+            label="Show what the AI is doing"
+            checked={s.aiActivity}
+            onChange={(on) => setPref("aiActivity", on)}
+            help="Under the picture, a dot lit while the AI works and its latest step beside it (click it for the steps before). The note it reads or answers, the lesson file it reads or writes and the seconds it looks at or renders light up for a moment. Nothing moves the playhead, scrolls or takes the focus. Kept in this browser."
+          />
+          <SwitchRow
             id="try-on"
             label="Show alternatives on the picture"
             checked={s.tryOn}
@@ -692,7 +699,7 @@ export function Settings() {
             label="Free camera"
             keys={["F"]}
             checked={s.free}
-            onChange={setFree}
+            onChange={(on) => engine.setFree(on)}
             help="Look around the scene freely. The film doesn't change: its own camera stays in the corner (Film camera) to compare. Turn it off to go back to the film's camera."
           />
           <SwitchRow
@@ -780,7 +787,9 @@ export function Settings() {
               label="Final quality"
               keys={["G"]}
               checked={s.final}
-              onChange={setFinal}
+              onChange={(on) => {
+                void engine.setFinal(on);
+              }}
               help={`Draws the paused frame at ${frameSize(1920).join("×")} with every effect, as in the video. Pauses playback. The first time takes about 10 s.`}
             />
             {/* CapCut's Player menu > Export still frame (picture/still.ts) */}

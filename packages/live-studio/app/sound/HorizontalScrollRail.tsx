@@ -19,6 +19,7 @@ export function HorizontalScrollRail({
   leftLabel,
   rightLabel,
   edgesKey,
+  groupRole = "radiogroup",
   className,
   children,
 }: {
@@ -26,6 +27,7 @@ export function HorizontalScrollRail({
   leftLabel?: string;
   rightLabel?: string;
   edgesKey: string;
+  groupRole?: "radiogroup" | "group";
   className?: string;
   children: ReactNode;
 }) {
@@ -42,7 +44,7 @@ export function HorizontalScrollRail({
     <div className="relative -mx-3 flex items-center">
       <div
         ref={railRef}
-        role="radiogroup"
+        role={groupRole}
         aria-label={label}
         {...edgeMask}
         onWheel={(e) => {
@@ -66,7 +68,7 @@ export function HorizontalScrollRail({
             aria-label={labels[key]}
             onClick={() => scrollHorizontalRail(railRef.current, dir)}
             className={cn(
-              "bg-raised-2 border-border text-foreground/85 hover:bg-raised-3 hover:text-foreground focus-visible:ring-ring studio-press absolute z-10 inline-flex size-6 items-center justify-center rounded-full border shadow-sm transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:size-9",
+              "bg-raised-2 border-border text-foreground/85 hover:bg-raised-3 hover:text-foreground focus-visible:ring-ring studio-press absolute z-10 inline-flex size-6 items-center justify-center rounded-full border shadow-sm transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none pointer-coarse:size-10",
               posCls,
             )}
           >

@@ -5,7 +5,7 @@ description: Core mc-films usage guide. Read this before running any of the repo
 
 # mc-films core
 
-Các lệnh thường dùng chạy qua CLI bun run; tại gốc repo hoặc trong films/<name>, bun run help chỉ đúng nơi chạy. Script bảo trì chạy trực tiếp và lệnh riêng từng phim được giải thích ở references/film.md, không phải giới hạn cho cách dựng phim.
+Các lệnh thường dùng chạy qua CLI bun run; tại gốc repo hoặc trong films/<name>, bun run help chỉ đúng nơi chạy. Dữ liệu/vault, dọn WT, script bảo trì và lệnh riêng từng phim được giải thích ở references/film.md, không phải giới hạn cho cách dựng phim.
 
 ## Where each answer lives
 

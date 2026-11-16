@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
 // CapCut's right-panel parts, so every details tab is laid out the same way: Segmented (the bar under the tabs: Basic | Voice
 // changer, In | Out | Combo), Section (a header with an optional checkbox, the title and its ▲, then reset and ◁◇▷ on the right,
 // over a thin line), SliderRow (the label, then on one line the slider, the value box, its ▲▼ and ◁◇▷), FieldRow (the label on
@@ -29,6 +29,8 @@ export function Segmented<T extends string>({
   className,
   vertical,
   fit,
+  tone = "neutral",
+  size = "default",
 }: {
   value: T;
   items: { id: T; title: ReactNode; ariaLabel?: string }[];
@@ -37,6 +39,8 @@ export function Segmented<T extends string>({
   className?: string;
   vertical?: boolean;
   fit?: boolean;
+  tone?: "neutral" | "accent";
+  size?: "default" | "comfortable";
 }) {
   const [back, on] = vertical ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"];
   const groupRef = useRef<HTMLDivElement>(null);
@@ -106,7 +110,10 @@ export function Segmented<T extends string>({
         "relative",
         vertical
           ? "flex flex-none flex-col gap-0.5"
-          : "bg-backdrop/90 flex h-8 flex-none gap-0.5 rounded-md border border-white/[0.08] p-0.5",
+          : cn(
+              "bg-backdrop/90 border-hairline flex flex-none gap-0.5 rounded-md border p-0.5",
+              size === "comfortable" ? "h-10 pointer-coarse:h-12" : "h-8",
+            ),
         fit && !vertical && "w-full min-w-0 overflow-hidden",
         className,
       )}
@@ -122,8 +129,12 @@ export function Segmented<T extends string>({
             "--pill-h": `${pill.h}px`,
           }}
           className={cn(
-            "segmented-pill pointer-events-none z-0 bg-white/[0.13] shadow-xs ring-1 ring-white/[0.22]",
-            vertical ? "rounded-md" : "rounded-sm",
+            "segmented-pill pointer-events-none z-0 shadow-xs ring-1",
+            vertical
+              ? "bg-tint ring-primary/25 rounded-md"
+              : tone === "accent"
+                ? "bg-tint ring-primary rounded-sm"
+                : "bg-secondary ring-hairline-strong rounded-sm",
           )}
         />
       )}
@@ -152,10 +163,12 @@ export function Segmented<T extends string>({
           className={cn(
             "text-ui text-muted-foreground not-aria-checked:hover:text-foreground focus-visible:ring-ring studio-press relative z-1 flex items-center gap-1.5 outline-none focus-visible:ring-2",
             vertical
-              ? "aria-checked:text-primary h-8 min-w-0 justify-start rounded-md px-2.5 pointer-coarse:h-10"
+              ? "aria-checked:text-primary-text h-8 min-w-0 justify-start rounded-md px-2.5 pointer-coarse:h-10"
               : fit
-                ? "min-w-0 flex-auto justify-center truncate rounded-sm px-1 text-xs aria-checked:font-semibold aria-checked:text-white pointer-coarse:h-10"
-                : "shrink-0 justify-center rounded-sm px-2.5 aria-checked:font-semibold aria-checked:text-white pointer-coarse:h-10",
+                ? "min-w-0 flex-auto justify-center truncate rounded-sm px-1 text-xs aria-checked:font-semibold aria-checked:text-foreground pointer-coarse:h-10"
+                : "shrink-0 justify-center rounded-sm px-2.5 aria-checked:font-semibold aria-checked:text-foreground pointer-coarse:h-10",
+            tone === "accent" && "aria-checked:text-primary-text",
+            size === "comfortable" && "min-h-9 flex-1 text-sm pointer-coarse:min-h-11",
           )}
         >
           {x.title}
@@ -185,14 +198,17 @@ export function NavItem({
       className={cn(
         "focus-visible:ring-ring studio-press flex h-7.5 w-full items-center justify-between gap-1 rounded-md px-2 text-start text-xs outline-none focus-visible:ring-2 pointer-coarse:h-10",
         current
-          ? "bg-raised-3 text-primary font-medium"
+          ? "bg-tint text-primary-text font-medium"
           : "text-foreground/90 hover:bg-card hover:text-foreground",
       )}
     >
       <span className="truncate">{title}</span>
       {count !== undefined && (
         <span
-          className={cn("text-tag tabular-nums", current ? "text-label" : "text-muted-foreground")}
+          className={cn(
+            "text-tag tabular-nums",
+            current ? "text-primary-text" : "text-muted-foreground",
+          )}
         >
           {count.toLocaleString()}
         </span>

@@ -2,7 +2,7 @@ export const ROOT: string;
 export const config: {
   root: string;
   externalRoot?: string;
-  external?: string[];
+  requiredDirectories?: string[];
   requiredFiles?: string[];
   film_links: Record<string, string>;
 };
@@ -10,4 +10,4 @@ export function vaultPath(path: string): string;
 export const LOCAL: string;
 export const EXTERNAL: string;
 export function checkVault(): void;
-export function linkDirectory(path: string, target: string): void;
+export function copyDirectory(path: string, target: string): void;

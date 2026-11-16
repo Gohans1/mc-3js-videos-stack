@@ -16,6 +16,5 @@ const [out] = cliArgs(HELP, [], 1);
 const where = existsSync(EXTERNAL) ? EXTERNAL : LOCAL;
 await packSound({
   local: LOCAL,
-  external: EXTERNAL,
   out: resolve(out ?? join(where, `mc-films-sound-${new Date().toISOString().slice(0, 10)}.zip`)),
 });

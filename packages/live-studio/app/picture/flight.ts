@@ -18,7 +18,7 @@ const AXES: Record<string, [axis: number, sign: number]> = {
 };
 const shift = (code: string) => code.startsWith("Shift");
 
-export const createFlight = () => {
+export const createFlight = (onWake?: () => void) => {
   const held = new Set<string>(),
     v = [0, 0, 0];
   let lastW = -Infinity,
@@ -39,6 +39,7 @@ export const createFlight = () => {
         dropped = 0;
         shiftUsed = false;
       }
+      onWake?.();
       return true;
     },
     release(code: string) {
@@ -50,6 +51,7 @@ export const createFlight = () => {
       sprint = false;
     },
     flying: () => held.size > 0,
+    active: () => held.size > 0 || v[0] !== 0 || v[1] !== 0 || v[2] !== 0,
     // A shortcut started while Shift is held (Shift+K, Shift+drag): from then on Shift only takes part in it. Returns how far
     // to climb back to where the camera was when Shift went down, so the shortcut gets the view as it was framed
     chord() {

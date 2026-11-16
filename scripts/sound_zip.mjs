@@ -22,8 +22,7 @@ import { crc32 } from "node:zlib";
 import yauzl from "yauzl";
 import yazl from "yazl";
 
-// The zip's top folders and the vault each lives in: mc-sound is in the heavy external vault (vault.json "external")
-const PARTS = { sound: "local", sfx: "local", "mc-sound": "external" };
+const PARTS = ["sound", "sfx", "mc-sound"];
 // a build's own cache (dot files) and a write cut short (*.part)
 const SKIP = /(^|\/)\.|\.part(\.\w+)?$/;
 // audio does not deflate: stored, it packs and unpacks at disk speed
@@ -91,12 +90,12 @@ export async function fetchSoundZip(link, dir) {
   );
 }
 
-export async function packSound({ local, external, out, log = console.log }) {
+export async function packSound({ local, out, log = console.log }) {
   const zip = new yazl.ZipFile();
   let files = 0,
     bytes = 0;
-  for (const [part, where] of Object.entries(PARTS)) {
-    const dir = join(where === "local" ? local : external, part);
+  for (const part of PARTS) {
+    const dir = join(local, part);
     if (!existsSync(dir)) {
       log(`${part}: not in the vault, left out of the zip`);
       continue;
@@ -130,7 +129,7 @@ const crcOf = async (file) => {
 };
 
 // A file already there with the zip's size and CRC is kept, so a stopped restore resumes where it was
-export async function restoreSound({ zip, local, external, log = console.log }) {
+export async function restoreSound({ zip, local, log = console.log }) {
   const file = await promisify(yauzl.open)(zip, { lazyEntries: true });
   let written = 0,
     kept = 0;
@@ -140,13 +139,12 @@ export async function restoreSound({ zip, local, external, log = console.log }) 
     file.on("entry", async (entry) => {
       try {
         if (entry.fileName.endsWith("/")) return file.readEntry();
-        const top = entry.fileName.split("/")[0],
-          where = Object.hasOwn(PARTS, top) && PARTS[top];
-        if (!where)
+        const top = entry.fileName.split("/")[0];
+        if (!PARTS.includes(top))
           throw new Error(
-            `${zip} is not a sound zip: ${entry.fileName} lies outside ${Object.keys(PARTS).join(", ")} (bun run pack:sound makes one)`,
+            `${zip} is not a sound zip: ${entry.fileName} lies outside ${PARTS.join(", ")} (bun run pack:sound makes one)`,
           );
-        const target = join(where === "local" ? local : external, entry.fileName);
+        const target = join(local, entry.fileName);
         if (
           existsSync(target) &&
           statSync(target).size === entry.uncompressedSize &&

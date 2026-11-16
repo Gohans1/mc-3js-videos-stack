@@ -1,4 +1,5 @@
 import { LINKAGE_DEFAULTS, LINKAGE_KINDS, type LinkageSettings } from "../../src/linkage.mjs";
+import { NOTE_VIEWS } from "../notes/note-views-model";
 // What this browser remembers between visits, each setting once: its store field, the localStorage key it is kept under (old
 // spellings kept, so nobody loses a setting) and its default. The store starts from readPrefs; every change goes through
 // setPref (core/store.ts)
@@ -55,15 +56,23 @@ const PREFS = {
   nightVision: flag("nightVision", false),
   scopes: flag("scopes", false), // CapCut's Color oscilloscope under the picture (picture/Oscilloscope.tsx)
   meter: flag("audioMeter", true), // the master meter beside the timeline (sound/AudioMeter.tsx)
-  aiActivity: flag("aiActivity", true),
+  aiActivity: flag("aiActivity", true), // what the AI is doing, lit as it works (activity/activity.ts)
   filmView: oneOf("filmView", FILM_VIEW_SIZES, "m"),
   flySpeed: within("flySpeed", FLY_SPEED.min, FLY_SPEED.max, FLY_SPEED.start),
+  noteView: oneOf("noteView", NOTE_VIEWS, "cards"),
 };
 export type Prefs = { [K in keyof typeof PREFS]: ReturnType<(typeof PREFS)[K]["read"]> };
 
-export const readPrefs = () =>
-  Object.fromEntries(
-    Object.entries(PREFS).map(([k, p]) => [k, p.read(stored.get(p.key))]),
-  ) as Prefs;
+export const readPrefs = () => {
+  let empty = false;
+  try {
+    empty = typeof localStorage !== "undefined" && localStorage.length === 0;
+  } catch {
+    empty = true;
+  }
+  const out = {} as Record<string, unknown>;
+  for (const [k, p] of Object.entries(PREFS)) out[k] = p.read(empty ? null : stored.get(p.key));
+  return out as Prefs;
+};
 export const savePref = <K extends keyof Prefs>(k: K, v: Prefs[K]) =>
   stored.set(PREFS[k].key, (PREFS[k].write as (x: Prefs[K]) => string)(v));

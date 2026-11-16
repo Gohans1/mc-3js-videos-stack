@@ -1,6 +1,5 @@
 // The engine's own state, read and written every frame by its parts. Not React state: nothing here re-renders anything.
 import type { Draw, Tools } from "film/scene";
-import { DURATION } from "film/scene";
 
 import { stored } from "./storage";
 
@@ -44,6 +43,7 @@ export interface Elements {
   textrow: HTMLCanvasElement;
   textsel: HTMLElement;
   timeline: HTMLElement;
+  playhead: HTMLElement;
   rowbox: HTMLElement;
   peek: HTMLElement;
   snap: HTMLElement;
@@ -55,13 +55,64 @@ export interface Elements {
 // How a component hands its element over: ref={bind("canvas")}
 export type Bind = <K extends keyof Elements>(key: K) => (node: Elements[K] | null) => void;
 
+type WakeEvent = "render" | "time" | "playing" | "rendered" | "audio";
+const subs: Record<WakeEvent, Set<() => void>> = {
+  render: new Set(),
+  time: new Set(),
+  playing: new Set(),
+  rendered: new Set(),
+  audio: new Set(),
+};
+export const wake = (kind: WakeEvent) => {
+  for (const fn of subs[kind]) fn();
+};
+export const onWake = (kind: WakeEvent, fn: () => void) => {
+  subs[kind].add(fn);
+  return () => {
+    subs[kind].delete(fn);
+  };
+};
+
+let _t = Math.max(0, Number(stored.get("t", sessionStorage)) || 0);
+let _playing = false;
+let _dirty = true;
+let _viewMoved = false;
+
 export const S = {
   el: null as unknown as Elements,
   film: "", // its name (package.json), from picture/frame.ts loadFilm
-  t: Math.min(Number(stored.get("t", sessionStorage)) || 0, DURATION - 0.01),
-  playing: false,
-  dirty: true,
-  viewMoved: false, // only the free camera moved since the last frame: the film camera's picture stays (picture/filmcam.ts)
+  get t() {
+    return _t;
+  },
+  set t(v: number) {
+    if (v === _t) return;
+    _t = v;
+    wake("time");
+  },
+  get playing() {
+    return _playing;
+  },
+  set playing(v: boolean) {
+    if (v === _playing) return;
+    _playing = v;
+    if (v) wake("render");
+    wake("playing");
+  },
+  get dirty() {
+    return _dirty;
+  },
+  set dirty(v: boolean) {
+    _dirty = v;
+    if (v) wake("render");
+  },
+  get viewMoved() {
+    return _viewMoved;
+  },
+  set viewMoved(v: boolean) {
+    _viewMoved = v;
+    if (v) wake("render");
+  },
+  watch: onWake,
   render: null as Draw | null,
   tools: null as Tools | null,
   finalRender: null as Draw | null,

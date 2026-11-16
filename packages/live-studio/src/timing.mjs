@@ -1,5 +1,4 @@
-import { bisector } from "d3-array";
-
+import { bisector } from "./bisect.mjs";
 import { timingPlan } from "./linkage.mjs";
 import { compileMainTrack } from "./main-track.mjs";
 import { cropSpeedCurve, flattenSpeedCurve } from "./speed-curve.mjs";
@@ -210,6 +209,17 @@ export const playRanges = (clock, from, to) => {
   return ranges;
 };
 
+export const visibleOutputAt = (clock, source) => {
+  for (const s of clock.segments) {
+    if (s.blank) continue;
+    if (s.kind === "freeze") {
+      if (Math.abs((s.frame ?? s.sourceFrom) - source) < 1e-6) return s.from;
+    } else if (source >= s.sourceFrom && source < s.sourceTo)
+      return s.from + elapsed(s, source - s.sourceFrom);
+  }
+  return null;
+};
+
 export const compileTiming = (timing, sourceDuration) => {
   const timebase = { base: timingPlan(timing), changes: [], sourceDuration };
   if (timing.main)
@@ -290,6 +300,7 @@ export const compileTiming = (timing, sourceDuration) => {
       holds.set(s.sourceFrom, { from: last?.from ?? s.from, to: s.to });
     }
   const sourceAt = (t, edge = "after") => {
+    if (!Number.isFinite(t)) return Number.NaN;
     if (t < 0) return t;
     if (t > duration || (t === duration && (edge !== "before" || !segments.length)))
       return sourceDuration + t - duration;
@@ -349,8 +360,14 @@ export const clipTiming = (clock, from, to) => {
       rate1: 1,
     });
   }
-  out.forEach((s, i) => {
-    s.from = i ? out[i - 1].to : 0;
+  return out.flatMap((s, i) => {
+    const end = i ? out[i - 1].to : 0;
+    if (s.from > end + 1e-9)
+      return [
+        { kind: "freeze", sourceFrom: s.sourceFrom, sourceTo: s.sourceFrom, from: end, to: s.from },
+        s,
+      ];
+    s.from = end;
+    return [s];
   });
-  return out;
 };

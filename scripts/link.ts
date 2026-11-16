@@ -3,15 +3,16 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { cliArgs } from "../packages/live-studio/src/cli.mjs";
-import { checkVault, config, EXTERNAL, linkDirectory, LOCAL, ROOT } from "./vault.mjs";
+import { checkVault, config, copyDirectory, LOCAL, ROOT } from "./vault.mjs";
 
-const HELP = `Connects the vault to the films, from the repo root: links the heavy external vault folders into vault/ and each film's
-assets/public to the vault, then builds the film's picks zip from pack/picks.json.
+const HELP = `Prepares real asset copies from the local vault in each film's assets/public, then builds its picks zip from pack/picks.json.
   bun run link                 every film in films/
   bun run link sealed-room     only these films
-A new film from bun run new-film is linked already; run this after moving the vault or adding to pack/picks.json.
+A new film from bun run new-film is prepared already; run this after updating vault files or pack/picks.json.
 Does not install dependencies or download assets. Missing light assets: bun run setup:vault; new machine: bun run setup.
-Refuses to replace real folders. next: cd films/<name> and run bun run check, then bun run studio.`;
+Protects existing custom files. Assets and code must use real directories; only Bun-managed node_modules links are allowed.
+Windows worktree cleanup requires Git for Windows 2.54 or newer; detach links before removing a worktree.
+next: cd films/<name> and run bun run check, then bun run studio.`;
 const args = cliArgs(HELP, []);
 const there = (existsSync(join(ROOT, "films")) ? readdirSync(join(ROOT, "films")) : []).filter(
   (f) => existsSync(join(ROOT, "films", f, "package.json")),
@@ -33,13 +34,12 @@ try {
   process.exit(1);
 }
 mkdirSync(LOCAL, { recursive: true });
-for (const name of config.external ?? []) linkDirectory(join(LOCAL, name), join(EXTERNAL, name));
 
 for (const film of films) {
   const dir = join(ROOT, "films", film);
   const pub = join(dir, "assets/public");
   for (const [name, sub] of Object.entries(config.film_links as Record<string, string>))
-    linkDirectory(join(pub, name), join(LOCAL, sub));
+    copyDirectory(join(pub, name), join(LOCAL, sub));
   if (existsSync(join(dir, "pack/picks.json"))) {
     const { pickBlocks } = await import(
       pathToFileURL(join(ROOT, "packages/mc-assets/pick.mjs")).href
@@ -49,6 +49,6 @@ for (const film of films) {
 }
 console.log(
   films.length
-    ? `Linked ${films.length} film(s).\nnext: cd films/${films[0]} and run bun run check, then bun run studio`
+    ? `Prepared ${films.length} film(s).\nnext: cd films/${films[0]} and run bun run check, then bun run studio`
     : "Vault connected; no films yet.\nnext: bun run new-film <name>",
 );

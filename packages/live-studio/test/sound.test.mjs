@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
-import { audioPeaks, oggInfo, openSound, wavInfo, wavPeaks } from "../src/sound.mjs";
+import { audioPeaks, findVaults, oggInfo, openSound, wavInfo, wavPeaks } from "../src/sound.mjs";
 import { compactJson } from "../src/timeline_file.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "studio-sound-"));
@@ -519,4 +519,16 @@ test("peaksAsync decodes local ogg peaks asynchronously and coalesces concurrent
   assert.ok(r1 && r1.peaks.some((v) => v > 0.2));
   assert.deepEqual(r1, r2);
   assert.equal(await s.peaksAsync("missing"), null);
+});
+
+test("runtime sound discovery excludes the raw download and backup root", () => {
+  const repo = mkdtempSync(join(dir, "local-runtime-"));
+  mkdirSync(join(repo, "films/demo"), { recursive: true });
+  mkdirSync(join(repo, "vault/sound"), { recursive: true });
+  mkdirSync(join(repo, "archive/mc-sound"), { recursive: true });
+  writeFileSync(
+    join(repo, "vault.json"),
+    JSON.stringify({ root: "./vault", externalRoot: "./archive" }),
+  );
+  assert.deepEqual(findVaults(join(repo, "films/demo"), {}), [join(repo, "vault/sound")]);
 });

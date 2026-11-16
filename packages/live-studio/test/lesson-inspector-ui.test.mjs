@@ -39,7 +39,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 lessons.setState({ loaded: true, files: [${JSON.stringify(file)}], subTab: 'inspector' });
 window.inspectTest = { lessons, session: useInspectorSession, studio };
 studio.setState({lib:'lessons',side:'lessons'});
-if(location.search.includes('shell')) {
+if(location.search.includes('shell') || location.search.includes('broken')) {
+  if(location.search.includes('broken')) sessionStorage.setItem('loadTries','3');
   import('@/App').then(({App})=>createRoot(document.getElementById('root')).render(<App />)).catch(e=>document.body.dataset.error=String(e));
 } else createRoot(document.getElementById('root')).render(<Toaster><TooltipProvider><main style={{display:'flex',height:'100vh',width:'100%'}}><LessonsPanel desktop /></main></TooltipProvider></Toaster>);
 `;
@@ -51,7 +52,7 @@ beforeAll(async () => {
   writeFileSync(join(root, "lessons/camera.md"), file.text);
   writeFileSync(
     join(root, "src/scene.ts"),
-    "export const SHOTS = [], SHOTS_OUT = [], DURATION = 10; export const applyEdit = () => {}; export const buildScene = async () => Object.assign(() => ({}), { tools: {} });",
+    "export const SHOTS = [], SHOTS_OUT = [], DURATION = 10; export const applyEdit = () => {}; export const buildScene = async () => { if(location.search.includes('broken')) throw new Error('Missing fixture FBX'); return Object.assign(() => ({}), { tools: {} }); };",
   );
   writeFileSync(
     join(root, "src/edit.ts"),
@@ -70,12 +71,30 @@ beforeAll(async () => {
         },
         load(id) {
           if (id.replaceAll("\\", "/").endsWith("/app/shell/boot.ts"))
-            return "export const useBoot = () => {};";
+            return "import {useEffect} from 'react'; export const useBoot = el => useEffect(() => { if(location.search.includes('broken')) import('../start').then(({start})=>start(el.current)).catch(e=>window.bootFailure=String(e)); },[]);";
           return id.replaceAll("\\", "/") === entryId ? entry : null;
         },
         configureServer(vite) {
           vite.middlewares.use(async (req, res, next) => {
             const path = req.url?.split("?")[0];
+            const editData = {
+              "/api/film.json": {
+                name: "broken-scene",
+                ratio: "16:9",
+                has: { cam: true, text: true, keys: true, adjustment: true },
+              },
+              "/api/cam": { version: "cam-1", data: [{ t: 0, p: [0, 1, 5], l: [0, 1, 0] }] },
+              "/api/text": { version: "text-1", data: { items: [] } },
+              "/api/keys": [{ file: "src/actor.json", edit: "actor", requiredRows: [] }],
+              "/api/keys/0": { version: "keys-1", data: {} },
+              "/api/adjustment": { version: "layers-1", data: { items: [] } },
+              "/api/notes": [],
+            };
+            if (path in editData) {
+              res.setHeader("content-type", "application/json");
+              res.end(JSON.stringify(editData[path]));
+              return;
+            }
             if (path === "/api/lessons") {
               res.setHeader("content-type", "application/json");
               res.end(JSON.stringify({ dir: join(root, "lessons"), files: [file] }));
@@ -132,6 +151,48 @@ afterAll(async () => {
   view?.close();
   await server?.close();
   if (root) rmSync(root, { recursive: true, force: true });
+});
+
+test.each([1920, 960])(
+  "editing tabs stay after Audio while the scene is unavailable at %ipx",
+  async (width) => {
+    await view.cdp("Emulation.setDeviceMetricsOverride", {
+      width,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await navigateFixture("?shell");
+    await waitFor("window.inspectTest && document.querySelector('[role=tablist]')");
+    await view.evaluate(`(() => {
+    window.inspectTest.lessons.setState({subTab:'deck'});
+    window.inspectTest.studio.setState({lib:'notes',side:'notes',sound:false,text:false,cam:false,placed:false,keyFiles:[]});
+  })()`);
+    const label = width >= 1280 ? "Libraries" : "Panels";
+    await waitFor(`document.querySelector('[aria-label="${label}"]')`);
+    const tabs = await view.evaluate(`(() => {
+    const list=document.querySelector('[aria-label="${label}"]');
+    return [...list.querySelectorAll('[role=tab]')].map(tab=>({text:tab.textContent.trim(),disabled:tab.disabled}));
+  })()`);
+    const audio = tabs.findIndex((tab) => tab.text === "Audio");
+    expect(audio).toBeGreaterThanOrEqual(0);
+    expect(tabs.slice(audio)).toEqual(
+      (width >= 1280
+        ? ["Audio", "Text", "Objects", "Transitions", "Adjustment"]
+        : ["Audio", "Text", "Objects", "Keyframes", "Transitions", "Camera"]
+      ).map((text) => ({ text, disabled: true })),
+    );
+  },
+);
+
+test("a missing scene asset still loads the film's editable files", async () => {
+  await navigateFixture("?broken");
+  await waitFor("window.bootFailure");
+  expect(await view.evaluate("window.bootFailure")).toContain("Missing fixture FBX");
+  await waitFor(
+    "window.inspectTest.studio.getState().cam && window.inspectTest.studio.getState().text && window.inspectTest.studio.getState().keyFiles?.length === 1",
+  );
+  expect(await view.evaluate("window.inspectTest.studio.getState().ready")).toBe(false);
 });
 
 test("external lesson edits refresh the dry Inspector even when note and drafts stay unchanged", async () => {

@@ -145,8 +145,7 @@ def _find_vaults():
                 vcfg = {}
             vroot = (d / vcfg.get("root", "./vault")).resolve()
             mc_local = vroot / "mc-sound"
-            mc_ext = (d / vcfg["externalRoot"] / "mc-sound").resolve() if vcfg.get("externalRoot") else None
-            mc_dir = mc_local if mc_local.exists() else (mc_ext if mc_ext and mc_ext.exists() else None)
+            mc_dir = mc_local if mc_local.exists() else None
             snd_dir = vroot / "sound" if (vroot / "sound").exists() else None
             return tuple(x for x in (mc_dir, snd_dir) if x is not None)
     return ()

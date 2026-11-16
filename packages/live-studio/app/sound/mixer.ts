@@ -1,18 +1,27 @@
+import { SMALL_SOUND } from "../core/device";
 // The sound lanes heard as they are edited, for a film with package.json "live-studio": { liveLanes: true }. Its sound.py then
 // mixes without them, and this plays every bed and one-shot of the timeline file on the mix's clock the way the film's
 // scripts/sound/mix.py builds them: a bed looped from..to, a one-shot from start for length, gains in dB, fades (envelope.ts),
 // its filters (EQ and width, eq.ts), its track's volume, and an option picked in its place at the level of the sound it stands in for. All of it goes
 // through the mix's master stage: audio.drive dB into mix.py's limiter at 0.45 (brickwall.ts), with the narration summed in before it.
 // A drag is heard on the next tick, nothing is remixed. The final render still comes from mix.py.
-import { DURATION } from "film/scene";
-
-import { SMALL_SOUND } from "../core/device";
+import { DURATION } from "../core/filmMeta";
 import { getFile } from "../core/net";
-import { S } from "../core/state";
+import { S, wake } from "../core/state";
 import { get, say } from "../core/store";
 import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
 import brickwall from "./brickwall.worklet.ts?worker&url";
-import { addModule, addPlayer, audioCtx, master, STEREO, track, type Window } from "./clock";
+import {
+  addModule,
+  addPlayer,
+  getAudio,
+  getAudioCtx,
+  hasAudio,
+  onAudioReady,
+  STEREO,
+  track,
+  type Window,
+} from "./clock";
 import { duckCorners, duckGain, duckWindows } from "./duck";
 import { envelope, envelopePoints } from "./envelope";
 import { coefficients, widthOf } from "./eq";
@@ -70,18 +79,43 @@ const stage = (ctx: BaseAudioContext, out: AudioNode) => {
   });
   return { bus, drive, ready };
 };
-const live = stage(audioCtx, master);
+let liveStage: ReturnType<typeof stage> | null = null,
+  fromMix: GainNode | null = null,
+  wantLive = false,
+  unsubAudio: (() => void) | null = null;
+const getLive = () => {
+  if (!liveStage) {
+    const { ctx, master } = getAudio();
+    liveStage = stage(ctx, master);
+    const l = source?.lanes();
+    if (l) liveStage.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+  }
+  return liveStage;
+};
 
 let source: Source | null = null,
   on = false,
   routed: MediaElementAudioSourceNode | null = null;
-const fromMix = audioCtx.createGain();
 // The mix element's own volume is applied before it reaches here, and the volume after master applies it again: undone, so it
 // counts once. A soloed track silences the narration as it does every other track
 const levelMix = () => {
+  if (!fromMix) return;
   const a = S.el.audio,
     v = a.muted ? 0 : a.volume;
   fromMix.gain.value = v > 0 && !get().solo.length ? 1 / v : 0;
+};
+const ensureRouting = () => {
+  const { ctx, master } = getAudio();
+  fromMix ??= ctx.createGain();
+  // Through the page's own graph either way, so the meter hears the mix (meter.ts)
+  if (!routed) {
+    routed = ctx.createMediaElementSource(S.el.audio);
+    routed.connect(fromMix);
+  }
+  // The mix goes through the master stage only while the lanes are summed with it; otherwise it already went through mix.py's
+  fromMix.disconnect();
+  fromMix.connect(wantLive ? getLive().bus : master);
+  levelMix();
 };
 
 // ---------- The lanes' sound files, decoded once, with ffmpeg volumedetect's mean_volume for an option's level
@@ -95,7 +129,7 @@ const load = (name: string) => {
       getFile(url)
         .then(async (r) => {
           if (!r.ok) return null;
-          const buf = await audioCtx.decodeAudioData(await r.arrayBuffer());
+          const buf = await getAudioCtx().decodeAudioData(await r.arrayBuffer());
           let sum = 0,
             n = 0;
           for (let c = 0; c < buf.numberOfChannels; c++) {
@@ -130,7 +164,7 @@ const mixBuffer = () => {
       url,
       buf: getFile(url)
         .then((r) => r.arrayBuffer())
-        .then((b) => audioCtx.decodeAudioData(b))
+        .then((b) => getAudioCtx().decodeAudioData(b))
         .catch(() => null),
     };
   return mixDecoded.buf;
@@ -285,6 +319,18 @@ interface Voice {
 }
 let voices: Voice[] = [];
 const started = new Set<string>();
+const duckWindowCache = new WeakMap<
+  readonly { s: number; e: number }[],
+  ReturnType<typeof duckWindows>
+>();
+const cachedDuckWindows = (lines: readonly { s: number; e: number }[]) => {
+  let cached = duckWindowCache.get(lines);
+  if (!cached) {
+    cached = duckWindows(lines.map((l) => [l.s, l.e]));
+    duckWindowCache.set(lines, cached);
+  }
+  return cached;
+};
 // One clip from film second at (inside it) on; w maps film seconds onto ctx's clock
 const play = (
   ctx: BaseAudioContext,
@@ -316,7 +362,7 @@ const play = (
   let pts = envelopePoints(u0, c.t1 - c.t0, c.fadeIn, c.fadeOut, c.length);
   if (c.duck > 0) {
     const lines = source?.voice() ?? S.voiceOut;
-    const w = duckWindows(lines.map((l) => [l.s, l.e]));
+    const w = cachedDuckWindows(lines);
     const us = [
       ...new Set([
         ...pts.map((p) => p[0]),
@@ -352,7 +398,8 @@ const play = (
   return { srcs, gain };
 };
 const hush = (list: Voice[]) => {
-  const t = audioCtx.currentTime;
+  if (!list.length || !hasAudio()) return;
+  const t = getAudioCtx().currentTime;
   for (const v of list) {
     v.gain.gain.cancelScheduledValues(t);
     v.gain.gain.setTargetAtTime(0, t, 0.004);
@@ -372,6 +419,8 @@ addPlayer({
     if (routed) levelMix(); // the mix plays through the graph whether or not the lanes do
     const l = on && source?.lanes();
     if (!l) return;
+    const ctx = getAudioCtx(),
+      live = getLive();
     for (const c of clips(l)) {
       if (started.has(c.key) || !(c.t0 < w.until && w.now < c.t1)) continue;
       const s = soundFor(c);
@@ -379,7 +428,7 @@ addPlayer({
         loadClip(c);
         continue;
       }
-      const v = play(audioCtx, live.bus, c, s, Math.max(w.now, c.t0), w);
+      const v = play(ctx, live.bus, c, s, Math.max(w.now, c.t0), w);
       started.add(c.key);
       if (v) {
         v.srcs.forEach(track);
@@ -407,7 +456,7 @@ export const replan = () => {
     plans++;
     const l = source?.lanes();
     if (l) {
-      live.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+      if (liveStage) liveStage.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
       setLaneGroups(groups(l));
       retainProcessed(clips(l, true).flatMap((c) => (c.process ? [c.process] : [])));
     }
@@ -416,6 +465,22 @@ export const replan = () => {
 
 // ---------- Options on the lanes (a "try" list), as option groups: picked like any other, played by this
 const auditioning: Voice[] = [];
+const previewSrcs = new Set<AudioScheduledSourceNode>();
+export const hasPreviewSounding = () => previewSrcs.size > 0;
+const trackPreview = (srcs: readonly AudioScheduledSourceNode[]) => {
+  if (!srcs.length) return;
+  for (const s of srcs) {
+    previewSrcs.add(s);
+    s.addEventListener(
+      "ended",
+      () => {
+        previewSrcs.delete(s);
+      },
+      { once: true },
+    );
+  }
+  wake("audio");
+};
 const audition = async (name: string) => {
   const l = source?.lanes();
   if (!l) return;
@@ -428,18 +493,20 @@ const audition = async (name: string) => {
   const s = await loadClip(c);
   if (!s) return;
   hush(auditioning.splice(0));
-  const from = Math.min(Math.max(S.t, c.t0), Math.max(c.t0, c.t1 - 2.5)),
+  const ctx = getAudioCtx(),
+    from = Math.min(Math.max(S.t, c.t0), Math.max(c.t0, c.t1 - 2.5)),
     to = Math.min(c.t1, from + 2.5),
-    t0 = audioCtx.currentTime + 0.02;
+    t0 = ctx.currentTime + 0.02;
   const w = {
     speed: 1,
     ctxAt: (t: number) => t0 + t - from,
     when: (t: number) => Math.max(t0, t0 + t - from),
   };
-  const v = play(audioCtx, live.bus, { ...c, t1: to }, s, from, w);
+  const v = play(ctx, getLive().bus, { ...c, t1: to }, s, from, w);
   if (!v) return;
   v.gain.gain.setTargetAtTime(0, w.ctxAt(to) - 0.08, 0.02);
   auditioning.push(v);
+  trackPreview(v.srcs);
 };
 const groups = (l: Lanes): Record<string, LaneGroup> => {
   const lib = new Map(source!.library().map((x) => [x.name, x]));
@@ -488,18 +555,19 @@ export const playSlice = async (t: number, len: number) => {
   const mine = ++skims,
     mix = await mixBuffer();
   if (mine !== skims) return;
-  const t0 = audioCtx.currentTime + 0.01,
+  const { ctx, master } = getAudio(),
+    t0 = ctx.currentTime + 0.01,
     end = t0 + len,
-    out = audioCtx.createGain(),
+    out = ctx.createGain(),
     srcs: AudioScheduledSourceNode[] = [];
   endSkim(t0);
   out.gain.setValueAtTime(0, t0);
   out.gain.linearRampToValueAtTime(1, t0 + 0.004);
   out.gain.setValueAtTime(1, end - 0.012);
   out.gain.linearRampToValueAtTime(0, end);
-  out.connect(on ? live.bus : master);
+  out.connect(on ? getLive().bus : master);
   if (mix && !get().solo.length && t < mix.duration) {
-    const s = audioCtx.createBufferSource();
+    const s = ctx.createBufferSource();
     s.buffer = mix;
     s.connect(out);
     s.start(t0, t);
@@ -519,25 +587,26 @@ export const playSlice = async (t: number, len: number) => {
         loadClip(c);
         continue;
       }
-      const v = play(audioCtx, out, c, s, t, w);
+      const v = play(ctx, out, c, s, t, w);
       if (v) srcs.push(...v.srcs);
     }
   }
   for (const s of srcs) s.stop(end); // the last stop called is the one kept
   skim = { out, srcs };
+  trackPreview(srcs);
 };
 
 // ---------- On and off, from the server's word (GET /api/sound live)
 export const setLive = (live_: boolean, src: Source) => {
   source = src;
-  // Through the page's own graph either way, so the meter hears the mix (meter.ts)
-  if (!routed) {
-    routed = audioCtx.createMediaElementSource(S.el.audio);
-    routed.connect(fromMix);
+  wantLive = live_;
+  if (!unsubAudio) {
+    unsubAudio = onAudioReady(() => {
+      ensureRouting();
+    });
+  } else if (hasAudio()) {
+    ensureRouting();
   }
-  // The mix goes through the master stage only while the lanes are summed with it; otherwise it already went through mix.py's
-  fromMix.disconnect();
-  fromMix.connect(live_ ? live.bus : master);
   if (live_ !== on) {
     on = live_;
     if (!on) {

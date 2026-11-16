@@ -12,9 +12,19 @@ import { SMALL_SOUND } from "../core/device";
 import { getFile, postJson } from "../core/net";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
-import { get, say, set } from "../core/store";
+import { get, invalidatePictures, say, set } from "../core/store";
 import { FPS } from "../core/time";
-import { addPlayer, audioCtx, master, restart, track, type Window } from "../sound/clock";
+import { filmFeatures } from "../picture/frame";
+import {
+  addPlayer,
+  getAudio,
+  getAudioCtx,
+  hasAudio,
+  restart,
+  resumeAudio,
+  track,
+  type Window,
+} from "../sound/clock";
 import { type ChipView, type GroupView } from "./slice";
 
 interface SoundOption {
@@ -96,7 +106,9 @@ export const rangesOf = (name: string): [number, number][] => {
 const loadOption = (o: SoundOption) =>
   o.files
     ? (o.loading ??= Promise.all(
-        o.files.map(async (f) => audioCtx.decodeAudioData(await (await getFile(f)).arrayBuffer())),
+        o.files.map(async (f) =>
+          getAudioCtx().decodeAudioData(await (await getFile(f)).arrayBuffer()),
+        ),
       ).then((b) => {
         o.buffers = b;
       }))
@@ -109,8 +121,9 @@ const playHit = (name: string, cue: Cue, when: number, speed: number) => {
     loadOption(o);
     return;
   }
-  const src = audioCtx.createBufferSource(),
-    g = audioCtx.createGain();
+  const { ctx, master } = getAudio(),
+    src = ctx.createBufferSource(),
+    g = ctx.createGain();
   src.buffer = buf;
   src.playbackRate.value = (o.plain ? 1 : cue.rate) * speed;
   g.gain.value = (o.level ?? 1) * (o.scale ?? 1) * (o.plain ? 1 : cue.gain) * pickOf(name).gain;
@@ -122,10 +135,9 @@ const playHit = (name: string, cue: Cue, when: number, speed: number) => {
     n: (window.__hits?.n ?? 0) + 1,
     set: o.id,
     at: cue.at,
-    late: +(
-      cue.at -
-      (audio.currentTime + (when - audioCtx.currentTime) * audio.playbackRate)
-    ).toFixed(4),
+    late: +(cue.at - (audio.currentTime + (when - ctx.currentTime) * audio.playbackRate)).toFixed(
+      4,
+    ),
   };
 };
 // A stem is mixed at the film's level already; offset is seconds into it. With a length it is a preview, faded out so it doesn't click
@@ -137,8 +149,9 @@ const playStem = (name: string, when: number, offset: number, speed: number, len
     loadOption(o);
     return null;
   }
-  const src = audioCtx.createBufferSource(),
-    g = audioCtx.createGain(),
+  const { ctx, master } = getAudio(),
+    src = ctx.createBufferSource(),
+    g = ctx.createGain(),
     v = pickOf(name).gain;
   src.buffer = buf;
   src.playbackRate.value = speed;
@@ -155,12 +168,17 @@ const playStem = (name: string, when: number, offset: number, speed: number, len
   return src;
 };
 const soundFiles: Record<string, { buf: AudioBuffer; scale: number }> = {};
+let soundsJob: Promise<void> | null = null;
+export const ensureBeatSounds = () => (soundsJob ??= loadSounds());
 export const loadSounds = async () => {
   const names = new Set(Object.values(EDIT.beats).flatMap((b) => b.sounds.map((s) => s[1])));
+  if (!names.size) return;
+  const ctx = getAudioCtx();
   await Promise.all(
     [...names].map(async (n) => {
+      if (soundFiles[n]) return;
       const small = SMALL_SOUND ? await getFile(`/lite/agent/sfx2/${n}.webm`) : null;
-      const buf = await audioCtx.decodeAudioData(
+      const buf = await ctx.decodeAudioData(
         await (small?.ok ? small : await getFile(`/agent/sfx2/${n}.wav`)).arrayBuffer(),
       );
       let peak = 1e-6;
@@ -171,9 +189,13 @@ export const loadSounds = async () => {
 };
 const playSound = (name: string, v: number, when: number, speed: number) => {
   const f = soundFiles[name];
-  if (!f) return;
-  const src = audioCtx.createBufferSource(),
-    g = audioCtx.createGain();
+  if (!f) {
+    void ensureBeatSounds();
+    return;
+  }
+  const { ctx, master } = getAudio(),
+    src = ctx.createBufferSource(),
+    g = ctx.createGain();
   src.buffer = f.buf;
   src.playbackRate.value = speed;
   g.gain.value = v * f.scale;
@@ -238,13 +260,17 @@ const SOON = 2,
 let chipKey = "";
 export const followChips = () => {
   const { tryOn } = get();
-  const near: ChipView[] = !tryOn
-    ? []
-    : Object.keys(trials).flatMap((name) => {
-        const r = rangesOf(name).find(([a, b]) => b >= S.t - LATE && a <= S.t + SOON);
-        return r ? [{ name, range: r }] : [];
-      });
-  const key = JSON.stringify(near);
+  if (!tryOn) {
+    if (chipKey === "[]") return;
+    chipKey = "[]";
+    set({ chips: [] });
+    return;
+  }
+  const near: ChipView[] = Object.keys(trials).flatMap((name) => {
+    const r = rangesOf(name).find(([a, b]) => b >= S.t - LATE && a <= S.t + SOON);
+    return r ? [{ name, range: r }] : [];
+  });
+  const key = near.length ? JSON.stringify(near) : "[]";
   if (key === chipKey) return;
   chipKey = key;
   set({ chips: near });
@@ -258,15 +284,19 @@ const setPicked = (name: string, change: Partial<Pick>) => {
   picked[name] = { ...pickOf(name), ...change };
   stored.set("picked", JSON.stringify(picked), sessionStorage);
   const g = trials[name];
-  if (g.kind === "picture") g.variant!.set(pickOf(name).set);
-  else restart();
+  if (g.kind === "picture") {
+    g.variant!.set(pickOf(name).set);
+    S.finalAt = -1;
+    S.dirty = true;
+    invalidatePictures();
+  } else restart();
   publish();
 };
 export const choose = (name: string, i: number) => {
   const g = trials[name],
     o = g?.options[i];
   if (!o) return;
-  audioCtx.resume();
+  resumeAudio();
   setPicked(name, { set: o.id });
   say(o.off ? `${g.title}: off` : `${g.title}: ${letter(i)} ${o.title}`);
   if (g.kind === "picture" || o.off) return;
@@ -277,13 +307,14 @@ export const choose = (name: string, i: number) => {
   // Paused: still say what it sounds like
   loadOption(o).then(() => {
     if (S.playing) return;
+    const ctx = getAudioCtx();
     if (g.cues?.length)
-      playHit(name, g.cues[Math.floor(Math.random() * g.cues.length)], audioCtx.currentTime, 1);
+      playHit(name, g.cues[Math.floor(Math.random() * g.cues.length)], ctx.currentTime, 1);
     else if (g.kind === "stem") {
       const len = Math.min(2.5, g.to! - g.from!);
       playStem(
         name,
-        audioCtx.currentTime,
+        ctx.currentTime,
         Math.min(Math.max(0, S.t - g.from!), g.to! - g.from! - len),
         1,
         len,
@@ -323,10 +354,16 @@ const merge = () => {
   trials = { ...fromFiles, ...lane };
   publish();
 };
-export const loadTrials = async () => {
-  const [r, c] = await Promise.all([getFile("/api/trials.json"), getFile("/api/choices.json")]);
-  chosen = c.ok ? await c.json() : {};
-  const sounds: Record<string, Group> = r.ok ? await r.json() : {};
+export const warmTrialAudio = () =>
+  Promise.all(Object.keys(trials).map((name) => loadOption(optionOf(name))));
+export const loadTrials = async (initial = false) => {
+  const has = filmFeatures();
+  const [r, c] = await Promise.all([
+    !initial || has.trials ? getFile("/api/trials.json") : Promise.resolve(null),
+    !initial || has.choices ? getFile("/api/choices.json") : Promise.resolve(null),
+  ]);
+  chosen = c?.ok ? await c.json() : {};
+  const sounds: Record<string, Group> = r?.ok ? await r.json() : {};
   const looks: Record<string, Group> = Object.fromEntries(
     (S.render?.variants ?? []).map((v) => [
       v.id,
@@ -345,7 +382,7 @@ export const loadTrials = async () => {
   merge();
   restart();
   for (const name in looks) looks[name].variant!.set(pickOf(name).set);
-  await Promise.all(Object.keys(trials).map((name) => loadOption(optionOf(name))));
+  if (S.playing || hasAudio()) await warmTrialAudio();
 };
 // The live mixer's groups, whenever the lanes change: a pick already made stays, a group whose sound left the lanes goes
 export const setLaneGroups = (groups: Record<string, LaneGroup>) => {

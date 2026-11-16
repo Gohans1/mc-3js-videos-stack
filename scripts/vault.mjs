@@ -1,14 +1,17 @@
+import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
-  readlinkSync,
+  renameSync,
   statSync,
-  symlinkSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -28,15 +31,12 @@ export function checkVault() {
     throw new Error(
       `Local vault must be a real directory: ${LOCAL}. Preserve its light assets before replacing the old link.`,
     );
-  for (const name of config.external ?? [])
-    if (!statSync(resolve(EXTERNAL, name), { throwIfNoEntry: false })?.isDirectory())
-      throw new Error(
-        `Missing external vault/${name}: ${EXTERNAL}. Restore it there or set MC_VAULT_EXTERNAL; then bun run link.`,
-      );
+  for (const name of config.requiredDirectories ?? [])
+    if (!lstatSync(resolve(LOCAL, name), { throwIfNoEntry: false })?.isDirectory())
+      throw new Error(`Missing real vault/${name}: ${LOCAL}. Restore it there, then bun run link.`);
   for (const sub of Object.values(config.film_links)) {
-    const external = (config.external ?? []).includes(sub);
-    const target = resolve(external ? EXTERNAL : LOCAL, sub);
-    if (!statSync(target, { throwIfNoEntry: false })?.isDirectory())
+    const target = resolve(LOCAL, sub);
+    if (!lstatSync(target, { throwIfNoEntry: false })?.isDirectory())
       throw new Error(
         `Missing asset directory: ${target}. Run bun run setup:vault, then bun run link.`,
       );
@@ -48,28 +48,67 @@ export function checkVault() {
       );
 }
 
-export function linkDirectory(path, target) {
+export function copyDirectory(path, target) {
   path = resolve(path);
   target = resolve(target);
   if (path === target) return;
   if (!existsSync(target)) throw new Error(`Missing asset directory: ${target}`);
   const current = lstatSync(path, { throwIfNoEntry: false });
-  if (current) {
-    if (!current.isSymbolicLink())
-      throw new Error(
-        `Refusing to replace real files at ${path}; move them deliberately before linking.`,
-      );
-    const old = resolve(dirname(path), readlinkSync(path));
-    if (
-      (process.platform === "win32"
-        ? old.toLowerCase() === target.toLowerCase()
-        : old === target) &&
-      existsSync(path)
-    )
-      return;
-    unlinkSync(path);
+  const linked = current?.isSymbolicLink();
+  const marker = join(path, ".vault-copy.json");
+  if (
+    current &&
+    !linked &&
+    (!current.isDirectory() || (!existsSync(marker) && readdirSync(path).length))
+  )
+    throw new Error(
+      `Refusing to replace real files at ${path}; preserve them before preparing asset copies.`,
+    );
+  const previous = !linked && existsSync(marker) ? JSON.parse(readFileSync(marker, "utf8")) : {};
+  const hash = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
+  const files = { ...previous };
+  const pending = [];
+  const walk = (sub = "") => {
+    for (const entry of readdirSync(join(target, sub), { withFileTypes: true })) {
+      if (entry.name === ".vault-copy.json") continue;
+      const rel = join(sub, entry.name);
+      const source = join(target, rel);
+      if (lstatSync(source).isSymbolicLink())
+        throw new Error(`Asset source must be a real file or directory: ${source}`);
+      if (entry.isDirectory()) {
+        const dest = !linked && lstatSync(join(path, rel), { throwIfNoEntry: false });
+        if (dest && !dest.isDirectory())
+          throw new Error(`Asset directory conflicts with ${join(path, rel)}`);
+        walk(rel);
+        continue;
+      }
+      const dest = join(path, rel);
+      files[rel] = hash(source);
+      const old = !linked && lstatSync(dest, { throwIfNoEntry: false });
+      if (old) {
+        if (!old.isFile()) throw new Error(`Asset copy conflicts with ${dest}`);
+        const actual = hash(dest);
+        if (actual === files[rel]) continue;
+        if (actual !== previous[rel])
+          throw new Error(`Modified film asset: ${dest}. Preserve it before refreshing.`);
+      }
+      pending.push(rel);
+    }
+  };
+  walk();
+  if (linked) unlinkSync(path);
+  mkdirSync(path, { recursive: true });
+  if (!existsSync(marker)) writeFileSync(marker, JSON.stringify(files));
+  for (const rel of pending) {
+    const dest = join(path, rel);
+    const partial = `${dest}.${process.pid}.part`;
+    mkdirSync(dirname(dest), { recursive: true });
+    copyFileSync(join(target, rel), partial);
+    if (hash(partial) !== files[rel]) throw new Error(`Asset copy verification failed: ${partial}`);
+    renameSync(partial, dest);
   }
-  mkdirSync(dirname(path), { recursive: true });
-  symlinkSync(target, path, process.platform === "win32" ? "junction" : "dir");
-  console.log(`${path} -> ${target}`);
+  const partial = `${marker}.${process.pid}.part`;
+  writeFileSync(partial, JSON.stringify(files));
+  renameSync(partial, marker);
+  console.log(`${path}: ${pending.length} asset file(s) copied`);
 }

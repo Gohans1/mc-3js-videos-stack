@@ -132,6 +132,7 @@ const dialogTitleVariants = cva("", {
   variants: {
     variant: {
       default: "",
+      reading: "text-xl outline-none",
       compact: "text-xs font-normal",
       workbench: "text-base font-semibold tracking-tight",
     },
@@ -157,7 +158,7 @@ function DialogTitle({
 }
 
 const dialogDescriptionVariants = cva("", {
-  variants: { variant: { default: "", compact: "text-xs" } },
+  variants: { variant: { default: "", compact: "text-xs", comfortable: "text-sm leading-normal" } },
   defaultVariants: { variant: "default" },
 });
 function DialogDescription({

@@ -1,16 +1,40 @@
-// The Film tab, view only, laid out as CapCut's libraries and the Audio tab: the kinds down the left (chips across the top when
-// the column is too narrow), the open one on the right. On screen is what the film's code says is in the picture at the playhead
-// (draw.describe); every other kind is what its code adds on top of the studio's libraries, each with the seconds it is used at
-import { SHOTS_OUT } from "film/scene";
-import { useState } from "react";
+import {
+  ArrowRightLeft,
+  Box,
+  CircleDot,
+  ClipboardCheck,
+  Folder,
+  GitCompare,
+  Layers,
+  LockKeyhole,
+  type LucideIcon,
+  Monitor,
+  Move,
+  Music2,
+  Shapes,
+  SlidersHorizontal,
+  Sparkles,
+  TriangleAlert,
+  Type,
+} from "lucide-react";
+import { useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import { keys as camKeys } from "../camera/cam";
 import { layerItems } from "../camera/layers";
 import { shotsDoc } from "../camera/shots";
-import { ChipGroup, NavItem } from "../components/inspector";
+import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { clockText } from "../core/time";
@@ -24,22 +48,35 @@ import { otherKeys, type OwnField, type OwnInput, type OwnItem, ownWork } from "
 
 type Rec = Record<string, unknown>;
 const NOW = "now";
-// What each kind holds, in a line, so the creator needn't know the film's code to read the list
 const ABOUT: Record<string, string> = {
-  [NOW]: "What the film's code says is in the picture at the playhead.",
-  audio: "Sound files this film brought in itself, playing ones first.",
-  text: "Text animations and eases the film's code made.",
-  stickers: "Stickers the film's code draws, and their animations.",
-  effects: "Speed-ramp effects the film's code made.",
-  transitions: "Transitions the film's code made.",
-  animation: "Shot animations and camera eases the film's code made.",
-  "3d": "What the film's code builds in 3D: objects and materials.",
-  fields: "Fields of its own on the timeline's rows, read only by the film's code.",
-  choices: "Versions to compare: the A/B chips over the picture switch them.",
-  checks: "Checks a draft render can run on the picture.",
-  other: "Anything else the film's code hands the studio.",
+  [NOW]: "Scene details at the playhead.",
+  audio: "Audio files added for this film.",
+  text: "Custom text animations and easing.",
+  stickers: "Custom stickers, shapes, and their animations.",
+  effects: "Speed-ramp effects added for this film.",
+  transitions: "Transitions created for this film.",
+  animation: "Custom shot animations and camera easing.",
+  "3d": "Objects and materials built for this film.",
+  fields: "Extra properties used by this film.",
+  choices: "Versions available to compare in the preview.",
+  checks: "Checks available for draft renders.",
+  other: "Additional data provided by this film.",
 };
-const aboutOf = (id: string) => ABOUT[id] ?? "A kind of its own the film's code made up.";
+const aboutOf = (id: string) => ABOUT[id] ?? "Custom items provided by this film.";
+const KIND_ICONS: Record<string, LucideIcon> = {
+  [NOW]: Monitor,
+  audio: Music2,
+  text: Type,
+  stickers: Shapes,
+  effects: Sparkles,
+  transitions: ArrowRightLeft,
+  animation: Move,
+  "3d": Box,
+  fields: SlidersHorizontal,
+  choices: GitCompare,
+  checks: ClipboardCheck,
+  other: Layers,
+};
 
 const filmWork = () => {
   const r = S.render;
@@ -92,32 +129,60 @@ const filmWork = () => {
 function OnScreen() {
   useFrame();
   const sections = S.render?.describe?.(S.t) ?? [];
+  if (sections.length === 0)
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Monitor aria-hidden />
+          </EmptyMedia>
+          <EmptyTitle>No scene details at this time</EmptyTitle>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Move the playhead to another moment. Details appear when the film provides them.
+          </p>
+        </EmptyHeader>
+      </Empty>
+    );
   return (
-    <dl className="flex flex-col gap-3">
-      {sections.map((s, i) => (
-        <div key={i} className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground text-xs font-semibold tracking-wide">{s.head}</dt>
-          {s.lines.map((l, j) => (
-            <dd key={j} className="text-ui text-foreground/90 break-words">
-              {l.fresh && <span className="text-primary mr-1.5 text-xs font-semibold">New </span>}
-              {l.text}
-            </dd>
-          ))}
-        </div>
-      ))}
-    </dl>
+    <div className="border-hairline-strong bg-card flex flex-col gap-5 rounded-lg border p-4">
+      <p className="text-primary-text text-ui inline-flex items-center gap-2 font-mono tabular-nums">
+        <CircleDot aria-hidden className="size-4" />
+        Playhead {clockText(S.t)}
+      </p>
+      <dl className="flex flex-col gap-5">
+        {sections.map((s, i) => (
+          <div key={i} className="flex flex-col gap-1.5">
+            <dt className="text-primary-text text-sm font-semibold">{s.head}</dt>
+            {s.lines.map((l, j) => (
+              <dd key={j} className="text-sm leading-relaxed wrap-anywhere">
+                {l.fresh && (
+                  <span className="text-primary-text text-ui me-2 font-semibold">New</span>
+                )}
+                {l.text}
+              </dd>
+            ))}
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
-// bare: the item's only field under a stand-in name ("value", "values", "check"), so only the value shows
 function Field({ f, bare }: { f: OwnField; bare: boolean }) {
   const [code, setCode] = useState<string | null>(null);
-  const name = bare ? "sr-only" : "text-muted-foreground w-24 flex-none font-mono break-all";
+  const name = bare ? "sr-only" : "text-muted-foreground text-ui font-mono wrap-anywhere";
   if (!f.code)
     return (
-      <div className="flex gap-2">
-        <dt className={cn(name, "text-xs")}>{f.key}</dt>
-        <dd className="min-w-0 text-xs break-words">{f.text}</dd>
+      <div
+        className={cn(
+          "grid min-w-0 gap-x-4 gap-y-1",
+          !bare && "@min-[40rem]/film:grid-cols-[minmax(0,8rem)_minmax(0,1fr)]",
+        )}
+      >
+        <dt className={name}>{f.key}</dt>
+        <dd className="min-w-0 text-sm leading-relaxed wrap-anywhere">
+          <bdi>{f.text}</bdi>
+        </dd>
       </div>
     );
   const write = f.code;
@@ -125,21 +190,20 @@ function Field({ f, bare }: { f: OwnField; bare: boolean }) {
     <div className="flex flex-col">
       <dt className="sr-only">{f.key}</dt>
       <dd>
-        {/* Written out on opening, once: an engine object the film hands over can be megabytes */}
+        {/* Serialize only while open: engine objects can be megabytes. */}
         <details onToggle={(e) => setCode(e.currentTarget.open ? write() : null)}>
-          <summary className="focus-visible:ring-ring flex cursor-pointer gap-2 rounded-sm text-xs outline-none focus-visible:ring-2">
-            {!bare && (
-              <span aria-hidden className={name}>
-                {f.key}
-              </span>
-            )}
-            <span className="text-primary">{f.text}</span>
+          <summary className="text-primary-text focus-visible:ring-ring cursor-pointer rounded-sm py-1 text-sm leading-relaxed wrap-anywhere outline-none focus-visible:ring-2">
+            <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 align-top">
+              {!bare && <span className={name}>{f.key}</span>}
+              <span>{f.text}</span>
+            </span>
           </summary>
           {code !== null && (
-            // Focusable so a keyboard can scroll a long shader
             <pre
               tabIndex={0}
-              className="bg-raised-2 focus-visible:ring-ring text-tag mt-1.5 max-h-60 overflow-auto overscroll-contain rounded-md p-2 font-mono leading-relaxed outline-none focus-visible:ring-2"
+              role="region"
+              aria-label={`${f.key} details`}
+              className="bg-raised-2 focus-visible:ring-ring text-ui mt-2 max-h-64 overflow-auto overscroll-contain rounded-md p-3 font-mono leading-relaxed outline-none focus-visible:ring-2"
             >
               {code}
             </pre>
@@ -150,45 +214,65 @@ function Field({ f, bare }: { f: OwnField; bare: boolean }) {
   );
 }
 
-const FEW = 8; // seconds shown before "+N more": a field set on every row would bury the list in buttons
+const FEW = 8;
+
+function UsageTimes({ times }: { times: number[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const timeButton = (t: number) => (
+    <Button
+      key={t}
+      variant="time"
+      size="row"
+      onClick={() => seek(t)}
+      aria-label={`Go to ${clockText(t)}`}
+    >
+      {clockText(t)}
+    </Button>
+  );
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-muted-foreground text-ui">Used at</p>
+      <div className="flex flex-wrap gap-2">{times.slice(0, FEW).map(timeButton)}</div>
+      {times.length > FEW && (
+        <details onToggle={(e) => setExpanded(e.currentTarget.open)}>
+          <summary className="text-primary-text focus-visible:ring-ring w-fit cursor-pointer rounded-sm py-1 text-sm leading-relaxed outline-none focus-visible:ring-2">
+            More timestamps ({times.length - FEW})
+          </summary>
+          {expanded && (
+            <div className="flex flex-wrap gap-2 pt-2">{times.slice(FEW).map(timeButton)}</div>
+          )}
+        </details>
+      )}
+    </div>
+  );
+}
 
 function Item({ x }: { x: OwnItem }) {
-  const [all, setAll] = useState(false);
-  const times = all ? x.used : x.used.slice(0, FEW);
   return (
-    <article className="flex flex-col gap-1.5 py-2.5">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <h3 className="text-ui font-semibold break-words">{x.title}</h3>
+    <article className="border-hairline-strong bg-card flex min-w-0 flex-col gap-3 rounded-lg border p-4">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h3 className="text-base leading-relaxed font-semibold wrap-anywhere">
+          <bdi>{x.title}</bdi>
+        </h3>
         {x.id !== x.title && (
-          <span className="text-muted-foreground font-mono text-xs break-all">{x.id}</span>
+          <span className="text-muted-foreground text-ui font-mono wrap-anywhere">
+            <bdi>{x.id}</bdi>
+          </span>
         )}
-        {x.part && <span className="text-muted-foreground text-xs">{x.part}</span>}
-        {x.changes && <span className="text-warn text-xs">changes the studio's own</span>}
+        {x.part && <span className="text-muted-foreground text-ui">{x.part}</span>}
       </div>
-      {x.tip && <p className="text-muted-foreground text-xs">{x.tip}</p>}
-      {x.used.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="text-muted-foreground text-xs">Used at</span>
-          {times.map((t) => (
-            <Button
-              key={t}
-              variant="time"
-              size="sm"
-              onClick={() => seek(t)}
-              aria-label={`Go to ${clockText(t)}`}
-            >
-              {clockText(t)}
-            </Button>
-          ))}
-          {x.used.length > FEW && (
-            <Button variant="quiet" size="sm" onClick={() => setAll(!all)}>
-              {all ? "Fewer" : `+${x.used.length - FEW} more`}
-            </Button>
-          )}
-        </div>
+      {x.changes && (
+        <p className="text-warn-text text-ui flex items-start gap-2">
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+          Overrides the studio version
+        </p>
       )}
+      {x.tip && (
+        <p className="text-muted-foreground text-sm leading-relaxed wrap-anywhere">{x.tip}</p>
+      )}
+      {x.used.length > 0 && <UsageTimes times={x.used} />}
       {x.fields.length > 0 && (
-        <dl className="flex flex-col gap-1">
+        <dl className="flex min-w-0 flex-col gap-3">
           {x.fields.map((f) => (
             <Field
               key={f.key}
@@ -203,6 +287,8 @@ function Item({ x }: { x: OwnItem }) {
 }
 
 export function OwnPanel() {
+  const categoryLabelId = useId();
+  const headingId = useId();
   useStudio((s) => s.ready);
   useStudio((s) => s.shotsRev);
   useStudio((s) => s.camRev);
@@ -210,6 +296,7 @@ export function OwnPanel() {
   useStudio((s) => s.soundRev);
   useStudio((s) => s.timingRev);
   useStudio((s) => s.layersRev);
+  useStudio((s) => s.metaRev);
   useStudio((s) => s.groups);
   const pick = useStudio((s) => s.filmKind);
   const groups = filmWork();
@@ -219,68 +306,128 @@ export function OwnPanel() {
   ];
   if (!kinds.length)
     return (
-      <p className="text-muted-foreground px-3 py-3.5 text-xs">
-        This film's code adds nothing of its own: every effect comes from the studio's libraries.
-      </p>
+      <section
+        aria-label="Made by this film"
+        className="flex min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 wrap-anywhere"
+      >
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Folder aria-hidden />
+            </EmptyMedia>
+            <EmptyTitle>No film-specific items</EmptyTitle>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              This film uses the studio libraries. Items created specifically for this film will
+              appear here.
+            </p>
+          </EmptyHeader>
+        </Empty>
+      </section>
     );
   const open = kinds.find((k) => k.id === pick) ?? kinds[0];
   const group = groups.find((g) => g.id === open.id);
   const choose = (id: string) => set({ filmKind: id });
+  const OpenIcon = KIND_ICONS[open.id] ?? Folder;
   return (
     <section
       aria-label="Made by this film"
-      className="@container flex min-h-0 flex-1 overflow-hidden"
+      className="@container/film flex min-h-0 w-full min-w-0 flex-1 overflow-hidden wrap-anywhere"
     >
       <nav
-        aria-label="Kinds"
-        className="border-border flex w-[134px] flex-none flex-col gap-0.5 overflow-y-auto overscroll-contain border-e px-1.5 py-2.5 @max-[320px]:hidden"
+        aria-label="Film categories"
+        className="border-hairline-subtle hidden w-44 flex-none flex-col gap-1 overflow-y-auto overscroll-contain border-e p-2 @min-[40rem]/film:flex"
       >
-        {kinds.map((k) => (
-          <NavItem
-            key={k.id}
-            title={k.title}
-            count={"count" in k ? k.count : undefined}
-            current={k.id === open.id}
-            onClick={() => choose(k.id)}
-          />
-        ))}
+        {kinds.map((k) => {
+          const Icon = KIND_ICONS[k.id] ?? Folder;
+          return (
+            <Button
+              key={k.id}
+              variant="quiet"
+              size="row"
+              className="w-full"
+              aria-pressed={k.id === open.id}
+              onClick={() => choose(k.id)}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Icon aria-hidden data-icon="inline-start" />
+                <span className="min-w-0 wrap-anywhere">{k.title}</span>
+              </span>
+              {"count" in k && (
+                <span className="text-ui shrink-0 font-mono tabular-nums">{k.count}</span>
+              )}
+            </Button>
+          );
+        })}
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex-none px-3 pt-2.5 @min-[320px]:hidden">
-          <ChipGroup
-            scroll
-            label="Kinds"
+        <div className="flex flex-none flex-col gap-2 px-4 pt-4 @min-[40rem]/film:hidden">
+          <p id={categoryLabelId} className="text-muted-foreground text-ui">
+            Category
+          </p>
+          <Select
             value={open.id}
-            onChange={choose}
-            items={kinds.map((k) => ({
-              id: k.id,
-              title: k.title,
-              ...("count" in k ? { count: k.count } : {}),
-            }))}
-          />
+            items={kinds.map((k) => ({ value: k.id, label: k.title }))}
+            onValueChange={(value) => {
+              if (value !== null) choose(value);
+            }}
+          >
+            <SelectTrigger aria-labelledby={categoryLabelId} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="start" finalFocus>
+              <SelectGroup>
+                {kinds.map((k) => (
+                  <SelectItem key={k.id} value={k.id} className="min-w-0">
+                    <span className="min-w-0 wrap-anywhere whitespace-normal">
+                      {k.title}
+                      {"count" in k ? ` (${k.count})` : ""}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex flex-none flex-col gap-0.5 px-3 pt-2.5 pb-1">
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-ui font-semibold">{open.title}</h2>
-            <span
-              className="text-muted-foreground ms-auto text-xs"
-              title="To change something here, write a note"
-            >
-              View only
-            </span>
-          </div>
-          <p className="text-muted-foreground text-xs">{aboutOf(open.id)}</p>
-        </div>
-        <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-1 pb-3">
-          {group ? (
-            <div key={open.id} className="divide-border flex flex-col divide-y">
-              {group.items.map((x) => (
-                <Item key={`${x.part ?? ""}:${x.id}`} x={x} />
-              ))}
+        <div
+          key={open.id}
+          role="region"
+          aria-labelledby={headingId}
+          className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        >
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-2 px-4 pt-4 pb-4">
+            <div className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-1">
+              <div className="flex min-w-0 flex-1 basis-48 items-start gap-3">
+                <OpenIcon aria-hidden className="text-primary-text mt-1 size-5 shrink-0" />
+                <h2 id={headingId} className="min-w-0 flex-1 text-lg leading-normal font-semibold">
+                  {open.title}
+                </h2>
+              </div>
+              {group && (
+                <span
+                  dir="auto"
+                  className="text-muted-foreground text-ui shrink-0 pt-1 tabular-nums"
+                >
+                  {group.items.length} {group.items.length === 1 ? "item" : "items"}
+                </span>
+              )}
             </div>
-          ) : (
-            <OnScreen />
-          )}
+            <p className="text-muted-foreground text-sm leading-relaxed">{aboutOf(open.id)}</p>
+            <p className="text-muted-foreground text-ui flex items-start gap-2 leading-relaxed">
+              <LockKeyhole aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+              View only · Add a note to request changes.
+            </p>
+          </div>
+          <div className="mx-auto w-full max-w-4xl px-4 pb-4">
+            {group ? (
+              <div className="flex flex-col gap-4">
+                {group.items.map((x) => (
+                  <Item key={`${x.part ?? ""}:${x.id}`} x={x} />
+                ))}
+              </div>
+            ) : (
+              <OnScreen />
+            )}
+          </div>
         </div>
       </div>
     </section>

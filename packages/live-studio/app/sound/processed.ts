@@ -2,7 +2,7 @@ import type { TimingSegment } from "../../src/timing.mjs";
 import { SMALL_SOUND } from "../core/device";
 import { S } from "../core/state";
 import { say } from "../core/store";
-import { audioCtx } from "./clock";
+import { getAudioCtx } from "./clock";
 import type { AudioProcessing } from "./retime";
 import type { Peaks } from "./sound";
 
@@ -98,7 +98,7 @@ export const loadProcessed = (spec: ProcessSpec): Promise<Result | null> => {
         signal: AbortSignal.timeout(255000),
       });
       if (!r.ok) throw new Error((await r.json()).error ?? "Could not process this sound");
-      const buf = await audioCtx.decodeAudioData(await r.arrayBuffer()),
+      const buf = await getAudioCtx().decodeAudioData(await r.arrayBuffer()),
         hop = Math.max(1, Math.round(buf.sampleRate * 0.01));
       const peaks: Peaks = {
         step: hop / buf.sampleRate,

@@ -30,10 +30,12 @@ function ToggleGroup({
   children,
   ...props
 }: ToggleGroupPrimitive.Props &
-  VariantProps<typeof toggleVariants> & {
+  Omit<VariantProps<typeof toggleVariants>, "variant"> & {
+    variant?: VariantProps<typeof toggleVariants>["variant"] | "strip";
     spacing?: number;
     orientation?: "horizontal" | "vertical";
   }) {
+  const itemVariant = variant === "strip" ? undefined : variant;
   return (
     <ToggleGroupPrimitive
       data-slot="toggle-group"
@@ -43,12 +45,12 @@ function ToggleGroup({
       data-orientation={orientation}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
-        "group/toggle-group data-[variant=segment]:bg-background flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-md data-vertical:flex-col data-vertical:items-stretch data-[size=sm]:rounded-[min(var(--radius-md),8px)] data-[variant=segment]:rounded-xl data-[variant=segment]:p-0.5",
+        "group/toggle-group data-[variant=segment]:bg-backdrop/75 data-[variant=segment]:border-border/55 data-[variant=strip]:bg-backdrop/90 data-[variant=strip]:border-hairline flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-md data-vertical:flex-col data-vertical:items-stretch data-[size=sm]:rounded-[min(var(--radius-md),8px)] data-[variant=segment]:rounded-lg data-[variant=segment]:border data-[variant=segment]:p-0.5 data-[variant=strip]:w-full data-[variant=strip]:flex-wrap data-[variant=strip]:gap-0.5 data-[variant=strip]:rounded-lg data-[variant=strip]:border data-[variant=strip]:p-0.5 data-[variant=strip]:@[440px]:flex-nowrap",
         className,
       )}
       {...props}
     >
-      <ToggleGroupContext.Provider value={{ variant, size, tone, spacing, orientation }}>
+      <ToggleGroupContext.Provider value={{ variant: itemVariant, size, tone, spacing, orientation }}>
         {children}
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>
@@ -73,7 +75,7 @@ function ToggleGroupItem({
       data-tone={context.tone || tone}
       data-spacing={context.spacing}
       className={cn(
-        "shrink-0 group-data-[spacing=0]/toggle-group:rounded-none group-data-[spacing=0]/toggle-group:px-2 focus:z-10 focus-visible:z-10 group-data-[spacing=0]/toggle-group:has-data-[icon=inline-end]:pr-1.5 group-data-[spacing=0]/toggle-group:has-data-[icon=inline-start]:pl-1.5 group-data-horizontal/toggle-group:data-[spacing=0]:first:rounded-l-md group-data-vertical/toggle-group:data-[spacing=0]:first:rounded-t-md group-data-horizontal/toggle-group:data-[spacing=0]:last:rounded-r-md group-data-vertical/toggle-group:data-[spacing=0]:last:rounded-b-md group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-l-0 group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-l group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t",
+        "shrink-0 group-data-[spacing=0]/toggle-group:rounded-none group-data-[spacing=0]/toggle-group:px-2 focus:z-10 focus-visible:z-10 group-data-[spacing=0]/toggle-group:has-data-[icon=inline-end]:pe-1.5 group-data-[spacing=0]/toggle-group:has-data-[icon=inline-start]:ps-1.5 group-data-horizontal/toggle-group:data-[spacing=0]:first:rounded-s-md group-data-vertical/toggle-group:data-[spacing=0]:first:rounded-t-md group-data-horizontal/toggle-group:data-[spacing=0]:last:rounded-e-md group-data-vertical/toggle-group:data-[spacing=0]:last:rounded-b-md group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-s-0 group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-s group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t",
         toggleVariants({
           variant: context.variant || variant,
           size: context.size || size,

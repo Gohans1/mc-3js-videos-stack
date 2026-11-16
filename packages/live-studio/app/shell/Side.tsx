@@ -1,10 +1,3 @@
-// The panels beside the picture, laid out as CapCut's. On a wide screen the libraries are on the left (the note being written,
-// then a toolbar of icons over their names: Notes, Audio, Text, Objects) and the details on the right, whose text tabs are those
-// of what is selected, as CapCut's are: a clip, Audio; a text or shape, Text | Animation; an object, Object; keys, Keyframes; nothing (the camera, CapCut's main
-// track), Camera, Speed and Animation for the shot or key picked, or on the playhead. Narrower, one column on the right (under
-// the picture on an upright phone) holds both: the note being written, then a tab each for the notes, the sound, the objects,
-// the text, the camera (Camera | Speed | Animation under it) and the keys, each with its details above its library.
-import { Tabs } from "@base-ui/react/tabs";
 import {
   Blend,
   BookOpenText,
@@ -13,44 +6,60 @@ import {
   type LucideIcon,
   MessageSquareText,
   Music2,
+  Network,
   SlidersHorizontal,
+  Terminal,
   Type,
 } from "lucide-react";
-import { Fragment, useSyncExternalStore } from "react";
+import { Fragment, lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
+// The panels beside the picture, laid out as CapCut's. On a wide screen the libraries are on the left (the note being written,
+// then a toolbar of icons over their names: Notes, Audio, Text, Objects) and the details on the right, whose text tabs are those
+// of what is selected, as CapCut's are: a clip, Audio; a text or shape, Text | Animation; an object, Object; keys, Keyframes; nothing (the camera, CapCut's main
+// track), Camera, Speed and Animation for the shot or key picked, or on the playhead. Narrower, one column on the right (under
+// the picture on an upright phone) holds both: the note being written, then a tab each for the notes, the sound, the objects,
+// the text, the camera (Camera | Speed | Animation under it) and the keys, each with its details above its library.
+import { Tabs } from "@/components/Tabs";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import { noteState } from "../../src/note-state.mjs";
 import { useActivity } from "../activity/activity";
-import { AdjustLibrary } from "../camera/AdjustLibrary";
-import { AdjustPanel } from "../camera/AdjustPanel";
-import { AnimPanel } from "../camera/AnimPanel";
 import { CamPanel } from "../camera/CamPanel";
-import { TransitionLibrary } from "../camera/TransitionLibrary";
-import { TransitionPanel } from "../camera/TransitionPanel";
+import { CliPanel } from "../cli/CliPanel";
+import { stopCliHotkeyPropagation, stopCliTabHotkeyPropagation } from "../cli/model";
 import { Segmented } from "../components/inspector";
 import { TabStage } from "../components/Motion";
 import { set, studio, type StudioState, useStudio } from "../core/store";
-import { KeyPanel } from "../keys/KeyPanel";
-import { LessonsPanel } from "../lessons/LessonsPanel";
 import { NoteList } from "../notes/NoteList";
-import { ObjectsPanel } from "../objects/ObjectsPanel";
-import { OwnPanel } from "../own/OwnPanel";
-import { SoundPanel } from "../sound/SoundPanel";
-import { TextLibrary } from "../text/TextLibrary";
-import { TextPanel } from "../text/TextPanel";
-import { FilmSpeedPanel as SpeedPanel } from "../timeline/FilmSpeedPanel";
+
+const loadPanels = () => import("./LazyPanels");
+const AdjustLibrary = lazy(() => loadPanels().then((m) => ({ default: m.AdjustLibrary })));
+const AdjustPanel = lazy(() => loadPanels().then((m) => ({ default: m.AdjustPanel })));
+const AnimPanel = lazy(() => loadPanels().then((m) => ({ default: m.AnimPanel })));
+const TransitionLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TransitionLibrary })));
+const TransitionPanel = lazy(() => loadPanels().then((m) => ({ default: m.TransitionPanel })));
+const KeyPanel = lazy(() => loadPanels().then((m) => ({ default: m.KeyPanel })));
+const LessonsPanel = lazy(() => loadPanels().then((m) => ({ default: m.LessonsPanel })));
+const ObjectsPanel = lazy(() => loadPanels().then((m) => ({ default: m.ObjectsPanel })));
+const OwnPanel = lazy(() => loadPanels().then((m) => ({ default: m.OwnPanel })));
+const PortsPanel = lazy(() => loadPanels().then((m) => ({ default: m.PortsPanel })));
+const SoundPanel = lazy(() => loadPanels().then((m) => ({ default: m.SoundPanel })));
+const TextLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TextLibrary })));
+const TextPanel = lazy(() => loadPanels().then((m) => ({ default: m.TextPanel })));
+const SpeedPanel = lazy(() => loadPanels().then((m) => ({ default: m.FilmSpeedPanel })));
 
 type SideTab = StudioState["side"];
 type Lib = StudioState["lib"];
+type CoreTab = "notes" | "lessons" | "film" | "ports" | "cli";
 
 // CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
 const tab =
-  "relative flex h-10 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-foreground/65 outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary motion-safe:active:scale-[0.96] pointer-coarse:h-11";
+  "relative flex h-10 upright:h-9 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-foreground/65 outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] pointer-coarse:h-11";
 const coreTab =
-  "px-2.5 upright:px-2 not-data-active:hover:text-foreground data-active:bg-primary/12 data-active:text-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary";
-const isCore = (id: string) => id === "notes" || id === "lessons" || id === "film";
+  "px-2.5 upright:px-2 not-data-active:hover:text-foreground data-active:bg-tint data-active:text-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary-text";
+const isCore = (id: string): id is CoreTab =>
+  id === "notes" || id === "lessons" || id === "film" || id === "ports" || id === "cli";
 const tabs =
   "relative flex flex-none items-center gap-4 overflow-x-auto bg-card px-3 upright:gap-2 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
@@ -78,12 +87,12 @@ export const useWide = () =>
     },
     () => WIDE.matches,
   );
-// Switching between wide (Library + Details) and narrow (Side) keeps core Notes/Lessons tabs aligned
+// Switching between wide (Library + Details) and narrow (Side) keeps core tabs aligned
 studio.subscribe((s, was) => {
   if (s.side !== was.side) {
-    if ((s.side === "notes" || s.side === "lessons") && s.lib !== s.side) set({ lib: s.side });
+    if (isCore(s.side) && s.lib !== s.side) set({ lib: s.side });
   } else if (s.lib !== was.lib) {
-    if ((s.lib === "notes" || s.lib === "lessons") && s.side !== s.lib) set({ side: s.lib });
+    if (isCore(s.lib) && s.side !== s.lib) set({ side: s.lib });
   }
 });
 
@@ -153,7 +162,7 @@ function NotesCount({ open, check, asking }: { open: number; check: number; aski
       ? [
           {
             key: "open",
-            textCls: "text-primary",
+            textCls: "text-primary-text",
             dotCls: "bg-primary",
             count: open,
             label: `${open} to fix`,
@@ -164,12 +173,12 @@ function NotesCount({ open, check, asking }: { open: number; check: number; aski
   return (
     <span
       title={parts.map((p) => p.label).join(" · ")}
-      className="bg-backdrop/90 text-tag inline-flex items-center gap-1 rounded-full border border-white/[0.12] px-1.5 py-0.5 font-mono leading-none tabular-nums"
+      className="bg-backdrop/90 text-tag border-hairline inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono leading-none tabular-nums"
     >
       {parts.map((p, i) => (
         <Fragment key={p.key}>
           {i > 0 && (
-            <span aria-hidden className="text-white/25">
+            <span aria-hidden className="text-muted-foreground/50">
               /
             </span>
           )}
@@ -196,6 +205,8 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "notes", title: "Notes", icon: MessageSquareText },
   { id: "lessons", title: "Lessons", icon: BookOpenText },
   { id: "film", title: "Film", icon: Clapperboard },
+  { id: "ports", title: "Ports", icon: Network },
+  { id: "cli", title: "CLI", icon: Terminal },
   { id: "sound", title: "Audio", icon: Music2 },
   { id: "text", title: "Text", icon: Type },
   { id: "objects", title: "Objects", icon: Boxes },
@@ -203,32 +214,29 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
 ];
 const tool =
-  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary motion-safe:active:scale-[0.96] [&_svg]:size-5";
+  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] [&_svg]:size-5";
 const coreTool =
-  "data-active:bg-primary/12 data-active:text-foreground data-active:[&_svg]:text-primary";
+  "data-active:bg-tint data-active:text-foreground data-active:[&_svg]:text-primary-text";
 export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null } = {}) {
   const { sound, text, cam, placed, open, check, asking } = useParts(),
     lib = useStudio((s) => s.lib),
     aiTab = useAiTabs();
   const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
-  const shown = LIBS.filter(
-    (l) =>
-      l.id === "notes" ||
-      l.id === "film" ||
-      l.id === "lessons" ||
-      (l.id === "sound"
-        ? sound
-        : l.id === "text"
-          ? text
-          : l.id === "transition" || l.id === "adjust"
-            ? cam
-            : placed),
-  );
-  const value = shown.some((l) => l.id === lib) ? lib : "notes";
+  const available = (id: Lib) =>
+    isCore(id) ||
+    (id === "sound"
+      ? sound
+      : id === "text"
+        ? text
+        : id === "transition" || id === "adjust"
+          ? cam
+          : placed);
+  const shown = LIBS;
+  const value = available(lib) ? lib : "notes";
   return (
     <aside
       aria-label="Library"
-      className="bg-background col-start-1 row-[1/-1] flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-lib-folded:hidden in-data-review:hidden"
+      className="bg-background col-start-1 row-[1/-1] flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-lib-folded:hidden in-data-review:hidden"
     >
       <Tabs.Root
         value={value}
@@ -239,6 +247,7 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
         <div className="bg-card flex-none">
           <Tabs.List
             aria-label="Libraries"
+            onKeyDown={stopCliTabHotkeyPropagation}
             className="scroll-fade-x relative flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain px-2 pt-1 pb-1"
           >
             <TabUnderline inset />
@@ -246,6 +255,8 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
               <Fragment key={l.id}>
                 <Tabs.Tab
                   value={l.id}
+                  disabled={!available(l.id)}
+                  data-cli-tab={l.id === "cli" || undefined}
                   data-tone={l.id === "notes" ? notesTone : undefined}
                   data-ai-lit={aiTab(l.id, value)}
                   className={cn(tool, "flex-none", isCore(l.id) && coreTool)}
@@ -256,7 +267,7 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
                     {l.id === "notes" && <NotesCount open={open} check={check} asking={asking} />}
                   </span>
                 </Tabs.Tab>
-                {l.id === "film" && shown.some((x) => !isCore(x.id)) && (
+                {l.id === "cli" && shown.some((x) => !isCore(x.id)) && (
                   <Separator
                     orientation="vertical"
                     className="mx-1 h-7 data-vertical:self-center"
@@ -266,14 +277,18 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
             ))}
           </Tabs.List>
         </div>
-        <Tabs.Panel value={value} className="flex min-h-0 flex-1 flex-col">
+        <Tabs.Panel
+          value={value}
+          onKeyDown={value === "cli" ? stopCliHotkeyPropagation : undefined}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           <TabStage
             activeKey={value}
             order={shown.map((l) => l.id)}
             className="relative flex min-h-0 flex-1 flex-col"
           >
             {value === "notes" ? (
-              <NoteList />
+              <NoteList composeDock />
             ) : value === "sound" && sound ? (
               <SoundPanel part="library" />
             ) : value === "text" && text ? (
@@ -294,6 +309,10 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
               </div>
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "cli" ? (
+              <CliPanel />
+            ) : value === "ports" ? (
+              <PortsPanel />
             ) : (
               <LessonsPanel desktop lockWidthPx={lessonsLockW} dock="start" />
             )}
@@ -345,13 +364,13 @@ function Details() {
   const { sound, text, cam, keys, placed } = useParts(),
     side = useStudio((s) => s.side);
   const has: Record<Group, boolean> = {
+    cam,
+    transition: cam,
+    adjustment: cam,
     sound,
     text,
     objects: placed,
     keys,
-    cam,
-    transition: cam,
-    adjustment: cam,
   };
   const picked = useStudio(groupOf),
     group = has[picked] ? picked : (Object.keys(has) as Group[]).find((g) => has[g])!;
@@ -381,30 +400,32 @@ function Details() {
             order={list.map((x) => x.id)}
             className="flex min-h-0 flex-1 flex-col"
           >
-            {value === "sound" || value === "voiceChanger" || value === "audioSpeed" ? (
-              <SoundPanel
-                part="clip"
-                tab={
-                  value === "voiceChanger" ? "voice" : value === "audioSpeed" ? "speed" : "basic"
-                }
-              />
-            ) : value === "text" || value === "textAnim" ? (
-              <TextPanel part={value} />
-            ) : value === "objects" ? (
-              <ObjectsPanel part="object" />
-            ) : value === "keys" ? (
-              <KeyPanel />
-            ) : value === "transition" ? (
-              <TransitionPanel />
-            ) : value === "adjust" ? (
-              <AdjustPanel />
-            ) : value === "anim" ? (
-              <AnimPanel />
-            ) : value === "speed" ? (
-              <SpeedPanel />
-            ) : (
-              <CamPanel />
-            )}
+            <Suspense fallback={null}>
+              {value === "sound" || value === "voiceChanger" || value === "audioSpeed" ? (
+                <SoundPanel
+                  part="clip"
+                  tab={
+                    value === "voiceChanger" ? "voice" : value === "audioSpeed" ? "speed" : "basic"
+                  }
+                />
+              ) : value === "text" || value === "textAnim" ? (
+                <TextPanel part={value} />
+              ) : value === "objects" ? (
+                <ObjectsPanel part="object" />
+              ) : value === "keys" ? (
+                <KeyPanel />
+              ) : value === "transition" ? (
+                <TransitionPanel />
+              ) : value === "adjust" ? (
+                <AdjustPanel />
+              ) : value === "anim" ? (
+                <AnimPanel />
+              ) : value === "speed" ? (
+                <SpeedPanel />
+              ) : (
+                <CamPanel />
+              )}
+            </Suspense>
           </TabStage>
         </Tabs.Panel>
       </Tabs.Root>
@@ -429,9 +450,11 @@ function AudioTab() {
         order={GROUPS.sound.map((x) => x.id)}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <SoundPanel
-          tab={part === "voiceChanger" ? "voice" : part === "audioSpeed" ? "speed" : "basic"}
-        />
+        <Suspense fallback={null}>
+          <SoundPanel
+            tab={part === "voiceChanger" ? "voice" : part === "audioSpeed" ? "speed" : "basic"}
+          />
+        </Suspense>
       </TabStage>
     </>
   );
@@ -456,11 +479,15 @@ function TextTab() {
         order={GROUPS.text.map((x) => x.id)}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <TextPanel part={part} />
+        <Suspense fallback={null}>
+          <TextPanel part={part} />
+        </Suspense>
       </TabStage>
     </>
   ) : (
-    <TextLibrary />
+    <Suspense fallback={null}>
+      <TextLibrary />
+    </Suspense>
   );
 }
 
@@ -489,15 +516,17 @@ function CameraTab() {
         order={GROUPS.cam.map((x) => x.id)}
         className="flex min-h-0 flex-1 flex-col"
       >
-        {part === "anim" ? (
-          <AnimPanel />
-        ) : part === "speed" ? (
-          <SpeedPanel />
-        ) : part === "adjust" ? (
-          <AdjustPanel library />
-        ) : (
-          <CamPanel />
-        )}
+        <Suspense fallback={null}>
+          {part === "anim" ? (
+            <AnimPanel />
+          ) : part === "speed" ? (
+            <SpeedPanel />
+          ) : part === "adjust" ? (
+            <AdjustPanel library />
+          ) : (
+            <CamPanel />
+          )}
+        </Suspense>
       </TabStage>
     </>
   );
@@ -517,6 +546,22 @@ export function Side({
   const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
   const layer = useStudio((s) => s.layerPicks.length > 0),
     aiTab = useAiTabs();
+  const tabListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (wide) return;
+    const list = tabListRef.current;
+    if (!list) return;
+    const keepSelectedVisible = () => {
+      list
+        .querySelector('[aria-selected="true"]')
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    };
+    keepSelectedVisible();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(keepSelectedVisible);
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [wide, side, sound, text, cam, keys, placed]);
   if (wide) return <Details />;
   const editable = sound || text || cam || keys || placed;
   const raw =
@@ -528,9 +573,7 @@ export function Side({
           ? "sound"
           : side;
   const shown =
-    raw === "notes" ||
-    raw === "film" ||
-    raw === "lessons" ||
+    isCore(raw) ||
     (raw === "sound"
       ? sound
       : raw === "text"
@@ -545,6 +588,8 @@ export function Side({
     "notes",
     "lessons",
     "film",
+    "ports",
+    "cli",
     "sound",
     "text",
     "objects",
@@ -555,7 +600,7 @@ export function Side({
   return (
     <aside
       aria-label="Side panels"
-      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-inspector-active:col-[1/-1] in-data-inspector-active:row-[1/-1] in-data-review:hidden in-data-side-folded:hidden"
+      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-cli-side:row-span-3 in-data-inspector-active:col-[1/-1] in-data-inspector-active:row-[1/-1] in-data-review:hidden in-data-side-folded:hidden in-data-[cli-expanded=library]:hidden"
     >
       <Tabs.Root
         value={value}
@@ -566,7 +611,9 @@ export function Side({
             line under them stays out of the fade, and the padding keeps the focus ring inside what the scroll clips */}
         <div className="bg-card flex-none">
           <Tabs.List
+            ref={tabListRef}
             aria-label="Panels"
+            onKeyDown={stopCliTabHotkeyPropagation}
             className={cn(
               tabs,
               "scroll-fade-x [scrollbar-width:none] overflow-x-auto overscroll-x-contain border-b-0 py-0.5",
@@ -596,48 +643,41 @@ export function Side({
               <Clapperboard aria-hidden />
               Film
             </Tabs.Tab>
+            <Tabs.Tab value="ports" className={cn(tab, coreTab)}>
+              <Network aria-hidden />
+              Ports
+            </Tabs.Tab>
+            <Tabs.Tab value="cli" data-cli-tab className={cn(tab, coreTab)}>
+              <Terminal aria-hidden />
+              CLI
+            </Tabs.Tab>
             {(sound || text || placed || keys || cam) && (
               <Separator orientation="vertical" className="mx-0.5 h-5 data-vertical:self-center" />
             )}
-            {sound && (
-              <Tabs.Tab value="sound" className={tab}>
-                Audio
-              </Tabs.Tab>
-            )}
-            {text && (
-              <Tabs.Tab value="text" className={tab}>
-                Text
-              </Tabs.Tab>
-            )}
-            {placed && (
-              <Tabs.Tab value="objects" className={tab}>
-                Objects
-              </Tabs.Tab>
-            )}
-            {keys && (
-              <Tabs.Tab value="keys" className={tab}>
-                Keyframes
-              </Tabs.Tab>
-            )}
-            {cam && (
-              <Tabs.Tab value="transition" className={tab}>
-                Transitions
-              </Tabs.Tab>
-            )}
-            {cam && (
-              <Tabs.Tab value="cam" className={tab}>
-                {layer ? "Adjustment" : "Camera"}
-              </Tabs.Tab>
-            )}
+            <Tabs.Tab value="sound" disabled={!sound} className={tab}>
+              Audio
+            </Tabs.Tab>
+            <Tabs.Tab value="text" disabled={!text} className={tab}>
+              Text
+            </Tabs.Tab>
+            <Tabs.Tab value="objects" disabled={!placed} className={tab}>
+              Objects
+            </Tabs.Tab>
+            <Tabs.Tab value="keys" disabled={!keys} className={tab}>
+              Keyframes
+            </Tabs.Tab>
+            <Tabs.Tab value="transition" disabled={!cam} className={tab}>
+              Transitions
+            </Tabs.Tab>
+            <Tabs.Tab value="cam" disabled={!cam} className={tab}>
+              {layer ? "Adjustment" : "Camera"}
+            </Tabs.Tab>
           </Tabs.List>
         </div>
         <Tabs.Panel
           value={value}
-          className={
-            value === "notes" || value === "film" || value === "lessons"
-              ? "flex min-h-0 flex-1 flex-col"
-              : panel
-          }
+          onKeyDown={value === "cli" ? stopCliHotkeyPropagation : undefined}
+          className={isCore(value) ? "flex min-h-0 flex-1 flex-col" : panel}
         >
           <TabStage
             activeKey={value}
@@ -645,7 +685,7 @@ export function Side({
             className="relative flex min-h-0 flex-1 flex-col"
           >
             {value === "notes" ? (
-              <NoteList />
+              <NoteList composeDock />
             ) : value === "sound" && sound ? (
               <AudioTab />
             ) : value === "text" && text ? (
@@ -663,6 +703,10 @@ export function Side({
               <KeyPanel />
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "cli" ? (
+              <CliPanel />
+            ) : value === "ports" ? (
+              <PortsPanel />
             ) : (
               <LessonsPanel desktop={desktop} lockWidthPx={lessonsLockW} dock="end" />
             )}

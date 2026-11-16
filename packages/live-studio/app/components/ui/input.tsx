@@ -18,6 +18,7 @@ const inputVariants = cva(
         title: "font-semibold",
       },
       size: {
+        comfortable: "h-9 px-2.5 text-base leading-normal sm:text-sm pointer-coarse:h-11",
         default: "h-8 px-2 pointer-coarse:h-10 pointer-coarse:text-base",
         md: "h-8 px-2.5 text-sm pointer-coarse:h-10 pointer-coarse:text-base",
         tight: "h-8 px-1.5 pointer-coarse:h-10 pointer-coarse:text-base",

@@ -16,11 +16,11 @@ import { dirname, join } from "node:path";
 import { unzipSync } from "fflate";
 
 import { cliArgs } from "../packages/live-studio/src/cli.mjs";
-import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
+import { LOCAL, ROOT } from "./vault.mjs";
 
-const HELP = `Rebuilds <externalRoot>/mc-sound/mc/<category>/*.ogg from vanilla Minecraft and the packs in scripts/mc-sound-packs.json
+const HELP = `Rebuilds vault/mc-sound/mc/<category>/*.ogg from vanilla Minecraft and the packs in scripts/mc-sound-packs.json
 (licence-checked; restricted packs are left out), with SOURCES.json, PEAKS.json and take families (x.ogg, x2.ogg ...).
-From the repo root, with the external vault present (vault.json "externalRoot" or MC_VAULT_EXTERNAL):
+From the repo root, with a real local vault directory:
   bun run setup:mc-sound
 Takes are compared by content, so a renumbered take never keeps an old file. Look a sound up: bun run find <words>.`;
 cliArgs(HELP, [], 0);
@@ -351,14 +351,14 @@ function splitTrailingIndex(relNoExt) {
 
 export async function buildMcSoundVault({
   root = ROOT,
-  external = EXTERNAL,
+  external: vault = LOCAL,
   mcAssetsDir = defaultMcAssetsDir(),
   resourcesBaseUrl = "https://resources.download.minecraft.net",
   skipPeaks = false,
   // the game's en_us.json lives in its client jar (vault/jar, bun run setup:vault); without it sounds keep no captions
   clientJar = join(LOCAL, "jar/client.jar"),
 } = {}) {
-  const outDir = join(external, "mc-sound");
+  const outDir = join(vault, "mc-sound");
   const cacheDir = join(outDir, ".cache");
   mkdirSync(cacheDir, { recursive: true });
 
@@ -439,7 +439,7 @@ export async function buildMcSoundVault({
   }
 
   // 3. Collect vetted Modrinth pack sounds (from scripts/mc-sound-packs.json, auto-fetching missing archives with SHA1 check)
-  const packsDir = join(external, "packs");
+  const packsDir = join(vault, "packs");
   const packsManifestPath = join(root, "scripts/mc-sound-packs.json");
   const packSpecs = [];
 
@@ -468,8 +468,8 @@ export async function buildMcSoundVault({
       });
     }
   } else if (existsSync(packsDir)) {
-    const triagePath = join(external, "tools/triage_result.json");
-    const indexPath = join(external, "packs_index.json");
+    const triagePath = join(vault, "tools/triage_result.json");
+    const indexPath = join(vault, "packs_index.json");
     const triage = existsSync(triagePath) ? JSON.parse(readFileSync(triagePath, "utf8")) : {};
     const packsIndex = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : {};
     const archives = readdirSync(packsDir)
