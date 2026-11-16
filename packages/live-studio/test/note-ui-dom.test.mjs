@@ -110,6 +110,7 @@ function Harness() {
   const refItem = refs[0] ?? { id: "ref-1", src: PIXEL, url: PIXEL, strokes: [] };
 
   window.__DOM_TEST__ = {
+    S,
     get,
     set,
     studio,
@@ -1090,6 +1091,371 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       `Expected Review row <p> to wrap unbroken token (${rowOverflow.scrollWidth} <= ${rowOverflow.clientWidth})`,
     );
   }, 15000);
+
+  test("keeps note view controls stationary when switching Cards to Board in a wide panel", async () => {
+    try {
+      await webview.resize(1600, 900);
+      await webview.evaluate(
+        `document.querySelector('[aria-label="Notes"]').parentElement.style.width = "1542px"`,
+      );
+      await webview.evaluate(`document.fonts.ready`);
+      const boardRect = `(() => { const r = document.querySelector('[data-note-view-tab="board"]').getBoundingClientRect(); return JSON.stringify({ x: r.x, y: r.y }); })()`;
+      const before = JSON.parse(await webview.evaluate(boardRect));
+      await webview.evaluate(`document.querySelector('[data-note-view-tab="board"]').focus()`);
+      await webview.press("Enter");
+      await waitUntil(`document.querySelector('[aria-label="Group board by"]')`, "Board mounted");
+      await webview.evaluate(`(async () => { ${SETTLE_TIME_ANIMS} })()`);
+      const after = JSON.parse(await webview.evaluate(boardRect));
+      assert.ok(
+        Math.abs(after.x - before.x) <= 2,
+        `Board tab stays at x=${before.x}, got ${after.x}`,
+      );
+      assert.ok(
+        Math.abs(after.y - before.y) <= 2,
+        `Board tab stays at y=${before.y}, got ${after.y}`,
+      );
+    } finally {
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps note view controls stationary when choosing Calendar from More in a narrow panel", async () => {
+    try {
+      await webview.resize(380, 700);
+      await webview.evaluate(
+        `document.querySelector('[aria-label="Notes"]').parentElement.style.width = "380px"`,
+      );
+      await webview.evaluate(`document.fonts.ready`);
+      const moreRect = `(() => { const r = document.querySelector('button[aria-label$="note views"]').getBoundingClientRect(); return JSON.stringify({ x: r.x, y: r.y, width: r.width, height: r.height }); })()`;
+      const before = JSON.parse(await webview.evaluate(moreRect));
+      await webview.evaluate(
+        `document.querySelector('button[aria-label="More note views"]').focus()`,
+      );
+      await webview.press("Enter");
+      await waitUntil(`document.querySelector('[role="menuitemradio"]')`, "More views menu open");
+      await webview.evaluate(
+        `[...document.querySelectorAll('[role="menuitemradio"]')].find((e) => e.textContent.trim() === "Calendar").click()`,
+      );
+      await waitUntil(
+        `document.querySelector('button[aria-label="Calendar — more note views"]') && !document.querySelector('[role="menu"]')`,
+        "Calendar selected",
+      );
+      await webview.evaluate(`(async () => { ${SETTLE_TIME_ANIMS} })()`);
+      const after = JSON.parse(await webview.evaluate(moreRect));
+      for (const key of ["x", "y", "width", "height"]) {
+        assert.ok(
+          Math.abs(after[key] - before[key]) <= 2,
+          `More ${key} stays ${before[key]}, got ${after[key]}`,
+        );
+      }
+    } finally {
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("offers all note views through a readable selector in a 320px panel with 200% text", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => { document.querySelector('[aria-label="Notes"]').parentElement.style.width = "320px"; document.documentElement.style.fontSize = "200%"; })()`,
+      );
+      await waitUntil(
+        `(() => { const e = document.querySelector('[role="combobox"][aria-label="Notes view"]'); return e && e.getBoundingClientRect().width > 0; })()`,
+        "Readable compact view selector",
+      );
+      const rect = `(() => { const e = document.querySelector('[role="combobox"][aria-label="Notes view"]'); const r = e.getBoundingClientRect(); return JSON.stringify({ x: r.x, y: r.y, width: r.width, height: r.height, textFits: e.scrollWidth <= e.clientWidth + 1 }); })()`;
+      await webview.evaluate(
+        `document.querySelector('[role="combobox"][aria-label="Notes view"]').focus()`,
+      );
+      const before = JSON.parse(await webview.evaluate(rect));
+      assert.equal(before.textFits, true, "Selected Cards label fits without horizontal scrolling");
+      await webview.press("Enter");
+      await waitUntil(
+        `document.querySelectorAll('[role="option"]').length === 9`,
+        "All nine views available",
+      );
+      const labels = JSON.parse(
+        await webview.evaluate(
+          `JSON.stringify([...document.querySelectorAll('[role="option"]')].map(e => e.textContent.trim()))`,
+        ),
+      );
+      assert.deepEqual(labels, [
+        "Cards",
+        "List",
+        "Board",
+        "Gallery",
+        "Table",
+        "Timeline",
+        "Calendar",
+        "Feed",
+        "Chart",
+      ]);
+      await webview.press("Home");
+      for (let i = 0; i < 6; i++) await webview.press("ArrowDown");
+      await webview.press("Enter");
+      await waitUntil(
+        `window.__DOM_TEST__.get().noteView === "calendar" && document.querySelector('[role="combobox"][aria-label="Notes view"]').getAttribute('aria-expanded') === 'false'`,
+        "Calendar selected",
+      );
+      await waitUntil(
+        `document.activeElement?.getAttribute('aria-label') === 'Notes view'`,
+        "Notes view focus restored",
+      );
+      const after = JSON.parse(await webview.evaluate(rect));
+      for (const key of ["x", "y", "width", "height"]) {
+        assert.ok(
+          Math.abs(after[key] - before[key]) <= 2,
+          `Compact selector ${key} stays ${before[key]}, got ${after[key]}`,
+        );
+      }
+      assert.equal(after.textFits, true, "Selected Calendar label fits");
+      assert.equal(
+        await webview.evaluate(`document.activeElement?.getAttribute('aria-label')`),
+        "Notes view",
+      );
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize = ""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps docked Compose actions visible in a 320px panel with 200% text", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => { document.querySelector('[aria-label="Notes"]').parentElement.style.width = "320px"; document.documentElement.style.fontSize = "200%"; document.querySelector('button[aria-label="New note"]').click(); })()`,
+      );
+      await waitUntil(`document.querySelector('textarea[name="note"]')`, "Compose open");
+      await webview.evaluate(
+        `(async () => { await document.fonts.ready; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); ${SETTLE_TIME_ANIMS} })()`,
+      );
+      const actions = JSON.parse(
+        await webview.evaluate(
+          `JSON.stringify((() => { const panel = document.querySelector('[aria-label="Notes"]').getBoundingClientRect(); return [...document.querySelectorAll('button')].filter(e => ['Add note','Cancel'].includes(e.textContent.trim()) || e.getAttribute('aria-label') === 'Add a picture').map(e => { const r = e.getBoundingClientRect(); return { label: e.getAttribute('aria-label') || e.textContent.trim(), fits: r.left >= panel.left && r.right <= panel.right && r.bottom <= panel.bottom }; }); })())`,
+        ),
+      );
+      assert.equal(actions.length, 3);
+      for (const action of actions)
+        assert.equal(action.fits, true, `${action.label} remains fully visible`);
+    } finally {
+      await webview.press("Escape");
+      await webview.evaluate(`document.documentElement.style.fontSize = ""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps a full Compose text line readable in a 320px by 300px panel with 200% text", async () => {
+    try {
+      await webview.resize(320, 300);
+      await webview.evaluate(
+        `(() => { const host = document.querySelector('[aria-label="Notes"]').parentElement; host.style.width = "320px"; host.style.height = "300px"; window.__DOM_TEST__.S.comments = ["Opening wide", "Main"]; document.documentElement.style.fontSize = "200%"; document.querySelector('button[aria-label="New note"]').click(); })()`,
+      );
+      await waitUntil(`document.querySelector('textarea[name="note"]')`, "Compose open");
+      await waitUntil(
+        `document.querySelector('[aria-label="Notes"]').textContent.includes('Opening wide')`,
+        "Shot context rendered",
+      );
+      await webview.evaluate(`(async () => { ${SETTLE_TIME_ANIMS} })()`);
+      await webview.press("x");
+      const sizes = JSON.parse(
+        await webview.evaluate(
+          `JSON.stringify((() => { const t = document.querySelector('textarea[name="note"]'); const s = t.parentElement; const cs = getComputedStyle(t); const tr = t.getBoundingClientRect(); const sr = s.getBoundingClientRect(); return { region: s.clientHeight, line: parseFloat(cs.lineHeight), padding: parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom), visible: Math.min(tr.bottom,sr.bottom) - Math.max(tr.top,sr.top) }; })())`,
+        ),
+      );
+      assert.ok(
+        sizes.region >= sizes.line + sizes.padding,
+        `Editor region ${sizes.region}px fits one line and padding (${sizes.line + sizes.padding}px)`,
+      );
+      assert.ok(
+        sizes.visible >= sizes.line + sizes.padding,
+        `Visible text field ${sizes.visible}px fits one padded line (${sizes.line + sizes.padding}px)`,
+      );
+    } finally {
+      await webview.press("Escape");
+      await webview.evaluate(
+        `(() => { document.documentElement.style.fontSize = ""; window.__DOM_TEST__.S.comments = []; })()`,
+      );
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps Calendar heading, weekdays and final dates readable at 320px with 200% text", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => { document.querySelector('[aria-label="Notes"]').parentElement.style.width = "320px"; document.documentElement.style.fontSize = "200%"; window.__DOM_TEST__.set({noteView: "calendar"}); })()`,
+      );
+      await waitUntil(`document.querySelector('[aria-label="Previous month"]')`, "Calendar open");
+      await webview.evaluate(
+        `(async () => { await document.fonts.ready; ${SETTLE_TIME_ANIMS} })()`,
+      );
+      const overlap = await webview.evaluate(
+        `(() => { const b = document.querySelector('[aria-label="Previous month"]'); const h = b.parentElement.parentElement.querySelector('h3'); const a = h.getBoundingClientRect(), r = b.parentElement.getBoundingClientRect(); return a.left < r.right && a.right > r.left && a.top < r.bottom && a.bottom > r.top; })()`,
+      );
+      assert.equal(overlap, false, "Month heading and navigation do not overlap");
+      const weekdays = JSON.parse(
+        await webview.evaluate(
+          `JSON.stringify([...document.querySelectorAll('abbr[title]')].map(e => { const r=e.getBoundingClientRect(), p=e.parentElement.getBoundingClientRect(); return {name:e.title,fits:r.left >= p.left && r.right <= p.right}; }))`,
+        ),
+      );
+      assert.equal(weekdays.length, 7);
+      assert.ok(
+        weekdays.every((d) => d.fits),
+        "Weekday names fit their columns",
+      );
+      const dateLabelsFit = await webview.evaluate(
+        `(() => { const region = document.querySelector('[aria-label="Note calendar"]'); return [...region.querySelectorAll('button[aria-label]')].filter(e => /\\d{4}: /.test(e.getAttribute('aria-label'))).every(e => { const r=e.firstElementChild.getBoundingClientRect(), p=e.getBoundingClientRect(); return r.left >= p.left && r.right <= p.right; }); })()`,
+      );
+      assert.equal(dateLabelsFit, true, "Date numbers stay inside their own day cells");
+      const lastDateVisible = await webview.evaluate(
+        `(() => { const region = document.querySelector('[aria-label="Note calendar"]'); const scroller = region.parentElement; const dates = [...region.querySelectorAll('button[aria-label]')].filter(e => /\\d{4}: /.test(e.getAttribute('aria-label'))); const last = dates.at(-1); last.focus(); const r = last.getBoundingClientRect(), s = scroller.getBoundingClientRect(); return r.top >= s.top && r.bottom <= s.bottom; })()`,
+      );
+      assert.equal(lastDateVisible, true, "Final date scrolls fully into view on keyboard focus");
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize = ""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps all view-specific controls reachable at 320px with 200% text", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => { const host=document.querySelector('[aria-label="Notes"]').parentElement; host.style.width="320px"; host.style.height="700px"; document.documentElement.style.fontSize="200%"; })()`,
+      );
+      for (const [view, label] of [
+        ["board", "Group board by"],
+        ["list", "List grouping"],
+        ["feed", "Feed sort order"],
+        ["timeline", "Timeline zoom"],
+        ["chart", "Chart breakdown"],
+      ]) {
+        await webview.evaluate(`window.__DOM_TEST__.set({noteView:${JSON.stringify(view)}})`);
+        await waitUntil(
+          `document.querySelector('[aria-label=${JSON.stringify(label)}]')`,
+          `${view} controls mounted`,
+        );
+        const fit = await webview.evaluate(
+          `(() => { const e=[...document.querySelectorAll('[aria-label=${JSON.stringify(label)}]')].find(e=>e.getBoundingClientRect().width>0); const p=document.querySelector('[aria-label="Notes"]').getBoundingClientRect(); const nodes=[e,...e.querySelectorAll('button')]; return nodes.every(e=>{const r=e.getBoundingClientRect();return r.left>=p.left&&r.right<=p.right;}); })()`,
+        );
+        assert.equal(fit, true, `${view} controls remain inside the panel`);
+      }
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize=""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps Chart counts and plot content fully scrollable at 200% text", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => {const host=document.querySelector('[aria-label="Notes"]').parentElement;host.style.width="320px";host.style.height="700px";document.documentElement.style.fontSize="200%";window.__DOM_TEST__.set({noteView:"chart"});})()`,
+      );
+      await waitUntil(`document.querySelector('[aria-label="Chart breakdown"]')`, "Chart mounted");
+      const blocks = JSON.parse(
+        await webview.evaluate(
+          `JSON.stringify((() => {const root=document.querySelector('[aria-label="Notes"]');const approved=[...root.querySelectorAll('div')].find(e=>e.textContent==='Approved');const summary=approved.parentElement.parentElement;return [summary,...root.querySelectorAll('[data-slot="card"]')].map(e=>({height:e.clientHeight,content:e.scrollHeight}));})())`,
+        ),
+      );
+      assert.ok(
+        blocks.every((b) => b.height + 1 >= b.content),
+        `Chart blocks show their full content: ${JSON.stringify(blocks)}`,
+      );
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize=""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps Timeline note lanes readable beside enlarged details", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => {const host=document.querySelector('[aria-label="Notes"]').parentElement;host.style.width="320px";host.style.height="700px";document.documentElement.style.fontSize="200%";window.__DOM_TEST__.set({noteView:"timeline"});})()`,
+      );
+      await waitUntil(`document.querySelector('.tl-pill')`, "Timeline pills mounted");
+      const sizes = JSON.parse(
+        await webview.evaluate(
+          `JSON.stringify((() => {const list=document.querySelector('[aria-label="Timeline shot lanes"]');const s=list.parentElement;return {pane:s.clientHeight,ruler:s.firstElementChild.getBoundingClientRect().height,pill:list.querySelector('.tl-pill').getBoundingClientRect().height};})())`,
+        ),
+      );
+      assert.ok(
+        sizes.pane - sizes.ruler >= sizes.pill + 8,
+        `Lanes retain a visible note row: ${JSON.stringify(sizes)}`,
+      );
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize=""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps Board column and navigation within a narrow enlarged panel", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => {const host=document.querySelector('[aria-label="Notes"]').parentElement;host.style.width="320px";host.style.height="700px";document.documentElement.style.fontSize="200%";window.__DOM_TEST__.set({noteView:"board"});})()`,
+      );
+      await waitUntil(
+        `document.querySelector('[aria-label="To check column"]')`,
+        "Board column mounted",
+      );
+      const fit = await webview.evaluate(
+        `(() => {const root=document.querySelector('[aria-label="Notes"]').getBoundingClientRect();const col=document.querySelector('[aria-label="To check column"]').getBoundingClientRect();const next=document.querySelector('[aria-label="Next column"]').getBoundingClientRect();return col.width<=root.width&&next.left>=root.left&&next.right<=root.right;})()`,
+      );
+      assert.equal(fit, true, "Column and Next remain within the panel");
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize=""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("gives List prose a readable row at 200% text", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => {const host=document.querySelector('[aria-label="Notes"]').parentElement;host.style.width="320px";host.style.height="700px";document.documentElement.style.fontSize="200%";window.__DOM_TEST__.set({noteView:"list"});})()`,
+      );
+      await waitUntil(
+        `document.querySelector('[aria-label="Notes list"] [data-note] p > span')`,
+        "List prose mounted",
+      );
+      const ratio = await webview.evaluate(
+        `(() => {const p=document.querySelector('[aria-label="Notes list"] [data-note] p > span');return p.getBoundingClientRect().width/p.closest('[data-note]').getBoundingClientRect().width;})()`,
+      );
+      assert.ok(ratio >= 0.55, `Prose retains the main row width, got ${ratio}`);
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize=""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps Table note text readable through local horizontal scrolling at 200%", async () => {
+    try {
+      await webview.resize(320, 700);
+      await webview.evaluate(
+        `(() => {const host=document.querySelector('[aria-label="Notes"]').parentElement;host.style.width="320px";host.style.height="700px";document.documentElement.style.fontSize="200%";window.__DOM_TEST__.set({noteView:"table"});})()`,
+      );
+      await waitUntil(
+        `document.querySelector('tbody [data-note] p > span')`,
+        "Table prose mounted",
+      );
+      const ratio = await webview.evaluate(
+        `(() => {const p=document.querySelector('tbody [data-note] p > span');return p.getBoundingClientRect().width/document.querySelector('[aria-label="Notes"]').clientWidth;})()`,
+      );
+      assert.ok(ratio >= 0.42, `Table prose preserves readable words, got ${ratio}`);
+    } finally {
+      await webview.evaluate(`document.documentElement.style.fontSize=""`);
+      await webview.resize(1024, 720);
+    }
+  });
+
+  test("keeps view controls free of references to missing panels", async () => {
+    const valid = await webview.evaluate(
+      `[...document.querySelectorAll('[data-note-view-tab][aria-controls]')].every(e=>Boolean(document.getElementById(e.getAttribute('aria-controls'))))`,
+    );
+    assert.equal(valid, true, "View controls reference only mounted panels");
+  });
 
   test("keeps Gallery tab unclipped at 380px, prevents List chip overlap, and shows Needs work in Compose edit", async () => {
     try {

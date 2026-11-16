@@ -67,7 +67,7 @@ import {
 import type { Fix, Mark, Note, NoteState } from "./slice";
 
 export const cardBase =
-  "group/card relative rounded-lg border border-s-2 p-2.5 transition-colors duration-150 ease-out motion-reduce:transition-none";
+  "group/card relative rounded-lg border p-3 transition-colors duration-150 ease-out motion-reduce:transition-none";
 
 export const noteSurfaceClass = (
   state: NoteState,
@@ -81,22 +81,22 @@ export const noteSurfaceClass = (
 ): string => {
   const base =
     state === "check" && opts?.asking
-      ? "border-hairline border-s-ai/85 bg-backdrop/85 hover:border-hairline-strong hover:border-s-ai hover:bg-backdrop"
+      ? "border-ai/35 bg-ai/8"
       : state === "check"
-        ? "border-warn/35 border-s-warn/80 bg-warn-card/80 hover:border-warn/55 hover:border-s-warn hover:bg-warn-card-hover/85"
+        ? "border-warn/40 bg-warn-card/80"
         : state === "done"
-          ? "border-hairline-subtle border-s-ok/40 bg-surface-subtle/50 text-foreground/78 hover:border-hairline hover:border-s-ok/65 hover:bg-surface-subtle"
-          : "border-hairline border-s-primary/70 bg-backdrop/75 hover:border-hairline-strong hover:border-s-primary hover:bg-backdrop/95";
+          ? "border-hairline-subtle bg-surface-subtle/50 text-foreground/78"
+          : "border-primary/35 bg-tint";
   const ring = opts?.editing
-    ? "border-warn/85 border-s-warn ring-1 ring-warn/35"
+    ? "border-warn/85 ring-1 ring-warn/35"
     : opts?.near && state !== "done"
       ? "border-hairline-strong ring-hairline-strong ring-1"
       : "";
   return cn(
     opts?.dense
-      ? "group/card relative rounded-md border border-s-2 px-2 py-1.5 transition-colors duration-150 motion-reduce:transition-none"
+      ? "group/card relative rounded-md border px-2 py-1.5 transition-colors duration-150 motion-reduce:transition-none"
       : opts?.compact
-        ? "group/card rounded-md border border-s-2 px-2.5 py-2 transition-colors duration-150 motion-reduce:transition-none"
+        ? "group/card rounded-md border px-2.5 py-2 transition-colors duration-150 motion-reduce:transition-none"
         : cardBase,
     base,
     ring,
@@ -144,10 +144,12 @@ export function NoteCardStatus({
   state,
   asking = false,
   needsWork = false,
+  dense = false,
 }: {
   state: NoteState;
   asking?: boolean;
   needsWork?: boolean;
+  dense?: boolean;
 }) {
   const label = noteStatusLabel(state, asking, needsWork);
   return (
@@ -155,7 +157,8 @@ export function NoteCardStatus({
       <NoteStatusGlyph state={state} asking={asking} needsWork={needsWork} />
       <span
         className={cn(
-          "text-xs font-medium whitespace-nowrap",
+          "font-medium whitespace-nowrap",
+          dense ? "text-xs" : "text-ui",
           noteStatusTextClass(state, asking, needsWork),
         )}
       >
@@ -219,7 +222,7 @@ export function NoteCardHeader({
       )}
     >
       <NoteNumber id={note.id} className="shrink-0" />
-      <NoteCardStatus state={state} asking={asking} needsWork={needsWork} />
+      <NoteCardStatus state={state} asking={asking} needsWork={needsWork} dense={dense} />
       {showTime && (
         <Tip label="Jump here">
           <NoteTimeChip note={note} t={t} dense={dense} />
@@ -230,8 +233,8 @@ export function NoteCardHeader({
       ) : (
         <span
           className={cn(
-            "me-auto min-w-0 truncate",
-            dense ? "flex-1 text-xs" : "text-ui max-w-full",
+            "me-auto min-w-0",
+            dense ? "flex-1 truncate text-xs" : "text-ui max-w-full wrap-anywhere",
             state === "done" ? "text-muted-foreground" : "text-label",
           )}
           title={shotFull}
@@ -359,7 +362,7 @@ export function NoteTimeChip({
         "text-label hover:bg-tint hover:text-primary-text hover:border-primary/45 focus-visible:ring-ring border-hairline bg-surface-subtle inline-flex shrink-0 cursor-pointer items-center justify-center rounded border font-mono leading-none font-medium tracking-tight tabular-nums transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none",
         dense
           ? "text-tag relative h-6 min-h-6 min-w-6 px-1 after:absolute after:-inset-x-0.5 after:-inset-y-px"
-          : "h-6 min-h-6 min-w-6 px-1.5 py-0.5 text-xs pointer-coarse:h-10 pointer-coarse:min-h-10",
+          : "text-ui h-6 min-h-6 min-w-6 px-1.5 py-0.5 pointer-coarse:h-10 pointer-coarse:min-h-10",
         className,
       )}
     >
@@ -1162,7 +1165,7 @@ export function CheckActions({
   iconOnly?: boolean;
   showEdit?: boolean;
 }) {
-  const size = dense ? "phone-xs" : "sm";
+  const size = dense ? "phone-xs" : compact ? "sm" : "md";
   const iconSize = dense ? "phone-icon" : "icon-sm";
   const target = noteActionTarget(noteNum(note.id), stamp(note.t));
   const compactReview = iconOnly || compact || dense;
@@ -1279,7 +1282,7 @@ export function NoteOpenActions({
   showEdit?: boolean;
 }) {
   const target = noteActionTarget(noteNum(note.id), stamp(t));
-  const size = "sm";
+  const size = compact ? "sm" : "md";
   const iconSize = "icon-sm";
   const compactReview = iconOnly || compact;
   return (
@@ -1396,7 +1399,7 @@ export function NoteDoneActions({
             "Review in big view",
             <Button
               variant="subtle"
-              size={compactReview ? "icon-sm" : "sm"}
+              size={compactReview ? "icon-sm" : "md"}
               aria-label={`Review note ${target}`}
               onClick={(e) => {
                 e.stopPropagation();
@@ -1412,7 +1415,7 @@ export function NoteDoneActions({
           "Reopen note",
           <Button
             variant="subtle"
-            size={iconOnly ? "icon-sm" : "sm"}
+            size={iconOnly ? "icon-sm" : compact ? "sm" : "md"}
             aria-label={`Reopen note ${target}`}
             onClick={(e) => {
               e.stopPropagation();

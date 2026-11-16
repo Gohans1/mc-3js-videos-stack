@@ -66,7 +66,6 @@ import {
   timelineMinPillPct,
 } from "./note-views-model";
 import { goToNote, noteMedia, noteNum } from "./notes";
-import type { NoteSort } from "./slice";
 
 const MONTH_FMT = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
 const SHORT_DAY_FMT = new Intl.DateTimeFormat("en-US", {
@@ -74,7 +73,7 @@ const SHORT_DAY_FMT = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   year: "numeric",
 });
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const formatDayKey = (key: string) => {
   const [y, m, d] = key.split("-").map(Number);
@@ -172,12 +171,14 @@ function TimelinePillButton({
       >
         <NoteStatusGlyph state={p.state} asking={asking} needsWork={needsWork} />
         {num != null && (
-          <span className="hidden shrink-0 font-mono font-semibold tabular-nums @[36px]:inline">
+          <span className="hidden shrink-0 font-mono font-semibold tabular-nums @min-[2.25rem]:inline">
             #{num}
           </span>
         )}
-        {p.n.text && <span className="hidden min-w-0 truncate @[72px]:inline">{p.n.text}</span>}
-        <span className="text-label hidden shrink-0 font-mono tabular-nums @[136px]:inline">
+        {p.n.text && (
+          <span className="hidden min-w-0 truncate @min-[4.5rem]:inline">{p.n.text}</span>
+        )}
+        <span className="text-label hidden shrink-0 font-mono tabular-nums @min-[8.5rem]:inline">
           {shortTick(p.t)}
         </span>
       </button>
@@ -216,7 +217,7 @@ function TimelinePickedCard({
   const replying = replyId === n.id;
 
   return (
-    <div className="max-h-[min(45%,15rem)] min-h-0 flex-none overflow-y-auto overscroll-contain px-3 pt-1.5 pb-2">
+    <div className="min-h-0 flex-none px-3 pt-1.5 pb-2">
       <Card size="sm" tone={asking ? "ai" : state} data-note={n.id} data-ai-lit={lit || undefined}>
         <CardContent>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -296,7 +297,7 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
   }, [duration, zoom]);
 
   const trackWidthPx = Math.max(180, wrapWidth - 118);
-  const minPillPct = timelineMinPillPct(trackWidthPx, zoom, zoom === 2 ? 120 : 56);
+  const minPillPct = timelineMinPillPct(trackWidthPx, zoom, zoom === 2 ? 240 : 112);
   const packedLanes = useMemo(
     () => lanes.map((lane) => ({ lane, ...packTimelineRows(lane.items, duration, minPillPct) })),
     [lanes, duration, minPillPct],
@@ -336,11 +337,11 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
   const ruler = (
     <div
       className={cn(
-        "bg-backdrop/95 border-hairline sticky top-0 z-10 flex items-center border-b px-2.5 py-1.5 backdrop-blur-xs",
+        "bg-backdrop/95 border-hairline sticky top-0 z-10 flex items-center border-b px-1.5 py-1.5 backdrop-blur-xs @sm/timeline:px-2.5",
         zoomWidthCls,
       )}
     >
-      <div className="text-label border-hairline-subtle w-22 shrink-0 border-e pe-2 text-xs font-medium">
+      <div className="text-label border-hairline-subtle w-22 max-w-[25%] shrink-0 border-e pe-2 text-xs font-medium">
         Shot
       </div>
       <div className="relative ms-2 h-4 flex-1">
@@ -352,6 +353,7 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
               style={{ "--tick-left": `${pct}%` } as CSSProperties}
               className={cn(
                 "text-muted-foreground absolute top-0 left-(--tick-left) font-mono text-xs whitespace-nowrap tabular-nums",
+                i > 0 && i < ticks.length - 1 && "hidden @lg/timeline:inline",
                 i === ticks.length - 1
                   ? "-translate-x-full"
                   : i === 0
@@ -368,27 +370,28 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
   );
 
   return (
-    <div ref={wrapRef} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-none items-center justify-between gap-2 px-3 pb-1.5">
+    <div
+      ref={wrapRef}
+      data-arrow-scroll
+      className="scroll-fade @container/timeline flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+    >
+      <div className="flex flex-none flex-wrap items-center justify-between gap-2 px-3 pb-1.5">
         <span className="text-label text-ui font-mono tabular-nums">
           {lanes.length} shot{lanes.length === 1 ? "" : "s"} · {stamp(duration)} total
         </span>
-        <ToggleGroup
-          value={[String(zoom)]}
-          onValueChange={(v: string[]) => {
-            if (v[0] === "1" || v[0] === "2") setZoom(Number(v[0]) as 1 | 2);
-          }}
-          aria-label="Timeline zoom"
-          variant="segment"
-          size="sm"
-          spacing={0.5}
-        >
-          <ToggleGroupItem value="1">Fit</ToggleGroupItem>
-          <ToggleGroupItem value="2">2× zoom</ToggleGroupItem>
-        </ToggleGroup>
+        <NoteViewChoice
+          value={zoom === 2 ? "2" : "1"}
+          onChange={(value) => setZoom(value === "2" ? 2 : 1)}
+          label="Timeline zoom"
+          options={[
+            { value: "1", label: "Fit" },
+            { value: "2", label: "2× zoom" },
+          ]}
+          className="max-w-full"
+        />
       </div>
 
-      <div className="bg-backdrop/55 border-hairline mx-3 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
+      <div className="bg-backdrop/55 border-hairline mx-3 mb-2 flex flex-none flex-col overflow-hidden rounded-lg border">
         <VirtualList
           items={packedLanes}
           getKey={(entry) => entry.lane.shot}
@@ -400,12 +403,12 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
           data-arrow-scroll
           role="list"
           ariaLabel="Timeline shot lanes"
-          className="scroll-fade min-h-0 flex-1 overflow-auto overscroll-contain"
+          className="scroll-fade min-h-0 flex-none overflow-x-auto overflow-y-hidden overscroll-x-contain overscroll-y-auto"
           listClassName={listWidthCls}
           header={ruler}
           renderItem={({ lane, rows, packed }) => (
-            <div className="border-hairline-subtle hover:bg-surface-subtle/75 flex items-stretch border-b px-2.5 py-1.5 transition-colors motion-reduce:transition-none">
-              <div className="border-hairline-subtle flex w-22 shrink-0 flex-col justify-center border-e pe-2">
+            <div className="border-hairline-subtle hover:bg-surface-subtle/75 flex items-stretch border-b px-1.5 py-1.5 transition-colors motion-reduce:transition-none @sm/timeline:px-2.5">
+              <div className="border-hairline-subtle flex w-22 max-w-[25%] shrink-0 flex-col justify-center border-e pe-2">
                 <div className="text-foreground/95 text-ui truncate font-medium" title={lane.title}>
                   {lane.title}
                 </div>
@@ -496,7 +499,7 @@ function CalendarDayCell({
       onClick={onPick}
       onKeyDown={onKeyDown}
       className={cn(
-        "focus-visible:ring-ring flex min-h-8 flex-col items-start justify-between gap-0.5 p-1 text-start transition-colors duration-100 outline-none focus-visible:z-10 focus-visible:ring-2 motion-reduce:transition-none @[420px]:min-h-9 pointer-coarse:min-h-10",
+        "focus-visible:ring-ring flex min-h-8 flex-col items-start justify-between gap-0.5 p-0.5 text-start transition-colors duration-100 outline-none focus-visible:z-10 focus-visible:ring-2 motion-reduce:transition-none @[420px]:min-h-9 @sm/calendar:p-1 pointer-coarse:min-h-10",
         cell.inMonth ? "bg-card/85" : "bg-background/55",
         isSelected
           ? "bg-surface-selected ring-hairline-strong z-10 ring-1 ring-inset"
@@ -505,7 +508,7 @@ function CalendarDayCell({
     >
       <span
         className={cn(
-          "inline-flex size-5.5 items-center justify-center rounded-full font-mono text-xs tabular-nums",
+          "inline-flex aspect-square w-4 max-w-full shrink-0 items-center justify-center rounded-full font-mono text-xs leading-none tabular-nums @sm/calendar:w-5.5",
           cell.isToday
             ? "text-foreground border-hairline-strong bg-secondary border font-bold"
             : cell.inMonth
@@ -557,36 +560,41 @@ function CalendarDayCell({
           const totalDay = dots.reduce((s, d) => s + d.n, 0);
           return (
             <>
-              {compactNarrow && (
-                <div className="flex w-full items-center justify-between gap-1 font-mono text-xs leading-tight tabular-nums @[380px]:hidden">
-                  <span className="inline-flex items-center gap-0.5">
-                    {dots.map((d) => (
-                      <span
-                        key={d.key}
-                        aria-hidden
-                        className={cn("size-1.5 rounded-full", d.dot)}
-                      />
-                    ))}
-                  </span>
-                  <span className="text-foreground/90 font-semibold">{totalDay}</span>
-                </div>
-              )}
-              <div
-                className={cn(
-                  "w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-xs leading-tight tabular-nums",
-                  compactNarrow ? "hidden @[380px]:flex" : "flex",
+              <div className="font-mono text-xs font-semibold tabular-nums @md/calendar:hidden">
+                {totalDay}
+              </div>
+              <div className="hidden w-full @md/calendar:block">
+                {compactNarrow && (
+                  <div className="flex w-full items-center justify-between gap-1 font-mono text-xs leading-tight tabular-nums @[380px]:hidden">
+                    <span className="inline-flex items-center gap-0.5">
+                      {dots.map((d) => (
+                        <span
+                          key={d.key}
+                          aria-hidden
+                          className={cn("size-1.5 rounded-full", d.dot)}
+                        />
+                      ))}
+                    </span>
+                    <span className="text-foreground/90 font-semibold">{totalDay}</span>
+                  </div>
                 )}
-              >
-                {dots.map((d) => (
-                  <span
-                    key={d.key}
-                    className={cn("inline-flex items-center gap-0.5 font-semibold", d.cls)}
-                    title={d.label}
-                  >
-                    <span aria-hidden className={cn("size-1.5 rounded-full", d.dot)} />
-                    {d.n}
-                  </span>
-                ))}
+                <div
+                  className={cn(
+                    "w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-xs leading-tight tabular-nums",
+                    compactNarrow ? "hidden @[380px]:flex" : "flex",
+                  )}
+                >
+                  {dots.map((d) => (
+                    <span
+                      key={d.key}
+                      className={cn("inline-flex items-center gap-0.5 font-semibold", d.cls)}
+                      title={d.label}
+                    >
+                      <span aria-hidden className={cn("size-1.5 rounded-full", d.dot)} />
+                      {d.n}
+                    </span>
+                  ))}
+                </div>
               </div>
             </>
           );
@@ -716,104 +724,120 @@ export function NoteCalendarView({ items }: { items: readonly PlacedWithState[] 
     cellRefs.current[targetCell.key]?.focus();
   };
 
+  const calendarRows = [
+    { kind: "calendar" as const },
+    ...(activeCell?.items ?? []).map((item) => ({ kind: "note" as const, item })),
+  ];
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
-      <div className="flex-none">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <h3 className="text-foreground text-base font-semibold text-balance tabular-nums">
-              {monthLabel}
-            </h3>
-            {undatedCount > 0 && (
-              <span className="text-muted-foreground font-mono text-xs tabular-nums">
-                {undatedCount} undated
-              </span>
-            )}
-          </div>
-          <div className="bg-backdrop/75 border-hairline flex items-center gap-0.5 rounded-lg border p-0.5">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Previous month"
-              onClick={() => shiftMonth(-1)}
-            >
-              <ChevronLeft aria-hidden />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const now = new Date();
-                setManualMonth({ year: now.getFullYear(), month: now.getMonth() });
-                setSelectedDay(localDateKey(now.toISOString()));
-              }}
-            >
-              Today
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Next month"
-              onClick={() => shiftMonth(1)}
-            >
-              <ChevronRight aria-hidden />
-            </Button>
-          </div>
-        </div>
-
-        <div className="border-hairline bg-hairline-subtle grid grid-cols-7 gap-px overflow-hidden rounded-lg border text-start">
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="text-label bg-card/85 py-1 ps-1.5 text-xs font-medium">
-              {w}
-            </div>
-          ))}
-          {visibleCells.map((cell, idx) => (
-            <CalendarDayCell
-              key={cell.key}
-              cell={cell}
-              isSelected={cell.key === activeKey}
-              cellRef={(el) => {
-                cellRefs.current[cell.key] = el;
-              }}
-              onPick={() => setSelectedDay(cell.key)}
-              onKeyDown={(e) => handleCellKeyDown(idx, e)}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-2.5 flex min-h-0 flex-1 flex-col">
-        <div className="mb-1.5 flex flex-none items-center justify-between">
-          <h3 className="text-foreground flex items-center text-base font-semibold text-balance tabular-nums">
-            <CalendarDays aria-hidden className="text-label me-1.5 inline size-3.5" />
-            {formatDayKey(activeKey)} ({activeCell?.items.length ?? 0})
-          </h3>
-        </div>
-        {!activeCell?.items.length ? (
-          <Empty>No notes created on this date.</Empty>
-        ) : (
-          <VirtualList
-            items={activeCell.items}
-            getKey={(it) => it.n.id}
-            estimateSize={108}
-            gap={6}
-            overscan={4}
-            data-arrow-scroll
-            role="list"
-            ariaLabel={`Notes on ${activeKey}`}
-            className="scroll-fade min-h-24 flex-1 px-0.5"
-            renderItem={(item) => (
-              <CalendarDayNoteCard
-                item={item}
-                replying={replyId === item.n.id}
-                onToggleReply={() => setReplyId(replyId === item.n.id ? null : item.n.id)}
-                onDoneReply={() => setReplyId(null)}
-              />
-            )}
+    <VirtualList
+      items={calendarRows}
+      getKey={(row) => (row.kind === "calendar" ? "calendar" : `note:${row.item.n.id}`)}
+      estimateSize={(index) => (index === 0 ? 480 : 108)}
+      gap={6}
+      overscan={4}
+      stickyKeys={["calendar"]}
+      data-arrow-scroll
+      role="region"
+      ariaLabel="Note calendar"
+      className="scroll-fade @container/calendar min-h-0 flex-1 px-3 pb-3"
+      renderItem={(row) =>
+        row.kind === "note" ? (
+          <CalendarDayNoteCard
+            item={row.item}
+            replying={replyId === row.item.n.id}
+            onToggleReply={() => setReplyId(replyId === row.item.n.id ? null : row.item.n.id)}
+            onDoneReply={() => setReplyId(null)}
           />
-        )}
-      </div>
-    </div>
+        ) : (
+          <div>
+            <div className="flex-none">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-2">
+                  <h3 className="text-foreground text-base font-semibold text-balance tabular-nums">
+                    {monthLabel}
+                  </h3>
+                  {undatedCount > 0 && (
+                    <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                      {undatedCount} undated
+                    </span>
+                  )}
+                </div>
+                <div className="bg-backdrop/75 border-hairline flex items-center gap-0.5 rounded-lg border p-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Previous month"
+                    onClick={() => shiftMonth(-1)}
+                  >
+                    <ChevronLeft aria-hidden />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const now = new Date();
+                      setManualMonth({ year: now.getFullYear(), month: now.getMonth() });
+                      setSelectedDay(localDateKey(now.toISOString()));
+                    }}
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Next month"
+                    onClick={() => shiftMonth(1)}
+                  >
+                    <ChevronRight aria-hidden />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border-hairline bg-hairline-subtle grid grid-cols-7 gap-px overflow-hidden rounded-lg border text-start">
+                {WEEKDAYS.map((w) => (
+                  <div
+                    key={w}
+                    className="text-label bg-card/85 px-0.5 py-1 text-center text-xs font-medium"
+                  >
+                    <abbr title={w} className="no-underline">
+                      <span aria-hidden className="@sm/calendar:hidden">
+                        {w[0]}
+                      </span>
+                      <span aria-hidden className="hidden @sm/calendar:inline">
+                        {w.slice(0, 3)}
+                      </span>
+                      <span className="sr-only">{w}</span>
+                    </abbr>
+                  </div>
+                ))}
+                {visibleCells.map((cell, idx) => (
+                  <CalendarDayCell
+                    key={cell.key}
+                    cell={cell}
+                    isSelected={cell.key === activeKey}
+                    cellRef={(el) => {
+                      cellRefs.current[cell.key] = el;
+                    }}
+                    onPick={() => setSelectedDay(cell.key)}
+                    onKeyDown={(e) => handleCellKeyDown(idx, e)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-2.5">
+              <div className="mb-1.5 flex flex-none items-center justify-between">
+                <h3 className="text-foreground flex items-center text-base font-semibold text-balance tabular-nums">
+                  <CalendarDays aria-hidden className="text-label me-1.5 inline size-3.5" />
+                  {formatDayKey(activeKey)} ({activeCell?.items.length ?? 0})
+                </h3>
+              </div>
+              {!activeCell?.items.length && <Empty>No notes created on this date.</Empty>}
+            </div>
+          </div>
+        )
+      }
+    />
   );
 }
 
@@ -1037,19 +1061,15 @@ export function NoteFeedView({ items }: { items: readonly PlacedWithState[] }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col px-3 pb-2">
       <div className="mb-2 flex flex-none items-center justify-between gap-2">
-        <ToggleGroup
-          value={[feedSort]}
-          onValueChange={(v: string[]) => {
-            if (v[0] === "activity" || v[0] === "film") set({ noteSort: v[0] as NoteSort });
-          }}
-          aria-label="Feed sort order"
-          variant="segment"
-          size="sm"
-          spacing={0.5}
-        >
-          <ToggleGroupItem value="activity">Latest activity</ToggleGroupItem>
-          <ToggleGroupItem value="film">Film order</ToggleGroupItem>
-        </ToggleGroup>
+        <NoteViewChoice
+          value={feedSort}
+          onChange={(value) => set({ noteSort: value })}
+          label="Feed sort order"
+          options={[
+            { value: "activity", label: "Latest activity" },
+            { value: "film", label: "Film order" },
+          ]}
+        />
       </div>
 
       <VirtualList
@@ -1238,7 +1258,7 @@ export function NoteChartView({
     >
       <div
         className={cn(
-          "border-hairline bg-hairline-subtle grid gap-px overflow-hidden rounded-lg border",
+          "border-hairline bg-hairline-subtle grid shrink-0 gap-px overflow-hidden rounded-lg border",
           stats.asks > 0 ? "grid-cols-2 @[340px]:grid-cols-4" : "grid-cols-3",
         )}
       >
@@ -1334,26 +1354,23 @@ export function NoteChartView({
         </div>
       </div>
 
-      <Card size="sm">
+      <Card size="sm" className="shrink-0">
         <CardContent>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <ToggleGroup
-              value={[metric]}
-              onValueChange={(v: string[]) => {
-                if (v[0] === "status" || v[0] === "shot" || v[0] === "day") {
-                  setMetric(v[0]);
-                  setDrillKey(null);
-                }
+            <NoteViewChoice
+              value={metric}
+              onChange={(value) => {
+                setMetric(value);
+                setDrillKey(null);
               }}
-              aria-label="Chart breakdown"
-              variant="segment"
-              size="sm"
-              spacing={0.5}
-            >
-              <ToggleGroupItem value="status">Status</ToggleGroupItem>
-              <ToggleGroupItem value="shot">Shot</ToggleGroupItem>
-              <ToggleGroupItem value="day">Day</ToggleGroupItem>
-            </ToggleGroup>
+              label="Chart breakdown"
+              options={[
+                { value: "status", label: "Status" },
+                { value: "shot", label: "Shot" },
+                { value: "day", label: "Day" },
+              ]}
+              className="min-w-[min(100%,14rem)] flex-1"
+            />
             <ToggleGroup
               value={[chartType]}
               onValueChange={(v: string[]) => {
@@ -1388,7 +1405,7 @@ export function NoteChartView({
                       active && drillHighlightCls(b.key),
                     )}
                   >
-                    <div className="text-ui mb-1 flex items-center justify-between gap-2">
+                    <div className="text-ui mb-1 flex flex-wrap items-center justify-between gap-2">
                       <span
                         className="truncate font-medium"
                         title={b.subtitle ? `${b.label} · ${b.subtitle}` : b.label}
@@ -1542,7 +1559,7 @@ export function NoteChartView({
       </Card>
 
       {selected && (
-        <Card size="sm">
+        <Card size="sm" className="shrink-0">
           <CardContent>
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-base font-semibold text-balance tabular-nums">
@@ -1582,7 +1599,7 @@ export function NoteChartView({
                 data-arrow-scroll
                 role="list"
                 ariaLabel={`${selected.label} notes`}
-                className="scroll-fade max-h-72 min-h-16 px-0.5"
+                className="scroll-fade max-h-72 min-h-16 overscroll-y-auto px-0.5"
                 renderItem={(item) => (
                   <ChartDrillRow
                     item={item}
@@ -1600,3 +1617,4 @@ export function NoteChartView({
     </div>
   );
 }
+import { NoteViewChoice } from "./NoteViewChoice";

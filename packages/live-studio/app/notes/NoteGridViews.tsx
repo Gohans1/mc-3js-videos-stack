@@ -48,7 +48,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import { useLit } from "../activity/activity";
@@ -307,6 +306,7 @@ function BoardCard({
                   <ArrowRightLeft aria-hidden />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
+                  motion="none"
                   align="end"
                   finalFocus={(closedBy) => {
                     const skip = skipMoveFocusRef.current;
@@ -366,7 +366,7 @@ function BoardCard({
 }
 
 const BOARD_COL_CLS =
-  "w-[84%] min-w-56 @[480px]:w-72 @[860px]:w-auto @[860px]:min-w-60 @[860px]:flex-1";
+  "w-[84%] min-w-[min(14rem,100%)] @[480px]:w-72 @[860px]:w-auto @[860px]:min-w-[min(15rem,100%)] @[860px]:flex-1";
 
 type BoardDropId = "check" | "asking" | "open" | "done";
 
@@ -516,26 +516,22 @@ export function NoteBoardView({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-none items-center justify-between gap-2 px-3 pb-1.5">
-        <div className="inline-flex items-center gap-1.5">
-          <Columns3 aria-hidden className="text-label size-3.5" />
-          <ToggleGroup
-            value={[groupBy]}
-            onValueChange={(v: string[]) => {
-              if (v[0] === "status" || v[0] === "shot") setGroupBy(v[0]);
-            }}
-            aria-label="Group board by"
-            variant="segment"
-            size="sm"
-            spacing={0.5}
-          >
-            <ToggleGroupItem value="status">By status</ToggleGroupItem>
-            <ToggleGroupItem value="shot">By shot</ToggleGroupItem>
-          </ToggleGroup>
+    <div className="@container/board flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-none flex-wrap items-center justify-between gap-2 px-3 pb-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <Columns3 aria-hidden className="text-label hidden size-3.5 shrink-0 @sm/board:block" />
+          <NoteViewChoice
+            value={groupBy}
+            onChange={setGroupBy}
+            label="Group board by"
+            options={[
+              { value: "status", label: "Status" },
+              { value: "shot", label: "Shot" },
+            ]}
+          />
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-label font-mono text-xs tabular-nums">
+          <span className="text-label hidden font-mono text-xs tabular-nums @sm/board:inline">
             {groupBy === "status"
               ? `${statusColumns.length} col${statusColumns.length === 1 ? "" : "s"}`
               : `${shotColumns.length} shot${shotColumns.length === 1 ? "" : "s"}`}
@@ -551,7 +547,7 @@ export function NoteBoardView({
               >
                 <ChevronLeft aria-hidden />
               </Button>
-              <span className="text-label px-1 font-mono text-xs tabular-nums">
+              <span className="text-label hidden px-1 font-mono text-xs tabular-nums @sm/board:inline">
                 {clampedColIdx + 1}/{activeCols.length}
               </span>
               <Button
@@ -1099,6 +1095,7 @@ function NoteTableRow({
               <MoreHorizontal aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent
+              motion="none"
               align="end"
               finalFocus={(closedBy) => closedBy === "keyboard" && !get().compose}
               font="md"
@@ -1167,6 +1164,7 @@ export function NoteTableView({ items }: { items: readonly PlacedWithState[] }) 
     <div className="flex min-h-0 flex-1 flex-col px-3 pb-2.5">
       <div className="border-hairline-subtle bg-surface-subtle/50 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
         <Table
+          className="min-w-80"
           data-arrow-scroll
           containerRef={scrollRef}
           containerClassName="@container min-h-0 flex-1 overflow-auto overscroll-contain"
@@ -1288,14 +1286,14 @@ function NoteListRow({
               : "text-foreground/78 before:bg-ok/40 hover:bg-surface-subtle",
       )}
     >
-      <div className="relative flex min-h-7.5 flex-wrap items-start gap-x-2 gap-y-1 @[440px]/row:flex-nowrap">
+      <div className="relative flex min-h-7.5 flex-wrap items-start gap-x-2 gap-y-1 @min-[28rem]/row:flex-nowrap">
         <span className="flex h-6 shrink-0 items-center">
           <NoteStatusGlyph state={state} asking={asking} needsWork={needsWork} />
         </span>
         <div className="flex min-h-6 min-w-8 shrink-0 items-center">
           <NoteNumber id={n.id} />
         </div>
-        <div className="flex min-w-[calc(100%-4.5rem)] flex-1 flex-col gap-0.5 @[440px]/row:min-w-0 @[440px]/row:py-0.5">
+        <div className="flex w-full min-w-0 flex-none flex-col gap-0.5 @min-[28rem]/row:w-auto @min-[28rem]/row:flex-1 @min-[28rem]/row:py-0.5">
           <CompactNoteBody
             note={n}
             state={state}
@@ -1307,7 +1305,7 @@ function NoteListRow({
           />
           <NoteTags note={n} className="mt-1" />
         </div>
-        <div className="flex min-h-6 w-full shrink-0 items-center gap-1.5 ps-6 @[440px]/row:h-auto @[440px]/row:min-h-6 @[440px]/row:w-auto @[440px]/row:ps-0">
+        <div className="flex min-h-6 w-full shrink-0 flex-wrap items-center gap-1.5 @min-[28rem]/row:h-auto @min-[28rem]/row:min-h-6 @min-[28rem]/row:w-auto">
           {(!grouped || (needsWork && !inlineCue)) && (
             <Badge
               variant={
@@ -1461,23 +1459,19 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
   }, [grouped, items]);
 
   return (
-    <div className="@container flex min-h-0 flex-1 flex-col px-3 pb-2.5">
+    <div className="@container/list flex min-h-0 flex-1 flex-col px-3 pb-2.5">
       <div className="mb-2 flex flex-none items-center justify-between gap-2">
-        <ToggleGroup
-          value={[grouped ? "status" : "flat"]}
-          onValueChange={(v: string[]) => {
-            if (v[0] === "status") setGrouped(true);
-            else if (v[0] === "flat") setGrouped(false);
-          }}
-          aria-label="List grouping"
-          variant="segment"
-          size="sm"
-          spacing={0.5}
-        >
-          <ToggleGroupItem value="status">By status</ToggleGroupItem>
-          <ToggleGroupItem value="flat">Flat list</ToggleGroupItem>
-        </ToggleGroup>
-        <span className="text-muted-foreground font-mono text-xs tabular-nums">
+        <NoteViewChoice
+          value={grouped ? "status" : "flat"}
+          onChange={(value) => setGrouped(value === "status")}
+          label="List grouping"
+          options={[
+            { value: "status", label: "By status" },
+            { value: "flat", label: "Flat list" },
+          ]}
+          className="flex-1"
+        />
+        <span className="text-muted-foreground hidden font-mono text-xs tabular-nums @sm/list:inline">
           {items.length} shown
         </span>
       </div>
@@ -1714,3 +1708,4 @@ export function NoteGalleryView({ items }: { items: readonly PlacedWithState[] }
     </div>
   );
 }
+import { NoteViewChoice } from "./NoteViewChoice";

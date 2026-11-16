@@ -33,7 +33,6 @@ import {
   useState,
 } from "react";
 
-import { Tabs } from "@/components/Tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +50,14 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   INITIAL_VIRTUAL_RECT,
@@ -486,6 +493,7 @@ function FilterMenu({
         </DropdownMenuTrigger>
       </Tip>
       <DropdownMenuContent
+        motion="none"
         align="end"
         finalFocus={(closedBy) => closedBy === "keyboard"}
         font="md"
@@ -514,6 +522,7 @@ function FilterMenu({
                   </span>
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent
+                  motion="none"
                   font="md"
                   className="max-h-72 overflow-y-auto overscroll-contain"
                 >
@@ -625,6 +634,7 @@ function SortMenu({ fixedReason }: { fixedReason?: string }) {
         </DropdownMenuTrigger>
       </Tip>
       <DropdownMenuContent
+        motion="none"
         align="end"
         finalFocus={(closedBy) => closedBy === "keyboard"}
         font="md"
@@ -724,122 +734,146 @@ export function NoteViewBar({
   const [moreOpen, setMoreOpen] = useState(false);
   const upright = useUpright();
   const overflowActive = isOverflowNoteView(view, upright);
+  const choices = [...PRIMARY_NOTE_VIEWS, ...EXTRA_NOTE_VIEWS];
   return (
-    <div className="bg-backdrop/90 border-hairline upright:w-fit upright:max-w-full upright:flex-nowrap flex flex-wrap items-center gap-0.5 rounded-lg border p-0.5">
-      <Tabs.Root
-        value={overflowActive ? null : view}
-        onValueChange={(v) => {
-          if (v) onChange(v as NoteView);
-        }}
-        className="upright:flex-none upright:min-w-0 min-w-fit flex-1"
-      >
-        <Tabs.List
-          aria-label="Notes layout view"
-          className="scroll-fade-x upright:overflow-x-auto relative flex [scrollbar-width:none] items-center gap-0.5 overscroll-x-contain"
+    <div className="@container/note-views w-full">
+      <div className="@xs/note-views:hidden">
+        <Select
+          value={view}
+          items={choices.map((id) => ({ value: id, label: NOTE_VIEW_META[id].label }))}
+          onValueChange={(value) => {
+            if (value !== null) onChange(value);
+          }}
         >
-          <Tabs.Indicator
-            aria-hidden
-            className="tab-pill-indicator bg-secondary ring-hairline-strong z-0 rounded-md shadow-xs ring-1"
-          />
-          {PRIMARY_NOTE_VIEWS.map((id) => {
-            const { label, icon: Icon, tip } = NOTE_VIEW_META[id];
-            return (
-              <Tip key={id} label={tip} side="bottom">
-                <Tabs.Tab
-                  value={id}
-                  data-note-view-tab={id}
-                  className={cn(
-                    "text-muted-foreground not-data-active:hover:text-foreground focus-visible:ring-ring data-active:[&_svg]:text-primary-text studio-press not-data-active:hover:bg-surface-subtle data-active:text-foreground text-ui relative z-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 font-medium whitespace-nowrap outline-none focus-visible:ring-2 data-active:font-semibold motion-reduce:transition-none pointer-coarse:h-10",
-                    id === "gallery" && "upright:hidden",
-                  )}
-                >
-                  <Icon aria-hidden className="size-3.5" />
-                  <span>{label}</span>
-                </Tabs.Tab>
-              </Tip>
-            );
-          })}
-        </Tabs.List>
-      </Tabs.Root>
-      <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-        <Tip label="More note views" side="bottom" open={moreOpen ? false : undefined}>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="tab"
-                size="tab"
-                aria-label={
-                  overflowActive
-                    ? `${NOTE_VIEW_META[view].label} — more note views`
-                    : "More note views"
-                }
-                aria-pressed={overflowActive}
-                className="shrink-0"
-              />
-            }
-          >
-            {overflowActive ? (
-              <>
-                {(() => {
-                  const ActiveIcon = NOTE_VIEW_META[view].icon;
-                  return (
-                    <ActiveIcon
-                      aria-hidden
-                      data-icon="inline-start"
-                      className="text-primary-text"
-                    />
-                  );
-                })()}
-                <span>{NOTE_VIEW_META[view].label}</span>
-              </>
-            ) : (
-              <span>More</span>
-            )}
-            <ChevronDown aria-hidden data-icon="inline-end" className="text-muted-foreground" />
-          </DropdownMenuTrigger>
-        </Tip>
-        <DropdownMenuContent
-          align="end"
-          finalFocus={(closedBy) => closedBy === "keyboard"}
-          font="md"
-          className="w-auto min-w-44"
-        >
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>More views</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={view} onValueChange={(v) => onChange(v as NoteView)}>
-              {EXTRA_NOTE_VIEWS.map((id) => {
-                const { label, icon: Icon, tip } = NOTE_VIEW_META[id];
+          <SelectTrigger aria-label="Notes view" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="start" finalFocus>
+            <SelectGroup>
+              {choices.map((id) => {
+                const { label, icon: Icon } = NOTE_VIEW_META[id];
                 return (
-                  <DropdownMenuRadioItem key={id} value={id} title={tip} closeOnClick>
-                    <span className="flex items-center gap-2">
-                      <Icon aria-hidden className="text-label" />
-                      <span>{label}</span>
-                    </span>
-                  </DropdownMenuRadioItem>
+                  <SelectItem key={id} value={id}>
+                    <Icon aria-hidden className="text-primary-text" />
+                    {label}
+                  </SelectItem>
                 );
               })}
-              <DropdownMenuSeparator className="upright:block hidden" />
-              {(() => {
-                const { label, icon: Icon, tip } = NOTE_VIEW_META.gallery;
-                return (
-                  <DropdownMenuRadioItem
-                    key="gallery"
-                    value="gallery"
-                    title={tip}
-                    closeOnClick
-                    className="upright:flex hidden"
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="bg-backdrop/90 border-hairline hidden w-fit max-w-full items-center gap-0.5 rounded-lg border p-0.5 @xs/note-views:flex">
+        <div className="scroll-fade-x min-w-0 flex-1 [scrollbar-width:none] overflow-x-auto overscroll-x-contain">
+          <ToggleGroup
+            value={overflowActive ? [] : [view]}
+            onValueChange={(v) => {
+              const next = PRIMARY_NOTE_VIEWS.find((id) => id === v[0]);
+              if (next) onChange(next);
+            }}
+            aria-label="Notes layout view"
+            variant="pick"
+            spacing={0.5}
+            className="min-w-fit"
+          >
+            {PRIMARY_NOTE_VIEWS.map((id) => {
+              const { label, icon: Icon, tip } = NOTE_VIEW_META[id];
+              return (
+                <Tip key={id} label={tip} side="bottom">
+                  <ToggleGroupItem
+                    value={id}
+                    data-note-view-tab={id}
+                    className={id === "gallery" ? "upright:hidden" : undefined}
                   >
-                    <span className="flex items-center gap-2">
-                      <Icon aria-hidden className="text-label" />
-                      <span>{label}</span>
-                    </span>
-                  </DropdownMenuRadioItem>
-                );
-              })()}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+                    <Icon aria-hidden className="hidden size-3.5 @md:block" />
+                    <span>{label}</span>
+                  </ToggleGroupItem>
+                </Tip>
+              );
+            })}
+          </ToggleGroup>
+        </div>
+        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+          <Tip label="More note views" side="bottom" open={moreOpen ? false : undefined}>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="tab"
+                  size="tab"
+                  aria-label={
+                    overflowActive
+                      ? `${NOTE_VIEW_META[view].label} — more note views`
+                      : "More note views"
+                  }
+                  aria-pressed={overflowActive}
+                  className="w-28 shrink-0 justify-between"
+                />
+              }
+            >
+              {overflowActive ? (
+                <>
+                  {(() => {
+                    const ActiveIcon = NOTE_VIEW_META[view].icon;
+                    return (
+                      <ActiveIcon
+                        aria-hidden
+                        data-icon="inline-start"
+                        className="text-primary-text"
+                      />
+                    );
+                  })()}
+                  <span>{NOTE_VIEW_META[view].label}</span>
+                </>
+              ) : (
+                <span>More</span>
+              )}
+              <ChevronDown aria-hidden data-icon="inline-end" className="text-muted-foreground" />
+            </DropdownMenuTrigger>
+          </Tip>
+          <DropdownMenuContent
+            motion="none"
+            align="end"
+            finalFocus={(closedBy) => closedBy === "keyboard"}
+            font="md"
+            className="w-auto min-w-44"
+          >
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>More views</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={view} onValueChange={(v) => onChange(v as NoteView)}>
+                {EXTRA_NOTE_VIEWS.map((id) => {
+                  const { label, icon: Icon, tip } = NOTE_VIEW_META[id];
+                  return (
+                    <DropdownMenuRadioItem key={id} value={id} title={tip} closeOnClick>
+                      <span className="flex items-center gap-2">
+                        <Icon aria-hidden className="text-label" />
+                        <span>{label}</span>
+                      </span>
+                    </DropdownMenuRadioItem>
+                  );
+                })}
+                <DropdownMenuSeparator className="upright:block hidden" />
+                {(() => {
+                  const { label, icon: Icon, tip } = NOTE_VIEW_META.gallery;
+                  return (
+                    <DropdownMenuRadioItem
+                      key="gallery"
+                      value="gallery"
+                      title={tip}
+                      closeOnClick
+                      className="upright:flex hidden"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon aria-hidden className="text-label" />
+                        <span>{label}</span>
+                      </span>
+                    </DropdownMenuRadioItem>
+                  );
+                })()}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }
@@ -1241,7 +1275,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
         <Empty>
           {anyFiltered && ix.done.length ? (
             <>
-              No fixed notes match.{" "}
+              No approved notes match.{" "}
               <Button variant="link" size="inline" onClick={clearNoteFilters}>
                 Reset filters
               </Button>
@@ -1303,119 +1337,124 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
         className="flex min-h-0 flex-1 flex-col"
       >
         <div
-          className={cn(
-            "upright:px-2.5 upright:py-1 sideways:py-1 flex flex-none flex-wrap items-center gap-1.5",
-            PHONE ? "px-2.5 pt-1 pb-0.5" : "px-3 pt-2 pb-1",
-          )}
+          role="group"
+          aria-label="Note controls"
+          className="mx-auto max-h-[50%] w-full max-w-4xl flex-none overflow-y-auto overscroll-contain"
         >
-          <h2
+          <div
             className={cn(
-              "flex shrink-0 items-center px-0.5 font-semibold tracking-tight text-balance whitespace-nowrap tabular-nums",
-              PHONE ? "min-h-5 text-sm" : "upright:min-h-6 min-h-7 text-lg",
+              "upright:px-2.5 upright:py-1 sideways:py-1 flex flex-none flex-wrap items-center gap-1.5",
+              PHONE ? "px-2.5 pt-1 pb-0.5" : "px-3 pt-2 pb-1",
             )}
           >
-            <span>Notes</span>
-            {notes.length > 0 && (
-              <span
-                className={cn(
-                  "text-label font-mono font-medium tabular-nums",
-                  PHONE ? "ms-1 text-xs" : "text-ui ms-1.5",
-                )}
-              >
-                ({notes.length})
-              </span>
-            )}
-          </h2>
-          {!PHONE && (
-            <Tip label="Add a note at the playhead (M)">
-              <Button
-                variant={composeNew ? "lit" : notes.length === 0 ? "default" : "subtle"}
-                size="md"
-                aria-label="New note"
-                aria-pressed={composeNew}
-                onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
-              >
-                <Plus aria-hidden data-icon="inline-start" />
-                Note
-              </Button>
-            </Tip>
-          )}
-          {/* The Review room is the desk's big view; highlights when notes await check */}
-          {!PHONE && ix.check.length + ix.open.length + ix.done.length > 0 && (
-            <Tip label="Review room: notes and pictures, big (N)">
-              <Button
-                variant={check.length > 0 ? "approve" : "subtle"}
-                size="md"
-                aria-label={
-                  narrowed && check.length !== ix.check.length
-                    ? `Review room, ${check.length} of ${ix.check.length} to check match filters`
-                    : `Review room${ix.check.length ? `, ${ix.check.length} to check` : ""}`
-                }
-                onClick={(e) => setReview(true, e.currentTarget)}
-              >
-                <ClipboardCheck aria-hidden data-icon="inline-start" />
-                Review
-                {ix.check.length > 0 && (
-                  <Badge
-                    variant={check.length > 0 ? "count-warn" : "count-muted"}
-                    aria-hidden
-                    className="ms-0.5"
-                  >
-                    {narrowed && check.length !== ix.check.length
-                      ? `${check.length}/${ix.check.length}`
-                      : ix.check.length}
-                  </Badge>
-                )}
-              </Button>
-            </Tip>
-          )}
-          {PHONE ? (
-            <PhoneHeaderStatus saved={saved} idleText={notes.length ? "Saved" : ""} />
-          ) : (
-            <SaveStatus
-              state={saved}
-              idleTone="ok"
-              idleText={notes.length ? "Saved" : ""}
-              failText="Not sent. Retrying…"
+            <h2
               className={cn(
-                "ms-auto text-end",
-                saved === "fail" ? "whitespace-normal" : "whitespace-nowrap",
+                "flex shrink-0 items-center px-0.5 font-semibold tracking-tight text-balance whitespace-nowrap tabular-nums",
+                PHONE ? "min-h-5 text-sm" : "upright:min-h-6 min-h-7 text-lg",
               )}
-            />
+            >
+              <span>Notes</span>
+              {notes.length > 0 && (
+                <span
+                  className={cn(
+                    "text-label font-mono font-medium tabular-nums",
+                    PHONE ? "ms-1 text-xs" : "text-ui ms-1.5",
+                  )}
+                >
+                  ({notes.length})
+                </span>
+              )}
+            </h2>
+            {!PHONE && (
+              <Tip label="Add a note at the playhead (M)">
+                <Button
+                  variant={composeNew ? "lit" : notes.length === 0 ? "default" : "subtle"}
+                  size="md"
+                  aria-label="New note"
+                  aria-pressed={composeNew}
+                  onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
+                >
+                  <Plus aria-hidden data-icon="inline-start" />
+                  New note
+                </Button>
+              </Tip>
+            )}
+            {!PHONE && ix.check.length + ix.open.length + ix.done.length > 0 && (
+              <Tip label="Review room: notes and pictures, big (N)">
+                <Button
+                  variant={check.length > 0 ? "approve" : "subtle"}
+                  size="md"
+                  aria-label={
+                    narrowed && check.length !== ix.check.length
+                      ? `Review room, ${check.length} of ${ix.check.length} pending notes match filters`
+                      : `Review room${ix.check.length ? `, ${ix.check.length} ${ix.check.length === 1 ? "note awaits" : "notes await"} your response` : ""}`
+                  }
+                  onClick={(e) => setReview(true, e.currentTarget)}
+                >
+                  <ClipboardCheck aria-hidden data-icon="inline-start" />
+                  Review
+                  {ix.check.length > 0 && (
+                    <Badge
+                      variant={check.length > 0 ? "count-warn" : "count-muted"}
+                      aria-hidden
+                      className="ms-0.5"
+                    >
+                      {narrowed && check.length !== ix.check.length
+                        ? `${check.length}/${ix.check.length}`
+                        : ix.check.length}
+                    </Badge>
+                  )}
+                </Button>
+              </Tip>
+            )}
+            {PHONE ? (
+              <PhoneHeaderStatus saved={saved} idleText={notes.length ? "Saved" : ""} />
+            ) : (
+              <SaveStatus
+                state={saved}
+                idleTone="ok"
+                idleText={notes.length ? "Saved" : ""}
+                failText="Not sent. Retrying…"
+                className={cn(
+                  "ms-auto text-end",
+                  saved === "fail" ? "whitespace-normal" : "whitespace-nowrap",
+                )}
+              />
+            )}
+          </div>
+
+          {notes.length > 0 && !PHONE && (
+            <div className="upright:gap-1 upright:px-2.5 upright:pb-1 flex flex-none flex-col gap-1.5 px-3 pb-1.5">
+              <NoteViewBar view={view} onChange={(v) => setPref("noteView", v)} />
+              <NoteStatusStrip
+                status={status}
+                counts={statusCounts}
+                onChange={(s) => set({ noteStatus: s })}
+              />
+
+              <div className="flex flex-wrap items-center gap-1">
+                <SearchBox
+                  name="note-search"
+                  value={q}
+                  onChange={(x) => set({ noteSearch: x })}
+                  label="Search notes"
+                  placeholder="Search #id, note…"
+                  className="min-w-0 flex-1 basis-40"
+                />
+                <FilterMenu allItems={allRawItems} />
+                <SortMenu fixedReason={SORT_FIXED_REASON[view]} />
+              </div>
+
+              <ActiveFilterChips includeSearch shotOptions={shotOptions} />
+            </div>
           )}
         </div>
-
-        {notes.length > 0 && !PHONE && (
-          <div className="upright:gap-1 upright:px-2.5 upright:pb-1 flex flex-none flex-col gap-1.5 px-3 pb-1.5">
-            <NoteViewBar view={view} onChange={(v) => setPref("noteView", v)} />
-            <NoteStatusStrip
-              status={status}
-              counts={statusCounts}
-              onChange={(s) => set({ noteStatus: s })}
-            />
-
-            <div className="flex flex-wrap items-center gap-1">
-              <SearchBox
-                name="note-search"
-                value={q}
-                onChange={(x) => set({ noteSearch: x })}
-                label="Search notes"
-                placeholder="Search #id, note…"
-                className="min-w-40 flex-1"
-              />
-              <FilterMenu allItems={allRawItems} />
-              <SortMenu fixedReason={SORT_FIXED_REASON[view]} />
-            </div>
-
-            <ActiveFilterChips includeSearch shotOptions={shotOptions} />
-          </div>
-        )}
-
         <TabStage
           activeKey={notes.length === 0 ? "cards" : view}
           order={NOTE_VIEWS}
           className={cn(
-            "border-hairline-subtle flex min-h-0 flex-1 flex-col border-t",
+            "border-hairline-subtle flex min-h-0 w-full flex-1 flex-col border-t",
+            (view === "cards" || view === "list" || view === "feed") && "mx-auto max-w-4xl",
             PHONE ? "pt-1" : "pt-2",
           )}
         >
@@ -1508,7 +1547,13 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
           )}
         </TabStage>
       </div>
-      {composeDock && <Compose dock onCrampedOverlayChange={setCrampedOverlay} />}
+      {composeDock && (
+        <Compose
+          dock
+          className="mx-auto w-full max-w-4xl"
+          onCrampedOverlayChange={setCrampedOverlay}
+        />
+      )}
     </section>
   );
 }

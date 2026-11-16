@@ -55,11 +55,13 @@ export function Compose({
   dock = false,
   idleFooter = null,
   onCrampedOverlayChange,
+  className,
 }: {
   inline?: boolean;
   dock?: boolean;
   idleFooter?: ReactNode;
   onCrampedOverlayChange?: (active: boolean) => void;
+  className?: string;
 }) {
   const compose = useStudio((s) => s.compose),
     draft = useStudio((s) => s.draft),
@@ -117,6 +119,7 @@ export function Compose({
   const shownCompose = compose ?? exitState?.compose ?? null;
   const hasCompose = Boolean(shownCompose);
   const cramped = hasCompose && isDockedSheetCramped({ dock, inline, panelHeight });
+  const scrollLocation = cramped && dock && !inline;
   const hasIdle = Boolean(idleFooter);
   const open = !!compose && !exiting;
   const composeKey =
@@ -125,6 +128,11 @@ export function Compose({
       : shownCompose.kind === "edit"
         ? `edit:${shownCompose.id}`
         : `create:${Math.round(shownCompose.t * 100)}`;
+
+  useLayoutEffect(() => {
+    if (scrollLocation && document.activeElement === text.current)
+      text.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [scrollLocation, composeKey]);
 
   useLayoutEffect(() => {
     if (!shownCompose && idleRef.current) {
@@ -388,6 +396,16 @@ export function Compose({
   const where = isEdit
     ? `Editing note · ${shownCompose.time} · ${shotText}`
     : `${stamp(shownCompose.t)} · ${shotText}${shownCompose.pin ? ` · ${shownCompose.pin.what}` : ""}`;
+  const locationHeader = (
+    <div
+      className={cn(
+        "text-foreground/90 sideways:mb-1 text-ui flex-none leading-normal font-medium wrap-anywhere tabular-nums",
+        dock ? (cramped ? "mb-1" : "mb-1.5 [@media(max-height:679px)]:mb-1") : "mb-2",
+      )}
+    >
+      {where}
+    </div>
+  );
   return (
     <div
       ref={wrapRef}
@@ -401,6 +419,7 @@ export function Compose({
             ? "relative z-20 flex-initial"
             : "flex-initial",
         exiting && "pointer-events-none select-none",
+        className,
       )}
     >
       <div
@@ -444,15 +463,9 @@ export function Compose({
           exiting === "save" && "ring-primary/70 ring-1 ring-inset",
         )}
       >
-        <div
-          className={cn(
-            "text-foreground/90 sideways:mb-1 text-ui flex-none leading-normal font-medium wrap-anywhere tabular-nums",
-            dock ? (cramped ? "mb-1" : "mb-1.5 [@media(max-height:679px)]:mb-1") : "mb-2",
-          )}
-        >
-          {where}
-        </div>
+        {!scrollLocation && locationHeader}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {scrollLocation && locationHeader}
           {shownDrawn && (
             <div className="text-ui text-ink-text mb-1.5 tabular-nums">{shownDrawn}</div>
           )}
@@ -509,6 +522,10 @@ export function Compose({
             autoComplete="off"
             value={shownDraft}
             readOnly={!!exiting}
+            onFocus={(e) => {
+              if (scrollLocation)
+                e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+            }}
             onChange={(e) => setDraft(e.target.value)}
             onPaste={(e) => {
               const files = [...e.clipboardData.files];
@@ -623,6 +640,7 @@ export function Compose({
         <div
           className={cn(
             "sideways:mt-1.5 flex max-w-[65ch] flex-none items-center gap-1.5",
+            dock && !inline && "flex-wrap",
             dock ? "mt-1.5" : "mt-2",
           )}
         >
