@@ -142,7 +142,7 @@ function SoundSwapList({
                   <span
                     className={cn(
                       "truncate text-xs",
-                      isCurrent ? "text-primary font-medium" : "text-foreground",
+                      isCurrent ? "text-primary-text font-medium" : "text-foreground",
                     )}
                   >
                     {label}
@@ -162,7 +162,9 @@ function SoundSwapList({
                     </span>
                   </span>
                 </span>
-                {isCurrent && <Check aria-hidden className="text-primary size-3.5 flex-none" />}
+                {isCurrent && (
+                  <Check aria-hidden className="text-primary-text size-3.5 flex-none" />
+                )}
               </button>
             </li>
           );

@@ -150,7 +150,7 @@ const drawClip = (
   // Fades as a darkened corner, with their handles on the clip the pointer is over or that is picked
   const fi = c.fadeIn ?? 0,
     fo = c.fadeOut ?? 0;
-  g.fillStyle = "rgba(0,0,0,.45)";
+  g.fillStyle = tone("fade-shade");
   if (fi > 0) {
     g.beginPath();
     g.moveTo(x0, y);
@@ -168,7 +168,7 @@ const drawClip = (
   if (on || (hover && same(hover, ref))) {
     const from = Math.max(0, (cx0 - x0) / px),
       to = Math.min(span(ref)[1] - span(ref)[0], (cx1 - x0) / px);
-    g.strokeStyle = "rgba(255,255,255,.65)";
+    g.strokeStyle = tone("gain-curve");
     g.lineWidth = 1;
     g.beginPath();
     for (const [i, k] of gainPoints(c, from, to).entries()) {
@@ -340,7 +340,7 @@ export const drawLanes = () => {
   }
   if (get().blade && bladeLine.row === "lanes") {
     const x = Math.round(X(bladeLine.t));
-    g.fillStyle = "#000";
+    g.fillStyle = tone("stage");
     g.fillRect(x - 1, bladeLine.y0 - 3, 3, bladeLine.y1 - bladeLine.y0 + 6);
     g.fillStyle = tone("pick");
     g.fillRect(x, bladeLine.y0 - 2, 1, bladeLine.y1 - bladeLine.y0 + 4);

@@ -73,7 +73,7 @@ function Slider({
             // The name belongs on the thumb: its <input type="range"> is what a screen reader lands on
             aria-label={ariaLabel}
             className={cn(
-              "ring-ring/30 relative block shrink-0 rounded-full border border-white bg-white transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-2 focus-visible:ring-2 focus-visible:outline-hidden active:ring-2 disabled:pointer-events-none disabled:opacity-50",
+              "ring-ring/30 border-slider-thumb bg-slider-thumb relative block shrink-0 rounded-full border transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-2 focus-visible:ring-2 focus-visible:outline-hidden active:ring-2 disabled:pointer-events-none disabled:opacity-50",
               appearance === "scrub" ? "size-2.5" : "size-3",
             )}
           />

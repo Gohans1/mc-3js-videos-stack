@@ -101,7 +101,7 @@ function Scrub() {
           e.preventDefault();
         }}
       >
-        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/18">
+        <div className="bg-scrubber-track absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full">
           <div className="bg-primary h-full w-[calc(var(--at,0)*100%)]" />
         </div>
         {/* what still needs the creator: to fix (ink) and to check (warn); the done ones stay folded, as in the list */}
@@ -122,7 +122,7 @@ function Scrub() {
         )}
         <span
           aria-hidden
-          className="bg-foreground absolute top-1/2 left-[calc(var(--at,0)*100%)] size-4 -translate-1/2 rounded-full shadow-md ring-2 ring-black/40 transition-transform duration-150 ease-out group-data-dragging/scrub:scale-125"
+          className="bg-foreground ring-scrim-soft absolute top-1/2 left-[calc(var(--at,0)*100%)] size-4 -translate-1/2 rounded-full shadow-md ring-2 transition-transform duration-150 ease-out group-data-dragging/scrub:scale-125"
         />
       </div>
       <span className="text-ui text-muted-foreground flex-none tabular-nums">

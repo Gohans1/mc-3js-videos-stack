@@ -20,7 +20,6 @@
 }
 
 @theme inline {
-  --color-curve: #080808;
   --color-input-border: var(--input-border);
   --color-destructive-text: var(--destructive-text);
 

@@ -2,10 +2,9 @@
 1722171), each fault with the command or setting that fixes it. Run inside the film.
   bun run deliver                  renders/final.mp4, the file to upload (bun run mix renders/final_video.mp4 makes it)
   bun run deliver <video>          any other video
-  bun run deliver --youtube        also how the picture looks after YouTube's own re-encode: renders/youtube_preview.mp4 (AV1 at
-                                   4 Mbps, 1440 lines, about YouTube's 1440p rung; Shorts 1080x1920 at 3 Mbps; YouTube picks the
-                                   bitrate per video and serves 1080p at about 0.4-3 Mbps, where smooth gradients band whatever
-                                   is done), and the seconds where that re-encode bands smooth light the upload kept smooth
+  bun run deliver --youtube        approximate LOCAL compression preview: renders/youtube_preview.mp4 (AV1 at
+                                   4 Mbps, 1440 lines; Shorts 1080x1920 at 3 Mbps). No upload or actual YouTube rendition.
+                                   Measures where this fixed-bitrate local re-encode adds bands to smooth light
                                    (Netflix CAMBI, 0 none, 5 a little, 24 unwatchable), each with a picture of it. About 3x the
                                    video's length on this PC: a 10 min film takes half an hour, so name seconds
   bun run deliver --youtube 9-15   the same for those seconds of the video only, in seconds
@@ -225,16 +224,24 @@ def youtube(video, span, root, named=""):
     for old in out.glob("youtube_bands_*s.png"):
         old.unlink()
     preview = out / "youtube_preview.mp4"
-    print(f"re-encoding {length:.0f} s the way YouTube serves it (AV1 {bitrate}bps, {width} wide) and measuring bands in both, "
+    print(f"local compression preview of {length:.0f} s (AV1 {bitrate}bps, {width} wide; approximate, not an actual YouTube rendition) and measuring bands in both, "
           f"about {max(10, length * 3):.0f} s{' (a few seconds judge banding as well: --youtube <from>-<to>)' if length > 60 else ''} ...",
           file=sys.stderr)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(length), "-i", str(video), "-map", "0:v:0",
-                    "-map", "0:a:0?", "-vf", f"scale={width}:-2:flags=lanczos", "-c:v", "libsvtav1", "-preset", "10", "-b:v",
-                    bitrate, "-c:a", "aac", "-b:a", "128k", str(preview)], check=True, timeout=600 + length * 20,
-                   env={**os.environ, "SVT_LOG": "1"})  # SVT-AV1 prints its whole config to stderr unless told errors only
-    with tempfile.TemporaryDirectory(prefix="deliver-") as tmp:
-        before = cambi(video, start, length, width, tmp, "upload")
-        after = cambi(preview, 0, length, width, tmp, "preview", shown=start)
+    try:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(length), "-i", str(video), "-map", "0:v:0",
+                        "-map", "0:a:0?", "-vf", f"scale={width}:-2:flags=lanczos", "-c:v", "libsvtav1", "-preset", "10", "-b:v",
+                        bitrate, "-c:a", "aac", "-b:a", "128k", str(preview)], check=True, timeout=600 + length * 20,
+                       env={**os.environ, "SVT_LOG": "1"})  # SVT-AV1 prints its whole config to stderr unless told errors only
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        print(f"Local compression preview failed: {e}", file=sys.stderr)
+        return 1, []
+    try:
+        with tempfile.TemporaryDirectory(prefix="deliver-") as tmp:
+            before = cambi(video, start, length, width, tmp, "upload")
+            after = cambi(preview, 0, length, width, tmp, "preview", shown=start)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        print(f"CAMBI banding measurement failed: {e}", file=sys.stderr)
+        return 1, []
     added = sorted(s for s, v in after.items() if v >= BANDS and v - before.get(s, 0.0) >= ADDED)
     spans = []
     for s in added:
@@ -361,7 +368,7 @@ def main(args):
     elif fixes:
         print(f"next: each FIX line says its fix; then bun run deliver {video} again")
     else:
-        print(f"next: bun run deliver {f'{video} ' if named else ''}--youtube shows how it looks after YouTube's re-encode and where it "
+        print(f"next: bun run deliver {f'{video} ' if named else ''}--youtube makes an approximate local compression preview and shows where it "
               f"bands (about {max(10, long * 3):.0f} s here{'; a few seconds judge it as well: --youtube <from>-<to>' if long > 60 else ''})")
     # a whole film's seconds are the studio's; a chunk's or a span's start elsewhere, so their bands are named, not lit
     whole = video.name in ("final.mp4", "final_video.mp4", "draft.mp4", "draft_video.mp4")

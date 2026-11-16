@@ -297,7 +297,7 @@ export function FilmSpeedPanel() {
             })}
           </ul>
           {curve && (
-            <div className="bg-curve mx-3 my-3 overflow-hidden rounded-md">
+            <div className="bg-curve-bg mx-3 my-3 overflow-hidden rounded-md">
               <p className="text-ui flex justify-between border-b px-3 py-2 tabular-nums">
                 <span>Duration</span>
                 <span>

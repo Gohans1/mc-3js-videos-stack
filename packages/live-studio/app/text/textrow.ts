@@ -36,7 +36,6 @@ export const ROW_H = 28;
 const CLIP_H = 24,
   EDGE = 6;
 // A shape has no CapCut clip to copy: plum, apart from the text clips' orange-brown (index.css --clip-text)
-const ANIM_SHADE = "rgba(0,0,0,.28)"; // over the stretch an item animates in or out
 
 type Box = { i: number; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
@@ -89,7 +88,7 @@ export const drawTextRow = () => {
     const ai = it.in?.fx ? (it.in.len ?? 0.5) : 0,
       ao = it.out?.fx ? (it.out.len ?? 0.5) : 0,
       k = ai + ao > span ? span / (ai + ao) : 1;
-    g.fillStyle = ANIM_SHADE;
+    g.fillStyle = tone("anim-shade");
     if (ai) g.fillRect(x0, y + CLIP_H - 5, ai * k * px, 5);
     if (ao) g.fillRect(x1 - ao * k * px, y + CLIP_H - 5, ao * k * px, 5);
     g.save();
@@ -119,7 +118,7 @@ export const drawTextRow = () => {
       g.roundRect(cx0 - 1, y - 1, cx1 - cx0 + 2, CLIP_H + 2, 4);
       g.stroke();
     } else if (hover === i) {
-      g.strokeStyle = "rgba(255,255,255,.35)";
+      g.strokeStyle = tone("clip-hover");
       g.lineWidth = 1;
       g.beginPath();
       g.roundRect(cx0 - 0.5, y - 0.5, cx1 - cx0 + 1, CLIP_H + 1, 3.5);

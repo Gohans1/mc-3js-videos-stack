@@ -8,12 +8,12 @@ new-film tự sao template, cài dependency, nối vault và dựng picked.zip; 
 
 ## Chọn đúng lệnh
 
-| Lệnh tại thư mục gốc | Vai trò |
-| --- | --- |
-| bun run setup | Chuẩn bị máy: bun install, setup:vault, link; tải tài nguyên và tái sử dụng kết quả khi chạy lại. |
-| bun run setup:vault | Chỉ tải và dựng vault; cần cài dependency trước bằng bun install. |
-| bun run new-film cave-escape | Tạo phim mới hoàn chỉnh từ template, không ghi đè phim đã có. |
-| bun run link cave-escape | Cập nhật bản sao asset thật từ vault và dựng picks sau khi đổi kho hoặc pack/picks.json; không cài dependency hay tải tài nguyên. |
+| Lệnh tại thư mục gốc                      | Vai trò                                                                                                                                               |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| bun run setup                             | Chuẩn bị máy: bun install, setup:vault, link; tải tài nguyên và tái sử dụng kết quả khi chạy lại.                                                     |
+| bun run setup:vault                       | Chỉ tải và dựng vault; cần cài dependency trước bằng bun install.                                                                                     |
+| bun run new-film cave-escape              | Tạo phim mới hoàn chỉnh từ template, không ghi đè phim đã có.                                                                                         |
+| bun run link cave-escape                  | Cập nhật bản sao asset thật từ vault và dựng picks sau khi đổi kho hoặc pack/picks.json; không cài dependency hay tải tài nguyên.                     |
 | bun packages/live-studio/init.mjs PROJECT | Nối project mới hoặc có sẵn vào Studio và cài dependency; không nối vault hay dựng picks. Xem trước bằng --dry-run; phim trong repo ưu tiên new-film. |
 
 ## Tiếp tục khi lỗi
@@ -70,23 +70,35 @@ Every schema is open (`looseObject`): a film may make its own objects, transitio
 
 Các đường dẫn dưới đây tính từ thư mục phim; thêm --help để xem đủ tham số trước khi chạy. Đây là công cụ hỗ trợ, không bắt buộc dùng mocap, định dạng timeline hay vật lý có sẵn để sáng tạo.
 
-| Việc | Lệnh và luồng |
-| --- | --- |
-| Đo catalogue | python ../../packages/clip-catalog/batch.py catalog mixamo --limit 1; đọc vault/motion và ghi catalog/<lib>.jsonl dùng chung toàn repo. Chạy lại để tiếp tục hoặc thử lại clip lỗi; tên clip giữ nguyên khoảng trắng. |
-| Kiểm tên và tư thế | python ../../packages/clip-catalog/catalog_check.py; bất đồng là gợi ý xem lại, không phải lệnh cấm động tác. --fights mở cả clip chiến đấu; lỗi tải cần sửa trước khi đánh giá. |
-| Review bằng mắt | Chạy batch.py sheets rồi catalog_review.py; mở trang JPG được pages.json liệt kê, ghi desc/mood/prop/style từng ô và nộp bằng --page 0 --notes notes.json. Trang đếm từ 0, ô từ 1; giữ nguyên pages.json tới khi review xong, --fix chỉ sửa một clip đã tồn tại. |
-| Từ vựng review | --help của catalog_review.py liệt kê nhãn tìm kiếm; desc và flaw mô tả tự do. Ảnh chỉ có tám thời điểm nên cần xem thêm chuyển động bằng lab/clip.ts khi nghi ngờ. |
-| So sánh tìm kiếm | python ../../packages/clip-catalog/catalog_eval.py renders/picks-v1.txt --limit 1; gửi mô tả tới Jev, có thể dùng quota trả phí. Mỗi cảnh lưu checkpoint .txt.jsonl, --resume tiếp tục cùng dữ liệu/tham số; đổi code hoặc catalogue thì dùng tên đầu ra mới. |
-| Quét retarget | python ../../packages/clip-catalog/batch.py sweep mixamo --limit 1 rồi sweep_report.py mixamo; --diff OLD.jsonl so với bản cũ. Ngưỡng chỉ gợi ý kiểm hình, không kết luận chất lượng diễn xuất. |
-| Giới hạn và chạy lại | Batch tối đa 600 giây mỗi nhóm, --limit giới hạn tổng clip; log nằm trong vault/motion/catalog/logs. Lỗi/ngắt giữ kết quả hoàn tất; sau đổi code đo/retarget, cất JSONL và sheets cũ trước khi đo lại để không dùng dữ liệu cũ. |
-| Bash cũ | catalog.sh, sweep.sh và catalog_review.sh chuyển tới cùng batch.py tương ứng catalog, sweep, sheets. Windows chạy Python trực tiếp, không cần Bash hay GNU timeout. |
-| Xem một clip | LAB_CLIP=lib/name ENTRY=lab/clip.ts bun run render stills rồi python ../../packages/clip-catalog/sheet_clip.py. PowerShell đặt biến qua $env:LAB_CLIP và $env:ENTRY, xóa chúng sau khi chạy. |
-| Nhặt asset | Sửa pack/picks.json rồi bun ../../packages/mc-assets/pick.mjs hoặc bun run link <phim> ở gốc; pick.py chỉ chuyển tiếp cho cùng bộ dựng Bun. picked.zip giữ namespace/model/texture và không được đưa lên Git khi giấy phép chưa cho phép. |
-| Runtime renderer | bun ../../packages/mc-assets/vendor.mjs sao chép WASM và entity pack đã cài vào assets/public; postinstall của phim tự gọi. Chạy lại sau nâng cấp block-model-renderer, không sửa file vendor bằng tay. |
-| Format tùy chọn | bun ../../scripts/timeline_fmt.ts hoặc python ../../scripts/timeline_fmt.py giữ bố cục gọn 140 cột; đều đọc hết JSON trước khi ghi. Hàm load/save/dump vẫn import được, schema mở và code riêng vẫn dùng bình thường. |
-| Lệnh riêng phim | bun run help đọc scripts từ package.json của phim; đọc --help và file thực thi trước khi chạy lệnh như bake:physics. Bake phải nói rõ file bị ghi và giây scene/narration/heard; đây là bước chuẩn bị riêng của phim, không phải quy trình bắt buộc cho mọi phim. |
-| Dữ liệu và công cụ | Vault không nằm trong Git; chép motion từ máy cũ vào vault/motion thật trên C: rồi chạy link, không có bước tự tải motion. Python tạo ảnh cần Pillow, cài bằng uv pip install pillow vào venv đang dùng; đánh giá Jev cần route/key riêng như jev.py chỉ rõ. |
+| Việc                 | Lệnh và luồng                                                                                                                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Đo catalogue         | python ../../packages/clip-catalog/batch.py catalog mixamo --limit 1; đọc vault/motion và ghi catalog/<lib>.jsonl dùng chung toàn repo. Chạy lại để tiếp tục hoặc thử lại clip lỗi; tên clip giữ nguyên khoảng trắng.                                             |
+| Kiểm tên và tư thế   | python ../../packages/clip-catalog/catalog_check.py; bất đồng là gợi ý xem lại, không phải lệnh cấm động tác. --fights mở cả clip chiến đấu; lỗi tải cần sửa trước khi đánh giá.                                                                                  |
+| Review bằng mắt      | Chạy batch.py sheets rồi catalog_review.py; mở trang JPG được pages.json liệt kê, ghi desc/mood/prop/style từng ô và nộp bằng --page 0 --notes notes.json. Trang đếm từ 0, ô từ 1; giữ nguyên pages.json tới khi review xong, --fix chỉ sửa một clip đã tồn tại.  |
+| Từ vựng review       | --help của catalog_review.py liệt kê nhãn tìm kiếm; desc và flaw mô tả tự do. Ảnh chỉ có tám thời điểm nên cần xem thêm chuyển động bằng lab/clip.ts khi nghi ngờ.                                                                                                |
+| So sánh tìm kiếm     | python ../../packages/clip-catalog/catalog_eval.py renders/picks-v1.txt --limit 1; gửi mô tả tới Jev, có thể dùng quota trả phí. Mỗi cảnh lưu checkpoint .txt.jsonl, --resume tiếp tục cùng dữ liệu/tham số; đổi code hoặc catalogue thì dùng tên đầu ra mới.     |
+| Quét retarget        | python ../../packages/clip-catalog/batch.py sweep mixamo --limit 1 rồi sweep_report.py mixamo; --diff OLD.jsonl so với bản cũ. Ngưỡng chỉ gợi ý kiểm hình, không kết luận chất lượng diễn xuất.                                                                   |
+| Giới hạn và chạy lại | Batch tối đa 600 giây mỗi nhóm, --limit giới hạn tổng clip; log nằm trong vault/motion/catalog/logs. Lỗi/ngắt giữ kết quả hoàn tất; sau đổi code đo/retarget, cất JSONL và sheets cũ trước khi đo lại để không dùng dữ liệu cũ.                                   |
+| Bash cũ              | catalog.sh, sweep.sh và catalog_review.sh chuyển tới cùng batch.py tương ứng catalog, sweep, sheets. Windows chạy Python trực tiếp, không cần Bash hay GNU timeout.                                                                                               |
+| Xem một clip         | LAB_CLIP=lib/name ENTRY=lab/clip.ts bun run render stills rồi python ../../packages/clip-catalog/sheet_clip.py. PowerShell đặt biến qua $env:LAB_CLIP và $env:ENTRY, xóa chúng sau khi chạy.                                                                      |
+| Nhặt asset           | Sửa pack/picks.json rồi bun ../../packages/mc-assets/pick.mjs hoặc bun run link <phim> ở gốc; pick.py chỉ chuyển tiếp cho cùng bộ dựng Bun. picked.zip giữ namespace/model/texture và không được đưa lên Git khi giấy phép chưa cho phép.                         |
+| Runtime renderer     | bun ../../packages/mc-assets/vendor.mjs sao chép WASM và entity pack đã cài vào assets/public; postinstall của phim tự gọi. Chạy lại sau nâng cấp block-model-renderer, không sửa file vendor bằng tay.                                                           |
+| Format tùy chọn      | bun ../../scripts/timeline_fmt.ts hoặc python ../../scripts/timeline_fmt.py giữ bố cục gọn 140 cột; đều đọc hết JSON trước khi ghi. Hàm load/save/dump vẫn import được, schema mở và code riêng vẫn dùng bình thường.                                             |
+| Lệnh riêng phim      | bun run help đọc scripts từ package.json của phim; đọc --help và file thực thi trước khi chạy lệnh như bake:physics. Bake phải nói rõ file bị ghi và giây scene/narration/heard; đây là bước chuẩn bị riêng của phim, không phải quy trình bắt buộc cho mọi phim. |
+| Dữ liệu và công cụ   | Vault không nằm trong Git; chép motion từ máy cũ vào vault/motion thật trên C: rồi chạy link, không có bước tự tải motion. Python tạo ảnh cần Pillow, cài bằng uv pip install pillow vào venv đang dùng; đánh giá Jev cần route/key riêng như jev.py chỉ rõ.      |
 
 ## Thử lệnh riêng
 
 Thử lệnh trên WT riêng, cài dependency bằng Bun và sao các asset cần dùng thành file thật; không chia sẻ node_modules thủ công. Trước khi dọn bản thử, tuân thủ mục Worktree trên Windows ở trên.
+
+## Thử lệnh riêng biệt
+
+Từ root, dùng bun run new-film <tên-thử-chưa-tồn-tại> để tạo phim thử độc lập, hoặc sao chép đúng phim cần tái hiện lỗi. Không dùng một tên thư mục cố định rồi mặc định rằng có thể xóa nó.
+
+| Cần gì                     | Cách làm                                                                                                        |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Thử parser và schema       | Dùng template trong phim thử, chỉ chép dữ liệu tối thiểu cần thiết                                              |
+| Tái hiện lỗi của phim thật | Sao chép src, cấu hình và media cần thiết; không chép hay dùng chung notes có thể ghi về bản gốc                |
+| Cần render có sẵn          | Sao chép riêng video và cuts.json vào renders của phim thử                                                      |
+| Dữ liệu bản thử            | Dùng file thật trên C:; node_modules do Bun cài trong WT, không dùng chung với checkout gốc                     |
+| Dọn phim thử               | Chỉ xóa đúng thư mục do phiên này tạo, sau khi xác minh đường dẫn và các junction; giữ kết quả cần review trước |

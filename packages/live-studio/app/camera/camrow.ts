@@ -94,7 +94,6 @@ import {
 } from "./transitions";
 
 // A shot is CapCut's video clip: its teal, a lighter tag holding its name, its other words dimmer on the clip (index.css tokens)
-const ANIM_LIGHT = "rgba(255,255,255,.55)"; // the band under a shot that animates in or out
 const PAD = 2,
   HEAD = 15,
   BAND = 4,
@@ -311,10 +310,11 @@ const drawBlock = (
     m = metricsOf(i);
   const inBand = animBandOnSegment(src, clock, m, span, "in");
   const outBand = animBandOnSegment(src, clock, m, span, "out");
-  g.fillStyle = ANIM_LIGHT;
+  const animLight = tone("anim-light");
+  g.fillStyle = animLight;
   if (an.combo) {
     g.setLineDash([3, 3]);
-    g.strokeStyle = ANIM_LIGHT;
+    g.strokeStyle = animLight;
     g.lineWidth = BAND;
     g.beginPath();
     g.moveTo(cx0, foot + BAND / 2);
@@ -483,7 +483,7 @@ export const drawCamRow = () => {
   }
   if (get().blade && bladeLine.row === "cam") {
     const x = Math.round(X(bladeLine.t));
-    g.fillStyle = "#000";
+    g.fillStyle = tone("stage");
     g.fillRect(x - 1, 0, 3, h);
     g.fillStyle = tone("pick");
     g.fillRect(x, 0, 1, h);

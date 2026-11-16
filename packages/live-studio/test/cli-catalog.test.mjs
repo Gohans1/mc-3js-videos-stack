@@ -237,6 +237,9 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
 
     // 4) Bidirectional disk entrypoint coverage across scripts/ and packages/
     const INTERNAL_WORKER_OR_HELPER_FILES = new Map([
+      ["scripts/evals/load/compare.mjs", "developer helper comparing recorded performance runs"],
+      ["scripts/evals/load/frame.mjs", "developer frame-measurement probe for load evaluations"],
+      ["scripts/studio_tell.py", "shared Studio activity reporter library imported by Python CLIs"],
       ["packages/clip-catalog/jev.py", "stdin JSON helper library/IPC wrapper for Jev"],
       ["packages/live-studio/src/cli.mjs", "shared CLI argument parser imported by entrypoints"],
       [
@@ -250,7 +253,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         "scripts/sound/process.py",
         "stdin JSON FFmpeg/Rubberband worker spawned by Live Studio audio",
       ],
-      
+
       [
         "scripts/voice/words.py",
         "internal WHISPERX_PYTHON GPU alignment worker spawned by scripts/voice/align.ts",
@@ -262,6 +265,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ".vite",
       "test",
       "renders",
+      "runs",
       ".git",
       "dist",
     ]);

@@ -69,11 +69,11 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
           {summary.matches.slice(0, 4).map((m, idx) => (
             <div
               key={m.id ?? idx}
-              className="bg-input/70 flex flex-col gap-1 rounded-md px-2.5 py-2"
+              className="bg-backdrop/70 flex flex-col gap-1 rounded-md px-2.5 py-2"
             >
               <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
                 {m.id && (
-                  <span className="text-tag text-primary font-mono tabular-nums">{m.id}</span>
+                  <span className="text-tag text-primary-text font-mono tabular-nums">{m.id}</span>
                 )}
                 <span>{m.voiceTitle}</span>
                 {m.tags.map((tag) => (
@@ -134,7 +134,7 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
                         onClick={() => listenVoiceFile("try", tryFile)}
                         className={cn(
                           "hover:bg-raised-4 focus-visible:ring-ring inline-flex h-6 items-center gap-1 rounded-sm px-2 text-xs transition-colors outline-none focus-visible:ring-2",
-                          isPlaying ? "text-primary" : "text-foreground",
+                          isPlaying ? "text-primary-text" : "text-foreground",
                         )}
                       >
                         {isPlaying ? (
@@ -149,7 +149,7 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
                         disabled={promoting !== null}
                         aria-label={`Use ${label} for take ${singleTake.id}`}
                         onClick={() => handleUseTry(singleTake.id, tryFile)}
-                        className="text-primary hover:bg-tint focus-visible:ring-ring inline-flex h-6 items-center rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 disabled:opacity-50"
+                        className="text-primary-text hover:bg-tint focus-visible:ring-ring inline-flex h-6 items-center rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 disabled:opacity-50"
                       >
                         {busy ? "…" : "Use"}
                       </button>

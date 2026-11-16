@@ -1,12 +1,3 @@
-// The buttons that matter, play, note and draw, then the free camera, the sound, full screen
-// and the settings (playback speed lives there: rarely touched). Settings open in a panel over the page, so the notes and the
-// sound lanes beside the picture never give way to them. As the bar narrows (a narrow window, the page zoomed in, a phone) labels
-// go first, then whole buttons, least needed first, each still on its key: the volume slider (Ctrl+↑ ↓), the snapshot (Shift+\), night
-// vision and the key from view while flying (Shift+K; night vision in Settings), the free camera (F, and in Settings; kept
-// while on); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
-// Settings). Play, Note, Draw, full screen and the settings never go. The widths are the bar's inside at a phone's larger text
-import { lazy, Suspense } from "react";
-
 import {
   Brush,
   Ellipsis,
@@ -22,6 +13,14 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+// The buttons that matter, play, note and draw, then the free camera, the sound, full screen
+// and the settings (playback speed lives there: rarely touched). Settings open in a panel over the page, so the notes and the
+// sound lanes beside the picture never give way to them. As the bar narrows (a narrow window, the page zoomed in, a phone) labels
+// go first, then whole buttons, least needed first, each still on its key: the volume slider (Ctrl+↑ ↓), the snapshot (Shift+\), night
+// vision and the key from view while flying (Shift+K; night vision in Settings), the free camera (F, and in Settings; kept
+// while on); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
+// Settings). Play, Note, Draw, full screen and the settings never go. The widths are the bar's inside at a phone's larger text
+import { lazy, Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -57,7 +56,7 @@ export function Transport() {
     full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none in-data-inspector-active:hidden @container col-start-1 row-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg px-3 py-1 in-data-wide:col-start-2 in-data-cli-expanded:hidden">
+    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg px-3 py-1 in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-wide:col-start-2">
       <Button
         variant="secondary"
         size="md"
@@ -212,7 +211,9 @@ export function Transport() {
           sideOffset={8}
           className="h-[min(720px,var(--available-height))] w-[min(400px,calc(100vw-24px))]"
         >
-          <Suspense fallback={null}><Settings /></Suspense>
+          <Suspense fallback={null}>
+            <Settings />
+          </Suspense>
         </PopoverContent>
       </Popover>
     </div>

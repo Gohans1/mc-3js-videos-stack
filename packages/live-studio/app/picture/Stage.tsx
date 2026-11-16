@@ -55,7 +55,7 @@ function Badges() {
       )}
       <span
         role="status"
-        className="max-w-full truncate rounded-md bg-black/72 px-2 py-px text-xs empty:hidden"
+        className="bg-scrim-strong max-w-full truncate rounded-md px-2 py-px text-xs empty:hidden"
       >
         {status}
       </span>
@@ -77,7 +77,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
       className={
         phone
           ? "portrait:phone-picture-h relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-black portrait:aspect-(--frame) portrait:w-full portrait:flex-initial landscape:flex-1"
-          : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden in-data-inspector-active:hidden rounded-t-lg in-data-wide:col-start-2 in-data-cli-expanded:hidden"
+          : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-wide:col-start-2"
       }
     >
       <div
@@ -85,7 +85,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         className="relative flex min-h-0 w-full flex-1 items-center justify-center"
       >
         {/* The frame itself and what is pinned or drawn on it */}
-        <div ref={bind("stage")} className="relative overflow-hidden bg-black">
+        <div ref={bind("stage")} className="bg-stage relative overflow-hidden">
           <canvas
             ref={bind("canvas")}
             className={cn(
@@ -143,7 +143,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         {loading && (
           <div
             role="status"
-            className="absolute top-12.5 left-3 z-2 rounded-md bg-black/60 px-2 py-0.5"
+            className="bg-scrim absolute top-12.5 left-3 z-2 rounded-md px-2 py-0.5"
           >
             {loading}
           </div>

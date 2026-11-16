@@ -48,12 +48,7 @@ import {
 } from "./ink";
 import { noteNumberMap, noteSecond, resolveNoteMedia } from "./note-card-meta";
 import { matchesNoteFilters, sortPlacedNotes } from "./note-views-model";
-import {
-  type ActivePinNote,
-  activeStageNotes,
-  type PinLike,
-  resolvePinLayout,
-} from "./pinfade";
+import { type ActivePinNote, activeStageNotes, type PinLike, resolvePinLayout } from "./pinfade";
 import { refHooks, restoreRefs, setRefs } from "./refs";
 import { nextReviewNeighborId, pickSnapshotSource, stepReviewPickId } from "./review-nav";
 import {

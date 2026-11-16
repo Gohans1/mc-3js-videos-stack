@@ -213,14 +213,14 @@ const TARGETS = [
   [0, 191, 0, "G"],
   [191, 191, 0, "Yl"],
 ] as const;
-const GRID = "rgba(255,255,255,0.14)",
-  LABEL = "rgba(255,255,255,0.45)";
 
 const paint = (
   pane: HTMLCanvasElement,
   from: HTMLCanvasElement,
   kind: "parade" | "wave" | "vector",
 ) => {
+  const grid = tone("hairline-strong"),
+    label = tone("muted-foreground");
   const dpr = devicePixelRatio,
     w = Math.round(pane.clientWidth * dpr),
     h = Math.round(pane.clientHeight * dpr);
@@ -240,7 +240,7 @@ const paint = (
       cx = w / 2,
       cy = h / 2;
     x.drawImage(from, ox, oy, s, s);
-    x.strokeStyle = GRID;
+    x.strokeStyle = grid;
     x.lineWidth = dpr;
     x.beginPath();
     x.arc(cx, cy, s / 2, 0, Math.PI * 2);
@@ -255,7 +255,7 @@ const paint = (
     x.moveTo(cx, cy);
     x.lineTo(cx + (Math.cos(skin) * s) / 2, cy + (Math.sin(skin) * s) / 2);
     x.stroke();
-    x.fillStyle = LABEL;
+    x.fillStyle = label;
     x.textAlign = "center";
     for (const [r, g, b, name] of TARGETS) {
       const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b,
@@ -272,9 +272,9 @@ const paint = (
     at = (v: number) => bottom - (v / 1023) * (bottom - top);
   x.imageSmoothingEnabled = true;
   x.drawImage(from, pad, top, w - pad - 4 * dpr, bottom - top);
-  x.strokeStyle = GRID;
+  x.strokeStyle = grid;
   x.lineWidth = dpr;
-  x.fillStyle = LABEL;
+  x.fillStyle = label;
   x.textAlign = "right";
   for (const v of [0, 256, 512, 768, 1023]) {
     x.beginPath();
@@ -299,12 +299,12 @@ const paint = (
       white = `White ${pct(clipped.white)}%   `,
       bw = x.measureText(black).width,
       ww = x.measureText(white).width;
-    x.fillStyle = "rgba(0,0,0,0.78)";
+    x.fillStyle = tone("scrim-strong");
     x.fillRect(w - 12 * dpr - bw - ww, y - 8 * dpr, bw + ww + 8 * dpr, 16 * dpr);
     x.textAlign = "right";
-    x.fillStyle = clipped.black > 0.02 ? tone("warn") : LABEL;
+    x.fillStyle = clipped.black > 0.02 ? tone("warn") : label;
     x.fillText(black, w - 8 * dpr, y);
-    x.fillStyle = clipped.white > 0.02 ? tone("warn") : LABEL;
+    x.fillStyle = clipped.white > 0.02 ? tone("warn") : label;
     x.fillText(white, w - 8 * dpr - bw, y);
   }
 };

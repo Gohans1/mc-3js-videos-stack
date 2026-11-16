@@ -14,7 +14,17 @@ import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, set, studio } from "../core/store";
 import { FPS } from "../core/time";
-import { editKeys, files, hold, keyOf, keysOf, pickKeys, preview, rows, sameKey } from "../keys/keys";
+import {
+  editKeys,
+  files,
+  hold,
+  keyOf,
+  keysOf,
+  pickKeys,
+  preview,
+  rows,
+  sameKey,
+} from "../keys/keys";
 import type { KeyRef } from "../keys/slice";
 import { setPlaying } from "../playback/transport";
 import { path, showPath } from "./path";

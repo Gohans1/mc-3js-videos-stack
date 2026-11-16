@@ -43,7 +43,8 @@
     "lint": "bun node_modules/live-studio/wrong-place.mjs lint",
     "typecheck": "bun node_modules/live-studio/wrong-place.mjs typecheck",
     "fmt": "bun node_modules/live-studio/wrong-place.mjs fmt",
-    "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check"
+    "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check",
+    "setup:voices": "bun node_modules/live-studio/wrong-place.mjs setup:voices"
   },
   "dependencies": {
     "block-model-renderer": "catalog:",

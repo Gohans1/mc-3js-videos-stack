@@ -1,44 +1,42 @@
-# Writing a repo command
+# Viết hoặc sửa CLI
 
-Every command babysits an AI that cannot see or hear the film. It must never leave that AI guessing.
+Lệnh giúp AI biết đang có gì, kết quả nằm đâu và kiểm chứng bằng cách nào. Dùng lại lệnh đang có khi hợp lý; không ép mọi ý tưởng thành một lệnh hay một tính năng studio.
 
-## The contract every command keeps
+## Hợp đồng
 
-| Rule                                     | How                                                                                                                                                                                                                                                                                                                |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Arguments are checked before any work    | First line: `cliArgs(HELP, ["--json", "--shot N"], words)` from `packages/live-studio/src/cli.mjs`. `-h`, `--help` or `help` prints `HELP` and exits 0; an unknown flag, a flag missing its value or a word too many exits 2. A typo must never run the default job (a bare `voice:gen --help` once spent credits) |
-| Numbers are checked                      | `numberArg(name, text, { min, max, int })` for arguments and environment variables; a wrong one exits 2 saying what it takes                                                                                                                                                                                       |
-| A film's JSON is read through `jsonFile` | A broken file is named with the fix, not left to a bare parse error                                                                                                                                                                                                                                                |
-| Every error says the fix                 | Name what was wrong, what it takes, and the command that helps (`did you mean bun run at 35.6?`)                                                                                                                                                                                                                   |
-| Output is what the next step needs       | The finding, its heard second, the file and row that hold it; no dumps. Long lists end with where the rest is (`renders/listen.json`)                                                                                                                                                                              |
-| The last line is `next:`                 | The command to run next, with real values filled in                                                                                                                                                                                                                                                                |
-| Absent data names its maker              | No video: `bun run render clip`; no cuts: which command writes `renders/cuts.json`                                                                                                                                                                                                                                 |
-| Costly work says so                      | Credits, minutes, downloads: in `--help`. Money is spent only with `--yes`; without it the command previews and its `next:` line carries `--yes` (Vercel's CLI guidelines). `--dry-run` previews even with `--yes`. A call under a cent needs none (`find --jev`, ~$0.002, a free quota first)                                                                                                 |
-| Exit codes mean one thing                | 0 ok, 1 something in the film to fix, 2 a wrong word and nothing done                                                                                                                                                                                                                                              |
-| Flags are kebab-case                     | `--dry-run`, never `--dryRun`                                                                                                                                                                                                                                                                                      |
+| Phần                 | Yêu cầu                                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Help trước công việc | Dùng cliArgs từ packages/live-studio/src/cli.mjs; -h, --help hoặc từ help đầu tiên in help rồi thoát 0                             |
+| Đầu vào              | Kiểm tra đủ vị trí, flag, giá trị và tổ hợp trước khi ghi hoặc gọi dịch vụ; sai thì thoát 2 kèm cách sửa                           |
+| Số và thời gian      | Dùng numberArg, secondArg; giây người xem nghe thấy phải đổi đúng đồng hồ trước khi chỉnh timeline                                 |
+| JSON                 | Dùng jsonFile; lỗi phải chỉ file và cách kiểm tra                                                                                  |
+| Kết quả              | Nêu phát hiện, thời điểm, file/dòng hoặc đường dẫn artifact; bước tiếp hữu ích thì thêm next:                                      |
+| Thiếu dữ liệu        | Chỉ lệnh hoặc thao tác tạo dữ liệu đó                                                                                              |
+| Chi phí              | Help nêu credits, tải dữ liệu và thời gian dài; lệnh tạo voice xem trước mặc định, chỉ gửi khi --yes, --dry-run luôn chỉ xem trước |
+| Dịch vụ nhỏ          | find --jev là ngoại lệ có gọi ngoài/quota mà không cần --yes; không tự suy rộng ngoại lệ cho lệnh khác                             |
+| Thời gian dài        | Có timeout và lưu từng kết quả khi có thể tiếp tục lần sau                                                                         |
+| Mã thoát             | 0 thành công, 1 lỗi công việc/dữ liệu, 2 lỗi gọi lệnh/điều kiện; lỗi sau khi chạy phải nói phần đã hoàn tất                        |
 
-Python commands (`scripts/sound`, `scripts/review`) keep the same contract by hand: help first, unknown words exit 2 before work.
+Python giữ cùng hành vi bằng parser hiện có. Kiểm tra cả vị trí chạy root/phim; wrong-place.mjs giúp chỉ đúng thư mục.
 
-Script bảo trì chạy trực tiếp được nối từ bun run help direct tới references/film.md, không cần tạo alias package.json trùng lặp. Lệnh riêng phim nằm trong scripts của phim, giữ --help an toàn và nói rõ đầu ra, chi phí, mốc thời gian; công cụ có sẵn không giới hạn sáng tạo bằng code riêng.
+## Nơi cập nhật
 
-## Adding or changing a command
+| Nơi                              | Nội dung                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| HELP của lệnh                    | Cú pháp đầy đủ, ví dụ, đầu ra, chi phí; nguồn chính của flag                                     |
+| package.json                     | Script ở root hoặc template và phim liên quan; stub cho lệnh thuộc nơi khác                      |
+| packages/live-studio/help.mjs    | Một dòng mô tả đúng việc, đúng nhóm                                                              |
+| skill-data/core                  | Chỉ sửa quy trình/reference bị ảnh hưởng; thêm reference thì thêm dòng định tuyến trong SKILL.md |
+| .claude/skills/mc-films/SKILL.md | Chỉ giữ vai trò dẫn tới skills get core; không nhét nội dung tính năng                           |
 
-Update every place an agent looks, in the same commit:
+## Kiểm chứng
 
-1. The command's `HELP`: what it does, each option, an example, what to run next. It is the one full list of a command's flags; a guide shows a flag in an example, never the whole list again.
-2. `package.json` `scripts`: the repo root's, or `templates/film/package.json` and every film's. A command of the other place gets a `wrong-place.mjs` stub, so running it in the wrong folder says where it runs.
-3. `packages/live-studio/help.mjs` `GROUPS`: one line under its job.
-4. These guides: `skill-data/core/references/*.md`, plus `skill-data/core/SKILL.md` when the core loop changes. Keep `SKILL.md` to the loop, clocks, costs, troubleshooting and its routing table; put details in a reference and add a routing row for a new one. Never put feature content in `.claude/skills/mc-films/SKILL.md`: it is a stub that only points at `bun run skills get core`.
+| Bước                    | Lệnh hoặc hành động                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| Sửa lỗi hành vi         | Viết test tái hiện, thấy fail, sửa tối thiểu rồi thấy pass; theo skill test-driven-development     |
+| Kiểm tra trực tiếp      | Gọi lệnh với dữ liệu thật và dữ liệu sai trên phim thử riêng; không tiêu credits chỉ để thử parser |
+| Format đúng phạm vi     | bun fmt --no-script <files>                                                                        |
+| Kiểm tra repo           | bun run lint; bun run typecheck; bun run test                                                      |
+| Review khi được yêu cầu | Reviewer độc lập kiểm chứng lại kết quả; giải quyết Critical và Required trước khi kết thúc        |
 
-`packages/live-studio/test/skills.test.mjs` fails when a guide names a `bun run` command no `package.json` has, or when a reference has no routing row.
-
-## Check it
-
-```bash
-bun run fmt                                  # or: bun fmt --no-script <files>
-bun run lint                                 # oxlint; warnings fail too
-bun run typecheck                            # bun check, the repo and live-studio
-bun run test                                 # every package's tests
-```
-
-Then probe it blind: fresh agents that know only the command's name use it on a copy of a film (`references/film.md`) with real and hard cases, and report every place it left them guessing. Fix and probe again until nothing Critical or Required is left.
+packages/live-studio/test/skills.test.mjs kiểm tra đường dẫn reference và tên lệnh được guide nhắc tới. Test này chưa chứng minh mọi ví dụ hoặc workflow đều đúng; vẫn phải đối chiếu code và chạy lệnh tương ứng.

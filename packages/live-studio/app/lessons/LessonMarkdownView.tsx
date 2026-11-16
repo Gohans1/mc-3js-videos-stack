@@ -189,7 +189,7 @@ export function LessonMarkdownView({
                           "mt-1 grid size-4 shrink-0 place-items-center rounded border",
                           item.checked
                             ? "bg-primary border-primary text-primary-foreground"
-                            : "border-border bg-input",
+                            : "border-input bg-backdrop",
                         )}
                       >
                         {item.checked && <Check className="size-3" />}

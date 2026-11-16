@@ -117,7 +117,7 @@ function Scene({ slot, fx }: { slot: Slot; fx: AnimFx }) {
         <rect x="20.5" y="25" width="4" height="7" className="fx-door" />
       </g>
       {fx.optics && <path d="M-8 56 L22 -8 H31 L1 56 Z" className="fill-primary/22" />}
-      {m.fade && <rect width="48" height="48" className="fx-veil fill-black" />}
+      {m.fade && <rect width="48" height="48" className="fx-veil fill-stage" />}
     </svg>
   );
 }
@@ -173,7 +173,7 @@ function Tile({
           {fx?.pair && (
             <span
               aria-hidden
-              className="text-foreground/80 absolute top-1 right-1 rounded-xs bg-black/55 p-0.5"
+              className="text-foreground/80 bg-scrim absolute top-1 right-1 rounded-xs p-0.5"
             >
               <Link2 className="size-2.5" />
             </span>

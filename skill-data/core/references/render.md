@@ -14,7 +14,7 @@ bun run render final                         # renders/final_video.mp4; only whe
 AT=12 bun run render poster                  # renders/poster_12s.png: one frame at the upload's size, lossless (thumbnail, detail)
 bun run mix renders/final_video.mp4          # renders/final.mp4, the file to upload
 bun run deliver                              # against YouTube's spec; exit 0 is ready
-bun run deliver --youtube 9-15               # renders/youtube_preview.mp4 and youtube_bands_<s>s.png
+bun run deliver --youtube 9-15               # local compression preview: youtube_preview.mp4 and youtube_bands_<s>s.png
 ```
 
 ## Fast, never from scratch
@@ -44,13 +44,15 @@ Source: support.google.com/youtube/answer/1722171.
 
 ## Why 1440p
 
-An upload of 1440p or more gets YouTube's VP9 or AV1 encode at a higher bitrate, so even 1080p viewers see it sharper. 4K is 2.25 times the pixels to render and after YouTube's re-encode is barely better than 1440p (a creator's VMAF: 99.92 against 99.95).
+1440p là mặc định của repo, không phải cam kết YouTube sẽ chọn VP9/AV1 hay luôn đẹp hơn 1080p. 4K có số pixel gấp 2,25 lần 1440p; chọn theo chi tiết của phim, thời gian render và kết quả xem thực tế.
 
-## Banding after YouTube's re-encode
+## Mô phỏng nén để kiểm tra banding
+
+deliver --youtube chạy ffmpeg/libsvtav1 tại máy với bitrate cố định, không upload hay tải bản encode từ YouTube. Đây là phép thử gần đúng; muốn kết luận về YouTube thật phải xem rendition của video đã upload.
 
 | Fact                                                        | So                                                                                                                    |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| The film's last pass dithers (film-stage `makeAdjustments`) | The 8-bit upload itself does not band                                                                                 |
-| YouTube's re-encode wipes fine dither                       | Measured on a test gradient: grain of ±3 levels is lost, ±8 survives at 1440p 4 Mbps; nothing survives 1080p 1 Mbps   |
+| The film's last pass dithers (film-stage `makeAdjustments`) | Giảm nguy cơ banding ở bản 8-bit; vẫn phải xem output thực tế                                                         |
+| Bài thử nén local trên gradient                             | Grain ±3 mức bị mất, ±8 còn ở 1440p 4 Mbps; 1080p 1 Mbps mất cả hai, không suy rộng thành bảo đảm cho mọi phim        |
 | Keeping a gradient smooth                                   | Texture in the scene (dust, noisy fog, blocks with grain), or grain from the Adjustment slider Particles              |
 | CAMBI is high on flat Minecraft tile walls                  | A false alarm from neighbouring tile colours; trust only what the re-encode adds, which `deliver --youtube` separates |

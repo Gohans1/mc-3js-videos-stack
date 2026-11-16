@@ -756,15 +756,29 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Close Review btn",
     );
 
+    await waitUntil(
+      `document.querySelector('[aria-label="Review notes"] button kbd')`,
+      "Approval shortcut available",
+    );
     const reviewStats = JSON.parse(
       await webview.evaluate(`JSON.stringify((() => {
         const room = document.querySelector('[aria-label="Review notes"]');
         const alerts = [...(room?.querySelectorAll('[data-slot="alert"]') ?? [])].length;
         const fixMentions = (room?.textContent ?? "").split("Reduced key gain to 0.72").length - 1;
-        return { alerts, fixMentions };
+        const shortcut = [...(room?.querySelectorAll("button kbd") ?? [])].find((el) => el.textContent === "A");
+        const approve = shortcut?.closest("button");
+        const shortcutColor = shortcut ? getComputedStyle(shortcut).color : null;
+        const buttonColor = approve ? getComputedStyle(approve).color : null;
+        return { alerts, fixMentions, shortcutColor, buttonColor };
       })())`),
     );
     assert.equal(reviewStats.alerts, 0, "No top summary alert when Compare/Pictures are absent");
+    assert.ok(reviewStats.shortcutColor, "Approval shortcut renders");
+    assert.equal(
+      reviewStats.shortcutColor,
+      reviewStats.buttonColor,
+      "Approval shortcut inherits the readable button foreground",
+    );
     assert.equal(
       reviewStats.fixMentions,
       1,

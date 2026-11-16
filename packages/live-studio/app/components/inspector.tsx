@@ -165,8 +165,8 @@ export function Segmented<T extends string>({
             vertical
               ? "aria-checked:text-primary-text h-8 min-w-0 justify-start rounded-md px-2.5 pointer-coarse:h-10"
               : fit
-                ? "min-w-0 flex-auto justify-center truncate rounded-sm px-1 text-xs aria-checked:font-semibold aria-checked:text-foreground pointer-coarse:h-10"
-                : "shrink-0 justify-center rounded-sm px-2.5 aria-checked:font-semibold aria-checked:text-foreground pointer-coarse:h-10",
+                ? "aria-checked:text-foreground min-w-0 flex-auto justify-center truncate rounded-sm px-1 text-xs aria-checked:font-semibold pointer-coarse:h-10"
+                : "aria-checked:text-foreground shrink-0 justify-center rounded-sm px-2.5 aria-checked:font-semibold pointer-coarse:h-10",
             tone === "accent" && "aria-checked:text-primary-text",
             size === "comfortable" && "min-h-9 flex-1 text-sm pointer-coarse:min-h-11",
           )}

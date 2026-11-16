@@ -41,7 +41,8 @@ const toggleVariants = cva(
       tone: {
         neutral: "",
         ai: "aria-pressed:bg-ai/20 aria-pressed:text-ai-text aria-pressed:ring-ai/40",
-        source: "aria-pressed:bg-primary/15 aria-pressed:text-primary aria-pressed:ring-primary/40",
+        source:
+          "aria-pressed:bg-primary/15 aria-pressed:text-primary-text aria-pressed:ring-primary/40",
       },
     },
     defaultVariants: {
