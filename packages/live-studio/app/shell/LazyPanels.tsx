@@ -14,4 +14,3 @@ export { SoundPanel } from "../sound/SoundPanel";
 export { TextLibrary } from "../text/TextLibrary";
 export { TextPanel } from "../text/TextPanel";
 export { FilmSpeedPanel } from "../timeline/FilmSpeedPanel";
-export { Settings } from "./Settings";

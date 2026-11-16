@@ -1,0 +1,706 @@
+{
+  "scope": "Second optimization round relative to f3009f1, on the real demo-test-mc-yolo film plus shared studio UI packaging.",
+  "worktree": "C:/Users/ADMIN/.t3/worktrees/gohans-monorepo-3js-mc/perf-live-studio-hill-c-f1c8c73c6e94307b",
+  "baseline": "f3009f1",
+  "userSnapshot": "53c0979 preserves the user's pre-existing local changes; those changes are not authored by this optimization.",
+  "target": {
+    "twofoldEveryConfiguration": false,
+    "absoluteCeilingClaimed": false
+  },
+  "commands": {
+    "measure": "bun run eval:load --film demo-test-mc-yolo --runs 5 --profile --panels --frames 0,2.4,4.7,8.2,10.5,13.2,0 --audio",
+    "compare": "bun scripts/evals/load/compare.mjs 2026-11-16T18-26-06-029Z 2026-11-16T18-29-28-818Z round2",
+    "objectEdits": "bun scripts/evals/load/frame.mjs --objects",
+    "playback": "bun run eval:load --film demo-test-mc-yolo --runs 1 --profile --panels --frames 0,2.4,4.7,8.2,10.5,13.2,0 --audio --playback"
+  },
+  "kept": [
+    "Rolldown native entry-aware vendor UI groups, with a 20 KB small-group merge.",
+    "Optional version-matched native fetch preloads, used for the real film's existing jar and bundled renderer assets.",
+    "Overlap independent asset/font requests; retain the original late reads of editable clip/font metadata.",
+    "Prepare the same asset pack stack with the library's persistent cross-call cache.",
+    "Three compileAsync bound to the real composer input buffer; existing renderer and shader quality flags retained.",
+    "Use the public BMR wasmStatus API to initialize the same kernels while the jar downloads."
+  ],
+  "rejected": [
+    {
+      "idea": "ZIP range slices",
+      "reason": "More requests and slower warm mobile loading.",
+      "sourceArchive": "2026-11-16T16-15-26-676Z"
+    },
+    {
+      "idea": "ZIP directory sidecar",
+      "reason": "Directory prototype was about 2.95 MB JSON/412 KB Brotli; not wired into production because it adds a separate resource dependency. Unused generated sidecars removed."
+    },
+    {
+      "idea": "On-demand audio RMS",
+      "reason": "Would defer a PCM scan onto first variant selection; original eager audio path restored.",
+      "sourceArchive": "2026-11-16T17-16-25-590Z"
+    },
+    {
+      "idea": "Unversioned preload",
+      "reason": "Chrome downloaded the jar twice; fixed by matching boot.ts's exact URL version."
+    },
+    {
+      "idea": "Manual shadow scheduling",
+      "reason": "No demonstrated hardware GPU benefit; actual application keeps its previous behavior."
+    },
+    {
+      "idea": "Grade tone closure hoist",
+      "reason": "Exact-color CPU prototype had inconsistent speed; no production edit."
+    }
+  ],
+  "attempts": [
+    {
+      "id": "2026-11-16T15-53-51-570Z",
+      "note": "Round 2 baseline f3009f1; unchanged assets and viewport",
+      "runs": 3,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T15-53-51-570Z/results.json",
+      "samples": "2026-11-16T15-53-51-570Z/samples.jsonl",
+      "decision": "baseline",
+      "reason": "Initial previous-round baseline."
+    },
+    {
+      "id": "2026-11-16T15-58-56-908Z",
+      "note": null,
+      "runs": null,
+      "failed": null,
+      "complete": null,
+      "error": null,
+      "results": null,
+      "samples": "2026-11-16T15-58-56-908Z/samples.jsonl",
+      "decision": "failed-harness",
+      "reason": "Phone has no __editor; replaced the probe with the real Playhead slider. Partial outputs retained."
+    },
+    {
+      "id": "2026-11-16T16-05-18-751Z",
+      "note": "Round 2 baseline phone shot references; f3009f1 renderer",
+      "runs": 1,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-05-18-751Z/results.json",
+      "samples": "2026-11-16T16-05-18-751Z/samples.jsonl",
+      "decision": "baseline-reference",
+      "reason": "Phone shot references after fixing the probe."
+    },
+    {
+      "id": "2026-11-16T16-07-07-870Z",
+      "note": "R2 A: prepare shared block assets once with library cache",
+      "runs": 3,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-07-07-870Z/results.json",
+      "samples": "2026-11-16T16-07-07-870Z/samples.jsonl",
+      "decision": "kept-in-combination",
+      "reason": "Prepared asset cache retained with the parallel startup; no standalone speed claim."
+    },
+    {
+      "id": "2026-11-16T16-15-26-676Z",
+      "note": "R2 B: library ZIP slices via native HTTP ranges, 64 KiB cache",
+      "runs": 2,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-15-26-676Z/results.json",
+      "samples": "2026-11-16T16-15-26-676Z/samples.jsonl",
+      "decision": "rejected",
+      "reason": "Native ZIP range slices added about 40 requests and made warm phone loading slower."
+    },
+    {
+      "id": "2026-11-16T16-20-47-051Z",
+      "note": "R2 C: overlap rig, picks and fonts with jar; clip prefetch during scene construction; prepared cache",
+      "runs": 3,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-20-47-051Z/results.json",
+      "samples": "2026-11-16T16-20-47-051Z/samples.jsonl",
+      "decision": "kept-in-combination",
+      "reason": "Overlap independent rig, picks, fonts and motion requests."
+    },
+    {
+      "id": "2026-11-16T16-24-51-147Z",
+      "note": "R2 D: overlapped film startup plus on-demand cached RMS; no source audio or render change",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-24-51-147Z/results.json",
+      "samples": "2026-11-16T16-24-51-147Z/samples.jsonl",
+      "decision": "superseded",
+      "reason": "On-demand RMS later rejected because it moves work onto first variant selection."
+    },
+    {
+      "id": "2026-11-16T16-28-18-622Z",
+      "note": "R2 final A: exact f3009f1 app and film; 5 cold/warm visits; same assets, harness and profiles",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-28-18-622Z/results.json",
+      "samples": "2026-11-16T16-28-18-622Z/samples.jsonl",
+      "decision": "diagnostic-baseline",
+      "reason": "Pre-navigation-guard baseline; excluded from final headline."
+    },
+    {
+      "id": "2026-11-16T16-31-27-543Z",
+      "note": null,
+      "runs": null,
+      "failed": null,
+      "complete": null,
+      "error": null,
+      "results": null,
+      "samples": null,
+      "decision": "failed-harness",
+      "reason": "Runtime.evaluate promise lost during navigation; log retained."
+    },
+    {
+      "id": "2026-11-16T16-32-40-695Z",
+      "note": "R2 E retry: entry-aware UI; previous harness ended with Bun Promise was collected",
+      "runs": 1,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-32-40-695Z/results.json",
+      "samples": "2026-11-16T16-32-40-695Z/samples.jsonl",
+      "decision": "superseded",
+      "reason": "Entry-aware UI with no small-group merging; later use the native 20 KB merge."
+    },
+    {
+      "id": "2026-11-16T16-46-20-775Z",
+      "note": "R2 F: vendor UI entry-aware with 20KB small-group merging; overlapped film startup; cached on-demand RMS",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-46-20-775Z/results.json",
+      "samples": "2026-11-16T16-46-20-775Z/samples.jsonl",
+      "decision": "kept-in-combination",
+      "reason": "20 KB UI group merging reduces initial JS; RMS part of this candidate was later reverted."
+    },
+    {
+      "id": "2026-11-16T16-54-35-193Z",
+      "note": "R2 G: early native fetch preload for critical jar at low priority; C+D+F retained for comparison",
+      "runs": 3,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-54-35-193Z/results.json",
+      "samples": "2026-11-16T16-54-35-193Z/samples.jsonl",
+      "decision": "rejected",
+      "reason": "Unversioned native preload duplicated the jar after boot.ts applied its version query."
+    },
+    {
+      "id": "2026-11-16T16-59-02-892Z",
+      "note": "R2 preload reuse diagnosis; capture Chrome preload warnings",
+      "runs": 1,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T16-59-02-892Z/results.json",
+      "samples": "2026-11-16T16-59-02-892Z/samples.jsonl",
+      "decision": "diagnostic",
+      "reason": "Captured Chrome preload reuse warnings."
+    },
+    {
+      "id": "2026-11-16T17-02-48-756Z",
+      "note": "R2 I: native preload matches boot.ts versioned URL; require one jar request per navigation",
+      "runs": 3,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-02-48-756Z/results.json",
+      "samples": "2026-11-16T17-02-48-756Z/samples.jsonl",
+      "decision": "kept-in-combination",
+      "reason": "Match native preload to the same boot asset version; one jar request."
+    },
+    {
+      "id": "2026-11-16T17-05-54-464Z",
+      "note": "R2 H: compileAsync in composer target; matched native preload; existing quality and diagnostic names retained",
+      "runs": 3,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-05-54-464Z/results.json",
+      "samples": "2026-11-16T17-05-54-464Z/samples.jsonl",
+      "decision": "kept-in-combination",
+      "reason": "Use compileAsync with the composer's render target and unchanged shader settings."
+    },
+    {
+      "id": "2026-11-16T17-09-47-713Z",
+      "note": "R2 final A2: all app and film files exactly f3009f1; repeated matched five visits with audio",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-09-47-713Z/results.json",
+      "samples": "2026-11-16T17-09-47-713Z/samples.jsonl",
+      "decision": "diagnostic-baseline",
+      "reason": "Repeated baseline before the document loader guard."
+    },
+    {
+      "id": "2026-11-16T17-16-25-590Z",
+      "note": "R2 final B2: overlap, lazy cached RMS, entry-aware UI, matched asset preload, parallel shader compilation; same assets and quality",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-16-25-590Z/results.json",
+      "samples": "2026-11-16T17-16-25-590Z/samples.jsonl",
+      "decision": "superseded",
+      "reason": "Lazy RMS rejected; source audio processing restored byte-for-byte."
+    },
+    {
+      "id": "2026-11-16T17-20-59-864Z",
+      "note": "R2 final B3: RMS remains eager to preserve first variant selection latency; overlap, entry-aware UI, matched preload and compileAsync retained",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-20-59-864Z/results.json",
+      "samples": "2026-11-16T17-20-59-864Z/samples.jsonl",
+      "decision": "superseded",
+      "reason": "Keep eager RMS; later move clip/font metadata reads back to their original construction points."
+    },
+    {
+      "id": "2026-11-16T17-30-00-067Z",
+      "note": null,
+      "runs": null,
+      "failed": null,
+      "complete": null,
+      "error": null,
+      "results": null,
+      "samples": null,
+      "decision": "failed-harness",
+      "reason": "Lost navigation context; added loader identity checks before reading ready metrics."
+    },
+    {
+      "id": "2026-11-16T17-37-34-900Z",
+      "note": "Navigation guard smoke, latest clip/font reads kept",
+      "runs": 1,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-37-34-900Z/results.json",
+      "samples": "2026-11-16T17-37-34-900Z/samples.jsonl",
+      "decision": "harness-smoke",
+      "reason": "Verified loader guard, seek and audio; not pooled with five-run timings."
+    },
+    {
+      "id": "2026-11-16T17-45-29-604Z",
+      "note": "R2 final A3: f3009f1 production sources, document-loader guard, all measurements retained, audio and six shots",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-45-29-604Z/results.json",
+      "samples": "2026-11-16T17-45-29-604Z/samples.jsonl",
+      "decision": "baseline-checkpoint",
+      "reason": "Five guarded visits per cache/profile."
+    },
+    {
+      "id": "2026-11-16T17-51-13-699Z",
+      "note": "R2 final B5: guarded document identity; unchanged eager audio RMS and late metadata reads; preload, caches, parallel fetch/shaders, entry-aware UI",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T17-51-13-699Z/results.json",
+      "samples": "2026-11-16T17-51-13-699Z/samples.jsonl",
+      "decision": "checkpoint-image-mismatch",
+      "reason": "Strict comparison failed at desktop t=0 after Settings: 53,423 pixels differ by at most 3/255 per channel. Cause not established; initial cold/warm pictures and the other eleven seek pictures matched."
+    },
+    {
+      "id": "2026-11-16T18-01-29-506Z",
+      "note": "R2 visual reproduction: unchanged B5 sources, do not pool timing with five-run comparison",
+      "runs": 1,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T18-01-29-506Z/results.json",
+      "samples": "2026-11-16T18-01-29-506Z/samples.jsonl",
+      "decision": "visual-control",
+      "reason": "Unchanged B5 source reproduces all six desktop references exactly; timings not pooled."
+    },
+    {
+      "id": "2026-11-16T18-04-18-408Z",
+      "note": "R2 visual history control: unchanged B5 sources, retain first zero and repeated zero, timing diagnostic only",
+      "runs": 1,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T18-04-18-408Z/results.json",
+      "samples": "2026-11-16T18-04-18-408Z/samples.jsonl",
+      "decision": "visual-control",
+      "reason": "Unchanged B5 source matches the first and repeated t=0 plus all other desktop seek references."
+    },
+    {
+      "id": "2026-11-16T18-26-06-029Z",
+      "note": "R2 final A4: f3009f1 production sources, repeated zero preserved, five cold and warm visits per profile",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T18-26-06-029Z/results.json",
+      "samples": "2026-11-16T18-26-06-029Z/samples.jsonl",
+      "decision": "final-before",
+      "reason": "Previous-round f3009f1 production files restored only in this isolated worktree; durable source snapshot restored afterward."
+    },
+    {
+      "id": "2026-11-16T18-29-28-818Z",
+      "note": "R2 B6: public wasmStatus warmup and version-matched bundled assets preload; unchanged quality/audio/late metadata reads; repeated zero retained",
+      "runs": 5,
+      "failed": false,
+      "complete": null,
+      "error": null,
+      "results": "2026-11-16T18-29-28-818Z/results.json",
+      "samples": "2026-11-16T18-29-28-818Z/samples.jsonl",
+      "decision": "final-after",
+      "reason": "Native WASM warmup and bundled asset preload added; all eighteen image comparisons exact."
+    },
+    {
+      "id": "frame-2026-11-16T16-43-28-854Z",
+      "note": "Raw demo film at 960x540 draft; paired shadow scheduling in one renderer",
+      "runs": null,
+      "failed": null,
+      "complete": true,
+      "error": null,
+      "results": "frame-2026-11-16T16-43-28-854Z/results.json",
+      "samples": null,
+      "decision": "rejected",
+      "reason": "Manual shadow scheduling probe used Microsoft Basic Render Driver without a GPU timer; no hardware GPU improvement established."
+    },
+    {
+      "id": "frame-2026-11-16T16-45-05-942Z",
+      "note": "Raw demo film at 960x540 draft; paired shadow scheduling in one renderer",
+      "runs": null,
+      "failed": null,
+      "complete": true,
+      "error": null,
+      "results": "frame-2026-11-16T16-45-05-942Z/results.json",
+      "samples": null,
+      "decision": "rejected",
+      "reason": "Repeated software-renderer shadow probe; production shadow scheduling unchanged."
+    },
+    {
+      "id": "frame-2026-11-16T18-35-39-241Z",
+      "note": "Real Minecraft add/replace/remove with prepared asset cache; no performance claim",
+      "runs": null,
+      "failed": null,
+      "complete": false,
+      "error": "AssertionError [ERR_ASSERTION]: addedVisible\n\nfalse !== true\n",
+      "results": "frame-2026-11-16T18-35-39-241Z/results.json",
+      "samples": null,
+      "decision": "failed-probe-setup",
+      "reason": "Probe cloned the camera position before drawing its first frame; test block was outside the view. Corrected probe ordering."
+    },
+    {
+      "id": "frame-2026-11-16T18-35-56-498Z",
+      "note": "Real Minecraft add/replace/remove with prepared asset cache; no performance claim",
+      "runs": null,
+      "failed": null,
+      "complete": true,
+      "error": null,
+      "results": "frame-2026-11-16T18-35-56-498Z/results.json",
+      "samples": null,
+      "decision": "behavior-verification",
+      "reason": "Real add, material replacement and removal all visible; removal restores the exact original frame."
+    },
+    {
+      "id": "2026-11-16T18-47-16-174Z",
+      "note": null,
+      "runs": null,
+      "failed": null,
+      "results": null,
+      "decision": "failed-probe",
+      "reason": "First probe failed a compound playback/note assertion after two animation frames; exact step flags were unavailable. Error and partial files retained; retry waits for actual note visibility."
+    },
+    {
+      "id": "2026-11-16T18-49-15-511Z",
+      "note": "R2 playback A: f3009f1, one diagnostic pair per profile, raw clock/draw cadence and real note composer; excluded from headline timing",
+      "runs": 1,
+      "failed": false,
+      "results": "2026-11-16T18-49-15-511Z/results.json",
+      "decision": "interaction-control",
+      "reason": "Actual play/pause and note open/cancel verified; one visit per profile, excluded from headline medians."
+    },
+    {
+      "id": "2026-11-16T18-52-53-457Z",
+      "note": "R2 playback B: final production, one diagnostic pair per profile, real play/pause and note composer; excluded from headline timing",
+      "runs": 1,
+      "failed": false,
+      "results": "2026-11-16T18-52-53-457Z/results.json",
+      "decision": "interaction-control",
+      "reason": "Actual play/pause and note open/cancel verified; one visit per profile, excluded from headline medians."
+    }
+  ],
+  "comparison": "round2.json",
+  "tableData": "round2.csv",
+  "previousStrictFailure": "round2-b5.json",
+  "pipeline": [
+    {
+      "profile": "desk",
+      "gpu": {
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 (0x00001F08) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "parallelShaders": true
+      },
+      "resources": [
+        [
+          "/mc/client_assets.zip",
+          5202112,
+          70,
+          468
+        ],
+        [
+          "/vendor/bmr_assets.zip",
+          129263,
+          70,
+          160
+        ],
+        [
+          "/_studio/block_model_renderer_bg-C_QWVt0J.wasm",
+          53892,
+          429,
+          431
+        ]
+      ]
+    },
+    {
+      "profile": "phone",
+      "gpu": {
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 (0x00001F08) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "parallelShaders": true
+      },
+      "resources": [
+        [
+          "/mc/client_assets.zip",
+          5202112,
+          137,
+          4520
+        ],
+        [
+          "/vendor/bmr_assets.zip",
+          129263,
+          138,
+          368
+        ],
+        [
+          "/_studio/block_model_renderer_bg-C_QWVt0J.wasm",
+          53892,
+          1863,
+          1951
+        ]
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "file": "films/demo-test-mc-yolo/src/scene.ts",
+      "before": "01aa4ae5f8c210754840326517cb208e16fcd7a86719d1ba62736af7b47574da",
+      "measuredAfter": "f893ace6c8f2846d2cb1b89e7eb53650609775dedf0ced12672a0a12358b5100",
+      "final": "f893ace6c8f2846d2cb1b89e7eb53650609775dedf0ced12672a0a12358b5100"
+    },
+    {
+      "file": "films/demo-test-mc-yolo/package.json",
+      "before": "7271a64159f5a4cc4d497b02bfc5a0d3f0f46dd8e611bdb5bc914e7fdf29defc",
+      "measuredAfter": "e358fd3274baeb5f2985fbd0d349eb847f27c47dc2111b060e5c8addeaedb8fb",
+      "final": "e358fd3274baeb5f2985fbd0d349eb847f27c47dc2111b060e5c8addeaedb8fb"
+    },
+    {
+      "file": "packages/film-stage/src/titles.ts",
+      "before": "da6bd3312555fd62bb5ef926c31fc9520e83d6a097c053ed70754490ed23fbc4",
+      "measuredAfter": "47a8c38ddc4a52e5997eb6652456e5a80ff61e48b4b8e023996be652b3e76dec",
+      "final": "47a8c38ddc4a52e5997eb6652456e5a80ff61e48b4b8e023996be652b3e76dec"
+    },
+    {
+      "file": "packages/live-studio/src/page.mjs",
+      "before": "8657eb153050e766d57b6ddc17780a92a35c03010b920fb9eefbb7aa2bcd4083",
+      "measuredAfter": "7874db6180371700ea4fa904ec31b6f0e5da8331849c89f3a2d475935a74abc1",
+      "final": "7874db6180371700ea4fa904ec31b6f0e5da8331849c89f3a2d475935a74abc1"
+    },
+    {
+      "file": "packages/live-studio/src/api.mjs",
+      "before": "d1d742b09dfa823069b605d2872a3e27ab5355bcd241eceb0193efc0b5f6a345",
+      "measuredAfter": "293778823dfe503cf9c84b3fd4495eaea516e408d73ecf2614067bd5485386b8",
+      "final": "7bdda2b8ec0be1d6bd7f717a0953f59b53e5e4f3c0304b6c7720b7683c6a6491"
+    },
+    {
+      "file": "packages/live-studio/src/contract.ts",
+      "before": "ea26492efcfe0ec47683c5561c0f48b3055ea5f434b202f0c750470157516a9b",
+      "measuredAfter": "a71297e15d5304751ba7251479a3425378e3595dbeeb664bc9674b6ca2a8acaf",
+      "final": "a71297e15d5304751ba7251479a3425378e3595dbeeb664bc9674b6ca2a8acaf"
+    },
+    {
+      "file": "packages/live-studio/src/film.mjs",
+      "before": "b68f1205757157cdab3737f486a8e1509f765790e2bb868ce40cb8dcea0f5b5a",
+      "measuredAfter": "e846691b7193a9b8b6cd3142ec0860f5c3cd98e2c59bdf749fe7e9794ae3843a",
+      "final": "e846691b7193a9b8b6cd3142ec0860f5c3cd98e2c59bdf749fe7e9794ae3843a"
+    }
+  ],
+  "measurementSourceSnapshot": {
+    "path": "C:/Users/ADMIN/AppData/Local/Temp/studio-r2-kept-source-1794853565714",
+    "status": "restored",
+    "exit": 0
+  },
+  "postMeasurementChange": "api.mjs now preserves empty query/fragment markers like boot.ts; both measured preload paths have no markers, so generated resource URLs are unchanged.",
+  "review": {
+    "correctness": "Original draw quality, audio pipeline, clip references and editable metadata timing retained; static frames and actual object edits verified.",
+    "readability": "Use existing library APIs; no custom ZIP loader, audio lazy getter or shadow state policy ships.",
+    "architecture": "Font preparation is extracted from the existing title implementation; film-specific preload choices stay in film configuration.",
+    "security": "Native preload attributes are HTML-escaped; asset versions come from the same server boot metadata.",
+    "performance": "Compare script recalculates medians from raw visits, checks navigation identity, request failures, duplicate jar fetches and exact image buffers.",
+    "tests": "The initial vendor budget now executes both real device preload branches in an isolated production test process, with the original 240 KiB ceiling. Small vendor chunks keep exact raw bytes across rebuilds; compressed siblings are required above the existing 1 KiB cutoff.",
+    "noNewDependencies": true,
+    "noCssOrUiCopyChanges": true,
+    "renderSettingsRetained": [
+      "resolution",
+      "MSAA",
+      "shadow size",
+      "AO",
+      "postprocessing",
+      "final quality"
+    ]
+  },
+  "research": [
+    {
+      "url": "https://github.com/ewanhowell5195/block-model-renderer/blob/master/docs/assets.md",
+      "tool": "Exa CLI and installed 2.20.0 source/types",
+      "use": "prepareAssets cache behavior and ZIP APIs"
+    },
+    {
+      "url": "https://github.com/ewanhowell5195/block-model-renderer/blob/master/docs/optimization.md",
+      "tool": "Exa CLI and src/core/fast.js",
+      "use": "Public wasmStatus and identical fallback behavior"
+    },
+    {
+      "url": "https://rolldown.rs/reference/TypeAlias.CodeSplittingGroup",
+      "tool": "Exa CLI and installed Rolldown 1.2.16 types",
+      "use": "entriesAware and merge threshold"
+    },
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload",
+      "tool": "Exa CLI",
+      "use": "Fetch/CORS matching for native preload reuse"
+    },
+    {
+      "url": "https://threejs.org/docs/#WebGLRenderer.compileAsync",
+      "tool": "Exa CLI and installed Three 0.187.0 source/types",
+      "use": "Parallel shader preparation and target-dependent program keys"
+    },
+    {
+      "url": "https://github.com/cyrus-and/chrome-remote-interface",
+      "tool": "Exa CLI",
+      "use": "Navigation context lifetime and collected Runtime.evaluate promises"
+    }
+  ],
+  "documentationDifferences": [
+    "BMR general browser documentation recommends Three 0.162.0; the repository pins 0.187.0. No dependency version was changed; the actual repository version was tested.",
+    "The film's existing describe text says r186 while the repository pins r187; that pre-existing visible text was retained to honor the appearance constraint."
+  ],
+  "limits": [
+    "Timing remains sensitive to other sessions on the host; final medians are observations, not a guaranteed multiplier.",
+    "Mobile profile emulates CPU/network/touch on RTX 2060; it is not a physical phone GPU.",
+    "Warm phone TBT rose from 564 to 647 ms in the final pair; do not claim every responsiveness metric improved.",
+    "No 2x whole-app, steady-playback FPS or absolute optimization-ceiling claim.",
+    "Historical vendor-caller CPU summaries omit newly tilde-named UI chunks; raw profiles remain intact and the classifier was corrected for future runs.",
+    "Root typecheck has the same 45 diagnostics as the original snapshot; no new diagnostics after fixing probe types.",
+    "Full suite: 1650 pass, the same two baseline failures. Root typecheck still has its 45 pre-existing diagnostics.",
+    "Picture uses the existing first __live draw signal polled with rAF; it is not a GPU presentation timestamp. Ready marks panel data, not every possible background asset.",
+    "The first playback-probe temporary log was overwritten by its retry; its error from tool output and partial run files are retained explicitly, not treated as a passing visit.",
+    "One-visit playback controls reversed some warm timing changes; these traces are kept, and no universal latency or steady-FPS improvement is claimed."
+  ],
+  "verification": {
+    "strictFinalImages": 18,
+    "fullSuite": {
+      "command": "bun run test",
+      "passed": 1650,
+      "failed": 2,
+      "seconds": 556.65,
+      "exit": 1,
+      "sourceHashesUnchanged": true,
+      "log": "round2-checks/full-tests-final.log",
+      "provenance": "round2-checks/full-tests-final.json",
+      "baselineFailures": [
+        "global speed and freeze retime the exported clips and duck windows on the same clock",
+        "voice:lips shaping, tag stripping, non-English, recovery, and partial failure > timeline move + warp + mouthCues integration"
+      ]
+    },
+    "mobilePlayback": {
+      "passed": true,
+      "desktopAlsoPassed": true,
+      "noteOpenedAndCancelled": true,
+      "nothingSaved": true,
+      "data": "round2-playback.json",
+      "rawBefore": "2026-11-16T18-49-15-511Z",
+      "rawAfter": "2026-11-16T18-52-53-457Z",
+      "controlComparison": "round2-playback-control.json",
+      "limits": "One eight-second trace each; no causal FPS speedup claim."
+    },
+    "rootTypes": {
+      "baseline": 45,
+      "final": 45,
+      "identical": true,
+      "log": "round2-checks/studio-r2-last-root-types.log"
+    },
+    "studioTypes": {
+      "passed": true,
+      "files": 283,
+      "log": "round2-checks/studio-r2-last-studio-types.log"
+    },
+    "lint": {
+      "passed": true,
+      "log": "round2-checks/studio-r2-last-lint.log"
+    },
+    "focused": {
+      "passed": 44,
+      "failed": 0,
+      "files": 3,
+      "log": "round2-checks/studio-r2-focused-final.log"
+    },
+    "mutations": {
+      "titleFonts": {
+        "disabledPreparationFailed": true,
+        "log": "round2-checks/studio-r2-font-mutation.log"
+      },
+      "preload": {
+        "invertedConditionFailed": true,
+        "restoredByteForByte": true,
+        "metadata": "round2-checks/preload-mutation.json",
+        "log": "round2-checks/preload-mutation.log"
+      }
+    },
+    "independentControlImages": 18,
+    "objectEdits": {
+      "passed": true,
+      "data": "frame-2026-11-16T18-35-56-498Z/results.json",
+      "restoresExactImage": true,
+      "scope": "Native raw film and public placed API on software GPU; no hardware performance claim."
+    },
+    "desktopUi": {
+      "passed": true,
+      "data": "round2-checks/browser.json",
+      "image": "round2-checks/desktop-ui.png",
+      "finalQuality": [
+        1080,
+        1920
+      ],
+      "notesCancelled": true
+    },
+    "tempCleanup": {
+      "executed": false,
+      "applicationUnaffected": true,
+      "reason": "Automatic approval policy rejected optional temporary-profile deletion; directories left intact.",
+      "record": "round2-checks/cleanup-policy.json"
+    }
+  },
+  "verificationFinished": true,
+  "applicationCommits": [
+    "45c50bd",
+    "e327778",
+    "7e1c856"
+  ]
+}

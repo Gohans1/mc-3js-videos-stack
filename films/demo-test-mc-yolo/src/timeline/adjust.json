@@ -1,0 +1,63 @@
+{
+ "items": [
+  {
+   "id": "base",
+   "name": "base look",
+   "from": 0,
+   "to": 15,
+   "track": 0,
+   "grade": {
+    "basic": {
+     "clarity": 18,
+     "contrast": 8,
+     "vignette": 22,
+     "dither": 30,
+     "temp": 6,
+     "saturation": 10
+    }
+   }
+  },
+  {
+   "id": "oldfilm",
+   "name": "old film (millions of years)",
+   "from": 4.39,
+   "to": 6.83,
+   "track": 1,
+   "grade": {
+    "basic": {
+     "saturation": -65,
+     "fade": 35,
+     "particles": 55,
+     "halation": 30,
+     "fringe": 25
+    }
+   }
+  },
+  {
+   "id": "shockflash",
+   "name": "shock flash",
+   "from": 9.27,
+   "to": 9.55,
+   "track": 1,
+   "grade": {
+    "basic": {
+     "exposure": 45,
+     "contrast": 25
+    }
+   }
+  },
+  {
+   "id": "endwarm",
+   "name": "warm end",
+   "from": 12.0,
+   "to": 15,
+   "track": 1,
+   "grade": {
+    "basic": {
+     "temp": 18,
+     "brilliance": 10
+    }
+   }
+  }
+ ]
+}

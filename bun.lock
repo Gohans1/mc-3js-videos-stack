@@ -28,6 +28,22 @@
         "three": "0.187.0",
       },
     },
+    "films/demo-test-mc-yolo": {
+      "name": "demo-test-mc-yolo",
+      "dependencies": {
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "2.0.1",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+      },
+    },
     "films/rapier-wall-demo": {
       "name": "rapier-wall-demo",
       "dependencies": {
@@ -782,6 +798,8 @@
     "default-browser-id": ["default-browser-id@5.0.1", "", {}, "sha512-x1VCxdX4t+8wVfd1so/9w+vQ4vx7lKd2Qp5tDRutErwmR85OgmfX7RlLRMWafRMY7hbEiXIbudNrjOAPa/hL8Q=="],
 
     "define-lazy-prop": ["define-lazy-prop@3.0.0", "", {}, "sha512-N+MeXYoqr3pOgn8xfyRPREN7gHakLYjhsHhWGT3fWAiL4IkAt0iDw14QiiEm2bE30c5XX5q0FtAA3CK5f9/BUg=="],
+
+    "demo-test-mc-yolo": ["demo-test-mc-yolo@workspace:films/demo-test-mc-yolo"],
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 

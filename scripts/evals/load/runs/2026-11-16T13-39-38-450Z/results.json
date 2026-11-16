@@ -1,0 +1,559 @@
+{
+  "film": "../scripts/evals/load/fixture",
+  "runs": 3,
+  "note": "round 5 minify bindings with function and class names preserved",
+  "failed": false,
+  "server": 6700,
+  "desk.cold": {
+    "connect": 1,
+    "ttfb": 2,
+    "fcp": 392,
+    "lcp": 392,
+    "picture": 361,
+    "ready": 407,
+    "tbt": 151,
+    "longest": 201,
+    "req": 43,
+    "kb": 707,
+    "js": 622
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 19,
+    "fcp": 196,
+    "lcp": 196,
+    "picture": 180,
+    "ready": 206,
+    "tbt": 38,
+    "longest": 88,
+    "req": 43,
+    "kb": 6,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      413,
+      415
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      291,
+      375
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      14,
+      55
+    ],
+    [
+      "/_studio/placed-data-DgnQrSBJ.js",
+      2032,
+      15,
+      53
+    ],
+    [
+      "/_studio/voice-library-client-TId_K9CI.js",
+      2031,
+      15,
+      53
+    ],
+    [
+      "/_studio/lessons-CS-E58nH.js",
+      2692,
+      15,
+      53
+    ],
+    [
+      "/_studio/start-BXydzjDE.js",
+      12283,
+      15,
+      51
+    ],
+    [
+      "/_studio/render-ai8CoYPn.js",
+      7738,
+      15,
+      51
+    ],
+    [
+      "/_studio/popover-DSLGjI9d.js",
+      964,
+      15,
+      50
+    ],
+    [
+      "/_studio/field-vLYtE35r.js",
+      1735,
+      15,
+      50
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      178572,
+      7,
+      21
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      14,
+      55
+    ],
+    [
+      "/_studio/App-Cafpa2uy.js",
+      63389,
+      13,
+      33
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      291,
+      375
+    ],
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      413,
+      415
+    ],
+    [
+      "/_studio/index-yb4tINdS.css",
+      31289,
+      7,
+      17
+    ],
+    [
+      "/_studio/timeline-CrMBKL22.js",
+      30215,
+      13,
+      40
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      26399,
+      14,
+      46
+    ],
+    [
+      "/_studio/notes-DpDr4Xjv.js",
+      23361,
+      14,
+      40
+    ],
+    [
+      "/_studio/NoteList-_gLNXVhd.js",
+      15864,
+      13,
+      32
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      0,
+      210,
+      210
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      0,
+      60,
+      60
+    ],
+    [
+      "/api/shots.json",
+      300,
+      55,
+      59
+    ],
+    [
+      "/api/notes",
+      302,
+      55,
+      59
+    ],
+    [
+      "/api/favorites",
+      373,
+      55,
+      59
+    ],
+    [
+      "/api/activity",
+      366,
+      55,
+      59
+    ],
+    [
+      "/api/voice",
+      330,
+      55,
+      59
+    ],
+    [
+      "/_studio/field-vLYtE35r.js",
+      0,
+      59,
+      59
+    ],
+    [
+      "/_studio/start-BXydzjDE.js",
+      0,
+      59,
+      59
+    ],
+    [
+      "/_studio/render-ai8CoYPn.js",
+      0,
+      59,
+      59
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      4832,
+      0,
+      47
+    ],
+    [
+      "/api/favorites",
+      373,
+      55,
+      59
+    ],
+    [
+      "/api/activity",
+      366,
+      55,
+      59
+    ],
+    [
+      "/api/voice",
+      330,
+      55,
+      59
+    ],
+    [
+      "/api/notes",
+      302,
+      55,
+      59
+    ],
+    [
+      "/api/shots.json",
+      300,
+      55,
+      59
+    ],
+    [
+      "/_studio/index-Cz85nkqE.js",
+      0,
+      52,
+      52
+    ],
+    [
+      "/_studio/rolldown-runtime-Dalm4fpH.js",
+      0,
+      52,
+      52
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      0,
+      52,
+      52
+    ],
+    [
+      "/_studio/vite-helpers-SyqyQxtk.js",
+      0,
+      53,
+      53
+    ]
+  ],
+  "phone.cold": {
+    "connect": 1,
+    "ttfb": 3,
+    "fcp": 1296,
+    "lcp": 1296,
+    "picture": 1564,
+    "ready": 1627,
+    "tbt": 1025,
+    "longest": 667,
+    "req": 41,
+    "kb": 644,
+    "js": 559
+  },
+  "phone.warm": {
+    "connect": 0,
+    "ttfb": 2,
+    "fcp": 692,
+    "lcp": 692,
+    "picture": 672,
+    "ready": 716,
+    "tbt": 203,
+    "longest": 253,
+    "req": 40,
+    "kb": 6,
+    "js": 0
+  },
+  "phone.cold.files": [
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      1743,
+      1802
+    ],
+    [
+      "/api/weight",
+      302,
+      1636,
+      1725
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      1137,
+      1648
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      91,
+      550
+    ],
+    [
+      "/_studio/lessons-CS-E58nH.js",
+      2692,
+      92,
+      514
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      26399,
+      92,
+      513
+    ],
+    [
+      "/_studio/voice-library-client-TId_K9CI.js",
+      2031,
+      92,
+      501
+    ],
+    [
+      "/_studio/textrow-lG1LqcQC.js",
+      9824,
+      92,
+      485
+    ],
+    [
+      "/_studio/text-iZu-Dvbs.js",
+      11912,
+      91,
+      471
+    ],
+    [
+      "/_studio/placed-data-DgnQrSBJ.js",
+      2032,
+      91,
+      470
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      178572,
+      86,
+      251
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      91,
+      550
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      1137,
+      1648
+    ],
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      1743,
+      1802
+    ],
+    [
+      "/_studio/index-yb4tINdS.css",
+      31289,
+      86,
+      172
+    ],
+    [
+      "/_studio/timeline-CrMBKL22.js",
+      30215,
+      90,
+      346
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      26399,
+      92,
+      513
+    ],
+    [
+      "/_studio/notes-DpDr4Xjv.js",
+      23361,
+      90,
+      345
+    ],
+    [
+      "/_studio/NoteList-_gLNXVhd.js",
+      15864,
+      91,
+      414
+    ],
+    [
+      "/_studio/start-BXydzjDE.js",
+      12283,
+      91,
+      439
+    ]
+  ],
+  "phone.warm.files": [
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      0,
+      740,
+      740
+    ],
+    [
+      "/api/shots.json",
+      300,
+      77,
+      143
+    ],
+    [
+      "/api/notes",
+      302,
+      77,
+      143
+    ],
+    [
+      "/api/favorites",
+      373,
+      77,
+      143
+    ],
+    [
+      "/api/activity",
+      366,
+      77,
+      143
+    ],
+    [
+      "/api/voice",
+      330,
+      77,
+      143
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      0,
+      83,
+      83
+    ],
+    [
+      "/_studio/text-iZu-Dvbs.js",
+      0,
+      81,
+      81
+    ],
+    [
+      "/_studio/placed-data-DgnQrSBJ.js",
+      0,
+      81,
+      81
+    ],
+    [
+      "/_studio/textrow-lG1LqcQC.js",
+      0,
+      81,
+      81
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      4832,
+      0,
+      64
+    ],
+    [
+      "/api/favorites",
+      373,
+      77,
+      143
+    ],
+    [
+      "/api/activity",
+      366,
+      77,
+      143
+    ],
+    [
+      "/api/voice",
+      330,
+      77,
+      143
+    ],
+    [
+      "/api/notes",
+      302,
+      77,
+      143
+    ],
+    [
+      "/api/shots.json",
+      300,
+      77,
+      143
+    ],
+    [
+      "/_studio/index-Cz85nkqE.js",
+      0,
+      75,
+      75
+    ],
+    [
+      "/_studio/rolldown-runtime-Dalm4fpH.js",
+      0,
+      75,
+      75
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      0,
+      75,
+      75
+    ],
+    [
+      "/_studio/vite-helpers-SyqyQxtk.js",
+      0,
+      75,
+      75
+    ]
+  ]
+}

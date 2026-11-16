@@ -1,0 +1,568 @@
+{
+  "film": "../scripts/evals/load/fixture",
+  "runs": 1,
+  "note": "final harness smoke after screenshot type fix and fixture lint cleanup",
+  "failed": false,
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "HeadlessChrome/149.0.7790.0",
+    "revision": "@6c7573d43a3cbcb08ab6dee8b7b5e52695175636",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7790.0 Safari/537.36",
+    "jsVersion": "14.9.68"
+  },
+  "bun": "1.4.4",
+  "resourceSettleMs": 1000,
+  "server": 4049,
+  "desk.cold": {
+    "connect": 1,
+    "ttfb": 3,
+    "fcp": 436,
+    "lcp": 436,
+    "picture": 411,
+    "ready": 456,
+    "tbt": 183,
+    "longest": 233,
+    "req": 43,
+    "kb": 707,
+    "js": 622
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 2,
+    "fcp": 164,
+    "lcp": 164,
+    "picture": 148,
+    "ready": 179,
+    "tbt": 33,
+    "longest": 83,
+    "req": 43,
+    "kb": 6,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      480,
+      483
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      336,
+      416
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      17,
+      68
+    ],
+    [
+      "/_studio/render-ai8CoYPn.js",
+      7738,
+      17,
+      68
+    ],
+    [
+      "/_studio/lessons-CS-E58nH.js",
+      2692,
+      18,
+      68
+    ],
+    [
+      "/_studio/start-BXydzjDE.js",
+      12283,
+      17,
+      67
+    ],
+    [
+      "/_studio/voice-library-client-TId_K9CI.js",
+      2031,
+      18,
+      67
+    ],
+    [
+      "/_studio/placed-data-DgnQrSBJ.js",
+      2032,
+      18,
+      67
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      26399,
+      17,
+      63
+    ],
+    [
+      "/_studio/text-iZu-Dvbs.js",
+      11912,
+      17,
+      62
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      178572,
+      8,
+      38
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      17,
+      68
+    ],
+    [
+      "/_studio/App-Cafpa2uy.js",
+      63389,
+      14,
+      31
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      336,
+      416
+    ],
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      480,
+      483
+    ],
+    [
+      "/_studio/index-yb4tINdS.css",
+      31289,
+      8,
+      24
+    ],
+    [
+      "/_studio/timeline-CrMBKL22.js",
+      30215,
+      16,
+      44
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      26399,
+      17,
+      63
+    ],
+    [
+      "/_studio/notes-DpDr4Xjv.js",
+      23361,
+      16,
+      45
+    ],
+    [
+      "/_studio/NoteList-_gLNXVhd.js",
+      15864,
+      15,
+      37
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      0,
+      183,
+      183
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      0,
+      26,
+      26
+    ],
+    [
+      "/api/voice",
+      330,
+      13,
+      19
+    ],
+    [
+      "/_studio/start-BXydzjDE.js",
+      0,
+      19,
+      19
+    ],
+    [
+      "/_studio/render-ai8CoYPn.js",
+      0,
+      19,
+      19
+    ],
+    [
+      "/_studio/placed-data-DgnQrSBJ.js",
+      0,
+      19,
+      19
+    ],
+    [
+      "/_studio/voice-library-client-TId_K9CI.js",
+      0,
+      19,
+      19
+    ],
+    [
+      "/_studio/lessons-CS-E58nH.js",
+      0,
+      19,
+      19
+    ],
+    [
+      "/api/activity",
+      366,
+      13,
+      18
+    ],
+    [
+      "/_studio/popover-DSLGjI9d.js",
+      0,
+      18,
+      18
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      4832,
+      0,
+      2
+    ],
+    [
+      "/api/favorites",
+      373,
+      13,
+      16
+    ],
+    [
+      "/api/activity",
+      366,
+      13,
+      18
+    ],
+    [
+      "/api/voice",
+      330,
+      13,
+      19
+    ],
+    [
+      "/api/notes",
+      302,
+      13,
+      16
+    ],
+    [
+      "/api/shots.json",
+      300,
+      13,
+      15
+    ],
+    [
+      "/_studio/index-Cz85nkqE.js",
+      0,
+      9,
+      9
+    ],
+    [
+      "/_studio/rolldown-runtime-Dalm4fpH.js",
+      0,
+      9,
+      9
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      0,
+      9,
+      9
+    ],
+    [
+      "/_studio/vite-helpers-SyqyQxtk.js",
+      0,
+      9,
+      9
+    ]
+  ],
+  "phone.cold": {
+    "connect": 2,
+    "ttfb": 5,
+    "fcp": 2340,
+    "lcp": 2340,
+    "picture": 2276,
+    "ready": 2346,
+    "tbt": 1696,
+    "longest": 1062,
+    "req": 41,
+    "kb": 644,
+    "js": 559
+  },
+  "phone.warm": {
+    "connect": 0,
+    "ttfb": 4,
+    "fcp": 540,
+    "lcp": 540,
+    "picture": 531,
+    "ready": 548,
+    "tbt": 125,
+    "longest": 166,
+    "req": 41,
+    "kb": 7,
+    "js": 0
+  },
+  "phone.cold.files": [
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      2500,
+      2574
+    ],
+    [
+      "/api/weight",
+      302,
+      2353,
+      2432
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      1798,
+      2352
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      158,
+      643
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      26399,
+      158,
+      622
+    ],
+    [
+      "/_studio/lessons-CS-E58nH.js",
+      2692,
+      158,
+      618
+    ],
+    [
+      "/_studio/voice-library-client-TId_K9CI.js",
+      2031,
+      158,
+      604
+    ],
+    [
+      "/_studio/textrow-lG1LqcQC.js",
+      9824,
+      158,
+      593
+    ],
+    [
+      "/_studio/text-iZu-Dvbs.js",
+      11912,
+      158,
+      565
+    ],
+    [
+      "/_studio/start-BXydzjDE.js",
+      12283,
+      157,
+      557
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      178572,
+      152,
+      340
+    ],
+    [
+      "/_studio/vendor-three-CltAyXAq.js",
+      141097,
+      158,
+      643
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      1798,
+      2352
+    ],
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      32967,
+      2500,
+      2574
+    ],
+    [
+      "/_studio/index-yb4tINdS.css",
+      31289,
+      152,
+      258
+    ],
+    [
+      "/_studio/timeline-CrMBKL22.js",
+      30215,
+      157,
+      466
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      26399,
+      158,
+      622
+    ],
+    [
+      "/_studio/notes-DpDr4Xjv.js",
+      23361,
+      157,
+      452
+    ],
+    [
+      "/_studio/NoteList-_gLNXVhd.js",
+      15864,
+      157,
+      507
+    ],
+    [
+      "/_studio/start-BXydzjDE.js",
+      12283,
+      157,
+      557
+    ]
+  ],
+  "phone.warm.files": [
+    [
+      "/api/weight",
+      302,
+      551,
+      628
+    ],
+    [
+      "/_studio/contract-BcFFJ2Z7.js",
+      0,
+      572,
+      572
+    ],
+    [
+      "/api/shots.json",
+      300,
+      83,
+      144
+    ],
+    [
+      "/api/notes",
+      302,
+      84,
+      144
+    ],
+    [
+      "/api/favorites",
+      373,
+      84,
+      143
+    ],
+    [
+      "/api/activity",
+      366,
+      84,
+      143
+    ],
+    [
+      "/api/voice",
+      330,
+      84,
+      143
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      0,
+      92,
+      92
+    ],
+    [
+      "/_studio/textrow-lG1LqcQC.js",
+      0,
+      90,
+      90
+    ],
+    [
+      "/_studio/lanes-8zYSh44M.js",
+      0,
+      90,
+      90
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      4832,
+      0,
+      66
+    ],
+    [
+      "/api/favorites",
+      373,
+      84,
+      143
+    ],
+    [
+      "/api/activity",
+      366,
+      84,
+      143
+    ],
+    [
+      "/api/voice",
+      330,
+      84,
+      143
+    ],
+    [
+      "/api/notes",
+      302,
+      84,
+      144
+    ],
+    [
+      "/api/weight",
+      302,
+      551,
+      628
+    ],
+    [
+      "/api/shots.json",
+      300,
+      83,
+      144
+    ],
+    [
+      "/_studio/index-Cz85nkqE.js",
+      0,
+      79,
+      79
+    ],
+    [
+      "/_studio/rolldown-runtime-Dalm4fpH.js",
+      0,
+      79,
+      79
+    ],
+    [
+      "/_studio/vendor-ui-DNS8qu-C.js",
+      0,
+      79,
+      79
+    ]
+  ]
+}

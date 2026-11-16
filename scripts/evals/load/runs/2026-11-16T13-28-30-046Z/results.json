@@ -1,0 +1,283 @@
+{
+  "film": "../scripts/evals/load/fixture",
+  "runs": 5,
+  "note": "baseline desktop and first Settings open",
+  "failed": false,
+  "server": 5480,
+  "desk.cold": {
+    "connect": 3,
+    "ttfb": 6,
+    "fcp": 788,
+    "lcp": 788,
+    "picture": 756,
+    "ready": 810,
+    "tbt": 315,
+    "longest": 326,
+    "req": 39,
+    "kb": 789,
+    "js": 705
+  },
+  "desk.warm": {
+    "connect": 0,
+    "ttfb": 8,
+    "fcp": 280,
+    "lcp": 280,
+    "picture": 261,
+    "ready": 308,
+    "tbt": 78,
+    "longest": 128,
+    "req": 39,
+    "kb": 6,
+    "js": 0
+  },
+  "desk.cold.files": [
+    [
+      "/_studio/contract-BLcJBHFV.js",
+      37779,
+      821,
+      891
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      629,
+      763
+    ],
+    [
+      "/_studio/voice-library-client-BiRsw1qX.js",
+      2406,
+      22,
+      147
+    ],
+    [
+      "/_studio/lessons-CNAnMH4c.js",
+      2997,
+      22,
+      147
+    ],
+    [
+      "/_studio/render-B9WgN_gG.js",
+      8911,
+      22,
+      141
+    ],
+    [
+      "/_studio/start-Da-iWs7Y.js",
+      13920,
+      22,
+      141
+    ],
+    [
+      "/_studio/placed-data-Cr2y9_Ky.js",
+      2120,
+      22,
+      141
+    ],
+    [
+      "/_studio/textrow-w3OAwfxX.js",
+      10765,
+      22,
+      140
+    ],
+    [
+      "/_studio/popover-AT8aKuZ4.js",
+      1030,
+      21,
+      139
+    ],
+    [
+      "/_studio/vendor-three-sHVee7yR.js",
+      156871,
+      21,
+      137
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/_studio/vendor-ui-BaNhppuZ.js",
+      217940,
+      13,
+      44
+    ],
+    [
+      "/_studio/vendor-three-sHVee7yR.js",
+      156871,
+      21,
+      137
+    ],
+    [
+      "/_studio/App-D2VmKYQv.js",
+      67502,
+      20,
+      107
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      48556,
+      629,
+      763
+    ],
+    [
+      "/_studio/contract-BLcJBHFV.js",
+      37779,
+      821,
+      891
+    ],
+    [
+      "/_studio/timeline-BzM9hWhO.js",
+      34250,
+      21,
+      120
+    ],
+    [
+      "/_studio/index-yb4tINdS.css",
+      31289,
+      13,
+      32
+    ],
+    [
+      "/_studio/lanes-fHWewbZS.js",
+      28725,
+      21,
+      132
+    ],
+    [
+      "/_studio/notes-FJsySTi1.js",
+      26581,
+      21,
+      119
+    ],
+    [
+      "/_studio/NoteList-Cv0D6mFT.js",
+      17952,
+      20,
+      103
+    ]
+  ],
+  "desk.warm.files": [
+    [
+      "/_studio/contract-BLcJBHFV.js",
+      0,
+      312,
+      312
+    ],
+    [
+      "/api/favorites",
+      373,
+      70,
+      110
+    ],
+    [
+      "/api/notes",
+      302,
+      70,
+      109
+    ],
+    [
+      "/api/activity",
+      366,
+      70,
+      109
+    ],
+    [
+      "/api/voice",
+      330,
+      70,
+      109
+    ],
+    [
+      "/api/shots.json",
+      300,
+      69,
+      100
+    ],
+    [
+      "/_studio/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      0,
+      75,
+      75
+    ],
+    [
+      "/_studio/render-B9WgN_gG.js",
+      0,
+      74,
+      74
+    ],
+    [
+      "/_studio/placed-data-Cr2y9_Ky.js",
+      0,
+      74,
+      74
+    ],
+    [
+      "/_studio/voice-library-client-BiRsw1qX.js",
+      0,
+      74,
+      74
+    ],
+    [
+      "-- heaviest:"
+    ],
+    [
+      "/",
+      4616,
+      0,
+      59
+    ],
+    [
+      "/api/favorites",
+      373,
+      70,
+      110
+    ],
+    [
+      "/api/activity",
+      366,
+      70,
+      109
+    ],
+    [
+      "/api/voice",
+      330,
+      70,
+      109
+    ],
+    [
+      "/api/notes",
+      302,
+      70,
+      109
+    ],
+    [
+      "/api/shots.json",
+      300,
+      69,
+      100
+    ],
+    [
+      "/_studio/index-CQyzcmyI.js",
+      0,
+      66,
+      66
+    ],
+    [
+      "/_studio/rolldown-runtime-ufE1LuJY.js",
+      0,
+      66,
+      66
+    ],
+    [
+      "/_studio/vendor-ui-BaNhppuZ.js",
+      0,
+      66,
+      66
+    ],
+    [
+      "/_studio/vite-helpers-DzIs9alY.js",
+      0,
+      66,
+      66
+    ]
+  ]
+}

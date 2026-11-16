@@ -1,0 +1,48 @@
+bun test v1.4.4 (38afee6c8)
+
+packages\live-studio\test\film-files.test.mjs:
+(pass) critical film fetches are preloaded before the app module with matching anonymous CORS [7.59ms]
+(pass) a preload URL remains an escaped attribute in the built page [1.21ms]
+(pass) a film file with a brotli copy beside it goes out as that copy to a browser that reads brotli [15.62ms]
+117 |   );
+118 |   const asset = await app.request("/mc/client_assets.zip");
+119 |   const tag = asset.headers.get("etag").replaceAll('"', "");
+120 |   await asset.arrayBuffer();
+121 |   const text = await (await app.request("/")).text();
+122 |   assert.ok(text.includes(`href="mc/client_assets.zip?v=${tag}"`));
+               ^
+AssertionError: false == true
+ generatedMessage: true,
+     actual: false,
+   expected: true,
+   operator: "==",
+       diff: "simple",
+       code: "ERR_ASSERTION"
+
+      at C:\Users\ADMIN\.t3\worktrees\gohans-monorepo-3js-mc\perf-live-studio-hill-c-f1c8c73c6e94307b\packages\live-studio\test\film-files.test.mjs:122:10
+      at node:test:1445:26
+      at executeTestNode (node:test:1448:63)
+(fail) preloads use the asset version from the same boot metadata and discard stale tags [5.56ms]
+140 |     },
+141 |     { page: { dir, html: () => "<html><head></head></html>" }, events: new Set() },
+142 |   );
+143 |   await (await app.request("/asset.zip")).arrayBuffer();
+144 |   const text = await (await app.request("/")).text();
+145 |   for (const href of hrefs) assert.ok(text.includes(`href="${href}"`), href);
+                                         ^
+AssertionError: asset.zip?
+ generatedMessage: false,
+     actual: false,
+   expected: true,
+   operator: "==",
+       diff: "simple",
+       code: "ERR_ASSERTION"
+
+      at C:\Users\ADMIN\.t3\worktrees\gohans-monorepo-3js-mc\perf-live-studio-hill-c-f1c8c73c6e94307b\packages\live-studio\test\film-files.test.mjs:145:36
+      at node:test:1445:26
+      at executeTestNode (node:test:1448:63)
+(fail) preloads preserve query and fragment markers like the browser's versioned fetch [2.81ms]
+
+ 3 pass
+ 2 fail
+Ran 5 tests across 1 file. [451.00ms]

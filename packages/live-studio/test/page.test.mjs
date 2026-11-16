@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -7,12 +8,14 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
+import { runInNewContext } from "node:vm";
 
 import { openFilm, STUDIO } from "../src/film.mjs";
 import { buildPage } from "../src/page.mjs";
@@ -85,6 +88,50 @@ test("the film builds into the page, even with a Node library that requires a No
   assert.ok(readdirSync(join(page.dir, "_studio")).some((f) => f.endsWith(".js")));
 });
 
+const VENDOR_BUDGET_TEST = "the initial UI vendor code fits a 240 KiB Brotli budget";
+test(VENDOR_BUDGET_TEST, () => {
+  // Bun's test environment includes React's development build; measure the shipped build in its own process.
+  if (process.env.NODE_ENV !== "production") {
+    const result = spawnSync(
+      process.execPath,
+      ["test", "--timeout", "20000", import.meta.filename, "-t", VENDOR_BUDGET_TEST],
+      {
+        env: { ...process.env, NODE_ENV: "production" },
+        encoding: "utf8",
+        timeout: 25000,
+      },
+    );
+    assert.equal(result.status, 0, result.error?.message ?? result.stderr);
+    return;
+  }
+  const html = page.html();
+  const loaders = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+    .map((m) => m[1])
+    .filter((s) => s.includes("matchMedia"));
+  assert.ok(loaders.length > 0);
+  for (const phone of [false, true]) {
+    const links = new Set([...html.matchAll(/href="(\/[^"<>]+\.js)"/g)].map((m) => m[1]));
+    for (const script of loaders)
+      runInNewContext(script, {
+        matchMedia: () => ({ matches: phone }),
+        document: {
+          createElement: () => ({}),
+          head: { appendChild: (link) => links.add(link.href) },
+        },
+      });
+    const paths = [...links].filter((p) => /^\/_studio\/vendor-ui[-~]/.test(p));
+    assert.ok(paths.length > 0);
+    const bytes = paths.reduce((sum, path) => {
+      const file = join(page.dir, path);
+      return sum + statSync(existsSync(`${file}.br`) ? `${file}.br` : file).size;
+    }, 0);
+    assert.ok(
+      bytes <= 240 * 1024,
+      `${phone ? "phone" : "desktop"} UI vendor: ${bytes} bytes Brotli`,
+    );
+  }
+});
+
 test("a saved comment builds the same page and reloads nothing", async () => {
   const before = page.html();
   await save(`${readFileSync(scene, "utf8")}\n// a thought\n`);
@@ -149,11 +196,13 @@ test("vendor chunks stay cached across film edits with fresh .br and .gz sibling
   const vendorsBefore = readdirSync(code)
     .filter((f) => /^vendor-.*\.js$/.test(f))
     .sort();
+  const original = new Map(vendorsBefore.map((v) => [v, readFileSync(join(code, v))]));
   assert.ok(
     vendorsBefore.length >= 2,
     `expected split vendor chunks, got: ${vendorsBefore.join(", ")}`,
   );
   for (const v of vendorsBefore) {
+    if (statSync(join(code, v)).size < 1024) continue;
     assert.equal(existsSync(join(code, `${v}.br`)), true, `missing ${v}.br`);
     assert.equal(existsSync(join(code, `${v}.gz`)), true, `missing ${v}.gz`);
     // Age the precompressed siblings near KEEP so a rebuild that forgets to touch them would let clearOld() delete them
@@ -167,6 +216,8 @@ test("vendor chunks stay cached across film edits with fresh .br and .gz sibling
     .sort();
   assert.deepEqual(vendorsAfter, vendorsBefore);
   for (const v of vendorsAfter) {
+    assert.deepEqual(readFileSync(join(code, v)), original.get(v));
+    if (statSync(join(code, v)).size < 1024) continue;
     assert.equal(existsSync(join(code, `${v}.br`)), true, `clearOld evicted active ${v}.br`);
     assert.equal(existsSync(join(code, `${v}.gz`)), true, `clearOld evicted active ${v}.gz`);
   }

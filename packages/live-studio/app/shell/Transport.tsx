@@ -5,6 +5,8 @@
 // vision and the key from view while flying (Shift+K; night vision in Settings), the free camera (F, and in Settings; kept
 // while on); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
 // Settings). Play, Note, Draw, full screen and the settings never go. The widths are the bar's inside at a phone's larger text
+import { lazy, Suspense } from "react";
+
 import {
   Brush,
   Ellipsis,
@@ -35,7 +37,8 @@ import { SnapshotButtons } from "../picture/Compare";
 import { setFree } from "../picture/freecam";
 import { setVolume, toggleMute, togglePlay } from "../playback/transport";
 import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
-import { Settings } from "./Settings";
+
+const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Settings })));
 
 // CapCut's player bar is one slim row under the picture: 32 px controls with a mouse, 40 px under a finger (Button size md)
 const square = "pointer-coarse:size-10";
@@ -209,7 +212,7 @@ export function Transport() {
           sideOffset={8}
           className="h-[min(720px,var(--available-height))] w-[min(400px,calc(100vw-24px))]"
         >
-          <Settings />
+          <Suspense fallback={null}><Settings /></Suspense>
         </PopoverContent>
       </Popover>
     </div>

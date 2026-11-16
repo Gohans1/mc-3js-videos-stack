@@ -1,0 +1,6 @@
+bun : $ oxlint packages scripts
+At line:2 char:95
++ ... ummary.log; bun run lint > $env:TEMP/studio-perf-lint-full.log 2>&1;  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ oxlint packages scripts:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError

@@ -1,0 +1,137 @@
+{
+ "narration": "narration",
+ "voice": false,
+ "voiceGain": 0,
+ "beds": [
+  {
+   "name": "bgm-deep-urban",
+   "from": 0,
+   "to": 15,
+   "start": 128.0116,
+   "gain": -14,
+   "fadeIn": 0.05,
+   "fadeOut": 1.0
+  }
+ ],
+ "sfx": [
+  {
+   "at": 0,
+   "start": 0,
+   "length": 2.847,
+   "name": "narration",
+   "gain": 0,
+   "dialogue": true
+  },
+  {
+   "at": 3.247,
+   "start": 3.247,
+   "length": 3.082,
+   "name": "narration",
+   "gain": 0,
+   "dialogue": true
+  },
+  {
+   "at": 6.729,
+   "start": 6.729,
+   "length": 3.004,
+   "name": "narration",
+   "gain": 0,
+   "dialogue": true
+  },
+  {
+   "at": 10.133,
+   "start": 10.133,
+   "length": 2.926,
+   "name": "narration",
+   "gain": 0,
+   "dialogue": true
+  },
+  {
+   "at": 0.0,
+   "name": "ear-whoosh_big-thump_airy",
+   "gain": -10
+  },
+  {
+   "at": 1.8,
+   "name": "ear-whoosh_fast-crisp",
+   "gain": -9
+  },
+  {
+   "at": 2.85,
+   "name": "mc-mob-cat-meow-1",
+   "gain": -8
+  },
+  {
+   "at": 4.3,
+   "name": "ear-glitch-crush",
+   "gain": -10
+  },
+  {
+   "at": 4.55,
+   "name": "ear-shimmer-m1",
+   "gain": -14
+  },
+  {
+   "at": 4.9,
+   "name": "mc-random-break",
+   "gain": -8
+  },
+  {
+   "at": 6.7,
+   "name": "mc-dig-stone-1",
+   "gain": -7
+  },
+  {
+   "at": 7.5,
+   "name": "snatch_riser",
+   "gain": -12
+  },
+  {
+   "at": 8.05,
+   "name": "mc-step-stone-1",
+   "gain": -9
+  },
+  {
+   "at": 8.2,
+   "name": "ken-interface-scratch-001",
+   "gain": -8
+  },
+  {
+   "at": 9.22,
+   "name": "ear-glitch-hit",
+   "gain": -9
+  },
+  {
+   "at": 9.27,
+   "name": "mixkit-2299",
+   "gain": -8
+  },
+  {
+   "at": 10.75,
+   "name": "mixkit-2294",
+   "gain": -7
+  },
+  {
+   "at": 11.15,
+   "name": "ear-whoosh_big-swell",
+   "gain": -12
+  },
+  {
+   "at": 12.0,
+   "name": "bite_crunch",
+   "gain": -8
+  },
+  {
+   "at": 12.95,
+   "name": "mc-mob-cat-purreow-1",
+   "gain": -6
+  },
+  {
+   "at": 14.3,
+   "name": "ear-pop-2",
+   "gain": -10
+  }
+ ],
+ "lufs": -14,
+ "drive": 0
+}

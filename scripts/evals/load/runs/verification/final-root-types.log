@@ -1,0 +1,67 @@
+packages/live-studio/app/camera/anim.ts(7,29): error TS2307: Cannot find module 'film/scene' or its corresponding type declarations.
+packages/live-studio/app/camera/anim.ts(45,30): error TS7006: Parameter 'x' implicitly has an 'any' type.
+packages/live-studio/app/camera/anim.ts(95,34): error TS7006: Parameter 'x' implicitly has an 'any' type.
+packages/live-studio/app/camera/anim.ts(99,35): error TS7006: Parameter 'x' implicitly has an 'any' type.
+packages/live-studio/app/camera/cam.ts(7,32): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+packages/live-studio/app/camera/camline.ts(54,38): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/live-studio/app/camera/camline.ts(55,30): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/live-studio/app/camera/layers.ts(2,22): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+packages/live-studio/app/camera/shots.ts(4,22): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+packages/live-studio/app/core/state.ts(2,34): error TS2307: Cannot find module 'film/scene' or its corresponding type declarations.
+packages/live-studio/app/keys/keys.ts(6,22): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+packages/live-studio/app/notes/notes.ts(1,44): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+packages/live-studio/app/notes/notes.ts(301,14): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/notes/notes.ts(302,13): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/notes/notes.ts(303,23): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/notes/notes.ts(304,12): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/notes/notes.ts(305,15): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/options/options.ts(1,34): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+packages/live-studio/app/options/options.ts(9,30): error TS2307: Cannot find module 'film/scene' or its corresponding type declarations.
+packages/live-studio/app/options/options.ts(134,10): error TS2339: Property '__hits' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/options/options.ts(135,16): error TS2339: Property '__hits' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/options/options.ts(167,10): error TS2339: Property '__stems' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/options/options.ts(167,32): error TS2339: Property '__stems' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/options/options.ts(174,66): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/options/options.ts(174,80): error TS7006: Parameter 's' implicitly has an 'any' type.
+packages/live-studio/app/options/options.ts(205,10): error TS2339: Property '__sounds' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/options/options.ts(205,29): error TS2339: Property '__sounds' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/options/options.ts(226,36): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/options/options.ts(227,42): error TS18046: 'b' is of type 'unknown'.
+packages/live-studio/app/options/options.ts(368,37): error TS7006: Parameter 'v' implicitly has an 'any' type.
+packages/live-studio/app/sound/meter.ts(7,21): error TS2307: Cannot find module 'loudness-worklet/worklet?url' or its corresponding type declarations.
+packages/live-studio/app/sound/mixer.ts(13,23): error TS2307: Cannot find module './brickwall.worklet.ts?worker&url' or its corresponding type declarations.
+packages/live-studio/app/sound/mixer.ts(441,12): error TS2339: Property '__lanes' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/sound/mixer.ts(628,8): error TS2339: Property '__lanesRender' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/timeline/timeline.ts(1,34): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+packages/live-studio/app/timeline/timeline.ts(41,65): error TS2571: Object is of type 'unknown'.
+packages/live-studio/app/timeline/timeline.ts(41,75): error TS2571: Object is of type 'unknown'.
+packages/live-studio/app/timeline/timeline.ts(77,22): error TS18046: 'm' is of type 'unknown'.
+packages/live-studio/app/timeline/timeline.ts(79,35): error TS18046: 'm' is of type 'unknown'.
+packages/live-studio/app/timeline/timeline.ts(79,53): error TS18046: 'm' is of type 'unknown'.
+packages/live-studio/app/timeline/timeline.ts(79,60): error TS18046: 'm' is of type 'unknown'.
+packages/live-studio/app/timeline/timeline.ts(1076,10): error TS2339: Property '__editor' does not exist on type 'Window & typeof globalThis'.
+packages/live-studio/app/timeline/timing.ts(1,22): error TS2307: Cannot find module 'film/edit' or its corresponding type declarations.
+scripts/find.ts(1496,34): error TS2339: Property 'seq' does not exist on type '{}'.
+scripts/find.ts(1496,74): error TS18048: 'd.seq' is possibly 'undefined'.
+bun : Found 45 errors in 14 files, checked 194 files [321.77ms]
+At line:2 char:36
++ ... 'Continue'; bun check --no-script *> "$env:TEMP\studio-perf-final-roo ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Found 45 errors...iles [321.77ms]:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+
+   4  packages/live-studio/app/camera/anim.ts:7
+   1  packages/live-studio/app/camera/cam.ts:7
+   2  packages/live-studio/app/camera/camline.ts:54
+   1  packages/live-studio/app/camera/layers.ts:2
+   1  packages/live-studio/app/camera/shots.ts:4
+   1  packages/live-studio/app/core/state.ts:2
+   1  packages/live-studio/app/keys/keys.ts:6
+   6  packages/live-studio/app/notes/notes.ts:1
+  13  packages/live-studio/app/options/options.ts:1
+   1  packages/live-studio/app/sound/meter.ts:7
+   3  packages/live-studio/app/sound/mixer.ts:13
+   8  packages/live-studio/app/timeline/timeline.ts:1
+   1  packages/live-studio/app/timeline/timing.ts:1
+   2  scripts/find.ts:1496

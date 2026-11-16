@@ -1,0 +1,140 @@
+[
+ {
+  "t": 0,
+  "name": "Hook: Steve to camera",
+  "size": "medium close-up (MCU)",
+  "what": "Steve says your cat can't taste sugar",
+  "anim": {
+   "in": {
+    "fx": "snapZoomIn",
+    "len": 0.55
+   },
+   "combo": {
+    "fx": "handheld",
+    "len": 1.95
+   },
+   "out": {
+    "fx": "whipDipR",
+    "len": 0.3
+   }
+  }
+ },
+ {
+  "t": 1.95,
+  "name": "The cat, unbothered",
+  "size": "close-up (CU)",
+  "what": "the cat walks low past the lens",
+  "transition": {
+   "fx": "whipStreak",
+   "len": 0.35,
+   "ease": "snap"
+  },
+  "anim": {
+   "combo": {
+    "fx": "push",
+    "len": 2.44
+   },
+   "out": {
+    "fx": "zoomThrough",
+    "len": 0.35
+   }
+  }
+ },
+ {
+  "t": 4.39,
+  "name": "The sweet gene",
+  "size": "extreme close-up (ECU)",
+  "what": "a DNA helix loses its pink sweet-taste rung",
+  "set": "helix",
+  "transition": {
+   "fx": "glitchBreak",
+   "len": 0.4
+  },
+  "anim": {
+   "in": {
+    "fx": "zoomThrough",
+    "len": 0.45
+   },
+   "combo": {
+    "fx": "vertigoIn",
+    "len": 2.44
+   }
+  },
+  "adjust": {
+   "basic": {
+    "contrast": 15,
+    "clarity": 20
+   }
+  }
+ },
+ {
+  "t": 6.83,
+  "name": "The cake heist",
+  "size": "medium shot (MS)",
+  "what": "the cat hops onto the table beside the cake",
+  "transition": {
+   "fx": "blockBreak",
+   "len": 0.5
+  },
+  "anim": {
+   "combo": {
+    "fx": "actionFollow",
+    "len": 2.44
+   },
+   "out": {
+    "fx": "rush",
+    "len": 0.3
+   }
+  }
+ },
+ {
+  "t": 9.27,
+  "name": "Steve finds out",
+  "size": "close-up (CU)",
+  "what": "Steve, shocked, it's the fat",
+  "transition": {
+   "fx": "rgbSplitCut",
+   "len": 0.3
+  },
+  "anim": {
+   "in": {
+    "fx": "impactKick",
+    "len": 0.4
+   },
+   "combo": {
+    "fx": "shake",
+    "len": 1.95
+   },
+   "out": {
+    "fx": "snapZoomIn",
+    "len": 0.35
+   }
+  },
+  "adjust": {
+   "basic": {
+    "fisheye": 35,
+    "saturation": 15
+   }
+  }
+ },
+ {
+  "t": 11.22,
+  "name": "And your attention",
+  "size": "wide (WS)",
+  "what": "the cat at the cake, Steve beside it, end card",
+  "transition": {
+   "fx": "lightIris",
+   "len": 0.5
+  },
+  "anim": {
+   "combo": {
+    "fx": "orbitR",
+    "len": 3.78
+   },
+   "out": {
+    "fx": "fade",
+    "len": 0.5
+   }
+  }
+ }
+]

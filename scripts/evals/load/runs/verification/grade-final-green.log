@@ -1,0 +1,16 @@
+bun test v1.4.4 (38afee6c8)
+bun :
+At line:2 char:120
++ ... de-page.ts; bun test packages/film-stage/test/grade-gpu.test.ts --tes ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+packages\film-stage\test\grade-gpu.test.ts:
+(pass) Finishing sliders reuse their color LUT while color and secondary edits invalidate it [72.15ms]
+
+ 1 pass
+ 9 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [759.00ms]

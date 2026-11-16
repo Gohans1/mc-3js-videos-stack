@@ -1,0 +1,374 @@
+{
+ "items": [
+  {
+   "kind": "text",
+   "text": "YOUR CAT CAN'T",
+   "font": "sans",
+   "bold": true,
+   "size": 84,
+   "x": 0.5,
+   "y": 0.6,
+   "align": "center",
+   "color": "#FFFFFF",
+   "in": {
+    "fx": "wordBuild",
+    "len": 0.5
+   },
+   "out": {
+    "fx": "collapseOut",
+    "len": 0.2
+   },
+   "from": 0.13,
+   "to": 1.95,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 0
+  },
+  {
+   "kind": "text",
+   "text": "TASTE SUGAR",
+   "font": "sans",
+   "bold": true,
+   "size": 118,
+   "x": 0.5,
+   "y": 0.68,
+   "align": "center",
+   "color": "#F5C542",
+   "in": {
+    "fx": "popIn",
+    "len": 0.28
+   },
+   "out": {
+    "fx": "whipRight",
+    "len": 0.22
+   },
+   "from": 0.8,
+   "to": 1.95,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 1
+  },
+  {
+   "kind": "text",
+   "text": "NOT EVEN A LITTLE.",
+   "font": "sans",
+   "bold": true,
+   "size": 92,
+   "x": 0.5,
+   "y": 0.62,
+   "align": "center",
+   "color": "#E5484D",
+   "in": {
+    "fx": "gravityDrop",
+    "len": 0.45
+   },
+   "out": {
+    "fx": "whipLeft",
+    "len": 0.25
+   },
+   "from": 2.0,
+   "to": 3.6,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 0
+  },
+  {
+   "kind": "text",
+   "text": "Tas1r2",
+   "font": "mono",
+   "bold": true,
+   "size": 96,
+   "x": 0.5,
+   "y": 0.17,
+   "align": "center",
+   "color": "#FFFFFF",
+   "in": {
+    "fx": "scramble",
+    "len": 0.6
+   },
+   "out": {
+    "fx": "scrambleOut",
+    "len": 0.3
+   },
+   "from": 4.5,
+   "to": 6.7,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 0
+  },
+  {
+   "kind": "text",
+   "text": "THE SWEET-TASTE GENE",
+   "font": "mono",
+   "bold": false,
+   "size": 46,
+   "x": 0.5,
+   "y": 0.235,
+   "align": "center",
+   "color": "#FFFFFF",
+   "in": {
+    "fx": "trackingIn",
+    "len": 0.5
+   },
+   "out": {
+    "fx": "fade",
+    "len": 0.2
+   },
+   "from": 4.6,
+   "to": 6.7,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 1,
+   "spacing": 0.08
+  },
+  {
+   "kind": "text",
+   "text": "DELETED",
+   "font": "sans",
+   "bold": true,
+   "size": 120,
+   "x": 0.5,
+   "y": 0.6,
+   "align": "center",
+   "color": "#E5484D",
+   "in": {
+    "fx": "echoIn",
+    "len": 0.4
+   },
+   "out": {
+    "fx": "shatter",
+    "len": 0.35
+   },
+   "from": 4.95,
+   "to": 6.75,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 2,
+   "background": {
+    "color": "#100F0F",
+    "opacity": 0.6
+   }
+  },
+  {
+   "kind": "text",
+   "text": "millions of years ago",
+   "font": "serif",
+   "bold": false,
+   "size": 58,
+   "x": 0.5,
+   "y": 0.67,
+   "align": "center",
+   "color": "#FFFFFF",
+   "in": {
+    "fx": "letterReveal",
+    "len": 0.35
+   },
+   "out": {
+    "fx": "blur",
+    "len": 0.25
+   },
+   "from": 5.2,
+   "to": 6.75,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 3,
+   "italic": true
+  },
+  {
+   "kind": "circle",
+   "size": 300,
+   "width": 10,
+   "color": "#FF6FB5",
+   "x": 0.5,
+   "y": 0.47,
+   "in": {
+    "fx": "draw",
+    "len": 0.35
+   },
+   "out": {
+    "fx": "expandFade",
+    "len": 0.3
+   },
+   "from": 4.55,
+   "to": 5.15,
+   "track": 4
+  },
+  {
+   "kind": "text",
+   "text": "SUSPECT #1",
+   "font": "mono",
+   "bold": true,
+   "size": 64,
+   "x": 0.5,
+   "y": 0.2,
+   "align": "center",
+   "color": "#FFFFFF",
+   "in": {
+    "fx": "type",
+    "len": 0.45
+   },
+   "out": {
+    "fx": "letterHide",
+    "len": 0.25
+   },
+   "from": 7.9,
+   "to": 9.2,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 0
+  },
+  {
+   "kind": "bracket",
+   "w": 420,
+   "h": 320,
+   "width": 8,
+   "color": "#F5C542",
+   "x": 0.42,
+   "y": 0.5,
+   "in": {
+    "fx": "oversize",
+    "len": 0.3
+   },
+   "out": {
+    "fx": "fade",
+    "len": 0.2
+   },
+   "from": 8.05,
+   "to": 9.2,
+   "track": 1
+  },
+  {
+   "kind": "text",
+   "text": "IT'S THE FAT.",
+   "font": "sans",
+   "bold": true,
+   "size": 128,
+   "x": 0.5,
+   "y": 0.62,
+   "align": "center",
+   "color": "#F5C542",
+   "in": {
+    "fx": "gravityDrop",
+    "len": 0.4
+   },
+   "out": {
+    "fx": "lensFlyOut",
+    "len": 0.3
+   },
+   "from": 10.72,
+   "to": 11.9,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 0
+  },
+  {
+   "kind": "text",
+   "text": "+ YOUR ATTENTION",
+   "font": "sans",
+   "bold": true,
+   "size": 92,
+   "x": 0.5,
+   "y": 0.62,
+   "align": "center",
+   "color": "#3AA99F",
+   "in": {
+    "fx": "lensFly",
+    "len": 0.4
+   },
+   "out": {
+    "fx": "lineSplitOut",
+    "len": 0.3
+   },
+   "from": 12.1,
+   "to": 14.5,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 1
+  },
+  {
+   "kind": "underline",
+   "w": 560,
+   "width": 10,
+   "color": "#3AA99F",
+   "x": 0.5,
+   "y": 0.665,
+   "in": {
+    "fx": "draw",
+    "len": 0.35
+   },
+   "out": {
+    "fx": "undraw",
+    "len": 0.25
+   },
+   "from": 12.45,
+   "to": 14.5,
+   "track": 2
+  },
+  {
+   "kind": "arrow",
+   "size": 200,
+   "width": 12,
+   "color": "#E5484D",
+   "x": 0.33,
+   "y": 0.4,
+   "rotate": 120,
+   "in": {
+    "fx": "draw",
+    "len": 0.4
+   },
+   "out": {
+    "fx": "undraw",
+    "len": 0.3
+   },
+   "from": 12.5,
+   "to": 14.5,
+   "track": 3
+  },
+  {
+   "kind": "text",
+   "text": "follow for more cat facts",
+   "font": "sans",
+   "bold": false,
+   "size": 52,
+   "x": 0.5,
+   "y": 0.2,
+   "align": "center",
+   "color": "#FFFFFF",
+   "in": {
+    "fx": "staggerWords",
+    "len": 0.4
+   },
+   "out": {
+    "fx": "fade",
+    "len": 0.2
+   },
+   "from": 13.3,
+   "to": 15.0,
+   "stroke": {
+    "color": "#100F0F",
+    "width": 8
+   },
+   "track": 4
+  }
+ ]
+}

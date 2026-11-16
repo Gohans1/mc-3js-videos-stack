@@ -1,0 +1,18 @@
+{
+  "complete": true,
+  "scope": "Real Minecraft add/replace/remove with prepared asset cache; no performance claim",
+  "trials": [],
+  "environment": {
+    "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "gpu": "ANGLE (Microsoft, Microsoft Basic Render Driver (0x0000008C) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "timer": false
+  },
+  "objects": {
+    "built": true,
+    "rebuilt": true,
+    "removed": true,
+    "addedVisible": true,
+    "replacementVisible": true,
+    "restoredExact": true
+  }
+}

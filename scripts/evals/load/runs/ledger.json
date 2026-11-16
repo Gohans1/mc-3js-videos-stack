@@ -1,0 +1,260 @@
+{
+  "scope": "Đóng gói app, tải PC/mobile và CPU khi chỉnh hiệu ứng; giữ renderer, shader, tỷ lệ và tính năng.",
+  "snapshot": "53c0979 là snapshot thay đổi có sẵn của user trước công việc tối ưu, không phải code mới của lượt này.",
+  "commands": {
+    "measure": "bun run eval:load --film ../scripts/evals/load/fixture --runs 5 --panels",
+    "profile": "bun run eval:load --film ../scripts/evals/load/fixture --runs 1 --profile",
+    "minecraft": "bun run eval:load --film demo-test-mc-yolo --runs 5 --panels",
+    "grade": "bun scripts/evals/load/grade.mjs",
+    "gradeBaseline": {
+      "workspace": "Only this isolated worktree, with no uncommitted grade.ts edits",
+      "prepare": "git restore --source=53c0979 -- packages/film-stage/src/grade.ts",
+      "run": "bun scripts/evals/load/grade.mjs",
+      "restore": "git restore --source=HEAD -- packages/film-stage/src/grade.ts"
+    }
+  },
+  "attempts": [
+    {
+      "id": "2026-11-16T13-26-48-544Z",
+      "note": "snapshot baseline repeat with raw samples",
+      "decision": "baseline",
+      "reason": "Lượt dò mobile; chưa dùng làm đối chứng cuối.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-26-48-544Z/results.json",
+      "samples": "2026-11-16T13-26-48-544Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-28-30-046Z",
+      "note": "baseline desktop and first Settings open",
+      "decision": "baseline",
+      "reason": "Đo mở Settings lần đầu để định vị chi phí panel.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-28-30-046Z/results.json",
+      "samples": "2026-11-16T13-28-30-046Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-30-13-353Z",
+      "note": "round 1 direct panel imports",
+      "decision": "reverted",
+      "reason": "Tách toàn bộ panel tăng số chunk dùng chung và dữ liệu tải đầu.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-30-13-353Z/results.json",
+      "samples": "2026-11-16T13-30-13-353Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-33-24-731Z",
+      "note": "round 2 shared app chunk with direct panel imports",
+      "decision": "reverted",
+      "reason": "Gom app dùng chung giảm request nhưng buộc mobile nạp thêm code; không giữ.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-33-24-731Z/results.json",
+      "samples": "2026-11-16T13-33-24-731Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-35-47-613Z",
+      "note": "round 3 entry aware shared app chunks 20KB merge",
+      "decision": "reverted",
+      "reason": "Gom theo entry chưa cải thiện tổng thể; không giữ.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-35-47-613Z/results.json",
+      "samples": "2026-11-16T13-35-47-613Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-37-17-768Z",
+      "note": "round 4 isolate Settings only; reject broad panel splitting",
+      "decision": "kept",
+      "reason": "Chỉ tách Settings: giảm dữ liệu mở panel, ít tác động phần khởi động.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-37-17-768Z/results.json",
+      "samples": "2026-11-16T13-37-17-768Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-39-38-450Z",
+      "note": "round 5 minify bindings with function and class names preserved",
+      "decision": "kept",
+      "reason": "Nén biến nội bộ, giữ tên hàm/lớp; giảm dữ liệu PC và mobile.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-39-38-450Z/results.json",
+      "samples": "2026-11-16T13-39-38-450Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-41-14-590Z",
+      "note": "controlled baseline app 53c0979; no concurrent test/build workload",
+      "decision": "baseline",
+      "reason": "Đối chứng thử; sau đó phát hiện session khác đang gây nhiễu máy.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-41-14-590Z/results.json",
+      "samples": "2026-11-16T13-41-14-590Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-42-27-146Z",
+      "note": "controlled candidate Settings plus named minification; no concurrent test/build workload",
+      "decision": "diagnostic",
+      "reason": "Đã lưu nhưng không dùng để khẳng định thời gian cải thiện do code.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-42-27-146Z/results.json",
+      "samples": "2026-11-16T13-42-27-146Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-47-05-509Z",
+      "note": "round 6 separate desktop hotkeys from phone vendor code; other sessions active on host",
+      "decision": "reverted",
+      "reason": "Nhóm hotkeys kéo theo dependency dùng chung, không giảm tải đáng kể.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-47-05-509Z/results.json",
+      "samples": "2026-11-16T13-47-05-509Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-48-37-302Z",
+      "note": "round 7 hotkeys without capturing React dependencies",
+      "decision": "reverted",
+      "reason": "Tách hotkeys không có bằng chứng lợi ích tổng thể ổn định; có lượt chờ dài và nhiễu host.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T13-48-37-302Z/results.json",
+      "samples": "2026-11-16T13-48-37-302Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-56-46-272Z",
+      "note": "final A baseline 53c0979; 1s resource settle; shared host load not controlled",
+      "decision": "final-before",
+      "reason": "Đối chứng cuối, cùng phép đo 1 giây chốt resource timing.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-56-46-272Z/results.json",
+      "samples": "2026-11-16T13-56-46-272Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T13-59-56-695Z",
+      "note": "final B Settings isolated plus named minification; 1s resource settle; shared host load not controlled",
+      "decision": "kept-checkpoint",
+      "reason": "Settings riêng và minify giữ tên; sau đó đo thêm Q6.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T13-59-56-695Z/results.json",
+      "samples": "2026-11-16T13-59-56-695Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T14-29-18-937Z",
+      "note": "final harness smoke after screenshot type fix and fixture lint cleanup",
+      "decision": "diagnostic",
+      "reason": "Giữ dữ liệu thô để đối chiếu.",
+      "failed": false,
+      "runs": 1,
+      "results": "2026-11-16T14-29-18-937Z/results.json",
+      "samples": "2026-11-16T14-29-18-937Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T14-31-35-666Z",
+      "note": "final C named minification and isolated Settings plus Brotli Q6; 1s settle",
+      "decision": "final-after",
+      "reason": "Bản giữ lại: Settings riêng, minify giữ tên và Brotli Q6; không giảm chất lượng hình.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T14-31-35-666Z/results.json",
+      "samples": "2026-11-16T14-31-35-666Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-00-03-387Z",
+      "note": "restored original Minecraft demo assets; current optimized page smoke",
+      "decision": "diagnostic",
+      "reason": "Demo có sẵn lỗi khai báo H trùng; đã sửa compile rồi mới đo đối chứng.",
+      "failed": true,
+      "runs": 1,
+      "results": "2026-11-16T15-00-03-387Z/results.json",
+      "samples": "2026-11-16T15-00-03-387Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-01-28-434Z",
+      "note": "Minecraft demo smoke after local duplicate variable compile fix",
+      "decision": "diagnostic",
+      "reason": "Phim lên hình nhưng còn asset âm thanh/mèo thiếu; không dùng để chốt tốc độ.",
+      "failed": false,
+      "runs": 1,
+      "results": "2026-11-16T15-01-28-434Z/results.json",
+      "samples": "2026-11-16T15-01-28-434Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-05-00-584Z",
+      "note": "Minecraft assets restored including original voice and cat dataset; optimized baseline",
+      "decision": "profile",
+      "reason": "Khôi phục đủ asset của demo Minecraft để profile.",
+      "failed": false,
+      "runs": 1,
+      "results": "2026-11-16T15-05-00-584Z/results.json",
+      "samples": "2026-11-16T15-05-00-584Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-10-48-150Z",
+      "note": "Minecraft baseline: snapshot app with identical restored assets and compile fix",
+      "decision": "minecraft-before",
+      "reason": "App snapshot, cùng asset và compile fix với bản cuối.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T15-10-48-150Z/results.json",
+      "samples": "2026-11-16T15-10-48-150Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-13-16-464Z",
+      "note": "Minecraft candidate: same assets and compile fix; minify, Settings, Q6, finishing LUT reuse",
+      "decision": "minecraft-after",
+      "reason": "App minify/Settings/Q6 và cache LUT; lượt đo đầu.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T15-13-16-464Z/results.json",
+      "samples": "2026-11-16T15-13-16-464Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-19-03-271Z",
+      "note": "Network scheduling baseline: default live audio priority",
+      "decision": "diagnostic",
+      "reason": "Ghi request priority và lỗi HTTP; BGM dùng High mặc định.",
+      "failed": false,
+      "runs": 1,
+      "results": "2026-11-16T15-19-03-271Z/results.json",
+      "samples": "2026-11-16T15-19-03-271Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-20-58-504Z",
+      "note": "Round: background lane audio uses low fetch priority until the first scene",
+      "decision": "reverted",
+      "reason": "Low priority được browser áp dụng nhưng không cải thiện rõ waterfall; đã hoàn nguyên.",
+      "failed": false,
+      "runs": 3,
+      "results": "2026-11-16T15-20-58-504Z/results.json",
+      "samples": "2026-11-16T15-20-58-504Z/samples.jsonl"
+    },
+    {
+      "id": "2026-11-16T15-24-29-250Z",
+      "note": "Final Minecraft verification: selected changes only; complete assets, HTTP diagnostics, PC and phone",
+      "decision": "minecraft-final",
+      "reason": "Bản giữ lại, 5 cặp mỗi profile, 0 request lỗi và 4 ảnh khớp byte.",
+      "failed": false,
+      "runs": 5,
+      "results": "2026-11-16T15-24-29-250Z/results.json",
+      "samples": "2026-11-16T15-24-29-250Z/samples.jsonl"
+    }
+  ],
+  "additionalExperiments": [
+    {
+      "file": "large-wav-compression.json",
+      "decision": "rejected",
+      "reason": "Giảm dưới 10% nhưng tăng CPU; không nén WAV lớn theo cách này."
+    },
+    {
+      "file": "grade.json",
+      "decision": "kept",
+      "reason": "46 lượt đổi hiệu ứng dùng 1 LUT thay vì 46; màu và secondary vẫn invalidation đúng."
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "settings": "00:00.000\nPlay\nNote\nDraw\nFree camera\nAI idle\nCamera\nAction\nSteve\n2\nmoves\nface\nProps\n0\nObjects\n2\ncat\ncake\nFX\n0\n−∞\nS\n−∞\nI\nNotes\nLessons\nFilm\nPorts\nAudio\nText\nObjects\nTransitions\nAdjustment\nNotes\nNote\nNo notes yet. Click the picture or press M to add one\nCamera\nSpeed\nAnimation\nAdjust\nShot 0\nSplit\nName\nRuns\n00:00.000 – 00:01.950\n1.9 s\nKeyframe\n\nStart\n\nTime\n00:00.000\nFOV\n°\nRoll\n°\nSway\n×\n\nThe film's slow drift: 0 holds still, 1 is its own\n\nUse free camera view\nHold 1 s\nKeyframe easing\nSettings\nView\nSpeed\n0.5×\n1×\n1.5×\n2×\nCaptions\nGuides\nCtrl\n;\n?\nColor oscilloscope\n?\nAudio meter\n?\nShow what the AI is doing\n?\nShow alternatives on the picture\n?\nShot\n↑\n↓\n‹ Previous\nNext ›\nAspect ratio\n?\n16:9\n9:16\nCamera\nFree camera\nF\n?\nNight vision\n?\nFly speed\n?\n4 m/s\nCamera angle\n?\nCopy\nNotes\n?\nAll open notes\nCopy\nTimeline\n?\n0 sentences off pace (tinted) · 0 stretches still for over 6 s (red line)\nZoom 0.0% per second\nHeavy\n\nUses more memory and GPU. The PC may stutter during a render.\n\nFinal quality\nG\n?\nStill frame\n?\nExport\nShortcuts\nshot 0: Hook: Steve to camera\n205 ms/frame",
+  "interaction": {
+    "audio": {
+      "ready": 4
+    },
+    "live": {
+      "drawMs": 185.52008299993489,
+      "shot": 1,
+      "t": 1.9666666666666666
+    },
+    "seekName": "seek",
+    "settingsClosed": true
+  },
+  "playback": {
+    "after": 1.498667,
+    "before": 0.290667,
+    "live": {
+      "drawMs": 2.6559301960491535,
+      "shot": 0,
+      "t": 1.490687
+    },
+    "paused": false,
+    "ready": 4
+  },
+  "shots": [
+    {
+      "t": 2.4,
+      "state": {
+        "toolIcon": {
+          "_tag": "website",
+          "pageUrl": "http://localhost:4392/"
+        },
+        "value": {
+          "errors": [],
+          "live": {
+            "drawMs": 167.97807470009042,
+            "shot": 1,
+            "t": 2.4
+          }
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "t": 4.7,
+      "state": {
+        "toolIcon": {
+          "_tag": "website",
+          "pageUrl": "http://localhost:4392/"
+        },
+        "value": {
+          "errors": [],
+          "live": {
+            "drawMs": 153.66026723015588,
+            "shot": 2,
+            "t": 4.7
+          }
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "t": 8.2,
+      "state": {
+        "toolIcon": {
+          "_tag": "website",
+          "pageUrl": "http://localhost:4392/"
+        },
+        "value": {
+          "errors": [],
+          "live": {
+            "drawMs": 138.7942405071403,
+            "shot": 3,
+            "t": 8.2
+          }
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "t": 10.5,
+      "state": {
+        "toolIcon": {
+          "_tag": "website",
+          "pageUrl": "http://localhost:4392/"
+        },
+        "value": {
+          "errors": [],
+          "live": {
+            "drawMs": 125.21481645642628,
+            "shot": 4,
+            "t": 10.5
+          }
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "t": 13.2,
+      "state": {
+        "toolIcon": {
+          "_tag": "website",
+          "pageUrl": "http://localhost:4392/"
+        },
+        "value": {
+          "errors": [],
+          "live": {
+            "drawMs": 120.76333481070915,
+            "shot": 5,
+            "t": 13.2
+          }
+        }
+      },
+      "consoleErrors": []
+    }
+  ],
+  "warnings": [
+    "Chromium/SwiftShader chạy shader trong test màu; phép đo load dùng headless Chrome với ANGLE D3D11.",
+    "Trình duyệt preview có cảnh báo shader gradient trong loop và f_transition; không có JS error hoặc HTTP error."
+  ]
+}

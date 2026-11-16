@@ -1,0 +1,37 @@
+export async function openRangeFile(url: string) {
+  const probe = await fetch(url, { headers: { Range: "bytes=0-0" } });
+  if (!probe.ok) throw new Error(`${url}: ${probe.status}`);
+  if (probe.status === 200) {
+    const bytes = new Uint8Array(await probe.arrayBuffer());
+    return { size: bytes.length, slice: async (start: number, end: number) => bytes.subarray(start, end) };
+  }
+  const size = Number(probe.headers.get("content-range")?.match(/\/(\d+)$/)?.[1]);
+  const etag = probe.headers.get("etag");
+  await probe.arrayBuffer();
+  if (!Number.isSafeInteger(size) || size <= 0) throw new Error(`${url}: invalid Content-Range`);
+  const blockSize = 65536, blocks = new Map<number, Promise<Uint8Array>>();
+  const range = async (start: number, end: number) => {
+    const response = await fetch(url, { headers: { Range: `bytes=${start}-${end - 1}` } });
+    if (response.status !== 206) throw new Error(`${url}: expected partial response, got ${response.status}`);
+    if (etag && response.headers.get("etag") !== etag) throw new Error(`${url}: pack changed while loading`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length !== end - start) throw new Error(`${url}: incomplete range`);
+    return bytes;
+  };
+  const slice = async (start: number, end: number) => {
+    if (end === start) return new Uint8Array();
+    if (end - start > blockSize) return range(start, end);
+    const first = Math.floor(start / blockSize), last = Math.floor((end - 1) / blockSize);
+    const parts = await Promise.all(Array.from({ length: last - first + 1 }, (_, i) => {
+      const block = first + i;
+      if (!blocks.has(block)) blocks.set(block, range(block * blockSize, Math.min(size, (block + 1) * blockSize)));
+      return blocks.get(block)!;
+    }));
+    if (parts.length === 1) return parts[0]!.subarray(start % blockSize, start % blockSize + end - start);
+    const joined = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let offset = 0;
+    for (const part of parts) { joined.set(part, offset); offset += part.length; }
+    return joined.subarray(start % blockSize, start % blockSize + end - start);
+  };
+  return { size, slice };
+}

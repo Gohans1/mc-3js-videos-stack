@@ -1,0 +1,6 @@
+bun : ✓ No type errors in 283 files [2.75s]
+At line:12 char:136
++ ... check.mjs"; bun check --no-script -p packages/live-studio *> "$env:TE ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (✓ No type errors in 283 files [2.75s]:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError

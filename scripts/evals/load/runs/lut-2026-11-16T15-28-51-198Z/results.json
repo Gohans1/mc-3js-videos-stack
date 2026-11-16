@@ -1,0 +1,63 @@
+{
+  "complete": true,
+  "callsPerSample": 46,
+  "sourceSha256": "382a8ead81941a3c46077535fbb42feca21425ef8eee203beefa9b79065e4764",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "samples": [
+    {
+      "ms": 3.599999997764826,
+      "finishLuts": 1,
+      "invalidates": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "ms": 3.5,
+      "finishLuts": 1,
+      "invalidates": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "ms": 3.5,
+      "finishLuts": 1,
+      "invalidates": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "ms": 3.199999999254942,
+      "finishLuts": 1,
+      "invalidates": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "ms": 3.400000002235174,
+      "finishLuts": 1,
+      "invalidates": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  ]
+}

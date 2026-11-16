@@ -657,6 +657,10 @@ export const openFilm = (projectDir, { send }) => {
   // "live-studio": { ratio }: the frame's shape (frame.ts), set from the studio's Settings. Read from the file each time, so the
   // page, the renders and a hand edit agree; the pages reload to draw at it
   const ratio = () => ratioOf(readPkg());
+  const preloads = () => {
+    const parsed = StudioConfig.shape.preload.safeParse(readPkg()["live-studio"]?.preload);
+    return parsed.success ? (parsed.data ?? []) : [];
+  };
   const setRatio = (r) => {
     const now = readPkg();
     if (ratioOf(now) === r) return;
@@ -743,6 +747,7 @@ export const openFilm = (projectDir, { send }) => {
     readChoices,
     choose,
     ratio,
+    preloads,
     setRatio,
     trials,
     shotComments,

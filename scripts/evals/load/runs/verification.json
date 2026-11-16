@@ -1,0 +1,202 @@
+{
+  "scope": "App packaging, PC/mobile lab load, real Minecraft demo, Settings/playback, CPU effect setup and regression suite.",
+  "baselineSnapshot": "53c0979",
+  "applicationCommits": [
+    "09f6151",
+    "5226025",
+    "34db68c",
+    "a43bbd7"
+  ],
+  "baselineSuite": {
+    "command": "bun run test",
+    "passed": 1638,
+    "failed": 6,
+    "seconds": 1322.07,
+    "log": "verification/baseline-tests.log",
+    "failures": [
+      "Beat analysis: timeout 30 giây.",
+      "Gain render: lệch kỳ vọng clock của speed/freeze.",
+      "Voice lips: mouthCues trả 2.5 thay vì 5.",
+      "YouTube encode: timeout 30 giây.",
+      "Sheet cut: timeout 30 giây.",
+      "Sheet shots chunk: timeout 30 giây."
+    ]
+  },
+  "checks": {
+    "rootLint": {
+      "command": "bun run lint",
+      "exit": 0,
+      "log": "verification/final-lint.log"
+    },
+    "studioTypes": {
+      "command": "bun check --no-script -p packages/live-studio",
+      "exit": 0,
+      "files": 283,
+      "log": "verification/final-studio-types.log"
+    },
+    "rootTypes": {
+      "command": "bun check --no-script",
+      "baselineErrors": 45,
+      "finalErrors": 45,
+      "identical": true,
+      "newErrors": 0
+    },
+    "staticUi": {
+      "passed": 24,
+      "failed": 0
+    },
+    "realChromiumDom": {
+      "passed": 24,
+      "failed": 0
+    },
+    "productionBudget": {
+      "baselineBytes": 287430,
+      "limitBytes": 245760,
+      "redFailed": true,
+      "greenPassed": true
+    },
+    "q6BuildAndVendorCache": {
+      "passed": 2,
+      "failed": 0
+    },
+    "rebuild": {
+      "baselineMs": 6503.17,
+      "candidateMs": 6774.47,
+      "bothPassed": true
+    }
+  },
+  "verificationLimits": [
+    "Một lượt chạy 8 file UI cùng lúc bị timeout ở setup; đã giữ log và chạy riêng lại UI/DOM thành công.",
+    "Lượt page suite có 8 pass và 1 timeout 20 giây; trường hợp đó chạy riêng lại pass ở cả baseline và candidate.",
+    "Root verify chưa xanh do 45 lỗi type có sẵn; toàn bộ danh sách chẩn đoán baseline và cuối khớp nhau.",
+    "Preview production có cảnh báo GPU ReadPixels; không có lỗi JavaScript hoặc request lỗi trong bước kiểm tra thao tác.",
+    "Cold mobile latency remains noisy; no claim that its initial frame became faster.",
+    "Cell-break still lacks 14 original Mixamo clips; all real-film load claims use demo-test-mc-yolo.",
+    "Shader tests use Chromium/SwiftShader; load evaluation uses Chrome with ANGLE D3D11."
+  ],
+  "productionBrowser": {
+    "tool": "T3 preview",
+    "checked": [
+      "Settings mở đủ nội dung và đóng được.",
+      "Nút Next shot chuyển tới t=4, shot=1.",
+      "Phím ArrowDown chuyển tiếp tới t=8, shot=2.",
+      "Tên hàm window.__editor.seek.name vẫn là seek."
+    ],
+    "closed": true
+  },
+  "frames": [
+    {
+      "profile": "desk",
+      "cache": "cold",
+      "file": "desk-cold-frame.png",
+      "beforeSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "afterSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "equal": true
+    },
+    {
+      "profile": "desk",
+      "cache": "warm",
+      "file": "desk-warm-frame.png",
+      "beforeSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "afterSha256": "62aba0dfde26bc82c20aef844160cbec58212767fa59a4857da23dad98e5bf1a",
+      "equal": true
+    },
+    {
+      "profile": "phone",
+      "cache": "cold",
+      "file": "phone-cold-frame.png",
+      "beforeSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "afterSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "equal": true
+    },
+    {
+      "profile": "phone",
+      "cache": "warm",
+      "file": "phone-warm-frame.png",
+      "beforeSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "afterSha256": "d82ab9e802d5537ccb337e89c2e482e0beb6c601301cd16bc3d187f42224e773",
+      "equal": true
+    }
+  ],
+  "sourceSha256": {
+    "packages/live-studio/src/page.mjs": "8657eb153050e766d57b6ddc17780a92a35c03010b920fb9eefbb7aa2bcd4083",
+    "packages/live-studio/app/shell/Transport.tsx": "ee396d6c0df2f76a1e230c755b7430e56946f2e626c3d962b9cbe93a2b34efe9",
+    "packages/live-studio/app/shell/LazyPanels.tsx": "4e7bbfdc24f45af324a14f7e99660ad4c46154a5467af758fecfe1bac1d1255d",
+    "packages/live-studio/test/page.test.mjs": "b59c420be968e6fdc9a60af3431e5e8daf8ef303ae491644a0e6b0bbdebfc8c4",
+    "scripts/evals/load/run.ts": "604dc331c6c37874f713766eff392b6926d60fd874bef8b0ab004bfffc0080b2",
+    "packages/film-stage/src/grade.ts": "382a8ead81941a3c46077535fbb42feca21425ef8eee203beefa9b79065e4764",
+    "packages/film-stage/test/gpu/grade-page.ts": "148825aba0445da131a54d73598354b14af9ddf79883db57e9f52d39d00da009",
+    "scripts/evals/load/grade.mjs": "57a69943ee7b393bc408a80ed6f3c3c65ef068d97115224a1bea060dc57c7b83"
+  },
+  "missingFilmAssets": [
+    "/mixamo/Angry_Forward_Gesture_c9c917a2.fbx",
+    "/mixamo/Basic_Push_Up_c9cac106.fbx",
+    "/mixamo/Buckled_Stand_And_Praying_c9c69fb6.fbx",
+    "/mixamo/Crouch_Looking_Around_Corner_c9cc0b63.fbx",
+    "/mixamo/Crying_And_Rubbing_Eyes_c9c984ee.fbx",
+    "/mixamo/Kneeling_In_Prayer_c9c6a211.fbx",
+    "/mixamo/Overhead_Bashing_Swing_c9c87a20.fbx",
+    "/mixamo/Reaching_Hands_Towards_Toes_4362690a.fbx",
+    "/mixamo/Restless_Sleeping.fbx",
+    "/mixamo/Sitting_At_A_Computer_And_Typing_c9ccaf87.fbx",
+    "/mixamo/Sleeping_Deeply_c9ccd46a.fbx",
+    "/mixamo/Standard_Jumping_Jacks_c9caceb2.fbx",
+    "/mixamo/Standing_Around_Bored_Idle_c9c79d1f.fbx",
+    "/mixamo/Stretching_Neck_Rolling_Side_To_Side_c9c9113b.fbx"
+  ],
+  "fixture": "Bốn shot của demo có sẵn, không có asset ngoài hoặc audio; không dùng để khẳng định thời gian dựng scene Minecraft.",
+  "toolNotes": [
+    "CodeGraph CLI có chỉ mục nhưng không liệt kê đủ caller của barrel; đã đối chiếu rg và kiểm tra trình duyệt.",
+    "Có session khác chạy test/build cùng máy; không quy toàn bộ chênh lệch thời gian thành hiệu quả của code.",
+    "PowerShell 5 may label successful native stderr as NativeCommandError; exit codes were read from LASTEXITCODE. The final full suite used a direct subprocess log.",
+    "Preview viewport/accessibility metadata may lag layout; checked saved images and current DOM. Performance uses fixed CDP viewports separately."
+  ],
+  "supportingCompileFix": "2f1198c; applied to both Minecraft baseline and candidate",
+  "realMinecraft": {
+    "results": "minecraft.json",
+    "assets": "assets.json",
+    "ui": "verification/minecraft-ui.json",
+    "firstFramesByteIdentical": 4,
+    "checkedNavigations": 20,
+    "httpErrors": 0,
+    "jsErrors": 0
+  },
+  "finalSuite": {
+    "command": "bun run test",
+    "passed": 1644,
+    "failed": 2,
+    "seconds": 509.4389681816101,
+    "log": "verification/final-suite.log",
+    "failures": [
+      "global speed and freeze retime the exported clips and duck windows on the same clock",
+      "voice:lips shaping, tag stripping, non-English, recovery, and partial failure > timeline move + warp + mouthCues integration"
+    ],
+    "allFailuresExistedInBaseline": true
+  },
+  "unchangedFailingTests": {
+    "packages/live-studio/test/gain-render.test.mjs": "2bb16d5161c369c4ca5b3029eb9de8e7b71e68bd1f2a283a64b9c408ef375b3c",
+    "scripts/test/cli-voice-lips.test.mjs": "581acdb730413ccb8847a726d097ae05391dd00baa0dfdb4f4b987242ab99de9"
+  },
+  "colorRuntime": {
+    "report": "grade.json",
+    "reproduce": "bun scripts/evals/load/grade.mjs",
+    "redLuts": 19,
+    "greenLuts": 1,
+    "standaloneTestsPassed": 22,
+    "backend": "Chromium/SwiftShader",
+    "identityTextureDataEqual": true,
+    "identityProof": "verification/identity-lut.json"
+  },
+  "documentationDifferences": [
+    "Three.js skill targets r186; installed repository uses r187. Followed installed APIs and existing conventions.",
+    "page.mjs compression comment said Brotli-9 while implementation was Q5; code and comment now both Q6."
+  ],
+  "review": {
+    "method": "Self-review using code-review-and-quality; no subagents requested.",
+    "findings": [
+      "Corrected independent invalidation checks for fade, HSL, curves and wheels.",
+      "No render-resolution, shader, audio quality or feature switches changed.",
+      "Low fetch-priority trial reverted after measurement."
+    ]
+  }
+}

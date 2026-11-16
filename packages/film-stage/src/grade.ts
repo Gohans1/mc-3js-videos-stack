@@ -216,12 +216,24 @@ export function gradeLUT(basic: BasicGrade, size = 32, secondary: SecondaryGrade
   return lut;
 }
 
+const FINISH_KEYS = new Set([
+  "sharpen",
+  "clarity",
+  "halation",
+  "soften",
+  "fringe",
+  "fisheye",
+  "vignette",
+  "particles",
+  "dither",
+]);
+
 function makeGradeStage(
   composer: EffectComposer,
   camera: Camera,
   imported: Map<string, LookupTexture>,
 ) {
-  const identity = gradeLUT({}),
+  const identity = LookupTexture.createNeutral(32),
     lut = new LUT3DEffect(identity, {
       tetrahedralInterpolation: true,
       inputColorSpace: SRGBColorSpace,
@@ -261,7 +273,10 @@ function makeGradeStage(
     customPass.enabled = active && useCustom;
     colorPass.enabled = finishPass.enabled = active;
     if (!active) return;
-    const key = JSON.stringify([basic, resolved.hsl, resolved.curves, resolved.wheels]);
+    const colorBasic = Object.fromEntries(
+      Object.entries(basic).filter(([id]) => !FINISH_KEYS.has(id)),
+    );
+    const key = JSON.stringify([colorBasic, resolved.hsl, resolved.curves, resolved.wheels]);
     let entry = cache.get(shot);
     if (entry?.key !== key) {
       entry?.texture.dispose();

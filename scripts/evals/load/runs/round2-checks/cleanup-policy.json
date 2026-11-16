@@ -1,0 +1,8 @@
+{
+  "action": "Delete this task's leftover Chrome temporary profiles",
+  "executed": false,
+  "tool": "exec_command",
+  "rejection": "approval required by policy, but AskForApproval::Granular.sandbox_approval is false",
+  "decision": "Leave temporary profiles intact; no deletion retried through another tool.",
+  "affectsApplicationOrVerification": false
+}
