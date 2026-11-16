@@ -277,6 +277,8 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
                 },
                 {
                   name: "vendor-ui",
+                  entriesAware: true,
+                  entriesAwareMergeThreshold: 20000,
                   test: (id) =>
                     /[\\/]node_modules[\\/]/.test(id) &&
                     !/[\\/]node_modules[\\/](?:zod|diff|d3-shape|d3-path|bezier-easing-editor|perfect-freehand|@base-ui[\\/]react[\\/](?:select|switch))[\\/]/.test(
