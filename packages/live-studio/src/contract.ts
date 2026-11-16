@@ -399,6 +399,7 @@ export const Choices = z.record(
 const filePath = z.string().min(1).optional();
 // every key the studio, its CLIs and the render read; any other is the film's own (bun run check names a near miss)
 export const StudioConfig = z.looseObject({
+  preload: z.array(z.string().min(1)).optional(),
   ratio: z.enum(RATIOS as unknown as [string, ...string[]]).optional(),
   soundSources: z.record(z.string().regex(/^\w[\w.-]*$/), z.string().min(1)).optional(),
   requiredKeyRows: z.record(z.string(), z.array(z.array(z.string()))).optional(),

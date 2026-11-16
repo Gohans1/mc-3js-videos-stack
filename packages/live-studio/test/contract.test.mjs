@@ -812,3 +812,9 @@ test("contract-keys matches contract zod schema field lists", () => {
     ["in", "out"].flatMap((s) => Object.keys(textItem[s].unwrap().shape).map((k) => `${s}.${k}`)),
   );
 });
+
+test("preloads name nonempty fetch URLs as an array", () => {
+  assert.equal(StudioConfig.safeParse({ preload: ["/mc/client_assets.zip"] }).success, true);
+  assert.equal(StudioConfig.safeParse({ preload: "mc/client_assets.zip" }).success, false);
+  assert.equal(StudioConfig.safeParse({ preload: [""] }).success, false);
+});
