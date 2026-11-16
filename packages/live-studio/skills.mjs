@@ -9,14 +9,15 @@ import { cliArgs } from "./src/cli.mjs";
 const DATA = fileURLToPath(new URL("../../skill-data", import.meta.url));
 const HELP = `The guides for an AI agent working in this repo, matched to the commands checked out with them. Runs at the root or in a film.
   bun run skills                         the guides, one line each
+  bun run skills list                    the same list
   bun run skills get core                start here: the loop from an idea to an upload, the clocks, the safe and the costly commands
   bun run skills get core --ref sound    one reference by its path, file name or stem (the guide's Load table lists them);
                                          --ref again for more
-  bun run skills get core --full         the guide and every reference at once, several times longer
+  bun run skills get core --full         the guide and every reference at once, several times longer; not with --ref
 A command's flags are in its own help (bun run <command> --help), not here: these guides are how to work.`;
 
 const argv = cliArgs(HELP, ["--ref NAME", "--full"], 2);
-const words = argv.filter((a, i) => !a.startsWith("-") && argv[i - 1] !== "--ref");
+const words = argv.filter((a, i) => a !== "--full" && a !== "--ref" && argv[i - 1] !== "--ref");
 const refs = argv.flatMap((a, i) => (argv[i - 1] === "--ref" ? [a] : []));
 // every refusal here is a wrong word: exit 2, as every repo command does
 const fail = (why) => {
@@ -39,6 +40,8 @@ const files = (name) =>
 
 const [verb, name] = words;
 if (!verb || verb === "list") {
+  if (name)
+    fail("list takes no guide name: bun run skills list; to read one: bun run skills get core");
   if (refs.length || argv.includes("--full"))
     fail("--ref and --full go with get: bun run skills get core --ref sound");
   for (const g of guides.map(about).filter((g) => !g.hidden))
@@ -46,6 +49,10 @@ if (!verb || verb === "list") {
   console.log("next: bun run skills get core");
   process.exit(0);
 }
+if (refs.length && argv.includes("--full"))
+  fail(
+    "choose --ref for selected references, or --full for the guide and all references; not both",
+  );
 if (verb !== "get") fail(`no ${verb}: bun run skills (the list) or bun run skills get <guide>`);
 if (!name)
   fail(`which guide? bun run skills get ${guides[0] ?? "core"} (the list: bun run skills)`);
@@ -69,14 +76,17 @@ const pick = (want) => {
   );
   if (hits.length === 1) return hits[0];
   // the guide also routes to repo docs (INSTALL.md): those are opened, never served here
-  const doc = [...about(name).text.matchAll(/`([\w./-]+\.md)`/g)]
+  const doc = [...about(name).text.matchAll(/([\w./-]+\.md)\b/g)]
     .map((m) => m[1])
     .find(
       (p) =>
         !p.startsWith("references/") &&
         p.split("/").at(-1).replace(/\.md$/, "").toLowerCase() === w.toLowerCase(),
     );
-  if (doc) fail(`${want} is a repo file, not a reference: open ${doc}`);
+  if (doc)
+    fail(
+      `${want} is a repo file, not a reference: open ${relative(process.cwd(), join(DATA, "..", doc)).replaceAll("\\", "/")}`,
+    );
   fail(
     `${hits.length ? `${want} could be ${hits.join(" or ")}: give the path` : `${name} has no ${want}`}. ${
       all.length ? `Its references: ${all.join(", ")}` : `${name} has no references`

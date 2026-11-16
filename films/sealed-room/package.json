@@ -30,6 +30,7 @@
     "link": "bun node_modules/live-studio/wrong-place.mjs link",
     "setup:vault": "bun node_modules/live-studio/wrong-place.mjs setup:vault",
     "setup:sound": "bun node_modules/live-studio/wrong-place.mjs setup:sound",
+    "setup:voices": "bun node_modules/live-studio/wrong-place.mjs setup:voices",
     "setup:mc-sound": "bun node_modules/live-studio/wrong-place.mjs setup:mc-sound",
     "fetch:sfx": "bun node_modules/live-studio/wrong-place.mjs fetch:sfx",
     "setup": "bun node_modules/live-studio/wrong-place.mjs setup",

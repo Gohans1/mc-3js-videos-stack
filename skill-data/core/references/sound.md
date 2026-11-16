@@ -42,7 +42,7 @@ A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` pu
 
 Describe the sound, not its job, and in English: "a heavy iron door slamming in a stone room", not "the door for the chase". Its models learnt from English captions; a query in another language ranks differently and earshot does not warn. earshot says what a sound is, never whether it is right for the story: that call is the creator's. Never run `earshot llm`: it uploads the audio to Google, and only the creator can agree to that.
 
-The film's sound goes through `audio.json` and `bun run mix` only. The real-sound skill is worth reading for sourcing, licences and cue design, but its own mixer, master and mux never touch a film: the studio and `bun run check` would never see what they write.
+Pipeline mặc định dùng audio.json và bun run mix để studio và check đọc cùng dữ liệu; real-sound vẫn hữu ích cho nguồn âm, giấy phép và thiết kế cue. Có thể dùng mixer, master hoặc mux riêng, nhưng phải nối đầu ra vào cách preview của phim và tự xem/nghe, kiểm chứng phần công cụ tích hợp không đọc được.
 
 ## How mix sets the loudness
 
@@ -73,4 +73,4 @@ When mix says it stopped short, it names the `drive` value to set: the limiter t
 | `near silence`                 | Dead air; keep it only when meant                                                                                     |
 | `abrupt end`                   | Fade the beds out before the end                                                                                      |
 
-Every vault sound is cleared for YouTube; a row tagged credit needs the author in the video description. Minecraft music with a contentId gets claimed. `bun run listen --sheet` also draws a spectrogram and loudness picture through `earshot sheet`.
+Âm nằm trong vault chưa đủ chứng minh quyền dùng: đọc SOURCES.json và giấy phép của đúng asset trước khi phát hành, ghi credit khi cần. Minecraft music có contentId có thể bị claim; bun run listen --sheet vẽ spectrogram và mức âm qua earshot sheet.

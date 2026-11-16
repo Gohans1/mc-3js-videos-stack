@@ -224,7 +224,7 @@ test("a ready upload's next step names the video and how long --youtube takes on
   assert.match(r.stdout, /about 10 s here/);
 });
 
-test("--youtube re-encodes the seconds asked as YouTube would and measures their bands", (t) => {
+test("--youtube makes a local compression preview of the seconds asked and measures their bands", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "deliver-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "renders"));
@@ -238,7 +238,10 @@ test("--youtube re-encodes the seconds asked as YouTube would and measures their
     timeout: 120000,
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stderr, /re-encoding 1 s the way YouTube serves it \(AV1 4Mbps, 2560 wide\)/);
+  assert.match(
+    r.stderr,
+    /local compression preview of 1 s \(AV1 4Mbps, 2560 wide; approximate, not an actual YouTube rendition\)/,
+  );
   assert.match(r.stdout, /bands \(Netflix CAMBI\)/);
   assert.match(r.stdout, /renders\/cuts\.json is no list of seconds/);
   // nothing banded in testsrc2's flat colours: the last line still says what comes next

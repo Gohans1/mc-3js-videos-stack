@@ -62,4 +62,4 @@ A new picture is a cut, or a third of the frame looking different from the last 
 | One stretch changed                         | `CHUNKS=3 bun run render clip` re-renders only that 30 s chunk (3 is 1:30-2:00)                            |
 | Commands only print paths                   | Open the pictures with your image viewer and look                                                          |
 
-Rendering fast, the GPU, YouTube's spec and banding: `bun run skills get core --ref render`.
+Render nhanh, GPU, thông số xuất và mô phỏng nén local: bun run skills get core --ref render. deliver --youtube không quan sát bản encode thật từ YouTube; chỉ dùng nó như phép thử gần đúng về banding.

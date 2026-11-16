@@ -43,13 +43,14 @@ bun run find sit --from stand --to sitFloor  # mocap by posture
 
 Every schema is open (`looseObject`): a film may make its own objects, transitions, anims and checks. Where each goes: `bun run skills get core --ref contract`.
 
-## Try a command on a copy, never on a real film
+## Thử lệnh riêng biệt
 
-On Windows, from the repo root:
+Từ root, dùng bun run new-film <tên-thử-chưa-tồn-tại> để tạo phim thử độc lập, hoặc sao chép đúng phim cần tái hiện lỗi. Không dùng một tên thư mục cố định rồi mặc định rằng có thể xóa nó.
 
-```bash
-robocopy films/sealed-room films/_try /E /XD node_modules renders   # then copy renders/draft_video.mp4 and cuts.json if needed
-cmd /c mklink /J films\_try\node_modules films\sealed-room\node_modules
-cmd /c rmdir films\_try\node_modules         # when done: unlink the junction first, so the real modules stay
-rm -rf films/_try
-```
+| Cần gì | Cách làm |
+| --- | --- |
+| Thử parser và schema | Dùng template trong phim thử, chỉ chép dữ liệu tối thiểu cần thiết |
+| Tái hiện lỗi của phim thật | Sao chép src, cấu hình và media cần thiết; không chép hay dùng chung notes có thể ghi về bản gốc |
+| Cần render có sẵn | Sao chép riêng video và cuts.json vào renders của phim thử |
+| node_modules hoặc vault là junction | Kiểm tra đích trỏ trước khi chạy lệnh ghi; file dự án và đầu ra phải thuộc phim thử |
+| Dọn phim thử | Chỉ xóa đúng thư mục do phiên này tạo, sau khi xác minh đường dẫn và các junction; giữ kết quả cần review trước |

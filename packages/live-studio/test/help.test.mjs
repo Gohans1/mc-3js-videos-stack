@@ -7,6 +7,33 @@ import { join } from "node:path";
 
 const HELP = join(import.meta.dir, "../help.mjs");
 
+test("help validates the entire request before directing an agent to a command", () => {
+  for (const args of [["skills", "extra"], ["skills", "--bogus"], ["toString"]]) {
+    const r = spawnSync("bun", [HELP, ...args], { encoding: "utf8", timeout: 10000 });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).not.toBe("");
+  }
+});
+
+test("help documents discovery, and sends commands to their real working directory", () => {
+  const usage = spawnSync("bun", [HELP, "--help"], { encoding: "utf8", timeout: 10000 });
+  expect(usage.status).toBe(0);
+  expect(usage.stdout).toContain("bun run help <command>");
+  const root = spawnSync("bun", [HELP, "render"], { encoding: "utf8", timeout: 10000 });
+  expect(root.status).toBe(0);
+  expect(root.stdout).toContain("cd films/<name>");
+  for (const dir of ["templates/film", "films/cell-break", "films/sealed-room"]) {
+    const film = spawnSync("bun", [HELP, "setup:voices"], {
+      cwd: join(import.meta.dir, "../../..", dir),
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    expect(film.status).toBe(0);
+    expect(film.stdout).toContain("cd ../..");
+  }
+});
+
 test("a film's help names earshot beside its sound commands, and where the guide says which call is for what", () => {
   const dir = mkdtempSync(join(tmpdir(), "help-"));
   try {

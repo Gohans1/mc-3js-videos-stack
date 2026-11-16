@@ -11,7 +11,7 @@ const GROUPS = [
     {
       skills:
         "for an AI agent: bun run skills get core before guessing from a command's --help (the loop, the three clocks, what costs money)",
-      gap: 'a command lacked something you needed: do it another way, then bun run gap "<what>" --did "<how>"; bare, every gap kept',
+      gap: 'keep a missing capability and what you tried (or why blocked): bun run gap "<need>" --did "<outcome>"; bare, historical reports',
     },
   ],
   [
@@ -55,7 +55,7 @@ const GROUPS = [
       framecheck: "the last check on the encoded video: black, flashes, jumps, shimmer, freezes",
       pace: "how the film moves: shot lengths, and where the picture holds still under the narration",
       deliver:
-        "the upload against YouTube's spec (renders/final.mp4), each fault with its fix; --youtube: how it looks after YouTube's re-encode, where it bands",
+        "the upload against YouTube's spec (renders/final.mp4), each fault with its fix; --youtube: approximate local compression preview and banding checks (no upload)",
     },
   ],
   [
@@ -75,6 +75,8 @@ const GROUPS = [
       "setup:vault": "fill the vault on a new machine (downloads, verified)",
       "setup:sound": "rebuild vault/sound/{bgm,sfx} with credits and peaks",
       "setup:mc-sound": "rebuild the Minecraft sound vault from the game and packs",
+      "setup:voices":
+        "sync the English voice catalogue to vault/voices/shared-en.json (network, no voice credits)",
       "fetch:sfx": "download the Mixkit sound effects",
       "fetch:sound-raw": "download the raw sound packs (Kenney) into the external vault",
       link: "connect the vault to every film (or the films named)",
@@ -96,16 +98,19 @@ const GROUPS = [
   ],
 ];
 
-const HELP = `Every command here, one line each, grouped by the job. Each takes --help for everything it does.
-  bun run help`;
+const HELP = `Discover commands in the current repo root or film folder; this does not run them.
+  bun run help             commands grouped by job; in a film, also its file map
+  bun run help <command>   where to read that command's --help
+  bun run skills get core  the workflow; --ref contract for custom scenes and hooks
+Built-ins are a starting kit: write custom code or tools when the film needs them.`;
+const [asked] = cliArgs(HELP, [], 1);
 const pkgFile = join(process.cwd(), "package.json");
 const scripts = existsSync(pkgFile)
   ? (JSON.parse(readFileSync(pkgFile, "utf8")).scripts ?? {})
   : {};
 // "bun run help find" is how one asks about one command
-const asked = process.argv[2];
-if (asked && !asked.startsWith("-") && asked !== "help") {
-  if (asked in scripts) {
+if (asked) {
+  if (Object.hasOwn(scripts, asked)) {
     // a command of the other place: point there at once, not at a stub that only redirects
     const elsewhere = String(scripts[asked]).includes("wrong-place.mjs");
     const inFilm = existsSync(join(process.cwd(), "src/scene.ts"));
@@ -127,7 +132,6 @@ if (asked && !asked.startsWith("-") && asked !== "help") {
   console.error(`no command ${asked} here: bun run help lists them`);
   process.exit(2);
 }
-cliArgs(HELP, [], 0);
 const film = existsSync(join(process.cwd(), "src/scene.ts"));
 // postinstall runs by itself after bun install; a command of the other place (wrong-place.mjs) only says where it runs
 const stubs = Object.keys(scripts).filter((k) => String(scripts[k]).includes("wrong-place.mjs"));

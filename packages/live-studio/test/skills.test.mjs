@@ -8,7 +8,60 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const DATA = join(ROOT, "skill-data");
 const SKILLS = fileURLToPath(new URL("../skills.mjs", import.meta.url));
-const run = (args, cwd = ROOT) => spawnSync("bun", [SKILLS, ...args], { cwd, encoding: "utf8" });
+const run = (args, cwd = ROOT) =>
+  spawnSync("bun", [SKILLS, ...args], { cwd, encoding: "utf8", timeout: 10000 });
+
+test("skills rejects requests whose extra words or conflicting modes would be ignored", () => {
+  for (const args of [
+    ["list", "core"],
+    ["list", "-1"],
+    ["-1"],
+    ["get", "core", "--ref", "sound", "--full"],
+  ]) {
+    const r = run(args);
+    assert.equal(r.status, 2, args.join(" "));
+    assert.equal(r.stdout, "");
+    assert.match(r.stderr, /list|--ref|--full/);
+  }
+});
+
+test("repo-document recovery points to existing files from the caller's directory, including hidden directories", () => {
+  for (const [name, path] of [
+    ["INSTALL.md", "../../INSTALL.md"],
+    ["SKILL", "../../.claude/skills/gohans-3js-videos-skills/SKILL.md"],
+  ]) {
+    const result = run(["get", "core", "--ref", name], join(ROOT, "templates/film"));
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.ok(result.stderr.includes(`open ${path}`), result.stderr);
+  }
+});
+
+test("skills prints exactly the requested guide and unique references in caller order", () => {
+  const guide = run(["get", "core"]);
+  assert.equal(guide.status, 0, guide.stderr);
+  assert.equal(guide.stdout.trim(), readFileSync(join(DATA, "core/SKILL.md"), "utf8").trim());
+  const refs = run([
+    "get",
+    "core",
+    "--ref",
+    "notes.md",
+    "--ref",
+    "references/sound.md",
+    "--ref",
+    "notes",
+  ]);
+  assert.equal(refs.status, 0, refs.stderr);
+  assert.equal((refs.stdout.match(/--- references\/notes.md ---/g) ?? []).length, 1);
+  assert.ok(
+    refs.stdout.indexOf("--- references/notes.md ---") <
+      refs.stdout.indexOf("--- references/sound.md ---"),
+  );
+  const full = run(["get", "core", "--full"]);
+  assert.equal(full.status, 0, full.stderr);
+  for (const file of md(join(DATA, "core/references")))
+    assert.ok(full.stdout.includes(readFileSync(file, "utf8").trim()), file);
+});
 const md = (dir) =>
   readdirSync(dir, { recursive: true, withFileTypes: true })
     .filter((f) => f.isFile() && f.name.endsWith(".md"))
