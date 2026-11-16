@@ -1,10 +1,12 @@
-// Cherry-picks blocks from vetted mod packs in vault/packs into the film's assets/public/picked.zip (Bun counterpart to pick.py).
+// Cherry-picks blocks from vetted mod packs in vault/packs into the film's assets/public/picked.zip; pick.py forwards here.
 // Can be imported as pickBlocks({ cwd, vaultDir }) or run directly inside a film folder: bun ../../packages/mc-assets/pick.mjs
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+
+import { cliArgs, needFilm } from "../live-studio/src/cli.mjs";
 
 const DEFAULT_VAULT = resolve(dirname(fileURLToPath(import.meta.url)), "../../vault/packs");
 const FIXED_MTIME = new Date(2026, 0, 1, 0, 0, 0);
@@ -40,7 +42,9 @@ export function pickBlocks({ cwd = process.cwd(), vaultDir = DEFAULT_VAULT } = {
     };
 
     const model = (path) => {
-      if (!path || path in files || !take(path)) return;
+      if (!path || path in files) return;
+      if (!take(path))
+        throw new Error(`${jar}: model missing (${path}); restore the jar or fix pack/picks.json`);
       const m = JSON.parse(strFromU8(files[path]));
       if (m.parent) model(ref(ns, m.parent, "models"));
       for (const t of Object.values(m.textures ?? {})) {
@@ -90,6 +94,17 @@ export function pickBlocks({ cwd = process.cwd(), vaultDir = DEFAULT_VAULT } = {
 }
 
 if (import.meta.main) {
+  cliArgs(
+    `Builds assets/public/picked.zip from pack/picks.json and vault/packs, inside a film.
+  bun ../../packages/mc-assets/pick.mjs
+Preserves namespaces, parent models, textures and animation metadata. Minecraft references come from client_assets.zip.
+Keep each jar's licence and source page in pack/picks.json; this generated zip is private and ignored by Git.
+Already called by bun run link <film> at the repo root; no download or creative asset restriction.
+next: bun run check`,
+    [],
+    0,
+  );
+  needFilm();
   try {
     pickBlocks();
   } catch (e) {

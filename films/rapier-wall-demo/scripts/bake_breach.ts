@@ -1,9 +1,9 @@
 // @ts-nocheck
-import { writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import RAPIER from "@dimforge/rapier3d-compat";
 import { mulberry32 } from "math/random";
+import { cliArgs } from "../../../packages/live-studio/src/cli.mjs";
 
 import {
   BLAST_ORIGIN,
@@ -18,7 +18,16 @@ import {
 } from "../src/breach-layout";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT_FILE = join(HERE, "../src/timeline/breach.json");
+const args = cliArgs(`Bake this film's wall breach and props with Rapier; local CPU, no network or credits.
+  bun run bake:physics
+  bun run bake:physics --out renders/breach-test.json
+Reads src/breach-layout.ts; overwrites src/timeline/breach.json atomically, or --out PATH relative to cwd.
+Fixed seed; ${SIM_DURATION}s simulation at ${BREACH_FPS * 4} Hz, sampled at ${BREACH_FPS} Hz; normally seconds to run.
+Frame offsets are simulation seconds; tBoom and impact t are scene seconds (convert via timing.json for heard seconds).
+Rerun after changing layout/physics; the studio consumes the baked cache. This workflow belongs only to this film.
+next: bun run check`, ["--out PATH"], 0);
+const OUT_FILE = args.includes("--out") ? resolve(args[args.indexOf("--out") + 1]) : join(HERE, "../src/timeline/breach.json");
+const { default: RAPIER } = await import("@dimforge/rapier3d-compat");
 
 const round3 = (n) => Math.round(n * 1000) / 1000;
 const round4 = (n) => Math.round(n * 10000) / 10000;
@@ -232,9 +241,12 @@ const out = {
   })),
 };
 
-writeFileSync(OUT_FILE, JSON.stringify(out));
 world.free();
+mkdirSync(dirname(OUT_FILE), { recursive: true });
+writeFileSync(`${OUT_FILE}.new`, JSON.stringify(out));
+renameSync(`${OUT_FILE}.new`, OUT_FILE);
 
 console.log(`Baked ${out.bodies.length} rigid bodies (${TOTAL_SAMPLES} samples @ ${BREACH_FPS}Hz) -> ${OUT_FILE}`);
 console.log("Dynamic props displacement:", barrelMotion);
-console.log("Top collision cue timestamps (heard seconds):", out.impacts);
+console.log("Top collision cue timestamps (scene seconds):", out.impacts);
+console.log("next: bun run check; preview the breach with AT=2.25,3,5 bun run render stills");

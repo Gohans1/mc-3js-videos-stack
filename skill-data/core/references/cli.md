@@ -19,6 +19,8 @@ Every command babysits an AI that cannot see or hear the film. It must never lea
 
 Python commands (`scripts/sound`, `scripts/review`) keep the same contract by hand: help first, unknown words exit 2 before work.
 
+Script bảo trì chạy trực tiếp được nối từ bun run help direct tới references/film.md, không cần tạo alias package.json trùng lặp. Lệnh riêng phim nằm trong scripts của phim, giữ --help an toàn và nói rõ đầu ra, chi phí, mốc thời gian; công cụ có sẵn không giới hạn sáng tạo bằng code riêng.
+
 ## Adding or changing a command
 
 Update every place an agent looks, in the same commit:

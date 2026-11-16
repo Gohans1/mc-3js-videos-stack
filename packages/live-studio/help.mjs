@@ -17,6 +17,8 @@ const GROUPS = [
   [
     "Make the film",
     {
+      "bake:physics":
+        "this film's physics cache: --help names inputs, output, clocks and cost; rerun after changing its simulation",
       studio: "the live studio: preview, timeline, notes (bun run studio, then open the link)",
       check:
         "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
@@ -125,6 +127,12 @@ if (asked && !asked.startsWith("-") && asked !== "help") {
     );
     process.exit(0);
   }
+  if (asked === "direct") {
+    console.log(
+      "Direct maintenance scripts: bun run skills get core --ref film (section Script chạy trực tiếp). Each script takes --help; these are independent of package.json commands.",
+    );
+    process.exit(0);
+  }
   console.error(`no command ${asked} here: bun run help lists them`);
   process.exit(2);
 }
@@ -150,6 +158,11 @@ for (const [title, cmds] of GROUPS) {
 }
 const rest = Object.keys(scripts).filter((k) => !said.has(k));
 if (rest.length) out.push("\nOther", ...rest.map((k) => `  ${k.padEnd(16)}${scripts[k]}`));
+out.push(
+  "\nDirect maintenance scripts",
+  "  mocap catalogue, sweep, review/eval; asset pick/vendor; timeline formatting",
+  "  bun run help direct — paths, working directory and workflow: bun run skills get core --ref film",
+);
 // Where a film keeps what: its own package.json "live-studio" names the timeline files, so the map is this film's
 if (film) {
   let conf = {};
