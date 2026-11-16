@@ -67,6 +67,7 @@ export const makeAccumulator = (
       gl.attachShader(p, s);
     }
     gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)!);
     return p;
   };
   const add = program(ADD),

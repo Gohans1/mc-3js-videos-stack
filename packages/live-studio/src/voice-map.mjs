@@ -7,6 +7,7 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -33,6 +34,42 @@ const DEFAULT_GAP = 0.4;
 const r3 = (x) => Math.round(x * 1000) / 1000;
 let tmpSeq = 0;
 const nextTmp = () => `${process.pid}.${Date.now()}.${++tmpSeq}`;
+const RETRY_WAIT = new Int32Array(new SharedArrayBuffer(4));
+
+const retryBusy = (fn) => {
+  for (let i = 0; ; i++) {
+    try {
+      return fn();
+    } catch (err) {
+      const code = err?.code;
+      if ((code === "EPERM" || code === "EACCES" || code === "EBUSY") && i < 8) {
+        Atomics.wait(RETRY_WAIT, 0, 0, 25);
+        continue;
+      }
+      throw err;
+    }
+  }
+};
+
+const isSymbolicLink = (file) => {
+  try {
+    return lstatSync(file).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+
+export const writeAtomicSync = (safeOut, data) => {
+  mkdirSync(dirname(safeOut), { recursive: true });
+  const part = `${safeOut}.${nextTmp()}.part`;
+  try {
+    writeFileSync(part, data);
+    retryBusy(() => renameSync(part, safeOut));
+  } catch (err) {
+    rmSync(part, { force: true });
+    throw err;
+  }
+};
 
 const inside = (root, file) => {
   const r = relative(root, file);
@@ -84,22 +121,51 @@ const isAlignedWord = (w) =>
 
 export const voiceFileOf = (projectDir) => {
   const root = resolve(projectDir);
-  const pkgPath = join(root, "package.json");
+  const fallback = join(root, "assets/public/agent/full_voice.wav");
+  let pkgPath;
+  try {
+    pkgPath = assertInsideDir(root, "package.json", "package.json");
+  } catch {
+    return fallback;
+  }
   if (existsSync(pkgPath)) {
     try {
-      const conf = JSON.parse(readFileSync(pkgPath, "utf8"))["live-studio"] ?? {};
-      const audioPath = conf.soundTimeline && join(root, conf.soundTimeline);
-      const narration =
-        audioPath && existsSync(audioPath)
-          ? JSON.parse(readFileSync(audioPath, "utf8")).narration
-          : "narration";
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+      const conf =
+        pkg &&
+        typeof pkg === "object" &&
+        !Array.isArray(pkg) &&
+        pkg["live-studio"] &&
+        typeof pkg["live-studio"] === "object" &&
+        !Array.isArray(pkg["live-studio"])
+          ? pkg["live-studio"]
+          : {};
+      const audioRel =
+        typeof conf.soundTimeline === "string" && conf.soundTimeline
+          ? conf.soundTimeline
+          : "src/timeline/audio.json";
+      let narration = "narration";
+      try {
+        const audioPath = assertInsideDir(root, audioRel, "Sound timeline");
+        if (existsSync(audioPath)) {
+          const audioDoc = JSON.parse(readFileSync(audioPath, "utf8"));
+          if (typeof audioDoc?.narration === "string" && audioDoc.narration) {
+            narration = audioDoc.narration;
+          }
+        }
+      } catch {
+        /* ignore out-of-root or broken audio timeline and keep default narration key */
+      }
       const rel = narration && conf.soundSources?.[narration];
-      if (rel) return join(root, rel);
+      // return resolved path (even outside root) so callers' containment checks reject escaping soundSources instead of masking them
+      if (typeof rel === "string" && rel) {
+        return resolve(root, rel);
+      }
     } catch {
       /* fall back to default path */
     }
   }
-  return join(root, "assets/public/agent/full_voice.wav");
+  return fallback;
 };
 
 const pickSafeTakeAudio = (realTakes, id) => {
@@ -122,43 +188,116 @@ const pickSafeTakeAudio = (realTakes, id) => {
   return candidates[0] ?? null;
 };
 
-// The takes of src/edit.json with audio in voice/takes: [{ id, audio, aligned }], aligned when <audio>.words.json is beside it
-export const takeAudios = (projectDir) => {
-  const takesDir = join(resolve(projectDir), "voice/takes");
-  if (!existsSync(takesDir)) return [];
-  let takes;
+const isValidWordsFile = (wf, realTakes, audioMtimeMs = null) => {
   try {
-    takes = JSON.parse(readFileSync(join(projectDir, "src/edit.json"), "utf8"))?.takes;
+    if (!existsSync(wf) || lstatSync(wf).isSymbolicLink()) return false;
+    const realWf = realpathSync(wf);
+    if (!inside(realTakes, realWf)) return false;
+    const st = statSync(realWf);
+    if (!st.isFile()) return false;
+    if (audioMtimeMs !== null && st.mtimeMs < audioMtimeMs) return false;
+    const info = JSON.parse(readFileSync(realWf, "utf8"));
+    if (!info || typeof info !== "object" || Array.isArray(info)) return false;
+    return Array.isArray(info.words) && info.words.some(isAlignedWord);
+  } catch {
+    return false;
+  }
+};
+
+// The takes of src/edit.json with audio in voice/takes: [{ id, audio, aligned }], aligned when <audio>.words.json is fresh, valid, and beside it
+export const takeAudios = (projectDir) => {
+  const root = resolve(projectDir);
+  if (!existsSync(root)) return [];
+  let takesDir;
+  let editFile;
+  try {
+    takesDir = assertInsideDir(root, "voice/takes", "Voice takes directory");
+    editFile = assertInsideDir(root, "src/edit.json", "src/edit.json");
   } catch {
     return [];
   }
+  if (!existsSync(takesDir) || !existsSync(editFile)) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(editFile, "utf8"));
+  } catch {
+    return [];
+  }
+  const takes =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed.takes : null;
+  if (!Array.isArray(takes)) return [];
   const realTakes = realpathSync(takesDir);
-  return (Array.isArray(takes) ? takes : []).flatMap((k) => {
+  return takes.flatMap((k) => {
     const a = typeof k?.id === "string" && TAKE_ID.test(k.id) && pickSafeTakeAudio(realTakes, k.id);
-    return a ? [{ id: k.id, audio: a.real, aligned: existsSync(`${a.real}.words.json`) }] : [];
+    return a
+      ? [
+          {
+            id: k.id,
+            audio: a.real,
+            aligned: isValidWordsFile(`${a.real}.words.json`, realTakes, a.mtimeMs),
+          },
+        ]
+      : [];
   });
 };
 export const unalignedTakes = (projectDir) => takeAudios(projectDir).filter((x) => !x.aligned);
 
 export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = false } = {}) => {
   const root = resolve(projectDir);
-  const takesDir = join(root, "voice/takes");
-  const editFile = join(root, "src/edit.json");
+  let editFile;
+  try {
+    editFile = assertInsideDir(root, "src/edit.json", "src/edit.json");
+  } catch (err) {
+    if (strict) throw err;
+    return [];
+  }
   if (!existsSync(root) || !existsSync(editFile)) {
     if (strict) throw new Error(`Missing src/edit.json in "${root}"`);
     return [];
   }
-  const parsedEdit = strict
-    ? JSON.parse(readFileSync(editFile, "utf8"))
-    : (() => {
-        try {
-          return JSON.parse(readFileSync(editFile, "utf8"));
-        } catch {
-          return {};
-        }
-      })();
+  let parsedEdit;
+  if (strict) {
+    parsedEdit = JSON.parse(readFileSync(editFile, "utf8"));
+    if (
+      !parsedEdit ||
+      typeof parsedEdit !== "object" ||
+      Array.isArray(parsedEdit) ||
+      (parsedEdit.takes !== undefined && !Array.isArray(parsedEdit.takes))
+    ) {
+      throw new Error(`Invalid src/edit.json in "${root}": expected an object with a takes array`);
+    }
+  } else {
+    try {
+      parsedEdit = JSON.parse(readFileSync(editFile, "utf8"));
+    } catch {
+      return [];
+    }
+  }
+
+  let takesDir;
+  try {
+    takesDir = assertInsideDir(root, "voice/takes", "Voice folders");
+  } catch (err) {
+    if (strict)
+      throw new Error(`Voice folders must stay inside the film directory (${err.message})`);
+    return [];
+  }
+
   const rawTakes = Array.isArray(parsedEdit?.takes) ? parsedEdit.takes : [];
   if (!rawTakes.length) return [];
+
+  if (strict) {
+    const seenIds = new Set();
+    for (const k of rawTakes) {
+      if (!k || typeof k.id !== "string" || !TAKE_ID.test(k.id)) {
+        throw new Error(`Invalid take id "${String(k?.id ?? "")}" in src/edit.json`);
+      }
+      if (seenIds.has(k.id)) {
+        throw new Error(`Duplicate take id "${k.id}" in src/edit.json`);
+      }
+      seenIds.add(k.id);
+    }
+  }
 
   if (!existsSync(takesDir)) {
     if (strict)
@@ -183,12 +322,24 @@ export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = fa
     return [];
   }
 
-  // all of them at once: one take named per run sends an AI round the loop once per take
-  const unaligned = strict ? unalignedTakes(root) : [];
-  if (unaligned.length)
-    throw new Error(
-      `${unaligned.length} take${unaligned.length === 1 ? " has" : "s have"} no word timings (${unaligned.map((x) => x.id).join(", ")}): bun run voice:align writes them with whisperX (minutes on a CPU; each take is kept as it finishes)`,
-    );
+  if (strict) {
+    for (const k of rawTakes) {
+      const active = pickSafeTakeAudio(realTakes, k.id);
+      if (!active) {
+        throw new Error(`Missing audio take for "${k.id}" in voice/takes/`);
+      }
+      const wf = `${active.real}.words.json`;
+      if (isSymbolicLink(wf) || (existsSync(wf) && !inside(realTakes, realpathSync(wf)))) {
+        throw new Error(`Unsafe word alignment path "${wf}"`);
+      }
+    }
+    // all of them at once: one take named per run sends an AI round the loop once per take
+    const unaligned = unalignedTakes(root);
+    if (unaligned.length)
+      throw new Error(
+        `${unaligned.length} take${unaligned.length === 1 ? " has" : "s have"} no word timings (${unaligned.map((x) => x.id).join(", ")}): bun run voice:align writes them with whisperX (minutes on a CPU; each take is kept as it finishes)`,
+      );
+  }
 
   const placed = [];
   let cursor = 0;
@@ -210,9 +361,13 @@ export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = fa
       try {
         if (!lstatSync(wf).isSymbolicLink() && inside(realTakes, realpathSync(wf))) {
           const info = JSON.parse(readFileSync(wf, "utf8"));
-          const rawWords = Array.isArray(info.words) ? info.words : [];
-          words = rawWords.filter(isAlignedWord);
-          if (typeof info.dur === "number" && Number.isFinite(info.dur)) alignedDur = info.dur;
+          if (info && typeof info === "object" && !Array.isArray(info)) {
+            const rawWords = Array.isArray(info.words) ? info.words : [];
+            words = rawWords.filter(isAlignedWord);
+            if (typeof info.dur === "number" && Number.isFinite(info.dur)) alignedDur = info.dur;
+          } else if (strict) {
+            throw new Error(`Invalid word alignment JSON in "${wf}"`);
+          }
         } else if (strict) {
           throw new Error(`Unsafe word alignment path "${wf}"`);
         }
@@ -272,6 +427,18 @@ export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = fa
         words: [],
       });
       cursor = Math.max(cursor, r3(naturalEnd + DEFAULT_GAP));
+    }
+  }
+  placed.sort((a, b) => a.start - b.start || a.spokenStart - b.spokenStart);
+  if (strict) {
+    for (let i = 1; i < placed.length; i++) {
+      const prev = placed[i - 1];
+      const curr = placed[i];
+      if (Math.abs(curr.start - prev.start) <= 0.01 || curr.start < prev.spokenEnd - 0.01) {
+        throw new Error(
+          `Overlapping voice takes "${prev.id}" (${prev.start}s..${prev.spokenEnd}s) and "${curr.id}" (starts ${curr.start}s): move "${curr.id}" after ${prev.spokenEnd}s or omit its t to pack sequentially`,
+        );
+      }
     }
   }
   return placed;
@@ -343,9 +510,21 @@ export const buildVoiceMap = (projectDir, precomputedPlacements) => {
 export const writeVoiceMap = (projectDir, outFile, precomputedPlacements) => {
   const safeOut = assertInsideDir(projectDir, outFile, "Voice map output");
   const map = buildVoiceMap(projectDir, precomputedPlacements);
-  mkdirSync(dirname(safeOut), { recursive: true });
-  const part = `${safeOut}.${nextTmp()}.part`;
-  writeFileSync(part, JSON.stringify(map));
-  renameSync(part, safeOut);
+  if (Array.isArray(precomputedPlacements)) {
+    map.placements = precomputedPlacements.map(({ id, start, spokenEnd, naturalEnd }) => ({
+      id,
+      start,
+      spokenEnd,
+      naturalEnd,
+    }));
+  } else if (existsSync(safeOut)) {
+    try {
+      const previous = JSON.parse(readFileSync(safeOut, "utf8"));
+      if (Array.isArray(previous.placements)) map.placements = previous.placements;
+    } catch {
+      // A derived map can be rebuilt; its last assembly layout is only available when the old JSON is readable.
+    }
+  }
+  writeAtomicSync(safeOut, JSON.stringify(map));
   return { ...map, words: map.lines.reduce((n, l) => n + l.words.length, 0) };
 };

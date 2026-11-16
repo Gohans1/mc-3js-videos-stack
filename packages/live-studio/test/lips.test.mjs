@@ -34,7 +34,7 @@ test("a speaker's mouth gets only the takes it speaks, placed where each take si
   assert.deepEqual(mouthCues(edit(), "narrator"), []);
 });
 
-test("the cues follow the voice edit and the narration clip that plays them, and go silent with a muted clip", () => {
+test("the cues follow the audio file and narration clip, while narrative warp leaves the samples fixed", () => {
   const moved = edit({
     voice: {
       edits: {},
@@ -50,10 +50,11 @@ test("the cues follow the voice edit and the narration clip that plays them, and
     },
   });
   // voice seconds 2, 2.5, 3 -> warped 4, 5, 6 -> the clip at 1 plays them at 5, 6, 7
+  // That warp places narrative anchors; these audio samples play at 3, 3.5, 4.
   assert.deepEqual(mouthCues(moved, "steve"), [
-    [5, "X"],
-    [6, "D"],
-    [7, "X"],
+    [3, "X"],
+    [3.5, "D"],
+    [4, "X"],
   ]);
   // the studio puts a fresh list in EDIT on every change, never edits one in place
   moved.audio = { ...moved.audio, tracks: [{ id: "v", mute: true }] };
@@ -68,8 +69,23 @@ test("a shape repeated where takes meet is said once", () => {
     ],
     mouth: {
       takes: [
-        { id: "hi", at: 0, cues: [[0, "C"], [1, "X"]] },
-        { id: "more", at: 2, cues: [[0, "X"], [0.2, "D"], [0.5, "X"]] },
+        {
+          id: "hi",
+          at: 0,
+          cues: [
+            [0, "C"],
+            [1, "X"],
+          ],
+        },
+        {
+          id: "more",
+          at: 2,
+          cues: [
+            [0, "X"],
+            [0.2, "D"],
+            [0.5, "X"],
+          ],
+        },
       ],
     },
   });
@@ -90,12 +106,12 @@ test("a narration clip trimmed mid-word shuts the mouth where the clip ends", ()
         [10, 20],
       ],
     },
-    audio: { narration: "voice", sfx: [{ name: "voice", at: 1, start: 0, length: 5.5 }] },
+    audio: { narration: "voice", sfx: [{ name: "voice", at: 1, start: 0, length: 2.75 }] },
   });
   assert.deepEqual(mouthCues(trimmed, "steve"), [
-    [5, "X"],
-    [6, "D"],
-    [6.5, "X"],
+    [3, "X"],
+    [3.5, "D"],
+    [3.75, "X"],
   ]);
 });
 

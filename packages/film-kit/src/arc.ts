@@ -7,40 +7,94 @@
 // Points are [x, y, z] in any one frame. A move straight away from or through the pivot keeps the straight line; a move
 // to the opposite side swings through `bend` (the side to pass, e.g. the character's forward).
 type V = number[];
-const sub = (a: V, b: V) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: V, b: V) => [
-  a[1] * b[2] - a[2] * b[1],
-  a[2] * b[0] - a[0] * b[2],
-  a[0] * b[1] - a[1] * b[0],
-];
-const len = (a: V) => Math.sqrt(dot(a, a));
-const scale = (a: V, k: number) => a.map((x) => x * k);
+const DEFAULT_BEND: V = [0, 0, 1];
 
-export function arc(pivot: V, a: V, b: V, k: number, { bend = [0, 0, 1] as V } = {}): V {
-  const da = sub(a, pivot),
-    db = sub(b, pivot),
-    ra = len(da),
-    rb = len(db);
-  const lerp = () => a.map((x, i) => x + (b[i] - x) * k);
-  if (ra < 1e-6 || rb < 1e-6) return lerp();
-  const u = scale(da, 1 / ra),
-    v = scale(db, 1 / rb);
-  const angle = Math.acos(Math.max(-1, Math.min(1, dot(u, v))));
-  if (angle < 1e-4) return lerp();
-  let axis = cross(u, v);
-  if (len(axis) < 1e-6) {
-    axis = cross(u, bend);
-    if (len(axis) < 1e-6) return lerp();
+export function arcInto(
+  out: V,
+  pivot: V,
+  a: V,
+  b: V,
+  k: number,
+  { bend = DEFAULT_BEND }: { bend?: V } = {},
+): V {
+  const px = pivot[0],
+    py = pivot[1],
+    pz = pivot[2];
+  const ax = a[0],
+    ay = a[1],
+    az = a[2];
+  const bx = b[0],
+    by = b[1],
+    bz = b[2];
+  const dax = ax - px,
+    day = ay - py,
+    daz = az - pz;
+  const dbx = bx - px,
+    dby = by - py,
+    dbz = bz - pz;
+  const ra = Math.sqrt(dax * dax + day * day + daz * daz);
+  const rb = Math.sqrt(dbx * dbx + dby * dby + dbz * dbz);
+  if (ra < 1e-6 || rb < 1e-6) {
+    out[0] = ax + (bx - ax) * k;
+    out[1] = ay + (by - ay) * k;
+    out[2] = az + (bz - az) * k;
+    return out;
   }
-  axis = scale(axis, 1 / len(axis));
+  const invA = 1 / ra,
+    invB = 1 / rb;
+  const ux = dax * invA,
+    uy = day * invA,
+    uz = daz * invA;
+  const vx = dbx * invB,
+    vy = dby * invB,
+    vz = dbz * invB;
+  const uv = ux * vx + uy * vy + uz * vz;
+  const angle = Math.acos(uv < -1 ? -1 : uv > 1 ? 1 : uv);
+  if (angle < 1e-4) {
+    out[0] = ax + (bx - ax) * k;
+    out[1] = ay + (by - ay) * k;
+    out[2] = az + (bz - az) * k;
+    return out;
+  }
+  let ex = uy * vz - uz * vy;
+  let ey = uz * vx - ux * vz;
+  let ez = ux * vy - uy * vx;
+  let axisLen = Math.sqrt(ex * ex + ey * ey + ez * ez);
+  if (axisLen < 1e-6) {
+    const bnx = bend[0],
+      bny = bend[1],
+      bnz = bend[2];
+    ex = uy * bnz - uz * bny;
+    ey = uz * bnx - ux * bnz;
+    ez = ux * bny - uy * bnx;
+    axisLen = Math.sqrt(ex * ex + ey * ey + ez * ez);
+    if (axisLen < 1e-6) {
+      out[0] = ax + (bx - ax) * k;
+      out[1] = ay + (by - ay) * k;
+      out[2] = az + (bz - az) * k;
+      return out;
+    }
+  }
+  const invAxis = 1 / axisLen;
+  ex *= invAxis;
+  ey *= invAxis;
+  ez *= invAxis;
   // Rodrigues: u turned by k * angle about the axis
   const th = k * angle,
     c = Math.cos(th),
     s = Math.sin(th),
-    ax = cross(axis, u),
-    d = dot(axis, u);
-  const dir = [0, 1, 2].map((i) => u[i] * c + ax[i] * s + axis[i] * d * (1 - c));
+    omc = 1 - c;
+  const cxx = ey * uz - ez * uy;
+  const cyy = ez * ux - ex * uz;
+  const czz = ex * uy - ey * ux;
+  const d = (ex * ux + ey * uy + ez * uz) * omc;
   const r = ra + (rb - ra) * k;
-  return [0, 1, 2].map((i) => pivot[i] + dir[i] * r);
+  out[0] = px + (ux * c + cxx * s + ex * d) * r;
+  out[1] = py + (uy * c + cyy * s + ey * d) * r;
+  out[2] = pz + (uz * c + czz * s + ez * d) * r;
+  return out;
+}
+
+export function arc(pivot: V, a: V, b: V, k: number, opts?: { bend?: V }): V {
+  return arcInto([0, 0, 0], pivot, a, b, k, opts);
 }

@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { ANIMS } from "../../packages/film-stage/src/animate";
 import { TEXT_IN, TEXT_OUT } from "../../packages/film-stage/src/titles";
 import { TRANSITIONS } from "../../packages/film-stage/src/transitions";
 import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
+import { openSound } from "../../packages/live-studio/src/sound.mjs";
 import {
   allEntries,
   easeAbout,
@@ -17,6 +20,7 @@ import {
   rank,
   run as findRun,
   soundEntries,
+  vaultSounds,
 } from "../find";
 
 // the creator's real stars (favorites/) never reach a test: an empty folder unless a test gives its own
@@ -932,15 +936,16 @@ test("--show says where a film makes its own of that kind, and a mark gets a lin
 test("the mocap hint names every body filter, and says how to list the moods and props", async () => {
   const clip = {
     ...e("mixamo/Shiver", "Shiver", "", "mocap", "stand"),
-    data: { seq: ["stand"], mood: ["scared"], prop: ["none", "chair"] },
+    data: { seq: ["stand"], mood: ["scared"], prop: ["none", "chair"], style: ["natural"] },
   };
   const out = await run(["shiver"], [clip], noJev);
   expect(out).toMatch(/--from\|--to\|--has <posture> \(stand\)/);
   expect(out).toMatch(
-    /--mood <m>, --prop <p> \(clips checked by eye; --mood or --prop alone lists them\)/,
+    /--mood <m>, --prop <p>, --style <s> \(clips checked by eye; --mood, --prop or --style alone lists them\)/,
   );
   expect(out).toMatch(/--air yes\|no/);
   await expect(run(["--mood"], [clip], noJev)).rejects.toThrow(/--mood .*: scared 1/);
+  await expect(run(["--style"], [clip], noJev)).rejects.toThrow(/--style .*: natural 1/);
 });
 
 test("a mood or posture said another way is read as the tag the clips carry", async () => {
@@ -1538,7 +1543,7 @@ test("a clip whose retarget breaks on Steve says so, as the catalogue's own sear
   rmSync(dir, { recursive: true });
 });
 
-test("a clip's postures start and end where --from and --to read them, unless checked by eye", () => {
+test("a clip's postures start and end where --from and --to read them, unless checked by eye", async () => {
   const dir = mkdtempSync(join(tmpdir(), "find-mocap-"));
   // measured: standing in its first 0.2 s, a run too short to make the sequence
   const row = (ref: string) => ({
@@ -1547,6 +1552,7 @@ test("a clip's postures start and end where --from and --to read them, unless ch
     start: "stand",
     end: "sitFloor",
     seq: ["crouch", "lie", "sitFloor"],
+    tl: { body: [[0, 2.5, "stand"]] },
   });
   writeFileSync(
     join(dir, "mixamo.jsonl"),
@@ -1559,7 +1565,29 @@ test("a clip's postures start and end where --from and --to read them, unless ch
   const [hit, fixed] = mocapEntries(dir);
   expect(hit?.data?.seq).toEqual(["stand", "crouch", "lie", "sitFloor"]);
   expect(fixed?.data?.seq).toEqual(["crouch", "sitFloor"]);
+  expect(await run(["--show", fixed!.id], [fixed!], noJev)).toContain(
+    "body (checked by eye): crouch > sitFloor",
+  );
   rmSync(dir, { recursive: true });
+});
+
+test("mocap duration filters and details use the eye-checked duration", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "find-reviewed-duration-"));
+  try {
+    const ref = "mixamo/Idle_c9c00003";
+    writeFileSync(
+      join(dir, "mixamo.jsonl"),
+      JSON.stringify({ ref, dur: 0, start: "stand", end: "stand" }) + "\n",
+    );
+    writeFileSync(join(dir, "review.json"), JSON.stringify({ [ref]: { dur: 4 } }));
+    const clips = mocapEntries(dir);
+    const found = await run(["--kind", "mocap", "--dur", "3-5"], clips, noJev);
+    expect(found).toContain(ref);
+    expect(found).toContain("4.0s");
+    expect(await run(["--show", ref], clips, noJev)).not.toContain("one frame");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a clip's category is its postures as checked by eye, not as measured", () => {
@@ -1706,6 +1734,14 @@ test("words beside body filters reach catalog.py without the words that name not
   );
   expect(seen).toHaveLength(1);
 });
+test("bad --kind is reported even with body filters, and swing3d matches swing3D", async () => {
+  await expect(run(["--kind", "bogus", "--from", "stand"], vault, noJev)).rejects.toThrow(
+    /Unknown --kind bogus/,
+  );
+  const anims = presetEntries().filter((x) => x.kind === "anim-in");
+  const out = await run(["swing3d", "-n", "3"], anims, noJev);
+  expect(out).toMatch(/anim-in\/\S+\s+swing3D\b/);
+});
 
 test("find --kind lens exposes prime lenses, DOF/framing helpers, aliases, and pasteable snippets", async () => {
   const presets = presetEntries();
@@ -1810,4 +1846,1102 @@ test("find --kind look exposes all named look presets and removes stale 'no name
   expect(showLook).toContain('"look": "teal-amber"');
   expect(showLook).toContain("adjust.json");
   expect(showLook).toContain("shots.json");
+});
+
+test("--kind keeps query words that name real entries in that kind, and stray files in sound folders are ignored", async () => {
+  const presets = presetEntries();
+  const shakeHit = await run(["heavy", "impact", "--kind", "shake"], presets, noJev);
+  expect(shakeHit).toMatch(/shake\/\S+\s+hits\b/);
+  expect(shakeHit).toMatch(/shake\/\S+\s+SPACESHIP_SHAKE_2D\b/);
+  const noFakeBokeh = await run(["bokeh", "--kind", "lens"], presets, noJev);
+  expect(noFakeBokeh).not.toMatch(/lens\/Primes\s+14mm\b/);
+
+  // Stray non-directory file under sfx/ should not throw ENOTDIR when --dir isn't overriding soundEntries
+  const dir = mkdtempSync(join(tmpdir(), "find-stray-"));
+  mkdirSync(join(dir, "sfx/hits"), { recursive: true });
+  writeFileSync(join(dir, "sfx/.DS_Store"), "x");
+  writeFileSync(join(dir, "sfx/hits/bang.wav"), "x");
+  const { vaultSounds } = await import("../find");
+  const entries = soundEntries(vaultSounds([dir]));
+  expect(entries.map((x) => x.id)).toContain("bang");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("Round 15: unfiltered/favMiss/missing respect ownOnly under --kind, mocapEntries skips error rows, and sub-kind read-as keeps sub-kind", async () => {
+  const pool: Entry[] = [
+    { ...e("track_a", "Warm Guitar", "soft acoustic", "bgm", "acoustic"), secs: 60 },
+    { ...e("track_b", "Deep Drone", "ambient pad", "bgm", "ambient"), secs: 250 },
+    { ...e("snd_hit", "Door Slam", "wooden bang", "sfx", "impacts"), secs: 1 },
+    { ...e("snd_ui", "Click Sound", "short UI click", "sfx", "ui"), secs: 0.2 },
+    {
+      ...e("mixkit-1487", "Dagger woosh", "a fast air whoosh, a whip pan", "sfx", "transitions"),
+      secs: 0.3,
+    },
+    { ...e("ear-dl", "Downlifter", "synth drop", "sfx", "transitions"), secs: 2 },
+  ];
+  const badUnfiltered = await run(["score", "--kind", "bgm", "--dur", "200-500"], pool, noJev);
+  expect(badUnfiltered).not.toContain("these words are in --kind bgm");
+
+  await withFavorites({ default: { sounds: ["snd_hit"] } }, async (favs) => {
+    const favOut = await run(
+      ["zzzzzzz", "sound", "--kind", "sfx", "--fav"],
+      pool,
+      noJev,
+      undefined,
+      favs,
+    );
+    expect(favOut).toContain("1 entries outside the favourites");
+  });
+
+  const partial = await run(
+    ["dagger", "downlifter", "--kind", "sfx/transitions"],
+    pool.filter((x) => x.id !== "ear-dl"),
+    noJev,
+  );
+  expect(partial).toContain("top hit lacks: downlifter");
+  expect(partial).toContain("bun run find --jev --kind sfx/transitions");
+
+  const catDir = mkdtempSync(join(tmpdir(), "find-err-r15-"));
+  try {
+    writeFileSync(
+      join(catDir, "mixamo.jsonl"),
+      `${JSON.stringify({ ref: "mixamo/Broken_00000001", error: "no skeleton" })}\n` +
+        `${JSON.stringify({ ref: "mixamo/Idle_00000002", dur: 2, start: "stand", end: "stand", seq: ["stand"], energy: 10 })}\n`,
+    );
+    const clips = mocapEntries(catDir);
+    expect(clips.map((c) => c.id)).toEqual(["mixamo/Idle_00000002"]);
+  } finally {
+    rmSync(catDir, { recursive: true, force: true });
+  }
+
+  const presets = presetEntries();
+  const subRead = await run(["--kind", "text-in/build"], presets, noJev);
+  expect(subRead).toContain("read as text-in/build-mask");
+
+  const bodyRead = await run(
+    ["--kind", "motion", "--from", "stand"],
+    [{ ...e("mixamo/Idle_1", "Idle", "", "mocap", "stand"), data: { seq: ["stand"] } }],
+    noJev,
+    async () => "mixamo/Idle_1  2.0s  stand",
+  );
+  expect(bodyRead).toContain("(--kind motion read as mocap)");
+
+  await withFavorites({ default: { sounds: ["snd_hit"] } }, async (favs) => {
+    const withPresets = [...pool, ...presets];
+    const multiFav = await run(
+      ["--kind", "transition,sfx", "--fav"],
+      withPresets,
+      noJev,
+      undefined,
+      favs,
+    );
+    expect(multiFav).toContain("snd_hit");
+    expect(multiFav).toContain("Door Slam");
+    await expect(
+      run(["--kind", "ease", "--fav"], withPresets, noJev, undefined, favs),
+    ).rejects.toThrow(/none of it --kind ease/);
+  });
+
+  const jevFlawed = await run(
+    ["--jev", "--kind", "mocap", "walk slowly"],
+    [{ ...e("mixamo/Bad_1", "Bad", "", "mocap", "stand"), data: { seq: ["stand"] } }],
+    noJev,
+    async () =>
+      "0.912  fits 0.850  mixamo/Bad_1  1.4s  stand  Walk\n       FLAW: foot slides\n       0-1.4 stand",
+  );
+  expect(jevFlawed).toContain("every clip shown has a FLAW seen by eye");
+
+  const catErrDir = mkdtempSync(join(tmpdir(), "find-catpy-err-"));
+  try {
+    mkdirSync(join(catErrDir, "catalog"), { recursive: true });
+    writeFileSync(
+      join(catErrDir, "catalog/mixamo.jsonl"),
+      `${JSON.stringify({ ref: "mixamo/Broken_00000001", error: "no skeleton" })}\n` +
+        `${JSON.stringify({ ref: "mixamo/Idle_00000002", dur: 2, start: "stand", end: "stand", seq: ["stand"], energy: 10 })}\n`,
+    );
+    const catPy = resolve(import.meta.dir, "../../packages/clip-catalog/catalog.py");
+    const pyRes = spawnSync(
+      "python",
+      [
+        "-c",
+        "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import catalog; catalog.ROOT = pathlib.Path(sys.argv[2]); print('\\n'.join(r['ref'] for r in catalog.rows(['mixamo'])))",
+        dirname(catPy),
+        catErrDir,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(pyRes.status).toBe(0);
+    expect(pyRes.stdout).toContain("mixamo/Idle_00000002");
+  } finally {
+    rmSync(catErrDir, { recursive: true, force: true });
+  }
+});
+
+test("Round 18: catalog.py builds seq from review.json start/end overrides and comma-empty --kind/--source fail", async () => {
+  const revDir = mkdtempSync(join(tmpdir(), "find-catpy-rev-"));
+  try {
+    mkdirSync(join(revDir, "catalog"), { recursive: true });
+    writeFileSync(
+      join(revDir, "catalog/mixamo.jsonl"),
+      `${JSON.stringify({ ref: "mixamo/Knee_00000003", dur: 2, start: "crouch", end: "crouch", seq: [], energy: 10, loop: [0, 0], reach: 0, travel: [0, 0], turn: 0, look: 0, seen: false })}\n`,
+    );
+    writeFileSync(
+      join(revDir, "catalog/review.json"),
+      JSON.stringify({ "mixamo/Knee_00000003": { start: "sitSeat", end: "sitSeat" } }),
+    );
+    const catPy = resolve(import.meta.dir, "../../packages/clip-catalog/catalog.py");
+    const runCat = (has: string) =>
+      spawnSync(
+        "python",
+        [
+          "-c",
+          "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import catalog; catalog.ROOT = pathlib.Path(sys.argv[2]); sys.argv = [sys.argv[1], '--lib', 'mixamo', '--has', sys.argv[3]]; catalog.main()",
+          dirname(catPy),
+          revDir,
+          has,
+        ],
+        { encoding: "utf8" },
+      );
+    const hit = runCat("sitSeat");
+    expect(hit.status).toBe(0);
+    expect(hit.stdout).toContain("mixamo/Knee_00000003");
+    const stale = runCat("crouch");
+    expect(stale.status).toBe(0);
+    expect(stale.stdout).not.toContain("mixamo/Knee_00000003");
+  } finally {
+    rmSync(revDir, { recursive: true, force: true });
+  }
+
+  const tinyPool: Entry[] = [
+    { ...e("snd_hit", "Door Slam", "wooden bang", "sfx", "impacts"), secs: 1 },
+  ];
+  await expect(run(["door", "--kind", ","], tinyPool, noJev)).rejects.toThrow(/--kind/);
+  await expect(run(["door", "--source", ","], tinyPool, noJev)).rejects.toThrow(/--source/);
+});
+
+test("Round 19: catalog.py splits camelCase and strips prop none, rerank drops 0.0, find handles spaced --kind and empty --jev misses", async () => {
+  const revDir = mkdtempSync(join(tmpdir(), "find-catpy-r19-"));
+  try {
+    mkdirSync(join(revDir, "catalog"), { recursive: true });
+    writeFileSync(
+      join(revDir, "catalog/ual2.jsonl"),
+      `${JSON.stringify({ ref: "ual2/TreeChopping_Loop", dur: 2, start: "stand", end: "stand", seq: ["stand"], energy: 30, loop: [0, 0], reach: 0, travel: [0, 0], turn: 0, look: 0, seen: true })}\n`,
+    );
+    writeFileSync(
+      join(revDir, "catalog/review.json"),
+      JSON.stringify({ "ual2/TreeChopping_Loop": { prop: ["none"] } }),
+    );
+    const catPy = resolve(import.meta.dir, "../../packages/clip-catalog/catalog.py");
+    const runCat = (words: string[]) =>
+      spawnSync(
+        "python",
+        [
+          "-c",
+          "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import catalog; catalog.ROOT = pathlib.Path(sys.argv[2]); sys.argv = [sys.argv[1], '--lib', 'ual2', *sys.argv[3:]]; catalog.main()",
+          dirname(catPy),
+          revDir,
+          ...words,
+        ],
+        { encoding: "utf8" },
+      );
+    const camelHit = runCat(["chopping"]);
+    expect(camelHit.status).toBe(0);
+    expect(camelHit.stdout).toContain("ual2/TreeChopping_Loop");
+    const propNone = runCat(["none"]);
+    expect(propNone.status).toBe(0);
+    expect(propNone.stdout).not.toContain("ual2/TreeChopping_Loop");
+
+    const rerankOut = spawnSync(
+      "python",
+      [
+        "-c",
+        "import sys; sys.path.insert(0, sys.argv[1]); import catalog\nclass F:\n def ask(self, *a): return {'clip': {'probabilities': {'c0': 0.9, 'c1': 0.0}}}\nh = catalog.rerank(F(), 's', [{'ref':'a/A','dur':1,'start':'s','end':'s','turn':0,'reach':0,'loop':[0,0]},{'ref':'a/B','dur':1,'start':'s','end':'s','turn':0,'reach':0,'loop':[0,0]}])\nprint(len(h), h[0][1]['ref'] if h else '')",
+        dirname(catPy),
+      ],
+      { encoding: "utf8" },
+    );
+    expect(rerankOut.status).toBe(0);
+    expect(rerankOut.stdout.trim()).toBe("1 a/A");
+  } finally {
+    rmSync(revDir, { recursive: true, force: true });
+  }
+
+  const spacedOut = await run(
+    ["wipe", "--kind", "transition/Wipe & Split,look", "--source", "film-stage/looks.ts"],
+    presetEntries(),
+    noJev,
+  );
+  expect(spacedOut).not.toContain("not with & Split");
+  expect(spacedOut).toContain('--kind "transition/Wipe & Split,look"');
+
+  const emptyJevErr = await run(
+    ["--jev", "--kind", "transition", "completelynonexistentwords"],
+    presetEntries(),
+    noJev,
+  );
+  expect(emptyJevErr).not.toMatch(/Word matches below/i);
+  expect(emptyJevErr).not.toContain("by meaning (Jev");
+
+  const emptyJevZero = await run(
+    ["--jev", "--kind", "transition", "completelynonexistentwords"],
+    presetEntries(),
+    async () => [],
+  );
+  expect(emptyJevZero).not.toMatch(/word matches below/i);
+  expect(emptyJevZero).not.toContain("by meaning (Jev");
+
+  const mockClips = async () => "0 matches";
+  const mocapEmpty = await run(
+    ["--kind", "mocap", "--from", "stand", "--jev", "hero"],
+    [{ ...e("mixamo/Stand_1", "Stand", "idle", "mocap", "stand>stand"), data: { seq: ["stand"] } }],
+    noJev,
+    mockClips,
+  );
+  expect(mocapEmpty).not.toContain("bun run find --jev --kind mocap");
+});
+
+test("Round 20: catalog.describe keeps ual suffixes, jev.ask handles null usage, find keeps sub-kinds in category hints and accurate empty timing --jev message", async () => {
+  const catPy = resolve(import.meta.dir, "../../packages/clip-catalog/catalog.py");
+  const pyRes = spawnSync(
+    "python",
+    [
+      "-c",
+      [
+        "import sys, io, json, urllib.request; sys.path.insert(0, sys.argv[1]); import catalog, jev",
+        "base = {'dur': 1, 'start': 's', 'end': 's', 'turn': 0, 'reach': 0, 'loop': [0, 0]}",
+        "print(catalog.describe({**base, 'ref': 'ual1/Pistol_Reload'}))",
+        "print(catalog.describe({**base, 'ref': 'mixamo/Standing_Up_000000ab'}))",
+        "class R(io.BytesIO):",
+        " def __enter__(self): return self",
+        " def __exit__(self, *a): pass",
+        "jev.urllib.request.urlopen = lambda req, timeout=0: R(json.dumps({'answers': {'a': 1}, 'usage': None}).encode())",
+        "j = jev.Jev()",
+        "j.routes = [('mock', 'https://example.invalid', 'm', 'k', 1, 1)]",
+        "print(j.ask('p', {'a': 'str'}))",
+      ].join("\n"),
+      dirname(catPy),
+    ],
+    { encoding: "utf8" },
+  );
+  expect(pyRes.status).toBe(0);
+  const pyLines = pyRes.stdout.trim().split(/\r?\n/);
+  expect(pyLines[0]).toContain("Pistol Reload (not checked by eye)");
+  expect(pyLines[1]).toContain("Standing Up (not checked by eye)");
+  expect(pyLines[2]).toContain("{'a': 1}");
+
+  const spreadOut = await run(["fade", "--kind", "text-in"], presetEntries(), noJev);
+  expect(spreadOut).toContain("--kind text-in/");
+  expect(spreadOut).not.toMatch(/Narrow to one: --kind text\//);
+
+  const holdsOut = await run(["hacker", "fade", "--kind", "text-in"], presetEntries(), noJev);
+  expect(holdsOut).toContain("--kind text-in/decode-split");
+  expect(holdsOut).not.toContain("--kind text/decode-split");
+
+  const favDir = mkdtempSync(join(tmpdir(), "find-fav-r20-"));
+  try {
+    writeFileSync(join(favDir, "default.json"), JSON.stringify({ effects: ["anim-curve:linear"] }));
+    const favs = favoriteLists(favDir);
+    const out = await run(
+      ["--jev", "--kind", "anim", "--fav=default", "snappy"],
+      presetEntries(),
+      noJev,
+      undefined,
+      favs,
+    );
+    expect(out).toContain("after hiding timing curves");
+    expect(out).not.toContain("--jev without --kind");
+  } finally {
+    rmSync(favDir, { recursive: true, force: true });
+  }
+});
+
+test("Round 22: velocity frequency docs match runtime, empty mocap gives clear message, allEntries honors soundVault/soundSources/SOURCES overrides, and mocapEntries skips null errors", async () => {
+  const showVel = await run(["--show", "flash"], presetEntries(), noJev);
+  expect(showVel).toContain("every 4th beat or every beat");
+  expect(showVel).not.toContain("every beat or every other");
+
+  await expect(run(["--kind", "mocap"], presetEntries(), noJev)).rejects.toThrow(
+    /no indexed clips|catalogue/i,
+  );
+  await expect(run(["--still"], presetEntries(), noJev)).rejects.toThrow(
+    /no mocap clips|catalogue/i,
+  );
+  await expect(run(["--from", "stand"], presetEntries(), noJev)).rejects.toThrow(
+    /no mocap clips|catalogue/i,
+  );
+
+  // soundVault: false, custom soundVault, custom soundSources (except narration), SOURCES.json override
+  const film = mkdtempSync(join(tmpdir(), "find-r22-film-"));
+  const customVault = join(film, "my-vault");
+  const wavBytes = (() => {
+    const head = Buffer.alloc(44);
+    head.write("RIFF", 0);
+    head.writeUInt32LE(36 + 8000, 4);
+    head.write("WAVEfmt ", 8);
+    head.writeUInt32LE(16, 16);
+    head.writeUInt16LE(1, 20);
+    head.writeUInt16LE(1, 22);
+    head.writeUInt32LE(8000, 24);
+    head.writeUInt32LE(8000, 28);
+    head.writeUInt16LE(1, 32);
+    head.writeUInt16LE(8, 34);
+    head.write("data", 36);
+    head.writeUInt32LE(8000, 40);
+    return Buffer.concat([head, Buffer.alloc(8000, 128)]);
+  })();
+  try {
+    mkdirSync(join(film, "sound/sfx"), { recursive: true });
+    mkdirSync(join(film, "assets/public/agent"), { recursive: true });
+    mkdirSync(join(customVault, "sfx/hits"), { recursive: true });
+    writeFileSync(join(film, "sound/sfx/local_beep.wav"), wavBytes);
+    writeFileSync(join(film, "sound/custom_src.wav"), wavBytes);
+    writeFileSync(join(film, "assets/public/agent/full_voice.wav"), wavBytes);
+    writeFileSync(join(customVault, "sfx/hits/vault_clap.wav"), wavBytes);
+    writeFileSync(
+      join(customVault, "SOURCES.json"),
+      JSON.stringify({ vault_clap: { title: "Vault Clap", license: "CC0" } }),
+    );
+    writeFileSync(
+      join(film, "sound/sfx/SOURCES.json"),
+      JSON.stringify({ vault_clap: { title: "Film Custom Clap", for: "trailer punch" } }),
+    );
+
+    // a) soundVault: false + soundSources (custom_src included, narration excluded)
+    writeFileSync(
+      join(film, "package.json"),
+      JSON.stringify({
+        "live-studio": {
+          sfx: "sound/sfx",
+          soundVault: false,
+          soundSources: {
+            custom_src: "sound/custom_src.wav",
+            narration: "assets/public/agent/full_voice.wav",
+          },
+        },
+      }),
+    );
+    const noVaultSounds = allEntries(true, film).filter((x) =>
+      ["sfx", "bgm", "mc"].includes(x.kind),
+    );
+    expect(noVaultSounds.some((x) => x.id === "local_beep")).toBe(true);
+    expect(noVaultSounds.some((x) => x.id === "custom_src")).toBe(true);
+    expect(noVaultSounds.some((x) => x.id === "narration")).toBe(false);
+    // All remaining sfx/bgm/mc come ONLY from this film (no repo vault leak)
+    expect(noVaultSounds.every((x) => x.src === "this-film")).toBe(true);
+
+    // b) custom string soundVault + SOURCES.json override onto vault sound
+    writeFileSync(
+      join(film, "package.json"),
+      JSON.stringify({
+        "live-studio": {
+          sfx: "sound/sfx",
+          soundVault: "my-vault",
+        },
+      }),
+    );
+    const customVaultSounds = allEntries(true, film).filter((x) => x.id === "vault_clap");
+    expect(customVaultSounds).toHaveLength(1);
+    expect(customVaultSounds[0]?.title).toBe("Film Custom Clap");
+    expect(customVaultSounds[0]?.about).toContain("trailer punch");
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+
+  const catDir = mkdtempSync(join(tmpdir(), "find-r22-cat-"));
+  try {
+    writeFileSync(
+      join(catDir, "mixamo.jsonl"),
+      [
+        JSON.stringify({
+          ref: "mixamo/Good_1",
+          dur: 1,
+          start: "stand",
+          end: "stand",
+          turn: 0,
+          reach: 0,
+          loop: [0, 0],
+        }),
+        JSON.stringify({
+          ref: "mixamo/ErrNull_1",
+          error: null,
+          dur: 1,
+          start: "stand",
+          end: "stand",
+          turn: 0,
+          reach: 0,
+          loop: [0, 0],
+        }),
+      ].join("\n"),
+    );
+    const clips = mocapEntries(catDir);
+    expect(clips.map((c) => c.id)).toEqual(["mixamo/Good_1"]);
+  } finally {
+    rmSync(catDir, { recursive: true, force: true });
+  }
+});
+
+test("Round 23: anim-combo show omits unused len while anim-in keeps it, and catalog.py matches inflected words", async () => {
+  const presets = presetEntries();
+  const combo = presets.find((e) => e.kind === "anim-combo")!;
+  const animIn = presets.find((e) => e.kind === "anim-in")!;
+
+  const showCombo = await run(["--show", combo.id, "--kind", "anim-combo"], presets, noJev);
+  expect(showCombo).toContain(`"fx": "${combo.id}"`);
+  expect(showCombo).not.toContain('"len"');
+
+  const showIn = await run(["--show", animIn.id, "--kind", "anim-in"], presets, noJev);
+  expect(showIn).toContain('"len"');
+
+  const catScript = resolve(import.meta.dir, "../../packages/clip-catalog/catalog.py");
+  const catDir = mkdtempSync(join(tmpdir(), "find-catpy-stem-"));
+  try {
+    mkdirSync(join(catDir, "catalog"), { recursive: true });
+    writeFileSync(
+      join(catDir, "catalog/mixamo.jsonl"),
+      [
+        {
+          ref: "mixamo/Sit_00000001",
+          dur: 2,
+          start: "sitSeat",
+          end: "sitSeat",
+          seq: ["sitSeat"],
+          energy: 5,
+          loop: [0, 0],
+          reach: 0,
+          travel: [0, 0],
+          turn: 0,
+          look: 0,
+        },
+        {
+          ref: "mixamo/Walk_Forward_00000002",
+          dur: 2,
+          start: "stand",
+          end: "stand",
+          seq: ["stand"],
+          energy: 30,
+          loop: [0, 0],
+          reach: 1.5,
+          travel: [0, 1.5],
+          turn: 0,
+          look: 0,
+        },
+        {
+          ref: "mixamo/Disposition_00000003",
+          dur: 2,
+          start: "stand",
+          end: "stand",
+          seq: ["stand"],
+          energy: 10,
+          loop: [0, 0],
+          reach: 0,
+          travel: [0, 0],
+          turn: 0,
+          look: 0,
+        },
+      ]
+        .map((r) => JSON.stringify(r))
+        .join("\n"),
+    );
+    for (const [word, expected] of [
+      ["sitting", /mixamo\/Sit_00000001/],
+      ["walking", /mixamo\/Walk_Forward_00000002/],
+      ["walks", /mixamo\/Walk_Forward_00000002/],
+      ["walked", /mixamo\/Walk_Forward_00000002/],
+    ] as const) {
+      const res = spawnSync(
+        "python",
+        [
+          "-c",
+          "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import catalog; catalog.ROOT = pathlib.Path(sys.argv[2]); sys.argv = ['catalog.py', '--lib', 'mixamo', sys.argv[3]]; catalog.main()",
+          dirname(catScript),
+          catDir,
+          word,
+        ],
+        { encoding: "utf8" },
+      );
+      expect(res.status).toBe(0);
+      expect(res.stdout).toMatch(expected);
+      expect(res.stdout).not.toContain("Disposition");
+    }
+  } finally {
+    rmSync(catDir, { recursive: true, force: true });
+  }
+});
+
+test("find uses the same soundSources override as the Studio", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-source-priority-"));
+  try {
+    mkdirSync(join(film, "sound"));
+    mkdirSync(join(film, "assets"));
+    for (const [file, duration] of [
+      ["sound/hit.wav", 1],
+      ["assets/hit.wav", 2],
+    ] as const) {
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", `sine=d=${duration}`, join(film, file)],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+    }
+    const conf = {
+      soundTimeline: "audio.json",
+      sfx: "sound",
+      soundVault: false,
+      soundSources: { hit: "assets/hit.wav" },
+    };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    const hits = allEntries(true, film).filter((x) => x.id === "hit");
+    const studio = openSound(film, conf);
+    expect(hits).toHaveLength(1);
+    expect(resolve(film, hits[0]!.data!.file!)).toBe(studio.fileOf("hit")!);
+    expect(hits[0]!.secs).toBe(studio.library().find((x) => x.name === "hit")!.seconds);
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find groups local sounds by SOURCES metadata as the Studio does", async () => {
+  const film = mkdtempSync(join(tmpdir(), "find-source-category-"));
+  try {
+    mkdirSync(join(film, "sound"));
+    const made = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, "sound/hit.wav")],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: false };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    writeFileSync(
+      join(film, "sound/SOURCES.json"),
+      JSON.stringify({ hit: { category: "impacts" } }),
+    );
+    const entries = allEntries(true, film);
+    expect(entries.find((x) => x.id === "hit")!.cat).toBe(
+      openSound(film, conf)
+        .library()
+        .find((x) => x.name === "hit")!.category!,
+    );
+    expect(await run(["--kind", "sfx/impacts"], entries, noJev)).toContain("hit");
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find's dollyZoom snippet executes with the imports it prints", async () => {
+  const shown = await run(["--show", "dollyZoom"], presetEntries(), noJev);
+  const code = shown
+    .split("\n")
+    .find((line) => line.includes("use: src/scene.ts"))!
+    .split("src/scene.ts")[1]!
+    .trim();
+  const url = pathToFileURL(resolve(import.meta.dir, "../../packages/film-kit/src/lens.ts")).href;
+  const result = spawnSync(
+    process.execPath,
+    ["-e", `${code.replace("'film-kit/lens'", JSON.stringify(url))}; console.log(d1);`],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  expect(result.status, result.stderr).toBe(0);
+  expect(Number(result.stdout.trim())).toBeGreaterThan(0);
+});
+
+test("find keeps local provider origin for folder and soundSources entries", async () => {
+  const film = mkdtempSync(join(tmpdir(), "find-local-origin-"));
+  try {
+    mkdirSync(join(film, "sound"));
+    for (const name of ["localTone", "customTone"]) {
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, `sound/${name}.wav`)],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+    }
+    const conf = {
+      soundTimeline: "audio.json",
+      sfx: "sound",
+      soundVault: false,
+      soundSources: { customTone: "sound/customTone.wav" },
+    };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    writeFileSync(
+      join(film, "sound/SOURCES.json"),
+      JSON.stringify({ localTone: { source: "earshot" }, customTone: { source: "earshot" } }),
+    );
+    const entries = allEntries(true, film);
+    const found = await run(["--origin", "synth"], entries, noJev);
+    for (const id of ["localTone", "customTone"]) {
+      expect(found).toContain(id);
+      expect(entries.find((x) => x.id === id)!.src).toBe("this-film");
+    }
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find custom vault discovery and metadata match the Studio at nested depths", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-vault-parity-"));
+  try {
+    const vault = join(film, "my-vault");
+    for (const [file, duration] of [
+      ["sfx/raw/vaultTone.wav", 2],
+      ["bgm/chill/deep/nestedTone.wav", 3],
+    ] as const) {
+      mkdirSync(dirname(join(vault, file)), { recursive: true });
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", `sine=d=${duration}`, join(vault, file)],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+    }
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: "my-vault" };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    writeFileSync(
+      join(vault, "SOURCES.json"),
+      JSON.stringify({ vaultTone: { kind: "bgm", category: "electronic" } }),
+    );
+    const entries = allEntries(true, film);
+    const studio = openSound(film, conf).library();
+    for (const id of ["vaultTone", "nestedTone"]) {
+      const actual = entries.find((x) => x.id === id);
+      const expected = studio.find((x) => x.name === id)!;
+      expect(actual).toBeDefined();
+      expect([actual!.kind, actual!.cat, actual!.secs]).toEqual([
+        expected.kind,
+        expected.category,
+        expected.seconds,
+      ]);
+    }
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find local duplicate IDs describe the same file the Studio plays", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-local-duplicate-"));
+  try {
+    for (const [file, duration] of [
+      ["sound/a/tap.ogg", 1],
+      ["sound/z/tap.wav", 2],
+    ] as const) {
+      mkdirSync(dirname(join(film, file)), { recursive: true });
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", `sine=d=${duration}`, join(film, file)],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+    }
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: false };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    const entry = allEntries(true, film).find((x) => x.id === "tap")!;
+    const studio = openSound(film, conf);
+    expect(resolve(film, entry.data!.file!)).toBe(studio.fileOf("tap")!);
+    expect(entry.secs).toBe(studio.library().find((x) => x.name === "tap")!.seconds);
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("local replacements inherit vault metadata and attribution as the Studio does", async () => {
+  const film = mkdtempSync(join(tmpdir(), "find-inherited-metadata-"));
+  try {
+    for (const file of ["sound/shared.wav", "my-vault/bgm/electronic/shared.wav"]) {
+      mkdirSync(dirname(join(film, file)), { recursive: true });
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, file)],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+    }
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: "my-vault" };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    writeFileSync(
+      join(film, "my-vault/SOURCES.json"),
+      JSON.stringify({
+        shared: {
+          title: "Shared theme",
+          kind: "bgm",
+          category: "electronic",
+          license: "CC BY 4.0",
+          family: "theme-takes",
+          variant: 1,
+        },
+      }),
+    );
+    const entries = allEntries(false, film);
+    const found = entries.find((x) => x.id === "shared")!;
+    const expected = openSound(film, conf)
+      .library()
+      .find((x) => x.name === "shared")!;
+    expect([found.kind, found.cat, found.title, found.data!.license, found.data!.family]).toEqual([
+      expected.kind,
+      expected.category,
+      expected.title,
+      expected.license,
+      expected.family,
+    ]);
+    expect(found.src).toBe("this-film");
+    expect(await run(["--license", "credit"], entries, noJev)).toContain("shared");
+    await expect(run(["--license", "free"], entries, noJev)).rejects.toThrow(/nothing/);
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find reads UTF-8 BOM sound metadata as the Studio does", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-bom-metadata-"));
+  try {
+    mkdirSync(join(film, "sound"));
+    const made = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, "sound/tone.wav")],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: false };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    writeFileSync(
+      join(film, "sound/SOURCES.json"),
+      "\uFEFF" + JSON.stringify({ tone: { license: "CC BY 4.0" } }),
+    );
+    const expected = openSound(film, conf)
+      .library()
+      .find((x) => x.name === "tone")!;
+    expect(allEntries(true, film).find((x) => x.id === "tone")!.data!.license).toBe(
+      expected.license!,
+    );
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("body filters read BOM review metadata accepted by word search", async () => {
+  const root = mkdtempSync(join(tmpdir(), "find-bom-review-"));
+  try {
+    mkdirSync(join(root, "catalog"));
+    const ref = "mixamo/Idle_12345678";
+    writeFileSync(
+      join(root, "catalog/mixamo.jsonl"),
+      JSON.stringify({
+        ref,
+        dur: 2,
+        start: "stand",
+        end: "stand",
+        seq: ["stand"],
+        energy: 1,
+        loop: [0, 0],
+        reach: 0,
+        travel: [0, 0],
+        turn: 0,
+        look: 0,
+      }) + "\n",
+    );
+    writeFileSync(
+      join(root, "catalog/review.json"),
+      "\uFEFF" +
+        JSON.stringify({
+          [ref]: { desc: "seated and calm", start: "sitSeat", end: "sitSeat", seq: ["sitSeat"] },
+        }),
+    );
+    const entries = mocapEntries(join(root, "catalog"));
+    const catalogue = async (args: string[]) => {
+      const py = spawnSync(
+        "python",
+        [
+          "-B",
+          "-c",
+          "import sys,pathlib;sys.path.insert(0,sys.argv[1]);import catalog;catalog.ROOT=pathlib.Path(sys.argv[2]);sys.argv=['catalog.py',*sys.argv[3:]];catalog.main()",
+          resolve(import.meta.dir, "../../packages/clip-catalog"),
+          root,
+          ...args,
+        ],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      if (py.status !== 0) throw new Error(py.stderr);
+      return py.stdout + py.stderr;
+    };
+    expect(await run(["seated", "--kind", "mocap"], entries, noJev, catalogue)).toContain(ref);
+    expect(await run(["--from", "sitSeat"], entries, noJev, catalogue)).toContain(ref);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("find names malformed film JSON and the recovery command without a stack trace", () => {
+  const root = mkdtempSync(join(tmpdir(), "find-json-error-"));
+  try {
+    writeFileSync(join(root, "package.json"), "{ broken");
+    const cli = spawnSync(
+      process.execPath,
+      [resolve(import.meta.dir, "../find.ts"), "--kind", "transition"],
+      { cwd: root, encoding: "utf8", timeout: 10000 },
+    );
+    expect(cli.status).toBe(1);
+    expect(cli.stderr).toContain("package.json");
+    expect(cli.stderr).toContain("bun run check");
+    expect(cli.stderr).not.toMatch(/\n\s+at /);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("find probes a vault file when its cached duration is not numeric", () => {
+  const vault = mkdtempSync(join(tmpdir(), "find-peak-seconds-"));
+  try {
+    const made = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(vault, "tone.wav")],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    writeFileSync(join(vault, "PEAKS.json"), JSON.stringify({ tone: { seconds: "0.5" } }));
+    expect(vaultSounds([vault]).find((x) => x.name === "tone")!.seconds).toBe(1);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("empty favourites still reject invalid filter values", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "find-empty-validation-"));
+  try {
+    const favs = favoriteLists(dir);
+    const pool = [{ ...e("tone", "Tone"), src: "mixkit" }];
+    for (const flag of ["--kind", "--source", "--origin", "--edition", "--license"])
+      await expect(
+        run(["--fav", flag, "bogus"], pool, noJev, undefined, favs),
+      ).rejects.toMatchObject({ code: 2 });
+    expect(await run(["--fav", "--kind", "sfx"], pool, noJev, undefined, favs)).toContain(
+      "nothing is starred",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("find help takes precedence over parsing and the paid judge", async () => {
+  let calls = 0;
+  const judge = async () => {
+    calls++;
+    return [];
+  };
+  const pool = [e("tone", "Tone")];
+  const help = await run(["--help"], pool, judge);
+  expect(await run(["help", "--jev", "--kind", "sfx"], pool, judge)).toBe(help);
+  expect(calls).toBe(0);
+  const cli = spawnSync(
+    process.execPath,
+    [resolve(import.meta.dir, "../find.ts"), "--help", "--bogus"],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  expect(cli.status, cli.stderr).toBe(0);
+  expect(cli.stdout.trim()).toBe(help.trim());
+});
+
+test("find earshot commands preserve literal sound paths in pasted shell commands", async () => {
+  const paths = ["sound/(preview)/tone.wav", "my vault/a'b$voice.wav"];
+  const pool = [
+    { ...e("tone", "Tone"), data: { file: paths[0] } },
+    { ...e("tone-alt", "Tone alternative"), data: { file: paths[1] } },
+  ];
+  const argvOf = (command: string) => {
+    const script =
+      process.platform === "win32"
+        ? `[Console]::OutputEncoding = [Text.UTF8Encoding]::new(); function earshot { ConvertTo-Json -InputObject @($args) -Compress }; ${command}`
+        : `earshot() { printf '%s\\0' "$@"; }; ${command}`;
+    const result =
+      process.platform === "win32"
+        ? spawnSync(
+            "powershell.exe",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-EncodedCommand",
+              Buffer.from(script, "utf16le").toString("base64"),
+            ],
+            { encoding: "utf8", timeout: 10000 },
+          )
+        : spawnSync("sh", ["-c", script], { encoding: "utf8", timeout: 10000 });
+    expect(result.status, result.stderr).toBe(0);
+    return process.platform === "win32"
+      ? JSON.parse(result.stdout).map(String)
+      : result.stdout.split("\0").slice(0, -1);
+  };
+  for (const [i, entry] of pool.entries()) {
+    const shown = await run(["--show", entry.id], pool, noJev);
+    expect(argvOf(shown.match(/hear it: (earshot describe .+)/)![1]!)).toEqual([
+      "describe",
+      paths[i],
+    ]);
+  }
+  const listed = await run(["tone"], pool, noJev);
+  expect(argvOf(listed.match(/hear them \(you cannot\): (earshot rank .+? --top 3)/)![1]!)).toEqual(
+    ["rank", "tone", ...paths, "--top", "3"],
+  );
+});
+
+test("find uses Studio metadata fallbacks for vault overrides", async () => {
+  const film = mkdtempSync(join(tmpdir(), "find-vault-fallback-"));
+  try {
+    mkdirSync(join(film, "sound"));
+    mkdirSync(join(film, "my-vault/bgm/chill"), { recursive: true });
+    const made = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, "my-vault/bgm/chill/music.wav")],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: "my-vault" };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    writeFileSync(
+      join(film, "my-vault/SOURCES.json"),
+      JSON.stringify({ music: { kind: "sfx", category: "foley", title: "Music" } }),
+    );
+    writeFileSync(
+      join(film, "sound/SOURCES.json"),
+      JSON.stringify({ music: { kind: null, category: null } }),
+    );
+    const entries = allEntries(false, film);
+    const found = entries.find((x) => x.id === "music")!;
+    const expected = openSound(film, conf)
+      .library()
+      .find((x) => x.name === "music")!;
+    expect([found.kind, found.cat, found.title]).toEqual([
+      expected.kind,
+      expected.category,
+      expected.title,
+    ]);
+    expect(await run(["music", "--kind", "bgm/chill"], entries, noJev)).toContain("music");
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("ordinary mocap words include eye-checked acting styles", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "find-reviewed-style-"));
+  try {
+    const ref = "mixamo/Idle_c9c00005";
+    writeFileSync(
+      join(dir, "mixamo.jsonl"),
+      JSON.stringify({ ref, dur: 2, start: "stand", end: "stand" }) + "\n",
+    );
+    writeFileSync(
+      join(dir, "review.json"),
+      JSON.stringify({ [ref]: { desc: "waits and looks ahead", style: ["cartoonish"] } }),
+    );
+    expect(await run(["cartoonish", "--kind", "mocap"], mocapEntries(dir), noJev)).toContain(ref);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("duration search finds shorter takes in a folded sound family", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-family-duration-"));
+  try {
+    mkdirSync(join(film, "sound"));
+    writeFileSync(
+      join(film, "package.json"),
+      JSON.stringify({
+        "live-studio": { soundTimeline: "audio.json", sfx: "sound", soundVault: false },
+      }),
+    );
+    const sources: Record<string, unknown> = {};
+    for (const [name, seconds, variant] of [
+      ["pulse-long", 1.5, 1],
+      ["pulse-short", 0.5, 2],
+    ] as const) {
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", `sine=d=${seconds}`, join(film, `sound/${name}.wav`)],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+      sources[name] = { kind: "sfx", title: "Pulse", family: "pulse", variant };
+    }
+    writeFileSync(join(film, "sound/SOURCES.json"), JSON.stringify(sources));
+    const result = spawnSync(
+      process.execPath,
+      [resolve(import.meta.dir, "../find.ts"), "pulse", "--kind", "sfx", "--dur", "0-1"],
+      { cwd: film, encoding: "utf8", timeout: 10000 },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("pulse-short");
+    expect(result.stdout).not.toContain("pulse-long");
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find ignores null optional sound metadata as the Studio does", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-null-metadata-"));
+  try {
+    mkdirSync(join(film, "sound"));
+    const made = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, "sound/tone.wav")],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: false };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    writeFileSync(join(film, "sound/SOURCES.json"), "null");
+    const expected = openSound(film, conf)
+      .library()
+      .find((x) => x.name === "tone")!;
+    expect(allEntries(true, film).find((x) => x.id === "tone")!.secs).toBe(expected.seconds);
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find retains the default vault source used by the Studio", async () => {
+  const film = mkdtempSync(join(tmpdir(), "find-vault-source-"));
+  try {
+    mkdirSync(join(film, "my-vault/sfx"), { recursive: true });
+    const made = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, "my-vault/sfx/tone.wav")],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const conf = { soundTimeline: "audio.json", sfx: "sound", soundVault: "my-vault" };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    const expected = openSound(film, conf)
+      .library()
+      .find((x) => x.name === "tone")!;
+    const entries = allEntries(true, film);
+    expect(entries.find((x) => x.id === "tone")!.src).toBe(expected.source!);
+    expect(await run(["--source", "vault"], entries, noJev)).toContain("tone");
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+});
+
+test("find excludes vault IDs rejected by the resolver and missing explicit overrides", () => {
+  const film = mkdtempSync(join(tmpdir(), "find-resolvable-vault-"));
+  try {
+    mkdirSync(join(film, "my-vault/sfx"), { recursive: true });
+    for (const name of ["hit", "bad name"]) {
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(film, `my-vault/sfx/${name}.wav`)],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+    }
+    const conf = {
+      soundTimeline: "audio.json",
+      sfx: "sound",
+      soundVault: "my-vault",
+      soundSources: { hit: "assets/missing.wav" },
+    };
+    writeFileSync(join(film, "package.json"), JSON.stringify({ "live-studio": conf }));
+    expect(openSound(film, conf).library()).toEqual([]);
+    expect(allEntries(true, film).filter((x) => ["hit", "bad name"].includes(x.id))).toEqual([]);
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
 });

@@ -1,11 +1,11 @@
-import { DURATION } from "film/scene";
 import { Minimize, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
+import { DURATION } from "../core/filmMeta";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { FPS, pad } from "../core/time";
@@ -17,6 +17,7 @@ const timecode = (frame: number) =>
   `${pad(Math.floor(frame / (3600 * FPS)))}:${pad(Math.floor(frame / (60 * FPS)) % 60)}:${pad(Math.floor(frame / FPS) % 60)}:${pad(frame % FPS)}`;
 
 function Controls() {
+  useStudio((s) => s.metaRev);
   const frame = useFrame(),
     playing = useStudio((s) => s.playing);
   const bar = useRef<HTMLDivElement>(null);
@@ -49,7 +50,7 @@ function Controls() {
       role="group"
       aria-label="Full screen playback"
       className={cn(
-        "absolute bottom-[6.2%] left-1/2 z-10 flex h-11 w-[36rem] max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md bg-black/80 px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
+        "bg-scrim-strong absolute bottom-[6.2%] left-1/2 z-10 flex h-11 w-[36rem] max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
         visibility === "hidden" && "pointer-events-none opacity-0",
       )}
     >
@@ -62,13 +63,14 @@ function Controls() {
         {playing ? <Pause /> : <Play />}
       </Button>
       <span className="flex shrink-0 gap-1 tabular-nums">
-        <span className="text-primary">{timecode(frame)}</span>
+        <span className="text-primary-text">{timecode(frame)}</span>
         <span>/</span>
         <span>{timecode(Math.round(DURATION * FPS))}</span>
       </span>
       <Slider
         aria-label="Full screen playhead"
-        className="min-w-8 flex-1 [&_[data-slot=slider-thumb]]:size-2 [&_[data-slot=slider-track]]:h-0.5"
+        appearance="mini"
+        className="min-w-8 flex-1"
         min={0}
         max={end}
         step={1}
@@ -76,7 +78,7 @@ function Controls() {
         value={Math.min(frame, end)}
         onValueChange={(value) => seek(Number(value) / FPS)}
       />
-      <span aria-hidden className="ml-1 h-3 border-l border-white/20" />
+      <span aria-hidden className="border-hairline-strong ml-1 h-3 border-l" />
       <Button variant="quiet" size="icon" aria-label="Leave full screen" onClick={toggleFullscreen}>
         <Minimize />
       </Button>

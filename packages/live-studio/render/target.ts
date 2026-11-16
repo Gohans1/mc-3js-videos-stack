@@ -13,7 +13,7 @@ const findChild = (parent, seg) => {
   return parent.children?.length ? null : (parent.getObjectByName?.(seg) ?? null);
 };
 
-export const findTarget = ({ scene, camera, bones, objects }, name) => {
+export const findTarget = ({ scene, camera, bones, objects } = {}, name) => {
   if (name === "cam") return camera;
   const direct =
     bones?.[name] ??
@@ -72,7 +72,7 @@ const dotNames = (bones, objects) => {
   return out;
 };
 
-export const targetHelp = ({ bones, objects }, name, { camera = true } = {}) => {
+export const targetHelp = ({ bones, objects } = {}, name, { camera = true } = {}) => {
   const names = [
     ...new Set([
       ...(camera ? ["cam"] : []),

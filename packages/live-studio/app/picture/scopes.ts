@@ -10,20 +10,31 @@ import { tone } from "../timeline/canvas";
 const W = 256,
   H = 144,
   LEVELS = 256;
-const tmp = (w: number, h: number) => {
+type ScopeCanvas = { c: HTMLCanvasElement; x: CanvasRenderingContext2D; img: ImageData };
+const tmp = (w: number, h: number): ScopeCanvas => {
   const c = Object.assign(document.createElement("canvas"), { width: w, height: h });
   return { c, x: c.getContext("2d")!, img: new ImageData(w, h) };
 };
-const parade = tmp(W * 3, LEVELS),
-  wave = tmp(W, LEVELS),
+let parade: ScopeCanvas,
+  wave: ScopeCanvas,
+  vector: ScopeCanvas,
+  bins: [Uint16Array, Uint16Array, Uint16Array],
+  vCount: Uint16Array,
+  vSum: Float32Array,
+  rgba: Uint8Array,
+  ready = false;
+
+const ensureBuffers = () => {
+  if (ready) return;
+  ready = true;
+  parade = tmp(W * 3, LEVELS);
+  wave = tmp(W, LEVELS);
   vector = tmp(LEVELS, LEVELS);
-const bins = [
-  new Uint16Array(W * LEVELS),
-  new Uint16Array(W * LEVELS),
-  new Uint16Array(W * LEVELS),
-];
-const vCount = new Uint16Array(LEVELS * LEVELS),
+  bins = [new Uint16Array(W * LEVELS), new Uint16Array(W * LEVELS), new Uint16Array(W * LEVELS)];
+  vCount = new Uint16Array(LEVELS * LEVELS);
   vSum = new Float32Array(LEVELS * LEVELS * 3);
+  rgba = new Uint8Array(W * H * 4);
+};
 
 // How bright a bin draws: a level a few pixels share still shows, a flat stretch of picture doesn't burn out
 const glow = (count: number, per: number) => Math.min(255, Math.sqrt(count / per) * 900);
@@ -41,6 +52,7 @@ let asked = 0,
   next: ImageBitmap | null = null;
 export const measureScopes = (src: HTMLCanvasElement | null) => {
   if (!src || !get().scopes) return;
+  ensureBuffers();
   const now = performance.now();
   if (S.playing && now - last < 100) return;
   last = now;
@@ -80,7 +92,6 @@ const readAll = async () => {
 // WebGL or canvas way (getImageData, VideoFrame.copyTo, readPixels into a pixel buffer behind a fence) makes a call that waits
 // on Chrome's GPU process, about 24 ms while the film plays: a hitch in the film at every reading (measured). A browser
 // without WebGPU reads through a canvas, hitches and all
-const rgba = new Uint8Array(W * H * 4);
 type Gpu = { device: GPUDevice; frame: GPUTexture; out: GPUBuffer } | null;
 let gpu: Promise<Gpu> | null = null,
   flat: OffscreenCanvasRenderingContext2D | null = null;
@@ -213,14 +224,14 @@ const TARGETS = [
   [0, 191, 0, "G"],
   [191, 191, 0, "Yl"],
 ] as const;
-const GRID = "rgba(255,255,255,0.14)",
-  LABEL = "rgba(255,255,255,0.45)";
 
 const paint = (
   pane: HTMLCanvasElement,
   from: HTMLCanvasElement,
   kind: "parade" | "wave" | "vector",
 ) => {
+  const grid = tone("hairline-strong"),
+    label = tone("muted-foreground");
   const dpr = devicePixelRatio,
     w = Math.round(pane.clientWidth * dpr),
     h = Math.round(pane.clientHeight * dpr);
@@ -240,7 +251,7 @@ const paint = (
       cx = w / 2,
       cy = h / 2;
     x.drawImage(from, ox, oy, s, s);
-    x.strokeStyle = GRID;
+    x.strokeStyle = grid;
     x.lineWidth = dpr;
     x.beginPath();
     x.arc(cx, cy, s / 2, 0, Math.PI * 2);
@@ -255,7 +266,7 @@ const paint = (
     x.moveTo(cx, cy);
     x.lineTo(cx + (Math.cos(skin) * s) / 2, cy + (Math.sin(skin) * s) / 2);
     x.stroke();
-    x.fillStyle = LABEL;
+    x.fillStyle = label;
     x.textAlign = "center";
     for (const [r, g, b, name] of TARGETS) {
       const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b,
@@ -272,9 +283,9 @@ const paint = (
     at = (v: number) => bottom - (v / 1023) * (bottom - top);
   x.imageSmoothingEnabled = true;
   x.drawImage(from, pad, top, w - pad - 4 * dpr, bottom - top);
-  x.strokeStyle = GRID;
+  x.strokeStyle = grid;
   x.lineWidth = dpr;
-  x.fillStyle = LABEL;
+  x.fillStyle = label;
   x.textAlign = "right";
   for (const v of [0, 256, 512, 768, 1023]) {
     x.beginPath();
@@ -299,12 +310,12 @@ const paint = (
       white = `White ${pct(clipped.white)}%   `,
       bw = x.measureText(black).width,
       ww = x.measureText(white).width;
-    x.fillStyle = "rgba(0,0,0,0.78)";
+    x.fillStyle = tone("scrim-strong");
     x.fillRect(w - 12 * dpr - bw - ww, y - 8 * dpr, bw + ww + 8 * dpr, 16 * dpr);
     x.textAlign = "right";
-    x.fillStyle = clipped.black > 0.02 ? tone("warn") : LABEL;
+    x.fillStyle = clipped.black > 0.02 ? tone("warn") : label;
     x.fillText(black, w - 8 * dpr, y);
-    x.fillStyle = clipped.white > 0.02 ? tone("warn") : LABEL;
+    x.fillStyle = clipped.white > 0.02 ? tone("warn") : label;
     x.fillText(white, w - 8 * dpr - bw, y);
   }
 };

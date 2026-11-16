@@ -24,16 +24,45 @@ import { audibleName, clipBeats, clipOf, edit, locked, snapshot, span } from "./
 
 type Status = { kind: "idle" } | { kind: "analyzing" } | { kind: "error"; message: string };
 
+function BeatAtPlayhead({
+  clip,
+  disabled,
+  marks,
+}: {
+  clip: Parameters<typeof clipOf>[0];
+  disabled: boolean;
+  marks: readonly number[];
+}) {
+  useFrame();
+  const [from, to] = clip ? span(clip) : [0, 0],
+    u = r3(S.t - from),
+    here = marks.find((t) => Math.abs(t - u) < 0.5 / FPS);
+  const toggle = () => {
+    if (!clip || disabled || u < 0 || u >= to - from) return;
+    edit((l) => {
+      const x = l[clip.list][clip.i],
+        name = audibleName(x);
+      if (!name) return;
+      const old = (x.beatSource ?? x.name) === name ? (x.beats ?? []) : [];
+      x.beats =
+        here === undefined ? [...old, u].sort((a, b) => a - b) : old.filter((t) => t !== here);
+      x.beatSource = name;
+    });
+  };
+  return (
+    <DropdownMenuItem disabled={u < 0 || u >= to - from} onClick={toggle}>
+      {here === undefined ? "Add beat at playhead" : "Remove beat at playhead"}
+    </DropdownMenuItem>
+  );
+}
+
 export function BeatMenu() {
   const clip = useStudio((s) => s.clip);
   useStudio((s) => s.soundRev);
-  useFrame();
+  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const c = clipOf(clip),
-    [from, to] = clip ? span(clip) : [0, 0],
-    u = r3(S.t - from);
-  const marks = clip ? clipBeats(clip) : [],
-    here = marks.find((t) => Math.abs(t - u) < 0.5 / FPS);
+    marks = clip ? clipBeats(clip) : [];
   const disabled = !clip || !c || locked(clip) || status.kind === "analyzing";
   const clear = () => {
     if (clip && !disabled)
@@ -55,6 +84,7 @@ export function BeatMenu() {
     }
     setStatus({ kind: "analyzing" });
     try {
+      const [from, to] = span(clip);
       const settings = processSpec(
         { ...c, name, start: name === c.name ? c.start : 0 },
         to - from,
@@ -98,20 +128,8 @@ export function BeatMenu() {
       say(message, 6000);
     }
   };
-  const toggle = () => {
-    if (!clip || disabled || u < 0 || u >= to - from) return;
-    edit((l) => {
-      const x = l[clip.list][clip.i],
-        name = audibleName(x);
-      if (!name) return;
-      const old = (x.beatSource ?? x.name) === name ? (x.beats ?? []) : [];
-      x.beats =
-        here === undefined ? [...old, u].sort((a, b) => a - b) : old.filter((t) => t !== here);
-      x.beatSource = name;
-    });
-  };
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <Tip
         label={
           status.kind === "analyzing"
@@ -162,9 +180,7 @@ export function BeatMenu() {
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={u < 0 || u >= to - from} onClick={toggle}>
-          {here === undefined ? "Add beat at playhead" : "Remove beat at playhead"}
-        </DropdownMenuItem>
+        {open && <BeatAtPlayhead clip={clip} disabled={disabled} marks={marks} />}
       </DropdownMenuContent>
     </DropdownMenu>
   );

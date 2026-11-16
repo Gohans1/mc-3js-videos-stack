@@ -11,7 +11,7 @@ import { say, showError } from "./store";
 
 export interface Doc<T> {
   readonly data: T | null;
-  load: (query?: string) => Promise<Response | null>; // the server's answer, for what else it sent (the sound library)
+  load: (query?: string, onJson?: (got: unknown) => void) => Promise<Response | null>; // the server's answer, for what else it sent (the sound library)
   edit: (change: (d: T) => void) => void;
   preview: (change: (d: T) => void) => void; // drawn, not kept: a drag's end makes it one edit
   snapshot: () => string;
@@ -48,6 +48,16 @@ const undos: Entry[] = [],
 // Edits made inside together() (one drag over keys in two files) are undone, redone and saved as one
 let group = 0,
   touched: Set<Side> | null = null;
+const mutListeners = new Set<() => void>();
+export const onDocMutated = (fn: () => void) => {
+  mutListeners.add(fn);
+  return () => {
+    mutListeners.delete(fn);
+  };
+};
+const emitMutated = () => {
+  for (const fn of mutListeners) fn();
+};
 const link = (sides: Iterable<Side>) => {
   const all = [...sides];
   for (const s of all) for (const o of all) if (o !== s) s.partners.add(o);
@@ -175,6 +185,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       hooks.tidy?.(data!);
       kept = JSON.stringify(data);
       hooks.changed();
+      emitMutated();
       hooks.replaced?.(old);
       side.later();
       return was;
@@ -189,15 +200,17 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     hooks.tidy?.(data);
     kept = JSON.stringify(data);
     hooks.changed();
+    emitMutated();
     hooks.replaced?.(old);
   };
   const release = () => {
     if (held && !shown) take(held);
   };
-  const load = async (query = "") => {
+  const load = async (query = "", onJson?: (got: unknown) => void) => {
     const r = await getFile(`/api/${name}${query}`);
     if (!r.ok) return null;
-    const got: Got<T> = await r.clone().json();
+    const got = (await r.json()) as Got<T>;
+    onJson?.(got);
     if (side.unsaved || side.saving) return r; // our own change is on its way
     if (got.version === side.version) return r; // news of this page's own save, or a reconnect with nothing new
     if (shown) held = got;
@@ -232,6 +245,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       kept = next;
       side.unsaved = true;
       hooks.changed();
+      emitMutated();
       side.later();
     },
     preview: (change: (d: T) => void) => {

@@ -2,11 +2,11 @@
 // because orbiting a target leaves these small rooms at once. It flies like Minecraft's creative flight (flight.ts)
 import * as THREE from "three";
 
-import { S } from "../core/state";
+import { S, wake } from "../core/state";
 import { get, say, set } from "../core/store";
 import { createFlight } from "./flight";
 
-export const flight = createFlight();
+export const flight = createFlight(() => wake("render"));
 // One frame's flying, by the time that passed since the last
 export const fly = (dt: number) => {
   if (S.tools?.free.on) {

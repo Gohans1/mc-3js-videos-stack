@@ -5,10 +5,10 @@
 // and Out bands on the camera row trim by dragging their inner edge.
 import type { AnimCurve } from "film-stage/animate";
 import type { AnimFx } from "film/scene";
-import { DURATION, SHOTS_OUT } from "film/scene";
 
 import { timingClock } from "../../src/timing-state.mjs";
 import { shotIndex } from "../core/film";
+import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { type Side, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";

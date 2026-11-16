@@ -5,23 +5,36 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  realpathSync,
+  readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cliArgs, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
+import { cliArgs, envTypos, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
 import {
   rhubarbPath,
   shapeTake,
   speakingTakes,
   writeMouthMap,
 } from "../../packages/live-studio/src/mouth-map.mjs";
-import { assertInsideDir, wordsCommand } from "../../packages/live-studio/src/voice-map.mjs";
-import { stripAudioTags, sts, tts } from "./genvoice.ts";
+import { startJob } from "../../packages/live-studio/src/tell.mjs";
+import {
+  assertInsideDir,
+  unalignedTakes,
+  wordsCommand,
+} from "../../packages/live-studio/src/voice-map.mjs";
+import {
+  MAX_AUDIO_BYTES,
+  resolveVoiceProvider,
+  sanitizeErrorText,
+  stripAudioTags,
+  sts,
+  tts,
+} from "./genvoice.ts";
 
 const HELP = `Narration takes for the lines in src/edit.json "takes", from ElevenLabs (via genvoice.pro unless ELEVENLABS_API_KEY
 is set). Run inside the film. Credits are spent only with --yes; without it every run only previews.
@@ -46,9 +59,29 @@ interface StoredRequestId {
   model: string;
 }
 
-const inside = (root: string, file: string) => {
-  const r = relative(root, file);
-  return Boolean(r) && !r.startsWith("..") && !isAbsolute(r);
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  Boolean(v) && typeof v === "object" && !Array.isArray(v);
+
+let tmpSeq = 0;
+const atomicWriteText = (out: string, text: string) => {
+  const target = resolve(out);
+  const part = `${target}.${process.pid}.${Date.now()}.${++tmpSeq}.part`;
+  try {
+    writeFileSync(part, text, "utf8");
+    renameSync(part, target);
+  } catch (err) {
+    rmSync(part, { force: true });
+    throw err;
+  }
+};
+
+const readTextMap = (file: string, filmDir: string, label: string): Record<string, string> => {
+  if (!existsSync(file)) return {};
+  const raw = jsonFile(file, filmDir);
+  if (!isPlainObject(raw)) {
+    throw new Error(`${label} must be a JSON object`);
+  }
+  return raw as Record<string, string>;
 };
 
 const freshReqId = (
@@ -66,7 +99,7 @@ const freshReqId = (
 
 interface TakeSpec {
   id: string;
-  text: string;
+  text?: string;
   t?: number;
   voice?: string;
   model?: string;
@@ -80,32 +113,80 @@ export interface GenRunOptions {
   cwd?: string;
   args?: string[];
   env?: Record<string, string | undefined>;
+  onTake?: (take: TakeSpec) => unknown; // as each take starts, in the order they are made
 }
 
+const ensureRegularOrAbsent = (file: string, label: string) => {
+  let st;
+  try {
+    st = lstatSync(file);
+  } catch {
+    return false;
+  }
+  if (st.isSymbolicLink()) {
+    throw new Error(`${label} cannot be a symlink or junction: "${file}"`);
+  }
+  if (!st.isFile()) {
+    throw new Error(`${label} exists as a directory or non-file: "${file}"`);
+  }
+  return true;
+};
+
+const ensureDirOrAbsent = (dir: string, label: string) => {
+  let st;
+  try {
+    st = lstatSync(dir);
+  } catch {
+    return;
+  }
+  if (st.isSymbolicLink() || !st.isDirectory()) {
+    throw new Error(`${label} must be a regular directory: "${dir}"`);
+  }
+};
+
 const hasTakeAudio = (dir: string, stem: string) =>
-  existsSync(join(dir, `${stem}.mp3`)) || existsSync(join(dir, `${stem}.wav`));
+  [".mp3", ".wav"].some((ext) => {
+    try {
+      const st = lstatSync(join(dir, `${stem}${ext}`));
+      return !st.isSymbolicLink() && st.isFile();
+    } catch {
+      return false;
+    }
+  });
+
+const staleTakeArtifacts = (filmDir: string, takesDir: string, id: string) =>
+  [`${id}.wav`, `${id}.wav.words.json`, `${id}.mp3.mouth.json`, `${id}.wav.mouth.json`].map(
+    (name) => assertInsideDir(filmDir, join(takesDir, name), "Voice take artifact"),
+  );
 
 // Takes whose kept words (whisperX's, in <take>.words.json) read otherwise than src/edit.json, for the takes voice:gen made
 // before it kept what it sent (voice/takes/.texts.json). Named only: a misheard word reads otherwise too, so nothing is spent
 export const unheardWords = (filmDir: string) => {
-  const takesDir = join(filmDir, "voice/takes");
+  const takesDir = assertInsideDir(filmDir, "voice/takes", "Voice takes directory");
   const plain = (text: string) =>
     stripAudioTags(text)
       .toLowerCase()
       .replace(/[^\p{L}\p{N}]+/gu, " ")
       .trim();
-  const textsFile = join(takesDir, ".texts.json");
-  const kept: Record<string, string> = existsSync(textsFile) ? jsonFile(textsFile, filmDir) : {};
+  const textsFile = assertInsideDir(filmDir, join(takesDir, ".texts.json"), "Take texts file");
+  const kept = readTextMap(textsFile, filmDir, "voice/takes/.texts.json");
+  const rawEdit = jsonFile(assertInsideDir(filmDir, "src/edit.json", "src/edit.json"), filmDir);
   const takes: TakeSpec[] =
-    (jsonFile(join(filmDir, "src/edit.json"), filmDir) as { takes?: TakeSpec[] }).takes ?? [];
+    isPlainObject(rawEdit) && Array.isArray(rawEdit.takes) ? (rawEdit.takes as TakeSpec[]) : [];
   return takes.flatMap((t) => {
-    if (kept[t.id] !== undefined || typeof t.text !== "string") return [];
+    if (typeof kept[t.id] === "string" || typeof t.text !== "string") return [];
     const wordsFile = [`${t.id}.mp3`, `${t.id}.wav`]
-      .map((f) => join(takesDir, `${f}.words.json`))
-      .find(existsSync);
+      .map((f) => assertInsideDir(filmDir, join(takesDir, `${f}.words.json`), "Take words file"))
+      .find((f) => existsSync(f) && statSync(f).isFile());
     if (!wordsFile) return [];
-    const heard = ((jsonFile(wordsFile, filmDir) as { words?: { w: string }[] }).words ?? [])
-      .map((w) => w.w)
+    const rawWords = jsonFile(wordsFile, filmDir);
+    const words =
+      isPlainObject(rawWords) && Array.isArray(rawWords.words)
+        ? (rawWords.words as { w?: unknown }[])
+        : [];
+    const heard = words
+      .map((w) => (typeof w?.w === "string" ? w.w : ""))
+      .filter(Boolean)
       .join(" ");
     return heard && plain(heard) !== plain(t.text) ? [{ id: t.id, heard, text: t.text }] : [];
   });
@@ -115,6 +196,14 @@ const nextTryOut = (tryDir: string, id: string) => {
   let n = 1;
   while (hasTakeAudio(tryDir, `${id}_${n}`)) n++;
   return join(tryDir, `${id}_${n}.mp3`);
+};
+
+const previewTryOuts = (tryDir: string, id: string, count: number) => {
+  const outs: string[] = [];
+  for (let n = 1; outs.length < count; n++) {
+    if (!hasTakeAudio(tryDir, `${id}_${n}`)) outs.push(`voice/try/${id}_${n}.mp3`);
+  }
+  return outs;
 };
 
 // asked wrong (exit 2), as against a take or a request that failed (exit 1)
@@ -128,6 +217,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   let trying = false,
     dryRun = false,
     confirmed = false,
+    sawTakes = false,
     takesCount = 1,
     cliGuide: string | undefined;
   const names: string[] = [];
@@ -136,21 +226,26 @@ export const runGen = async (opts: GenRunOptions = {}) => {
     if (a === "--try") trying = true;
     else if (a === "--dry-run") dryRun = true;
     else if (a === "--yes") confirmed = true;
-    else if (a === "--takes") {
-      const rawTakes = args[++i] ?? "";
+    else if (a === "--takes" || a.startsWith("--takes=")) {
+      sawTakes = true;
+      const rawTakes = a.startsWith("--takes=") ? a.slice("--takes=".length) : (args[++i] ?? "");
       if (!/^[1-9]\d*$/.test(rawTakes) || Number(rawTakes) > 20) {
         throw usage("--takes requires an integer between 1 and 20");
       }
       takesCount = Number(rawTakes);
-    } else if (a === "--guide") {
-      const next = args[++i];
-      if (!next || next.startsWith("-")) {
+    } else if (a === "--guide" || a.startsWith("--guide=")) {
+      const next = a.startsWith("--guide=") ? a.slice("--guide=".length) : args[++i];
+      if (!next || !next.trim() || next.startsWith("-")) {
         throw usage("--guide requires a path to a guide audio file");
       }
       cliGuide = next;
-    } else if (!a.startsWith("--")) names.push(a);
+    } else if (a.startsWith("-")) {
+      throw usage(`Unknown option "${a}"`);
+    } else {
+      names.push(a);
+    }
   }
-  if (takesCount > 1 && !trying) {
+  if (sawTakes && !trying) {
     throw usage(
       "--takes N makes N new tries of a take: add --try (bun run voice:gen --try ID --takes 3)",
     );
@@ -166,17 +261,62 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   }
 
   const editPath = assertInsideDir(filmDir, "src/edit.json", "src/edit.json");
-  const edit = jsonFile(editPath, filmDir) as {
-    takes?: TakeSpec[];
-  };
-  const ordered = edit.takes ?? [];
+  if (!existsSync(editPath)) {
+    throw new Error(
+      'Missing src/edit.json: create it with "takes": [{"id": "01", "text": "..."}] (compare templates/film/src/edit.json)',
+    );
+  }
+  if (!statSync(editPath).isFile()) {
+    throw new Error("src/edit.json must be a file, not a directory");
+  }
+  const rawEdit = jsonFile(editPath, filmDir);
+  if (!isPlainObject(rawEdit)) {
+    throw new Error("src/edit.json must be a JSON object");
+  }
+  if (rawEdit.takes !== undefined && !Array.isArray(rawEdit.takes)) {
+    throw new Error('src/edit.json "takes" must be an array');
+  }
+  const ordered = (rawEdit.takes ?? []) as TakeSpec[];
   const byId = new Map<string, TakeSpec>();
   for (const t of ordered) {
-    if (!t || typeof t.id !== "string" || !TAKE_ID.test(t.id)) {
-      throw new Error(`Invalid take id "${String(t?.id ?? "")}" in src/edit.json`);
+    if (!isPlainObject(t) || typeof t.id !== "string" || !TAKE_ID.test(t.id)) {
+      const rawId = isPlainObject(t) ? t.id : undefined;
+      const idLabel =
+        typeof rawId === "string" || typeof rawId === "number"
+          ? String(rawId)
+          : rawId === undefined
+            ? ""
+            : JSON.stringify(rawId);
+      throw new Error(`Invalid take id "${idLabel}" in src/edit.json`);
     }
     if (byId.has(t.id)) {
       throw new Error(`Duplicate take id "${t.id}" in src/edit.json`);
+    }
+    if (t.text !== undefined && typeof t.text !== "string") {
+      throw new Error(`Take "${t.id}" text must be a string in src/edit.json`);
+    }
+    for (const key of ["voice", "model", "language", "guide"] as const) {
+      const val = t[key];
+      if (val !== undefined && (typeof val !== "string" || !val.trim())) {
+        throw new Error(`Take "${t.id}" ${key} must be a non-empty string in src/edit.json`);
+      }
+    }
+    if (
+      t.speed !== undefined &&
+      (typeof t.speed !== "number" || !Number.isFinite(t.speed) || t.speed <= 0)
+    ) {
+      throw new Error(`Take "${t.id}" speed must be a finite number > 0 in src/edit.json`);
+    }
+    if (
+      t.stability !== undefined &&
+      (typeof t.stability !== "number" ||
+        !Number.isFinite(t.stability) ||
+        t.stability < 0 ||
+        t.stability > 1)
+    ) {
+      throw new Error(
+        `Take "${t.id}" stability must be a finite number between 0 and 1 in src/edit.json`,
+      );
     }
     byId.set(t.id, t);
   }
@@ -190,35 +330,69 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   const voiceRoot = assertInsideDir(filmDir, "voice", "Voice directory");
   const takesDir = assertInsideDir(filmDir, join(voiceRoot, "takes"), "Voice takes directory"),
     tryDir = assertInsideDir(filmDir, join(voiceRoot, "try"), "Voice try directory");
-  mkdirSync(takesDir, { recursive: true });
-  mkdirSync(tryDir, { recursive: true });
+  ensureDirOrAbsent(voiceRoot, "Voice directory");
+  ensureDirOrAbsent(takesDir, "Voice takes directory");
+  if (trying) ensureDirOrAbsent(tryDir, "Voice try directory");
 
   // the words each take's audio was made from: a take whose words changed since is due again (a take made before this
   // file existed is not known, so not offered)
   const textsFile = assertInsideDir(filmDir, join(takesDir, ".texts.json"), "Take texts file");
-  const spoken: Record<string, string> = existsSync(textsFile) ? jsonFile(textsFile, filmDir) : {};
+  ensureRegularOrAbsent(textsFile, "Take texts file");
+  const spoken = readTextMap(textsFile, filmDir, "voice/takes/.texts.json");
   const reworded = (t: TakeSpec) =>
-    hasTakeAudio(takesDir, t.id) && spoken[t.id] !== undefined && spoken[t.id] !== t.text;
+    hasTakeAudio(takesDir, t.id) &&
+    typeof spoken[t.id] === "string" &&
+    spoken[t.id] !== (t.text ?? "");
   const want = names.length
     ? names
-    : trying
-      ? ordered.map((t) => t.id)
-      : ordered.filter((t) => !hasTakeAudio(takesDir, t.id) || reworded(t)).map((t) => t.id);
+    : ordered.filter((t) => !hasTakeAudio(takesDir, t.id) || reworded(t)).map((t) => t.id);
   const wantSet = new Set(want);
+  const guideFor = (t: TakeSpec) => (names.length === 1 && cliGuide ? cliGuide : t.guide);
 
   // checked before a dry run returns, so the dry run says what the real one would fail on
-  const realFilmDir = realpathSync(filmDir);
   for (const t of ordered) {
     if (!wantSet.has(t.id)) continue;
-    const guideRel = names.length === 1 && cliGuide ? cliGuide : t.guide;
-    if (!guideRel) continue;
-    const guideAbs = resolve(filmDir, guideRel);
-    if (!existsSync(guideAbs) || lstatSync(guideAbs).isSymbolicLink()) {
-      throw new Error(`Guide audio file not found: "${guideRel}"`);
+    const guideRel = guideFor(t);
+    if (guideRel) {
+      const guideAbs = assertInsideDir(filmDir, guideRel, "Guide audio file");
+      if (!existsSync(guideAbs) || !statSync(guideAbs).isFile()) {
+        throw new Error(`Guide audio file not found: "${guideRel}"`);
+      }
+      const guideSize = statSync(guideAbs).size;
+      if (guideSize === 0) {
+        throw new Error(`Guide audio file is empty (0 bytes): "${guideRel}"`);
+      }
+      if (guideSize > MAX_AUDIO_BYTES) {
+        throw new Error(
+          `Guide audio file "${guideRel}" exceeds maximum size limit (${MAX_AUDIO_BYTES} bytes)`,
+        );
+      }
+    } else if (typeof t.text !== "string" || !t.text.trim()) {
+      throw new Error(`Take "${t.id}" is missing non-empty text in src/edit.json`);
     }
-    const realGuide = realpathSync(guideAbs);
-    if (!inside(realFilmDir, realGuide) || !statSync(realGuide).isFile()) {
-      throw new Error(`Guide audio file not found inside film directory: "${guideRel}"`);
+    if (trying) {
+      for (const relTry of previewTryOuts(tryDir, t.id, takesCount)) {
+        const absTry = assertInsideDir(filmDir, join(filmDir, relTry), "Voice try output");
+        ensureRegularOrAbsent(absTry, "Voice try output");
+        ensureRegularOrAbsent(
+          assertInsideDir(filmDir, `${absTry}.words.json`, "Take words file"),
+          "Take words file",
+        );
+      }
+    } else {
+      const targetMp3 = assertInsideDir(
+        filmDir,
+        join(takesDir, `${t.id}.mp3`),
+        "Voice take output",
+      );
+      ensureRegularOrAbsent(targetMp3, "Voice take output");
+      ensureRegularOrAbsent(
+        assertInsideDir(filmDir, `${targetMp3}.words.json`, "Take words file"),
+        "Take words file",
+      );
+      for (const stale of staleTakeArtifacts(filmDir, takesDir, t.id)) {
+        ensureRegularOrAbsent(stale, "Voice take artifact");
+      }
     }
   }
   // spending needs --yes (no one is at a prompt to ask); without it, or with --dry-run, the run only says what it would do
@@ -227,42 +401,71 @@ export const runGen = async (opts: GenRunOptions = {}) => {
     return ordered
       .filter((t) => wantSet.has(t.id))
       .flatMap((t) => {
-        const first = trying ? Number(/_(\d+)\.mp3$/.exec(nextTryOut(tryDir, t.id))![1]) : 0;
-        return Array.from({ length: trying ? takesCount : 1 }, (_, k) => ({
+        const guideRel = guideFor(t);
+        const outs = trying
+          ? previewTryOuts(tryDir, t.id, takesCount)
+          : [
+              `${rel(join(takesDir, `${t.id}.mp3`))}${hasTakeAudio(takesDir, t.id) ? `, replacing its audio${reworded(t) ? ": its words changed since" : ""}` : ""}`,
+            ];
+        return outs.map((out) => ({
           id: t.id,
-          out: trying
-            ? `would write voice/try/${t.id}_${first + k}.mp3`
-            : `would write ${rel(join(takesDir, `${t.id}.mp3`))}${hasTakeAudio(takesDir, t.id) ? `, replacing its audio${reworded(t) ? ": its words changed since" : ""}` : ""}`,
-          info: { chars: t.text.length, voice: t.voice ?? DEFAULT_NARRATOR },
+          out: `would write ${out}`,
+          info: guideRel
+            ? { guide: guideRel, chars: 0, voice: t.voice ?? DEFAULT_NARRATOR }
+            : { chars: (t.text ?? "").length, voice: t.voice ?? DEFAULT_NARRATOR },
         }));
       });
   }
 
   const reqFile = assertInsideDir(filmDir, join(takesDir, ".request_ids.json"), "Request IDs file");
-  const reqIds: Record<string, string | StoredRequestId> = existsSync(reqFile)
-    ? jsonFile(reqFile, filmDir)
-    : {};
+  ensureRegularOrAbsent(reqFile, "Request IDs file");
+  let reqIds: Record<string, string | StoredRequestId> = {};
+  if (existsSync(reqFile)) {
+    try {
+      const rawReq = jsonFile(reqFile, filmDir);
+      if (isPlainObject(rawReq)) reqIds = rawReq as Record<string, string | StoredRequestId>;
+      else console.error("ignoring non-object voice/takes/.request_ids.json");
+    } catch (err) {
+      console.error(`ignoring unreadable voice/takes/.request_ids.json: ${(err as Error).message}`);
+    }
+  }
   const saveReqIds = () =>
-    writeFileSync(
+    atomicWriteText(
       assertInsideDir(filmDir, reqFile, "Request IDs file"),
       JSON.stringify(reqIds, null, 1) + "\n",
-      "utf8",
     );
 
   const saveSpoken = (t: TakeSpec) => {
-    spoken[t.id] = t.text;
-    writeFileSync(textsFile, JSON.stringify(spoken, null, 1) + "\n", "utf8");
+    spoken[t.id] = t.text ?? "";
+    atomicWriteText(textsFile, JSON.stringify(spoken, null, 1) + "\n");
   };
 
-  const provider = env.ELEVENLABS_API_KEY ? "elevenlabs" : "genvoice";
-  const apiKey = provider === "elevenlabs" ? env.ELEVENLABS_API_KEY : env.GENVOICE_API_KEY;
-  const apiBase = provider === "elevenlabs" ? env.ELEVENLABS_API_BASE : env.GENVOICE_API_BASE;
+  let provider: "elevenlabs" | "genvoice" = "genvoice",
+    apiKey = "",
+    apiBase = "";
+  if (want.length > 0) {
+    const resolved = resolveVoiceProvider({}, env);
+    provider = resolved.provider;
+    apiKey = resolved.apiKey;
+    apiBase = resolved.apiBase;
+    if (
+      provider !== "elevenlabs" &&
+      ordered.some((t) => wantSet.has(t.id) && Boolean(guideFor(t)))
+    ) {
+      throw new Error(
+        "Speech-to-Speech (Voice Changer) requires ELEVENLABS_API_KEY (api.genvoice.pro/v1 returns 405 on /speech-to-speech)",
+      );
+    }
+    mkdirSync(takesDir, { recursive: true });
+    if (trying) mkdirSync(tryDir, { recursive: true });
+  }
 
   // Walk in narrative order so sequential takes feed request IDs and prosody into neighbors of the same voice
   const results: { id: string; out: string; info: unknown }[] = [];
   for (let idx = 0; idx < ordered.length; idx++) {
     const t = ordered[idx];
     if (!wantSet.has(t.id)) continue;
+    await opts.onTake?.(t);
     const voiceId = t.voice ?? DEFAULT_NARRATOR;
     const model = t.model ?? "eleven_v4";
     const now = Date.now();
@@ -285,7 +488,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
       .filter((id): id is string => Boolean(id))
       .slice(0, 3);
 
-    const guideRel = names.length === 1 && cliGuide ? cliGuide : t.guide;
+    const guideRel = guideFor(t);
     const repeats = trying ? takesCount : 1;
     for (let c = 0; c < repeats; c++) {
       const out = assertInsideDir(
@@ -293,14 +496,12 @@ export const runGen = async (opts: GenRunOptions = {}) => {
         trying ? nextTryOut(tryDir, t.id) : join(takesDir, `${t.id}.mp3`),
         "Voice take output",
       );
-      const staleWav = assertInsideDir(filmDir, join(takesDir, `${t.id}.wav`), "Voice take wav");
-      const staleWords = assertInsideDir(
-        filmDir,
-        join(takesDir, `${t.id}.wav.words.json`),
-        "Voice take words",
-      );
+      const staleOutputs = trying ? [] : staleTakeArtifacts(filmDir, takesDir, t.id);
+      let usedModel = model;
+      let info: Awaited<ReturnType<typeof tts>> | Awaited<ReturnType<typeof sts>>;
       if (guideRel) {
-        const info = await sts({
+        usedModel = "eleven_multilingual_sts_v2";
+        info = await sts({
           voiceId,
           audioPath: resolve(filmDir, guideRel),
           out,
@@ -310,25 +511,10 @@ export const runGen = async (opts: GenRunOptions = {}) => {
           apiBase,
           env,
         });
-        if (!trying) {
-          rmSync(staleWav, { force: true });
-          rmSync(staleWords, { force: true });
-          saveSpoken(t);
-          if (info.requestId) {
-            reqIds[t.id] = {
-              id: info.requestId,
-              at: Date.now(),
-              voiceId,
-              model: "eleven_multilingual_sts_v2",
-            };
-            saveReqIds();
-          }
-        }
-        results.push({ id: t.id, out, info });
       } else {
-        const info = await tts({
+        info = await tts({
           voiceId,
-          text: t.text,
+          text: t.text ?? "",
           out,
           model,
           language: t.language,
@@ -343,108 +529,216 @@ export const runGen = async (opts: GenRunOptions = {}) => {
           apiBase,
           env,
         });
-        if (!trying) {
-          rmSync(staleWav, { force: true });
-          rmSync(staleWords, { force: true });
-          saveSpoken(t);
-          if (info.requestId) {
-            reqIds[t.id] = { id: info.requestId, at: Date.now(), voiceId, model };
-            saveReqIds();
-          }
-        }
-        results.push({ id: t.id, out, info });
       }
+      if (!trying) {
+        for (const stale of staleOutputs) rmSync(stale, { force: true });
+        saveSpoken(t);
+        if (info.requestId) {
+          reqIds[t.id] = { id: info.requestId, at: Date.now(), voiceId, model: usedModel };
+          saveReqIds();
+        }
+      }
+      results.push({ id: t.id, out, info });
     }
   }
 
   return results;
 };
 
-const isMain =
-  process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-if (isMain) {
-  cliArgs(HELP, ["--try", "--takes N", "--guide FILE", "--dry-run", "--yes"]);
-  const film = needFilm(process.env.LIVE_PROJECT);
-  const results = await runGen({ cwd: film }).catch((e: Error & { usage?: boolean }) => {
-    console.error(e.message);
-    process.exit(e.usage ? 2 : 1);
-  });
-  for (const r of results) console.log(r.id, r.out, JSON.stringify(r.info));
-  const sent = process.argv.includes("--yes") && !process.argv.includes("--dry-run");
-  if (results.length && !sent) {
-    const real = [
-      ...process.argv.slice(2).filter((a) => a !== "--dry-run" && a !== "--yes"),
-      "--yes",
-    ];
-    const chars = results.reduce((n, r) => n + ((r.info as { chars?: number }).chars ?? 0), 0);
-    const what =
-      results.length === 1
-        ? `this ${process.argv.includes("--try") ? "try" : "take"}`
-        : `these ${results.length} ${process.argv.includes("--try") ? "tries" : "takes"}`;
-    console.log(
-      `nothing sent.\nnext: bun run voice:gen ${real.join(" ")} sends ${what} (${chars} characters, billed by the character)`,
-    );
-  }
-  // a take said on screen gets its mouth shapes now (Rhubarb, local): a failure here leaves the audio and names voice:lips
-  if (sent && !process.argv.includes("--try")) {
-    const made = new Set(results.map((r) => r.out));
-    const lips = speakingTakes(film).filter((k) => made.has(k.audio) && !k.fresh);
-    if (lips.length && !existsSync(rhubarbPath()))
-      console.error(
-        `no Rhubarb Lip Sync at ${rhubarbPath()} for the mouth shapes of ${lips.map((k) => k.id).join(", ")} (INSTALL.md, the lip sync row): bun run voice:lips once it is there`,
-      );
-    else if (lips.length) {
-      for (const k of lips)
-        try {
-          console.log(
-            `take ${k.id} (by ${k.by}): ${shapeTake(k, stripAudioTags(k.text ?? "")).length} mouth shapes`,
-          );
-        } catch (e) {
-          console.error(`take ${k.id}: ${(e as Error).message}: bun run voice:lips tries again`);
-        }
-      writeMouthMap(film);
+const shellQuote = (s: string) => (/[\s"'$`]/.test(s) ? `"${s.replace(/(["$`])/g, "\\$1")}"` : s);
+
+const resolveExecutable = (cmd: string): string | null => {
+  if (/[\\/]/.test(cmd)) {
+    try {
+      return statSync(cmd).isFile() ? cmd : null;
+    } catch {
+      return null;
     }
   }
-  // voice:assemble needs every take's word timings and a genvoice.pro take comes without them: whisperX writes them now
-  const unaligned =
-    sent && !process.argv.includes("--try")
-      ? results.map((r) => r.out).filter((out) => !existsSync(`${out}.words.json`))
-      : [];
-  if (unaligned.length) {
-    const [py, ...args] = wordsCommand(unaligned);
-    console.log(
-      `aligning the words of ${unaligned.length === 1 ? "this take" : `these ${unaligned.length} takes`} with whisperX (a few minutes on a CPU)...`,
-    );
-    // its stderr is library warnings on every run: shown only when it fails
-    const run = existsSync(py)
-      ? spawnSync(py, args, { encoding: "utf8", timeout: 20 * 60_000 })
-      : null;
-    if (run?.stdout) process.stdout.write(run.stdout);
-    if (run?.status !== 0) {
-      if (run?.stderr) console.error(run.stderr.trim().split(/\r?\n/).slice(-15).join("\n"));
-      console.error(
-        `${run ? "whisperX failed" : `no whisperX python at ${py} (WHISPERX_PYTHON names one: INSTALL.md)`}: the audio is saved, only its word timings are missing, and bun run voice:assemble needs them: bun run voice:align`,
-      );
-      process.exit(1);
-    }
+  return Bun.which(cmd);
+};
+
+const hasValidMouthFile = (shapes: string) => {
+  try {
+    const data = JSON.parse(readFileSync(shapes, "utf8")) as { cues?: unknown };
+    return Array.isArray(data?.cues) && data.cues.length > 0;
+  } catch {
+    return false;
   }
-  if (results.length && sent)
-    console.log(
-      process.argv.includes("--try")
-        ? "next: hear the tries in the studio and keep one there (they are in voice/try), then bun run voice:assemble"
-        : "next: bun run voice:assemble lays them on the film",
-    );
-  if (!results.length) {
-    const ids = (
-      (jsonFile(join(film, "src/edit.json"), film) as { takes?: { id: string }[] }).takes ?? []
-    ).map((t) => t.id);
-    console.log(
-      `nothing to generate: every take in src/edit.json has audio in voice/takes. Redo some: bun run voice:gen ${ids[0] ?? "ID"} previews it (the ids: ${ids.join(", ") || "none yet"}); new tries beside them: --try ID`,
-    );
-  }
-  if (!process.argv.slice(2).some((a) => !a.startsWith("-")))
+};
+
+const printUnheardWords = (film: string, hasExplicitIds: boolean) => {
+  if (hasExplicitIds) return;
+  try {
     for (const u of unheardWords(film))
       console.log(
         `take ${u.id}: its audio says "${u.heard}", src/edit.json says "${u.text}". Reworded since? bun run voice:gen ${u.id} previews it again (a misheard word reads otherwise too)`,
       );
+  } catch (err) {
+    console.error(`skipping word-mismatch check: ${(err as Error).message}`);
+  }
+};
+
+const isMain =
+  process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+if (isMain) {
+  cliArgs(HELP, ["--try", "--takes N", "--guide FILE", "--dry-run", "--yes"]);
+  envTypos(["LIVE_PROJECT", "WHISPERX_PYTHON", "THREEJS_LAB", "RHUBARB"]);
+  const film = needFilm(process.env.LIVE_PROJECT);
+  const cliRest = process.argv.slice(2);
+  const trying = cliRest.includes("--try");
+  const sent = cliRest.includes("--yes") && !cliRest.includes("--dry-run");
+  const hasExplicitIds = cliRest.some((a) => !a.startsWith("-"));
+  const redact = (msg: string) =>
+    sanitizeErrorText(msg, process.env.ELEVENLABS_API_KEY, process.env.GENVOICE_API_KEY);
+  // the creator's studio shows each take as it is voiced (src/tell.mjs); a preview spends nothing and says nothing
+  let ended: Awaited<ReturnType<typeof startJob>> | undefined;
+  const finishJob = async (payload: { say: string; level: "ok" | "warn" | "fail" }) => {
+    const end = ended;
+    ended = undefined;
+    await end?.(payload);
+  };
+  const results = await runGen({
+    cwd: film,
+    onTake: sent
+      ? async (t) => {
+          ended = await startJob(film, "voice:gen", {
+            say: t.text
+              ? `Voicing take ${t.id}: "${stripAudioTags(t.text)}"`
+              : `Voicing take ${t.id} (from guide)`,
+          });
+        }
+      : undefined,
+  }).catch(async (e: Error & { usage?: boolean }) => {
+    const msg = redact(e.message);
+    console.error(msg);
+    await finishJob({ say: `Voicing stopped: ${msg}`, level: "fail" });
+    process.exit(e.usage ? 2 : 1);
+  });
+  try {
+    for (const r of results) console.log(r.id, r.out, JSON.stringify(r.info));
+    if (results.length && !sent) {
+      printUnheardWords(film, hasExplicitIds);
+      const real = [
+        ...cliRest.filter((a) => a !== "--dry-run" && a !== "--yes").map(shellQuote),
+        "--yes",
+      ];
+      const chars = results.reduce((n, r) => n + ((r.info as { chars?: number }).chars ?? 0), 0);
+      const guideCount = results.filter((r) =>
+        Boolean((r.info as { guide?: unknown }).guide),
+      ).length;
+      const what =
+        results.length === 1
+          ? `this ${trying ? "try" : "take"}`
+          : `these ${results.length} ${trying ? "tries" : "takes"}`;
+      const billing =
+        guideCount === 0
+          ? `${chars} characters, billed by the character`
+          : guideCount === results.length
+            ? `${results.length === 1 ? "voice changer" : `${results.length} voice changer takes`}, billed by ElevenLabs STS credits`
+            : `${chars} TTS characters + ${guideCount} voice changer`;
+      console.log(
+        `nothing sent.\nnext: bun run voice:gen ${real.join(" ")} sends ${what} (${billing})`,
+      );
+    }
+    // a take said on screen gets its mouth shapes now (Rhubarb, local): a failure here leaves the audio and names voice:lips
+    let lipsFailed = false;
+    if (sent && !trying) {
+      const madeIds = new Set(results.map((r) => r.id));
+      const lips = speakingTakes(film).filter(
+        (k) => madeIds.has(k.id) && (!k.fresh || !hasValidMouthFile(k.shapes)),
+      );
+      if (lips.length && !resolveExecutable(rhubarbPath())) {
+        lipsFailed = true;
+        console.error(
+          `no Rhubarb Lip Sync at ${rhubarbPath()} for the mouth shapes of ${lips.map((k) => k.id).join(", ")} (INSTALL.md, the lip sync row): bun run voice:lips once it is there`,
+        );
+      } else if (lips.length) {
+        for (const k of lips)
+          try {
+            const cues = shapeTake(k, stripAudioTags(k.text ?? ""));
+            if (!cues.length) {
+              rmSync(k.shapes, { force: true });
+              throw new Error("Rhubarb produced 0 mouth shapes");
+            }
+            console.log(`take ${k.id} (by ${k.by}): ${cues.length} mouth shapes`);
+          } catch (e) {
+            lipsFailed = true;
+            console.error(`take ${k.id}: ${(e as Error).message}: bun run voice:lips tries again`);
+          }
+        writeMouthMap(film);
+      }
+    }
+    // voice:assemble needs every take's word timings and a genvoice.pro take comes without them: whisperX writes them now
+    const unaligned =
+      sent && !trying
+        ? results.map((r) => r.out).filter((out) => !existsSync(`${out}.words.json`))
+        : [];
+    if (unaligned.length) {
+      const [py, ...args] = wordsCommand(unaligned);
+      console.log(
+        `aligning the words of ${unaligned.length === 1 ? "this take" : `these ${unaligned.length} takes`} with whisperX (a few minutes on a CPU)...`,
+      );
+      // its stderr is library warnings on every run: shown only when it fails
+      const resolvedPy = resolveExecutable(py);
+      const run = resolvedPy
+        ? spawnSync(resolvedPy, args, { encoding: "utf8", timeout: 20 * 60_000 })
+        : null;
+      if (run?.stdout) process.stdout.write(run.stdout);
+      if (run?.status !== 0) {
+        if (run?.stderr) console.error(run.stderr.trim().split(/\r?\n/).slice(-15).join("\n"));
+        else if (run?.error) console.error(run.error.message);
+        console.error(
+          `${run ? "whisperX failed" : `no whisperX python at ${py} (WHISPERX_PYTHON names one: INSTALL.md)`}: the audio is saved, only its word timings are missing, and bun run voice:assemble needs them: bun run voice:align`,
+        );
+        await finishJob({
+          say: `Voiced ${results.length} take${results.length > 1 ? "s" : ""}; their word timings are missing`,
+          level: "warn",
+        });
+        process.exit(1);
+      }
+    }
+    await finishJob({
+      say: lipsFailed
+        ? `Voiced ${results.length} take${results.length > 1 ? "s" : ""}; mouth shapes need bun run voice:lips`
+        : `Voiced ${results.length} take${results.length > 1 ? "s" : ""}: ${results.map((r) => r.id).join(", ")}`,
+      level: lipsFailed ? "warn" : "ok",
+    });
+    if (results.length && sent) {
+      printUnheardWords(film, hasExplicitIds);
+      console.log(
+        trying
+          ? "next: hear the tries in the studio and keep one there (they are in voice/try), then bun run voice:assemble"
+          : lipsFailed
+            ? "next: bun run voice:lips writes their mouth shapes, then bun run voice:assemble"
+            : "next: bun run voice:assemble lays them on the film",
+      );
+    }
+    if (!results.length) {
+      const ids = (
+        (jsonFile(join(film, "src/edit.json"), film) as { takes?: { id: string }[] }).takes ?? []
+      ).map((t) => t.id);
+      if (!ids.length) {
+        console.log(
+          'nothing to generate: src/edit.json has no takes yet.\nnext: add takes to src/edit.json "takes", then bun run voice:gen',
+        );
+      } else {
+        console.log(
+          `nothing to generate: every take in src/edit.json has audio in voice/takes. Redo some: bun run voice:gen ${ids[0]} previews it (the ids: ${ids.join(", ")}); new tries beside them: --try ID`,
+        );
+        printUnheardWords(film, hasExplicitIds);
+        const nextStep = unalignedTakes(film).length
+          ? "bun run voice:align aligns the takes whose word timings are missing"
+          : speakingTakes(film).some((k) => !k.fresh || !hasValidMouthFile(k.shapes))
+            ? "bun run voice:lips writes mouth shapes for speaking takes"
+            : "bun run voice:assemble lays them on the film";
+        console.log(`next: ${nextStep}`);
+      }
+    }
+  } catch (err) {
+    const msg = redact((err as Error).message);
+    console.error(msg);
+    await finishJob({ say: `Voicing failed: ${msg}`, level: "fail" });
+    process.exit(1);
+  }
 }

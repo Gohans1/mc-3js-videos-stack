@@ -64,6 +64,7 @@ export interface TimingClock {
 }
 export function compileTiming(timing: Timing, sourceDuration: number): TimingClock;
 export function frameVisible(clock: TimingClock, t: number): boolean;
+export function visibleOutputAt(clock: TimingClock, source: number): number | null;
 export function frameAt(clock: TimingClock, t: number): number;
 export function segmentAt(
   clock: TimingClock,
@@ -72,7 +73,7 @@ export function segmentAt(
 ): TimingSegment | undefined;
 export function visibleSourceRange(clock: TimingClock, from: number, to: number): [number, number];
 export function playRanges(
-  clock: TimingClock,
+  clock: Pick<TimingClock, "segments">,
   from: number,
   to: number,
 ): { sourceFrom: number; sourceTo: number; from: number; to: number }[];

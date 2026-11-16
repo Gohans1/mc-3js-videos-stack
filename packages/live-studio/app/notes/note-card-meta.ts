@@ -1,29 +1,35 @@
 // Pure metadata and picture-URL helpers shared by NoteList.tsx, notes.ts, scripts/at.ts and tests.
-import { frameAt, type TimingClock } from "../../src/timing.mjs";
+import { frameAt, frameVisible, type TimingClock, visibleOutputAt } from "../../src/timing.mjs";
 
 export interface NoteMediaSource {
   id: string;
   img?: string;
   crop?: unknown;
+  refs?: unknown;
 }
 
 export interface QueuedNoteMedia {
   note: { id: string };
   img?: string | null;
   crop?: string | null;
+  refs?: string[];
 }
 
 export const resolveNoteMedia = (
   note: NoteMediaSource,
   unsentQueue: readonly QueuedNoteMedia[],
-): { thumb: string | null; crop: string | null } => {
+): { thumb: string | null; crop: string | null; refs: string[] } => {
   const queued = unsentQueue.find((x) => x.note.id === note.id);
   const thumb = note.img ? `/api/note-img/${note.id}.jpg` : (queued?.img ?? null);
   const crop =
     typeof note.crop === "string" && note.crop
       ? `/api/note-img/${note.id}_crop.jpg`
       : (queued?.crop ?? null);
-  return { thumb, crop };
+  // the creator's pasted pictures, saved as notes/img/<id>_r<i>.jpg
+  const refs = Array.isArray(note.refs)
+    ? note.refs.map((r) => `/api/note-img/${String(r).split("/").pop()}`)
+    : (queued?.refs ?? []);
+  return { thumb, crop, refs };
 };
 
 // Strip developer file provenance like "silverfish (src/silverfish.ts, game model)" -> "silverfish" for compact card chips
@@ -32,6 +38,36 @@ export const pinShortLabel = (what: string | undefined | null): string | null =>
   if (!trimmed) return null;
   const match = /^(.+?)\s+\([^()]+\)$/.exec(trimmed);
   return match ? match[1].trim() : trimmed;
+};
+
+export const noteNumberMap = (
+  notes: readonly { id: string }[],
+  headerJson?: string | null,
+): Record<string, number> => {
+  if (headerJson) {
+    try {
+      const parsed = JSON.parse(headerJson) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const out: Record<string, number> = {};
+        let valid = true;
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v !== "number" || !Number.isInteger(v) || v < 1) {
+            valid = false;
+            break;
+          }
+          out[k] = v;
+        }
+        if (valid) return out;
+      }
+    } catch {
+      // ignore malformed server header and fall back to list order
+    }
+  }
+  const fallback: Record<string, number> = {};
+  notes.forEach((n, i) => {
+    fallback[n.id] = i + 1;
+  });
+  return fallback;
 };
 
 export const noteShotTitle = (
@@ -88,14 +124,25 @@ export const noteScene = (n: NoteWhere, shots: readonly { t: number; name?: stri
 // Where a note is heard now: its picture (noteScene) through today's Speed and Freeze, else its narration second, which follows
 // voice edits but not Speed or Freeze. A held picture is heard over a stretch: a note whose own second still shows its picture
 // stays there; moved, it goes to the picture's first heard second
+export const noteActionTarget = (num: number | null, timeText: string): string =>
+  num != null ? `#${num} at ${timeText}` : `at ${timeText}`;
+
+export const modKeyLabel = (): string =>
+  typeof navigator !== "undefined" &&
+  /Mac|iP(ad|hone|od)/.test(navigator.platform || navigator.userAgent)
+    ? "⌘"
+    : "Ctrl+";
+
 export const noteSecond = (
   n: NoteWhere & { t: number; srcT?: number | null },
   fromSource: (s: number) => number,
   clock: TimingClock,
   shots: readonly { t: number; name?: string }[] = [],
 ) => {
+  const hasT = typeof n.t === "number" && Number.isFinite(n.t) && n.t >= 0;
   const s = noteScene(n, shots);
-  if (!s) return n.srcT != null ? fromSource(n.srcT) : n.t;
-  if (Math.abs(frameAt(clock, n.t) - s.at) < 0.002) return n.t; // seconds are kept to the millisecond
-  return clock.outputAt(s.at, "before");
+  if (!s) return typeof n.srcT === "number" && Number.isFinite(n.srcT) ? fromSource(n.srcT) : n.t;
+  const matches = hasT && Math.abs(frameAt(clock, n.t) - s.at) < 0.002; // seconds are kept to the millisecond
+  if (matches && frameVisible(clock, n.t)) return n.t;
+  return visibleOutputAt(clock, s.at) ?? (matches ? n.t : clock.outputAt(s.at, "before"));
 };

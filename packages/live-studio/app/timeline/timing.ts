@@ -1,5 +1,4 @@
 import { EDIT } from "film/edit";
-import { DURATION, SHOTS } from "film/scene";
 
 import { remapOutputTime } from "../../src/layer-timing.mjs";
 import { recordLinkage, timingPlan as plan } from "../../src/linkage.mjs";
@@ -22,6 +21,7 @@ import {
 import { type Velocity, velocityCurve } from "../../src/velocity.mjs";
 import { warp } from "../../src/warp.mjs";
 import { createDoc } from "../core/doc";
+import { DURATION, SHOTS } from "../core/filmMeta";
 import { pruneFreezeSelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set, setPref } from "../core/store";

@@ -11,10 +11,9 @@ import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import type { Bind, Elements } from "./core/state";
-import { useStudio } from "./core/store";
 import { Compose } from "./notes/Compose";
 import { NoteList } from "./notes/NoteList";
-import { openNote } from "./notes/notes";
+import { openNote, originOf } from "./notes/notes";
 import { Stage } from "./picture/Stage";
 import { useBoot } from "./shell/boot";
 import { PhoneBar } from "./shell/PhoneBar";
@@ -25,10 +24,9 @@ export function App() {
     if (node) el.current[key] = node;
   };
   useBoot(el);
-  const composing = useStudio((s) => !!s.compose);
   return (
-    // toasts stack above the Note button (its 44 px, its padding and an iPhone's 34 px home bar), never over it
-    <Toaster limit={2} viewportClassName="bottom-20">
+    // toasts stack above the compact Note CTA, never over it
+    <Toaster limit={2} viewportClassName="phone-toast-bottom">
       <TooltipProvider delay={500}>
         <div className="bg-background safe-sides phone-h flex flex-col text-sm landscape:grid landscape:grid-cols-[minmax(0,1fr)_min(42%,22rem)]">
           <div className="landscape:phone-h flex min-h-0 flex-initial flex-col">
@@ -37,22 +35,29 @@ export function App() {
           </div>
           <aside
             aria-label="Notes"
-            className="landscape:phone-h flex flex-1 flex-col border-white/8 landscape:border-l"
+            className="landscape:phone-h border-border/80 flex min-h-0 flex-1 flex-col overflow-hidden landscape:border-l"
           >
-            <Compose inline />
             {/* The list adds nothing to the column's least height (contain-size), so when the keyboard leaves too little
                 room the picture above shrinks and the note box keeps its Save button in view */}
             <div className="flex min-h-0 flex-1 flex-col contain-size">
               <NoteList />
             </div>
-            {!composing && (
-              <div className="safe-bottom flex-none px-3 pt-2">
-                <Button size="xl" className="w-full" onClick={() => openNote(null)}>
-                  <Pencil aria-hidden />
-                  Note
-                </Button>
-              </div>
-            )}
+            <Compose
+              inline
+              dock
+              idleFooter={
+                <div className="safe-bottom-compact motion-safe:animate-in motion-safe:fade-in-0 flex-none px-2.5 pt-1 duration-150">
+                  <Button
+                    size="phone-cta"
+                    className="w-full"
+                    onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
+                  >
+                    <Pencil data-icon="inline-start" aria-hidden />
+                    Note
+                  </Button>
+                </div>
+              }
+            />
           </aside>
         </div>
         <audio ref={bind("audio")} preload="auto" />

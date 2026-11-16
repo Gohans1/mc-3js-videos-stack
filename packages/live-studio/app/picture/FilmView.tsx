@@ -29,10 +29,10 @@ export function FilmView({ bind }: { bind: Bind }) {
       <figure
         hidden={!size}
         aria-label="Film camera"
-        className="shadow-float relative m-0 overflow-hidden rounded-md bg-black ring-1 ring-white/30"
+        className="shadow-float bg-stage ring-hairline-strong relative m-0 overflow-hidden rounded-md ring-1"
       >
         <canvas ref={bind("filmview")} className="block aspect-(--frame) w-full" />
-        <figcaption className="text-picture pointer-events-auto absolute inset-x-0 top-0 flex items-center gap-0.5 bg-black/65 ps-2 pe-0.5 text-xs font-semibold">
+        <figcaption className="text-picture bg-scrim pointer-events-auto absolute inset-x-0 top-0 flex items-center gap-0.5 ps-2 pe-0.5 text-xs font-semibold">
           <span className="min-w-0 flex-1 truncate">Film camera</span>
           {size && (
             <Tip label={`Size: ${NAME[size]}. Click for ${NAME[NEXT[size]]}`}>

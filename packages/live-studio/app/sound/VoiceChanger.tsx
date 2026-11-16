@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Slider } from "@/components/ui/slider";
+import { Slider } from "@/components/Slider";
 import { cn } from "@/lib/utils";
 
 import { Section, ValueBox } from "../components/inspector";

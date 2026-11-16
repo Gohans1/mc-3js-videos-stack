@@ -6,9 +6,9 @@ import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { engine } from "../core/engine";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
-import { select } from "../objects/placed";
 import {
   files,
   fileTitle,
@@ -93,8 +93,8 @@ export function KeyHeads() {
             <button
               type="button"
               title={`${l.row.label}: click to select it on the picture`}
-              onClick={() => select(l.row.path[0])}
-              className="text-label hover:text-foreground focus-visible:ring-ring group-data-[lit=true]:text-primary flex h-full w-full items-center ps-5.5 pe-2 text-start text-xs outline-none group-data-[lit=true]:font-semibold focus-visible:ring-2 focus-visible:ring-inset"
+              onClick={() => engine.selectObject(l.row.path[0])}
+              className="text-label hover:text-foreground focus-visible:ring-ring group-data-[lit=true]:text-primary-text flex h-full w-full items-center ps-5.5 pe-2 text-start text-xs outline-none group-data-[lit=true]:font-semibold focus-visible:ring-2 focus-visible:ring-inset"
             >
               <RowName row={l.row} />
             </button>

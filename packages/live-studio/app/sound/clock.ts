@@ -1,12 +1,40 @@
 // What the page plays itself (options to try, beat sounds, the live sound lanes) runs on the mix's clock: the <audio> element
 // plays the mix, and every 50 ms each player schedules what is due in the next quarter second against it
-import { S } from "../core/state";
+import { S, wake } from "../core/state";
 
-export const audioCtx = new AudioContext();
-// Everything the page plays sums here at the film's own level, where the meter reads it (meter.ts); the volume slider comes after
-export const master = audioCtx.createGain();
-const monitor = audioCtx.createGain();
-master.connect(monitor).connect(audioCtx.destination);
+let ctx: AudioContext | null = null,
+  masterNode: GainNode | null = null,
+  monitorNode: GainNode | null = null,
+  masterLevel = 1;
+const readyHooks = new Set<(ctx: AudioContext, master: GainNode) => void>();
+
+export const hasAudio = () => ctx !== null;
+export const onAudioReady = (fn: (ctx: AudioContext, master: GainNode) => void) => {
+  readyHooks.add(fn);
+  if (ctx && masterNode) fn(ctx, masterNode);
+  return () => {
+    readyHooks.delete(fn);
+  };
+};
+export const getAudio = (): { ctx: AudioContext; master: GainNode } => {
+  if (!ctx || !masterNode || !monitorNode) {
+    ctx = new AudioContext();
+    // Everything the page plays sums here at the film's own level, where the meter reads it (meter.ts); the volume slider comes after
+    masterNode = ctx.createGain();
+    monitorNode = ctx.createGain();
+    const audio = S.el?.audio;
+    if (audio) masterLevel = audio.muted ? 0 : audio.volume;
+    monitorNode.gain.value = masterLevel;
+    masterNode.connect(monitorNode).connect(ctx.destination);
+    for (const hook of readyHooks) hook(ctx, masterNode);
+  }
+  return { ctx, master: masterNode };
+};
+export const getAudioCtx = () => getAudio().ctx;
+export const getMaster = () => getAudio().master;
+export const resumeAudio = () => {
+  void getAudioCtx().resume();
+};
 // Read as a stereo file is: a mono sound comes out of both sides, as ffmpeg makes it stereo in the final mix
 export const STEREO = {
   channelCount: 2,
@@ -41,11 +69,13 @@ export const addPlayer = (p: Player) => {
 
 let sounding: AudioScheduledSourceNode[] = [],
   anchor: { base: number; speed: number; from: number } | null = null;
+export const hasSounding = () => sounding.length > 0;
 export const track = (src: AudioScheduledSourceNode) => {
   src.addEventListener("ended", () => {
     sounding = sounding.filter((s) => s !== src);
   });
   sounding.push(src);
+  wake("audio");
 };
 const silence = () => {
   for (const s of sounding) {
@@ -59,28 +89,38 @@ const silence = () => {
 };
 // Something heard changed (an option picked): what is sounding stops and starts again from here
 export const restart = () => {
-  if (anchor) {
+  if (anchor && ctx) {
     silence();
     tick();
   }
 };
 
-let masterLevel = 1;
-const tick = () => {
+export const syncMonitorGain = () => {
   const audio = S.el?.audio;
-  if (!audio) return;
+  if (!ctx || !monitorNode || !audio) return;
   const level = audio.muted ? 0 : audio.volume;
   if (masterLevel !== level) {
     masterLevel = level;
-    monitor.gain.setTargetAtTime(level, audioCtx.currentTime, 0.015);
+    monitorNode.gain.setTargetAtTime(level, ctx.currentTime, 0.015);
   } // eased, or a slider drag clicks
+};
+
+const tick = () => {
+  const audio = S.el?.audio;
+  if (!audio) return;
+  if (!ctx || !monitorNode) {
+    if (S.playing && !audio.paused && audio.readyState >= 3) getAudio();
+    else return;
+  }
+  const activeCtx = ctx!;
+  syncMonitorGain();
   if (!S.playing || audio.paused || audio.readyState < 3) {
     if (anchor) silence();
     return;
   }
   const now = audio.currentTime,
     speed = audio.playbackRate,
-    base = audioCtx.currentTime - now / speed;
+    base = activeCtx.currentTime - now / speed;
   // A seek shows up as a jump in the sound's clock; small wobble in that clock is ignored, so the rhythm of the presses stays even
   if (!anchor || anchor.speed !== speed || Math.abs(anchor.base - base) > 0.05) {
     silence();
@@ -95,9 +135,22 @@ const tick = () => {
     until,
     ctxAt,
     due: (at) => at >= a.from && at < until && at > now - 0.1,
-    when: (at) => Math.max(audioCtx.currentTime, ctxAt(at)),
+    when: (at) => Math.max(activeCtx.currentTime, ctxAt(at)),
   };
   for (const p of players) p.tick(w);
   a.from = until;
 };
-setInterval(tick, 50);
+let tickTimer = 0;
+const syncClockTick = () => {
+  if (S.playing) {
+    if (!tickTimer) tickTimer = window.setInterval(tick, 50);
+  } else {
+    if (tickTimer) {
+      clearInterval(tickTimer);
+      tickTimer = 0;
+    }
+    tick();
+  }
+};
+S.watch("playing", syncClockTick);
+syncClockTick();

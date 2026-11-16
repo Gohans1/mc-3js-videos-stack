@@ -38,11 +38,16 @@ const jevAsk = (state: unknown, questions: Record<string, unknown>) =>
     py.stderr.on("data", (d) => (err += d));
     py.on("error", fail);
     py.on("close", (code) => {
-      const said = err.split("\n").filter((l) => l.trim() && !jevNotes.has(l));
+      const lines = err.split(/\r?\n/).filter((l) => l.trim());
+      const said = lines.filter((l) => !jevNotes.has(l));
       for (const l of said) jevNotes.add(l);
-      if (code) return fail(new Error(said.at(-1)?.trim() || `jev.py exited ${code}`));
+      if (code) return fail(new Error(lines.at(-1)?.trim() || `jev.py exited ${code}`));
       if (said.length) console.error(said.join("\n"));
-      done(JSON.parse(out) as Answers);
+      try {
+        done(JSON.parse(out) as Answers);
+      } catch (e) {
+        fail(new Error(`jev.py returned invalid JSON: ${(e as Error).message}`));
+      }
     });
     py.stdin.end(JSON.stringify({ state, questions }));
   });
@@ -118,6 +123,7 @@ export async function jevRank<T>(
         .map(([, x]) => x),
     );
   }
+  if (!list.length) return [];
   return (await vote(q, list)).flatMap(([p, x]) =>
     (same.get(q.text(x)) ?? [x]).map((y): [number, T] => [p, y]),
   );

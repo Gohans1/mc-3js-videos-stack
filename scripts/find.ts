@@ -1,14 +1,15 @@
 // One lookup over everything a film can name (vault sounds, every film-stage preset), built so an agent reads ~15 lines
 // instead of grepping 3 MB of SOURCES.json: bun run find --help. Jev (packages/clip-catalog/jev.py) ranks by meaning.
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, extname, join, relative } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { FIT_NO, FIT_YES, jevJudge as judgeBy } from "../packages/clip-catalog/jev";
+import { type ShakeName, SHAKES } from "../packages/film-kit/src/handheld";
 import { PRIME_LENSES } from "../packages/film-kit/src/lens";
-import { ANIM_CURVES, ANIMS } from "../packages/film-stage/src/animate";
-import { EASE_JOBS, EASES, type ShakeName, SHAKES } from "../packages/film-stage/src/camera";
-import { ADJUSTMENTS } from "../packages/film-stage/src/grade-color";
+import { ANIM_CURVES, ANIMS } from "../packages/film-stage/src/animate-meta";
+import { EASE_JOBS, EASES } from "../packages/film-stage/src/camera-meta";
+import { ADJUSTMENTS } from "../packages/film-stage/src/grade-meta";
 import { LOOK_IDS, LOOKS } from "../packages/film-stage/src/looks";
 import {
   FONTS,
@@ -19,8 +20,8 @@ import {
   TEXT_OUT,
   TITLE_EASES,
 } from "../packages/film-stage/src/titles";
-import { TRANSITION_EASES, TRANSITIONS } from "../packages/film-stage/src/transitions";
-import { VELOCITY_EFFECTS, VELOCITY_LOOKS } from "../packages/film-stage/src/velocity";
+import { TRANSITION_EASES, TRANSITIONS } from "../packages/film-stage/src/transitions-meta";
+import { VELOCITY_EFFECTS, VELOCITY_LOOKS } from "../packages/film-stage/src/velocity-meta";
 import {
   catTitle,
   editionOf,
@@ -29,7 +30,12 @@ import {
   sentenceSlug,
 } from "../packages/live-studio/app/sound/groups";
 import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
-import { audioInfo } from "../packages/live-studio/src/sound.mjs";
+import {
+  findVaults,
+  openSound,
+  probeAudio,
+  walkAudio,
+} from "../packages/live-studio/src/sound.mjs";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 export type Entry = {
@@ -72,6 +78,7 @@ type Detail = {
   css?: string;
   min?: number;
   max?: number;
+  imports?: string[];
   [k: string]: unknown;
 };
 
@@ -82,7 +89,7 @@ const USE: Record<string, string> = {
     'audio.json sfx[] {"at","name","gain"} | beds[] {"name","from","to","gain","fadeIn","fadeOut"}',
   transition: 'shots.json shot.transition {"fx","len"}',
   "transition-ease": "shots.json shot.transition.ease",
-  anim: 'shots.json shot.anim.in|out|combo {"fx","len"} (anim-in plays as the shot starts, anim-out as it ends, anim-combo across the whole shot; one id can be all three)',
+  anim: 'shots.json shot.anim.in|out|combo {"fx"} (+ "len" on in/out; anim-in plays as the shot starts, anim-out as it ends, anim-combo across the whole shot; one id can be all three)',
   "anim-curve": "shots.json shot.anim.<in|out|combo>.curve",
   text: 'text.json items[] kind "text": .in|.out {"fx","len"}',
   shape: "text.json items[] kind arrow|circle|box|bracket|underline: .in|.out",
@@ -113,7 +120,7 @@ const stem = (w: string) => {
 };
 const plain = (text: string) =>
   text
-    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z\d]+/)
     .filter(Boolean);
@@ -199,6 +206,10 @@ const top = (kind: string) => (SOUND.includes(kind) ? kind : (kind.split("-")[0]
 // A category as --kind writes it: "Wipe & Split" -> wipe-split, "stand>crouch" -> stand-crouch
 const catSlug = (cat: string) => plain(cat).join("-");
 const catKey = (x: Pick<Entry, "kind" | "cat">) => `${top(x.kind)}/${catSlug(x.cat)}`;
+const catScope = (xs: readonly Pick<Entry, "kind">[]) =>
+  new Set(xs.map((x) => x.kind)).size === 1 ? xs[0]?.kind : undefined;
+const narrowCatKey = (x: Pick<Entry, "kind" | "cat">, one?: string) =>
+  one ? `${one}/${catSlug(x.cat)}` : catKey(x);
 // The studio's heading for a sound category ("shutter" -> "Camera shutter", Minecraft "horror" -> "Horror & caves")
 const catLabel = (x: Pick<Entry, "kind" | "cat">) =>
   !x.cat
@@ -258,10 +269,12 @@ const CAT_WORDS: Record<string, string> = {
 
 // BM25F by repetition: a word in the id or title counts 3x, in the category or its heading 2x, in the description, the
 // category's other words and the kind once
-const fieldWords = (x: Entry) => {
+const fieldWords = (x: Entry, withKind = true) => {
   const head = words(`${x.id} ${x.title}`),
     cat = words(`${x.cat} ${catLabel(x) === x.cat ? "" : catLabel(x)}`);
-  const kind = words(`${x.kind} ${KIND_WORDS[x.kind] ?? ""} ${CAT_WORDS[catKey(x)] ?? ""}`);
+  const kind = withKind
+    ? words(`${x.kind} ${KIND_WORDS[x.kind] ?? ""} ${CAT_WORDS[catKey(x)] ?? ""}`)
+    : [];
   return [...head, ...head, ...head, ...cat, ...cat, ...words(x.about), ...kind];
 };
 
@@ -278,7 +291,11 @@ export function kindFilter(asked: string[], pool: Entry[]) {
     as.push(c ? `${k}/${c}` : k);
     const ofKind = pool.filter((x) => kindMatches(x.kind, k));
     if (!ofKind.length) {
-      bad.push(unknownKind(a, pool));
+      bad.push(
+        k === "mocap"
+          ? `mocap has no indexed clips on this machine (vault/motion/catalog has no *.jsonl files). Build or sync the mocap catalogue, or write custom poses in src/timeline/steve.json.`
+          : unknownKind(a, pool),
+      );
       return () => false;
     }
     if (extra.length) {
@@ -331,7 +348,7 @@ export function kindFilter(asked: string[], pool: Entry[]) {
     }
     if (!exact.length)
       read.push(
-        `--kind ${said}/${c} read as ${[...keep].map((cat) => `${top(k)}/${catSlug(cat)}`).join(", ")}`,
+        `--kind ${said}/${c} read as ${[...keep].map((cat) => `${k}/${catSlug(cat)}`).join(", ")}`,
       );
     return (x: Entry) => kindMatches(x.kind, k) && keep.has(x.cat);
   });
@@ -402,8 +419,8 @@ const kindOf = (said: string, pool: Entry[]) => {
 // heading where it says more
 const catList = (xs: Entry[]) => {
   // all of one sub-kind (--kind text-in): its categories are named under it, or text/<cat> would take text-out too
-  const one = new Set(xs.map((x) => x.kind)).size === 1 ? xs[0]?.kind : undefined;
-  const keyOf = (x: Entry) => (one ? `${one}/${catSlug(x.cat)}` : catKey(x));
+  const one = catScope(xs);
+  const keyOf = (x: Entry) => narrowCatKey(x, one);
   const by = new Map<string, Entry[]>();
   for (const x of xs) if (x.cat) by.set(keyOf(x), [...(by.get(keyOf(x)) ?? []), x]);
   return [...by]
@@ -414,12 +431,12 @@ const catList = (xs: Entry[]) => {
     })
     .join(", ");
 };
-// Narration is generated per film, never a vault entry; the vault's sfx/voices are game-announcer one-liners
+// Narration is generated per film, never a vault entry; sfx/voices holds short callouts and vocal clips
 const SPOKEN = new Set(
   words("narration narrator voiceover voice speech dialogue dialog tts spoken voiceline"),
 );
 const SPOKEN_NOTE =
-  "a spoken line (narration, voiceover, dialogue) is made, not found: in a film folder, bun run voice:gen reads the script in src/edit.json (run it bare first, a preview; --yes spends voice credits); how: bun run skills get core --ref voice. The vault's --kind sfx/voices are game-announcer one-liners only";
+  "a spoken line (narration, voiceover, dialogue) is made, not found: in a film folder, bun run voice:gen reads the script in src/edit.json (run it bare first, a preview; --yes spends voice credits); how: bun run skills get core --ref voice. The vault's --kind sfx/voices are short callouts and vocal clips (laughs, bites, announcers), not custom spoken lines";
 // Minecraft's soundtrack and discs: scripts/build_mc_sound_vault.mjs leaves music/ and records/ out of the vault
 // A named grade the vault has no entry for: the adjust sliders or a LUT make it
 const LOOK_WORDS = new Set(words("lut luts vhs teal bleach grading"));
@@ -524,12 +541,12 @@ const VALUE_ALIAS: Record<string, Record<string, string>> = {
 export function rank(
   entries: Entry[],
   query: string,
-  opt: { kinds?: string[]; n?: number } = {},
+  opt: { kinds?: string[]; n?: number; ownOnly?: boolean } = {},
 ): (Entry & { score: number; matched: number; of: number })[] {
   const pool = opt.kinds?.length
     ? entries.filter((x) => opt.kinds?.some((k) => kindMatches(x.kind, k)))
     : entries;
-  const docs = pool.map(fieldWords);
+  const docs = pool.map((x) => fieldWords(x, !opt.ownOnly));
   const avg = docs.reduce((s, d) => s + d.length, 0) / (docs.length || 1);
   const q = slotsOf(query);
   const ways = [...new Set(words(query))].filter((w) => WAYS.has(w));
@@ -571,6 +588,7 @@ type SoundItem = {
   title?: string;
   for?: string;
   source?: string;
+  origin?: "real" | "synth";
   license?: string;
   contentId?: boolean;
   seconds?: number;
@@ -579,14 +597,23 @@ type SoundItem = {
   peaks?: number[];
 };
 
-export function soundEntries(items: SoundItem[], fold = true): Entry[] {
+const inRange = (value: number | undefined, [lo, hi]: readonly [number, number]) =>
+  value !== undefined && value >= lo && value <= hi;
+
+export function soundEntries(
+  items: SoundItem[],
+  fold = true,
+  duration?: readonly [number, number],
+): Entry[] {
   const groups = new Map<string, SoundItem[]>();
   for (const it of items) {
     const key = fold && it.family ? `family:${it.family}` : `name:${it.name}`;
     groups.set(key, [...(groups.get(key) ?? []), it]);
   }
   return [...groups.values()].map((takes) => {
-    const first = takes.toSorted((a, b) => (a.variant ?? 0) - (b.variant ?? 0))[0] as SoundItem;
+    const sorted = takes.toSorted((a, b) => (a.variant ?? 0) - (b.variant ?? 0));
+    const first =
+      (duration && sorted.find((take) => inRange(take.seconds, duration))) || sorted[0]!;
     const note = [
       /\bCC[ -]BY\b/i.test(first.license ?? "")
         ? `credit: ${first.license}`
@@ -622,9 +649,11 @@ type Clip = {
 };
 // start/end/seq: postures as checked by eye, over the measured ones
 type Review = {
+  dur?: number;
   desc?: string;
   mood?: string[];
   prop?: string[];
+  style?: string[];
   flaw?: string;
   start?: string;
   end?: string;
@@ -673,39 +702,46 @@ export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] 
     return readFileSync(f, "utf8")
       .split("\n")
       .filter((l) => l.trim())
-      .map((l) => {
-        const c = JSON.parse(l) as Clip,
-          seen = review[c.ref] ?? {},
+      .flatMap((l) => {
+        const c = JSON.parse(l) as Clip & { error?: unknown };
+        if ("error" in c) return [];
+        const seen = review[c.ref] ?? {},
           flaw = [seen.flaw, brk.get(c.ref)].filter(Boolean).join("; "),
           r = { ...seen, ...(flaw && { flaw }) },
+          dur = r.dur ?? c.dur,
           start = r.start ?? c.start,
           end = r.end ?? c.end,
           // what he touches is searched as --prop and catalog.py's words read it: most descs never say "chair"
           props = (r.prop ?? []).filter((p) => p !== "none"),
-          tags = [r.mood?.join(", "), props.length && `touches ${props.join(", ")}`].filter(
-            Boolean,
-          );
-        return {
-          kind: "mocap",
-          id: c.ref,
-          cat: start === end ? (start ?? "") : `${start}>${end}`,
-          title: (c.ref.split("/")[1] ?? "").replace(/_[0-9a-f]{8}$/, "").replace(/_/g, " "),
-          about: [r.desc, tags.length && `(${tags.join("; ")})`].filter(Boolean).join(" "),
-          src: lib,
-          secs: c.dur,
-          ...((r.flaw || (c.dur ?? 1) < 0.1) && {
-            note: r.flaw ? `flaw: ${r.flaw}` : "one frame: a still pose",
-          }),
-          // seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
-          data: {
-            ...c,
-            seq: [start, ...(c.seq ?? []), end].filter(
-              (x, i, a): x is string => !!x && x !== a[i - 1],
-            ),
-            ...r,
-            checked: c.ref in review,
+          tags = [
+            r.mood?.join(", "),
+            r.style?.join(", "),
+            props.length && `touches ${props.join(", ")}`,
+          ].filter(Boolean);
+        return [
+          {
+            kind: "mocap",
+            id: c.ref,
+            cat: start === end ? (start ?? "") : `${start}>${end}`,
+            title: (c.ref.split("/")[1] ?? "").replace(/_[0-9a-f]{8}$/, "").replace(/_/g, " "),
+            about: [r.desc, tags.length && `(${tags.join("; ")})`].filter(Boolean).join(" "),
+            src: lib,
+            secs: dur,
+            ...((r.flaw || (dur ?? 1) < 0.1) && {
+              note: r.flaw ? `flaw: ${r.flaw}` : "one frame: a still pose",
+            }),
+            // seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
+            data: {
+              ...c,
+              seq: [start, ...(c.seq ?? []), end].filter(
+                (x, i, a): x is string => !!x && x !== a[i - 1],
+              ),
+              ...r,
+              fix: r,
+              checked: c.ref in review,
+            },
           },
-        };
+        ];
       });
   });
 }
@@ -796,6 +832,7 @@ export function presetEntries(): Entry[] {
       title: "Vertigo Dolly-Zoom",
       tip: "New camera distance holding subject size while changing lens FOV",
       pkg: "film-kit/lens",
+      imports: ["dollyZoom", "fovOf"],
       code: "const d1 = dollyZoom(3, fovOf(35, 16 / 9), fovOf(85, 16 / 9));",
     },
     {
@@ -837,12 +874,12 @@ export function presetEntries(): Entry[] {
     })),
   );
   return [
-    ...list("transition", TRANSITIONS, "transitions"),
-    ...list("transition-ease", TRANSITION_EASES, "transitions"),
-    ...list("anim-in", ANIMS.in, "animate"),
-    ...list("anim-out", ANIMS.out, "animate"),
-    ...list("anim-combo", ANIMS.combo, "animate"),
-    ...list("anim-curve", ANIM_CURVES, "animate"),
+    ...list("transition", TRANSITIONS, "transitions-meta"),
+    ...list("transition-ease", TRANSITION_EASES, "transitions-meta"),
+    ...list("anim-in", ANIMS.in, "animate-meta"),
+    ...list("anim-out", ANIMS.out, "animate-meta"),
+    ...list("anim-combo", ANIMS.combo, "animate-meta"),
+    ...list("anim-curve", ANIM_CURVES, "animate-meta"),
     ...list("text-in", TEXT_IN, "titles-catalog"),
     ...list("text-out", TEXT_OUT, "titles-catalog"),
     ...list(
@@ -853,7 +890,7 @@ export function presetEntries(): Entry[] {
     ...list("shape-in", SHAPE_IN, "titles-catalog"),
     ...list("shape-out", SHAPE_OUT, "titles-catalog"),
     ...list("font", FONTS, "titles-catalog"),
-    ...list("adjust", ADJUSTMENTS, "grade-color"),
+    ...list("adjust", ADJUSTMENTS, "grade-meta"),
     ...list(
       "look",
       LOOK_IDS.map((id) => ({ id, cat: "Look Presets", ...LOOKS[id]! })),
@@ -864,9 +901,9 @@ export function presetEntries(): Entry[] {
     ...list(
       "velocity",
       VELOCITY_EFFECTS.map((id) => ({ id, ...VELOCITY_LOOKS[id] })),
-      "velocity",
+      "velocity-meta",
     ),
-    ...list("ease", eases, "camera"),
+    ...list("ease", eases, "camera-meta"),
   ];
 }
 
@@ -914,31 +951,43 @@ export function easeAbout(f: (t: number) => number, job?: string): string {
 
 // The vault's sound folders as the studio reads them (live-studio/src/sound.mjs findVaults): <kind>/<category>/<name>.<ext>
 // with SOURCES.json (credits) and PEAKS.json (seconds) beside them
-const readJson = (f: string) => (existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {});
-function vaultSounds(): SoundItem[] {
+const readJson = (f: string) => {
+  if (!existsSync(f)) return {};
+  const text = readFileSync(f, "utf8").replace(/^\uFEFF/, "");
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) {
+    throw new FindError(
+      `${relative(process.cwd(), f).replaceAll("\\", "/")}: not valid JSON (${e instanceof Error ? e.message : String(e)}). Fix the file; bun run check names the fault in a film.`,
+      1,
+    );
+  }
+};
+export function vaultSounds(dirs?: string[]): SoundItem[] {
   const mc = [join(LOCAL, "mc-sound"), join(EXTERNAL, "mc-sound")].find(existsSync);
   const out: SoundItem[] = [];
-  for (const dir of [mc, join(LOCAL, "sound")].filter((d): d is string => !!d && existsSync(d))) {
+  for (const dir of (dirs ?? [mc, join(LOCAL, "sound")]).filter(
+    (d): d is string => !!d && existsSync(d),
+  )) {
     const sources = readJson(join(dir, "SOURCES.json")),
       peaks = readJson(join(dir, "PEAKS.json"));
-    for (const kind of readdirSync(dir).filter((k) => SOUND.includes(k))) {
-      for (const category of readdirSync(join(dir, kind))) {
-        const files = readdirSync(join(dir, kind, category)).filter((f) =>
-          /\.(?:wav|ogg)$/i.test(f),
-        );
-        for (const f of files) {
-          const name = basename(f, extname(f));
-          out.push({
-            ...sources[name],
-            name,
-            kind,
-            category,
-            seconds: peaks[name]?.seconds,
-            peaks: peaks[name]?.peaks,
-            file: relative(ROOT, join(dir, kind, category, f)).replaceAll("\\", "/"),
-          });
-        }
-      }
+    for (const [name, entry] of walkAudio(dir, dir, realpathSync(dir))) {
+      const meta = sources[name] ?? {},
+        cachedSeconds = peaks[name]?.seconds;
+      out.push({
+        ...meta,
+        source: meta.source ?? "vault",
+        name,
+        kind: SOUND.includes(meta.kind) ? meta.kind : (entry.kind ?? "sfx"),
+        category: (typeof meta.category === "string" && meta.category) || entry.category || "",
+        seconds:
+          Number.isFinite(cachedSeconds) && cachedSeconds > 0
+            ? cachedSeconds
+            : probeAudio(entry.file)?.seconds,
+        peaks: peaks[name]?.peaks,
+        file: relative(ROOT, entry.file).replaceAll("\\", "/"),
+      });
     }
   }
   return out;
@@ -946,29 +995,38 @@ function vaultSounds(): SoundItem[] {
 
 // Run from a film folder: its own sounds too, from the folder package.json "live-studio".sfx names (as the studio lists them:
 // a top folder bgm/, sfx/ or mc/ is the kind). No PEAKS.json there: the length is read off the file's header
-function filmSounds(film: string): SoundItem[] {
-  const conf = readJson(join(film, "package.json"))["live-studio"];
-  if (typeof conf?.sfx !== "string") return [];
-  const dir = join(film, conf.sfx);
-  if (!existsSync(dir)) return [];
-  const sources = readJson(join(dir, "SOURCES.json"));
-  return readdirSync(dir, { recursive: true, encoding: "utf8" })
-    .filter((f) => /\.(?:wav|ogg)$/i.test(f))
-    .map((f) => {
-      const name = basename(f, extname(f)),
-        [top = "", ...rest] = f.split(/[\\/]/).slice(0, -1);
-      const kind = sources[name]?.kind ?? (SOUND.includes(top) ? top : "sfx");
-      const category = (SOUND.includes(top) ? rest : [top, ...rest]).join("/");
-      return {
-        ...sources[name],
-        name,
-        kind,
-        category,
-        seconds: audioInfo(join(dir, f))?.seconds,
-        source: "this-film",
-        file: join(conf.sfx, f).replaceAll("\\", "/"),
-      };
-    });
+function filmConfig(film: string): Record<string, any> {
+  return readJson(join(film, "package.json"))["live-studio"] ?? {};
+}
+function filmSourcesMap(film: string, conf = filmConfig(film)): Record<string, any> {
+  if (typeof conf?.sfx !== "string") return {};
+  const dir = resolve(film, conf.sfx);
+  const rel = relative(resolve(film), dir);
+  if (rel.startsWith("..") || isAbsolute(rel)) return {};
+  return readJson(join(dir, "SOURCES.json"));
+}
+function filmSounds(
+  film: string,
+  conf: ReturnType<typeof filmConfig>,
+  sound: ReturnType<typeof openSound>,
+): SoundItem[] {
+  const sources = filmSourcesMap(film, conf);
+  if (!sound) return [];
+  const own = new Set([
+    ...walkAudio(resolve(film, conf.sfx ?? "sound/sfx"), null, realpathSync(film)).keys(),
+    ...Object.keys(conf.soundSources ?? {}),
+  ]);
+  // soundSources exposes custom project files outside conf.sfx (keep "narration" pointing to voice:gen)
+  return sound
+    .library()
+    .filter((item) => item.name !== "narration" && own.has(item.name))
+    .map((item) => ({
+      ...sources[item.name],
+      ...item,
+      origin: originOf(item),
+      source: "this-film",
+      file: relative(film, sound.fileOf(item.name)!).replaceAll("\\", "/"),
+    }));
 }
 
 // The id the studio's star gives an entry (live-studio/src/favorites.mjs): a sound by its file name, an effect by its
@@ -1003,13 +1061,40 @@ export const markStarred = (xs: Entry[], favs: Favorites) => {
   });
 };
 
-export const allEntries = (fold = true, film = process.cwd()) => {
+export const allEntries = (
+  fold = true,
+  film = process.cwd(),
+  duration?: readonly [number, number],
+) => {
   // a film file named as a vault sound plays instead of it (live-studio/src/sound.mjs)
-  const own = filmSounds(film),
-    mine = new Set(own.map((x) => x.name));
+  const conf = filmConfig(film);
+  const sound = openSound(film, {
+    ...conf,
+    soundTimeline: conf.soundTimeline ?? "src/timeline/audio.json",
+    sfx: conf.sfx ?? "sound/sfx",
+  });
+  const own = filmSounds(film, conf, sound),
+    mine = new Set([...own.map((x) => x.name), ...Object.keys(conf.soundSources ?? {})]);
+  const vaultDirs =
+    conf?.soundVault === false
+      ? []
+      : typeof conf?.soundVault === "string"
+        ? (() => {
+            try {
+              return findVaults(film, conf);
+            } catch {
+              return [];
+            }
+          })()
+        : undefined;
+  const rawVault = vaultDirs ? (vaultDirs.length ? vaultSounds(vaultDirs) : []) : vaultSounds();
+  const resolved = new Map(sound?.library().map((item) => [item.name, item]));
+  const vault = rawVault
+    .filter((x) => !mine.has(x.name))
+    .map((x) => ({ ...(resolved.get(x.name) ?? x), file: x.file, peaks: x.peaks }));
   return [
     ...presetEntries(),
-    ...soundEntries([...own, ...vaultSounds().filter((x) => !mine.has(x.name))], fold),
+    ...soundEntries([...own, ...vault], fold, duration),
     ...mocapEntries(),
   ];
 };
@@ -1281,15 +1366,22 @@ const mocapNext = (pool: Entry[], show = true, used: string[] = []) => {
     ...left(["--air"], " yes|no"),
     ...left(["--look"], " 45"),
     ...left(["--mood"], " <m>"),
-    ...left(["--prop"], " <p> (clips checked by eye; --mood or --prop alone lists them)"),
+    ...left(["--prop"], " <p>"),
+    ...left(["--style"], " <s> (clips checked by eye; --mood, --prop or --style alone lists them)"),
     ...left(["--fights"], " (weapons, left out by default)"),
   ];
   return `mocap: ${show ? "one clip in full (its timeline, where it leaves him): bun run find --show <id>. By body" : "clips by body"}, any mix: ${offer.join(", ")}`;
 };
 // earshot rank over the files a list shows: the first few, as each call takes ~40 s whatever their number
 const HEAR_MAX = 8;
+const qArg = (s: string) =>
+  /^[\w./,:+=-]+$/.test(s)
+    ? s
+    : process.platform === "win32"
+      ? `'${s.replace(/['\u2018\u2019]/g, "$&$&")}'`
+      : `'${s.replaceAll("'", "'\\''")}'`;
 const hearThem = (what: string, files: string[]) =>
-  `hear them (you cannot): earshot rank "${what.replaceAll('"', "")}" ${files.slice(0, HEAR_MAX).join(" ")} --top 3${files.length > HEAR_MAX ? `  (the first ${HEAR_MAX} of ${files.length})` : ""}`;
+  `hear them (you cannot): earshot rank "${what.replaceAll('"', "")}" ${files.slice(0, HEAR_MAX).map(qArg).join(" ")} --top 3${files.length > HEAR_MAX ? `  (the first ${HEAR_MAX} of ${files.length})` : ""}`;
 
 // ---------- --show: one entry in full, from the catalogue record behind its line
 
@@ -1394,7 +1486,7 @@ function details(x: Entry): string[] {
     if (x.kind !== "bgm" && (x.secs ?? 0) >= 10)
       out.push(`      or under a whole scene, looping: ${bed}`);
     if (d.file) {
-      const file = soundFile(d.file);
+      const file = qArg(soundFile(d.file));
       out.push(
         Bun.which("earshot")
           ? `hear it: earshot describe ${file}`
@@ -1430,7 +1522,8 @@ function details(x: Entry): string[] {
     );
     const tl = d.tl ?? {};
     for (const [k, label] of Object.entries(TL))
-      if (tl[k]?.length)
+      if (k === "body" && d.fix?.seq) out.push(`body (checked by eye): ${d.seq.join(" > ")}`);
+      else if (tl[k]?.length)
         out.push(`${label}: ${tl[k].map(([a, b, what]) => `${a}-${b} ${what}`).join(" · ")}`);
     use(
       "steve.json",
@@ -1454,9 +1547,14 @@ function details(x: Entry): string[] {
     );
   } else if (x.kind.startsWith("anim-") && x.kind !== "anim-curve") {
     out.push(
-      `settings: "len" seconds (default ${num(d.len) ?? 1}); "k" strength (1 as designed); "curve" one of ${ANIM_CURVES.map((c) => c.id).join(", ")}`,
+      `settings: ${side === "combo" ? "" : `"len" seconds (default ${num(d.len) ?? 1}); `}"k" strength (1 as designed); "curve" one of ${ANIM_CURVES.map((c) => c.id).join(", ")}`,
     );
-    use("shots.json", `shot: "anim": {"${side}": {"fx": "${x.id}", "len": ${num(d.len) ?? 1}}}`);
+    use(
+      "shots.json",
+      side === "combo"
+        ? `shot: "anim": {"combo": {"fx": "${x.id}"}}`
+        : `shot: "anim": {"${side}": {"fx": "${x.id}", "len": ${num(d.len) ?? 1}}}`,
+    );
     out.push("see it: AT=<shot time> bun run render stills  (in a film folder)");
   } else if (x.kind.startsWith("text-") || x.kind.startsWith("shape-")) {
     const knobs = [
@@ -1510,7 +1608,9 @@ function details(x: Entry): string[] {
         `code: import { fovOf, shotSize } from 'film-kit/lens'; shotSize('MCU', { height: 1.8, mm: ${d.mm} })`,
       );
     } else {
-      out.push(`use: src/scene.ts  import { ${x.id} } from '${d.pkg}'; ${d.code}`);
+      out.push(
+        `use: src/scene.ts  import { ${(d.imports ?? [x.id]).join(", ")} } from '${d.pkg}'; ${d.code}`,
+      );
     }
   } else if (x.kind === "shake") {
     if (x.cat === "Shakify") {
@@ -1533,7 +1633,7 @@ function details(x: Entry): string[] {
   } else if (x.kind === "velocity") {
     use(
       "timing.json",
-      `velocity[]: {"effect": "${x.id}", "from": 0, "to": 4, "music": "<a beds[] name in audio.json>", "beats": [<its beat times in film seconds>], "frequency": 1, "speed": "normal", "intensity": 60}  (frequency 1|2 = every beat or every other; speed normal|fast|veryFast; intensity 0-100)`,
+      `velocity[]: {"effect": "${x.id}", "from": 0, "to": 4, "music": "<a beds[] name in audio.json>", "beats": [<its beat times in film seconds>], "frequency": 2, "speed": "normal", "intensity": 60}  (frequency 1|2 = every 4th beat or every beat; speed normal|fast|veryFast; intensity 0-100)`,
     );
     out.push(
       `beats: echo '{"duration": <seconds>}' | python ${relative(process.cwd(), join(ROOT, "scripts/sound/beats.py")).replaceAll("\\", "/")} <the bed's sound file> prints {"bpm", "beats"} in the track's own seconds; film second = the bed's "from" + beat - its "start" (at rate 1). The Studio's Auto mark beats, on a sound row, marks them too`,
@@ -1544,7 +1644,7 @@ function details(x: Entry): string[] {
       out.push(
         `curve: at 25%, 50%, 75% of the time it has gone ${[0.25, 0.5, 0.75].map((t) => f(t).toFixed(2)).join(", ")}`,
       );
-    use("cam.json", `a key: "ease": "${x.id}"  (the move into that key)`);
+    use("cam.json", `a key: "ease": "${x.id}"  (the move into that key; also a key of props.json)`);
   } else if (x.kind === "shape") {
     // arrow and underline are a stroke of a length (size), the rest a frame of w x h; x, y place its middle (0-1)
     const sized =
@@ -1740,6 +1840,7 @@ const BODY: Record<string, string | null> = {
   "--air": "--air yes",
   "--mood": "--mood scared",
   "--prop": "--prop chair",
+  "--style": "--style natural",
   "--still": null,
   "--moves": null,
   "--loop": null,
@@ -1750,7 +1851,7 @@ const BODY: Record<string, string | null> = {
   "--fights": null,
 };
 // Tags written by eye (catalog_review.py), read off the clips that have them so the list never drifts from the data
-const TAGGED = ["--mood", "--prop"] as const;
+const TAGGED = ["--mood", "--prop", "--style"] as const;
 // Other words for the moods clips are tagged with, keyed by stem
 const MOOD_ALIAS: Record<string, string> = Object.fromEntries(
   Object.entries({
@@ -1976,9 +2077,13 @@ const valuesOf = (o: string, pool: Entry[]) => {
   if (o === "--look") return `--look takes ${LOOK_SAYS}`;
   if (o === "--air") return `--air is ${AIR_SAYS}`;
   if (o === "--from" || o === "--to" || o === "--has")
-    return `postures: ${postures(clips).join(" ")}`;
+    return clips.length
+      ? `postures: ${postures(clips).join(" ")}`
+      : "no mocap clips are indexed (vault/motion/catalog is empty or missing)";
   if ((TAGGED as readonly string[]).includes(o))
-    return `${o} (only clips checked by eye carry it): ${tagged(o.slice(2), clips)}`;
+    return clips.length
+      ? `${o} (only clips checked by eye carry it): ${tagged(o.slice(2), clips)}`
+      : "no mocap clips are indexed (vault/motion/catalog is empty or missing)";
   if (o === "--show" || o === "--star" || o === "--unstar")
     return "an id: the second column of bun run find <words>";
   return "";
@@ -1991,6 +2096,11 @@ export async function run(
   clips: Catalog = catalog,
   favorites: FavoriteLists = favoriteLists(),
 ): Promise<string> {
+  if (
+    argv.some((a) => a.toLowerCase() === "--help" || a.toLowerCase() === "-h") ||
+    argv[0]?.toLowerCase() === "help"
+  )
+    return HELP;
   const lists = favorites.lists();
   const { set, query, notes, bare } = parse(
     argv,
@@ -2008,7 +2118,6 @@ export async function run(
       .map((a) => a.replace(/^[^/]*/, (k) => k.toLowerCase())),
     sources = list(set.get("--source"));
   let kinds = asked;
-  if (set.has("--help") || set.has("-h")) return HELP;
   const nRaw = set.get("-n");
   if (nRaw !== undefined && !/^[1-9]\d*$/.test(nRaw))
     throw new FindError("-n takes a whole number of hits, 1 or more, e.g. -n 20");
@@ -2017,7 +2126,6 @@ export async function run(
     throw new FindError(
       `-n ${n} would put ${n} lines in your context; ${LIST_ALL} at most. Narrow instead: --kind <kind>/<category>, words, or by meaning: --jev --kind <kind> "<the moment>"`,
     );
-  if (query.toLowerCase() === "help" && set.size === 0 && !bare.length) return HELP;
   const starring = set.has("--star") ? "--star" : set.has("--unstar") ? "--unstar" : undefined;
   // The favourites list in use: default unless --fav names another; a name no list has falls back to default, said so
   // (--star into a new name makes that list)
@@ -2031,7 +2139,8 @@ export async function run(
     listName = "default";
   }
   const stars = favorites.open(listName);
-  const entriesOf = (fold = true) => markStarred(given ?? allEntries(fold), stars.shown());
+  const entriesOf = (fold = true, duration?: readonly [number, number]) =>
+    markStarred(given ?? allEntries(fold, process.cwd(), duration), stars.shown());
   const fav = set.has("--fav"),
     favArg = listName === "default" ? "--fav" : `--fav ${listName}`;
   // the creator's other lists, offered beside the one in use, never forced
@@ -2045,6 +2154,8 @@ export async function run(
     !fav && starredLists.length
       ? `the creator's favourites: ${starredLists.map((l) => `${l.name} ${l.count}`).join(", ")} (only those: add --fav, or --fav <list>)`
       : "";
+  const asRead = (read: string[] | undefined, text: string) =>
+    noted(read?.length ? `(${read.join("; ")})\n${text}` : text);
   if (bare.length) {
     // values counted inside the --kind given beside, as the search would filter
     const all = entriesOf(),
@@ -2056,6 +2167,10 @@ export async function run(
         .join("\n"),
     );
   }
+  if (asked && !asked.length)
+    throw new FindError(`--kind needs a value, e.g. ${OPTIONS["--kind"]}.`);
+  if (sources && !sources.length)
+    throw new FindError(`--source needs a value, e.g. ${OPTIONS["--source"]}.`);
   const showIds = set.get("--show")?.split(",").filter(Boolean);
   if (showIds && !showIds.length) throw new FindError("--show needs an id, e.g. --show dissolve");
   if (starring && !set.get(starring)!.split(",").some(Boolean))
@@ -2072,7 +2187,7 @@ export async function run(
     const all = entriesOf(false);
     const kf = asked ? kindFilter(asked, all) : undefined;
     if (kf?.bad.length) throw new FindError(kf.bad.join("\n"));
-    return noted(show(showIds, kf ? all.filter(kf.test) : all));
+    return asRead(kf?.read, show(showIds, kf ? all.filter(kf.test) : all));
   }
   if (starring) {
     const extra = [
@@ -2088,16 +2203,19 @@ export async function run(
     );
   }
   const catalogSays = async (args: string[], clipPool: Entry[]) => {
+    const ranJev = args.includes("--jev");
     try {
       const said = await clips([...args, "-n", `${n}`]);
       if (/^0 matches/m.test(said))
-        return `${said}\nnext: no clip passes every word and filter together (${args.join(" ")}). Drop one filter or widen a range (--energy, --dur), then add it back; words match from a word start in the clip's name and description.\n      by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"\n      ${mocapNext(clipPool, true, [...set.keys()])}\n      none fits: ${MAKE_MOCAP}`;
-      // catalog.py prints a clip per unindented line, its FLAW (a fault seen by eye) on an indented one under it
-      const rows = said.split("\n").filter((l) => /^\S+\/\S+\s/.test(l)).length,
+        return `${said}\nnext: no clip passes every word and filter together (${args.join(" ")}). Drop one filter or widen a range (--energy, --dur), then add it back; words match from a word start in the clip's name and description.${ranJev ? "" : `\n      by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"`}\n      ${mocapNext(clipPool, true, [...set.keys()])}\n      none fits: ${MAKE_MOCAP}`;
+      // catalog.py prints a clip per unindented line (with an optional "--jev" score prefix), its FLAW on an indented one under it
+      const rows = said
+          .split("\n")
+          .filter((l) => /^(?:-?\d+\.\d+\s+(?:fits\s+-?\d+\.\d+\s+)?)?\S+\/\S+\s/.test(l)).length,
         flawed = said.split("\n").filter((l) => /^\s+FLAW:/.test(l)).length;
       const allFlawed =
         rows && flawed === rows
-          ? `every clip shown has a FLAW seen by eye: none is clean as it is. Drop or loosen a filter (--mood, --to, --from, --dur) for a clean one, or by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"; else ${MAKE_MOCAP}\n      `
+          ? `every clip shown has a FLAW seen by eye: none is clean as it is. Drop or loosen a filter (--mood, --to, --from, --dur) for a clean one${ranJev ? "" : ', or by meaning (Jev, paid): bun run find --jev --kind mocap "<the move in words>"'}; else ${MAKE_MOCAP}\n      `
           : "";
       return `${said}\n\n${MOCAP_COLUMNS}\nwhere (in ${timelineDir()}/): ${USE.mocap}\nnext: ${allFlawed}${mocapNext(clipPool, true, [...set.keys()])}`;
     } catch (err) {
@@ -2126,7 +2244,9 @@ export async function run(
   const body = Object.keys(BODY).filter((o) => set.has(o));
   // a mocap category is the postures its clips start and end in, so body filters and catalog.py's Jev can take it
   // --kind as read (motion is mocap), so a body filter or the catalogue's Jev knows the clips were asked for
-  const askedAs = asked && (body.length || jev) ? kindFilter(asked, entriesOf()).as : undefined;
+  const askedKind = asked && (body.length || jev) ? kindFilter(asked, entriesOf()) : undefined;
+  if (askedKind?.bad.length) throw new FindError(askedKind.bad.join("\n"));
+  const askedAs = askedKind?.as;
   const clipCats = askedAs?.filter((k) => k.startsWith("mocap/")) ?? [];
   const clipCat = clipCats.length
     ? (() => {
@@ -2139,7 +2259,7 @@ export async function run(
             `${clipCats.join(",")} holds clips starting and ending in ${cats.length} ways (${cats.join(", ")}); body filters take one: --kind mocap/<one of them>, or --kind mocap with --from and --to`,
           );
         const [from = "", to = from] = cats[0]!.split(">");
-        return { name: clipCats.join(","), from, to };
+        return { name: clipCats.join(","), from, to, read: kf.read };
       })()
     : undefined;
   if (body.length || (jev && clipCat)) {
@@ -2147,7 +2267,7 @@ export async function run(
     // catalog.py reads the clips' own records, which know no stars: the starred clips are few enough to list
     if (fav)
       throw new FindError(
-        `--fav does not combine with the body filters (${body.join(" ")}); the starred clips: bun run find --kind mocap ${favArg} (${clipPool.filter((x) => x.fav).length} of them)`,
+        `--fav does not combine with ${body.length ? `the body filters (${body.join(" ")})` : `--jev --kind ${clipCats.join(",")}`}; the starred clips: bun run find --kind mocap ${favArg} (${clipPool.filter((x) => x.fav).length} of them)`,
       );
     if (askedAs && !askedAs.every((k) => k === "mocap" || k.startsWith("mocap/"))) {
       const soundy = askedAs.some((k) => [...SOUND, "sound"].includes(k.split("/")[0]!));
@@ -2161,6 +2281,10 @@ export async function run(
     if (soundOnly.length)
       throw new FindError(
         `${soundOnly.join(" ")} filter${soundOnly.length > 1 ? "" : "s"} sounds; mocap clips have none: drop ${soundOnly.length > 1 ? "them" : "it"} (clips filter by --source and --dur)`,
+      );
+    if (!clipPool.length)
+      throw new FindError(
+        `no mocap clips are indexed (vault/motion/catalog is empty or missing); drop ${body.join(" ")} or build the mocap catalogue first`,
       );
     const libs = [...new Set(clipPool.map((x) => x.src!))];
     const noClips = sources?.filter((s) => !libs.includes(s));
@@ -2251,7 +2375,8 @@ export async function run(
           set.has(o) ? [] : [o, o === "--from" ? clipCat.from : clipCat.to],
         )
       : [];
-    return noted(
+    return asRead(
+      [...new Set([...(askedKind?.read ?? []), ...(clipCat?.read ?? [])])],
       await catalogSays([...words, ...args, ...catArgs, ...durArg, ...libArg], clipPool),
     );
   }
@@ -2269,17 +2394,7 @@ export async function run(
   }
 
   // weapons and fights are left out, as the catalogue's own search leaves them (--fights, a body filter, goes there)
-  const pool = entriesOf().filter((x) => x.kind !== "mocap" || !isFight(x.id));
-  // nothing in the list in use: how a star is given, and the lists that have some
-  if (fav && !pool.some((x) => x.fav))
-    return noted(
-      [
-        `nothing is starred yet in the ${listName} favourites (${relative(ROOT, stars.file).replaceAll("\\", "/")}).`,
-        ...(listsLine ? [listsLine] : []),
-        `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
-        `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
-      ].join("\n"),
-    );
+  const pool = entriesOf(true, dur).filter((x) => x.kind !== "mocap" || !isFight(x.id));
   // A source by its whole name, or a folder of them (film-stage = every film-stage/*.ts)
   const fromSource = (x: Entry, s: string) => {
     const src = x.src?.toLowerCase();
@@ -2348,40 +2463,52 @@ export async function run(
         (SOUND.includes(x.kind) && x.kind !== "mc" && originOfEntry(x) === origin)) &&
       (edition === undefined || (x.kind === "mc" && editionOfEntry(x) === edition)) &&
       (license === undefined || licensed(x)) &&
-      (!dur || (x.secs !== undefined && x.secs >= dur[0] && x.secs <= dur[1])),
+      (!dur || inRange(x.secs, dur)),
   );
   const entries = fav ? unstarred.filter((x) => x.fav) : unstarred;
-  const kf = kinds ? kindFilter(kinds, entries) : undefined;
+  const kf = kinds ? kindFilter(kinds, pool) : undefined;
+  const filter = [
+    sources && `--source ${sources.join(",")}`,
+    origin && `--origin ${origin}`,
+    edition && `--edition ${edition}`,
+    license && `--license ${license}`,
+    dur && `--dur ${set.get("--dur")}`,
+    fav && favArg,
+  ]
+    .filter(Boolean)
+    .join(" ");
   if (kf?.bad.length) {
-    const filter = [
-      sources && `--source ${sources.join(",")}`,
-      origin && `--origin ${origin}`,
-      edition && `--edition ${edition}`,
-      license && `--license ${license}`,
-      dur && `--dur ${set.get("--dur")}`,
-      fav && favArg,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    // the kind exists but the filter took it all: say which filter, not "unknown kind"
     throw new FindError(
       !filter
         ? kf.bad.join("\n")
-        : !kindFilter(kinds!, pool).bad.length
-          ? `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${bySource.filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc only." : ""}${license ? " --license sorts sounds only." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}${sources?.includes("minecraft") && kinds!.some((k) => k.startsWith("bgm")) ? `\n${MC_MUSIC_NOTE}` : ""}`
-          : `${filter} keeps ${counts(entries) || "nothing"}: ${kf.bad.join("; ")}`,
+        : `${filter} keeps ${counts(entries) || "nothing"}: ${kf.bad.join("; ")}`,
     );
   }
+  // nothing in the list in use: how a star is given, and the lists that have some
+  if (fav && !pool.some((x) => x.fav))
+    return noted(
+      [
+        `nothing is starred yet in the ${listName} favourites (${relative(ROOT, stars.file).replaceAll("\\", "/")}).`,
+        ...(listsLine ? [listsLine] : []),
+        `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
+        `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
+      ].join("\n"),
+    );
   kinds = kf?.as;
   const inKinds = kf ? entries.filter(kf.test) : entries;
+  if (kf && !inKinds.length && filter) {
+    // the kind exists in pool but the filter took it all: say which filter, not "unknown kind"
+    throw new FindError(
+      `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${bySource.filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc only." : ""}${license ? " --license sorts sounds only." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}${sources?.includes("minecraft") && kinds!.some((k) => k.startsWith("bgm")) ? `\n${MC_MUSIC_NOTE}` : ""}`,
+    );
+  }
   // how a loose --kind was read (music as bgm, sfx/riser as sfx/transitions), above whatever it found
-  const readAs = (text: string) =>
-    noted(kf?.read.length ? `(${kf.read.join("; ")})\n${text}` : text);
+  const readAs = (text: string) => asRead(kf?.read, text);
   // what --kind names without its categories (sfx/typing is sfx), for the hints that speak of a kind
   const kindNames = kinds?.map((k) => k.split("/")[0]!);
   // the filters besides --kind: Jev offered on these entries keeps them, or it votes over the whole kind
   const narrowing = `${sources ? ` --source ${sources.join(",")}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}${fav ? ` ${favArg}` : ""}`;
-  const filters = `${kinds ? ` --kind ${kinds.join(",")}` : ""}${narrowing}`;
+  const filters = `${kinds ? ` --kind ${qArg(kinds.join(","))}` : ""}${narrowing}`;
   // The filters these entries can still take, each value with how many it keeps (a filter already given is left out).
   // Terse (under a search): only filters that would split the hits, values without their meaning
   const filtersFor = (xs: Entry[], terse = false) => {
@@ -2422,7 +2549,7 @@ export async function run(
       );
     const kindsHere = [...new Set(inKinds.map((x) => top(x.kind)))];
     const narrowed = kinds?.some((k) => k.includes("/"));
-    const jevHere = `by meaning (Jev, paid; reads every entry of the kind or category): bun run find --jev --kind ${kinds?.join(",") ?? kindsHere.join(",")}${narrowing} "<the scene or feeling>"`;
+    const jevHere = `by meaning (Jev, paid; reads every entry of the kind or category): bun run find --jev --kind ${qArg(kinds?.join(",") ?? kindsHere.join(","))}${narrowing} "<the scene or feeling>"`;
     const groups =
       narrowed ||
       kindsHere.every((k) => !catList(inKinds.filter((x) => top(x.kind) === k)).includes(","))
@@ -2524,7 +2651,8 @@ export async function run(
     );
 
   const foreign = isForeign(query);
-  // Under --kind, a word that only names that kind ("music" with --kind bgm) matches every entry and says nothing
+  // Under --kind, a word that only names that kind ("music" with --kind bgm) matches every entry and says nothing;
+  // words that appear in an entry's own text ("impact" in hits) stay in the query
   const kindSaid = new Set(
     (kindNames ?? []).flatMap((k) =>
       (k === "sound" ? SOUND : [k]).flatMap((kk) => [
@@ -2534,9 +2662,14 @@ export async function run(
       ]),
     ),
   );
-  const said = plain(query).filter((w) => !kindSaid.has(stem(w)));
-  const asks = said.length ? said.join(" ") : query;
-  const ranked = foreign ? [] : rank(inKinds, asks);
+  const asksOf = (xs: Entry[]) => {
+    const has = kinds?.length ? new Set(xs.flatMap((x) => fieldWords(x, false))) : undefined;
+    const s = plain(query).filter((w) => !kindSaid.has(stem(w)) || has?.has(stem(w)));
+    return { said: s, asks: s.length ? s.join(" ") : query };
+  };
+  const rankIn = (xs: Entry[]) => rank(xs, asksOf(xs).asks, { ownOnly: Boolean(kinds?.length) });
+  const { said, asks } = asksOf(inKinds);
+  const ranked = foreign ? [] : rank(inKinds, asks, { ownOnly: Boolean(kinds?.length) });
   // A one-frame mocap clip is a still pose: it never plays the move its name says, so it goes last
   const isStill = (x: Entry) => x.kind === "mocap" && (x.secs ?? 1) < 0.1;
   const typed = [...new Set(plain(asks))].filter((w) => !STOP.has(stem(w)) && !/^\d+$/.test(w));
@@ -2555,7 +2688,8 @@ export async function run(
   let shown: [string, Entry][] | undefined;
   // Jev said none of the shown is what was asked: no line may send the agent back to them
   let rejected = false;
-  const byMeaning = (kind: string) => `bun run find --jev --kind ${kind}${narrowing} "${query}"`;
+  const byMeaning = (kind: string) =>
+    `bun run find --jev --kind ${qArg(kind)}${narrowing} "${query}"`;
   const moodAdvice = () =>
     `${BGM_MOOD}; bgm groups: ${catList(pool.filter((x) => x.kind === "bgm"))}`;
   // an ask for music, or in a mood: words cannot find a mood no group names
@@ -2588,9 +2722,10 @@ export async function run(
   // Hits spread over categories: the one to narrow to, as the studio's chips would
   const spread = (xs: Entry[]) => {
     if (kinds?.every((k) => k.includes("/"))) return "";
-    const cats = tally(xs.map((x) => (x.cat ? catKey(x) : x.kind))).split(", ");
+    const one = catScope(xs);
+    const cats = tally(xs.map((x) => (x.cat ? narrowCatKey(x, one) : x.kind))).split(", ");
     return cats.length > 1
-      ? `hits by category: ${cats.slice(0, 6).join(", ")}${cats.length > 6 ? ", …" : ""}. Narrow to one: --kind ${cats[0]!.split(" ")[0]}`
+      ? `hits by category: ${cats.slice(0, 6).join(", ")}${cats.length > 6 ? ", …" : ""}. Narrow to one: --kind ${qArg(cats[0]!.split(" ")[0]!)}`
       : "";
   };
   const browse = () => {
@@ -2617,7 +2752,9 @@ export async function run(
     const jevPool = kinds?.length ? inKinds.filter((x) => !timing(x)) : matches.slice(0, POOL);
     if (!jevPool.length)
       next.push(
-        "--jev without --kind only reorders word matches, and none matched: add --kind <kind>.",
+        kinds?.length
+          ? `nothing left in --kind ${qArg(kinds.join(","))} after hiding timing curves; name --kind transition/ease or --kind anim-curve, or drop --jev.`
+          : "--jev without --kind only reorders word matches, and none matched: add --kind <kind>.",
       );
     else {
       try {
@@ -2680,14 +2817,20 @@ export async function run(
               (m) => `  ${m}`,
             ),
           );
-        } else next.push("Jev found no entry that fits; word matches below.");
+        } else
+          next.push(
+            matches.length
+              ? "Jev found no entry that fits; word matches below."
+              : "Jev found no entry that fits, and no word matches either.",
+          );
       } catch (err) {
         // jev.py's own words already say which key or quota; anything else never reached it
         const why = (err as Error).message;
+        const tail = matches.length ? "Word matches below." : "No word matches either.";
         next.push(
           why.startsWith("Jev:")
-            ? `${why}. Word matches below.`
-            : `Jev did not run: ${why}. Word matches below. Jev needs python on PATH (packages/clip-catalog/jev.py).`,
+            ? `${why}. ${tail}`
+            : `Jev did not run: ${why}. ${tail}${/ENOENT|spawn/i.test(why) ? " Jev needs python on PATH (packages/clip-catalog/jev.py)." : ""}`,
         );
       }
     }
@@ -2725,18 +2868,22 @@ export async function run(
       next.push(
         `words match English only: say it again in 1-3 plain English words, ${PLAIN}. e.g. bun run find <english words>${filters}`,
         browse(),
-        `last, by meaning in any language (Jev, a paid call): ${byMeaning(kinds?.join(",") ?? "<kind>")}`,
+        ...(!jev
+          ? [
+              `last, by meaning in any language (Jev, a paid call): ${byMeaning(kinds?.join(",") ?? "<kind>")}`,
+            ]
+          : []),
       );
     else if (!best) {
-      const known = new Set(inKinds.flatMap(fieldWords));
+      const known = new Set(inKinds.flatMap((x) => fieldWords(x, !kinds?.length)));
       const guesses = typed.flatMap((w) => (known.has(stem(w)) ? [] : (closest(w, inKinds) ?? [])));
       // the words are there, but --source/--origin/--edition took them: name the sources that have them
       const unfiltered =
         sources || origin || edition || license || dur
-          ? rank(kinds ? pool.filter(kindFilter(kinds, pool).test) : pool, asks)
+          ? rankIn(kinds ? pool.filter(kindFilter(kinds, pool).test) : pool)
           : [];
       const other = unfiltered.length
-        ? `these words are in${kinds ? ` --kind ${kinds.join(",")}` : ""}, but not with${filters.replace(/ --kind \S+/, "")}: ${tally(
+        ? `these words are in${kinds ? ` --kind ${qArg(kinds.join(","))}` : ""}, but not with${narrowing}: ${tally(
             unfiltered.map((x) =>
               sources
                 ? `--source ${x.src ?? "?"}`
@@ -2751,19 +2898,19 @@ export async function run(
           )
             .split(", ")
             .slice(0, 5)
-            .join(", ")} (bun run find ${query}${kinds ? ` --kind ${kinds.join(",")}` : ""})`
+            .join(", ")} (bun run find ${query}${kinds ? ` --kind ${qArg(kinds.join(","))}` : ""})`
         : elsewhere();
       // under --fav: the creator's other lists that have these words, then everything outside the favourites
       const inKind = (xs: Entry[]) => (kf ? xs.filter(kf.test) : xs);
       const inLists = fav
         ? otherLists.flatMap((l) => {
             const xs = markStarred(unstarred, favorites.open(l.name).shown());
-            const hits = rank(inKind(xs.filter((x) => x.fav)), query).length;
+            const hits = rankIn(inKind(xs.filter((x) => x.fav))).length;
             return hits ? [`${l.name} ${hits}`] : [];
           })
         : [];
       const favMiss = fav
-        ? `none of the ${listName} favourites has these words${inLists.length ? `; other lists do: ${inLists.join(", ")} (bun run find ${query} --fav ${inLists[0]!.split(" ")[0]})` : ""}; ${rank(inKind(unstarred), query).length} entries outside the favourites do (bun run find ${query}${filters.replace(` ${favArg}`, "")})`
+        ? `none of the ${listName} favourites has these words${inLists.length ? `; other lists do: ${inLists.join(", ")} (bun run find ${query} --fav ${inLists[0]!.split(" ")[0]})` : ""}; ${rankIn(inKind(unstarred)).length} entries outside the favourites do (bun run find ${query}${filters.replace(` ${favArg}`, "")})`
         : "";
       // the words may be a weapon's or a fight's, whose clips the pool leaves out: they exist, so nothing needs making
       const fights = fightLine();
@@ -2777,15 +2924,15 @@ export async function run(
       else
         next.push(
           ...(other ? [other] : []),
-          `no entry${kinds ? ` of --kind ${kinds.join(",")}` : ""}${unfiltered.length ? ` with${filters.replace(/ --kind \S+/, "")}` : ""} has these words${guesses.length ? ` (did you mean: ${guesses.join(", ")}?)` : ""}. Try other words: ${PLAIN}`,
+          `no entry${kinds ? ` of --kind ${qArg(kinds.join(","))}` : ""}${unfiltered.length ? ` with${narrowing}` : ""} has these words${guesses.length ? ` (did you mean: ${guesses.join(", ")}?)` : ""}. Try other words: ${PLAIN}`,
           browse(),
           ...(music ? [moodAdvice()] : []),
-          `last, by meaning (Jev, a paid call): ${byMeaning(guess())}`,
+          ...(!jev ? [`last, by meaning (Jev, a paid call): ${byMeaning(guess())}`] : []),
           "if none of these has it, make it:",
           ...make(kindNames, entries).map((m) => `  ${m}`),
         );
     } else if (!jev) {
-      const has = new Set(fieldWords(best));
+      const has = new Set(fieldWords(best, !kinds?.length));
       // each word's slot as the query made it, so "ender" keeps the "enderdragon" it joins with its neighbour
       const slotOf = new Map(slotsOf(asks).map((slot) => [slot[0]!, slot]));
       const missing = typed.filter(
@@ -2806,18 +2953,25 @@ export async function run(
           `a sound? add --kind sound (sfx, bgm and Minecraft only): bun run find ${query} --kind sound`,
         );
       // a word no title says may be what a whole category is ("creepy": mc/horror): the category, searched with the rest
+      const one = catScope(inKinds);
       const cats = new Map<string, Entry[]>();
-      for (const x of inKinds) if (x.cat) cats.set(catKey(x), [...(cats.get(catKey(x)) ?? []), x]);
+      for (const x of inKinds)
+        if (x.cat) {
+          const k = narrowCatKey(x, one);
+          cats.set(k, [...(cats.get(k) ?? []), x]);
+        }
       for (const w of missing) {
         const holds = [...cats].filter(
           ([key, xs]) =>
-            key !== catKey(best) &&
-            words(`${xs[0]!.cat} ${catLabel(xs[0]!)} ${CAT_WORDS[key] ?? ""}`).includes(stem(w)),
+            key !== narrowCatKey(best, one) &&
+            words(`${xs[0]!.cat} ${catLabel(xs[0]!)} ${CAT_WORDS[catKey(xs[0]!)] ?? ""}`).includes(
+              stem(w),
+            ),
         );
         const rest = typed.filter((t) => t !== w).join(" ");
         if (holds.length)
           next.push(
-            `"${w}" is what a category holds: ${holds.map(([key, xs]) => `${key} ${xs.length}`).join(", ")}. bun run find ${rest ? `${rest} ` : ""}--kind ${holds[0]![0]}`,
+            `"${w}" is what a category holds: ${holds.map(([key, xs]) => `${key} ${xs.length}`).join(", ")}. bun run find ${rest ? `${rest} ` : ""}--kind ${qArg(holds[0]![0])}`,
           );
       }
       if (kind === "adjust" && missing.length)

@@ -1,19 +1,10 @@
 import { Color, MathUtils } from "three";
 
-export const WHEEL_KEYS = ["shadows", "midtones", "highlights", "offset"] as const;
-export type WheelKey = (typeof WHEEL_KEYS)[number];
-export type WheelValue = { rgb?: [number, number, number]; saturation?: number };
-export type WheelsGrade = {
-  enabled?: boolean;
-  mode?: "primary" | "log";
-  amount?: number;
-} & Partial<Record<WheelKey, WheelValue>>;
+import { hasWheels, WHEEL_KEYS, type WheelsGrade } from "./grade-meta";
+
+export { hasWheels, WHEEL_KEYS, type WheelKey, type WheelsGrade, type WheelValue } from "./grade-meta";
+
 const clamp = (x: number) => MathUtils.clamp(x, 0, 1);
-export const hasWheels = (w?: WheelsGrade) =>
-  !!w &&
-  w.enabled !== false &&
-  (w.amount ?? 100) > 0 &&
-  WHEEL_KEYS.some((k) => w[k]?.rgb?.some((v) => v !== 0) || (w[k]?.saturation ?? 100) !== 100);
 
 export function wheelGrade(w?: WheelsGrade) {
   if (!hasWheels(w)) return (c: Color) => c;

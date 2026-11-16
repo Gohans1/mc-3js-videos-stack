@@ -1,5 +1,5 @@
 // Pure animation state, clock mapping and timeline handle geometry shared by camera/anim.ts, camera/camrow.ts and tests.
-import { ANIM_CATEGORIES, type AnimCurve, ANIMS, fitAnimationLengths } from "film-stage/animate";
+import { ANIM_CATEGORIES, type AnimCurve, ANIMS, fitAnimationLengths } from "film-stage/animate-meta";
 
 import { effectLength, effectSpan } from "../../src/timing-effects.mjs";
 import type { TimingClock } from "../../src/timing.mjs";

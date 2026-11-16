@@ -19,3 +19,36 @@ export const matcher = (q: string) => {
     return want.every((w) => have.some((h) => h.startsWith(w)));
   };
 };
+
+// Incrementally runs indexed work during browser idle slices so large catalogs warm without frame drops
+export const scheduleIdleBatch = (
+  total: number,
+  stepSlice: (startIndex: number, batchSize: number) => number,
+  shouldContinue: () => boolean = () => true,
+): (() => void) => {
+  if (typeof window === "undefined" || total <= 0) return () => {};
+  let idx = 0;
+  let cancelled = false;
+  const scheduleNext = (cb: (idle?: IdleDeadline) => void): (() => void) => {
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(cb);
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(cb, 16);
+    return () => window.clearTimeout(id);
+  };
+  let cancelStep = () => {};
+  const step = (idle?: IdleDeadline) => {
+    if (cancelled || !shouldContinue()) return;
+    if (!idle) idx = stepSlice(idx, 600);
+    else
+      do idx = stepSlice(idx, 40);
+      while (idx < total && idle.timeRemaining() > 2);
+    if (idx < total) cancelStep = scheduleNext(step);
+  };
+  cancelStep = scheduleNext(step);
+  return () => {
+    cancelled = true;
+    cancelStep();
+  };
+};

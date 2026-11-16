@@ -25,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from seconds import heard_second, meant  # noqa: E402
 from stale import say_if_stale  # noqa: E402
+from studio_tell import tell  # noqa: E402
 
 R = Path.cwd() / "renders"  # run from the film folder
 args = sys.argv[1:]
@@ -118,14 +119,18 @@ if args:
             usage(f"cut {n} is at {c:.2f} s, outside {video} (film seconds {start:g}-{start + dur:.2f})")
         secs = [min(max(c + d, start), end) for d in (-0.25, -0.15, -0.05, 0.05, 0.15, 0.35)]
         # cut n opens shots-timeline row n+1 when the rows are the video's shots (one more row than cuts)
-        conf = json.loads(Path("package.json").read_text(encoding="utf8")).get("live-studio", {}) if Path("package.json").exists() else {}
-        rows_file = conf.get("shotsTimeline")
-        rows = json.loads(Path(rows_file).read_text(encoding="utf8")) if rows_file and Path(rows_file).exists() else None
+        try:
+            conf = json.loads(Path("package.json").read_text(encoding="utf8")).get("live-studio", {}) if Path("package.json").exists() else {}
+            rows_file = conf.get("shotsTimeline") if isinstance(conf, dict) else None
+            rows = json.loads(Path(rows_file).read_text(encoding="utf8")) if isinstance(rows_file, str) and Path(rows_file).exists() else None
+        except (ValueError, OSError):
+            rows_file, rows = None, None
         meet = ""
-        if isinstance(rows, list) and len(rows) == len(ends) + 1:
+        if isinstance(rows, list) and len(rows) == len(ends) + 1 and isinstance(rows[n], dict) and isinstance(rows[n + 1], dict):
             a, b = rows[n], rows[n + 1]
-            tr = b.get("transition") or {}
-            fx = f"{tr.get('fx')} {tr.get('len', 0):g} s ({rows_file} [{n + 1}].transition)" if tr.get("fx") else f"a hard cut (a transition goes in {rows_file} [{n + 1}].transition)"
+            tr = b.get("transition") if isinstance(b.get("transition"), dict) else {}
+            tlen = tr.get("len", 0)
+            fx = f"{tr.get('fx')} {tlen if isinstance(tlen, (int, float)) else 0:g} s ({rows_file} [{n + 1}].transition)" if tr.get("fx") else f"a hard cut (a transition goes in {rows_file} [{n + 1}].transition)"
             meet = f': from shot {n} "{a.get("name", "")}" into shot {n + 1} "{b.get("name", "")}", {fx}'
         header = f"cut {n} at {c:.2f} s{meet}; frames from 0.25 s before to 0.35 s after"
         after = f"; bun run at {round(c, 2):g} names every row that places it"
@@ -144,44 +149,57 @@ if args:
     if header:
         print(header)
     say_if_stale(video)
+    what = "every shot" if mode == "shots" else f"cut {args[2]}" if mode else ", ".join(f"{s:g}" for s in secs[:8]) + " s"
+    # a cut's frames are one stretch, lit on the studio's ruler; seconds far apart are named in the line only
+    lit = {"at": secs[0], "to": secs[-1]} if mode == "cut" else {"at": secs[0]} if len(secs) == 1 else {}
+    tell(Path.cwd(), f"Looking at frames of {Path(video).as_posix()}: {what}", **lit)
     # the video's frames go to a folder of their own, never over the film's rendered stills
     tmp = Path(tempfile.mkdtemp(prefix="sheet-"))
-    for s in secs:
-        # named as render names its stills (still_12.5s.jpg), to the thousandth: :g writes 5e-05, which is no second
-        named = f"{s:.3f}".rstrip("0").rstrip(".")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{max(0.0, s - start):.6f}", "-i", video, "-frames:v", "1", "-q:v", "3",
-                        str(tmp / f"still_{named}s.jpg")], check=True)
+    try:
+        for s in secs:
+            # named as render names its stills (still_12.5s.jpg), to the thousandth: :g writes 5e-05, which is no second
+            named = f"{s:.3f}".rstrip("0").rstrip(".")
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{max(0.0, s - start):.6f}", "-i", video, "-frames:v", "1", "-q:v", "3",
+                            str(tmp / f"still_{named}s.jpg")], check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        shutil.rmtree(tmp, ignore_errors=True)
+        usage(f"ffmpeg could not read frames from {video}: {e}", 1)
     src, name = tmp, f"sheet_{Path(video).stem}_{'shots_' if mode == 'shots' else f'cut{args[2]}_' if mode else ''}"
 else:
     src, name = R, "sheet_"
-# a still a render names by its second (still_12.5s.jpg); any other still_*.jpg is no frame of the film
-at_second = {f: re.fullmatch(r"still_(-?\d+(?:\.\d+)?)s\.jpg", f.name) for f in src.glob("still_*.jpg")}
-files = sorted((f for f, m in at_second.items() if m), key=lambda f: float(at_second[f].group(1)))
-if not files:
-    usage("no renders/still_*.jpg to lay out: AT=1,4,8 bun run render stills first, or bun run sheet <video> 10,20,30", 1)
-R.mkdir(exist_ok=True)
-for old in R.glob(f"{name}*.jpg"):
-    if re.fullmatch(re.escape(name) + r"\d+\.jpg", old.name):
-        old.unlink()
-# tiles 640 wide at the stills' own shape (a draft still is the picture with its time strip under it)
-w, h = map(int, subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(files[0])], capture_output=True, text=True, check=True).stdout.split(","))
-TH = round(640 * h / w / 2) * 2
-for i in range(0, len(files), 6):
-    grp = files[i:i + 6]
-    inp, filt = [], ""
-    for k, f in enumerate(grp):
-        inp += ["-i", str(f)]
-        filt += f"[{k}:v]scale=640:{TH}[v{k}];"  # the draft's own time strip names each picture
-    n = len(grp)
-    while n % 3:
-        inp += ["-f", "lavfi", "-i", f"color=black:s=640x{TH}"]
-        filt += f"[{n}:v]null[v{n}];"
-        n += 1
-    filt += "".join(f"[v{k}]" for k in range(n)) + f"xstack=inputs={n}:layout=" + "|".join(f"{(k % 3) * 640}_{(k // 3) * TH}" for k in range(n))
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *inp, "-filter_complex", filt, "-frames:v", "1", str(R / f"{name}{i // 6}.jpg")], check=True)
-    print(f"renders/{name}{i // 6}.jpg  {', '.join(f.stem.removeprefix('still_') for f in grp)}")
-if tmp:
-    shutil.rmtree(tmp, ignore_errors=True)
+    tell(Path.cwd(), "Looking at the rendered stills")
+try:
+    # a still a render names by its second (still_12.5s.jpg); any other still_*.jpg is no frame of the film
+    at_second = {f: re.fullmatch(r"still_(-?\d+(?:\.\d+)?)s\.jpg", f.name) for f in src.glob("still_*.jpg")}
+    files = sorted((f for f, m in at_second.items() if m), key=lambda f: float(at_second[f].group(1)))
+    if not files:
+        usage("no renders/still_*.jpg to lay out: AT=1,4,8 bun run render stills first, or bun run sheet <video> 10,20,30")
+    R.mkdir(exist_ok=True)
+    for old in R.glob(f"{name}*.jpg"):
+        if re.fullmatch(re.escape(name) + r"\d+\.jpg", old.name):
+            old.unlink()
+    # tiles 640 wide at the stills' own shape (a draft still is the picture with its time strip under it)
+    w, h = map(int, subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(files[0])], capture_output=True, text=True, check=True).stdout.split(","))
+    TH = round(640 * h / w / 2) * 2
+    for i in range(0, len(files), 6):
+        grp = files[i:i + 6]
+        inp, filt = [], ""
+        for k, f in enumerate(grp):
+            inp += ["-i", str(f)]
+            filt += f"[{k}:v]scale=640:{TH}[v{k}];"  # the draft's own time strip names each picture
+        n = len(grp)
+        while n % 3:
+            inp += ["-f", "lavfi", "-i", f"color=black:s=640x{TH}"]
+            filt += f"[{n}:v]null[v{n}];"
+            n += 1
+        filt += "".join(f"[v{k}]" for k in range(n)) + f"xstack=inputs={n}:layout=" + "|".join(f"{(k % 3) * 640}_{(k // 3) * TH}" for k in range(n))
+        subprocess.run(["ffmpeg", "-v", "error", "-y", *inp, "-filter_complex", filt, "-frames:v", "1", str(R / f"{name}{i // 6}.jpg")], check=True)
+        print(f"renders/{name}{i // 6}.jpg  {', '.join(f.stem.removeprefix('still_') for f in grp)}")
+except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
+    usage(f"could not lay out frames from {src}: {e}", 1)
+finally:
+    if tmp:
+        shutil.rmtree(tmp, ignore_errors=True)
 sheets = (len(files) + 5) // 6
 print(len(files), "pictures ->", sheets, "sheet" if sheets == 1 else "sheets")
 print(f"next: open {'it' if sheets == 1 else 'them'} to look{after}")

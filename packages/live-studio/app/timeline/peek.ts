@@ -4,12 +4,11 @@
 // scrubs. Off while playing, writing a note, drawing or flying the free camera, where the picture must stay on the playhead.
 // Picture only unless Shift+S, CapCut's "video and audio": then each new frame under the pointer plays a few frames of its
 // sound, and a dragged playhead's too (sound/skim.ts)
-import { DURATION } from "film/scene";
-
+import { DURATION } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, setPref } from "../core/store";
 import { FPS } from "../core/time";
-import { audioCtx } from "../sound/clock";
+import { resumeAudio } from "../sound/clock";
 import { skimSound } from "../sound/skim";
 import { timeAt } from "./timeline";
 
@@ -42,7 +41,7 @@ export const togglePreviewAudio = () => {
   const on = !get().previewAudio;
   setPref("previewAudio", on);
   if (on) {
-    void audioCtx.resume();
+    resumeAudio();
     if (!get().previewAxis) setPref("previewAxis", true);
   }
   say(
@@ -57,11 +56,22 @@ export const attachPreviewAxis = () => {
   const rows = [ruler, camrow, textrow, detail, keyrows, lanes];
   const scroller = detail.closest<HTMLElement>("[data-tracks-scroll]")!; // the rows' scroll box under the ruler, which the line runs down to its foot
   timeline.addEventListener("pointermove", (e) => {
+    const target = e.target as Element | null;
+    const dr = detail.getBoundingClientRect();
+    const inGap =
+      !!target &&
+      scroller.contains(target) &&
+      !target.closest("button, input, canvas, [role=separator]") &&
+      dr.width > 0 &&
+      e.clientX >= dr.left &&
+      e.clientX <= dr.right;
     const c =
       rows.find((r) => r === e.target) ??
-      (e.target instanceof HTMLCanvasElement && e.target.hasAttribute("data-timeline-row")
-        ? e.target
-        : null);
+      (target instanceof HTMLCanvasElement && target.hasAttribute("data-timeline-row")
+        ? target
+        : inGap
+          ? detail
+          : null);
     if (!c || e.pointerType !== "mouse" || e.buttons || !allowed()) return end();
     const r = c.getBoundingClientRect(),
       x = Math.max(0, Math.min(r.width, e.clientX - r.left));

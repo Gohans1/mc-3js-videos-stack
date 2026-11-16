@@ -4,16 +4,24 @@ import { test } from "node:test";
 import { ADJUSTMENTS } from "film-stage/grade-color";
 
 import {
+  ADJUSTMENT_KEYS,
+  AdjustmentTimeline,
+  CAM_KEYS,
   CamTimeline,
   checkFiles,
   checkFilm,
   Edit,
   Grade,
   KeyFile,
+  SHOT_KEYS,
+  SHOT_SLOT_KEYS,
   ShotsTimeline,
+  SOUND_KEYS,
   SoundProcess,
   SoundTimeline,
   StudioConfig,
+  TEXT_KEYS,
+  TEXT_SLOT_KEYS,
   TextTimeline,
   TimingTimeline,
   Trials,
@@ -327,6 +335,19 @@ test("velocity and text timelines welcome Cinetic accents, annotation shapes, vo
   };
   assert.equal(TimingTimeline.safeParse(velOk).success, true);
   assert.equal(TimingTimeline.safeParse(velCustom).success, true);
+  const timingWithCustom = {
+    note: "film timing",
+    main: [{ id: "m1", kind: "clip", sourceFrom: 0, sourceTo: 4, tag: "a" }],
+    speeds: [{ from: 0, to: 4, rate: 1, tag: "s" }],
+    freezes: [{ at: 2, duration: 1, tag: "f" }],
+    cuts: [{ from: 1, to: 1.5, tag: "c" }],
+    gaps: [{ from: 3, to: 3.5, tag: "g" }],
+    layers: {
+      base: { custom: true },
+      changes: [{ before: { custom: 1 }, after: { custom: 2 } }],
+    },
+  };
+  assert.deepEqual(TimingTimeline.parse(timingWithCustom), timingWithCustom);
   assert.equal(
     TimingTimeline.safeParse({ velocity: [{ ...velOk.velocity[0], effect: "" }] }).success,
     false,
@@ -766,5 +787,28 @@ test("checkFilm resolves object-labeled focus targets via findTarget and reports
       "custom/cam.json",
     ).join(),
     /custom\/cam\.json \[0\]\.focus/,
+  );
+});
+
+test("contract-keys matches contract zod schema field lists", () => {
+  assert.deepEqual(SOUND_KEYS.audio, Object.keys(SoundTimeline.shape));
+  assert.deepEqual(SOUND_KEYS.beds, Object.keys(SoundTimeline.shape.beds.element.shape));
+  assert.deepEqual(SOUND_KEYS.sfx, Object.keys(SoundTimeline.shape.sfx.element.shape));
+  assert.deepEqual(CAM_KEYS, Object.keys(CamTimeline.unwrap().shape));
+  assert.deepEqual(SHOT_KEYS, Object.keys(ShotsTimeline.unwrap().shape));
+  assert.deepEqual(TEXT_KEYS, Object.keys(TextTimeline.shape.items.element.shape));
+  assert.deepEqual(ADJUSTMENT_KEYS, Object.keys(AdjustmentTimeline.shape.items.element.shape));
+  const shotAnim = ShotsTimeline.unwrap().shape.anim.unwrap().shape;
+  const shotTrans = ShotsTimeline.unwrap().shape.transition.unwrap().shape;
+  assert.deepEqual(SHOT_SLOT_KEYS, [
+    ...["in", "out", "combo"].flatMap((s) =>
+      Object.keys(shotAnim[s].unwrap().shape).map((k) => `anim.${s}.${k}`),
+    ),
+    ...Object.keys(shotTrans).map((k) => `transition.${k}`),
+  ]);
+  const textItem = TextTimeline.shape.items.element.shape;
+  assert.deepEqual(
+    TEXT_SLOT_KEYS,
+    ["in", "out"].flatMap((s) => Object.keys(textItem[s].unwrap().shape).map((k) => `${s}.${k}`)),
   );
 });

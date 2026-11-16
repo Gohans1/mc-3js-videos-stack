@@ -19,17 +19,21 @@ const HZ = 60,
 export const motionCheck =
   (render, cfg, cuts = []) =>
   async (target, from, to) => {
-    const { camera, free, look } = render.tools;
+    const { camera, free, look } = render.tools ?? {};
     if (typeof target !== "string" || !(to > from))
       return [
         "ERROR usage: CHECK=motion:<target>,<from s>,<to s> (target: cam, a bone, an object name or label)",
       ];
     const isCam = target === "cam";
+    if (!camera) return ["ERROR CHECK=motion requires draw.tools.camera on the film"];
     const obj = findTarget(render.tools, target);
     if (!obj) return [targetHelp(render.tools, target)];
+    if (!isCam && !free)
+      return ["ERROR CHECK=motion on an object requires draw.tools.free on the film"];
 
     // one fixed camera for the whole move, so ghosts and the path line up; put back afterwards
-    const saved = { on: free.on, p: free.p.clone(), l: free.l.clone(), fov: free.fov };
+    const saved =
+      !isCam && free ? { on: free.on, p: free.p.clone(), l: free.l.clone(), fov: free.fov } : null;
     if (!isCam) {
       if (cfg.inspect) {
         const [px, py, pz, lx, ly, lz, fov] = cfg.inspect;
@@ -39,7 +43,8 @@ export const motionCheck =
       } else {
         render((from + to) / 2);
         free.p.copy(camera.getWorldPosition(new THREE.Vector3()));
-        free.l.copy(look);
+        if (look) free.l.copy(look);
+        else camera.getWorldDirection(free.l).add(free.p);
         free.fov = camera.fov;
       }
       free.on = true;
@@ -240,8 +245,10 @@ export const motionCheck =
       out.push({ still: `${tag}_turn.jpg`, canvas: k.canvas });
     }
 
-    Object.assign(free, { on: saved.on, fov: saved.fov });
-    free.p.copy(saved.p);
-    free.l.copy(saved.l);
+    if (saved) {
+      Object.assign(free, { on: saved.on, fov: saved.fov });
+      free.p.copy(saved.p);
+      free.l.copy(saved.l);
+    }
     return out;
   };

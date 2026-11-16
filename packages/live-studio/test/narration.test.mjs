@@ -68,3 +68,27 @@ test("what of the sound shows in the picture: where the narration clips put the 
     tracks: [{ id: "v", mute: true }],
   });
 });
+
+test("narration projection stops at file EOF with explicit length, rate, start and reverse", () => {
+  const audio = {
+    narration: "voice",
+    sfx: [{ name: "voice", at: 10, start: 2, length: 8, rate: 2 }],
+  };
+  const projected = narrationLines(lines, audio, 5);
+  assert.deepEqual(projected, [
+    { text: "two", s: 10, e: 11.5, words: [{ w: "two", s: 10.5, e: 11 }] },
+  ]);
+  assert.deepEqual(
+    narrationLines(lines, { ...audio, sfx: [{ ...audio.sfx[0], reverse: true }] }, 5),
+    [{ text: "two", s: 10, e: 11.5, words: [{ w: "two", s: 10.5, e: 11 }] }],
+  );
+  assert.deepEqual(
+    narrationLines(lines, { ...audio, sfx: [{ ...audio.sfx[0], start: 5 }] }, 5),
+    [],
+  );
+});
+
+test("narration keeps an explicit span when the source duration is unknown", () => {
+  const audio = { narration: "voice", sfx: [{ name: "voice", at: 0, length: 8 }] };
+  assert.deepEqual(narrationLines(lines, audio, 0), lines);
+});

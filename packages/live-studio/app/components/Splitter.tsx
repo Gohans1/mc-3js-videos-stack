@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // The edges the creator drags to share the screen between the picture, the timeline and the right column (CapCut's panel
 // edges), as the WAI-ARIA window splitter: arrows move it, Enter folds the pane away and back, a double click puts it back to
 // its own size. The pane it sizes sits after it (below, or to the right) unless before is set, and this browser remembers the size
 import { cn } from "@/lib/utils";
 
+import {
+  fitSplitterValue,
+  nextEnterToggle,
+  parseStoredSize,
+  stepSplitterArrow,
+} from "./splitter-layout";
+
 export const useStoredSize = (key: string) => {
   const [v, setV] = useState<number | null>(() => {
     try {
-      const s = localStorage.getItem(key);
-      return s === null ? null : Number(s);
+      return parseStoredSize(localStorage.getItem(key));
     } catch {
       return null;
     }
@@ -55,20 +61,45 @@ export function Splitter({
   className,
   lineClassName,
 }: Props) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef(measure);
   const [last, setLast] = useState(0); // the size before it was folded away, for Enter to bring back
-  const fit = (n: number) => {
-    const lo = min();
-    return fold && n < lo / 2 ? 0 : Math.round(Math.min(max(), Math.max(lo, n)));
+  const [measured, setMeasured] = useState<number | null>(null);
+  useEffect(() => {
+    measureRef.current = measure;
+  }, [measure]);
+  useEffect(() => {
+    const refresh = () => {
+      const next = Math.round(measureRef.current());
+      setMeasured((prev) => (prev === next ? prev : next));
+    };
+    const raf = requestAnimationFrame(refresh);
+    const box = barRef.current?.parentElement;
+    const ro = box && typeof ResizeObserver !== "undefined" ? new ResizeObserver(refresh) : null;
+    if (ro && box) ro.observe(box);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
+  }, []);
+  const lo = Math.round(min());
+  const hi = Math.max(lo, Math.round(max()));
+  const fit = (n: number, current: number) =>
+    fitSplitterValue({ target: n, current, min: lo, max: hi, fold });
+  const apply = (next: number | null, current: number) => {
+    if (fold && next === 0 && current >= lo) setLast(Math.round(current));
+    set(next);
   };
-  const now = size ?? measure();
+  const now = size ?? measured ?? measure();
   return (
     <div
+      ref={barRef}
       role="separator"
       tabIndex={0}
       aria-label={label}
       aria-orientation={across ? "horizontal" : "vertical"}
-      aria-valuemin={fold ? 0 : Math.round(min())}
-      aria-valuemax={Math.round(max())}
+      aria-valuemin={fold ? 0 : lo}
+      aria-valuemax={hi}
       aria-valuenow={Math.round(now)}
       title={`${label}: drag to resize, double-click to reset`}
       onPointerDown={(e) => {
@@ -92,7 +123,11 @@ export function Splitter({
             end();
             return;
           }
-          set(fit(start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from)));
+          const curNow = measure();
+          apply(
+            fit(start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from), start),
+            curNow,
+          );
         };
         bar.addEventListener("pointermove", move);
         for (const t of ends) bar.addEventListener(t, end);
@@ -103,14 +138,14 @@ export function Splitter({
           grow = across ? { ArrowUp: by1, ArrowDown: -by1 } : { ArrowLeft: by1, ArrowRight: -by1 };
         const by = grow[e.key as keyof typeof grow],
           cur = size ?? measure();
-        if (by !== undefined) set(Math.round(Math.min(max(), Math.max(min(), cur + by))));
-        else if (e.key === "Home") set(min());
-        else if (e.key === "End") set(Math.round(max()));
+        if (by !== undefined) {
+          set(stepSplitterArrow({ current: cur, delta: by, min: lo, max: hi, fold }));
+        } else if (e.key === "Home") apply(fold ? 0 : lo, cur);
+        else if (e.key === "End") set(hi);
         else if (e.key === "Enter" && fold) {
-          if (cur > 0) {
-            setLast(cur);
-            set(0);
-          } else set(last || null);
+          const toggle = nextEnterToggle({ cur, last, min: lo, max: hi });
+          setLast(toggle.last);
+          set(toggle.next);
         } else return;
         e.preventDefault();
         e.stopPropagation();

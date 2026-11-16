@@ -15,7 +15,7 @@ def keys(env, file):
         raw = re.split(r"[,\s]+", os.environ[env])
     else:
         f = Path.home() / ".secrets" / file
-        raw = [l.split("=", 1)[-1] for l in f.read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")] if f.exists() else []
+        raw = [l.split("=", 1)[-1] for l in f.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")] if f.exists() else []
     return list(dict.fromkeys(k.strip() for k in raw if k.strip()))
 
 
@@ -36,7 +36,7 @@ def spent_file():
 
 def read_spent():
     try:
-        return json.loads(spent_file().read_text())
+        return json.loads(spent_file().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -86,7 +86,7 @@ class Jev:
                 try:
                     res = json.load(urllib.request.urlopen(req, timeout=120))
                     with self.lock:
-                        self.spent += res.get("usage", {}).get("cost") or 0
+                        self.spent += (res.get("usage") or {}).get("cost") or 0
                         if self.spent > SPEND_CAP:
                             sys.exit(f"Jev: stopped at ${self.spent:.4f}, past SPEND_CAP ${SPEND_CAP}")
                         self.used = name
@@ -101,8 +101,6 @@ class Jev:
                                 self.routes.pop(0)
                         break
                     # a server fault (5xx) passes like a burst: one lost answer would throw away every heat paid before it
-                    if (e.code != 429 and e.code < 500) or not wait:
-                        raise
                     if e.code == 429 and after > 300:
                         with self.lock:
                             if any(r[0] == name for r in self.routes):
@@ -110,14 +108,16 @@ class Jev:
                                 back[name] = time.time() + after
                                 spent_file().parent.mkdir(parents=True, exist_ok=True)
                                 tmp = spent_file().with_suffix(f".{os.getpid()}.tmp")
-                                tmp.write_text(json.dumps(back))
+                                tmp.write_text(json.dumps(back), encoding="utf-8")
                                 tmp.replace(spent_file())
                                 print(f"Jev: {name} quota spent, back in {after / 3600:.1f} h", file=sys.stderr)
                                 self.routes = [r for r in self.routes if r[0] != name]
                         break
+                    if (e.code != 429 and e.code < 500) or not wait:
+                        raise
                     time.sleep(after)
-                # a connection dropped mid-answer is no URLError: urlopen passes http.client's own faults through
-                except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
+                # a connection dropped mid-answer or malformed 200 payload is retried cleanly
+                except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException, ValueError, KeyError):
                     if not wait:
                         raise
                     time.sleep(wait)

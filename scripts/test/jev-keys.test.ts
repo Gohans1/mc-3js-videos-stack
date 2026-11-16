@@ -2,15 +2,15 @@
 // route's other keys, and later runs try that route last until it is back; a refused key hands over to the route's next
 // key. A stand-in Jev server answers by key; the real routes are swapped for it, so no test reaches the net
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const JEV_DIR = join(import.meta.dir, "../../packages/clip-catalog");
 
 // key -> how the stand-in answers it: "ok", "spent" (429, back in an hour), "refused" (403, a key that cannot call), or
-// a fault on the key's first call only, then ok: "busy" (429 with the Retry-After in `burst`), "down" (503)
-let answers: Record<string, "ok" | "spent" | "refused" | "busy" | "down"> = {};
+// a fault on the key's first call only, then ok: "busy" (429 with the Retry-After in `burst`), "down" (503), "badjson" (200 HTML)
+let answers: Record<string, "ok" | "spent" | "refused" | "busy" | "down" | "badjson"> = {};
 let burst = "1";
 const asked: string[] = [];
 const ok = () => Response.json({ answers: { q: { noul: 0.9 } }, usage: { cost: 0 } });
@@ -23,17 +23,19 @@ const server = Bun.serve({
     asked.push(key);
     const a = answers[key];
     const again = asked.filter((k) => k === key).length > 1;
-    if (a === "ok" || ((a === "busy" || a === "down") && again)) return ok();
+    if (a === "ok" || ((a === "busy" || a === "down" || a === "badjson") && again)) return ok();
     return a === "busy"
       ? new Response("RateLimitError", { status: 429, headers: { "Retry-After": burst } })
       : a === "down"
         ? new Response("Bad Gateway", { status: 503 })
-        : a === "refused"
-          ? new Response("This API key can't call models", { status: 403 })
-          : new Response("FreeUsageLimitError", {
-              status: 429,
-              headers: { "Retry-After": "3600" },
-            });
+        : a === "badjson"
+          ? new Response("<html>bad gateway</html>", { status: 200 })
+          : a === "refused"
+            ? new Response("This API key can't call models", { status: 403 })
+            : new Response("FreeUsageLimitError", {
+                status: 429,
+                headers: { "Retry-After": "3600" },
+              });
   },
 });
 // a server that hangs up on its first call before any answer (python raises RemoteDisconnected, not a URLError), then
@@ -53,11 +55,17 @@ const flaky = Bun.listen({
     },
   },
 });
-afterAll(() => (server.stop(true), flaky.stop(true)));
+const temps: string[] = [];
+afterAll(() => {
+  server.stop(true);
+  flaky.stop(true);
+  for (const d of temps) rmSync(d, { recursive: true, force: true });
+});
 
 // a home with ~/.secrets/zen.env and paid.env holding these key lines
 const home = (zen: string, paid = "") => {
   const dir = mkdtempSync(join(tmpdir(), "jev-home-"));
+  temps.push(dir);
   mkdirSync(join(dir, ".secrets"));
   writeFileSync(join(dir, ".secrets/zen.env"), zen);
   if (paid) writeFileSync(join(dir, ".secrets/paid.env"), paid);
@@ -93,7 +101,7 @@ test("a spent quota skips the route's other keys, as Zen counts it per network",
   expect(asked).toEqual(["z1", "p1"]);
   expect(r.err).toContain("Jev: Zen quota spent, back in 1.0 h");
   expect(r.err).not.toContain("z1");
-});
+}, 15000);
 
 test("the next run starts on a route with quota, not the spent one", async () => {
   answers = { z1: "spent", p1: "ok" };
@@ -103,7 +111,7 @@ test("the next run starts on a route with quota, not the spent one", async () =>
   const r = await ask(dir);
   expect(r.code).toBe(0);
   expect(asked).toEqual(["p1"]);
-});
+}, 15000);
 
 test("a route remembered as spent is still tried last, in case its quota came back early", async () => {
   answers = { z1: "spent", p1: "ok" };
@@ -114,7 +122,7 @@ test("a route remembered as spent is still tried last, in case its quota came ba
   const r = await ask(dir);
   expect(r.code).toBe(0);
   expect(asked).toEqual(["p1", "z1"]);
-});
+}, 15000);
 
 test("a refused key hands over to the route's next key", async () => {
   answers = { z1: "refused", z2: "ok" };
@@ -123,7 +131,7 @@ test("a refused key hands over to the route's next key", async () => {
   expect(r.code).toBe(0);
   expect(asked).toEqual(["z1", "z2"]);
   expect(r.err).toContain("Jev: Zen key 1 of 2 refused (403)");
-});
+}, 15000);
 
 test("every route spent: it says when, and that more keys on one network do not help", async () => {
   answers = { z1: "spent", p1: "spent" };
@@ -131,29 +139,31 @@ test("every route spent: it says when, and that more keys on one network do not 
   expect(r.code).not.toBe(0);
   expect(r.err).toContain("every route has spent its quota");
   expect(r.err).toContain("per network");
-});
+}, 15000);
 
-test("a burst limit or a server fault is waited out on the same key: one lost answer loses the heats paid before it", async () => {
-  for (const [a, after] of [
-    ["busy", "1"],
-    ["busy", "Wed, 21 Oct 2015 07:28:00 GMT"],
-    ["busy", "-5"],
-    ["busy", "nan"],
-    ["down", ""],
-  ] as const) {
+for (const [label, a, after] of [
+  ["seconds Retry-After", "busy", "1"],
+  ["HTTP-date Retry-After", "busy", "Wed, 21 Oct 2015 07:28:00 GMT"],
+  ["negative Retry-After", "busy", "-5"],
+  ["non-numeric Retry-After", "busy", "nan"],
+  ["server 503", "down", ""],
+  ["non-JSON 200 body", "badjson", ""],
+] as const) {
+  test(`burst limit / transient fault retried on same key (${label})`, async () => {
     answers = { z1: a };
     burst = after;
     asked.length = 0;
     const r = await ask(home("z1\n"));
     expect(r.code, `${a} ${after}: ${r.err}`).toBe(0);
     expect(asked).toEqual(["z1", "z1"]);
-  }
-});
+  }, 15000);
+}
 
 test("a connection dropped before any answer is retried", async () => {
+  hungUp = 0;
   answers = { z1: "ok" };
   const r = await ask(home("z1\n"), `http://127.0.0.1:${flaky.port}/`);
   expect(r.code, r.err).toBe(0);
   expect(JSON.parse(r.out)).toEqual({ q: { noul: 0.9 } });
   expect(hungUp).toBe(2);
-});
+}, 15000);

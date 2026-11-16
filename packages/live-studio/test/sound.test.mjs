@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
-import { audioPeaks, oggInfo, openSound, wavInfo, wavPeaks } from "../src/sound.mjs";
+import { audioPeaks, oggInfo, openSound, probeAudio, wavInfo, wavPeaks } from "../src/sound.mjs";
 import { compactJson } from "../src/timeline_file.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "studio-sound-"));
@@ -32,6 +32,49 @@ const wav = (file, rate = 8000) => {
   h.writeUInt32LE(data.length, 40);
   writeFileSync(file, Buffer.concat([h, data]));
 };
+
+test("invalid cached vault durations fall back to the actual audio file", () => {
+  const project = mkdtempSync(join(dir, "invalid-peak-seconds-"));
+  mkdirSync(join(project, "vault"));
+  wav(join(project, "vault/tap.wav"));
+  writeFileSync(join(project, "vault/PEAKS.json"), JSON.stringify({ tap: { seconds: "0.5" } }));
+  const sound = openSound(project, {
+    soundTimeline: "audio.json",
+    sfx: "sound",
+    soundVault: "vault",
+  });
+  assert.equal(sound.library().find((item) => item.name === "tap").seconds, 2);
+});
+
+test("audio probing rejects float16 WAV and accepts supported floating point audio", () => {
+  const bad = join(dir, "invalid-float16.wav");
+  wav(bad);
+  const bytes = readFileSync(bad);
+  bytes.writeUInt16LE(3, 20);
+  writeFileSync(bad, bytes);
+  assert.equal(probeAudio(bad), null);
+  const good = join(dir, "valid-float32.wav");
+  const made = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=0.5", "-c:a", "pcm_f32le", good],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(made.status, 0, made.stderr);
+  assert.ok(probeAudio(good)?.seconds > 0);
+});
+
+test("null optional sound metadata leaves local audio usable", () => {
+  const project = mkdtempSync(join(dir, "null-metadata-"));
+  mkdirSync(join(project, "sound/sfx"), { recursive: true });
+  wav(join(project, "sound/sfx/tap.wav"));
+  writeFileSync(join(project, "sound/sfx/SOURCES.json"), "null");
+  const sound = openSound(project, {
+    soundTimeline: "audio.json",
+    sfx: "sound/sfx",
+    soundVault: false,
+  });
+  assert.equal(sound.library().find((item) => item.name === "tap").seconds, 2);
+});
 
 test("a WAV's length comes from its header and its level curve follows the sound", () => {
   const f = join(dir, "two.wav");
@@ -519,4 +562,98 @@ test("peaksAsync decodes local ogg peaks asynchronously and coalesces concurrent
   assert.ok(r1 && r1.peaks.some((v) => v > 0.2));
   assert.deepEqual(r1, r2);
   assert.equal(await s.peaksAsync("missing"), null);
+});
+
+test("the library describes the root WAV selected over nested duplicates", (t) => {
+  const project = mkdtempSync(join(tmpdir(), "sound-root-precedence-"));
+  t.after(() => rmSync(project, { recursive: true, force: true }));
+  mkdirSync(join(project, "sound/z"), { recursive: true });
+  wav(join(project, "sound/z/tap.wav"));
+  const made = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(project, "sound/tap.wav")],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(made.status, 0, made.stderr);
+  const sound = openSound(project, {
+    soundTimeline: "audio.json",
+    sfx: "sound",
+    soundVault: false,
+  });
+  assert.equal(sound.fileOf("tap"), join(project, "sound/tap.wav"));
+  assert.equal(sound.library().find((x) => x.name === "tap").seconds, 1);
+});
+
+test("nested duplicate WAV takes precedence over OGG as in the Python mixer", (t) => {
+  const project = mkdtempSync(join(tmpdir(), "sound-nested-precedence-"));
+  t.after(() => rmSync(project, { recursive: true, force: true }));
+  mkdirSync(join(project, "sound/a"), { recursive: true });
+  mkdirSync(join(project, "sound/z"), { recursive: true });
+  wav(join(project, "sound/a/tap.wav"));
+  const made = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=d=3",
+      "-c:a",
+      "libvorbis",
+      join(project, "sound/z/tap.ogg"),
+    ],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(made.status, 0, made.stderr);
+  const sound = openSound(project, {
+    soundTimeline: "audio.json",
+    sfx: "sound",
+    soundVault: false,
+  });
+  assert.equal(sound.fileOf("tap"), join(project, "sound/a/tap.wav"));
+  assert.equal(sound.library().find((x) => x.name === "tap").seconds, 2);
+});
+
+test("valid compressed WAV duration is probed instead of being classified as corrupt", (t) => {
+  const project = mkdtempSync(join(tmpdir(), "sound-compressed-wav-"));
+  t.after(() => rmSync(project, { recursive: true, force: true }));
+  mkdirSync(join(project, "sound"));
+  for (const codec of ["adpcm_ima_wav", "pcm_mulaw"]) {
+    const made = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=d=1",
+        "-c:a",
+        codec,
+        join(project, `sound/${codec}.wav`),
+      ],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    assert.equal(made.status, 0, made.stderr);
+  }
+  const sound = openSound(project, {
+    soundTimeline: "audio.json",
+    sfx: "sound",
+    soundVault: false,
+  });
+  for (const name of ["adpcm_ima_wav", "pcm_mulaw"])
+    assert.ok(Math.abs(sound.library().find((x) => x.name === name).seconds - 1) < 0.1);
+});
+
+test("PCM duration counts complete sample frames instead of undecodable partial bytes", (t) => {
+  const project = mkdtempSync(join(tmpdir(), "sound-partial-frame-"));
+  t.after(() => rmSync(project, { recursive: true, force: true }));
+  const file = join(project, "partial.wav");
+  wav(file);
+  const data = readFileSync(file).subarray(0, 45);
+  data.writeUInt32LE(37, 4);
+  data.writeUInt32LE(1, 40);
+  writeFileSync(file, data);
+  assert.equal(wavInfo(file).seconds, 0);
 });

@@ -1,5 +1,5 @@
 import { isTornByReorder, remapOutputTime, startsOnHold, timebaseClock } from "./layer-timing.mjs";
-import { clipTiming } from "./timing.mjs";
+import { clipTiming, playRanges } from "./timing.mjs";
 
 const overlaySpan = (clock, basis, a, b) => {
   const forward = basis ? (t, edge) => remapOutputTime(basis, clock, t, edge) : clock.outputAt;
@@ -183,10 +183,11 @@ export const mapTimeline = (
   }
   if (
     name === "sound" &&
-    clock.segments.some(
-      (s) =>
-        s.blank || s.kind !== "play" || s.rate0 !== 1 || s.rate1 !== 1 || s.from !== s.sourceFrom,
-    )
+    (clock.duration !== clock.sourceDuration ||
+      clock.segments.some(
+        (s) =>
+          s.blank || s.kind !== "play" || s.rate0 !== 1 || s.rate1 !== 1 || s.from !== s.sourceFrom,
+      ))
   ) {
     for (const list of ["beds", "sfx"])
       for (const [index, c] of out[list].entries()) {
@@ -214,6 +215,7 @@ export const mapTimeline = (
           } else {
             c.at = span.from;
             if (length > 0 || c.length !== undefined) c.length = span.to - span.from;
+            else if (!clock.visible(a) || durations[c.name] !== undefined) c.length = 0;
           }
           const timeline = span.torn
             ? b > a
@@ -291,8 +293,7 @@ export const mapTimeline = (
 };
 
 export const mapVoice = (lines, clock) => {
-  const ranges = [];
-  for (const s of [
+  const segments = [
     ...clock.segments,
     {
       kind: "play",
@@ -300,37 +301,33 @@ export const mapVoice = (lines, clock) => {
       sourceTo: Infinity,
       from: clock.duration,
       to: Infinity,
+      rate0: 1,
+      rate1: 1,
     },
-  ]) {
-    if (s.kind !== "play" || s.blank) continue;
-    const last = ranges.at(-1);
-    if (
-      last &&
-      Math.abs(last.sourceTo - s.sourceFrom) < 1e-9 &&
-      Math.abs(last.to - s.from) < 1e-9
-    ) {
-      last.sourceTo = s.sourceTo;
-      last.to = s.to;
-    } else ranges.push({ ...s });
-  }
+  ];
+  const ranges = playRanges({ segments }, 0, Infinity).map((r) => ({
+    ...r,
+    clock: { segments: segments.filter((s) => s.from < r.to && s.to > r.from) },
+  }));
   return lines
     .flatMap((l) =>
       ranges.flatMap((r) => {
         const a = Math.max(l.s, r.sourceFrom),
           b = Math.min(l.e, r.sourceTo);
         if (b <= a) return [];
+        const [span] = playRanges(r.clock, a, b);
         const words = l.words
           .filter((w) => w.e > a && w.s < b)
           .map((w) => ({
             ...w,
-            s: clock.outputAt(Math.max(w.s, a)),
-            e: clock.outputAt(Math.min(w.e, b), "before"),
+            s: playRanges(r.clock, Math.max(w.s, a), b)[0].from,
+            e: playRanges(r.clock, a, Math.min(w.e, b))[0].to,
           }));
         return [
           {
             ...l,
-            s: clock.outputAt(a),
-            e: clock.outputAt(b, "before"),
+            s: span.from,
+            e: span.to,
             words,
             ...(words.length && { text: words.map((w) => w.w).join(" ") }),
             ...(Number.isFinite(r.to) && { until: r.to }),

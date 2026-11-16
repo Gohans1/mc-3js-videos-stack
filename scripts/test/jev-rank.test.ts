@@ -59,3 +59,14 @@ test("entries Jev would read the same (a sound's takes) vote once and come back 
     [0.5, 3],
   ]);
 });
+
+test("all-zero heat scores stop before calling vote with an empty group", async () => {
+  const sizes: number[] = [];
+  const vote = (_: unknown, group: { t: string }[]) => (
+    sizes.push(group.length),
+    Promise.resolve(group.map((x): [number, { t: string }] => [0, x]))
+  );
+  const pool = Array.from({ length: 300 }, (_, i) => ({ t: `item ${i}` }));
+  expect(await jevRank(q, pool, vote)).toEqual([]);
+  expect(sizes.every((n) => n > 0)).toBe(true);
+});

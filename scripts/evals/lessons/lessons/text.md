@@ -1,10 +1,13 @@
+---
+when: on-screen text, titles, subtitles, their size, place and time on screen
+---
+
 # On-screen text
 
-## Inside the safe area
-Titles and subtitles stay inside the safe area; phones crop the edges.
+## Titles and subtitles stay inside the safe area
 
-## Big enough on a phone
-Body text at least 5% of the frame height.
+Phones crop the edges.
 
-## On screen long enough to read
-Keep text up for its reading time plus half a second.
+## Body text at least 5% of the frame height, so it reads on a phone
+
+## Text stays up for its reading time plus half a second

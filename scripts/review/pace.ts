@@ -20,6 +20,7 @@ import {
 } from "../../packages/live-studio/src/cli.mjs";
 import { ratioOf } from "../../packages/live-studio/src/frame.ts";
 import { staleVideo } from "../../packages/live-studio/src/stale.mjs";
+import { startJob } from "../../packages/live-studio/src/tell.mjs";
 import { probeVideo, videoStart } from "../../packages/live-studio/src/video.mjs";
 
 const HELP = `How the film moves: how long each shot runs, and every stretch where the picture holds still, with what the
@@ -68,6 +69,10 @@ const said = (words: Word[], a: number, b: number) => {
   return text ? `"${text.length > 70 ? `${text.slice(0, 69)}…` : text}"` : "no narration";
 };
 
+// each stretch from one new picture to the next
+export const stills = (news: number[], length: number) =>
+  news.map((a, i) => ({ a, b: news[i + 1] ?? length, len: (news[i + 1] ?? length) - a }));
+
 export const paceReport = ({
   length,
   cuts,
@@ -96,9 +101,7 @@ export const paceReport = ({
     return inQ.length ? (inQ.reduce((n, s) => n + s.len, 0) / inQ.length).toFixed(1) : "-";
   });
   const longest = shots.toSorted((p, q) => q.len - p.len).slice(0, 3);
-  const gaps = news
-    .map((t, i) => ({ a: t, b: news[i + 1] ?? length }))
-    .map((g) => ({ ...g, len: g.b - g.a }));
+  const gaps = stills(news, length);
   const holds = gaps.filter((g) => g.len >= hold);
   const near = gaps
     .filter((g) => g.len < hold)
@@ -206,6 +209,7 @@ if (import.meta.main) {
   const cuts: number[] = [...new Set<number>(written)].toSorted((a, b) => a - b);
   const stale = staleVideo(PROJECT, video);
   if (stale) console.log(`STALE: ${stale.message}`);
+  const ended = await startJob(PROJECT, "pace", { say: `Measuring the pace of ${shown}` });
   // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape
   const tall = short ? "16/9" : "9/16";
   const w = 64,
@@ -254,4 +258,12 @@ if (import.meta.main) {
   console.log(`pace of ${shown}, ${s2(length)} s heard`);
   const news = newPictures(frames, FPS, cuts);
   for (const l of paceReport({ length, cuts, news, words, hold, short })) console.log(l);
+  const holds = stills(news, length).filter((g) => g.len >= hold);
+  await ended({
+    say: `Pace of ${shown}: ${holds.length ? `${holds.length} hold${holds.length > 1 ? "s" : ""} of ${hold} s or more with no new picture` : `a new picture every ${s2(length / news.length)} s, no hold of ${hold} s`}`,
+    level: holds.length ? "warn" : "ok",
+    ...(holds.length && {
+      marks: holds.map((g) => ({ at: g.a, to: g.b, say: `HOLD ${g.len.toFixed(1)} s` })),
+    }),
+  });
 }

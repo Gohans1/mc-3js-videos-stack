@@ -1,5 +1,6 @@
 // note.mjs done: the AI files what it fixed, through the studio when it is running so the two never write notes.jsonl at once
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -78,6 +79,40 @@ test("a note named by the number bun run notes shows is the one written that man
   );
 });
 
+test("a note the creator deleted keeps its number, so the numbers read before it never move to another note", () => {
+  const dir = film([note("b", "y", { at: "2026-11-02" }), note("c", "z", { at: "2026-11-03" })]);
+  writeFileSync(
+    join(dir, "notes/deleted.jsonl"),
+    JSON.stringify(note("a", "x", { at: "2026-11-01" })) + "\n",
+  );
+  assert.equal(resolveNote(dir, "2"), "b");
+  assert.equal(resolveNote(dir, "#3"), "c");
+  assert.throws(() => resolveNote(dir, "1"), /note #1 \(a\) was deleted by the creator/);
+  assert.throws(() => resolveNote(dir, "a"), /note #1 \(a\) was deleted by the creator/);
+});
+
+test("a line with an id but not a whole note is no note to answer", () => {
+  const dir = film([note("a", "x"), { id: "bad", t: 3 }]);
+  assert.throws(() => resolveNote(dir, "bad"), /no such note: bad/);
+});
+
+test("a studio too busy to answer in time is no stopped one: nothing goes into the file behind its back", async () => {
+  const dir = film([note("a", "x")]);
+  const server = createServer(() => {}); // takes the request, never answers: a studio deep in a build
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  writeFileSync(
+    join(dir, "renders/live/studio.json"),
+    JSON.stringify({ port: server.address().port }),
+  );
+  try {
+    await assert.rejects(markDone(dir, "a", "fixed"), /studio did not answer in 3 s/);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+  assert.equal(readNotes(dir)[0].state, undefined);
+});
+
 test("done goes through the running studio, and leaves the file to it", async () => {
   const dir = film([note("a", "x")]);
   const got = [];
@@ -112,6 +147,36 @@ test("a studio that has stopped since is passed over for the file", async () => 
   writeFileSync(join(dir, "renders/live/studio.json"), JSON.stringify({ port: 1 }));
   await markDone(dir, "a", "fixed");
   assert.equal(readNotes(dir)[0].state, "check");
+});
+
+// bun run note itself, as the AI reads it
+const NOTE = join(import.meta.dirname, "../note.mjs");
+const answer = (dir, ...args) => {
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "");
+  return spawnSync("bun", [NOTE, ...args], { cwd: dir, encoding: "utf8" });
+};
+
+test("an answer names the note it went on by number and words, so a wrong number shows, and ends on what to do next", () => {
+  const dir = film([note("a", "the door is too fast", { at: "2026-11-01" })]);
+  const r = answer(dir, "done", "1", "slowed the door");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^#1 a "the door is too fast": waits for the creator's check/m);
+  assert.match(r.stdout.trim().split("\n").at(-1), /^next: bun run notes/);
+});
+
+test("a second answer before the creator checked the first says so", () => {
+  const dir = film([
+    note("a", "x", {
+      at: "2026-11-01",
+      state: "check",
+      done: true,
+      fixes: [{ what: "y", at: "t" }],
+    }),
+  ]);
+  const r = answer(dir, "done", "a", "and the hinge");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /a 2nd answer: the creator has not checked your last one yet/);
 });
 
 test("done on a note that isn't there says so", async () => {

@@ -102,6 +102,10 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     log(`${name} done in ${((performance.now() - t1) / 1000).toFixed(1)}s`);
   }
   if (cfg.inspect) {
+    if (!render.tools?.free) {
+      log("ERROR INSPECT requires draw.tools.free on the film");
+      return;
+    }
     const [px, py, pz, lx, ly, lz, fov] = cfg.inspect;
     Object.assign(render.tools.free, { on: true, fov });
     render.tools.free.p.set(px, py, pz);

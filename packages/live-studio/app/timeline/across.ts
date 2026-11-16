@@ -1,11 +1,10 @@
-import { DURATION } from "film/scene";
-
 import * as cam from "../camera/cam";
 // One pick across the timeline's rows, as CapCut's box over all its tracks (the dev's call): text items, camera keys, keys on the
 // key rows and sound clips picked together by the box (rowbox.ts, which each row starts on its empty space), then moved together by a drag on
 // any of them (each row's drag takes alongWith for the other kinds), deleted and copied together (cut.ts, clipboard.ts), each
 // as one undo step (core/doc.ts together). A pick of one kind goes through that kind's own setter, which also opens its tab
 import * as layers from "../camera/layers";
+import { DURATION } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";

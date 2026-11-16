@@ -7,6 +7,7 @@ import { meter } from "./checks/frames.mjs";
 import { cliArgs, envTypos, jsonFile, needFilm, secondArg } from "./src/cli.mjs";
 import { ratioOf, sizeOf } from "./src/frame.ts";
 import { staleVideo } from "./src/stale.mjs";
+import { startJob } from "./src/tell.mjs";
 import { probeVideo, videoStart } from "./src/video.mjs";
 
 const HELP = `The last check before a video goes out, on the encoded file itself (what the audience gets): black frames, one-frame
@@ -17,7 +18,7 @@ flashes, jumps away from cuts, shimmering, frozen stretches (checks/frames.mjs).
 A Short (package.json "live-studio".ratio "9:16") is measured at its own shape, the whole picture.
 Prints the faults and writes renders/frames_<KIND>_<s>.jpg for each (up to 12): the frame before, the frame, the frame
 after (the last run's are cleared first). Cuts come from renders/cuts.json, which every bun run render clip writes, so a cut is never a JUMP. Render without LIST=1 for
-this check (the list changes the picture). Only the picture is measured, never the draft's strip under it.`;
+this check (the list changes the picture). Only the picture is measured, never the draft's strip under it; prints faults and exits 0.`;
 const [videoArg] = cliArgs(HELP, [], 1);
 envTypos(["START", "LIVE_PROJECT"]);
 needFilm(process.env.LIVE_PROJECT);
@@ -56,6 +57,8 @@ if (!probed) {
   process.exit(2);
 }
 const { fps } = probed;
+const shown = (videoArg ?? "renders/draft_video.mp4").replaceAll("\\", "/");
+const ended = await startJob(PROJECT, "framecheck", { say: `Checking the frames of ${shown}` });
 // the picture at the top of the frame at the film's shape (a Short is 9:16), without a draft's strip under it
 const ratio = ratioOf(readJson(join(PROJECT, "package.json")));
 const [w, h] = sizeOf(ratio, 192),
@@ -73,7 +76,12 @@ if (!Array.isArray(written) || written.some((c) => typeof c !== "number" || !(c 
   process.exit(1);
 }
 const cuts = written.map((c) => c - START);
-if (!cuts.length) console.log("no renders/cuts.json: every cut will show as a JUMP");
+if (!cuts.length)
+  console.log(
+    existsSync(cutsFile)
+      ? "renders/cuts.json has no cuts: every cut will show as a JUMP"
+      : "no renders/cuts.json: every cut will show as a JUMP",
+  );
 else
   console.log(
     `cuts from renders/cuts.json, the last bun run render clip's (${statSync(cutsFile).mtime.toLocaleString("sv").slice(0, 16)}): a video from an older render may show a moved cut as a JUMP`,
@@ -113,6 +121,10 @@ await new Promise((done, fail) => {
     }
   });
   ff.stderr.on("data", (d) => process.stderr.write(d));
+  ff.on("error", (err) => {
+    clearTimeout(limit);
+    fail(err);
+  });
   ff.on("close", (code) => {
     clearTimeout(limit);
     if (code) fail(new Error(`ffmpeg exited ${code}`));
@@ -164,6 +176,19 @@ for (const x of faults.slice(0, 12)) {
   );
 }
 if (faults.length > 12) console.log(`${faults.length - 12} more not drawn`);
+await ended(
+  faults.length
+    ? {
+        say: `Frames of ${shown}: ${faults.length} fault${faults.length > 1 ? "s" : ""} (${[...new Set(faults.map((x) => x.kind))].join(", ")})`,
+        level: "warn",
+        marks: faults.map((x) => ({
+          at: x.t + START,
+          ...(x.to !== undefined && { to: x.to + START }),
+          say: x.kind,
+        })),
+      }
+    : { say: `Frames of ${shown}: no black, flash, jump, shimmer or freeze`, level: "ok" },
+);
 // a mixed video (draft.mp4, final.mp4) gets its new picture through the mix again; the upload's picture goes on to deliver
 // a START said by hand goes on with the commands that read the same video's seconds
 const again = process.env.START !== undefined ? `START=${START} ` : "";

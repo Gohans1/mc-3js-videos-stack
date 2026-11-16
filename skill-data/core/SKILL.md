@@ -78,7 +78,7 @@ AT=35.6 bun run render stills
 ### Answer the creator's notes
 
 ```bash
-bun run notes                                # the open notes, #1 first
+bun run notes                                # the open notes (up to 25, #1 first; --sort back for replies)
 bun run notes 3                              # one in full: where they tapped, words, pictures
 bun run at '#3'                              # where that note is heard now
 bun run note done 3 "what changed"           # only after you saw the fix; the creator approves or reopens

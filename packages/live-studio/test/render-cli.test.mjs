@@ -287,12 +287,21 @@ test("render final's captions are named as the upload's picture, never as the dr
 
 test("a CHUNKS run that joins a chunk drawn before a narration move still says the video is stale", async (t) => {
   // the mouths follow the narration clips: a scene that reads the sound timeline draws them
-  const film = chromeFilm(t, 40, { soundTimeline: "src/timeline/audio.json" });
+  const film = chromeFilm(t, 31, { soundTimeline: "src/timeline/audio.json" });
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
   const scene = join(film.dir, "src/scene.ts");
   writeFileSync(
     scene,
-    `import sound from "./timeline/audio.json";\nglobalThis.filmSound = sound;\n${readFileSync(scene, "utf8")}`,
+    `import * as THREE from "three";
+import sound from "./timeline/audio.json";
+globalThis.filmSound = sound;
+export const DURATION = 31, SHOTS_OUT = [];
+export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
+  const renderer = new THREE.WebGLRenderer({ canvas });
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  return () => renderer.render(scene, camera);
+};`,
   );
   mkdirSync(join(film.dir, "src/timeline"));
   const audio = (at) =>
@@ -303,7 +312,7 @@ test("a CHUNKS run that joins a chunk drawn before a narration move still says t
   audio(1);
   const whole = film.render("clip");
   assert.equal(whole.status, 0, whole.stdout + whole.stderr);
-  audio(35);
+  audio(30.2);
   const part = film.render("clip", { CHUNKS: "0" });
   assert.equal(part.status, 0, part.stdout + part.stderr);
   assert.match(part.stdout, /chunk 1 was drawn before the film's last change/);
@@ -312,4 +321,85 @@ test("a CHUNKS run that joins a chunk drawn before a narration move still says t
     staleVideo(film.dir, join(film.dir, "renders/draft_video.mp4"))?.message ?? "fresh",
     /narration clips moved/,
   );
+});
+
+test("ENTRY=folder and running outside a film exit 2 before any build, and a dead Chrome fails fast instead of hanging", (t) => {
+  const empty = mkdtempSync(join(tmpdir(), "render-empty-"));
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
+  const outside = spawnSync("bun", [RENDER, "stills"], {
+    cwd: empty,
+    encoding: "utf8",
+    timeout: 20000,
+    env: { ...process.env, LIVE_PROJECT: empty },
+  });
+  assert.equal(outside.status, 2, outside.stdout + outside.stderr);
+  assert.match(outside.stderr, /cd films\/<name> first/);
+
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "lab"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { chrome: process.execPath } }),
+  );
+  const badEntry = spawnSync("bun", [RENDER, "stills"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 20000,
+    env: { ...process.env, LIVE_PROJECT: dir, ENTRY: "lab" },
+  });
+  assert.equal(badEntry.status, 2, badEntry.stdout + badEntry.stderr);
+  assert.match(badEntry.stderr, /ENTRY=lab is no file in the film/);
+
+  const deadChrome = spawnSync("bun", [RENDER, "stills"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 20000,
+    env: { ...process.env, LIVE_PROJECT: dir, AT: "1" },
+  });
+  assert.equal(deadChrome.status, 1, deadChrome.stdout + deadChrome.stderr);
+  assert.match(deadChrome.stderr, /ERROR Chrome exited/);
+  assert.match(deadChrome.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
+});
+
+test("CHECK=motion:cam works without draw.tools.free, and seen/touch name missing hooks instead of crashing", (t) => {
+  const film = chromeFilm(t, 1);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const scene = join(film.dir, "src/scene.ts");
+  writeFileSync(
+    scene,
+    `import * as THREE from "three";
+export const DURATION = 1, SHOTS_OUT = [];
+export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
+  const renderer = new THREE.WebGLRenderer({ canvas });
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  camera.position.set(0, 1, 3);
+  return Object.assign((t: number) => { camera.position.x = t; renderer.render(scene, camera); }, { tools: { scene, camera } });
+};`,
+  );
+  const cam = film.render("stills", { CHECK: "motion:cam,0,0.4" });
+  assert.equal(cam.status, 0, cam.stdout + cam.stderr);
+
+  writeFileSync(
+    scene,
+    `import * as THREE from "three";
+export const DURATION = 1, SHOTS_OUT = [];
+export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
+  const renderer = new THREE.WebGLRenderer({ canvas });
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  return () => renderer.render(scene, camera);
+};`,
+  );
+  for (const kind of ["seen", "touch"]) {
+    const out = film.render("stills", { CHECK: `${kind}:hero,0,0.4` });
+    assert.equal(out.status, 1, out.stdout + out.stderr);
+    assert.match(
+      out.stderr,
+      new RegExp(`ERROR CHECK=${kind} requires draw\\.tools\\.scene and draw\\.tools\\.camera`),
+    );
+    assert.doesNotMatch(out.stderr, /TypeError/);
+  }
 });

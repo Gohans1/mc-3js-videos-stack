@@ -2,8 +2,8 @@
 // Rhubarb cues bun run voice:lips gathers in src/timeline/mouth.json (voice seconds), moved the way the voice itself is
 // heard in the scene: through the voice edit (voice.warp) and the narration clips of the sound timeline, as voice:cues does.
 // The result is what mc-actor's mouthAt reads: [[scene second, "A".."H"|"X"], ...].
+// Native word and mouth maps index WAV samples; voice.warp only places narrative anchors.
 import { narrationLines } from "./narration.ts";
-import { warp } from "./warp.mjs";
 
 type Cue = [number, string];
 interface MouthTake {
@@ -31,14 +31,13 @@ export const mouthCues = (edit: LipsEdit, who: string): Cue[] => {
 
 const build = (edit: LipsEdit, who: string): Cue[] => {
   const mine = new Set((edit.takes ?? []).filter((t) => t.by === who).map((t) => t.id));
-  const w = edit.voice?.warp ?? [];
   const lines = (edit.mouth?.takes ?? [])
     .filter((m) => mine.has(m.id) && m.cues?.length)
     .map((m) => {
       const words = m.cues.map(([s, shape], i) => ({
         w: shape,
-        s: warp(w, m.at + s, 0, 1),
-        e: m.cues[i + 1] ? warp(w, m.at + m.cues[i + 1][0], 0, 1) : Infinity,
+        s: m.at + s,
+        e: m.cues[i + 1] ? m.at + m.cues[i + 1][0] : Infinity,
       }));
       return { text: m.id, s: words[0].s, e: words.at(-1).e, words };
     });

@@ -4,6 +4,7 @@ import { Type } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import { ui, useStudio } from "../core/store";
@@ -39,7 +40,7 @@ export function PinTools() {
         "--bar-top": `calc(${pin.y * 100}% ${below ? "+" : "-"} ${gap}px)`,
       }}
       className={cn(
-        "shadow-float pointer-events-auto absolute top-(--bar-top) left-(--bar-left) z-6 flex items-center gap-0.5 rounded-xl bg-black/90 p-1 backdrop-blur-md",
+        "shadow-float bg-scrim-strong pointer-events-auto absolute top-(--bar-top) left-(--bar-left) z-6 flex items-center gap-0.5 rounded-xl p-1 backdrop-blur-md",
         !below && "-translate-y-full",
       )}
     >
@@ -50,10 +51,10 @@ export function PinTools() {
         title="Type the note (the box on the right)"
         onClick={() => ui.focusNote()}
       >
-        <Type />
+        <Type aria-hidden data-icon="inline-start" />
         <span className="@max-[720px]:sr-only">Text</span>
       </Button>
-      <span aria-hidden className="mx-1 h-5 w-px bg-white/15" />
+      <Separator orientation="vertical" className="mx-1 h-5 data-vertical:self-center" />
       {TOOLS.map(([id, name, icon, help]) => (
         <Button
           key={id}

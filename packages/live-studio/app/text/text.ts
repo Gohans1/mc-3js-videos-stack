@@ -4,8 +4,8 @@
 // Tracks are CapCut's text tracks: 0 sits just over the camera row and each one above is drawn over it; two items never overlap
 // on one track, so an item dropped or moved onto another goes up to the first track with room
 import { EDIT } from "film/edit";
-import { DURATION } from "film/scene";
 
+import { DURATION } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
@@ -208,7 +208,7 @@ export const PRESETS: Preset[] = [
       x: 0.5,
       y: 0.5,
       align: "center",
-      in: { fx: "inkIn", len: 0.6, tint: "#38BDF8" },
+      in: { fx: "inkIn", len: 0.6, tint: "#4385BE" },
       out: { fx: "blurExit", len: 0.4 },
     },
   },
@@ -295,7 +295,7 @@ export const SHAPES: Preset[] = [
       kind: "arrow",
       size: 180,
       width: 10,
-      color: "#E5484D",
+      color: "#D14D41",
       x: 0.5,
       y: 0.5,
       rotate: 30,
@@ -313,7 +313,7 @@ export const SHAPES: Preset[] = [
       w: 300,
       h: 190,
       width: 8,
-      color: "#E5484D",
+      color: "#D14D41",
       x: 0.5,
       y: 0.5,
       in: { fx: "draw", len: 0.6 },
@@ -330,7 +330,7 @@ export const SHAPES: Preset[] = [
       w: 320,
       h: 190,
       width: 8,
-      color: "#F5C542",
+      color: "#D0A215",
       x: 0.5,
       y: 0.5,
       in: { fx: "draw", len: 0.55 },
@@ -363,7 +363,7 @@ export const SHAPES: Preset[] = [
       kind: "underline",
       size: 240,
       width: 9,
-      color: "#E5484D",
+      color: "#D14D41",
       x: 0.5,
       y: 0.58,
       in: { fx: "draw", len: 0.5 },

@@ -1,8 +1,6 @@
-import { EDIT } from "film/edit";
 import { useSyncExternalStore } from "react";
 
 import { clockForTimeline } from "../../src/timing-state.mjs";
-import { warp } from "../../src/warp.mjs";
 import { getFile } from "../core/net";
 import { S } from "../core/state";
 import { get, say } from "../core/store";
@@ -26,9 +24,11 @@ import {
   findTakeLineIndex,
   resizeNarrationBrickForSwap,
   sliceNarrationClip,
+  subscribeVoiceNames,
   type SwappedVoiceSpan,
   voiceClipLabel,
   voiceClipSummary,
+  voiceNamesSnapshot,
   type VoiceTakeItem,
 } from "./voice-view";
 
@@ -43,6 +43,7 @@ const notify = () => {
 };
 
 marks.voiceLoaded = notify;
+subscribeVoiceNames(notify);
 
 export const subscribeVoiceTakes = (fn: () => void) => {
   subs.add(fn);
@@ -52,7 +53,7 @@ export const subscribeVoiceTakes = (fn: () => void) => {
 };
 const voiceTakesSnapshot = () => voiceRev;
 export const useVoiceTakes = () => {
-  useSyncExternalStore(subscribeVoiceTakes, voiceTakesSnapshot);
+  useSyncExternalStore(subscribeVoiceTakes, voiceTakesSnapshot, voiceTakesSnapshot);
   return takesState;
 };
 
@@ -115,7 +116,7 @@ let labelCacheKey = "";
 let labelCache = new WeakMap<object, string>();
 
 export const cachedVoiceClipLabel = (clip: OneShot): string => {
-  const key = `${S.timesRev}:${get().soundRev}:${voiceRev}`;
+  const key = `${S.timesRev}:${get().soundRev}:${voiceRev}:${voiceNamesSnapshot()}`;
   if (key !== labelCacheKey) {
     labelCacheKey = key;
     labelCache = new WeakMap<object, string>();
@@ -234,7 +235,7 @@ export const resolveVoiceTakeTarget = (
     typeof anchor === "number" &&
     Number.isFinite(anchor)
   ) {
-    const sec = clockForTimeline("voice").outputAt(warp(EDIT.voice.warp, anchor, 0, 1));
+    const sec = clockForTimeline("voice").outputAt(anchor);
     if (!Number.isFinite(sec)) return null;
     if (lanes?.narration) {
       const ref = pickNarrationClipForTake(take.id, sec);
