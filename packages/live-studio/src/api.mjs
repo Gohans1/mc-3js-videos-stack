@@ -1,8 +1,9 @@
+import { Activity, createActivity } from "./activity.mjs";
 import { createHash } from "node:crypto";
 // What the studio page asks the server for, as one Hono app: the built page (src/page.mjs) at / and /_studio/, its data and
 // live events under /api/, and everything else from the film's own files (assets/public as /, small phone copies as /lite/).
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, isAbsolute, join, relative } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import { brotliCompress, constants as zlibConsts, gzip } from "node:zlib";
@@ -20,6 +21,15 @@ import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
+import { LessonJevConfigSchema } from "./lesson-config.ts";
+import { openLessonFiles } from "./lesson-files.mjs";
+import {
+  clearInspectCache,
+  InspectInput,
+  inspectLessons,
+  inspectorInfo,
+} from "./lesson-inspector.mjs";
+import { writeLessonJson } from "./lesson-settings.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
 const MIME = {
@@ -52,6 +62,20 @@ const NoteIn = z.object({
     .array(z.object({ t: z.number().refine(Number.isFinite), img: jpeg }))
     .max(8)
     .optional(),
+  // pictures the creator pasted beside the words (a reference, a screenshot), drawn on or not
+  refs: z.array(z.string().startsWith("data:image/jpeg;base64,/9j/")).max(6).optional(),
+});
+const LessonScope = z.enum(["film", "all"]).default("all");
+const LessonSave = z.object({
+  scope: LessonScope,
+  path: z.string().max(200),
+  text: z.string().max(1_000_000),
+  base: z.string().nullable(),
+});
+const LessonDelete = z.object({
+  scope: LessonScope,
+  path: z.string().max(200),
+  base: z.string().nullable(),
 });
 // note-state.mjs says which of these may happen to a note now; {remove}/{restore} are the file's own
 const NoteChange = z.object({
@@ -105,7 +129,21 @@ const inside = (root, file) => {
   return r && !r.startsWith("..") && !isAbsolute(r);
 };
 
-export const createApi = (film, { page, events, send }) => {
+// activity: src/activity.mjs's, what the AI is doing; lessons: src/lesson-files.mjs's, the one live.mjs watches
+export const createApi = (
+  film,
+  {
+    page,
+    events,
+    send,
+    activity = createActivity(send),
+    lessons = {
+      all: openLessonFiles(),
+      film: film?.PROJECT ? openLessonFiles(join(film.PROJECT, "lessons")) : null,
+    },
+    favorites = openFavorites(),
+  },
+) => {
   // Text and geometry shrink a lot and pictures don't. Squeezed once per version, so the next visit costs nothing here either;
   // what barely shrinks (a zip of pictures) is remembered as not worth it and goes out as it is
   // Off the main thread (a few MB takes a second), and kept as the promise so a second visit meanwhile waits for the same work
@@ -267,6 +305,88 @@ export const createApi = (film, { page, events, send }) => {
     return c.body(pic);
   });
 
+  // What the AI is doing (src/activity.mjs): a line from each of the film's commands (src/tell.mjs), the latest for a new page
+  app.get("/api/activity", (c) => fresh(c, activity.state()));
+  app.post("/api/activity", zValidator("json", Activity), (c) => {
+    activity.add(c.req.valid("json"));
+    return c.text("ok");
+  });
+
+  // Global lessons/*.md plus this film's lessons/*.md (src/lesson-files.mjs): 409 is the AI's newer words
+  const lessonAll =
+    typeof lessons?.list === "function" ? lessons : (lessons?.all ?? openLessonFiles());
+  const lessonFilmRaw = typeof lessons?.list === "function" ? null : (lessons?.film ?? null);
+  const lessonFilm =
+    lessonFilmRaw && resolve(lessonFilmRaw.dir) !== resolve(lessonAll.dir) ? lessonFilmRaw : null;
+  const lessonStore = (scope) => (scope === "film" ? lessonFilm : lessonAll);
+  const inspectOptions = {
+    root: film.PROJECT,
+    dir: lessonAll.dir,
+    projectDir: lessonFilm?.dir ?? null,
+  };
+  app.get("/api/lessons/inspect", (c) => {
+    try {
+      return fresh(c, { ...inspectorInfo(inspectOptions), notes: film.notes?.read?.() ?? [] });
+    } catch (e) {
+      return c.json({ error: e.message }, 400);
+    }
+  });
+  app.post(
+    "/api/lessons/inspect",
+    bodyLimit({ maxSize: 8 * 1024 * 1024 }),
+    zValidator("json", InspectInput),
+    async (c) => {
+      try {
+        return fresh(
+          c,
+          await inspectLessons(c.req.valid("json"), {
+            ...inspectOptions,
+            notes: film.notes?.read?.() ?? [],
+          }),
+        );
+      } catch (e) {
+        return c.json({ error: e.message }, 400);
+      }
+    },
+  );
+  app.put(
+    "/api/lessons/inspect",
+    bodyLimit({ maxSize: 256 * 1024 }),
+    zValidator("json", LessonJevConfigSchema),
+    (c) => {
+      writeLessonJson(join(film.PROJECT, "notes/lessons-config.json"), c.req.valid("json"));
+      return fresh(c, { saved: true });
+    },
+  );
+  app.delete("/api/lessons/inspect-cache", (c) => {
+    clearInspectCache(film.PROJECT);
+    return fresh(c, { cleared: true });
+  });
+  app.get("/api/lessons", (c) =>
+    fresh(c, {
+      dir: lessonAll.dir.replaceAll("\\", "/"),
+      ...(lessonFilm ? { projectDir: lessonFilm.dir.replaceAll("\\", "/") } : {}),
+      files: [
+        ...(lessonFilm ? lessonFilm.list().map((f) => ({ ...f, scope: "film" })) : []),
+        ...lessonAll.list().map((f) => ({ ...f, scope: "all" })),
+      ],
+    }),
+  );
+  app.post("/api/lessons", zValidator("json", LessonSave), (c) => {
+    const { scope, path, text, base } = c.req.valid("json");
+    const store = lessonStore(scope);
+    if (!store) return c.json({ error: "no project lessons folder", scope }, 400);
+    const r = store.write(path, text, base);
+    return c.json({ ...r, scope }, r.error ? 400 : r.conflict ? 409 : 200);
+  });
+  app.delete("/api/lessons", zValidator("json", LessonDelete), (c) => {
+    const { scope, path, base } = c.req.valid("json");
+    const store = lessonStore(scope);
+    if (!store) return c.json({ error: "no project lessons folder", scope }, 400);
+    const r = store.remove(path, base);
+    return c.json({ ...r, scope }, r.error ? 400 : r.conflict ? 409 : 200);
+  });
+
   app.on("GET", ["/api/edit.json", "/edit.json"], (c) => text(c, readFileSync(film.EDIT)));
   app.get("/api/voice_map.json", (c) => fileOrMissing(c, film.VOICE_MAP));
   app.get("/api/voice", (c) => (film.voice ? fresh(c, film.voice.read()) : c.body(null, 404)));
@@ -303,7 +423,6 @@ export const createApi = (film, { page, events, send }) => {
   });
 
   // The creator's stars, kept for every film (src/favorites.mjs); every open page of this studio hears a change
-  const favorites = openFavorites();
   app.get("/api/favorites", (c) => fresh(c, favorites.shown()));
   app.post("/api/favorites", zValidator("json", FavoriteChange), (c) => {
     const all = favorites.set(c.req.valid("json"));

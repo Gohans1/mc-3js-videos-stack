@@ -32,18 +32,19 @@ A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`
 
 `bun run help` inside a film prints this film's own map (its timeline file names come from `package.json` `"live-studio"`). Shots count from 0 everywhere: notes, the studio, `bun run at`, the draft's strip.
 
-| File                                    | Holds                                                                                    | Clock     |
-| --------------------------------------- | ---------------------------------------------------------------------------------------- | --------- |
-| `src/scene.ts`                          | The film's code: `buildScene` returns `draw(t)`, which must draw any `t` on its own      | Scene     |
-| `src/edit.json`                         | Narration takes and script, `voice.warp`, beats, the film's own settings                 | Narration |
-| `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into it, `anim`, `adjust` (`look`), `hits` | Narration |
-| `src/timeline/cam.json`                 | Camera keys and cuts: `p`, `l`, `fov` or `mm`, `fstop`/`focus` DOF, `handheld` rig       | Scene     |
-| `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                       | Scene     |
-| `src/timeline/text.json`, `adjust.json` | On-screen text, colour sliders and named `look` presets                                  | Scene     |
-| `src/timeline/timing.json`              | Speed, Freeze, velocity: what turns scene seconds into heard seconds                     | Scene     |
-| Key files (`"live-studio".keyFiles`)    | Keyed rows for characters and props                                                      | Scene     |
-| `renders/`                              | Everything render, sheet, framecheck and listen write (ignored by git)                   |           |
-| `notes/`                                | The creator's notes; read them with `bun run notes`                                      |           |
+| File                                    | Holds                                                                                                 | Clock     |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------- |
+| `src/scene.ts`                          | The film's code: `buildScene` returns `draw(t)`, which must draw any `t` on its own                   | Scene     |
+| `src/edit.json`                         | Narration takes and script, `voice.warp`, beats, the film's own settings                              | Narration |
+| `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into it, `anim`; shot N is row N                        | Narration |
+| `src/timeline/cam.json`                 | Camera keys and cuts                                                                                  | Scene     |
+| `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                                    | Scene     |
+| `src/timeline/text.json`, `adjust.json` | On-screen text, colour and look layers                                                                | Scene     |
+| `src/timeline/timing.json`              | Speed, Freeze, velocity: what turns scene seconds into heard seconds                                  | Scene     |
+| Key files (`"live-studio".keyFiles`)    | Keyed rows for characters and props                                                                   | Scene     |
+| `renders/`                              | Everything render, sheet, framecheck and listen write (ignored by git)                                |           |
+| `notes/`                                | The creator's notes; read them with `bun run notes`                                                   |           |
+| `lessons/`                              | This film's lessons (`../../lessons/` for every film, nested `.md` ok); `bun run notes ID` picks both |           |
 
 After every JSON edit run `bun run check`: the studio's own schemas, every sound name, misspelt keys, an off-target `lufs` or a runaway `drive`. The full contract: `bun run skills get core --ref contract`.
 

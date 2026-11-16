@@ -54,7 +54,7 @@ export function Transport() {
     full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg px-3 py-1 in-data-wide:col-start-2">
+    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none in-data-inspector-active:hidden @container col-start-1 row-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg px-3 py-1 in-data-wide:col-start-2">
       <Button
         variant="secondary"
         size="md"

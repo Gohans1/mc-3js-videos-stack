@@ -62,9 +62,12 @@ class Jev:
     seen spent go last), with its first key the route accepts. Adds up what the paid route costs. Thread-safe: the heats
     run in parallel."""
 
-    def __init__(self):
+    def __init__(self, options=None):
+        options = options or {}
+        self.options, self.trace = options, []
         now, back = time.time(), read_spent()
         tries = [(name, url, model, key, i + 1, len(ks)) for name, url, model, env, file in ROUTES
+                 if options.get("route", "auto") == "auto" or (options.get("route") == "free") == ("free" in name)
                  for ks in [keys(env, file)] for i, key in enumerate(ks)]
         self.routes = sorted(tries, key=lambda r: back.get(r[0], 0) > now)
         self.keyed = bool(self.routes)
@@ -78,6 +81,7 @@ class Jev:
                     break
                 route = self.routes[0]
             name, url, model, key, i, n = route
+            model = self.options.get("freeModel" if "free" in name else "paidModel") or model
             # Cloudflare in front of Zen refuses Python's default User-Agent (error 1010)
             req = urllib.request.Request(url, data=json.dumps({"model": model, "state": state, "questions": questions}).encode(),
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "mc-films-jev/1"})
@@ -87,8 +91,10 @@ class Jev:
                     res = json.load(urllib.request.urlopen(req, timeout=120))
                     with self.lock:
                         self.spent += res.get("usage", {}).get("cost") or 0
-                        if self.spent > SPEND_CAP:
-                            sys.exit(f"Jev: stopped at ${self.spent:.4f}, past SPEND_CAP ${SPEND_CAP}")
+                        cap = self.options.get("spendCap", SPEND_CAP)
+                        self.trace.append({"phase": "response", "route": name, "request": {"model": model, "state": state, "questions": questions}, "answers": res["answers"], "usage": res.get("usage", {}), "cost": res.get("usage", {}).get("cost")})
+                        if self.spent > cap:
+                            sys.exit(f"Jev: stopped at ${self.spent:.4f}, past SPEND_CAP ${cap}")
                         self.used = name
                     return res["answers"]
                 except urllib.error.HTTPError as e:
@@ -131,4 +137,6 @@ class Jev:
 if __name__ == "__main__":
     # A pipe for tools in other languages (scripts/find.ts): {"state": ..., "questions": {...}} on stdin, the answers on stdout
     req = json.load(sys.stdin)
-    print(json.dumps(Jev().ask(req["state"], req["questions"])))
+    jev = Jev(req.get("options"))
+    answers = jev.ask(req["state"], req["questions"])
+    print(json.dumps({"answers": answers, "trace": jev.trace} if req.get("trace") else answers))

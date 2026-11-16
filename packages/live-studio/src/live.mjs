@@ -1,3 +1,4 @@
+import { createActivity } from "./activity.mjs";
 // The studio for one film; HELP below
 import { execFile } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -97,8 +98,32 @@ const fromElsewhere = (req, host) => {
   }
 };
 
-const api = createApi(film, { page, events, send });
+// The lessons the AI keeps (bun run note learned, or its own edit): both global and this film's lessons/*.md
+const activity = createActivity(send);
+const globalLessons = openLessonFiles();
+const projectLessons = openLessonFiles(join(film.PROJECT, "lessons"));
+const lessons = { all: globalLessons, film: projectLessons };
+const voiceLibrary = openVoiceLibrary({
+  project: film.PROJECT,
+  onEvent: () => send("voice-library"),
+});
+const api = createApi(film, { page, events, send, activity, lessons, voiceLibrary });
 film.start();
+const watchLessons = (store, scope, label) =>
+  store.watch((paths) => {
+    send("lessons");
+    const keys = paths.map((p) => `${scope}:${p}`);
+    activity.add({
+      say:
+        paths.length === 1
+          ? `Changed the ${label} lesson ${paths[0]}`
+          : `Changed ${paths.length} ${label} lessons: ${paths.slice(0, 4).join(", ")}${paths.length > 4 ? ", …" : ""}`,
+      lessons: keys.slice(0, 20),
+    });
+  });
+watchLessons(projectLessons, "film", "film");
+if (resolve(projectLessons.dir) !== resolve(globalLessons.dir))
+  watchLessons(globalLessons, "all", "global");
 
 // This machine only, unless asked: --lan opens it to the network for a phone, and nothing here asks for a password
 const serve = {

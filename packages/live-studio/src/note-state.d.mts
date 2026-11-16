@@ -14,7 +14,9 @@ export interface ThreadLine {
   at: string;
   ask?: boolean;
   checkpoint?: string;
+  reworded?: boolean;
 }
+export const WORD_NEAR: number;
 export const STATES: NoteState[];
 export function noteState(n: Partial<Note>): NoteState;
 export function wholeNote(n: unknown): boolean;
@@ -23,4 +25,4 @@ export function applyChange(
   change: NoteChange,
   at?: string,
 ): { ok: true } | { ok: false; why: string };
-export function noteThread(n: Note): ThreadLine[];
+export function noteThread(n: Note, options?: { rewordings?: boolean }): ThreadLine[];

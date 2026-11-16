@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { lessonsFor } from "../src/lessons.mjs";
+import { lessonsFor, lessonTopics } from "../src/lessons.mjs";
 
 const lessons = (files) => {
   const root = mkdtempSync(join(tmpdir(), "repo-")),
@@ -17,26 +17,25 @@ const HANDS =
   "# Hands\n\n## Hands holding a prop follow the carry rig\nwhy\n\n## Fingers stay on the prop\nwhy\n";
 const CUTS = "# Cuts\n\n## Transitions under 0.4 s, ease-out\nwhy\n";
 const note = (id, text) => ({ id, text });
-// a stand-in for Jev: votes and fits by the words each file shows it, as [vote, file, fit]
+// a stand-in for Jev: votes and fits each file by its path, as [vote, file, fit]
 const judgeBy =
   (fits, calls = []) =>
   (text, pool, show) => {
     calls.push(text);
-    const voted = pool.map((x) => [fits[x.path] ?? 0, x]).sort((a, b) => b[0] - a[0]);
-    return Promise.resolve(
-      voted.map(([p, x], i) => (i < show ? [p, x, fits[x.path] ?? 0] : [p, x])),
-    );
+    const fit = (x) => fits[x.path] ?? 0;
+    const voted = pool.map((x) => [fit(x), x]).sort((a, b) => b[0] - a[0]);
+    return Promise.resolve(voted.map(([p, x], i) => (i < show ? [p, x, fit(x)] : [p, x])));
   };
 
-test("a note gets the paths of the lesson files Jev says it needs, best first, and never a misfit", async () => {
+test("a note gets the lesson files Jev says it needs, best first, sure or maybe, each with its headings and their lines", async () => {
   const { dir, cache } = lessons({
     "hands.md": HANDS,
     "cuts.md": CUTS,
     "sound.md": "# Sound\n\n## Doors\n",
   });
   const judge = judgeBy({
-    "lessons/cuts.md": 0.6,
     "lessons/hands.md": 0.9,
+    "lessons/cuts.md": 0.5,
     "lessons/sound.md": 0.1,
   });
   const got = await lessonsFor([note("a", "tay lệch, transition nhanh hơn")], {
@@ -44,13 +43,37 @@ test("a note gets the paths of the lesson files Jev says it needs, best first, a
     cache,
     judge,
   });
-  assert.deepEqual(got.get("a"), { paths: ["lessons/hands.md", "lessons/cuts.md"] });
+  assert.deepEqual(got.get("a"), {
+    picks: [
+      {
+        path: "lessons/hands.md",
+        sure: true,
+        heads: [
+          { line: 1, head: "# Hands" },
+          { line: 3, head: "## Hands holding a prop follow the carry rig" },
+          { line: 6, head: "## Fingers stay on the prop" },
+        ],
+      },
+      {
+        path: "lessons/cuts.md",
+        sure: false,
+        heads: [
+          { line: 1, head: "# Cuts" },
+          { line: 3, head: "## Transitions under 0.4 s, ease-out" },
+        ],
+      },
+    ],
+  });
+  const none = await lessonsFor([note("b", "đẹp")], { dir, cache, judge: judgeBy({}) });
+  assert.deepEqual(none.get("b"), { picks: [] });
 });
 
-test("Jev reads each file's path and words, however the file is written", async () => {
+test("Jev reads each file's path, frontmatter and every heading, never the words under them", async () => {
   const { dir, cache } = lessons({
     "hands.md": HANDS,
     "free.md": "tay cầm đồ\n\n  phải bám   theo rig\n",
+    "cam.md":
+      "---\r\nwhen: camera   moves\r\n---\r\n# Camera\r\nbody\r\n```sh\r\n# not a heading\r\n```\r\n  ### No roll ###\r\n#nospace\r\n",
   });
   let seen;
   await lessonsFor([note("a", "x")], {
@@ -59,9 +82,56 @@ test("Jev reads each file's path and words, however the file is written", async 
     judge: (_, pool) => ((seen = pool.map((x) => x.jev)), Promise.resolve([])),
   });
   assert.deepEqual(seen, [
-    "lessons/free.md: tay cầm đồ phải bám theo rig",
-    "lessons/hands.md: # Hands ## Hands holding a prop follow the carry rig why ## Fingers stay on the prop why",
+    "lessons/cam.md: when: camera moves | # Camera ### No roll ###",
+    "lessons/free.md",
+    "lessons/hands.md: # Hands ## Hands holding a prop follow the carry rig ## Fingers stay on the prop",
   ]);
+});
+
+test("a change under a heading asks Jev nothing again and the heading lines follow the file; a heading's change asks again", async () => {
+  const { dir, cache } = lessons({ "hands.md": HANDS });
+  const calls = [],
+    judge = judgeBy({ "lessons/hands.md": 0.9 }, calls);
+  await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
+  writeFileSync(join(dir, "hands.md"), HANDS.replace("why", "because\nthe rig says so"));
+  const moved = await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
+  assert.equal(calls.length, 1);
+  assert.equal(moved.get("a").picks[0].heads[2].line, 7);
+  writeFileSync(join(dir, "hands.md"), `${HANDS}\n## Knuckles face out\n`);
+  await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
+  assert.equal(calls.length, 2);
+});
+
+test("Jev reads the creator's answers on a note too, and asks again when a new one comes", async () => {
+  const { dir, cache } = lessons({ "hands.md": HANDS });
+  const calls = [],
+    judge = judgeBy({}, calls),
+    door = note("a", "the door is too fast");
+  await lessonsFor([door], { dir, cache, judge });
+  await lessonsFor([{ ...door, asks: [{ text: "and the hinge squeak is missing", at: "t" }] }], {
+    dir,
+    cache,
+    judge,
+  });
+  assert.deepEqual(calls, [
+    "the door is too fast",
+    "the door is too fast\nand the hinge squeak is missing",
+  ]);
+});
+
+test("a cache entry kept in an older shape is asked again, never read as picks", async () => {
+  const { dir, cache } = lessons({ "hands.md": HANDS });
+  const calls = [],
+    judge = judgeBy({ "lessons/hands.md": 0.9 }, calls);
+  await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
+  const kept = JSON.parse(readFileSync(cache, "utf8"));
+  writeFileSync(cache, JSON.stringify({ a: { key: kept.a.key, paths: ["lessons/hands.md"] } }));
+  const again = await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
+  assert.deepEqual(
+    again.get("a").picks.map((p) => p.path),
+    ["lessons/hands.md"],
+  );
+  assert.equal(calls.length, 2);
 });
 
 test("a note read again asks Jev nothing until its words or the lessons change", async () => {
@@ -70,7 +140,10 @@ test("a note read again asks Jev nothing until its words or the lessons change",
     judge = judgeBy({ "lessons/hands.md": 0.9 }, calls);
   await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
   const again = await lessonsFor([note("a", "tay lệch")], { dir, cache, judge });
-  assert.deepEqual(again.get("a").paths, ["lessons/hands.md"]);
+  assert.deepEqual(
+    again.get("a").picks.map((p) => p.path),
+    ["lessons/hands.md"],
+  );
   assert.equal(calls.length, 1);
   await lessonsFor([note("a", "tay lệch quá")], { dir, cache, judge });
   assert.equal(calls.length, 2);
@@ -99,4 +172,177 @@ test("no lesson files yet: nothing to say and no Jev call", async () => {
   assert.equal(got.size, 0);
   assert.equal(calls.length, 0);
   assert.equal((await lessonsFor([note("a", "x")], { dir: join(dir, "none"), cache })).size, 0);
+});
+
+test("lessonsFor evaluates both project and global lessons together without colliding on identical paths", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lessons-dual-"));
+  const globalDir = join(root, "lessons");
+  const projectDir = join(root, "films/cell-break/lessons");
+  mkdirSync(globalDir, { recursive: true });
+  mkdirSync(projectDir, { recursive: true });
+  writeFileSync(
+    join(globalDir, "camera.md"),
+    "---\nwhen: camera\n---\n# Global Camera\n## Never roll\n",
+  );
+  writeFileSync(join(globalDir, "hands.md"), "---\nwhen: hands\n---\n# Hands\n## Match grip\n");
+  writeFileSync(
+    join(projectDir, "camera.md"),
+    "---\nwhen: camera\n---\n# Film Camera\n## Cut on landing\n",
+  );
+  writeFileSync(
+    join(projectDir, "lighting.md"),
+    "---\nwhen: shadows\n---\n# Cell Shadows\n## Keep warm torch\n",
+  );
+
+  const cache = join(root, "cache.json");
+  const calls = [];
+  const judge = async (words, pool, show) => {
+    calls.push({
+      words,
+      show,
+      pool: pool.map((x) => ({ scope: x.scope, rel: x.rel, jev: x.jev })),
+    });
+    return pool
+      .map((x) => {
+        if (x.scope === "film" && x.rel === "camera.md") return [0.9, x, 1.0];
+        if (x.scope === "all" && x.rel === "camera.md") return [0.6, x, 0.5];
+        if (x.scope === "film" && x.rel === "lighting.md") return [0.8, x, 0.9];
+        return [0.1, x, 0.1];
+      })
+      .sort((a, b) => b[0] - a[0]);
+  };
+
+  const got = await lessonsFor([note("a", "shot 3 camera light")], {
+    dir: globalDir,
+    projectDir,
+    cache,
+    judge,
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].pool.length, 4);
+  const filmCamJev = calls[0].pool.find((x) => x.scope === "film" && x.rel === "camera.md")?.jev;
+  const allCamJev = calls[0].pool.find((x) => x.scope === "all" && x.rel === "camera.md")?.jev;
+  assert.notEqual(filmCamJev, allCamJev);
+  assert.deepEqual(
+    got.get("a")?.picks.map((p) => [p.scope, p.rel, p.sure, p.file, p.heads.map((h) => h.head)]),
+    [
+      [
+        "film",
+        "camera.md",
+        true,
+        join(projectDir, "camera.md"),
+        ["# Film Camera", "## Cut on landing"],
+      ],
+      [
+        "film",
+        "lighting.md",
+        true,
+        join(projectDir, "lighting.md"),
+        ["# Cell Shadows", "## Keep warm torch"],
+      ],
+      [
+        "all",
+        "camera.md",
+        false,
+        join(globalDir, "camera.md"),
+        ["# Global Camera", "## Never roll"],
+      ],
+    ],
+  );
+
+  // Cache hit when nothing changes; body edit preserves cache; heading edit in projectDir invalidates cache
+  writeFileSync(
+    join(projectDir, "camera.md"),
+    "---\nwhen: camera\n---\n# Film Camera\n## Cut on landing\nBody details only.\n",
+  );
+  const cached = await lessonsFor([note("a", "shot 3 camera light")], {
+    dir: globalDir,
+    projectDir,
+    cache,
+    judge,
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(cached.get("a")?.picks.length, 3);
+
+  writeFileSync(
+    join(projectDir, "camera.md"),
+    "---\nwhen: camera\n---\n# Film Camera\n## Hold 12 frames on landing\n",
+  );
+  const refreshed = await lessonsFor([note("a", "shot 3 camera light")], {
+    dir: globalDir,
+    projectDir,
+    cache,
+    judge,
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(refreshed.get("a")?.picks[0].heads[1].head, "## Hold 12 frames on landing");
+});
+
+test("lessonsFor deduplicates when projectDir equals dir and ignores missing projectDir", async () => {
+  const { dir, cache } = lessons({ "hands.md": HANDS });
+  const calls = [];
+  const same = await lessonsFor([note("a", "tay")], {
+    dir,
+    projectDir: dir,
+    cache,
+    judge: judgeBy({ "lessons/hands.md": 0.9 }, calls),
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(same.get("a")?.picks.length, 1);
+
+  const missingProj = await lessonsFor([note("b", "tay")], {
+    dir,
+    projectDir: join(dir, "..", "does-not-exist"),
+    cache,
+    judge: async (_, pool) => pool.map((x) => [0.9, x, 1.0]),
+  });
+  assert.equal(missingProj.get("b")?.picks.length, 1);
+  assert.equal(missingProj.get("b")?.picks[0].scope, "all");
+});
+
+test("lessonsFor and lessonTopics recurse into nested subfolders across both scopes and skip hidden dot folders", async () => {
+  const root = mkdtempSync(join(tmpdir(), "nested-lessons-"));
+  const globalDir = join(root, "lessons");
+  const projectDir = join(root, "films/cell-break/lessons");
+  mkdirSync(join(globalDir, "sound/foley"), { recursive: true });
+  mkdirSync(join(globalDir, ".obsidian"), { recursive: true });
+  mkdirSync(join(projectDir, "craft/camera"), { recursive: true });
+  mkdirSync(join(projectDir, ".git"), { recursive: true });
+
+  writeFileSync(
+    join(globalDir, "sound/foley/steps.md"),
+    "---\nwhen: footsteps\n---\n# Footsteps\n\n## Match block surface\n",
+  );
+  writeFileSync(join(globalDir, ".obsidian/workspace.md"), "# Hidden\n");
+  writeFileSync(
+    join(projectDir, "craft/camera/handheld.md"),
+    "---\nwhen: handheld shot\n---\n# Handheld\n\n## Dampen micro jitter\n",
+  );
+  writeFileSync(join(projectDir, ".git/ignored.md"), "# Ignored\n");
+
+  assert.deepEqual(lessonTopics(globalDir), ["sound/foley/steps"]);
+  assert.deepEqual(lessonTopics(projectDir), ["craft/camera/handheld"]);
+
+  const seenPaths = [];
+  const got = await lessonsFor([note("n1", "handheld shot footsteps")], {
+    dir: globalDir,
+    projectDir,
+    cache: join(root, "cache.json"),
+    judge: async (_, pool) => {
+      seenPaths.push(...pool.map((x) => `${x.scope}:${x.rel}:${x.path}`));
+      return pool.map((x) => [0.95, x, 1.0]);
+    },
+  });
+
+  assert.deepEqual(seenPaths, [
+    "film:craft/camera/handheld.md:lessons/craft/camera/handheld.md",
+    "all:sound/foley/steps.md:lessons/sound/foley/steps.md",
+  ]);
+  assert.deepEqual(
+    got.get("n1")?.picks.map((p) => [p.scope, p.rel, p.file]),
+    [
+      ["film", "craft/camera/handheld.md", join(projectDir, "craft/camera/handheld.md")],
+      ["all", "sound/foley/steps.md", join(globalDir, "sound/foley/steps.md")],
+    ],
+  );
 });

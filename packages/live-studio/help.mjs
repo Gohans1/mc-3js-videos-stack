@@ -187,6 +187,10 @@ if (film) {
     ]),
     ["renders/", "what render, sheet, framecheck write"],
     ["notes/", "the creator's notes (read them with bun run notes)"],
+    [
+      "lessons/",
+      "this film's lessons (every film's: ../../lessons/, nested .md allowed; notes ID picks both)",
+    ],
   ].map(
     ([f, about]) =>
       `  ${f.padEnd(28)}${about}${existsSync(join(process.cwd(), f)) ? "" : " (none yet)"}`,

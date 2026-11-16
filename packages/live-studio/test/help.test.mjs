@@ -29,6 +29,10 @@ test("a film's help names earshot beside its sound commands, and where the guide
     const one = spawnSync("bun", [HELP, "earshot"], { cwd: dir, encoding: "utf8" });
     expect(one.status).toBe(0);
     expect(one.stdout).toMatch(/earshot -h/);
+    // file map includes both notes/ and per-film lessons/ with global path
+    expect(r.stdout).toMatch(
+      /\n {2}lessons\/\s+this film's lessons \(every film's: \.\.\/\.\.\/lessons\//,
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

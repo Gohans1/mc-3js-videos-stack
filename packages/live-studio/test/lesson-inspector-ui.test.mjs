@@ -1,0 +1,624 @@
+﻿import { afterAll, beforeAll, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+import { createServer } from "vite";
+
+import { inspectLessons, inspectorInfo } from "../src/lesson-inspector.mjs";
+import { filmPlugin } from "../src/vite_film.mjs";
+
+let server,
+  view,
+  root,
+  paidCalls = 0,
+  judgeFailure = "",
+  holdInfo = null;
+const errors = [];
+const studio = resolve(import.meta.dir, "..");
+const entryId = `${studio.replaceAll("\\", "/")}/app/__inspect-test__.tsx`;
+const file = { key: "all:camera.md", scope: "all", path: "camera.md", tag: "1", text: "# Camera" };
+const browser = (width = 960, height = 720) =>
+  new Bun.WebView({
+    backend: { type: "chrome" },
+    width,
+    height,
+    console: (type, ...args) => {
+      if (type === "error") errors.push(args.map(String).join(" "));
+    },
+  });
+const entry = `
+import './index.css';
+import { createRoot } from 'react-dom/client';
+import { LessonsPanel } from '@/lessons/LessonsPanel';
+import { studio } from '@/core/store';
+import { lessons } from '@/lessons/lessons';
+import { useInspectorSession } from '@/lessons/inspector-session';
+import { Toaster } from '@/components/ui/toast';
+import { TooltipProvider } from '@/components/ui/tooltip';
+lessons.setState({ loaded: true, files: [${JSON.stringify(file)}], subTab: 'inspector' });
+window.inspectTest = { lessons, session: useInspectorSession, studio };
+studio.setState({lib:'lessons',side:'lessons'});
+if(location.search.includes('shell')) {
+  import('@/App').then(({App})=>createRoot(document.getElementById('root')).render(<App />)).catch(e=>document.body.dataset.error=String(e));
+} else createRoot(document.getElementById('root')).render(<Toaster><TooltipProvider><main style={{display:'flex',height:'100vh',width:'100%'}}><LessonsPanel desktop /></main></TooltipProvider></Toaster>);
+`;
+
+beforeAll(async () => {
+  root = mkdtempSync(join(tmpdir(), "inspector-ui-"));
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "lessons"));
+  writeFileSync(join(root, "lessons/camera.md"), file.text);
+  writeFileSync(
+    join(root, "src/scene.ts"),
+    "export const SHOTS = [], SHOTS_OUT = [], DURATION = 10; export const applyEdit = () => {}; export const buildScene = async () => Object.assign(() => ({}), { tools: {} });",
+  );
+  writeFileSync(
+    join(root, "src/edit.ts"),
+    "export const EDIT = {}; export const fromSource = t => t; export const toSource = t => t;",
+  );
+  server = await createServer({
+    configFile: join(studio, "vite.config.ts"),
+    logLevel: "silent",
+    optimizeDeps: { exclude: ["loudness-worklet/worklet?url"] },
+    plugins: [
+      filmPlugin({ SRC: join(root, "src"), threeFrom: studio }),
+      {
+        name: "inspector-test",
+        resolveId(id) {
+          return id === "/__inspect-test__.tsx" ? entryId : null;
+        },
+        load(id) {
+          if (id.replaceAll("\\", "/").endsWith("/app/shell/boot.ts"))
+            return "export const useBoot = () => {};";
+          return id.replaceAll("\\", "/") === entryId ? entry : null;
+        },
+        configureServer(vite) {
+          vite.middlewares.use(async (req, res, next) => {
+            const path = req.url?.split("?")[0];
+            if (path === "/api/lessons") {
+              res.setHeader("content-type", "application/json");
+              res.end(JSON.stringify({ dir: join(root, "lessons"), files: [file] }));
+              return;
+            }
+            if (path === "/api/lessons/inspect") {
+              const options = {
+                root,
+                dir: join(root, "lessons"),
+                judge: async (_words, pool) => {
+                  paidCalls++;
+                  if (judgeFailure) throw new Error(judgeFailure);
+                  return [[1, pool[0], 0.9]];
+                },
+              };
+              res.setHeader("content-type", "application/json");
+              try {
+                if (req.method === "GET") {
+                  if (holdInfo) await holdInfo;
+                  res.end(JSON.stringify({ ...inspectorInfo(options), notes: [] }));
+                } else {
+                  let body = "";
+                  for await (const chunk of req) body += chunk;
+                  res.end(JSON.stringify(await inspectLessons(JSON.parse(body), options)));
+                }
+              } catch (e) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ error: e.message }));
+              }
+              return;
+            }
+            if (path === "/__inspect-test__.html") {
+              res.setHeader("content-type", "text/html");
+              res.end(
+                await vite.transformIndexHtml(
+                  path,
+                  '<html class="dark"><body style="margin:0"><div id="root"></div><script>window.addEventListener("error",e=>document.body.dataset.error=e.message);window.addEventListener("unhandledrejection",e=>document.body.dataset.error=String(e.reason));</script><script type="module" src="/__inspect-test__.tsx"></script></body></html>',
+                ),
+              );
+              return;
+            }
+            next();
+          });
+        },
+      },
+    ],
+    server: { host: "127.0.0.1", port: 0, hmr: false },
+  });
+  await server.listen();
+  view = browser();
+  await view.navigate(`http://127.0.0.1:${server.httpServer.address().port}/__inspect-test__.html`);
+});
+afterAll(async () => {
+  view?.close();
+  await server?.close();
+  if (root) rmSync(root, { recursive: true, force: true });
+});
+
+test("external lesson edits refresh the dry Inspector even when note and drafts stay unchanged", async () => {
+  const wait = async (text) =>
+    view.evaluate(`new Promise((resolve,reject) => {
+    const start=Date.now(); const tick=()=>{if(document.body.textContent.includes(${JSON.stringify(text)})) return resolve(true); if(Date.now()-start>12000) return reject(new Error("Missing preview: " + ${JSON.stringify(text)})); setTimeout(tick,20);}; tick();
+  })`);
+  await wait("Jev input");
+  await view.evaluate(
+    "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Jev input').click()",
+  );
+  await wait("lessons/camera.md: # Camera");
+  writeFileSync(join(root, "lessons/camera.md"), "# External camera edit");
+  await view.evaluate(
+    `window.inspectTest.lessons.setState({ files: [{...${JSON.stringify(file)},text:'# External camera edit',tag:'2'}] })`,
+  );
+  await wait("lessons/camera.md: # External camera edit");
+  expect(paidCalls).toBe(0);
+  writeFileSync(join(root, "lessons/camera.md"), file.text);
+  await view.evaluate(`window.inspectTest.lessons.setState({ files: [${JSON.stringify(file)}] })`);
+  await wait("lessons/camera.md: # Camera");
+});
+
+test("mounted Inspector keeps previews free, runs only after opt-in, reacts to lesson drafts and disarms when leaving", async () => {
+  const wait = (expression) =>
+    view.evaluate(`new Promise((resolve,reject) => {
+    const start=Date.now(); const tick=()=>{if(${expression}) return resolve(true); if(Date.now()-start>8000) return reject(new Error(${JSON.stringify(expression)})); setTimeout(tick,20);}; tick();
+  })`);
+  const click = (text) =>
+    view.evaluate(
+      `[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`,
+    );
+  await wait("document.getElementById('inspect-note-text')");
+  await click("AI output");
+  expect(await view.evaluate("document.getElementById('inspect-new-path')")).toBeNull();
+  expect(await view.evaluate("document.body.textContent.includes('Try lesson edits')")).toBe(false);
+  await view.evaluate(`(() => {
+    const input = document.getElementById('inspect-note-text');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'Move camera closer');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await wait("document.body.textContent.includes('dry simulation;')");
+  expect(
+    await view.evaluate("document.querySelector('[role=switch]').getAttribute('aria-checked')"),
+  ).toBe("false");
+  await click("Run Jev");
+  expect(paidCalls).toBe(0);
+  await view.evaluate("document.querySelector('[role=switch]').click()");
+  await wait(
+    "![...document.querySelectorAll('button')].find(b=>b.textContent==='Run Jev').disabled",
+  );
+  expect(paidCalls).toBe(0);
+  await click("Run Jev");
+  await wait("document.body.textContent.includes('lesson: lessons/camera.md')");
+  expect(paidCalls).toBe(1);
+  await view.evaluate(
+    "window.inspectTest.lessons.setState({ edits: { 'all:camera.md': { text: '# Handheld', base: '1' } } })",
+  );
+  await click("Jev input");
+  await wait("document.body.textContent.includes('lessons/camera.md: # Handheld')");
+  const layout = await view.evaluate(`(() => {
+    const controls=document.querySelector('[data-inspector-controls]');
+    const output=document.querySelector('[data-inspector-output]');
+    const before=output.getBoundingClientRect();
+    controls.scrollTop=controls.scrollHeight;
+    const after=output.getBoundingClientRect();
+    return {visible:before.height>150&&before.top>=0&&before.bottom<=innerHeight,stable:before.top===after.top&&before.bottom===after.bottom};
+  })()`);
+  expect(layout).toEqual({ visible: true, stable: true });
+  await click("Deck");
+  await wait(
+    "window.inspectTest.lessons.getState().subTab==='deck' && !window.inspectTest.lessons.getState().inspectorLiveEnabled",
+  );
+  await click("AI Inspector");
+  await wait("document.querySelector('[role=switch]').getAttribute('aria-checked')==='false'");
+  expect(await view.evaluate("document.getElementById('inspect-note-text').value")).toBe(
+    "Move camera closer",
+  );
+  await view.navigate(`http://127.0.0.1:${server.httpServer.address().port}/__inspect-test__.html`);
+  await wait("document.querySelector('[role=switch]')?.getAttribute('aria-checked')==='false'");
+  expect(paidCalls).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test("changing a note or advanced prompt highlights the related live output without a Jev call", async () => {
+  const callsBefore = paidCalls;
+  const wait = (expression) =>
+    view.evaluate(
+      `new Promise((resolve,reject)=>{const start=Date.now();const tick=()=>{if(${expression})return resolve(true);if(Date.now()-start>8000)return reject(new Error(${JSON.stringify(expression)}));setTimeout(tick,20);};tick();})`,
+    );
+  const fill = (id, text) =>
+    view.evaluate(
+      `(()=>{const input=document.getElementById(${JSON.stringify(id)});Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,${JSON.stringify(text)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`,
+    );
+  await wait("document.getElementById('inspect-note-text')");
+  await fill("inspect-note-text", "First note");
+  await wait(
+    "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: First note')",
+  );
+  await fill("inspect-note-text", "Move closer instead");
+  await wait(
+    "[...document.querySelectorAll('[data-changed=true]')].some(e=>e.textContent.includes('NOTE: Move closer instead'))",
+  );
+  expect(
+    await view.evaluate(
+      "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: First note')",
+    ),
+  ).toBe(false);
+  await view.evaluate(
+    `(()=>{for(const text of ['Advanced settings','Prompts for Jev']){const d=[...document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes(text));d.open=true;}})()`,
+  );
+  const promptId = await view.evaluate(
+    "[...document.querySelectorAll('label')].find(l=>l.textContent==='Extra instructions').htmlFor",
+  );
+  await fill(promptId, "Prioritize camera distance");
+  await wait(
+    "document.querySelector('[data-inspector-output]').textContent.includes('Assembled Jev prompts')",
+  );
+  await wait(
+    "[...document.querySelectorAll('[data-changed=true]')].some(e=>e.textContent.includes('Prioritize camera distance'))",
+  );
+  expect(paidCalls).toBe(callsBefore);
+  expect(errors).toEqual([]);
+});
+
+test("a narrow short Inspector keeps actual output inside its visible pane", async () => {
+  const result = await view.evaluate(`(async()=>{
+    const main=document.querySelector('main');main.style.width='320px';main.style.height='344px';
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    const pane=document.querySelector('[data-inspector-output]').getBoundingClientRect();
+    const text=document.querySelector('[data-inspector-result]').getBoundingClientRect();
+    const controls=document.querySelector('[data-inspector-controls]');
+    return {textHeight:text.height,inside:text.bottom<=pane.bottom&&pane.bottom<=main.getBoundingClientRect().bottom,overflow:controls.scrollWidth>controls.clientWidth,debug:{pane:pane.toJSON(),text:text.toJSON(),header:document.querySelector('[data-inspector-output]').firstElementChild.getBoundingClientRect().toJSON(),main:main.getBoundingClientRect().toJSON()}};
+  })()`);
+  expect(result.textHeight, JSON.stringify(result.debug)).toBeGreaterThanOrEqual(24);
+  expect(result.inside).toBe(true);
+  expect(result.overflow).toBe(false);
+});
+
+test("an excluded real Deck file can be restored individually without changing its contents", async () => {
+  const callsBefore = paidCalls;
+  await view.evaluate(
+    `(()=>{const main=document.querySelector('main');main.style.width='960px';main.style.height='720px';const s=[...document.querySelectorAll('summary')].find(s=>s.textContent.includes('Lesson files'));s.parentElement.open=true;})()`,
+  );
+  await view.evaluate("document.querySelector('[data-inspector-file] [role=checkbox]').click()");
+  await view.evaluate(
+    "new Promise((resolve,reject)=>{const start=Date.now();const tick=()=>{if(document.body.textContent.includes('Files: 0'))return resolve(true);if(Date.now()-start>4000)return reject(new Error('Exclusion did not reach preview'));setTimeout(tick,20);};tick();})",
+  );
+  expect(readFileSync(join(root, "lessons/camera.md"), "utf8")).toBe(file.text);
+  await view.evaluate("document.querySelector('[data-inspector-file] [role=checkbox]').click()");
+  await view.evaluate(
+    "new Promise((resolve,reject)=>{const start=Date.now();const tick=()=>{if(document.body.textContent.includes('Files: 1'))return resolve(true);if(Date.now()-start>4000)return reject(new Error('Restore did not reach preview'));setTimeout(tick,20);};tick();})",
+  );
+  expect(paidCalls).toBe(callsBefore);
+});
+
+test("invalid matching settings explain the error at the focused field and recover in place", async () => {
+  await view.evaluate(
+    "new Promise((resolve,reject)=>{const start=Date.now();const tick=()=>{if(document.getElementById('inspect-note-text'))return resolve(true);if(document.body.dataset.error)return reject(new Error(document.body.dataset.error));if(Date.now()-start>12000)return reject(new Error('Inspector missing'));setTimeout(tick,20);};tick();})",
+  );
+  const result = await view.evaluate(`(async()=>{
+    for(const text of ['Advanced settings','Select matching lessons'])
+      [...document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes(text)).open=true;
+    const label=[...document.querySelectorAll('label')].find(l=>l.textContent==='Maximum results to check');
+    const input=document.getElementById(label.htmlFor);
+    input.scrollIntoView({block:'center'}); input.focus();
+    const top=input.getBoundingClientRect().top;
+    const fill=value=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));};
+    fill('0'); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    const description=input.getAttribute('aria-describedby').split(' ').map(id=>document.getElementById(id)?.textContent).join(' ');
+    const invalid=input.getAttribute('aria-invalid');
+    const stayed=document.activeElement===input&&Math.abs(input.getBoundingClientRect().top-top)<2;
+    fill('5'); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    return {invalid,description,stayed,recovered:input.getAttribute('aria-invalid')!=='true'};
+  })()`);
+  expect(result.invalid).toBe("true");
+  expect(result.description).toContain("Enter 1–50 results");
+  expect(result.stayed).toBe(true);
+  expect(result.recovered).toBe(true);
+});
+
+test("the full 960px Studio shell reserves multiline Inspector output and restores the timeline in Deck", async () => {
+  await view.navigate(
+    `http://127.0.0.1:${server.httpServer.address().port}/__inspect-test__.html?shell`,
+  );
+  await view.evaluate(
+    "new Promise((resolve,reject)=>{const start=Date.now();const tick=()=>{if(document.querySelector('[data-inspector-result]'))return resolve(true);if(document.body.dataset.error)return reject(new Error(document.body.dataset.error));if(Date.now()-start>12000)return reject(new Error('Shell Inspector missing: '+document.body.textContent));setTimeout(tick,20);};tick();})",
+  );
+  const result = await view.evaluate(`(async()=>{
+    const text=document.querySelector('[data-inspector-result]');
+    const switcher=document.querySelector('[role=switch]');
+    const off=text.getBoundingClientRect();
+    switcher.click();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    const on=text.getBoundingClientRect();
+    [...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Deck').click();
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    return {off:off.height,on:on.height,stable:off.top===on.top&&off.height===on.height,
+      restored:!document.querySelector('[data-inspector-active]')&&!!document.querySelector('[aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom"]')?.getBoundingClientRect().height};
+  })()`);
+  expect(result.off).toBeGreaterThanOrEqual(180);
+  expect(result.on).toBeGreaterThanOrEqual(180);
+  expect(result.stable).toBe(true);
+  expect(result.restored).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+const waitFor = (expression) =>
+  view.evaluate(
+    `new Promise((resolve,reject)=>{const end=Date.now()+12000;const tick=()=>{if(${expression})return resolve(true);if(Date.now()>end)return reject(new Error(${JSON.stringify(expression)}));setTimeout(tick,20);};tick();})`,
+  );
+const fillNote = (text) =>
+  view.evaluate(
+    `(()=>{const input=document.getElementById('inspect-note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,${JSON.stringify(text)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`,
+  );
+const clickButton = (text) =>
+  view.evaluate(
+    `[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`,
+  );
+const navigateFixture = async (query = "") => {
+  await view.navigate(
+    `http://127.0.0.1:${server.httpServer.address().port}/__inspect-test__.html${query}`,
+  );
+  await waitFor("document.getElementById('inspect-note-text')");
+};
+
+test("a failed manual run stays visible until an explicit retry and a successful run remains live", async () => {
+  const callsBefore = paidCalls;
+  await navigateFixture();
+  await waitFor(
+    "!document.getElementById('inspect-note-text').disabled && window.inspectTest.session.getState().hydrated",
+  );
+  await fillNote("Provider retry: move the camera closer");
+  await waitFor(
+    "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: Provider retry')",
+  );
+  judgeFailure = "Provider unavailable. Try Run Jev again.";
+  try {
+    await view.evaluate("document.querySelector('[role=switch]').click()");
+    await clickButton("Run Jev");
+    await waitFor("document.body.textContent.includes('Provider unavailable.')");
+    await view.evaluate("new Promise(r=>setTimeout(r,900))");
+    expect(await view.evaluate("document.body.textContent.includes('Provider unavailable.')")).toBe(
+      true,
+    );
+    expect(
+      await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
+    ).toBe(true);
+    judgeFailure = "";
+    await clickButton("Retry Jev");
+    await waitFor("document.body.textContent.includes('Live result')");
+    await view.evaluate("new Promise(r=>setTimeout(r,900))");
+    expect(await view.evaluate("document.body.textContent.includes('Live result')")).toBe(true);
+    expect(paidCalls).toBe(callsBefore + 2);
+  } finally {
+    judgeFailure = "";
+  }
+});
+
+test("cold settings stay locked until the genuine initial response arrives", async () => {
+  let release;
+  holdInfo = new Promise((resolve) => {
+    release = resolve;
+  });
+  try {
+    await navigateFixture();
+    await view.evaluate(
+      `(()=>{for(const text of ['Advanced settings','Prompts for Jev'])[...document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes(text)).open=true;})()`,
+    );
+    const state = await view.evaluate(
+      `(()=>{const label=[...document.querySelectorAll('label')].find(l=>l.textContent==='Extra instructions');const input=document.getElementById(label.htmlFor);return {disabled:input.matches(':disabled'),loading:document.querySelector('[data-inspector-output]').textContent.includes('Loading')};})()`,
+    );
+    expect(state).toEqual({ disabled: true, loading: true });
+  } finally {
+    holdInfo = null;
+    release();
+    await waitFor("window.inspectTest.session.getState().hydrated");
+  }
+  await view.evaluate(
+    `(()=>{const label=[...document.querySelectorAll('label')].find(l=>l.textContent==='Extra instructions');const input=document.getElementById(label.htmlFor);Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'Keep this camera instruction');input.dispatchEvent(new Event('input',{bubbles:true}));})()`,
+  );
+  await waitFor(
+    "document.querySelector('[data-inspector-result]').textContent.includes('Keep this camera instruction')",
+  );
+});
+
+test.each([
+  [1920, 1080, 3],
+  [960, 720, 3],
+  [800, 480, 2],
+  [390, 844, 3],
+  [320, 568, 2],
+])(
+  "enlarged text at %i×%i keeps multiple output lines visible",
+  async (width, height, minimumLines) => {
+    view.close();
+    view = browser(width, height);
+    await navigateFixture("?shell");
+    await view.cdp("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    expect(await view.evaluate("({width:innerWidth,height:innerHeight})")).toEqual({
+      width,
+      height,
+    });
+    await waitFor("window.inspectTest.session.getState().hydrated");
+    await fillNote("The face needs to read clearly");
+    await waitFor(
+      "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: The face')",
+    );
+    const result = await view.evaluate(`(async()=>{
+      document.documentElement.style.fontSize='32px';
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const text=document.querySelector('[data-inspector-result]'),r=text.getBoundingClientRect();
+      return {height:r.height,line:parseFloat(getComputedStyle(text.querySelector('pre')).lineHeight),inside:r.top>=0&&r.bottom<=innerHeight,overflow:document.documentElement.scrollWidth>innerWidth};
+    })()`);
+    expect(result.height, JSON.stringify({ width, ...result })).toBeGreaterThanOrEqual(
+      result.line * minimumLines,
+    );
+    expect(result.inside, JSON.stringify({ width, ...result })).toBe(true);
+    expect(result.overflow).toBe(false);
+    await view.evaluate("document.documentElement.style.fontSize=''");
+    expect(errors).toEqual([]);
+  },
+);
+
+test("a stored folded panel cannot hide the focused Inspector workspace", async () => {
+  await view.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 960,
+    height: 720,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  const previous = await view.evaluate("localStorage.getItem('studio.lessonsWidth')");
+  try {
+    await view.evaluate("localStorage.setItem('studio.lessonsWidth','0')");
+    await navigateFixture("?shell");
+    await waitFor(
+      "document.querySelector('[data-inspector-output]')?.textContent.includes('Preview ready')",
+    );
+    expect(
+      await view.evaluate(
+        "document.querySelector('[data-inspector-result]').getBoundingClientRect().height",
+      ),
+    ).toBeGreaterThanOrEqual(180);
+    expect(await view.evaluate("document.querySelector('[data-side-folded]')")).toBeNull();
+  } finally {
+    await view.evaluate(
+      previous === null
+        ? "localStorage.removeItem('studio.lessonsWidth')"
+        : `localStorage.setItem('studio.lessonsWidth',${JSON.stringify(previous)})`,
+    );
+  }
+});
+
+test("Save failures survive a later dry response and retry Save without blocking a valid preview", async () => {
+  const callsBefore = paidCalls;
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  await view.evaluate(`(()=>{
+    const original=window.fetch;
+    let releaseDry;const gate=new Promise(resolve=>{releaseDry=resolve;});
+    window.saveProbe={calls:0,release:releaseDry,restore:()=>{releaseDry();window.fetch=original;}};
+    window.fetch=async(url,options)=>{
+      if(String(url)==='/api/lessons/inspect'&&options?.method==='PUT'){
+        const failed=++window.saveProbe.calls===1;
+        return new Response(JSON.stringify(failed?{error:'QA settings unavailable'}:{saved:true}),{status:failed?503:200,headers:{'content-type':'application/json'}});
+      }
+      const response=await original(url,options);
+      if(String(url)==='/api/lessons/inspect'&&options?.method==='POST')await gate;
+      return response;
+    };
+    for(const text of ['Advanced settings','Prompts for Jev'])[...document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes(text)).open=true;
+    const label=[...document.querySelectorAll('label')].find(l=>l.textContent==='Extra instructions');
+    const input=document.getElementById(label.htmlFor);
+    input.scrollIntoView({block:'center'});
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'Save recovery instruction');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
+  try {
+    await waitFor(
+      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Save'&&!b.disabled)",
+    );
+    await clickButton("Save");
+    await waitFor("document.body.textContent.includes('QA settings unavailable')");
+    const named = await view.evaluate(
+      "document.querySelector('[data-inspector-controls]').textContent.includes('Settings were not saved')",
+    );
+    await view.evaluate("window.saveProbe.release()");
+    await waitFor(
+      "document.querySelector('[data-inspector-result]').textContent.includes('Save recovery instruction')",
+    );
+    expect({
+      named,
+      persistent: await view.evaluate(
+        "document.querySelector('[data-inspector-controls]').textContent.includes('QA settings unavailable')",
+      ),
+      visibleRecovery: await view.evaluate(`(()=>{
+        return [...document.querySelectorAll('button')].some(button=>{
+          const r=button.getBoundingClientRect();
+          return button.textContent==='Retry save'&&!button.disabled&&r.top>=0&&r.bottom<=innerHeight;
+        });
+      })()`),
+    }).toEqual({ named: true, persistent: true, visibleRecovery: true });
+    const recoveryName = await view.evaluate(`(()=>{
+      const button=[...document.querySelectorAll('button')].find(button=>{
+        const r=button.getBoundingClientRect();
+        return button.textContent==='Retry save'&&r.top>=0&&r.bottom<=innerHeight;
+      });
+      return button?.getAttribute('aria-label')??button?.textContent??'';
+    })()`);
+    expect(recoveryName).toContain("Retry save");
+    expect(
+      await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
+    ).toBe(false);
+    await clickButton("Retry save");
+    await waitFor(
+      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Saved'&&b.disabled)",
+    );
+    expect(await view.evaluate("window.saveProbe.calls")).toBe(2);
+    expect(
+      await view.evaluate(
+        "document.querySelector('[data-inspector-controls]').textContent.includes('QA settings unavailable')",
+      ),
+    ).toBe(false);
+    expect(paidCalls).toBe(callsBefore);
+  } finally {
+    await view.evaluate("window.saveProbe.restore()");
+  }
+});
+
+test.each([
+  [1920, 1080, 16],
+  [800, 480, 32],
+])(
+  "native keyboard focus stays visible at %i×%i with root font %ipx",
+  async (width, height, fontSize) => {
+    view.close();
+    view = browser(width, height);
+    await navigateFixture("?shell");
+    await view.cdp("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    expect(await view.evaluate("({width:innerWidth,height:innerHeight})")).toEqual({
+      width,
+      height,
+    });
+    await waitFor("window.inspectTest.session.getState().hydrated");
+    const focused = () =>
+      view.evaluate(`(()=>{
+    const element=document.activeElement,r=element.getBoundingClientRect();
+    const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+    const label=[...document.querySelectorAll('label')].find(label=>label.htmlFor===element.id);
+    return {target:label?.textContent.trim()||element.textContent.trim(),visible:!!hit&&element.contains(hit),rect:r.toJSON(),hit:hit?.textContent.slice(0,80)};
+  })()`);
+    try {
+      await view.evaluate(`(async()=>{
+      document.documentElement.style.fontSize='${fontSize}px';
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      document.getElementById('inspect-note-text').focus();
+    })()`);
+      await view.press("Tab");
+      await view.press("Tab");
+      let state = await focused();
+      expect(state.target).toBe("Edit in Deck");
+      expect(state.visible, JSON.stringify(state)).toBe(true);
+      await view.press("Tab");
+      state = await focused();
+      expect(state.target).toBe("Search lessons in");
+      expect(state.visible, JSON.stringify(state)).toBe(true);
+      await view.evaluate(`(()=>{
+      for(const text of ['Advanced settings','Read lesson files'])
+        [...document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes(text)).open=true;
+      const label=[...document.querySelectorAll('label')].find(label=>label.textContent==='Every-film input label');
+      document.getElementById(label.htmlFor).focus();
+    })()`);
+      await view.press("Tab", { modifiers: ["Shift"] });
+      state = await focused();
+      expect(state.target).toBe("This-film input label");
+      expect(state.visible, JSON.stringify(state)).toBe(true);
+    } finally {
+      await view.evaluate("document.documentElement.style.fontSize=''");
+    }
+  },
+);

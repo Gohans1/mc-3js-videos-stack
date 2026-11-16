@@ -19,6 +19,7 @@ const inputVariants = cva(
       },
       size: {
         default: "h-8 px-2 pointer-coarse:h-10 pointer-coarse:text-base",
+        md: "h-8 px-2.5 text-sm pointer-coarse:h-10 pointer-coarse:text-base",
         tight: "h-8 px-1.5 pointer-coarse:h-10 pointer-coarse:text-base",
         xsTight: "h-8 px-1 pointer-coarse:h-10 pointer-coarse:text-base",
         search: "h-8 ps-8.5 pe-2.5 pointer-coarse:h-10 pointer-coarse:text-base",

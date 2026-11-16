@@ -29,36 +29,92 @@ export const FIT_YES = 0.7,
 // jev.py's own notes (a route's quota spent, its cost): parallel heats repeat them, so each is printed once per run
 const jevNotes = new Set<string>();
 type Answers = Record<string, { probabilities?: Record<string, number>; noul?: number }>;
-const jevAsk = (state: unknown, questions: Record<string, unknown>) =>
+export interface JevOptions {
+  choiceMax?: number;
+  heat?: number;
+  keep?: number;
+  dedupe?: boolean;
+  noulInstructionsTemplate?: string;
+  route?: "auto" | "free" | "paid";
+  freeModel?: string;
+  paidModel?: string;
+  spendCap?: number;
+  onTrace?: (event: Record<string, unknown>) => void;
+  deadline?: number;
+}
+
+const jevAsk = (state: unknown, questions: Record<string, unknown>, options: JevOptions = {}) =>
   new Promise<Answers>((done, fail) => {
+    const remaining = (options.deadline ?? Date.now() + 180000) - Date.now();
+    if (remaining <= 0) {
+      fail(new Error("Jev run stopped after 180 seconds."));
+      return;
+    }
     const py = spawn("python", [JEV], { stdio: ["pipe", "pipe", "pipe"] });
+    const timer = setTimeout(() => {
+      py.kill();
+      fail(new Error("Jev stopped after 180 seconds; try again."));
+    }, remaining);
     let out = "",
       err = "";
     py.stdout.on("data", (d) => (out += d));
     py.stderr.on("data", (d) => (err += d));
-    py.on("error", fail);
+    py.on("error", (e) => {
+      clearTimeout(timer);
+      fail(e);
+    });
     py.on("close", (code) => {
+      clearTimeout(timer);
       const said = err.split("\n").filter((l) => l.trim() && !jevNotes.has(l));
       for (const l of said) jevNotes.add(l);
       if (code) return fail(new Error(said.at(-1)?.trim() || `jev.py exited ${code}`));
       if (said.length) console.error(said.join("\n"));
-      done(JSON.parse(out) as Answers);
+      try {
+        const result = JSON.parse(out) as { answers: Answers; trace: unknown[] };
+        for (const event of result.trace) options.onTrace?.(event as Record<string, unknown>);
+        done(result.answers);
+      } catch {
+        fail(new Error("Jev returned an invalid response."));
+      }
     });
-    py.stdin.end(JSON.stringify({ state, questions }));
+    py.stdin.on("error", fail);
+    py.stdin.end(
+      JSON.stringify({
+        state,
+        questions,
+        options: {
+          route: options.route,
+          freeModel: options.freeModel,
+          paidModel: options.paidModel,
+          spendCap: options.spendCap,
+        },
+        trace: true,
+      }),
+    );
   });
 
-const choice = async <T>(q: JevQuestion<T>, group: T[]): Promise<[number, T][]> => {
+export const choiceRequest = <T>(q: JevQuestion<T>, group: T[]) => {
   const criteria = Object.fromEntries(group.map((x, i) => [`c${i}`, q.text(x)]));
-  const probs =
-    (await jevAsk(q.wanted, { pick: { type: "choice", instructions: q.pick, criteria } })).pick
-      ?.probabilities ?? {};
+  return {
+    state: q.wanted,
+    questions: { pick: { type: "choice", instructions: q.pick, criteria } },
+  };
+};
+const choice = async <T>(
+  q: JevQuestion<T>,
+  group: T[],
+  options: JevOptions = {},
+): Promise<[number, T][]> => {
+  const request = choiceRequest(q, group);
+  options.onTrace?.({ phase: "choice", request });
+  const probs = (await jevAsk(request.state, request.questions, options)).pick?.probabilities ?? {};
   return group.map((x, i) => [probs[`c${i}`] ?? 0, x]);
 };
 
 // A vote always picks something, even when nothing in the list is what was asked (TypeSafe: a "none of the above" option
 // often fails; ask a companion Noul instead, as catalog.py does for mocap). So each item shown gets its own yes/no, all in
 // one request: the probability that it really is what was wanted
-const fits = async <T>(q: JevQuestion<T>, shown: T[]) => {
+export const fitRequest = <T>(q: JevQuestion<T>, shown: T[], options: JevOptions = {}) => {
   const state = {
     wanted: q.wanted,
     ...Object.fromEntries(shown.map((x, k) => [`entry_${k + 1}`, q.text(x)])),
@@ -68,12 +124,19 @@ const fits = async <T>(q: JevQuestion<T>, shown: T[]) => {
       `fit_${k + 1}`,
       {
         type: "noul",
-        instructions: `Is \`entry_${k + 1}\` what \`wanted\` asks for?`,
+        instructions: (
+          options.noulInstructionsTemplate ?? "Is `entry_{index}` what `wanted` asks for?"
+        ).replaceAll("{index}", String(k + 1)),
         criteria: { true: q.yes, false: q.no },
       },
     ]),
   );
-  const ans = await jevAsk(state, qs);
+  return { state, questions: qs };
+};
+const fits = async <T>(q: JevQuestion<T>, shown: T[], options: JevOptions = {}) => {
+  const request = fitRequest(q, shown, options);
+  options.onTrace?.({ phase: "noul", request });
+  const ans = await jevAsk(request.state, request.questions, options);
   return shown.map((_, k) => ans[`fit_${k + 1}`]?.noul ?? 0);
 };
 
@@ -82,21 +145,28 @@ export async function jevRank<T>(
   q: JevQuestion<T>,
   pool: T[],
   vote: (q: JevQuestion<T>, group: T[]) => Promise<[number, T][]> = choice,
+  options: JevOptions = {},
 ) {
+  const choiceMax = options.choiceMax ?? CHOICE_MAX,
+    heat = options.heat ?? HEAT,
+    keep = options.keep ?? KEEP;
+  if (!(keep >= 1 && keep < heat && heat <= choiceMax && choiceMax <= CHOICE_MAX))
+    throw new Error("Tournament requires 1 <= keep < heat <= choiceMax <= 255");
+  if (!pool.length) return [];
   // items Jev would read the same vote once, the first standing for the rest; all come back with its share
   const same = new Map<string, T[]>();
   let list: T[] = [];
   for (const x of pool) {
     const t = q.text(x);
     const seen = same.get(t);
-    if (seen) seen.push(x);
+    if (seen && options.dedupe !== false) seen.push(x);
     else {
       same.set(t, [x]);
       list.push(x);
     }
   }
   // the heats' winners run in heats again until they fit one final
-  while (list.length > CHOICE_MAX) {
+  while (list.length > choiceMax) {
     // Fisher-Yates on a fixed-seed Park-Miller generator: the same query ranks the same
     let seed = 7;
     const shuffled = [...list];
@@ -106,7 +176,13 @@ export async function jevRank<T>(
       [shuffled[i], shuffled[j]] = [shuffled[j] as T, shuffled[i] as T];
     }
     const heats: T[][] = [];
-    for (let k = 0; k < shuffled.length; k += HEAT) heats.push(shuffled.slice(k, k + HEAT));
+    for (let k = 0; k < shuffled.length; k += heat) heats.push(shuffled.slice(k, k + heat));
+    options.onTrace?.({
+      phase: "heats",
+      candidates: list.length,
+      groups: heats.map((group) => group.map(q.text)),
+      keep,
+    });
     const results: [number, T][][] = [];
     for (let k = 0; k < heats.length; k += 4)
       results.push(...(await Promise.all(heats.slice(k, k + 4).map((h) => vote(q, h)))));
@@ -114,12 +190,13 @@ export async function jevRank<T>(
       r
         .filter(([p]) => p > 0)
         .sort((a, b) => b[0] - a[0])
-        .slice(0, KEEP)
+        .slice(0, keep)
         .map(([, x]) => x),
     );
   }
+  options.onTrace?.({ phase: "final", candidates: list.map(q.text) });
   return (await vote(q, list)).flatMap(([p, x]) =>
-    (same.get(q.text(x)) ?? [x]).map((y): [number, T] => [p, y]),
+    (options.dedupe === false ? [x] : (same.get(q.text(x)) ?? [x])).map((y): [number, T] => [p, y]),
   );
 }
 
@@ -128,13 +205,20 @@ export async function jevJudge<T>(
   q: JevQuestion<T>,
   pool: T[],
   show: number,
+  options: JevOptions = {},
 ): Promise<JevVoted<T>[]> {
-  const voted = (await jevRank(q, pool)).filter(([p]) => p > 0).sort((a, b) => b[0] - a[0]);
+  options = { ...options, deadline: options.deadline ?? Date.now() + 180000 };
+  const voted = (
+    await jevRank(q, pool, (question, group) => choice(question, group, options), options)
+  )
+    .filter(([p]) => p > 0)
+    .sort((a, b) => b[0] - a[0]);
   const top = voted.slice(0, show);
   if (!top.length) return voted;
   const fit = await fits(
     q,
     top.map(([, x]) => x),
+    options,
   );
   return [...top.map(([p, x], i): JevVoted<T> => [p, x, fit[i]]), ...voted.slice(show)];
 }

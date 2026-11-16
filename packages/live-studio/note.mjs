@@ -7,8 +7,9 @@ const HELP = `The AI's answer on a creator's note; run inside the film. ID: as b
                                             Needs work with words, which brings it back to bun run notes)
   bun run note ask ID "your question"       not sure what they want: the question waits for their answer the same way
   bun run note learned ID "the rule, where"  for a note they asked you to remember (bun run notes lists those): the
-                                            lasting rule you drew from it and where you kept it, shown on their note
-Read the open notes first: bun run notes (one in full: bun run notes ID).`;
+                                            lasting rule you drew and where you kept it (this film: src or lessons/,
+                                            every film: ../../lessons/, nested .md ok), shown on their note
+Read the open notes first: bun run notes (one in full: bun run notes ID; lesson matches return only file names and headings by line — read those files directly for full details).`;
 const project = process.env.LIVE_PROJECT ?? process.cwd();
 const [cmd, key, ...words] = cliArgs(HELP, null);
 needFilm(project);

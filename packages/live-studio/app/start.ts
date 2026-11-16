@@ -1,3 +1,5 @@
+import { listenActivity, loadActivity } from "./activity/activity";
+import { lessons, loadLessons } from "./lessons/lessons";
 import * as FILM from "film/scene";
 import { buildScene, SHOTS_OUT as SHOTS } from "film/scene";
 // The studio page's start: the film is built, every part attached and loaded, the server's saves listened to; from then on
@@ -148,7 +150,11 @@ const listen = () => {
   });
   onEvent("contract", loadContract);
   onEvent("film", codeChanged); // the frame's shape changed (Settings, maybe in another page): a reload builds the scene at it
-  onEvent("favorites", loadFavorites); // starred here, in another tab or on the phone
+  onEvent("favorites", loadFavorites);
+  onEvent("lessons", () => {
+    if (lessons.getState().loaded) void loadLessons();
+  });
+  listenActivity(); // starred here, in another tab or on the phone
   // Back after the line dropped or the studio restarted: catch up on what changed meanwhile
   onHello((current, reconnect) => {
     if (!current) codeChanged();
@@ -167,6 +173,8 @@ const listen = () => {
       loadText();
       loadLayers();
       loadFavorites();
+      void loadActivity();
+      if (lessons.getState().loaded) void loadLessons();
     }
   });
 };

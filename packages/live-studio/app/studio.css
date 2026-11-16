@@ -389,3 +389,180 @@
 .grade-wheel-value {
   background: #1c1c1c;
 }
+
+/* What the AI just touched (activity/activity.ts useLit, for its LIT_MS): a violet ring and glow that hold, then fade. Colour
+   only, nothing moves or changes size, so a list being read never shifts and reduced motion keeps it as it is */
+@layer components {
+  :root {
+    --ai-lit-ms: 12000ms;
+  }
+  @keyframes ai-lit {
+    0% {
+      box-shadow:
+        inset 0 0 0 1.5px var(--lit-color, var(--primary)),
+        inset 0 0 18px color-mix(in oklab, var(--lit-color, var(--primary)) 14%, transparent),
+        0 0 0 1px color-mix(in oklab, var(--lit-color, var(--primary)) 45%, transparent),
+        0 0 14px 1px color-mix(in oklab, var(--lit-color, var(--primary)) 28%, transparent);
+    }
+    72% {
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow:
+        inset 0 0 0 1.5px color-mix(in oklab, var(--lit-color, var(--primary)) 90%, transparent),
+        inset 0 0 12px color-mix(in oklab, var(--lit-color, var(--primary)) 10%, transparent),
+        0 0 0 1px color-mix(in oklab, var(--lit-color, var(--primary)) 32%, transparent),
+        0 0 8px 0 color-mix(in oklab, var(--lit-color, var(--primary)) 18%, transparent);
+    }
+    100% {
+      box-shadow:
+        inset 0 0 0 1.5px transparent,
+        inset 0 0 12px transparent,
+        0 0 0 1px transparent,
+        0 0 8px 0 transparent;
+    }
+  }
+  @keyframes ai-lit-row {
+    0%,
+    72% {
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+      background-color: color-mix(in oklab, var(--lit-color, var(--primary)) 12%, transparent);
+      box-shadow:
+        inset 0 1.5px 0 var(--lit-color, var(--primary)),
+        inset 0 -1.5px 0 var(--lit-color, var(--primary));
+    }
+    100% {
+      background-color: transparent;
+      box-shadow:
+        inset 0 1.5px 0 transparent,
+        inset 0 -1.5px 0 transparent;
+    }
+  }
+  .tab-indicator {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: var(--active-tab-width, 0px);
+    transform: translate3d(var(--active-tab-left, 0px), 0px, 0);
+    transition:
+      transform 190ms cubic-bezier(0.23, 1, 0.32, 1),
+      width 190ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .tab-pill-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--active-tab-width, 0px);
+    height: var(--active-tab-height, 0px);
+    transform: translate3d(var(--active-tab-left, 0px), var(--active-tab-top, 0px), 0);
+    transition:
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      width 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      height 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .segmented-pill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--pill-w, 0px);
+    height: var(--pill-h, 0px);
+    transform: translate3d(var(--pill-x, 0px), var(--pill-y, 0px), 0);
+  }
+  .segmented-pill[data-animated] {
+    transition:
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      width 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      height 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .studio-press {
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      box-shadow 150ms ease,
+      transform 150ms ease-out;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .studio-press:not(:disabled):not([aria-disabled="true"]):not([aria-haspopup]):active {
+      transform: scale(0.96);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tab-indicator,
+    .tab-pill-indicator,
+    .segmented-pill[data-animated],
+    .studio-press {
+      transition: none;
+    }
+    .studio-press:not(:disabled):not([aria-disabled="true"]):not([aria-haspopup]):active {
+      transform: none;
+    }
+  }
+}
+
+/* Kept in @layer utilities so border-* and ring-* card utilities never suppress the AI highlight or focus ring */
+@layer utilities {
+  [data-ai-lit][data-tone="check"] {
+    --lit-color: var(--warn);
+  }
+  [data-ai-lit][data-tone="ai"] {
+    --lit-color: var(--ai);
+  }
+  [data-ai-lit][data-tone="open"] {
+    --lit-color: var(--primary);
+  }
+  [data-ai-lit][data-tone="done"] {
+    --lit-color: var(--ok);
+  }
+  [data-ai-lit][data-ai-lit] {
+    border-color: color-mix(in oklab, var(--lit-color, var(--primary)) 72%, transparent);
+    animation: ai-lit var(--ai-lit-ms) linear both;
+  }
+  [data-ai-lit][data-ai-lit]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  [data-slot="table-row"][data-ai-lit] > td {
+    animation: ai-lit-row var(--ai-lit-ms) linear both;
+  }
+  [data-slot="table-row"][data-ai-lit] > td:first-child {
+    border-start-start-radius: 6px;
+    border-end-start-radius: 6px;
+  }
+  [data-slot="table-row"][data-ai-lit] > td:last-child {
+    border-start-end-radius: 6px;
+    border-end-end-radius: 6px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-ai-lit][data-ai-lit] {
+      animation: none;
+      border-color: var(--lit-color, var(--primary));
+      box-shadow:
+        inset 0 0 0 1.5px var(--lit-color, var(--primary)),
+        inset 0 0 14px color-mix(in oklab, var(--lit-color, var(--primary)) 10%, transparent);
+    }
+    [data-slot="table-row"][data-ai-lit] > td {
+      animation: none;
+      background-color: color-mix(in oklab, var(--lit-color, var(--primary)) 12%, transparent);
+      box-shadow:
+        inset 0 1.5px 0 var(--lit-color, var(--primary)),
+        inset 0 -1.5px 0 var(--lit-color, var(--primary));
+    }
+  }
+}
+
+.tl-lane {
+  --tl-step: 28px;
+  --tl-pill-offset: 4px;
+  --tl-stem-offset: 26px;
+  height: calc(var(--tl-rows, 1) * var(--tl-step) + 6px);
+}
+.tl-pill {
+  top: calc(var(--tl-row, 0) * var(--tl-step) + var(--tl-pill-offset));
+}
+.tl-stem {
+  top: calc(var(--tl-row, 0) * var(--tl-step) + var(--tl-stem-offset));
+}
+@media (pointer: coarse) {
+  .tl-lane {
+    --tl-step: 52px;
+    --tl-stem-offset: 48px;
+  }
+}
