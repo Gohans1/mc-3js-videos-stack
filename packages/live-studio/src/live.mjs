@@ -7,6 +7,7 @@ import { stripVTControlCharacters } from "node:util";
 
 import { createActivity } from "./activity.mjs";
 import { createApi } from "./api.mjs";
+import { createCliRunner } from "./cli-runner.ts";
 import { cliArgs } from "./cli.mjs";
 import { openFilm } from "./film.mjs";
 import { openLessonFiles } from "./lesson-files.mjs";
@@ -146,7 +147,16 @@ const voiceLibrary = openVoiceLibrary({
   project: film.PROJECT,
   onEvent: () => send("voice-library"),
 });
-const api = createApi(film, { page, events, send, activity, lessons, voiceLibrary });
+const cliRunner = createCliRunner(film);
+const api = createApi(film, { page, events, send, activity, lessons, voiceLibrary, cliRunner });
+const stopCli = () => cliRunner.stopActive();
+process.once("exit", stopCli);
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => {
+    stopCli();
+    process.exit(0);
+  });
+}
 film.start();
 lessons.watch((paths) => {
   send("lessons");

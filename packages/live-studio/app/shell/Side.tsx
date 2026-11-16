@@ -14,9 +14,10 @@ import {
   MessageSquareText,
   Music2,
   SlidersHorizontal,
+  Terminal,
   Type,
 } from "lucide-react";
-import { Fragment, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,8 @@ import { AnimPanel } from "../camera/AnimPanel";
 import { CamPanel } from "../camera/CamPanel";
 import { TransitionLibrary } from "../camera/TransitionLibrary";
 import { TransitionPanel } from "../camera/TransitionPanel";
+import { CliPanel } from "../cli/CliPanel";
+import { stopCliHotkeyPropagation, stopCliTabHotkeyPropagation } from "../cli/model";
 import { Segmented } from "../components/inspector";
 import { TabStage } from "../components/Motion";
 import { set, studio, type StudioState, useStudio } from "../core/store";
@@ -50,7 +53,7 @@ const tab =
   "relative flex h-10 upright:h-9 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-foreground/65 outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] pointer-coarse:h-11";
 const coreTab =
   "px-2.5 upright:px-2 not-data-active:hover:text-foreground data-active:bg-tint data-active:text-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary-text";
-const isCore = (id: string) => id === "notes" || id === "lessons" || id === "film";
+const isCore = (id: string) => id === "notes" || id === "lessons" || id === "film" || id === "cli";
 const tabs =
   "relative flex flex-none items-center gap-4 overflow-x-auto bg-card px-3 upright:gap-2 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
@@ -78,12 +81,14 @@ export const useWide = () =>
     },
     () => WIDE.matches,
   );
-// Switching between wide (Library + Details) and narrow (Side) keeps core Notes/Lessons tabs aligned
+const isSyncedCore = (id: string): id is "notes" | "lessons" | "cli" =>
+  id === "notes" || id === "lessons" || id === "cli";
+// Switching between wide (Library + Details) and narrow (Side) keeps core Notes/Lessons/CLI tabs aligned
 studio.subscribe((s, was) => {
   if (s.side !== was.side) {
-    if ((s.side === "notes" || s.side === "lessons") && s.lib !== s.side) set({ lib: s.side });
+    if (isSyncedCore(s.side) && s.lib !== s.side) set({ lib: s.side });
   } else if (s.lib !== was.lib) {
-    if ((s.lib === "notes" || s.lib === "lessons") && s.side !== s.lib) set({ side: s.lib });
+    if (isSyncedCore(s.lib) && s.side !== s.lib) set({ side: s.lib });
   }
 });
 
@@ -196,6 +201,7 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "notes", title: "Notes", icon: MessageSquareText },
   { id: "lessons", title: "Lessons", icon: BookOpenText },
   { id: "film", title: "Film", icon: Clapperboard },
+  { id: "cli", title: "CLI", icon: Terminal },
   { id: "sound", title: "Audio", icon: Music2 },
   { id: "text", title: "Text", icon: Type },
   { id: "objects", title: "Objects", icon: Boxes },
@@ -216,6 +222,7 @@ export function Library() {
       l.id === "notes" ||
       l.id === "film" ||
       l.id === "lessons" ||
+      l.id === "cli" ||
       (l.id === "sound"
         ? sound
         : l.id === "text"
@@ -239,6 +246,7 @@ export function Library() {
         <div className="bg-card flex-none">
           <Tabs.List
             aria-label="Libraries"
+            onKeyDown={stopCliTabHotkeyPropagation}
             className="scroll-fade-x relative flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain px-2 pt-1 pb-1"
           >
             <TabUnderline inset />
@@ -246,6 +254,7 @@ export function Library() {
               <Fragment key={l.id}>
                 <Tabs.Tab
                   value={l.id}
+                  data-cli-tab={l.id === "cli" || undefined}
                   data-tone={l.id === "notes" ? notesTone : undefined}
                   data-ai-lit={aiTab(l.id, value)}
                   className={cn(tool, "flex-none", isCore(l.id) && coreTool)}
@@ -256,7 +265,7 @@ export function Library() {
                     {l.id === "notes" && <NotesCount open={open} check={check} asking={asking} />}
                   </span>
                 </Tabs.Tab>
-                {l.id === "film" && shown.some((x) => !isCore(x.id)) && (
+                {l.id === "cli" && shown.some((x) => !isCore(x.id)) && (
                   <Separator
                     orientation="vertical"
                     className="mx-1 h-7 data-vertical:self-center"
@@ -266,7 +275,11 @@ export function Library() {
             ))}
           </Tabs.List>
         </div>
-        <Tabs.Panel value={value} className="flex min-h-0 flex-1 flex-col">
+        <Tabs.Panel
+          value={value}
+          onKeyDown={value === "cli" ? stopCliHotkeyPropagation : undefined}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           <TabStage
             activeKey={value}
             order={shown.map((l) => l.id)}
@@ -294,6 +307,8 @@ export function Library() {
               </div>
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "cli" ? (
+              <CliPanel />
             ) : (
               <LessonsPanel />
             )}
@@ -509,6 +524,22 @@ export function Side({ wide }: { wide: boolean }) {
   const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
   const layer = useStudio((s) => s.layerPicks.length > 0),
     aiTab = useAiTabs();
+  const tabListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (wide) return;
+    const list = tabListRef.current;
+    if (!list) return;
+    const keepSelectedVisible = () => {
+      list
+        .querySelector('[aria-selected="true"]')
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    };
+    keepSelectedVisible();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(keepSelectedVisible);
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [wide, side, sound, text, cam, keys, placed]);
   if (wide) return <Details />;
   const editable = sound || text || cam || keys || placed;
   const raw =
@@ -523,6 +554,7 @@ export function Side({ wide }: { wide: boolean }) {
     raw === "notes" ||
     raw === "film" ||
     raw === "lessons" ||
+    raw === "cli" ||
     (raw === "sound"
       ? sound
       : raw === "text"
@@ -537,6 +569,7 @@ export function Side({ wide }: { wide: boolean }) {
     "notes",
     "lessons",
     "film",
+    "cli",
     "sound",
     "text",
     "objects",
@@ -558,7 +591,9 @@ export function Side({ wide }: { wide: boolean }) {
             line under them stays out of the fade, and the padding keeps the focus ring inside what the scroll clips */}
         <div className="bg-card flex-none">
           <Tabs.List
+            ref={tabListRef}
             aria-label="Panels"
+            onKeyDown={stopCliTabHotkeyPropagation}
             className={cn(
               tabs,
               "scroll-fade-x [scrollbar-width:none] overflow-x-auto overscroll-x-contain border-b-0 py-0.5",
@@ -587,6 +622,10 @@ export function Side({ wide }: { wide: boolean }) {
             <Tabs.Tab value="film" className={cn(tab, coreTab)}>
               <Clapperboard aria-hidden />
               Film
+            </Tabs.Tab>
+            <Tabs.Tab value="cli" data-cli-tab className={cn(tab, coreTab)}>
+              <Terminal aria-hidden />
+              CLI
             </Tabs.Tab>
             {(sound || text || placed || keys || cam) && (
               <Separator orientation="vertical" className="mx-0.5 h-5 data-vertical:self-center" />
@@ -625,8 +664,9 @@ export function Side({ wide }: { wide: boolean }) {
         </div>
         <Tabs.Panel
           value={value}
+          onKeyDown={value === "cli" ? stopCliHotkeyPropagation : undefined}
           className={
-            value === "notes" || value === "film" || value === "lessons"
+            value === "notes" || value === "film" || value === "lessons" || value === "cli"
               ? "flex min-h-0 flex-1 flex-col"
               : panel
           }
@@ -655,6 +695,8 @@ export function Side({ wide }: { wide: boolean }) {
               <KeyPanel />
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "cli" ? (
+              <CliPanel />
             ) : (
               <LessonsPanel />
             )}

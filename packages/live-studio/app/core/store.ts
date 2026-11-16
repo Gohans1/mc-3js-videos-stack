@@ -28,6 +28,8 @@ export type ModalKind =
   | "refSketch"
   | "noteRefs"
   | "reviewImage"
+  | "cliConfirm"
+  | "cliTemplate"
   | null;
 
 interface PageSlice {
@@ -56,8 +58,10 @@ interface PageSlice {
     | "text"
     | "textAnim"
     | "film"
-    | "lessons";
-  lib: "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film" | "lessons"; // on a wide screen: the left column's tab (side then picks the right column's)
+    | "lessons"
+    | "cli";
+  lib:
+    "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film" | "lessons" | "cli"; // on a wide screen: the left column's tab (side then picks the right column's)
   filmKind: string | null; // the Film tab's open kind (own-work.ts group id, "now" for On screen); null: its first
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;

@@ -17,6 +17,9 @@ import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 
 import { Activity, createActivity } from "./activity.mjs";
+import { CLI_CATEGORIES, CLI_COMMANDS } from "./cli-catalog.ts";
+import { CliRunHttpError, createCliRunner, scanCliContext } from "./cli-runner.ts";
+import { CliTemplateUpsertSchema, openCliTemplates } from "./cli-templates.ts";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
@@ -135,8 +138,13 @@ export const createApi = (
       onEvent: () => send("voice-library"),
     }),
     favorites = openFavorites(),
+    cliRunner,
+    cliTemplates,
+    cliContextOpts,
   },
 ) => {
+  const runner = cliRunner ?? createCliRunner(film, cliContextOpts);
+  const templates = cliTemplates ?? openCliTemplates();
   // Text and geometry shrink a lot and pictures don't. Squeezed once per version, so the next visit costs nothing here either;
   // what barely shrinks (a zip of pictures) is remembered as not worth it and goes out as it is
   // Off the main thread (a few MB takes a second), and kept as the promise so a second visit meanwhile waits for the same work
@@ -665,6 +673,129 @@ export const createApi = (
     await film.smallMix();
     return existsSync(film.MIX_SMALL) ? sendFile(c, film.MIX_SMALL) : c.body(null, 404);
   }); // no ffmpeg, no small copy: the page plays the full mix
+
+  // CLI runner & catalog (strict allowlisted repo scripts and earshot; never exposes secret values)
+  app.get("/api/cli/catalog", async (c) => {
+    const requestedFilm = c.req.query("film") || undefined;
+    const context = await scanCliContext(film, { ...cliContextOpts, requestedFilm });
+    return fresh(c, { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context });
+  });
+  app.get("/api/cli/runs", (c) => fresh(c, runner.getRuns()));
+  app.post("/api/cli/run", async (c) => {
+    let body;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body", code: "INVALID_ARGS" }, 400);
+    }
+    try {
+      const { run } = await runner.start(body);
+      return c.json(
+        {
+          runId: run.runId,
+          displayCommand: run.displayCommand,
+          cwd: run.cwd,
+          targetFilm: run.targetFilm,
+          startedAt: run.startedAt,
+          run,
+        },
+        202,
+      );
+    } catch (e) {
+      if (e instanceof CliRunHttpError) {
+        return c.json({ error: safeErr(e), code: e.code, ...e.extra }, e.status);
+      }
+      throw e;
+    }
+  });
+  app.get("/api/cli/runs/:id/stream", (c) => {
+    const id = c.req.param("id");
+    const rawSeq = Number(c.req.query("afterSeq") ?? "-1");
+    const afterSeq = Number.isInteger(rawSeq) ? rawSeq : -1;
+    const queued = [];
+    let push = (ev) => queued.push(ev);
+    const unsub = runner.subscribe(id, afterSeq, (ev) => push(ev));
+    if (!unsub) return c.json({ error: "Run not found", code: "UNKNOWN_RUN" }, 404);
+
+    const res = streamSSE(c, async (stream) => {
+      let resolveDone;
+      const done = new Promise((r) => {
+        resolveDone = r;
+      });
+      stream.onAbort(() => resolveDone());
+      if (stream.aborted) resolveDone();
+
+      let writing = Promise.resolve();
+      const emit = (ev) => {
+        writing = writing
+          .then(async () => {
+            if (stream.aborted) return;
+            await stream.writeSSE({
+              ...(ev.event === "chunk" ? { id: String(ev.data.seq) } : {}),
+              event: ev.event,
+              data: JSON.stringify(ev.data),
+            });
+            if (ev.event === "done") resolveDone();
+          })
+          .catch(() => resolveDone());
+      };
+
+      push = emit;
+      for (const ev of queued.splice(0)) emit(ev);
+
+      const alive = setInterval(() => {
+        writing = writing
+          .then(() => (stream.aborted ? undefined : stream.write(": alive\n\n")))
+          .catch(() => {});
+      }, 20e3);
+
+      try {
+        await done;
+        await writing;
+      } finally {
+        clearInterval(alive);
+        unsub();
+      }
+    });
+    // Override streamSSE's default Cache-Control: no-cache so live command chunks are never stored
+    res.headers.set("cache-control", "no-store");
+    return res;
+  });
+  app.post("/api/cli/runs/:id/stop", (c) => {
+    const run = runner.stopRun(c.req.param("id"));
+    if (!run) return c.json({ error: "Run not found", code: "UNKNOWN_RUN" }, 404);
+    return c.json({ ok: true, run });
+  });
+  app.get("/api/cli/templates", (c) => fresh(c, templates.listWithWarning()));
+  app.post(
+    "/api/cli/templates",
+    zValidator("json", CliTemplateUpsertSchema, (result, c) => {
+      if (!result.success) {
+        return c.json(
+          { error: result.error.issues[0]?.message ?? "Invalid template payload" },
+          400,
+        );
+      }
+    }),
+    (c) => {
+      try {
+        return c.json(templates.upsert(c.req.valid("json")));
+      } catch (e) {
+        const msg = safeErr(e);
+        return c.json({ error: msg }, msg.includes("Malformed") ? 409 : 400);
+      }
+    },
+  );
+  app.delete("/api/cli/templates/:id", (c) => {
+    try {
+      const res = templates.remove(c.req.param("id"));
+      if (!res.removed) return c.json({ error: "Template not found" }, 404);
+      return c.json({ ok: true, templates: res.templates });
+    } catch (e) {
+      const msg = safeErr(e);
+      return c.json({ error: msg }, msg.includes("Malformed") ? 409 : 400);
+    }
+  });
 
   // The film's own files, last
   app.get("*", (c) => {
