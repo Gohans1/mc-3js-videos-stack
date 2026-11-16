@@ -156,7 +156,7 @@ const brotli = promisify(brotliCb),
 const BROTLI_OPTS = { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } };
 const GZIP_OPTS = { level: 4 };
 
-// Precompresses hashed _studio/ text assets once with Brotli-9 + Gzip. Unchanged chunks (like vendor-three and vendor-ui on a
+// Precompresses hashed _studio/ text assets once with Brotli-5 + Gzip. Unchanged chunks (like vendor-three and vendor-ui on a
 // scene.ts save) keep their hash, so we only refresh their .br/.gz mtimes for clearOld() instead of re-squeezing ~2.5 MB of JS.
 const precompress = (outDir) => ({
   name: "live-studio-precompress",
@@ -258,7 +258,11 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
         // Names kept: a film that throws shows its stack in the page and in this terminal, where no source map reaches
         rolldownOptions: {
           output: {
-            minify: { mangle: false },
+            keepNames: true,
+            minify: {
+              mangle: { keepNames: true },
+              compress: { keepNames: { function: true, class: true } },
+            },
             codeSplitting: {
               groups: [
                 {

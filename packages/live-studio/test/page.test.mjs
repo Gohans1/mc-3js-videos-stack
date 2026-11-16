@@ -88,6 +88,16 @@ test("the film builds into the page, even with a Node library that requires a No
   assert.ok(readdirSync(join(page.dir, "_studio")).some((f) => f.endsWith(".js")));
 });
 
+test("the initial UI vendor code fits a 240 KiB Brotli budget", () => {
+  const paths = [...page.html().matchAll(/href="\/(_studio\/vendor-ui-[\w-]+\.js)"/g)];
+  assert.ok(paths.length > 0);
+  const bytes = paths.reduce(
+    (sum, [, path]) => sum + statSync(join(page.dir, `${path}.br`)).size,
+    0,
+  );
+  assert.ok(bytes <= 240 * 1024, `initial UI vendor code: ${bytes} bytes Brotli`);
+});
+
 test("a saved comment builds the same page and reloads nothing", async () => {
   const before = page.html();
   await save(`${readFileSync(scene, "utf8")}\n// a thought\n`);
