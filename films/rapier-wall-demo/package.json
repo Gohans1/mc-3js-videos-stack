@@ -44,8 +44,7 @@
     "deliver": "python ../../scripts/review/deliver.py",
     "sfx:get": "python ../../scripts/sound/get_sfx.py",
     "mix": "python ../../scripts/sound/mix.py",
-    "listen": "python ../../scripts/sound/listen.py",
-    "setup:voices": "bun node_modules/live-studio/wrong-place.mjs setup:voices"
+    "listen": "python ../../scripts/sound/listen.py"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
