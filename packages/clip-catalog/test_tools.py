@@ -12,6 +12,20 @@ import catalog_review as review
 
 
 class Tools(unittest.TestCase):
+    def test_sweep_next_step_keeps_selected_library(self):
+        import batch
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "src").mkdir()
+            (root / "src/scene.ts").touch()
+            (root / "ual1").mkdir()
+            (root / "ual1/AnimationLibrary_Godot_Standard.gltf").write_text('{"animations":[]}', encoding="utf8")
+            output = io.StringIO()
+            with patch.object(batch, "MOTION", root), patch.object(batch.Path, "cwd", return_value=root), \
+                    patch.object(sys, "argv", ["batch.py", "sweep", "ual1"]), contextlib.redirect_stdout(output):
+                self.assertEqual(batch.main(), 0)
+            self.assertIn("next: python ../../packages/clip-catalog/sweep_report.py ual1", output.getvalue())
+
     def test_sheets_reject_old_render_after_sheet_failure(self):
         from batch import run_batch
         with tempfile.TemporaryDirectory() as d:
