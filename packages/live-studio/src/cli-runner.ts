@@ -357,11 +357,11 @@ export async function scanCliContext(
   opts: CliRunnerOptions & { requestedFilm?: string } = {},
 ): Promise<CliContext> {
   const repoRoot = opts.repoRoot ?? resolveMonorepoRoot(film?.PROJECT);
-  const films = listFilmNames(repoRoot);
+  const knownFilms = listFilmNames(repoRoot);
 
   let activeFilm: string | null = null;
   if (film?.PROJECT) {
-    for (const f of films) {
+    for (const f of knownFilms) {
       if (sameRealPath(film.PROJECT, join(repoRoot, "films", f))) {
         activeFilm = f;
         break;
@@ -369,14 +369,22 @@ export async function scanCliContext(
     }
   }
   const isDemo = !activeFilm;
+  activeFilm ??= film?.PROJECT ? basename(resolve(film.PROJECT)) : null;
+  const films = activeFilm ? [activeFilm] : [];
+  if (opts.requestedFilm && !["active", "root", activeFilm].includes(opts.requestedFilm)) {
+    throw new CliRunHttpError(
+      400,
+      "INVALID_ARGS",
+      "Choose the current Studio project or repo root.",
+    );
+  }
 
   // Detect running studios cleanly
   const probePort = opts.probeStudioPort ?? defaultProbeStudioPort;
-  const runningFilms: string[] = [];
+  const runningFilms: string[] = activeFilm ? [activeFilm] : [];
   await Promise.all(
-    films.map(async (f) => {
+    knownFilms.map(async (f) => {
       if (f === activeFilm) {
-        runningFilms.push(f);
         return;
       }
       const studioJson = safeReadJson(join(repoRoot, "films", f, "renders/live/studio.json"));
@@ -387,12 +395,7 @@ export async function scanCliContext(
     }),
   );
 
-  const selectedFilm =
-    opts.requestedFilm && films.includes(opts.requestedFilm)
-      ? opts.requestedFilm
-      : (activeFilm ?? films[0] ?? null);
-
-  const targetDir = selectedFilm ? join(repoRoot, "films", selectedFilm) : (film?.PROJECT ?? null);
+  const targetDir = film?.PROJECT ?? null;
   const filmChoices = listFilmChoices(targetDir);
   const { skills, skillRefs } = listSkillChoices(repoRoot);
 
@@ -407,7 +410,7 @@ export async function scanCliContext(
 
   const choices: Record<CliChoiceSource, string[]> = {
     films,
-    filmDirs: films.map((f) => `films/${f}`),
+    filmDirs: isDemo ? [] : films.map((f) => `films/${f}`),
     notes: filmChoices.notes,
     shots: filmChoices.shots,
     takes: filmChoices.takes,
@@ -424,6 +427,9 @@ export async function scanCliContext(
 
   return {
     repoName: basename(repoRoot),
+    repoRoot: resolve(repoRoot).replaceAll("\\", "/"),
+    projectRoot: film?.PROJECT ? resolve(film.PROJECT).replaceAll("\\", "/") : null,
+    copyShell: process.platform === "win32" ? "powershell" : "posix",
     activeFilm,
     isDemo,
     films,
@@ -675,12 +681,16 @@ export function createCliRunner(
 
     const requestedFilm =
       !req.targetFilm || req.targetFilm === "active" || req.targetFilm === "root"
-        ? (context.activeFilm ?? context.films[0])
+        ? context.activeFilm
         : req.targetFilm;
 
     if (req.targetFilm && req.targetFilm !== "active" && req.targetFilm !== "root") {
-      if (!context.films.includes(req.targetFilm)) {
-        throw new CliRunHttpError(400, "INVALID_ARGS", `Film does not exist: ${req.targetFilm}`);
+      if (req.targetFilm !== context.activeFilm) {
+        throw new CliRunHttpError(
+          400,
+          "INVALID_ARGS",
+          "Choose the current Studio project or repo root.",
+        );
       }
     }
 
@@ -763,12 +773,14 @@ export function createCliRunner(
           "No film directory available in films/ for this command.",
         );
       }
-      const filmsDir = join(repoRoot, "films");
-      const candidate = join(filmsDir, requestedFilm);
-      if (!isInsideDirReal(filmsDir, candidate)) {
-        throw new CliRunHttpError(400, "INVALID_ARGS", `Invalid film directory: ${requestedFilm}`);
+      if (!film?.PROJECT || !existsSync(film.PROJECT)) {
+        throw new CliRunHttpError(
+          400,
+          "GUARDED",
+          "The current Studio project is unavailable. Reopen its Studio.",
+        );
       }
-      resolvedCwd = candidate;
+      resolvedCwd = realpathSync(film.PROJECT);
       resolvedFilmName = requestedFilm;
     } else if (cmd.runner === "package-script" && cmd.packageDir) {
       const pkgPath = join(repoRoot, cmd.packageDir);

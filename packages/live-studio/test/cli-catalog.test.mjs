@@ -650,17 +650,17 @@ describe("cli-catalog resolver rules", () => {
       expect(isFieldVisible(labViewDef?.visibleWhen, { target })).toBe(true);
     }
 
-    // eval:load defaults --film to "cell-break" regardless of activeFilm
+    // Studio checks the current film before launching a second Studio.
     expect(
       buildCliInvocation(
         { commandId: "eval:load" },
-        { ...BASE_CONTEXT, activeFilm: "sealed-room", runningFilms: ["cell-break"] },
+        { ...BASE_CONTEXT, activeFilm: "sealed-room", runningFilms: ["sealed-room"] },
       ).guardReason,
     ).toBeTruthy();
     expect(
       buildCliInvocation(
         { commandId: "eval:load" },
-        { ...BASE_CONTEXT, activeFilm: "sealed-room", runningFilms: ["sealed-room"] },
+        { ...BASE_CONTEXT, activeFilm: "sealed-room", runningFilms: ["cell-break"] },
       ).guardReason,
     ).toBeNull();
 

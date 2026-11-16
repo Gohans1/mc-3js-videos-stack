@@ -677,8 +677,14 @@ export const createApi = (
   // CLI runner & catalog (strict allowlisted repo scripts and earshot; never exposes secret values)
   app.get("/api/cli/catalog", async (c) => {
     const requestedFilm = c.req.query("film") || undefined;
-    const context = await scanCliContext(film, { ...cliContextOpts, requestedFilm });
-    return fresh(c, { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context });
+    try {
+      const context = await scanCliContext(film, { ...cliContextOpts, requestedFilm });
+      return fresh(c, { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context });
+    } catch (error) {
+      if (error instanceof CliRunHttpError)
+        return c.json({ error: error.message, code: error.code }, error.status);
+      throw error;
+    }
   });
   app.get("/api/cli/runs", (c) => fresh(c, runner.getRuns()));
   app.post("/api/cli/run", async (c) => {

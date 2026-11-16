@@ -10,10 +10,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createApi } from "../src/api.mjs";
+import { buildCliInvocation } from "../src/cli-catalog.ts";
 import {
   createCliRunner,
   readEnvStatus,
@@ -216,6 +217,151 @@ test("rejects hidden spending flags before spawning a command", async () => {
   expect(cliRunner.getRuns().last).toBeNull();
 });
 
+test("external project script previews resolve to the script the runner executes", async () => {
+  const { root } = makeFixtureRepo();
+  const project = tempDir("copy-external-");
+  const context = await scanCliContext({ PROJECT: project }, { repoRoot: root });
+  const spec = buildCliInvocation({ commandId: "timeline:fmt" }, context);
+  const script = resolve(root, "scripts/timeline_fmt.ts").replaceAll("\\", "/");
+  expect(spec.displayCommand).toContain(script);
+  expect(existsSync(script)).toBe(true);
+});
+
+const copyPayload = `odd 'quoted' $literal $(echo UNEXPECTED) "double" C:\\path\\`;
+const copyShells = [];
+if (process.platform === "win32") {
+  copyShells.push(
+    {
+      label: "PowerShell",
+      kind: "powershell",
+      exe: "powershell.exe",
+      args: ["-NoProfile", "-NonInteractive", "-Command"],
+    },
+    {
+      label: "PowerShell StrictMode",
+      kind: "powershell",
+      exe: "powershell.exe",
+      args: ["-NoProfile", "-NonInteractive", "-Command"],
+      prefix: "Set-StrictMode -Version Latest\n",
+    },
+  );
+  const gitBash = "C:/Program Files/Git/bin/bash.exe";
+  if (existsSync(gitBash))
+    copyShells.push({ label: "Git Bash", kind: "posix", exe: gitBash, args: ["-c"] });
+} else {
+  copyShells.push({ label: "POSIX shell", kind: "posix", exe: "sh", args: ["-c"] });
+}
+for (const shell of copyShells)
+  for (const copyCase of [
+    {
+      request: { commandId: "help", args: { command: copyPayload } },
+      target: "project",
+      args: [copyPayload],
+      at: "before-value",
+    },
+    {
+      request: { commandId: "render", args: { target: "poster" }, env: { AT: "5" } },
+      target: "project",
+      args: ["poster"],
+      at: "5",
+    },
+    { request: { commandId: "timeline:fmt" }, target: "project", args: [], at: "before-value" },
+    { request: { commandId: "live-studio:lint" }, target: "package", args: [], at: "before-value" },
+  ])
+    test(`${shell.label} copy of ${copyCase.request.commandId} preserves project, literals and caller environment`, async () => {
+      const { root } = makeFixtureRepo();
+      const project = tempDir("copy project 'quoted'-");
+      const unrelated = tempDir("copy-unrelated-");
+      const echo =
+        "console.log(JSON.stringify({cwd:process.cwd(),project:process.env.LIVE_PROJECT??process.cwd(),args:process.argv.slice(2),at:process.env.AT??null}));";
+      writeFileSync(join(project, "echo.mjs"), echo);
+      writeFileSync(
+        join(project, "package.json"),
+        JSON.stringify({
+          type: "module",
+          scripts: { help: "bun echo.mjs", render: "bun echo.mjs" },
+        }),
+      );
+      writeFileSync(join(root, "scripts/timeline_fmt.ts"), echo);
+      const pkg = join(root, "packages/live-studio");
+      writeFileSync(join(pkg, "echo.mjs"), echo);
+      writeFileSync(
+        join(pkg, "package.json"),
+        JSON.stringify({ type: "module", scripts: { lint: "bun echo.mjs" } }),
+      );
+      const context = await scanCliContext({ PROJECT: project }, { repoRoot: root });
+      const spec = buildCliInvocation(copyCase.request, { ...context, copyShell: shell.kind });
+      const cwd = copyCase.target === "package" ? pkg : project;
+      const oldProject = "previous-studio-project";
+      const callerCheck =
+        shell.kind === "powershell"
+          ? "\nif ($env:LIVE_PROJECT -ne 'previous-studio-project' -or $env:AT -ne 'before-value') { throw 'Caller environment changed' }"
+          : '\n[ "$LIVE_PROJECT" = previous-studio-project ] && [ "$AT" = before-value ] || exit 97';
+      const child = Bun.spawnSync(
+        [shell.exe, ...shell.args, (shell.prefix ?? "") + spec.copyCommand + callerCheck],
+        {
+          cwd: unrelated,
+          env: { ...process.env, AT: "before-value", LIVE_PROJECT: oldProject },
+          stdout: "pipe",
+          stderr: "pipe",
+          windowsHide: true,
+          timeout: 15000,
+        },
+      );
+      expect(child.exitCode).toBe(0);
+      const actual = JSON.parse(new TextDecoder().decode(child.stdout).trim());
+      expect(actual.cwd.toLowerCase()).toBe(realpathSync(cwd).toLowerCase());
+      expect(actual.project.toLowerCase()).toBe(realpathSync(cwd).toLowerCase());
+      expect(actual.args).toEqual(copyCase.args);
+      expect(actual.at).toBe(copyCase.at);
+    });
+
+test("Studio catalogs and runs only its own project, including projects outside films", async () => {
+  const { root, filmDir } = makeFixtureRepo();
+  const project = tempDir("current-demo-");
+  writeFileSync(
+    join(project, "package.json"),
+    JSON.stringify({ name: "current-demo", scripts: { help: "bun echo.mjs" } }),
+  );
+  writeFileSync(join(project, "echo.mjs"), 'console.log("CURRENT_PROJECT=" + process.cwd())');
+  const context = await scanCliContext({ PROJECT: project }, { repoRoot: root });
+  expect(context.activeFilm).toBeTruthy();
+  expect(context.films).toEqual([context.activeFilm]);
+  expect(context.films).not.toContain("test-film");
+  const runner = createCliRunner({ PROJECT: project }, { repoRoot: root });
+  cleanups.push(() => runner.stopActive());
+  const started = await runner.start({ commandId: "help", targetFilm: "active" });
+  const done = new Promise((resolve) => {
+    const unsubscribe = runner.subscribe(started.run.runId, -1, (event) => {
+      if (event.event === "done") resolve();
+    });
+    cleanups.push(unsubscribe);
+  });
+  await done;
+  const output = runner
+    .getRuns()
+    .last.output.map((chunk) => chunk.chunk)
+    .join("");
+  expect(output).toContain(`CURRENT_PROJECT=${project}`);
+  expect(output).not.toContain(filmDir);
+});
+
+test("Studio rejects another film even when it exists in the same worktree", async () => {
+  const { root, filmDir } = makeFixtureRepo();
+  const other = join(root, "films", "other-film");
+  mkdirSync(other, { recursive: true });
+  writeFileSync(
+    join(other, "package.json"),
+    JSON.stringify({ scripts: { help: "echo wrong-project" } }),
+  );
+  const runner = createCliRunner({ PROJECT: filmDir }, { repoRoot: root });
+  cleanups.push(() => runner.stopActive());
+  await expect(runner.start({ commandId: "help", targetFilm: "other-film" })).rejects.toThrow(
+    "current Studio",
+  );
+  expect(runner.getRuns().active).toBeNull();
+});
+
 function parseSseText(raw) {
   const events = [];
   for (const block of raw.split(/\r?\n\r?\n/)) {
@@ -323,7 +469,7 @@ describe("/api/cli routes, security & process runtime", () => {
       { repoRoot: root, probeStudioPort: async () => false },
     );
     expect(demoCtx.isDemo).toBe(true);
-    expect(demoCtx.activeFilm).toBeNull();
+    expect(demoCtx.activeFilm).toBe(basename(demoDir));
   });
 
   test("rejects unknown commands, traversal paths, disallowed env, null bytes, guards, confirms & bad JSON", async () => {
@@ -788,7 +934,9 @@ describe("/api/cli routes, security & process runtime", () => {
     const okFmt = await postRun({ commandId: "timeline:fmt" });
     expect(okFmt.status).toBe(202);
     const fmtRun = await okFmt.json();
-    expect(fmtRun.displayCommand).toBe("bun ../../scripts/timeline_fmt.ts");
+    expect(fmtRun.displayCommand).toBe(
+      "bun " + join(root, "scripts/timeline_fmt.ts").replaceAll("\\", "/"),
+    );
     const fmtEvents = parseSseText(
       await (
         await api.fetch(new Request(`http://localhost/api/cli/runs/${fmtRun.runId}/stream`))
@@ -981,7 +1129,11 @@ describe("/api/cli routes, security & process runtime", () => {
     );
     expect(startRes.status).toBe(202);
     const run = await startRes.json();
-    expect(run.displayCommand).toBe("bash ../../packages/clip-catalog/catalog.sh mixamo ual1");
+    expect(run.displayCommand).toBe(
+      "bash " +
+        join(root, "packages/clip-catalog/catalog.sh").replaceAll("\\", "/") +
+        " mixamo ual1",
+    );
     expect(run.cwd).toBe("films/test-film");
     const sse = parseSseText(
       await (
@@ -1051,7 +1203,7 @@ describe("/api/cli routes, security & process runtime", () => {
     const prevLiveProject = process.env.LIVE_PROJECT;
     process.env.LIVE_PROJECT = filmDir;
     try {
-      const { api } = makeApiHarness(filmDir, { repoRoot: root });
+      const { api } = makeApiHarness(otherFilm, { repoRoot: root });
       const startRes = await api.fetch(
         new Request("http://localhost/api/cli/run", {
           method: "POST",

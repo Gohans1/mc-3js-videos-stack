@@ -167,6 +167,9 @@ export type CliEnvStatus = Record<CliEnvKey, boolean>;
 
 export interface CliContext {
   repoName: string;
+  repoRoot: string;
+  projectRoot: string | null;
+  copyShell: "powershell" | "posix";
   activeFilm: string | null;
   isDemo: boolean;
   films: string[];
@@ -247,6 +250,7 @@ export interface ResolvedCliSpec {
   argvTokens: string[];
   envEntries: [string, string][];
   displayCommand: string;
+  copyCommand: string;
   requiresConfirm: boolean;
   confirmMessage: string | null;
   guardReason: string | null;
@@ -258,43 +262,42 @@ export interface ResolvedCliSpec {
 export const CLI_CATEGORIES: readonly CliCategory[] = [
   {
     id: "daily",
-    label: "Daily Film AI Loop",
-    description:
-      "Commands AI uses constantly while inspecting, checking, finding assets, and answering notes.",
+    label: "Everyday film tools",
+    description: "Inspect your film, find assets, check its data, and respond to notes.",
   },
   {
     id: "voice",
-    label: "Voice & Lip Sync",
+    label: "Voice and lip sync",
     description:
       "Generate narration takes, align words, shape mouths, assemble voice tracks, and read cues.",
   },
   {
     id: "sound",
-    label: "Sound, Mix & Earshot",
+    label: "Sound and mixing",
     description:
       "Fetch CC0 SFX, mix and audit soundtracks, and run Earshot audio inspection & synthesis.",
   },
   {
     id: "render",
-    label: "Render & QA Review",
+    label: "Rendering and checks",
     description:
       "Render stills, clips, finals, contact sheets, frame checks, pacing, and YouTube delivery audits.",
   },
   {
     id: "setup",
-    label: "Setup & Vaults",
+    label: "Setup and assets",
     description:
       "Bootstrap vaults, download external sound packs, scaffold new films, and link assets.",
   },
   {
     id: "dev",
-    label: "Repo Dev & Evals",
+    label: "Development",
     description:
       "Tests, lint, formatting, typechecks, package suites, studios, and search/load benchmarks.",
   },
   {
     id: "pipeline",
-    label: "Direct Asset & Catalog Tools",
+    label: "Asset utilities",
     description:
       "Standalone asset picking, JAR slimming, mocap catalog search/review, and studio init scripts.",
   },
@@ -314,7 +317,7 @@ const earshotThreadsFlag: CliFlagDef = {
 const earshotJsonFlag: CliFlagDef = {
   key: "--json",
   flag: "--json",
-  label: "JSON Output",
+  label: "Output as JSON",
   type: "boolean",
   tier: "common",
   hint: "Print full result as JSON",
@@ -323,7 +326,7 @@ const earshotJsonFlag: CliFlagDef = {
 const earshotOutFlag: CliFlagDef = {
   key: "--out",
   flag: "--out",
-  label: "Out JSON",
+  label: "Save JSON to file",
   type: "string",
   tier: "advanced",
   placeholder: "renders/earshot.json",
@@ -339,18 +342,20 @@ const earshotTrim = (): readonly CliFlagDef[] => [
   {
     key: "--start",
     flag: "--start",
-    label: "Start (s)",
+    label: "Start time (seconds)",
     type: "number",
     tier: "common",
     placeholder: "0",
+    hint: "Leave blank to start at the beginning.",
   },
   {
     key: "--end",
     flag: "--end",
-    label: "End (s)",
+    label: "End time (seconds)",
     type: "number",
     tier: "common",
     placeholder: "5",
+    hint: "Leave blank to use the rest of the file.",
   },
 ];
 
@@ -396,17 +401,17 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     id: "help",
     label: "help",
     category: "daily",
-    summary: "List every runnable script for the current folder (root or film), one line each.",
+    summary: "List commands in this folder, or print where to find help for a named command.",
     runner: "bun-script",
     target: "help",
     cwdModes: ["film", "root"],
     args: [
       {
         key: "command",
-        label: "Command Name",
+        label: "Command to look up (optional)",
         type: "string",
         placeholder: "find",
-        hint: "Optional script name to check where it runs and how to inspect --help",
+        hint: "Leave blank to list commands. Enter find to print where its help is; this does not run find.",
       },
     ],
     meta: {
@@ -782,7 +787,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "at",
     category: "daily",
     summary:
-      "Inspect everything happening at one heard second (or #note): shot, camera, words, audio, keys, notes.",
+      "Inspect a moment in the film: shot, camera, dialogue, audio, keyframes and notes. Enter a playback time or note number.",
     runner: "bun-script",
     target: "at",
     cwdModes: ["film"],
@@ -1522,16 +1527,16 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         id: "describe",
         label: "describe",
-        summary:
-          "Describe what a sound sounds like (calibrated tags, AudioSet labels, measurements).",
+        summary: "Analyze an audio or video file and describe the sounds it contains.",
         args: [
           {
             key: "path",
-            label: "Audio / Video File",
+            label: "Audio or video file",
             type: "string",
             required: true,
             choiceSource: "renders",
-            placeholder: "sound/mix.wav",
+            placeholder: "Example: sound/mix.wav",
+            hint: "Start from this project folder, or enter an absolute path.",
           },
         ],
         flags: [
@@ -1539,9 +1544,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
           {
             key: "--top",
             flag: "--top",
-            label: "Top Tags",
+            label: "Number of sound tags",
             type: "number",
             placeholder: "8",
+            hint: "Maximum number of matching sound labels. Default: 8.",
             tier: "common",
           },
           ...earshotStd(),
@@ -4431,10 +4437,45 @@ function computeEffectiveMeta(
   return next;
 }
 
+function formatCliCopyCommand(
+  cwd: string,
+  argv: readonly string[],
+  env: readonly [string, string][],
+  shell: "powershell" | "posix",
+): string {
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const command = `cd ${quote(cwd)} && ${env.map(([key, value]) => `${key}=${quote(value)} `).join("")}${argv.map(quote).join(" ")}`;
+  if (shell === "posix") return `env -u LIVE_PROJECT bun exec ${quote(command)}`;
+  return [
+    "& {",
+    "  $cliPreviousProject = [Environment]::GetEnvironmentVariable('LIVE_PROJECT')",
+    "  try {",
+    "    $env:LIVE_PROJECT = $null",
+    `    $cliCommand = '${command.replaceAll("'", "''")}'`,
+    // PowerShell Legacy mode otherwise strips quotes from native command arguments.
+    String.raw`    if ((Get-Variable PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue) -notin @('Standard', 'Windows')) { $cliCommand = $cliCommand -replace '(\\*)"', '$1$1\"' }`,
+    "    bun exec $cliCommand",
+    "  } finally {",
+    "    [Environment]::SetEnvironmentVariable('LIVE_PROJECT', $cliPreviousProject)",
+    "  }",
+    "}",
+  ].join("\n");
+}
+
 export function buildCliInvocation(
   request: CliRunRequest,
   context?: Partial<
-    Pick<CliContext, "activeFilm" | "isDemo" | "films" | "runningFilms" | "envStatus">
+    Pick<
+      CliContext,
+      | "activeFilm"
+      | "isDemo"
+      | "films"
+      | "runningFilms"
+      | "envStatus"
+      | "repoRoot"
+      | "projectRoot"
+      | "copyShell"
+    >
   >,
 ): ResolvedCliSpec {
   const command = findCliCommand(request.commandId);
@@ -4453,13 +4494,7 @@ export function buildCliInvocation(
       ? undefined
       : request.targetFilm;
   const resolvedFilm =
-    filmOnly && request.targetFilm === "root"
-      ? null
-      : rawFilm ||
-        (context?.activeFilm && (!context.isDemo || context.films?.includes(context.activeFilm))
-          ? context.activeFilm
-          : context?.films?.[0]) ||
-        null;
+    filmOnly && request.targetFilm === "root" ? null : rawFilm || context?.activeFilm || null;
 
   const cwdMode: CliCwdMode =
     command.cwdModes.length === 1
@@ -4654,8 +4689,7 @@ export function buildCliInvocation(
       guardReason = effectiveMeta.guard.reason;
     } else if (effectiveMeta.guard?.disabledOnRunningFilm && context) {
       const evalFilm =
-        (typeof flags["--film"] === "string" && flags["--film"].trim()) ||
-        (command.id === "eval:load" ? "cell-break" : context.activeFilm);
+        (typeof flags["--film"] === "string" && flags["--film"].trim()) || context.activeFilm;
       if (evalFilm && context.runningFilms?.includes(evalFilm)) {
         guardReason = effectiveMeta.guard.reason;
       }
@@ -4716,7 +4750,12 @@ export function buildCliInvocation(
   }
 
   const envPrefix = envEntries.map(([k, v]) => `${k}=${formatShellToken(v)} `).join("");
-  const targetToken = cwdMode === "film" ? `../../${command.target}` : command.target;
+  const targetToken =
+    cwdMode === "film"
+      ? context?.repoRoot
+        ? `${context.repoRoot}/${command.target}`
+        : `../../${command.target}`
+      : command.target;
   let baseParts: readonly string[];
   switch (command.runner) {
     case "bun-script":
@@ -4742,6 +4781,20 @@ export function buildCliInvocation(
     command.runner === "package-script" && command.packageDir
       ? `(cd ${formatShellToken(command.packageDir)} && ${envPrefix}${cmdString})`
       : `${envPrefix}${cmdString}`;
+  const copyCwd =
+    cwdMode === "film"
+      ? context?.projectRoot
+      : command.packageDir && context?.repoRoot
+        ? `${context.repoRoot}/${command.packageDir}`
+        : context?.repoRoot;
+  const copyCommand = copyCwd
+    ? formatCliCopyCommand(
+        copyCwd,
+        [...baseParts, ...argvTokens],
+        envEntries,
+        context?.copyShell ?? "posix",
+      )
+    : displayCommand;
 
   return {
     command,
@@ -4757,6 +4810,7 @@ export function buildCliInvocation(
     argvTokens,
     envEntries,
     displayCommand,
+    copyCommand,
     requiresConfirm,
     confirmMessage,
     guardReason,
