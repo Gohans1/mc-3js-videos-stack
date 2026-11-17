@@ -7,11 +7,10 @@ import { join, resolve } from "node:path";
 import { documentText, type Part } from "./model";
 import { type Asset, type Segment } from "./store";
 
-export const chunks = (duration: number, kind: "audio" | "video"): Segment[] => {
+export const chunks = (duration: number): Segment[] => {
   if (!Number.isFinite(duration) || duration <= 0 || duration > 86400)
     throw new Error("Media duration must be between 0 and 86400 seconds");
-  // MP3 encoder padding must fit inside the model's 180-second audio limit.
-  const limit = kind === "audio" ? 179 : 30;
+  const limit = 30;
   return Array.from({ length: Math.ceil(duration / limit) }, (_, i) => ({
     from: i * limit,
     to: Math.min(duration, (i + 1) * limit),
@@ -59,7 +58,7 @@ export const segmentsFor = (asset: Asset, deadline = Date.now() + 10000): Segmen
     10000,
   );
   const data = JSON.parse(output) as { format?: { duration?: string } };
-  return chunks(Number(data.format?.duration), asset.media.kind);
+  return chunks(Number(data.format?.duration));
 };
 export const inputFor = async (asset: Asset, spec: Segment, deadline: number): Promise<Part[]> => {
   const content: Part[] = [

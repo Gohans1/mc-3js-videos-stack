@@ -30,6 +30,7 @@ import {
 } from "../packages/live-studio/app/sound/groups";
 import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
 import { audioInfo } from "../packages/live-studio/src/sound.mjs";
+import { importedEntries } from "./imported-catalog";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 export type Entry = {
@@ -664,7 +665,7 @@ const brokenOf = (dir: string, lib: string) => {
   }
   return out;
 };
-export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] {
+export function mocapEntries(dir = join(LOCAL, "motion/catalog")): Entry[] {
   const review: Record<string, Review> = readJson(join(dir, "review.json"));
   return ["mixamo", "ual1", "ual2"].flatMap((lib) => {
     const f = join(dir, `${lib}.jsonl`);
@@ -1009,6 +1010,7 @@ export const allEntries = (fold = true, film = process.cwd()) => {
     mine = new Set(own.map((x) => x.name));
   return [
     ...presetEntries(),
+    ...importedEntries(join(LOCAL, "openfilm/assets.json")),
     ...soundEntries([...own, ...vaultSounds().filter((x) => !mine.has(x.name))], fold),
     ...mocapEntries(),
   ];
@@ -1101,8 +1103,9 @@ Options:
                    shown also gets "fits" 0-1, Jev's own yes that it is what you asked for; the next: line then says
                    FOUND (use the first), UNSURE (--show it first) or NOT IN THE VAULT (do not use them: make it)
   --semantic       hybrid local vectors + keywords (draft); requires a prepared assets:semantic index. Cached queries
-                   are offline; --yes permits a paid OpenRouter query embedding. Failure falls back to keywords.
+                   are offline; --yes permits a query API call. Failure falls back to keywords.
                    --db PATH and --dimensions 768|1536|3072 select a compatible index. Each audio take is separate.
+                   --provider auto|gemini|openrouter selects access; auto prefers a configured Google key. No failover.
                    Keeps kind/source/origin/edition/license/dur/fav filters; body filters and --jev are separate calls.
   --show <id>      the entry in full (ids are the second column; any take of a family)
   mocap by body:   --from <posture> (at its start) --to <posture> (at its end) --has <posture> (anywhere in it)
@@ -1726,6 +1729,7 @@ const OPTIONS: Record<string, string | null> = {
   "--yes": null,
   "--db": "--db path.sqlite",
   "--dimensions": "--dimensions 768",
+  "--provider": "--provider auto|gemini|openrouter",
   "--fav": null,
   "--star": "--star dissolve",
   "--unstar": "--unstar dissolve",
@@ -2022,8 +2026,10 @@ export async function run(
     throw new FindError(
       "--semantic needs scene words and keeps catalog filters; use --jev or mocap body filters in a separate call",
     );
-  if (!semantic && ["--yes", "--db", "--dimensions"].some((key) => set.has(key)))
-    throw new FindError("--yes, --db and --dimensions apply only to --semantic");
+  if (!semantic && ["--yes", "--db", "--dimensions", "--provider"].some((key) => set.has(key)))
+    throw new FindError("--yes, --db, --dimensions and --provider apply only to --semantic");
+  if (semantic && !["auto", "gemini", "openrouter"].includes(set.get("--provider") ?? "auto"))
+    throw new FindError("--provider is auto, gemini or openrouter");
   const dimensions = Number(set.get("--dimensions") ?? 768);
   if (semantic && ![768, 1536, 3072].includes(dimensions))
     throw new FindError("--dimensions is 768, 1536 or 3072");
@@ -2431,7 +2437,7 @@ export async function run(
     return facets;
   };
   const where = (shown: Entry[]) => {
-    const uses = [...new Set(shown.map((x) => useOf(x.kind)))];
+    const uses = [...new Set(shown.map((x) => useOf(x.kind)).filter(Boolean))];
     return uses.length ? ["", `where (in ${timelineDir()}/): ${uses.join("\n       ")}`] : [];
   };
   if (!query) {
@@ -2539,6 +2545,7 @@ export async function run(
         {
           allowApi: set.has("--yes"),
           file: set.get("--db"),
+          provider: set.get("--provider"),
           dimensions,
           limit: n,
         },

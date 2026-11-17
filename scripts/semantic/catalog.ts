@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, extname, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 
 import type { Entry } from "../find";
 import { ROOT } from "../vault.mjs";
@@ -16,9 +16,17 @@ const mediaKind = (file: string): "audio" | "video" | "image" | null => {
     return "image";
   return null;
 };
-export const assetFromEntry = (entry: Entry): Asset => {
+export const assetFromEntry = (entry: Entry, root = ROOT): Asset => {
   const raw = typeof entry.data?.file === "string" ? entry.data.file : "";
-  const kind = raw ? mediaKind(raw) : null;
+  let file = raw ? resolve(entry.src === "this-film" ? process.cwd() : root, raw) : "";
+  if (!mediaKind(file) && typeof entry.data?.preview === "string" && existsSync(entry.data.preview))
+    file = entry.data.preview;
+  if (!mediaKind(file) && entry.src === "openfilm" && typeof entry.data?.upstreamId === "string") {
+    const folder = resolve(root, "vault/openfilm/library", entry.data.upstreamId);
+    const preview = [join(folder, "preview.mp4"), join(folder, "poster.jpg")].find(existsSync);
+    if (preview) file = preview;
+  }
+  const kind = file ? mediaKind(file) : null;
   const heard = Array.isArray(entry.data?.heard)
     ? entry.data.heard.filter((x) => typeof x === "string").join("; ")
     : "";
@@ -38,7 +46,7 @@ export const assetFromEntry = (entry: Entry): Asset => {
       .filter(Boolean)
       .join(". "),
     ...(kind && {
-      media: { kind, file: resolve(entry.src === "this-film" ? process.cwd() : ROOT, raw) },
+      media: { kind, file },
     }),
   };
 };

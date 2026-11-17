@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { inputFor, segmentsFor, sourceHash } from "./media";
 import { type Embed } from "./model";
 import { type Asset, type Index, inputFingerprint } from "./store";
@@ -10,6 +12,7 @@ export const runIndex = async (
     embed: Embed;
     maxRequests: number;
     deadline: number;
+    pace?: { rpm: number; tpm: number };
     progress?: (value: { key: string; part: number; requests: number }) => void;
   },
 ) => {
@@ -20,7 +23,13 @@ export const runIndex = async (
     !Number.isFinite(options.deadline)
   )
     throw new Error("Set a finite time and request limit");
+  if (
+    options.pace &&
+    ![options.pace.rpm, options.pace.tpm].every((n) => Number.isFinite(n) && n > 0)
+  )
+    throw new Error("Set positive RPM and TPM limits");
   let requests = 0;
+  let nextRequestAt = 0;
   const result = (
     stopped: "complete" | "time-limit" | "request-limit" | "error",
     error?: string,
@@ -37,6 +46,26 @@ export const runIndex = async (
         if (Date.now() >= options.deadline) return result("time-limit");
         try {
           const input = await inputFor(asset, job.spec, options.deadline);
+          if (options.pace) {
+            const wait = Math.max(0, nextRequestAt - Date.now());
+            if (Date.now() + wait >= options.deadline) return result("time-limit");
+            if (wait) await delay(wait);
+            const duration = job.spec.to - job.spec.from;
+            const tokens =
+              100 +
+              Math.ceil(
+                Buffer.byteLength(JSON.stringify(input.filter((p) => p.type === "text"))) / 2,
+              ) +
+              (asset.media?.kind === "audio"
+                ? duration * 25
+                : asset.media?.kind === "video"
+                  ? Math.ceil(duration) * 66
+                  : asset.media
+                    ? 258
+                    : 0);
+            nextRequestAt =
+              Date.now() + Math.max(60000 / options.pace.rpm, (tokens * 60000) / options.pace.tpm);
+          }
           const remaining = options.deadline - Date.now();
           if (remaining < 1) return result("time-limit");
           requests++;

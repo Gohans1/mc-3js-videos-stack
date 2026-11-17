@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { documentText, type Embedding, hash, MODEL, normalize, RECIPE } from "./model";
@@ -153,9 +153,9 @@ export const openIndex = (file: string, dimensions = 768) => {
     db
       .query("UPDATE jobs SET state='failed',error=? WHERE asset=? AND part=? AND fingerprint=?")
       .run(message, job.asset, job.part, job.fingerprint);
-  const remove = db.transaction((key: string) => {
+  const remove = db.transaction((key: string, purge = false) => {
     db.query("DELETE FROM jobs WHERE asset=?").run(key);
-    db.query("DELETE FROM cache WHERE key=?").run(key);
+    if (purge) db.query("DELETE FROM cache WHERE key=?").run(key);
     db.query("DELETE FROM assets WHERE key=?").run(key);
     db.query("DELETE FROM asset_errors WHERE key=?").run(key);
   });
@@ -225,6 +225,14 @@ export const openIndex = (file: string, dimensions = 768) => {
     assetFailed,
     search,
     status,
+    backup(target: string) {
+      const output = resolve(target);
+      if (existsSync(output))
+        throw new Error("Backup destination already exists; choose a new file");
+      mkdirSync(dirname(output), { recursive: true });
+      db.query("VACUUM INTO ?").run(output);
+      return output;
+    },
     close() {
       if (!closed) {
         closed = true;

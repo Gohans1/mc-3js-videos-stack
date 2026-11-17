@@ -26,13 +26,17 @@ A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` pu
 
 ## Tìm theo ý cảnh: bản thử nghiệm
 
-bun run assets:semantic plan chỉ đếm catalog và in mẫu key, không gọi API hay ghi vector; build cũng chỉ xem trước nếu thiếu --yes. Chọn key hoặc manifest trước khi build --yes, đặt --max-requests và --max-seconds; mỗi chunk hoàn tất được lưu ngay nên chạy lại tiếp tục phần thiếu hoặc lỗi.
+bun run assets:semantic plan chỉ đếm catalog và in mẫu key, không gọi API hay ghi vector; build cũng chỉ xem trước nếu thiếu --yes. Chọn key hoặc manifest trước khi build --yes, đặt --max-requests, --max-seconds, --rpm và --tpm theo quota; mỗi chunk hoàn tất được lưu ngay nên chạy lại tiếp tục phần thiếu hoặc lỗi.
 
-bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới tới OpenRouter. Jev và bộ lọc cơ thể mocap dùng riêng; dịch vụ hoặc index lỗi thì quay về từ khóa, luôn nghe/xem trước khi chọn.
+bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới. --provider auto ưu tiên GEMINI_API_KEY hoặc GOOGLE_API_KEY, còn lại dùng OPENROUTER_API_KEY; gemini hoặc openrouter chọn cố định, lỗi không tự đổi provider hay luân phiên key.
 
-remove xóa mục và cache cũ của nó; redo --part N chỉ đặt lại chunk cần sửa, chưa gọi API cho tới build --yes tiếp theo. Đổi model, số chiều hoặc cách chuẩn bị dữ liệu cần database riêng; chạy một builder mỗi database và dừng trước khi sao lưu.
+remove bỏ mục khỏi tìm kiếm và giữ cache để thêm lại không tốn lượt; remove --purge mới xóa cả cache, redo --part N chỉ đặt lại chunk cần sửa. bun run assets:semantic backup <file-mới.sqlite> tạo bản SQLite nhất quán để mang tiến trình ra khỏi worktree; không sao chép riêng file database đang mở cùng WAL.
 
-Catalog không bao gồm mọi file thô trong vault; FBX/GLB chỉ dùng mô tả nếu chưa có preview trong manifest, video không chứa nhánh âm thanh. Chất lượng SFX/nhạc chưa được đo trên kho thật; [Google nêu audio tối ưu cho lời nói](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-multimodal-embeddings), cú pháp và giới hạn nằm trong --help.
+Tên/mô tả đi cùng media của đúng asset trong một vector; audio chia tối đa 30 giây và giữ timestamp, video không chứa nhánh âm thanh. Catalog nhập dùng preview có sẵn; FBX/GLB hoặc mục thiếu preview dùng mô tả, không tự dựng hay bịa nội dung media.
+
+Đổi model, số chiều hoặc recipe cần database riêng; file cũ được giữ nguyên, chỉ chạy một builder mỗi database. Worktree dùng MC_VAULT_ROOT trỏ tới vault thật để đọc chung asset; CLI nhận manifest riêng để AI bổ sung hoặc thử bất kỳ nguồn nào.
+
+Gemini free tier có thể dùng đầu vào cải thiện sản phẩm; kiểm tra quyền chia sẻ theo nguồn, đặc biệt nội dung có điều khoản hạn chế AI. Pilot nhỏ không chứng minh chất lượng cả kho; [Google nêu audio tối ưu cho lời nói](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-multimodal-embeddings), luôn nghe/xem trước khi chọn và dùng Jev khi cần đánh giá khác.
 
 ## Ears: earshot
 

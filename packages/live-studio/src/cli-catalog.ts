@@ -634,7 +634,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "boolean",
         visibleWhen: { field: "--semantic", in: ["true"] },
         requiresConfirmIfSet: true,
-        hint: "Permit a paid OpenRouter query embedding on a cache miss.",
+        hint: "Permit an external query embedding on a cache miss; provider billing/quota applies.",
       },
       {
         key: "--db",
@@ -643,6 +643,16 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         visibleWhen: { field: "--semantic", in: ["true"] },
         tier: "advanced",
+      },
+      {
+        key: "--provider",
+        flag: "--provider",
+        label: "Embedding provider",
+        type: "enum",
+        options: ["auto", "gemini", "openrouter"],
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        tier: "advanced",
+        hint: "Auto prefers a configured Gemini key; provider errors never trigger account rotation.",
       },
       {
         key: "--dimensions",
@@ -882,14 +892,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       effect: "read",
       cost: "optional-paid",
       costHint:
-        "Words and cached semantic queries are offline. --semantic --yes permits a paid query; --jev uses its existing judge service.",
+        "Words and cached semantic queries are offline. --semantic --yes permits a provider request with project quota/billing; --jev uses its existing judge service.",
       speed: "instant",
       cancellable: true,
       helpMode: "flag",
       envAnyOf: [["OPENCODE_API_KEY", "OPENROUTER_API_KEY"]],
       confirm: {
         mode: "when-flagged",
-        message: "--yes permits sending this query to OpenRouter and spending embedding credits.",
+        message:
+          "--yes permits sending this query to the selected provider; its quota, billing and data-use terms apply.",
       },
     },
   },
@@ -903,6 +914,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     target: "scripts/asset-search.ts",
     cwdModes: ["root", "film"],
     flags: [
+      {
+        key: "--provider",
+        flag: "--provider",
+        label: "Embedding provider",
+        type: "enum",
+        options: ["auto", "gemini", "openrouter"],
+        hint: "Auto uses Gemini when a Google key is configured, otherwise OpenRouter.",
+      },
       {
         key: "--db",
         flag: "--db",
@@ -937,7 +956,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
           {
             key: "--yes",
             flag: "--yes",
-            label: "Allow paid embedding",
+            label: "Allow embedding API",
             type: "boolean",
             requiresConfirmIfSet: true,
           },
@@ -954,6 +973,20 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             label: "Time limit (seconds)",
             type: "number",
             hint: "Default 60; at most 3600. Completed work survives stopping.",
+          },
+          {
+            key: "--rpm",
+            flag: "--rpm",
+            label: "Requests per minute",
+            type: "number",
+            hint: "Default 60; use your project's limit.",
+          },
+          {
+            key: "--tpm",
+            flag: "--tpm",
+            label: "Input tokens per minute",
+            type: "number",
+            hint: "Estimated including media; default 24000.",
           },
         ],
       },
@@ -983,9 +1016,26 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         id: "remove",
         inheritFlags: true,
         label: "remove",
-        summary: "Remove an asset and its cached versions without an API call.",
+        summary:
+          "Remove an asset from search; retain vectors for re-adding identical inputs without API calls.",
         args: [{ key: "key", label: "Exact asset key", type: "string", required: true }],
-        meta: { effect: "write" },
+        flags: [
+          {
+            key: "--purge",
+            flag: "--purge",
+            label: "Permanently delete retained vectors",
+            type: "boolean",
+            requiresConfirmIfSet: true,
+          },
+        ],
+        meta: {
+          effect: "write",
+          confirm: {
+            mode: "when-flagged",
+            message:
+              "Permanently delete this asset's retained vectors with --purge. Original media files are never deleted.",
+          },
+        },
       },
       {
         id: "redo",
@@ -996,6 +1046,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flags: [
           { key: "--part", flag: "--part", label: "Chunk number (starts at 0)", type: "number" },
         ],
+        meta: { effect: "write" },
+      },
+      {
+        id: "backup",
+        inheritFlags: true,
+        label: "backup",
+        summary: "Create a consistent SQLite snapshot; refuse an existing destination.",
+        args: [{ key: "file", label: "New backup file", type: "string", required: true }],
         meta: { effect: "write" },
       },
     ],
@@ -1010,7 +1068,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       confirm: {
         mode: "when-flagged",
         message:
-          "Send selected media/text to OpenRouter and spend embedding credits within the request/time limits.",
+          "Send selected media/text to the chosen provider within request/time limits. Billing/quota and data-use terms apply.",
       },
     },
   },
@@ -4686,9 +4744,16 @@ function computeEffectiveMeta(
   ) {
     if (isBooleanActive(flags["--yes"])) {
       next.effect = "write";
-      next.cost = subcommandPath[0] === "build" ? "paid" : "optional-paid";
+      next.cost = "optional-paid";
       next.speed = subcommandPath[0] === "build" ? "long" : "short";
-      if (subcommandPath[0] === "build") next.envRequired = ["OPENROUTER_API_KEY"];
+      if (subcommandPath[0] === "build")
+        next.envAnyOf = [
+          flags["--provider"] === "gemini"
+            ? ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
+            : flags["--provider"] === "openrouter"
+              ? ["OPENROUTER_API_KEY"]
+              : ["GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"],
+        ];
     }
   } else if (commandId === "voice:gen") {
     if (!isBooleanActive(flags["--yes"]) || isBooleanActive(flags["--dry-run"])) {

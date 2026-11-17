@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Entry } from "../find";
 import { ROOT } from "../vault.mjs";
 import { assetKey } from "./catalog";
-import { createEmbedder, type Embed, hash } from "./model";
+import { configuredProvider, createEmbedder, type Embed, hash } from "./model";
 import { type Index, openIndex } from "./store";
 
 export const DEFAULT_INDEX = join(ROOT, ".studio", "asset-search.sqlite");
@@ -40,9 +40,7 @@ export const searchIndex = async (
   let embedded = index.cached("?query", fingerprint);
   if (!embedded) {
     if (!options.allowApi || !options.embed)
-      throw new Error(
-        "No cached query; --semantic --yes permits a paid OpenRouter query embedding",
-      );
+      throw new Error("No cached query; --semantic --yes permits an external query embedding");
     embedded = await options.embed([{ type: "text", text }]);
     index.put("?query", fingerprint, embedded);
   }
@@ -56,6 +54,7 @@ export const hybridSearch = async (
     allowApi: boolean;
     file?: string;
     dimensions?: number;
+    provider?: string;
     limit?: number;
   },
 ) => {
@@ -72,7 +71,7 @@ export const hybridSearch = async (
       ...(options.allowApi && {
         embed: (parts, signal) =>
           createEmbedder({
-            apiKey: process.env.OPENROUTER_API_KEY ?? "",
+            ...configuredProvider(options.provider),
             dimensions: options.dimensions ?? 768,
           })(parts, signal),
       }),

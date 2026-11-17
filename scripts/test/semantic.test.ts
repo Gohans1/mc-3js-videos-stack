@@ -16,6 +16,31 @@ import { openIndex } from "../semantic/store";
 
 const vector = (axis: number) => Array.from({ length: 768 }, (_, i) => (i === axis ? 2 : 0));
 
+test("an imported kind without a native timeline lane offers source inspection without an empty placement hint", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "semantic-custom-kind-"));
+  try {
+    const result = await findRun(
+      ["snow", "--kind", "asset"],
+      [
+        {
+          kind: "asset",
+          id: "snow",
+          src: "custom",
+          cat: "effect",
+          title: "Snow",
+          about: "White snow falls",
+        },
+      ],
+      favoriteLists(folder),
+    );
+    expect(result).toContain("Snow");
+    expect(result).not.toContain("where (in");
+    expect(result).toContain("--show");
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test("OpenRouter multimodal embedding uses one joint input and validates normalized output", async () => {
   let received: unknown;
   const server = Bun.serve({
@@ -91,6 +116,12 @@ test("index updates, append, removal and retry preserve completed vectors across
     expect(index.pending("a")).toHaveLength(0);
     index.remove("a");
     expect(index.search(normalize(vector(0), 768), new Set(["a"]))).toEqual([]);
+    index.stage(a, "source-a", [{ from: 0, to: 1 }]);
+    expect(index.pending("a")).toHaveLength(0);
+    expect(index.search(normalize(vector(0), 768), new Set(["a"]))).toHaveLength(1);
+    index.remove("a", true);
+    index.stage(a, "source-a", [{ from: 0, to: 1 }]);
+    expect(index.pending("a")).toHaveLength(1);
     expect(() => openIndex(file, 1536)).toThrow(/space/);
   } finally {
     index.close();
@@ -99,15 +130,16 @@ test("index updates, append, removal and retry preserve completed vectors across
 });
 
 test("audio and video chunks cover the complete asset without exceeding model limits", () => {
-  expect(chunks(181, "audio")).toEqual([
-    { from: 0, to: 179 },
-    { from: 179, to: 181 },
+  expect(chunks(61)).toEqual([
+    { from: 0, to: 30 },
+    { from: 30, to: 60 },
+    { from: 60, to: 61 },
   ]);
-  expect(chunks(31, "video")).toEqual([
+  expect(chunks(31)).toEqual([
     { from: 0, to: 30 },
     { from: 30, to: 31 },
   ]);
-  expect(() => chunks(0, "audio")).toThrow(/duration/);
+  expect(() => chunks(0)).toThrow(/duration/);
 });
 
 test("local OGG, image and video become supported joint media inputs without an API call", async () => {

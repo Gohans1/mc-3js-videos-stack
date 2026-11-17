@@ -69,7 +69,7 @@ Không chỉnh notes/notes.jsonl bằng tay. Final xuất ra renders/final.mp4; 
 | ------------------------------- | ------------------------------------------------------------------------------------------- |
 | voice:gen --yes                 | Tốn credits; chạy không --yes để xem trước, chỉ tạo lại take cần sửa                        |
 | find --jev                      | Gọi dịch vụ ngoài, có quota/chi phí; tìm bằng từ khóa trước khi cần tìm theo nghĩa          |
-| assets:semantic build --yes, find --semantic --yes | Gửi media/câu tìm tới OpenRouter, tốn credits; plan và cache offline không gọi API |
+| assets:semantic build --yes, find --semantic --yes | Gửi media/câu tìm tới Gemini hoặc OpenRouter, dùng quota/credits; plan và cache offline không gọi API |
 | render final, deliver --youtube | Có thể lâu; xem --help và giới hạn đoạn cần kiểm tra                                        |
 | Thử lệnh có ghi dữ liệu         | Dùng phim thử riêng; bun run skills get core --ref film                                     |
 | Lệnh lỗi                        | Đọc lỗi và kiểm tra kết quả đã ghi; không mặc định mã thoát lỗi đồng nghĩa chưa thay đổi gì |

@@ -34,7 +34,7 @@ const BASE_CONTEXT = {
   },
 };
 
-test("embedding controls stay free without opt-in and gate paid builds on OpenRouter", () => {
+test("embedding controls stay offline by default and respect the selected provider's credentials", () => {
   const missing = buildCliInvocation({ commandId: "assets:semantic" }, BASE_CONTEXT);
   expect(missing.validationErrors.some((error) => error.includes("subcommand"))).toBe(true);
   const draft = buildCliInvocation(
@@ -48,9 +48,21 @@ test("embedding controls stay free without opt-in and gate paid builds on OpenRo
     { commandId: "assets:semantic", subcommandPath: ["build"], flags: { "--yes": true } },
     BASE_CONTEXT,
   );
-  expect(live.meta.cost).toBe("paid");
+  expect(live.meta.cost).toBe("optional-paid");
   expect(live.requiresConfirm).toBe(true);
-  expect(live.missingEnvGroups).toContainEqual(["OPENROUTER_API_KEY"]);
+  expect(live.missingEnvGroups).toEqual([]);
+  const router = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["build"],
+      flags: { "--yes": true, "--provider": "openrouter", "--rpm": "40", "--tpm": "20000" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(router.missingEnvGroups).toContainEqual(["OPENROUTER_API_KEY"]);
+  expect(router.argvTokens).toEqual(
+    expect.arrayContaining(["--provider", "openrouter", "--rpm", "40", "--tpm", "20000"]),
+  );
   const cached = buildCliInvocation(
     { commandId: "find", args: { words: "sad goodbye" }, flags: { "--semantic": true } },
     BASE_CONTEXT,
