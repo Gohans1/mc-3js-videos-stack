@@ -219,11 +219,15 @@ test("invalid shared budget configuration is a usage error without data writes",
   }
 });
 
-test("film commands inherit root dotenv defaults while explicit environment and Bun env flags keep precedence", () => {
+test("film commands share expanded dotenv defaults with direct flags and nested Bun runtime scope", () => {
   const folder = mkdtempSync(join(tmpdir(), "semantic-film-env-"));
   const film = join(folder, "film");
   mkdirSync(join(folder, "scripts/semantic"), { recursive: true });
   mkdirSync(film);
+  writeFileSync(
+    join(film, "package.json"),
+    JSON.stringify({ scripts: { probe: "bun ../probe.mjs" } }),
+  );
   copyFileSync(
     fileURLToPath(new URL("../vault.mjs", import.meta.url)),
     join(folder, "scripts/vault.mjs"),
@@ -294,6 +298,26 @@ test("film commands inherit root dotenv defaults while explicit environment and 
     });
     expect(inspect([], { NODE_ENV: "test" })).toMatchObject({
       vault: join(folder, "base-vault"),
+      rootKeyLoaded: false,
+    });
+    const wrapper = (flags: string[], overrides: Record<string, string> = {}) => {
+      const child = Bun.spawnSync([process.execPath, ...flags, "run", "probe"], {
+        cwd: film,
+        env: { ...env, ...overrides },
+        timeout: 5000,
+      });
+      expect(child.exitCode, child.stderr.toString()).toBe(0);
+      return JSON.parse(child.stdout.toString());
+    };
+    // Bun run starts another runtime; CLI flags stay with the parent, unlike BUN_OPTIONS.
+    expect(wrapper(["--no-env-file"]).rootKeyLoaded).toBe(true);
+    expect(wrapper([`--env-file=${profile}`])).toMatchObject({
+      dailyLimit: 42,
+      rootKeyLoaded: false,
+    });
+    expect(wrapper([], { BUN_OPTIONS: "--no-env-file" })).toMatchObject({
+      vault: join(folder, "vault"),
+      dailyLimit: 1000,
       rootKeyLoaded: false,
     });
   } finally {

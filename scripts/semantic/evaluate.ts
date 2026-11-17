@@ -1,4 +1,4 @@
-import { type Entry, isForeign, rank } from "../find";
+import { defaultSearchEntry, type Entry, isForeign, rank } from "../find";
 import { assetFromEntry, assetKey } from "./catalog";
 import { fuseRanks, searchIndex } from "./search";
 import type { Index } from "./store";
@@ -125,7 +125,9 @@ export const evaluateSearch = async (
   for (const item of set.cases) {
     const pool = entries.filter(
       (entry) =>
-        (!item.kind || entry.kind === item.kind) && (!item.source || entry.src === item.source),
+        defaultSearchEntry(entry) &&
+        (!item.kind || entry.kind === item.kind) &&
+        (!item.source || entry.src === item.source),
     );
     const eligible = new Set(pool.map(assetKey));
     const start = performance.now();

@@ -34,7 +34,9 @@ Thêm --json để nhận mode, query, notes và results; khi API/index lỗi, m
 
 Đặt MC_SEMANTIC_DB, MC_SEMANTIC_MANIFEST và MC_SEMANTIC_QUOTA_DB trong .env.local để build và find dùng chung dữ liệu ngoài worktree; manifest đã cấu hình bị thiếu thì dừng, không quay sang catalog khác. status phân biệt toàn catalog với phần đã xếp hàng, hoàn tất hoặc cần cập nhật; chỉ build mới kiểm lại byte media.
 
-Các đường dẫn trong biến môi trường tính từ gốc repo, còn cờ đường dẫn tính từ nơi đang đứng. Lệnh trong phim nhận mặc định dotenv của repo, giữ ưu tiên biến đã truyền và các cờ env của Bun.
+Các đường dẫn trong biến môi trường tính từ gốc repo, còn cờ đường dẫn tính từ nơi đang đứng. Lệnh trong phim nhận mặc định dotenv của repo, giữ ưu tiên biến đã truyền.
+
+--env-file và --no-env-file bỏ qua mặc định repo khi gọi entrypoint Bun trực tiếp; package script có thể mở Bun con không nhận các cờ của cha. Muốn cô lập, gọi bun --no-env-file <đường-dẫn-đầy-đủ/scripts/asset-search.ts> trực tiếp; BUN_OPTIONS=--no-env-file áp dụng cả Bun con theo [cơ chế của Bun](https://bun.com/docs/runtime/environment-variables).
 
 MC_SEMANTIC_DAILY_LIMIT giới hạn nội bộ, mặc định 1000 lượt mỗi ngày Pacific; mọi lần gọi kể cả lỗi, retry và câu tìm mới đều giữ chỗ trước khi gửi. --retries mặc định 2 cho lỗi tạm 429/503, giữ giới hạn lượt/thời gian; quota ngày dừng ngay, còn 429 không rõ nguyên nhân không đồng nghĩa hết quota ngày.
 

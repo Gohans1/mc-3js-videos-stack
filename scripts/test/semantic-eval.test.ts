@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Entry } from "../find";
+import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
+import { type Entry, run as findRun } from "../find";
 import { assetFromEntry, assetKey } from "../semantic/catalog";
 import { evaluateSearch, parseEvalCases, retrievalMetrics } from "../semantic/evaluate";
 import { hash } from "../semantic/model";
@@ -152,6 +153,71 @@ test("the offline eval CLI saves partial reports, rejects API opt-in and preserv
     expect(run("--yes").exitCode).toBe(2);
     expect(existsSync(join(folder, "quota.sqlite"))).toBe(false);
   } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("eval and find use the same default mocap eligibility before either ranking branch", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "semantic-eval-pool-")),
+    file = join(folder, "index.sqlite");
+  const index = openIndex(file),
+    vector = Array.from({ length: 768 }, (_, i) => (i ? 0 : 1));
+  const entries: Entry[] = [
+    {
+      kind: "mocap",
+      id: "mixamo/SwordAttack",
+      title: "Sword attack",
+      about: "sword attack",
+      cat: "stand",
+      src: "mixamo",
+    },
+    {
+      kind: "mocap",
+      id: "mixamo/Walk",
+      title: "Walk",
+      about: "walking",
+      cat: "stand",
+      src: "mixamo",
+    },
+  ];
+  try {
+    for (const entry of entries) {
+      const asset = assetFromEntry(entry);
+      index.stage(asset, "fixture", [{ from: 0, to: 0 }]);
+      index.complete(index.pending(asset.key)[0]!, { vector, usage: {} });
+    }
+    index.put("?query", hash("task: search result | query: sword attack"), { vector, usage: {} });
+    const report = await evaluateSearch(
+      index,
+      entries,
+      parseEvalCases({
+        labelMethod: "Fixture",
+        cases: [
+          {
+            id: "walk",
+            query: "sword attack",
+            language: "en",
+            kind: "mocap",
+            relevant: [assetKey(entries[1]!)],
+          },
+        ],
+      }),
+    );
+    const actual = JSON.parse(
+      await findRun(
+        ["--semantic", "--json", "--db", file, "--kind", "mocap", "sword attack"],
+        entries,
+        undefined,
+        undefined,
+        favoriteLists(join(folder, "favorites")),
+      ),
+    );
+    expect(report.rows[0]!.top.hybrid).toEqual(
+      actual.results.map((row: { key: string }) => row.key),
+    );
+    expect(report.rows[0]!.top.hybrid).toEqual([assetKey(entries[1]!)]);
+  } finally {
+    index.close();
     rmSync(folder, { recursive: true, force: true });
   }
 });

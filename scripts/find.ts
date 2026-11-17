@@ -649,6 +649,7 @@ export const isFight = (ref: string) => {
     SCREEN.fights.some((w) => name.slice(m.index).toLowerCase().startsWith(w)),
   );
 };
+export const defaultSearchEntry = (entry: Entry) => entry.kind !== "mocap" || !isFight(entry.id);
 // ref -> "retarget breaks on Steve: <what> at <s> s; ..." for clips whose sweep (sweep_<lib>.jsonl) crosses a limit
 const brokenOf = (dir: string, lib: string) => {
   const f = join(dir, `sweep_${lib}.jsonl`);
@@ -2310,7 +2311,7 @@ export async function run(
   }
 
   // weapons and fights are left out, as the catalogue's own search leaves them (--fights, a body filter, goes there)
-  const pool = entriesOf().filter((x) => x.kind !== "mocap" || !isFight(x.id));
+  const pool = entriesOf().filter(defaultSearchEntry);
   // nothing in the list in use: how a star is given, and the lists that have some
   if (fav && !pool.some((x) => x.fav)) {
     const message = [

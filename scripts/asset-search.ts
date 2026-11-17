@@ -46,7 +46,9 @@ Failed/interrupted builds keep completed chunks. An interrupted request can be c
 Every external attempt reserves the shared daily budget first, including failures/retries and new query embeddings.
 MC_SEMANTIC_DAILY_LIMIT is a local cap (default 1000), not proof of your provider quota; reset is midnight America/Los_Angeles.
 MC_SEMANTIC_QUOTA_DB or the configured index's .requests.sqlite ledger persists across --db overrides; keep it for the same project.
-Environment paths start at the repo root; CLI path flags start at cwd. Film commands inherit root dotenv defaults; caller values and Bun env flags win.
+Environment paths start at the repo root; CLI path flags start at cwd. Film commands inherit root dotenv defaults; caller environment wins.
+Direct Bun entrypoints respect --env-file/--no-env-file. Package scripts that start another Bun do not forward those runtime flags.
+For isolation invoke bun --no-env-file <absolute-path-to-scripts/asset-search.ts> directly; BUN_OPTIONS=--no-env-file also applies to descendant runtimes.
 Cached queries and previews consume no allowance. Status counts current catalog coverage; media byte hashes are checked by build.
 Eval cases: {labelMethod,cases:[{id,query,language,relevant:[exactAssetKey],kind?,source?,group?}]}.
 Eval never sends requests: prepare uncached queries with query --yes, then rerun eval; a partial report exits 1 and still saves results.
