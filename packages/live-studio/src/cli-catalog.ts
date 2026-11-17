@@ -598,7 +598,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         ...bareListCopy("kinds & groups"),
         choiceSource: "findKinds",
         tier: "common",
-        hint: "e.g. sfx, bgm, mc, sound, mocap, transition, anim, text, shape, font, adjust, velocity, ease; omit value to list groups",
+        hint: "e.g. sfx, bgm, mc, sound, mocap, asset/effect, asset/sticker, transition, anim, text, shape; omit value to list groups",
       },
       {
         key: "--source",
@@ -696,7 +696,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "csv",
         tier: "common",
         placeholder: "dissolve",
-        hint: "Inspect full entry details & paste snippets",
+        hint: "Inspect files, licence and settings; native entries have paste snippets, imported visuals expose source files.",
       },
       {
         key: "--dur",
@@ -717,6 +717,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         optionalValue: true,
         ...bareListCopy("origin values"),
         tier: "advanced",
+        hint: "Real / Studio is a grouping, not verified recording provenance. Inspect --show for explicit unknown origins.",
       },
       {
         key: "--edition",

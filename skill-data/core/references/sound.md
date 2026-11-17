@@ -30,6 +30,10 @@ bun run find "<câu tìm>" trả BM25 toàn catalog đã lọc trước, rồi k
 
 Các bộ lọc áp dụng cho cả hai khối; --kind mc không gọi OpenFilm, âm thanh gọi đúng sound/music và hình dùng asset/sticker, asset/transition hoặc nhóm asset tương ứng. ID lặp có nhãn also BM25; điểm semantic là độ gần, không phải xác suất phù hợp, cần nghe/xem trước khi chọn.
 
+--show <id> chỉ file, giấy phép, preview và mẫu đặt; trang OpenFilm có saved.json mô tả nút chỉnh, cần đọc và chuyển nguồn vào src/scene.ts khi chưa có lane timeline tương ứng. Preview có thể là bản minh họa trên ảnh nền, không thay thế việc kiểm tra nguồn đã tích hợp.
+
+--origin real là nhóm Real / Studio hiện có, không xác minh xuất xứ bản thu; --show giữ nguyên provenance unknown nếu nguồn ghi vậy. Chỉ dùng giấy phép và thông tin nguồn đã kiểm tra để kết luận quyền dùng hoặc xuất xứ, không suy từ tên asset hay điểm earshot.
+
 --json trả keyword.results và semantic.results độc lập; semantic.scope là openfilm, alsoKeyword đánh dấu mục đã có trong khối BM25. BM25 dùng tiếng Anh; câu tiếng Việt chỉ có thể tìm semantic OpenFilm, muốn tìm cả Minecraft thì dùng từ khóa tiếng Anh.
 
 OpenFilm chỉ nhận câu tìm, loại và giới hạn kết quả, không nhận file hoặc API key; timeout mỗi loại 2,5 giây, tối đa hai loại đồng thời. --offline hoặc MC_FIND_OFFLINE=1 chỉ đọc cache 24 giờ; lỗi mạng/cache giữ nguyên BM25 và ghi lý do, cache nằm ở MC_FIND_CACHE hoặc .studio/openfilm-search.sqlite, đường dẫn biến môi trường tính từ gốc repo.

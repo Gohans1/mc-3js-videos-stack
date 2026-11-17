@@ -2,7 +2,7 @@
 // instead of grepping SOURCES.json: bun run find --help. Keyword and OpenFilm meaning results keep separate orders.
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, extname, join, relative } from "node:path";
+import { basename, dirname, extname, join, relative } from "node:path";
 
 import { FIT_NO, FIT_YES, jevJudge as judgeBy } from "../packages/clip-catalog/jev";
 import { PRIME_LENSES } from "../packages/film-kit/src/lens";
@@ -458,7 +458,10 @@ const unknownKind = (asked: string, pool: Entry[]) => {
 };
 
 // The Sound panel's filters: Real / Studio recordings or Code-gen (sfx, bgm), Vanilla or Modded packs (mc)
-const ORIGINS = { real: "Real / Studio: recordings", synth: "Code-gen: made in code by earshot" };
+const ORIGINS = {
+  real: "Real / Studio grouping, not verified recording provenance",
+  synth: "Code-gen: made in code by earshot",
+};
 const EDITIONS = { vanilla: "Vanilla Minecraft", modded: "Modded packs" };
 const originOfEntry = (x: Entry) =>
   originOf({ name: x.id, source: x.src, origin: x.data?.origin as "real" | "synth" | undefined });
@@ -1114,22 +1117,24 @@ export const jevJudge = (scene: string, pool: Entry[], show: number): Promise<Vo
   );
 
 const HELP = `Usage: bun run find <words> [options]     (works from a film folder too, and then also searches the film's own sounds)
-       bun run find --show <id[,id]>      everything about one entry: what it does, its settings, a line to paste, how to see it
+       bun run find --show <id[,id]>      files/licence, settings, and timeline placement or source adaptation
 
 Finds what a film can name: vault sounds, mocap clips, transitions, camera anims and curves, text and shape voices,
-fonts, adjust sliders, beat effects, camera eases. One line per hit: kind/category  id-to-write  length  title —
+fonts, adjust sliders, beat effects, camera eases and imported visual pages/images. One line per hit: kind/category  id-to-write  length  title —
 description  [source], then where that id goes in the film's src/timeline and what to try next.
 
 Options:
   --kind <k[,k]>   sfx, bgm, mc (Minecraft) or sound (all three); mocap; transition anim text shape font adjust look lens shake velocity ease
+                   asset/<category> for imported visuals: asset/effect, asset/sticker, asset/transition; --kind asset lists groups
                    each with /<category>, the studio's groups: --kind sfx/typing, mc/horror, transition/wipe, text/pop
                    (a word of the group is enough, and plain names work: music is bgm, titles is text, camera is anim;
-                   the first line says how a loose one was read). --kind <kind> alone: its groups with counts, then
+                   the output says how a loose one was read). --kind <kind> alone: its groups with counts, then
                    every entry when 60 or fewer; --kind <kind>/<category>: that group, and the words its entries are
                    named by when it is long
   --source <s[,s]> where it comes from: minecraft and each mod pack by name (alexs-caves, quality-sounds ...), earshot,
                    mixkit, mixamo, film-stage or film-kit (every preset) or one preset file
-  --origin <o>     sfx and bgm: real (recordings, the studio's Real / Studio) or synth (made in code, its Code-gen)
+  --origin <o>     sfx and bgm: real (the studio's Real / Studio grouping) or synth (made in code, its Code-gen).
+                   This grouping does not verify recording provenance; --show retains an explicit unknown origin.
   --edition <e>    Minecraft sounds: vanilla (the game itself) or modded (mod packs)
   --license <l>    sounds by what a YouTube upload must do: free (nothing), credit (CC BY: name the author), claim
                    (Content ID claims the video), minecraft (Mojang's game sounds: Minecraft videos only), mod (a mod's
@@ -1446,13 +1451,19 @@ function details(x: Entry): string[] {
     dir = timelineDir();
   const out: string[] = [];
   const use = (file: string, json: string) => out.push(`use: ${dir}/${file} ${json}`);
+  const licenceUrl = typeof d.licenseUrl === "string" ? d.licenseUrl : d.url;
+  if (d.license) out.push(`licence: ${d.license}${licenceUrl ? `  ${licenceUrl}` : ""}`);
+  if (d.licenseUrl && d.url && d.url !== d.licenseUrl) out.push(`source: ${d.url}`);
   if (SOUND.includes(x.kind)) {
     const takes = d.takes ?? [];
     if (takes.length > 1)
       out.push(
         `takes: ${takes.length > 6 ? `${takes.length} of them, ${takes[0]} to ${takes.at(-1)}` : takes.join(", ")} (vary a repeated sound across them)`,
       );
-    if (d.license) out.push(`licence: ${d.license}${d.url ? `  ${d.url}` : ""}`);
+    if (d.origin === "unknown")
+      out.push(
+        "provenance: unknown; Real / Studio is a grouping, not verified recording provenance",
+      );
     if (d.peaks?.length) out.push(`loudness: ${envelope(d.peaks)}`);
     const bed = `beds[]: {"name": "${x.id}", "from": 0, "to": ${num(x.secs) ?? 10}, "gain": 0, "fadeIn": 1, "fadeOut": 1}  (gain in dB; + "start", "duck", "pan"; a bed shorter than its span loops)`;
     const hit = `sfx[]: {"at": <scene seconds, not heard: bun run at <heard s> gives the scene second>, "name": "${x.id}", "gain": 0}  (gain in dB; + "rate", "pitch", "reverse", "fadeIn", "fadeOut")`;
@@ -1622,7 +1633,26 @@ function details(x: Entry): string[] {
       "text.json",
       `items[]: {"kind": "${x.id}", "x": 0.5, "y": 0.5, ${sized}, "width": 10, "color": "#E5484D", "from": 0, "to": 3, "in": {"fx": "draw", "len": 0.5}}  (size and width in px at 1080p; "at": [x, y, z] pins it to a world point; in/out voices: bun run find --kind shape)`,
     );
-  } else out.push(`use: ${dir}/${useOf(x.kind)}`);
+  } else {
+    const lane = useOf(x.kind);
+    if (lane) out.push(`use: ${dir}/${lane}`);
+    else {
+      const file = assetFile(x);
+      out.push(`file: ${file || "not recorded in the catalog"}`);
+      if (typeof d.format === "string") out.push(`format: ${d.format}`);
+      if (!d.license) out.push("licence: not recorded; inspect the source before reuse");
+      if (file && d.format === "openfilm-page") {
+        const settings = join(dirname(file), "..", "saved.json");
+        if (existsSync(settings))
+          out.push(
+            `settings: ${settings} (clip.attrs data-props names controls; source defines defaults)`,
+          );
+      }
+      out.push(`use: no native timeline lane for ${x.kind}; inspect/adapt the source in ${HOOKS}`);
+      const preview = typeof d.preview === "string" ? d.preview : "";
+      out.push(`see it: ${preview || file || "no source or preview recorded"}`);
+    }
+  }
   if (!SOUND.includes(x.kind) && !out.some((l) => l.startsWith("see it:")))
     out.push(
       "see it: AT=<a second it is on screen> bun run render stills  (in a film folder), or the Studio at that second",
@@ -1743,7 +1773,7 @@ function show(ids: string[], pool: Entry[]) {
         ].join("\n\n")
       );
     })
-    .concat("after pasting it in: bun run check (in the film) says whether the file still fits")
+    .concat("after placing or adapting it: bun run check (in the film) says whether the file still fits")
     .join("\n\n");
 }
 

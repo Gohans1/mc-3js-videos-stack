@@ -162,6 +162,79 @@ test("--show of a music track says how to make music, not a sound effect", async
   expect(out).not.toMatch(/sfx:get/);
 });
 
+test("--show of an imported page exposes its files, controls and licence without inventing a timeline lane", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "find-imported-page-"));
+  const file = join(folder, "files/snow.html"),
+    preview = join(folder, "preview.mp4"),
+    settings = join(folder, "saved.json");
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, "<style>:root { --amount: 1 }</style>");
+    writeFileSync(
+      settings,
+      JSON.stringify({
+        clip: { attrs: { "data-props": '[{"name":"Amount","type":"var","var":"--amount"}]' } },
+      }),
+    );
+    const output = await run(
+      ["--show", "snow"],
+      [
+        {
+          ...e("snow", "Snow", "Sparse falling flakes", "asset", "effect"),
+          src: "openfilm",
+          data: {
+            file,
+            preview,
+            format: "openfilm-page",
+            license: "CC0 1.0",
+            url: "https://example.test/library/LICENSE.md",
+          },
+        },
+      ],
+      noJev,
+    );
+    expect(output).toContain(`file: ${file}`);
+    expect(output).toContain(`see it: ${preview}`);
+    expect(output).toContain(`settings: ${settings}`);
+    expect(output).toContain("format: openfilm-page");
+    expect(output).toContain("licence: CC0 1.0  https://example.test/library/LICENSE.md");
+    expect(output).toContain("src/scene.ts");
+    expect(output).toContain("no native timeline lane");
+    expect(output).not.toContain("undefined");
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("--show separates an explicit licence document from the audio download URL", async () => {
+  const output = await run(
+    ["--show", "farewell"],
+    [
+      {
+        ...e("farewell", "Farewell", "", "bgm", "sad"),
+        data: {
+          license: "CC0 1.0",
+          licenseUrl: "https://example.test/library/LICENSE.md",
+          url: "https://example.test/music.mp3",
+        },
+      },
+    ],
+    noJev,
+  );
+  expect(output).toContain("licence: CC0 1.0  https://example.test/library/LICENSE.md");
+  expect(output).toContain("source: https://example.test/music.mp3");
+});
+
+test("--show discloses unknown audio provenance even when it belongs to the Real / Studio grouping", async () => {
+  const output = await run(
+    ["--show", "wind"],
+    [{ ...e("wind", "Wind"), data: { origin: "unknown" } }],
+    noJev,
+  );
+  expect(output).toContain("provenance: unknown");
+  expect(output).toContain("not verified recording provenance");
+});
+
 test("a word in a kind the --kind left out is pointed to, by its category", async () => {
   const out = await run(["zombie", "--kind", "sfx"], vault, noJev);
   expect(out).toMatch(
