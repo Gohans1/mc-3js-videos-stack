@@ -50,6 +50,18 @@ Tên/mô tả đi cùng media của đúng asset trong một vector; audio chia 
 
 Gemini free tier có thể dùng đầu vào cải thiện sản phẩm; kiểm tra quyền chia sẻ theo nguồn, đặc biệt nội dung có điều khoản hạn chế AI. Pilot nhỏ không chứng minh chất lượng cả kho; [Google nêu audio tối ưu cho lời nói](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-multimodal-embeddings), luôn nghe/xem trước khi chọn và dùng Jev khi cần đánh giá khác.
 
+## Đo chất lượng tìm kiếm
+
+bun run assets:semantic eval scripts/evals/semantic/known-item.json --out <report-mới.json> so từ khóa, vector và kết hợp; chỉ dùng câu đã cache, không gọi API. Bộ known-item có 400 asset khác nhau từ 64 nhóm loại/nguồn; đáp án dựa trên metadata nên chỉ đo tìm đúng mục, không chứng minh hợp cảnh bằng nghe/xem.
+
+scenes-pilot.json giữ 14 ý cảnh Anh–Việt, tương đương 28 câu có tương quan, chưa đủ kết luận chất lượng toàn kho. Tăng bộ ý cảnh độc lập và đáp án đã nghe/xem trước khi tuyên bố chất lượng; không tính bản dịch thành mẫu độc lập hay suy khoảng tin cậy từ mẫu tiện tay.
+
+Report giữ từng câu, top 10, Hit@1/5/10, MRR@10, Recall@10, nDCG@10, độ trễ p50/p95 và tách theo ngôn ngữ/nhóm. complete chỉ báo đủ dữ liệu chạy, không phải chất lượng đạt; scored loại câu thiếu cache, hit5AllCases vẫn tính chúng vào mẫu số, missingCatalog/missingEmbeddings cho biết phần kho chưa sẵn sàng.
+
+Để bổ sung cache, dùng query --yes cho đúng query trong bộ case, giữ ledger và hạn mức của project; chạy lại eval sau mỗi đợt embedding. Đầu ra mới không ghi đè report cũ, thiếu dữ liệu vẫn lưu report và exit 1; thời gian eval không gồm API hay nạp catalog, không dùng để quảng cáo tốc độ tìm câu mới.
+
+Chỉ số theo [Sentence Transformers](https://sbert.net/docs/package_reference/sentence_transformer/evaluation.html); nhãn chỉ liệt kê mục đã biết đúng, các lựa chọn chưa chấm vẫn có thể phù hợp. Giữ nguyên bộ case khi so hai phiên bản và ghi rõ khác biệt catalog/index khi so dịch vụ khác.
+
 ## Ears: earshot
 
 `earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call; a file it has heard before is cached, and the same call again takes about 2 s. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the installed earshot agent skill; open its SKILL.md rather than requesting an mc-films guide.

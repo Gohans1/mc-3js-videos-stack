@@ -1,0 +1,257 @@
+{
+  "labelMethod": "14 paired English/Vietnamese pilot intents, 28 queries. Catalog-selected targets from the earlier media pilot; labels are not blind listening/viewing judgments and were not held out from model exploration. Diagnostic only; language pairs are correlated.",
+  "cases": [
+    {
+      "id": "scene-1-en",
+      "query": "the sound of a heavy metal gate sliding closed",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"sfx\",\"openfilm\",\"of-sfx-heavy-metal-door-slide-ea6930\"]"
+      ]
+    },
+    {
+      "id": "scene-1-vi",
+      "query": "tiếng cổng sắt nặng trượt đóng lại",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"sfx\",\"openfilm\",\"of-sfx-heavy-metal-door-slide-ea6930\"]"
+      ]
+    },
+    {
+      "id": "scene-2-en",
+      "query": "the sound of glass shattering into pieces",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"quality-sounds\",\"mc-quality-sounds-block-glass-break-2\"]"
+      ]
+    },
+    {
+      "id": "scene-2-vi",
+      "query": "tiếng kính vỡ thành nhiều mảnh",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"quality-sounds\",\"mc-quality-sounds-block-glass-break-2\"]"
+      ]
+    },
+    {
+      "id": "scene-3-en",
+      "query": "the sound of water splashing",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"minecraft\",\"mc-liquid-splash-1\"]"
+      ]
+    },
+    {
+      "id": "scene-3-vi",
+      "query": "tiếng nước bắn tung tóe",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"minecraft\",\"mc-liquid-splash-1\"]"
+      ]
+    },
+    {
+      "id": "scene-4-en",
+      "query": "the sound of wind blowing in a cavern",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"minecraft\",\"mc-ambient-nether-soulsand-valley-wind-1\"]"
+      ]
+    },
+    {
+      "id": "scene-4-vi",
+      "query": "tiếng gió thổi trong hang động",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"minecraft\",\"mc-ambient-nether-soulsand-valley-wind-1\"]"
+      ]
+    },
+    {
+      "id": "scene-5-en",
+      "query": "the sound of a wooden door opening",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"minecraft\",\"mc-block-bamboo-wood-door-toggle-1\"]"
+      ]
+    },
+    {
+      "id": "scene-5-vi",
+      "query": "tiếng mở cửa bằng gỗ",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"mc\",\"minecraft\",\"mc-block-bamboo-wood-door-toggle-1\"]"
+      ]
+    },
+    {
+      "id": "scene-6-en",
+      "query": "the sound of paper cards flicking and slapping",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"sfx\",\"openfilm\",\"of-sfx-cards-slapping-down-8b3df7\"]"
+      ]
+    },
+    {
+      "id": "scene-6-vi",
+      "query": "tiếng lật và đập những tấm thẻ giấy",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"sfx\",\"openfilm\",\"of-sfx-cards-slapping-down-8b3df7\"]"
+      ]
+    },
+    {
+      "id": "scene-7-en",
+      "query": "slow sad soft piano music for a farewell",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"bgm\",\"openfilm\",\"of-bgm-elegiac-felt-piano-calm-c63e53\"]"
+      ]
+    },
+    {
+      "id": "scene-7-vi",
+      "query": "nhạc piano chậm và buồn cho cảnh chia tay",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"bgm\",\"openfilm\",\"of-bgm-elegiac-felt-piano-calm-c63e53\"]"
+      ]
+    },
+    {
+      "id": "scene-8-en",
+      "query": "tense rising strings building suspense",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"bgm\",\"openfilm\",\"of-bgm-rising-strings-tension-4662f6\"]"
+      ]
+    },
+    {
+      "id": "scene-8-vi",
+      "query": "nhạc dây dồn lên tạo cảm giác hồi hộp",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"bgm\",\"openfilm\",\"of-bgm-rising-strings-tension-4662f6\"]"
+      ]
+    },
+    {
+      "id": "scene-9-en",
+      "query": "soft sustained clarinet woodwind music",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"bgm\",\"openfilm\",\"of-bgm-airy-clarinet-long-tones-1b7015\"]"
+      ]
+    },
+    {
+      "id": "scene-9-vi",
+      "query": "nhạc kèn clarinet ngân nhẹ và dài",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"bgm\",\"openfilm\",\"of-bgm-airy-clarinet-long-tones-1b7015\"]"
+      ]
+    },
+    {
+      "id": "scene-10-en",
+      "query": "an overlay of falling snow",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-effects-snow\"]"
+      ]
+    },
+    {
+      "id": "scene-10-vi",
+      "query": "hiệu ứng hình ảnh tuyết đang rơi",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-effects-snow\"]"
+      ]
+    },
+    {
+      "id": "scene-11-en",
+      "query": "an overlay of colorful confetti falling",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-effects-confetti\"]"
+      ]
+    },
+    {
+      "id": "scene-11-vi",
+      "query": "hiệu ứng giấy màu confetti đang rơi",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-effects-confetti\"]"
+      ]
+    },
+    {
+      "id": "scene-12-en",
+      "query": "blurred glowing bokeh lights in a video overlay",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-effects-bokeh\"]"
+      ]
+    },
+    {
+      "id": "scene-12-vi",
+      "query": "lớp hiệu ứng những đốm sáng bokeh mờ",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-effects-bokeh\"]"
+      ]
+    },
+    {
+      "id": "scene-13-en",
+      "query": "a video transition using a heart shaped mask",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-transitions-heart\"]"
+      ]
+    },
+    {
+      "id": "scene-13-vi",
+      "query": "chuyển cảnh video bằng mặt nạ hình trái tim",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"asset\",\"openfilm\",\"of-transitions-heart\"]"
+      ]
+    },
+    {
+      "id": "scene-14-en",
+      "query": "fade to black between two shots",
+      "language": "en",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"transition\",\"film-stage/transitions-meta.ts\",\"black\"]"
+      ]
+    },
+    {
+      "id": "scene-14-vi",
+      "query": "chuyển hai cảnh bằng cách tối dần về đen",
+      "language": "vi",
+      "group": "scene-pilot",
+      "relevant": [
+        "[\"transition\",\"film-stage/transitions-meta.ts\",\"black\"]"
+      ]
+    }
+  ]
+}

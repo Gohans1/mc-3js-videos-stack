@@ -80,6 +80,20 @@ test("embedding controls stay offline by default and respect the selected provid
   );
   expect(coverage.validationErrors).toEqual([]);
   expect(coverage.argvTokens).toEqual(expect.arrayContaining(["--manifest", "assets.json"]));
+  const evaluation = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["eval"],
+      args: { cases: "cases.json" },
+      flags: { "--out": "report.json" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(evaluation.validationErrors).toEqual([]);
+  expect(evaluation.argvTokens).toEqual(
+    expect.arrayContaining(["eval", "cases.json", "--out", "report.json"]),
+  );
+  expect(evaluation.missingEnvGroups).toEqual([]);
   const router = buildCliInvocation(
     {
       commandId: "assets:semantic",

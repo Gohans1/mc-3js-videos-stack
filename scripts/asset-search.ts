@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { cliArgs, numberArg } from "../packages/live-studio/src/cli.mjs";
@@ -6,6 +6,7 @@ import { allEntries } from "./find";
 import { openBudget, readBudget } from "./semantic/budget";
 import { assetFromEntry, readiness, readManifest } from "./semantic/catalog";
 import { runIndex } from "./semantic/engine";
+import { evaluateSearch, parseEvalCases } from "./semantic/evaluate";
 import { configuredProvider, createEmbedder, type Embed } from "./semantic/model";
 import { searchIndex } from "./semantic/search";
 import { semanticSettings } from "./semantic/settings";
@@ -17,6 +18,7 @@ const HELP = `Incremental local Gemini Embedding 2 search (Google direct or Open
   bun run assets:semantic build                        same preview; only --yes enables embedding
   bun run assets:semantic build --yes --key '<key>'     selected asset, saved after every completed chunk
   bun run assets:semantic status                       catalog coverage, failures and daily budget
+  bun run assets:semantic eval cases.json [--out report.json]  cached-only lexical/semantic/hybrid metrics
   bun run assets:semantic query "sad farewell"          cached query only; --yes permits one external query
   bun run assets:semantic remove '<key>'                hide from search; keep cached vectors for re-adding
   bun run assets:semantic remove '<key>' --purge        also permanently delete that asset's cached vectors
@@ -34,6 +36,7 @@ Options:
   --max-seconds N        build: default 60, at most 3600; each subprocess/request also has a timeout
   --retries N            build: default 2, range 0–5; only transient 429/503, respecting retry hints and all limits
   --purge                remove only: permanently forget that asset's cached vectors
+  --out PATH             eval only: save a new JSON report without overwriting an existing file
   --yes                  build/query only: allow external requests; project billing/quota determine cost
 Names/descriptions join media in one vector. Filter metadata stays separate; no paid caption generation.
 Audio: <=30 s per MP3 chunk, retaining source timestamps; video: <=30 s, 1 fps, no audio track; images: PNG within 768 px.
@@ -45,6 +48,10 @@ MC_SEMANTIC_DAILY_LIMIT is a local cap (default 1000), not proof of your provide
 MC_SEMANTIC_QUOTA_DB or the configured index's .requests.sqlite ledger persists across --db overrides; keep it for the same project.
 Environment paths start at the repo root; CLI path flags start at cwd. Film commands inherit root dotenv defaults; caller values and Bun env flags win.
 Cached queries and previews consume no allowance. Status counts current catalog coverage; media byte hashes are checked by build.
+Eval cases: {labelMethod,cases:[{id,query,language,relevant:[exactAssetKey],kind?,source?,group?}]}.
+Eval never sends requests: prepare uncached queries with query --yes, then rerun eval; a partial report exits 1 and still saves results.
+Use scripts/evals/semantic/known-item.json (400 distinct targets) and scenes-pilot.json (28 bilingual diagnostic queries).
+Known-item labels come from catalog metadata; they do not establish blind scene relevance. More independent judged scene cases are needed for that claim.
 Run one builder per database. Use backup to move progress outside a disposable worktree; never copy only an open WAL database file.
 remove keeps old vectors; re-adding identical inputs reuses them. Remove the source catalog/manifest row as well to exclude it from future builds.
 --purge explicitly deletes that asset's retained cache; it never refunds request usage.
@@ -68,6 +75,7 @@ const raw = cliArgs(
     "--part N",
     "--yes",
     "--purge",
+    "--out PATH",
   ],
   2,
 ) as string[];
@@ -90,9 +98,12 @@ for (let i = 0; i < raw.length; i++) {
   flags.set(value, next);
 }
 const [action, value] = args;
-if (!action || !["plan", "build", "status", "query", "remove", "redo", "backup"].includes(action))
-  usage("Choose plan, build, status, query, remove, redo or backup");
-if (args.length !== (["query", "remove", "redo", "backup"].includes(action) ? 2 : 1))
+if (
+  !action ||
+  !["plan", "build", "status", "query", "remove", "redo", "backup", "eval"].includes(action)
+)
+  usage("Choose plan, build, status, query, remove, redo, backup or eval");
+if (args.length !== (["query", "remove", "redo", "backup", "eval"].includes(action) ? 2 : 1))
   usage("Wrong number of arguments");
 for (const flag of flags.keys()) {
   if (
@@ -101,6 +112,7 @@ for (const flag of flags.keys()) {
     (["--max-requests", "--max-seconds", "--rpm", "--tpm", "--retries"].includes(flag) &&
       action !== "build") ||
     (flag === "--part" && action !== "redo") ||
+    (flag === "--out" && action !== "eval") ||
     (flag === "--purge" && action !== "remove") ||
     (flag === "--yes" && !["build", "query"].includes(action))
   )
@@ -214,7 +226,17 @@ try {
     };
   } else {
     index = openIndex(file, dimensions);
-    if (action === "query") {
+    if (action === "eval") {
+      if (statSync(value!).size > 8 * 1024 * 1024) throw new Error("Evaluation cases exceed 8 MB");
+      const cases = parseEvalCases(JSON.parse(readFileSync(value!, "utf8")));
+      const report = await evaluateSearch(index, allEntries(false, ROOT), cases);
+      if (flags.has("--out"))
+        writeFileSync(resolve(flags.get("--out")!), JSON.stringify(report, null, 2), {
+          flag: "wx",
+        });
+      output = report;
+      if (!report.complete) process.exitCode = 1;
+    } else if (action === "query") {
       const hits = await searchIndex(index, value!, new Set(index.ready()), {
         allowApi,
         ...(allowApi && {

@@ -1016,6 +1016,23 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flags: [assetManifestFlag],
       },
       {
+        id: "eval",
+        inheritFlags: true,
+        label: "eval",
+        summary:
+          "Compare cached lexical, semantic and hybrid retrieval; report missing data separately without API calls.",
+        args: [{ key: "cases", label: "Labeled cases JSON", type: "string", required: true }],
+        flags: [
+          {
+            key: "--out",
+            flag: "--out",
+            label: "New report JSON",
+            type: "string",
+            hint: "Optional; refuses to overwrite an existing report. Partial reports exit 1.",
+          },
+        ],
+      },
+      {
         id: "query",
         inheritFlags: true,
         label: "query",

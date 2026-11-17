@@ -127,7 +127,7 @@ const plain = (text: string) =>
     .filter(Boolean);
 const words = (text: string) => plain(text).map(stem);
 // Words are matched as English; letters outside it (Vietnamese, emoji aside) would only match stray fragments
-const isForeign = (text: string) => /[^a-z]/i.test(text.replace(/[^\p{L}]/gu, ""));
+export const isForeign = (text: string) => /[^a-z]/i.test(text.replace(/[^\p{L}]/gu, ""));
 
 // Words that name nothing: kept out of the query so "a" or "the" never matches a description
 const STOP = new Set(
