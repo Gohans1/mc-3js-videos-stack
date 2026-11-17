@@ -11,3 +11,5 @@ __pycache__/
 
 # a junction to .claude/skills for other agent tools
 /.agents/
+
+/scripts/evals/load/runs/

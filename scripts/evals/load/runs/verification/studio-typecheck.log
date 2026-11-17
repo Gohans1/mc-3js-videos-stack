@@ -1,6 +1,0 @@
-bun : ✓ No type errors in 283 files [392.46ms]
-At line:2 char:1
-+ bun check --no-script -p packages/live-studio > $env:TEMP/studio-perf ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (✓ No type errors in 283 files [392.46ms]:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError

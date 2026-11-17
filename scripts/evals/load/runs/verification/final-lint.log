@@ -1,6 +1,0 @@
-bun : $ oxlint packages scripts
-At line:12 char:259
-+ ... STEXITCODE; bun run lint *> "$env:TEMP\studio-perf-final-lint.log"; $ ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: ($ oxlint packages scripts:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
