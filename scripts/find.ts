@@ -1100,6 +1100,10 @@ Options:
                    --kind it reads every entry of those kinds; without, it only reorders the word matches. Each hit
                    shown also gets "fits" 0-1, Jev's own yes that it is what you asked for; the next: line then says
                    FOUND (use the first), UNSURE (--show it first) or NOT IN THE VAULT (do not use them: make it)
+  --semantic       hybrid local vectors + keywords (draft); requires a prepared assets:semantic index. Cached queries
+                   are offline; --yes permits a paid OpenRouter query embedding. Failure falls back to keywords.
+                   --db PATH and --dimensions 768|1536|3072 select a compatible index. Each audio take is separate.
+                   Keeps kind/source/origin/edition/license/dur/fav filters; body filters and --jev are separate calls.
   --show <id>      the entry in full (ids are the second column; any take of a family)
   mocap by body:   --from <posture> (at its start) --to <posture> (at its end) --has <posture> (anywhere in it)
                    --still (stays within 0.3 m) | --moves, --loop, --energy 10-40 (deg/s: idle ~10, walk ~30,
@@ -1718,6 +1722,10 @@ const OPTIONS: Record<string, string | null> = {
   "--help": null,
   "-h": null,
   "--jev": null,
+  "--semantic": null,
+  "--yes": null,
+  "--db": "--db path.sqlite",
+  "--dimensions": "--dimensions 768",
   "--fav": null,
   "--star": "--star dissolve",
   "--unstar": "--unstar dissolve",
@@ -1843,7 +1851,7 @@ function parse(argv: string[], lists: string[] = []) {
       );
     if (!(name in OPTIONS))
       throw new FindError(
-        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --jev --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any of them without a value lists its values.`,
+        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --jev --semantic --yes --db --dimensions --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any filter without a value lists its values.`,
       );
     if (name === "--fav") {
       // a favourites list's name may follow (--fav horror); any other word after it is a search word, except when
@@ -1999,6 +2007,7 @@ export async function run(
   // how a loose option or value was read (--licence as --license, --origin recorded as real), above the answer
   const noted = (text: string) => (notes.length ? `(${notes.join("; ")})\n${text}` : text);
   const jev = set.has("--jev");
+  const semantic = set.has("--semantic");
   const list = (v?: string) => v?.toLowerCase().split(",").filter(Boolean);
   // a category keeps its case, which marks its word breaks (mocap/sitSeat is sit-seat)
   const asked = set
@@ -2009,6 +2018,15 @@ export async function run(
     sources = list(set.get("--source"));
   let kinds = asked;
   if (set.has("--help") || set.has("-h")) return HELP;
+  if (semantic && (jev || !query || Object.keys(BODY).some((key) => set.has(key))))
+    throw new FindError(
+      "--semantic needs scene words and keeps catalog filters; use --jev or mocap body filters in a separate call",
+    );
+  if (!semantic && ["--yes", "--db", "--dimensions"].some((key) => set.has(key)))
+    throw new FindError("--yes, --db and --dimensions apply only to --semantic");
+  const dimensions = Number(set.get("--dimensions") ?? 768);
+  if (semantic && ![768, 1536, 3072].includes(dimensions))
+    throw new FindError("--dimensions is 768, 1536 or 3072");
   const nRaw = set.get("-n");
   if (nRaw !== undefined && !/^[1-9]\d*$/.test(nRaw))
     throw new FindError("-n takes a whole number of hits, 1 or more, e.g. -n 20");
@@ -2031,7 +2049,8 @@ export async function run(
     listName = "default";
   }
   const stars = favorites.open(listName);
-  const entriesOf = (fold = true) => markStarred(given ?? allEntries(fold), stars.shown());
+  const entriesOf = (fold = true) =>
+    markStarred(given ?? allEntries(semantic ? false : fold), stars.shown());
   const fav = set.has("--fav"),
     favArg = listName === "default" ? "--fav" : `--fav ${listName}`;
   // the creator's other lists, offered beside the one in use, never forced
@@ -2508,6 +2527,35 @@ export async function run(
         ...(favsLine ? [`      ${favsLine}`] : []),
       ].join("\n"),
     );
+  }
+
+  if (semantic) {
+    try {
+      const { hybridSearch } = await import("./semantic/search");
+      const hits = await hybridSearch(
+        query,
+        inKinds,
+        isForeign(query) ? [] : rank(inKinds, query, { n: 100 }),
+        {
+          allowApi: set.has("--yes"),
+          file: set.get("--db"),
+          dimensions,
+          limit: n,
+        },
+      );
+      return readAs(
+        [
+          `hybrid semantic + keywords: ${hits.length} candidates (listen/view before choosing)`,
+          ...hits.map((entry) => line(entry)),
+          ...where(hits),
+          "next: bun run find --show <id> for settings, file and usage; Jev remains available for a closer fit check.",
+        ].join("\n"),
+      );
+    } catch (error) {
+      notes.push(
+        `semantic unavailable: ${error instanceof Error ? error.message : String(error)}; keyword results follow`,
+      );
+    }
   }
 
   if (jev && kinds?.length === 1 && kinds[0] === "mocap" && !fav)

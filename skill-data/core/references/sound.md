@@ -24,6 +24,16 @@ In `audio.json`, `tracks[].gain` is a whole track and a clip's `filters` is an f
 
 A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` puts it on the draft, and `render clip` keeps every chunk (the sound timeline is not in a chunk's stamp).
 
+## Tìm theo ý cảnh: bản thử nghiệm
+
+bun run assets:semantic plan chỉ đếm catalog và in mẫu key, không gọi API hay ghi vector; build cũng chỉ xem trước nếu thiếu --yes. Chọn key hoặc manifest trước khi build --yes, đặt --max-requests và --max-seconds; mỗi chunk hoàn tất được lưu ngay nên chạy lại tiếp tục phần thiếu hoặc lỗi.
+
+bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới tới OpenRouter. Jev và bộ lọc cơ thể mocap dùng riêng; dịch vụ hoặc index lỗi thì quay về từ khóa, luôn nghe/xem trước khi chọn.
+
+remove xóa mục và cache cũ của nó; redo --part N chỉ đặt lại chunk cần sửa, chưa gọi API cho tới build --yes tiếp theo. Đổi model, số chiều hoặc cách chuẩn bị dữ liệu cần database riêng; chạy một builder mỗi database và dừng trước khi sao lưu.
+
+Catalog không bao gồm mọi file thô trong vault; FBX/GLB chỉ dùng mô tả nếu chưa có preview trong manifest, video không chứa nhánh âm thanh. Chất lượng SFX/nhạc chưa được đo trên kho thật; [Google nêu audio tối ưu cho lời nói](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-multimodal-embeddings), cú pháp và giới hạn nằm trong --help.
+
 ## Ears: earshot
 
 `earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call; a file it has heard before is cached, and the same call again takes about 2 s. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the earshot skill: `bun run skills get earshot` prints its path from where you stand.

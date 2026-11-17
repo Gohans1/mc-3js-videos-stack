@@ -394,8 +394,25 @@ const bareListCopy = (itemsName: string): Pick<CliFlagDef, "bareLabel" | "bareHi
 });
 
 const renderTargetValues = ["stills", "clip", "captions", "poster", "all", "final"] as const;
+const assetSelectionFlags: readonly CliFlagDef[] = [
+  {
+    key: "--manifest",
+    flag: "--manifest",
+    label: "Local manifest",
+    type: "string",
+    hint: "Optional JSON array of assets; relative media paths start at the manifest.",
+  },
+  {
+    key: "--key",
+    flag: "--key",
+    label: "Exact asset key",
+    type: "string",
+    hint: "Copy a key from plan or query to prepare one asset.",
+  },
+];
 
-export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
+export const CLI_COMMANDS: readonly CliCommand[] = [
+  // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
   {
     id: "help",
     label: "help",
@@ -434,6 +451,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LO
     subcommands: [
       {
         id: "list",
+        inheritFlags: true,
         label: "list",
         summary: "List versions and the current fingerprint.",
         flags: [{ key: "--before", flag: "--before", label: "Before sequence", type: "number" }],
@@ -441,12 +459,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LO
       },
       {
         id: "save",
+        inheritFlags: true,
         label: "save",
         summary: "Keep a named version of editing files on disk.",
         args: [{ key: "name", label: "Version name", type: "string", required: true }],
       },
       {
         id: "restore",
+        inheritFlags: true,
         label: "restore",
         summary: "Restore a version, keeping a recovery snapshot first.",
         args: [{ key: "id", label: "Version ID", type: "string", required: true }],
@@ -475,12 +495,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LO
     subcommands: [
       {
         id: "read",
+        inheritFlags: true,
         label: "read",
         summary: "Read the canonical document and retained-write notices.",
         args: [{ key: "name", label: "Document", type: "string", required: true }],
       },
       {
         id: "write",
+        inheritFlags: true,
         label: "write",
         summary: "Save a JSON envelope with the base version read earlier.",
         args: [
@@ -562,7 +584,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LO
         type: "string",
         multi: true,
         placeholder: "creaky door",
-        hint: "Plain English keywords, or scene description with --jev",
+        hint: "Plain English keywords, or a scene description with --jev or --semantic",
       },
     ],
     flags: [
@@ -592,9 +614,44 @@ export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LO
         key: "--jev",
         flag: "--jev",
         label: "Use Jev AI Judge",
+        exclusiveGroup: "search-engine",
         type: "boolean",
         tier: "common",
         hint: "Rank by meaning using Jev (OpenCode free -> OpenRouter <$0.01)",
+      },
+      {
+        key: "--semantic",
+        flag: "--semantic",
+        label: "Hybrid semantic search",
+        type: "boolean",
+        exclusiveGroup: "search-engine",
+        hint: "Draft: local vectors + keywords. Requires a prepared index; cached queries stay offline.",
+      },
+      {
+        key: "--yes",
+        flag: "--yes",
+        label: "Allow query API",
+        type: "boolean",
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        requiresConfirmIfSet: true,
+        hint: "Permit a paid OpenRouter query embedding on a cache miss.",
+      },
+      {
+        key: "--db",
+        flag: "--db",
+        label: "Semantic database",
+        type: "string",
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        tier: "advanced",
+      },
+      {
+        key: "--dimensions",
+        flag: "--dimensions",
+        label: "Embedding dimensions",
+        type: "enum",
+        options: ["768", "1536", "3072"],
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        tier: "advanced",
       },
       {
         key: "-n",
@@ -824,11 +881,137 @@ export const CLI_COMMANDS: readonly CliCommand[] = [  // ── DAILY FILM AI LO
     meta: {
       effect: "read",
       cost: "optional-paid",
-      costHint: "Free offline by default; --jev queries Zen free -> OpenRouter (<$0.01/search).",
+      costHint:
+        "Words and cached semantic queries are offline. --semantic --yes permits a paid query; --jev uses its existing judge service.",
       speed: "instant",
       cancellable: true,
       helpMode: "flag",
       envAnyOf: [["OPENCODE_API_KEY", "OPENROUTER_API_KEY"]],
+      confirm: {
+        mode: "when-flagged",
+        message: "--yes permits sending this query to OpenRouter and spending embedding credits.",
+      },
+    },
+  },
+  {
+    id: "assets:semantic",
+    subcommandRequired: true,
+    label: "assets:semantic",
+    category: "setup",
+    summary: "Prepare incremental local multimodal embeddings; preview first, API only with --yes.",
+    runner: "bun-file",
+    target: "scripts/asset-search.ts",
+    cwdModes: ["root", "film"],
+    flags: [
+      {
+        key: "--db",
+        flag: "--db",
+        label: "Index database",
+        type: "string",
+        hint: "Default: repository .studio/asset-search.sqlite.",
+      },
+      {
+        key: "--dimensions",
+        flag: "--dimensions",
+        label: "Dimensions",
+        type: "enum",
+        options: ["768", "1536", "3072"],
+        tier: "advanced",
+      },
+    ],
+    subcommands: [
+      {
+        id: "plan",
+        inheritFlags: true,
+        label: "plan",
+        summary: "Count catalog assets and sample keys without embedding or vector writes.",
+        flags: assetSelectionFlags,
+      },
+      {
+        id: "build",
+        inheritFlags: true,
+        label: "build",
+        summary: "Preview by default; --yes prepares missing/changed chunks and saves each result.",
+        flags: [
+          ...assetSelectionFlags,
+          {
+            key: "--yes",
+            flag: "--yes",
+            label: "Allow paid embedding",
+            type: "boolean",
+            requiresConfirmIfSet: true,
+          },
+          {
+            key: "--max-requests",
+            flag: "--max-requests",
+            label: "Request limit",
+            type: "number",
+            hint: "Default 10 attempts; at most 100000.",
+          },
+          {
+            key: "--max-seconds",
+            flag: "--max-seconds",
+            label: "Time limit (seconds)",
+            type: "number",
+            hint: "Default 60; at most 3600. Completed work survives stopping.",
+          },
+        ],
+      },
+      {
+        id: "status",
+        inheritFlags: true,
+        label: "status",
+        summary: "Read completed, pending and failed work.",
+      },
+      {
+        id: "query",
+        inheritFlags: true,
+        label: "query",
+        summary: "Search all indexed assets; cached queries work offline.",
+        args: [{ key: "query", label: "Scene or meaning", type: "string", required: true }],
+        flags: [
+          {
+            key: "--yes",
+            flag: "--yes",
+            label: "Allow query API",
+            type: "boolean",
+            requiresConfirmIfSet: true,
+          },
+        ],
+      },
+      {
+        id: "remove",
+        inheritFlags: true,
+        label: "remove",
+        summary: "Remove an asset and its cached versions without an API call.",
+        args: [{ key: "key", label: "Exact asset key", type: "string", required: true }],
+        meta: { effect: "write" },
+      },
+      {
+        id: "redo",
+        inheritFlags: true,
+        label: "redo",
+        summary: "Reset one asset or chunk locally; next build retries it.",
+        args: [{ key: "key", label: "Exact asset key", type: "string", required: true }],
+        flags: [
+          { key: "--part", flag: "--part", label: "Chunk number (starts at 0)", type: "number" },
+        ],
+        meta: { effect: "write" },
+      },
+    ],
+    meta: {
+      effect: "read",
+      cost: "free",
+      speed: "instant",
+      cancellable: true,
+      helpMode: "flag",
+      costHint:
+        "No API without --yes. Build can be resumed; an interrupted request may be charged and need retry.",
+      confirm: {
+        mode: "when-flagged",
+        message:
+          "Send selected media/text to OpenRouter and spend embedding credits within the request/time limits.",
+      },
     },
   },
   {
@@ -4492,6 +4675,20 @@ function computeEffectiveMeta(
       next.speed = "short";
     } else {
       next.envAnyOf = undefined;
+      if (isBooleanActive(flags["--semantic"])) {
+        next.cost = isBooleanActive(flags["--yes"]) ? "optional-paid" : "free";
+        next.speed = "short";
+      }
+    }
+  } else if (
+    commandId === "assets:semantic" &&
+    ["build", "query"].includes(subcommandPath[0] ?? "")
+  ) {
+    if (isBooleanActive(flags["--yes"])) {
+      next.effect = "write";
+      next.cost = subcommandPath[0] === "build" ? "paid" : "optional-paid";
+      next.speed = subcommandPath[0] === "build" ? "long" : "short";
+      if (subcommandPath[0] === "build") next.envRequired = ["OPENROUTER_API_KEY"];
     }
   } else if (commandId === "voice:gen") {
     if (!isBooleanActive(flags["--yes"]) || isBooleanActive(flags["--dry-run"])) {

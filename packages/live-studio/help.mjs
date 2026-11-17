@@ -26,6 +26,7 @@ const GROUPS = [
         "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
       at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",
       find: "a sound, music, mocap clip, transition, anim, lens, shake, text voice, font or look preset by words; prints where it goes",
+      "assets:semantic": "draft multimodal search index: plan first; append/update/resume, remove or redo; API only with --yes (--help)",
     },
   ],
   [

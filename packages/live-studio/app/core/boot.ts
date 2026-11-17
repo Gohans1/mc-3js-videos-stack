@@ -65,29 +65,31 @@ if (typeof globalThis !== "undefined" && !globalThis.__studioAssetPatch) {
   globalThis.__studioAssetPatch = true;
   if (typeof globalThis.fetch === "function") {
     const origFetch = globalThis.fetch.bind(globalThis);
-    globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      const method = (
-        init?.method ?? (input instanceof Request ? input.method : "GET")
-      ).toUpperCase();
-      if (method === "GET" || method === "HEAD") {
-        if (typeof input === "string") {
-          const next = versionUrl(input);
-          if (next !== input) return origFetch(next, init);
-        } else if (input instanceof URL && typeof location !== "undefined") {
-          if (input.origin === location.origin && !input.search) {
-            const next = versionUrl(input.pathname);
-            if (next !== input.pathname) return origFetch(next, init);
-          }
-        } else if (input instanceof Request && typeof location !== "undefined") {
-          const u = new URL(input.url, location.href);
-          if (u.origin === location.origin && !u.search) {
-            const next = versionUrl(u.pathname);
-            if (next !== u.pathname) return origFetch(new Request(next, input), init);
+    globalThis.fetch = new Proxy(globalThis.fetch, {
+      apply: (_target, _receiver, [input, init]: [RequestInfo | URL, RequestInit?]) => {
+        const method = (
+          init?.method ?? (input instanceof Request ? input.method : "GET")
+        ).toUpperCase();
+        if (method === "GET" || method === "HEAD") {
+          if (typeof input === "string") {
+            const next = versionUrl(input);
+            if (next !== input) return origFetch(next, init);
+          } else if (input instanceof URL && typeof location !== "undefined") {
+            if (input.origin === location.origin && !input.search) {
+              const next = versionUrl(input.pathname);
+              if (next !== input.pathname) return origFetch(next, init);
+            }
+          } else if (input instanceof Request && typeof location !== "undefined") {
+            const u = new URL(input.url, location.href);
+            if (u.origin === location.origin && !u.search) {
+              const next = versionUrl(u.pathname);
+              if (next !== u.pathname) return origFetch(new Request(next, input), init);
+            }
           }
         }
-      }
-      return origFetch(input, init);
-    };
+        return origFetch(input, init);
+      },
+    });
   }
   const desc =
     typeof HTMLImageElement !== "undefined"

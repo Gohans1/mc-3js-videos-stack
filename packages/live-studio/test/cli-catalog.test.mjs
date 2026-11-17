@@ -34,6 +34,57 @@ const BASE_CONTEXT = {
   },
 };
 
+test("embedding controls stay free without opt-in and gate paid builds on OpenRouter", () => {
+  const missing = buildCliInvocation({ commandId: "assets:semantic" }, BASE_CONTEXT);
+  expect(missing.validationErrors.some((error) => error.includes("subcommand"))).toBe(true);
+  const draft = buildCliInvocation(
+    { commandId: "assets:semantic", subcommandPath: ["build"] },
+    BASE_CONTEXT,
+  );
+  expect(draft.meta.cost).toBe("free");
+  expect(draft.meta.effect).toBe("read");
+  expect(draft.missingEnvGroups).toEqual([]);
+  const live = buildCliInvocation(
+    { commandId: "assets:semantic", subcommandPath: ["build"], flags: { "--yes": true } },
+    BASE_CONTEXT,
+  );
+  expect(live.meta.cost).toBe("paid");
+  expect(live.requiresConfirm).toBe(true);
+  expect(live.missingEnvGroups).toContainEqual(["OPENROUTER_API_KEY"]);
+  const cached = buildCliInvocation(
+    { commandId: "find", args: { words: "sad goodbye" }, flags: { "--semantic": true } },
+    BASE_CONTEXT,
+  );
+  expect(cached.meta.cost).toBe("free");
+  expect(cached.missingEnvGroups).toEqual([]);
+});
+
+test("film collaboration/history and embedding subcommands retain their shared CLI options", () => {
+  for (const [commandId, subcommandPath, args, flags, expected] of [
+    ["history", ["list"], {}, { "--film": "films/cell-break" }, ["--film", "films/cell-break"]],
+    [
+      "collab",
+      ["read"],
+      { name: "cam" },
+      { "--film": "films/cell-break" },
+      ["--film", "films/cell-break"],
+    ],
+    [
+      "assets:semantic",
+      ["build"],
+      {},
+      { "--db": "custom.sqlite", "--dimensions": "1536" },
+      ["--db", "custom.sqlite", "--dimensions", "1536"],
+    ],
+  ]) {
+    const spec = buildCliInvocation(
+      { commandId, subcommandPath, args, flags, targetFilm: "root" },
+      BASE_CONTEXT,
+    );
+    for (const token of expected) expect(spec.argvTokens).toContain(token);
+  }
+});
+
 test("rejects options hidden in argument and flag values while preserving negative numbers", () => {
   for (const request of [
     { commandId: "voice:gen", args: { ids: ["--yes"] } },
