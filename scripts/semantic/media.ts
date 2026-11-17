@@ -11,10 +11,18 @@ export const chunks = (duration: number): Segment[] => {
   if (!Number.isFinite(duration) || duration <= 0 || duration > 86400)
     throw new Error("Media duration must be between 0 and 86400 seconds");
   const limit = 30;
-  return Array.from({ length: Math.ceil(duration / limit) }, (_, i) => ({
+  const segments = Array.from({ length: Math.ceil(duration / limit) }, (_, i) => ({
     from: i * limit,
     to: Math.min(duration, (i + 1) * limit),
   }));
+  // A sub-frame tail encodes no content and Gemini rejects the near-empty audio/video as INVALID_ARGUMENT.
+  const tail = segments.at(-1)!,
+    previous = segments.at(-2);
+  if (previous && tail.to - tail.from < 0.05) {
+    previous.to = tail.to;
+    segments.pop();
+  }
+  return segments;
 };
 const run = (tool: string, args: string[], deadline: number, limit: number) => {
   const timeout = Math.min(limit, deadline - Date.now());

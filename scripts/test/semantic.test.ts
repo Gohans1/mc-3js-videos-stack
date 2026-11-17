@@ -144,6 +144,10 @@ test("audio and video chunks cover the complete asset without exceeding model li
     { from: 0, to: 30 },
     { from: 30, to: 31 },
   ]);
+  expect(chunks(60.00068)).toEqual([
+    { from: 0, to: 30 },
+    { from: 30, to: 60.00068 },
+  ]);
   expect(() => chunks(0)).toThrow(/duration/);
 });
 
