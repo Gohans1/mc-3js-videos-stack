@@ -17,6 +17,7 @@ CLI và live-studio là bộ khởi đầu để dựng, xem và nhận feedback
 | Quy trình chung                                 | bun run skills get core                                     |
 | Một chủ đề                                      | bun run skills get core --ref sound; lặp --ref để chọn thêm |
 | Toàn bộ hướng dẫn và references                 | bun run skills get core --full; không kết hợp --ref         |
+| Công cụ media đang lọc và thử                    | docs/research/media-tools.md tại root; đọc trực tiếp, không phải --ref |
 
 Ở root dùng lệnh quản lý repo; ở films/<name> dùng lệnh của phim. -h, --help hoặc từ help đầu tiên chỉ in hướng dẫn; --ref chỉ thuộc skills get.
 
@@ -32,6 +33,7 @@ Chọn các bước phục vụ cảnh đang dựng, không cần chạy cả ch
 | Xem tại giây nghe thấy          | bun run at 35.6; AT=35.6 bun run render stills; mở ảnh được in ra              |
 | Xem chuyển động                 | SPAN=40,44 bun run render clip; mở video                                       |
 | Xem nhiều khung hình            | bun run sheet                                                                  |
+| Dò cảnh video tham khảo          | bun run scenes <video>; tùy chọn CPU, mốc theo file nguồn, không sửa timeline |
 | Kiểm tra hình và nhịp của draft | bun run render clip; bun run framecheck; bun run pace                          |
 | Ghép âm thanh vào draft         | bun run mix renders/draft_video.mp4; tạo renders/draft.mp4                     |
 | Đo mức âm                       | bun run listen; không dùng số đo mức âm để kết luận tiếng gì hoặc có hợp cảnh  |

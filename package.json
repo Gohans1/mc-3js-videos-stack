@@ -60,6 +60,7 @@
     "sfx:get": "bun packages/live-studio/wrong-place.mjs sfx:get",
     "mix": "bun packages/live-studio/wrong-place.mjs mix",
     "listen": "bun packages/live-studio/wrong-place.mjs listen",
+    "scenes": "python scripts/review/scenes.py",
     "sheet": "bun packages/live-studio/wrong-place.mjs sheet",
     "framecheck": "bun packages/live-studio/wrong-place.mjs framecheck",
     "pace": "bun packages/live-studio/wrong-place.mjs pace",

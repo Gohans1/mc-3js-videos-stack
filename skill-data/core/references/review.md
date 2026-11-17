@@ -17,6 +17,18 @@ CHECK=text bun run render stills             # each line of text: inside the saf
 bun run deliver                              # the upload against YouTube's spec
 ```
 
+## Reference footage
+
+| Need | Use |
+| --- | --- |
+| Suggest cuts | bun run scenes reference.mp4; optional CPU PySceneDetect, no models or services |
+| Change detector | --method adaptive for cuts amid motion, content for picture changes, threshold for fades through darkness; --threshold adjusts sensitivity |
+| Limit range | --from 0:10 --to 0:30 uses input-file seconds, without film speed or span/chunk offsets |
+| Read evidence | Each run-* keeps result.json for AI, native scenes.csv and metrics.csv, three images per scene and scenes.html |
+| Judge cuts | Look around each boundary; more detected cuts do not mean greater accuracy, and suggestions never replace renders/cuts.json |
+| Deadline or failure | --minutes defaults to 5, at most 60; logs and finished artifacts survive, unfinished detection does not resume at the last frame |
+| Setup and more options | bun run scenes --help; INSTALL.md covers optional Python setup, upstream CLI offers crop, more detectors and timeline exports |
+
 ## Measure a move
 
 `CHECK` runs a built-in check between two heard seconds and writes charts to `renders/`:

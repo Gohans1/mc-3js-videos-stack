@@ -20,6 +20,7 @@
     "voice:assemble": "bun ../../scripts/voice/assemble.ts",
     "voice:cues": "bun ../../scripts/voice/cues.ts",
     "check": "bun node_modules/live-studio/check.mjs",
+    "scenes": "python ../../scripts/review/scenes.py",
     "sheet": "python ../../scripts/review/sheet.py",
     "pace": "bun ../../scripts/review/pace.ts",
     "deliver": "python ../../scripts/review/deliver.py",

@@ -39,6 +39,7 @@
     "voice:lips": "bun ../../scripts/voice/lips.ts",
     "voice:assemble": "bun ../../scripts/voice/assemble.ts",
     "voice:cues": "bun ../../scripts/voice/cues.ts",
+    "scenes": "python ../../scripts/review/scenes.py",
     "sheet": "python ../../scripts/review/sheet.py",
     "pace": "bun ../../scripts/review/pace.ts",
     "deliver": "python ../../scripts/review/deliver.py",
