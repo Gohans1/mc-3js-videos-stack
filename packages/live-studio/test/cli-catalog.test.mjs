@@ -269,6 +269,9 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ["scripts/media/ocr.py", "RapidOCR SDK adapter spawned by the media CLI"],
       ["scripts/media/native.py", "native CPU media adapter spawned by the media CLI"],
       ["scripts/media/install.py", "verified native asset installer spawned by media setup"],
+      ["scripts/media/sdk.py", "local SDK media worker spawned by the media CLI"],
+      ["scripts/media/audio_sdk.py", "lazy audio SDK backends used by the media worker"],
+      ["scripts/media/timeline.py", "OTIO handoff backend used by the media worker"],
       [
         "scripts/media/llama.py",
         "local llama.cpp server lifecycle/client used by the native media adapter",

@@ -61,6 +61,26 @@ Discover with bun run media list, check with media doctor, and install only the 
 
 The runtime, weights and bundled dependencies have separate licenses: Kokoro uses eSpeak-ng GPL notices, FluidR3 GM retains its MIT grant, and third-party SoundFonts/voices keep their own terms. setup downloads retained assets; inference remains local and a short-lived model server binds only to 127.0.0.1.
 
+## Optional SDK tools
+
+These commands use independent CPU environments, source-file seconds and fresh evidence folders. setup pins the tested packages; beat/separate/locate install CPU Torch from its official index, while Basic Pitch keeps Python 3.10 and its legacy resampy dependency isolated.
+
+| Need | Use and limits |
+| --- | --- |
+| Music beats and bar starts | bun run media beat bgm.wav --from 0 --to 25; beats/downbeats suggest cut points, keep intentional off-beat edits and verify the grid on the music |
+| Speech intervals | bun run media vad reference.mp4 --from 5 --to 15; Silero returns start/end, without words or speaker identity; --config is native Silero settings JSON |
+| Melody to editable MIDI | bun run media melody melody.wav; Basic Pitch keeps melody.mid, model-output.npz and source-timed notes; repeated notes or whole mixes can be misread, MIDI remains local to the selected excerpt |
+| Custom sound processing | bun run media effects voice.wav --config effects.json --tail 2; config is an array of objects with name and parameters, e.g. Gain/gain_db or Reverb/room_size, using native Pedalboard classes |
+| Vocals and backing | bun run media separate clip.mp4 --from 0 --to 8; Kim Vocal 2 is a small CPU starting model, --config forwards Separator parameters except owned paths/device, --model selects a licensed cached model; upstream ONNX chooses CPU threads and has no supported SDK thread limit |
+| Find a described sound | bun run media locate clip.wav --query "a man speaking" --query "a dog barking"; PE-A Small preserves raw logits every 40 ms, --threshold groups suggested spans and is not a calibrated probability or accuracy guarantee |
+| Model/config choices | media <tool> --help; --model accepts a file, or a local Transformers directory for locate; --config forwards backend JSON where advertised and cannot redirect artifact paths, including Basic Pitch debug_file |
+| Inspect a timeline handoff | bun run media timeline edit.otio; read/write roundtrip verifies references, ranges and metadata, without modifying the film |
+| Create a timeline handoff | media timeline edit.json accepts fps and tracks of kind Video/Audio, each with clips; clip url/start/duration or gap:true/duration use frame units, metadata stays intact |
+
+OTIO core writes .otio; NLE-specific formats need their own supported adapter or baked media. These tools do not translate draw(t), scene speed curves or shader effects automatically, and model output never becomes an artistic gate.
+
+Native regression checks require the optional effects, separate and timeline setups: bun test ./scripts/test/media-sdk.native.mjs. They verify PitchShift frequency/duration, failure on an unavailable stem and OTIO fields with generated fixtures; they do not download models and retain their temporary evidence paths.
+
 ## How mix sets the loudness
 
 The mix goes through `drive` dB into a limiter, then one linear gain brings it to `lufs` (-14), or only as far as its true peak stays under -1.5 dBTP (room for the AAC encode). Never a dynamic loudness pass: it lifts every quiet stretch, room tone up to the voice (AES TD1004).

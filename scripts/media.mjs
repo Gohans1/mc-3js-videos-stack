@@ -153,6 +153,18 @@ if (setup) {
   if (tool.packages.length && !existsSync(python(id)))
     commands.push(["uv", "venv", "--python", tool.python, join(HOME, id, "env")]);
   if (tool.packages.length)
+    if (tool.cpuPackages?.length)
+      commands.push([
+        "uv",
+        "pip",
+        "install",
+        "--python",
+        python(id),
+        ...tool.cpuPackages,
+        "--index-url",
+        "https://download.pytorch.org/whl/cpu",
+      ]);
+  if (tool.packages.length)
     commands.push(["uv", "pip", "install", "--python", python(id), ...tool.packages]);
   if (tool.assets?.length || tool.build)
     commands.push(["python", join(ROOT, "scripts/media/install.py"), id, "--home", HOME]);

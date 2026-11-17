@@ -30,8 +30,11 @@ def parse_ced(text):
 
 
 def digest(file):
+    checksum = hashlib.sha256()
     with Path(file).open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            checksum.update(block)
+    return checksum.hexdigest()
 
 
 def main():

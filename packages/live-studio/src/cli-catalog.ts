@@ -1,5 +1,6 @@
 // Shared CLI catalog schema, 100% repo command inventory, and pure argv/safety resolver (no Node built-ins; safe in browser & server).
 import { nativeMediaSubcommands } from "./media-cli.ts";
+import { sdkMediaSubcommands } from "./media-sdk-cli.ts";
 
 export type CliCategoryId = "daily" | "voice" | "sound" | "render" | "setup" | "dev" | "pipeline";
 
@@ -3047,6 +3048,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     subcommandRequired: true,
     subcommands: [
       ...nativeMediaSubcommands,
+      ...sdkMediaSubcommands,
       {
         id: "list",
         label: "list",

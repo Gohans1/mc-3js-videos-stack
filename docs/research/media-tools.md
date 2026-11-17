@@ -16,7 +16,14 @@
 | Review native vòng 1 | Reviewer 1 bắt ghi đè khi gọi worker trực tiếp, reviewer 2 bắt clone HEAD trùng pin chưa checkout; đã sửa và thêm regression fail trước/pass sau | CED truyền threads thật, fingerprint từ chối length 0; đang review lại độc lập |
 | Review native vòng 2 | Reviewer 2 PASS; reviewer 1 bắt resume clone chưa checkout và file giải nén dở chặn lần sau | Đã sửa checkout và giải nén atomic từng file; regression gây ngắt thật rồi chạy tiếp, tăng test validation theo góp ý reviewer 2 |
 | Review native vòng 3 | Hai reviewer đều PASS, mỗi bên 42 test và nhiều probe native; hash nguồn và deadline/server đã kiểm | Đã sửa thêm Optional của reviewer 1: doctor kiểm receipt hoàn tất và kích thước asset, không báo sẵn sàng vì file tải dở tồn tại |
-| SDK âm thanh | Đã cài riêng Beat This, Pedalboard, OTIO, sherpa-onnx, Basic Pitch, Audio Separator và PE-A qua Transformers | Nối adapter, model và kiểm dữ liệu thật; chưa gọi là đã tích hợp xong |
+| SDK âm thanh | Đã nối beat/effects/vad/melody/separate/locate/timeline, model pin/hash và môi trường CPU riêng; cả bảy lệnh chạy thật thành công | Cập nhật help/catalog và review nhóm; Basic Pitch đã sửa lỗi NumPy int64 khi xuất JSON, note nhạc vẫn có thể lặp/sai |
+| Review SDK vòng 1 | Reviewer 1 bắt Critical debug_file có thể xóa nguồn; cả hai bắt separate quảng bá threads nhưng ONNX không nhận | Đã chặn debug_file trước khi ghi và bỏ flag threads của separate, ghi rõ giới hạn native; test hồi quy fail trước/pass sau và tăng ca scalar theo reviewer 2 |
+| Review SDK vòng 2 | Cả hai bắt timeline thiếu kiểm object/metadata; reviewer 2 bắt Critical output_format có thể thành đường ghi ngoài job | Đã kiểm object từng tầng và giới hạn output_format thành tên định dạng; hồi quy bảo toàn nguồn/kết quả cũ fail trước/pass sau |
+| Review SDK vòng 3 | Reviewer 1 bắt gap nhận sai kiểu và trả stems rỗng vẫn thành công; reviewer 2 bắt PitchShift streaming trả im lặng | Đã xử lý effect cả đoạn kèm tail, từ chối gap sai kiểu và stems rỗng; thêm native regression đo tần số/thời lượng và trạng thái lỗi |
+| Review SDK vòng 4 | Cả hai PASS; native PitchShift/separation, offset, OTIO và mutation đều đã kiểm | Đã sửa Optional giữ tên gap, help nói rõ timeout/output; native OTIO regression fail trước/pass sau, typecheck Studio 324 file đạt |
+| Tracking/metadata | TAPIR bám điểm kính qua 16 frame, RF-DETR/ByteTrack giữ ID người; BWF đọc BEXT và hash nguồn giữ nguyên | Đã thử SDK/native, chưa nối media CLI cho nhóm này |
+| Foley | CLI đã index ba file và tìm đúng thoại bằng CLAP; runtime miễn phí CPU, dữ liệu giữ trong SQLite | PANNs tải qua URL cũ sai checksum; đang tải tiếp qua API Zenodo, không bỏ kiểm hash |
+| ACE-Step | Đã cài tag v0.1.8, thử INT8 nhỏ và import handler trên RTX 2060 đạt; model lõi khoảng 6,32 GB đang tải có resume | Chưa tạo nhạc thật, chưa gọi là hỗ trợ phần cứng đã kiểm chứng đầy đủ |
 
 ## Đã kiểm chứng
 
@@ -65,7 +72,7 @@ Số sao và lịch sử dưới đây là ảnh chụp ngày 17/11/2026, không
 
 | Công cụ và nguồn | Uy tín, hoạt động | Dùng khi nào và giới hạn |
 | --- | --- | --- |
-| [PE-A-Frame](https://huggingface.co/facebook/pe-a-frame-small) | Meta Research, repo chung 2.410 sao, HEAD 12/2025; code/model Apache-2.0 | Tìm khoảng có âm mô tả, model Small 450M; SDK cần CLI mỏng, Windows/6 GB chưa thử và embedding mỗi 40 ms không có nghĩa sai số 40 ms |
+| [PE-A-Frame](https://huggingface.co/facebook/pe-a-frame-small) | Meta Research, repo chung 2.410 sao, HEAD 12/2025; code/model Apache-2.0 | Đã nối CLI qua Transformers và chạy Windows CPU với Small 450M; giữ logits/spans theo giây nguồn, nhịp 40 ms không phải sai số hay xác suất đúng |
 | [MiDashengLM 0.6B](https://github.com/xiaomi-research/dasheng-lm) | Xiaomi Horizon/MiLM Plus; 452 sao, HEAD 24/04, Apache-2.0 | Đã build fork llama.cpp và chạy Windows CPU qua JSON local; câu thử chưa đáng tin, giữ audio/response và nhãn chưa xác minh |
 | [CED.cpp](https://github.com/localai-org/ced.cpp) | Ettore Di Giacinto/LocalAI; 108 sao, HEAD 04/10, release 0.2.0 tháng 09 | CLI Windows CPU gắn 527 nhãn âm, tiny Q8 khoảng 6 MB; code MIT, weights Apache-2.0, labels CC-BY-4.0, trùng earshot nên chỉ thử nếu cần runtime nhẹ |
 | [audio.cpp và Kokoro](https://github.com/0xShug0/audio.cpp) | ShugoAI/0xShug0, lý lịch Princeton tự khai chưa xác minh; 4.314 sao, HEAD 17/11, release 0.9.5 ngày 14/11 | CLI/API Windows tạo voice nháp bằng [Kokoro 82M Apache-2.0](https://huggingface.co/hexgrad/Kokoro-82M), runtime Apache-2.0; model khác có quyền riêng, Kokoro hiện không có voice Việt và timing của port không phải word alignment |
@@ -99,7 +106,7 @@ Số sao và lịch sử dưới đây là ảnh chụp ngày 17/11/2026, không
 
 | Việc | Kết luận |
 | --- | --- |
-| Đồng thuận | Parent và hai nghiên cứu thống nhất PySceneDetect hiện tại, OCR tiếp theo; còn lại thử theo nhu cầu, không cài cả danh sách |
+| Đồng thuận | Hai nghiên cứu đã thống nhất danh sách giữ lại; yêu cầu mới của người dùng cho phép triển khai toàn bộ, lọc tiếp bằng chạy thật |
 | Độ phủ | Đã phủ nghe/tìm/định vị/tách/dọn âm, speech, nhịp/melody, tạo voice/BGM, OCR/frame, tracking, scene, timeline và lưu chứng cứ |
 | Hai lượt cuối | Mỗi nghiên cứu có hai lượt discovery không thêm khả năng phù hợp mới; kết quả còn lại là wrapper, trùng hoặc lệch cloud/hệ điều hành/phần cứng/license |
 | Truy vấn tiêu biểu | maintained open source CLI local audio sound effect music analysis recognition synthesis agent Windows alternatives; open source CLI offline video frames OCR point tracking media timeline evidence interchange tools for coding agents Windows |
