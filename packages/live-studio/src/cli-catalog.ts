@@ -634,7 +634,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "JSON results",
         type: "boolean",
         tier: "advanced",
-        hint: "Independent keyword/semantic blocks and fallback notes; explicit --semantic keeps its vector-index schema.",
+        hint: "Schema v2: independent blocks; semantic hits marked alsoKeyword reference keyword records by key. Explicit --semantic keeps its vector-index schema.",
       },
       {
         key: "--offline",

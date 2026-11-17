@@ -34,7 +34,9 @@ Các bộ lọc áp dụng cho cả hai khối; --kind mc không gọi OpenFilm,
 
 --origin real là nhóm Real / Studio hiện có, không xác minh xuất xứ bản thu; --show giữ nguyên provenance unknown nếu nguồn ghi vậy. Chỉ dùng giấy phép và thông tin nguồn đã kiểm tra để kết luận quyền dùng hoặc xuất xứ, không suy từ tên asset hay điểm earshot.
 
---json trả keyword.results và semantic.results độc lập; semantic.scope là openfilm, alsoKeyword đánh dấu mục đã có trong khối BM25. BM25 dùng tiếng Anh; câu tiếng Việt chỉ có thể tìm semantic OpenFilm, muốn tìm cả Minecraft thì dùng từ khóa tiếng Anh.
+--json thường có schemaVersion 2: keyword.results chứa bản ghi đầy đủ, semantic.results giữ thứ hạng riêng; mục alsoKeyword true chỉ có key, rank, similarity và cờ, tra bản đầy đủ trong keyword.results theo key. Mục semantic khác vẫn đầy đủ; không đọc id/file trực tiếp từ mọi mục semantic như cấu trúc cũ, chế độ --semantic riêng giữ schema cũ.
+
+BM25 dùng tiếng Anh; câu tiếng Việt chỉ có thể tìm semantic OpenFilm, muốn tìm cả Minecraft thì dùng từ khóa tiếng Anh. Mô tả hiển thị bỏ tag lặp và text chỉ in hướng đặt chung một lần, không đổi dữ liệu catalog hoặc thứ hạng.
 
 OpenFilm chỉ nhận câu tìm, loại và giới hạn kết quả, không nhận file hoặc API key; timeout mỗi loại 2,5 giây, tối đa hai loại đồng thời. --offline hoặc MC_FIND_OFFLINE=1 chỉ đọc cache 24 giờ; lỗi mạng/cache giữ nguyên BM25 và ghi lý do, cache nằm ở MC_FIND_CACHE hoặc .studio/openfilm-search.sqlite, đường dẫn biến môi trường tính từ gốc repo.
 

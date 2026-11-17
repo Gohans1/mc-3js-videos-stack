@@ -2,6 +2,20 @@ import type { Entry } from "../find";
 import { assetFile, assetKey } from "../semantic/catalog";
 import type { OpenFilmResult } from "./openfilm";
 
+export const displayAbout = (about: string) => {
+  const seen = new Set<string>();
+  return about
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => {
+      const key = part.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join("; ");
+};
+
 export const dualSearchOutput = (
   query: string,
   keyword: Entry[],
@@ -31,6 +45,7 @@ export const dualSearchOutput = (
       key: assetKey(entry),
       rank,
       ...fields,
+      about: displayAbout(entry.about),
       file: assetFile(entry) || undefined,
       license: typeof data?.license === "string" ? data.license : undefined,
     };
@@ -38,6 +53,7 @@ export const dualSearchOutput = (
   if (options.json)
     return JSON.stringify(
       {
+        schemaVersion: 2,
         mode: semantic.categories.length
           ? semantic.notes.length && !hits.length
             ? "keyword-fallback"
@@ -55,7 +71,9 @@ export const dualSearchOutput = (
           categories: semantic.categories,
           scoreMeaning: "similarity, not confidence; listen/view before choosing",
           results: hits.map(({ entry, score }, i) => ({
-            ...summary(entry, i + 1),
+            ...(wordKeys.has(assetKey(entry))
+              ? { key: assetKey(entry), rank: i + 1 }
+              : summary(entry, i + 1)),
             similarity: score,
             alsoKeyword: wordKeys.has(assetKey(entry)),
           })),
@@ -69,7 +87,6 @@ export const dualSearchOutput = (
     ...(words.length
       ? words.map(options.line)
       : ["No keyword matches; this does not establish that the asset is absent."]),
-    ...options.where(words),
     "",
     `OpenFilm semantic — ${hits.length} nearest candidates; similarity is not confidence`,
     ...hits.map(
@@ -82,7 +99,7 @@ export const dualSearchOutput = (
             : "No OpenFilm assets within these filters; service not called.",
         ]
       : []),
-    ...options.where(hits.map((hit) => hit.entry)),
+    ...options.where([...words, ...hits.map((hit) => hit.entry)]),
     ...notes.map((note) => `note: ${note}`),
     "next: bun run find --show <id> for file, license, settings and usage. Listen/view before choosing; --offline reads saved searches without network.",
   ].join("\n");

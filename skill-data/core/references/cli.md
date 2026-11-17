@@ -13,7 +13,7 @@ Lệnh giúp AI biết đang có gì, kết quả nằm đâu và kiểm chứng
 | Kết quả              | Nêu phát hiện, thời điểm, file/dòng hoặc đường dẫn artifact; bước tiếp hữu ích thì thêm next:                                      |
 | Thiếu dữ liệu        | Chỉ lệnh hoặc thao tác tạo dữ liệu đó                                                                                              |
 | Chi phí              | Help nêu credits và thời gian dài; voice và assets:semantic build chỉ xem trước mặc định, chỉ gửi khi --yes; --dry-run của voice luôn chỉ xem trước |
-| Dịch vụ nhỏ          | find --jev là ngoại lệ có gọi ngoài/quota mà không cần --yes; không tự suy rộng ngoại lệ cho lệnh khác                             |
+| Dịch vụ nhỏ          | find thường có thể gửi câu tìm tới OpenFilm, --offline chỉ dùng cache; find --jev gọi judge có quota/chi phí mà không cần --yes, không suy rộng ngoại lệ sang lệnh khác |
 | Thời gian dài        | Có timeout và lưu từng kết quả khi có thể tiếp tục lần sau                                                                         |
 | Mã thoát             | 0 thành công, 1 lỗi công việc/dữ liệu, 2 lỗi gọi lệnh/điều kiện; lỗi sau khi chạy phải nói phần đã hoàn tất                        |
 

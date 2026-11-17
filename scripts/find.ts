@@ -32,7 +32,7 @@ import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.
 import { audioInfo } from "../packages/live-studio/src/sound.mjs";
 import { importedEntries } from "./imported-catalog";
 import { openFilmCategory, type OpenFilmLookup, openFilmSearch } from "./search/openfilm";
-import { dualSearchOutput } from "./search/output";
+import { displayAbout, dualSearchOutput } from "./search/output";
 import { assetFile, assetKey } from "./semantic/catalog";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
@@ -1077,7 +1077,7 @@ const tells = (x: Entry) => {
 const line = (x: Entry, lead = "") => {
   // a Minecraft sound says what the game's subtitles call it ("Door creaks"), the plainest account of what is heard
   const heard = Array.isArray(x.data?.heard) ? (x.data.heard as string[]).join("; ") : "";
-  const said = heard ? `heard: ${heard}` : !tells(x) ? "" : x.about;
+  const said = heard ? `heard: ${heard}` : !tells(x) ? "" : displayAbout(x.about);
   const about = said.length > 90 ? `${said.slice(0, 89)}…` : said;
   const synth = (x.kind === "sfx" || x.kind === "bgm") && originOfEntry(x) === "synth";
   const tags = [x.fav && "starred", x.src, synth && "made in code", x.note]
@@ -1150,9 +1150,10 @@ Options:
   (--source), --length/--duration (--dur), --limit (-n); values too: --origin recorded, --edition mods, --license cc-by
   -n <N>           hits per block (default 12, at most 200); BM25 and OpenFilm semantic have independent limits
   --offline        no OpenFilm requests: use its saved responses (24 h cache), else show BM25 with a cache-miss note
-  --json           ordinary search: {mode,query,notes,keyword:{results},semantic:{scope,categories,results}}
-                   The two blocks never reorder or remove one another. alsoKeyword marks a repeated asset;
-                   similarity is not confidence. --semantic below retains its existing vector-index JSON contract.
+  --json           ordinary search schemaVersion 2: {mode,query,notes,keyword:{results},semantic:{scope,categories,results}}
+                   keyword results are full records. A semantic hit with alsoKeyword:true has only key/rank/similarity;
+                   find its full record in keyword.results by key. Other semantic hits include their full records.
+                   The two blocks keep independent ranks. Similarity is not confidence; --semantic below keeps its old schema.
   --jev            rank by meaning with Jev, a small AI judge that reads any language: 1-3 s, under $0.01 a search. With
                    --kind it reads every entry of those kinds; without, it only reorders the word matches. Each hit
                    shown also gets "fits" 0-1, Jev's own yes that it is what you asked for; the next: line then says
@@ -1763,17 +1764,20 @@ function show(ids: string[], pool: Entry[]) {
         readAs +
         [
           ...shared,
-          ...hits.map((x) =>
-            [
+          ...hits.map((x) => {
+            const about = displayAbout(x.about);
+            return [
               line(x),
-              ...(x.about && !line(x).includes(x.about) ? [`about: ${x.about}`] : []),
+              ...(about && !line(x).includes(about) ? [`about: ${about}`] : []),
               ...detail(x).map((l) => once(x, l)),
-            ].join("\n"),
-          ),
+            ].join("\n");
+          }),
         ].join("\n\n")
       );
     })
-    .concat("after placing or adapting it: bun run check (in the film) says whether the file still fits")
+    .concat(
+      "after placing or adapting it: bun run check (in the film) says whether the file still fits",
+    )
     .join("\n\n");
 }
 
@@ -1947,7 +1951,11 @@ function parse(argv: string[], lists: string[] = []) {
       );
     if (!(name in OPTIONS))
       throw new FindError(
-        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --jev --semantic --json --yes --db --dimensions --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any filter without a value lists its values.`,
+        `Unknown option ${typed}. Options: ${Object.keys(OPTIONS)
+          .filter((key) => !(key in BODY))
+          .join(
+            " ",
+          )}; mocap by body: ${Object.keys(BODY).join(" ")}. Any filter without a value lists its values.`,
       );
     if (name === "--fav") {
       // a favourites list's name may follow (--fav horror); any other word after it is a search word, except when
