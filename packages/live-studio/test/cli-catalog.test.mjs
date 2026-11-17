@@ -34,6 +34,17 @@ test("media native tools remain discoverable and preserve their structured argum
   expect(request.argvTokens).toEqual(["ced", "speech.wav", "--top-k", "3"]);
 });
 
+test("reference media catalog preserves repeated points and a complete Foley search phrase", () => {
+  for (const { request, expected } of [
+    {request: { subcommandPath: ["tapir"], args: { source: "clip.mp4" }, flags: { "--point": ["1,2", "3,4"] } }, expected: ["tapir", "clip.mp4", "--point", "1,2", "--point", "3,4"]},
+    {request: { subcommandPath: ["foley", "search"], args: { value: "a man speaking" }, flags: { "--config": "library.toml" } }, expected: ["foley", "search", "a man speaking", "--config", "library.toml"]},
+  ]) {
+    const result = buildCliInvocation({ commandId: "media", ...request }, BASE_CONTEXT);
+    expect(result.validationErrors).toEqual([]);
+    expect(result.argvTokens).toEqual(expected);
+  }
+});
+
 const BASE_CONTEXT = {
   activeFilm: "cell-break",
   isDemo: false,
@@ -272,6 +283,8 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ["scripts/media/sdk.py", "local SDK media worker spawned by the media CLI"],
       ["scripts/media/audio_sdk.py", "lazy audio SDK backends used by the media worker"],
       ["scripts/media/timeline.py", "OTIO handoff backend used by the media worker"],
+      ["scripts/media/tracking.py", "reference tracking worker spawned by media CLI"],
+      ["scripts/media/library.py", "local Foley catalog worker spawned by media CLI"],
       [
         "scripts/media/llama.py",
         "local llama.cpp server lifecycle/client used by the native media adapter",

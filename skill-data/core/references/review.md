@@ -66,7 +66,20 @@ CHECK=text:20,45 bun run render stills       # the lines between two heard secon
 
 `CHECK=text` draws each line alone and the frame without it, so it measures what is really drawn, wherever the line is anchored and however it animates. `OUTSIDE`: closer than 5% to an edge (EBU R95's graphics-safe area); in a Short, under what YouTube's player draws over it: 10% on the right (like and share), 25% at the bottom (title, channel, sound), 10% at the top, 5% on the left (Google's Shorts ad guidance). A size is a share of the frame's short side, a Short's width, so the same 36 floor holds for both: full screen, that side is the phone's. `LOW`: the letters against what is just around them, the worst tenth, under 4.5:1, or 3:1 from size 67.5 up (WCAG 1.4.3). A stroke or a shadow counts, since it is around the letters. Each fault writes `renders/text_<i>.jpg`, the line boxed in yellow and the safe area dashed. A line not meant to be read (a sign in the world, a glitch) takes `"read": false` and is never judged.
 
-## Pace
+## Reference motion tools
+
+| Need | Optional local command |
+| --- | --- |
+| Follow a chosen point | bun run media tapir clip.mp4 --point 158,105; repeat --point for more original-pixel positions, --query-frame indexes sampled frames |
+| Follow detected objects | bun run media track clip.mp4 --class 1; RF-DETR Nano/ByteTrack uses COCO classes, not Minecraft-specific recognition |
+| Choose the span | --from/--to use source-file seconds; --fps 5 --frames 16 defaults keep a small CPU job, raise either deliberately |
+| Check the evidence | Each run keeps actual frame timestamps, original PNGs, tracks.jsonl, source/model hashes and decode logs; IDs/visibility remain unverified model predictions |
+
+Install only what is needed with media setup tapir or media setup track. Use scene coordinates directly for authored Three.js; these tools help inspect outside footage and do not change the timeline.
+
+Optional native regressions: bun test ./scripts/test/media-reference.native.mjs after setting up track/foley and caching htsat-unfused once. They use generated fixtures, verify real ByteTrack expiry across a timestamp gap and cached Foley tags with network blocked, and retain TEMP evidence.
+
+## Pace measurements
 
 ```bash
 bun run pace                                 # shot lengths, and every stretch the picture holds still, with the narration over it

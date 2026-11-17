@@ -19,7 +19,16 @@
 | Phim mới | Sau khi setup thành công, chạy bun run new-film ten-phim tại gốc; lệnh tự cài dependency, nối vault và dựng picks. Vào films/ten-phim chạy bun run check rồi bun run studio, mở URL được in và kiểm tra cảnh. |
 | Khôi phục tạo phim | Nếu phim đã được sao nhưng bước sau lỗi, giữ thư mục và chạy bun packages/live-studio/init.mjs films/ten-phim rồi bun run link ten-phim tại gốc. init.mjs chỉ nối Studio và cài dependency; không tải vault hay dựng picks. |
 
-## Bản quyền và Lời dẫn
+## Công cụ media mở rộng
+
+| Mục | Cách dùng |
+| --- | --- |
+| Tracking CPU | media setup tapir hoặc media setup track cài môi trường Torch CPU và checkpoint đã pin/hash; --frames giới hạn số frame giữ trong RAM, --minutes giới hạn thời gian. |
+| Kho âm tùy chọn | media setup foley cài alpha Foley cùng PANNs đã kiểm hash; TOML chỉ rõ library.root và storage.data_dir ngoài kho, CLAP tải lần đầu vào cache riêng. |
+| Metadata âm | media setup metadata cài BWF MetaEdit Windows và notices trong archive; adapter chỉ đọc/export XML, không sửa WAV. |
+| Cache và quyền dùng | Giữ vault/tools/media và bằng chứng run-* khi chuyển checkout; không di chuyển venv vì launcher có thể chứa đường dẫn cũ, cài lại bằng setup và dùng cache uv. |
+
+## Bản quyền tài nguyên và lời dẫn
 
 | Mục       | Nội dung                                                                                                                                                                                                                                                                        |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

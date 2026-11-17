@@ -1,6 +1,7 @@
 // Shared CLI catalog schema, 100% repo command inventory, and pure argv/safety resolver (no Node built-ins; safe in browser & server).
 import { nativeMediaSubcommands } from "./media-cli.ts";
 import { sdkMediaSubcommands } from "./media-sdk-cli.ts";
+import { referenceMediaSubcommands } from "./media-reference-cli.ts";
 
 export type CliCategoryId = "daily" | "voice" | "sound" | "render" | "setup" | "dev" | "pipeline";
 
@@ -3041,7 +3042,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "media",
     category: "render",
     summary:
-      "Optional local media tools with isolated environments, CPU OCR and retained per-run evidence.",
+      "Optional local audio, OCR, tracking, sound catalog, metadata and OTIO tools with retained evidence.",
     runner: "bun-script",
     target: "media",
     cwdModes: ["root", "film"],
@@ -3049,6 +3050,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     subcommands: [
       ...nativeMediaSubcommands,
       ...sdkMediaSubcommands,
+      ...referenceMediaSubcommands,
       {
         id: "list",
         label: "list",

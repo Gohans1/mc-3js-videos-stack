@@ -81,7 +81,20 @@ OTIO core writes .otio; NLE-specific formats need their own supported adapter or
 
 Native regression checks require the optional effects, separate and timeline setups: bun test ./scripts/test/media-sdk.native.mjs. They verify PitchShift frequency/duration, failure on an unavailable stem and OTIO fields with generated fixtures; they do not download models and retain their temporary evidence paths.
 
-## How mix sets the loudness
+## Local sound library and metadata
+
+| Need | Optional command |
+| --- | --- |
+| Build a searchable sound library | bun run media foley index --config library.toml --limit 20 --workers 1; native TOML explicitly selects [library] root and [storage] data_dir outside it |
+| Search by meaning | bun run media foley search "a man speaking" --config library.toml; JSON preserves candidate scores and license fields, not a verdict of correctness or permission |
+| Inspect an asset / progress | media foley describe 2 --config library.toml; media foley status --config library.toml reports errors and pending model stages |
+| Choose local models | In native TOML use [models] enabled=true, device="cpu", clap=["htsat-unfused"] for this PC; first CLAP use downloads the upstream pinned checkpoint |
+| Resume indexing | Reuse the same TOML/data_dir and rerun index; SQLite/cache survive timeout, --limit caps analyses rather than the library scan |
+| Read Broadcast WAV fields | bun run media metadata recording.wav; BWF MetaEdit exports XML and verifies that the input hash remains unchanged |
+
+Foley is an optional young alpha project, supplementing earshot with a persistent catalog. The adapter exposes index/search/status/describe; its native CLI/MCP remains available, and PANNs CC-BY-4.0, CLAP Apache-2.0 and AudioSet notices stay separate from Foley's MIT code license.
+
+## Mix loudness processing
 
 The mix goes through `drive` dB into a limiter, then one linear gain brings it to `lufs` (-14), or only as far as its true peak stays under -1.5 dBTP (room for the AAC encode). Never a dynamic loudness pass: it lifts every quiet stretch, room tone up to the voice (AES TD1004).
 

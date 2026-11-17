@@ -83,7 +83,7 @@ if (verb === "list" || verb === "doctor") {
           [
             "-c",
             "import importlib.metadata as m,sys,json; print(json.dumps({p:m.version(p) for p in sys.argv[1:]}))",
-            ...tool.packages.map((pkg) => pkg.split(/[<>=]/, 1)[0].split("[", 1)[0]),
+            ...tool.packages.map((pkg) => pkg.match(/^[\w.-]+/)[0]),
           ],
           { encoding: "utf8", timeout: 10_000, windowsHide: true },
         );

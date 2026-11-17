@@ -477,5 +477,139 @@
     "arguments": [
       "timeline"
     ]
+  },
+  "tapir": {
+    "name": "DeepMind TAPIR",
+    "summary": "Follow selected original-pixel points across sampled reference frames on CPU.",
+    "python": "3.12",
+    "packages": [
+      "tapnet[torch] @ git+https://github.com/google-deepmind/tapnet@ceedd60bb9f6c9f7c74796e4445aff6c6ddf7c9b",
+      "opencv-python==5.0.0.93"
+    ],
+    "cpuPackages": [
+      "torch==2.8.0+cpu",
+      "torchvision==0.23.0+cpu"
+    ],
+    "worker": "scripts/media/tracking.py",
+    "arguments": [
+      "tapir"
+    ],
+    "source": "https://github.com/google-deepmind/tapnet/tree/ceedd60bb9f6c9f7c74796e4445aff6c6ddf7c9b",
+    "codeLicense": "Apache-2.0",
+    "modelLicense": "Apache-2.0; dataset terms separate",
+    "defaultModel": "models/bootstapir_checkpoint_v2.pt",
+    "assets": [
+      {
+        "url": "https://storage.googleapis.com/dm-tapnet/bootstap/bootstapir_checkpoint_v2.pt",
+        "path": "models/bootstapir_checkpoint_v2.pt",
+        "size": 218886140,
+        "sha256": "8493c7a69e02c85b9382fbb3c7b8b539b36bc08ede744b9e99feb739a0129f4b"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/google-deepmind/tapnet/ceedd60bb9f6c9f7c74796e4445aff6c6ddf7c9b/LICENSE",
+        "path": "licenses/TAPNET-LICENSE.txt",
+        "size": 11358,
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    ]
+  },
+  "track": {
+    "name": "RF-DETR Nano / ByteTrack",
+    "summary": "Detect COCO objects and follow boxes/IDs on CPU; retain unverified predictions.",
+    "python": "3.12",
+    "packages": [
+      "rfdetr==1.12.1",
+      "trackers==2.7.0"
+    ],
+    "cpuPackages": [
+      "torch==2.8.0+cpu",
+      "torchvision==0.23.0+cpu"
+    ],
+    "worker": "scripts/media/tracking.py",
+    "arguments": [
+      "track"
+    ],
+    "source": "https://github.com/roboflow/trackers/tree/2.7.0",
+    "codeLicense": "Apache-2.0",
+    "modelLicense": "Apache-2.0; dataset terms separate",
+    "defaultModel": "models/rf-detr-nano.pth",
+    "assets": [
+      {
+        "url": "https://repo.roboflow.com/rfdetr/nano_coco/checkpoint_best_regular.pth",
+        "path": "models/rf-detr-nano.pth",
+        "size": 366287238,
+        "sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/roboflow/rf-detr/1.12.1/LICENSE",
+        "path": "licenses/RF-DETR-LICENSE.txt",
+        "size": 11345,
+        "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca"
+      }
+    ]
+  },
+  "metadata": {
+    "name": "BWF MetaEdit",
+    "version": "26.08.1",
+    "summary": "Read/export Broadcast WAV metadata without editing the source.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "metadata"
+    ],
+    "source": "https://mediaarea.net/BWFMetaEdit",
+    "codeLicense": "Public-domain core; bundled dependency notices retained",
+    "modelLicense": null,
+    "binary": "bin/bwfmetaedit.exe",
+    "requiredFiles": [
+      "bin/c2pa_c.dll"
+    ],
+    "assets": [
+      {
+        "url": "https://mediaarea.net/download/binary/bwfmetaedit/26.08.1/BWFMetaEdit_CLI_26.08.1_Windows_x64.zip",
+        "path": "models/BWFMetaEdit_CLI_26.08.1_Windows_x64.zip",
+        "size": 7783071,
+        "sha256": "4b384468d67ac2424295aa8f482a007cae061e0c55acdc1879d84b32384903ea",
+        "unpackTo": "bin"
+      }
+    ]
+  },
+  "foley": {
+    "name": "Foley",
+    "summary": "Incremental local sound catalog: index, semantic search, describe and status; alpha optional tool.",
+    "python": "3.12",
+    "packages": [
+      "foley[models] @ git+https://github.com/Soverance/Foley@d0cde57534f5ffa5f955985154e8fc2af6faa1bb",
+      "transformers==5.23.0"
+    ],
+    "cpuPackages": [
+      "torch==2.8.0+cpu"
+    ],
+    "worker": "scripts/media/library.py",
+    "source": "https://github.com/Soverance/Foley/tree/d0cde57534f5ffa5f955985154e8fc2af6faa1bb",
+    "codeLicense": "MIT",
+    "modelLicense": "CLAP Apache-2.0; PANNs CC-BY-4.0; AudioSet ontology CC-BY-SA-4.0",
+    "assets": [
+      {
+        "url": "https://huggingface.co/thelou1s/panns-inference/resolve/f98a09ed0dca73b284786393cfc2b2bd6f46f878/Cnn14_mAP%3D0.431.pth",
+        "path": "models/panns/Cnn14_mAP=0.431.pth",
+        "size": 327428481,
+        "sha256": "0dc499e40e9761ef5ea061ffc77697697f277f6a960894903df3ada000e34b31",
+        "publisherMd5": "541141fa2ee191a88f24a3219fff024e",
+        "originalPublisher": "https://zenodo.org/records/3987831"
+      },
+      {
+        "url": "https://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv",
+        "path": "models/panns/class_labels_indices.csv",
+        "size": 14675,
+        "sha256": "cdd1049833c4b86127c2773ac0d14a2754b6a6d0d1798002ed5c66e699708429"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/Soverance/Foley/d0cde57534f5ffa5f955985154e8fc2af6faa1bb/THIRD_PARTY_NOTICES.md",
+        "path": "licenses/FOLEY-THIRD-PARTY-NOTICES.txt",
+        "size": 7024,
+        "sha256": "477721fd4b20fc0125079a78b6838d05ef320d3dd204f7cc71795190eb9e83f3"
+      }
+    ]
   }
 }
