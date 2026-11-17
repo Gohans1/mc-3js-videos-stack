@@ -55,7 +55,11 @@ test("OpenRouter multimodal embedding uses one joint input and validates normali
     },
   });
   try {
-    const embed = createEmbedder({ apiKey: "offline-test", endpoint: `${server.url}embeddings` });
+    const embed = createEmbedder({
+      provider: "openrouter",
+      apiKey: "offline-test",
+      endpoint: `${server.url}embeddings`,
+    });
     const result = await embed([
       { type: "text", text: "rain" },
       { type: "input_audio", input_audio: { data: "data:audio/mp3;base64,AA==", format: "mp3" } },

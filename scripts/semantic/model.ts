@@ -19,13 +19,13 @@ export type Embedding = { vector: number[]; usage: Record<string, unknown> };
 export type Embed = (parts: Part[], signal?: AbortSignal) => Promise<Embedding>;
 export type Provider = "gemini" | "openrouter";
 export const configuredProvider = (
-  choice = "auto",
+  choice = "gemini",
   env: Record<string, string | undefined> = process.env,
 ): { provider: Provider; apiKey: string } => {
   if (!["auto", "gemini", "openrouter"].includes(choice))
     throw new Error("Choose provider auto, gemini or openrouter");
   const google = env.GEMINI_API_KEY || env.GOOGLE_API_KEY;
-  const provider = choice === "auto" ? (google ? "gemini" : "openrouter") : (choice as Provider);
+  const provider = choice === "auto" ? "gemini" : (choice as Provider);
   return { provider, apiKey: (provider === "gemini" ? google : env.OPENROUTER_API_KEY) ?? "" };
 };
 export class EmbeddingError extends Error {
@@ -33,10 +33,17 @@ export class EmbeddingError extends Error {
     public status: number,
     public retryAfterMs: number | null,
     provider: Provider,
+    public quotaScope: "day" | "minute" | "unknown" = "unknown",
   ) {
-    super(
-      `${provider} embeddings HTTP ${status}; ${status === 429 ? "quota reached; completed work is saved" : "check provider access and retry pending work"}`,
-    );
+    const reason =
+      status === 429
+        ? {
+            day: "daily quota reached",
+            minute: "minute rate limit reached",
+            unknown: "rate or capacity limit reached",
+          }[quotaScope]
+        : "check provider access and retry pending work";
+    super(`${provider} embeddings HTTP ${status}; ${reason}; completed work is saved`);
     this.name = "EmbeddingError";
   }
 }
@@ -57,13 +64,15 @@ export const normalize = (value: unknown, dimensions: number): number[] => {
 export const createEmbedder = ({
   apiKey,
   dimensions = 768,
-  provider = "openrouter",
+  provider = "gemini",
   endpoint,
+  beforeRequest,
 }: {
   apiKey: string;
   dimensions?: number;
   provider?: Provider;
   endpoint?: string;
+  beforeRequest?: () => void;
 }): Embed => {
   if (!apiKey)
     throw new Error(
@@ -74,57 +83,82 @@ export const createEmbedder = ({
   if (![768, 1536, 3072].includes(dimensions))
     throw new Error("Dimensions must be 768, 1536 or 3072");
   return async (content, signal) => {
+    const request: RequestInit = {
+      method: "POST",
+      headers:
+        provider === "gemini"
+          ? { "x-goog-api-key": apiKey, "content-type": "application/json" }
+          : { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify(
+        provider === "gemini"
+          ? {
+              model: "models/gemini-embedding-2",
+              outputDimensionality: dimensions,
+              content: {
+                parts: content.map((part) =>
+                  part.type === "text"
+                    ? { text: part.text }
+                    : {
+                        inlineData: inlineData(
+                          part.type === "input_audio"
+                            ? part.input_audio.data
+                            : part.type === "input_video"
+                              ? part.input_video.data
+                              : part.image_url.url,
+                        ),
+                      },
+                ),
+              },
+            }
+          : {
+              model: MODEL,
+              dimensions,
+              encoding_format: "float",
+              input: [{ content }],
+            },
+      ),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(45000)])
+        : AbortSignal.timeout(45000),
+    };
+    signal?.throwIfAborted();
+    beforeRequest?.();
     const response = await fetch(
       endpoint ??
         (provider === "gemini"
           ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent"
           : "https://openrouter.ai/api/v1/embeddings"),
-      {
-        method: "POST",
-        headers:
-          provider === "gemini"
-            ? { "x-goog-api-key": apiKey, "content-type": "application/json" }
-            : { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-        body: JSON.stringify(
-          provider === "gemini"
-            ? {
-                model: "models/gemini-embedding-2",
-                outputDimensionality: dimensions,
-                content: {
-                  parts: content.map((part) =>
-                    part.type === "text"
-                      ? { text: part.text }
-                      : {
-                          inlineData: inlineData(
-                            part.type === "input_audio"
-                              ? part.input_audio.data
-                              : part.type === "input_video"
-                                ? part.input_video.data
-                                : part.image_url.url,
-                          ),
-                        },
-                  ),
-                },
-              }
-            : {
-                model: MODEL,
-                dimensions,
-                encoding_format: "float",
-                input: [{ content }],
-              },
-        ),
-        signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(45000)])
-          : AbortSignal.timeout(45000),
-      },
+      request,
     );
     if (!response.ok) {
       const after = response.headers.get("retry-after"),
         seconds = after === null ? NaN : Number(after);
+      const waits: number[] = [];
+      if (Number.isFinite(seconds) && seconds >= 0) waits.push(seconds * 1000);
+      else if (after && Number.isFinite(Date.parse(after)))
+        waits.push(Math.max(0, Date.parse(after) - Date.now()));
+      const payload = await response.json().catch(() => null);
+      const details = Array.isArray(payload?.error?.details) ? payload.error.details : [];
+      const ids: string[] = [];
+      for (const detail of details) {
+        if (!detail || typeof detail !== "object") continue;
+        if (Array.isArray(detail.violations))
+          for (const violation of detail.violations)
+            if (typeof violation?.quotaId === "string") ids.push(violation.quotaId);
+        if (typeof detail.retryDelay === "string" && /^\d+(?:\.\d+)?s$/.test(detail.retryDelay)) {
+          const wait = Number(detail.retryDelay.slice(0, -1)) * 1000;
+          if (Number.isFinite(wait)) waits.push(wait);
+        }
+      }
       throw new EmbeddingError(
         response.status,
-        Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null,
+        waits.length ? Math.max(...waits) : null,
         provider,
+        ids.some((id) => id.includes("PerDay"))
+          ? "day"
+          : ids.some((id) => id.includes("PerMinute"))
+            ? "minute"
+            : "unknown",
       );
     }
     const result = (await response.json()) as {
