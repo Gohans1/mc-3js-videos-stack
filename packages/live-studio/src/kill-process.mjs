@@ -6,6 +6,7 @@ export function killProcessTree(pid, fallbackKill) {
       spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
         windowsHide: true,
         stdio: "ignore",
+        timeout: 5000,
       });
     } catch {
       /* fallback below */
