@@ -16,6 +16,17 @@ import {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
+test("media setup preserves custom deadline and evidence parent in catalog argv", () => {
+  const result = buildCliInvocation({
+    commandId: "media",
+    subcommandPath: ["setup"],
+    args: { tool: "caption" },
+    flags: { "--minutes": 20, "--out": "renders/install" },
+  });
+  expect(result.validationErrors).toEqual([]);
+  expect(result.argvTokens).toEqual(["setup", "caption", "--minutes", "20", "--out", "renders/install"]);
+});
+
 test("media native tools remain discoverable and preserve their structured arguments", () => {
   const tools = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/media/tools.json"), "utf8"));
   const catalog = findCliCommand("media");

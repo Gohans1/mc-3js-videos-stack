@@ -3069,6 +3069,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "setup",
         summary: "Install pinned packages or verified native binaries/models; network, no inference.",
         args: [{ key: "tool", label: "Tool", type: "string", required: true, placeholder: "ocr" }],
+        flags: [
+          { key: "--minutes", flag: "--minutes", label: "Deadline Minutes per Step", type: "number" },
+          { key: "--out", flag: "--out", label: "Evidence Parent", type: "string" },
+        ],
         meta: { effect: "install", speed: "long" },
       },
       {
