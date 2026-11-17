@@ -8,6 +8,11 @@
 | --- | --- | --- |
 | PySceneDetect | Đã nối CLI, help/skill; test cut, fade, đoạn riêng, không cut, hết giờ và giữ dữ liệu cũ đạt | Hai reviewer vòng 6 đều PASS, không còn Critical/Required |
 | Nghiên cứu công cụ | Hai nghiên cứu độc lập và thảo luận đã thống nhất chọn lọc bên dưới | Benchmark riêng trước khi thêm backend/model |
+| Triển khai mở rộng | Đang xử lý toàn bộ danh sách giữ lại theo yêu cầu mới, không dừng ở báo cáo | Hoàn tất từng công cụ hoặc ghi bằng chứng không phù hợp; hai review mỗi nhóm |
+| RapidOCR | Đã cài CPU, nối CLI/help/skill/catalog; clip thật, ảnh Việt/Anh và blank đã kiểm; hai review vòng 2 PASS, mỗi bên 67 test | Giữ frame/score vì dòng Việt bị mất dấu/chữ, không coi OCR là nhãn chuẩn |
+| Nền media CLI | Đã có list/doctor/setup, môi trường riêng, timeout dọn cây process và bằng chứng mỗi lượt; hai review PASS | Mở rộng backend kế tiếp, không dừng ở nhóm OCR |
+| Native CPU | DeepFilterNet, CED, FluidSynth và Chromaprint đã chạy binary thật, chưa nối media CLI | Nối installer có kiểm hash, adapter và demo; Kokoro còn thiếu đường load eSpeak |
+| Caption local | Đã tải weights Q4/projector có SHA-256, đang build fork llama.cpp trên MinGW CPU | Chạy caption thật rồi mới ghi đạt |
 
 ## Đã kiểm chứng
 
@@ -43,7 +48,7 @@
 
 ## Ưu tiên thử tiếp
 
-Số sao và lịch sử dưới đây là ảnh chụp ngày 17/11/2026, không phải điểm chất lượng. Chưa chạy local ngoài PySceneDetect; giữ model tùy chọn, không tự tải khi dùng lệnh khác.
+Số sao và lịch sử dưới đây là ảnh chụp ngày 17/11/2026, không phải điểm chất lượng. Đã chạy PySceneDetect và RapidOCR; model tùy chọn, không tự tải khi dùng lệnh khác.
 
 | Công cụ và nguồn | Tác giả, hoạt động | Giá trị, phần cứng và license | Quyết định |
 | --- | --- | --- | --- |

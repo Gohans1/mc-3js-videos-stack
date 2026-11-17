@@ -1,0 +1,12 @@
+{
+  "ocr": {
+    "name": "RapidOCR",
+    "summary": "Read text boxes from images or timestamped video frames on CPU.",
+    "python": "3.12",
+    "packages": ["rapidocr==3.10.0", "onnxruntime==1.32.0"],
+    "worker": "scripts/media/ocr.py",
+    "codeLicense": "Apache-2.0",
+    "modelLicense": "Apache-2.0 for models in upstream registry; resources have separate terms",
+    "source": "https://github.com/RapidAI/RapidOCR/tree/v3.10.0"
+  }
+}

@@ -248,6 +248,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ],
       ["scripts/review/stale.py", "shared staleness helper module wrapping src/stale.mjs"],
       ["scripts/seconds.py", "shared heard-second parsing library imported by Python CLIs"],
+      ["scripts/media/ocr.py", "RapidOCR SDK adapter spawned by the media CLI"],
       ["scripts/sound/beats.py", "stdin JSON beat-detection worker spawned by Live Studio audio"],
       [
         "scripts/sound/process.py",

@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
@@ -21,6 +21,7 @@ import {
   findCliCommand,
 } from "./cli-catalog.ts";
 import { favoriteLists } from "./favorites.mjs";
+import { killProcessTree } from "./kill-process.mjs";
 import { noteNumbers } from "./notes.mjs";
 
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
@@ -536,41 +537,6 @@ export function sliceUtf8ToByteLimit(text: string, maxBytes: number): string {
     end += step;
   }
   return text.slice(0, end);
-}
-
-function killProcessTree(pid: number, fallbackKill: () => void): void {
-  if (process.platform === "win32") {
-    try {
-      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
-        windowsHide: true,
-        stdio: "ignore",
-      });
-    } catch {
-      /* fallback below */
-    }
-    try {
-      fallbackKill();
-    } catch {
-      /* already exited */
-    }
-    return;
-  }
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {
-    try {
-      fallbackKill();
-    } catch {
-      return;
-    }
-  }
-  setTimeout(() => {
-    try {
-      process.kill(-pid, "SIGKILL");
-    } catch {
-      /* exited cleanly */
-    }
-  }, 1500).unref?.();
 }
 
 export interface CliStreamEvent {

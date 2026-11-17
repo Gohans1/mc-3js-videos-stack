@@ -29,6 +29,17 @@ bun run deliver                              # the upload against YouTube's spec
 | Deadline or failure | --minutes defaults to 5, at most 60; logs and finished artifacts survive, unfinished detection does not resume at the last frame |
 | Setup and more options | bun run scenes --help; INSTALL.md covers optional Python setup, upstream CLI offers crop, more detectors and timeline exports |
 
+## Read reference text
+
+| Need | Use |
+| --- | --- |
+| Discover/install | bun run media list; media doctor ocr; media setup ocr installs an independent CPU environment with uv |
+| Read images or video | bun run media ocr image.png; media ocr video.mp4 --at 5,10; --frames samples a range, all times belong to the input file |
+| Choose model/language | --language vi; --config native.yaml keeps upstream model/engine configuration, --score overrides only when explicitly passed |
+| Keep evidence | Fresh run-* keeps job.json/process.log, original frames, frames.jsonl and result.json; model cache survives interruptions |
+| Verify | Compare text and polygons against retained frames; scores are estimates and Vietnamese diacritics/small game text can be wrong |
+| Stop or inspect | --minutes bounds the whole worker process tree; --dry-run validates without loading models or writing files, job.json is authoritative if a worker was interrupted |
+
 ## Measure a move
 
 `CHECK` runs a built-in check between two heard seconds and writes charts to `renders/`:
