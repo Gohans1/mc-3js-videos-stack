@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,9 +12,9 @@ const HOME = resolve(process.env.MC_MEDIA_HOME || join(ROOT, "vault/tools/media"
 const HELP = `Optional local media tools for AI, with independent environments and retained evidence.
   bun run media list [--json]             Available tools and upstream/license information
   bun run media doctor [tool] [--json]    Installed package versions; does not load/download models
-  bun run media setup <tool>              Install pinned packages in that tool's own uv/Python environment
+  bun run media setup <tool>              Install pinned packages or verified Windows binaries/models
   bun run media <tool> --help             Tool-specific inputs, outputs and native configuration
-  bun run media <tool> <arguments>        Run a structured SDK adapter
+  bun run media <tool> <arguments>        Run a structured local adapter
   --out DIR       Parent for fresh run-* evidence folders (default renders/media/<tool>)
   --minutes N     Wall-clock deadline (default 5; setup default 10). Logs and finished files survive failure.
 MC_MEDIA_HOME overrides the environment/model cache root (default vault/tools/media).
@@ -44,9 +44,40 @@ if (verb === "list" || verb === "doctor") {
   const results = Object.entries(TOOLS)
     .filter(([key]) => !id || key === id)
     .map(([key, tool]) => {
-      const result = { id: key, ...tool, pythonPath: python(key) };
+      const result = {
+        id: key,
+        ...tool,
+        ...(tool.binary
+          ? { binaryPath: join(HOME, key, tool.binary) }
+          : { pythonPath: python(key) }),
+      };
       if (verb === "doctor") result.installed = false;
-      if (verb === "doctor" && existsSync(result.pythonPath)) {
+      if (verb === "doctor" && tool.binary) {
+        const required = [
+          tool.binary,
+          tool.defaultModel,
+          tool.defaultProjector,
+          tool.defaultSoundfont,
+          ...(tool.requiredFiles ?? []),
+        ].filter(Boolean);
+        try {
+          const receipt = JSON.parse(readFileSync(join(HOME, key, "installed.json"), "utf8"));
+          result.installed =
+            receipt.status === "completed" &&
+            required.every((file) => statSync(join(HOME, key, file)).isFile()) &&
+            tool.assets.every(
+              (asset) =>
+                statSync(join(HOME, key, asset.path)).size === asset.size &&
+                receipt.assets.some(
+                  (record) =>
+                    record.path === asset.path && record.sha256 === asset.sha256 && record.verified,
+                ),
+            );
+        } catch {
+          result.installed = false;
+        }
+        result.version = tool.version;
+      } else if (verb === "doctor" && existsSync(result.pythonPath)) {
         const probe = spawnSync(
           result.pythonPath,
           [
@@ -66,7 +97,7 @@ if (verb === "list" || verb === "doctor") {
   else
     for (const tool of results)
       console.log(
-        `${tool.id}: ${tool.name} — ${tool.summary}${verb === "doctor" ? ` (${tool.installed ? "packages ready; model availability is separate" : "needs setup"})` : ""}\n  ${tool.source}`,
+        `${tool.id}: ${tool.name} — ${tool.summary}${verb === "doctor" ? ` (${tool.installed ? (tool.binary ? "setup complete; run tool to verify runtime" : "packages ready; model availability is separate") : "needs setup"})` : ""}\n  ${tool.source}`,
       );
   process.exit(verb === "doctor" && results.some((tool) => !tool.installed) ? 1 : 0);
 }
@@ -81,11 +112,15 @@ if (!tool) fail(`unknown tool ${id ?? "(missing)"}; available: ${Object.keys(TOO
 if (rest.some((arg) => ["--help", "-h"].includes(arg)) || rest[0] === "help") {
   if (setup) console.log(HELP);
   else {
-    const help = spawnSync("python", [join(ROOT, tool.worker), "--help"], {
-      encoding: "utf8",
-      timeout: 15_000,
-      windowsHide: true,
-    });
+    const help = spawnSync(
+      "python",
+      [join(ROOT, tool.worker), ...(tool.arguments ?? []), "--help"],
+      {
+        encoding: "utf8",
+        timeout: 15_000,
+        windowsHide: true,
+      },
+    );
     process.stdout.write(help.stdout ?? "");
     process.stderr.write(help.stderr ?? "");
     process.exit(help.status ?? 1);
@@ -115,19 +150,23 @@ const finish = (report) => {
 if (setup) {
   cliArgs(HELP, [], 0, args);
   const commands = [];
-  if (!existsSync(python(id)))
+  if (tool.packages.length && !existsSync(python(id)))
     commands.push(["uv", "venv", "--python", tool.python, join(HOME, id, "env")]);
-  commands.push(["uv", "pip", "install", "--python", python(id), ...tool.packages]);
+  if (tool.packages.length)
+    commands.push(["uv", "pip", "install", "--python", python(id), ...tool.packages]);
+  if (tool.assets?.length || tool.build)
+    commands.push(["python", join(ROOT, "scripts/media/install.py"), id, "--home", HOME]);
   for (const command of commands) {
     if (!finish(await runMediaJob({ tool: `setup:${id}`, command, out, minutes }))) process.exit(1);
   }
 } else {
   if (args[0] === "help") args[0] = "--help";
   const worker = join(ROOT, tool.worker);
-  const preflight = spawnSync("python", [worker, ...args, "--dry-run"], {
+  const preflight = spawnSync("python", [worker, ...(tool.arguments ?? []), ...args, "--dry-run"], {
     encoding: "utf8",
     timeout: 30_000,
     windowsHide: true,
+    env: { ...process.env, MC_MEDIA_TOOL_HOME: join(HOME, id) },
   });
   if (preflight.status !== 0 || args.some((arg) => ["--help", "-h", "--dry-run"].includes(arg))) {
     process.stdout.write(preflight.stdout ?? "");
@@ -135,16 +174,29 @@ if (setup) {
     if (preflight.error) console.error(preflight.error.message);
     process.exit(preflight.status ?? 1);
   }
-  if (!existsSync(python(id))) fail(`tool ${id} is not installed: bun run media setup ${id}`);
+  const plan = JSON.parse(preflight.stdout);
+  for (const file of plan.requiredFiles ?? [])
+    if (!existsSync(file)) fail(`missing ${file}: bun run media setup ${id}`);
+  if (tool.packages.length && !existsSync(python(id)))
+    fail(`tool ${id} is not installed: bun run media setup ${id}`);
   const models = join(HOME, id, "models");
   mkdirSync(models, { recursive: true });
   console.error(`Running ${tool.name}; deadline ${minutes} min; evidence parent: ${out}`);
   const report = await runMediaJob({
     tool: id,
-    command: [python(id), worker, ...args],
+    command: [
+      tool.packages.length ? python(id) : "python",
+      worker,
+      ...(tool.arguments ?? []),
+      ...args,
+    ],
     out,
     minutes,
-    env: { MC_MEDIA_MODELS_DIR: models },
+    env: {
+      MC_MEDIA_MODELS_DIR: models,
+      MC_MEDIA_TOOL_HOME: join(HOME, id),
+      MC_MEDIA_TIMEOUT_SECONDS: String(minutes * 60),
+    },
   });
   process.exit(finish(report) ? 0 : report.status === "interrupted" ? 130 : 1);
 }

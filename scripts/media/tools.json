@@ -3,10 +3,262 @@
     "name": "RapidOCR",
     "summary": "Read text boxes from images or timestamped video frames on CPU.",
     "python": "3.12",
-    "packages": ["rapidocr==3.10.0", "onnxruntime==1.32.0"],
+    "packages": [
+      "rapidocr==3.10.0",
+      "onnxruntime==1.32.0"
+    ],
     "worker": "scripts/media/ocr.py",
     "codeLicense": "Apache-2.0",
     "modelLicense": "Apache-2.0 for models in upstream registry; resources have separate terms",
     "source": "https://github.com/RapidAI/RapidOCR/tree/v3.10.0"
+  },
+  "denoise": {
+    "name": "DeepFilterNet",
+    "version": "0.5.6",
+    "summary": "Enhance noisy speech locally at 48 kHz, preserving the source.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "denoise"
+    ],
+    "codeLicense": "MIT OR Apache-2.0",
+    "modelLicense": "MIT OR Apache-2.0",
+    "assets": [
+      {
+        "url": "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-x86_64-pc-windows-msvc.exe",
+        "path": "bin/deep-filter.exe",
+        "size": 26912256,
+        "sha256": "75e11fa16445f560cb6b021521ddb89e89270d13b83089705d98776f58fd7915"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/Rikorose/DeepFilterNet/v0.5.6/LICENSE-MIT",
+        "path": "licenses/LICENSE-MIT",
+        "size": 1083,
+        "sha256": "24e6bb09c928af8d8e56268082f87413247ce36b39dd5d33add2f9893968065e"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/Rikorose/DeepFilterNet/v0.5.6/LICENSE-APACHE",
+        "path": "licenses/LICENSE-APACHE",
+        "size": 10837,
+        "sha256": "1eaee808c5fb6b4e895ba30425285a5cdc5dd25bba2cd230f264c2200c331aec"
+      }
+    ],
+    "source": "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-x86_64-pc-windows-msvc.exe",
+    "binary": "bin/deep-filter.exe"
+  },
+  "ced": {
+    "name": "CED.cpp",
+    "version": "0.2.0",
+    "summary": "Classify audio with a tiny CPU model; independent AudioSet scores, not onset localization.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "ced"
+    ],
+    "codeLicense": "MIT",
+    "modelLicense": "Apache-2.0; AudioSet labels CC-BY-4.0",
+    "assets": [
+      {
+        "url": "https://github.com/localai-org/ced.cpp/releases/download/v0.2.0/ced-v0.2.0-bin-win-cpu-x64.zip",
+        "path": "downloads/ced-v0.2.0-bin-win-cpu-x64.zip",
+        "size": 536097,
+        "sha256": "88640a49b840d1bb0adaea502fc0c5a2326ea055b336aa065842121e8f08150d",
+        "unpackTo": "bin"
+      },
+      {
+        "url": "https://huggingface.co/mudler/ced-gguf/resolve/b5e9a4aad6438763c8da16079d77563fbed35c65/ced-tiny-q8_0.gguf",
+        "path": "models/ced-tiny-q8_0.gguf",
+        "size": 6211616,
+        "sha256": "48bee4e2fc3cc85d7806e03471db24e77fda6c2a2e81ffe9ef67caebaf2bd674"
+      }
+    ],
+    "source": "https://github.com/localai-org/ced.cpp/releases/download/v0.2.0/ced-v0.2.0-bin-win-cpu-x64.zip",
+    "binary": "bin/ced-v0.2.0-bin-win-cpu-x64/ced-cli.exe",
+    "defaultModel": "models/ced-tiny-q8_0.gguf"
+  },
+  "midi": {
+    "name": "FluidSynth",
+    "version": "2.6.2",
+    "summary": "Render editable MIDI into offline instrument audio.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "midi"
+    ],
+    "codeLicense": "LGPL-2.1-or-later",
+    "modelLicense": "FluidR3 GM MIT; original notices retained",
+    "assets": [
+      {
+        "url": "https://github.com/FluidSynth/fluidsynth/releases/download/v2.6.2/fluidsynth-v2.6.2-win10-x64-cpp11.zip",
+        "path": "downloads/fluidsynth-v2.6.2-win10-x64-cpp11.zip",
+        "size": 2729665,
+        "sha256": "808295345d43c9c428f3fa87d29fbf97a9926f356df95559ff2689f3bd4072d7",
+        "unpackTo": "bin"
+      },
+      {
+        "url": "https://github.com/pianobooster/fluid-soundfont/releases/download/v3.1/FluidR3_GM.sf2",
+        "path": "models/FluidR3_GM.sf2",
+        "size": 148398306,
+        "sha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/pianobooster/fluid-soundfont/24c5c8a82e2f2cec2497710c6a72e5ccfeca40cd/COPYING",
+        "path": "models/COPYING",
+        "size": 1086,
+        "sha256": "8ef830b65c97a976b86e34bb5fde08d99dfb1db13c4149b5b20bc837ac6c4568"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/pianobooster/fluid-soundfont/24c5c8a82e2f2cec2497710c6a72e5ccfeca40cd/README",
+        "path": "models/README",
+        "size": 1042,
+        "sha256": "2f92d462684629f207e43815115b79d7f1ce130d30ca8792b7d82b398a8306f9"
+      }
+    ],
+    "source": "https://github.com/FluidSynth/fluidsynth/releases/download/v2.6.2/fluidsynth-v2.6.2-win10-x64-cpp11.zip",
+    "binary": "bin/fluidsynth-v2.6.2-win10-x64-cpp11/bin/fluidsynth.exe",
+    "defaultSoundfont": "models/FluidR3_GM.sf2"
+  },
+  "fingerprint": {
+    "name": "Chromaprint",
+    "version": "1.6.2",
+    "summary": "Generate local audio fingerprints for near-duplicate comparison, without network lookup.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "fingerprint"
+    ],
+    "codeLicense": "LGPL-2.1; build dependencies have separate notices",
+    "modelLicense": "No model",
+    "assets": [
+      {
+        "url": "https://github.com/acoustid/chromaprint/releases/download/v1.6.2/chromaprint-fpcalc-1.6.2-windows-x86_64.zip",
+        "path": "downloads/chromaprint-fpcalc-1.6.2-windows-x86_64.zip",
+        "size": 1817825,
+        "sha256": "b74369726676670af3ab0eadff45f960cf969fdf4a87a971ba37eaf8d530e874",
+        "unpackTo": "bin"
+      }
+    ],
+    "source": "https://github.com/acoustid/chromaprint/releases/download/v1.6.2/chromaprint-fpcalc-1.6.2-windows-x86_64.zip",
+    "binary": "bin/chromaprint-fpcalc-1.6.2-windows-x86_64/fpcalc.exe"
+  },
+  "tts": {
+    "name": "audio.cpp / Kokoro",
+    "version": "0.9.5",
+    "summary": "Generate local English/other supported voice drafts on CPU; no Vietnamese preset.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "tts"
+    ],
+    "codeLicense": "Apache-2.0; eSpeak-ng GPL-3.0-or-later, loader MIT",
+    "modelLicense": "Kokoro Apache-2.0",
+    "assets": [
+      {
+        "url": "https://github.com/0xShug0/audio.cpp/releases/download/v0.9.5/audio-v0.9.5-bin-windows-x64-cpu-portable.zip",
+        "path": "downloads/audio-v0.9.5-bin-windows-x64-cpu-portable.zip",
+        "size": 33663926,
+        "sha256": "9f470c3b254205d044e91e84d609424f528734cd06b74968ab0e4868a30b839a",
+        "unpackTo": "bin"
+      },
+      {
+        "url": "https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/7a103b33f04120535bdfe97b5f65b79d3c90d708/Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf",
+        "path": "models/kokoro-82m-q8_0.gguf",
+        "size": 189550976,
+        "sha256": "9a4ca6176460cdc8c7845b804c0bbe85a4791ee3ffff568a3fdadbb708c63f47"
+      },
+      {
+        "url": "https://files.pythonhosted.org/packages/9d/ed/a3d872fbad4f3a3f3db0e8c31768ab14e77cd77306de16b8b20b1e1df7ea/espeakng_loader-0.2.4-py3-none-win_amd64.whl",
+        "path": "espeak/espeakng_loader-0.2.4-py3-none-win_amd64.whl",
+        "size": 9437292,
+        "sha256": "41f1e08ac9deda2efd1ea9de0b81dab9f5ae3c4b24284f76533d0a7b1dd7abd7",
+        "unpackTo": "espeak"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/espeak-ng/espeak-ng/1.52.0/COPYING",
+        "path": "licenses/COPYING-espeak-ng",
+        "size": 35147,
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      }
+    ],
+    "source": "https://github.com/0xShug0/audio.cpp/releases/download/v0.9.5/audio-v0.9.5-bin-windows-x64-cpu-portable.zip",
+    "binary": "bin/audiocpp_cli.exe",
+    "defaultModel": "models/kokoro-82m-q8_0.gguf",
+    "espeakDirectory": "espeak/espeakng_loader",
+    "requiredFiles": [
+      "espeak/espeakng_loader/espeak-ng.dll",
+      "espeak/espeakng_loader/espeak-ng-data/phontab"
+    ]
+  },
+  "caption": {
+    "name": "MiDashengLM / llama.cpp fork",
+    "version": "255ab173",
+    "summary": "Describe audio locally using a small CPU language model.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "caption"
+    ],
+    "codeLicense": "MIT runtime; Xiaomi Apache-2.0 model code",
+    "modelLicense": "Apache-2.0",
+    "assets": [
+      {
+        "url": "https://huggingface.co/mispeech/midashenglm-0.6b-gguf/resolve/06791d3c6ca4dbf9b97610750333b88686d1c40e/backbone-Q4_K_M.gguf",
+        "path": "models/backbone-Q4_K_M.gguf",
+        "size": 397043776,
+        "sha256": "9e20751284cdf195b026c1bf44fa1cff0ba1861a5e29ea84faad7134e71af03a"
+      },
+      {
+        "url": "https://huggingface.co/mispeech/midashenglm-0.6b-gguf/resolve/06791d3c6ca4dbf9b97610750333b88686d1c40e/mmproj-f32.gguf",
+        "path": "models/mmproj-f32.gguf",
+        "size": 362967072,
+        "sha256": "49f0e850f95456afe53deb94cdeee439619e373b8234c518a505286779f83b23"
+      }
+    ],
+    "source": "https://github.com/zhoukezi/llama.cpp/tree/255ab173ffd0ddb8d4ddc9dcfa3fff353bff50d3",
+    "binary": "build/bin/llama-server.exe",
+    "build": {
+      "repository": "https://github.com/zhoukezi/llama.cpp",
+      "revision": "255ab173ffd0ddb8d4ddc9dcfa3fff353bff50d3",
+      "target": "llama-server"
+    },
+    "defaultModel": "models/backbone-Q4_K_M.gguf",
+    "defaultProjector": "models/mmproj-f32.gguf"
+  },
+  "vision": {
+    "name": "llama.cpp / SmolVLM2",
+    "version": "b12470",
+    "summary": "Describe an image or selected video frame using a small CPU vision model.",
+    "packages": [],
+    "worker": "scripts/media/native.py",
+    "arguments": [
+      "vision"
+    ],
+    "codeLicense": "MIT",
+    "modelLicense": "Apache-2.0",
+    "assets": [
+      {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12470/llama-b12470-bin-win-cpu-x64.zip",
+        "path": "downloads/llama-b12470-bin-win-cpu-x64.zip",
+        "size": 25272394,
+        "sha256": "fc83371644b501647c253ca1e42277795eca7ed15851a218b20294275b45d67f",
+        "unpackTo": "bin"
+      },
+      {
+        "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+        "path": "models/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+        "size": 108785184,
+        "sha256": "921dc7e259f308e5b027111fa185efcbf33db13f6e35749ddf7f5cdb60ef520b"
+      },
+      {
+        "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+        "path": "models/SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+        "size": 436808704,
+        "sha256": "6f67b8036b2469fcd71728702720c6b51aebd759b78137a8120733b4d66438bc"
+      }
+    ],
+    "source": "https://github.com/ggml-org/llama.cpp/releases/download/b12470/llama-b12470-bin-win-cpu-x64.zip",
+    "binary": "bin/llama-server.exe",
+    "defaultProjector": "models/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+    "defaultModel": "models/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
   }
 }

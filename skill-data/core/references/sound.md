@@ -44,6 +44,23 @@ Describe the sound, not its job, and in English: "a heavy iron door slamming in 
 
 Pipeline mặc định dùng audio.json và bun run mix để studio và check đọc cùng dữ liệu; real-sound vẫn hữu ích cho nguồn âm, giấy phép và thiết kế cue. Có thể dùng mixer, master hoặc mux riêng, nhưng phải nối đầu ra vào cách preview của phim và tự xem/nghe, kiểm chứng phần công cụ tích hợp không đọc được.
 
+## Optional local media tools
+
+Discover with bun run media list, check with media doctor, and install only the needed backend with media setup <tool>. Each run has a deadline, a fresh evidence folder and cached models; these tools never change audio.json or replace creative decisions.
+
+| Need | Use and limits |
+| --- | --- |
+| Clean noisy speech | bun run media denoise recording.mp4 --from 5 --to 13; DeepFilterNet CPU, output WAV at 48 kHz, keep the original because ambience or consonants may disappear |
+| Lightweight sound labels | bun run media ced recording.wav --top-k 5; CED Tiny CPU gives independent AudioSet scores, not event times or verified probabilities |
+| Draft a voice locally | bun run media tts --text "The door opens."; Kokoro CPU, --voice/--language choose supported voices, no Vietnamese preset and no forced word alignment |
+| Compose editable notes | bun run media midi sting.mid; FluidSynth CPU renders MIDI with a licensed SoundFont, --soundfont selects another file with its own terms |
+| Fingerprint music | bun run media fingerprint bgm.wav --length 30; Chromaprint emits raw fingerprints for comparison, without a title database or copyright judgement |
+| Ask about recorded sound | bun run media caption recording.mp4 --from 5 --to 13 --prompt "Describe the sounds."; experimental MiDashengLM CPU, response.json and source audio stay beside result.json |
+| Trust model text | Caption and vision outputs are unverified hypotheses; small models have hallucinated in local trials, so check retained evidence and use earshot for independent sound comparison |
+| Native options and setup | media <tool> --help; pinned Windows binaries and model hashes live in scripts/media/tools.json, caption setup also needs CMake and MinGW and may need --minutes 20 on a cold build |
+
+The runtime, weights and bundled dependencies have separate licenses: Kokoro uses eSpeak-ng GPL notices, FluidR3 GM retains its MIT grant, and third-party SoundFonts/voices keep their own terms. setup downloads retained assets; inference remains local and a short-lived model server binds only to 127.0.0.1.
+
 ## How mix sets the loudness
 
 The mix goes through `drive` dB into a limiter, then one linear gain brings it to `lufs` (-14), or only as far as its true peak stays under -1.5 dBTP (room for the AAC encode). Never a dynamic loudness pass: it lifts every quiet stretch, room tone up to the voice (AES TD1004).

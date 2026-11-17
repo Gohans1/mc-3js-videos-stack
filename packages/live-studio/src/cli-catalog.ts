@@ -1,4 +1,5 @@
 // Shared CLI catalog schema, 100% repo command inventory, and pure argv/safety resolver (no Node built-ins; safe in browser & server).
+import { nativeMediaSubcommands } from "./media-cli.ts";
 
 export type CliCategoryId = "daily" | "voice" | "sound" | "render" | "setup" | "dev" | "pipeline";
 
@@ -3045,6 +3046,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     cwdModes: ["root", "film"],
     subcommandRequired: true,
     subcommands: [
+      ...nativeMediaSubcommands,
       {
         id: "list",
         label: "list",
@@ -3061,7 +3063,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         id: "setup",
         label: "setup",
-        summary: "Install pinned packages with uv; network, no inference.",
+        summary: "Install pinned packages or verified native binaries/models; network, no inference.",
         args: [{ key: "tool", label: "Tool", type: "string", required: true, placeholder: "ocr" }],
         meta: { effect: "install", speed: "long" },
       },

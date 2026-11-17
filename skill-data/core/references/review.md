@@ -42,6 +42,8 @@ bun run deliver                              # the upload against YouTube's spec
 
 ## Measure a move
 
+For an experimental description of one frame, use bun run media vision reference.mp4 --at 5 --prompt "Describe the visible action." or pass an image. The small CPU model can invent objects or names; result.json marks its text unverified and keeps the frame, model hashes, native response and server log for checking.
+
 `CHECK` runs a built-in check between two heard seconds and writes charts to `renders/`:
 
 ```bash

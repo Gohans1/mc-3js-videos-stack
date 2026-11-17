@@ -80,3 +80,31 @@ test("equals-style output flags cannot bypass fresh evidence folders or overwrit
   assert.equal(readFileSync(join(old, "result.json"), "utf8"), "kept");
   assert.equal(existsSync(out), false);
 });
+
+test("native tool help and doctor do not require a Python package environment", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-native-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const home = join(dir, "empty");
+  for (const id of ["denoise", "ced", "midi", "fingerprint", "tts", "caption", "vision"]) {
+    const help = run([id, "--help"], { MC_MEDIA_HOME: home });
+    assert.equal(help.status, 0, help.stderr);
+    assert.match(help.stdout, /Structured adapters/);
+  }
+  const doctor = run(["doctor", "ced", "--json"], { MC_MEDIA_HOME: home });
+  assert.equal(doctor.status, 1, doctor.stderr);
+  const [tool] = JSON.parse(doctor.stdout);
+  assert.equal(tool.installed, false);
+  assert.ok(tool.binaryPath.startsWith(home));
+  assert.equal(Object.hasOwn(tool, "pythonPath"), false);
+  assert.equal(existsSync(home), false);
+});
+
+test("native doctor does not report an interrupted binary download as installed", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-native-partial-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "denoise/bin"), { recursive: true });
+  writeFileSync(join(dir, "denoise/bin/deep-filter.exe"), "incomplete");
+  const result = run(["doctor", "denoise", "--json"], { MC_MEDIA_HOME: dir });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(JSON.parse(result.stdout)[0].installed, false);
+});

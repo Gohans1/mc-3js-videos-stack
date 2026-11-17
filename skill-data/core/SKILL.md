@@ -35,6 +35,7 @@ Chọn các bước phục vụ cảnh đang dựng, không cần chạy cả ch
 | Xem nhiều khung hình            | bun run sheet                                                                  |
 | Dò cảnh video tham khảo          | bun run scenes <video>; tùy chọn CPU, mốc theo file nguồn, không sửa timeline |
 | Đọc chữ trong ảnh/video          | bun run media ocr <file> --at 5,10; JSON kèm vùng chữ, score, frame và giây nguồn |
+| Công cụ âm/hình local tùy chọn | bun run media list; --help từng tool; sound/review nêu cách dùng và giới hạn model |
 | Kiểm tra hình và nhịp của draft | bun run render clip; bun run framecheck; bun run pace                          |
 | Ghép âm thanh vào draft         | bun run mix renders/draft_video.mp4; tạo renders/draft.mp4                     |
 | Đo mức âm                       | bun run listen; không dùng số đo mức âm để kết luận tiếng gì hoặc có hợp cảnh  |

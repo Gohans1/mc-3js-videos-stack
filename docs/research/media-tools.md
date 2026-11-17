@@ -11,8 +11,12 @@
 | Triển khai mở rộng | Đang xử lý toàn bộ danh sách giữ lại theo yêu cầu mới, không dừng ở báo cáo | Hoàn tất từng công cụ hoặc ghi bằng chứng không phù hợp; hai review mỗi nhóm |
 | RapidOCR | Đã cài CPU, nối CLI/help/skill/catalog; clip thật, ảnh Việt/Anh và blank đã kiểm; hai review vòng 2 PASS, mỗi bên 67 test | Giữ frame/score vì dòng Việt bị mất dấu/chữ, không coi OCR là nhãn chuẩn |
 | Nền media CLI | Đã có list/doctor/setup, môi trường riêng, timeout dọn cây process và bằng chứng mỗi lượt; hai review PASS | Mở rộng backend kế tiếp, không dừng ở nhóm OCR |
-| Native CPU | DeepFilterNet, CED, FluidSynth và Chromaprint đã chạy binary thật, chưa nối media CLI | Nối installer có kiểm hash, adapter và demo; Kokoro còn thiếu đường load eSpeak |
-| Caption local | Đã tải weights Q4/projector có SHA-256, đang build fork llama.cpp trên MinGW CPU | Chạy caption thật rồi mới ghi đạt |
+| Native CPU | Đã nối media CLI cho DeepFilterNet, CED, FluidSynth, Chromaprint, Kokoro; chạy source thật, MIDI và voice; installer kiểm SHA-256 và giữ notices | Đồng bộ catalog/help, review nhóm native |
+| Caption/vision local | MiDashengLM Q4 và SmolVLM2 Q8 đã chạy CPU qua API JSON local, server tắt sau job | Model nhỏ trả câu chưa chắc đúng và đã bịa tên game; chỉ là gợi ý chưa xác minh, không thay bằng chứng gốc |
+| Review native vòng 1 | Reviewer 1 bắt ghi đè khi gọi worker trực tiếp, reviewer 2 bắt clone HEAD trùng pin chưa checkout; đã sửa và thêm regression fail trước/pass sau | CED truyền threads thật, fingerprint từ chối length 0; đang review lại độc lập |
+| Review native vòng 2 | Reviewer 2 PASS; reviewer 1 bắt resume clone chưa checkout và file giải nén dở chặn lần sau | Đã sửa checkout và giải nén atomic từng file; regression gây ngắt thật rồi chạy tiếp, tăng test validation theo góp ý reviewer 2 |
+| Review native vòng 3 | Hai reviewer đều PASS, mỗi bên 42 test và nhiều probe native; hash nguồn và deadline/server đã kiểm | Đã sửa thêm Optional của reviewer 1: doctor kiểm receipt hoàn tất và kích thước asset, không báo sẵn sàng vì file tải dở tồn tại |
+| SDK âm thanh | Đã cài riêng Beat This, Pedalboard, OTIO, sherpa-onnx, Basic Pitch, Audio Separator và PE-A qua Transformers | Nối adapter, model và kiểm dữ liệu thật; chưa gọi là đã tích hợp xong |
 
 ## Đã kiểm chứng
 
@@ -62,7 +66,7 @@ Số sao và lịch sử dưới đây là ảnh chụp ngày 17/11/2026, không
 | Công cụ và nguồn | Uy tín, hoạt động | Dùng khi nào và giới hạn |
 | --- | --- | --- |
 | [PE-A-Frame](https://huggingface.co/facebook/pe-a-frame-small) | Meta Research, repo chung 2.410 sao, HEAD 12/2025; code/model Apache-2.0 | Tìm khoảng có âm mô tả, model Small 450M; SDK cần CLI mỏng, Windows/6 GB chưa thử và embedding mỗi 40 ms không có nghĩa sai số 40 ms |
-| [MiDashengLM 0.6B](https://github.com/xiaomi-research/dasheng-lm) | Xiaomi Horizon/MiLM Plus; 452 sao, HEAD 24/04, Apache-2.0 | Mô tả âm bằng câu tự do; GGUF CPU hiện cần [fork llama.cpp riêng](https://huggingface.co/mispeech/midashenglm-0.6b-gguf), chưa chốt runtime Windows |
+| [MiDashengLM 0.6B](https://github.com/xiaomi-research/dasheng-lm) | Xiaomi Horizon/MiLM Plus; 452 sao, HEAD 24/04, Apache-2.0 | Đã build fork llama.cpp và chạy Windows CPU qua JSON local; câu thử chưa đáng tin, giữ audio/response và nhãn chưa xác minh |
 | [CED.cpp](https://github.com/localai-org/ced.cpp) | Ettore Di Giacinto/LocalAI; 108 sao, HEAD 04/10, release 0.2.0 tháng 09 | CLI Windows CPU gắn 527 nhãn âm, tiny Q8 khoảng 6 MB; code MIT, weights Apache-2.0, labels CC-BY-4.0, trùng earshot nên chỉ thử nếu cần runtime nhẹ |
 | [audio.cpp và Kokoro](https://github.com/0xShug0/audio.cpp) | ShugoAI/0xShug0, lý lịch Princeton tự khai chưa xác minh; 4.314 sao, HEAD 17/11, release 0.9.5 ngày 14/11 | CLI/API Windows tạo voice nháp bằng [Kokoro 82M Apache-2.0](https://huggingface.co/hexgrad/Kokoro-82M), runtime Apache-2.0; model khác có quyền riêng, Kokoro hiện không có voice Việt và timing của port không phải word alignment |
 | [FluidSynth](https://github.com/FluidSynth/fluidsynth) | Peter Hanappe, maintainer Tom Moebert; 2.551 sao, HEAD 15/11, release 2.6.2 ngày 01/11 | CLI Windows CPU render MIDI thành sting/BGM tự sửa từng nốt; LGPL-2.1, cần kiểm license SoundFont riêng |

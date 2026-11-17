@@ -16,6 +16,24 @@ import {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
+test("media native tools remain discoverable and preserve their structured arguments", () => {
+  const tools = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/media/tools.json"), "utf8"));
+  const catalog = findCliCommand("media");
+  for (const [id, tool] of Object.entries(tools))
+    if (tool.binary) expect(catalog.subcommands.some((sub) => sub.id === id)).toBe(true);
+  const request = buildCliInvocation(
+    {
+      commandId: "media",
+      subcommandPath: ["ced"],
+      args: { source: "speech.wav" },
+      flags: { "--top-k": 3 },
+    },
+    BASE_CONTEXT,
+  );
+  expect(request.validationErrors).toEqual([]);
+  expect(request.argvTokens).toEqual(["ced", "speech.wav", "--top-k", "3"]);
+});
+
 const BASE_CONTEXT = {
   activeFilm: "cell-break",
   isDemo: false,
@@ -249,6 +267,12 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ["scripts/review/stale.py", "shared staleness helper module wrapping src/stale.mjs"],
       ["scripts/seconds.py", "shared heard-second parsing library imported by Python CLIs"],
       ["scripts/media/ocr.py", "RapidOCR SDK adapter spawned by the media CLI"],
+      ["scripts/media/native.py", "native CPU media adapter spawned by the media CLI"],
+      ["scripts/media/install.py", "verified native asset installer spawned by media setup"],
+      [
+        "scripts/media/llama.py",
+        "local llama.cpp server lifecycle/client used by the native media adapter",
+      ],
       ["scripts/sound/beats.py", "stdin JSON beat-detection worker spawned by Live Studio audio"],
       [
         "scripts/sound/process.py",
