@@ -512,7 +512,7 @@ test("structured semantic results retain the best source chunk and a keyword fal
     );
     expect(emptyFavorites).toMatchObject({ mode: "keyword-fallback", query: "rain", results: [] });
     expect(emptyFavorites.notes.join(" ")).toContain("nothing is starred");
-    await expect(findRun(["--json", "rain"], entries)).rejects.toThrow(/semantic/);
+    expect(JSON.parse(await findRun(["--json", "rain"], entries)).query).toBe("rain");
   } finally {
     index.close();
     rmSync(folder, { recursive: true, force: true });

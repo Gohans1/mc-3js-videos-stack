@@ -34,6 +34,36 @@ const BASE_CONTEXT = {
   },
 };
 
+test("default dual search and its evaluation expose offline/JSON controls without provider credentials", () => {
+  const spec = buildCliInvocation(
+    {
+      commandId: "find",
+      args: { words: "creeper hiss" },
+      flags: { "--json": true, "--offline": true },
+    },
+    BASE_CONTEXT,
+  );
+  expect(spec.validationErrors).toEqual([]);
+  expect(spec.missingEnvGroups).toEqual([]);
+  expect(spec.meta.cost).toBe("free");
+  expect(spec.argvTokens).toEqual(expect.arrayContaining(["--offline", "--json"]));
+  expect(
+    isFieldVisible(findCliCommand("find").flags.find((f) => f.key === "--json").visibleWhen, {}),
+  ).toBe(true);
+  const evaluation = buildCliInvocation(
+    {
+      commandId: "eval:find",
+      flags: { "--mode": "dual", "--plan": true, "--max-seconds": "30", "--max-requests": "20" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(evaluation.validationErrors).toEqual([]);
+  expect(evaluation.missingEnvGroups).toEqual([]);
+  expect(evaluation.meta.cost).toBe("free");
+  expect(evaluation.meta.effect).toBe("read");
+  expect(evaluation.argvTokens).toEqual(expect.arrayContaining(["--mode", "dual", "--plan"]));
+});
+
 test("embedding controls stay offline by default and respect the selected provider's credentials", () => {
   const missing = buildCliInvocation({ commandId: "assets:semantic" }, BASE_CONTEXT);
   expect(missing.validationErrors.some((error) => error.includes("subcommand"))).toBe(true);
@@ -358,6 +388,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
     const INTERNAL_WORKER_OR_HELPER_FILES = new Map([
       ["scripts/evals/load/compare.mjs", "developer helper comparing recorded performance runs"],
       ["scripts/evals/load/frame.mjs", "developer frame-measurement probe for load evaluations"],
+      ["scripts/evals/find/dual.ts", "dual search evaluation dispatched by eval:find --mode dual"],
       ["scripts/studio_tell.py", "shared Studio activity reporter library imported by Python CLIs"],
       ["packages/clip-catalog/jev.py", "stdin JSON helper library/IPC wrapper for Jev"],
       ["packages/live-studio/src/cli.mjs", "shared CLI argument parser imported by entrypoints"],
@@ -1165,7 +1196,7 @@ describe("cli-catalog resolver rules", () => {
       BASE_CONTEXT,
     );
     expect(falseBool.argvTokens).toEqual([]);
-    expect(falseBool.meta.cost).toBe("optional-paid");
+    expect(falseBool.meta.cost).toBe("free");
 
     const sheetClip = buildCliInvocation({ commandId: "catalog:sheet-clip" }, BASE_CONTEXT);
     expect(sheetClip.validationErrors).toEqual([]);

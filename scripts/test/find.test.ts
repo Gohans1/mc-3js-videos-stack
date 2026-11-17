@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -8,7 +9,6 @@ import { TEXT_IN, TEXT_OUT } from "../../packages/film-stage/src/titles";
 import { TRANSITIONS } from "../../packages/film-stage/src/transitions";
 import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
 import {
-  allEntries,
   easeAbout,
   type Entry,
   markStarred,
@@ -1633,17 +1633,38 @@ test("a film's own sounds have their length, and its bgm folder holds music", ()
   };
   wav(join(film, "sound/sfx/my-hit.wav"));
   wav(join(film, "sound/sfx/bgm/calm/my-theme.wav"));
-  const mine = allEntries(true, film).filter((x) => x.src === "this-film");
-  expect(mine.find((x) => x.id === "my-hit")?.secs).toBeCloseTo(1, 2);
-  expect(mine.find((x) => x.id === "my-theme")?.kind).toBe("bgm");
-  // a film file named as a vault sound plays instead of it (sound.mjs): one entry, no second take
-  const vault = allEntries(true, film).find(
-    (x) => x.kind === "sfx" && x.src !== "this-film" && x.takes === 1,
-  )!;
-  wav(join(film, `sound/sfx/${vault.id}.wav`));
-  const same = allEntries(true, film).filter((x) => x.id === vault.id);
-  expect(same.map((x) => [x.src, x.takes])).toEqual([["this-film", 1]]);
-  rmSync(film, { recursive: true });
+  const fixtureVault = join(film, "vault");
+  wav(join(fixtureVault, "sound/sfx/foley/vault-hit.wav"));
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--no-env-file",
+        "-e",
+        `import {allEntries} from ${JSON.stringify(new URL("../find.ts", import.meta.url).href)};
+import {copyFileSync} from "node:fs";
+const film = ${JSON.stringify(film)};
+const before = allEntries(true, film);
+copyFileSync(film + "/sound/sfx/my-hit.wav", film + "/sound/sfx/vault-hit.wav");
+console.log(JSON.stringify({before, after: allEntries(true, film).filter(x => x.id === "vault-hit")}));`,
+      ],
+      {
+        env: { ...process.env, MC_VAULT_ROOT: fixtureVault, MC_VAULT_EXTERNAL: fixtureVault },
+        encoding: "utf8",
+        timeout: 10000,
+        windowsHide: true,
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const { before, after } = JSON.parse(result.stdout) as { before: Entry[]; after: Entry[] };
+    const mine = before.filter((x) => x.src === "this-film");
+    expect(mine.find((x) => x.id === "my-hit")?.secs).toBeCloseTo(1, 2);
+    expect(mine.find((x) => x.id === "my-theme")?.kind).toBe("bgm");
+    expect(before.find((x) => x.id === "vault-hit")).toMatchObject({ kind: "sfx", takes: 1 });
+    expect(after.map((x) => [x.src, x.takes])).toEqual([["this-film", 1]]);
+  } finally {
+    rmSync(film, { recursive: true });
+  }
 });
 
 test("the eases of one group are told apart at the start of their rows, not by the job they share", async () => {

@@ -26,7 +26,7 @@ Chọn các bước phục vụ cảnh đang dựng, không cần chạy cả ch
 
 | Việc                            | Lệnh hoặc nơi chỉnh                                                            |
 | ------------------------------- | ------------------------------------------------------------------------------ |
-| Tìm chất liệu, preset           | bun run find <words>; --semantic dùng index đã chuẩn bị, --json cho AI; đọc --ref sound và kiểm tra giấy phép |
+| Tìm chất liệu, preset           | bun run find <words>: BM25 rồi OpenFilm semantic riêng; --json cho AI, --offline chỉ dùng cache; đọc --ref sound |
 | Dựng cảnh và hiệu ứng riêng     | src/scene.ts; bun run skills get core --ref contract                           |
 | Chỉnh dữ liệu                   | Các file timeline ghi trong package.json của phim; bun run check sau khi chỉnh |
 | Giữ một hướng dựng              | Film → Versions; bun run history --film films/tên --help |
@@ -69,6 +69,7 @@ Không chỉnh notes/notes.jsonl bằng tay. Final xuất ra renders/final.mp4; 
 | ------------------------------- | ------------------------------------------------------------------------------------------- |
 | voice:gen --yes                 | Tốn credits; chạy không --yes để xem trước, chỉ tạo lại take cần sửa                        |
 | find --jev                      | Gọi dịch vụ ngoài, có quota/chi phí; tìm bằng từ khóa trước khi cần tìm theo nghĩa          |
+| find <words>                    | Có thể gửi câu tìm tới OpenFilm; hai khối độc lập, --offline không gọi mạng, lỗi vẫn giữ BM25 |
 | assets:semantic build --yes, find --semantic --yes | Gửi media/câu tìm tới Gemini hoặc OpenRouter, dùng quota/credits; plan và cache offline không gọi API |
 | render final, deliver --youtube | Có thể lâu; xem --help và giới hạn đoạn cần kiểm tra                                        |
 | Thử lệnh có ghi dữ liệu         | Dùng phim thử riêng; bun run skills get core --ref film                                     |

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -91,6 +92,61 @@ test("malformed scores and service failures never become candidates", async () =
       });
       expect(result.hits).toEqual([]);
       expect(result.notes.length).toBeGreaterThan(0);
+    }
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a stalled service times out and an oversized response is rejected", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "of-search-"));
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch: () => new Promise<Response>(() => {}),
+  });
+  try {
+    const timed = await openFilmSearch("hit", [entry("hit")], {
+      cache: join(folder, "timeout.sqlite"),
+      offline: false,
+      fetch: (_input, init) => fetch(`http://127.0.0.1:${server.port}`, init),
+    });
+    expect(timed.hits).toEqual([]);
+    expect(timed.notes.join(" ")).toMatch(/timed out|timeout|abort/i);
+    const large = await openFilmSearch("hit", [entry("hit")], {
+      cache: join(folder, "large.sqlite"),
+      offline: false,
+      fetch: async () => new Response("x".repeat(65537)),
+    });
+    expect(large.hits).toEqual([]);
+    expect(large.notes.join(" ")).toContain("64 KB");
+  } finally {
+    server.stop(true);
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a different SQLite database is preserved when chosen as the cache by mistake", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "of-search-")),
+    file = join(folder, "existing.sqlite");
+  const original = new Database(file, { create: true });
+  original.run("CREATE TABLE valuable(value TEXT); INSERT INTO valuable VALUES ('keep')");
+  original.close();
+  try {
+    const result = await openFilmSearch("hit", [entry("hit")], {
+      cache: file,
+      offline: false,
+      fetch: async () => {
+        throw new Error("unexpected network");
+      },
+    });
+    expect(result.hits).toEqual([]);
+    expect(result.notes.join(" ")).toContain("separate");
+    const restored = new Database(file);
+    try {
+      expect(restored.query("SELECT value FROM valuable").get()).toEqual({ value: "keep" });
+    } finally {
+      restored.close();
     }
   } finally {
     rmSync(folder, { recursive: true, force: true });

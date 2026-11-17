@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import type { Entry } from "../find";
 import { ROOT } from "../vault.mjs";
@@ -12,7 +12,8 @@ export type OpenFilmLookup = (
   pool: Entry[],
   options?: Options,
 ) => Promise<OpenFilmResult>;
-type Options = { cache?: string; offline?: boolean; fetch?: typeof fetch };
+export type SearchFetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
+type Options = { cache?: string; offline?: boolean; fetch?: SearchFetch };
 const CATEGORIES = new Set(["transition", "effect", "text", "sticker", "filter", "template"]);
 export const openFilmCategory = (entry: Entry): string | undefined => {
   if (entry.src !== "openfilm" || typeof entry.data?.upstreamId !== "string") return;
@@ -70,7 +71,7 @@ export const openFilmSearch = async (
   if (!query.trim() || Buffer.byteLength(query, "utf8") > 2048)
     return { ...result, notes: ["OpenFilm skipped: query needs 1–2048 UTF-8 bytes"] };
   const file =
-    options.cache ?? process.env.MC_FIND_CACHE ?? join(ROOT, ".studio/openfilm-search.sqlite");
+    options.cache ?? resolve(ROOT, process.env.MC_FIND_CACHE || ".studio/openfilm-search.sqlite");
   const offline = options.offline ?? process.env.MC_FIND_OFFLINE === "1";
   if (offline && !existsSync(file))
     return { ...result, notes: ["OpenFilm offline: no search cache"] };
@@ -137,9 +138,8 @@ export const openFilmSearch = async (
     for (let i = 0; i < categories.length; i += 2)
       await Promise.all(categories.slice(i, i + 2).map(load));
     // Category scores share one embedding model; arrival order must not rank sound above music.
-    result.hits = categories
-      .flatMap((cat) => byCategory.get(cat) ?? [])
-      .sort((a, b) => b.score - a.score || a.entry.id.localeCompare(b.entry.id));
+    result.hits = categories.flatMap((cat) => byCategory.get(cat) ?? []);
+    if (categories.length > 1) result.hits.sort((a, b) => b.score - a.score);
     result.notes = categories.flatMap((cat) =>
       problems.has(cat) ? [`OpenFilm ${cat}: ${problems.get(cat)}; keyword results retained`] : [],
     );

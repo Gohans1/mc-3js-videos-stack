@@ -241,7 +241,7 @@
       "language": "en",
       "group": "scene-pilot",
       "relevant": [
-        "[\"transition\",\"film-stage/transitions-meta.ts\",\"black\"]"
+        "[\"transition\",\"film-stage/transitions.ts\",\"black\"]"
       ]
     },
     {
@@ -250,7 +250,7 @@
       "language": "vi",
       "group": "scene-pilot",
       "relevant": [
-        "[\"transition\",\"film-stage/transitions-meta.ts\",\"black\"]"
+        "[\"transition\",\"film-stage/transitions.ts\",\"black\"]"
       ]
     }
   ]

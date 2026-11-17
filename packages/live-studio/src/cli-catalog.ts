@@ -585,7 +585,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         multi: true,
         placeholder: "creaky door",
-        hint: "Plain English keywords, or a scene description with --jev or --semantic",
+        hint: "Keywords then OpenFilm meaning candidates, in separate blocks. Use English to include local-only assets.",
       },
     ],
     flags: [
@@ -634,8 +634,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "JSON results",
         type: "boolean",
         tier: "advanced",
-        visibleWhen: { field: "--semantic", in: ["true"] },
-        hint: "Structured results and fallback notes, including source chunk times and actual embedding input type.",
+        hint: "Independent keyword/semantic blocks and fallback notes; explicit --semantic keeps its vector-index schema.",
+      },
+      {
+        key: "--offline",
+        flag: "--offline",
+        label: "Cached searches only",
+        type: "boolean",
+        tier: "common",
+        hint: "Skip external queries and read saved results. Cannot combine with --jev or --yes.",
       },
       {
         key: "--yes",
@@ -680,7 +687,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "number",
         tier: "common",
         placeholder: "12",
-        hint: "Hits shown (default 12, max 200)",
+        hint: "Hits per independent block (default 12, max 200)",
       },
       {
         key: "--show",
@@ -902,7 +909,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       effect: "read",
       cost: "optional-paid",
       costHint:
-        "Words and cached semantic queries are offline. --semantic --yes permits a provider request with project quota/billing; --jev uses its existing judge service.",
+        "Default queries send text to OpenFilm without a key; --offline reads cache only. --semantic --yes uses provider quota/billing; --jev uses its judge service.",
       speed: "instant",
       cancellable: true,
       helpMode: "flag",
@@ -3863,17 +3870,70 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         tier: "common",
         placeholder: "holdout-a",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
       },
       {
         key: "--mode",
         flag: "--mode",
         label: "Mode",
         type: "enum",
-        options: ["words", "jev", "both"],
+        options: ["words", "jev", "both", "dual"],
         tier: "common",
       },
-      { key: "--kind", flag: "--kind", label: "Filter Kind", type: "string", tier: "common" },
-      { key: "--fresh", flag: "--fresh", label: "Restart Run", type: "boolean", tier: "common" },
+      {
+        key: "--live",
+        flag: "--live",
+        label: "Allow OpenFilm requests",
+        type: "boolean",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+        hint: "Only text queries to OpenFilm; no Jev or embedding provider calls.",
+      },
+      {
+        key: "--plan",
+        flag: "--plan",
+        label: "Preview evaluation corpus",
+        type: "boolean",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--out",
+        flag: "--out",
+        label: "Report path",
+        type: "string",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--max-seconds",
+        flag: "--max-seconds",
+        label: "Time limit (seconds)",
+        type: "number",
+        placeholder: "600",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--max-requests",
+        flag: "--max-requests",
+        label: "OpenFilm request limit",
+        type: "number",
+        placeholder: "1000",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--kind",
+        flag: "--kind",
+        label: "Filter Kind",
+        type: "string",
+        tier: "common",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
+      },
+      {
+        key: "--fresh",
+        flag: "--fresh",
+        label: "Restart Run",
+        type: "boolean",
+        tier: "common",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
+      },
       {
         key: "-j",
         flag: "-j",
@@ -3881,6 +3941,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "number",
         placeholder: "3",
         tier: "advanced",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
       },
       {
         key: "--finish",
@@ -3888,13 +3949,22 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Score Stopped Run",
         type: "boolean",
         tier: "advanced",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
       },
-      { key: "--note", flag: "--note", label: "History Note", type: "string", tier: "advanced" },
+      {
+        key: "--note",
+        flag: "--note",
+        label: "History Note",
+        type: "string",
+        tier: "advanced",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
+      },
     ],
     meta: {
       effect: "write",
       cost: "optional-paid",
-      costHint: "words mode is free; jev/both runs Jev judge queries across the case set.",
+      costHint:
+        "words/dual are free; dual is cached-only unless --live. jev/both calls Jev across the case set.",
       speed: "long",
       cancellable: true,
       helpMode: "flag",
@@ -4772,6 +4842,9 @@ function computeEffectiveMeta(
       if (isBooleanActive(flags["--semantic"])) {
         next.cost = isBooleanActive(flags["--yes"]) ? "optional-paid" : "free";
         next.speed = "short";
+      } else {
+        next.cost = "free";
+        next.speed = isBooleanActive(flags["--offline"]) ? "instant" : "short";
       }
     }
   } else if (
@@ -4831,9 +4904,13 @@ function computeEffectiveMeta(
   } else if (commandId === "studio:init" && isBooleanActive(flags["--dry"])) {
     next.effect = "read";
   } else if (commandId === "eval:find") {
-    if (flags["--mode"] === "words") {
+    if (["words", "dual"].includes(String(flags["--mode"]))) {
       next.cost = "free";
       next.envAnyOf = undefined;
+      if (flags["--mode"] === "dual" && isBooleanActive(flags["--plan"])) {
+        next.effect = "read";
+        next.confirm = { mode: "none", message: "" };
+      }
     } else {
       next.cost = "paid";
     }

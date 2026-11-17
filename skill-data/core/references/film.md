@@ -64,7 +64,7 @@ After every JSON edit run `bun run check`: the studio's own schemas, every sound
 ## What a film can name
 
 ```bash
-bun run find impact --kind sfx -n 20         # by words: free, offline, instant
+bun run find impact --kind sfx -n 20         # BM25, then OpenFilm meaning; --offline for cached-only search
 bun run find --kind look                     # named grades (teal-amber, noir-slate); --kind lens, --kind shake too
 bun run find --show dissolve                 # one entry in full, with a line to paste
 bun run find --jev --kind transition "a memory slipping away"   # by meaning, when words miss

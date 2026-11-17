@@ -16,6 +16,16 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+if (process.argv[process.argv.indexOf("--mode") + 1] === "dual") {
+  try {
+    process.exitCode = await (await import("./dual")).runDualEval(process.argv.slice(2));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+  }
+  process.exit(process.exitCode ?? 0);
+}
+
 const HERE = dirname(fileURLToPath(import.meta.url)),
   ROOT = join(HERE, "../../..");
 // TypeSafe's starting thresholds for a Noul answer: yes above 0.7, no below 0.3 (catalog.py uses the same)
@@ -27,7 +37,9 @@ const KINDS = new Set(
   ),
 );
 
-const HELP = `Usage: bun run eval:find [--set <name>] [--mode jev|words|both] [--kind <k>] [--fresh] [-j N] [--finish] [--note <t>]
+const HELP = `Usage: bun run eval:find [--set <name>] [--mode jev|words|both|dual] [--kind <k>] [--fresh] [-j N] [--finish] [--note <t>]
+--mode dual evaluates the independent BM25/OpenFilm blocks without Jev: --mode dual --help for options.
+words reads only structured BM25 results with --offline; cached OpenFilm candidates are never scored as words.
 Runs scripts/evals/find/cases/<set>.tsv (default: every set) through bun run find, scores it, and keeps:
   runs/<set>.<mode>.jsonl   every case's top 5 hits, fits and verdict (the last run; a stopped run resumes from it)
   runs/history.jsonl        one line per finished run: accuracy overall, per kind, language and style, commit, time
@@ -154,7 +166,15 @@ const once = async (c: Case, mode: string): Promise<Row> => {
   const t0 = performance.now();
   const p = spawn(
     "bun",
-    ["scripts/find.ts", ...(mode === "jev" ? ["--jev"] : []), "--kind", c.kind, c.query, "-n", "5"],
+    [
+      "scripts/find.ts",
+      ...(mode === "jev" ? ["--jev"] : ["--json", "--offline"]),
+      "--kind",
+      c.kind,
+      c.query,
+      "-n",
+      "5",
+    ],
     { cwd: ROOT },
   );
   const timer = setTimeout(() => p.kill(), 300_000);
@@ -164,7 +184,20 @@ const once = async (c: Case, mode: string): Promise<Row> => {
   p.stderr.on("data", (d) => (err += d));
   const code = await new Promise<number | null>((done) => p.on("close", done));
   clearTimeout(timer);
-  const hits = parseHits(out + "\n" + err);
+  let hits: Hit[] = [],
+    parseError = "";
+  if (mode === "jev") hits = parseHits(out + "\n" + err);
+  else {
+    try {
+      const rows: { id: string }[] = JSON.parse(out).keyword.results;
+      hits = rows.slice(0, 5).map(({ id }) => {
+        if (typeof id !== "string") throw new Error("keyword result has no ID");
+        return { id, share: null, fits: null };
+      });
+    } catch (error) {
+      parseError = `Cannot read keyword JSON: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
   // Jev unreachable (quota, key, network): find falls back to word matches, which must not score as Jev's answer. With
   // --kind Jev always votes, so a Jev run with no voted hit is a failed run, not an empty answer
   const jevDown = mode === "jev" && (!hits.length || hits.every((h) => h.share === null));
@@ -174,8 +207,8 @@ const once = async (c: Case, mode: string): Promise<Row> => {
     hits,
     ...score(c, mode, hits),
     secs: Math.round(performance.now() - t0) / 1000,
-    ...((code || jevDown) && {
-      err: `${err}\n${out}`.trim().split("\n").slice(-4).join(" | ").slice(0, 600),
+    ...((code || jevDown || parseError) && {
+      err: `${err}\n${out}\n${parseError}`.trim().split("\n").slice(-4).join(" | ").slice(0, 600),
     }),
   };
 };

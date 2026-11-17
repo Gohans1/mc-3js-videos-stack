@@ -1,5 +1,5 @@
 // One lookup over everything a film can name (vault sounds, every film-stage preset), built so an agent reads ~15 lines
-// instead of grepping 3 MB of SOURCES.json: bun run find --help. Jev (packages/clip-catalog/jev.py) ranks by meaning.
+// instead of grepping SOURCES.json: bun run find --help. Keyword and OpenFilm meaning results keep separate orders.
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join, relative } from "node:path";
@@ -31,6 +31,8 @@ import {
 import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
 import { audioInfo } from "../packages/live-studio/src/sound.mjs";
 import { importedEntries } from "./imported-catalog";
+import { openFilmCategory, type OpenFilmLookup, openFilmSearch } from "./search/openfilm";
+import { dualSearchOutput } from "./search/output";
 import { assetFile, assetKey } from "./semantic/catalog";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
@@ -570,6 +572,42 @@ export function rank(
     .slice(0, opt.n ?? Infinity);
 }
 
+export const keywordSearch = (entries: Entry[], query: string, kinds?: string[]) => {
+  const foreign = isForeign(query);
+  const kindNames = kinds?.map((kind) => kind.split("/")[0]!);
+  const kindSaid = new Set(
+    (kindNames ?? []).flatMap((kind) =>
+      (kind === "sound" ? SOUND : [kind]).flatMap((name) => [
+        ...words(`${name} ${KIND_WORDS[name] ?? ""}`),
+        ...Object.entries(KIND_ALIAS).flatMap(([word, to]) => (to === name ? [word] : [])),
+        ...Object.entries(KIND_NAMED).flatMap(([word, to]) => (to === name ? [word] : [])),
+      ]),
+    ),
+  );
+  const said = plain(query).filter((word) => !kindSaid.has(stem(word)));
+  const asks = said.length ? said.join(" ") : query;
+  const ranked = foreign ? [] : rank(entries, asks);
+  const typed = [...new Set(plain(asks))].filter(
+    (word) => !STOP.has(stem(word)) && !/^\d+$/.test(word),
+  );
+  const named = kinds ? [] : [...new Set(typed.flatMap((word) => KIND_NAMED[stem(word)] ?? []))];
+  const whole = plain(query).join(" ");
+  const first = (entry: Entry) =>
+    plain(entry.id).join(" ") === whole
+      ? -1
+      : (entry.kind === "mocap" && (entry.secs ?? 1) < 0.1 ? 2 : 0) +
+        (named.length && !named.includes(top(entry.kind)) ? 1 : 0);
+  return {
+    foreign,
+    said,
+    asks,
+    ranked,
+    typed,
+    named,
+    matches: ranked.toSorted((a, b) => first(a) - first(b)),
+  };
+};
+
 type SoundItem = {
   name: string;
   kind?: string;
@@ -1103,9 +1141,13 @@ Options:
   --star <id[,id]> star for the creator, when asked (--unstar takes it off); into a named list: --star boom --fav horror
                    (a new name makes the list). An id in several kinds needs --kind
   Any filter without a value lists its values with counts: bun run find --source lists every source and mod pack.
-  Other names work and the first line says how they were read: --licence, --type/--category (--kind), --pack/--mod
+  Other names work and the output says how they were read: --licence, --type/--category (--kind), --pack/--mod
   (--source), --length/--duration (--dur), --limit (-n); values too: --origin recorded, --edition mods, --license cc-by
-  -n <N>           hits shown (default 12, at most 200)
+  -n <N>           hits per block (default 12, at most 200); BM25 and OpenFilm semantic have independent limits
+  --offline        no OpenFilm requests: use its saved responses (24 h cache), else show BM25 with a cache-miss note
+  --json           ordinary search: {mode,query,notes,keyword:{results},semantic:{scope,categories,results}}
+                   The two blocks never reorder or remove one another. alsoKeyword marks a repeated asset;
+                   similarity is not confidence. --semantic below retains its existing vector-index JSON contract.
   --jev            rank by meaning with Jev, a small AI judge that reads any language: 1-3 s, under $0.01 a search. With
                    --kind it reads every entry of those kinds; without, it only reorders the word matches. Each hit
                    shown also gets "fits" 0-1, Jev's own yes that it is what you asked for; the next: line then says
@@ -1127,8 +1169,15 @@ Options:
                    With words or --jev "<scene>"; a wrong posture lists them
   Any filter alone (--kind, --source, --origin, --edition, --license, --dur, --fav) lists what it keeps.
 
-Words first: free, offline, instant, English only (translate first). Name the thing, not the moment: "whoosh", not "the
-camera flies past"; Minecraft sounds also match what the game's subtitles say ("creeper hisses", "door creaks"). A sound
+Ordinary search returns BM25 first, then independent OpenFilm semantic candidates when those assets pass your filters.
+OpenFilm receives only query text/category/limit, no files or keys; each category waits at most 2.5 s, two at a time.
+Responses are cached for 24 h in MC_FIND_CACHE or .studio/openfilm-search.sqlite; MC_FIND_OFFLINE=1 disables requests.
+API/cache errors keep BM25 intact. No prepared embedding index, Gemini, OpenRouter or Jev is used by default.
+MC_FIND_CACHE paths start at the repo root; --offline uses fresh cache entries only. --kind mc never calls OpenFilm.
+The semantic service always returns nearest candidates, even for nonsense: listen/view; no result is a fit guarantee.
+BM25 searches English only (translate first); OpenFilm accepts other languages but cannot search local-only Minecraft.
+Name the thing for precise keywords ("whoosh"); describe the scene for semantic alternatives. Minecraft sounds also
+match the game's subtitles ("creeper hisses", "door creaks"). A sound
 ask without --kind also meets mocap clips and presets: add --kind sound. No hit: other plain words, then browse the
 groups (--kind sfx, then --kind sfx/<group>). Music has no tags beyond its group: for another mood, list a bgm group
 and rank it by ear (earshot rank). --jev (paid) last, when the cue is a feeling or a moment ("the moment he realises
@@ -1738,6 +1787,7 @@ const OPTIONS: Record<string, string | null> = {
   "--jev": null,
   "--semantic": null,
   "--json": null,
+  "--offline": null,
   "--yes": null,
   "--db": "--db path.sqlite",
   "--dimensions": "--dimensions 768",
@@ -2014,6 +2064,7 @@ export async function run(
   judge: Judge = jevJudge,
   clips: Catalog = catalog,
   favorites: FavoriteLists = favoriteLists(),
+  lookup: OpenFilmLookup = openFilmSearch,
 ): Promise<string> {
   const lists = favorites.lists();
   const { set, query, notes, bare } = parse(
@@ -2034,17 +2085,18 @@ export async function run(
     sources = list(set.get("--source"));
   let kinds = asked;
   if (set.has("--help") || set.has("-h")) return HELP;
+  if (set.has("--offline") && (jev || set.has("--yes")))
+    throw new FindError("--offline cannot be combined with --jev or --yes");
+  if (set.has("--json") && (jev || !query || Object.keys(BODY).some((key) => set.has(key))))
+    throw new FindError(
+      "--json needs search words; use --jev or mocap body filters in a separate call",
+    );
   if (semantic && (jev || !query || Object.keys(BODY).some((key) => set.has(key))))
     throw new FindError(
       "--semantic needs scene words and keeps catalog filters; use --jev or mocap body filters in a separate call",
     );
-  if (
-    !semantic &&
-    ["--yes", "--db", "--dimensions", "--provider", "--json"].some((key) => set.has(key))
-  )
-    throw new FindError(
-      "--yes, --db, --dimensions, --provider and --json apply only to --semantic",
-    );
+  if (!semantic && ["--yes", "--db", "--dimensions", "--provider"].some((key) => set.has(key)))
+    throw new FindError("--yes, --db, --dimensions and --provider apply only to --semantic");
   if (semantic && !["auto", "gemini", "openrouter"].includes(set.get("--provider") ?? "auto"))
     throw new FindError("--provider is auto, gemini or openrouter");
   const dimensions = Number(set.get("--dimensions") ?? 768);
@@ -2320,7 +2372,21 @@ export async function run(
       `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
       `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
     ].join("\n");
-    return semantic && set.has("--json")
+    if (set.has("--json") && !semantic)
+      return dualSearchOutput(
+        query,
+        [],
+        { hits: [], categories: [], notes: [] },
+        {
+          limit: n,
+          json: true,
+          notes: [...notes, message],
+          foreign: isForeign(query),
+          line,
+          where: () => [],
+        },
+      );
+    return set.has("--json")
       ? JSON.stringify(
           { mode: "keyword-fallback", query, notes: [...notes, message], results: [] },
           null,
@@ -2625,33 +2691,30 @@ export async function run(
       ),
     );
 
-  const foreign = isForeign(query);
-  // Under --kind, a word that only names that kind ("music" with --kind bgm) matches every entry and says nothing
-  const kindSaid = new Set(
-    (kindNames ?? []).flatMap((k) =>
-      (k === "sound" ? SOUND : [k]).flatMap((kk) => [
-        ...words(`${kk} ${KIND_WORDS[kk] ?? ""}`),
-        ...Object.entries(KIND_ALIAS).flatMap(([w, to]) => (to === kk ? [w] : [])),
-        ...Object.entries(KIND_NAMED).flatMap(([w, to]) => (to === kk ? [w] : [])),
-      ]),
-    ),
+  const { foreign, said, asks, ranked, typed, named, matches } = keywordSearch(
+    inKinds,
+    query,
+    kinds,
   );
-  const said = plain(query).filter((w) => !kindSaid.has(stem(w)));
-  const asks = said.length ? said.join(" ") : query;
-  const ranked = foreign ? [] : rank(inKinds, asks);
-  // A one-frame mocap clip is a still pose: it never plays the move its name says, so it goes last
-  const isStill = (x: Entry) => x.kind === "mocap" && (x.secs ?? 1) < 0.1;
-  const typed = [...new Set(plain(asks))].filter((w) => !STOP.has(stem(w)) && !/^\d+$/.test(w));
-  const named = kinds ? [] : [...new Set(typed.flatMap((w) => KIND_NAMED[stem(w)] ?? []))];
-  // words naming a kind ("sad background music", "title animation") put that kind's hits first, as --kind would keep them;
-  // an id said whole (bgm_drone, pasted from audio.json) before all. A clip with a FLAW keeps its place: the eval's right
-  // answers often carry one (a retarget break), and sinking them lost 3 of 44
-  const whole = plain(query).join(" ");
-  const first = (x: Entry) =>
-    plain(x.id).join(" ") === whole
-      ? -1
-      : (isStill(x) ? 2 : 0) + (named.length && !named.includes(top(x.kind)) ? 1 : 0);
-  const matches = ranked.toSorted((a, b) => first(a) - first(b));
+  if (
+    !jev &&
+    !semantic &&
+    (set.has("--json") || inKinds.some((entry) => openFilmCategory(entry)))
+  ) {
+    const found = inKinds.some((entry) => openFilmCategory(entry))
+      ? await lookup(query, inKinds, {
+          offline: set.has("--offline") || process.env.MC_FIND_OFFLINE === "1",
+        })
+      : { hits: [], categories: [], notes: [] };
+    return dualSearchOutput(query, matches, found, {
+      limit: n,
+      json: set.has("--json"),
+      notes: [...notes, ...(kf?.read ?? [])],
+      foreign,
+      line: (entry) => line(entry),
+      where,
+    });
+  }
   const out: string[] = [],
     next: string[] = [];
   let shown: [string, Entry][] | undefined;

@@ -26,11 +26,21 @@ A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` pu
 
 ## Tìm theo ý cảnh
 
+bun run find "<câu tìm>" trả BM25 toàn catalog đã lọc trước, rồi khối semantic chỉ từ OpenFilm; mỗi khối giữ thứ tự riêng và có tối đa -n mục, mặc định 12. Không cần chọn nguồn hoặc bật semantic; --source chỉ giới hạn nguồn khi có chủ ý, --kind sound gồm sfx, bgm và mc.
+
+Các bộ lọc áp dụng cho cả hai khối; --kind mc không gọi OpenFilm, âm thanh gọi đúng sound/music và hình dùng asset/sticker, asset/transition hoặc nhóm asset tương ứng. ID lặp có nhãn also BM25; điểm semantic là độ gần, không phải xác suất phù hợp, cần nghe/xem trước khi chọn.
+
+--json trả keyword.results và semantic.results độc lập; semantic.scope là openfilm, alsoKeyword đánh dấu mục đã có trong khối BM25. BM25 dùng tiếng Anh; câu tiếng Việt chỉ có thể tìm semantic OpenFilm, muốn tìm cả Minecraft thì dùng từ khóa tiếng Anh.
+
+OpenFilm chỉ nhận câu tìm, loại và giới hạn kết quả, không nhận file hoặc API key; timeout mỗi loại 2,5 giây, tối đa hai loại đồng thời. --offline hoặc MC_FIND_OFFLINE=1 chỉ đọc cache 24 giờ; lỗi mạng/cache giữ nguyên BM25 và ghi lý do, cache nằm ở MC_FIND_CACHE hoặc .studio/openfilm-search.sqlite, đường dẫn biến môi trường tính từ gốc repo.
+
+Chế độ index dưới đây là tùy chọn riêng, giữ dữ liệu Gemini đã chuẩn bị; tìm thường không mở index này hay dùng quota Gemini/OpenRouter. Không chạy build hoặc query --yes nếu chỉ cần hai khối tìm kiếm mặc định.
+
 bun run assets:semantic plan chỉ đếm catalog và in mẫu key, không gọi API hay ghi vector; build cũng chỉ xem trước nếu thiếu --yes. Chọn key hoặc manifest trước khi build --yes, đặt --max-requests, --max-seconds, --rpm và --tpm theo quota; mỗi chunk hoàn tất được lưu ngay nên chạy lại tiếp tục phần thiếu hoặc lỗi.
 
 bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới. Gemini là mặc định, auto cũng dùng Gemini; OpenRouter chỉ dùng khi chọn rõ, lỗi không tự đổi provider hay luân phiên key.
 
-Thêm --json để nhận mode, query, notes và results; khi API/index lỗi, mode là keyword-fallback và đầu ra vẫn là JSON. semantic.input cho biết đã dùng media hay chỉ text, segment là giây trên nguồn gốc; score là độ gần vector, không phải xác suất đúng, cần nghe/xem để chọn đoạn chính xác hơn.
+Trong chế độ find --semantic, --json giữ mode, query, notes và results cũ; khi API/index lỗi, mode là keyword-fallback và đầu ra vẫn là JSON. semantic.input cho biết đã dùng media hay chỉ text, segment là giây trên nguồn gốc; score là độ gần vector, không phải xác suất đúng, cần nghe/xem để chọn đoạn chính xác hơn.
 
 Đặt MC_SEMANTIC_DB, MC_SEMANTIC_MANIFEST và MC_SEMANTIC_QUOTA_DB trong .env.local để build và find dùng chung dữ liệu ngoài worktree; manifest đã cấu hình bị thiếu thì dừng, không quay sang catalog khác. status phân biệt toàn catalog với phần đã xếp hàng, hoàn tất hoặc cần cập nhật; chỉ build mới kiểm lại byte media.
 
@@ -53,6 +63,10 @@ Tên/mô tả đi cùng media của đúng asset trong một vector; audio chia 
 Gemini free tier có thể dùng đầu vào cải thiện sản phẩm; kiểm tra quyền chia sẻ theo nguồn, đặc biệt nội dung có điều khoản hạn chế AI. Pilot nhỏ không chứng minh chất lượng cả kho; [Google nêu audio tối ưu cho lời nói](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-multimodal-embeddings), luôn nghe/xem trước khi chọn và dùng Jev khi cần đánh giá khác.
 
 ## Đo chất lượng tìm kiếm
+
+bun run eval:find --mode dual --plan kiểm tra số mẫu và catalog; bỏ --plan để đánh giá hai khối qua chính CLI, mặc định chỉ đọc cache. --live cho phép gọi OpenFilm với --max-seconds và --max-requests; mỗi phản hồi được lưu ngay, cùng --out tiếp tục report dở qua checkpoint .jsonl nhưng không ghi đè report hoàn tất.
+
+Eval dual dùng bộ 400 mục và pilot 28 câu hiện có, đổi đáp án về ID đại diện của nhóm bản thu và dùng pool sound chung cho âm thanh, không lọc nguồn theo đáp án. Report tách số đo từng khối, ứng viên mới, độ trễ, mục chưa sẵn sàng và kiểm tra BM25 giữ nguyên thứ tự; tổng hai khối có tối đa 24 chỗ nên không gọi đó là cải thiện ranking top 12.
 
 bun run assets:semantic eval scripts/evals/semantic/known-item.json --out <report-mới.json> so từ khóa, vector và kết hợp; chỉ dùng câu đã cache, không gọi API. Bộ known-item có 400 asset khác nhau từ 64 nhóm loại/nguồn; đáp án dựa trên metadata nên chỉ đo tìm đúng mục, không chứng minh hợp cảnh bằng nghe/xem.
 
