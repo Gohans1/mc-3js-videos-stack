@@ -394,14 +394,15 @@ const bareListCopy = (itemsName: string): Pick<CliFlagDef, "bareLabel" | "bareHi
 });
 
 const renderTargetValues = ["stills", "clip", "captions", "poster", "all", "final"] as const;
+const assetManifestFlag: CliFlagDef = {
+  key: "--manifest",
+  flag: "--manifest",
+  label: "Local manifest",
+  type: "string",
+  hint: "Optional JSON array of assets; relative media paths start at the manifest.",
+};
 const assetSelectionFlags: readonly CliFlagDef[] = [
-  {
-    key: "--manifest",
-    flag: "--manifest",
-    label: "Local manifest",
-    type: "string",
-    hint: "Optional JSON array of assets; relative media paths start at the manifest.",
-  },
+  assetManifestFlag,
   {
     key: "--key",
     flag: "--key",
@@ -625,7 +626,16 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Hybrid semantic search",
         type: "boolean",
         exclusiveGroup: "search-engine",
-        hint: "Draft: local vectors + keywords. Requires a prepared index; cached queries stay offline.",
+        hint: "Local vectors + keywords. Requires a prepared index; cached queries stay offline.",
+      },
+      {
+        key: "--json",
+        flag: "--json",
+        label: "JSON results",
+        type: "boolean",
+        tier: "advanced",
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        hint: "Structured results and fallback notes, including source chunk times and actual embedding input type.",
       },
       {
         key: "--yes",
@@ -652,7 +662,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         options: ["auto", "gemini", "openrouter"],
         visibleWhen: { field: "--semantic", in: ["true"] },
         tier: "advanced",
-        hint: "Auto prefers a configured Gemini key; provider errors never trigger account rotation.",
+        hint: "Gemini by default; auto is a Gemini alias. OpenRouter requires explicit selection.",
       },
       {
         key: "--dimensions",
@@ -920,14 +930,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Embedding provider",
         type: "enum",
         options: ["auto", "gemini", "openrouter"],
-        hint: "Auto uses Gemini when a Google key is configured, otherwise OpenRouter.",
+        hint: "Gemini by default; auto is a Gemini alias. OpenRouter requires explicit selection.",
       },
       {
         key: "--db",
         flag: "--db",
         label: "Index database",
         type: "string",
-        hint: "Default: repository .studio/asset-search.sqlite.",
+        hint: "MC_SEMANTIC_DB or repository .studio/asset-search.sqlite; quota accounting is shared across overrides.",
       },
       {
         key: "--dimensions",
@@ -988,13 +998,22 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             type: "number",
             hint: "Estimated including media; default 24000.",
           },
+          {
+            key: "--retries",
+            flag: "--retries",
+            label: "Transient retries per chunk",
+            type: "number",
+            tier: "advanced",
+            hint: "Default 2, range 0–5; every attempt counts toward request/time and daily budgets.",
+          },
         ],
       },
       {
         id: "status",
         inheritFlags: true,
         label: "status",
-        summary: "Read completed, pending and failed work.",
+        summary: "Read catalog coverage, resumable chunks and the shared daily request budget.",
+        flags: [assetManifestFlag],
       },
       {
         id: "query",
@@ -4748,11 +4767,9 @@ function computeEffectiveMeta(
       next.speed = subcommandPath[0] === "build" ? "long" : "short";
       if (subcommandPath[0] === "build")
         next.envAnyOf = [
-          flags["--provider"] === "gemini"
-            ? ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
-            : flags["--provider"] === "openrouter"
-              ? ["OPENROUTER_API_KEY"]
-              : ["GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"],
+          flags["--provider"] === "openrouter"
+            ? ["OPENROUTER_API_KEY"]
+            : ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
         ];
     }
   } else if (commandId === "voice:gen") {

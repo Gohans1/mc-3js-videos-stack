@@ -1,13 +1,12 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 import type { Entry } from "../find";
-import { ROOT } from "../vault.mjs";
+import { openBudget } from "./budget";
 import { assetKey } from "./catalog";
 import { configuredProvider, createEmbedder, type Embed, hash } from "./model";
+import { semanticSettings } from "./settings";
 import { type Index, openIndex } from "./store";
 
-export const DEFAULT_INDEX = join(ROOT, ".studio", "asset-search.sqlite");
 export const fuseRanks = (lexical: string[], semantic: string[], limit = 100): string[] => {
   const scores = new Map<string, number>();
   for (const list of [lexical, semantic])
@@ -58,12 +57,14 @@ export const hybridSearch = async (
     limit?: number;
   },
 ) => {
-  const file = options.file ?? DEFAULT_INDEX;
+  const settings = semanticSettings();
+  const file = options.file ?? settings.db;
   if (!existsSync(file))
     throw new Error(
       "No semantic index yet; assets:semantic plan previews preparation without requests",
     );
   const index = openIndex(file, options.dimensions ?? 768);
+  let budget: ReturnType<typeof openBudget> | undefined;
   try {
     const byKey = new Map(pool.map((entry) => [assetKey(entry), entry]));
     const hits = await searchIndex(index, query, new Set(byKey.keys()), {
@@ -73,15 +74,36 @@ export const hybridSearch = async (
           createEmbedder({
             ...configuredProvider(options.provider),
             dimensions: options.dimensions ?? 768,
+            beforeRequest: () => {
+              budget ??= openBudget(settings.quotaDb, settings.dailyLimit);
+              budget.reserve();
+            },
           })(parts, signal),
       }),
     });
+    const semanticByKey = new Map(hits.map((hit) => [hit.key, hit]));
     return fuseRanks(
       lexical.map(assetKey),
       hits.map((hit) => hit.key),
       options.limit,
-    ).flatMap((key) => (byKey.has(key) ? [byKey.get(key)!] : []));
+    ).flatMap((key) => {
+      const entry = byKey.get(key);
+      if (!entry) return [];
+      const hit = semanticByKey.get(key);
+      if (!hit) return [entry];
+      const result: Entry = {
+        ...entry,
+        semantic: {
+          score: hit.score,
+          part: hit.part,
+          input: index.get(key)?.asset.media?.kind ?? "text",
+          ...(hit.segment && { segment: hit.segment }),
+        },
+      };
+      return [result];
+    });
   } finally {
+    budget?.close();
     index.close();
   }
 };

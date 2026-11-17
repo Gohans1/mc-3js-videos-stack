@@ -15,6 +15,28 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function loadRootEnv() {
+  if (
+    process.execArgv.some(
+      (arg) => arg === "--no-env-file" || arg === "--env-file" || arg.startsWith("--env-file="),
+    )
+  )
+    return;
+  const mode = process.env.NODE_ENV || "development";
+  const named = ["development", "production", "test"].includes(mode);
+  const names = [
+    ...(named ? [`.env.${mode}.local`] : []),
+    ...(mode !== "test" ? [".env.local"] : []),
+    ...(named ? [`.env.${mode}`] : []),
+    ".env",
+  ];
+  // Bun reads cwd dotenv; film commands also need root defaults without overriding caller values.
+  for (const name of names) {
+    const file = join(ROOT, name);
+    if (existsSync(file)) process.loadEnvFile(file);
+  }
+}
+loadRootEnv();
 export const config = JSON.parse(readFileSync(resolve(ROOT, "vault.json"), "utf8"));
 
 export function vaultPath(path) {

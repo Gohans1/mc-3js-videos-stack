@@ -24,13 +24,25 @@ In `audio.json`, `tracks[].gain` is a whole track and a clip's `filters` is an f
 
 A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` puts it on the draft, and `render clip` keeps every chunk (the sound timeline is not in a chunk's stamp).
 
-## Tìm theo ý cảnh: bản thử nghiệm
+## Tìm theo ý cảnh
 
 bun run assets:semantic plan chỉ đếm catalog và in mẫu key, không gọi API hay ghi vector; build cũng chỉ xem trước nếu thiếu --yes. Chọn key hoặc manifest trước khi build --yes, đặt --max-requests, --max-seconds, --rpm và --tpm theo quota; mỗi chunk hoàn tất được lưu ngay nên chạy lại tiếp tục phần thiếu hoặc lỗi.
 
-bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới. --provider auto ưu tiên GEMINI_API_KEY hoặc GOOGLE_API_KEY, còn lại dùng OPENROUTER_API_KEY; gemini hoặc openrouter chọn cố định, lỗi không tự đổi provider hay luân phiên key.
+bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới. Gemini là mặc định, auto cũng dùng Gemini; OpenRouter chỉ dùng khi chọn rõ, lỗi không tự đổi provider hay luân phiên key.
 
-remove bỏ mục khỏi tìm kiếm và giữ cache để thêm lại không tốn lượt; remove --purge mới xóa cả cache, redo --part N chỉ đặt lại chunk cần sửa. bun run assets:semantic backup <file-mới.sqlite> tạo bản SQLite nhất quán để mang tiến trình ra khỏi worktree; không sao chép riêng file database đang mở cùng WAL.
+Thêm --json để nhận mode, query, notes và results; khi API/index lỗi, mode là keyword-fallback và đầu ra vẫn là JSON. semantic.input cho biết đã dùng media hay chỉ text, segment là giây trên nguồn gốc; score là độ gần vector, không phải xác suất đúng, cần nghe/xem để chọn đoạn chính xác hơn.
+
+Đặt MC_SEMANTIC_DB, MC_SEMANTIC_MANIFEST và MC_SEMANTIC_QUOTA_DB trong .env.local để build và find dùng chung dữ liệu ngoài worktree; manifest đã cấu hình bị thiếu thì dừng, không quay sang catalog khác. status phân biệt toàn catalog với phần đã xếp hàng, hoàn tất hoặc cần cập nhật; chỉ build mới kiểm lại byte media.
+
+Các đường dẫn trong biến môi trường tính từ gốc repo, còn cờ đường dẫn tính từ nơi đang đứng. Lệnh trong phim nhận mặc định dotenv của repo, giữ ưu tiên biến đã truyền và các cờ env của Bun.
+
+MC_SEMANTIC_DAILY_LIMIT giới hạn nội bộ, mặc định 1000 lượt mỗi ngày Pacific; mọi lần gọi kể cả lỗi, retry và câu tìm mới đều giữ chỗ trước khi gửi. --retries mặc định 2 cho lỗi tạm 429/503, giữ giới hạn lượt/thời gian; quota ngày dừng ngay, còn 429 không rõ nguyên nhân không đồng nghĩa hết quota ngày.
+
+Giữ nguyên ledger của cùng project khi đổi --db hoặc khôi phục vector; snapshot cũ không chứng minh ngân sách hôm nay còn dư. Build/query dùng --yes mới gọi API, còn xem plan/status và tìm câu đã cache không tiêu lượt.
+
+remove bỏ mục khỏi tìm kiếm và giữ cache để thêm lại không tốn lượt; remove --purge mới xóa cả cache, redo --part N chỉ đặt lại chunk cần sửa. bun run assets:semantic backup <file-mới.sqlite> tạo snapshot index và ledger nếu đã có, không ghi đè đích; không sao chép riêng file database đang mở cùng WAL.
+
+Để bỏ một mục khỏi các lần build sau, xóa cả dòng nguồn trong catalog hoặc manifest; remove chỉ tác động index hiện tại. Xóa vector không hoàn lại lượt gọi đã dùng.
 
 Tên/mô tả đi cùng media của đúng asset trong một vector; audio chia tối đa 30 giây và giữ timestamp, video không chứa nhánh âm thanh. Catalog nhập dùng preview có sẵn; FBX/GLB hoặc mục thiếu preview dùng mô tả, không tự dựng hay bịa nội dung media.
 
@@ -40,7 +52,7 @@ Gemini free tier có thể dùng đầu vào cải thiện sản phẩm; kiểm 
 
 ## Ears: earshot
 
-`earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call; a file it has heard before is cached, and the same call again takes about 2 s. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the earshot skill: `bun run skills get earshot` prints its path from where you stand.
+`earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call; a file it has heard before is cached, and the same call again takes about 2 s. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the installed earshot agent skill; open its SKILL.md rather than requesting an mc-films guide.
 
 | You want                                    | Run inside the film                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

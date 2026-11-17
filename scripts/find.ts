@@ -31,6 +31,7 @@ import {
 import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
 import { audioInfo } from "../packages/live-studio/src/sound.mjs";
 import { importedEntries } from "./imported-catalog";
+import { assetFile, assetKey } from "./semantic/catalog";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 export type Entry = {
@@ -47,6 +48,12 @@ export type Entry = {
   fav?: boolean;
   // the catalogue record behind the line, for --show
   data?: Detail;
+  semantic?: {
+    score: number;
+    part: number;
+    input: "text" | "audio" | "video" | "image";
+    segment?: { from: number; to: number };
+  };
 };
 // What --show reads from a sound's SOURCES/PEAKS, a mocap clip's catalogue row or a film-stage preset
 type Detail = {
@@ -1102,10 +1109,13 @@ Options:
                    --kind it reads every entry of those kinds; without, it only reorders the word matches. Each hit
                    shown also gets "fits" 0-1, Jev's own yes that it is what you asked for; the next: line then says
                    FOUND (use the first), UNSURE (--show it first) or NOT IN THE VAULT (do not use them: make it)
-  --semantic       hybrid local vectors + keywords (draft); requires a prepared assets:semantic index. Cached queries
+  --semantic       hybrid local vectors + keywords; requires a prepared assets:semantic index. Cached queries
                    are offline; --yes permits a query API call. Failure falls back to keywords.
                    --db PATH and --dimensions 768|1536|3072 select a compatible index. Each audio take is separate.
-                   --provider auto|gemini|openrouter selects access; auto prefers a configured Google key. No failover.
+                   --provider gemini (default), auto (Gemini alias) or explicitly openrouter. No failover.
+                   MC_SEMANTIC_DB selects the shared index; live queries share its configured daily request budget.
+                   --json returns {mode,query,notes,results}, including semantic input type and source chunk seconds;
+                   keyword fallback stays JSON. Vector score is similarity, not confidence; inspect/listen before use.
                    Keeps kind/source/origin/edition/license/dur/fav filters; body filters and --jev are separate calls.
   --show <id>      the entry in full (ids are the second column; any take of a family)
   mocap by body:   --from <posture> (at its start) --to <posture> (at its end) --has <posture> (anywhere in it)
@@ -1726,6 +1736,7 @@ const OPTIONS: Record<string, string | null> = {
   "-h": null,
   "--jev": null,
   "--semantic": null,
+  "--json": null,
   "--yes": null,
   "--db": "--db path.sqlite",
   "--dimensions": "--dimensions 768",
@@ -1855,7 +1866,7 @@ function parse(argv: string[], lists: string[] = []) {
       );
     if (!(name in OPTIONS))
       throw new FindError(
-        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --jev --semantic --yes --db --dimensions --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any filter without a value lists its values.`,
+        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --jev --semantic --json --yes --db --dimensions --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any filter without a value lists its values.`,
       );
     if (name === "--fav") {
       // a favourites list's name may follow (--fav horror); any other word after it is a search word, except when
@@ -2026,8 +2037,13 @@ export async function run(
     throw new FindError(
       "--semantic needs scene words and keeps catalog filters; use --jev or mocap body filters in a separate call",
     );
-  if (!semantic && ["--yes", "--db", "--dimensions", "--provider"].some((key) => set.has(key)))
-    throw new FindError("--yes, --db, --dimensions and --provider apply only to --semantic");
+  if (
+    !semantic &&
+    ["--yes", "--db", "--dimensions", "--provider", "--json"].some((key) => set.has(key))
+  )
+    throw new FindError(
+      "--yes, --db, --dimensions, --provider and --json apply only to --semantic",
+    );
   if (semantic && !["auto", "gemini", "openrouter"].includes(set.get("--provider") ?? "auto"))
     throw new FindError("--provider is auto, gemini or openrouter");
   const dimensions = Number(set.get("--dimensions") ?? 768);
@@ -2536,32 +2552,56 @@ export async function run(
   }
 
   if (semantic) {
+    const lexical = isForeign(query) ? [] : rank(inKinds, query, { n: 100 });
+    const json = (mode: "hybrid" | "keyword-fallback", entries: Entry[], message?: string) =>
+      JSON.stringify(
+        {
+          mode,
+          query,
+          notes: [...notes, ...(message ? [message] : [])],
+          results: entries.map((entry) => {
+            const { data, ...summary } = entry;
+            return {
+              key: assetKey(entry),
+              ...summary,
+              file: assetFile(entry) || undefined,
+              license: typeof data?.license === "string" ? data.license : undefined,
+            };
+          }),
+        },
+        null,
+        2,
+      );
     try {
       const { hybridSearch } = await import("./semantic/search");
-      const hits = await hybridSearch(
-        query,
-        inKinds,
-        isForeign(query) ? [] : rank(inKinds, query, { n: 100 }),
-        {
-          allowApi: set.has("--yes"),
-          file: set.get("--db"),
-          provider: set.get("--provider"),
-          dimensions,
-          limit: n,
-        },
-      );
+      const hits = await hybridSearch(query, inKinds, lexical, {
+        allowApi: set.has("--yes"),
+        file: set.get("--db"),
+        provider: set.get("--provider"),
+        dimensions,
+        limit: n,
+      });
+      if (set.has("--json")) return json("hybrid", hits);
       return readAs(
         [
           `hybrid semantic + keywords: ${hits.length} candidates (listen/view before choosing)`,
-          ...hits.map((entry) => line(entry)),
+          ...hits.map((entry) => {
+            const segment = entry.semantic?.segment;
+            return (
+              line(entry) +
+              (segment
+                ? `  [source chunk ${segment.from.toFixed(2)}–${segment.to.toFixed(2)}s]`
+                : "")
+            );
+          }),
           ...where(hits),
           "next: bun run find --show <id> for settings, file and usage; Jev remains available for a closer fit check.",
         ].join("\n"),
       );
     } catch (error) {
-      notes.push(
-        `semantic unavailable: ${error instanceof Error ? error.message : String(error)}; keyword results follow`,
-      );
+      const message = `semantic unavailable: ${error instanceof Error ? error.message : String(error)}; keyword results follow`;
+      if (set.has("--json")) return json("keyword-fallback", lexical.slice(0, n), message);
+      notes.push(message);
     }
   }
 

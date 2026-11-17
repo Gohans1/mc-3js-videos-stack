@@ -7,6 +7,10 @@ import type { Asset } from "./store";
 
 export const assetKey = (entry: Pick<Entry, "kind" | "id" | "src">) =>
   JSON.stringify([entry.kind, entry.src ?? "", entry.id]);
+export const assetFile = (entry: Entry, root = ROOT) => {
+  const raw = typeof entry.data?.file === "string" ? entry.data.file : "";
+  return raw ? resolve(entry.src === "this-film" ? process.cwd() : root, raw) : "";
+};
 const mediaKind = (file: string): "audio" | "video" | "image" | null => {
   const extension = extname(file).toLowerCase();
   if ([".wav", ".mp3", ".ogg", ".flac", ".aif", ".aiff", ".m4a", ".opus"].includes(extension))
@@ -17,8 +21,7 @@ const mediaKind = (file: string): "audio" | "video" | "image" | null => {
   return null;
 };
 export const assetFromEntry = (entry: Entry, root = ROOT): Asset => {
-  const raw = typeof entry.data?.file === "string" ? entry.data.file : "";
-  let file = raw ? resolve(entry.src === "this-film" ? process.cwd() : root, raw) : "";
+  let file = assetFile(entry, root);
   if (!mediaKind(file) && typeof entry.data?.preview === "string" && existsSync(entry.data.preview))
     file = entry.data.preview;
   if (!mediaKind(file) && entry.src === "openfilm" && typeof entry.data?.upstreamId === "string") {

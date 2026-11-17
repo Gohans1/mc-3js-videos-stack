@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
 import { type Entry, run as findRun } from "../find";
@@ -13,6 +13,7 @@ import { chunks, inputFor, segmentsFor, sourceHash } from "../semantic/media";
 import { createEmbedder, MODEL, normalize } from "../semantic/model";
 import { fuseRanks, searchIndex } from "../semantic/search";
 import { openIndex } from "../semantic/store";
+import { ROOT } from "../vault.mjs";
 
 const vector = (axis: number) => Array.from({ length: 768 }, (_, i) => (i === axis ? 2 : 0));
 
@@ -429,6 +430,74 @@ test("find combines cached semantic results with keywords inside current filters
     expect(fallback).toContain("allowedRain");
     expect(fallback).toMatch(/semantic unavailable/i);
     expect(existsSync(join(folder, "absent.sqlite"))).toBe(false);
+  } finally {
+    index.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("structured semantic results retain the best source chunk and a keyword fallback stays valid JSON", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "semantic-structured-"));
+  const file = join(folder, "index.sqlite");
+  const index = openIndex(file);
+  const favorites = favoriteLists(join(folder, "favorites"));
+  const entries: Entry[] = [
+    {
+      kind: "sfx",
+      id: "rain",
+      cat: "weather",
+      title: "Rain",
+      about: "steady rain",
+      secs: 60,
+      data: {
+        file: relative(ROOT, join(folder, "rain.ogg")),
+        peaks: Array(3000).fill(0),
+        license: "CC0",
+      },
+    },
+  ];
+  try {
+    const asset = assetFromEntry(entries[0]!);
+    index.stage(asset, "fixture", [
+      { from: 0, to: 30 },
+      { from: 30, to: 60 },
+    ]);
+    index.complete(index.pending(asset.key)[0]!, { vector: vector(1), usage: {} });
+    index.complete(index.pending(asset.key)[0]!, { vector: vector(0), usage: {} });
+    await searchIndex(index, "water", new Set([asset.key]), {
+      allowApi: true,
+      embed: async () => ({ vector: vector(0), usage: {} }),
+    });
+    const result = JSON.parse(
+      await findRun(
+        ["--semantic", "--json", "--db", file, "--kind", "sfx", "water"],
+        entries,
+        undefined,
+        undefined,
+        favorites,
+      ),
+    );
+    expect(result.mode).toBe("hybrid");
+    expect(result.results[0]).toMatchObject({
+      id: "rain",
+      file: join(folder, "rain.ogg"),
+      license: "CC0",
+      semantic: { part: 1, input: "audio", segment: { from: 30, to: 60 } },
+    });
+    expect(result.results[0]).not.toHaveProperty("data");
+    const fallback = JSON.parse(
+      await findRun(
+        ["--semantic", "--json", "--db", join(folder, "absent.sqlite"), "rain"],
+        entries,
+        undefined,
+        undefined,
+        favorites,
+      ),
+    );
+    expect(fallback.mode).toBe("keyword-fallback");
+    expect(fallback.results[0].id).toBe("rain");
+    expect(fallback.notes.join(" ")).toMatch(/semantic unavailable/);
+    await expect(findRun(["--json", "rain"], entries)).rejects.toThrow(/semantic/);
   } finally {
     index.close();
     rmSync(folder, { recursive: true, force: true });

@@ -51,6 +51,35 @@ test("embedding controls stay offline by default and respect the selected provid
   expect(live.meta.cost).toBe("optional-paid");
   expect(live.requiresConfirm).toBe(true);
   expect(live.missingEnvGroups).toEqual([]);
+  const googleMissing = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["build"],
+      flags: { "--yes": true, "--retries": "2" },
+    },
+    {
+      ...BASE_CONTEXT,
+      envStatus: {
+        ...BASE_CONTEXT.envStatus,
+        GEMINI_API_KEY: false,
+        GOOGLE_API_KEY: false,
+        OPENROUTER_API_KEY: true,
+      },
+    },
+  );
+  expect(googleMissing.missingEnvGroups).toContainEqual(["GEMINI_API_KEY", "GOOGLE_API_KEY"]);
+  expect(googleMissing.validationErrors).toEqual([]);
+  expect(googleMissing.argvTokens).toEqual(expect.arrayContaining(["--retries", "2"]));
+  const coverage = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["status"],
+      flags: { "--manifest": "assets.json" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(coverage.validationErrors).toEqual([]);
+  expect(coverage.argvTokens).toEqual(expect.arrayContaining(["--manifest", "assets.json"]));
   const router = buildCliInvocation(
     {
       commandId: "assets:semantic",
@@ -64,11 +93,17 @@ test("embedding controls stay offline by default and respect the selected provid
     expect.arrayContaining(["--provider", "openrouter", "--rpm", "40", "--tpm", "20000"]),
   );
   const cached = buildCliInvocation(
-    { commandId: "find", args: { words: "sad goodbye" }, flags: { "--semantic": true } },
+    {
+      commandId: "find",
+      args: { words: "sad goodbye" },
+      flags: { "--semantic": true, "--json": true },
+    },
     BASE_CONTEXT,
   );
   expect(cached.meta.cost).toBe("free");
   expect(cached.missingEnvGroups).toEqual([]);
+  expect(cached.validationErrors).toEqual([]);
+  expect(cached.argvTokens).toContain("--json");
 });
 
 test("film collaboration/history and embedding subcommands retain their shared CLI options", () => {

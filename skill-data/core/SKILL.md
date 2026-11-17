@@ -26,7 +26,7 @@ Chọn các bước phục vụ cảnh đang dựng, không cần chạy cả ch
 
 | Việc                            | Lệnh hoặc nơi chỉnh                                                            |
 | ------------------------------- | ------------------------------------------------------------------------------ |
-| Tìm chất liệu, preset           | bun run find <words>; semantic đang thử nghiệm, đọc --ref sound trước; kiểm tra giấy phép |
+| Tìm chất liệu, preset           | bun run find <words>; --semantic dùng index đã chuẩn bị, --json cho AI; đọc --ref sound và kiểm tra giấy phép |
 | Dựng cảnh và hiệu ứng riêng     | src/scene.ts; bun run skills get core --ref contract                           |
 | Chỉnh dữ liệu                   | Các file timeline ghi trong package.json của phim; bun run check sau khi chỉnh |
 | Giữ một hướng dựng              | Film → Versions; bun run history --film films/tên --help |

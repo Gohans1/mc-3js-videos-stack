@@ -161,17 +161,24 @@ export const openIndex = (file: string, dimensions = 768) => {
   });
   const search = (query: number[], eligible: Set<string>, limit = 100) => {
     const q = normalize(query, dimensions),
-      hits = new Map<string, { key: string; score: number; part: number }>();
+      hits = new Map<string, { key: string; score: number; part: number; segment?: Segment }>();
     for (const row of db
       .query(
-        "SELECT j.asset,j.part,c.vector FROM jobs j JOIN cache c ON c.key=j.asset AND c.fingerprint=j.fingerprint WHERE j.state='done' AND NOT EXISTS (SELECT 1 FROM asset_errors e WHERE e.key=j.asset)",
+        "SELECT j.asset,j.part,j.spec,c.vector FROM jobs j JOIN cache c ON c.key=j.asset AND c.fingerprint=j.fingerprint WHERE j.state='done' AND NOT EXISTS (SELECT 1 FROM asset_errors e WHERE e.key=j.asset)",
       )
-      .iterate() as Iterable<{ asset: string; part: number; vector: Uint8Array }>) {
+      .iterate() as Iterable<{ asset: string; part: number; spec: string; vector: Uint8Array }>) {
       if (!eligible.has(row.asset)) continue;
       const vector = decode(row.vector);
       const score = vector.reduce((sum, value, i) => sum + value * q[i]!, 0);
-      if (score > (hits.get(row.asset)?.score ?? -Infinity))
-        hits.set(row.asset, { key: row.asset, score, part: row.part });
+      if (score > (hits.get(row.asset)?.score ?? -Infinity)) {
+        const segment = JSON.parse(row.spec) as Segment;
+        hits.set(row.asset, {
+          key: row.asset,
+          score,
+          part: row.part,
+          ...(segment.to > segment.from && { segment }),
+        });
+      }
     }
     return [...hits.values()]
       .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key))
@@ -203,6 +210,59 @@ export const openIndex = (file: string, dimensions = 768) => {
     ).map((row) => row.asset);
   const assetFailed = (key: string, message: string) =>
     db.query("INSERT OR REPLACE INTO asset_errors VALUES (?,?)").run(key, message);
+  const coverage = (assets: Asset[]) => {
+    const rows = db
+      .query(
+        "SELECT a.key,a.definition,count(j.part) AS total,sum(j.state='done') AS done,sum(j.state='failed') AS failed FROM assets a LEFT JOIN jobs j ON j.asset=a.key GROUP BY a.key",
+      )
+      .all() as {
+      key: string;
+      definition: string;
+      total: number;
+      done: number | null;
+      failed: number | null;
+    }[];
+    const saved = new Map(rows.map((row) => [row.key, row]));
+    const errors = new Set(
+      (db.query("SELECT key FROM asset_errors").all() as { key: string }[]).map((row) => row.key),
+    );
+    const result = {
+      catalog: assets.length,
+      complete: 0,
+      pending: 0,
+      partial: 0,
+      changed: 0,
+      failed: 0,
+      unindexed: 0,
+      retainedOutsideCatalog: 0,
+      mediaHashesChecked: false,
+    };
+    const keys = new Set(assets.map((asset) => asset.key));
+    result.retainedOutsideCatalog = rows.filter((row) => !keys.has(row.key)).length;
+    for (const asset of assets) {
+      const row = saved.get(asset.key);
+      if (errors.has(asset.key) || row?.failed) {
+        result.failed++;
+        continue;
+      }
+      if (!row) {
+        result.unindexed++;
+        continue;
+      }
+      const previous = JSON.parse(row.definition) as Asset;
+      if (
+        asset.title !== previous.title ||
+        asset.text !== previous.text ||
+        asset.media?.kind !== previous.media?.kind ||
+        asset.media?.file !== previous.media?.file
+      )
+        result.changed++;
+      else if (row.total > 0 && row.done === row.total) result.complete++;
+      else if (row.done) result.partial++;
+      else result.pending++;
+    }
+    return result;
+  };
   const status = () => ({
     space: JSON.parse(space),
     assets: (db.query("SELECT count(*) AS n FROM assets").get() as { n: number }).n,
@@ -225,6 +285,7 @@ export const openIndex = (file: string, dimensions = 768) => {
     assetFailed,
     search,
     status,
+    coverage,
     backup(target: string) {
       const output = resolve(target);
       if (existsSync(output))
