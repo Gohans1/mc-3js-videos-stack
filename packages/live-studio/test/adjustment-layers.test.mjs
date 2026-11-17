@@ -32,7 +32,9 @@ test("a shared grade saves independently of shots and rejects stale or invalid l
   };
   assert.equal((await post(before.version, data)).status, 200);
   assert.deepEqual(adjustment.read().data, data);
-  assert.equal((await post(before.version, { items: [] })).status, 409);
+  assert.equal((await post(before.version, { items: [] })).status, 200);
+  assert.deepEqual(adjustment.read().data, data, "unchanged stale input keeps the current layers");
+  assert.equal((await post("unknown", { items: [] })).status, 409);
   const base = adjustment.read().version;
   assert.equal((await post(base, { items: [{ ...data.items[0], to: 0 }] })).status, 400);
   assert.equal((await post(base, { items: [data.items[0], data.items[0]] })).status, 400);

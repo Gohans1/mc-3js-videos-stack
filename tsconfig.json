@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2023",
+    "types": ["bun"],
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -22,6 +23,7 @@
     }
   },
   "include": [
+    "packages/live-studio/app/*.d.ts",
     "packages/film-kit/src",
     "packages/film-stage/src",
     "packages/mc-actor/src",

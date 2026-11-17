@@ -15,6 +15,8 @@ import {
 } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 
+import { ROOT } from "../../../scripts/vault.mjs";
+
 import { SoundTimeline } from "./contract.ts";
 import { openTimelineFile } from "./timeline_file.mjs";
 import { assertInsideDir } from "./voice-map.mjs";
@@ -304,7 +306,7 @@ export const findVaults = (project, conf) => {
     const vf = join(d, "vault.json");
     if (existsSync(vf)) {
       const vcfg = readJsonCached(vf),
-        vroot = resolve(d, vcfg.root ?? "vault");
+        vroot = resolve(d, (relative(ROOT, d) === "" ? process.env.MC_VAULT_ROOT : undefined) ?? vcfg.root ?? "vault");
       const mcLocal = join(vroot, "mc-sound");
       const mcDir = existsSync(mcLocal) ? mcLocal : null;
       const sndDir = existsSync(join(vroot, "sound")) ? join(vroot, "sound") : null;

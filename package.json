@@ -24,6 +24,9 @@
   },
   "type": "module",
   "scripts": {
+    "assets:semantic": "bun scripts/asset-search.ts",
+    "history": "bun packages/live-studio/history.mjs",
+    "collab": "bun packages/live-studio/collab.mjs",
     "help": "bun packages/live-studio/help.mjs",
     "skills": "bun packages/live-studio/skills.mjs",
     "setup": "bun scripts/setup.mjs",
@@ -69,6 +72,7 @@
     "setup:voices": "bun scripts/voice/sync.ts"
   },
   "devDependencies": {
+    "@types/bun": "1.4.4",
     "fflate": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",

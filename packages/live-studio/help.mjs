@@ -20,10 +20,16 @@ const GROUPS = [
       "bake:physics":
         "this film's physics cache: --help names inputs, output, clocks and cost; rerun after changing its simulation",
       studio: "the live studio: preview, timeline, notes (bun run studio, then open the link)",
+      collab:
+        "read protected Studio edits; write intentional AI changes with an explicit current base (--help)",
+      history:
+        "named versions and autosaves for one film; restore with a recovery version kept first (--help)",
       check:
         "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
       at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",
-      find: "a sound, music, mocap clip, transition, anim, lens, shake, text voice, font or look preset by words; prints where it goes",
+      find: "BM25 catalog matches, then independent OpenFilm semantic candidates; shared filters, --json for AI, --offline for cached-only search",
+      "assets:semantic":
+        "incremental multimodal search: plan, build/resume, query, remove/redo or backup; Gemini/OpenRouter API only with --yes (--help)",
     },
   ],
   [
@@ -96,7 +102,8 @@ const GROUPS = [
       typecheck: "bun check",
       fmt: "format (bun fmt --no-script <files> for a few)",
       "fmt:check": "is everything formatted?",
-      "eval:find": "how well find answers a set of searches, kept in scripts/evals/find/runs",
+      "eval:find":
+        "search diagnostics; --mode dual checks BM25/OpenFilm separately without Jev, cached-only unless --live (--help)",
       "eval:lessons": "how well notes ID picks the lessons for a note (Jev)",
       "eval:load": "how fast the studio page loads, desk and phone",
     },

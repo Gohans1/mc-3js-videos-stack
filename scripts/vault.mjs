@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
@@ -15,13 +16,41 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function loadRootEnv() {
+  if (
+    resolve(process.cwd()) === ROOT ||
+    process.execArgv.some(
+      (arg) => arg === "--no-env-file" || arg === "--env-file" || arg.startsWith("--env-file="),
+    )
+  )
+    return;
+  if (!readdirSync(ROOT).some((name) => name === ".env" || name.startsWith(".env."))) return;
+  // Bun's dotenv parser preserves expansion/precedence for commands launched inside films.
+  const loaded = spawnSync(
+    process.versions.bun ? process.execPath : "bun",
+    ["--print", "JSON.stringify(process.env)"],
+    {
+      cwd: ROOT,
+      env: process.env,
+      encoding: "utf8",
+      timeout: 5000,
+      windowsHide: true,
+    },
+  );
+  if (loaded.error || loaded.status !== 0)
+    throw new Error("Cannot load repository dotenv defaults with Bun");
+  const defaults = JSON.parse(loaded.stdout);
+  for (const [key, value] of Object.entries(defaults))
+    if (process.env[key] === undefined) process.env[key] = value;
+}
+loadRootEnv();
 export const config = JSON.parse(readFileSync(resolve(ROOT, "vault.json"), "utf8"));
 
 export function vaultPath(path) {
   return resolve(ROOT, path);
 }
 
-export const LOCAL = vaultPath(config.root);
+export const LOCAL = vaultPath(process.env.MC_VAULT_ROOT ?? config.root);
 export const EXTERNAL = vaultPath(
   process.env.MC_VAULT_EXTERNAL ?? config.externalRoot ?? config.root,
 );

@@ -397,6 +397,23 @@ const bareListCopy = (itemsName: string): Pick<CliFlagDef, "bareLabel" | "bareHi
 });
 
 const renderTargetValues = ["stills", "clip", "captions", "poster", "all", "final"] as const;
+const assetManifestFlag: CliFlagDef = {
+  key: "--manifest",
+  flag: "--manifest",
+  label: "Local manifest",
+  type: "string",
+  hint: "Optional JSON array of assets; relative media paths start at the manifest.",
+};
+const assetSelectionFlags: readonly CliFlagDef[] = [
+  assetManifestFlag,
+  {
+    key: "--key",
+    flag: "--key",
+    label: "Exact asset key",
+    type: "string",
+    hint: "Copy a key from plan or query to prepare one asset.",
+  },
+];
 
 export const CLI_COMMANDS: readonly CliCommand[] = [
   // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
@@ -424,6 +441,81 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: false,
       helpMode: "flag",
     },
+  },
+
+  {
+    id: "history",
+    label: "history",
+    category: "daily",
+    summary: "Save and restore editing versions of one film without changing monorepo Git.",
+    runner: "bun-file",
+    target: "packages/live-studio/history.mjs",
+    cwdModes: ["film", "root"],
+    flags: [{ key: "--film", flag: "--film", label: "Film path", type: "string" }],
+    subcommands: [
+      {
+        id: "list",
+        inheritFlags: true,
+        label: "list",
+        summary: "List versions and the current fingerprint.",
+        flags: [{ key: "--before", flag: "--before", label: "Before sequence", type: "number" }],
+        meta: { effect: "read" },
+      },
+      {
+        id: "save",
+        inheritFlags: true,
+        label: "save",
+        summary: "Keep a named version of editing files on disk.",
+        args: [{ key: "name", label: "Version name", type: "string", required: true }],
+      },
+      {
+        id: "restore",
+        inheritFlags: true,
+        label: "restore",
+        summary: "Restore a version, keeping a recovery snapshot first.",
+        args: [{ key: "id", label: "Version ID", type: "string", required: true }],
+        flags: [
+          {
+            key: "--base",
+            flag: "--base",
+            label: "Current fingerprint",
+            type: "string",
+            required: true,
+          },
+        ],
+      },
+    ],
+    meta: { effect: "write", cost: "free", speed: "short", cancellable: false, helpMode: "flag" },
+  },
+  {
+    id: "collab",
+    label: "collab",
+    category: "daily",
+    summary: "Read protected Studio edits and save intentional AI revisions with an explicit base.",
+    runner: "bun-file",
+    target: "packages/live-studio/collab.mjs",
+    cwdModes: ["root", "film"],
+    flags: [{ key: "--film", flag: "--film", label: "Film path", type: "string" }],
+    subcommands: [
+      {
+        id: "read",
+        inheritFlags: true,
+        label: "read",
+        summary: "Read the canonical document and retained-write notices.",
+        args: [{ key: "name", label: "Document", type: "string", required: true }],
+      },
+      {
+        id: "write",
+        inheritFlags: true,
+        label: "write",
+        summary: "Save a JSON envelope with the base version read earlier.",
+        args: [
+          { key: "name", label: "Document", type: "string", required: true },
+          { key: "input", label: "JSON envelope path", type: "string", required: true },
+        ],
+      },
+    ],
+    meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "flag" },
   },
   {
     id: "skills",
@@ -496,7 +588,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         multi: true,
         placeholder: "creaky door",
-        hint: "Plain English keywords, or scene description with --jev",
+        hint: "Keywords then OpenFilm meaning candidates, in separate blocks. Use English to include local-only assets.",
       },
     ],
     flags: [
@@ -509,7 +601,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         ...bareListCopy("kinds & groups"),
         choiceSource: "findKinds",
         tier: "common",
-        hint: "e.g. sfx, bgm, mc, sound, mocap, transition, anim, text, shape, font, adjust, velocity, ease; omit value to list groups",
+        hint: "e.g. sfx, bgm, mc, sound, mocap, asset/effect, asset/sticker, transition, anim, text, shape; omit value to list groups",
       },
       {
         key: "--source",
@@ -526,9 +618,70 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "--jev",
         flag: "--jev",
         label: "Use Jev AI Judge",
+        exclusiveGroup: "search-engine",
         type: "boolean",
         tier: "common",
         hint: "Rank by meaning using Jev (OpenCode free -> OpenRouter <$0.01)",
+      },
+      {
+        key: "--semantic",
+        flag: "--semantic",
+        label: "Hybrid semantic search",
+        type: "boolean",
+        exclusiveGroup: "search-engine",
+        hint: "Local vectors + keywords. Requires a prepared index; cached queries stay offline.",
+      },
+      {
+        key: "--json",
+        flag: "--json",
+        label: "JSON results",
+        type: "boolean",
+        tier: "advanced",
+        hint: "Schema v2: independent blocks; semantic hits marked alsoKeyword reference keyword records by key. Explicit --semantic keeps its vector-index schema.",
+      },
+      {
+        key: "--offline",
+        flag: "--offline",
+        label: "Cached searches only",
+        type: "boolean",
+        tier: "common",
+        hint: "Skip external queries and read saved results. Cannot combine with --jev or --yes.",
+      },
+      {
+        key: "--yes",
+        flag: "--yes",
+        label: "Allow query API",
+        type: "boolean",
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        requiresConfirmIfSet: true,
+        hint: "Permit an external query embedding on a cache miss; provider billing/quota applies.",
+      },
+      {
+        key: "--db",
+        flag: "--db",
+        label: "Semantic database",
+        type: "string",
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        tier: "advanced",
+      },
+      {
+        key: "--provider",
+        flag: "--provider",
+        label: "Embedding provider",
+        type: "enum",
+        options: ["auto", "gemini", "openrouter"],
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        tier: "advanced",
+        hint: "Gemini by default; auto is a Gemini alias. OpenRouter requires explicit selection.",
+      },
+      {
+        key: "--dimensions",
+        flag: "--dimensions",
+        label: "Embedding dimensions",
+        type: "enum",
+        options: ["768", "1536", "3072"],
+        visibleWhen: { field: "--semantic", in: ["true"] },
+        tier: "advanced",
       },
       {
         key: "-n",
@@ -537,7 +690,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "number",
         tier: "common",
         placeholder: "12",
-        hint: "Hits shown (default 12, max 200)",
+        hint: "Hits per independent block (default 12, max 200)",
       },
       {
         key: "--show",
@@ -546,7 +699,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "csv",
         tier: "common",
         placeholder: "dissolve",
-        hint: "Inspect full entry details & paste snippets",
+        hint: "Inspect files, licence and settings; native entries have paste snippets, imported visuals expose source files.",
       },
       {
         key: "--dur",
@@ -567,6 +720,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         optionalValue: true,
         ...bareListCopy("origin values"),
         tier: "advanced",
+        hint: "Real / Studio is a grouping, not verified recording provenance. Inspect --show for explicit unknown origins.",
       },
       {
         key: "--edition",
@@ -758,11 +912,211 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     meta: {
       effect: "read",
       cost: "optional-paid",
-      costHint: "Free offline by default; --jev queries Zen free -> OpenRouter (<$0.01/search).",
+      costHint:
+        "Default queries send text to OpenFilm without a key; --offline reads cache only. --semantic --yes uses provider quota/billing; --jev uses its judge service.",
       speed: "instant",
       cancellable: true,
       helpMode: "flag",
       envAnyOf: [["OPENCODE_API_KEY", "OPENROUTER_API_KEY"]],
+      confirm: {
+        mode: "when-flagged",
+        message:
+          "--yes permits sending this query to the selected provider; its quota, billing and data-use terms apply.",
+      },
+    },
+  },
+  {
+    id: "assets:semantic",
+    subcommandRequired: true,
+    label: "assets:semantic",
+    category: "setup",
+    summary: "Prepare incremental local multimodal embeddings; preview first, API only with --yes.",
+    runner: "bun-file",
+    target: "scripts/asset-search.ts",
+    cwdModes: ["root", "film"],
+    flags: [
+      {
+        key: "--provider",
+        flag: "--provider",
+        label: "Embedding provider",
+        type: "enum",
+        options: ["auto", "gemini", "openrouter"],
+        hint: "Gemini by default; auto is a Gemini alias. OpenRouter requires explicit selection.",
+      },
+      {
+        key: "--db",
+        flag: "--db",
+        label: "Index database",
+        type: "string",
+        hint: "MC_SEMANTIC_DB or repository .studio/asset-search.sqlite; quota accounting is shared across overrides.",
+      },
+      {
+        key: "--dimensions",
+        flag: "--dimensions",
+        label: "Dimensions",
+        type: "enum",
+        options: ["768", "1536", "3072"],
+        tier: "advanced",
+      },
+    ],
+    subcommands: [
+      {
+        id: "plan",
+        inheritFlags: true,
+        label: "plan",
+        summary: "Count catalog assets and sample keys without embedding or vector writes.",
+        flags: assetSelectionFlags,
+      },
+      {
+        id: "build",
+        inheritFlags: true,
+        label: "build",
+        summary: "Preview by default; --yes prepares missing/changed chunks and saves each result.",
+        flags: [
+          ...assetSelectionFlags,
+          {
+            key: "--yes",
+            flag: "--yes",
+            label: "Allow embedding API",
+            type: "boolean",
+            requiresConfirmIfSet: true,
+          },
+          {
+            key: "--max-requests",
+            flag: "--max-requests",
+            label: "Request limit",
+            type: "number",
+            hint: "Default 10 attempts; at most 100000.",
+          },
+          {
+            key: "--max-seconds",
+            flag: "--max-seconds",
+            label: "Time limit (seconds)",
+            type: "number",
+            hint: "Default 60; at most 3600. Completed work survives stopping.",
+          },
+          {
+            key: "--rpm",
+            flag: "--rpm",
+            label: "Requests per minute",
+            type: "number",
+            hint: "Default 60; use your project's limit.",
+          },
+          {
+            key: "--tpm",
+            flag: "--tpm",
+            label: "Input tokens per minute",
+            type: "number",
+            hint: "Estimated including media; default 24000.",
+          },
+          {
+            key: "--retries",
+            flag: "--retries",
+            label: "Transient retries per chunk",
+            type: "number",
+            tier: "advanced",
+            hint: "Default 2, range 0–5; every attempt counts toward request/time and daily budgets.",
+          },
+        ],
+      },
+      {
+        id: "status",
+        inheritFlags: true,
+        label: "status",
+        summary: "Read catalog coverage, resumable chunks and the shared daily request budget.",
+        flags: [assetManifestFlag],
+      },
+      {
+        id: "eval",
+        inheritFlags: true,
+        label: "eval",
+        summary:
+          "Compare cached lexical, semantic and hybrid retrieval; report missing data separately without API calls.",
+        args: [{ key: "cases", label: "Labeled cases JSON", type: "string", required: true }],
+        flags: [
+          {
+            key: "--out",
+            flag: "--out",
+            label: "New report JSON",
+            type: "string",
+            hint: "Optional; refuses to overwrite an existing report. Partial reports exit 1.",
+          },
+        ],
+      },
+      {
+        id: "query",
+        inheritFlags: true,
+        label: "query",
+        summary: "Search all indexed assets; cached queries work offline.",
+        args: [{ key: "query", label: "Scene or meaning", type: "string", required: true }],
+        flags: [
+          {
+            key: "--yes",
+            flag: "--yes",
+            label: "Allow query API",
+            type: "boolean",
+            requiresConfirmIfSet: true,
+          },
+        ],
+      },
+      {
+        id: "remove",
+        inheritFlags: true,
+        label: "remove",
+        summary:
+          "Remove an asset from search; retain vectors for re-adding identical inputs without API calls.",
+        args: [{ key: "key", label: "Exact asset key", type: "string", required: true }],
+        flags: [
+          {
+            key: "--purge",
+            flag: "--purge",
+            label: "Permanently delete retained vectors",
+            type: "boolean",
+            requiresConfirmIfSet: true,
+          },
+        ],
+        meta: {
+          effect: "write",
+          confirm: {
+            mode: "when-flagged",
+            message:
+              "Permanently delete this asset's retained vectors with --purge. Original media files are never deleted.",
+          },
+        },
+      },
+      {
+        id: "redo",
+        inheritFlags: true,
+        label: "redo",
+        summary: "Reset one asset or chunk locally; next build retries it.",
+        args: [{ key: "key", label: "Exact asset key", type: "string", required: true }],
+        flags: [
+          { key: "--part", flag: "--part", label: "Chunk number (starts at 0)", type: "number" },
+        ],
+        meta: { effect: "write" },
+      },
+      {
+        id: "backup",
+        inheritFlags: true,
+        label: "backup",
+        summary: "Create a consistent SQLite snapshot; refuse an existing destination.",
+        args: [{ key: "file", label: "New backup file", type: "string", required: true }],
+        meta: { effect: "write" },
+      },
+    ],
+    meta: {
+      effect: "read",
+      cost: "free",
+      speed: "instant",
+      cancellable: true,
+      helpMode: "flag",
+      costHint:
+        "No API without --yes. Build can be resumed; an interrupted request may be charged and need retry.",
+      confirm: {
+        mode: "when-flagged",
+        message:
+          "Send selected media/text to the chosen provider within request/time limits. Billing/quota and data-use terms apply.",
+      },
     },
   },
   {
@@ -3717,17 +4071,70 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         tier: "common",
         placeholder: "holdout-a",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
       },
       {
         key: "--mode",
         flag: "--mode",
         label: "Mode",
         type: "enum",
-        options: ["words", "jev", "both"],
+        options: ["words", "jev", "both", "dual"],
         tier: "common",
       },
-      { key: "--kind", flag: "--kind", label: "Filter Kind", type: "string", tier: "common" },
-      { key: "--fresh", flag: "--fresh", label: "Restart Run", type: "boolean", tier: "common" },
+      {
+        key: "--live",
+        flag: "--live",
+        label: "Allow OpenFilm requests",
+        type: "boolean",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+        hint: "Only text queries to OpenFilm; no Jev or embedding provider calls.",
+      },
+      {
+        key: "--plan",
+        flag: "--plan",
+        label: "Preview evaluation corpus",
+        type: "boolean",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--out",
+        flag: "--out",
+        label: "Report path",
+        type: "string",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--max-seconds",
+        flag: "--max-seconds",
+        label: "Time limit (seconds)",
+        type: "number",
+        placeholder: "600",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--max-requests",
+        flag: "--max-requests",
+        label: "OpenFilm request limit",
+        type: "number",
+        placeholder: "1000",
+        visibleWhen: { field: "--mode", in: ["dual"] },
+      },
+      {
+        key: "--kind",
+        flag: "--kind",
+        label: "Filter Kind",
+        type: "string",
+        tier: "common",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
+      },
+      {
+        key: "--fresh",
+        flag: "--fresh",
+        label: "Restart Run",
+        type: "boolean",
+        tier: "common",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
+      },
       {
         key: "-j",
         flag: "-j",
@@ -3735,6 +4142,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "number",
         placeholder: "3",
         tier: "advanced",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
       },
       {
         key: "--finish",
@@ -3742,13 +4150,22 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Score Stopped Run",
         type: "boolean",
         tier: "advanced",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
       },
-      { key: "--note", flag: "--note", label: "History Note", type: "string", tier: "advanced" },
+      {
+        key: "--note",
+        flag: "--note",
+        label: "History Note",
+        type: "string",
+        tier: "advanced",
+        visibleWhen: { field: "--mode", unsetOrIn: ["words", "jev", "both"] },
+      },
     ],
     meta: {
       effect: "write",
       cost: "optional-paid",
-      costHint: "words mode is free; jev/both runs Jev judge queries across the case set.",
+      costHint:
+        "words/dual are free; dual is cached-only unless --live. jev/both calls Jev across the case set.",
       speed: "long",
       cancellable: true,
       helpMode: "flag",
@@ -4623,7 +5040,31 @@ function computeEffectiveMeta(
       next.speed = "short";
     } else {
       next.envAnyOf = undefined;
+      if (isBooleanActive(flags["--semantic"])) {
+        next.cost = isBooleanActive(flags["--yes"]) ? "optional-paid" : "free";
+        next.speed = "short";
+      } else {
+        next.cost = "free";
+        next.speed = isBooleanActive(flags["--offline"]) ? "instant" : "short";
+      }
     }
+  } else if (
+    commandId === "assets:semantic" &&
+    ["build", "query"].includes(subcommandPath[0] ?? "")
+  ) {
+    if (isBooleanActive(flags["--yes"])) {
+      next.effect = "write";
+      next.cost = "optional-paid";
+      next.speed = subcommandPath[0] === "build" ? "long" : "short";
+      if (subcommandPath[0] === "build")
+        next.envAnyOf = [
+          flags["--provider"] === "openrouter"
+            ? ["OPENROUTER_API_KEY"]
+            : ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        ];
+    }
+  } else if (commandId === "assets:semantic" && subcommandPath[0] === "eval") {
+    if (isActiveValue(flags["--out"])) next.effect = "write";
   } else if (commandId === "voice:gen") {
     if (!isBooleanActive(flags["--yes"]) || isBooleanActive(flags["--dry-run"])) {
       next.envAnyOf = undefined;
@@ -4664,9 +5105,13 @@ function computeEffectiveMeta(
   } else if (commandId === "studio:init" && isBooleanActive(flags["--dry"])) {
     next.effect = "read";
   } else if (commandId === "eval:find") {
-    if (flags["--mode"] === "words") {
+    if (["words", "dual"].includes(String(flags["--mode"]))) {
       next.cost = "free";
       next.envAnyOf = undefined;
+      if (flags["--mode"] === "dual" && isBooleanActive(flags["--plan"])) {
+        next.effect = "read";
+        next.confirm = { mode: "none", message: "" };
+      }
     } else {
       next.cost = "paid";
     }

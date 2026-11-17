@@ -74,6 +74,149 @@ const BASE_CONTEXT = {
   },
 };
 
+test("default dual search and its evaluation expose offline/JSON controls without provider credentials", () => {
+  const spec = buildCliInvocation(
+    {
+      commandId: "find",
+      args: { words: "creeper hiss" },
+      flags: { "--json": true, "--offline": true },
+    },
+    BASE_CONTEXT,
+  );
+  expect(spec.validationErrors).toEqual([]);
+  expect(spec.missingEnvGroups).toEqual([]);
+  expect(spec.meta.cost).toBe("free");
+  expect(spec.argvTokens).toEqual(expect.arrayContaining(["--offline", "--json"]));
+  expect(
+    isFieldVisible(findCliCommand("find").flags.find((f) => f.key === "--json").visibleWhen, {}),
+  ).toBe(true);
+  const evaluation = buildCliInvocation(
+    {
+      commandId: "eval:find",
+      flags: { "--mode": "dual", "--plan": true, "--max-seconds": "30", "--max-requests": "20" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(evaluation.validationErrors).toEqual([]);
+  expect(evaluation.missingEnvGroups).toEqual([]);
+  expect(evaluation.meta.cost).toBe("free");
+  expect(evaluation.meta.effect).toBe("read");
+  expect(evaluation.argvTokens).toEqual(expect.arrayContaining(["--mode", "dual", "--plan"]));
+});
+
+test("embedding controls stay offline by default and respect the selected provider's credentials", () => {
+  const missing = buildCliInvocation({ commandId: "assets:semantic" }, BASE_CONTEXT);
+  expect(missing.validationErrors.some((error) => error.includes("subcommand"))).toBe(true);
+  const draft = buildCliInvocation(
+    { commandId: "assets:semantic", subcommandPath: ["build"] },
+    BASE_CONTEXT,
+  );
+  expect(draft.meta.cost).toBe("free");
+  expect(draft.meta.effect).toBe("read");
+  expect(draft.missingEnvGroups).toEqual([]);
+  const live = buildCliInvocation(
+    { commandId: "assets:semantic", subcommandPath: ["build"], flags: { "--yes": true } },
+    BASE_CONTEXT,
+  );
+  expect(live.meta.cost).toBe("optional-paid");
+  expect(live.requiresConfirm).toBe(true);
+  expect(live.missingEnvGroups).toEqual([]);
+  const googleMissing = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["build"],
+      flags: { "--yes": true, "--retries": "2" },
+    },
+    {
+      ...BASE_CONTEXT,
+      envStatus: {
+        ...BASE_CONTEXT.envStatus,
+        GEMINI_API_KEY: false,
+        GOOGLE_API_KEY: false,
+        OPENROUTER_API_KEY: true,
+      },
+    },
+  );
+  expect(googleMissing.missingEnvGroups).toContainEqual(["GEMINI_API_KEY", "GOOGLE_API_KEY"]);
+  expect(googleMissing.validationErrors).toEqual([]);
+  expect(googleMissing.argvTokens).toEqual(expect.arrayContaining(["--retries", "2"]));
+  const coverage = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["status"],
+      flags: { "--manifest": "assets.json" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(coverage.validationErrors).toEqual([]);
+  expect(coverage.argvTokens).toEqual(expect.arrayContaining(["--manifest", "assets.json"]));
+  const evaluation = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["eval"],
+      args: { cases: "cases.json" },
+      flags: { "--out": "report.json" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(evaluation.validationErrors).toEqual([]);
+  expect(evaluation.argvTokens).toEqual(
+    expect.arrayContaining(["eval", "cases.json", "--out", "report.json"]),
+  );
+  expect(evaluation.missingEnvGroups).toEqual([]);
+  expect(evaluation.meta.effect).toBe("write");
+  const router = buildCliInvocation(
+    {
+      commandId: "assets:semantic",
+      subcommandPath: ["build"],
+      flags: { "--yes": true, "--provider": "openrouter", "--rpm": "40", "--tpm": "20000" },
+    },
+    BASE_CONTEXT,
+  );
+  expect(router.missingEnvGroups).toContainEqual(["OPENROUTER_API_KEY"]);
+  expect(router.argvTokens).toEqual(
+    expect.arrayContaining(["--provider", "openrouter", "--rpm", "40", "--tpm", "20000"]),
+  );
+  const cached = buildCliInvocation(
+    {
+      commandId: "find",
+      args: { words: "sad goodbye" },
+      flags: { "--semantic": true, "--json": true },
+    },
+    BASE_CONTEXT,
+  );
+  expect(cached.meta.cost).toBe("free");
+  expect(cached.missingEnvGroups).toEqual([]);
+  expect(cached.validationErrors).toEqual([]);
+  expect(cached.argvTokens).toContain("--json");
+});
+
+test("film collaboration/history and embedding subcommands retain their shared CLI options", () => {
+  for (const [commandId, subcommandPath, args, flags, expected] of [
+    ["history", ["list"], {}, { "--film": "films/cell-break" }, ["--film", "films/cell-break"]],
+    [
+      "collab",
+      ["read"],
+      { name: "cam" },
+      { "--film": "films/cell-break" },
+      ["--film", "films/cell-break"],
+    ],
+    [
+      "assets:semantic",
+      ["build"],
+      {},
+      { "--db": "custom.sqlite", "--dimensions": "1536" },
+      ["--db", "custom.sqlite", "--dimensions", "1536"],
+    ],
+  ]) {
+    const spec = buildCliInvocation(
+      { commandId, subcommandPath, args, flags, targetFilm: "root" },
+      BASE_CONTEXT,
+    );
+    for (const token of expected) expect(spec.argvTokens).toContain(token);
+  }
+});
+
 test("rejects options hidden in argument and flag values while preserving negative numbers", () => {
   for (const request of [
     { commandId: "voice:gen", args: { ids: ["--yes"] } },
@@ -195,6 +338,12 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
     const catalogBunTargets = new Set(
       CLI_COMMANDS.filter((c) => c.runner === "bun-script").map((c) => c.target),
     );
+    for (const command of CLI_COMMANDS)
+      if (
+        command.runner === "bun-file" &&
+        rootPkg.scripts?.[command.id] === `bun ${command.target}`
+      )
+        catalogBunTargets.add(command.id);
     const catalogPkgScripts = new Set(
       CLI_COMMANDS.filter((c) => c.runner === "package-script").map(
         (c) => `${c.packageDir}:${c.target}`,
@@ -279,6 +428,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
     const INTERNAL_WORKER_OR_HELPER_FILES = new Map([
       ["scripts/evals/load/compare.mjs", "developer helper comparing recorded performance runs"],
       ["scripts/evals/load/frame.mjs", "developer frame-measurement probe for load evaluations"],
+      ["scripts/evals/find/dual.ts", "dual search evaluation dispatched by eval:find --mode dual"],
       ["scripts/studio_tell.py", "shared Studio activity reporter library imported by Python CLIs"],
       ["packages/clip-catalog/jev.py", "stdin JSON helper library/IPC wrapper for Jev"],
       ["packages/live-studio/src/cli.mjs", "shared CLI argument parser imported by entrypoints"],
@@ -1098,7 +1248,7 @@ describe("cli-catalog resolver rules", () => {
       BASE_CONTEXT,
     );
     expect(falseBool.argvTokens).toEqual([]);
-    expect(falseBool.meta.cost).toBe("optional-paid");
+    expect(falseBool.meta.cost).toBe("free");
 
     const sheetClip = buildCliInvocation({ commandId: "catalog:sheet-clip" }, BASE_CONTEXT);
     expect(sheetClip.validationErrors).toEqual([]);

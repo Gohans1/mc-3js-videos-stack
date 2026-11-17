@@ -91,5 +91,6 @@ test("a key file is written only over the version the page saw, and only when ev
   assert.ok(keys.write(version, data).version);
   assert.ok(keys.ownWrite());
   assert.equal(JSON.parse(readFileSync(file, "utf8")).note, "kept");
-  assert.deepEqual(keys.write(version, data), { conflict: true });
+  assert.ok(keys.write(version, data).version, "a repeated save from a known base converges");
+  assert.deepEqual(keys.write("unknown", data), { conflict: true });
 });

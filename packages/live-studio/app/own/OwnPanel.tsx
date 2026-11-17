@@ -44,6 +44,7 @@ import { sourceOf } from "../sound/library-view";
 import { lanes, library } from "../sound/sound";
 import { items as textItems } from "../text/text";
 import { BUILTINS } from "./builtins";
+import { HistoryPanel } from "./HistoryPanel";
 import { otherKeys, type OwnField, type OwnInput, type OwnItem, ownWork } from "./own-work";
 
 type Rec = Record<string, unknown>;
@@ -303,27 +304,8 @@ export function OwnPanel() {
   const kinds = [
     ...(S.render?.describe ? [{ id: NOW, title: "On screen" }] : []),
     ...groups.map((g) => ({ id: g.id, title: g.title, count: g.items.length })),
+    { id: "history", title: "Versions" },
   ];
-  if (!kinds.length)
-    return (
-      <section
-        aria-label="Made by this film"
-        className="flex min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 wrap-anywhere"
-      >
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Folder aria-hidden />
-            </EmptyMedia>
-            <EmptyTitle>No film-specific items</EmptyTitle>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              This film uses the studio libraries. Items created specifically for this film will
-              appear here.
-            </p>
-          </EmptyHeader>
-        </Empty>
-      </section>
-    );
   const open = kinds.find((k) => k.id === pick) ?? kinds[0];
   const group = groups.find((g) => g.id === open.id);
   const choose = (id: string) => set({ filmKind: id });
@@ -411,14 +393,22 @@ export function OwnPanel() {
                 </span>
               )}
             </div>
-            <p className="text-muted-foreground text-sm leading-relaxed">{aboutOf(open.id)}</p>
-            <p className="text-muted-foreground text-ui flex items-start gap-2 leading-relaxed">
-              <LockKeyhole aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-              View only · Add a note to request changes.
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              {open.id === "history"
+                ? "Try a different direction and return to a version you kept."
+                : aboutOf(open.id)}
             </p>
+            {open.id !== "history" && (
+              <p className="text-muted-foreground text-ui flex items-start gap-2 leading-relaxed">
+                <LockKeyhole aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+                View only · Add a note to request changes.
+              </p>
+            )}
           </div>
           <div className="mx-auto w-full max-w-4xl px-4 pb-4">
-            {group ? (
+            {open.id === "history" ? (
+              <HistoryPanel />
+            ) : group ? (
               <div className="flex flex-col gap-4">
                 {group.items.map((x) => (
                   <Item key={`${x.part ?? ""}:${x.id}`} x={x} />

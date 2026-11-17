@@ -12,8 +12,8 @@ Lệnh giúp AI biết đang có gì, kết quả nằm đâu và kiểm chứng
 | JSON                 | Dùng jsonFile; lỗi phải chỉ file và cách kiểm tra                                                                                  |
 | Kết quả              | Nêu phát hiện, thời điểm, file/dòng hoặc đường dẫn artifact; bước tiếp hữu ích thì thêm next:                                      |
 | Thiếu dữ liệu        | Chỉ lệnh hoặc thao tác tạo dữ liệu đó                                                                                              |
-| Chi phí              | Help nêu credits, tải dữ liệu và thời gian dài; lệnh tạo voice xem trước mặc định, chỉ gửi khi --yes, --dry-run luôn chỉ xem trước |
-| Dịch vụ nhỏ          | find --jev là ngoại lệ có gọi ngoài/quota mà không cần --yes; không tự suy rộng ngoại lệ cho lệnh khác                             |
+| Chi phí              | Help nêu credits và thời gian dài; voice và assets:semantic build chỉ xem trước mặc định, chỉ gửi khi --yes; --dry-run của voice luôn chỉ xem trước |
+| Dịch vụ nhỏ          | find thường có thể gửi câu tìm tới OpenFilm, --offline chỉ dùng cache; find --jev gọi judge có quota/chi phí mà không cần --yes, không suy rộng ngoại lệ sang lệnh khác |
 | Thời gian dài        | Có timeout và lưu từng kết quả khi có thể tiếp tục lần sau                                                                         |
 | Mã thoát             | 0 thành công, 1 lỗi công việc/dữ liệu, 2 lỗi gọi lệnh/điều kiện; lỗi sau khi chạy phải nói phần đã hoàn tất                        |
 
@@ -40,3 +40,8 @@ Python giữ cùng hành vi bằng parser hiện có. Kiểm tra cả vị trí 
 | Review khi được yêu cầu | Reviewer độc lập kiểm chứng lại kết quả; giải quyết Critical và Required trước khi kết thúc        |
 
 packages/live-studio/test/skills.test.mjs kiểm tra đường dẫn reference và tên lệnh được guide nhắc tới. Test này chưa chứng minh mọi ví dụ hoặc workflow đều đúng; vẫn phải đối chiếu code và chạy lệnh tương ứng.
+
+## Giữ chỉnh sửa trong Studio
+
+Studio giữ các trường người đã chỉnh trước ghi file trực tiếp chưa xác nhận; danh sách chưa có ID ổn định hoặc vừa đổi cấu trúc được giữ cả khối, và đầu vào bị giữ lại nằm ở .studio/collaboration/notices.jsonl.
+AI dùng bun run collab --film films/tên read cam rồi write cam đường-dẫn-json với base và data để sửa có chủ ý; Studio phải đang chạy và bản trả về mới là kết quả đã lưu.

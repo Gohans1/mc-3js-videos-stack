@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -6,9 +7,9 @@ import { dirname, join } from "node:path";
 import { ANIMS } from "../../packages/film-stage/src/animate";
 import { TEXT_IN, TEXT_OUT } from "../../packages/film-stage/src/titles";
 import { TRANSITIONS } from "../../packages/film-stage/src/transitions";
+import { ROOT } from "../vault.mjs";
 import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
 import {
-  allEntries,
   easeAbout,
   type Entry,
   markStarred,
@@ -160,6 +161,79 @@ test("--show of a music track says how to make music, not a sound effect", async
   const out = await run(["--show", "bgm-calm"], [track], noJev);
   expect(out).toMatch(/make your own: music: the real-sound skill/);
   expect(out).not.toMatch(/sfx:get/);
+});
+
+test("--show of an imported page exposes its files, controls and licence without inventing a timeline lane", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "find-imported-page-"));
+  const file = join(folder, "files/snow.html"),
+    preview = join(folder, "preview.mp4"),
+    settings = join(folder, "saved.json");
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, "<style>:root { --amount: 1 }</style>");
+    writeFileSync(
+      settings,
+      JSON.stringify({
+        clip: { attrs: { "data-props": '[{"name":"Amount","type":"var","var":"--amount"}]' } },
+      }),
+    );
+    const output = await run(
+      ["--show", "snow"],
+      [
+        {
+          ...e("snow", "Snow", "Sparse falling flakes", "asset", "effect"),
+          src: "openfilm",
+          data: {
+            file,
+            preview,
+            format: "openfilm-page",
+            license: "CC0 1.0",
+            url: "https://example.test/library/LICENSE.md",
+          },
+        },
+      ],
+      noJev,
+    );
+    expect(output).toContain(`file: ${file}`);
+    expect(output).toContain(`see it: ${preview}`);
+    expect(output).toContain(`settings: ${settings}`);
+    expect(output).toContain("format: openfilm-page");
+    expect(output).toContain("licence: CC0 1.0  https://example.test/library/LICENSE.md");
+    expect(output).toContain("src/scene.ts");
+    expect(output).toContain("no native timeline lane");
+    expect(output).not.toContain("undefined");
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("--show separates an explicit licence document from the audio download URL", async () => {
+  const output = await run(
+    ["--show", "farewell"],
+    [
+      {
+        ...e("farewell", "Farewell", "", "bgm", "sad"),
+        data: {
+          license: "CC0 1.0",
+          licenseUrl: "https://example.test/library/LICENSE.md",
+          url: "https://example.test/music.mp3",
+        },
+      },
+    ],
+    noJev,
+  );
+  expect(output).toContain("licence: CC0 1.0  https://example.test/library/LICENSE.md");
+  expect(output).toContain("source: https://example.test/music.mp3");
+});
+
+test("--show discloses unknown audio provenance even when it belongs to the Real / Studio grouping", async () => {
+  const output = await run(
+    ["--show", "wind"],
+    [{ ...e("wind", "Wind"), data: { origin: "unknown" } }],
+    noJev,
+  );
+  expect(output).toContain("provenance: unknown");
+  expect(output).toContain("not verified recording provenance");
 });
 
 test("a word in a kind the --kind left out is pointed to, by its category", async () => {
@@ -1633,17 +1707,38 @@ test("a film's own sounds have their length, and its bgm folder holds music", ()
   };
   wav(join(film, "sound/sfx/my-hit.wav"));
   wav(join(film, "sound/sfx/bgm/calm/my-theme.wav"));
-  const mine = allEntries(true, film).filter((x) => x.src === "this-film");
-  expect(mine.find((x) => x.id === "my-hit")?.secs).toBeCloseTo(1, 2);
-  expect(mine.find((x) => x.id === "my-theme")?.kind).toBe("bgm");
-  // a film file named as a vault sound plays instead of it (sound.mjs): one entry, no second take
-  const vault = allEntries(true, film).find(
-    (x) => x.kind === "sfx" && x.src !== "this-film" && x.takes === 1,
-  )!;
-  wav(join(film, `sound/sfx/${vault.id}.wav`));
-  const same = allEntries(true, film).filter((x) => x.id === vault.id);
-  expect(same.map((x) => [x.src, x.takes])).toEqual([["this-film", 1]]);
-  rmSync(film, { recursive: true });
+  const fixtureVault = join(film, "vault");
+  wav(join(fixtureVault, "sound/sfx/foley/vault-hit.wav"));
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--no-env-file",
+        "-e",
+        `import {allEntries} from ${JSON.stringify(new URL("../find.ts", import.meta.url).href)};
+import {copyFileSync} from "node:fs";
+const film = ${JSON.stringify(film)};
+const before = allEntries(true, film);
+copyFileSync(film + "/sound/sfx/my-hit.wav", film + "/sound/sfx/vault-hit.wav");
+console.log(JSON.stringify({before, after: allEntries(true, film).filter(x => x.id === "vault-hit")}));`,
+      ],
+      {
+        env: { ...process.env, MC_VAULT_ROOT: fixtureVault, MC_VAULT_EXTERNAL: fixtureVault },
+        encoding: "utf8",
+        timeout: 10000,
+        windowsHide: true,
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const { before, after } = JSON.parse(result.stdout) as { before: Entry[]; after: Entry[] };
+    const mine = before.filter((x) => x.src === "this-film");
+    expect(mine.find((x) => x.id === "my-hit")?.secs).toBeCloseTo(1, 2);
+    expect(mine.find((x) => x.id === "my-theme")?.kind).toBe("bgm");
+    expect(before.find((x) => x.id === "vault-hit")).toMatchObject({ kind: "sfx", takes: 1 });
+    expect(after.map((x) => [x.src, x.takes])).toEqual([["this-film", 1]]);
+  } finally {
+    rmSync(film, { recursive: true });
+  }
 });
 
 test("the eases of one group are told apart at the start of their rows, not by the job they share", async () => {
@@ -1810,4 +1905,50 @@ test("find --kind look exposes all named look presets and removes stale 'no name
   expect(showLook).toContain('"look": "teal-amber"');
   expect(showLook).toContain("adjust.json");
   expect(showLook).toContain("shots.json");
+});
+
+test("a shared vault override supplies the same real sounds to discovery and the Studio", () => {
+  const folder = mkdtempSync(join(tmpdir(), "find-shared-vault-"));
+  try {
+    mkdirSync(join(folder, "mc-sound/mc"), { recursive: true });
+    const audio = Buffer.alloc(2044);
+    audio.write("RIFF");
+    audio.writeUInt32LE(2036, 4);
+    audio.write("WAVE", 8);
+    audio.write("fmt ", 12);
+    audio.writeUInt32LE(16, 16);
+    audio.writeUInt16LE(1, 20);
+    audio.writeUInt16LE(1, 22);
+    audio.writeUInt32LE(1000, 24);
+    audio.writeUInt32LE(2000, 28);
+    audio.writeUInt16LE(2, 32);
+    audio.writeUInt16LE(16, 34);
+    audio.write("data", 36);
+    audio.writeUInt32LE(2000, 40);
+    writeFileSync(join(folder, "mc-sound/mc/shared-stone.wav"), audio);
+    const script = `import { allEntries } from ${JSON.stringify(new URL("../find.ts", import.meta.url).href)};
+import { findVaults, openSound } from ${JSON.stringify(new URL("../../packages/live-studio/src/sound.mjs", import.meta.url).href)};
+const film = process.cwd();
+console.log(JSON.stringify({
+  dirs: findVaults(film, {}),
+  disabled: findVaults(film, { soundVault: false }),
+  entries: allEntries(false, film).filter(entry => entry.id === 'shared-stone'),
+  studio: openSound(film, { soundTimeline: 'audio.json', sfx: 'sound' }).library().filter(entry => entry.name === 'shared-stone'),
+}));`;
+    const result = spawnSync(process.execPath, ["--no-env-file", "-e", script], {
+      cwd: ROOT,
+      env: { ...process.env, MC_VAULT_ROOT: folder, MC_VAULT_EXTERNAL: folder },
+      encoding: "utf8",
+      timeout: 15000,
+      windowsHide: true,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const output = JSON.parse(result.stdout);
+    expect(output.disabled).toEqual([]);
+    expect(output.dirs).toEqual([join(folder, "mc-sound")]);
+    expect(output.entries.map((entry: Entry) => entry.id)).toEqual(["shared-stone"]);
+    expect(output.studio.map((entry: { name: string }) => entry.name)).toEqual(["shared-stone"]);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
 });

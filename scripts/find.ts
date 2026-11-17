@@ -1,8 +1,8 @@
 // One lookup over everything a film can name (vault sounds, every film-stage preset), built so an agent reads ~15 lines
-// instead of grepping 3 MB of SOURCES.json: bun run find --help. Jev (packages/clip-catalog/jev.py) ranks by meaning.
+// instead of grepping SOURCES.json: bun run find --help. Keyword and OpenFilm meaning results keep separate orders.
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, extname, join, relative } from "node:path";
+import { basename, dirname, extname, join, relative } from "node:path";
 
 import { FIT_NO, FIT_YES, jevJudge as judgeBy } from "../packages/clip-catalog/jev";
 import { PRIME_LENSES } from "../packages/film-kit/src/lens";
@@ -30,6 +30,10 @@ import {
 } from "../packages/live-studio/app/sound/groups";
 import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
 import { audioInfo } from "../packages/live-studio/src/sound.mjs";
+import { importedEntries } from "./imported-catalog";
+import { openFilmCategory, type OpenFilmLookup, openFilmSearch } from "./search/openfilm";
+import { displayAbout, dualSearchOutput } from "./search/output";
+import { assetFile, assetKey } from "./semantic/catalog";
 import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
 
 export type Entry = {
@@ -46,6 +50,12 @@ export type Entry = {
   fav?: boolean;
   // the catalogue record behind the line, for --show
   data?: Detail;
+  semantic?: {
+    score: number;
+    part: number;
+    input: "text" | "audio" | "video" | "image";
+    segment?: { from: number; to: number };
+  };
 };
 // What --show reads from a sound's SOURCES/PEAKS, a mocap clip's catalogue row or a film-stage preset
 type Detail = {
@@ -119,7 +129,7 @@ const plain = (text: string) =>
     .filter(Boolean);
 const words = (text: string) => plain(text).map(stem);
 // Words are matched as English; letters outside it (Vietnamese, emoji aside) would only match stray fragments
-const isForeign = (text: string) => /[^a-z]/i.test(text.replace(/[^\p{L}]/gu, ""));
+export const isForeign = (text: string) => /[^a-z]/i.test(text.replace(/[^\p{L}]/gu, ""));
 
 // Words that name nothing: kept out of the query so "a" or "the" never matches a description
 const STOP = new Set(
@@ -448,7 +458,10 @@ const unknownKind = (asked: string, pool: Entry[]) => {
 };
 
 // The Sound panel's filters: Real / Studio recordings or Code-gen (sfx, bgm), Vanilla or Modded packs (mc)
-const ORIGINS = { real: "Real / Studio: recordings", synth: "Code-gen: made in code by earshot" };
+const ORIGINS = {
+  real: "Real / Studio grouping, not verified recording provenance",
+  synth: "Code-gen: made in code by earshot",
+};
 const EDITIONS = { vanilla: "Vanilla Minecraft", modded: "Modded packs" };
 const originOfEntry = (x: Entry) =>
   originOf({ name: x.id, source: x.src, origin: x.data?.origin as "real" | "synth" | undefined });
@@ -562,6 +575,42 @@ export function rank(
     .slice(0, opt.n ?? Infinity);
 }
 
+export const keywordSearch = (entries: Entry[], query: string, kinds?: string[]) => {
+  const foreign = isForeign(query);
+  const kindNames = kinds?.map((kind) => kind.split("/")[0]!);
+  const kindSaid = new Set(
+    (kindNames ?? []).flatMap((kind) =>
+      (kind === "sound" ? SOUND : [kind]).flatMap((name) => [
+        ...words(`${name} ${KIND_WORDS[name] ?? ""}`),
+        ...Object.entries(KIND_ALIAS).flatMap(([word, to]) => (to === name ? [word] : [])),
+        ...Object.entries(KIND_NAMED).flatMap(([word, to]) => (to === name ? [word] : [])),
+      ]),
+    ),
+  );
+  const said = plain(query).filter((word) => !kindSaid.has(stem(word)));
+  const asks = said.length ? said.join(" ") : query;
+  const ranked = foreign ? [] : rank(entries, asks);
+  const typed = [...new Set(plain(asks))].filter(
+    (word) => !STOP.has(stem(word)) && !/^\d+$/.test(word),
+  );
+  const named = kinds ? [] : [...new Set(typed.flatMap((word) => KIND_NAMED[stem(word)] ?? []))];
+  const whole = plain(query).join(" ");
+  const first = (entry: Entry) =>
+    plain(entry.id).join(" ") === whole
+      ? -1
+      : (entry.kind === "mocap" && (entry.secs ?? 1) < 0.1 ? 2 : 0) +
+        (named.length && !named.includes(top(entry.kind)) ? 1 : 0);
+  return {
+    foreign,
+    said,
+    asks,
+    ranked,
+    typed,
+    named,
+    matches: ranked.toSorted((a, b) => first(a) - first(b)),
+  };
+};
+
 type SoundItem = {
   name: string;
   kind?: string;
@@ -641,6 +690,7 @@ export const isFight = (ref: string) => {
     SCREEN.fights.some((w) => name.slice(m.index).toLowerCase().startsWith(w)),
   );
 };
+export const defaultSearchEntry = (entry: Entry) => entry.kind !== "mocap" || !isFight(entry.id);
 // ref -> "retarget breaks on Steve: <what> at <s> s; ..." for clips whose sweep (sweep_<lib>.jsonl) crosses a limit
 const brokenOf = (dir: string, lib: string) => {
   const f = join(dir, `sweep_${lib}.jsonl`);
@@ -664,7 +714,7 @@ const brokenOf = (dir: string, lib: string) => {
   }
   return out;
 };
-export function mocapEntries(dir = join(ROOT, "vault/motion/catalog")): Entry[] {
+export function mocapEntries(dir = join(LOCAL, "motion/catalog")): Entry[] {
   const review: Record<string, Review> = readJson(join(dir, "review.json"));
   return ["mixamo", "ual1", "ual2"].flatMap((lib) => {
     const f = join(dir, `${lib}.jsonl`);
@@ -1009,6 +1059,7 @@ export const allEntries = (fold = true, film = process.cwd()) => {
     mine = new Set(own.map((x) => x.name));
   return [
     ...presetEntries(),
+    ...importedEntries(join(LOCAL, "openfilm/assets.json")),
     ...soundEntries([...own, ...vaultSounds().filter((x) => !mine.has(x.name))], fold),
     ...mocapEntries(),
   ];
@@ -1026,7 +1077,7 @@ const tells = (x: Entry) => {
 const line = (x: Entry, lead = "") => {
   // a Minecraft sound says what the game's subtitles call it ("Door creaks"), the plainest account of what is heard
   const heard = Array.isArray(x.data?.heard) ? (x.data.heard as string[]).join("; ") : "";
-  const said = heard ? `heard: ${heard}` : !tells(x) ? "" : x.about;
+  const said = heard ? `heard: ${heard}` : !tells(x) ? "" : displayAbout(x.about);
   const about = said.length > 90 ? `${said.slice(0, 89)}…` : said;
   const synth = (x.kind === "sfx" || x.kind === "bgm") && originOfEntry(x) === "synth";
   const tags = [x.fav && "starred", x.src, synth && "made in code", x.note]
@@ -1066,22 +1117,24 @@ export const jevJudge = (scene: string, pool: Entry[], show: number): Promise<Vo
   );
 
 const HELP = `Usage: bun run find <words> [options]     (works from a film folder too, and then also searches the film's own sounds)
-       bun run find --show <id[,id]>      everything about one entry: what it does, its settings, a line to paste, how to see it
+       bun run find --show <id[,id]>      files/licence, settings, and timeline placement or source adaptation
 
 Finds what a film can name: vault sounds, mocap clips, transitions, camera anims and curves, text and shape voices,
-fonts, adjust sliders, beat effects, camera eases. One line per hit: kind/category  id-to-write  length  title —
+fonts, adjust sliders, beat effects, camera eases and imported visual pages/images. One line per hit: kind/category  id-to-write  length  title —
 description  [source], then where that id goes in the film's src/timeline and what to try next.
 
 Options:
   --kind <k[,k]>   sfx, bgm, mc (Minecraft) or sound (all three); mocap; transition anim text shape font adjust look lens shake velocity ease
+                   asset/<category> for imported visuals: asset/effect, asset/sticker, asset/transition; --kind asset lists groups
                    each with /<category>, the studio's groups: --kind sfx/typing, mc/horror, transition/wipe, text/pop
                    (a word of the group is enough, and plain names work: music is bgm, titles is text, camera is anim;
-                   the first line says how a loose one was read). --kind <kind> alone: its groups with counts, then
+                   the output says how a loose one was read). --kind <kind> alone: its groups with counts, then
                    every entry when 60 or fewer; --kind <kind>/<category>: that group, and the words its entries are
                    named by when it is long
   --source <s[,s]> where it comes from: minecraft and each mod pack by name (alexs-caves, quality-sounds ...), earshot,
                    mixkit, mixamo, film-stage or film-kit (every preset) or one preset file
-  --origin <o>     sfx and bgm: real (recordings, the studio's Real / Studio) or synth (made in code, its Code-gen)
+  --origin <o>     sfx and bgm: real (the studio's Real / Studio grouping) or synth (made in code, its Code-gen).
+                   This grouping does not verify recording provenance; --show retains an explicit unknown origin.
   --edition <e>    Minecraft sounds: vanilla (the game itself) or modded (mod packs)
   --license <l>    sounds by what a YouTube upload must do: free (nothing), credit (CC BY: name the author), claim
                    (Content ID claims the video), minecraft (Mojang's game sounds: Minecraft videos only), mod (a mod's
@@ -1093,13 +1146,26 @@ Options:
   --star <id[,id]> star for the creator, when asked (--unstar takes it off); into a named list: --star boom --fav horror
                    (a new name makes the list). An id in several kinds needs --kind
   Any filter without a value lists its values with counts: bun run find --source lists every source and mod pack.
-  Other names work and the first line says how they were read: --licence, --type/--category (--kind), --pack/--mod
+  Other names work and the output says how they were read: --licence, --type/--category (--kind), --pack/--mod
   (--source), --length/--duration (--dur), --limit (-n); values too: --origin recorded, --edition mods, --license cc-by
-  -n <N>           hits shown (default 12, at most 200)
+  -n <N>           hits per block (default 12, at most 200); BM25 and OpenFilm semantic have independent limits
+  --offline        no OpenFilm requests: use its saved responses (24 h cache), else show BM25 with a cache-miss note
+  --json           ordinary search schemaVersion 2: {mode,query,notes,keyword:{results},semantic:{scope,categories,results}}
+                   keyword results are full records. A semantic hit with alsoKeyword:true has only key/rank/similarity;
+                   find its full record in keyword.results by key. Other semantic hits include their full records.
+                   The two blocks keep independent ranks. Similarity is not confidence; --semantic below keeps its old schema.
   --jev            rank by meaning with Jev, a small AI judge that reads any language: 1-3 s, under $0.01 a search. With
                    --kind it reads every entry of those kinds; without, it only reorders the word matches. Each hit
                    shown also gets "fits" 0-1, Jev's own yes that it is what you asked for; the next: line then says
                    FOUND (use the first), UNSURE (--show it first) or NOT IN THE VAULT (do not use them: make it)
+  --semantic       hybrid local vectors + keywords; requires a prepared assets:semantic index. Cached queries
+                   are offline; --yes permits a query API call. Failure falls back to keywords.
+                   --db PATH and --dimensions 768|1536|3072 select a compatible index. Each audio take is separate.
+                   --provider gemini (default), auto (Gemini alias) or explicitly openrouter. No failover.
+                   MC_SEMANTIC_DB selects the shared index; live queries share its configured daily request budget.
+                   --json returns {mode,query,notes,results}, including semantic input type and source chunk seconds;
+                   keyword fallback stays JSON. Vector score is similarity, not confidence; inspect/listen before use.
+                   Keeps kind/source/origin/edition/license/dur/fav filters; body filters and --jev are separate calls.
   --show <id>      the entry in full (ids are the second column; any take of a family)
   mocap by body:   --from <posture> (at its start) --to <posture> (at its end) --has <posture> (anywhere in it)
                    --still (stays within 0.3 m) | --moves, --loop, --energy 10-40 (deg/s: idle ~10, walk ~30,
@@ -1109,8 +1175,15 @@ Options:
                    With words or --jev "<scene>"; a wrong posture lists them
   Any filter alone (--kind, --source, --origin, --edition, --license, --dur, --fav) lists what it keeps.
 
-Words first: free, offline, instant, English only (translate first). Name the thing, not the moment: "whoosh", not "the
-camera flies past"; Minecraft sounds also match what the game's subtitles say ("creeper hisses", "door creaks"). A sound
+Ordinary search returns BM25 first, then independent OpenFilm semantic candidates when those assets pass your filters.
+OpenFilm receives only query text/category/limit, no files or keys; each category waits at most 2.5 s, two at a time.
+Responses are cached for 24 h in MC_FIND_CACHE or .studio/openfilm-search.sqlite; MC_FIND_OFFLINE=1 disables requests.
+API/cache errors keep BM25 intact. No prepared embedding index, Gemini, OpenRouter or Jev is used by default.
+MC_FIND_CACHE paths start at the repo root; --offline uses fresh cache entries only. --kind mc never calls OpenFilm.
+The semantic service always returns nearest candidates, even for nonsense: listen/view; no result is a fit guarantee.
+BM25 searches English only (translate first); OpenFilm accepts other languages but cannot search local-only Minecraft.
+Name the thing for precise keywords ("whoosh"); describe the scene for semantic alternatives. Minecraft sounds also
+match the game's subtitles ("creeper hisses", "door creaks"). A sound
 ask without --kind also meets mocap clips and presets: add --kind sound. No hit: other plain words, then browse the
 groups (--kind sfx, then --kind sfx/<group>). Music has no tags beyond its group: for another mood, list a bgm group
 and rank it by ear (earshot rank). --jev (paid) last, when the cue is a feeling or a moment ("the moment he realises
@@ -1379,13 +1452,19 @@ function details(x: Entry): string[] {
     dir = timelineDir();
   const out: string[] = [];
   const use = (file: string, json: string) => out.push(`use: ${dir}/${file} ${json}`);
+  const licenceUrl = typeof d.licenseUrl === "string" ? d.licenseUrl : d.url;
+  if (d.license) out.push(`licence: ${d.license}${licenceUrl ? `  ${licenceUrl}` : ""}`);
+  if (d.licenseUrl && d.url && d.url !== d.licenseUrl) out.push(`source: ${d.url}`);
   if (SOUND.includes(x.kind)) {
     const takes = d.takes ?? [];
     if (takes.length > 1)
       out.push(
         `takes: ${takes.length > 6 ? `${takes.length} of them, ${takes[0]} to ${takes.at(-1)}` : takes.join(", ")} (vary a repeated sound across them)`,
       );
-    if (d.license) out.push(`licence: ${d.license}${d.url ? `  ${d.url}` : ""}`);
+    if (d.origin === "unknown")
+      out.push(
+        "provenance: unknown; Real / Studio is a grouping, not verified recording provenance",
+      );
     if (d.peaks?.length) out.push(`loudness: ${envelope(d.peaks)}`);
     const bed = `beds[]: {"name": "${x.id}", "from": 0, "to": ${num(x.secs) ?? 10}, "gain": 0, "fadeIn": 1, "fadeOut": 1}  (gain in dB; + "start", "duck", "pan"; a bed shorter than its span loops)`;
     const hit = `sfx[]: {"at": <scene seconds, not heard: bun run at <heard s> gives the scene second>, "name": "${x.id}", "gain": 0}  (gain in dB; + "rate", "pitch", "reverse", "fadeIn", "fadeOut")`;
@@ -1555,7 +1634,26 @@ function details(x: Entry): string[] {
       "text.json",
       `items[]: {"kind": "${x.id}", "x": 0.5, "y": 0.5, ${sized}, "width": 10, "color": "#E5484D", "from": 0, "to": 3, "in": {"fx": "draw", "len": 0.5}}  (size and width in px at 1080p; "at": [x, y, z] pins it to a world point; in/out voices: bun run find --kind shape)`,
     );
-  } else out.push(`use: ${dir}/${useOf(x.kind)}`);
+  } else {
+    const lane = useOf(x.kind);
+    if (lane) out.push(`use: ${dir}/${lane}`);
+    else {
+      const file = assetFile(x);
+      out.push(`file: ${file || "not recorded in the catalog"}`);
+      if (typeof d.format === "string") out.push(`format: ${d.format}`);
+      if (!d.license) out.push("licence: not recorded; inspect the source before reuse");
+      if (file && d.format === "openfilm-page") {
+        const settings = join(dirname(file), "..", "saved.json");
+        if (existsSync(settings))
+          out.push(
+            `settings: ${settings} (clip.attrs data-props names controls; source defines defaults)`,
+          );
+      }
+      out.push(`use: no native timeline lane for ${x.kind}; inspect/adapt the source in ${HOOKS}`);
+      const preview = typeof d.preview === "string" ? d.preview : "";
+      out.push(`see it: ${preview || file || "no source or preview recorded"}`);
+    }
+  }
   if (!SOUND.includes(x.kind) && !out.some((l) => l.startsWith("see it:")))
     out.push(
       "see it: AT=<a second it is on screen> bun run render stills  (in a film folder), or the Studio at that second",
@@ -1666,17 +1764,20 @@ function show(ids: string[], pool: Entry[]) {
         readAs +
         [
           ...shared,
-          ...hits.map((x) =>
-            [
+          ...hits.map((x) => {
+            const about = displayAbout(x.about);
+            return [
               line(x),
-              ...(x.about && !line(x).includes(x.about) ? [`about: ${x.about}`] : []),
+              ...(about && !line(x).includes(about) ? [`about: ${about}`] : []),
               ...detail(x).map((l) => once(x, l)),
-            ].join("\n"),
-          ),
+            ].join("\n");
+          }),
         ].join("\n\n")
       );
     })
-    .concat("after pasting it in: bun run check (in the film) says whether the file still fits")
+    .concat(
+      "after placing or adapting it: bun run check (in the film) says whether the file still fits",
+    )
     .join("\n\n");
 }
 
@@ -1718,6 +1819,13 @@ const OPTIONS: Record<string, string | null> = {
   "--help": null,
   "-h": null,
   "--jev": null,
+  "--semantic": null,
+  "--json": null,
+  "--offline": null,
+  "--yes": null,
+  "--db": "--db path.sqlite",
+  "--dimensions": "--dimensions 768",
+  "--provider": "--provider auto|gemini|openrouter",
   "--fav": null,
   "--star": "--star dissolve",
   "--unstar": "--unstar dissolve",
@@ -1843,7 +1951,11 @@ function parse(argv: string[], lists: string[] = []) {
       );
     if (!(name in OPTIONS))
       throw new FindError(
-        `Unknown option ${typed}. Options: --kind --source --origin --edition --license --dur --fav -n --jev --show --star --unstar --help; mocap by body: ${Object.keys(BODY).join(" ")}. Any of them without a value lists its values.`,
+        `Unknown option ${typed}. Options: ${Object.keys(OPTIONS)
+          .filter((key) => !(key in BODY))
+          .join(
+            " ",
+          )}; mocap by body: ${Object.keys(BODY).join(" ")}. Any filter without a value lists its values.`,
       );
     if (name === "--fav") {
       // a favourites list's name may follow (--fav horror); any other word after it is a search word, except when
@@ -1990,6 +2102,7 @@ export async function run(
   judge: Judge = jevJudge,
   clips: Catalog = catalog,
   favorites: FavoriteLists = favoriteLists(),
+  lookup: OpenFilmLookup = openFilmSearch,
 ): Promise<string> {
   const lists = favorites.lists();
   const { set, query, notes, bare } = parse(
@@ -1999,6 +2112,7 @@ export async function run(
   // how a loose option or value was read (--licence as --license, --origin recorded as real), above the answer
   const noted = (text: string) => (notes.length ? `(${notes.join("; ")})\n${text}` : text);
   const jev = set.has("--jev");
+  const semantic = set.has("--semantic");
   const list = (v?: string) => v?.toLowerCase().split(",").filter(Boolean);
   // a category keeps its case, which marks its word breaks (mocap/sitSeat is sit-seat)
   const asked = set
@@ -2009,6 +2123,23 @@ export async function run(
     sources = list(set.get("--source"));
   let kinds = asked;
   if (set.has("--help") || set.has("-h")) return HELP;
+  if (set.has("--offline") && (jev || set.has("--yes")))
+    throw new FindError("--offline cannot be combined with --jev or --yes");
+  if (set.has("--json") && (jev || !query || Object.keys(BODY).some((key) => set.has(key))))
+    throw new FindError(
+      "--json needs search words; use --jev or mocap body filters in a separate call",
+    );
+  if (semantic && (jev || !query || Object.keys(BODY).some((key) => set.has(key))))
+    throw new FindError(
+      "--semantic needs scene words and keeps catalog filters; use --jev or mocap body filters in a separate call",
+    );
+  if (!semantic && ["--yes", "--db", "--dimensions", "--provider"].some((key) => set.has(key)))
+    throw new FindError("--yes, --db, --dimensions and --provider apply only to --semantic");
+  if (semantic && !["auto", "gemini", "openrouter"].includes(set.get("--provider") ?? "auto"))
+    throw new FindError("--provider is auto, gemini or openrouter");
+  const dimensions = Number(set.get("--dimensions") ?? 768);
+  if (semantic && ![768, 1536, 3072].includes(dimensions))
+    throw new FindError("--dimensions is 768, 1536 or 3072");
   const nRaw = set.get("-n");
   if (nRaw !== undefined && !/^[1-9]\d*$/.test(nRaw))
     throw new FindError("-n takes a whole number of hits, 1 or more, e.g. -n 20");
@@ -2031,7 +2162,8 @@ export async function run(
     listName = "default";
   }
   const stars = favorites.open(listName);
-  const entriesOf = (fold = true) => markStarred(given ?? allEntries(fold), stars.shown());
+  const entriesOf = (fold = true) =>
+    markStarred(given ?? allEntries(semantic ? false : fold), stars.shown());
   const fav = set.has("--fav"),
     favArg = listName === "default" ? "--fav" : `--fav ${listName}`;
   // the creator's other lists, offered beside the one in use, never forced
@@ -2269,17 +2401,37 @@ export async function run(
   }
 
   // weapons and fights are left out, as the catalogue's own search leaves them (--fights, a body filter, goes there)
-  const pool = entriesOf().filter((x) => x.kind !== "mocap" || !isFight(x.id));
+  const pool = entriesOf().filter(defaultSearchEntry);
   // nothing in the list in use: how a star is given, and the lists that have some
-  if (fav && !pool.some((x) => x.fav))
-    return noted(
-      [
-        `nothing is starred yet in the ${listName} favourites (${relative(ROOT, stars.file).replaceAll("\\", "/")}).`,
-        ...(listsLine ? [listsLine] : []),
-        `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
-        `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
-      ].join("\n"),
-    );
+  if (fav && !pool.some((x) => x.fav)) {
+    const message = [
+      `nothing is starred yet in the ${listName} favourites (${relative(ROOT, stars.file).replaceAll("\\", "/")}).`,
+      ...(listsLine ? [listsLine] : []),
+      `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
+      `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
+    ].join("\n");
+    if (set.has("--json") && !semantic)
+      return dualSearchOutput(
+        query,
+        [],
+        { hits: [], categories: [], notes: [] },
+        {
+          limit: n,
+          json: true,
+          notes: [...notes, message],
+          foreign: isForeign(query),
+          line,
+          where: () => [],
+        },
+      );
+    return set.has("--json")
+      ? JSON.stringify(
+          { mode: "keyword-fallback", query, notes: [...notes, message], results: [] },
+          null,
+          2,
+        )
+      : noted(message);
+  }
   // A source by its whole name, or a folder of them (film-stage = every film-stage/*.ts)
   const fromSource = (x: Entry, s: string) => {
     const src = x.src?.toLowerCase();
@@ -2412,7 +2564,7 @@ export async function run(
     return facets;
   };
   const where = (shown: Entry[]) => {
-    const uses = [...new Set(shown.map((x) => useOf(x.kind)))];
+    const uses = [...new Set(shown.map((x) => useOf(x.kind)).filter(Boolean))];
     return uses.length ? ["", `where (in ${timelineDir()}/): ${uses.join("\n       ")}`] : [];
   };
   if (!query) {
@@ -2510,6 +2662,60 @@ export async function run(
     );
   }
 
+  if (semantic) {
+    const lexical = isForeign(query) ? [] : rank(inKinds, query, { n: 100 });
+    const json = (mode: "hybrid" | "keyword-fallback", entries: Entry[], message?: string) =>
+      JSON.stringify(
+        {
+          mode,
+          query,
+          notes: [...notes, ...(message ? [message] : [])],
+          results: entries.map((entry) => {
+            const { data, ...summary } = entry;
+            return {
+              key: assetKey(entry),
+              ...summary,
+              file: assetFile(entry) || undefined,
+              license: typeof data?.license === "string" ? data.license : undefined,
+            };
+          }),
+        },
+        null,
+        2,
+      );
+    try {
+      const { hybridSearch } = await import("./semantic/search");
+      const hits = await hybridSearch(query, inKinds, lexical, {
+        allowApi: set.has("--yes"),
+        file: set.get("--db"),
+        provider: set.get("--provider"),
+        dimensions,
+        limit: n,
+      });
+      if (set.has("--json")) return json("hybrid", hits);
+      return readAs(
+        [
+          `hybrid semantic + keywords: ${hits.length} candidates (listen/view before choosing)`,
+          ...hits.map((entry) => {
+            const segment = entry.semantic?.segment;
+            return (
+              line(entry) +
+              (segment
+                ? `  [source chunk ${segment.from.toFixed(2)}–${segment.to.toFixed(2)}s]`
+                : "")
+            );
+          }),
+          ...where(hits),
+          "next: bun run find --show <id> for settings, file and usage; Jev remains available for a closer fit check.",
+        ].join("\n"),
+      );
+    } catch (error) {
+      const message = `semantic unavailable: ${error instanceof Error ? error.message : String(error)}; keyword results follow`;
+      if (set.has("--json")) return json("keyword-fallback", lexical.slice(0, n), message);
+      notes.push(message);
+    }
+  }
+
   if (jev && kinds?.length === 1 && kinds[0] === "mocap" && !fav)
     return readAs(
       await catalogSays(
@@ -2523,33 +2729,30 @@ export async function run(
       ),
     );
 
-  const foreign = isForeign(query);
-  // Under --kind, a word that only names that kind ("music" with --kind bgm) matches every entry and says nothing
-  const kindSaid = new Set(
-    (kindNames ?? []).flatMap((k) =>
-      (k === "sound" ? SOUND : [k]).flatMap((kk) => [
-        ...words(`${kk} ${KIND_WORDS[kk] ?? ""}`),
-        ...Object.entries(KIND_ALIAS).flatMap(([w, to]) => (to === kk ? [w] : [])),
-        ...Object.entries(KIND_NAMED).flatMap(([w, to]) => (to === kk ? [w] : [])),
-      ]),
-    ),
+  const { foreign, said, asks, ranked, typed, named, matches } = keywordSearch(
+    inKinds,
+    query,
+    kinds,
   );
-  const said = plain(query).filter((w) => !kindSaid.has(stem(w)));
-  const asks = said.length ? said.join(" ") : query;
-  const ranked = foreign ? [] : rank(inKinds, asks);
-  // A one-frame mocap clip is a still pose: it never plays the move its name says, so it goes last
-  const isStill = (x: Entry) => x.kind === "mocap" && (x.secs ?? 1) < 0.1;
-  const typed = [...new Set(plain(asks))].filter((w) => !STOP.has(stem(w)) && !/^\d+$/.test(w));
-  const named = kinds ? [] : [...new Set(typed.flatMap((w) => KIND_NAMED[stem(w)] ?? []))];
-  // words naming a kind ("sad background music", "title animation") put that kind's hits first, as --kind would keep them;
-  // an id said whole (bgm_drone, pasted from audio.json) before all. A clip with a FLAW keeps its place: the eval's right
-  // answers often carry one (a retarget break), and sinking them lost 3 of 44
-  const whole = plain(query).join(" ");
-  const first = (x: Entry) =>
-    plain(x.id).join(" ") === whole
-      ? -1
-      : (isStill(x) ? 2 : 0) + (named.length && !named.includes(top(x.kind)) ? 1 : 0);
-  const matches = ranked.toSorted((a, b) => first(a) - first(b));
+  if (
+    !jev &&
+    !semantic &&
+    (set.has("--json") || inKinds.some((entry) => openFilmCategory(entry)))
+  ) {
+    const found = inKinds.some((entry) => openFilmCategory(entry))
+      ? await lookup(query, inKinds, {
+          offline: set.has("--offline") || process.env.MC_FIND_OFFLINE === "1",
+        })
+      : { hits: [], categories: [], notes: [] };
+    return dualSearchOutput(query, matches, found, {
+      limit: n,
+      json: set.has("--json"),
+      notes: [...notes, ...(kf?.read ?? [])],
+      foreign,
+      line: (entry) => line(entry),
+      where,
+    });
+  }
   const out: string[] = [],
     next: string[] = [];
   let shown: [string, Entry][] | undefined;

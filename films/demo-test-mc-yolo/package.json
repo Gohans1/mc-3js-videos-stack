@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "assets:semantic": "bun ../../scripts/asset-search.ts",
+    "history": "bun ../../packages/live-studio/history.mjs",
+    "collab": "bun ../../packages/live-studio/collab.mjs",
     "studio": "bun node_modules/live-studio/src/live.mjs 4326",
     "notes": "bun node_modules/live-studio/notes.mjs",
     "note": "bun node_modules/live-studio/note.mjs",

@@ -398,7 +398,7 @@ describe("CLI tab model & dependent lego logic", () => {
       { commandId: "find", args: { words: "stone" }, flags: {}, targetFilm: "active" },
       ctx,
     );
-    assert.equal(specFree.meta.cost, "optional-paid");
+    assert.equal(specFree.meta.cost, "free");
     assert.equal(specFree.requiresConfirm, false);
 
     const specJev = buildCliInvocation(

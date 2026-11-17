@@ -24,9 +24,71 @@ In `audio.json`, `tracks[].gain` is a whole track and a clip's `filters` is an f
 
 A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` puts it on the draft, and `render clip` keeps every chunk (the sound timeline is not in a chunk's stamp).
 
+## Tìm theo ý cảnh
+
+bun run find "<câu tìm>" trả BM25 toàn catalog đã lọc trước, rồi khối semantic chỉ từ OpenFilm; mỗi khối giữ thứ tự riêng và có tối đa -n mục, mặc định 12. Không cần chọn nguồn hoặc bật semantic; --source chỉ giới hạn nguồn khi có chủ ý, --kind sound gồm sfx, bgm và mc.
+
+Các bộ lọc áp dụng cho cả hai khối; --kind mc không gọi OpenFilm, âm thanh gọi đúng sound/music và hình dùng asset/sticker, asset/transition hoặc nhóm asset tương ứng. ID lặp có nhãn also BM25; điểm semantic là độ gần, không phải xác suất phù hợp, cần nghe/xem trước khi chọn.
+
+--show <id> chỉ file, giấy phép, preview và mẫu đặt; trang OpenFilm có saved.json mô tả nút chỉnh, cần đọc và chuyển nguồn vào src/scene.ts khi chưa có lane timeline tương ứng. Preview có thể là bản minh họa trên ảnh nền, không thay thế việc kiểm tra nguồn đã tích hợp.
+
+--origin real là nhóm Real / Studio hiện có, không xác minh xuất xứ bản thu; --show giữ nguyên provenance unknown nếu nguồn ghi vậy. Chỉ dùng giấy phép và thông tin nguồn đã kiểm tra để kết luận quyền dùng hoặc xuất xứ, không suy từ tên asset hay điểm earshot.
+
+--json thường có schemaVersion 2: keyword.results chứa bản ghi đầy đủ, semantic.results giữ thứ hạng riêng; mục alsoKeyword true chỉ có key, rank, similarity và cờ, tra bản đầy đủ trong keyword.results theo key. Mục semantic khác vẫn đầy đủ; không đọc id/file trực tiếp từ mọi mục semantic như cấu trúc cũ, chế độ --semantic riêng giữ schema cũ.
+
+BM25 dùng tiếng Anh; câu tiếng Việt chỉ có thể tìm semantic OpenFilm, muốn tìm cả Minecraft thì dùng từ khóa tiếng Anh. Mô tả hiển thị bỏ tag lặp và text chỉ in hướng đặt chung một lần, không đổi dữ liệu catalog hoặc thứ hạng.
+
+OpenFilm chỉ nhận câu tìm, loại và giới hạn kết quả, không nhận file hoặc API key; timeout mỗi loại 2,5 giây, tối đa hai loại đồng thời. --offline hoặc MC_FIND_OFFLINE=1 chỉ đọc cache 24 giờ; lỗi mạng/cache giữ nguyên BM25 và ghi lý do, cache nằm ở MC_FIND_CACHE hoặc .studio/openfilm-search.sqlite, đường dẫn biến môi trường tính từ gốc repo.
+
+Chế độ index dưới đây là tùy chọn riêng, giữ dữ liệu Gemini đã chuẩn bị; tìm thường không mở index này hay dùng quota Gemini/OpenRouter. Không chạy build hoặc query --yes nếu chỉ cần hai khối tìm kiếm mặc định.
+
+bun run assets:semantic plan chỉ đếm catalog và in mẫu key, không gọi API hay ghi vector; build cũng chỉ xem trước nếu thiếu --yes. Chọn key hoặc manifest trước khi build --yes, đặt --max-requests, --max-seconds, --rpm và --tpm theo quota; mỗi chunk hoàn tất được lưu ngay nên chạy lại tiếp tục phần thiếu hoặc lỗi.
+
+bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới. Gemini là mặc định, auto cũng dùng Gemini; OpenRouter chỉ dùng khi chọn rõ, lỗi không tự đổi provider hay luân phiên key.
+
+Trong chế độ find --semantic, --json giữ mode, query, notes và results cũ; khi API/index lỗi, mode là keyword-fallback và đầu ra vẫn là JSON. semantic.input cho biết đã dùng media hay chỉ text, segment là giây trên nguồn gốc; score là độ gần vector, không phải xác suất đúng, cần nghe/xem để chọn đoạn chính xác hơn.
+
+Đặt MC_SEMANTIC_DB, MC_SEMANTIC_MANIFEST và MC_SEMANTIC_QUOTA_DB trong .env.local để build và find dùng chung dữ liệu ngoài worktree; manifest đã cấu hình bị thiếu thì dừng, không quay sang catalog khác. status phân biệt toàn catalog với phần đã xếp hàng, hoàn tất hoặc cần cập nhật; chỉ build mới kiểm lại byte media.
+
+Các đường dẫn trong biến môi trường tính từ gốc repo, còn cờ đường dẫn tính từ nơi đang đứng. Lệnh trong phim nhận mặc định dotenv của repo, giữ ưu tiên biến đã truyền.
+
+--env-file và --no-env-file bỏ qua mặc định repo khi gọi entrypoint Bun trực tiếp; package script có thể mở Bun con không nhận các cờ của cha. Muốn cô lập, gọi bun --no-env-file <đường-dẫn-đầy-đủ/scripts/asset-search.ts> trực tiếp; BUN_OPTIONS=--no-env-file áp dụng cả Bun con theo [cơ chế của Bun](https://bun.com/docs/runtime/environment-variables).
+
+MC_SEMANTIC_DAILY_LIMIT giới hạn nội bộ, mặc định 1000 lượt mỗi ngày Pacific; mọi lần gọi kể cả lỗi, retry và câu tìm mới đều giữ chỗ trước khi gửi. --retries mặc định 2 cho lỗi tạm 429/503, giữ giới hạn lượt/thời gian; quota ngày dừng ngay, còn 429 không rõ nguyên nhân không đồng nghĩa hết quota ngày.
+
+Giữ nguyên ledger của cùng project khi đổi --db hoặc khôi phục vector; snapshot cũ không chứng minh ngân sách hôm nay còn dư. Build/query dùng --yes mới gọi API, còn xem plan/status và tìm câu đã cache không tiêu lượt.
+
+remove bỏ mục khỏi tìm kiếm và giữ cache để thêm lại không tốn lượt; remove --purge mới xóa cả cache, redo --part N chỉ đặt lại chunk cần sửa. bun run assets:semantic backup <file-mới.sqlite> tạo snapshot index và ledger nếu đã có, không ghi đè đích; không sao chép riêng file database đang mở cùng WAL.
+
+Để bỏ một mục khỏi các lần build sau, xóa cả dòng nguồn trong catalog hoặc manifest; remove chỉ tác động index hiện tại. Xóa vector không hoàn lại lượt gọi đã dùng.
+
+Tên/mô tả đi cùng media của đúng asset trong một vector; audio chia tối đa 30 giây và giữ timestamp, video không chứa nhánh âm thanh. Catalog nhập dùng preview có sẵn; FBX/GLB hoặc mục thiếu preview dùng mô tả, không tự dựng hay bịa nội dung media.
+
+Đổi model, số chiều hoặc recipe cần database riêng; file cũ được giữ nguyên, chỉ chạy một builder mỗi database. Worktree dùng MC_VAULT_ROOT trỏ tới vault thật để đọc chung asset; CLI nhận manifest riêng để AI bổ sung hoặc thử bất kỳ nguồn nào.
+
+Gemini free tier có thể dùng đầu vào cải thiện sản phẩm; kiểm tra quyền chia sẻ theo nguồn, đặc biệt nội dung có điều khoản hạn chế AI. Pilot nhỏ không chứng minh chất lượng cả kho; [Google nêu audio tối ưu cho lời nói](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-multimodal-embeddings), luôn nghe/xem trước khi chọn và dùng Jev khi cần đánh giá khác.
+
+## Đo chất lượng tìm kiếm
+
+bun run eval:find --mode dual --plan kiểm tra số mẫu và catalog; bỏ --plan để đánh giá hai khối qua chính CLI, mặc định chỉ đọc cache. --live cho phép gọi OpenFilm với --max-seconds và --max-requests; mỗi phản hồi được lưu ngay, cùng --out tiếp tục report dở qua checkpoint .jsonl nhưng không ghi đè report hoàn tất.
+
+Eval dual dùng bộ 400 mục và pilot 28 câu hiện có, đổi đáp án về ID đại diện của nhóm bản thu và dùng pool sound chung cho âm thanh, không lọc nguồn theo đáp án. Report tách số đo từng khối, ứng viên mới, độ trễ, mục chưa sẵn sàng và kiểm tra BM25 giữ nguyên thứ tự; tổng hai khối có tối đa 24 chỗ nên không gọi đó là cải thiện ranking top 12.
+
+bun run assets:semantic eval scripts/evals/semantic/known-item.json --out <report-mới.json> so từ khóa, vector và kết hợp; chỉ dùng câu đã cache, không gọi API. Bộ known-item có 400 asset khác nhau từ 64 nhóm loại/nguồn; đáp án dựa trên metadata nên chỉ đo tìm đúng mục, không chứng minh hợp cảnh bằng nghe/xem.
+
+scenes-pilot.json giữ 14 ý cảnh Anh–Việt, tương đương 28 câu có tương quan, chưa đủ kết luận chất lượng toàn kho. Tăng bộ ý cảnh độc lập và đáp án đã nghe/xem trước khi tuyên bố chất lượng; không tính bản dịch thành mẫu độc lập hay suy khoảng tin cậy từ mẫu tiện tay.
+
+Report giữ từng câu, top 10, Hit@1/5/10, MRR@10, Recall@10, nDCG@10, độ trễ p50/p95 và tách theo ngôn ngữ/nhóm. scored loại câu thiếu cache, hit5AllCases vẫn tính chúng vào mẫu số; missingCatalog/missingEmbeddings cho biết phần kho chưa sẵn sàng.
+
+complete chỉ báo query và ID sẵn sàng, không xác nhận chất lượng hay byte media hiện tại. catalog.definitions so metadata với catalog hiện tại, có thể khác manifest có chủ đích; build kiểm lại nội dung trước khi so phiên bản.
+
+Để bổ sung cache, dùng query --yes cho đúng query trong bộ case, giữ ledger và hạn mức của project; chạy lại eval sau mỗi đợt embedding. Đầu ra mới không ghi đè report cũ, thiếu dữ liệu vẫn lưu report và exit 1; thời gian eval không gồm API hay nạp catalog, không dùng để quảng cáo tốc độ tìm câu mới.
+
+Chỉ số theo [Sentence Transformers](https://sbert.net/docs/package_reference/sentence_transformer/evaluation.html); nhãn chỉ liệt kê mục đã biết đúng, các lựa chọn chưa chấm vẫn có thể phù hợp. Giữ nguyên bộ case khi so hai phiên bản và ghi rõ khác biệt catalog/index khi so dịch vụ khác.
+
 ## Ears: earshot
 
-`earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call; a file it has heard before is cached, and the same call again takes about 2 s. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the earshot skill: `bun run skills get earshot` prints its path from where you stand.
+`earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call; a file it has heard before is cached, and the same call again takes about 2 s. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the installed earshot agent skill; open its SKILL.md rather than requesting an mc-films guide.
 
 | You want                                    | Run inside the film                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

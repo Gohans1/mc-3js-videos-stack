@@ -53,7 +53,8 @@ test("the camera file is written only over the version the page saw, and only wh
   assert.ok(cam.write(version, data).version);
   assert.ok(cam.ownWrite());
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8"))[0].wave, 0.3); // the film's own fields stay
-  assert.deepEqual(cam.write(version, data), { conflict: true });
+  assert.ok(cam.write(version, data).version, "a repeated save from a known base converges");
+  assert.deepEqual(cam.write("unknown", data), { conflict: true });
   writeFileSync(file, readFileSync(file, "utf8").replace("0.23", "0.3"));
   assert.ok(!cam.ownWrite());
 });

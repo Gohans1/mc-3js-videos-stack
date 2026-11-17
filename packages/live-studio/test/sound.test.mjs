@@ -144,7 +144,8 @@ test("a save made on an old version is refused, a bad one is named, a good one i
     gain: 0,
     try: ["knock"],
   }); // the film's own keys stay
-  assert.deepEqual(s.write(version, data), { conflict: true });
+  assert.ok(s.write(version, data).version, "known-base repeated saves converge");
+  assert.deepEqual(s.write("unknown", data), { conflict: true });
   writeFileSync(file, readFileSync(file, "utf8").replace("2.5", "3"));
   assert.ok(!s.ownWrite());
   assert.equal(s.fileOf("../x"), null);

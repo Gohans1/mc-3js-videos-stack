@@ -1,11 +1,6 @@
-// A film file the creator edits by hand in the studio (the sound lanes, the camera keys), served at /api/<name>: every change is
-// drawn at once, kept for undo and saved a moment later over the version it was made on. Undo is one history for all of them,
-// so Ctrl+Z takes back the last edit whichever file it was in. What an agent changed in a file meanwhile always wins: the
-// server refuses the save (409), the page loads that version and says so, nothing is written over it.
-// Files changed in one go (a cut moved on the camera row: cam.json and shots.json) are saved in one request, all or none, so a
-// 409 on one never leaves the other half saved.
-// A preview (a drag on its way, a hovered effect) is drawn, never kept: saves and undo take the last kept state, and an agent's
-// version arriving meanwhile waits for the preview to end, so a restore can't bring back what the agent replaced.
+import { equalJson, mergeEdits } from "../../src/merge-edits.mjs";
+// Studio edits merge against their explicit base; conflicting fields keep the person's value.
+// Unsaved edits remain recoverable if their base is no longer available.
 import { getFile, postJson } from "./net";
 import { say, showError } from "./store";
 
@@ -40,7 +35,11 @@ interface Side {
   load: () => Promise<unknown>;
   saved?: (state: "busy" | "fail" | null) => void;
   swap: (snap: string) => string; // undo/redo: put snap in, give back what it held
+  accept: (sent: unknown, data: unknown) => void;
+  cancelTimer: () => void;
 }
+const sides = new Set<Side>();
+const pending = new Set<Promise<void>>();
 
 type Entry = { side: Side; snap: string; group: number };
 const undos: Entry[] = [],
@@ -86,7 +85,7 @@ const teamOf = (side: Side) => {
   return [...team];
 };
 
-const save = async (me: Side) => {
+const saveTeam = async (me: Side) => {
   const team = teamOf(me);
   if (team.some((s) => s.saving)) {
     me.later();
@@ -101,6 +100,7 @@ const save = async (me: Side) => {
   }
   const one = team.length === 1,
     labels = team.map((s) => s.label).join(" + ");
+  const sent = new Map(team.map((s) => [s, s.data()]));
   const failed = () => {
     link(team);
     for (const s of team) {
@@ -111,23 +111,15 @@ const save = async (me: Side) => {
   };
   try {
     const r = one
-      ? await postJson(`/api/${me.name}`, { base: me.version, data: me.data() })
+      ? await postJson(`/api/${me.name}`, { base: me.version, data: sent.get(me) })
       : await postJson("/api/together", {
-          files: team.map((s) => ({ name: s.name, base: s.version, data: s.data() })),
+          files: team.map((s) => ({ name: s.name, base: s.version, data: sent.get(s) })),
         });
     if (r.status === 409) {
-      for (const s of team) {
-        s.version = "";
-        s.saving = false;
-        s.unsaved = false;
-        forget(s);
-      }
-      await Promise.all(team.map((s) => s.load()));
-      say(
-        `The ${labels} file changed elsewhere (the AI?). Loaded that version; your last change wasn't saved`,
-        6000,
+      failed();
+      showError(
+        `Couldn't merge ${labels}: the base version is unavailable. Your unsaved edit is still here; copy it before reloading.`,
       );
-      for (const s of team) s.saved?.(null);
       return;
     }
     // Refused as it stands (the file's schema): the same data would be refused again, so it waits for the next change or undo
@@ -137,11 +129,21 @@ const save = async (me: Side) => {
       return;
     }
     if (!r.ok) throw new Error(String(r.status));
-    const got: { version?: string; versions?: Record<string, string> } = await r.json();
+    const got: {
+      version?: string;
+      versions?: Record<string, string>;
+      data?: unknown;
+      files?: Record<string, unknown>;
+      retained?: string[];
+    } = await r.json();
     for (const s of team) {
       s.version = one ? got.version! : got.versions![s.name];
+      const data = one ? got.data : got.files?.[s.name];
+      if (data !== undefined) s.accept(sent.get(s), data);
       s.saved?.(null);
     }
+    if (got.retained?.length)
+      say(`Kept your edits while merging ${labels}: ${got.retained.join(", ")}`, 6000);
   } catch {
     failed();
     me.later(3000); // a dropped line: tried again
@@ -149,6 +151,27 @@ const save = async (me: Side) => {
   }
   for (const s of team) s.saving = false;
   for (const s of team) if (s.unsaved) s.later();
+};
+
+const save = (side: Side) => {
+  side.cancelTimer();
+  if (!side.unsaved) return Promise.resolve();
+  const request = saveTeam(side);
+  pending.add(request);
+  request.then(
+    () => pending.delete(request),
+    () => pending.delete(request),
+  );
+  return request;
+};
+export const flushDocs = async () => {
+  for (const side of sides) side.cancelTimer();
+  await Promise.all(pending);
+  for (const side of sides) if (side.unsaved) await save(side);
+  if ([...sides].some((side) => side.unsaved || side.saving))
+    throw new Error(
+      "Some edits could not be saved. Resolve the save error before saving or restoring a version.",
+    );
 };
 
 type Got<T> = { version: string; data: T };
@@ -160,6 +183,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     kept = "null",
     shown = false,
     held: Got<T> | null = null,
+    restoredPreviewBase: string | null = null,
     timer = 0;
   const side: Side = {
     name,
@@ -175,6 +199,26 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     },
     load: () => load(),
     saved: hooks.saved,
+    cancelTimer: () => clearTimeout(timer),
+    accept: (sent, canonical) => {
+      if (equalJson(sent, canonical)) return;
+      const old = data;
+      const next = mergeEdits(sent, JSON.parse(kept), canonical).data as T;
+      kept = JSON.stringify(next);
+      side.unsaved = !equalJson(next, canonical);
+      for (const list of [undos, redos])
+        for (const entry of list)
+          if (entry.side === side)
+            entry.snap = JSON.stringify(mergeEdits(sent, JSON.parse(entry.snap), canonical).data);
+      if (shown) held = { version: side.version, data: next };
+      else {
+        data = next;
+        hooks.tidy?.(data);
+        hooks.changed();
+        emitMutated();
+        hooks.replaced?.(old);
+      }
+    },
     swap: (snap) => {
       const old = data,
         was = kept;
@@ -191,10 +235,12 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       return was;
     },
   };
+  sides.add(side);
   const take = (got: Got<T>) => {
-    if (side.version) forget(side);
+    if (side.version && side.version !== got.version) forget(side);
     side.version = got.version;
     held = null;
+    restoredPreviewBase = null;
     const old = data;
     data = got.data;
     hooks.tidy?.(data);
@@ -225,17 +271,21 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     edit: (change: (d: T) => void) => {
       if (!data) return;
       // An edit never keeps a preview it didn't make, nor a snapshot restored over a version an agent loaded since it was taken
-      if (shown || JSON.stringify(data) !== kept) data = JSON.parse(kept);
+      const editBase = restoredPreviewBase;
+      restoredPreviewBase = null;
+      if (editBase !== null) data = JSON.parse(editBase);
+      else if (shown || JSON.stringify(data) !== kept) data = JSON.parse(kept);
       shown = false;
       change(data!);
       hooks.tidy?.(data!);
+      if (editBase !== null) data = mergeEdits(JSON.parse(editBase), data, JSON.parse(kept)).data;
       const next = JSON.stringify(data);
       if (next === kept) {
         hooks.changed();
         release();
         return;
       }
-      // Made on the version from before an agent's change still held: its save gets the 409, and that version loads
+      // The saved base lets the server merge the committed drag with edits made meanwhile.
       held = null;
       if (touched) touched.add(side);
       else group++;
@@ -261,6 +311,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     restore: (snap: string) => {
       if (!shown) return;
       shown = false;
+      restoredPreviewBase = snap;
       data = JSON.parse(snap);
       hooks.changed();
       if (held) queueMicrotask(release);

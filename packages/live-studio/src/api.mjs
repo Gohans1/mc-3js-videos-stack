@@ -39,6 +39,8 @@ import { openVoiceLibrary } from "./voice-library.mjs";
 import { inside, SAFE_MEDIA_FILE, SAFE_REMOTE_ID_RE } from "./voice-playground-genvoice.mjs";
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
+import { mountCollaboration } from "./collaboration-api.mjs";
+import { mountHistory } from "./history-api.mjs";
 
 const MIME = {
   ".gltf": "application/json",
@@ -1357,6 +1359,8 @@ export const createApi = (
       ["timing", film.timing],
       ...film.keyFiles.map((k, i) => [`keys/${i}`, k]),
     ]).get(name);
+  mountCollaboration(app, named);
+  mountHistory(app, film);
   app.post("/api/together", zValidator("json", TogetherSave), (c) => {
     const files = c.req.valid("json").files.map((f) => ({ ...f, file: named(f.name) }));
     if (files.some((f) => !f.file)) return noSound(c);
@@ -1364,10 +1368,11 @@ export const createApi = (
     if (nos.some((no) => no?.conflict)) return c.body(null, 409);
     if (nos.some(Boolean))
       return c.json({ problems: nos.flatMap((no) => no?.problems ?? []) }, 400);
+    const saved = files.map((f) => ({ name: f.name, ...f.file.write(f.base, f.data) }));
     return c.json({
-      versions: Object.fromEntries(
-        files.map((f) => [f.name, f.file.write(f.base, f.data).version]),
-      ),
+      versions: Object.fromEntries(saved.map((f) => [f.name, f.version])),
+      files: Object.fromEntries(saved.map((f) => [f.name, f.data])),
+      retained: saved.flatMap((f) => f.retained ?? []),
     });
   });
   app.get("/api/sfx/:name{[A-Za-z0-9_.-]+}/peaks", async (c) => {
