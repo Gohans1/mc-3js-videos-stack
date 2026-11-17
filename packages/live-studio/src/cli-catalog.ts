@@ -4789,6 +4789,8 @@ function computeEffectiveMeta(
             : ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
         ];
     }
+  } else if (commandId === "assets:semantic" && subcommandPath[0] === "eval") {
+    if (isActiveValue(flags["--out"])) next.effect = "write";
   } else if (commandId === "voice:gen") {
     if (!isBooleanActive(flags["--yes"]) || isBooleanActive(flags["--dry-run"])) {
       next.envAnyOf = undefined;

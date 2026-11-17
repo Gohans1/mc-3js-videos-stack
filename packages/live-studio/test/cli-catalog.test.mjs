@@ -94,6 +94,7 @@ test("embedding controls stay offline by default and respect the selected provid
     expect.arrayContaining(["eval", "cases.json", "--out", "report.json"]),
   );
   expect(evaluation.missingEnvGroups).toEqual([]);
+  expect(evaluation.meta.effect).toBe("write");
   const router = buildCliInvocation(
     {
       commandId: "assets:semantic",

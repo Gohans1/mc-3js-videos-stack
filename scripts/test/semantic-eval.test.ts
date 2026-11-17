@@ -76,6 +76,8 @@ test("cached eval compares the actual hybrid ranking and exposes missing vectors
     expect(report.apiRequests).toBe(0);
     expect(report.catalog.assets).toBe(3);
     expect(report.catalog.searchable).toBe(2);
+    expect(report.catalog.definitions.complete).toBe(2);
+    expect(report.catalog.definitions.mediaHashesChecked).toBe(false);
     expect(report.rows[0]!.semantic?.hit1).toBe(1);
     expect(report.rows[0]!.hybrid?.hit1).toBe(1);
     expect(report.rows[0]!.lexical.hit1).toBe(0);

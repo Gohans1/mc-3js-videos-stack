@@ -56,7 +56,9 @@ bun run assets:semantic eval scripts/evals/semantic/known-item.json --out <repor
 
 scenes-pilot.json giữ 14 ý cảnh Anh–Việt, tương đương 28 câu có tương quan, chưa đủ kết luận chất lượng toàn kho. Tăng bộ ý cảnh độc lập và đáp án đã nghe/xem trước khi tuyên bố chất lượng; không tính bản dịch thành mẫu độc lập hay suy khoảng tin cậy từ mẫu tiện tay.
 
-Report giữ từng câu, top 10, Hit@1/5/10, MRR@10, Recall@10, nDCG@10, độ trễ p50/p95 và tách theo ngôn ngữ/nhóm. complete chỉ báo đủ dữ liệu chạy, không phải chất lượng đạt; scored loại câu thiếu cache, hit5AllCases vẫn tính chúng vào mẫu số, missingCatalog/missingEmbeddings cho biết phần kho chưa sẵn sàng.
+Report giữ từng câu, top 10, Hit@1/5/10, MRR@10, Recall@10, nDCG@10, độ trễ p50/p95 và tách theo ngôn ngữ/nhóm. scored loại câu thiếu cache, hit5AllCases vẫn tính chúng vào mẫu số; missingCatalog/missingEmbeddings cho biết phần kho chưa sẵn sàng.
+
+complete chỉ báo query và ID sẵn sàng, không xác nhận chất lượng hay byte media hiện tại. catalog.definitions so metadata với catalog hiện tại, có thể khác manifest có chủ đích; build kiểm lại nội dung trước khi so phiên bản.
 
 Để bổ sung cache, dùng query --yes cho đúng query trong bộ case, giữ ledger và hạn mức của project; chạy lại eval sau mỗi đợt embedding. Đầu ra mới không ghi đè report cũ, thiếu dữ liệu vẫn lưu report và exit 1; thời gian eval không gồm API hay nạp catalog, không dùng để quảng cáo tốc độ tìm câu mới.
 

@@ -1,5 +1,5 @@
 import { type Entry, isForeign, rank } from "../find";
-import { assetKey } from "./catalog";
+import { assetFromEntry, assetKey } from "./catalog";
 import { fuseRanks, searchIndex } from "./search";
 import type { Index } from "./store";
 
@@ -165,6 +165,7 @@ export const evaluateSearch = async (
     catalog: {
       assets: entries.length,
       searchable: [...ready].filter((key) => all.has(key)).length,
+      definitions: index.coverage(entries.map((entry) => assetFromEntry(entry))),
     },
     cases: rows.length,
     uniqueTargets: new Set(set.cases.flatMap((row) => row.relevant)).size,
@@ -189,6 +190,7 @@ export const evaluateSearch = async (
       "Metrics use supplied judgments only; unlabelled alternatives may also be relevant.",
       "Scored-only metrics exclude missing query caches; hit5AllCases includes those misses. Complete is data readiness, not a quality pass.",
       "Repeated languages/queries for the same target are correlated; target count is not a confidence interval or a blind relevance judgment.",
+      "Definitions compare against current catalog metadata, which may intentionally differ from the operational manifest. Media byte hashes are not checked; rebuild before comparing refreshed content.",
     ],
     rows,
   };

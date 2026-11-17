@@ -2312,15 +2312,21 @@ export async function run(
   // weapons and fights are left out, as the catalogue's own search leaves them (--fights, a body filter, goes there)
   const pool = entriesOf().filter((x) => x.kind !== "mocap" || !isFight(x.id));
   // nothing in the list in use: how a star is given, and the lists that have some
-  if (fav && !pool.some((x) => x.fav))
-    return noted(
-      [
-        `nothing is starred yet in the ${listName} favourites (${relative(ROOT, stars.file).replaceAll("\\", "/")}).`,
-        ...(listsLine ? [listsLine] : []),
-        `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
-        `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
-      ].join("\n"),
-    );
+  if (fav && !pool.some((x) => x.fav)) {
+    const message = [
+      `nothing is starred yet in the ${listName} favourites (${relative(ROOT, stars.file).replaceAll("\\", "/")}).`,
+      ...(listsLine ? [listsLine] : []),
+      `next: the creator stars in the studio (the star on a sound card or an effect tile), or asks you to: bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}`,
+      `      without --fav, find searches everything: bun run find ${query || "<words>"}`,
+    ].join("\n");
+    return semantic && set.has("--json")
+      ? JSON.stringify(
+          { mode: "keyword-fallback", query, notes: [...notes, message], results: [] },
+          null,
+          2,
+        )
+      : noted(message);
+  }
   // A source by its whole name, or a folder of them (film-stage = every film-stage/*.ts)
   const fromSource = (x: Entry, s: string) => {
     const src = x.src?.toLowerCase();

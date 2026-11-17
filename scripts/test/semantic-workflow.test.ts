@@ -239,7 +239,7 @@ test("film commands inherit root dotenv defaults while explicit environment and 
   writeFileSync(join(folder, ".env"), "MC_VAULT_ROOT=base-vault\n");
   writeFileSync(
     join(folder, ".env.local"),
-    "MC_VAULT_ROOT=shared-vault\nMC_SEMANTIC_DB=.state/vectors.sqlite\nMC_SEMANTIC_QUOTA_DB=.state/requests.sqlite\nMC_SEMANTIC_MANIFEST=.state/assets.json\nMC_SEMANTIC_DAILY_LIMIT=42\nGEMINI_API_KEY=fixture-root\n",
+    "FIXTURE_VAULT=shared-vault\nMC_VAULT_ROOT=$FIXTURE_VAULT\nFIXTURE_STATE=.state\nMC_SEMANTIC_DB=$FIXTURE_STATE/vectors.sqlite\nMC_SEMANTIC_QUOTA_DB=$FIXTURE_STATE/requests.sqlite\nMC_SEMANTIC_MANIFEST=$FIXTURE_STATE/assets.json\nMC_SEMANTIC_DAILY_LIMIT=42\nGEMINI_API_KEY=fixture-root\n",
   );
   const probe = join(folder, "probe.mjs");
   writeFileSync(
@@ -259,9 +259,9 @@ test("film commands inherit root dotenv defaults while explicit environment and 
     "OPENROUTER_API_KEY",
   ])
     delete env[name];
-  const inspect = (flags: string[] = [], overrides: Record<string, string> = {}) => {
+  const inspect = (flags: string[] = [], overrides: Record<string, string> = {}, cwd = film) => {
     const child = Bun.spawnSync([process.execPath, ...flags, probe], {
-      cwd: film,
+      cwd,
       env: { ...env, ...overrides },
       timeout: 5000,
     });
@@ -269,6 +269,7 @@ test("film commands inherit root dotenv defaults while explicit environment and 
     return JSON.parse(child.stdout.toString());
   };
   try {
+    expect(inspect()).toEqual(inspect([], {}, folder));
     expect(inspect()).toMatchObject({
       vault: join(folder, "shared-vault"),
       db: join(folder, ".state/vectors.sqlite"),

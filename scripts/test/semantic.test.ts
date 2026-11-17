@@ -497,6 +497,17 @@ test("structured semantic results retain the best source chunk and a keyword fal
     expect(fallback.mode).toBe("keyword-fallback");
     expect(fallback.results[0].id).toBe("rain");
     expect(fallback.notes.join(" ")).toMatch(/semantic unavailable/);
+    const emptyFavorites = JSON.parse(
+      await findRun(
+        ["--semantic", "--json", "--fav", "rain"],
+        entries,
+        undefined,
+        undefined,
+        favorites,
+      ),
+    );
+    expect(emptyFavorites).toMatchObject({ mode: "keyword-fallback", query: "rain", results: [] });
+    expect(emptyFavorites.notes.join(" ")).toContain("nothing is starred");
     await expect(findRun(["--json", "rain"], entries)).rejects.toThrow(/semantic/);
   } finally {
     index.close();
