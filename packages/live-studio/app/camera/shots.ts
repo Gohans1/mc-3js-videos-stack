@@ -1,5 +1,5 @@
 // The film's shots as data (package.json "live-studio".shotsTimeline), edited by hand like the camera keys (doc.ts: undo, saving,
-// an agent's edit wins): a cut moved on the camera row (cam.ts rollCut), a shot renamed in the Camera tab. Each change puts a fresh
+// manual edits are protected): a cut moved on the camera row (cam.ts rollCut), a shot renamed in the Camera tab. Each change puts a fresh
 // copy in EDIT.shots and runs the film's applyEdit, which rebuilds SHOTS and SHOTS_OUT from it in place.
 import { equalJson } from "../../src/merge-edits.mjs";
 import { lightEdit } from "../activity/activity";
@@ -15,6 +15,7 @@ import { get, invalidatePictures, set, showError } from "../core/store";
 import { refreshTimes } from "../timeline/timeline";
 
 export interface ShotRow {
+  id?: string;
   t: number;
   name?: string;
   [k: string]: unknown;

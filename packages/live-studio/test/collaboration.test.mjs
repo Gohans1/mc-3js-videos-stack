@@ -8,7 +8,7 @@ import { Hono } from "hono";
 import * as z from "zod";
 
 import { mountCollaboration } from "../src/collaboration-api.mjs";
-import { AdjustmentTimeline, SoundTimeline } from "../src/contract.ts";
+import { AdjustmentTimeline, CamTimeline, ShotsTimeline, SoundTimeline } from "../src/contract.ts";
 import { openOpenFilm } from "../src/openfilm.mjs";
 import { openTimelineFile } from "../src/timeline_file.mjs";
 
@@ -234,4 +234,255 @@ test("an open document observes another instance's agent acknowledgment", (t) =>
   assert.deepEqual(timeline.read().data, { camera: 70 });
   writeFileSync(file, JSON.stringify({ camera: 75 }));
   assert.deepEqual(timeline.read().data, { camera: 75 });
+});
+
+for (const { kind, schema, rows } of [
+  {
+    kind: "cam",
+    schema: CamTimeline,
+    rows: [0, 1, 2].map((t) => ({ t, p: [0, 1, 0], l: [0, 1, 1], fov: 45 })),
+  },
+  { kind: "shots", schema: ShotsTimeline, rows: [0, 1, 2].map((t) => ({ t, name: String(t) })) },
+]) {
+  test(`${kind} IDs persist and human edits survive independent additions and deletions`, (t) => {
+    const { project, file } = setup(t, rows);
+    const open = () => openTimelineFile(project, "timeline.json", schema);
+    const timeline = open();
+    const base = timeline.read();
+    const [first, second, third] = base.data;
+    assert.equal(new Set(base.data.map((row) => row.id)).size, 3);
+    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), base.data);
+    assert.deepEqual(open().read(), base);
+
+    const human = { ...second, t: 1.25, reason: "human" };
+    const added = { ...third, t: 1.5, id: "agent-new" };
+    writeFileSync(file, JSON.stringify([first, { ...second, reason: "agent" }, added, third]));
+    const saved = timeline.write(base.version, [first, human]);
+    assert.deepEqual(saved.data, [first, human, added]);
+    assert.deepEqual(saved.retained, [`/@${second.id}/reason`]);
+
+    writeFileSync(file, JSON.stringify([first, { ...second, note: "extra" }, added, third]));
+    assert.deepEqual(open().read().data, [first, { ...human, note: "extra" }, added]);
+  });
+}
+
+test("camera tails and cuts at the same time receive distinct stable IDs", (t) => {
+  const key = { t: 1, p: [0, 1, 0], l: [0, 1, 1] };
+  const { project, file } = setup(t, [key, { ...key, cut: true }]);
+  const timeline = openTimelineFile(project, "timeline.json", CamTimeline);
+  const base = timeline.read();
+  assert.notEqual(base.data[0].id, base.data[1].id);
+  assert.equal(base.data[1].cut, true);
+  writeFileSync(file, JSON.stringify([key, { ...key, cut: true, fov: 50 }]));
+  assert.deepEqual(
+    timeline.read().data.map((row) => row.id),
+    base.data.map((row) => row.id),
+  );
+});
+
+test("a legacy whole-file guard narrows to the original human edit when its base is available", (t) => {
+  const rows = [
+    { t: 0, name: "start" },
+    { t: 5, name: "second" },
+    { t: 10, name: "third" },
+  ];
+  const { project, file } = setup(t, rows);
+  const old = openTimelineFile(project, "timeline.json", z.array(z.looseObject({ t: z.number() })));
+  old.write(old.read().version, [rows[0], { ...rows[1], name: "human" }, rows[2]]);
+  writeFileSync(file, JSON.stringify(rows));
+  assert.deepEqual(
+    old.read().data.map((row) => row.name),
+    ["start", "human", "third"],
+  );
+  const timeline = openTimelineFile(project, "timeline.json", ShotsTimeline);
+  const [first, second, third] = timeline.read().data;
+  writeFileSync(
+    file,
+    JSON.stringify([first, { ...second, name: "agent" }, { ...third, name: "new" }]),
+  );
+  assert.deepEqual(
+    timeline.read().data.map((row) => row.name),
+    ["start", "human", "new"],
+  );
+  assert.deepEqual(timeline.collaboration().protected, [`/@${second.id}/name`]);
+});
+
+test("an older ID-less file cannot bring back a cut at its pre-retime position", (t) => {
+  const rows = [
+    { t: 0, name: "start" },
+    { t: 5, name: "second" },
+    { t: 10, name: "third" },
+  ];
+  const { project, file } = setup(t, rows);
+  const timeline = openTimelineFile(project, "timeline.json", ShotsTimeline);
+  const base = timeline.read();
+  const [first, second, third] = base.data;
+  timeline.write(base.version, [first, { ...third, t: 5 }, { ...second, t: 6 }]);
+  writeFileSync(
+    file,
+    JSON.stringify([
+      { ...rows[0], name: "edited start" },
+      { t: 3, name: "insert" },
+      rows[1],
+      { ...rows[2], name: "new" },
+    ]),
+  );
+  const reopened = openTimelineFile(project, "timeline.json", ShotsTimeline);
+  const [newFirst, inserted, newThird, newSecond] = reopened.read().data;
+  assert.deepEqual(newFirst, { ...first, name: "edited start" });
+  assert.deepEqual(inserted, { t: 3, name: "insert", id: inserted.id });
+  assert.deepEqual(newThird, { ...third, t: 5, name: "new" });
+  assert.deepEqual(newSecond, { ...second, t: 6 });
+  assert.equal(reopened.read().data.length, 4);
+});
+
+test("merging a stale camera save preserves the order of equal-time keys around a cut", (t) => {
+  const key = (id, at, extra = {}) => ({ id, t: at, p: [0, 0, 0], l: [0, 0, 1], ...extra });
+  const start = key("start", 0, { fov: 45 });
+  const cut = key("cut", 1, { cut: true });
+  const tail = key("tail", 1);
+  const insertedA = key("added-a", 1);
+  const insertedB = key("added-b", 1);
+  const { project, file } = setup(t, [start, cut, tail]);
+  const timeline = openTimelineFile(project, "timeline.json", CamTimeline);
+  const base = timeline.read();
+  const incoming = { ...start, fov: 55 };
+  writeFileSync(file, JSON.stringify([incoming, cut, tail]));
+  const saved = timeline.write(base.version, [start, insertedA, tail, insertedB, cut]);
+  assert.deepEqual(saved.data, [incoming, insertedA, tail, insertedB, cut]);
+  writeFileSync(file, JSON.stringify([{ ...start, fov: 65 }, cut, tail]));
+  const expected = [{ ...start, fov: 65 }, insertedA, tail, insertedB, cut];
+  assert.deepEqual(timeline.read().data, expected);
+  writeFileSync(file, "[null]");
+  assert.deepEqual(timeline.read().data, expected);
+});
+
+test("a protected camera tail restored after deletion stays before the cut at the same time", (t) => {
+  const start = { id: "start", t: 0, p: [0, 0, 0], l: [0, 0, 1], fov: 45 };
+  const tail = { ...start, id: "tail", t: 1, fov: 50 };
+  const cut = { ...start, id: "cut", t: 1, cut: true, fov: 80 };
+  const { project, file } = setup(t, [start, tail, cut]);
+  const timeline = openTimelineFile(project, "timeline.json", CamTimeline);
+  const base = timeline.read();
+  const edited = { ...tail, fov: 55 };
+  timeline.write(base.version, [start, edited, cut]);
+  const incoming = { ...start, fov: 60 };
+  writeFileSync(file, JSON.stringify([incoming, cut]));
+  assert.deepEqual(timeline.read().data, [incoming, edited, cut]);
+});
+
+test("valid legacy rows receive IDs after an invalid unprotected file is repaired", (t) => {
+  const { project, file } = setup(t, [null]);
+  const timeline = openTimelineFile(project, "timeline.json", ShotsTimeline);
+  timeline.read();
+  writeFileSync(file, JSON.stringify([{ t: 0, name: "fixed" }]));
+  const repaired = timeline.read();
+  assert.equal(repaired.data[0].name, "fixed");
+  assert.equal(typeof repaired.data[0].id, "string");
+});
+
+test("an ID-less rewrite with two equally plausible histories keeps the canonical shots and records the input", (t) => {
+  const rows = [
+    { t: 0, name: "start" },
+    { t: 5, name: "A" },
+    { t: 10, name: "B" },
+  ];
+  const { project, file } = setup(t, rows);
+  const timeline = openTimelineFile(project, "timeline.json", ShotsTimeline);
+  const base = timeline.read();
+  const [first, a, b] = base.data;
+  const canonical = [first, { ...b, t: 5 }, { ...a, t: 10 }];
+  timeline.write(base.version, canonical);
+  const ambiguous = [rows[0], { t: 5, name: "new five" }, { t: 10, name: "new ten" }];
+  writeFileSync(file, JSON.stringify(ambiguous));
+  assert.deepEqual(timeline.read().data, canonical);
+  assert.deepEqual(timeline.collaboration().notices.at(-1).incoming, ambiguous);
+});
+
+test("a stale Studio reorder reports invalid camera rows written during the edit", (t) => {
+  const start = { id: "start", t: 0, p: [0, 0, 0], l: [0, 0, 1] };
+  const cut = { ...start, id: "cut", t: 1, cut: true };
+  const tail = { ...start, id: "tail", t: 1 };
+  const { project, file } = setup(t, [start, cut, tail]);
+  const timeline = openTimelineFile(project, "timeline.json", CamTimeline);
+  const base = timeline.read();
+  writeFileSync(file, "[null]");
+  assert.ok(timeline.write(base.version, [start, tail, cut]).problems?.length);
+});
+
+test("legacy protection for retimes preserves independent changes to retimed shot names", (t) => {
+  const rows = [
+    { t: 0, name: "start" },
+    { t: 5, name: "A" },
+    { t: 10, name: "B" },
+  ];
+  const { project, file } = setup(t, rows);
+  const old = openTimelineFile(project, "timeline.json", z.array(z.looseObject({ t: z.number() })));
+  old.write(old.read().version, [rows[0], { ...rows[2], t: 5 }, { ...rows[1], t: 6 }]);
+  const timeline = openTimelineFile(project, "timeline.json", ShotsTimeline);
+  const [start, b, a] = timeline.read().data;
+  writeFileSync(file, JSON.stringify([start, { ...b, name: "new B" }, { ...a, name: "new A" }]));
+  assert.deepEqual(
+    timeline.read().data.map((row) => row.name),
+    ["start", "new B", "new A"],
+  );
+});
+
+for (const deletion of [false, true]) {
+  test(
+    deletion
+      ? "ID-less rows cannot resurrect a protected deletion after the base ages out"
+      : "ID-less rows cannot reintroduce a protected retime after the base ages out",
+    (t) => {
+      const rows = [
+        { t: 0, name: "start" },
+        { t: 5, name: "A" },
+      ];
+      const { project, file } = setup(t, rows);
+      const timeline = openTimelineFile(project, "timeline.json", ShotsTimeline);
+      const base = timeline.read();
+      const [start, a] = base.data;
+      const selected = deletion ? [] : [{ ...a, t: 6 }];
+      timeline.write(base.version, [start, ...selected]);
+      const savedRows = deletion
+        ? [{ id: "replacement", t: 5, name: "independent replacement" }]
+        : selected;
+      for (let i = 0; i < 33; ++i)
+        timeline.write(timeline.read().version, [{ ...start, name: String(i) }, ...savedRows], {
+          actor: "agent",
+        });
+      const current = timeline.read();
+      writeFileSync(file, JSON.stringify(rows));
+      assert.deepEqual(timeline.read(), current);
+      assert.deepEqual(timeline.collaboration().notices.at(-1).incoming, rows);
+    },
+  );
+}
+
+test("ID-less duplicate-time keys keep their relative identities when their payloads were identical", (t) => {
+  const start = { id: "start", t: 0, p: [0, 0, 0], l: [0, 0, 1], fov: 30 };
+  const a = { ...start, id: "a", t: 1 };
+  const b = { ...a, id: "b" };
+  const { project, file } = setup(t, [start, a, b]);
+  const timeline = openTimelineFile(project, "timeline.json", CamTimeline);
+  const base = timeline.read();
+  timeline.write(base.version, [start, a, { ...b, fov: 55 }]);
+  const incoming = [start, { ...a, fov: 45 }, b].map(({ id: _id, ...row }) => row);
+  writeFileSync(file, JSON.stringify(incoming));
+  assert.deepEqual(timeline.read().data, [start, { ...a, fov: 45 }, { ...b, fov: 55 }]);
+});
+
+test("an agent field acknowledgment preserves the existence and other fields of a human-created shot", (t) => {
+  const start = { id: "start", t: 0, name: "start" };
+  const human = { id: "human", t: 5, name: "human", reason: "editor" };
+  const { project, file } = setup(t, [start]);
+  const timeline = openTimelineFile(project, "timeline.json", ShotsTimeline);
+  timeline.write(timeline.read().version, [start, human]);
+  const acknowledged = { ...human, name: "acknowledged" };
+  timeline.write(timeline.read().version, [start, acknowledged], { actor: "agent" });
+  writeFileSync(file, JSON.stringify([start]));
+  assert.deepEqual(timeline.read().data, [start, acknowledged]);
+  const incoming = { ...acknowledged, name: "new", reason: "automated" };
+  writeFileSync(file, JSON.stringify([start, incoming]));
+  assert.deepEqual(timeline.read().data, [start, { ...acknowledged, name: "new" }]);
 });

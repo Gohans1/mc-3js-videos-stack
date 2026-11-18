@@ -55,6 +55,7 @@ export const SOUND_KEYS = {
 };
 
 export const CAM_KEYS = [
+  "id",
   "t",
   "p",
   "l",
@@ -69,7 +70,7 @@ export const CAM_KEYS = [
   "roll",
   "bob",
 ];
-export const SHOT_KEYS = ["t", "name", "anim", "transition", "adjust", "hits"];
+export const SHOT_KEYS = ["id", "t", "name", "anim", "transition", "adjust", "hits"];
 export const SHOT_SLOT_KEYS = [
   ...["in", "out", "combo"].flatMap((s) =>
     ["fx", "len", "k", "curve", "flip", "optics", "seam"].map((k) => `anim.${s}.${k}`),

@@ -601,6 +601,7 @@ const HandheldObj = HandheldShape.refine(
 );
 const Handheld = z.union([z.literal(false), z.string().min(1), HandheldObj]);
 const CamKey = z.looseObject({
+  id: z.string().min(1).optional(),
   t: secs,
   p: point,
   l: point,
@@ -617,13 +618,15 @@ const CamKey = z.looseObject({
 });
 export const FOCUS_KEYS = Object.keys(FocusTargetObj.shape);
 export const HANDHELD_KEYS = Object.keys(HandheldShape.shape);
+const distinctRowIds = (rows: { id?: string }[]) => unique(rows.flatMap((row) => row.id ?? []));
 export const CamTimeline = z
   .array(CamKey)
   .min(1)
   .refine(
     (ks) => ks.every((k, i) => i === 0 || k.t >= ks[i - 1].t),
     "camera keys must be in order of time",
-  );
+  )
+  .refine(distinctRowIds, "camera key ids must differ");
 
 // ---------- The shots (package.json "live-studio".shotsTimeline): SHOTS as data, so the studio can move a cut. Each shot starts at t
 // (the voice's source seconds, like SHOTS) and may carry a name the timeline shows; the film reads them from EDIT.shots in applyEdit
@@ -795,6 +798,7 @@ const ShotHit = z.looseObject({
   seed: z.number().optional(),
 });
 const ShotRow = z.looseObject({
+  id: z.string().min(1).optional(),
   t: secs,
   name: z.string().optional(),
   anim: Anim.optional(),
@@ -810,7 +814,8 @@ export const ShotsTimeline = z
   .refine(
     (s) => s.every((x, i) => i === 0 || x.t > s[i - 1].t),
     "shots must start in order of time, each after the one before",
-  );
+  )
+  .refine(distinctRowIds, "shot ids must differ");
 
 // ---------- Words and shapes over the picture (package.json "live-studio".textTimeline), which the studio also writes: CapCut's
 // Text and Shapes, drawn by film-stage/titles.ts. Each item is on screen from `from` to `to` (the seconds draw(t) gets) on a text

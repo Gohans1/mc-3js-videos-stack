@@ -50,6 +50,7 @@ A Shorts film sets "ratio": "9:16" under "live-studio" in package.json: drafts a
 | `src/edit.json`                         | Narration takes and script, `voice.warp`, beats, the film's own settings                              | Narration |
 | `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into it, `anim`; shot N is row N                        | Narration |
 | `src/timeline/cam.json`                 | Camera keys and cuts                                                                                  | Scene     |
+| ID dòng camera | Giữ nguyên id khi sửa dòng cũ và dùng id mới cho dòng mới. Studio cấp id khi đọc dòng cũ. | Camera và shot |
 | `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                                    | Scene     |
 | `src/timeline/text.json`, `adjust.json` | On-screen text, colour and look layers                                                                | Scene     |
 | `src/timeline/openfilm.json` | HTML/CSS/canvas effects, stickers and animated text; optional `openfilmTimeline` overrides this path | Layer timebase |

@@ -46,11 +46,12 @@ test("a moved cut is written only over the version the page saw, with the shots'
   const shots = openTimelineFile(dir, "shots.json", ShotsTimeline);
   const { version, data } = shots.read();
   assert.ok(shots.write(version, [{ t: 0 }, { t: 0 }]).problems);
+  const ids = data.map((shot) => shot.id);
   data[1].t = 4.5;
   assert.ok(shots.write(version, data).version);
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), [
-    { t: 0, name: "má»Ÿ", pov: true },
-    { t: 4.5, name: "cá»­a" },
+    { t: 0, name: "má»Ÿ", pov: true, id: ids[0] },
+    { t: 4.5, name: "cá»­a", id: ids[1] },
   ]);
   assert.ok(shots.write(version, data).version);
   assert.deepEqual(shots.write("unknown", data), { conflict: true });
@@ -82,7 +83,7 @@ test("a cut moved on the camera row saves cam and shots together: both or neithe
     camText = readFileSync(cam.FILE, "utf8");
   const moved = (v) => [
     { name: "cam", base: c0.version, data: [c0.data[0], { ...c0.data[1], t: v }] },
-    { name: "shots", base: s0.version, data: [{ t: 0 }, { t: v }] },
+    { name: "shots", base: s0.version, data: [s0.data[0], { ...s0.data[1], t: v }] },
   ];
 
   assert.equal((await post([moved(4.5)[0], { ...moved(4.5)[1], base: "stale" }])).status, 409);

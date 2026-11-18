@@ -16,8 +16,40 @@ export const equalJson = (a, b) => {
 };
 export const pointer = (path) =>
   "/" + path.map((k) => k.replaceAll("~", "~0").replaceAll("/", "~1")).join("/");
-export const changes = (base, next, path = []) => {
+const tieOrder = (rows) => {
+  const groups = new Map();
+  for (const row of rows) {
+    const time = String(row.t);
+    if (!groups.has(time)) groups.set(time, []);
+    groups.get(time).push(row.id);
+  }
+  return groups;
+};
+
+export const changes = (base, next, path = [], orderedRows = false) => {
   if (equalJson(base, next)) return [];
+  if (orderedRows && keyed(next) && (base === undefined || keyed(base))) {
+    const before = new Map((base ?? []).map((row) => [row.id, row]));
+    const after = new Set(next.map((row) => row.id));
+    const oldOrder = tieOrder(base ?? []);
+    const reordered = [...tieOrder(next)].filter(([time, ids]) => {
+      if (ids.length < 2) return false;
+      const retained = oldOrder.get(time)?.filter((id) => ids.includes(id)) ?? [];
+      return !equalJson(retained, ids);
+    });
+    return [
+      ...[...before.keys()]
+        .filter((id) => !after.has(id))
+        .map((id) => ({ path: [`@${id}`], remove: true })),
+      ...next.flatMap((row) => {
+        const rowPath = [`@${row.id}`];
+        return before.has(row.id)
+          ? changes(before.get(row.id), row, rowPath)
+          : [{ path: rowPath, value: row }];
+      }),
+      ...reordered.map(([time, ids]) => ({ path: ["$order", time], value: ids, order: true })),
+    ];
+  }
   if (
     keyed(base) &&
     keyed(next) &&
@@ -35,24 +67,53 @@ export const changes = (base, next, path = []) => {
 const child = (data, key) =>
   Array.isArray(data) && key.startsWith("@")
     ? data.find((row) => row?.id === key.slice(1))
-    : object(data) && Object.hasOwn(data, key)
-      ? data[key]
-      : undefined;
+    : key === "$order" && keyed(data)
+      ? Object.fromEntries(tieOrder(data))
+      : object(data) && Object.hasOwn(data, key)
+        ? data[key]
+        : undefined;
 const at = (data, path) => path.reduce(child, data);
 const put = (data, path, change, fallback) => {
   if (!path.length) return change.remove ? undefined : structuredClone(change.value);
   const [key, ...rest] = path;
+  if (change.order) {
+    if (!keyed(data)) return data;
+    const [time] = rest;
+    const matching = new Map(
+      data
+        .filter((row) => String(row.t) === time && change.value.includes(row.id))
+        .map((row) => [row.id, row]),
+    );
+    const ordered = change.value.filter((id) => matching.has(id)).map((id) => matching.get(id));
+    let next = 0;
+    return data.map((row) => (matching.has(row.id) ? ordered[next++] : row));
+  }
   if (Array.isArray(fallback) && key.startsWith("@")) {
     const result = [...(Array.isArray(data) ? data : fallback)];
     const index = result.findIndex((row) => row?.id === key.slice(1));
+    if (change.remove && (index < 0 || !rest.length)) {
+      if (index >= 0) result.splice(index, 1);
+      return result;
+    }
+    if (change.ensure && index >= 0) return data;
     const value = put(
       index < 0 ? child(fallback, key) : result[index],
       rest,
-      change,
+      change.ensure ? { ...change, value: child(fallback, key) ?? change.value } : change,
       child(fallback, key),
     );
-    if (index < 0) result.push(value);
-    else result[index] = value;
+    if (index >= 0) result[index] = value;
+    else {
+      const position = fallback.findIndex((row) => row?.id === key.slice(1));
+      const following = new Set(
+        fallback
+          .slice(position + 1)
+          .filter((row) => row?.t === value?.t)
+          .map((row) => row.id),
+      );
+      const next = result.findIndex((row) => row?.t === value?.t && following.has(row?.id));
+      result.splice(next < 0 ? result.length : next, 0, value);
+    }
     return result;
   }
   const result = { ...(object(data) ? data : object(fallback) ? fallback : {}) };
@@ -66,12 +127,19 @@ const put = (data, path, change, fallback) => {
     });
   return result;
 };
-export const applyEdits = (data, edits, fallback = data) =>
-  edits.reduce((d, c) => put(d, c.path, c, fallback), data);
+export const applyEdits = (data, edits, fallback = data, orderedRows = false) => {
+  const orders = orderedRows ? edits.filter((c) => c.order) : [];
+  const rows = orderedRows ? edits.filter((c) => !c.order) : edits;
+  let result = rows.reduce((d, c) => put(d, c.path, c, fallback), data);
+  for (const order of orders) result = put(result, order.path, order, fallback);
+  return orderedRows && keyed(result) && result !== data
+    ? result.toSorted((a, b) => a.t - b.t)
+    : result;
+};
 export const overlapping = (a, b) => a.every((v, i) => b[i] === v) || b.every((v, i) => a[i] === v);
-export const mergeEdits = (base, person, incoming) => {
-  const mine = changes(base, person),
-    theirs = changes(base, incoming);
+export const mergeEdits = (base, person, incoming, orderedRows = false) => {
+  const mine = changes(base, person, [], orderedRows),
+    theirs = changes(base, incoming, [], orderedRows);
   const retained = mine
     .filter(
       (m) =>
@@ -79,5 +147,5 @@ export const mergeEdits = (base, person, incoming) => {
         !equalJson(at(incoming, m.path), m.remove ? undefined : m.value),
     )
     .map((m) => pointer(m.path));
-  return { data: applyEdits(incoming, mine, person), retained };
+  return { data: applyEdits(incoming, mine, person, orderedRows), retained };
 };

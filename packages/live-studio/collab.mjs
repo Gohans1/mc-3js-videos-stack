@@ -7,7 +7,8 @@ const HELP = `Read and update a Studio document without undoing the creator's ed
   bun run collab --film films/name read cam          current version, data, protected paths and notices
   bun run collab --film films/name write cam <file>  file contains {"base":"version from read","data":...}
 Names: sound, cam, shots, text, adjustment, timing, openfilm, keys/0 (as /api names them).
-Direct filesystem writes cannot acknowledge protected units. Unidentified arrays and structural array edits are whole units.
+Direct filesystem writes cannot acknowledge protected units. Cam and shots merge by stable row ID.
+Keep existing IDs when editing or moving rows. Use a new ID for each new row.
 The notices preserve rejected input in .studio/collaboration/notices.jsonl. Read the canonical result after writing.`;
 const argv = cliArgs(HELP, ["--film PATH"], 3);
 const at = argv.indexOf("--film");

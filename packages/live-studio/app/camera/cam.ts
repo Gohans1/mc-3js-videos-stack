@@ -1,12 +1,12 @@
+import { EDIT, toSource } from "film/edit";
+
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
-// camera row like the sound lanes (doc.ts: undo, saving, an agent's edit wins). The film draws from EDIT.cam, so every change
+// camera row like the sound lanes (doc.ts: undo, saving, manual edits are protected). The film draws from EDIT.cam, so every change
 // puts a fresh copy there and the picture follows at once; its caches are keyed on that array, so it is never edited in place.
 // A key's time moves only inside its shot. A cut belongs to the film's SHOTS as much as to the camera, so a cut key moves only
 // when the film keeps its shots as data (shots.ts), and then both move together (rollCut), and a shot can be split at the playhead
 // or merged with the one before (splitShot, removeKey on a cut), CapCut's Split and its undo.
 import { lightEdit } from "../activity/activity";
-import { EDIT, toSource } from "film/edit";
-
 import { together } from "../core/doc";
 import type { Ease } from "../core/ease";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
@@ -20,6 +20,7 @@ import { type ShotRow, shotsDoc } from "./shots";
 
 export type Point = [number, number, number] | Record<string, unknown>; // a world point, or the film's anchor ({"eye": [...]})
 export interface CamKey {
+  id?: string;
   t: number;
   p: Point;
   l: Point;
@@ -34,6 +35,11 @@ export interface CamKey {
   ease?: Ease;
   [k: string]: unknown;
 }
+
+const newRowId = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 
 export let keys: CamKey[] = [];
 const changed = () => {
@@ -127,11 +133,11 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
       delete k.cut;
       const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
       if (on > 0) {
-        ks[on] = k;
+        ks[on] = { ...k, id: ks[on].id ?? newRowId() };
         continue;
       }
       const i = ks.findIndex((x) => x.t > k.t);
-      ks.splice(i < 0 ? ks.length : i, 0, k);
+      ks.splice(i < 0 ? ks.length : i, 0, { ...k, id: newRowId() });
     }
   });
   pickCamKeys(ok.map((k) => keys.findIndex((x, i) => i > 0 && !x.cut && x.t === k.t)));
@@ -224,7 +230,7 @@ export const holdAfter = (i: number, secs = 1) => {
   }
   edit((ks) => {
     const { ease: _, cut: __, ...pose } = structuredClone(ks[i]);
-    ks.splice(i + 1, 0, { ...pose, t, ease: "linear" });
+    ks.splice(i + 1, 0, { ...pose, id: newRowId(), t, ease: "linear" });
   });
   setKey(i + 1);
   say(`Camera holds ${stamp(k.t)} → ${stamp(t)}. Drag the new keyframe to hold longer`);
@@ -253,7 +259,7 @@ const insertKey = (t: number, view: View) => {
     ...sway
   } = structuredClone(before ?? ({} as CamKey));
   edit((ks) => {
-    ks.splice(i < 0 ? ks.length : i, 0, { t, ...view, ...sway });
+    ks.splice(i < 0 ? ks.length : i, 0, { t, ...view, ...sway, id: newRowId() });
   });
   setKey(i < 0 ? keys.length - 1 : i);
   say(`Camera keyframe added at ${stamp(t)}. Ctrl+Z to undo`);
@@ -404,7 +410,12 @@ export const splitShot = () => {
   } = structuredClone(before);
   together(() => {
     edit((ks) => {
-      ks.splice(at, 0, { ...sway, t: r3(t - TAIL), ...here }, { ...sway, t, ...next, cut: true });
+      ks.splice(
+        at,
+        0,
+        { ...sway, id: newRowId(), t: r3(t - TAIL), ...here },
+        { ...sway, id: newRowId(), t, ...next, cut: true },
+      );
     });
     shotsDoc.edit((sh) => {
       const splitSource = r3(toSource(t));
@@ -414,6 +425,7 @@ export const splitShot = () => {
       sh.splice(s + 1, 0, {
         ...structuredClone(rest),
         ...(after ? { hits: after } : {}),
+        id: newRowId(),
         t: splitSource,
         name: secondName(name ?? `Shot ${s}`, sh),
       });

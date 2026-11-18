@@ -180,6 +180,7 @@ type Got<T> = { version: string; data: T };
 export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
   // data is what is drawn, kept (JSON) the last state worth saving. shown: a preview is on, from its first change to the restore
   // or edit that ends it, even while a drag is back where it started and data equals kept
+  const orderedRows = name === "cam" || name === "shots";
   let data: T | null = null,
     kept = "null",
     shown = false,
@@ -204,13 +205,15 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     accept: (sent, canonical) => {
       if (equalJson(sent, canonical)) return;
       const old = data;
-      const next = mergeEdits(sent, JSON.parse(kept), canonical).data as T;
+      const next = mergeEdits(sent, JSON.parse(kept), canonical, orderedRows).data as T;
       kept = JSON.stringify(next);
       side.unsaved = !equalJson(next, canonical);
       for (const list of [undos, redos])
         for (const entry of list)
           if (entry.side === side)
-            entry.snap = JSON.stringify(mergeEdits(sent, JSON.parse(entry.snap), canonical).data);
+            entry.snap = JSON.stringify(
+              mergeEdits(sent, JSON.parse(entry.snap), canonical, orderedRows).data,
+            );
       if (shown) held = { version: side.version, data: next };
       else {
         data = next;
@@ -281,7 +284,8 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       shown = false;
       change(data!);
       hooks.tidy?.(data!);
-      if (editBase !== null) data = mergeEdits(JSON.parse(editBase), data, JSON.parse(kept)).data;
+      if (editBase !== null)
+        data = mergeEdits(JSON.parse(editBase), data, JSON.parse(kept), orderedRows).data;
       const next = JSON.stringify(data);
       if (next === kept) {
         hooks.changed();
