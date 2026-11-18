@@ -1,5 +1,5 @@
 [
- {"t": 0, "name": "Lesson name camera//framing", "size": "high-angle wide (WS)", "what": "CCTV feed"},
+ {"t": 0, "name": "CCTV CELL 0412 from the ceiling corner", "size": "high-angle wide (WS)", "what": "CCTV feed"},
  {"t": 3.5, "name": "close on his eyes as they open", "size": "extreme close-up (ECU)", "what": "his eyes"},
  {"t": 6.5, "name": "his eyes: bare wall, desk, door", "size": "POV", "what": "through his eyes", "pov": true},
  {"t": 27, "name": "side of the bed: up, and to the door", "size": "medium side (MS)", "what": "he gets up and walks to the door"},
