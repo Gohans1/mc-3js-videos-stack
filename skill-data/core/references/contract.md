@@ -67,6 +67,15 @@ The creator sees all of the above in the studio's Film tab, view only, under Cap
 
 `src/scene.ts` is plain JS under `// @ts-nocheck`, and `bun run check` reads only the JSON: a mistake in the code shows as an `ERROR` when a render builds the scene, so look at a still after every code change.
 
+## Kho props trong Objects
+
+| Kho | Vị trí |
+| --- | --- |
+| Global | vault/props/ trong kho chung. |
+| Film | src/props/ trong film đang mở. |
+
+Studio tự quét thư mục con để hiện ảnh, model GLB tự chứa và file TypeScript. Đặt ảnh hoặc GLB cùng tên với file code để xem trước một prop.
+
 ## Sound the studio finds
 
 | Where                                | What                                                                                                                     |

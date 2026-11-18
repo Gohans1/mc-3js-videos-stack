@@ -76,6 +76,7 @@ import {
   toggleKey,
   tools,
 } from "./placed-data";
+import { PropRows, usePropCatalog } from "./PropLibrary";
 
 type Item = { what: string; kind: "block" | "mob" | "custom"; title: string };
 let catalog: Promise<Item[]> | null = null;
@@ -549,8 +550,10 @@ const KINDS = [
   { id: "block", title: "Blocks", one: "block" },
   { id: "mob", title: "Mobs", one: "mob" },
   { id: "custom", title: "Custom", one: "custom object" },
+  { id: "global", title: "Global", one: "global prop" },
+  { id: "film", title: "Film", one: "film prop" },
 ] as const;
-type Kind = Item["kind"];
+type Kind = (typeof KINDS)[number]["id"];
 const CAP = 200;
 // The game's own by name; custom ones by where they come from, the film's own pack (gohans) first, then each mod
 const nsOf = (x: Item) => x.what.split(":")[1] ?? "";
@@ -591,28 +594,42 @@ function InFilm() {
 }
 
 // side: a wide library, its kinds in a column down the left as CapCut's sections are
-export function ObjectLibrary({ side = false }: { side?: boolean }) {
+function ObjectLibrary({ side, placeable }: { side: boolean; placeable: boolean }) {
   const ready = useStudio((s) => s.ready);
   const [items, setItems] = useState<Item[] | null>(null);
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState<Kind>("block");
+  const [pick, setKind] = useState<Kind>("block");
+  const kinds = placeable ? KINDS : KINDS.filter(({ id }) => id === "global" || id === "film");
+  const kind = kinds.some(({ id }) => id === pick) ? pick : "film";
+  const scope = kind === "global" || kind === "film" ? kind : null;
+  const props = usePropCatalog();
   useEffect(() => {
-    if (!ready || !tools()) return;
+    if (!ready || !placeable || !tools()) return;
     catalog ??= tools()!.catalog();
     catalog.then((xs) => setItems([...xs].sort(order))).catch(() => setItems([]));
-  }, [ready]);
+  }, [ready, placeable]);
   // Every tab's matches, so the tabs say how many each holds for the words typed
   const found = useMemo(() => {
     const hit = matcher(q);
-    const all = (items ?? []).filter((x) => hit(`${x.what} ${x.title}`));
-    return Object.fromEntries(
-      KINDS.map((k) => [k.id, all.filter((x) => x.kind === k.id)]),
-    ) as Record<Kind, Item[]>;
-  }, [items, q]);
-  const shown = found[kind],
-    meta = KINDS.find((k) => k.id === kind)!,
-    typed = q.trim() !== "";
-  const elsewhere = KINDS.filter((k) => k.id !== kind && found[k.id].length);
+    const all = (items ?? []).filter((x) => hit(x.what + " " + x.title));
+    return {
+      block: all.filter((x) => x.kind === "block"),
+      mob: all.filter((x) => x.kind === "mob"),
+      custom: all.filter((x) => x.kind === "custom"),
+      global: (props.data?.global ?? []).filter((x) => hit(x.id)),
+      film: (props.data?.film ?? []).filter((x) => hit(x.id)),
+    };
+  }, [items, props.data, q]);
+  const shown = kind === "film" || kind === "global" ? [] : found[kind];
+  const meta = KINDS.find((k) => k.id === kind)!;
+  const typed = q.trim() !== "";
+  const elsewhere = kinds.filter((k) => k.id !== kind && found[k.id].length);
+  const total = scope ? props.data?.[scope].length : items?.filter((x) => x.kind === kind).length;
+  const [limit, setLimit] = useState(CAP);
+  const pickKind = (next: Kind) => {
+    setKind(next);
+    setLimit(CAP);
+  };
   // Dragged: a few pixels of movement turn the press into carrying the object to the picture (as the sound library does)
   const press = (what: string) => (e: ReactPointerEvent) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
@@ -643,14 +660,14 @@ export function ObjectLibrary({ side = false }: { side?: boolean }) {
         label="Kind"
         vertical={side}
         value={kind}
-        onChange={setKind}
+        onChange={pickKind}
         className={cn(side && "sticky top-0 w-27")}
-        items={KINDS.map((k) => ({
+        items={kinds.map((k) => ({
           id: k.id,
           title: (
             <>
               <span className="truncate">{k.title}</span>
-              {typed && items && (
+              {typed && found[k.id].length > 0 && (
                 <span className="text-muted-foreground ms-auto tabular-nums">
                   {found[k.id].length}
                 </span>
@@ -663,66 +680,93 @@ export function ObjectLibrary({ side = false }: { side?: boolean }) {
         <SearchBox
           name="object-search"
           value={q}
-          onChange={setQ}
+          onChange={(value) => {
+            setQ(value);
+            setLimit(CAP);
+          }}
           label="Search objects"
           placeholder={
-            items
-              ? `Search ${items.filter((x) => x.kind === kind).length} ${meta.title.toLowerCase()}…`
-              : "Loading objects…"
+            total === undefined ? "Search objects…" : "Search " + total + " " + meta.one + "s…"
           }
         />
-        <p className="text-muted-foreground px-0.5 text-xs">
-          Drag onto the picture, or click + to add it in the middle of the view.
-        </p>
+        {!scope && (
+          <p className="text-muted-foreground px-0.5 text-xs">
+            Drag onto the picture, or click + to add it in the middle of the view.
+          </p>
+        )}
         <TabStage
           activeKey={kind}
-          order={KINDS.map((k) => k.id)}
+          order={kinds.map((k) => k.id)}
           axis="y"
           distance={6}
           duration={150}
         >
           <ul className="flex flex-col">
-            {shown.slice(0, CAP).map((x) => (
-              <li
-                key={x.what}
-                onPointerDown={press(x.what)}
-                onDragStart={(e) => e.preventDefault()}
-                className="group hover:bg-card flex min-h-11 cursor-grab touch-none items-center gap-2 rounded-lg px-1 transition-colors duration-150 select-none active:cursor-grabbing"
-              >
-                <Icon item={x} />
-                <span className="flex min-w-0 flex-1 flex-col py-1">
-                  <span className="text-ui truncate first-letter:uppercase">{x.title}</span>
-                  <span translate="no" className="text-muted-foreground truncate text-xs">
-                    {x.what}
+            {scope && <PropRows entries={found[scope]} scope={scope} visible={limit} />}
+            {!scope &&
+              shown.slice(0, CAP).map((x) => (
+                <li
+                  key={x.what}
+                  onPointerDown={press(x.what)}
+                  onDragStart={(e) => e.preventDefault()}
+                  className="group hover:bg-card flex min-h-11 cursor-grab touch-none items-center gap-2 rounded-lg px-1 transition-colors duration-150 select-none active:cursor-grabbing"
+                >
+                  <Icon item={x} />
+                  <span className="flex min-w-0 flex-1 flex-col py-1">
+                    <span className="text-ui truncate first-letter:uppercase">{x.title}</span>
+                    <span translate="no" className="text-muted-foreground truncate text-xs">
+                      {x.what}
+                    </span>
                   </span>
-                </span>
-                <Tip label="Add in the middle of the view">
-                  <Button
-                    variant="quiet"
-                    size="icon-lg"
-                    className="flex-none pointer-coarse:size-10"
-                    aria-label={`Add ${titleOf(x.what)}`}
-                    onClick={() => engine.addObjectInFront(x.what)}
-                  >
-                    <Plus />
-                  </Button>
-                </Tip>
+                  <Tip label="Add in the middle of the view">
+                    <Button
+                      variant="quiet"
+                      size="icon-lg"
+                      className="flex-none pointer-coarse:size-10"
+                      aria-label={`Add ${titleOf(x.what)}`}
+                      onClick={() => engine.addObjectInFront(x.what)}
+                    >
+                      <Plus />
+                    </Button>
+                  </Tip>
+                </li>
+              ))}
+            {scope && found[scope].length > limit && (
+              <li className="py-2">
+                <Button variant="secondary" size="sm" onClick={() => setLimit(limit + CAP)}>
+                  Show more
+                </Button>
               </li>
-            ))}
-            {items && shown.length > CAP && (
+            )}
+            {!scope && items && shown.length > CAP && (
               <li className="text-muted-foreground px-1 py-2 text-xs">
                 Showing {CAP} of {shown.length}. Type to narrow it down.
               </li>
             )}
-            {items && !shown.length && (
+            {scope && props.status === "error" && (
+              <li role="status" className="text-muted-foreground py-2">
+                Could not load props.
+              </li>
+            )}
+            {scope && props.status === "loading" && (
+              <li role="status" className="text-muted-foreground py-2">
+                Loading props…
+              </li>
+            )}
+            {((scope && props.status === "ready" && !found[scope].length) ||
+              (!scope && items && !shown.length)) && (
               <li className="text-ui text-muted-foreground flex flex-col items-start gap-1.5 px-1 py-2">
-                {!items.length
-                  ? "Couldn't list the film's blocks and mobs"
-                  : typed
-                    ? `No ${meta.one}s match "${q.trim()}"`
-                    : `This film has no ${meta.one}s`}
+                {scope
+                  ? typed
+                    ? "No props match “" + q.trim() + "”"
+                    : "Add props to " + (scope === "global" ? "vault/props/" : "src/props/")
+                  : !items?.length
+                    ? "Couldn't list the film's blocks and mobs"
+                    : typed
+                      ? `No ${meta.one}s match "${q.trim()}"`
+                      : `This film has no ${meta.one}s`}
                 {elsewhere.map((k) => (
-                  <Button key={k.id} variant="secondary" size="md" onClick={() => setKind(k.id)}>
+                  <Button key={k.id} variant="secondary" size="md" onClick={() => pickKind(k.id)}>
                     {found[k.id].length} in {k.title}
                   </Button>
                 ))}
@@ -751,8 +795,10 @@ export function ObjectInspector() {
 export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "library" }) {
   useStudio((s) => s.keysRev);
   const loaded = useStudio((s) => s.keyFiles !== null);
+  const hasPlacement = useStudio((s) => s.placed);
   if (!loaded) return null;
-  if (!canPlace())
+  const placeable = hasPlacement && canPlace();
+  if (part === "object" && !placeable)
     return (
       <EmptyCard title="This film can't take objects yet" className="m-3">
         It needs a placed key file and makePlaced in its scene (bun run skills get core --ref
@@ -764,9 +810,9 @@ export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "libr
       data-arrow-scroll
       className="scroll-fade flex min-h-0 flex-1 flex-col gap-3 overflow-auto overscroll-contain px-3 pt-1 pb-3 *:shrink-0"
     >
-      {part !== "library" && <ObjectInspector />}
-      {part !== "object" && <InFilm />}
-      {part !== "object" && <ObjectLibrary side={part === "library"} />}
+      {placeable && part !== "library" && <ObjectInspector />}
+      {placeable && part !== "object" && <InFilm />}
+      {part !== "object" && <ObjectLibrary side={part === "library"} placeable={placeable} />}
     </div>
   );
 }

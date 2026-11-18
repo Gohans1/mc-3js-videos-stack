@@ -16,6 +16,7 @@ import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 
+import { LOCAL as PROP_VAULT } from "../../../scripts/vault.mjs";
 import { JevRunError } from "../../clip-catalog/jev.ts";
 import { Activity, createActivity } from "./activity.mjs";
 import { CLI_CATEGORIES, CLI_COMMANDS } from "./cli-catalog.ts";
@@ -40,6 +41,7 @@ import { LESSON_PATH_MAX, LESSON_TEXT_MAX } from "./lesson-template.ts";
 import { noteNumbers } from "./notes.mjs";
 import { openFilmLut, openFilmResource, openOpenFilm } from "./openfilm.mjs";
 import { createPortsService } from "./ports.mjs";
+import { openPropLibrary } from "./prop-library.ts";
 import { openVoiceLibrary } from "./voice-library.mjs";
 import {
   PlaygroundConfig,
@@ -193,6 +195,7 @@ export const createApi = (
     cliRunner,
     cliTemplates,
     cliContextOpts,
+    propVault = PROP_VAULT,
   },
 ) => {
   const portsService = ports ?? createPortsService({ repoRoot: film?.PROJECT, selfPort: port });
@@ -1119,6 +1122,16 @@ export const createApi = (
     c.header("content-type", "text/plain; charset=utf-8");
     return c.body(srt);
   });
+  const props = film?.PROJECT ? openPropLibrary(film.PROJECT, propVault) : null;
+  app.get("/api/props", async (c) => fresh(c, (await props?.catalog()) ?? { global: [], film: [] }));
+  app.get("/api/props/preview", async (c) => {
+    const preview = await props?.preview(c.req.query("scope"), c.req.query("path"));
+    if (!preview) return c.notFound();
+    return new Response(Bun.file(preview.file, { type: preview.type }), {
+      headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" },
+    });
+  });
+
   app.get("/api/shots.json", (c) => text(c, Buffer.from(JSON.stringify(film.shotComments()))));
   app.get("/api/trials.json", (c) => {
     const t = film.trials();
