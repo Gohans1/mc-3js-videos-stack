@@ -250,7 +250,9 @@ export function InspectorPreview({
                 {removed ? (
                   "Preview updated"
                 ) : changed > 0 ? (
-                  <span className="text-ok-text">{changed} added</span>
+                  <span className="text-ok-text">
+                    {changed} {changed === 1 ? "line" : "lines"} added
+                  </span>
                 ) : before ? (
                   "Output unchanged"
                 ) : (

@@ -168,8 +168,9 @@ export function animateDeckTransition({
   );
   const cropped =
     previousCols.size !== prevTrail.columns.length || currentCols.size !== nextTrail.columns.length;
+  const replacesLayout = cropped || transition.closingContent;
   const replaced = new Set<string>();
-  if (!reduced && cropped) {
+  if (!reduced && replacesLayout) {
     for (const [key, current] of currentCols) {
       const old = previousCols.get(key)?.rect;
       if (
@@ -211,7 +212,7 @@ export function animateDeckTransition({
         scrollers(ghost).forEach((el, i) => {
           el.scrollTop = item.scrollTops[i] ?? 0;
         });
-        const crossfade = replaced.has(item.key) || (cropped && item !== snapshot.content);
+        const crossfade = replacesLayout;
         const anim = ghost.animate([{ opacity: item.opacity }, { opacity: 0 }], {
           duration: crossfade ? ENTER_MS : EXIT_MS,
           delay: crossfade ? 0 : Math.min(idx * 22, 60),

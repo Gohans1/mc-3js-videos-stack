@@ -56,13 +56,14 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error("Could not reach Studio. Check the connection and try again.", { cause });
   });
   const body = await response.json().catch(() => null);
-  if (body === null)
-    throw new Error("Studio could not complete the request. Check the connection and try again.");
+  if (body === null) throw new Error("Studio returned an unreadable response. Try again.");
   if (!response.ok)
     throw new Error(
       typeof body.error === "string"
         ? body.error
-        : "Request refused. Check the fields and try again.",
+        : response.status >= 500
+          ? "Studio could not complete the request. Try again."
+          : "Studio rejected the request. Check your inputs and try again.",
     );
   return body as T;
 }
@@ -113,6 +114,14 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const runFailureToast = useRef<string | null>(null),
     saveFailureToast = useRef<string | null>(null);
   const enabled = active && inspectorLiveEnabled;
+  const providerHint =
+    config.route === "free"
+      ? config.freeModel === DEFAULT_LESSON_JEV_CONFIG.freeModel
+        ? "Free model · OpenCode Zen"
+        : "OpenCode Zen only"
+      : config.route === "paid"
+        ? "Paid · OpenRouter"
+        : "May use paid OpenRouter";
   const body = useMemo(
     () => ({
       note,
@@ -362,9 +371,9 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
               onChange={(value) => lessons.setState({ inspectorLiveEnabled: value })}
               onRun={() => void run()}
               busy={busy}
-              failed={Boolean(runError)}
               disabled={!info || Boolean(validationError) || Boolean(reason)}
               reason={reason}
+              providerHint={providerHint}
             >
               <Button
                 size="md"
@@ -655,10 +664,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                                 setChange("Inspector cache cleared");
                                 toast.add({ title: "Inspector cache cleared" });
                               })
-                              .catch(() =>
+                              .catch((e: Error) =>
                                 toast.add({
                                   title: "Could not clear Inspector cache",
-                                  description: "Check the Studio connection and try again.",
+                                  description: e.message,
                                   type: "error",
                                 }),
                               )

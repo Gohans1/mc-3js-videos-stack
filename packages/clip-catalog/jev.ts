@@ -61,20 +61,32 @@ const jevAsk = (state: unknown, questions: Record<string, unknown>, options: Jev
     py.stderr.on("data", (d) => (err += d));
     py.on("error", (e) => {
       clearTimeout(timer);
-      fail(e);
+      fail(
+        (e as NodeJS.ErrnoException).code === "ENOENT"
+          ? new Error(
+              "Python was not found. Install Python or add it to PATH, then restart Studio or your terminal.",
+            )
+          : e,
+      );
     });
     py.on("close", (code) => {
       clearTimeout(timer);
       const said = err.split("\n").filter((l) => l.trim() && !jevNotes.has(l));
       for (const l of said) jevNotes.add(l);
-      if (code) return fail(new Error(said.at(-1)?.trim() || `jev.py exited ${code}`));
+      if (code)
+        return fail(
+          new Error(
+            err.trim().split("\n").at(-1)?.trim() ||
+              "Jev stopped before returning a result. Try again.",
+          ),
+        );
       if (said.length) console.error(said.join("\n"));
       try {
         const result = JSON.parse(out) as { answers: Answers; trace: unknown[] };
         for (const event of result.trace) options.onTrace?.(event as Record<string, unknown>);
         done(result.answers);
       } catch {
-        fail(new Error("Jev returned an invalid response."));
+        fail(new Error("Jev returned an unreadable response. Try again."));
       }
     });
     py.stdin.on("error", fail);

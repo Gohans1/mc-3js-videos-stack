@@ -222,7 +222,7 @@ export function LessonMarkdownView({
             data-line={b.line}
             className="border-border bg-card/40 overflow-x-auto rounded-lg border"
           >
-            <table className="w-full caption-bottom border-collapse text-sm/[1.5]">
+            <table className="w-full caption-bottom border-collapse text-sm/[1.5] tabular-nums">
               <thead className="border-border bg-card/60 border-b">
                 <tr>
                   {b.headers.map((h, i) => (

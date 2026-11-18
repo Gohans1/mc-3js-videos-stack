@@ -427,7 +427,7 @@ export function LessonFileView({
                     aria-current={active ? "true" : undefined}
                     onClick={(e) => flyToHeading(h.line, e.detail > 0)}
                     className={cn(
-                      "hover:bg-muted focus-visible:ring-ring studio-press relative flex w-full items-start gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.35] outline-none focus-visible:ring-2",
+                      "hover:bg-muted focus-visible:ring-ring studio-press relative flex w-full items-start gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.4] outline-none focus-visible:ring-2",
                       active && "bg-primary/12",
                     )}
                     style={{ "--indent": `${26 + (h.depth - 1) * 10}px` }}

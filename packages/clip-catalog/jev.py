@@ -70,7 +70,7 @@ class Jev:
                  if options.get("route", "auto") == "auto" or (options.get("route") == "free") == ("free" in name)
                  for ks in [keys(env, file)] for i, key in enumerate(ks)]
         self.routes = sorted(tries, key=lambda r: back.get(r[0], 0) > now)
-        self.keyed = bool(self.routes)
+        self.unavailable = {}
         self.spent, self.lock = 0.0, threading.Lock()
 
     def ask(self, state, questions):
@@ -78,7 +78,10 @@ class Jev:
             # another heat may drop the last route between a check and a read
             with self.lock:
                 if not self.routes:
-                    break
+                    if self.unavailable:
+                        sys.exit(" ".join(self.unavailable.values()))
+                    sys.exit("No API key is configured for the selected Jev provider. Set OPENCODE_API_KEY for OpenCode Zen "
+                             "or OPENROUTER_API_KEY for OpenRouter, then restart Studio or your terminal.")
                 route = self.routes[0]
             name, url, model, key, i, n = route
             model = self.options.get("freeModel" if "free" in name else "paidModel") or model
@@ -104,11 +107,17 @@ class Jev:
                             if self.routes and self.routes[0] is route:
                                 print(f"Jev: {name}{f' key {i} of {n}' if n > 1 else ''} refused ({e.code}): a wrong or revoked key",
                                       file=sys.stderr)
+                                self.unavailable[name] = (f"{name} rejected its API key. Update the key and restart Studio "
+                                                          "or your terminal.")
                                 self.routes.pop(0)
                         break
                     # a server fault (5xx) passes like a burst: one lost answer would throw away every heat paid before it
                     if (e.code != 429 and e.code < 500) or not wait:
-                        raise
+                        if e.code == 429:
+                            sys.exit(f"{name} is limiting requests. Wait a few minutes and try again.")
+                        if e.code >= 500:
+                            sys.exit(f"{name} did not complete the request. Try again in a few minutes.")
+                        sys.exit(f"{name} rejected the request (HTTP {e.code}). Check the model ID in your Jev settings.")
                     if e.code == 429 and after > 300:
                         with self.lock:
                             if any(r[0] == name for r in self.routes):
@@ -119,19 +128,15 @@ class Jev:
                                 tmp.write_text(json.dumps(back))
                                 tmp.replace(spent_file())
                                 print(f"Jev: {name} quota spent, back in {after / 3600:.1f} h", file=sys.stderr)
+                                self.unavailable[name] = f"{name} quota is exhausted. Try again in {after / 3600:.1f} hours."
                                 self.routes = [r for r in self.routes if r[0] != name]
                         break
                     time.sleep(after)
                 # a connection dropped mid-answer is no URLError: urlopen passes http.client's own faults through
                 except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
                     if not wait:
-                        raise
+                        sys.exit(f"Could not reach {name}. Check your connection and try again.")
                     time.sleep(wait)
-        sys.exit("Jev: every route has spent its quota (the lines above say when each is back). Zen's free quota is per "
-                 "network, so more Zen keys on this machine do not help; OpenRouter credit does: OPENROUTER_API_KEY in "
-                 "~/.secrets/openrouter.env" if self.keyed else
-                 "Jev: no key: OPENCODE_API_KEY in ~/.secrets/opencode_zen.env (free, a daily quota) or OPENROUTER_API_KEY in "
-                 "~/.secrets/openrouter.env (paid)")
 
 
 if __name__ == "__main__":

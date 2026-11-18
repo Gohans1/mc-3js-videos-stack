@@ -756,12 +756,13 @@ test("the Inspector includes only files from the chosen lesson scope", async () 
     mobile: false,
   });
   await navigateFixture("");
-  await waitFor(
-    "document.querySelector('#inspect-scope') && !document.querySelector('#inspect-scope').disabled",
-  );
+  await waitFor("document.querySelector('#inspect-scope:enabled')");
+  await fillNote("Camera framing");
+  await view.evaluate("document.querySelector('#inspect-scope').focus()");
+  await view.press("Enter");
+  await view.press("ArrowDown");
+  await view.press("Enter");
   await view.evaluate(`(() => {
-    const session = window.inspectTest.session;
-    session.setState({ config: { ...session.getState().config, scopeFilter: "film" } });
     [...document.querySelectorAll("summary")].find(s => s.textContent.includes("Lesson files")).parentElement.open = true;
   })()`);
   await waitFor("document.body.textContent.includes('Files: 0')");

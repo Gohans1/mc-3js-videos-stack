@@ -12,18 +12,18 @@ export function JevSafetyBanner({
   onChange,
   onRun,
   busy,
-  failed,
   disabled,
   reason,
+  providerHint,
   children,
 }: {
   enabled: boolean;
   onChange: (value: boolean) => void;
   onRun: () => void;
   busy: boolean;
-  failed: boolean;
   disabled: boolean;
   reason: string;
+  providerHint: string;
   children?: ReactNode;
 }) {
   return (
@@ -45,7 +45,7 @@ export function JevSafetyBanner({
               toast.add({
                 title: value ? "Jev calls enabled" : "Jev calls off",
                 description: value
-                  ? "Only Run Jev sends data. Paid routes may charge."
+                  ? "Run Jev sends the note, replies and included lesson content to the selected provider."
                   : "Editing and previewing remain free.",
                 type: value ? "warning" : "info",
               });
@@ -61,7 +61,7 @@ export function JevSafetyBanner({
             >
               {enabled && <TriangleAlert className="text-warn-text size-3 shrink-0" aria-hidden />}
               <span>
-                {!enabled ? "Free preview" : busy ? "180s limit" : reason || "May charge"}
+                {!enabled ? "Free preview" : busy ? "180-second limit" : reason || providerHint}
               </span>
             </p>
           </div>
@@ -74,7 +74,7 @@ export function JevSafetyBanner({
             disabled={!enabled || disabled || busy}
             onClick={onRun}
           >
-            {busy ? "Running Jev…" : failed ? "Retry Jev" : "Run Jev"}
+            {busy ? "Running Jev…" : "Run Jev"}
           </Button>
         </div>
       </div>

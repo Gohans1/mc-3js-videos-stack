@@ -269,7 +269,7 @@ const options: Partial<Record<keyof LessonJevConfig, { value: string; label: str
   ],
   route: [
     { value: "auto", label: "Auto · free preferred" },
-    { value: "free", label: "Free only · OpenCode Zen" },
+    { value: "free", label: "OpenCode Zen only" },
     { value: "paid", label: "Paid only · OpenRouter" },
   ],
 };

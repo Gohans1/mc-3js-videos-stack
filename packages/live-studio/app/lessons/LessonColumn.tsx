@@ -225,7 +225,7 @@ export function LessonColumnView({
       className={cn(
         "flex min-h-0 flex-col self-stretch",
         isSoleColumn
-          ? "min-w-0 flex-1"
+          ? "relative z-10 min-w-0 flex-1"
           : isSideColumn
             ? cn(
                 "sticky left-(--deck-left) z-(--deck-z) mt-(--deck-top) flex-none @max-[19rem]/lesson-deck:hidden",
