@@ -212,10 +212,10 @@ const useAiTabs = () => {
 const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "notes", title: "Notes", icon: MessageSquareText },
   { id: "lessons", title: "Lessons", icon: BookOpenText },
-  { id: "film", title: "Film", icon: Clapperboard },
+  { id: "sound", title: "Audio", icon: Music2 },
   { id: "ports", title: "Ports", icon: Network },
   { id: "cli", title: "CLI", icon: Terminal },
-  { id: "sound", title: "Audio", icon: Music2 },
+  { id: "film", title: "Film", icon: Clapperboard },
   { id: "text", title: "Text", icon: Type },
   { id: "objects", title: "Objects", icon: Boxes },
   { id: "transition", title: "Transitions", icon: Blend },
@@ -596,10 +596,10 @@ export function Side({
   const sideOrder: SideTab[] = [
     "notes",
     "lessons",
-    "film",
+    "sound",
     "ports",
     "cli",
-    "sound",
+    "film",
     "text",
     "objects",
     "keys",
@@ -648,9 +648,8 @@ export function Side({
               <BookOpenText aria-hidden />
               Lessons
             </Tabs.Tab>
-            <Tabs.Tab value="film" {...aiTab("film", value)} className={cn(tab, coreTab)}>
-              <Clapperboard aria-hidden />
-              Film
+            <Tabs.Tab value="sound" {...aiTab("sound", value)} disabled={!sound} className={tab}>
+              Audio
             </Tabs.Tab>
             <Tabs.Tab value="ports" className={cn(tab, coreTab)}>
               <Network aria-hidden />
@@ -663,8 +662,9 @@ export function Side({
             {(sound || text || placed || keys || cam) && (
               <Separator orientation="vertical" className="mx-0.5 h-5 data-vertical:self-center" />
             )}
-            <Tabs.Tab value="sound" {...aiTab("sound", value)} disabled={!sound} className={tab}>
-              Audio
+            <Tabs.Tab value="film" {...aiTab("film", value)} className={cn(tab, coreTab)}>
+              <Clapperboard aria-hidden />
+              Film
             </Tabs.Tab>
             <Tabs.Tab value="text" {...aiTab("text", value)} disabled={!text} className={tab}>
               Text

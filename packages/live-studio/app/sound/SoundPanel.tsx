@@ -99,6 +99,7 @@ import {
   editionTitle,
   filterAndSortLibrary,
   groupLibraryFamilies,
+  indexTimelineSounds,
   INITIAL_NAV,
   INITIAL_OPEN_GROUPS,
   itemVariantTitle,
@@ -116,6 +117,7 @@ import {
   sourceOf,
   sourceTitle,
   stepNavHeader,
+  timelineLibraryView,
   type YoursLeaf,
 } from "./library-view";
 import { decoded } from "./mixer";
@@ -123,6 +125,7 @@ import { NormalizeClip } from "./NormalizeClip";
 import { type ClipRef } from "./slice";
 import {
   addClip,
+  audibleName,
   auditionTarget,
   clipOf,
   cutAfter,
@@ -131,6 +134,7 @@ import {
   itemOf,
   kindOf,
   type Lanes,
+  type LibraryItem,
   lanes,
   library,
   lightSounds,
@@ -938,14 +942,32 @@ function CategoryTree({
   onHeader: (group: NavGroupId) => void;
   onSelect: (pick: NavPick) => void;
 }) {
+  const timeline = tree
+    .find((section) => section.id === "yours")
+    ?.leaves.find((leaf) => leaf.id === "timeline");
+  const timelineActive = activeNav.group === "yours" && activeNav.leaf === "timeline";
   return (
     <nav
       aria-label="Audio categories"
       className="border-border/50 flex w-40 flex-none flex-col gap-1 overflow-y-auto overscroll-contain border-e px-2 py-2.5 @max-[440px]:hidden"
     >
+      {timeline && (
+        <Button
+          variant={timelineActive ? "secondary" : "tool"}
+          size="sm"
+          className="mb-2 min-h-8 w-full justify-start text-start"
+          aria-current={timelineActive || undefined}
+          onClick={() => onSelect({ group: "yours", leaf: "timeline" })}
+        >
+          <Music aria-hidden />
+          <span className="min-w-0 flex-1 wrap-anywhere">{timeline.title}</span>
+          <span className="text-muted-foreground tabular-nums">{timeline.count.toLocaleString()}</span>
+        </Button>
+      )}
       {tree.map((sec) => {
         const isGroupActive = activeNav.group === sec.id;
         const isOpen = open[sec.id];
+        const leaves = sec.id === "yours" ? sec.leaves.filter((leaf) => leaf.id !== "timeline") : sec.leaves;
         return (
           <div key={sec.id} className="flex flex-col gap-0.5">
             <button
@@ -978,7 +1000,7 @@ function CategoryTree({
             </button>
             {isOpen && (
               <div className="border-border/40 ms-1.5 flex flex-col gap-0.5 border-s ps-1.5 pt-0.5 pb-1">
-                {sec.leaves.map((leaf) => {
+                {leaves.map((leaf) => {
                   const isCurrent = isGroupActive && activeNav.leaf === leaf.id;
                   const nextPick: NavPick =
                     sec.id === "yours"
@@ -1022,9 +1044,16 @@ function CategoryTree({
   );
 }
 
+const singleSoundCard = (item: LibraryItem): LibraryGroup => ({
+  key: item.name,
+  primary: item,
+  variants: [item],
+});
+
 // side: wide desktop left-column Audio library (CapCut's two-pane layout); !side: compact single-column mode
 function Library({ side }: { side: boolean }) {
   useStudio((s) => s.soundRev);
+  useStudio((s) => s.groups);
   const favs = useStudio((s) => s.favorites.sounds);
   const effectFavs = useStudio((s) => s.favorites.effects);
   const voiceTakes = useVoiceTakes();
@@ -1127,9 +1156,17 @@ function Library({ side }: { side: boolean }) {
   );
   const libraryItems = library;
   const narrationName = lanes?.narration ?? null;
+  const timelineUses = indexTimelineSounds(lanes, audibleName);
+  const unavailableSounds = new Set<string>();
+  const timelineItems: LibraryItem[] = [];
+  for (const [name, { kind }] of timelineUses) {
+    const item = itemOf(name);
+    if (!item) unavailableSounds.add(name);
+    timelineItems.push(item ?? { name, kind, seconds: 0 });
+  }
 
   const {
-    tree,
+    tree: catalogTree,
     activeNav,
     origins,
     activeOrigin,
@@ -1137,7 +1174,7 @@ function Library({ side }: { side: boolean }) {
     activeEdition,
     sources,
     activeSource,
-    shown,
+    shown: catalogItems,
     elsewhere,
   } = useMemo(
     () =>
@@ -1170,6 +1207,13 @@ function Library({ side }: { side: boolean }) {
   const isVoiceLeaf = activeNav.group === "yours" && activeNav.leaf === "voice";
   const isVoicesGroup = activeNav.group === "voices";
   const isFavLeaf = activeNav.group === "yours" && activeNav.leaf === "fav";
+  const isTimelineLeaf = activeNav.group === "yours" && activeNav.leaf === "timeline";
+  const { tree, shown: placedItems } = timelineLibraryView(
+    catalogTree,
+    timelineItems,
+    deferredQ,
+    isTimelineLeaf,
+  );
   const activeVoiceLeafFavs = isVoicesGroup && activeNav.leaf === "fav" ? voiceFavs : EMPTY_FAVS;
   const filteredVoices = useMemo(
     () =>
@@ -1209,13 +1253,11 @@ function Library({ side }: { side: boolean }) {
     setLimit(PAGE);
   }, []);
   const activeSection = tree.find((s) => s.id === activeNav.group)!;
-  const groups: LibraryGroup[] = useMemo(
-    () =>
-      isFavLeaf
-        ? shown.map((x) => ({ key: x.name, primary: x, variants: [x] }))
-        : groupLibraryFamilies(shown),
-    [isFavLeaf, shown],
+  const catalogGroups = useMemo(
+    () => (isFavLeaf ? catalogItems.map(singleSoundCard) : groupLibraryFamilies(catalogItems)),
+    [isFavLeaf, catalogItems],
   );
+  const groups = isTimelineLeaf ? placedItems.map(singleSoundCard) : catalogGroups;
   const visibleGroups = groups.slice(0, limit);
   const more = groups.length - visibleGroups.length;
   const heading = categoryHeading(activeNav);
@@ -1281,6 +1323,7 @@ function Library({ side }: { side: boolean }) {
   };
 
   const resetSourceIfAbsentInGroup = (nextGroup: NavGroupId, nextLeaf: string) => {
+    if (nextGroup === "yours" && nextLeaf === "timeline") return;
     if (nextGroup === "yours" && (nextLeaf === "film" || nextLeaf === "voice")) {
       setSrc(ALL);
       return;
@@ -1315,7 +1358,7 @@ function Library({ side }: { side: boolean }) {
   // selection: Chrome then drags the selection natively, a ghost of half the panel, and cancels the carry (pointercancel).
   // A press let go where it began picks every clip of the sound (or variation family) instead
   const press =
-    (activeName: string, familyNames: readonly string[], label: string, onCarried?: () => void) =>
+    (activeName: string, onSelectUses: () => void, onCarried: () => void) =>
     (e: ReactPointerEvent) => {
       if (
         e.button !== 0 ||
@@ -1331,13 +1374,13 @@ function Library({ side }: { side: boolean }) {
         removeEventListener("pointermove", move);
         removeEventListener("pointerup", stop);
         removeEventListener("pointercancel", stop);
-        if (ev.type === "pointerup" && !carried) pickNamesUses(familyNames, label);
+        if (ev.type === "pointerup" && !carried) onSelectUses();
       };
       const move = (ev: PointerEvent) => {
         if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return;
         carried = true;
         stop(ev);
-        onCarried?.();
+        onCarried();
         startCarry(activeName, ev);
       };
       addEventListener("pointermove", move);
@@ -1407,10 +1450,10 @@ function Library({ side }: { side: boolean }) {
 
   const expandedGroup: LibraryGroup | null = useMemo(
     () =>
-      !isVoicesGroup && !isVoiceLeaf && expandedKey
-        ? (groups.find((g) => g.key === expandedKey) ?? null)
+      !isVoicesGroup && !isVoiceLeaf && !isTimelineLeaf && expandedKey
+        ? (catalogGroups.find((g) => g.key === expandedKey) ?? null)
         : null,
-    [expandedKey, groups, isVoiceLeaf, isVoicesGroup],
+    [expandedKey, catalogGroups, isVoiceLeaf, isVoicesGroup, isTimelineLeaf],
   );
 
   const expandedVariantsRef = useRef<readonly string[] | null>(null);
@@ -1432,6 +1475,7 @@ function Library({ side }: { side: boolean }) {
 
   const compactHideRow4 =
     activeSection.leaves.length > 1 &&
+    !isTimelineLeaf &&
     !isVoicesGroup &&
     (isVoiceLeaf || (activeEdition === ALL && activeOrigin === ALL && activeSource === ALL));
 
@@ -1716,7 +1760,7 @@ function Library({ side }: { side: boolean }) {
               setLimit(PAGE);
             }}
           />
-        ) : shown.length === 0 ? (
+        ) : groups.length === 0 ? (
           <div
             className={cn(
               "flex items-center justify-center px-3 py-6",
@@ -1733,20 +1777,22 @@ function Library({ side }: { side: boolean }) {
                   )}
                 </EmptyMedia>
                 <EmptyTitle>
-                  {!library.length
+                  {!library.length && !isTimelineLeaf
                     ? "No audio in library"
                     : typed
                       ? `No matching ${activeSection.one}s`
                       : activeNav.group === "yours" && activeNav.leaf === "fav"
                         ? "No favorites yet"
-                        : activeNav.group === "yours" && activeNav.leaf === "film"
-                          ? "No film-specific audio yet"
-                          : `No ${activeSection.one}s found`}
+                        : isTimelineLeaf
+                          ? "No audio on the timeline yet"
+                          : activeNav.group === "yours" && activeNav.leaf === "film"
+                            ? "No film files yet"
+                            : `No ${activeSection.one}s found`}
                 </EmptyTitle>
                 <EmptyDescription>
                   <span className="text-foreground/75">
-                    {!library.length
-                      ? "This film's audio library is empty."
+                    {!library.length && !isTimelineLeaf
+                      ? "Add audio files to this film or set up its sound library."
                       : typed
                         ? `No results for "${deferredQ.trim()}". Try another keyword or switch categories.`
                         : activeEdition !== ALL && activeSource !== ALL
@@ -1760,9 +1806,11 @@ function Library({ side }: { side: boolean }) {
                                 : activeSource !== ALL
                                   ? `No ${activeSection.one}s from ${sourceTitle(activeSource)} here.`
                                   : activeNav.group === "yours" && activeNav.leaf === "fav"
-                                    ? "Click the star on any track to save it to Favorites."
-                                    : activeNav.group === "yours" && activeNav.leaf === "film"
-                                      ? "No custom audio files have been added to this film yet."
+                                    ? "Star a sound to save it here."
+                                    : isTimelineLeaf
+                                      ? "Add music or a sound effect to the timeline to see it here."
+                                      : activeNav.group === "yours" && activeNav.leaf === "film"
+                                        ? "Add audio files to this film to find them here."
                                       : `No ${activeSection.one}s in this category.`}
                   </span>
                 </EmptyDescription>
@@ -1820,11 +1868,7 @@ function Library({ side }: { side: boolean }) {
           <ul
             className={cn(
               "grid auto-rows-max content-start items-stretch gap-2",
-              activeNav.group === "bgm"
-                ? "grid-cols-[repeat(auto-fill,minmax(min(100%,21rem),1fr))]"
-                : activeNav.group === "mc"
-                  ? "grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))]"
-                  : "grid-cols-[repeat(auto-fill,minmax(min(100%,18.5rem),1fr))]",
+              "grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))]",
               side && "scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3",
             )}
           >
@@ -1847,14 +1891,17 @@ function Library({ side }: { side: boolean }) {
               const starId = hasVariants
                 ? (g.variants.find((v) => favSet.has(v.name))?.name ?? x.name)
                 : x.name;
-              const isFav = favSet.has(starId);
-              const uses = useCountOfNames(allNames);
+              const timelineClips = isTimelineLeaf ? timelineUses.get(x.name)?.clips : undefined;
+              const highlightedNames = isTimelineLeaf ? null : allNames;
+              const unavailable = isTimelineLeaf && unavailableSounds.has(x.name);
+              const uses = timelineClips?.length ?? useCountOfNames(allNames);
               const itemKind = kindOf(x);
               const isSynth = originOf(x) === "synth";
               const isPlaying = playingIdx >= 0;
               const isTarget = targetIdx >= 0;
               const showCategory = activeNav.group === "yours" || activeNav.leaf === ALL;
               const showSource =
+                !unavailable &&
                 activeSource === ALL &&
                 !(activeNav.group === "yours" && activeNav.leaf === "film") &&
                 !(isSynth && showCategory && Boolean(x.category));
@@ -1869,6 +1916,10 @@ function Library({ side }: { side: boolean }) {
               });
               const title = audioDisplayTitle(rawTitle, { mc: itemKind === "mc" });
               const detail = soundCardDetail(x);
+              const selectUses = () => {
+                if (timelineClips) setClips(timelineClips);
+                else pickNamesUses(allNames, title);
+              };
               const advanceRoundRobin = () => {
                 if (hasVariants) {
                   setVariantCursor((prev) => ({ ...prev, [g.key]: (curIdx + 1) % variantCount }));
@@ -1877,14 +1928,15 @@ function Library({ side }: { side: boolean }) {
               return (
                 <li
                   key={g.key}
-                  onPointerDown={press(x.name, allNames, title, advanceRoundRobin)}
+                  onPointerDown={unavailable ? undefined : press(x.name, selectUses, advanceRoundRobin)}
                   onDragStart={(e) => e.preventDefault()}
-                  onPointerEnter={() => lightSounds(allNames)}
+                  onPointerEnter={() => lightSounds(highlightedNames)}
                   onPointerLeave={() => lightSounds(null)}
-                  onFocus={() => lightSounds(allNames)}
+                  onFocus={() => lightSounds(highlightedNames)}
                   onBlur={() => lightSounds(null)}
                   className={cn(
-                    "group flex min-w-0 cursor-grab touch-none flex-col rounded-lg border px-2.5 py-2 transition-colors duration-150 select-none active:cursor-grabbing motion-reduce:transition-none",
+                    "group flex min-w-0 flex-col rounded-lg border px-2.5 py-2 transition-colors duration-150 motion-reduce:transition-none",
+                    !unavailable && "cursor-grab touch-none active:cursor-grabbing",
                     isPlaying
                       ? "border-primary/75 bg-raised-3"
                       : isTarget
@@ -1893,48 +1945,35 @@ function Library({ side }: { side: boolean }) {
                   )}
                 >
                   <div className="flex min-h-11 flex-1 items-start gap-2">
-                    <Tip label={isPlaying ? "Pause preview" : "Preview audio"}>
+                    <Tip label={unavailable ? "File unavailable" : isPlaying ? "Pause preview" : "Preview audio"}>
                       <Button
                         variant="cover"
                         size="cover"
                         className="mt-0.5 flex-none"
                         aria-pressed={isPlaying}
+                        disabled={unavailable}
                         aria-label={`${isPlaying ? "Pause" : "Preview"} ${title}`}
                         onClick={() => {
                           setExpandedKey(hasVariants ? g.key : null);
                           listen(x.name);
                         }}
                       >
-                        {isPlaying ? (
-                          <Pause className="fill-current" />
-                        ) : (
-                          <Play className="translate-x-[0.5px] fill-current" />
-                        )}
+                        <span aria-hidden className="grid place-items-center">
+                          <Play className={cn("col-start-1 row-start-1 translate-x-[0.5px] fill-current transition-opacity duration-150 motion-reduce:transition-none", isPlaying && "opacity-0")} />
+                          <Pause className={cn("col-start-1 row-start-1 fill-current transition-opacity duration-150 motion-reduce:transition-none", !isPlaying && "opacity-0")} />
+                        </span>
                       </Button>
                     </Tip>
                     <div
                       className="flex min-w-0 flex-1 flex-col justify-between gap-0.5 self-stretch"
                       title={detail}
                     >
-                      <div className="relative flex min-h-6 items-start gap-1">
-                        <span className="text-ui text-foreground line-clamp-2 min-w-0 flex-1 py-0.5 leading-snug font-medium">
+                      <div className="flex min-h-6 flex-wrap items-start gap-1">
+                        <span className="text-ui text-foreground min-w-[min(100%,6rem)] flex-1 py-0.5 leading-snug font-medium wrap-anywhere">
                           {title}
                         </span>
-                        {isFav ? (
-                          <span className="inline-flex flex-none">
-                            <FavoriteStar kind="sounds" id={starId} name={title} onCard />
-                          </span>
-                        ) : (
-                          <>
-                            <span className="hidden flex-none pointer-coarse:inline-flex">
-                              <FavoriteStar kind="sounds" id={starId} name={title} onCard />
-                            </span>
-                            <span className="from-raised-3 pointer-events-none absolute end-7 top-0 flex h-6 items-center bg-linear-to-l from-75% to-transparent ps-4 opacity-0 transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 motion-reduce:transition-none pointer-coarse:hidden">
-                              <FavoriteStar kind="sounds" id={starId} name={title} onCard />
-                            </span>
-                          </>
-                        )}
-                        <span className="flex flex-none transition-opacity duration-150 motion-reduce:transition-none">
+                        <span className="ms-auto flex flex-none items-center gap-1">
+                          {!unavailable && <FavoriteStar kind="sounds" id={starId} name={title} onCard />}
                           <Tip
                             label={
                               hasVariants
@@ -1946,6 +1985,7 @@ function Library({ side }: { side: boolean }) {
                               variant="card-action"
                               size="icon-sm"
                               className="flex-none pointer-coarse:size-9"
+                              disabled={unavailable}
                               aria-label={`Add ${title} to track`}
                               onClick={() => {
                                 addClip(x.name, S.t);
@@ -1957,26 +1997,21 @@ function Library({ side }: { side: boolean }) {
                           </Tip>
                         </span>
                       </div>
-                      <div className="mt-auto flex min-h-6 items-center justify-between gap-1.5">
-                        <span className="text-foreground/70 text-tag flex min-w-0 flex-1 items-center gap-1 leading-none">
+                      <div className="mt-auto flex min-h-6 flex-wrap items-center justify-between gap-1.5">
+                        <span className="text-muted-foreground text-xs flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 leading-snug">
                           {(isSynth || x.contentId || subtitle) && (
-                            <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+                            <span className="flex min-w-0 flex-wrap items-center gap-1">
                               {isSynth && <Badge variant="synth">Code</Badge>}
                               {x.contentId && (
                                 <Badge variant="claim" title={CONTENT_ID_NOTE}>
                                   Content ID
                                 </Badge>
                               )}
-                              {subtitle && <span className="min-w-0 truncate">{subtitle}</span>}
+                              {subtitle && <span className="min-w-0 wrap-anywhere">{subtitle}</span>}
                             </span>
                           )}
-                          {subtitle && (
-                            <span aria-hidden className="flex-none">
-                              ·
-                            </span>
-                          )}
-                          <span className="flex-none whitespace-nowrap tabular-nums">
-                            {duration}
+                          <span className="tabular-nums">
+                            {unavailable ? "File unavailable" : duration}
                           </span>
                         </span>
                         {(hasVariants || uses > 0) && (
@@ -2024,7 +2059,7 @@ function Library({ side }: { side: boolean }) {
                                         : "bg-raised-3 group-hover:bg-raised-4/75 text-foreground/85 hover:bg-tint hover:text-primary-text",
                                   )}
                                   aria-label={`Select the ${uses > 1 ? `${uses} clips` : "clip"} of ${title}`}
-                                  onClick={() => pickNamesUses(allNames, title)}
+                                  onClick={selectUses}
                                 >
                                   {uses}×
                                 </button>

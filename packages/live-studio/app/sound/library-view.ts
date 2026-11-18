@@ -11,7 +11,8 @@ import {
   type SoundOrigin,
   sourceOf,
 } from "./groups";
-import type { LibraryItem } from "./sound";
+import type { ClipRef } from "./slice";
+import type { Bed, Lanes, LibraryItem, OneShot } from "./sound";
 import { voiceLeafTitle } from "./voice-library-view";
 
 const NATURAL_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -39,7 +40,7 @@ export { catTitle, editionOf, originOf, sourceOf };
 export type OriginFilter = typeof ALL | SoundOrigin;
 export type EditionFilter = typeof ALL | EditionKind;
 export type NavGroupId = "yours" | "bgm" | "sfx" | "mc" | "voices";
-export type YoursLeaf = "fav" | "voice" | "film";
+export type YoursLeaf = "fav" | "voice" | "film" | "timeline";
 export type NavPick =
   { group: "yours"; leaf: YoursLeaf } | { group: "bgm" | "sfx" | "mc" | "voices"; leaf: string };
 export type OpenGroups = Record<NavGroupId, boolean>;
@@ -431,6 +432,25 @@ const categoryLeaves = (items: readonly LibraryItem[]): NavLeaf[] => {
   ];
 };
 
+export const indexTimelineSounds = (
+  lanes: Pick<Lanes, "beds" | "sfx" | "narration"> | null,
+  audibleName: (clip: Bed | OneShot) => string | null,
+) => {
+  const sounds = new Map<string, { kind: "bgm" | "sfx"; clips: ClipRef[] }>();
+  if (!lanes) return sounds;
+  for (const list of ["beds", "sfx"] as const) {
+    lanes[list].forEach((clip, i) => {
+      const name = audibleName(clip);
+      if (!name || clip.name === lanes.narration || name === lanes.narration) return;
+      const ref = { list, i };
+      const existing = sounds.get(name);
+      if (existing) existing.clips.push(ref);
+      else sounds.set(name, { kind: list === "beds" ? "bgm" : "sfx", clips: [ref] });
+    });
+  }
+  return sounds;
+};
+
 export const buildNavTree = (
   items: readonly LibraryItem[],
   favs: readonly string[],
@@ -467,7 +487,8 @@ export const buildNavTree = (
       leaves: [
         { id: "fav", title: "Favorites", count: favCount },
         { id: "voice", title: "Voiceover", count: voiceCount },
-        { id: "film", title: "This film", count: filmCount },
+        { id: "film", title: "Film files", count: filmCount },
+        { id: "timeline", title: "On timeline", count: 0 },
       ],
     },
     {
@@ -602,12 +623,14 @@ export const searchPlaceholder = (nav: NavPick): string => {
     return nav.leaf === "fav" ? "Search favorite voices" : "Search English voices";
   }
   if (nav.leaf === "voice") return "Search voiceover & script";
-  return nav.leaf === "fav" ? "Search favorites" : "Search film sounds";
+  if (nav.leaf === "timeline") return "Search timeline audio";
+  return nav.leaf === "fav" ? "Search favorites" : "Search film files";
 };
 
 export const categoryHeading = (nav: NavPick): string => {
   if (nav.group === "yours") {
-    return nav.leaf === "fav" ? "Favorites" : nav.leaf === "voice" ? "Voiceover" : "This film";
+    if (nav.leaf === "timeline") return "On timeline";
+    return nav.leaf === "fav" ? "Favorites" : nav.leaf === "voice" ? "Voiceover" : "Film files";
   }
   if (nav.group === "voices") {
     if (nav.leaf === ALL) return "All English voices";
@@ -619,6 +642,15 @@ export const categoryHeading = (nav: NavPick): string => {
   }
   if (nav.leaf === ALL) return nav.group === "bgm" ? "All music" : "All sound effects";
   return catTitle(nav.leaf);
+};
+
+const matchLibraryItems = (items: readonly LibraryItem[], query: string) => {
+  const want = words(query);
+  if (!want.length) return items;
+  return items.filter((item) => {
+    const tokens = itemSearchTokens(item);
+    return want.every((word) => tokens.some((token) => token.startsWith(word)));
+  });
 };
 
 export const filterAndSortLibrary = ({
@@ -646,14 +678,8 @@ export const filterAndSortLibrary = ({
   voiceCount?: number;
   voiceSection?: { count: number; leaves: readonly NavLeaf[] };
 }) => {
-  const want = words(query);
   const soundItems = narrationName ? items.filter((x) => x.name !== narrationName) : items;
-  const matched = !want.length
-    ? soundItems
-    : soundItems.filter((x) => {
-        const have = itemSearchTokens(x);
-        return want.every((w) => have.some((h) => h.startsWith(w)));
-      });
+  const matched = matchLibraryItems(soundItems, query);
   const tree = buildNavTree(matched, favs, kindOf, voiceCount, voiceSection);
 
   // Resolve valid leaf (keep user's selected leaf for yours/voices so 0 hits doesn't snap back to "all")
@@ -662,11 +688,12 @@ export const filterAndSortLibrary = ({
   const validLeaf = keepLeaf || section.leaves.some((l) => l.id === nav.leaf) ? nav.leaf : ALL;
   const activeNav: NavPick = keepLeaf ? nav : { group: nav.group, leaf: validLeaf };
 
-  let scoped: LibraryItem[];
+  const isTimeline = activeNav.group === "yours" && activeNav.leaf === "timeline";
+  let scoped: readonly LibraryItem[];
   if (activeNav.group === "voices") {
     scoped = [];
   } else if (activeNav.group === "yours") {
-    if (activeNav.leaf === "voice") {
+    if (activeNav.leaf === "voice" || isTimeline) {
       scoped = [];
     } else if (activeNav.leaf === "fav") {
       const matchedByName = new Map(matched.map((x) => [x.name, x]));
@@ -684,8 +711,10 @@ export const filterAndSortLibrary = ({
 
   const isMc = activeNav.group === "mc";
   const activeOrigin: OriginFilter =
-    !isMc && (origin === "real" || origin === "synth") ? origin : ALL;
-  const origins: OriginOption[] = isMc
+    !isTimeline && !isMc && (origin === "real" || origin === "synth")
+      ? origin
+      : ALL;
+  const origins: OriginOption[] = isMc || isTimeline
     ? []
     : scoped.length
       ? originOptions(scoped)
@@ -718,7 +747,8 @@ export const filterAndSortLibrary = ({
       ? scoped
       : scoped.filter((x) => originOf(x) === activeOrigin);
   const noSourceFilter =
-    activeNav.group === "yours" && (activeNav.leaf === "film" || activeNav.leaf === "voice");
+    isTimeline ||
+    (activeNav.group === "yours" && (activeNav.leaf === "film" || activeNav.leaf === "voice"));
   const activeSource = noSourceFilter || !source || source === ALL ? ALL : source;
   const sources = noSourceFilter ? [] : sourceOptions(byFirstFilter, activeSource);
   const bySource =
@@ -741,6 +771,26 @@ export const filterAndSortLibrary = ({
     shown,
     elsewhere,
   };
+};
+
+export const timelineLibraryView = (
+  sections: readonly NavSection[],
+  items: readonly LibraryItem[],
+  query: string,
+  selected: boolean,
+) => {
+  const matched = matchLibraryItems(items, query);
+  const tree = sections.map((section) =>
+    section.id === "yours"
+      ? {
+          ...section,
+          leaves: section.leaves.map((leaf) =>
+            leaf.id === "timeline" ? { ...leaf, count: matched.length } : leaf,
+          ),
+        }
+      : section,
+  );
+  return { tree, shown: selected ? sortLibraryItems(matched) : [] };
 };
 
 const AUDIO_TITLE_ACRONYMS = new Set([

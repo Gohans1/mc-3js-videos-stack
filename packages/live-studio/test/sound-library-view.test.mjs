@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  ALL,
   buildNavTree,
   categoryHeading,
   collapseSwapFamilies,
@@ -13,6 +14,7 @@ import {
   groupLibraryFamilies,
   INITIAL_NAV,
   INITIAL_OPEN_GROUPS,
+  indexTimelineSounds,
   itemVariantTitle,
   originOf,
   originOptions,
@@ -25,6 +27,7 @@ import {
   sourceOptions,
   sourceTitle,
   stepNavHeader,
+  timelineLibraryView,
   warmSearchTokens,
 } from "../app/sound/library-view.ts";
 
@@ -149,6 +152,49 @@ describe("soundCardText & soundCardDetail", () => {
 });
 
 describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
+  test("On timeline counts the selected sound files and finds only sounds placed in the film", () => {
+    const lanes = {
+      beds: [{ name: "music", from: 0, to: 3 }],
+      sfx: [
+        { name: "original", at: 0, try: ["alternate"] },
+        { name: "alternate", at: 1 },
+        { name: "disabled", at: 2 },
+        { name: "narration", at: 3 },
+        { name: "narration choice", at: 4 },
+      ],
+      narration: "narration",
+    };
+    const picks = new Map([["original", "alternate"], ["disabled", null], ["narration choice", "narration"]]);
+    const chosen = (clip) => picks.has(clip.name) ? picks.get(clip.name) : clip.name;
+    const used = indexTimelineSounds(lanes, chosen);
+    assert.deepEqual([...used], [
+      ["music", { kind: "bgm", clips: [{ list: "beds", i: 0 }] }],
+      ["alternate", { kind: "sfx", clips: [{ list: "sfx", i: 0 }, { list: "sfx", i: 1 }] }],
+    ]);
+    const items = ["music", "alternate", "original", "narration"].map((name) => ({ name, seconds: 1 }));
+    const query = "alt";
+    const catalog = filterAndSortLibrary({
+      items,
+      favs: [],
+      nav: { group: "yours", leaf: "timeline" },
+      source: "mixkit",
+      origin: "synth",
+      query,
+      kindOf: (item) => used.get(item.name)?.kind ?? "sfx",
+      narrationName: lanes.narration,
+    });
+    const result = timelineLibraryView(
+      catalog.tree,
+      items.filter((item) => used.has(item.name)),
+      query,
+      true,
+    );
+    assert.deepEqual(result.shown.map((item) => item.name), ["alternate"]);
+    assert.equal(result.tree[0].leaves.find((leaf) => leaf.id === "timeline").count, 1);
+    assert.equal(catalog.activeSource, ALL);
+    assert.equal(catalog.activeOrigin, ALL);
+  });
+
   test("builds CapCut Yours / Music / Sound effects tree with accurate counts and Voiceover leaf", () => {
     const tree = buildNavTree(SAMPLE, ["mixkit-168", "bgm-night-owl"], (x) => x.kind ?? "sfx", 4);
     assert.deepEqual(
@@ -167,6 +213,7 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
             ["fav", 2],
             ["voice", 4],
             ["film", 1],
+            ["timeline", 0],
           ],
         },
         {
@@ -196,6 +243,12 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
           count: 0,
           leaves: [["all", 0]],
         },
+        {
+          id: "voices",
+          title: "Voices",
+          count: 0,
+          leaves: [["all", 0]],
+        },
       ],
     );
   });
@@ -220,6 +273,7 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
         ["fav", 0],
         ["voice", 4],
         ["film", 1],
+        ["timeline", 0],
       ],
     );
   });
@@ -227,12 +281,24 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
   test("stepNavHeader opens only the active group like CapCut 9.7 and toggles collapse on repeat clicks", () => {
     const tree = buildNavTree(SAMPLE, ["mixkit-168"], (x) => x.kind ?? "sfx");
     assert.deepEqual(INITIAL_NAV, { group: "sfx", leaf: "all" });
-    assert.deepEqual(INITIAL_OPEN_GROUPS, { yours: false, bgm: false, sfx: true, mc: false });
+    assert.deepEqual(INITIAL_OPEN_GROUPS, {
+      yours: false,
+      bgm: false,
+      sfx: true,
+      mc: false,
+      voices: false,
+    });
 
     // Clicking Music while on SFX opens Music, closes SFX, and selects Music > All immediately
     const toMusic = stepNavHeader(INITIAL_NAV, INITIAL_OPEN_GROUPS, "bgm", tree);
     assert.deepEqual(toMusic.nav, { group: "bgm", leaf: "all" });
-    assert.deepEqual(toMusic.open, { yours: false, bgm: true, sfx: false, mc: false });
+    assert.deepEqual(toMusic.open, {
+      yours: false,
+      bgm: true,
+      sfx: false,
+      mc: false,
+      voices: false,
+    });
 
     // Clicking Music again while already in Music collapses its accordion without losing selection
     const collapsed = stepNavHeader(toMusic.nav, toMusic.open, "bgm", tree);
@@ -242,7 +308,13 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     // Clicking Yours opens Yours and picks Favorites when non-empty, else Voiceover when non-empty, else This film
     const toYours = stepNavHeader(collapsed.nav, collapsed.open, "yours", tree);
     assert.deepEqual(toYours.nav, { group: "yours", leaf: "fav" });
-    assert.deepEqual(toYours.open, { yours: true, bgm: false, sfx: false, mc: false });
+    assert.deepEqual(toYours.open, {
+      yours: true,
+      bgm: false,
+      sfx: false,
+      mc: false,
+      voices: false,
+    });
 
     const voiceTree = buildNavTree(SAMPLE, [], (x) => x.kind ?? "sfx", 4);
     const toVoice = stepNavHeader(INITIAL_NAV, INITIAL_OPEN_GROUPS, "yours", voiceTree);
@@ -298,7 +370,7 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     assert.equal(searchPlaceholder({ group: "sfx", leaf: "transitions" }), "Search sound effects");
     assert.equal(searchPlaceholder({ group: "yours", leaf: "fav" }), "Search favorites");
     assert.equal(searchPlaceholder({ group: "yours", leaf: "voice" }), "Search voiceover & script");
-    assert.equal(searchPlaceholder({ group: "yours", leaf: "film" }), "Search film sounds");
+    assert.equal(searchPlaceholder({ group: "yours", leaf: "film" }), "Search film files");
 
     assert.equal(categoryHeading({ group: "bgm", leaf: "all" }), "All music");
     assert.equal(categoryHeading({ group: "bgm", leaf: "electronic" }), "Electronic");
@@ -306,7 +378,7 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     assert.equal(categoryHeading({ group: "sfx", leaf: "transitions" }), "Transitions");
     assert.equal(categoryHeading({ group: "yours", leaf: "fav" }), "Favorites");
     assert.equal(categoryHeading({ group: "yours", leaf: "voice" }), "Voiceover");
-    assert.equal(categoryHeading({ group: "yours", leaf: "film" }), "This film");
+    assert.equal(categoryHeading({ group: "yours", leaf: "film" }), "Film files");
   });
 
   test("distinguishes Real / Studio vs Code-gen (synth), filters strictly by origin without silent fallback, and updates sources", () => {
