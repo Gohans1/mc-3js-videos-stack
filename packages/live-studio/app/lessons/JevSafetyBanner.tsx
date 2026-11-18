@@ -57,7 +57,7 @@ export function JevSafetyBanner({
             </FieldLabel>
             <p
               id="jev-mode-description"
-              className="text-muted-foreground flex items-center gap-1 text-xs/relaxed"
+              className="text-label flex items-center gap-1 text-xs/relaxed"
             >
               {enabled && <TriangleAlert className="text-warn-text size-3 shrink-0" aria-hidden />}
               <span>

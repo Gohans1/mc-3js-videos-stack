@@ -376,13 +376,16 @@ function LessonDeckPanel({
   const trimmed = naming?.trim() ?? "";
   const targetScope: LessonScope = hasProject ? newScope : "all";
   const existingLesson = trimmed ? findExistingLesson(targetScope, trimmed) : undefined;
-  const errMsg = !trimmed
-    ? "Enter a lesson name."
-    : !LESSON_NAME.test(trimmed)
-      ? "Use unaccented letters and replace spaces with hyphens, as in craft/goc-may."
-      : !existingLesson && lessonPath(trimmed).length > LESSON_PATH_MAX
-        ? `Shorten the path to ${LESSON_PATH_MAX} characters or fewer, including .md.`
-        : null;
+  const errMsg =
+    !trimmed || trimmed.endsWith("/")
+      ? trimmed
+        ? "Enter a lesson name after the slash."
+        : "Enter a lesson name."
+      : !LESSON_NAME.test(trimmed)
+        ? "Use unaccented letters and replace spaces with hyphens, as in craft/goc-may."
+        : !existingLesson && lessonPath(trimmed).length > LESSON_PATH_MAX
+          ? `Shorten the path to ${LESSON_PATH_MAX} characters or fewer, including .md.`
+          : null;
   const createLesson = () => {
     if (errMsg) {
       setSubmitted(true);

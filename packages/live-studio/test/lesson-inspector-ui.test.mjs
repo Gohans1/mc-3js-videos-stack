@@ -364,12 +364,14 @@ test("invalid matching settings explain the error at the focused field and recov
     fill('0'); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     const description=input.getAttribute('aria-describedby').split(' ').map(id=>document.getElementById(id)?.textContent).join(' ');
     const invalid=input.getAttribute('aria-invalid');
+    const retryOffered=[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Retry preview');
     const stayed=document.activeElement===input&&Math.abs(input.getBoundingClientRect().top-top)<2;
     fill('5'); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-    return {invalid,description,stayed,recovered:input.getAttribute('aria-invalid')!=='true'};
+    return {invalid,description,retryOffered,stayed,recovered:input.getAttribute('aria-invalid')!=='true'};
   })()`);
   expect(result.invalid).toBe("true");
   expect(result.description).toContain("Enter 1–50 results");
+  expect(result.retryOffered).toBe(false);
   expect(result.stayed).toBe(true);
   expect(result.recovered).toBe(true);
 });
@@ -418,6 +420,30 @@ const navigateFixture = async (query = "") => {
   await waitFor("document.getElementById('inspect-note-text')");
 };
 
+test("an oversized preview note keeps its text and identifies the field to shorten", async () => {
+  await navigateFixture();
+  await fillNote("x".repeat(50_001));
+  await waitFor("document.querySelector('#inspect-note-error')");
+  expect(
+    await view.evaluate(`(()=>{
+      const input=document.getElementById('inspect-note-text');
+      return {
+        length:input.value.length,
+        description:document.getElementById(input.getAttribute('aria-describedby'))?.textContent,
+        retryOffered:[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Retry preview')
+      };
+    })()`),
+  ).toEqual({
+    length: 50_001,
+    description: "Shorten the note to 50,000 characters or fewer.",
+    retryOffered: false,
+  });
+  await fillNote("Shorten the opening shot");
+  await waitFor(
+    "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: Shorten the opening shot')",
+  );
+});
+
 test("a failed manual run stays visible until an explicit retry and a successful run remains live", async () => {
   const callsBefore = paidCalls;
   await navigateFixture();
@@ -433,6 +459,12 @@ test("a failed manual run stays visible until an explicit retry and a successful
     await view.evaluate("document.querySelector('[role=switch]').click()");
     await clickButton("Run Jev");
     await waitFor("document.body.textContent.includes('Provider unavailable.')");
+    await waitFor(
+      "document.querySelector('[data-inspector-output]').textContent.includes('Previous preview')",
+    );
+    expect(
+      await view.evaluate("document.body.textContent.includes('The provider may still charge')"),
+    ).toBe(true);
     await view.evaluate("new Promise(r=>setTimeout(r,900))");
     expect(await view.evaluate("document.body.textContent.includes('Provider unavailable.')")).toBe(
       true,

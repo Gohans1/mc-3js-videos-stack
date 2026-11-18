@@ -92,6 +92,7 @@ export function InspectorPreview({
   view,
   onViewChange,
   updating,
+  runningJev,
   change,
   error,
   failedRun,
@@ -104,11 +105,14 @@ export function InspectorPreview({
   view: InspectorView;
   onViewChange: (view: InspectorView) => void;
   updating: boolean;
+  runningJev: boolean;
   change: string;
   error: string;
   failedRun: boolean;
 }) {
   const awaitingNote = view === "ai" && !hasNote;
+  const requestPending = updating || runningJev;
+  const showPrevious = runningJev || failedRun;
   const text = result && !awaitingNote ? inspectorPreviewText(result, view) : "";
   const before = previous && !awaitingNote ? inspectorPreviewText(previous, view) : "";
   const lines = useMemo(
@@ -125,12 +129,12 @@ export function InspectorPreview({
   useLayoutEffect(() => {
     const parent = scroller.current,
       target = parent?.querySelector<HTMLElement>("[data-changed=true]");
-    if (parent && target && !updating)
+    if (parent && target && !requestPending)
       parent.scrollTop +=
         target.getBoundingClientRect().top -
         parent.getBoundingClientRect().top -
         parent.clientHeight / 3;
-  }, [text, view, updating]);
+  }, [text, view, requestPending]);
   const copy = () =>
     void navigator.clipboard
       .writeText(text)
@@ -204,7 +208,7 @@ export function InspectorPreview({
               size="icon-sm"
               variant="ghost"
               aria-label="Copy preview"
-              disabled={!text || updating || Boolean(error)}
+              disabled={!text || requestPending || Boolean(error)}
               onClick={copy}
             >
               <Copy aria-hidden />
@@ -223,6 +227,8 @@ export function InspectorPreview({
               ) : (
                 "Preview paused"
               )
+            ) : runningJev ? (
+              "Running Jev…"
             ) : updating ? (
               result ? (
                 "Updating preview…"
@@ -257,7 +263,7 @@ export function InspectorPreview({
         tabIndex={0}
         role="region"
         aria-label={titles[view]}
-        aria-busy={updating}
+        aria-busy={requestPending && !error}
         data-inspector-result
         ref={scroller}
         className="focus-visible:ring-ring min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-3 outline-none focus-visible:ring-2"
@@ -299,25 +305,31 @@ export function InspectorPreview({
           </pre>
         )}
       </div>
-      <div className="border-border text-muted-foreground flex flex-none flex-wrap gap-x-3 gap-y-1 border-t px-3 py-1 text-xs/relaxed tabular-nums @min-[700px]/inspector:px-4">
+      <div className="border-border text-label flex flex-none flex-wrap gap-x-3 gap-y-1 border-t px-3 py-1 text-xs/relaxed tabular-nums @min-[700px]/inspector:px-4">
         <span className="hidden @min-[20rem]/inspector:inline">
           Files:{" "}
           <strong className="text-primary-text font-semibold">{result?.pool.length ?? 0}</strong>
         </span>
         <span
           className={
-            result?.status === "live"
+            !showPrevious && result?.status === "live"
               ? "text-ai-text"
-              : result?.status === "cached"
+              : !showPrevious && result?.status === "cached"
                 ? "text-ok-text"
                 : undefined
           }
         >
-          {result?.status === "live"
-            ? "Live result"
-            : result?.status === "cached"
-              ? "Cached result · no call"
-              : "Preview · no Jev call"}
+          {!result
+            ? "No result yet"
+            : showPrevious
+              ? result.status === "dry"
+                ? "Previous preview"
+                : "Previous result"
+              : result.status === "live"
+                ? "Live result"
+                : result.status === "cached"
+                  ? "Cached result · no call"
+                  : "Preview · no Jev call"}
         </span>
       </div>
     </section>

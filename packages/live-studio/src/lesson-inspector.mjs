@@ -8,6 +8,7 @@ import * as z from "zod";
 import { choiceRequest, fitRequest } from "../../clip-catalog/jev.ts";
 import {
   DEFAULT_LESSON_JEV_CONFIG,
+  InspectorNoteSchema,
   JEV_ENGINE_FIELDS,
   LessonJevConfigSchema,
 } from "./lesson-config.ts";
@@ -19,14 +20,7 @@ import { noteNumbers } from "./notes.mjs";
 
 export const InspectInput = z
   .object({
-    note: z.object({
-      id: z.string().max(100).optional(),
-      text: z.string().max(50000),
-      asks: z
-        .array(z.object({ text: z.string().max(10000), at: z.string().max(100).optional() }))
-        .max(100)
-        .default([]),
-    }),
+    note: InspectorNoteSchema,
     config: LessonJevConfigSchema.optional(),
     drafts: z
       .array(

@@ -599,7 +599,7 @@ export function LessonColumnRow({
             <span
               className={cn(
                 "text-foreground min-w-0 wrap-anywhere",
-                compact ? "text-sm/[1.35]" : "text-base/[1.35]",
+                compact ? "text-sm/[1.4]" : "text-base/[1.4]",
                 isActive ? "font-semibold" : "font-medium",
               )}
             >

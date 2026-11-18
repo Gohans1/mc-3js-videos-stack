@@ -105,13 +105,13 @@ export function LessonMarkdownView({
   const blocks = useMemo(() => parseLessonBlocks(text), [text]);
   if (!blocks.length) {
     return (
-      <div className="font-md text-muted-foreground mx-auto w-full max-w-[42rem] py-4 text-base/[1.6]">
+      <div className="font-md text-muted-foreground mx-auto w-full max-w-[37rem] py-4 text-base/[1.6]">
         Empty lesson file. Switch to Edit to start writing rules.
       </div>
     );
   }
   return (
-    <article className="font-md text-foreground mx-auto flex w-full max-w-[42rem] flex-col gap-3.5 text-base/[1.6]">
+    <article className="font-md text-foreground mx-auto flex w-full max-w-[37rem] flex-col gap-3.5 text-base/[1.6]">
       {blocks.map((b) => {
         if (b.type === "heading")
           return <HeadingBlock key={b.line} block={b} onJumpEdit={onJumpEdit} />;
@@ -126,7 +126,7 @@ export function LessonMarkdownView({
             <blockquote
               key={b.line}
               data-line={b.line}
-              className="border-hairline-strong bg-card/60 text-label rounded-e-md border-s px-3.5 py-2 text-pretty italic"
+              className="border-hairline-strong bg-card/60 text-label rounded-e-md border-s px-3.5 py-2 text-pretty wrap-anywhere italic"
             >
               <RenderInlines tokens={b.inlines} />
             </blockquote>

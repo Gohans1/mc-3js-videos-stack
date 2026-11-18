@@ -237,7 +237,7 @@ export function App() {
                 label="Library width"
                 across={false}
                 before
-                size={bounds.libW}
+                size={bounds.libW ?? desiredLibPx}
                 measure={() => libCell.current?.offsetWidth ?? (lessonsWideLib ? 720 : 400)}
                 min={() => LIB_MIN}
                 max={() => bounds.libMax}

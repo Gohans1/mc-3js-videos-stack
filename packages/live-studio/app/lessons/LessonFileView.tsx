@@ -290,7 +290,7 @@ export function LessonFileView({
                 {depthPill}
               </span>
             )}
-            <span className="text-foreground min-w-0 text-base/[1.3] font-semibold wrap-anywhere">
+            <span className="text-foreground min-w-0 text-base/[1.4] font-semibold wrap-anywhere">
               {displayPath}
             </span>
             <Badge variant={scope === "film" ? "lessonFilm" : "lessonAll"} className="flex-none">

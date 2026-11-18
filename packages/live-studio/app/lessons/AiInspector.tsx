@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -33,6 +33,7 @@ import { toast } from "@/components/ui/toast";
 
 import {
   DEFAULT_LESSON_JEV_CONFIG,
+  InspectorNoteSchema,
   JEV_ENGINE_FIELDS,
   type LessonJevConfig,
   LessonJevConfigSchema,
@@ -136,6 +137,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const runError = runFailure?.key === previewKey ? runFailure.message : "";
   const valid = LessonJevConfigSchema.safeParse(config);
   const configError = valid.success ? "" : "Fix the highlighted settings in Advanced settings.";
+  const validNote = InspectorNoteSchema.safeParse(note);
+  const noteIssues = validNote.success ? [] : validNote.error.issues;
+  const noteError = noteIssues.find((issue) => issue.path[0] !== "asks")?.message;
+  const repliesError = noteIssues.find((issue) => issue.path[0] === "asks")?.message;
+  const validationError = noteError || repliesError || configError;
   const fieldErrors = inspectorSettingErrors(valid.success ? [] : valid.error.issues);
   const configKey = JSON.stringify(config);
   const dirty = configKey !== saved;
@@ -196,7 +202,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     return () => controller.abort();
   }, [retry]);
   useEffect(() => {
-    if (!info || !active || busy || configError || !updating) return;
+    if (!info || !active || busy || validationError || !updating) return;
     const controller = new AbortController(),
       id = ++generation.current;
     const timer = setTimeout(() => {
@@ -218,9 +224,9 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       clearTimeout(timer);
       controller.abort();
     };
-  }, [bodyKey, previewKey, info, active, busy, configError, retry, updating]);
+  }, [bodyKey, previewKey, info, active, busy, validationError, retry, updating]);
   const run = async () => {
-    if (!enabled || running.current || configError || updating) return;
+    if (!enabled || running.current || validationError || updating) return;
     if (runFailureToast.current) {
       toast.close(runFailureToast.current);
       runFailureToast.current = null;
@@ -246,11 +252,15 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         type: "info",
       });
     } catch (e) {
-      if (currentBody.current === snapshot)
-        setRunFailure({ key: snapshot, message: (e as Error).message });
+      const detail = (e as Error).message;
+      const message =
+        config.route === "free"
+          ? detail
+          : `${detail} The provider may still charge for this attempt.`;
+      if (currentBody.current === snapshot) setRunFailure({ key: snapshot, message });
       runFailureToast.current = toast.add({
         title: "Jev run failed",
-        description: (e as Error).message,
+        description: message,
         type: "error",
       });
     } finally {
@@ -322,7 +332,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
               onRun={() => void run()}
               busy={busy}
               failed={Boolean(runError)}
-              disabled={!info || Boolean(configError) || Boolean(reason)}
+              disabled={!info || Boolean(validationError) || Boolean(reason)}
               reason={reason}
             >
               <Button
@@ -337,7 +347,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
             </JevSafetyBanner>
           </div>
           <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-6 p-4">
-            {(configError || error || runError || saveError) && (
+            {(validationError || error || runError || saveError) && (
               <Alert variant="destructive">
                 <AlertTitle>
                   {runError
@@ -347,40 +357,44 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                       : "Preview needs attention"}
                 </AlertTitle>
                 <AlertDescription>
-                  {runError || saveError || configError || error}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="md"
-                      variant="outline"
-                      disabled={
-                        busy ||
-                        (Boolean(runError) &&
-                          (!enabled || Boolean(configError) || Boolean(reason))) ||
-                        (Boolean(saveError) && (saving || !valid.success || !info))
-                      }
-                      onClick={() =>
-                        runError ? void run() : saveError ? void save() : setRetry((v) => v + 1)
-                      }
-                    >
-                      {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
-                    </Button>
-                    {configError && (
-                      <Button
-                        size="md"
-                        variant="outline"
-                        onClick={() =>
-                          changeConfig(
-                            DEFAULT_LESSON_JEV_CONFIG,
-                            "enabled",
-                            "Default settings",
-                            "ai",
-                          )
-                        }
-                      >
-                        Reset defaults
-                      </Button>
-                    )}
-                  </div>
+                  {runError || saveError || validationError || error}
+                  {(runError || saveError || configError || (!validationError && error)) && (
+                    <div className="flex flex-wrap gap-2">
+                      {(runError || saveError || (!validationError && error)) && (
+                        <Button
+                          size="md"
+                          variant="outline"
+                          disabled={
+                            busy ||
+                            (Boolean(runError) &&
+                              (!enabled || Boolean(validationError) || Boolean(reason))) ||
+                            (Boolean(saveError) && (saving || !valid.success || !info))
+                          }
+                          onClick={() =>
+                            runError ? void run() : saveError ? void save() : setRetry((v) => v + 1)
+                          }
+                        >
+                          {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
+                        </Button>
+                      )}
+                      {configError && (
+                        <Button
+                          size="md"
+                          variant="outline"
+                          onClick={() =>
+                            changeConfig(
+                              DEFAULT_LESSON_JEV_CONFIG,
+                              "enabled",
+                              "Default settings",
+                              "ai",
+                            )
+                          }
+                        >
+                          Reset defaults
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
@@ -430,11 +444,14 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     <Textarea
                       variant="inspector"
                       id="inspect-note-text"
+                      aria-invalid={Boolean(noteError) || undefined}
+                      aria-describedby={noteError ? "inspect-note-error" : undefined}
                       value={note.text}
                       className="max-h-48 overflow-y-auto overscroll-contain @min-[700px]/inspector:min-h-24"
                       onChange={(e) => changeNote({ ...note, text: e.target.value })}
                       placeholder="The face is too small. Move the camera closer."
                     />
+                    {noteError && <FieldError id="inspect-note-error">{noteError}</FieldError>}
                   </Field>
                   <details>
                     <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2">
@@ -447,6 +464,8 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                       <Textarea
                         variant="inspector"
                         id="inspect-replies"
+                        aria-invalid={Boolean(repliesError) || undefined}
+                        aria-describedby={repliesError ? "inspect-replies-error" : undefined}
                         className="max-h-40 overflow-y-auto overscroll-contain"
                         value={(note.asks ?? []).map((a) => a.text).join("\n")}
                         onChange={(e) =>
@@ -460,6 +479,9 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                           })
                         }
                       />
+                      {repliesError && (
+                        <FieldError id="inspect-replies-error">{repliesError}</FieldError>
+                      )}
                     </Field>
                   </details>
                 </FieldGroup>
@@ -657,9 +679,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
           previous={received?.previous}
           view={view}
           onViewChange={setView}
-          updating={updating || busy}
+          updating={updating}
+          runningJev={busy}
           change={change}
-          error={configError || runError || error}
+          error={validationError || runError || error}
           failedRun={Boolean(runError)}
         />
       </div>
