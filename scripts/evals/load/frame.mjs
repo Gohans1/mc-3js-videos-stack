@@ -3,18 +3,20 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cliArgs } from "../../../packages/live-studio/src/cli.mjs";
+import { cliArgs, needFilm } from "../../../packages/live-studio/src/cli.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url)),
-  root = resolve(here, "../../..");
+const here = dirname(fileURLToPath(import.meta.url));
 const args = cliArgs(
-  `Measure frame scheduling in a real browser at the repo root.
-  bun scripts/evals/load/frame.mjs [--objects]
+  `Measure frame scheduling in a real browser.
+  bun scripts/evals/load/frame.mjs [--film <path>] [--objects]
+--film selects a film directory. Defaults to the current directory.
 --objects measures Minecraft add/replace/remove with prepared asset caches.
 Writes scripts/evals/load/runs/frame-*/ evidence; stops after 180 seconds. No paid requests.`,
-  ["--objects"],
+  ["--film <path>", "--objects"],
   0,
 );
+const filmArg = args.indexOf("--film");
+const film = needFilm(filmArg === -1 ? process.cwd() : resolve(args[filmArg + 1]));
 const objects = args.includes("--objects");
 const dir = join(here, "runs", `frame-${new Date().toISOString().replaceAll(/[:.]/g, "-")}`);
 mkdirSync(dir, { recursive: true });
@@ -22,7 +24,7 @@ const result = {
   complete: false,
   scope: objects
     ? "Real Minecraft add/replace/remove with prepared asset cache; no performance claim"
-    : "Raw demo film at 960x540 draft; paired shadow scheduling in one renderer",
+    : "Film at 960x540 draft; paired shadow scheduling in one renderer",
   trials: [],
 };
 const save = () => writeFileSync(join(dir, "results.json"), JSON.stringify(result, null, 2));
@@ -34,7 +36,20 @@ const stop = setTimeout(() => {
   process.exit(1);
 }, 180000);
 try {
-  const built = await Bun.build({ entrypoints: [join(here, "frame-page.ts")], target: "browser" });
+  const built = await Bun.build({
+    entrypoints: [join(here, "frame-page.ts")],
+    target: "browser",
+    plugins: [
+      {
+        name: "film",
+        setup(build) {
+          build.onResolve({ filter: /^film\/(edit|scene)$/ }, ({ path }) => ({
+            path: join(film, "src", `${path.slice("film/".length)}.ts`),
+          }));
+        },
+      },
+    ],
+  });
   if (!built.success) throw new AggregateError(built.logs, "Could not bundle frame eval");
   const files = new Map(built.outputs.map((o) => [o.path.replace(/^\.\//, "/"), o]));
   const entry = built.outputs.find((o) => o.kind === "entry-point").path.replace(/^\.\//, "/");
@@ -42,7 +57,7 @@ try {
     .filter((p) => p.endsWith(".css"))
     .map((p) => `<link rel="stylesheet" href="${p}">`)
     .join("");
-  const publicDir = join(root, "films/demo-test-mc-yolo/assets/public");
+  const publicDir = join(film, "assets/public");
   server = Bun.serve({
     port: 0,
     async fetch(req) {

@@ -1,29 +1,12 @@
-import { EDIT } from "../../../films/demo-test-mc-yolo/src/edit";
-import { buildScene } from "../../../films/demo-test-mc-yolo/src/scene";
+import { EDIT } from "film/edit";
+import { buildScene } from "film/scene";
 
 const canvas = document.body.appendChild(document.createElement("canvas"));
-interface FrameRenderer {
-  getContext(): WebGL2RenderingContext;
-  shadowMap: { autoUpdate: boolean; needsUpdate: boolean };
-  info: { autoReset: boolean; reset(): void; render: { calls: number; triangles: number } };
-}
-const film = await buildScene(canvas, 960, 540, true);
-interface FrameVector {
-  clone(): FrameVector;
-  addScaledVector(v: FrameVector, scale: number): FrameVector;
-  toArray(): number[];
-}
-type FrameDraw = typeof film & {
-  tools: {
-    renderer: FrameRenderer;
-    camera: { position: FrameVector; getWorldDirection(out: FrameVector): FrameVector };
-    placed: { sync(): Promise<void>; objectOf(name: string): unknown };
-  };
-};
-const draw = film as FrameDraw;
-const edit = EDIT as { placed: Record<string, unknown> };
-const renderer = draw.tools?.renderer;
-if (!renderer) throw new Error("Frame eval needs the film's renderer");
+const draw = await buildScene(canvas, 960, 540, true);
+const edit = EDIT as typeof EDIT & { placed?: Record<string, unknown> };
+const filmRenderer = draw.tools?.renderer;
+if (!filmRenderer) throw new Error("Frame eval needs the film's renderer");
+const renderer = filmRenderer;
 const gl = renderer.getContext() as WebGL2RenderingContext;
 const timer = gl.getExtension("EXT_disjoint_timer_query_webgl2");
 renderer.info.autoReset = false;
@@ -70,6 +53,7 @@ Object.assign(window, {
   async objectTrial() {
     const previous = edit.placed,
       { camera, placed } = draw.tools;
+    if (!placed) throw new Error("Object eval needs the film's placed-object tools");
     const name = "__perf_cache_probe";
     const capture = () => {
       draw(0);

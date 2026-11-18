@@ -1,8 +1,0 @@
-{
-  "end": 9.5,
-  "voice": { "lines": [], "edits": {}, "warp": [] },
-  "takes": [],
-  "beats": {},
-  "light": { "fill": 0.72, "key": 42 },
-  "look": { "saturation": 0.05 }
-}

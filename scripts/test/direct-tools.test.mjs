@@ -86,7 +86,6 @@ for (const [exe, file] of [
   ["python", "packages/clip-catalog/catalog_review.py"],
   ["python", "packages/clip-catalog/catalog_eval.py"],
   ["python", "packages/clip-catalog/sweep_report.py"],
-  ["bun", "films/rapier-wall-demo/scripts/bake_breach.ts"],
 ]) {
   test(`${file}: help and typos never rewrite a film`, () => {
     const dir = mkdtempSync(join(tmpdir(), "direct-help-"));
@@ -136,31 +135,3 @@ test("catalogue maintenance uses isolated data and real bounded subprocesses", (
   });
   expect(result.status, result.stdout + result.stderr).toBe(0);
 }, 65_000);
-
-test("physics bake writes finite frame samples to the requested output without touching the film cache", () => {
-  const dir = mkdtempSync(join(tmpdir(), "physics-bake-"));
-  const original = readFileSync(join(ROOT, "films/rapier-wall-demo/src/timeline/breach.json"));
-  try {
-    const result = run(
-      "bun",
-      "films/rapier-wall-demo/scripts/bake_breach.ts",
-      ["--out", join(dir, "baked.json")],
-      dir,
-    );
-    expect(result.status, result.stderr).toBe(0);
-    const baked = JSON.parse(readFileSync(join(dir, "baked.json"), "utf8"));
-    expect(baked.bodies.length).toBeGreaterThan(0);
-    for (const body of baked.bodies) {
-      expect(body.frames.length).toBe(Math.round(baked.duration * baked.fps) + 1);
-      expect(body.frames.every((frame) => frame.length === 7 && frame.every(Number.isFinite))).toBe(
-        true,
-      );
-    }
-    expect(result.stdout).toContain("scene seconds");
-    expect(readFileSync(join(ROOT, "films/rapier-wall-demo/src/timeline/breach.json"))).toEqual(
-      original,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}, 35_000);

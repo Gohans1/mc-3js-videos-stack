@@ -145,15 +145,13 @@ test("help documents discovery, and sends commands to their real working directo
   const root = spawnSync("bun", [HELP, "render"], { encoding: "utf8", timeout: 10000 });
   expect(root.status).toBe(0);
   expect(root.stdout).toContain("cd films/<name>");
-  for (const dir of ["templates/film", "films/cell-break", "films/sealed-room"]) {
-    const film = spawnSync("bun", [HELP, "setup:voices"], {
-      cwd: join(import.meta.dir, "../../..", dir),
-      encoding: "utf8",
-      timeout: 10000,
-    });
-    expect(film.status).toBe(0);
-    expect(film.stdout).toContain("cd ../..");
-  }
+  const film = spawnSync("bun", [HELP, "setup:voices"], {
+    cwd: join(import.meta.dir, "../../../templates/film"),
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  expect(film.status).toBe(0);
+  expect(film.stdout).toContain("cd ../..");
 });
 
 test("a film's help names earshot beside its sound commands, and where the guide says which call is for what", () => {
