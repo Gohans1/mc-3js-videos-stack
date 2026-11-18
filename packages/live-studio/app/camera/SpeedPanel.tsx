@@ -1,10 +1,12 @@
+import { CAMERA_MOTIONS } from "film-stage/camera";
+
 import { CurveEditor, EaseTiles } from "../components/EasePicker";
-import { EmptyCard, Section } from "../components/inspector";
+import { EmptyCard, Section, Segmented } from "../components/inspector";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { useFrameKey } from "../core/useFrameKey";
-import { DEFAULT_EASE, keys, preview, restore, setEase, shownKey, snapshot } from "./cam";
+import { DEFAULT_EASE, edit, keys, preview, restore, setEase, shownKey, snapshot } from "./cam";
 
 const camDoc = { snapshot, restore };
 
@@ -22,7 +24,7 @@ export function CameraEasePanel() {
       </EmptyCard>
     );
   }
-  const curve = Array.isArray(k.ease) ? k.ease : null;
+  const curve = k.motion !== "hold" && Array.isArray(k.ease) ? k.ease : null;
   return (
     <div className="flex flex-col">
       <p className="text-ui px-3 pb-2">
@@ -32,7 +34,19 @@ export function CameraEasePanel() {
         </span>
       </p>
       <div className="flex flex-col gap-2 px-3 pb-3">
-        <EaseTiles value={k.ease} fallback={DEFAULT_EASE} onPick={(v) => setEase(i, v)} />
+        <Segmented
+          label="Camera path"
+          value={k.motion ?? "smooth"}
+          items={CAMERA_MOTIONS.map((id) => ({ id, title: id[0].toUpperCase() + id.slice(1) }))}
+          onChange={(motion) =>
+            edit((rows) => {
+              rows[i].motion = motion;
+            })
+          }
+        />
+        {k.motion !== "hold" && (
+          <EaseTiles value={k.ease} fallback={DEFAULT_EASE} onPick={(v) => setEase(i, v)} />
+        )}
       </div>
       {curve && (
         <div className="border-t">

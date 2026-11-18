@@ -26,29 +26,16 @@ import { SAME, stamp } from "../core/time";
 import { useFrame } from "../core/useFrame";
 import { useFrameKey } from "../core/useFrameKey";
 
-let keyTimesRev = -1,
-  keyTimesArr: number[] = [];
-const keyTimes = () => {
-  const rev = get().camRev;
-  if (keyTimesRev !== rev) {
-    keyTimesRev = rev;
-    keyTimesArr = keys.map((x) => x.t);
-  }
-  return keyTimesArr;
-};
-
 function PlayheadStamp() {
   useFrame();
   return <span className="tabular-nums">{stamp(S.t)}</span>;
 }
-import { keyNav } from "../keys/keynav";
-import { seek } from "../playback/transport";
+import { seekExact } from "../playback/transport";
 import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
 import {
   addKeyHere,
   holdAfter,
-  keyAt,
   keys,
   movable,
   preview,
@@ -67,6 +54,7 @@ import {
   snapshot,
   splitShot,
 } from "./cam";
+import { cameraKeyNavigation } from "./camera-edit";
 import { renameShot } from "./shots";
 
 const CameraEasePanel = lazy(() =>
@@ -212,20 +200,23 @@ function KeySection() {
   useFrameKey(() => {
     const i = shownKey(S.t);
     const k = keys[i];
-    const nav = keyNav(keyTimes(), S.t, SAME);
+    const nav = cameraKeyNavigation(keys, S.t, get().camKey, SAME);
     return `${get().camRev}:${i}:${nav.prev}:${nav.next}:${!!k && Math.abs(k.t - S.t) < SAME ? 1 : 0}`;
   });
   const free = useStudio((s) => s.free),
     shots = useStudio((s) => s.shots);
   const i = shownKey(S.t),
     k = keys[i],
-    nav = keyNav(keyTimes(), S.t, SAME);
+    nav = cameraKeyNavigation(keys, S.t, get().camKey, SAME);
   const here = !!k && Math.abs(k.t - S.t) < SAME,
     cut = !!k?.cut;
-  const go = (t: number | null) => {
-    if (t === null) return;
-    seek(t);
-    setKey(keyAt(t));
+  const go = (index: number | null) => {
+    if (index === null) return;
+    const key = keys[index];
+    const beforeCut =
+      !key.cut && keys.slice(index + 1).some((next) => next.t === key.t && next.cut);
+    seekExact(beforeCut ? key.t - 1e-6 : key.t);
+    setKey(index);
   };
   const canDelete = !!k && (movable(i) || (cut && !!shots && shotOfCut(i) > 0));
   const lens = (field: "fov" | "roll" | "wave", scale: number) => ({
@@ -243,12 +234,16 @@ function KeySection() {
         <>
           {k && (
             <Reset
-              label="Reset FOV, roll and sway to the film's own"
+              label="Reset lens, depth of field, roll and shake"
               disabled={
                 k.fov === undefined &&
                 k.mm === undefined &&
                 k.roll === undefined &&
-                k.wave === undefined
+                k.wave === undefined &&
+                k.bob === undefined &&
+                k.fstop === undefined &&
+                k.focus === undefined &&
+                k.handheld === undefined
               }
               onClick={() => resetLens(i)}
             />

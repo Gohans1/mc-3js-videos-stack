@@ -1,3 +1,4 @@
+import type { CameraMotion } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
@@ -15,6 +16,15 @@ import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { r3, SAME, stamp } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
+import {
+  type CameraFieldGroup,
+  cameraTailIndex,
+  type CameraView,
+  copyCameraFields,
+  keyAtTime,
+  replaceCameraFraming,
+  selectedCameraKeyAt,
+} from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
 import { type ShotRow, shotsDoc } from "./shots";
 
@@ -31,7 +41,10 @@ export interface CamKey {
   handheld?: unknown;
   roll?: number;
   wave?: number;
+  bob?: number;
+  motion?: CameraMotion;
   cut?: boolean;
+  tailId?: string | false;
   ease?: Ease;
   [k: string]: unknown;
 }
@@ -72,8 +85,9 @@ export const loadCam = async () => {
 // What film-stage/camera.ts gives a key without an ease (core/ease.ts works out how each one spends its span)
 export const DEFAULT_EASE = "smooth";
 export const holds = (a: CamKey, b: CamKey) =>
-  JSON.stringify([a.p, a.l, a.fov, a.mm, a.fstop, a.focus, a.handheld]) ===
-  JSON.stringify([b.p, b.l, b.fov, b.mm, b.fstop, b.focus, b.handheld]);
+  b.motion === "hold" ||
+  JSON.stringify([a.p, a.l, a.fov, a.mm, a.fstop, a.focus, a.handheld, a.roll, a.wave, a.bob]) ===
+    JSON.stringify([b.p, b.l, b.fov, b.mm, b.fstop, b.focus, b.handheld, b.roll, b.wave, b.bob]);
 // The keys a key may move between: its shot's cut (or the film's start) and the next cut, never past its neighbours
 export const room = (i: number): [number, number] => [
   i > 0 ? Math.min(keys[i].t, keys[i - 1].t + SAME) : 0,
@@ -131,6 +145,7 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
   edit((ks) => {
     for (const k of ok) {
       delete k.cut;
+      delete k.tailId;
       const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
       if (on > 0) {
         ks[on] = { ...k, id: ks[on].id ?? newRowId() };
@@ -169,35 +184,21 @@ export const setLens = (i: number, field: "fov" | "roll" | "wave", v: number | u
     if (v === undefined) delete ks[i][field];
     else ks[i][field] = field === "roll" ? Math.round(v * 1e4) / 1e4 : r3(v);
   });
-// The Camera tab's reset: the key draws with the film's own FOV, roll and sway again
 export const resetLens = (i: number) =>
   edit((ks) => {
-    delete ks[i].fov;
-    delete ks[i].mm;
+    copyCameraFields({}, ks[i], ["lens", "dof", "shake"]);
     delete ks[i].roll;
-    delete ks[i].wave;
   });
 export const setEase = (i: number, ease: Ease | undefined) =>
   edit((ks) => {
     if (ease === undefined) delete ks[i].ease;
     else ks[i].ease = ease;
   });
-// Paste attributes (timeline/attributes.ts): the lens (FOV, roll, sway) and the speed (ease) of key `from`, as it has them (none:
-// the film's own), onto keys `to`, one undo step. A shot's first key has no speed, so it takes the lens alone
-export const pasteKeyAttrs = (from: CamKey, to: number[], what: ("lens" | "speed")[]) =>
+export const pasteKeyAttrs = (from: CamKey, to: number[], what: CameraFieldGroup[]) =>
   edit((ks) => {
     for (const i of to) {
-      const k = ks[i] as Record<string, unknown> | undefined;
-      if (!k) continue;
-      if (what.includes("lens"))
-        for (const f of ["fov", "mm", "fstop", "focus", "handheld", "roll", "wave"]) {
-          if (from[f] === undefined) delete k[f];
-          else k[f] = structuredClone(from[f]);
-        }
-      if (what.includes("speed") && movable(i)) {
-        if (from.ease === undefined) delete k.ease;
-        else k.ease = structuredClone(from.ease);
-      }
+      if (!ks[i]) continue;
+      copyCameraFields(from, ks[i], movable(i) ? what : what.filter((group) => group !== "speed"));
     }
   });
 export const removeKey = (i: number) => {
@@ -229,87 +230,102 @@ export const holdAfter = (i: number, secs = 1) => {
     return;
   }
   edit((ks) => {
-    const { ease: _, cut: __, ...pose } = structuredClone(ks[i]);
-    ks.splice(i + 1, 0, { ...pose, id: newRowId(), t, ease: "linear" });
+    const { ease: _, cut: __, tailId: _tail, __timing: _timing, ...pose } = structuredClone(ks[i]);
+    ks.splice(i + 1, 0, { ...pose, id: newRowId(), t, motion: "hold" });
   });
   setKey(i + 1);
   say(`Camera holds ${stamp(k.t)} → ${stamp(t)}. Drag the new keyframe to hold longer`);
 };
 
 // The key on the playhead: on a cut both the shot's last key and the cut sit at that second, and the picture there is the cut's
-export const keyAt = (t: number) => keys.findLastIndex((k) => Math.abs(k.t - t) < SAME);
+export const keyAt = (t: number) => keyAtTime(keys, t, SAME);
 // The key the Camera and Speed tabs show: the one picked on the camera row, else the one on the playhead (-1: none)
 export const shownKey = (t: number) => {
   const k = get().camKey;
   return k !== null && keys[k] ? k : keyAt(t);
 };
-type View = { p: Point; l: Point; fov: number };
-// A new key at t with this framing, keeping the shot's own sway (wave, bob, roll) from the key before it
-const insertKey = (t: number, view: View) => {
-  const i = keys.findIndex((k) => k.t > t),
-    before = keys[(i < 0 ? keys.length : i) - 1];
+const vectorPoint = (v: { toArray(): number[] }) => v.toArray().map(r3) as [number, number, number];
+
+const viewFromFree = (): CameraView => {
+  const f = S.tools!.free;
+  return { p: vectorPoint(f.p), l: vectorPoint(f.l), fov: f.fov };
+};
+const withFraming = (key: CamKey, view: CameraView) => {
+  const tools = S.tools!;
+  return replaceCameraFraming(key, view, tools.camera.aspect, tools.moveCameraAnchor);
+};
+const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: CamKey) => {
+  const previous: Partial<CamKey> = before ?? {};
   const {
-    t: _,
-    p: __,
-    l: ___,
-    fov: ____,
-    mm: ____m,
-    cut: _____,
-    ease: ______,
-    ...sway
-  } = structuredClone(before ?? ({} as CamKey));
-  edit((ks) => {
-    ks.splice(i < 0 ? ks.length : i, 0, { t, ...view, ...sway, id: newRowId() });
-  });
-  setKey(i < 0 ? keys.length - 1 : i);
+    id: _id,
+    cut: _cut,
+    tailId: _tail,
+    ease: _ease,
+    motion: _motion,
+    __timing: _timing,
+    ...fields
+  } = structuredClone(previous);
+  const key: CamKey = { ...fields, ...view, id: newRowId(), t };
+  if (before) {
+    key.p = before.p;
+    key.l = before.l;
+  }
+  if (incoming && !incoming.cut) {
+    key.motion = incoming.motion;
+    key.ease = structuredClone(incoming.ease);
+  }
+  return withFraming(key, view) ? key : null;
+};
+const anchorUnavailable = () =>
+  say(
+    "This film cannot move the camera anchor. Choose a fixed point or provide a camera anchor editor.",
+  );
+
+const insertKey = (t: number, view: CameraView, free?: CameraView) => {
+  const next = keys.findIndex((k) => k.t > t);
+  const i = next < 0 ? keys.length : next;
+  const key = capturedKey(t, view, keys[i - 1], keys[i]);
+  if (!key || (free && !withFraming(key, free))) return anchorUnavailable();
+  edit((ks) => ks.splice(i, 0, key));
+  setKey(i);
   say(`Camera keyframe added at ${stamp(t)}. Ctrl+Z to undo`);
 };
-// The free camera's view (F) as a key at the playhead: it replaces the key on that moment, or goes in between. With `only`, that
-// key's framing is replaced, wherever the playhead is
 export const saveView = (only?: number) => {
-  const f = S.tools?.free;
-  if (!f?.on) {
+  if (!S.tools?.free.on) {
     say("Turn on Free camera (F) and frame the shot first");
     return;
   }
   const t = r3(S.t),
-    p = f.p.toArray().map(r3) as Point,
-    l = f.l.toArray().map(r3) as Point,
-    fov = Math.round(f.fov * 10) / 10;
-  const at = only ?? keyAt(t);
+    view = viewFromFree();
+  const at = only ?? selectedCameraKeyAt(keys, S.t, get().camKey, SAME);
   if (at >= 0) {
-    const anchored = !Array.isArray(keys[at].p) || !Array.isArray(keys[at].l);
+    const next = structuredClone(keys[at]);
+    if (!withFraming(next, view)) return anchorUnavailable();
     edit((ks) => {
-      delete ks[at].mm;
-      Object.assign(ks[at], { p, l, fov });
+      ks[at] = next;
     });
     setKey(at);
-    say(
-      `Keyframe at ${stamp(keys[at].t)} updated${anchored ? ". It followed an object before; now it's a fixed point" : ""}`,
-      5000,
-    );
-    return;
+    say(`Keyframe at ${stamp(keys[at].t)} updated`);
+  } else {
+    insertKey(t, drawnView(), view);
   }
-  insertKey(t, { p, l, fov });
 };
-// CapCut's ◇ on the Camera section: a key at the playhead holding the picture as it is now (the free camera's view when it is on)
 export const addKeyHere = () => {
   if (S.tools?.free.on) saveView();
-  else if (S.tools) insertKey(r3(S.t), drawnView());
+  else if (S.tools && keyAt(S.t) < 0) insertKey(r3(S.t), drawnView());
 };
-
 // ---------- A cut moved (a roll edit): the shot before ends sooner or later and the one after starts with it; nothing in the film
 // moves, only where the picture changes camera. The shot's start in shots.json moves with its cut key (one undo step for both),
 // and so does the last key of the shot before when it sits on the cut (its framing held up to the cut, a frame or less before)
-const tailOf = (i: number) =>
-  i > 1 && !keys[i - 1].cut && keys[i].t - keys[i - 1].t < SAME * 2 ? i - 1 : -1;
+const tailOf = (i: number) => cameraTailIndex(keys, i, SAME * 2);
 export const shotOfCut = (i: number) =>
   keys[i]?.cut ? SHOTS_OUT.findIndex((s) => Math.abs(s.t - keys[i].t) < SAME) : -1;
 export const rollable = (i: number) => get().shots && shotOfCut(i) > 0;
 export const rollRoom = (i: number): [number, number] => {
   const tail = tailOf(i),
     before = keys[(tail >= 0 ? tail : i) - 1];
-  return [before.t + SAME * 3, keys[i + 1] ? keys[i + 1].t - SAME : DURATION - SAME];
+  const margin = keys[i].tailId === false ? 0 : SAME * 3;
+  return [before.t + margin, keys[i + 1] ? keys[i + 1].t - SAME : DURATION - SAME];
 };
 type Apply<T> = (change: (d: T) => void) => void;
 const setHits = (row: ShotRow, hits: ShotHit[] | undefined) => {
@@ -347,19 +363,23 @@ export const previewRoll = (i: number, t: number) => rollWith(i, t, preview, sho
 // reverse: the cut, its tail and the shot go, and the camera glides from one shot's keys into the other's
 const TAIL = 0.001;
 // The film's own draw with the free camera off, for its camera alone: no overlays (picture/render.ts) on a frame nobody sees
-const drawnView = (): View => {
-  const f = S.tools!.free,
-    was = f.on;
-  f.on = false;
-  S.render!(S.t);
-  const v = {
-    p: S.tools!.camera.position.toArray().map(r3) as Point,
-    l: S.tools!.look.toArray().map(r3) as Point,
-    fov: Math.round(S.tools!.camera.fov * 10) / 10,
-  };
-  f.on = was;
-  S.dirty = true;
-  return v;
+const drawnView = (): CameraView => {
+  const tools = S.tools!;
+  const was = tools.free.on;
+  tools.free.on = false;
+  try {
+    S.render!(S.t);
+    return (
+      tools.cameraSample?.() ?? {
+        p: vectorPoint(tools.camera.position),
+        l: vectorPoint(tools.look),
+        fov: tools.camera.fov,
+      }
+    );
+  } finally {
+    tools.free.on = was;
+    S.dirty = true;
+  }
 };
 // The new half's name: "Hall (2)", and splitting "Hall (2)" again gives "Hall (3)", never "Hall (2) (2)" or a name taken
 const secondName = (name: string, shots: ShotRow[]) => {
@@ -377,6 +397,7 @@ export const splitShot = () => {
   const t = r3(S.t),
     s = SHOTS_OUT.findLastIndex((x) => x.t <= t + SAME);
   if (
+    s < 0 ||
     t < SAME * 3 ||
     t > DURATION - SAME * 3 ||
     keys.some((k) => k.cut && Math.abs(k.t - t) < SAME * 3) ||
@@ -385,38 +406,22 @@ export const splitShot = () => {
     say("A shot starts or ends here already. Move the playhead");
     return;
   }
-  const f = S.tools!.free,
-    here = drawnView();
-  const next = f.on
-    ? {
-        p: f.p.toArray().map(r3) as Point,
-        l: f.l.toArray().map(r3) as Point,
-        fov: Math.round(f.fov * 10) / 10,
-      }
-    : here;
-  const i = keys.findIndex((k) => k.t > t),
-    at = i < 0 ? keys.length : i,
-    before = keys[at - 1];
-  const anchored = !Array.isArray(before.p) || !Array.isArray(before.l);
-  const {
-    t: _,
-    p: __,
-    l: ___,
-    fov: ____,
-    mm: ____m,
-    cut: _____,
-    ease: ______,
-    ...sway
-  } = structuredClone(before);
+  const free = S.tools?.free.on ? viewFromFree() : undefined;
+  const here = drawnView();
+  const i = keys.findIndex((k) => k.t > t);
+  const at = i < 0 ? keys.length : i;
+  const before = keys[at - 1];
+  const reuseKey = !!before && Math.abs(before.t - t) < 1e-6;
+  const tail = reuseKey
+    ? null
+    : capturedKey(Math.max(before?.t ?? 0, r3(t - TAIL)), here, before, keys[at]);
+  const start = capturedKey(t, here, before);
+  if ((!reuseKey && !tail) || !start || (free && !withFraming(start, free)))
+    return anchorUnavailable();
+  start.cut = true;
+  start.tailId = tail?.id ?? false;
   together(() => {
-    edit((ks) => {
-      ks.splice(
-        at,
-        0,
-        { ...sway, id: newRowId(), t: r3(t - TAIL), ...here },
-        { ...sway, id: newRowId(), t, ...next, cut: true },
-      );
-    });
+    edit((ks) => ks.splice(at, 0, ...(tail ? [tail, start] : [start])));
     shotsDoc.edit((sh) => {
       const splitSource = r3(toSource(t));
       const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
@@ -431,9 +436,9 @@ export const splitShot = () => {
       });
     });
   });
-  setKey(at + 1);
+  setKey(at + (tail ? 1 : 0));
   say(
-    `Shot ${s} split at ${stamp(t)}.${f.on ? "" : " Frame the new shot: Free camera (F), then Use current view."}${anchored ? " Its new keys are fixed points: they don't follow an object." : ""}`,
+    `Shot ${s} split at ${stamp(t)}.${free ? "" : " Frame the new shot with Free camera (F)."}`,
     6000,
   );
 };

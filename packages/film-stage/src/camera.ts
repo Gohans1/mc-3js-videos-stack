@@ -1,15 +1,21 @@
 // @ts-nocheck
 // A keyed camera (a film's src/timeline/cam.json): keys {t, p, l, fov?, roll?, wave?, bob?, cut?, ease?}: position, look
-// point, lens and how much the head sways. Between cuts the keys are one centripetal Catmull-Rom curve, so the camera never
-// stops gliding; a key with cut: true starts a new curve (a hard cut). On top ride a slow wave (the "breathing" float the
+// point, lens and how much the head sways. A key with cut: true starts a new path. On top ride a slow wave (the "breathing" float the
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import { handheld as makeHandheld, type ShakeName, SHAKES } from "film-kit/handheld";
 import { fovOf, mmOf } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
+import { compileCameraPath, type ResolveCameraAnchor } from "./camera-path";
 
 export * from "./camera-meta";
+export {
+  CAMERA_MOTIONS,
+  resolveCameraPoint,
+  type CameraMotion,
+  type ResolveCameraAnchor,
+} from "./camera-path";
 export { fovOf, mmOf };
 export { SHAKES, type ShakeName };
 const curves = new WeakMap();
@@ -25,17 +31,12 @@ const segments = (keys) => {
     cur.push(k);
   });
   out.push(cur);
-  const built = out.map((ks) => {
-    const pts = (f) => ks.map((k) => new THREE.Vector3(...k[f]));
-    const one = ks.length === 1;
-    return {
-      t0: ks[0].t,
-      t1: ks[ks.length - 1].t,
-      ks,
-      p: one ? null : new THREE.CatmullRomCurve3(pts("p"), false, "centripetal"),
-      l: one ? null : new THREE.CatmullRomCurve3(pts("l"), false, "centripetal"),
-    };
-  });
+  const built = out.map((ks) => ({
+    t0: ks[0].t,
+    ks,
+    dynamic: ks.some((key) => !Array.isArray(key.p) || !Array.isArray(key.l)),
+    path: null,
+  }));
   curves.set(keys, built);
   return built;
 };
@@ -53,13 +54,18 @@ const spanIndex = (ks, t) => {
   }
   return lo;
 };
-const paramAt = (ks, t, idx = spanIndex(ks, t)) => {
+const timeFraction = (ks, t, i) =>
+  i < 0 || ks[i + 1].t <= ks[i].t
+    ? 1
+    : THREE.MathUtils.clamp((t - ks[i].t) / (ks[i + 1].t - ks[i].t), 0, 1);
+const progressAt = (ks, t, i) => {
+  if (i < 0) return 1;
   if (t <= ks[0].t) return 0;
-  if (idx < 0) return 1;
-  const a = ks[idx],
-    b = ks[idx + 1],
-    x = (t - a.t) / (b.t - a.t);
-  return (idx + easeOf(b.ease)(x)) / (ks.length - 1);
+  const a = ks[i],
+    b = ks[i + 1];
+  if (b.t <= a.t) return 1;
+  if (b.motion === "hold") return Number(t >= b.t);
+  return t >= b.t ? 1 : easeOf(b.ease)((t - a.t) / (b.t - a.t));
 };
 // Camera shake for impacts only: [{t, d, amp}] (amp in metres, roll in radians x 0.1). Decorrelated x/y/roll noise that
 // starts at full and decays to nothing over d; keep d <= ~0.6 s and match amp to the hit (a door kick 0.02, a blast 0.06)
@@ -99,7 +105,12 @@ const spanAt = (ks, t) => {
     if (t <= ks[i + 1].t) {
       const dt = ks[i + 1].t - ks[i].t;
       const x = dt > 1e-9 ? THREE.MathUtils.clamp((t - ks[i].t) / dt, 0, 1) : 1;
-      const u = ks[i + 1].ease !== undefined ? easeOf(ks[i + 1].ease)(x) : x * x * (3 - 2 * x);
+      const u =
+        ks[i + 1].motion === "hold"
+          ? Number(x === 1)
+          : ks[i + 1].ease !== undefined
+            ? easeOf(ks[i + 1].ease)(x)
+            : x * x * (3 - 2 * x);
       return { i, j: i + 1, u };
     }
   const last = ks.length - 1;
@@ -151,22 +162,31 @@ const carryAt = (ks, idx, aspect) => {
   let fov = 70,
     fstop = 0,
     focus: FocusTargetSpec | undefined,
-    hh: HandheldConfig | null = null;
+    mm: number | undefined,
+    hh: HandheldConfig[] = [];
   for (let m = 0; m <= idx; m++) {
     const k = ks[m];
-    if (k.mm != null) fov = fovOf(k.mm, aspect);
-    else if (k.fov != null) fov = k.fov;
+    if (k.mm != null) {
+      mm = k.mm;
+      fov = fovOf(mm, aspect);
+    } else if (k.fov != null) {
+      mm = undefined;
+      fov = k.fov;
+    }
     if (k.fstop != null) fstop = Math.max(0, k.fstop);
     if (k.focus !== undefined) focus = k.focus;
-    if (k.handheld !== undefined) hh = normHandheld(k.handheld);
+    if (k.handheld !== undefined) {
+      const values = Array.isArray(k.handheld?.mix) ? k.handheld.mix : [k.handheld];
+      hh = values.map(normHandheld).filter(Boolean);
+    }
   }
-  return { fov, fstop, focus, hh };
+  return { fov, mm, fstop, focus, hh };
 };
 
 const sampleHandheld = (cfg: HandheldConfig, scale: number, t: number) => {
   const amount = cfg.amount * scale;
   if (amount <= 1e-6) return null;
-  const key = `${cfg.kind}:${amount.toFixed(4)}:${cfg.move.toFixed(4)}:${cfg.speed.toFixed(4)}:${cfg.offset.toFixed(4)}`;
+  const key = [cfg.kind, amount, cfg.move, cfg.speed, cfg.offset].join(":");
   let sampler = shakeCache.get(key);
   if (!sampler) {
     if (shakeCache.size > 128) shakeCache.clear();
@@ -218,7 +238,29 @@ const applyShakify = (
   return roll;
 };
 
-export function cameraAt(t, keys, opts?: { aspect?: number }) {
+const blendHandheld = (from: HandheldConfig[], to: HandheldConfig[], u: number) => {
+  const pending = [...to];
+  const result = from.map((a) => {
+    const index = pending.findIndex(
+      (b) =>
+        a.kind === b.kind &&
+        Math.abs(a.speed - b.speed) < 1e-6 &&
+        Math.abs(a.offset - b.offset) < 1e-6,
+    );
+    if (index < 0) return { ...a, amount: a.amount * (1 - u) };
+    const [b] = pending.splice(index, 1);
+    return {
+      ...a,
+      amount: THREE.MathUtils.lerp(a.amount, b.amount, u),
+      move: Math.max(0, THREE.MathUtils.lerp(a.move, b.move, u)),
+    };
+  });
+  return [...result, ...pending.map((b) => ({ ...b, amount: b.amount * u }))].filter(
+    (shake) => shake.amount > 1e-6,
+  );
+};
+
+export function cameraAt(t, keys, opts?: { aspect?: number; resolveAnchor?: ResolveCameraAnchor }) {
   const aspect = opts?.aspect ?? 16 / 9;
   const segs = segments(keys);
   let s = segs[0];
@@ -233,10 +275,13 @@ export function cameraAt(t, keys, opts?: { aspect?: number }) {
     s = segs[lo];
   }
   const ks = s.ks;
+  const path = s.dynamic
+    ? compileCameraPath(ks, opts?.resolveAnchor)
+    : (s.path ??= compileCameraPath(ks));
   const idx = spanIndex(ks, t);
-  const u = paramAt(ks, t, idx);
-  const p = s.p ? s.p.getPoint(u) : new THREE.Vector3(...ks[0].p);
-  const l = s.l ? s.l.getPoint(u) : new THREE.Vector3(...ks[0].l);
+  const u = progressAt(ks, t, idx);
+  const { p, l } = path.pose(idx, u);
+  const distance = path.distanceAt(idx, timeFraction(ks, t, idx));
 
   const span = spanAt(ks, t);
   const c0 = carryAt(ks, span.i, aspect);
@@ -260,13 +305,17 @@ export function cameraAt(t, keys, opts?: { aspect?: number }) {
   const bob = lerpKey(ks, t, "bob", 0);
   const base = { p: p.clone(), l: l.clone(), fov, roll };
 
-  // walking speed from the curve, for the step rhythm
-  if (s.p) {
-    const u2 = paramAt(ks, t + 0.05);
-    s.p.getPoint(u2, tmp).sub(p);
-  } else tmp.set(0, 0, 0);
-  const speed = tmp.length() / 0.05;
-  const walked = t * Math.min(speed, 6) * 0.55; // Minecraft's walk distance, about two steps per block
+  let speed = 0;
+  if (idx >= 0 && t >= ks[idx].t && ks[idx + 1].motion !== "hold") {
+    const before = Math.max(t - 0.025, ks[idx].t);
+    const after = Math.min(t + 0.025, ks[idx + 1].t);
+    if (after > before) {
+      const a = path.distanceAt(idx, timeFraction(ks, before, idx));
+      const b = path.distanceAt(idx, timeFraction(ks, after, idx));
+      speed = (b - a) / (after - before);
+    }
+  }
+  const walked = distance * 0.55;
   const step = Math.sin(walked * Math.PI);
   const lift = Math.abs(Math.cos(walked * Math.PI));
   const amt = bob * Math.min(speed / 4.3, 1.4) * 0.05;
@@ -280,38 +329,47 @@ export function cameraAt(t, keys, opts?: { aspect?: number }) {
   l.y += wave * 0.08 * Math.sin(t * 0.71 + 1.3);
   roll += wave * 0.012 * Math.sin(t * 0.53) + step * amt * 0.06;
 
-  let handheld: ShakeName | undefined;
-  const h0 = c0.hh,
-    h1 = c1.hh;
-  if (
-    h0 &&
-    h1 &&
-    h0.kind === h1.kind &&
-    Math.abs(h0.speed - h1.speed) < 1e-6 &&
-    Math.abs(h0.offset - h1.offset) < 1e-6
-  ) {
-    const blended: HandheldConfig = {
-      kind: h0.kind,
-      amount: THREE.MathUtils.lerp(h0.amount, h1.amount, span.u),
-      move: THREE.MathUtils.lerp(h0.move, h1.move, span.u),
-      speed: span.u < 0.5 ? h0.speed : h1.speed,
-      offset: span.u < 0.5 ? h0.offset : h1.offset,
-    };
-    const sOut = sampleHandheld(blended, 1, t);
-    if (sOut) {
-      roll = applyShakify(p, l, roll, sOut);
-      handheld = blended.kind;
-    }
-  } else {
-    const s0 = h0 ? sampleHandheld(h0, 1 - span.u, t) : null;
-    const s1 = h1 ? sampleHandheld(h1, span.u, t) : null;
-    if (s0) roll = applyShakify(p, l, roll, s0);
-    if (s1) roll = applyShakify(p, l, roll, s1);
-    if (s1 && (!s0 || span.u >= 0.5)) handheld = h1!.kind;
-    else if (s0) handheld = h0!.kind;
+  const shakes = blendHandheld(c0.hh, c1.hh, span.u);
+  let strongest: HandheldConfig | undefined;
+  for (const shake of shakes) {
+    const offset = sampleHandheld(shake, 1, t);
+    if (offset) roll = applyShakify(p, l, roll, offset);
+    if (!strongest || shake.amount >= strongest.amount) strongest = shake;
   }
-
-  return { p, l, fov, roll, speed, mm, fstop, focus, handheld, base };
+  const sampleMm =
+    span.u <= 0 || c0.mm === c1.mm
+      ? c0.mm
+      : span.u >= 1
+        ? c1.mm
+        : c0.mm !== undefined && c1.mm !== undefined
+          ? mm
+          : undefined;
+  const sample = {
+    p: base.p.toArray(),
+    l: base.l.toArray(),
+    fov,
+    ...(sampleMm !== undefined && { mm: sampleMm }),
+    fstop,
+    focus,
+    roll: base.roll,
+    wave,
+    bob,
+    handheld: shakes.length > 1 ? { mix: shakes } : (shakes[0] ?? false),
+  };
+  return {
+    p,
+    l,
+    fov,
+    roll,
+    speed,
+    distance,
+    mm,
+    fstop,
+    focus,
+    handheld: strongest?.kind,
+    base,
+    sample,
+  };
 }
 
 const resolveSingleFocus = (
@@ -352,7 +410,7 @@ export function resolveFocusDistance(
     const distance =
       a.point && b.point
         ? Math.max(0.05, a.point.clone().lerp(b.point, blend.u).distanceTo(camPos))
-        : THREE.MathUtils.lerp(a.distance, b.distance, blend.u);
+        : Math.max(0.05, THREE.MathUtils.lerp(a.distance, b.distance, blend.u));
     return { distance, label: `${a.label}->${b.label}` };
   }
   const only = b ?? a;

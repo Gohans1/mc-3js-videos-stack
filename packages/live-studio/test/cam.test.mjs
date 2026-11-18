@@ -1,9 +1,19 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
+import { cameraAt } from "film-stage/camera";
+
+import {
+  cameraKeyNavigation,
+  cameraTailIndex,
+  copyCameraFields,
+  keyAtTime,
+  replaceCameraFraming,
+  selectedCameraKeyAt,
+} from "../app/camera/camera-edit.ts";
 import { mergeShotHits, repartitionAdjacentHits, splitShotHits } from "../app/camera/shot-hits.ts";
 import { formatOpticsAttributes } from "../app/timeline/cam-attributes.ts";
 import { CamTimeline, problems } from "../src/contract.ts";
@@ -152,4 +162,72 @@ test("formatOpticsAttributes renders handheld preset, kind, and off forms accura
     formatOpticsAttributes({ handheld: { kind: "HANDYCAM_RUN", amount: 1e-7 } }),
     "the film's lens, handheld off, no roll, the film's sway",
   );
+});
+
+test("camera key lookup prefers the exact tail and the exact cut over frame tolerance", () => {
+  const keys = [key(0), key(0.999), key(1, { cut: true })];
+  assert.equal(keyAtTime(keys, 0.999, 1 / 60), 1);
+  assert.equal(keyAtTime(keys, 1, 1 / 60), 2);
+});
+
+test("replacing framing retains a tracked position and the authored millimeter unit", () => {
+  const anchor = { target: "Steve.head", offset: [0, 0, 0] };
+  const source = key(2, { p: anchor, mm: 85, fstop: 2 });
+  replaceCameraFraming(source, { p: [1, 2, 3], l: [0, 1, 0], fov: 42 }, 16 / 9, (saved, pose) => ({
+    ...saved,
+    offset: pose,
+  }));
+  assert.deepEqual(source.p, { ...anchor, offset: [1, 2, 3] });
+  assert.equal(source.fov, undefined);
+  assert.ok(source.mm > 0);
+  assert.equal(source.fstop, 2);
+});
+
+test("pasting shake copies bob, clearing lens or DOF only clears that group's channels", () => {
+  const from = key(1, { wave: 0.2, bob: 0.8, handheld: false });
+  const to = key(2, { mm: 50, fstop: 2, focus: "Steve.head", wave: 1, bob: 0 });
+  copyCameraFields(from, to, ["shake"]);
+  assert.deepEqual(
+    to,
+    key(2, { mm: 50, fstop: 2, focus: "Steve.head", wave: 0.2, bob: 0.8, handheld: false }),
+  );
+  copyCameraFields(from, to, ["dof"]);
+  assert.equal(to.fstop, undefined);
+  assert.equal(to.focus, undefined);
+  assert.equal(to.mm, 50);
+});
+
+test("camera navigation steps through adjacent tail and cut without clustering their times", () => {
+  const keys = [key(0), key(2.999), key(3, { cut: true })];
+  assert.equal(cameraKeyNavigation(keys, 2.999, 1, 1 / 60).next, 2);
+  assert.equal(cameraKeyNavigation(keys, 3, 2, 1 / 60).prev, 1);
+});
+
+test("an anchor without an inverse blocks the whole camera reframe", () => {
+  const row = key(2, { p: { eye: [0, 0, 5] }, mm: 50 });
+  const before = structuredClone(row);
+  const updated = replaceCameraFraming(row, { p: [1, 1, 2], l: [0, 2, 0], fov: 42 }, 16 / 9);
+  assert.equal(updated, false);
+  assert.deepEqual(row, before);
+});
+
+test("a camera key sampled during anticipation serializes valid handheld settings", () => {
+  const rows = [
+    key(0, { handheld: { kind: "THE_CLOSEUP", move: 0 } }),
+    key(2, { handheld: { kind: "THE_CLOSEUP", move: 1 }, ease: "anticipate" }),
+  ];
+  const pose = cameraAt(0.24, rows).sample;
+  assert.deepEqual(problems(CamTimeline, [{ t: 0.24, ...pose }], "cam"), []);
+});
+
+test("a saved view targets the selected tail even when the cut shares its timestamp", () => {
+  const keys = [key(0), key(3, { fov: 28 }), key(3, { cut: true, fov: 45 })];
+  assert.equal(selectedCameraKeyAt(keys, 3 - 1e-6, 1, 1 / 60), 1);
+});
+
+test("merging a cut removes only its generated tail and keeps a key reused by Split", () => {
+  const keys = [key(0), key(1.5, { id: "outgoing" }), key(1.5, { cut: true, tailId: false })];
+  assert.equal(cameraTailIndex(keys, 2, 1 / 30), -1);
+  keys[2].tailId = "outgoing";
+  assert.equal(cameraTailIndex(keys, 2, 1 / 30), 1);
 });

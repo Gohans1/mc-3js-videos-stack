@@ -249,10 +249,50 @@ export async function buildScene(canvas, W, H, draft = false) {
     });
     return { effectiveFstop, focusM, fallbackFocus, renderedMm };
   };
-  let clocks;
+  const anchorObject = (anchor) => {
+    const name =
+      typeof anchor.target === "string"
+        ? anchor.target
+        : Array.isArray(anchor.eye)
+          ? "Steve.head"
+          : null;
+    return name ? findTarget({ scene, objects: sceneObjects, bones: steve.bones }, name) : null;
+  };
+  const resolveCameraAnchor = (anchor) => {
+    const object = anchorObject(anchor);
+    if (!object) return null;
+    const point = new THREE.Vector3().fromArray(anchor.offset ?? anchor.eye ?? [0, 0, 0]);
+    return anchor.space === "local"
+      ? object.localToWorld(point)
+      : point.add(object.getWorldPosition(new THREE.Vector3()));
+  };
+  const moveCameraAnchor = (anchor, point) => {
+    const object = anchorObject(anchor);
+    if (!object) return null;
+    const offset = new THREE.Vector3().fromArray(point);
+    if (anchor.space === "local") object.worldToLocal(offset);
+    else offset.sub(object.getWorldPosition(new THREE.Vector3()));
+    const field = Array.isArray(anchor.eye) && !anchor.target ? "eye" : "offset";
+    return { ...anchor, [field]: offset.toArray(), fallback: point };
+  };
+  const sampleTrack = (t) =>
+    cameraAt(t, EDIT.cam, { aspect: W / H, resolveAnchor: resolveCameraAnchor });
+  let clocks,
+    editTime = 0;
+  const cameraSample = () => {
+    const cam = sampleTrack(editTime);
+    const focus =
+      cam.focus && typeof cam.focus === "object" && "u" in cam.focus
+        ? resolveFocusDistance(cam.focus, cam.base.p, resolveFocusTarget).distance
+        : cam.focus;
+    return { ...cam.sample, focus };
+  };
   const frame = (t, view) => {
+    perform(t);
+    placed.draw(t);
+    scene.updateMatrixWorld();
     const cameraTime = view === undefined ? t : viewTime(SHOTS_OUT, DURATION, view, t);
-    const cam = cameraAt(cameraTime, EDIT.cam, { aspect: W / H });
+    const cam = sampleTrack(cameraTime);
     const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION, anims);
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
@@ -270,9 +310,6 @@ export async function buildScene(canvas, W, H, draft = false) {
     head.copy(camera.position);
     Object.assign(now, { cam });
 
-    perform(t);
-    placed.draw(t);
-    scene.updateMatrixWorld();
     const mood = moodAt(EDIT.steve.face, t);
     // lip sync: the takes with "by": "steve" in edit.json (bun run voice:lips); any mouth of the film's own reads the same cues
     const mouth = mouthAt(mouthCues(EDIT, "steve"), t);
@@ -336,6 +373,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   );
   const draw = Object.assign((t, nextClocks) => {
     clocks = nextClocks;
+    editTime = t;
     composite(t);
   }, composite);
   draw.velocity = true;
@@ -431,6 +469,8 @@ export async function buildScene(canvas, W, H, draft = false) {
     composer,
     renderer,
     optics: opticsTelemetry,
+    cameraSample,
+    moveCameraAnchor,
     placed,
     targets: [
       {
@@ -457,7 +497,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     prepare: (grades) => Promise.all([adjust.prepare(grades), layerAdjust.prepare(grades)]),
   };
   const initCam = EDIT.cam?.length
-    ? cameraAt(0, EDIT.cam, { aspect: W / H })
+    ? sampleTrack(0)
     : { p: camera.position, l: lookAt, fov: camera.fov };
   camera.position.copy(initCam.p);
   lookAt.copy(initCam.l);

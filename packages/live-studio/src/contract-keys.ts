@@ -60,6 +60,7 @@ export const CAM_KEYS = [
   "p",
   "l",
   "cut",
+  "tailId",
   "ease",
   "fov",
   "mm",
@@ -69,6 +70,7 @@ export const CAM_KEYS = [
   "wave",
   "roll",
   "bob",
+  "motion",
 ];
 export const SHOT_KEYS = ["id", "t", "name", "anim", "transition", "adjust", "hits"];
 export const SHOT_SLOT_KEYS = [

@@ -164,8 +164,8 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Đợt | Phạm vi | Trạng thái |
 | --- | --- | --- |
 | 1 | ID bền vững và hòa giải sửa tay cho keyframe và shot | Qua review và kiểm thử |
-| 2 | Lấy mẫu camera, neo, tách shot, Hold, dán thuộc tính và spline | Đang triển khai |
-| 3 | Đồng hồ camera khi Freeze và Speed | Chờ |
+| 2 | Lấy mẫu camera, neo, tách shot, Hold, dán thuộc tính và spline | Qua review và kiểm thử |
+| 3 | Đồng hồ camera khi Freeze và Speed | Đang triển khai |
 | 4 | CamPanel, lấy nét, chỉnh bố cục và nắn góc | Chờ |
 | 5 | Free Cam, đường bay 3D và kiểm tra xuyên tường | Chờ |
 | 6 | Timeline, easing, Graph Editor và thao tác keyframe | Chờ |
@@ -177,3 +177,10 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Nhận dạng dòng cũ | Giữ ID theo mốc và lịch sử đã biết. Khi thiếu căn cứ tách khóa cũ, giữ bảo vệ toàn file và dùng collab để xác nhận thay đổi có chủ đích. |
 | Trùng thời điểm | Giữ thứ tự key cạnh cut khi hòa giải, kể cả lúc khôi phục tail bị ghi đè. |
 | Ghi có chủ đích | AI xác nhận riêng từng trường bằng collab. Dòng do người dựng tạo vẫn được giữ khi bản JSON cũ bỏ mất dòng. |
+
+| Ghi chú đợt 2 | Chi tiết |
+| --- | --- |
+| Đường bay | Smooth dùng chiều dài cung theo từng đoạn. Hold giữ nguyên cho đến key kế tiếp, còn Orbit giữ hướng quanh điểm ngắm. |
+| Lưu góc | Lấy mẫu trước AnimPanel và giữ đơn vị mm cùng neo có thể giải được. Dán thuộc tính chia Framing, Lens, DOF, Shake và Speed. |
+| Studio | Kiểm tra Orbit, Hold 1s, Split, lưu Free Cam và nhóm Paste bằng Chrome 1920×1080 trên phim thử riêng. |
+| Split đúng mốc | Dùng lại key hiện có làm tail. Khi gộp shot, Studio giữ ID gốc. |

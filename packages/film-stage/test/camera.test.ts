@@ -227,3 +227,164 @@ test("coincident timestamps never produce NaN and handheld speed changes crossfa
   expect(atHalf.p.distanceTo(afterHalf.p)).toBeLessThan(0.02);
   expect(Math.abs(afterHalf.roll - atHalf.roll)).toBeLessThan(0.02);
 });
+
+test("camera anchors resolve for the current draw without caching actor poses across seeks", () => {
+  const keys = [
+    {
+      t: 0,
+      p: { target: "Steve.head", offset: [0, 0, 5] },
+      l: { target: "Steve.head" },
+      wave: 0,
+    },
+  ];
+  const at = (t: number) =>
+    cameraAt(t, keys, {
+      resolveAnchor: (point) =>
+        new THREE.Vector3(t, 1.6, 0).add(new THREE.Vector3().fromArray(point.offset ?? [0, 0, 0])),
+    }).base;
+  expect(at(3).p.toArray()).toEqual([3, 1.6, 5]);
+  expect(at(5).l.toArray()).toEqual([5, 1.6, 0]);
+  expect(at(3).p.toArray()).toEqual([3, 1.6, 5]);
+});
+
+test("hold and repeated camera positions never drift between their endpoints", () => {
+  const key = (t, x) => ({ t, p: [x, 0, 0], l: [x, 0, 4], wave: 0 });
+  const keys = [
+    key(0, -6),
+    key(1, 0),
+    key(2, 0),
+    { ...key(3, 6), motion: "hold", ease: [0.2, 2, 0.8, 2] },
+  ];
+  expect(cameraAt(1.5, keys).base.p.x).toBe(0);
+  expect(cameraAt(2.75, keys).base.p.x).toBe(0);
+  expect(cameraAt(3, keys).base.p.x).toBe(6);
+});
+
+test("arc-length camera timing stays monotone and still passes through each key", () => {
+  const key = (t, x, z) => ({ t, p: [x, 0, z], l: [0, 1, 4], wave: 0, bob: 1, ease: "linear" });
+  const keys = [key(0, 0, 0), key(1, 2, 0), key(4, 3, 4)];
+  const first = cameraAt(0.25, keys).distance;
+  const half = cameraAt(0.5, keys).distance;
+  const boundary = cameraAt(1, keys);
+  const decelerating = keys.map((k, i) => (i === 2 ? { ...k, ease: "out" } : k));
+  expect(half).toBeCloseTo(first * 2, 5);
+  expect(boundary.base.p.toArray()).toEqual([2, 0, 0]);
+  expect(cameraAt(3.9, decelerating).distance).toBeGreaterThan(cameraAt(3, decelerating).distance);
+  const earlier = cameraAt(2, decelerating).p.toArray();
+  cameraAt(3.8, decelerating);
+  expect(cameraAt(2, decelerating).p.toArray()).toEqual(earlier);
+});
+
+test("camera orbit turns their view around the pivot at constant radius", () => {
+  const keys = [
+    { t: 0, p: [4, 0, 0], l: [0, 0, 0], wave: 0 },
+    { t: 2, p: [0, 0, 4], l: [0, 0, 0], wave: 0, motion: "orbit", ease: "linear" },
+  ];
+  const pose = cameraAt(1, keys).base;
+  expect(pose.p.length()).toBeCloseTo(4, 6);
+  expect(pose.p.x).toBeCloseTo(Math.sqrt(8), 5);
+  expect(pose.p.z).toBeCloseTo(Math.sqrt(8), 5);
+});
+
+test("a sampled camera key keeps authored optics while excluding procedural movement", () => {
+  const keys = [
+    {
+      t: 0,
+      p: [0, 1, 5],
+      l: [0, 1, 0],
+      mm: 35,
+      fstop: 0,
+      focus: 2,
+      handheld: "THE_CLOSEUP",
+      roll: 0,
+      wave: 1,
+      bob: 0.2,
+    },
+    {
+      t: 2,
+      p: [1, 1, 5],
+      l: [0, 1, 0],
+      mm: 85,
+      fstop: 2,
+      focus: 6,
+      handheld: "HANDYCAM_RUN",
+      roll: 0.2,
+      wave: 0.5,
+      bob: 0.8,
+      ease: "linear",
+    },
+  ];
+  const frame = cameraAt(1, keys);
+  const keyframe = frame.sample;
+  expect(keyframe.p).toEqual(frame.base.p.toArray());
+  expect(keyframe.l).toEqual(frame.base.l.toArray());
+  expect(keyframe.mm).toBeCloseTo(frame.mm, 6);
+  expect(keyframe.fstop).toBeCloseTo(4, 6);
+  expect(keyframe.roll).toBeCloseTo(0.1, 6);
+  expect(keyframe.wave).toBeCloseTo(0.75, 6);
+  expect(keyframe.bob).toBeCloseTo(0.5, 6);
+  expect(keyframe.handheld.mix.map(({ kind, amount }) => [kind, amount])).toEqual([
+    ["THE_CLOSEUP", 0.5],
+    ["HANDYCAM_RUN", 0.5],
+  ]);
+});
+
+test("nearby handheld strengths produce independent poses regardless of cache order", () => {
+  const at = (amount: number) =>
+    cameraAt(1.34, [
+      {
+        t: 0,
+        p: [0, 0, 5],
+        l: [0, 0, 0],
+        wave: 0,
+        handheld: { kind: "THE_CLOSEUP", amount, move: 0.8275, speed: 1.43, offset: 0.331 },
+      },
+    ]).p.toArray();
+  const low = at(0.41121);
+  const high = at(0.41123);
+  expect(low).not.toEqual(high);
+  expect(at(0.41121)).toEqual(low);
+});
+
+test("orbit never crosses its pivot for antipodal camera keys on the depth axis", () => {
+  const keys = [
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0], wave: 0 },
+    { t: 2, p: [0, 0, -5], l: [0, 0, 0], motion: "orbit", ease: "linear", wave: 0 },
+  ];
+  const { p, l } = cameraAt(1, keys).base;
+  expect(p.distanceTo(l)).toBeCloseTo(5, 6);
+  expect(p.y).toBeCloseTo(0, 6);
+});
+
+test("a moving orbit aims at the pivot used by its position curve", () => {
+  const rows = [
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0], wave: 0 },
+    { t: 2, p: [20, 0, 0], l: [25, 0, 0], motion: "orbit", ease: "linear", wave: 0 },
+  ];
+  const { p, l } = cameraAt(1, rows).base;
+  expect(p.distanceTo(l)).toBeCloseTo(5, 5);
+});
+
+test("bob stays idle just before a held section ends", () => {
+  const key = (t, x, motion) => ({
+    t,
+    p: [x, 0, 5],
+    l: [0, 0, 0],
+    wave: 0,
+    bob: 1,
+    motion,
+    ease: "linear",
+  });
+  const frame = cameraAt(1.98, [key(0, 0), key(2, 0, "hold"), key(3, 5, "linear")]);
+  expect(frame.speed).toBe(0);
+  expect(frame.p.toArray()).toEqual(frame.base.p.toArray());
+});
+
+test("the authored Anticipate ease backs up along the camera path before moving forward", () => {
+  const key = (t, x, ease) => ({ t, p: [x, 0, 5], l: [0, 0, 0], wave: 0, ease });
+  const rows = [key(0, 0), key(1, 3), key(2, 6, "anticipate")];
+  const backward = cameraAt(1.12, rows);
+  expect(backward.base.p.x).toBeLessThan(3);
+  expect(backward.distance).toBeGreaterThan(cameraAt(1, rows).distance);
+  expect(cameraAt(2, rows).base.p.x).toBe(6);
+});

@@ -227,6 +227,8 @@ export const Tools = z.looseObject({
     .optional(),
   materials: z.array(z.tuple([three("isMaterial", "a THREE.Material"), z.string()])).optional(),
   optics: OpticsTelemetry.optional(),
+  cameraSample: fn.optional(),
+  moveCameraAnchor: fn.optional(),
   // mc-assets/placed.ts makePlaced: what the creator drops into the scene from the Objects library, in one of the film's keyFiles
   placed: z
     .looseObject({
@@ -599,13 +601,19 @@ const HandheldObj = HandheldShape.refine(
   (h: any) => typeof h.preset === "string" || typeof h.kind === "string",
   "handheld preset or kind is required",
 );
-const Handheld = z.union([z.literal(false), z.string().min(1), HandheldObj]);
+const Handheld = z.union([
+  z.literal(false),
+  z.string().min(1),
+  HandheldObj,
+  z.object({ mix: z.array(HandheldObj).min(1) }),
+]);
 const CamKey = z.looseObject({
   id: z.string().min(1).optional(),
   t: secs,
   p: point,
   l: point,
   cut: z.boolean().optional(),
+  tailId: z.union([z.literal(false), z.string().min(1)]).optional(),
   ease: Ease.optional(),
   fov: z.number().positive().optional(),
   mm: z.number().positive().optional(),
@@ -615,6 +623,7 @@ const CamKey = z.looseObject({
   wave: z.number().optional(),
   roll: z.number().optional(),
   bob: z.number().finite().optional(),
+  motion: z.enum(["smooth", "linear", "hold", "orbit"]).optional(),
 });
 export const FOCUS_KEYS = Object.keys(FocusTargetObj.shape);
 export const HANDHELD_KEYS = Object.keys(HandheldShape.shape);

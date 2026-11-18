@@ -51,8 +51,8 @@ const endShuttle = () => {
   S.el.audio.playbackRate = get().rate;
   if (get().status === shown) say("", 0);
 };
-export const seek = (x: number) => {
-  S.t = Math.max(0, Math.min(DURATION - 0.01, Math.round(x * FPS) / FPS)); // whole frames, so a time said out loud is a frame that exists
+export const seekExact = (x: number) => {
+  S.t = Math.max(0, Math.min(DURATION - 0.01, x));
   const audio = S.el.audio;
   if (audio.readyState > 0) audio.currentTime = S.t;
   if (shuttle < 0) {
@@ -62,6 +62,7 @@ export const seek = (x: number) => {
   syncClock();
   S.dirty = true;
 };
+export const seek = (x: number) => seekExact(Math.round(x * FPS) / FPS);
 export const setPlaying = (p: boolean) => {
   S.playing = p;
   set({ playing: p });

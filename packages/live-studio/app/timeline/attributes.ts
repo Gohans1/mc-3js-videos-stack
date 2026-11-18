@@ -16,6 +16,7 @@ import {
   type Slot,
 } from "../camera/anim";
 import { type CamKey, DEFAULT_EASE, keys as camKeys, movable, pasteKeyAttrs } from "../camera/cam";
+import type { CameraFieldGroup } from "../camera/camera-edit";
 import { layerItems, layerLocked, layersDoc } from "../camera/layers";
 import { together } from "../core/doc";
 import { easeTitle } from "../core/ease";
@@ -200,7 +201,10 @@ export const choices = (): Choice[] => {
     const k = copied.k,
       starts = t.is.filter((i) => !movable(i)).length;
     const list: Choice[] = [
-      { id: "lens", title: "Lens & optics", value: formatOpticsAttributes(k) },
+      { id: "framing", title: "Framing", value: "Position, target, roll and path" },
+      { id: "lens", title: "Lens", value: formatOpticsAttributes(k, "lens") },
+      { id: "dof", title: "Depth of field", value: formatOpticsAttributes(k, "dof") },
+      { id: "shake", title: "Camera shake", value: formatOpticsAttributes(k, "shake") },
     ];
     if (copied.speed)
       list.push({
@@ -208,7 +212,7 @@ export const choices = (): Choice[] => {
         title: "Speed",
         value: easeTitle(k.ease, DEFAULT_EASE),
         warn: starts
-          ? `${starts > 1 ? `${starts} of these start` : "One of these starts"} a shot: nothing eases into it, so it takes the lens only.`
+          ? `${starts > 1 ? `${starts} of these start` : "One of these starts"} a shot: nothing eases into it, so its easing is skipped.`
           : undefined,
       });
     return list;
@@ -248,7 +252,7 @@ export const pasteAttrs = (ids: string[]) => {
       for (const i of t.is) pasteAnims(i, a, ids as ("anim" | "combo")[]);
     });
   } else if (copied.kind === "cam" && t.kind === "cam")
-    pasteKeyAttrs(copied.k, t.is, ids as ("lens" | "speed")[]);
+    pasteKeyAttrs(copied.k, t.is, ids as CameraFieldGroup[]);
   if (!n) return;
   say(
     `Attributes pasted onto ${many(n, NOUN[t.kind])}${left ? `, ${left} on locked tracks left out` : ""}. Ctrl+Z to undo`,
