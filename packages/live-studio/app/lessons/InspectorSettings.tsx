@@ -358,7 +358,7 @@ export function InspectorSettings({
                       >
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent alignItemWithTrigger={false}>
                         <SelectGroup>
                           {choices.map((c) => (
                             <SelectItem key={c.value} value={c.value}>

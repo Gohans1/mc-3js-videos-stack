@@ -98,7 +98,8 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const [saving, setSaving] = useState(false);
   const [pinnedActionsHeight, setPinnedActionsHeight] = useState(0);
   const controlsRef = useRef<HTMLDivElement>(null),
-    actionsRef = useRef<HTMLDivElement>(null);
+    actionsRef = useRef<HTMLDivElement>(null),
+    lessonFilesSummaryRef = useRef<HTMLElement>(null);
   const running = useRef(false),
     generation = useRef(0);
   const runFailureToast = useRef<string | null>(null),
@@ -333,7 +334,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
           role="region"
           tabIndex={0}
           aria-label="Inspector controls"
-          className="focus-visible:ring-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) scroll-pb-5 [scrollbar-width:thin] overflow-y-auto overscroll-contain outline-none focus-visible:ring-2"
+          className="focus-visible:outline-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) scroll-pb-5 [scrollbar-width:thin] overflow-y-auto overscroll-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid"
           style={{ "--inspector-actions-offset": `${pinnedActionsHeight}px` } as CSSProperties}
         >
           <div
@@ -424,7 +425,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                         <SelectTrigger id="inspect-note" size="readable" className="w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent alignItemWithTrigger={false}>
                           <SelectGroup>
                             {noteOptions.map((n) => (
                               <SelectItem key={n.value} value={n.value}>
@@ -522,7 +523,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     <SelectTrigger id="inspect-scope" size="readable" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent alignItemWithTrigger={false}>
                       <SelectGroup>
                         {scopes.map((s) => (
                           <SelectItem key={s.value} value={s.value}>
@@ -537,7 +538,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                   View extracted lessons
                 </Button>
                 <details>
-                  <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2">
+                  <summary
+                    ref={lessonFilesSummaryRef}
+                    className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2"
+                  >
                     Lesson files · {includedCount} of {scopedFiles.length} included
                   </summary>
                   {scopedFiles.length > 0 && (
@@ -575,7 +579,8 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     <Button
                       size="md"
                       variant="outline"
-                      onClick={() => {
+                      onClick={(event) => {
+                        if (event.detail === 0) lessonFilesSummaryRef.current?.focus();
                         useInspectorSession.setState({
                           excluded: excluded.filter(
                             (key) => !scopedExcluded.some((file) => file.key === key),

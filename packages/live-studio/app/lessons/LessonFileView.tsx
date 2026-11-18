@@ -7,11 +7,21 @@ import {
   GitCompare,
   ListTree,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Empty,
   EmptyContent,
@@ -19,13 +29,13 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import { useLitAny } from "../activity/activity";
 import { SaveStatus, Segmented } from "../components/inspector";
 import { lessonChanges } from "./changes";
-import { ConfirmDeleteButton, SCOPE_LABEL, TEXT } from "./lesson-ui";
+import { SCOPE_LABEL, TEXT } from "./lesson-ui";
 import { LessonChanges } from "./LessonChanges";
 import { LessonMarkdownView } from "./LessonMarkdownView";
 import {
@@ -121,6 +131,7 @@ export function LessonFileView({
   const view: LessonViewMode = storedView ?? (pickKey === key ? "edit" : preferredView);
   const effectiveView: LessonViewMode = view === "changes" && !news ? preferredView : view;
   const [contentsOpen, setContentsOpen] = useState(false);
+  const contentsTriggerRef = useRef<HTMLButtonElement>(null);
   const [activeLine, setActiveLine] = useState(1);
 
   const area = useRef<HTMLTextAreaElement>(null),
@@ -187,8 +198,13 @@ export function LessonFileView({
     });
   };
 
-  const flyToHeading = (line: number, smooth: boolean) => {
+  const closeContents = (keyboard: boolean) => {
     setContentsOpen(false);
+    if (keyboard) contentsTriggerRef.current?.focus({ preventScroll: true });
+  };
+
+  const flyToHeading = (line: number, smooth: boolean) => {
+    closeContents(!smooth);
     setActiveLine(line);
     if (effectiveView === "changes") {
       switchView(preferredView, line, false);
@@ -199,7 +215,11 @@ export function LessonFileView({
   };
 
   const flyEdge = (toBottom: boolean, smooth: boolean) => {
-    setContentsOpen(false);
+    closeContents(!smooth);
+    if (effectiveView === "changes") {
+      switchView(preferredView, toBottom ? lines.length : 1, false);
+      return;
+    }
     const scroller = activeScroller();
     if (!scroller) return;
     flyStop.current?.();
@@ -314,6 +334,7 @@ export function LessonFileView({
           <PopoverTrigger
             render={
               <Button
+                ref={contentsTriggerRef}
                 variant="ghost"
                 size="icon-lg"
                 title="Contents"
@@ -330,9 +351,7 @@ export function LessonFileView({
             className="max-h-[60vh] w-72 overflow-y-auto overscroll-contain"
           >
             <div className="border-border/80 mb-1.5 flex items-center justify-between gap-1 border-b pb-1.5">
-              <span className="text-muted-foreground text-ui px-1 font-medium tabular-nums">
-                Contents ({heads.length})
-              </span>
+              <PopoverTitle className="ms-1">Contents ({heads.length})</PopoverTitle>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="xs" onClick={(e) => flyEdge(false, e.detail > 0)}>
                   <ArrowUp aria-hidden data-icon="inline-start" />
@@ -385,11 +404,32 @@ export function LessonFileView({
             </nav>
           </PopoverContent>
         </Popover>
-        <ConfirmDeleteButton
-          label={`${displayPath} (${SCOPE_LABEL[scope]})`}
-          header
-          onConfirm={onDelete}
-        />
+        <Dialog>
+          <DialogTrigger
+            render={
+              <Button
+                variant="remove"
+                size="icon-lg"
+                title={`Delete ${displayPath} (${SCOPE_LABEL[scope]})`}
+                aria-label={`Delete ${displayPath} (${SCOPE_LABEL[scope]})`}
+              />
+            }
+          >
+            <Trash2 aria-hidden />
+          </DialogTrigger>
+          <DialogContent showCloseButton={false}>
+            <DialogTitle>Delete lesson?</DialogTitle>
+            <DialogDescription>
+              Delete {displayPath} ({SCOPE_LABEL[scope]}). The deletion notification offers Undo.
+            </DialogDescription>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <DialogClose render={<Button variant="destructive" />} onClick={onDelete}>
+                Delete lesson
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       {edit?.failed && (
         <div className="flex flex-none flex-wrap items-center gap-2 px-3 pb-2">

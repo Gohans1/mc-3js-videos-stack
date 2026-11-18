@@ -194,7 +194,7 @@ export function InspectorPreview({
               >
                 <SelectValue placeholder="More views" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent alignItemWithTrigger={false}>
                 <SelectGroup>
                   {details.map((d) => (
                     <SelectItem key={d.value} value={d.value}>
@@ -266,7 +266,7 @@ export function InspectorPreview({
         aria-busy={requestPending && !error}
         data-inspector-result
         ref={scroller}
-        className="focus-visible:ring-ring min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-3 outline-none focus-visible:ring-2"
+        className="focus-visible:outline-ring min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-3 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid"
       >
         {awaitingNote ? (
           <p className="text-muted-foreground text-sm/relaxed">

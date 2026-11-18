@@ -185,14 +185,14 @@ describe("deck-motion intersection clip bounds and SSR guards", () => {
         prevTrail: trailA,
         nextTrail: trailB,
         animate: true,
-      })();
+      })?.cancel();
       animateDeckTransition({
         deck: null,
         snapshot: null,
         prevTrail: trailA,
         nextTrail: trailB,
         animate: false,
-      })();
+      })?.cancel();
     });
   });
 

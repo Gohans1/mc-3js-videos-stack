@@ -4,7 +4,7 @@ import { classifyLessonTrailTransition, type LessonTrail } from "./tree";
 
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 const EXIT_EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
-const ENTER_MS = 200;
+const ENTER_MS = 125;
 const EXIT_MS = 175;
 const REDUCED_MS = 125;
 
@@ -13,6 +13,7 @@ interface PanelSnapshot {
   rect: DOMRect;
   node: HTMLElement;
   background: string;
+  opacity: string;
   scrollTops: number[];
 }
 
@@ -20,6 +21,11 @@ export interface DeckSnapshot {
   deckRect: DOMRect;
   cols: PanelSnapshot[];
   content: PanelSnapshot | null;
+}
+
+export interface DeckMotion {
+  cancel: () => void;
+  isRunning: () => boolean;
 }
 
 export interface ClipRectLike {
@@ -70,16 +76,20 @@ const scrollers = (node: HTMLElement) => [
   ...node.querySelectorAll<HTMLElement>("[data-arrow-scroll], .scroll-fade"),
 ];
 
-const capturePanel = (node: HTMLElement, key: string): PanelSnapshot => ({
-  key,
-  node,
-  rect: node.getBoundingClientRect(),
-  background: getComputedStyle(node).backgroundColor,
-  scrollTops: scrollers(node).map((el) => el.scrollTop),
-});
+const capturePanel = (node: HTMLElement, key: string): PanelSnapshot => {
+  const style = getComputedStyle(node);
+  return {
+    key,
+    node,
+    rect: node.getBoundingClientRect(),
+    background: style.backgroundColor,
+    opacity: style.opacity,
+    scrollTops: scrollers(node).map((el) => el.scrollTop),
+  };
+};
 
 const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLElement => {
-  const { node, rect, background } = panel;
+  const { node, rect, background, opacity } = panel;
   const ghost = node.cloneNode(true) as HTMLElement;
   for (const drop of ghost.querySelectorAll("textarea, [role='dialog']")) drop.remove();
   ghost.style.position = "absolute";
@@ -91,6 +101,7 @@ const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLEle
   ghost.style.flex = "none";
   ghost.style.zIndex = String(z);
   ghost.style.backgroundColor = background;
+  ghost.style.opacity = opacity;
   ghost.style.pointerEvents = "none";
   return ghost;
 };
@@ -109,23 +120,28 @@ export function captureDeckSnapshot(deck: HTMLElement | null): DeckSnapshot | nu
 /** Runs clipped fold-in ghosts and interruptible fold-out / FLIP transitions on the Lessons deck. */
 export function animateDeckTransition({
   deck,
+  overlayHost,
   snapshot,
   prevTrail,
   nextTrail,
   animate,
+  interrupted = false,
 }: {
   deck: HTMLElement | null;
+  overlayHost?: HTMLElement | null;
   snapshot: DeckSnapshot | null;
   prevTrail: LessonTrail;
   nextTrail: LessonTrail;
   animate: boolean;
-}): () => void {
-  if (!deck || !animate) return () => {};
+  interrupted?: boolean;
+}): DeckMotion | null {
+  if (!deck || !animate) return null;
   const transition = classifyLessonTrailTransition(prevTrail, nextTrail);
-  if (transition.kind === "none") return () => {};
+  if (transition.kind === "none" || (interrupted && transition.kind === "open-right")) return null;
 
   const reduced = prefersReduced();
-  const cancels: (() => void)[] = [];
+  const animations: Animation[] = [];
+  const cleanup: (() => void)[] = [];
   const cancelAnims = (el: Element | null | undefined) => {
     if (!el || typeof el.getAnimations !== "function") return;
     for (const a of el.getAnimations()) a.cancel();
@@ -147,19 +163,20 @@ export function animateDeckTransition({
     const clip = computeDeckClipBounds(snapshot.deckRect, deck.getBoundingClientRect());
     const clipRect = clip as DOMRect;
     const visibleOut = selectVisibleOutgoing(outgoing, clip);
-    if (visibleOut.length > 0 && typeof document !== "undefined") {
+    if (visibleOut.length > 0 && overlayHost) {
+      const host = overlayHost.getBoundingClientRect();
       const overlay = document.createElement("div");
       overlay.inert = true;
       overlay.setAttribute("aria-hidden", "true");
-      overlay.style.position = "fixed";
-      overlay.style.left = `${clip.left}px`;
-      overlay.style.top = `${clip.top}px`;
+      overlay.style.position = "absolute";
+      overlay.style.left = `${clip.left - host.left}px`;
+      overlay.style.top = `${clip.top - host.top}px`;
       overlay.style.width = `${clip.width}px`;
       overlay.style.height = `${clip.height}px`;
       overlay.style.overflow = "hidden";
       overlay.style.pointerEvents = "none";
       overlay.style.zIndex = "45";
-      document.body.append(overlay);
+      overlayHost.append(overlay);
 
       let remaining = visibleOut.length;
       const removeOverlay = () => overlay.remove();
@@ -174,14 +191,14 @@ export function animateDeckTransition({
           Math.max(56, clip.right - item.rect.left + 24),
         );
         const anim = reduced
-          ? ghost.animate([{ opacity: 1 }, { opacity: 0 }], {
+          ? ghost.animate([{ opacity: item.opacity }, { opacity: 0 }], {
               duration: REDUCED_MS,
               easing: "ease-out",
               fill: "forwards",
             })
           : ghost.animate(
               [
-                { transform: "translate3d(0, 0, 0) scale(1)", opacity: 1 },
+                { transform: "translate3d(0, 0, 0) scale(1)", opacity: item.opacity },
                 { transform: `translate3d(${flyX}px, 0, 0) scale(0.985)`, opacity: 0 },
               ],
               {
@@ -191,6 +208,7 @@ export function animateDeckTransition({
                 fill: "forwards",
               },
             );
+        animations.push(anim);
         const done = () => {
           ghost.remove();
           if (--remaining <= 0) removeOverlay();
@@ -198,7 +216,7 @@ export function animateDeckTransition({
         anim.finished.then(done, done);
       });
       const fallback = setTimeout(removeOverlay, EXIT_MS + 120);
-      cancels.push(() => {
+      cleanup.push(() => {
         clearTimeout(fallback);
         removeOverlay();
       });
@@ -221,7 +239,7 @@ export function animateDeckTransition({
           [{ transform: `translate3d(${dx}px, 0, 0)` }, { transform: "translate3d(0, 0, 0)" }],
           { duration: ENTER_MS, easing: ENTER_EASE },
         );
-        cancels.push(() => anim.cancel());
+        animations.push(anim);
       }
     }
   }
@@ -233,20 +251,18 @@ export function animateDeckTransition({
     for (const el of entering) {
       cancelAnims(el);
       if (typeof el.animate !== "function") continue;
-      const anim = reduced
-        ? el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REDUCED_MS, easing: "ease-out" })
-        : el.animate(
-            [
-              { transform: "translate3d(26%, 0, 0) scale(0.985)", opacity: 0.15 },
-              { transform: "translate3d(0, 0, 0) scale(1)", opacity: 1 },
-            ],
-            { duration: ENTER_MS, easing: ENTER_EASE },
-          );
-      cancels.push(() => anim.cancel());
+      animations.push(
+        el.animate([{ opacity: 0.82 }, { opacity: 1 }], { duration: ENTER_MS, easing: ENTER_EASE }),
+      );
     }
   }
 
-  return () => {
-    for (const fn of cancels) fn();
+  return {
+    isRunning: () =>
+      animations.some((animation) => animation.pending || animation.playState === "running"),
+    cancel: () => {
+      for (const animation of animations) animation.cancel();
+      for (const remove of cleanup) remove();
+    },
   };
 }

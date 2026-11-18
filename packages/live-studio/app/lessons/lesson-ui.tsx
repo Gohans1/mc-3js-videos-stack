@@ -62,15 +62,13 @@ export function attachArmedDeleteDismiss(
   };
 }
 
-/** Two-click armed delete control shared between Miller column rows and file headers. */
+/** Two-click armed delete for rows in the Lessons deck. */
 export function ConfirmDeleteButton({
   label,
-  header = false,
   revealOnRowHover = false,
   onConfirm,
 }: {
   label: string;
-  header?: boolean;
   revealOnRowHover?: boolean;
   onConfirm: () => void;
 }) {
@@ -97,7 +95,7 @@ export function ConfirmDeleteButton({
       <Button
         type="button"
         variant={armed ? "destructive" : "remove"}
-        size={armed ? (header ? "lg" : "sm") : header ? "icon-lg" : "icon-sm"}
+        size={armed ? "sm" : "icon-sm"}
         title={armed ? `Confirm delete ${label}` : `Delete ${label}`}
         aria-label={armed ? `Confirm delete ${label}` : `Delete ${label}`}
         onClick={() => {

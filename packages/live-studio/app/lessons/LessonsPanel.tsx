@@ -20,7 +20,12 @@ import { Segmented } from "../components/inspector";
 import { TabStage } from "../components/Motion";
 import { isDesktopViewport } from "../components/splitter-layout";
 import { AiInspector } from "./AiInspector";
-import { animateDeckTransition, captureDeckSnapshot, type DeckSnapshot } from "./deck-motion";
+import {
+  animateDeckTransition,
+  captureDeckSnapshot,
+  type DeckMotion,
+  type DeckSnapshot,
+} from "./deck-motion";
 import { downloadLessonDrafts, removeLessonWithUndo } from "./lesson-ui";
 import { LessonColumnView } from "./LessonColumn";
 import { LessonFileView } from "./LessonFileView";
@@ -141,6 +146,7 @@ function LessonDeckPanel({
 
   const hostRef = useRef<HTMLDivElement>(null);
   const deckScrollRef = useRef<HTMLDivElement>(null);
+  const motionLayerRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const formTriggerRef = useRef<HTMLElement>(null);
   const pendingMotionRef = useRef<{
@@ -148,7 +154,7 @@ function LessonDeckPanel({
     prevTrail: LessonTrail;
     animate: boolean;
   } | null>(null);
-  const stopMotionRef = useRef<(() => void) | null>(null);
+  const motionRef = useRef<DeckMotion | null>(null);
   const didAnimatedAlignRef = useRef(false);
 
   const [containerWidth, setContainerWidth] = useState(720);
@@ -158,6 +164,7 @@ function LessonDeckPanel({
   const [namingDepth, setNamingDepth] = useState(0);
   const [newScope, setNewScope] = useState<LessonScope>("film");
   const [submitted, setSubmitted] = useState(false);
+  const isLockedWidth = isDesktop && typeof lockWidthPx === "number" && lockWidthPx > 0;
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -171,9 +178,9 @@ function LessonDeckPanel({
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [isLockedWidth]);
 
-  useEffect(() => () => stopMotionRef.current?.(), []);
+  useEffect(() => () => motionRef.current?.cancel(), []);
 
   useEffect(() => {
     if (!aiNotice) return;
@@ -271,7 +278,6 @@ function LessonDeckPanel({
       : null
     : trail.contentKey;
 
-  const isLockedWidth = isDesktop && typeof lockWidthPx === "number" && lockWidthPx > 0;
   const effectiveContainerWidth = isLockedWidth ? lockWidthPx : containerWidth;
 
   const layout = useMemo(
@@ -288,14 +294,25 @@ function LessonDeckPanel({
 
   useLayoutEffect(() => {
     const pending = pendingMotionRef.current;
+    const deck = deckScrollRef.current;
+    if (
+      active &&
+      pending &&
+      deck?.clientWidth &&
+      !isLockedWidth &&
+      deck.clientWidth !== containerWidth
+    ) {
+      setContainerWidth(deck.clientWidth);
+      return;
+    }
     pendingMotionRef.current = null;
     if (!pending && active) return;
-    stopMotionRef.current?.();
-    stopMotionRef.current = null;
-    if (!active || !pending?.animate || isSearching || layout.mode !== "desktop-stack") return;
+    const interrupted = motionRef.current?.isRunning();
+    motionRef.current?.cancel();
+    motionRef.current = null;
+    if (!active || !pending?.animate || isSearching || layout.mode !== "desktop-stack" || !deck)
+      return;
 
-    const deck = deckScrollRef.current;
-    if (!deck) return;
     const hasHiddenColumns = [...deck.querySelectorAll("[data-lessons-col]")].some(
       (column) => column.getClientRects().length === 0,
     );
@@ -303,14 +320,16 @@ function LessonDeckPanel({
     const target = Math.max(0, deck.scrollWidth - deck.clientWidth);
     if (Math.abs(deck.scrollLeft - target) >= 2) deck.scrollLeft = target;
     didAnimatedAlignRef.current = true;
-    stopMotionRef.current = animateDeckTransition({
+    motionRef.current = animateDeckTransition({
       deck,
+      overlayHost: motionLayerRef.current,
       snapshot: pending.snapshot,
       prevTrail: pending.prevTrail,
       nextTrail: trail,
       animate: true,
+      interrupted,
     });
-  });
+  }, [active, containerWidth, isLockedWidth, isSearching, layout.mode, trail]);
 
   // Auto-scroll horizontal Miller deck cleanly when trail changes without an active FLIP/WAAPI transition
   useEffect(() => {
@@ -613,16 +632,27 @@ function LessonDeckPanel({
         isLockedWidth && (dock === "end" ? "justify-end" : "justify-start"),
       )}
     >
-      {isLockedWidth ? (
-        <div className="flex min-h-0 w-(--deck-lock-w) flex-none">{deckItems}</div>
-      ) : (
-        deckItems
-      )}
+      <div
+        className={cn(
+          "flex min-h-0",
+          isLockedWidth ? "w-(--deck-lock-w) flex-none" : "min-w-0 flex-1",
+        )}
+      >
+        {deckItems}
+      </div>
     </div>
   );
 
   return (
-    <div ref={hostRef} className="@container/lesson-deck flex min-h-0 min-w-0 flex-1 flex-col">
+    <div
+      ref={hostRef}
+      className="@container/lesson-deck relative flex min-h-0 min-w-0 flex-1 flex-col"
+    >
+      <div
+        ref={motionLayerRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-40 overflow-hidden"
+      />
       {isDesktop ? (
         deckBody
       ) : (
