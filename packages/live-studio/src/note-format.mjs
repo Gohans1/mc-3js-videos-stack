@@ -14,19 +14,20 @@ export const noteLessonFormat = ({
 }) => {
   const hasProjectLessons = Boolean(projectDir && resolve(projectDir) !== resolve(dir));
   const globalPath = relative(root, dir).replaceAll("\\", "/");
-  const learnPrompt = () => {
+  const learnPrompt = (noteId = "<note-id>") => {
     const globalTopics = topics?.all ?? lessonTopics(dir);
     const filmTopics = topics?.film ?? (hasProjectLessons ? lessonTopics(projectDir) : []);
     const filmTarget = hasProjectLessons
       ? `this film's src, beside what it rules, or in lessons/<topic>.md (nested subfolders ok, letters/digits/-/_ only; ${filmTopics.length ? `this film's topics now: ${filmTopics.join(", ")}; ` : ""}same frontmatter/heading format)`
       : "this film's src, beside what it rules";
-    const standard = `keep it as a rule that outlives this chat: in code where you can (a default, or a check that fails); else, for every film, in ${globalPath}/<topic>.md (nested subfolders ok, letters/digits/-/_ only; ${globalTopics.length ? `topics now: ${globalTopics.join(", ")}; ` : ""}a rule joins its topic's file, a new file only for a new topic; write it any way, but Jev finds it for later notes by its path, frontmatter and headings only, never the words under them, so write those with care: a "when:" frontmatter line naming the notes the file is for, each rule a heading that says it, the details under it); a this-film rule in ${filmTarget}; then`;
-    return fillTemplate(config.learnTemplate, {
+    const standard = `keep it as a rule that outlives this chat: in code where you can (a default, or a check that fails); else, for every film, in ${globalPath}/<topic>.md (nested subfolders ok, letters/digits/-/_ only; ${globalTopics.length ? `topics now: ${globalTopics.join(", ")}; ` : ""}a rule joins its topic's file, a new file only for a new topic; to help Jev match it in headings mode, use a descriptive path, a "when:" frontmatter line naming the relevant notes, and a heading that states each rule with the details below); a this-film rule in ${filmTarget}; then`;
+    const instruction = fillTemplate(config.learnTemplate, {
       default: standard,
       globalPath,
       globalTopics: globalTopics.join(", "),
       filmTopics: filmTopics.join(", "),
     });
+    return `${instruction} bun run note learned ${noteId} "the rule, where"`;
   };
   const lessonLines = (l) =>
     !l

@@ -506,7 +506,7 @@ export function LessonFileView({
             Search match · line {initialLine}
           </span>
         )}
-        <span className="text-muted-foreground text-ui shrink-0 whitespace-nowrap tabular-nums">
+        <span className="text-muted-foreground text-lesson-meta shrink-0 whitespace-nowrap tabular-nums">
           {effectiveView === "read"
             ? `${heads.length} ${heads.length === 1 ? "section" : "sections"}`
             : effectiveView === "edit"

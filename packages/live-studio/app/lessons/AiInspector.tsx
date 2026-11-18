@@ -55,7 +55,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init).catch((cause) => {
     throw new Error("Could not reach Studio. Check the connection and try again.", { cause });
   });
-  const body = await response.json();
+  const body = await response.json().catch(() => null);
+  if (body === null)
+    throw new Error("Studio could not complete the request. Check the connection and try again.");
   if (!response.ok)
     throw new Error(
       typeof body.error === "string"
@@ -442,7 +444,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                         <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                           <SelectGroup>
                             {noteOptions.map((n) => (
-                              <SelectItem key={n.value} value={n.value}>
+                              <SelectItem key={n.value} value={n.value} size="readable">
                                 {n.label}
                               </SelectItem>
                             ))}
@@ -547,7 +549,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                       <SelectGroup>
                         {scopes.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
+                          <SelectItem key={s.value} value={s.value} size="readable">
                             {s.label}
                           </SelectItem>
                         ))}

@@ -615,7 +615,7 @@ export function LessonColumnRow({
             </Badge>
           </span>
           {!compact && (
-            <span className="text-label text-ui/[1.4] mt-0.5 block truncate tabular-nums">
+            <span className="text-label text-lesson-meta/[1.4] mt-0.5 block truncate tabular-nums">
               {heads.length} {heads.length === 1 ? "section" : "sections"}
               {rules > 0 && ` · ${rules} ${rules === 1 ? "rule" : "rules"}`}
             </span>
@@ -625,7 +625,7 @@ export function LessonColumnRow({
           )}
           {entry.isDraft && <span className="text-warn-text mt-0.5 block text-xs">Draft</span>}
           {matchMeta?.snippet && (
-            <span className="text-primary-text text-ui/[1.45] mt-0.5 block wrap-anywhere tabular-nums">
+            <span className="text-primary-text text-lesson-meta/[1.45] mt-0.5 block wrap-anywhere tabular-nums">
               L{matchMeta.matchLine}: {matchMeta.snippet}
             </span>
           )}

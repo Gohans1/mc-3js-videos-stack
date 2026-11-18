@@ -202,7 +202,7 @@ export function InspectorPreview({
               <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                 <SelectGroup>
                   {details.map((d) => (
-                    <SelectItem key={d.value} value={d.value}>
+                    <SelectItem key={d.value} value={d.value} size="readable">
                       {d.label}
                     </SelectItem>
                   ))}

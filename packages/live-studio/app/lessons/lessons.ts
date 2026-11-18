@@ -178,12 +178,7 @@ const savedAtSeq = new Map<string, number>();
 
 export const dismissAiNotice = () => set({ aiNotice: null });
 
-const adoptExternalVersion = (
-  key: string,
-  tag: string | null,
-  text: string | null,
-  notify = true,
-) => {
+const adoptExternalVersion = (key: string, tag: string | null, text: string | null) => {
   clearTimer(key);
   const { scope, path } = parseLessonKey(key);
   const edits = get().edits;
@@ -204,18 +199,14 @@ const adoptExternalVersion = (
       folder: nextOpen
         ? folderOfKey(nextOpen)
         : clampFolder(nextFiles, nextEdits, s.scopeFilter, s.folder),
-      ...(notify
-        ? {
-            aiNotice: {
-              id: ++noticeSeq,
-              key,
-              scope,
-              path,
-              removed,
-              drafts: draft ? [{ path, text: draft.text }] : undefined,
-            },
-          }
-        : {}),
+      aiNotice: {
+        id: ++noticeSeq,
+        key,
+        scope,
+        path,
+        removed,
+        drafts: draft ? [{ path, text: draft.text }] : undefined,
+      },
     };
   });
 };
@@ -497,7 +488,7 @@ export const deleteLesson = async (
     if (r.status === 409) {
       const tag = typeof body.tag === "string" ? body.tag : null;
       const text = typeof body.text === "string" ? body.text : null;
-      adoptExternalVersion(key, tag, text, false);
+      adoptExternalVersion(key, tag, text);
       if (tag !== null && text !== null) openLesson(key);
       return { removed: false, conflict: true };
     }

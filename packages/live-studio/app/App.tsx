@@ -233,6 +233,7 @@ export function App() {
                 min={() => LIB_MIN}
                 max={() => bounds.libMax}
                 set={lessonsInLibrary ? setLessonsW : setLibW}
+                resizeOnRelease={lessonsInLibrary}
                 className="pointer-events-auto -right-[7px]"
               />
             </div>

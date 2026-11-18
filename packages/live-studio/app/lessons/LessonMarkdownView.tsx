@@ -1,5 +1,5 @@
 import { Check, Pencil } from "lucide-react";
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,12 +8,12 @@ import { cn } from "@/lib/utils";
 import { type InlineToken, type LessonBlock, parseInlines, parseLessonBlocks } from "./markdown";
 
 const HEADING_STYLE: Record<number, string> = {
-  1: "text-2xl/[1.4] font-semibold tracking-[-0.015em] mt-6 first:mt-0 pb-2 border-b border-border/50",
-  2: "text-xl/[1.4] font-semibold tracking-[-0.01em] mt-5 first:mt-0",
-  3: "text-lg/[1.4] font-semibold mt-4 first:mt-0",
-  4: "text-base/[1.4] font-semibold mt-3.5 first:mt-0",
-  5: "text-base/[1.4] font-medium mt-3 first:mt-0",
-  6: "text-label text-base/[1.4] font-medium tracking-[0.05em] mt-2.5 first:mt-0",
+  1: "text-2xl/[1.3] font-semibold tracking-[-0.015em] mt-6 first:mt-0 pb-2 border-b border-border/50",
+  2: "text-xl/[1.3] font-semibold tracking-[-0.01em] mt-5 first:mt-0",
+  3: "text-lg/[1.3] font-semibold mt-4 first:mt-0",
+  4: "text-base/[1.3] font-semibold mt-3.5 first:mt-0",
+  5: "text-base/[1.3] font-medium mt-3 first:mt-0",
+  6: "text-label text-base/[1.3] font-medium tracking-[0.05em] mt-2.5 first:mt-0",
 };
 
 function RenderInlines({ tokens }: { tokens: readonly InlineToken[] }) {
@@ -77,7 +77,10 @@ function HeadingBlock({
   const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   return (
     <div className={cn("text-lesson-heading flex items-start gap-2", cls)}>
-      <Tag data-line={block.line} className="min-w-0 flex-1 text-balance wrap-anywhere">
+      <Tag
+        data-line={block.line}
+        className="data-[multiline]:leading-lesson-heading-wrapped min-w-0 flex-1 text-balance wrap-anywhere"
+      >
         <RenderInlines tokens={block.inlines} />
       </Tag>
       {onJumpEdit && (
@@ -103,6 +106,26 @@ export function LessonMarkdownView({
   onJumpEdit?: (line: number) => void;
 }) {
   const blocks = useMemo(() => parseLessonBlocks(text), [text]);
+  const articleRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const article = articleRef.current;
+    if (!article) return;
+    const headings = Array.from(
+      article.querySelectorAll<HTMLHeadingElement>("h1, h2, h3, h4, h5, h6"),
+    );
+    if (!headings.length) return;
+    const updateLeading = () => {
+      const wrapped = headings.map((heading) => {
+        const lineHeight = Number.parseFloat(getComputedStyle(heading).lineHeight);
+        return Math.round(heading.offsetHeight / lineHeight) >= 3;
+      });
+      headings.forEach((heading, i) => heading.toggleAttribute("data-multiline", wrapped[i]));
+    };
+    updateLeading();
+    const observer = new ResizeObserver(updateLeading);
+    observer.observe(article);
+    return () => observer.disconnect();
+  }, [blocks]);
   if (!blocks.length) {
     return (
       <div className="font-md text-muted-foreground mx-auto w-full max-w-[33rem] py-4 text-base/[1.6]">
@@ -111,7 +134,10 @@ export function LessonMarkdownView({
     );
   }
   return (
-    <article className="font-md text-foreground mx-auto flex w-full max-w-[33rem] flex-col gap-3.5 text-base/[1.6]">
+    <article
+      ref={articleRef}
+      className="font-md text-foreground mx-auto flex w-full max-w-[33rem] flex-col gap-3.5 text-base/[1.6]"
+    >
       {blocks.map((b) => {
         if (b.type === "heading")
           return <HeadingBlock key={b.line} block={b} onJumpEdit={onJumpEdit} />;

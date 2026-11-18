@@ -238,7 +238,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
     fields: [
       {
         key: "learnTemplate",
-        label: "Learn instruction",
+        label: "Remember prompt",
         help: "{default} keeps the standard instruction. Also accepts {globalPath}, {filmTopics}, {globalTopics}.",
         multiline: true,
       },
@@ -367,7 +367,7 @@ export function InspectorSettings({
                       <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                         <SelectGroup>
                           {choices.map((c) => (
-                            <SelectItem key={c.value} value={c.value}>
+                            <SelectItem key={c.value} value={c.value} size="readable">
                               {c.label}
                             </SelectItem>
                           ))}

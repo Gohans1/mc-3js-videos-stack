@@ -223,6 +223,6 @@ export async function inspectLessons(
     output: format.lessonLines(selection).join("\n"),
     noteOutput: noteDetailFormat(formatOptions)(detailNote, false, selection).join("\n"),
     noteInput: detailNote,
-    learnPrompt: format.learnPrompt(),
+    learnPrompt: format.learnPrompt(input.note.id),
   };
 }

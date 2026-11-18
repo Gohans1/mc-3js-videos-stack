@@ -84,12 +84,11 @@ export async function removeLessonWithUndo(key: string, onBeforeRemove?: () => v
   const { scope, path } = parseLessonKey(key);
   const res = await deleteLesson(key, onBeforeRemove);
   if (!res.removed) {
+    if (res.conflict) return;
     toast.add({
-      title: res.conflict ? "Kept lesson with AI changes" : "Could not delete lesson",
-      description: res.conflict
-        ? "The latest version is open. Review it before deleting again."
-        : "Check the Studio connection and try deleting again.",
-      type: res.conflict ? "info" : "error",
+      title: "Could not delete lesson",
+      description: "Check the Studio connection and try deleting again.",
+      type: "error",
     });
     return;
   }

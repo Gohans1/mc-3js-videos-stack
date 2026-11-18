@@ -545,9 +545,10 @@ test("deleteLesson 409 does not resurrect an edit committed while DELETE was in 
   assert.equal(res.removed, false);
   assert.equal(res.conflict, true);
   assert.equal(lessons.getState().edits["all:walk.md"], undefined);
+  assert.equal(lessons.getState().aiNotice?.drafts, undefined);
 });
 
-test("deleteLesson 409 adopts AI's version automatically and clears pending stale edit", async () => {
+test("deleteLesson 409 adopts the disk version and saves the rejected draft for download", async () => {
   lessons.setState((s) => ({
     ...s,
     files: [{ key: "all:walk.md", scope: "all", path: "walk.md", tag: "t1", text: "# Walk\n" }],
@@ -564,6 +565,7 @@ test("deleteLesson 409 adopts AI's version automatically and clears pending stal
   assert.equal(lessons.getState().edits["all:walk.md"], undefined);
   assert.equal(lessons.getState().files.find((f) => f.key === "all:walk.md")?.text, "# AI edit\n");
   assert.equal(lessons.getState().seen["all:walk.md"]?.text, "# Walk\n");
+  assert.deepEqual(lessons.getState().aiNotice?.drafts, [{ path: "walk.md", text: "# Old\n" }]);
 });
 
 const seedDualScopeCameraLessons = async () => {
