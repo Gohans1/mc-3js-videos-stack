@@ -228,14 +228,14 @@ function Options() {
 }
 
 const KEYS: [ReactNode, ReactNode][] = [
-  ["Click the picture", "pick an object or a title there; a click beside them picks nothing"],
+  ["Right-click the picture", "pick an object or title there; right-click empty space to clear the selection"],
   [
     "Drag the picture",
     "the free camera comes on from the view you see and turns with the drag (Shift+drag: orbit); F leaves it",
   ],
   [
-    "Right-click the picture",
-    "pin a note there: the Draw tools open above the pin, or just type or talk. On a phone, a tap pins it",
+    "Click the picture",
+    "pin a note there, then type, talk, or pick a Draw tool. On a phone, tap to pin",
   ],
   [
     "Right-drag the picture",
@@ -462,7 +462,7 @@ const KEYS: [ReactNode, ReactNode][] = [
   [
     <Kbd key="k">F</Kbd>,
     <>
-      free camera: click to pick an object, right-click to pin a note, drag to look, scroll to move
+      free camera: click to pin a note, right-click to pick an object, drag to look, scroll to move
       in, right-drag to pan, Shift+drag to orbit, <Kbd>-</Kbd>
       <Kbd>=</Kbd> lens there. Flies like Minecraft: hold <Kbd>W</Kbd>
       <Kbd>A</Kbd>

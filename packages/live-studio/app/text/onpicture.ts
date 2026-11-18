@@ -1,5 +1,5 @@
-// Text and shapes on the picture, as in CapCut's player: the picked ones are outlined where the film draws them, and a press on
-// one drags it there (a mouse press on any one picks it first). The boxes come from the film's own drawer
+// Text and shapes on the picture, as in CapCut's player: the picked ones are outlined where the film draws them, and dragging
+// a title picks and moves it. The boxes come from the film's own drawer
 // (film-stage/titles.ts through draw.tools.titles), so what is outlined is what the final video shows. A drag snaps the item's
 // anchor to the frame's middle lines (Shift: no snap) and is one undo step
 import { EDIT } from "film/edit";
@@ -101,9 +101,12 @@ export const textAt = (x: number, y: number) =>
     return hitContext.isPointInPath(path, x, y);
   })?.i ?? -1;
 
-// A press on the picture: true when it took it (any item under the mouse; on a phone, whose tap pins a note, a picked one)
-export const textPress = (e: PointerEvent, at: readonly [number, number]) => {
-  if (e.button !== 0 || !get().text) return false;
+export const startTextDrag = (
+  e: PointerEvent,
+  firstMove: PointerEvent,
+  at: readonly [number, number],
+) => {
+  if (!get().text) return false;
   const i = textAt(...at);
   if (i < 0 || !(get().textPicks.includes(i) || e.pointerType === "mouse")) return false;
   if (!get().textPicks.includes(i)) pickText([i]);
@@ -156,5 +159,6 @@ export const textPress = (e: PointerEvent, at: readonly [number, number]) => {
   canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("pointercancel", end);
+  move(firstMove);
   return true;
 };

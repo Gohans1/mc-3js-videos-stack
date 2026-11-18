@@ -2,7 +2,7 @@
 export type ViewportGesture<E = unknown> =
   | { kind: "idle" }
   | { kind: "tap_press"; id: number; x: number; y: number; moved: boolean }
-  | { kind: "wake_press"; id: number; x: number; y: number; orbit: boolean }
+  | { kind: "wake_press"; id: number; x: number; y: number; orbit: boolean; event?: E }
   | { kind: "right_press"; id: number; x: number; y: number; event: E }
   | {
       kind: "cam_drag";
@@ -69,6 +69,7 @@ export function stepViewport<E>(
               x: event.x,
               y: event.y,
               orbit: event.shiftKey,
+              event: event.raw,
             },
             dropSketch: false,
           };

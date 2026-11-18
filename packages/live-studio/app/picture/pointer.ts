@@ -1,7 +1,5 @@
-// The picture's size, and what the mouse and keys do on it, as in a 3D editor's viewport: a click picks an object (or a title,
-// text/onpicture.ts), the right button pins a note and a right drag draws one (notes/ink.ts sketch); a tap on a phone, which has
-// no right button, pins the note. Dragging and the flying keys move the free camera, and a left drag on the film's own view turns
-// the free camera on from that view. On a phone (PhoneApp) the picture is for notes only: no title is picked, no drag flies.
+// Preview input: a click or tap pins a note, a right-click picks an object or title, and a right drag draws a note.
+// A left drag moves a title or wakes Free Camera from the film view. On a phone the picture is for notes only.
 import { PHONE } from "../core/device";
 import { S } from "../core/state";
 import { get } from "../core/store";
@@ -9,7 +7,8 @@ import { sketch } from "../notes/ink";
 import { openNote } from "../notes/notes";
 import { gizmoBusy, hover, pickAt, selectTarget } from "../objects/placed";
 import { setPlaying } from "../playback/transport";
-import { textPress } from "../text/onpicture";
+import { startTextDrag, textAt } from "../text/onpicture";
+import { pickText } from "../text/text";
 import { frameSize } from "./frame";
 import { flight, flyCam, moveCam, setFree, turnAbout } from "./freecam";
 import { IDLE_VIEWPORT_GESTURE, stepViewport, type ViewportGesture } from "./gesture";
@@ -56,14 +55,10 @@ export const attachPicture = () => {
       raw: e,
     });
     if (next.gesture === prev) return;
-    if (gizmoBusy()) {
+    if (e.button === 0 && gizmoBusy()) {
       gesture = IDLE_VIEWPORT_GESTURE;
       return;
     } // the gizmo's handle under the pointer takes this drag
-    if (!PHONE && !S.tools?.free.on && textPress(e, frac(e))) {
-      gesture = IDLE_VIEWPORT_GESTURE;
-      return;
-    } // a title on the picture: picked and dragged
     gesture = next.gesture;
     if (next.capture) canvas.setPointerCapture(e.pointerId);
   });
@@ -88,7 +83,12 @@ export const attachPicture = () => {
       sketch.move(e);
       return;
     }
-    if (step.wokeFree && gesture.kind === "cam_drag" && "x" in prev) {
+    if (step.wokeFree && gesture.kind === "cam_drag" && prev.kind === "wake_press") {
+      if (prev.event && startTextDrag(prev.event, e, frac(prev.event))) {
+        gesture = IDLE_VIEWPORT_GESTURE;
+        hover(null);
+        return;
+      }
       setFree(true, true);
       canvas.setPointerCapture(gesture.id);
       hover(null);
@@ -142,7 +142,10 @@ export const attachPicture = () => {
           : null;
     if (!origin) return;
     const at = tappedAt(origin[0], origin[1], e);
-    if (at) pinNote(...at);
+    if (!at) return;
+    const title = S.tools?.free.on ? -1 : textAt(...at);
+    if (title >= 0) pickText([title]);
+    else selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
   });
   addEventListener("pointerup", (e) => {
     const res = stepViewport(gesture, {
@@ -218,7 +221,6 @@ export const attachPicture = () => {
     gesture = IDLE_VIEWPORT_GESTURE;
     const at = tappedAt(x, y, e);
     if (!at) return;
-    if (e.pointerType === "mouse" && !PHONE) selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
-    else pinNote(...at);
+    pinNote(...at);
   });
 };
