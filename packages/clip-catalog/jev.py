@@ -27,6 +27,7 @@ ROUTES = [("OpenCode Zen free", "https://opencode.ai/zen/v1/systemone", "jev-1.1
           ("OpenRouter (paid)", "https://openrouter.ai/api/v1/systemone", "typesafe/jev-1.14", "OPENROUTER_API_KEY", "openrouter.env")]
 SPEND_CAP = 0.05  # USD per run on a paid route: a run past it stops, as a runaway loop would
 NO_REQUEST_EXIT = 78
+CHARGE_THRESHOLD_EXIT = 79
 
 
 # Each call is its own process (jev.ts spawns one per question), so when a route's quota is back is kept on disk:
@@ -101,8 +102,10 @@ class Jev:
                         cap = self.options.get("spendCap", SPEND_CAP)
                         self.trace.append({"phase": "response", "route": name, "request": {"model": model, "state": state, "questions": questions}, "answers": res["answers"], "usage": res.get("usage", {}), "cost": res.get("usage", {}).get("cost")})
                         if self.spent > cap:
-                            sys.exit(f"Jev stopped after a reported charge of ${self.spent:.4f} exceeded the ${cap:g} threshold. "
-                                     "Review the provider and charge threshold in Provider & billing before running again.")
+                            print(f"Jev stopped after a reported charge of ${self.spent:.4f} exceeded the ${cap:g} threshold. "
+                                  "Review the provider and charge threshold in Provider & billing before running again.",
+                                  file=sys.stderr)
+                            sys.exit(CHARGE_THRESHOLD_EXIT)
                         self.used = name
                     return res["answers"]
                 except urllib.error.HTTPError as e:

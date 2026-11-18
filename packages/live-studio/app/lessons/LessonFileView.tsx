@@ -232,10 +232,17 @@ export function LessonFileView({
   const closeContents = (keyboard: boolean) => {
     setContentsOpen(false);
     if (keyboard) contentsTriggerRef.current?.focus({ preventScroll: true });
+    else
+      requestAnimationFrame(() => {
+        contentsTriggerRef.current
+          ?.closest<HTMLElement>("[data-lesson-content]")
+          ?.focus({ preventScroll: true });
+      });
   };
 
   const flyToHeading = (line: number, smooth: boolean) => {
-    setContentsOpen(false);
+    if (smooth) closeContents(false);
+    else setContentsOpen(false);
     setActiveLine(line);
     if (effectiveView === "changes") {
       switchView(preferredView, line, false);

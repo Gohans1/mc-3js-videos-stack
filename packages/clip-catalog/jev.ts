@@ -5,8 +5,17 @@ import { fileURLToPath } from "node:url";
 
 const JEV = fileURLToPath(new URL("./jev.py", import.meta.url));
 const NO_REQUEST_EXIT = 78;
+const CHARGE_THRESHOLD_EXIT = 79;
 
-export class JevNotStartedError extends Error {}
+export class JevRunError extends Error {
+  constructor(
+    message: string,
+    readonly outcome: "not-started" | "charge-reported",
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
 
 // What to ask of a list: the state Jev reads, the question that picks the best item, what makes one item fit or not, and
 // an item as Jev reads it
@@ -66,11 +75,13 @@ const jevAsk = (state: unknown, questions: Record<string, unknown>, options: Jev
       clearTimeout(timer);
       fail(
         (e as NodeJS.ErrnoException).code === "ENOENT"
-          ? new JevNotStartedError(
+          ? new JevRunError(
               "Python was not found. Install Python or add it to PATH, then restart Studio or your terminal.",
+              "not-started",
             )
-          : new JevNotStartedError(
+          : new JevRunError(
               "Studio could not start Python. Check your Python installation and try again.",
+              "not-started",
               { cause: e },
             ),
       );
@@ -83,9 +94,10 @@ const jevAsk = (state: unknown, questions: Record<string, unknown>, options: Jev
         const message =
           err.trim().split("\n").at(-1)?.trim() ||
           "Jev stopped before returning a result. Try again.";
-        return fail(
-          code === NO_REQUEST_EXIT ? new JevNotStartedError(message) : new Error(message),
-        );
+        if (code === NO_REQUEST_EXIT) return fail(new JevRunError(message, "not-started"));
+        if (code === CHARGE_THRESHOLD_EXIT)
+          return fail(new JevRunError(message, "charge-reported"));
+        return fail(new Error(message));
       }
       if (said.length) console.error(said.join("\n"));
       try {

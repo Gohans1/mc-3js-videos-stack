@@ -522,7 +522,7 @@ export function LessonColumnRow({
 }) {
   if (entry.kind === "dir") {
     return (
-      <li data-ai-lit={entry.isLit || undefined}>
+      <li tabIndex={-1} data-ai-lit={entry.isLit || undefined}>
         <button
           type="button"
           data-lesson-row={entry.key}
@@ -587,6 +587,7 @@ export function LessonColumnRow({
 
   return (
     <li
+      tabIndex={-1}
       data-ai-lit={entry.isLit || undefined}
       className={cn(
         "group/row flex w-full items-center transition-colors",

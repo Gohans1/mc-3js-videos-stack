@@ -155,7 +155,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
       {
         key: "spendCap",
         label: "Charge threshold per request (USD)",
-        help: "Jev checks each charge after billing and discards responses over this amount. A run can bill several requests.",
+        help: "A charge over this amount ends the run without returning matches. Charges already incurred still apply. One run can make several requests.",
       },
     ],
   },

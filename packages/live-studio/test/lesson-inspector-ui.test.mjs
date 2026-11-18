@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 
 import { createServer } from "vite";
 
+import { JevRunError } from "../../clip-catalog/jev.ts";
 import { inspectLessons, inspectorInfo } from "../src/lesson-inspector.mjs";
 import { filmPlugin } from "../src/vite_film.mjs";
 
@@ -106,7 +107,7 @@ beforeAll(async () => {
                 dir: join(root, "lessons"),
                 judge: async (_words, pool) => {
                   paidCalls++;
-                  if (judgeFailure) throw new Error(judgeFailure);
+                  if (judgeFailure) throw judgeFailure;
                   return [[1, pool[0], 0.9]];
                 },
               };
@@ -121,8 +122,9 @@ beforeAll(async () => {
                   res.end(JSON.stringify(await inspectLessons(JSON.parse(body), options)));
                 }
               } catch (e) {
-                res.statusCode = 400;
-                res.end(JSON.stringify({ error: e.message }));
+                const outcome = e instanceof JevRunError ? e.outcome : undefined;
+                res.statusCode = outcome === "not-started" ? 424 : 400;
+                res.end(JSON.stringify({ error: e.message, outcome }));
               }
               return;
             }
@@ -536,7 +538,7 @@ test("a failed manual run stays visible until an explicit retry and a successful
   await waitFor(
     "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: Provider retry')",
   );
-  judgeFailure = "Provider unavailable. Try Run Jev again.";
+  judgeFailure = new Error("Provider unavailable. Try Run Jev again.");
   try {
     await view.evaluate("document.querySelector('[role=switch]').click()");
     await clickButton("Run Jev");
@@ -559,12 +561,23 @@ test("a failed manual run stays visible until an explicit retry and a successful
       "Turn on Jev calls to retry.",
     );
     await view.evaluate("document.querySelector('[role=switch]').click()");
+    judgeFailure = new JevRunError(
+      "Jev stopped after a reported charge of $0.0600.",
+      "charge-reported",
+    );
+    await clickButton("Retry Jev");
+    await waitFor(
+      "document.querySelector('[data-inspector-controls]').textContent.includes('reported charge')",
+    );
+    expect(
+      await view.evaluate("document.querySelector('[data-inspector-controls]').textContent"),
+    ).not.toContain("The provider may still charge");
     judgeFailure = "";
     await clickButton("Retry Jev");
     await waitFor("document.body.textContent.includes('Live result')");
     await view.evaluate("new Promise(r=>setTimeout(r,900))");
     expect(await view.evaluate("document.body.textContent.includes('Live result')")).toBe(true);
-    expect(paidCalls).toBe(callsBefore + 2);
+    expect(paidCalls).toBe(callsBefore + 3);
   } finally {
     judgeFailure = "";
   }
@@ -806,7 +819,7 @@ test.each([
       expect(state.visible, JSON.stringify(state)).toBe(true);
       await view.press("Tab");
       state = await focused();
-      expect(state.target).toBe("Search lessons in");
+      expect(state.target).toBe("Lesson scope");
       expect(state.visible, JSON.stringify(state)).toBe(true);
       await view.evaluate(`(()=>{
       for(const text of ['Advanced settings','Read lesson files'])

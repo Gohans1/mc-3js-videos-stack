@@ -64,7 +64,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
         : response.status >= 500
           ? "Studio could not complete the request. Try again."
           : "Studio rejected the request. Check your inputs and try again.",
-      { cause: response.status },
+      { cause: body.outcome === "charge-reported" ? body.outcome : response.status },
     );
   return body as T;
 }
@@ -290,7 +290,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     } catch (e) {
       const failure = e as Error;
       const message =
-        usesFreeModel || failure.cause === 424
+        usesFreeModel || failure.cause === 424 || failure.cause === "charge-reported"
           ? failure.message
           : `${failure.message} The provider may still charge for this attempt.`;
       if (currentBody.current === snapshot) setRunFailure({ key: snapshot, message });
@@ -562,7 +562,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 </div>
                 <Field>
                   <FieldLabel variant="row" htmlFor="inspect-scope">
-                    Search lessons in
+                    Lesson scope
                   </FieldLabel>
                   <Select
                     value={config.scopeFilter}

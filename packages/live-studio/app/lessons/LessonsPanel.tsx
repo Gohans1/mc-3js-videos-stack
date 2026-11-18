@@ -429,7 +429,7 @@ function LessonDeckPanel({
         ? "Enter a lesson name after the slash."
         : "Enter a lesson name."
       : !LESSON_NAME.test(trimmed)
-        ? "Use A–Z, numbers, hyphens or underscores in each part. Separate folders with one slash, as in craft/camera."
+        ? "Use letters (A–Z or a–z), numbers, hyphens, or underscores in each part. Separate folders with one slash, as in craft/camera."
         : !existingLesson && lessonPath(trimmed).length > LESSON_PATH_MAX
           ? `Shorten the path to ${LESSON_PATH_MAX} characters or fewer, including .md.`
           : null;
@@ -456,7 +456,7 @@ function LessonDeckPanel({
     });
   };
 
-  const focusLastColumn = (returnKey?: string) => {
+  const focusLastColumn = (returnKey?: string, fromPointer = false) => {
     requestAnimationFrame(() => {
       const columns = hostRef.current?.querySelectorAll<HTMLElement>("[data-lessons-col]");
       const column = columns?.[columns.length - 1];
@@ -467,18 +467,19 @@ function LessonDeckPanel({
         rows.find((row) => row.getAttribute("aria-current") === "true") ??
         rows[0] ??
         column.querySelector<HTMLElement>("header button");
-      target?.focus();
+      const destination = fromPointer ? (target?.closest("li") ?? column) : target;
+      destination?.focus({ preventScroll: fromPointer });
     });
   };
 
   const navigateFolder = (parts: readonly string[], animate: boolean) => {
     triggerTrailChange(animate, () => openLessonFolder([...parts]));
-    if (!animate) focusLastColumn();
+    focusLastColumn(undefined, animate);
   };
 
   const closeLesson = (animate: boolean) => {
     triggerTrailChange(animate, () => openLesson(null));
-    if (!animate && activeOpen) focusLastColumn(`file:${activeOpen}`);
+    if (activeOpen) focusLastColumn(`file:${activeOpen}`, animate);
   };
 
   const handleOpenFile = (key: string, matchLine: number | null, animate = true) => {
@@ -486,10 +487,11 @@ function LessonDeckPanel({
       setJumpTarget(matchLine ? { path: key, line: matchLine } : null);
       openLesson(key);
     });
-    if (!animate && !matchLine)
-      requestAnimationFrame(() =>
-        hostRef.current?.querySelector<HTMLElement>("[data-lesson-back]")?.focus(),
-      );
+    if (!matchLine)
+      requestAnimationFrame(() => {
+        const selector = animate ? "[data-lesson-content]" : "[data-lesson-back]";
+        hostRef.current?.querySelector<HTMLElement>(selector)?.focus({ preventScroll: animate });
+      });
   };
 
   const setSearchQuery = (next: string) => {
@@ -632,6 +634,7 @@ function LessonDeckPanel({
       {activeOpen && (
         <div
           data-lesson-content={activeOpen}
+          tabIndex={-1}
           style={
             layout.showAncestors
               ? ({
@@ -711,7 +714,11 @@ function LessonDeckPanel({
           className="flex min-h-0 flex-1 flex-col"
         >
           {layout.mode === "compact-file" && activeOpen ? (
-            <div data-lesson-content={activeOpen} className="flex min-h-0 flex-1 flex-col">
+            <div
+              data-lesson-content={activeOpen}
+              tabIndex={-1}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               <LessonFileView
                 key={activeOpen}
                 path={activeOpen}

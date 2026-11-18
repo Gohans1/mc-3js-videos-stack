@@ -721,8 +721,15 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       await frame();
       const sheet = document.querySelector(reader);
       const startX = sheet.getBoundingClientRect().left;
+      click(sheet.querySelector('[aria-label="Contents"]'));
+      await frame();
+      click([...document.querySelectorAll("button")].find(button => button.textContent.trim() === "Bottom"));
+      await frame();
+      const contentsKeptFocus = document.activeElement === sheet;
       click(sheet.querySelector("[data-lesson-back]"));
       await frame();
+      const listItemFocused = document.activeElement.matches("li") &&
+        document.activeElement.querySelector('[data-lesson-row="file:all:camera.md"]') !== null;
       const overlay = document.querySelector("div[style*='z-index: 45']");
       const ghost = overlay.querySelector('[data-lesson-motion-key="all:camera.md"]');
       const fade = ghost.getAnimations()[0];
@@ -739,6 +746,9 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
         resumedOpacity: Number(reopened.getAnimations()[0]?.effect.getKeyframes()[0].opacity),
         shift: Math.abs(startX - exitX),
         visibleGhostControls,
+        contentsKeptFocus,
+        listItemFocused,
+        readerFocused: document.activeElement === reopened,
         oldGhostMounted: ghost.isConnected,
       };
     })()`);
@@ -746,6 +756,9 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.ok(Math.abs(result.resumedOpacity - result.exitOpacity) < 0.08);
     assert.ok(result.shift < 1);
     assert.equal(result.visibleGhostControls, 0);
+    assert.equal(result.contentsKeptFocus, true);
+    assert.equal(result.listItemFocused, true);
+    assert.equal(result.readerFocused, true);
     assert.equal(result.oldGhostMounted, false);
   });
 

@@ -279,7 +279,9 @@ export function animateDeckTransition({
     if (typeof el.animate !== "function") continue;
     const key = el.dataset.lessonContent ?? el.dataset.lessonsCol;
     const resumed = resume?.key === key ? resume : undefined;
-    const opacity = resumed?.opacity ?? (reduced ? 0.9 : 0.82);
+    const retained =
+      interrupted && key !== undefined && replaced.has(key) ? previousCols.get(key) : undefined;
+    const opacity = resumed?.opacity ?? retained?.opacity ?? (reduced ? 0.9 : 0.82);
     const entersFolder =
       !reduced && folderNavigation && key !== undefined && !previousCols.has(key);
     const travel =
