@@ -257,7 +257,12 @@ export function LessonFileView({
       id: "read",
       title: (
         <span className="inline-flex items-center gap-1.5">
-          <Eye aria-hidden className="size-3.5" />
+          <Eye
+            aria-hidden
+            size={14}
+            absoluteStrokeWidth
+            strokeWidth={effectiveView === "read" ? 2 : 1.5}
+          />
           Read
         </span>
       ),
@@ -266,7 +271,12 @@ export function LessonFileView({
       id: "edit",
       title: (
         <span className="inline-flex items-center gap-1.5">
-          <Pencil aria-hidden className="size-3.5" />
+          <Pencil
+            aria-hidden
+            size={14}
+            absoluteStrokeWidth
+            strokeWidth={effectiveView === "edit" ? 2 : 1.5}
+          />
           Edit
         </span>
       ),
@@ -278,7 +288,12 @@ export function LessonFileView({
             ariaLabel: `Changes (+${news.added}, -${news.removed})`,
             title: (
               <span className="inline-flex items-center gap-1.5 tabular-nums">
-                <GitCompare aria-hidden className="size-3.5" />
+                <GitCompare
+                  aria-hidden
+                  size={14}
+                  absoluteStrokeWidth
+                  strokeWidth={effectiveView === "changes" ? 2 : 1.5}
+                />
                 <span className="text-ok-text">+{news.added}</span>
                 <span className="text-destructive-text">−{news.removed}</span>
               </span>
@@ -356,7 +371,9 @@ export function LessonFileView({
             className="max-h-[60vh] w-72 overflow-y-auto overscroll-contain"
           >
             <div className="border-border/80 mb-1.5 flex items-center justify-between gap-1 border-b pb-1.5">
-              <PopoverTitle className="ms-1">Contents ({heads.length})</PopoverTitle>
+              <PopoverTitle className="ms-1">
+                Contents (<span className="tabular-nums">{heads.length}</span>)
+              </PopoverTitle>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="xs" onClick={(e) => flyEdge(false, e.detail > 0)}>
                   <ArrowUp aria-hidden data-icon="inline-start" />

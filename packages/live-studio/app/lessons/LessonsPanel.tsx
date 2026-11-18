@@ -1,5 +1,5 @@
 // The Lessons tab: project lessons/<path>.md plus global lessons/<path>.md, rendered as an md-phone desktop Miller deck
-// so ancestor folder columns always stay visible beside opened subfolders and notes, with GFM Read view, painted
+// with ancestor folder columns alongside the reader when they fit, a GFM Read view, painted
 // line-synced editor, Contents flyTo, diacritic-insensitive search, and AI-first updates with optional word diffs.
 import {
   type CSSProperties,
@@ -52,6 +52,7 @@ import {
   layoutLessonDeck,
   lessonCardOffsets,
   type LessonColumn,
+  LESSONS_LIBRARY_WIDTH,
   type LessonTrail,
 } from "./tree";
 
@@ -73,6 +74,7 @@ const useFresh = () =>
   }, []);
 
 type LessonsPanelProps = { desktop?: boolean; lockWidthPx?: number | null; dock?: "start" | "end" };
+const READER_WIDTH = 552;
 
 export function LessonsPanel(props: LessonsPanelProps = {}) {
   const tab = useLessons((s) => s.subTab);
@@ -157,7 +159,7 @@ function LessonDeckPanel({
   const motionRef = useRef<DeckMotion | null>(null);
   const didAnimatedAlignRef = useRef(false);
 
-  const [containerWidth, setContainerWidth] = useState(720);
+  const [containerWidth, setContainerWidth] = useState(LESSONS_LIBRARY_WIDTH);
   const [jumpTarget, setJumpTarget] = useState<{ path: string; line: number } | null>(null);
   const [query, setQuery] = useState("");
   const [naming, setNaming] = useState<string | null>(null);
@@ -290,7 +292,20 @@ function LessonDeckPanel({
       }),
     [activeColumns.length, activeOpen, effectiveContainerWidth, isDesktop],
   );
-  const renderedColumns = layout.showAncestors ? activeColumns : activeColumns.slice(-1);
+  const tighterDeck = layout.stickyStepPx === 24;
+  const ancestorLimit =
+    dock === "start" && activeOpen
+      ? Math.max(
+          0,
+          Math.floor(
+            (effectiveContainerWidth - (tighterDeck ? 280 : READER_WIDTH)) /
+              (tighterDeck ? 176 : 192),
+          ),
+        )
+      : activeColumns.length;
+  const renderedColumns = activeColumns.slice(
+    Math.max(0, activeColumns.length - (layout.showAncestors ? ancestorLimit : 1)),
+  );
 
   useLayoutEffect(() => {
     const pending = pendingMotionRef.current;
@@ -527,8 +542,7 @@ function LessonDeckPanel({
   };
 
   const initialLine = jumpTarget && jumpTarget.path === activeOpen ? jumpTarget.line : null;
-  const contentDepth = trail.contentDepth ?? 1;
-  const contentOffsets = lessonCardOffsets(contentDepth, layout);
+  const contentOffsets = lessonCardOffsets(renderedColumns.length, layout);
   const mobileStageOrder = [
     ...Array.from({ length: Math.max(8, activeColumns.length + 1) }, (_, i) => `col:${i}`),
     "file",
@@ -598,6 +612,7 @@ function LessonDeckPanel({
               ? ({
                   "--deck-top": `${contentOffsets.stepTopPx}px`,
                   "--deck-z": String(renderedColumns.length + 1),
+                  "--deck-reader-w": `${READER_WIDTH}px`,
                 } as CSSProperties)
               : undefined
           }
@@ -606,9 +621,9 @@ function LessonDeckPanel({
             layout.showAncestors
               ? cn(
                   "border-primary/45 shadow-sheet z-(--deck-z) mt-(--deck-top) rounded-ss-xl border-s border-t @max-[19rem]/lesson-deck:mt-0 @max-[19rem]/lesson-deck:rounded-none @max-[19rem]/lesson-deck:border-0 @max-[19rem]/lesson-deck:shadow-none",
-                  layout.stickyStepPx === 24
+                  tighterDeck || dock === "end"
                     ? "min-w-[min(17.5rem,100%)] @max-[19rem]/lesson-deck:min-w-0"
-                    : "min-w-[min(20rem,100%)] @max-[19rem]/lesson-deck:min-w-0",
+                    : "min-w-[min(var(--deck-reader-w),100%)] @max-[19rem]/lesson-deck:min-w-0",
                 )
               : "min-w-0",
           )}

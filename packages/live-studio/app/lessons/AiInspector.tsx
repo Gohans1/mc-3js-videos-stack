@@ -427,7 +427,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                         <SelectTrigger id="inspect-note" size="readable" className="w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent alignItemWithTrigger={false}>
+                        <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                           <SelectGroup>
                             {noteOptions.map((n) => (
                               <SelectItem key={n.value} value={n.value}>
@@ -531,7 +531,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     <SelectTrigger id="inspect-scope" size="readable" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
+                    <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                       <SelectGroup>
                         {scopes.map((s) => (
                           <SelectItem key={s.value} value={s.value}>
@@ -623,7 +623,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     <DialogTrigger render={<Button size="md" variant="ghost" />}>
                       Clear Inspector cache
                     </DialogTrigger>
-                    <DialogContent showCloseButton={false}>
+                    <DialogContent showCloseButton={false} motion="fade">
                       <DialogTitle>Clear Inspector cache?</DialogTitle>
                       <DialogDescription>
                         This removes saved Inspector matches and run details. Future runs may call
@@ -700,7 +700,7 @@ function ResetSettingsDialog({ onReset }: { onReset: () => void }) {
   return (
     <Dialog>
       <DialogTrigger render={<Button size="md" variant="outline" />}>Reset defaults</DialogTrigger>
-      <DialogContent showCloseButton={false}>
+      <DialogContent showCloseButton={false} motion="fade">
         <DialogTitle>Reset Inspector settings?</DialogTitle>
         <DialogDescription>
           Reset replaces the current settings and discards unsaved edits. Select Save CLI settings

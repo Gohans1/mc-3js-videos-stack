@@ -179,8 +179,8 @@ export function LessonColumnView({
   const showRootControls = col.depth === 0;
   const compactControls = isSideColumn || layout.mode !== "desktop-stack";
   const sideWidthClass = layout.stickyStepPx === 24 ? "w-44" : "w-48";
-  const offsets = lessonCardOffsets(col.depth, layout);
-  const stepped = layout.showAncestors && col.depth > 0 && layout.mode !== "compact-file";
+  const offsets = lessonCardOffsets(idx, layout);
+  const stepped = layout.showAncestors && idx > 0 && layout.mode !== "compact-file";
   const parentParts = col.parts.slice(0, -1);
   const parentName = parentParts.at(-1) ?? "lessons";
   const scopeOptions = [
@@ -326,10 +326,10 @@ export function LessonColumnView({
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
+              <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                 <SelectGroup>
                   {scopeOptions.map(({ value, label }) => (
-                    <SelectItem key={value} value={value}>
+                    <SelectItem key={value} value={value} size="readable">
                       {label}
                     </SelectItem>
                   ))}

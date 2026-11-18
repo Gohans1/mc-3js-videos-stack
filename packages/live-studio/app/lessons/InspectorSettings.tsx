@@ -364,7 +364,7 @@ export function InspectorSettings({
                       >
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
+                      <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                         <SelectGroup>
                           {choices.map((c) => (
                             <SelectItem key={c.value} value={c.value}>
@@ -393,7 +393,7 @@ export function InspectorSettings({
                       value={value}
                       aria-describedby={descriptionId}
                       aria-invalid={Boolean(error) || undefined}
-                      className="max-h-48 overflow-y-auto"
+                      className="max-h-48 overflow-y-auto overscroll-contain"
                       onChange={(e) => update(e.target.value)}
                     />
                   ) : (

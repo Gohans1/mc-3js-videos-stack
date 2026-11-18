@@ -194,7 +194,7 @@ describe("LessonsPanel rendered component behavior", () => {
     assert.equal(isDesktopViewport(800, 480), false);
   });
 
-  test("renders Miller ancestor columns alongside open note sheet when desktop=true", () => {
+  test("keeps the nearest folder and back navigation beside a nested Reader before measuring the desktop pane", () => {
     setPanelState({
       dir: "lessons",
       projectDir: "films/cell-break/lessons",
@@ -210,8 +210,8 @@ describe("LessonsPanel rendered component behavior", () => {
     });
 
     const html = renderToStaticMarkup(createElement(panelMod.LessonsPanel, { desktop: true }));
-    assert.match(html, /data-lessons-col="\/"/);
-    assert.match(html, /data-lessons-col="dir:craft"/);
+    assert.doesNotMatch(html, /data-lessons-col="\/"/);
+    assert.doesNotMatch(html, /data-lessons-col="dir:craft"/);
     assert.match(html, /data-lessons-col="dir:craft\/ik"/);
     assert.match(html, /data-lesson-content="all:craft\/ik\/foot\.md"/);
     assert.match(html, /aria-label="Back to lesson list"/);

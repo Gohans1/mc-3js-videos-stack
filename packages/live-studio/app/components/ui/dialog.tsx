@@ -32,16 +32,23 @@ const overlayVariants = cva("", {
   },
   defaultVariants: { variant: "default" },
 });
+const fadeDialog =
+  "transition-opacity duration-100 ease-out data-starting-style:opacity-0 data-ending-style:opacity-0";
+
 function DialogOverlay({
   className,
   variant,
+  motion,
   ...props
-}: DialogPrimitive.Backdrop.Props & VariantProps<typeof overlayVariants>) {
+}: DialogPrimitive.Backdrop.Props & VariantProps<typeof overlayVariants> & { motion?: "fade" }) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 bg-scrim-strong fixed inset-0 isolate z-50 duration-100 supports-backdrop-filter:backdrop-blur-xs",
+        "bg-scrim-strong fixed inset-0 isolate z-50 supports-backdrop-filter:backdrop-blur-xs",
+        motion === "fade"
+          ? fadeDialog
+          : "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 duration-100",
         overlayVariants({ variant }),
         className,
       )}
@@ -68,18 +75,23 @@ function DialogContent({
   showCloseButton = true,
   variant,
   font,
+  motion,
   ...props
 }: DialogPrimitive.Popup.Props &
   VariantProps<typeof dialogVariants> & {
     showCloseButton?: boolean;
+    motion?: "fade";
   }) {
   return (
     <DialogPortal>
-      <DialogOverlay variant={variant} />
+      <DialogOverlay variant={variant} motion={motion} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl p-4 ring-1 duration-100 outline-none sm:max-w-sm",
+          "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl p-4 ring-1 outline-none sm:max-w-sm",
+          motion === "fade"
+            ? fadeDialog
+            : "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100",
           dialogVariants({ variant, font }),
           className,
         )}

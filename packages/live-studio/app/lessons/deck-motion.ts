@@ -5,7 +5,6 @@ import { classifyLessonTrailTransition, type LessonTrail } from "./tree";
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 const ENTER_MS = 125;
 const EXIT_MS = 175;
-const REDUCED_MS = 125;
 
 interface PanelSnapshot {
   key: string;
@@ -137,12 +136,11 @@ export function animateDeckTransition({
   interrupted?: boolean;
   resume?: { key: string; opacity: string };
 }): DeckMotion | null {
-  if (!deck || !animate) return null;
+  if (!deck || !animate || prefersReduced()) return null;
   const transition = classifyLessonTrailTransition(prevTrail, nextTrail);
   if (transition.kind === "none" || (interrupted && !resume && transition.kind === "open-right"))
     return null;
 
-  const reduced = prefersReduced();
   const animations: Animation[] = [];
   const exiting = new Map<string, HTMLElement>();
   const cleanup: (() => void)[] = [];
@@ -192,8 +190,8 @@ export function animateDeckTransition({
           el.scrollTop = item.scrollTops[i] ?? 0;
         });
         const anim = ghost.animate([{ opacity: item.opacity }, { opacity: 0 }], {
-          duration: reduced ? REDUCED_MS : EXIT_MS,
-          delay: reduced ? 0 : Math.min(idx * 22, 60),
+          duration: EXIT_MS,
+          delay: Math.min(idx * 22, 60),
           easing: "ease-out",
           fill: "forwards",
         });
@@ -213,7 +211,7 @@ export function animateDeckTransition({
   }
 
   // Smooth horizontal FLIP for kept columns that repositioned when opening or folding back
-  if (!reduced && snapshot) {
+  if (snapshot) {
     const oldByKey = new Map(snapshot.cols.map((c) => [c.key, c.rect.left]));
     const checkCount = Math.min(transition.keepColumnCount, liveCols.length);
     for (let i = 0; i < checkCount; i++) {

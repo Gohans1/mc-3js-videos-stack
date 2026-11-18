@@ -13,7 +13,7 @@ const HEADING_STYLE: Record<number, string> = {
   3: "text-lg/[1.4] font-semibold mt-4 first:mt-0",
   4: "text-base/[1.4] font-semibold mt-3.5 first:mt-0",
   5: "text-base/[1.4] font-medium mt-3 first:mt-0",
-  6: "text-base/[1.4] font-semibold uppercase tracking-[0.05em] mt-2.5 first:mt-0",
+  6: "text-sm/[1.4] font-medium tracking-[0.05em] mt-2.5 first:mt-0",
 };
 
 function RenderInlines({ tokens }: { tokens: readonly InlineToken[] }) {
@@ -105,13 +105,13 @@ export function LessonMarkdownView({
   const blocks = useMemo(() => parseLessonBlocks(text), [text]);
   if (!blocks.length) {
     return (
-      <div className="font-md text-muted-foreground mx-auto w-full max-w-[35rem] py-4 text-base/[1.6]">
+      <div className="font-md text-muted-foreground mx-auto w-full max-w-[33rem] py-4 text-base/[1.6]">
         Empty lesson file. Switch to Edit to start writing rules.
       </div>
     );
   }
   return (
-    <article className="font-md text-foreground mx-auto flex w-full max-w-[35rem] flex-col gap-3.5 text-base/[1.6]">
+    <article className="font-md text-foreground mx-auto flex w-full max-w-[33rem] flex-col gap-3.5 text-base/[1.6]">
       {blocks.map((b) => {
         if (b.type === "heading")
           return <HeadingBlock key={b.line} block={b} onJumpEdit={onJumpEdit} />;

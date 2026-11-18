@@ -773,6 +773,51 @@ test("the Inspector includes only files from the chosen lesson scope", async () 
   ).toContain("0 of 0");
 });
 
+test("the Lessons splitter keeps its width across Deck, Reader and Inspector and leaves Notes independent", async () => {
+  await view.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 1920,
+    height: 1080,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await view.evaluate("localStorage.removeItem('studio.lessonsWidth')");
+  await navigateFixture("?shell");
+  const sizes = await view.evaluate(`(async () => {
+    const { lessons, studio } = window.inspectTest;
+    const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const splitter = () => document.querySelector('[aria-label="Library width"]');
+    const width = () => Number(splitter().getAttribute("aria-valuenow"));
+    lessons.setState({ subTab: "deck", folder: [], open: null });
+    await frame();
+    const deck = width();
+    document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
+    await frame();
+    const reader = width();
+    document.querySelector("[data-lesson-back]").click();
+    await frame();
+    const handle = splitter();
+    handle.focus();
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    await frame();
+    const custom = width();
+    document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
+    await frame();
+    const customReader = width();
+    lessons.setState({ subTab: "inspector" });
+    await frame();
+    const inspector = width();
+    studio.setState({ lib: "notes" });
+    await frame();
+    return { deck, reader, custom, customReader, inspector, notes: width() };
+  })()`);
+  expect(sizes.reader).toBe(sizes.deck);
+  expect(sizes.custom).toBeLessThan(sizes.deck);
+  expect(sizes.customReader).toBe(sizes.custom);
+  expect(sizes.inspector).toBe(sizes.custom);
+  expect(sizes.notes).not.toBe(sizes.custom);
+  await view.evaluate("localStorage.removeItem('studio.lessonsWidth')");
+});
+
 test("a reader remains usable at 200% desktop magnification", async () => {
   await view.cdp("Emulation.setDeviceMetricsOverride", {
     width: 960,

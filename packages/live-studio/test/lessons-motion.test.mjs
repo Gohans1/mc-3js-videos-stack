@@ -75,7 +75,7 @@ function DeckRunner({ dockMode }) {
     !open && folder.length === 0
       ? restW
       : open
-        ? Math.min(isEnd ? 600 : 1040, Math.max(isEnd ? 600 : 800, (folder.length + 1) * 192 + 384))
+        ? Math.min(isEnd ? 600 : 1176, Math.max(isEnd ? 600 : 800, (folder.length + 1) * 192 + 552))
         : Math.min(isEnd ? 600 : 960, Math.max(540, (folder.length + 1) * 192 + 128));
   const trailKey = \`\${folder.join("/")}\\0\${open ?? ""}\`;
   const latch = useDeckShrinkLatch({

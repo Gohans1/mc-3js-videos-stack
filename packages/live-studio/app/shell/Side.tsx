@@ -218,7 +218,7 @@ const tool =
   "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] [&_svg]:size-5";
 const coreTool =
   "data-active:bg-tint data-active:text-foreground data-active:[&_svg]:text-primary-text";
-export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null } = {}) {
+export function Library() {
   const { sound, text, cam, placed, open, check, asking } = useParts(),
     lib = useStudio((s) => s.lib),
     aiTab = useAiTabs();
@@ -320,7 +320,7 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
             ) : value === "ports" ? (
               <PortsPanel />
             ) : (
-              <LessonsPanel desktop lockWidthPx={lessonsLockW} dock="start" />
+              <LessonsPanel desktop />
             )}
           </TabStage>
         </Tabs.Panel>

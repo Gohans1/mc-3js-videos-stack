@@ -20,6 +20,7 @@ import type { Bind, Elements } from "./core/state";
 import { useStudio } from "./core/store";
 import { useDeckShrinkLatch } from "./lessons/deck-latch";
 import { lessonTrailKey, useLessons } from "./lessons/lessons";
+import { LESSONS_LIBRARY_WIDTH } from "./lessons/tree";
 import { ReviewRoom } from "./notes/ReviewRoom";
 import { Stage } from "./picture/Stage";
 import { useBoot } from "./shell/boot";
@@ -88,15 +89,11 @@ export function App() {
     wideScreen,
     editable,
   });
-  const lessonsWideLib = showLibrary && lib === "lessons" && lessonDeckTargetW !== null;
+  const lessonsInLibrary = showLibrary && lib === "lessons";
   const lessonsWideSide =
     showSideOnRight && desktop && side === "lessons" && lessonDeckTargetW !== null;
-  const effRawLibW =
-    lessonsWideLib && lessonDeckTargetW !== null
-      ? lessonsLibW === null
-        ? lessonDeckTargetW
-        : lessonsLibW
-      : libW;
+  // Keep Stage geometry stable across the Deck trail, Reader and Inspector.
+  const effRawLibW = lessonsInLibrary ? (lessonsLibW ?? LESSONS_LIBRARY_WIDTH) : libW;
   const effRawSideW =
     lessonsWideSide && lessonDeckTargetW !== null
       ? lessonsSideW === null
@@ -131,12 +128,6 @@ export function App() {
     targetBounds.libW === 0 ? 0 : Math.min(targetBounds.libW ?? 400, targetBounds.libMax);
   const desiredSidePx =
     targetBounds.sideW === 0 ? 0 : Math.min(targetBounds.sideW ?? 360, targetBounds.sideMax);
-  const libLatch = useDeckShrinkLatch({
-    desiredW: desiredLibPx,
-    trailKey,
-    animate: animateDeckFold,
-    active: !inspectorActive && showLibrary && lib === "lessons" && targetBounds.libW !== 0,
-  });
   const sideLatch = useDeckShrinkLatch({
     desiredW: desiredSidePx,
     trailKey,
@@ -149,13 +140,13 @@ export function App() {
       targetBounds.sideW !== 0,
   });
   const bounds =
-    libLatch.lockW !== null || sideLatch.lockW !== null
+    sideLatch.lockW !== null
       ? clampSplitterLayout({
           vw,
           vh,
           wideAttr,
-          rawLibW: libLatch.lockW !== null ? libLatch.paneW : effRawLibW,
-          rawSideW: sideLatch.lockW !== null ? sideLatch.paneW : effRawSideW,
+          rawLibW: effRawLibW,
+          rawSideW: sideLatch.paneW,
           rawEditH: editH,
           rawReviewW: reviewW,
           editMin: EDIT_MIN,
@@ -197,7 +188,7 @@ export function App() {
           <Stage bind={bind} />
           <Transport />
           <TimelinePanel bind={bind} size={bounds.editH} />
-          {showLibrary && <Library lessonsLockW={libLatch.lockW} />}
+          {showLibrary && <Library />}
           {(showSideOnRight || showDetails) && (
             <Side wide={showLibrary} desktop={desktop} lessonsLockW={sideLatch.lockW} />
           )}
@@ -233,15 +224,15 @@ export function App() {
               className="pointer-events-none relative z-30 col-start-1 row-[1/-1] in-data-cli-expanded:hidden in-data-review:hidden"
             >
               <Splitter
-                key={lessonsWideLib ? "lessons" : "library"}
+                key={lessonsInLibrary ? "lessons" : "library"}
                 label="Library width"
                 across={false}
                 before
                 size={bounds.libW ?? desiredLibPx}
-                measure={() => libCell.current?.offsetWidth ?? (lessonsWideLib ? 720 : 400)}
+                measure={() => libCell.current?.offsetWidth ?? desiredLibPx}
                 min={() => LIB_MIN}
                 max={() => bounds.libMax}
-                set={lessonsWideLib ? setLessonsW : setLibW}
+                set={lessonsInLibrary ? setLessonsW : setLibW}
                 className="pointer-events-auto -right-[7px]"
               />
             </div>
