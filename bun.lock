@@ -137,6 +137,7 @@
         "bezier-easing": "catalog:",
         "film-kit": "workspace:*",
         "gl-transitions": "3.1.0",
+        "html-to-image": "1.11.13",
         "postprocessing": "catalog:",
       },
       "devDependencies": {
@@ -915,6 +916,8 @@
     "headless-three": ["headless-three@1.9.0", "", { "dependencies": { "gl": "^8.1.6", "sharp": "^0.34.5", "three": "0.162.0" } }, "sha512-4QuRO2VPE2Dlt7dhwkUU29oETHLjKNbZmd7vOks/GfDZnQG3WogF37QlUtrUr/uS7IHuzHodVr0uAg2uYszguA=="],
 
     "hono": ["hono@4.13.16", "", {}, "sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A=="],
+
+    "html-to-image": ["html-to-image@1.11.13", "", {}, "sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg=="],
 
     "http-cache-semantics": ["http-cache-semantics@4.3.0", "", {}, "sha512-M5t5LlJpS1UHMjvwRQVdFHvPISGeLAxNcrWuJkeGh0KxsqCHZ1O3NXZU/8x7cD0BDcGW8kapxMKTvwlqrNkHkA=="],
 

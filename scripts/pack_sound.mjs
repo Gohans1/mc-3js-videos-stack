@@ -6,7 +6,9 @@ import { packSound } from "./sound_zip.mjs";
 import { EXTERNAL, LOCAL } from "./vault.mjs";
 
 const HELP = `Packs every sound of the vault into one zip, each file at its vault path: sound/ (sfx by category, bgm by mood,
-SOURCES.json, PEAKS.json), sfx/ (the Mixkit, BGM and Freesound downloads) and mc-sound/ (the Minecraft sounds). From the
+SOURCES.json, PEAKS.json), sfx/ (the Mixkit, BGM and Freesound downloads), openfilm/ (all editable source, catalogs,
+original media, notices and checksums) and mc-sound/ (the Minecraft sounds). Paths are relative to the vault, without
+an old machine's drive or project name. OpenFilm and sound restore directly into the new repo's vault/. From the
 repo root:
   bun run pack:sound                 into the external vault, named mc-films-sound-<date>.zip
   bun run pack:sound D:/sound.zip    there

@@ -57,6 +57,7 @@ import { formatOpticsHud } from "./picture/hud";
 import { lookAtClick } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
 import { drawFinal, finalCanvas, render, setFinal } from "./picture/render";
+import { readOpenFilm } from "./openfilm/state";
 import { measureScopes } from "./picture/scopes";
 import {
   loadMix,
@@ -187,6 +188,7 @@ const listen = () => {
   onEvent("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
   onEvent("timing", loadTiming);
   onEvent("adjustment", reloadNotice("layersRev", "Color adjustment updated", loadLayers));
+  onEvent("openfilm", () => { void readOpenFilm().catch(showError); });
   onEvent("text", reloadNotice("textRev", "Titles updated", loadText)); // an agent edited the titles: the picture takes them now
   onEvent("notes", () => { void loadNotes({ notify: true }); });
   onEvent("voice", () => {
@@ -329,6 +331,7 @@ export const start = async (el: Elements) => {
       has.keys ? loadKeys() : Promise.resolve(set({ keyFiles: [] })),
       has.text ? loadText() : Promise.resolve(set({ text: false })),
       has.adjustment ? loadLayers() : Promise.resolve(set({ layers: false })),
+      readOpenFilm(),
     ]),
   );
   if (has.cam) prefetchFile("/api/cam");
@@ -443,12 +446,12 @@ document.addEventListener("visibilitychange", () => {
   scheduleLoop();
 });
 // A film that throws at one moment still lets the dev move to another: the error shows and the next frame comes anyway
-const loop = () => {
+const loop = async () => {
   loopKind = 0;
   loopId = 0;
   inFrame = true;
   try {
-    frame();
+    await frame();
   } catch (e) {
     showError(e);
   } finally {
@@ -464,7 +467,7 @@ let lastCaptionText: string | null = null;
 let lastHudEl: HTMLElement | null = null;
 let lastHudText: string | null = null;
 
-const frame = () => {
+const frame = async () => {
   const dt = Math.min(0.1, (performance.now() - lastFrame) / 1000); // a frame after a stall moves a little, never across the room
   lastFrame = performance.now();
   fly(dt);
@@ -474,7 +477,7 @@ const frame = () => {
     if (S.dirty) staleFilmView(); // anything but the free camera's own move may change what the film camera sees
     S.dirty = S.viewMoved = false;
     const a = performance.now();
-    render(peeked ?? S.t);
+    await render(peeked ?? S.t);
     followChips();
     drawMs = drawMs * 0.9 + (performance.now() - a) * 0.1;
     frames++;
@@ -530,7 +533,7 @@ const frame = () => {
         S.el.final.hidden = true;
         S.finalAt = -1;
       } else if (S.finalAt !== S.t) {
-        drawFinal();
+        await drawFinal();
         finalNow = true;
       }
     }
@@ -549,8 +552,11 @@ const frame = () => {
   } else if (warm.length) {
     // While nothing is asked of it: touch one more shot, nearest first, so its shaders and textures are ready before the first
     // jump there. The current frame is redrawn in the same task, so the screen never shows the detour
-    render(SHOTS[warm.shift()!].t + 0.1);
-    render(S.t);
+    if (S.render?.renderFrame) warm.length = 0;
+    else {
+      await render(SHOTS[warm.shift()!].t + 0.1);
+      await render(S.t);
+    }
   }
   const now = performance.now();
   if (now - fpsAt > 500 || (!S.playing && get().perf.includes("fps"))) {

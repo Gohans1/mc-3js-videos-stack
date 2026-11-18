@@ -13,6 +13,7 @@ import { useStudio } from "../core/store";
 import { KeyHeads } from "../keys/KeyHeads";
 import { AudioMeter } from "../sound/AudioMeter";
 import { ClipMenu } from "../sound/ClipMenu";
+import { OpenFilmTrack } from "../openfilm/Track";
 import { TrackHeads } from "../sound/TrackHeads";
 import { TextHeads } from "../text/TextHeads";
 import { boxPick } from "./rowbox";
@@ -109,6 +110,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
         className="sideways:hidden upright:max-h-86 relative col-span-2 grid min-h-0 grid-cols-subgrid content-start overflow-x-hidden overflow-y-auto overscroll-contain rounded-b-md"
       >
         <LayerTrack />
+        <OpenFilmTrack />
         {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}
         <div className={cn("col-span-2 mt-1 grid grid-cols-subgrid", !text && "hidden")}>
           <TextHeads />

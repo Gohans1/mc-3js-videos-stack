@@ -83,3 +83,15 @@ The creator sees all of the above in the studio's Film tab, view only, under Cap
 | Mocap through one `loadClips(refs, steve)` in `buildScene`                                                                                | It keeps each bake between loads; `loadClip` bakes every time                                         |
 | A loop over many poses that reads only his bones: `steve.updateBones()` and `steve.soleNow()`, then one `g.updateMatrixWorld(true)` after | A full update or `getWorldPosition` per pose walks his whole tree; this was seconds of a phone's load |
 | A change to how the film loads: `bun run eval:load` at the repo root, before and after                                                    | Desk and phone, first visit and reload; phone runs swing ~30%, so repeat one                          |
+
+## OpenFilm direct editing
+
+Use bun run fetch:openfilm from the root to prepare the vault. Use bun run openfilm --help for CLI editing, or open Effects in Live Studio. A film-local HTML page under assets/public can be used as /page.html without a catalog entry.
+
+| Task | Action |
+| --- | --- |
+| Select an element | Right-click the element in Preview, then edit its text, styles, or transform in Effects |
+| Move an element | Drag with the left mouse button. Press Escape to cancel. Use the inspector offsets for pages with a 3D transform |
+| Edit a native title | Right-click to select it. Drag a corner to scale or the top handle to rotate. Ctrl+double-click to type, then Enter to save or Escape to cancel |
+| Preserve source | Use stable selectors and keep page overrides in the OpenFilm timeline. Reset an element to restore its source values |
+| Edit other controls | Edit custom JSON fields in Film and applied transition properties in Transition. Use Ctrl+Z to undo |

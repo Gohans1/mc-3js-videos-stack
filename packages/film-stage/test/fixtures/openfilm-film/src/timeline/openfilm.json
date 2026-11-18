@@ -1,0 +1,22 @@
+{
+ "items": [
+  {
+   "id": "00498582-e0f1-45cb-9a6e-c2ae46f0e614",
+   "asset": "text/looks/title",
+   "from": 0,
+   "to": 3.5,
+   "y": 0.25,
+   "size": 0.2,
+   "timebase": {"base": {"speeds": [], "freezes": [], "cuts": [], "gaps": []}, "changes": [], "sourceDuration": 4},
+   "vars": {"--color": "#ffd35a"},
+   "text": {".t": "AI tự do sáng tạo"}
+  },
+  {
+   "id": "9ed0e59a-a6a2-4bd9-883f-894ba67728e5",
+   "asset": "effects/snow",
+   "from": 0,
+   "to": 4,
+   "timebase": {"base": {"speeds": [], "freezes": [], "cuts": [], "gaps": []}, "changes": [], "sourceDuration": 4}
+  }
+ ]
+}

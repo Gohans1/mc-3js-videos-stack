@@ -4,7 +4,7 @@ import type { GizmoMode, TargetTransform, TransformBinding } from "../objects/pl
 export type { GizmoMode };
 
 export interface StudioEngine {
-  render: (t: number) => void;
+  render: (t: number, readFrame?: () => void) => Promise<void>;
   finalCanvas: () => HTMLCanvasElement | null;
   setFinal: (on: boolean) => Promise<void> | void;
   setFree: (on: boolean, here?: boolean) => void;
@@ -22,7 +22,7 @@ export interface StudioEngine {
 }
 
 export const engine: StudioEngine = {
-  render: () => {},
+  render: () => Promise.resolve(),
   finalCanvas: () => null,
   setFinal: () => {},
   setFree: () => {},

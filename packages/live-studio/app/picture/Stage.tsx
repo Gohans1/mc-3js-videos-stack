@@ -112,6 +112,9 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
             ref={bind("pins")}
             className="pointer-events-none absolute inset-0 z-4 overflow-hidden"
           />
+          <svg data-page-selection aria-hidden className="pointer-events-none absolute inset-0 z-3 size-full overflow-visible">
+            <polygon fill="none" stroke="var(--picture)" strokeWidth="1.5" />
+          </svg>
           {/* Strokes (notes/ink.ts): drawn on while a tool is in hand, and otherwise lets every tap through */}
           <canvas
             ref={bind("ink")}

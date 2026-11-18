@@ -31,6 +31,7 @@ import {
 } from "./src/readable.mjs";
 import { audioInfo } from "./src/sound.mjs";
 import { startJob } from "./src/tell.mjs";
+import { openFilmResource } from "./src/openfilm.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
 import { clockForTimeline, setTiming } from "./src/timing-state.mjs";
 import { writeRenderEvidence } from "./src/video.mjs";
@@ -628,6 +629,8 @@ const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   async fetch(req) {
+    const openfilm = openFilmResource(req);
+    if (openfilm) return openfilm;
     const url = decodeURIComponent(new URL(req.url).pathname);
     if (req.method === "POST") {
       const b = Buffer.from(await req.arrayBuffer());

@@ -1,0 +1,7 @@
+[
+ {
+  "t": 0,
+  "name": "Front"
+ },
+ {"t": 2, "name": "Side", "transition": {"fx": "of:transitions/dissolve", "len": 2, "props": {}}}
+]

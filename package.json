@@ -38,6 +38,8 @@
     "link": "bun scripts/link.ts",
     "fetch:sfx": "bun scripts/fetch_mixkit.mjs",
     "fetch:sound-raw": "bun scripts/fetch_sound_raw.mjs",
+    "fetch:openfilm": "bun scripts/openfilm.mjs",
+    "openfilm": "bun scripts/openfilm-use.mjs",
     "find": "bun scripts/find.ts",
     "gap": "bun scripts/gap.ts",
     "eval:find": "bun scripts/evals/find/run.ts",

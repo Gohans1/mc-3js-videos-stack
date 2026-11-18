@@ -1,8 +1,9 @@
+import { extendedTransitions } from "film-stage/transition-extension";
 import type { TransitionEase } from "film-stage/transitions";
-import { SHOTS_OUT } from "film/scene";
 
 import { effectLength, effectSpan, transitionAvailable } from "../../src/timing-effects.mjs";
 import { timingClock } from "../../src/timing-state.mjs";
+import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { originalShot } from "../timeline/timing";
@@ -11,7 +12,11 @@ import { shotsDoc } from "./shots";
 import { freshTransition, tidyTransition, type TransitionData } from "./transition-math";
 
 export type Transition = TransitionData;
-export const transitions = () => S.render?.transitions ?? [];
+export const transitions = () => [
+  ...new Map(
+    [...extendedTransitions(), ...(S.render?.transitions ?? [])].map((fx) => [fx.id, fx]),
+  ).values(),
+];
 const fxMeta = (id: string | undefined) =>
   id ? transitions().find((x) => x.id === id) : undefined;
 
@@ -60,10 +65,20 @@ export const TRANSITION_DRAG = "application/x-studio-transition";
 export function pickTransition(shot: number) {
   pickShot(shot, "transition");
 }
-export function setTransition(shot: number, fx: string | null) {
+export function setTransition(
+  shot: number,
+  fx: string | null,
+  duration?: number,
+  props?: { vars?: Record<string, string>; text?: Record<string, string> },
+) {
   if (!transitionRoom(shot) || (fx && !transitions().some((x) => x.id === fx))) return;
   shotsDoc.edit((rows) => {
-    if (fx) rows[shot].transition = valueOf(shot, fx);
+    if (fx)
+      rows[shot].transition = {
+        ...valueOf(shot, fx),
+        ...(duration !== undefined && { len: sourceLength(shot, duration) }),
+        ...(props && { props }),
+      };
     else delete rows[shot].transition;
   });
   say(
@@ -98,7 +113,13 @@ export function setTransitionDuration(shot: number, value: number, keep = true) 
 }
 export function setTransitionOption(
   shot: number,
-  patch: { ease?: TransitionEase; feather?: number; flip?: boolean },
+  patch: {
+    ease?: TransitionEase;
+    feather?: number;
+    flip?: boolean;
+    props?: import("film-stage/openfilm-page").PageProps;
+    params?: Transition["params"];
+  },
   keep = true,
 ) {
   const change = (rows: NonNullable<typeof shotsDoc.data>) => {

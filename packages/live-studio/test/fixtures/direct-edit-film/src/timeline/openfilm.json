@@ -1,0 +1,11 @@
+{
+ "items": [
+  {
+   "elements": [{"selector": "#page-title", "text": "Human polished this ", "style": {"color": "#ff6b6b"}}],
+   "id": "own-page",
+   "asset": "/custom-title.html",
+   "from": 0,
+   "to": 6
+  }
+ ]
+}

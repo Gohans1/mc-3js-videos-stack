@@ -57,6 +57,7 @@ export const marks = {
   cam: () => {}, // and camera/camrow.ts its own
   keys: () => {}, // and keys/keyrows.ts the key rows
   layers: () => {},
+  openfilm: () => {},
   text: () => {}, // and text/textrow.ts the text tracks
 };
 
@@ -837,6 +838,7 @@ export const drawTimelines = () => {
   drawRuler();
   drawDetail();
   marks.layers();
+  marks.openfilm();
   marks.text();
   marks.cam();
   marks.keys();

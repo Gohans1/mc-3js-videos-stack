@@ -1,6 +1,6 @@
 // How the Sound panel groups the vault: category headings, Real / Studio vs Code-gen, Vanilla vs Modded. Imports nothing, so
 // bun run find (scripts/find.ts) groups and filters the vault exactly as the panel does
-export type SoundOrigin = "real" | "synth";
+export type SoundOrigin = "real" | "synth" | "unknown";
 export type EditionKind = "vanilla" | "modded";
 
 const CATEGORY_TITLES: Record<string, string> = {
@@ -31,6 +31,7 @@ export const MC_HEADINGS: Record<string, string> = {
 export const ORIGIN_TITLES: Record<SoundOrigin, string> = {
   real: "Real / Studio",
   synth: "Code-gen",
+  unknown: "Unverified origin",
 };
 export const EDITION_TITLES: Record<EditionKind, string> = {
   vanilla: "Vanilla 26.3",
@@ -50,7 +51,7 @@ const SYNTH_SOURCES = new Set(["earshot"]);
 export const sourceOf = (item: { source?: string }): string => item.source ?? "film";
 
 export const originOf = (item: { name: string; source?: string; origin?: string }): SoundOrigin => {
-  if (item.origin === "real" || item.origin === "synth") return item.origin;
+  if (item.origin === "real" || item.origin === "synth" || item.origin === "unknown") return item.origin;
   if (SYNTH_SOURCES.has(sourceOf(item))) return "synth";
   if (/^(?:ear|syn|synth)[-_]/i.test(item.name)) return "synth";
   return "real";

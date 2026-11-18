@@ -1,10 +1,6 @@
-// What a film's code adds on top of the studio's libraries, for the view-only Film tab and the "Film" mark on the pickers.
-// Grouped as CapCut's libraries are (Audio, Text, Stickers, Effects, Transitions, then the clip's Animation), then what only a
-// 3D film has (3D, fields of its own on the JSON rows, A/B choices, checks). A list of {id} the film hands over under a name the
-// studio doesn't know is a kind of its own, named after it; anything else unknown lands in Other. The studio shows these and
-// never edits them: the film's code is the AI's to change, so nothing here may refuse or drop a field.
-// Pure, so the tests read it without a page.
+// Persistent row fields carry their owner's edit callback; runtime objects and code remain inspection-only.
 
+import { editableFields, type FieldPath } from "./custom-fields";
 type Rec = Record<string, unknown>;
 interface Fx extends Rec {
   id: string;
@@ -37,7 +33,12 @@ export interface OwnInput {
     pick?: { title: string };
     ranges: readonly (readonly [number, number])[]; // heard seconds
   }[];
-  rows?: readonly { kind: string; t: number; row: Rec }[]; // the timeline JSON's rows (a shot, a text…) at their heard second
+  rows?: readonly {
+    kind: string;
+    t: number;
+    row: Rec;
+    change?: (path: FieldPath, value: unknown) => void;
+  }[];
   other?: Rec;
 }
 export interface Builtins {
@@ -63,6 +64,7 @@ export interface OwnField {
   code?: () => string; // written out only when opened: an engine object the film hands over can be megabytes
 }
 export interface OwnItem {
+  edits?: { t: number; value: unknown; change: (value: unknown) => void }[];
   id: string;
   title: string;
   tip?: string;
@@ -115,6 +117,11 @@ const DRAW = new Set([
   "velocityEffects",
   "adjustments",
   "disposeTransitions",
+  "renderFrame",
+  "prepareFrame",
+  "needsPreparation",
+  "disposeOpenFilm",
+  "inspectOpenFilm",
 ]);
 export const otherKeys = (of: object, part: "draw" | "tools" = "draw") =>
   Object.keys(of).filter((k) => !(part === "tools" ? TOOLS : DRAW).has(k));
@@ -279,30 +286,27 @@ const keyOf = (v: unknown) => {
     return String(v);
   }
 };
-// A slot the studio reads inside a row (a shot's anim.in) is opened when its read fields are listed by path ("anim.in.fx")
-const ownPaths = (x: Rec, read: readonly string[], at = ""): [string, unknown][] =>
-  Object.keys(x).flatMap((k): [string, unknown][] => {
-    const path = at + k,
-      v = x[k];
-    if (v === undefined) return [];
-    if (
-      v &&
-      typeof v === "object" &&
-      !Array.isArray(v) &&
-      read.some((r) => r.startsWith(`${path}.`))
-    )
-      return ownPaths(v as Rec, read, `${path}.`);
-    return read.includes(path) ? [] : [[path, v]];
-  });
 const rowFields = (rows: OwnInput["rows"], known: Builtins["rowKeys"]): OwnItem[] => {
-  const by = new Map<string, { kind: string; key: string; uses: { t: number; v: unknown }[] }>();
-  for (const { kind, t, row } of rows ?? []) {
+  const by = new Map<
+    string,
+    {
+      kind: string;
+      key: string;
+      uses: { t: number; v: unknown; change?: (value: unknown) => void }[];
+    }
+  >();
+  for (const { kind, t, row, change } of rows ?? []) {
     const read = known?.[kind];
     if (!read) continue;
-    for (const [key, v] of ownPaths(row, read)) {
+    for (const { path, value: v } of editableFields(row, read)) {
+      const key = path.join(".");
       const id = `${kind}.${key}`;
       if (!by.has(id)) by.set(id, { kind, key, uses: [] });
-      by.get(id)!.uses.push({ t, v });
+      by.get(id)!.uses.push({
+        t,
+        v,
+        ...(change && { change: (next: unknown) => change(path, next) }),
+      });
     }
   }
   const kinds = [...new Set((rows ?? []).map((r) => r.kind))];
@@ -326,6 +330,9 @@ const rowFields = (rows: OwnInput["rows"], known: Builtins["rowKeys"]): OwnItem[
                   uses.map((u) => `${u.t.toFixed(2)} s  ${short(u.v) ?? keyOf(u.v)}`).join("\n"),
               };
       return {
+        ...(uses.some((u) => u.change) && {
+          edits: uses.flatMap((u) => (u.change ? [{ t: u.t, value: u.v, change: u.change }] : [])),
+        }),
         id: key, // the row kind is its part, so the name alone heads it
         title: key,
         part: kind,

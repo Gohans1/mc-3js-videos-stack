@@ -1,0 +1,22 @@
+{
+  "name": "direct-edit-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "bun ../../../src/live.mjs 4397",
+    "render": "bun ../../../render.mjs",
+    "help": "bun ../../../help.mjs",
+    "skills": "bun ../../../skills.mjs"
+  },
+  "live-studio": {
+    "camTimeline": "src/timeline/cam.json",
+    "shotsTimeline": "src/timeline/shots.json",
+    "timingTimeline": "src/timeline/timing.json",
+    "textTimeline": "src/timeline/text.json",
+    "openfilmTimeline": "src/timeline/openfilm.json",
+    "adjustmentTimeline": "src/timeline/adjust.json",
+    "keyFiles": {
+      "src/timeline/fx.json": "fx"
+    }
+  }
+}

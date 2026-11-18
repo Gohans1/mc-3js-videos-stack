@@ -24,6 +24,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 
+import { TEXT_ITEM_KEYS } from "film-stage/titles-catalog";
+import { TEXT_KEYS, TEXT_SLOT_KEYS } from "../../src/contract-keys";
 import { playSpan, stopSpan } from "../camera/anim";
 import { FavoriteStar } from "../components/FavoriteStar";
 import {
@@ -43,9 +45,12 @@ import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { ownVoice, THIS_FILM, withFilmChip } from "../own/builtins";
+import { replaceField } from "../own/custom-fields";
+import { CustomFields } from "../own/CustomFields";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { frameSize } from "../picture/frame";
 import {
+  edit,
   editPicked,
   isShape,
   items,
@@ -1016,6 +1021,20 @@ export function TextPanel({ part }: { part: "text" | "textAnim" }) {
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {shapes ? <Shape it={it} /> : <Basic it={it} one={picks.length === 1} />}
+          {picks.length === 1 ? (
+            <CustomFields
+              value={it}
+              known={[...TEXT_KEYS, ...TEXT_ITEM_KEYS, ...TEXT_SLOT_KEYS]}
+              onChange={(path, value) => {
+                if (!locked(picks[0]))
+                  edit((data) => replaceField(data.items[picks[0]], path, value));
+              }}
+            />
+          ) : (
+            <p className="text-ui text-muted-foreground px-3 pb-3">
+              Select one item to edit custom fields.
+            </p>
+          )}
         </div>
       )}
     </div>

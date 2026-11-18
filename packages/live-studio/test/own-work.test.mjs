@@ -20,6 +20,20 @@ const dissolve = {
   glsl: "vec4 transition(vec2 uv){}",
 };
 const fade = { id: "fade", title: "Fade", cat: "Basic", tip: "built in", len: 0.5 };
+
+test("render lifecycle hooks do not appear as the film's own effects", () => {
+  assert.deepEqual(
+    otherKeys({
+      renderFrame: async () => {},
+      prepareFrame: async () => {},
+      needsPreparation: () => false,
+      disposeOpenFilm: () => {},
+      inspectOpenFilm: () => [],
+      particles: { title: "My particles" },
+    }),
+    ["particles"],
+  );
+});
 const builtins = {
   transitions: [dissolve],
   anims: { in: [fade], out: [], combo: [] },

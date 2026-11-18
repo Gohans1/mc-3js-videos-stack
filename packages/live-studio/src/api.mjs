@@ -42,7 +42,11 @@ import { weighFirstVisit } from "./weight.mjs";
 import { mountCollaboration } from "./collaboration-api.mjs";
 import { mountHistory } from "./history-api.mjs";
 
+import { openFilmResource, openOpenFilm, openFilmLut } from "./openfilm.mjs";
+
 const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".gltf": "application/json",
   ".glb": "model/gltf-binary",
   ".jpg": "image/jpeg",
@@ -542,6 +546,24 @@ export const createApi = (
   };
 
   const app = new Hono();
+  const openfilmPackage = film.PROJECT && join(film.PROJECT, "package.json");
+  const openfilm = film.openfilm ?? (film.PROJECT ? openOpenFilm(film.PROJECT, film.pkg?.["live-studio"] ?? (existsSync(openfilmPackage) ? JSON.parse(readFileSync(openfilmPackage, "utf8"))["live-studio"] : {}) ?? {}) : null);
+  app.get("/_openfilm/*", (c) => openFilmResource(c.req.raw) ?? c.notFound());
+  app.get("/api/openfilm", (c) => openfilm ? c.json(openfilm.read()) : noSound(c));
+  app.post("/api/openfilm", bodyLimit({ maxSize: 20 * 1024 * 1024 }), zValidator("json", SoundSave), (c) => {
+    try {
+      const { base, data } = c.req.valid("json"), result = openfilm.write(base, data);
+      return result.conflict ? c.json(result, 409) : result.problems ? c.json(result, 400) : c.json(result);
+    } catch (error) { return c.json({ error: error.message }, 400); }
+  });
+  app.post("/api/openfilm/use", bodyLimit({ maxSize: 1024 * 1024 }), async (c) => {
+    try { return c.json(openfilm.use(await c.req.json())); }
+    catch (error) { return c.json({ error: error.message }, 400); }
+  });
+  app.post("/api/openfilm/lut", bodyLimit({ maxSize: 1024 * 1024 }), async (c) => {
+    try { return c.json(openFilmLut(film.PROJECT, (await c.req.json()).asset)); }
+    catch (error) { return c.json({ error: error.message }, 400); }
+  });
 
   // The page names the build it came from, so after the studio restarts it can tell whether it is still the current one
   let lastBuiltHtml = null,
@@ -1356,6 +1378,7 @@ export const createApi = (
       ["shots", film.shots],
       ["text", film.text],
       ["adjustment", film.adjustment],
+      ["openfilm", openfilm],
       ["timing", film.timing],
       ...film.keyFiles.map((k, i) => [`keys/${i}`, k]),
     ]).get(name);

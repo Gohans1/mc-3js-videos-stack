@@ -31,6 +31,7 @@ import {
   SoundTimeline,
   StudioConfig,
   TextTimeline,
+  OpenFilmTimeline,
   TimingTimeline,
   Trials,
 } from "./contract.ts";
@@ -43,6 +44,7 @@ import { layerDuration, setTiming, timingClock } from "./timing-state.mjs";
 import { voiceFileOf, writeVoiceMap } from "./voice-map.mjs";
 import { openVoice } from "./voice.mjs";
 import { warp } from "./warp.mjs";
+import { OPENFILM_FILE, openOpenFilm } from "./openfilm.mjs";
 
 export const STUDIO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // One copy of three: the film's and the studio's would each otherwise bring their own, and objects from one fail instanceof in the other
@@ -103,6 +105,10 @@ export const contractFiles = (project) => {
     ...own("textTimeline", TextTimeline),
     ...own("adjustmentTimeline", AdjustmentTimeline),
     ...own("timingTimeline", TimingTimeline),
+    ...own("openfilmTimeline", OpenFilmTimeline),
+    ...(!conf.openfilmTimeline && textOf(OPENFILM_FILE) !== undefined
+      ? { [OPENFILM_FILE]: [OpenFilmTimeline, textOf(OPENFILM_FILE)] }
+      : {}),
     ...Object.fromEntries(
       Object.entries(conf.keyFiles ?? {}).map(([rel, edit]) => [
         rel,
@@ -119,6 +125,7 @@ const debounce = (f, ms) => {
   };
 };
 
+// activity: src/activity.mjs's, told of each edit made outside the studio (the AI's)
 export const openFilm = (projectDir, { send }) => {
   const PROJECT = resolve(projectDir);
   const SRC = join(PROJECT, "src");
@@ -201,13 +208,14 @@ export const openFilm = (projectDir, { send }) => {
       : null;
   const timingRel = pkg["live-studio"]?.timingTimeline,
     timing = timingRel ? openTimelineFile(PROJECT, timingRel, TimingTimeline) : null;
+  const openfilm = openOpenFilm(PROJECT, pkg["live-studio"]);
   const ownWrites = () => [
-    ...[sound, cam, shots, text, adjustment, timing, ...keyFiles]
+    ...[sound, cam, shots, text, adjustment, timing, openfilm, ...keyFiles]
       .filter((f) => f?.ownWrite())
       .map((f) => f.FILE),
     ...(voice.ownEditWrite() ? [EDIT] : []),
   ]; // files whose last change was the studio's own save
-  const handEdited = [sound, cam, shots, text, adjustment, timing, ...keyFiles]
+  const handEdited = [sound, cam, shots, text, adjustment, timing, openfilm, ...keyFiles]
     .filter(Boolean)
     .map((f) => f.FILE); // the page loads these itself on every change (/api)
   const editable = [sound, cam, shots, text, adjustment, timing, ...keyFiles].filter(Boolean);
@@ -550,6 +558,13 @@ export const openFilm = (projectDir, { send }) => {
         }, 150),
       );
     }
+    let overlaysSeen = textOf(openfilm.FILE);
+    watch(SRC, { recursive: true }, debounce(() => {
+      const now = textOf(openfilm.FILE);
+      if (now !== overlaysSeen) {
+        overlaysSeen = now; checkContract(); send("openfilm");
+      }
+    }, 150));
     keyFiles.forEach((k, i) => {
       if (!existsSync(k.FILE)) return;
       let seen = textOf(k.FILE);
@@ -790,6 +805,7 @@ export const openFilm = (projectDir, { send }) => {
     shots,
     text,
     adjustment,
+    openfilm,
     timing,
     keyFiles,
     ownWrites,

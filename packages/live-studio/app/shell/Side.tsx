@@ -47,12 +47,18 @@ const OwnPanel = lazy(() => loadPanels().then((m) => ({ default: m.OwnPanel })))
 const PortsPanel = lazy(() => loadPanels().then((m) => ({ default: m.PortsPanel })));
 const SoundPanel = lazy(() => loadPanels().then((m) => ({ default: m.SoundPanel })));
 const TextLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TextLibrary })));
+const OpenFilmLibrary = lazy(() =>
+  import("../openfilm/Library").then((m) => ({ default: m.OpenFilmLibrary })),
+);
+const OpenFilmDetails = lazy(() =>
+  import("../openfilm/Library").then((m) => ({ default: m.OpenFilmDetails })),
+);
 const TextPanel = lazy(() => loadPanels().then((m) => ({ default: m.TextPanel })));
 const SpeedPanel = lazy(() => loadPanels().then((m) => ({ default: m.FilmSpeedPanel })));
 
 type SideTab = StudioState["side"];
 type Lib = StudioState["lib"];
-const CORE_TABS = ["notes", "lessons", "film", "ports", "cli"] as const;
+const CORE_TABS = ["notes", "lessons", "film", "ports", "cli", "openfilm"] as const;
 type CoreTab = (typeof CORE_TABS)[number];
 
 // CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
@@ -217,6 +223,7 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "cli", title: "CLI", icon: Terminal },
   { id: "film", title: "Film", icon: Clapperboard },
   { id: "text", title: "Text", icon: Type },
+  { id: "openfilm", title: "Effects", icon: Blend },
   { id: "objects", title: "Objects", icon: Boxes },
   { id: "transition", title: "Transitions", icon: Blend },
   { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
@@ -317,6 +324,8 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
               </div>
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "openfilm" ? (
+              <OpenFilmLibrary showInspector={false} />
             ) : value === "cli" ? (
               <CliPanel />
             ) : value === "ports" ? (
@@ -332,8 +341,10 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
 }
 
 // Wide: the right column, CapCut's details: the tabs of what is selected
-type Group = "adjustment" | "sound" | "text" | "objects" | "keys" | "cam" | "transition";
+type Group =
+  "adjustment" | "sound" | "text" | "objects" | "keys" | "cam" | "transition" | "openfilm";
 const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
+  openfilm: [{ id: "openfilm", title: "Layer" }],
   adjustment: [{ id: "adjust", title: "Adjustment" }],
   sound: [
     { id: "sound", title: "Basic" },
@@ -355,24 +366,27 @@ const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
   transition: [{ id: "transition", title: "Transition" }],
 };
 const groupOf = (s: StudioState): Group =>
-  s.layerPicks.length
-    ? "adjustment"
-    : s.clips.length
-      ? "sound"
-      : s.textPicks.length
-        ? "text"
-        : s.object
-          ? "objects"
-          : s.keyPicks.length
-            ? "keys"
-            : s.side === "transition"
-              ? "transition"
-              : "cam";
+  s.side === "openfilm"
+    ? "openfilm"
+    : s.layerPicks.length
+      ? "adjustment"
+      : s.clips.length
+        ? "sound"
+        : s.textPicks.length
+          ? "text"
+          : s.object
+            ? "objects"
+            : s.keyPicks.length
+              ? "keys"
+              : s.side === "transition"
+                ? "transition"
+                : "cam";
 function Details() {
   const { sound, text, cam, keys, placed } = useParts(),
     side = useStudio((s) => s.side);
   const aiTab = useAiTabs();
   const has: Record<Group, boolean> = {
+    openfilm: true,
     cam,
     transition: cam,
     adjustment: cam,
@@ -410,7 +424,9 @@ function Details() {
             className="flex min-h-0 flex-1 flex-col"
           >
             <Suspense fallback={null}>
-              {value === "sound" || value === "voiceChanger" || value === "audioSpeed" ? (
+              {value === "openfilm" ? (
+                <OpenFilmDetails />
+              ) : value === "sound" || value === "voiceChanger" || value === "audioSpeed" ? (
                 <SoundPanel
                   part="clip"
                   tab={
@@ -601,6 +617,7 @@ export function Side({
     "cli",
     "film",
     "text",
+    "openfilm",
     "objects",
     "keys",
     "transition",
@@ -669,6 +686,9 @@ export function Side({
             <Tabs.Tab value="text" {...aiTab("text", value)} disabled={!text} className={tab}>
               Text
             </Tabs.Tab>
+            <Tabs.Tab value="openfilm" className={tab}>
+              Effects
+            </Tabs.Tab>
             <Tabs.Tab value="objects" {...aiTab("objects", value)} disabled={!placed} className={tab}>
               Objects
             </Tabs.Tab>
@@ -712,6 +732,8 @@ export function Side({
               <KeyPanel />
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "openfilm" ? (
+              <OpenFilmLibrary />
             ) : value === "cli" ? (
               <CliPanel />
             ) : value === "ports" ? (

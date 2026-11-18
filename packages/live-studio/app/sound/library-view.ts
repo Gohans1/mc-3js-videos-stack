@@ -99,6 +99,7 @@ const SOURCE_ORDER = [
   "mixkit",
   "pixabay",
   "freesound",
+  "openfilm",
   "incompetech",
   "scott-buckley",
   "punch-deck",
@@ -109,6 +110,7 @@ const SOURCE_ORDER = [
 ];
 
 const SOURCE_NAMES: Record<string, string> = {
+  openfilm: "OpenFilm",
   film: "This film",
   mixkit: "Mixkit",
   pixabay: "Pixabay",
@@ -557,14 +559,18 @@ export const originOptions = (items: readonly LibraryItem[]): OriginOption[] => 
   if (!items.length) return [];
   const real = new Set<string>();
   const synth = new Set<string>();
+  const unknown = new Set<string>();
   for (const x of items) {
-    if (originOf(x) === "synth") synth.add(familyKeyOf(x));
+    const origin = originOf(x);
+    if (origin === "synth") synth.add(familyKeyOf(x));
+    else if (origin === "unknown") unknown.add(familyKeyOf(x));
     else real.add(familyKeyOf(x));
   }
   return [
     { id: ALL, title: originTitle(ALL), count: countDistinctFamilies(items) },
     { id: "real", title: originTitle("real"), count: real.size },
     { id: "synth", title: originTitle("synth"), count: synth.size },
+    ...(unknown.size ? [{ id: "unknown" as const, title: originTitle("unknown"), count: unknown.size }] : []),
   ];
 };
 
@@ -711,7 +717,7 @@ export const filterAndSortLibrary = ({
 
   const isMc = activeNav.group === "mc";
   const activeOrigin: OriginFilter =
-    !isTimeline && !isMc && (origin === "real" || origin === "synth")
+    !isTimeline && !isMc && (origin === "real" || origin === "synth" || origin === "unknown")
       ? origin
       : ALL;
   const origins: OriginOption[] = isMc || isTimeline
@@ -723,6 +729,7 @@ export const filterAndSortLibrary = ({
             { id: ALL, title: originTitle(ALL), count: 0 },
             { id: "real", title: originTitle("real"), count: 0 },
             { id: "synth", title: originTitle("synth"), count: 0 },
+            ...(activeOrigin === "unknown" ? [{ id: "unknown" as const, title: originTitle("unknown"), count: 0 }] : []),
           ]
         : [];
   const activeEdition: EditionFilter =
