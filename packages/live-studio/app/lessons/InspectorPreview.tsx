@@ -156,13 +156,13 @@ export function InspectorPreview({
       aria-label="Live preview"
       data-inspector-output
       className={cn(
-        "bg-backdrop flex min-h-0 min-w-0 flex-col border-t transition-colors duration-150 ease-out motion-reduce:transition-none @min-[700px]/inspector:border-s @min-[700px]/inspector:border-t-0",
+        "bg-backdrop ease-studio-out flex min-h-0 min-w-0 flex-col border-t transition-colors duration-150 motion-reduce:transition-none @min-[700px]/inspector:border-s @min-[700px]/inspector:border-t-0",
         view === "lessons" ? "border-primary/30" : "border-ai/30",
       )}
     >
       <div
         className={cn(
-          "flex flex-none flex-col gap-0.5 border-b px-3 py-1 transition-colors duration-150 ease-out motion-reduce:transition-none @min-[700px]/inspector:px-4",
+          "ease-studio-out flex flex-none flex-col gap-0.5 border-b px-3 py-1 transition-colors duration-150 motion-reduce:transition-none @min-[700px]/inspector:px-4",
           view === "lessons" ? "border-primary/20 bg-primary/5" : "border-ai/20 bg-ai/5",
         )}
       >

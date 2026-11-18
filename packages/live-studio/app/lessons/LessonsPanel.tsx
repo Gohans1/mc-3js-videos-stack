@@ -334,8 +334,7 @@ function LessonDeckPanel({
     if (!pending && active) return;
     const interrupted = motionRef.current?.isRunning();
     const nextKey = trail.contentKey ?? trail.columns.at(-1)?.key;
-    const exitOpacity =
-      nextKey && interrupted ? motionRef.current?.exitOpacity(nextKey) : undefined;
+    const exitFrame = nextKey && interrupted ? motionRef.current?.exitFrame(nextKey) : undefined;
     motionRef.current?.cancel();
     motionRef.current = null;
     if (!active || !pending?.animate || isSearching || layout.mode !== "desktop-stack" || !deck)
@@ -356,8 +355,7 @@ function LessonDeckPanel({
       nextTrail: trail,
       animate: true,
       interrupted,
-      resume:
-        nextKey && exitOpacity !== undefined ? { key: nextKey, opacity: exitOpacity } : undefined,
+      resume: nextKey && exitFrame ? { key: nextKey, ...exitFrame } : undefined,
     });
   }, [active, containerWidth, hasPaneWidth, isLockedWidth, isSearching, layout.mode, trail]);
 

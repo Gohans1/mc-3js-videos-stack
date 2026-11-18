@@ -143,6 +143,7 @@
   --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
   --text-lesson-meta: 0.8125rem;
   --leading-lesson-heading-wrapped: 1.4;
+  --ease-studio-out: cubic-bezier(0.23, 1, 0.32, 1);
   --text-title: 15px; /* a panel's or dialog's heading */
   --shadow-float: 0 4px 16px oklch(0.1696 0.0017 17.3 / 0.55); /* a bar over the picture */
   --shadow-sheet: 0 8px 20px oklch(0.1696 0.0017 17.3 / 0.65); /* the note sheet over the picture on a phone */

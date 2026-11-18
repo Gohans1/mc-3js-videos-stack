@@ -1,11 +1,10 @@
 // GPU-composited WAAPI fold-out / fold-in animations for Lessons Miller columns (emil-design-eng + md-phone).
-import { prefersReduced } from "../components/Motion";
+import { EASE_OUT, prefersReduced } from "../components/Motion";
 import { classifyLessonTrailTransition, type LessonTrail } from "./tree";
 
-const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 const ENTER_MS = 125;
 const EXIT_MS = 150;
-const FOLDER_TRAVEL = "translateX(8px)";
+const FOLDER_TRAVEL = 8;
 
 interface PanelSnapshot {
   key: string;
@@ -26,7 +25,7 @@ export interface DeckSnapshot {
 export interface DeckMotion {
   cancel: () => void;
   isRunning: () => boolean;
-  exitOpacity: (key: string) => string | undefined;
+  exitFrame: (key: string) => { opacity: string; left: number } | undefined;
 }
 
 export interface ClipRectLike {
@@ -153,7 +152,7 @@ export function animateDeckTransition({
   nextTrail: LessonTrail;
   animate: boolean;
   interrupted?: boolean;
-  resume?: { key: string; opacity: string };
+  resume?: { key: string; opacity: string; left: number };
 }): DeckMotion | null {
   if (!deck || !animate) return null;
   const reduced = prefersReduced();
@@ -231,13 +230,13 @@ export function animateDeckTransition({
           leavesFolder
             ? [
                 { opacity: item.opacity, transform: "none" },
-                { opacity: 0, transform: FOLDER_TRAVEL },
+                { opacity: 0, transform: `translateX(${FOLDER_TRAVEL}px)` },
               ]
             : [{ opacity: item.opacity }, { opacity: 0 }],
           {
             duration: replacesLayout ? ENTER_MS : EXIT_MS,
             delay: replacesLayout ? 0 : Math.min(idx * 22, 60),
-            easing: "ease-out",
+            easing: EASE_OUT,
             fill: "forwards",
           },
         );
@@ -267,7 +266,7 @@ export function animateDeckTransition({
         animations.push(
           col.animate(
             [{ transform: `translate3d(${dx}px, 0, 0)` }, { transform: "translate3d(0, 0, 0)" }],
-            { duration: ENTER_MS, easing: ENTER_EASE },
+            { duration: ENTER_MS, easing: EASE_OUT },
           ),
         );
       }
@@ -279,26 +278,33 @@ export function animateDeckTransition({
     cancelAnims(el);
     if (typeof el.animate !== "function") continue;
     const key = el.dataset.lessonContent ?? el.dataset.lessonsCol;
-    const opacity = resume && resume.key === key ? resume.opacity : reduced ? 0.9 : 0.82;
+    const resumed = resume?.key === key ? resume : undefined;
+    const opacity = resumed?.opacity ?? (reduced ? 0.9 : 0.82);
     const entersFolder =
       !reduced && folderNavigation && key !== undefined && !previousCols.has(key);
+    const travel =
+      entersFolder && resumed
+        ? Math.min(FOLDER_TRAVEL, Math.max(0, resumed.left - el.getBoundingClientRect().left))
+        : FOLDER_TRAVEL;
     animations.push(
       el.animate(
         entersFolder
           ? [
-              { opacity, transform: FOLDER_TRAVEL },
+              { opacity, transform: `translateX(${travel}px)` },
               { opacity: 1, transform: "none" },
             ]
           : [{ opacity }, { opacity: 1 }],
-        { duration: reduced ? 80 : ENTER_MS, easing: ENTER_EASE },
+        { duration: reduced ? 80 : ENTER_MS, easing: EASE_OUT },
       ),
     );
   }
 
   return {
-    exitOpacity: (key) => {
+    exitFrame: (key) => {
       const ghost = exiting.get(key);
-      return ghost?.isConnected ? getComputedStyle(ghost).opacity : undefined;
+      return ghost?.isConnected
+        ? { opacity: getComputedStyle(ghost).opacity, left: ghost.getBoundingClientRect().left }
+        : undefined;
     },
     isRunning: () =>
       animations.some((animation) => animation.pending || animation.playState === "running"),

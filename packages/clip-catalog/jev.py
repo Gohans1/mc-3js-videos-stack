@@ -67,9 +67,11 @@ class Jev:
         options = options or {}
         self.options, self.trace = options, []
         now, back = time.time(), read_spent()
-        tries = [(name, url, model, key, i + 1, len(ks)) for name, url, model, env, file in ROUTES
-                 if options.get("route", "auto") == "auto" or (options.get("route") == "free") == ("free" in name)
+        selected = options.get("route", "auto")
+        providers = [route for route in ROUTES if selected == "auto" or (selected == "free") == ("free" in route[0])]
+        tries = [(name, url, model, key, i + 1, len(ks)) for name, url, model, env, file in providers
                  for ks in [keys(env, file)] for i, key in enumerate(ks)]
+        self.key_hint = " or ".join(f"{env} for {name}" for name, _, _, env, _ in providers)
         self.routes = sorted(tries, key=lambda r: back.get(r[0], 0) > now)
         self.unavailable = {}
         self.spent, self.lock = 0.0, threading.Lock()
@@ -81,8 +83,8 @@ class Jev:
                 if not self.routes:
                     if self.unavailable:
                         sys.exit(" ".join(self.unavailable.values()))
-                    print("No API key is configured for the selected Jev provider. Set OPENCODE_API_KEY for OpenCode Zen "
-                          "or OPENROUTER_API_KEY for OpenRouter, then restart Studio or your terminal.", file=sys.stderr)
+                    print(f"No API key is configured for this Jev run. Set {self.key_hint}, then restart Studio or your terminal.",
+                          file=sys.stderr)
                     sys.exit(NO_REQUEST_EXIT)
                 route = self.routes[0]
             name, url, model, key, i, n = route

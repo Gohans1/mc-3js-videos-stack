@@ -144,7 +144,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
       {
         key: "route",
         label: "Provider",
-        help: "Auto prefers free OpenCode Zen. Paid OpenRouter can go first if Zen is unavailable or out of quota.",
+        help: "Auto prefers OpenCode Zen. OpenRouter may charge if Zen is unavailable or out of quota.",
       },
       {
         key: "freeModel",
@@ -272,7 +272,7 @@ const options: Partial<Record<keyof LessonJevConfig, { value: string; label: str
     { value: "none", label: "No metadata" },
   ],
   route: [
-    { value: "auto", label: "Auto · free preferred" },
+    { value: "auto", label: "Auto · OpenCode Zen preferred" },
     { value: "free", label: "OpenCode Zen only" },
     { value: "paid", label: "Paid only · OpenRouter" },
   ],

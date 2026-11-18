@@ -504,6 +504,11 @@ test("a failed manual run stays visible until an explicit retry and a successful
     expect(
       await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
     ).toBe(true);
+    await view.evaluate("document.querySelector('[role=switch]').click()");
+    expect(await view.evaluate("document.body.textContent")).toContain(
+      "Turn on Jev calls to retry.",
+    );
+    await view.evaluate("document.querySelector('[role=switch]').click()");
     judgeFailure = "";
     await clickButton("Retry Jev");
     await waitFor("document.body.textContent.includes('Live result')");
@@ -678,9 +683,14 @@ test("settings and preview failures can be reviewed and retried independently", 
     expect(
       await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
     ).toBe(false);
-    await view.evaluate("window.saveProbe.rejectDry=true");
+    await view.evaluate(
+      "window.inspectTest.lessons.setState({inspectorLiveEnabled:true}); window.saveProbe.rejectDry=true",
+    );
     await fillNote("Try a second framing note");
     await waitFor("document.body.textContent.includes('QA preview unavailable')");
+    expect(
+      await view.evaluate("document.getElementById('jev-mode-description').textContent"),
+    ).toContain("Retry the preview to run Jev.");
     await clickButton("Review error");
     expect(await view.evaluate("document.activeElement.textContent")).toContain("Retry preview");
     await clickButton("Retry preview");

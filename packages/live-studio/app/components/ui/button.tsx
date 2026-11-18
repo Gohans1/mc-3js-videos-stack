@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button focus-visible:border-ring focus-visible:ring-ring aria-invalid:border-destructive/50 aria-invalid:ring-destructive/40 inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out outline-none select-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:ring-2 motion-safe:enabled:not-aria-disabled:active:not-aria-[haspopup]:scale-[0.96] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button focus-visible:border-ring focus-visible:ring-ring aria-invalid:border-destructive/50 aria-invalid:ring-destructive/40 inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,scale] duration-150 ease-out outline-none select-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:ring-2 motion-safe:enabled:not-aria-disabled:active:not-aria-[haspopup]:scale-[0.96] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -24,8 +24,7 @@ const buttonVariants = cva(
         quiet:
           "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint aria-pressed:hover:text-primary-text data-popup-open:bg-tint data-popup-open:text-primary-text",
         tab: "text-muted-foreground hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring hover:bg-surface-subtle aria-expanded:bg-hairline-subtle aria-pressed:bg-secondary aria-pressed:text-foreground aria-pressed:ring-hairline-strong aria-pressed:hover:bg-secondary-hover aria-pressed:hover:text-foreground focus-visible:border-transparent focus-visible:ring-2 aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
-        remove:
-          "text-muted-foreground hover:bg-destructive/15 hover:text-destructive focus-visible:transition-none",
+        remove: "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
         "remove-chip":
           "text-muted-foreground hover:bg-destructive/15 hover:text-destructive border-hairline rounded-none border-s",
         lit: "text-primary-text border-hairline bg-surface-subtle hover:bg-hairline", // a control whose item is active right now

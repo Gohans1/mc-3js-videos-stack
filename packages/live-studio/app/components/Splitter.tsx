@@ -138,7 +138,7 @@ export function Splitter({
       <span
         aria-hidden
         className={cn(
-          "bg-primary pointer-events-none absolute opacity-0 transition-opacity duration-150 group-hover:opacity-60 group-focus-visible:opacity-100 group-data-dragging:opacity-100",
+          "bg-primary pointer-events-none absolute opacity-0 transition-opacity duration-150 group-hover:opacity-60 group-focus-visible:opacity-100 group-focus-visible:transition-none group-data-dragging:opacity-100 group-data-dragging:transition-none motion-reduce:transition-none",
           across ? "inset-x-0 top-[3px] h-0.5" : "inset-y-0 left-[3px] w-0.5",
           lineClassName,
         )}

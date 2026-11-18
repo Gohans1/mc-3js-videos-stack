@@ -192,6 +192,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     }));
   const changeNote = (value: InspectNote) => {
     useInspectorSession.setState({ note: value });
+    setError("");
     setView("ai");
     setChange("Note edited");
   };
@@ -202,6 +203,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     nextView: InspectorView,
   ) => {
     useInspectorSession.setState({ config: value });
+    setError("");
     setView(nextView);
     setChange(label + " changed");
   };
@@ -211,6 +213,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     useInspectorSession.setState({
       excluded: included ? excluded.filter((x) => x !== key) : [...excluded, key],
     });
+    setError("");
     setView("lessons");
     setChange(included ? "File restored" : "File excluded");
   };
@@ -340,11 +343,13 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     : !note.text.trim()
       ? "Write a note."
       : missingLessons ||
-        (updating
-          ? "Updating preview…"
-          : !received?.value.pool.length
-            ? "No lesson files available."
-            : "");
+        (error
+          ? "Retry the preview to run Jev."
+          : updating
+            ? "Updating preview…"
+            : !received?.value.pool.length
+              ? "No lesson files available."
+              : "");
   const noteOptions = [
     { value: "simulation", label: "Write a preview note" },
     ...availableNotes.map((n) => ({ value: n.id ?? "", label: n.text })),
@@ -396,6 +401,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 <AlertTitle>{runError ? "Jev run failed" : "Preview needs attention"}</AlertTitle>
                 <AlertDescription>
                   {runError || error}
+                  {runError && !enabled && <p>Turn on Jev calls to retry.</p>}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="md"
@@ -409,7 +415,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                         const target = runError ? controlsRef.current : noteRef.current;
                         target?.focus();
                         if (runError) void run();
-                        else setRetry((v) => v + 1);
+                        else {
+                          setError("");
+                          setRetry((v) => v + 1);
+                        }
                       }}
                     >
                       {runError ? "Retry Jev" : "Retry preview"}

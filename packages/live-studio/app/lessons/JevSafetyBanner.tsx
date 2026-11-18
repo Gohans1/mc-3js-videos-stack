@@ -29,7 +29,7 @@ export function JevSafetyBanner({
   return (
     <div
       className={cn(
-        "flex-none border-b px-4 py-3 transition-colors duration-150 ease-out motion-reduce:transition-none",
+        "ease-studio-out flex-none border-b px-4 py-3 transition-colors duration-150 motion-reduce:transition-none",
         enabled ? "border-warn/30 bg-warn/8" : "border-border bg-card/35",
       )}
     >

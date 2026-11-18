@@ -60,7 +60,7 @@ const overlayVariants = cva("", {
   defaultVariants: { variant: "default" },
 });
 const fadeDialog =
-  "transition-opacity duration-100 ease-out data-starting-style:opacity-0 data-ending-style:opacity-0";
+  "transition-opacity duration-100 ease-studio-out data-starting-style:opacity-0 data-ending-style:opacity-0";
 
 function DialogOverlay({
   className,
