@@ -676,7 +676,7 @@ test("Save failures survive a later dry response and retry Save without blocking
     ).toBe(false);
     await clickButton("Retry save");
     await waitFor(
-      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Settings saved'&&b.disabled)",
+      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Settings up to date'&&b.disabled)",
     );
     expect(await view.evaluate("window.saveProbe.calls")).toBe(2);
     expect(

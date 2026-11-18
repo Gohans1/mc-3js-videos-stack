@@ -106,7 +106,7 @@ export const JEV_ENGINE_FIELDS: Record<keyof LessonJevConfig, string> = {
   freeModel: "Model on OpenCode Zen's /zen/v1/systemone endpoint.",
   paidModel: "Model on OpenRouter's /api/v1/systemone endpoint.",
   spendCap:
-    "USD response-cost stop per Python request, checked AFTER billing; not a hard whole-tournament budget.",
+    "USD charge threshold per engine request, checked after billing. One run can bill several requests.",
   systemPreamble: "Prepended to wanted inside state. No HTTP system role exists.",
   wantedTemplate: "{note} = note text followed by every ask/reply text, separated by newlines.",
   choiceInstructions: "Choice pick.instructions, shared by heats and final.",

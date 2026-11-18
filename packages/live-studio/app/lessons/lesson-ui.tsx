@@ -63,8 +63,10 @@ export function ConfirmDeleteButton({
           <Trash2 size={16} absoluteStrokeWidth aria-hidden />
         </DialogTrigger>
         <DialogContent showCloseButton={false} motion="fade">
-          <DialogTitle>Delete lesson?</DialogTitle>
-          <DialogDescription>{action}. The deletion notification offers Undo.</DialogDescription>
+          <DialogTitle>
+            <span className="wrap-anywhere">{action}?</span>
+          </DialogTitle>
+          <DialogDescription>You can undo this from the notification.</DialogDescription>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
             <DialogClose render={<Button variant="destructive" />} onClick={onConfirm}>

@@ -95,6 +95,7 @@ export function InspectorPreview({
   runningJev,
   change,
   error,
+  onReviewError,
   validationError,
   failedRun,
 }: {
@@ -109,6 +110,7 @@ export function InspectorPreview({
   runningJev: boolean;
   change: string;
   error: string;
+  onReviewError: () => void;
   validationError: string;
   failedRun: boolean;
 }) {
@@ -259,6 +261,13 @@ export function InspectorPreview({
               "Choose a note or write one to begin."
             )}
           </p>
+          {error && !validationError && (
+            <div className="flex">
+              <Button size="sm" variant="outline" onClick={onReviewError}>
+                Review error
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       <div

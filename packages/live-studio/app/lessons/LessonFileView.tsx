@@ -8,7 +8,7 @@ import {
   ListTree,
   Pencil,
 } from "lucide-react";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,15 @@ function scrollScrollerToLine(
   return () => {};
 }
 
+function focusEditorLine(editor: HTMLTextAreaElement | null, line: number) {
+  if (!editor) return;
+  const start = editor.value
+    .split("\n", line - 1)
+    .reduce((offset, text) => offset + text.length + 1, 0);
+  editor.focus({ preventScroll: true });
+  editor.setSelectionRange(start, start);
+}
+
 /** Reader, painted live editor, Contents navigator, and AI word-diff sheet for one lesson file. */
 export function LessonFileView({
   path: key,
@@ -125,6 +134,7 @@ export function LessonFileView({
   const view: LessonViewMode = storedView ?? (pickKey === key ? "edit" : preferredView);
   const effectiveView: LessonViewMode = view === "changes" && !news ? preferredView : view;
   const [contentsOpen, setContentsOpen] = useState(false);
+  const searchMatchId = useId();
   const contentsTriggerRef = useRef<HTMLButtonElement>(null);
   const [activeLine, setActiveLine] = useState(1);
 
@@ -158,13 +168,20 @@ export function LessonFileView({
       setLessonView(key, "edit", false);
       area.current?.focus({ preventScroll: true });
       area.current?.setSelectionRange(picked[0], picked[1]);
-    } else if (initialLine && initialLine > 1) {
-      requestAnimationFrame(() => {
+    } else if (initialLine) {
+      const frame = requestAnimationFrame(() => {
         flyStop.current?.();
-        const target = viewRef.current === "edit" ? editScroller.current : readScroller.current;
+        const editing = viewRef.current === "edit";
+        const target = editing ? editScroller.current : readScroller.current;
         flyStop.current = scrollScrollerToLine(target, initialLine, false);
         setActiveLine(initialLine);
+        if (editing) focusEditorLine(area.current, initialLine);
+        else {
+          const match = target?.querySelector<HTMLElement>("[data-lesson-search-match]");
+          (match ?? contentsTriggerRef.current)?.focus({ preventScroll: true });
+        }
       });
+      return () => cancelAnimationFrame(frame);
     }
   }, [key, initialLine]);
 
@@ -174,10 +191,14 @@ export function LessonFileView({
     const marker = findLineNode(scroller, initialLine);
     if (!marker) return;
     marker.dataset.lessonSearchMatch = "";
+    marker.tabIndex = -1;
+    marker.setAttribute("aria-describedby", searchMatchId);
     return () => {
       delete marker.dataset.lessonSearchMatch;
+      marker.removeAttribute("tabindex");
+      marker.removeAttribute("aria-describedby");
     };
-  }, [effectiveView, initialLine, text]);
+  }, [effectiveView, initialLine, searchMatchId, text]);
 
   const activeScroller = () =>
     effectiveView === "edit" ? editScroller.current : readScroller.current;
@@ -193,13 +214,7 @@ export function LessonFileView({
       const target = next === "edit" ? editScroller.current : readScroller.current;
       scrollScrollerToLine(target, keepLine, false);
       setActiveLine(keepLine);
-      if (next === "edit" && jumpLine !== undefined) {
-        const box = area.current;
-        if (!box) return;
-        const at = lines.slice(0, jumpLine - 1).reduce((n, l) => n + l.length + 1, 0);
-        box.focus({ preventScroll: true });
-        box.setSelectionRange(at, at);
-      }
+      if (next === "edit" && jumpLine !== undefined) focusEditorLine(area.current, jumpLine);
     });
   };
 
@@ -453,6 +468,11 @@ export function LessonFileView({
           items={viewItems}
           onChange={(v) => switchView(v)}
         />
+        {initialLine !== null && (
+          <span id={searchMatchId} className="text-primary-text text-sm tabular-nums">
+            Search match · line {initialLine}
+          </span>
+        )}
         <span className="text-muted-foreground text-ui shrink-0 whitespace-nowrap tabular-nums">
           {effectiveView === "read"
             ? `${heads.length} ${heads.length === 1 ? "section" : "sections"}`
@@ -473,7 +493,7 @@ export function LessonFileView({
           <div
             ref={readScroller}
             onScroll={(e) => setActiveLine(findVisibleLine(e.currentTarget))}
-            className="scroll-fade [&_[data-lesson-search-match]]:bg-primary/15 min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [&_[data-lesson-search-match]]:rounded-sm"
+            className="scroll-fade [&_[data-lesson-search-match]]:outline-ring min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [&_[data-lesson-search-match]]:rounded-sm [&_[data-lesson-search-match]]:outline-2 [&_[data-lesson-search-match]]:outline-solid"
           >
             <LessonMarkdownView text={text} onJumpEdit={goTo} />
           </div>
@@ -497,6 +517,7 @@ export function LessonFileView({
                     className={cn(
                       i < frontEnd && "text-muted-foreground",
                       headingLines.has(i + 1) && "text-lesson-heading",
+                      initialLine === i + 1 && "outline-ring rounded-sm outline-2 outline-solid",
                     )}
                   >
                     {l}
@@ -507,6 +528,7 @@ export function LessonFileView({
               <textarea
                 ref={area}
                 aria-label={`${displayPath} (${SCOPE_LABEL[scope]}), the lesson's words`}
+                aria-describedby={initialLine === null ? undefined : searchMatchId}
                 spellCheck={false}
                 value={text}
                 onChange={(e) => typeLesson(key, e.target.value)}

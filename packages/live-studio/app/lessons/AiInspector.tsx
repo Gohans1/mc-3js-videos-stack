@@ -102,6 +102,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const [saving, setSaving] = useState(false);
   const [pinnedActionsHeight, setPinnedActionsHeight] = useState(0);
   const controlsRef = useRef<HTMLDivElement>(null),
+    errorRef = useRef<HTMLDivElement>(null),
     actionsRef = useRef<HTMLDivElement>(null),
     lessonFilesSummaryRef = useRef<HTMLElement>(null);
   const running = useRef(false),
@@ -159,7 +160,15 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       ? "Retry save"
       : dirty
         ? "Save CLI settings"
-        : "Settings saved";
+        : "Settings up to date";
+  const choosePreviewView = (next: InspectorView) => {
+    setView(next);
+    setReceived((current) => (current?.previous ? { ...current, previous: undefined } : current));
+  };
+  const revealPreviewError = () => {
+    errorRef.current?.scrollIntoView({ block: "start" });
+    errorRef.current?.focus({ preventScroll: true });
+  };
   const accept = (key: string, value: InspectResult) =>
     setReceived((previous) => ({
       key,
@@ -367,7 +376,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
           </div>
           <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-6 p-4">
             {(runError || saveError || (!validationError && error)) && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" ref={errorRef} tabIndex={-1}>
                 <AlertTitle>
                   {runError
                     ? "Jev run failed"
@@ -542,7 +551,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     </SelectContent>
                   </Select>
                 </Field>
-                <Button size="md" variant="ghost" onClick={() => setView("lessons")}>
+                <Button size="md" variant="ghost" onClick={() => choosePreviewView("lessons")}>
                   View extracted lessons
                 </Button>
                 <details>
@@ -683,11 +692,12 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
           result={received?.value ?? null}
           previous={received?.previous}
           view={view}
-          onViewChange={setView}
+          onViewChange={choosePreviewView}
           updating={updating}
           runningJev={busy}
           change={change}
           error={validationError || runError || error}
+          onReviewError={revealPreviewError}
           validationError={validationError}
           failedRun={Boolean(runError)}
         />

@@ -449,16 +449,7 @@ export function LessonColumnView({
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => {
-                    setQuery("");
-                    sectionRef.current
-                      ?.querySelector<HTMLInputElement>('input[type="search"]')
-                      ?.focus();
-                  }}
-                >
+                <Button variant="secondary" size="md" onClick={() => setQuery("")}>
                   Clear search
                 </Button>
               </EmptyContent>

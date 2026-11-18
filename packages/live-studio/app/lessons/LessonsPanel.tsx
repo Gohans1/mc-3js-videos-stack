@@ -478,10 +478,25 @@ function LessonDeckPanel({
       setJumpTarget(matchLine ? { path: key, line: matchLine } : null);
       openLesson(key);
     });
-    if (!animate)
+    if (!animate && !matchLine)
       requestAnimationFrame(() =>
         hostRef.current?.querySelector<HTMLElement>("[data-lesson-back]")?.focus(),
       );
+  };
+
+  const setSearchQuery = (next: string) => {
+    setQuery(next);
+    if (next.trim() || !isSearching) return;
+    requestAnimationFrame(() => {
+      const host = hostRef.current;
+      const field = host?.querySelector<HTMLInputElement>('input[type="search"]');
+      if (field?.getClientRects().length) field.focus();
+      else {
+        const back = host?.querySelector<HTMLElement>("[data-lesson-back]");
+        if (back) back.focus({ preventScroll: true });
+        else focusLastColumn();
+      }
+    });
   };
 
   const handleDeckKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -566,7 +581,7 @@ function LessonDeckPanel({
             loadFailed={loadFailed}
             isSearching={isSearching}
             query={query}
-            setQuery={setQuery}
+            setQuery={setSearchQuery}
             hasProject={hasProject}
             filesCount={files.length}
             filmCount={filmCount}

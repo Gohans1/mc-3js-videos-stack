@@ -150,8 +150,8 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
       { key: "paidModel", label: "Paid model ID", help: "Model sent to OpenRouter." },
       {
         key: "spendCap",
-        label: "Response-cost stop · USD",
-        help: "Checked after billing per request. This is not a hard budget for the whole run.",
+        label: "Charge threshold per request (USD)",
+        help: "Jev checks each charge after billing and discards responses over this amount. A run can bill several requests.",
       },
     ],
   },
