@@ -256,12 +256,12 @@ export function LessonColumnView({
             type="button"
             onClick={(e) => onFocusFolder(col.parts, e.detail > 0)}
             title={`Focus folder ${col.title}`}
-            className="text-foreground hover:bg-muted/70 focus-visible:ring-ring studio-press text-title/[1.4] min-w-0 flex-1 rounded px-1.5 py-0.5 text-start font-semibold wrap-anywhere outline-none focus-visible:ring-2"
+            className="text-foreground hover:bg-muted/70 focus-visible:ring-ring studio-press min-w-0 flex-1 rounded px-1.5 py-0.5 text-start text-base/[1.4] font-semibold wrap-anywhere outline-none focus-visible:ring-2"
           >
             {col.title}
           </button>
         ) : (
-          <span className="text-foreground text-title/[1.4] min-w-0 flex-1 font-semibold wrap-anywhere">
+          <span className="text-foreground min-w-0 flex-1 text-base/[1.4] font-semibold wrap-anywhere">
             {col.title}
           </span>
         )}

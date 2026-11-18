@@ -729,6 +729,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       fade.currentTime = 60;
       const exitOpacity = Number(getComputedStyle(ghost).opacity);
       const exitX = ghost.getBoundingClientRect().left;
+      const visibleGhostControls = [...ghost.querySelectorAll("button, [role=radio]")]
+        .filter(control => getComputedStyle(control).visibility === "visible").length;
       click(document.querySelector('[data-lesson-row="file:all:camera.md"]'));
       await frame();
       const reopened = document.querySelector(reader);
@@ -736,12 +738,14 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
         exitOpacity,
         resumedOpacity: Number(reopened.getAnimations()[0]?.effect.getKeyframes()[0].opacity),
         shift: Math.abs(startX - exitX),
+        visibleGhostControls,
         oldGhostMounted: ghost.isConnected,
       };
     })()`);
     assert.ok(result.exitOpacity > 0 && result.exitOpacity < 1);
     assert.ok(Math.abs(result.resumedOpacity - result.exitOpacity) < 0.08);
     assert.ok(result.shift < 1);
+    assert.equal(result.visibleGhostControls, 0);
     assert.equal(result.oldGhostMounted, false);
   });
 

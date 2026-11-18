@@ -97,7 +97,8 @@ class Jev:
                         cap = self.options.get("spendCap", SPEND_CAP)
                         self.trace.append({"phase": "response", "route": name, "request": {"model": model, "state": state, "questions": questions}, "answers": res["answers"], "usage": res.get("usage", {}), "cost": res.get("usage", {}).get("cost")})
                         if self.spent > cap:
-                            sys.exit(f"Jev: stopped at ${self.spent:.4f}, past SPEND_CAP ${cap}")
+                            sys.exit(f"Jev stopped after a reported charge of ${self.spent:.4f} exceeded the ${cap:g} threshold. "
+                                     "Review the provider and charge threshold in Provider & billing before running again.")
                         self.used = name
                     return res["answers"]
                 except urllib.error.HTTPError as e:

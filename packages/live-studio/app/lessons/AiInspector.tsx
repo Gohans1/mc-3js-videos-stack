@@ -114,9 +114,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const runFailureToast = useRef<string | null>(null),
     saveFailureToast = useRef<string | null>(null);
   const enabled = active && inspectorLiveEnabled;
+  const usesFreeModel =
+    config.route === "free" && config.freeModel === DEFAULT_LESSON_JEV_CONFIG.freeModel;
   const providerHint =
     config.route === "free"
-      ? config.freeModel === DEFAULT_LESSON_JEV_CONFIG.freeModel
+      ? usesFreeModel
         ? "Free model · OpenCode Zen"
         : "OpenCode Zen only"
       : config.route === "paid"
@@ -283,10 +285,9 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       });
     } catch (e) {
       const detail = (e as Error).message;
-      const message =
-        config.route === "free"
-          ? detail
-          : `${detail} The provider may still charge for this attempt.`;
+      const message = usesFreeModel
+        ? detail
+        : `${detail} The provider may still charge for this attempt.`;
       if (currentBody.current === snapshot) setRunFailure({ key: snapshot, message });
       runFailureToast.current = toast.add({
         title: "Jev run failed",
@@ -378,7 +379,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
               <Button
                 size="md"
                 variant={dirty ? "lit" : "outline"}
-                className="min-w-36"
+                className="w-36 max-w-full"
                 disabled={!dirty || !info || !valid.success || saving || busy}
                 onClick={() => void save()}
                 aria-busy={saving}

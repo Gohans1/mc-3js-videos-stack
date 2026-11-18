@@ -674,8 +674,7 @@ function LessonDeckPanel({
       onKeyDown={handleDeckKeyDown}
       style={isLockedWidth ? ({ "--deck-lock-w": `${lockWidthPx}px` } as CSSProperties) : undefined}
       className={cn(
-        "flex min-h-0 flex-1 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden",
-        (layout.showAncestors || renderedColumns.length > 1 || isLockedWidth) && "bg-backdrop",
+        "relative z-10 flex min-h-0 flex-1 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden",
         isLockedWidth && (dock === "end" ? "justify-end" : "justify-start"),
       )}
     >
@@ -693,7 +692,10 @@ function LessonDeckPanel({
   return (
     <div
       ref={hostRef}
-      className="@container/lesson-deck relative flex min-h-0 min-w-0 flex-1 flex-col"
+      className={cn(
+        "@container/lesson-deck relative isolate flex min-h-0 min-w-0 flex-1 flex-col",
+        (layout.showAncestors || renderedColumns.length > 1 || isLockedWidth) && "bg-backdrop",
+      )}
     >
       <div
         ref={motionLayerRef}

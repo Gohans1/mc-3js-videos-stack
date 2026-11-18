@@ -94,6 +94,11 @@ const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLEle
   const { key, node, copy, rect, background, opacity } = panel;
   const ghost = copy ?? (node.cloneNode(true) as HTMLElement);
   for (const drop of ghost.querySelectorAll("textarea, [role='dialog']")) drop.remove();
+  if (node.hasAttribute("data-lesson-content")) {
+    for (const control of ghost.querySelectorAll<HTMLElement>("button, [role='radio']")) {
+      control.style.visibility = "hidden";
+    }
+  }
   ghost.removeAttribute("id");
   ghost.removeAttribute("data-lessons-col");
   ghost.removeAttribute("data-lesson-content");
