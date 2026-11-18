@@ -1,4 +1,6 @@
 export interface VoiceTakeRecord {
+  playgroundItemId?: string;
+  playgroundScope?: "project" | "global";
   id: string;
   text: string;
   t?: number;
@@ -13,6 +15,7 @@ export interface VoiceTakeRecord {
   words: number;
   aligned: boolean;
   tries: string[];
+  alternatives?: Array<{ file: string; title: string; active: boolean }>;
 }
 
 export interface VoiceSwappedSpan {
@@ -31,6 +34,7 @@ export interface VoiceController {
   TRY_DIR: string;
   read(): { narration: boolean; takes: VoiceTakeRecord[] };
   audioFile(kind: string, file: string): string | null;
+  readWordTimings(kind: string, file: string): Array<{ w: string; s: number; e: number }>;
   ownEditWrite(): boolean;
   useTry(params: { takeId: string; tryFile: string }): Promise<
     | { error: string; status: number }

@@ -1,8 +1,44 @@
-import { AUDIO_TAG_RE, stripDialogueSpeakerBrackets } from "../../src/voice-playground-text.mjs";
-// Complete ElevenLabs v4 / v3 Audio Tags catalog, inline parser, cursor inserter, and credit estimator.
+import { providerForModel } from "../../src/voice-playground-providers.mjs";
+import {
+  AUDIO_TAG_RE,
+  extractAudioTags,
+  stripDialogueSpeakerBrackets,
+} from "../../src/voice-playground-text.mjs";
+// Audio tags are natural-language directions, not a fixed API enum.
 import type { PlaygroundModelInfo } from "../../src/voice-playground.mjs";
 
 export { AUDIO_TAG_RE, stripDialogueSpeakerBrackets };
+
+export function composerAudioTags(draft: {
+  mode: string;
+  provider?: string;
+  modelId: string;
+  text: string;
+  speakers?: readonly { name: string; modelId: string }[];
+}) {
+  const dialogue = draft.mode === "dialogue";
+  const speakers = new Map((draft.speakers ?? []).map((speaker) => [speaker.name.trim(), speaker]));
+  const unsupported = new Set<string>();
+  let current = "";
+  if (dialogue)
+    for (const line of stripDialogueSpeakerBrackets(draft.text).split(/\r?\n/)) {
+      const turn = line.match(/^\s*([^:]+):\s*(.*)$/);
+      if (turn && speakers.has(turn[1]!.trim())) current = turn[1]!.trim();
+      const speaker = speakers.get(current);
+      if (speaker && !modelSupportsAudioTags(speaker.modelId) && extractAudioTags(line).length)
+        unsupported.add(current);
+    }
+  return {
+    showPalette: dialogue
+      ? [...speakers.values()].some((speaker) => modelSupportsAudioTags(speaker.modelId))
+      : (draft.provider ?? providerForModel(draft.modelId)) === "elevenlabs",
+    unsupportedTts:
+      draft.mode === "tts" &&
+      !modelSupportsAudioTags(draft.modelId) &&
+      extractAudioTags(draft.text).length > 0,
+    unsupportedSpeakers: [...unsupported],
+  };
+}
 
 export interface AudioTagEntry {
   tag: string;
@@ -21,6 +57,18 @@ export const AUDIO_TAG_CATEGORIES: readonly AudioTagCategory[] = [
     id: "emotion",
     title: "Emotions",
     tags: [
+      { tag: "happy", label: "Happy", hint: "Warm, cheerful delivery" },
+      { tag: "sad", label: "Sad", hint: "Subdued, sorrowful delivery" },
+      { tag: "angry", label: "Angry", hint: "Direct, forceful anger" },
+      { tag: "furious", label: "Furious", hint: "Intense anger and accusation" },
+      { tag: "repelled", label: "Repelled", hint: "Disgust and aversion" },
+      { tag: "threatened", label: "Threatened", hint: "Defensive, under pressure" },
+      { tag: "vulnerable", label: "Vulnerable", hint: "Exposed, emotionally open" },
+      { tag: "busy", label: "Busy", hint: "Distracted, pressed for time" },
+      { tag: "content", label: "Content", hint: "Quietly satisfied" },
+      { tag: "trusting", label: "Trusting", hint: "Open, reassured warmth" },
+      { tag: "worried", label: "Worried", hint: "Concerned and uncertain" },
+      { tag: "surprised", label: "Surprised", hint: "Unexpected realization" },
       { tag: "excited", label: "Excited", hint: "High energy, upbeat and bright" },
       { tag: "playful", label: "Playful", hint: "Light, teasing, warm cadence" },
       { tag: "amazed", label: "Amazed", hint: "Wide-eyed wonder and awe" },

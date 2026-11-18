@@ -240,6 +240,7 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
                 ? Math.max(parsed.dur, lastEnd)
                 : lastEnd;
             const meta = {
+              timings: words,
               seconds: Math.max(0, dur),
               words: words.length,
               aligned: words.length > 0,
@@ -728,5 +729,9 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
     return next;
   };
 
-  return { VOICE_DIR, TAKES_DIR, TRY_DIR, read, audioFile, ownEditWrite, useTry };
+  const readWordTimings = (kind, file) => {
+    const path = audioFile(kind, file);
+    return path ? (readWordsMeta(path).timings ?? []) : [];
+  };
+  return { VOICE_DIR, TAKES_DIR, TRY_DIR, read, audioFile, readWordTimings, ownEditWrite, useTry };
 };

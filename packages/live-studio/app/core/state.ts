@@ -16,6 +16,7 @@ export interface Line {
   pieces?: Word[][];
 }
 export interface VoiceMap {
+  placements?: Array<{ id: string; start: number; spokenEnd?: number; naturalEnd: number }>;
   step: number;
   peaks: number[];
   lines: Line[];

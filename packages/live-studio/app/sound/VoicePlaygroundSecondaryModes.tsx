@@ -1,5 +1,5 @@
-import { Captions, Copy, Download, Loader2, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
-import { useId, useState } from "react";
+import { Captions, Copy, Download, Loader2, SlidersHorizontal } from "lucide-react";
+import { useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
@@ -12,35 +12,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 import type { PlaygroundSttResult } from "../../src/voice-playground.mjs";
-import { Tip } from "../components/Tip";
 import { say } from "../core/store";
 import {
-  loadMoreSharedVoices,
   runPlaygroundStt,
-  searchLiveSharedVoices,
+  saveUploadedSttSource,
   setComposerDraft,
+  setPlaygroundScope,
   setPlaygroundSubTab,
   type VoicePlaygroundClientState,
 } from "./voice-playground-client";
-import {
-  type ComposerDialogueSpeaker,
-  type ComposerDraft,
-  groupDiarizedTranscript,
-  resolveModeModelId,
-  snapToDiscreteValue,
-} from "./voice-playground-view";
+import { groupDiarizedTranscript, resolveModeModelId } from "./voice-playground-view";
 import {
   type AudioSourceKind,
   type FilmTakeAudioOption,
   parseTakeRef,
   VoicePlaygroundAudioSource,
 } from "./VoicePlaygroundAudioSource";
-import { VoicePlaygroundVoicePicker } from "./VoicePlaygroundVoicePicker";
+import { SliderSettingRow } from "./VoiceSettingSlider";
+import { VoicePaidActionConfirmation } from "./VoiceSpeechConfirmation";
 
 const GRANULARITY_ITEMS = [
   { value: "word", label: "Word timestamps" },
@@ -58,357 +51,6 @@ const ENTITY_REDACTION_MODE_ITEMS = [
   { value: "entity_type", label: "Type ([PERSON_NAME])" },
   { value: "redacted", label: "Literal ([redacted])" },
 ];
-
-const sliderNumber = (v: number | readonly number[]): number =>
-  Array.isArray(v) ? Number(v[0] ?? 0) : Number(v);
-
-export function SliderSettingRow({
-  label,
-  hint,
-  value,
-  min,
-  max,
-  step,
-  formatValue,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  formatValue?: (v: number) => string;
-  onChange: (next: number) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-foreground/90 text-sm font-medium" title={hint}>
-          {label}
-        </span>
-        <span className="text-muted-foreground font-mono text-xs tabular-nums">
-          {formatValue ? formatValue(value) : value.toFixed(2)}
-        </span>
-      </div>
-      <Slider
-        appearance="accent"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        aria-label={label}
-        onValueChange={(val) => onChange(sliderNumber(val))}
-      />
-    </div>
-  );
-}
-
-/**
- * Multi-speaker roster and pause controls for GenVoice Dialogue mode.
- */
-export function DialogueSpeakersPanel({
-  draft,
-  pg,
-  onFocusScript,
-}: {
-  draft: ComposerDraft;
-  pg: VoicePlaygroundClientState;
-  onFocusScript: () => void;
-}) {
-  const uid = useId();
-  const [expandedIds, setExpandedIds] = useState(() => new Set<string>());
-  const ttsModels = pg.catalog.models.filter((m) => m.can_do_text_to_speech);
-  const modelItems = ttsModels.map((m) => ({ value: m.model_id, label: m.name }));
-  const langItems = [
-    { value: "__auto__", label: "Auto Detect" },
-    ...pg.catalog.languages.map((l) => ({ value: l.code, label: `${l.name} (${l.code})` })),
-  ];
-
-  const updateSpeaker = (idx: number, patch: Partial<ComposerDialogueSpeaker>) => {
-    const next = draft.speakers.map((sp, i) => (i === idx ? { ...sp, ...patch } : sp));
-    setComposerDraft({ speakers: next });
-  };
-
-  const addSpeaker = () => {
-    const idx = draft.speakers.length + 1;
-    setComposerDraft({
-      speakers: [
-        ...draft.speakers,
-        {
-          id: `sp_${Date.now().toString(36)}_${idx}`,
-          name: `Speaker ${idx}`,
-          voiceId: draft.voiceId,
-          voiceName: draft.voiceName,
-          modelId: draft.modelId.includes("_sts_") ? "eleven_v4" : draft.modelId,
-          languageCode: draft.languageCode || "en",
-          stability: draft.stability,
-          similarityBoost: draft.similarityBoost,
-          style: draft.style,
-          useSpeakerBoost: draft.useSpeakerBoost,
-          speed: draft.speed,
-        },
-      ],
-    });
-  };
-
-  const nameCounts = new Map<string, number>();
-  for (const sp of draft.speakers) {
-    const k = sp.name.trim();
-    if (k) nameCounts.set(k, (nameCounts.get(k) ?? 0) + 1);
-  }
-
-  return (
-    <div className="border-hairline bg-surface-subtle flex flex-col gap-2 rounded-lg border p-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-ai-text text-sm font-semibold">
-          Speakers ({draft.speakers.length}) — write <code className="font-mono">Name: line</code>
-        </span>
-        <Button type="button" variant="secondary" size="sm" onClick={addSpeaker}>
-          <Plus className="size-3" />
-          <span>Add Speaker</span>
-        </Button>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {draft.speakers.map((sp, idx) => {
-          const spKey = sp.id || `sp-${idx}`;
-          const isOpen = expandedIds.has(spKey);
-          const panelId = `${uid}-speaker-${idx}`;
-          const spModel = ttsModels.find((m) => m.model_id === sp.modelId) ?? ttsModels[0];
-          const switchUid = `${spKey}-boost`;
-          const trimmedName = sp.name.trim();
-          const isDuplicateName = Boolean(trimmedName) && (nameCounts.get(trimmedName) ?? 0) > 1;
-          return (
-            <div
-              key={spKey}
-              className="border-hairline bg-card flex flex-col gap-1.5 rounded-md border p-1.5"
-            >
-              <Collapsible open={isOpen}>
-                <div className="flex flex-wrap items-center gap-1">
-                  <Input
-                    size="sm"
-                    value={sp.name}
-                    onChange={(e) => updateSpeaker(idx, { name: e.target.value })}
-                    placeholder="Speaker"
-                    aria-label={`Speaker ${idx + 1} name`}
-                    aria-invalid={isDuplicateName || !trimmedName || undefined}
-                    className="w-20"
-                  />
-                  <VoicePlaygroundVoicePicker
-                    selectedId={sp.voiceId}
-                    selectedName={sp.voiceName}
-                    defaultVoices={pg.catalog.defaultVoices}
-                    sharedSearch={pg.sharedSearch}
-                    configured={pg.status.configured}
-                    onSearchShared={searchLiveSharedVoices}
-                    onLoadMoreShared={() => void loadMoreSharedVoices()}
-                    onSelect={(v) => updateSpeaker(idx, { voiceId: v.id, voiceName: v.name })}
-                    compact
-                  />
-                  <div className="ms-auto flex flex-none items-center gap-1">
-                    <Tip label={`Insert ${trimmedName || "Speaker"}: turn into script`}>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          const line = `${draft.text && !draft.text.endsWith("\n") ? "\n" : ""}${trimmedName || "Speaker"}: `;
-                          setComposerDraft({ text: `${draft.text}${line}` });
-                          onFocusScript();
-                        }}
-                      >
-                        + Turn
-                      </Button>
-                    </Tip>
-                    <Tip label="Configure per-speaker model, language & voice settings">
-                      <Button
-                        type="button"
-                        variant={isOpen ? "lit" : "ghost"}
-                        size="icon-xs"
-                        aria-label={`Tune speaker ${trimmedName || idx + 1}`}
-                        aria-expanded={isOpen}
-                        aria-controls={panelId}
-                        onClick={() =>
-                          setExpandedIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(spKey)) next.delete(spKey);
-                            else next.add(spKey);
-                            return next;
-                          })
-                        }
-                      >
-                        <SlidersHorizontal className="size-3" />
-                      </Button>
-                    </Tip>
-                    {draft.speakers.length > 2 && (
-                      <Button
-                        type="button"
-                        variant="remove"
-                        size="icon-xs"
-                        aria-label={`Remove speaker ${trimmedName || idx + 1}`}
-                        onClick={() =>
-                          setComposerDraft({
-                            speakers: draft.speakers.filter((_, i) => i !== idx),
-                          })
-                        }
-                      >
-                        <Trash2 className="size-3" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <CollapsibleContent id={panelId} variant="animated" className="mt-1.5">
-                  <div className="border-hairline flex flex-col gap-2 border-t pt-1.5">
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <Select
-                        items={modelItems}
-                        value={sp.modelId}
-                        onValueChange={(v) => {
-                          if (!v) return;
-                          const nextModel = ttsModels.find((m) => m.model_id === v);
-                          const nextStab = nextModel?.stability_values?.length
-                            ? snapToDiscreteValue(sp.stability, nextModel.stability_values)
-                            : sp.stability;
-                          updateSpeaker(idx, { modelId: v, stability: nextStab });
-                        }}
-                      >
-                        <SelectTrigger className="h-7 w-full" aria-label="Speaker model">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ttsModels.map((m) => (
-                            <SelectItem key={m.model_id} value={m.model_id}>
-                              {m.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select
-                        items={langItems}
-                        value={sp.languageCode || "__auto__"}
-                        onValueChange={(v) =>
-                          updateSpeaker(idx, { languageCode: !v || v === "__auto__" ? "" : v })
-                        }
-                      >
-                        <SelectTrigger className="h-7 w-full" aria-label="Speaker language">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {langItems.map((l) => (
-                            <SelectItem key={l.value} value={l.value}>
-                              {l.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {spModel?.stability_values?.length ? (
-                        <div className="col-span-2 flex flex-col gap-1">
-                          <span className="text-foreground/85 text-xs font-medium">
-                            Stability Preset (v3 discrete)
-                          </span>
-                          <div className="bg-raised-2 grid grid-cols-3 gap-0.5 rounded-md p-0.5">
-                            {[
-                              { value: 0, label: "Creative (0.0)" },
-                              { value: 0.5, label: "Natural (0.5)" },
-                              { value: 1, label: "Robust (1.0)" },
-                            ].map((p) => {
-                              const active = Math.abs(sp.stability - p.value) < 0.05;
-                              return (
-                                <button
-                                  key={p.value}
-                                  type="button"
-                                  aria-pressed={active}
-                                  onClick={() => updateSpeaker(idx, { stability: p.value })}
-                                  className={cn(
-                                    "focus-visible:ring-ring rounded px-1.5 py-1 text-sm font-medium transition-colors outline-none focus-visible:ring-2",
-                                    active
-                                      ? "bg-card text-primary-text shadow-xs"
-                                      : "text-muted-foreground hover:text-foreground",
-                                  )}
-                                >
-                                  {p.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <SliderSettingRow
-                          label="Stability"
-                          value={sp.stability}
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          onChange={(next) => updateSpeaker(idx, { stability: next })}
-                        />
-                      )}
-                      {spModel?.supports_similarity !== false && (
-                        <SliderSettingRow
-                          label="Similarity"
-                          value={sp.similarityBoost}
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          onChange={(next) => updateSpeaker(idx, { similarityBoost: next })}
-                        />
-                      )}
-                      {spModel?.supports_speed === true && (
-                        <SliderSettingRow
-                          label="Speed"
-                          value={sp.speed}
-                          min={0.7}
-                          max={1.2}
-                          step={0.05}
-                          formatValue={(v) => `${v.toFixed(2)}×`}
-                          onChange={(next) => updateSpeaker(idx, { speed: next })}
-                        />
-                      )}
-                      {spModel?.can_use_style && (
-                        <SliderSettingRow
-                          label="Style"
-                          value={sp.style}
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          onChange={(next) => updateSpeaker(idx, { style: next })}
-                        />
-                      )}
-                    </div>
-                    {spModel?.can_use_speaker_boost && (
-                      <div className="flex items-center justify-between text-sm">
-                        <label htmlFor={switchUid} className="text-muted-foreground text-xs">
-                          Speaker Boost
-                        </label>
-                        <Switch
-                          id={switchUid}
-                          size="sm"
-                          checked={sp.useSpeakerBoost}
-                          onCheckedChange={(v) => updateSpeaker(idx, { useSpeakerBoost: v })}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            </div>
-          );
-        })}
-      </div>
-      <SliderSettingRow
-        label="Pause Between Turns"
-        value={draft.pauseBetweenTurns}
-        min={0}
-        max={3}
-        step={0.1}
-        formatValue={(v) => `${v.toFixed(1)}s`}
-        onChange={(next) => setComposerDraft({ pauseBetweenTurns: next })}
-      />
-    </div>
-  );
-}
 
 /**
  * Speech-to-Speech (Voice Changer) source audio selector and background noise toggle.
@@ -488,7 +130,9 @@ export function VoiceChangerPanel({
 export function SttTranscriptionPanel({
   pg,
   filmTakeOptions,
+  showResult = true,
 }: {
+  showResult?: boolean;
   pg: VoicePlaygroundClientState;
   filmTakeOptions: readonly FilmTakeAudioOption[];
 }) {
@@ -496,6 +140,8 @@ export function SttTranscriptionPanel({
   const [sttDraftVersion, setSttDraftVersion] = useState(pg.draftVersion);
   const [sttFile, setSttFile] = useState<File | null>(null);
   const [advancedSttOpen, setAdvancedSttOpen] = useState(false);
+  const [reviewStt, setReviewStt] = useState<"default" | "none" | null>(null);
+  const transcribeButton = useRef<HTMLButtonElement>(null);
   if (sttDraftVersion !== pg.draftVersion) {
     setSttDraftVersion(pg.draftVersion);
     setSttFile(null);
@@ -529,6 +175,9 @@ export function SttTranscriptionPanel({
   const sttItemId = pg.draft.sttSourceItemId;
   const sttTakeValue = pg.draft.sttSourceTakeValue;
   const sttSourceTake = parseTakeRef(sttTakeValue);
+  const activeTranscription = pg.jobs.some(
+    (job) => job.kind === "stt" && ["pending", "processing", "downloading"].includes(job.status),
+  );
 
   const trimmedLang = sttLang.trim();
   const langInvalid = !trimmedLang || trimmedLang.toLowerCase() === "auto";
@@ -587,10 +236,17 @@ export function SttTranscriptionPanel({
                   ? "Entity redaction categories must be listed in Entity detection (or include 'all')."
                   : null;
 
+  const transcriptionUnavailable =
+    Boolean(sttValidationError) ||
+    (sttSourceKind === "upload" &&
+      (!pg.draft.sttSourceFile || pg.sttSourceUpload?.status === "uploading")) ||
+    (sttSourceKind === "playground" && !sttItemId) ||
+    (sttSourceKind === "film_take" && !sttTakeValue);
   const handleRunStt = () => {
-    if (sttValidationError) return;
+    if (transcriptionUnavailable || pg.busyAction === "stt") return;
     void runPlaygroundStt({
-      file: sttSourceKind === "upload" ? sttFile : null,
+      background: true,
+      sourceFile: sttSourceKind === "upload" ? pg.draft.sttSourceFile || undefined : undefined,
       itemId: sttSourceKind === "playground" ? sttItemId || undefined : undefined,
       sourceTakeKind: sttSourceKind === "film_take" ? sttSourceTake?.kind : undefined,
       sourceTakeFile: sttSourceKind === "film_take" ? sttSourceTake?.file : undefined,
@@ -614,22 +270,31 @@ export function SttTranscriptionPanel({
       ),
       sourceLabel:
         sttSourceKind === "upload"
-          ? sttFile?.name
+          ? sttFile?.name || pg.draft.sttSourceLabel
           : sttSourceKind === "playground"
             ? pg.items.find((x) => x.id === sttItemId)?.title
-            : sttTakeValue,
+            : filmTakeOptions.find((take) => take.value === sttTakeValue)?.label,
     });
   };
 
   return (
     <div className="border-hairline bg-surface-subtle flex flex-col gap-2.5 rounded-lg border p-2.5">
+      {sttSourceKind === "upload" && pg.draft.sttSourceFile && !sttFile && (
+        <p className="text-primary-text text-sm">
+          Saved original: {pg.draft.sttSourceLabel || pg.draft.sttSourceFile}. Choose another file
+          to replace it.
+        </p>
+      )}
       <VoicePlaygroundAudioSource
         tone="stt"
         title="Speech to Text · Scribe v2"
         sourceKind={sttSourceKind}
         onSourceKindChange={(k) => setComposerDraft({ sttSourceKind: k })}
         uploadedFile={sttFile}
-        onFileChange={setSttFile}
+        onFileChange={(file) => {
+          setSttFile(file);
+          if (file) void saveUploadedSttSource(file);
+        }}
         accept="audio/*,video/*"
         uploadPlaceholder="Pick audio or video file (max 90MB)…"
         playgroundItems={pg.items}
@@ -642,6 +307,27 @@ export function SttTranscriptionPanel({
         takePlaceholder="Choose a Film Take…"
         itemIcon="wave"
       />
+      {sttSourceKind === "upload" && pg.sttSourceUpload?.status === "uploading" && (
+        <p role="status" className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+          Saving {pg.sttSourceUpload.name} for reuse. No credits used.
+        </p>
+      )}
+      {sttSourceKind === "upload" && pg.sttSourceUpload?.status === "failed" && (
+        <div role="alert" className="text-destructive flex flex-wrap items-center gap-2 text-sm">
+          <p>{pg.sttSourceUpload.error}. Choose the file again or retry its upload.</p>
+          {sttFile && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void saveUploadedSttSource(sttFile)}
+            >
+              Retry source upload
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <Field className="min-w-0" data-invalid={langInvalid || undefined}>
@@ -650,7 +336,7 @@ export function SttTranscriptionPanel({
           </FieldLabel>
           <Input
             id={`${uid}-language`}
-            size="sm"
+            size="md"
             value={sttLang}
             onChange={(e) => setComposerDraft({ sttLanguageCode: e.target.value })}
             placeholder="Required ISO code (en, vi)"
@@ -677,7 +363,7 @@ export function SttTranscriptionPanel({
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent finalFocus>
               {GRANULARITY_ITEMS.map((g) => (
                 <SelectItem key={g.value} value={g.value}>
                   {g.label}
@@ -701,7 +387,7 @@ export function SttTranscriptionPanel({
             }
           />
           <label htmlFor={sttDiarizeId} className="cursor-pointer">
-            Diarize speakers
+            Identify speakers
           </label>
         </div>
         <div className="flex items-center gap-1.5">
@@ -723,7 +409,7 @@ export function SttTranscriptionPanel({
             onCheckedChange={(v) => setComposerDraft({ sttNoVerbatim: v })}
           />
           <label htmlFor={sttCleanId} className="cursor-pointer">
-            Clean filler (no verbatim)
+            Remove filler words
           </label>
         </div>
         <div className="flex items-center gap-1.5">
@@ -737,79 +423,6 @@ export function SttTranscriptionPanel({
             Export .srt
           </label>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Field className="min-w-0" data-invalid={numSpkInvalid || undefined}>
-          <FieldLabel variant="compact" htmlFor={`${uid}-speaker-count`}>
-            Number of speakers
-          </FieldLabel>
-          <Input
-            id={`${uid}-speaker-count`}
-            inputMode="numeric"
-            size="sm"
-            value={sttNumSpeakers}
-            onChange={(e) => setComposerDraft({ sttNumSpeakers: e.target.value })}
-            placeholder="Speakers 1–32 (auto)"
-            aria-label="Number of speakers"
-            aria-invalid={numSpkInvalid || undefined}
-            aria-describedby={numSpkInvalid ? sttErrorId : undefined}
-          />
-        </Field>
-        {sttDiarize && (
-          <Field className="min-w-0" data-invalid={thresholdInvalid || undefined}>
-            <FieldLabel variant="compact" htmlFor={`${uid}-threshold`}>
-              Diarization threshold
-            </FieldLabel>
-            <Input
-              id={`${uid}-threshold`}
-              inputMode="decimal"
-              size="sm"
-              value={sttThreshold}
-              onChange={(e) => setComposerDraft({ sttDiarizationThreshold: e.target.value })}
-              disabled={hasNumSpeakers}
-              placeholder={
-                hasNumSpeakers
-                  ? "Auto-ignored when speaker count set"
-                  : "Diarize threshold (0.0-1.5)"
-              }
-              aria-label="Diarization threshold"
-              aria-invalid={thresholdInvalid || undefined}
-              aria-describedby={thresholdInvalid ? sttErrorId : undefined}
-            />
-          </Field>
-        )}
-        <Field className="min-w-0" data-invalid={seedInvalid || undefined}>
-          <FieldLabel variant="compact" htmlFor={`${uid}-seed`}>
-            STT seed
-          </FieldLabel>
-          <Input
-            id={`${uid}-seed`}
-            inputMode="numeric"
-            size="sm"
-            value={sttSeed}
-            onChange={(e) => setComposerDraft({ sttSeedText: e.target.value })}
-            placeholder="Seed 0–2147483647 (optional)"
-            aria-label="STT seed"
-            aria-invalid={seedInvalid || undefined}
-            aria-describedby={seedInvalid ? sttErrorId : undefined}
-          />
-        </Field>
-        <Field className="min-w-0" data-invalid={keytermsInvalid || undefined}>
-          <FieldLabel variant="compact" htmlFor={`${uid}-keyterms`}>
-            STT keyterms
-          </FieldLabel>
-          <Input
-            id={`${uid}-keyterms`}
-            size="sm"
-            value={sttKeyterms}
-            onChange={(e) => setComposerDraft({ sttKeytermsText: e.target.value })}
-            placeholder="Keyterms (comma-sep)"
-            aria-label="STT keyterms"
-            aria-invalid={keytermsInvalid || undefined}
-            aria-describedby={keytermsInvalid ? sttErrorId : undefined}
-          />
-        </Field>
       </div>
 
       <Collapsible open={advancedSttOpen}>
@@ -826,8 +439,88 @@ export function SttTranscriptionPanel({
           <span>Scribe v2 options</span>
         </Button>
 
-        <CollapsibleContent id={`${uid}-advanced-stt`} variant="animated" className="mt-2">
+        <CollapsibleContent id={`${uid}-advanced-stt`} className="mt-2">
           <div className="border-hairline bg-surface-subtle flex flex-col gap-2 rounded-md border p-2 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <Field className="min-w-0" data-invalid={numSpkInvalid || undefined}>
+                <FieldLabel variant="compact" htmlFor={`${uid}-speaker-count`}>
+                  Number of speakers
+                </FieldLabel>
+                <Input
+                  id={`${uid}-speaker-count`}
+                  inputMode="numeric"
+                  size="sm"
+                  value={sttNumSpeakers}
+                  onChange={(e) => setComposerDraft({ sttNumSpeakers: e.target.value })}
+                  placeholder="Speakers 1–32 (auto)"
+                  aria-label="Number of speakers"
+                  aria-invalid={numSpkInvalid || undefined}
+                  aria-describedby={numSpkInvalid ? sttErrorId : undefined}
+                />
+              </Field>
+              {sttDiarize && (
+                <Field className="min-w-0" data-invalid={thresholdInvalid || undefined}>
+                  <FieldLabel variant="compact" htmlFor={`${uid}-threshold`}>
+                    Diarization threshold
+                  </FieldLabel>
+                  <Input
+                    id={`${uid}-threshold`}
+                    inputMode="decimal"
+                    size="sm"
+                    value={sttThreshold}
+                    onChange={(e) => setComposerDraft({ sttDiarizationThreshold: e.target.value })}
+                    disabled={hasNumSpeakers}
+                    placeholder={
+                      hasNumSpeakers
+                        ? "Auto-ignored when speaker count set"
+                        : "Diarize threshold (0.0-1.5)"
+                    }
+                    aria-label="Diarization threshold"
+                    aria-invalid={thresholdInvalid || undefined}
+                    aria-describedby={thresholdInvalid ? sttErrorId : undefined}
+                  />
+                </Field>
+              )}
+              <Field className="min-w-0" data-invalid={seedInvalid || undefined}>
+                <FieldLabel variant="compact" htmlFor={`${uid}-seed`}>
+                  STT seed
+                </FieldLabel>
+                <Input
+                  id={`${uid}-seed`}
+                  inputMode="numeric"
+                  size="sm"
+                  value={sttSeed}
+                  onChange={(e) => setComposerDraft({ sttSeedText: e.target.value })}
+                  placeholder="Seed 0–2147483647 (optional)"
+                  aria-label="STT seed"
+                  aria-invalid={seedInvalid || undefined}
+                  aria-describedby={seedInvalid ? sttErrorId : undefined}
+                />
+              </Field>
+              <Field className="min-w-0" data-invalid={keytermsInvalid || undefined}>
+                <FieldLabel variant="compact" htmlFor={`${uid}-keyterms`}>
+                  STT keyterms
+                </FieldLabel>
+                <Input
+                  id={`${uid}-keyterms`}
+                  size="sm"
+                  value={sttKeyterms}
+                  onChange={(e) => setComposerDraft({ sttKeytermsText: e.target.value })}
+                  placeholder="Keyterms (comma-sep)"
+                  aria-label="STT keyterms"
+                  aria-invalid={keytermsInvalid || undefined}
+                  aria-describedby={keytermsInvalid ? sttErrorId : undefined}
+                />
+              </Field>
+            </div>
+            <SliderSettingRow
+              label="Transcription temperature"
+              value={sttTemp}
+              min={0}
+              max={2}
+              step={0.1}
+              onChange={(v) => setComposerDraft({ sttTemperature: v })}
+            />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Field className="min-w-0">
                 <FieldLabel variant="compact" htmlFor={`${uid}-input-format`}>
@@ -849,7 +542,7 @@ export function SttTranscriptionPanel({
                   >
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent finalFocus>
                     {STT_FILE_FORMAT_ITEMS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
@@ -923,7 +616,7 @@ export function SttTranscriptionPanel({
                   <SelectTrigger id={`${uid}-redaction-mode`} className="h-7 w-full">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent finalFocus>
                     {ENTITY_REDACTION_MODE_ITEMS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
@@ -972,26 +665,48 @@ export function SttTranscriptionPanel({
         </p>
       )}
 
-      <SliderSettingRow
-        label="STT Temperature"
-        value={sttTemp}
-        min={0}
-        max={2}
-        step={0.1}
-        onChange={(v) => setComposerDraft({ sttTemperature: v })}
-      />
-
+      <div className="border-hairline bg-surface-subtle flex flex-col gap-3 rounded-lg border p-3">
+        <p className="text-warn-text text-sm font-medium">Transcription cost isn’t available yet</p>
+        <p className="text-reading-foreground max-w-[59ch] text-sm leading-relaxed text-pretty">
+          GenVoice may charge credits. The transcript, original source and requested settings are
+          saved to your library.
+        </p>
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-foreground text-sm" htmlFor={`${uid}-stt-scope`}>
+            Save transcript to
+          </label>
+          <Select
+            items={[
+              { value: "project", label: "This project" },
+              { value: "global", label: "Global · all projects" },
+            ]}
+            value={pg.scope}
+            disabled={pg.busyAction === "stt"}
+            onValueChange={(value) => {
+              if (value === "project" || value === "global") setPlaygroundScope(value);
+            }}
+          >
+            <SelectTrigger id={`${uid}-stt-scope`} size="readable">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent finalFocus>
+              <SelectItem value="project">This project</SelectItem>
+              <SelectItem value="global">Global · all projects</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <Button
+        ref={transcribeButton}
         type="button"
         size="xl"
-        disabled={
-          pg.busyAction === "stt" ||
-          Boolean(sttValidationError) ||
-          (sttSourceKind === "upload" && !sttFile) ||
-          (sttSourceKind === "playground" && !sttItemId) ||
-          (sttSourceKind === "film_take" && !sttTakeValue)
-        }
-        onClick={handleRunStt}
+        disabled={transcriptionUnavailable}
+        aria-disabled={transcriptionUnavailable || pg.busyAction === "stt"}
+        onClick={(event) => {
+          if (!transcriptionUnavailable && pg.busyAction !== "stt") {
+            setReviewStt(event.detail === 0 ? "none" : "default");
+          }
+        }}
       >
         {pg.busyAction === "stt" ? (
           <>
@@ -1001,12 +716,23 @@ export function SttTranscriptionPanel({
         ) : (
           <>
             <Captions className="size-3.5" />
-            <span>Transcribe with Scribe v2</span>
+            <span>
+              {activeTranscription ? "Start another transcription" : "Transcribe with Scribe v2"}
+            </span>
           </>
         )}
       </Button>
 
-      {pg.lastSttResult && (
+      {reviewStt && (
+        <VoicePaidActionConfirmation
+          action="Transcribe audio"
+          motion={reviewStt}
+          returnFocus={transcribeButton}
+          onConfirm={handleRunStt}
+          onClose={() => setReviewStt(null)}
+        />
+      )}
+      {showResult && pg.lastSttResult && (
         <SttTranscriptDetails
           result={pg.lastSttResult}
           onSendToTts={(text) => {
@@ -1053,15 +779,30 @@ export function SttTranscriptDetails({
     typeof result.language_probability === "number" && Number.isFinite(result.language_probability)
       ? `${Math.round(result.language_probability * 100)}%`
       : null;
-  const formats = result.additional_formats ?? [];
+  const formats = [
+    ...(result.additional_formats ?? []),
+    ...((result.additional_formats ?? []).some((format) => format.file_extension === "txt")
+      ? []
+      : [{ file_extension: "txt", content: result.text }]),
+  ];
 
   return (
     <div className="border-hairline bg-card flex flex-col gap-1.5 rounded-md border p-2 text-sm">
+      <p className="text-muted-foreground text-sm tabular-nums">
+        Actual STT fee:{" "}
+        <span className="text-foreground font-medium">
+          {typeof result.creditsDeducted === "number"
+            ? `${result.creditsDeducted.toLocaleString()} credits`
+            : "Not reported"}
+        </span>
+      </p>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-foreground flex items-center gap-1.5 font-medium">
           <span>Transcript ({result.language_code || "unknown"})</span>
           {probLabel && (
-            <span className="text-muted-foreground text-xs">{probLabel} confidence</span>
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {probLabel} confidence
+            </span>
           )}
         </span>
         {onSendToTts && (
@@ -1071,7 +812,7 @@ export function SttTranscriptDetails({
             size="sm"
             onClick={() => onSendToTts(result.text)}
           >
-            Send to TTS Prompt
+            Send to Speech
           </Button>
         )}
       </div>
@@ -1080,7 +821,7 @@ export function SttTranscriptDetails({
         <div className="bg-surface-subtle/60 flex max-h-40 flex-col gap-1 overflow-y-auto rounded p-1.5">
           {turns.map((turn, i) => (
             <div key={`${turn.speaker}-${i}`} className="leading-snug">
-              <span className="text-primary-text font-mono text-xs font-medium">
+              <span className="text-primary-text font-mono text-xs font-medium tabular-nums">
                 {turn.speaker}
                 {typeof turn.start === "number" ? ` [${turn.start.toFixed(1)}s]` : ""}:
               </span>{" "}

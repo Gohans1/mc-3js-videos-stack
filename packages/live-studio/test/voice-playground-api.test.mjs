@@ -15,15 +15,393 @@ import { join } from "node:path";
 import { createApi } from "../src/api.mjs";
 import { openFavorites } from "../src/favorites.mjs";
 import { openVoiceLibrary } from "../src/voice-library.mjs";
+import { runVoicePlaygroundCli } from "../src/voice-playground-cli.mjs";
+import { cloneVoiceOption } from "../src/voice-playground-clone-view.mjs";
 import {
   assertSafeMediaUrl,
   isNonGlobalIp,
   isRawHeaderlessPcm,
+  wrapPcm16ToWav,
 } from "../src/voice-playground-genvoice.mjs";
 import { openVoicePlayground } from "../src/voice-playground.mjs";
 import { openVoice } from "../src/voice.mjs";
 
+test("clone favorites accept their actual archived preview through the same HTTP entrypoint used by the picker and Dock", async () => {
+  const audio = wrapPcm16ToWav(Buffer.alloc(16000 * 2 * 12), 16000);
+  const { api, voicePlayground } = makeHarness({
+    fetchImpl: async (raw) => {
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/minimax/voices/clone"))
+        return jsonRes({ id: "own_preview", status: "processing" });
+      if (path.endsWith("/minimax/voices"))
+        return jsonRes({
+          voices: [
+            {
+              id: "own_preview",
+              status: "done",
+              sample_audio_url: "https://cdn.example.com/clone.wav",
+            },
+          ],
+        });
+      if (path.endsWith("/clone.wav"))
+        return new Response(audio, { headers: { "content-type": "audio/wav" } });
+      if (path.endsWith("/models") || path.endsWith("/languages")) return jsonRes([]);
+      return jsonRes({ voices: [] });
+    },
+  });
+  const created = await voicePlayground.createClone(new File([audio], "me.wav"), {
+    name: "My narrator",
+    language: "English",
+    permissionConfirmed: true,
+  });
+  const voice = cloneVoiceOption(await voicePlayground.refreshClone(created.id));
+  expect(voice.previewUrl).toStartWith("/api/voice/playground/audio/");
+  for (const favorite of [true, false]) {
+    const response = await api.request("/api/voice/playground/voice-favorites", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ voice, favorite }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(voicePlayground.getClone(created.id).favorite).toBe(favorite);
+    const saved = voicePlayground.listVoiceFavorites().find((row) => row.id === voice.id);
+    expect(Boolean(saved)).toBe(favorite);
+    if (saved) expect(saved.previewUrl).toBe(voice.previewUrl);
+  }
+  for (const previewUrl of [
+    "/api/voice/playground/config",
+    "//external.invalid/audio.wav",
+    "/api/voice/playground/audio/../private.wav?scope=project",
+  ]) {
+    const response = await api.request("/api/voice/playground/voice-favorites", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ voice: { ...voice, previewUrl }, favorite: true }),
+    });
+    expect(response.status).toBe(400);
+  }
+});
+
+test("a deleted cloned voice cannot spend generation credits through TTS or a Dialogue role", async () => {
+  let paidPosts = 0;
+  const { api } = makeHarness({
+    fetchImpl: async (url, init = {}) => {
+      if (init.method === "POST") paidPosts++;
+      return jsonRes(
+        init.method === "DELETE"
+          ? { success: true }
+          : {
+              voices: [
+                {
+                  id: "own_clone",
+                  voice_name: "My voice",
+                  language_tag: "Vietnamese",
+                  status: "done",
+                },
+              ],
+            },
+      );
+    },
+  });
+  const adopted = await (
+    await api.request("/api/voice/playground/clones/adopt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ remoteId: "own_clone", permissionConfirmed: true }),
+    })
+  ).json();
+  expect(adopted.clone.id).toBeDefined();
+  expect(
+    (
+      await api.request(`/api/voice/playground/clones/${adopted.clone.id}/cloud`, {
+        method: "DELETE",
+      })
+    ).status,
+  ).toBe(200);
+  for (const { route, input } of [
+    {
+      route: "tts",
+      input: {
+        provider: "minimax",
+        voiceId: "own_clone",
+        modelId: "speech-2.8-hd",
+        text: "Xin chào",
+      },
+    },
+    {
+      route: "dialogue",
+      input: {
+        text: "Alex: Xin chào\nBob: Chào bạn",
+        speakers: {
+          Alex: { provider: "minimax", voice_id: "own_clone", model_id: "speech-2.8-hd" },
+          Bob: { voice_id: "other", model_id: "eleven_v4" },
+        },
+      },
+    },
+  ]) {
+    const response = await api.request(`/api/voice/playground/${route}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("deleted");
+  }
+  expect(paidPosts).toBe(0);
+});
+
+test.each(["minimax", "capcut"])(
+  "%s casting forwards native filters and returns reusable voice metadata",
+  async (provider) => {
+    const queries = [];
+    const { api } = makeHarness({
+      fetchImpl: async (raw) => {
+        const url = new URL(raw);
+        queries.push(url);
+        return jsonRes({
+          has_more: true,
+          total: 2,
+          voice_list:
+            provider === "minimax"
+              ? [
+                  {
+                    voice_id: "12345",
+                    uniq_id: "English_Actor",
+                    voice_name: "British actor",
+                    tag_list: ["English", "EN-British", "Male", "Young", "Audiobook"],
+                    sample_audio: "https://cdn.example/actor.mp3",
+                  },
+                ]
+              : [
+                  {
+                    voice_id: "777",
+                    name: "Cartoon",
+                    language: "en",
+                    gender: "Female",
+                    tags: ["Young", "Excited", "English", "steady"],
+                    preview_url: "https://api.genvoice.pro/v1/capcut/voices/777/preview",
+                  },
+                ],
+        });
+      },
+    });
+    const response = await api.request(
+      `/api/voice/playground/shared-voices?provider=${provider}&page=0&pageSize=30&language=en&gender=Male&age=Young&accent=EN-British&useCase=Audiobook&emotion=Angery`,
+    );
+    expect(response.status).toBe(200);
+    expect(queries[0].pathname).toBe(`/v1/${provider}/system-voices`);
+    expect(queries[0].searchParams.get("page")).toBe("1");
+    expect(queries[0].searchParams.get("language")).toBe(provider === "minimax" ? "English" : "en");
+    expect(queries[0].searchParams.get(provider === "minimax" ? "use_cases" : "emotion")).toBe(
+      provider === "minimax" ? "Audiobook" : "Angery",
+    );
+    const result = await response.json();
+    expect(result.hasMore).toBe(true);
+    expect(result.voices[0]).toMatchObject(
+      provider === "minimax"
+        ? {
+            id: "12345",
+            provider,
+            name: "British actor",
+            language: "English",
+            gender: "Male",
+            age: "Young",
+            accent: "EN-British",
+            useCase: "Audiobook",
+            dubbingVoiceId: "English_Actor",
+          }
+        : {
+            id: "777",
+            provider,
+            name: "Cartoon",
+            language: "en",
+            gender: "Female",
+            age: "Young",
+            accent: "Steady",
+          },
+    );
+    if (provider === "capcut") expect(result.voices[0].useCase).toBe("");
+  },
+);
+
+test("mixed-provider Dialogue keeps each role's acting recipe and swaps just the selected role", async () => {
+  const sent = [];
+  const { api, voicePlayground } = makeHarness({
+    fetchImpl: async (raw, init = {}) => {
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/models")) return jsonRes([]);
+      if (path.endsWith("/languages")) return jsonRes([{ code: "en", name: "English" }]);
+      if (path.endsWith("/default-voices")) return jsonRes({ voices: [] });
+      if (path.endsWith("/dialogue")) {
+        sent.push(JSON.parse(init.body));
+        return jsonRes({ id: `mixed_${sent.length}` });
+      }
+      if (path.includes("/history/"))
+        return jsonRes({
+          status: "completed",
+          credits_deducted: 21,
+          result: { audio_url: "https://cdn.example/mixed.mp3" },
+        });
+      if (path.endsWith("/mixed.mp3"))
+        return new Response(makeMinimalMp3(), { headers: { "content-type": "audio/mpeg" } });
+      if (path.endsWith("/auth/me")) return jsonRes({ credit_balance: 99 });
+      throw new Error(`Unexpected isolated request ${path}`);
+    },
+  });
+  const speakers = {
+    Alice: {
+      provider: "elevenlabs",
+      voice_id: "alice",
+      model_id: "eleven_v4",
+      voice_settings: { stability: 0.5 },
+    },
+    Bob: {
+      provider: "minimax",
+      voice_id: "12345",
+      model_id: "speech-2.8-hd",
+      language_code: "en",
+      voice_settings: { speed: 1.6, pitch: -4, vol: 0.8 },
+    },
+    Cara: {
+      provider: "capcut",
+      voice_id: "777",
+      model_id: "capcut",
+      voice_settings: { speed: 1.4, pitch: 3 },
+    },
+  };
+  const response = await api.request("/api/voice/playground/dialogue", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "Alice: Hello.\nBob: Stay here.\nCara: Bye.", speakers }),
+  });
+  expect(response.status, await response.clone().text()).toBe(202);
+  await voicePlayground.waitForAllJobs();
+  expect(sent[0].speakers.Bob).toMatchObject({
+    provider: "minimax",
+    language_code: "English",
+    voice_settings: speakers.Bob.voice_settings,
+  });
+  expect(sent[0].speakers.Cara).toMatchObject({
+    provider: "capcut",
+    voice_settings: speakers.Cara.voice_settings,
+  });
+  const item = voicePlayground.listItems()[0];
+  expect(item.dialogue.speakers.Bob.provider).toBe("minimax");
+  await voicePlayground.retryItem(item.id, {
+    speakerKey: "Bob",
+    provider: "capcut",
+    voiceId: "999",
+    modelId: "capcut",
+    languageCode: "en",
+    voiceSettings: { speed: 1.5, pitch: -2 },
+  });
+  await voicePlayground.waitForAllJobs();
+  expect(sent[1].speakers.Bob).toMatchObject({
+    provider: "capcut",
+    voice_id: "999",
+    model_id: "capcut",
+    voice_settings: { speed: 1.5, pitch: -2 },
+  });
+  expect(sent[1].speakers.Alice).toEqual(sent[0].speakers.Alice);
+});
+
+test.each(["minimax", "capcut"])(
+  "%s TTS accepts its provider-specific settings through the HTTP contract",
+  async (provider) => {
+    const sent = [],
+      modelId = provider === "minimax" ? "speech-2.8-hd" : "capcut";
+    const settings = { speed: 1.6, pitch: -4, ...(provider === "minimax" ? { vol: 0.8 } : {}) };
+    const { api, voicePlayground } = makeHarness({
+      fetchImpl: async (raw, init = {}) => {
+        const path = new URL(raw).pathname;
+        if (path.endsWith("/models"))
+          return jsonRes([
+            {
+              model_id: modelId,
+              provider,
+              name: provider,
+              credit_ratio: provider === "capcut" ? 0 : 1,
+            },
+          ]);
+        if (path.endsWith("/languages")) return jsonRes([{ code: "en", name: "English" }]);
+        if (path.endsWith("/default-voices")) return jsonRes({ voices: [] });
+        if (path.includes("/text-to-speech/")) {
+          sent.push(JSON.parse(init.body));
+          return jsonRes({ id: `provider_task_${sent.length}` });
+        }
+        if (path.includes("/history/"))
+          return jsonRes({
+            status: "completed",
+            credits_deducted: 0,
+            result: { audio_url: "https://cdn.example/provider.mp3" },
+          });
+        if (path.endsWith("/provider.mp3"))
+          return new Response(makeMinimalMp3(), { headers: { "content-type": "audio/mpeg" } });
+        if (path.endsWith("/auth/me")) return jsonRes({ credit_balance: 99 });
+        throw new Error(`Unexpected isolated request ${path}`);
+      },
+    });
+    const response = await api.request("/api/voice/playground/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider,
+        modelId,
+        voiceId: "12345",
+        text: "Hello",
+        languageCode: "en",
+        voiceSettings: settings,
+        applyTextNormalization: "auto",
+      }),
+    });
+    expect(response.status, await response.clone().text()).toBe(202);
+    await voicePlayground.waitForAllJobs();
+    expect(sent[0]).toMatchObject({
+      provider,
+      voice_settings: settings,
+      language_code: provider === "minimax" ? "English" : "en",
+    });
+    const original = voicePlayground.listItems()[0];
+    expect(original).toMatchObject({
+      provider,
+      voiceSettings: settings,
+      creditsDeducted: 0,
+    });
+    await voicePlayground.retryItem(original.id);
+    await voicePlayground.waitForAllJobs();
+    expect(sent[0].apply_text_normalization).toBe("auto");
+    expect(sent[1]).toEqual(sent[0]);
+  },
+);
+
+test("Cloud history applies its advertised kind filter through the HTTP API and shared engine", async () => {
+  const { api, voicePlayground } = makeHarness({
+    fetchImpl: async (raw) => {
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/voice-changer/history"))
+        return jsonRes({
+          tasks: [{ id: "vc_task", status: "completed", text: "Converted" }],
+          has_more: false,
+        });
+      if (path.endsWith("/history"))
+        return jsonRes({
+          tasks: [{ id: "tts_task", status: "completed", text: "Speech" }],
+          has_more: false,
+        });
+      throw new Error(`Unexpected fixture request ${path}`);
+    },
+  });
+  const vc = await api.request("/api/voice/playground/remote-history?kind=voice_changer");
+  expect(vc.status).toBe(200);
+  expect((await vc.json()).items.map((item) => item.kind)).toEqual(["voice_changer"]);
+  expect(
+    (await voicePlayground.fetchRemoteHistory({ kind: "tts" })).items.map((item) => item.kind),
+  ).toEqual(["tts"]);
+  expect((await api.request("/api/voice/playground/remote-history?kind=unknown")).status).toBe(400);
+});
+
 const tempDirs = [];
+const playgroundControllers = [];
 const makeDir = (prefix = "vp-api-") => {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
@@ -31,7 +409,1630 @@ const makeDir = (prefix = "vp-api-") => {
 };
 
 afterEach(() => {
+  for (const controller of playgroundControllers.splice(0)) controller.close();
   while (tempDirs.length) rmSync(tempDirs.pop(), { recursive: true, force: true });
+});
+
+test("Speech keeps the selected connection through generation, archive and retry", async () => {
+  const wav = wrapPcm16ToWav(Buffer.alloc(24000 * 2), 24000);
+  const calls = [];
+  const { api, voicePlayground } = makeHarness({
+    env: { ELEVENLABS_API_KEY: "direct-test-key", GEMINI_API_KEY: "google-test-key" },
+    fetchImpl: async (raw, init) => {
+      const url = new URL(raw);
+      calls.push({ url, headers: new Headers(init.headers), body: JSON.parse(init.body) });
+      if (url.hostname === "api.elevenlabs.io") {
+        return new Response(wav, {
+          headers: {
+            "content-type": "audio/wav",
+            "character-cost": "16",
+            "request-id": "eleven-run-123",
+          },
+        });
+      }
+      return jsonRes({
+        steps: [
+          { type: "model_output", content: [{ type: "audio", data: wav.toString("base64") }] },
+        ],
+      });
+    },
+  });
+  const post = (route, body) =>
+    api.request(`/api/voice/playground/${route}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  for (const speech of [
+    {
+      connection: "elevenlabs",
+      modelId: "eleven_v4",
+      voiceId: "narrator",
+      outputFormat: "wav_24000",
+      text: "A quiet evening.",
+    },
+    {
+      connection: "google",
+      modelId: "gemini-3.8-flash-tts",
+      voiceId: "Kore",
+      speechStyle: "Softly, with a brief pause.",
+      text: "Xin chào.",
+    },
+  ]) {
+    const response = await post("tts", speech);
+    expect(response.status, await response.clone().text()).toBe(202);
+    const { jobs } = await response.json();
+    const item = await voicePlayground.waitForJob(jobs[0].id);
+    expect(item).toMatchObject({ connection: speech.connection, modelId: speech.modelId });
+    expect(item.creditsDeducted).toBeUndefined();
+    if (speech.connection === "elevenlabs") {
+      expect(item.actualCost).toEqual({ unit: "elevenlabs_credits", amount: 16 });
+      expect(item.providerRequestId).toBe("eleven-run-123");
+      const originalCalls = calls.length;
+      const edit = await post(`items/${item.id}/versions`, {
+        mode: "local",
+        from: 0,
+        to: 0.5,
+        gainDb: -3,
+      });
+      expect(edit.status, await edit.clone().text()).toBe(202);
+      const edited = await voicePlayground.waitForJob((await edit.json()).job.id);
+      expect(edited.version.parentId).toBe(item.id);
+      expect(edited.actualCost).toBeUndefined();
+      expect(edited.providerRequestId).toBeUndefined();
+      expect(calls).toHaveLength(originalCalls);
+    }
+    const audio = await api.request(`/api/voice/playground/audio/${item.audioFile}`);
+    expect(Buffer.from(await audio.arrayBuffer())).toEqual(wav);
+    expect((await post(`items/${item.id}/retry`, { speakerKey: "Alex" })).status).toBe(400);
+    const retry = await post(`items/${item.id}/retry`, {});
+    expect(retry.status, await retry.clone().text()).toBe(202);
+    const retryResult = await voicePlayground.waitForJob((await retry.json()).jobs[0].id);
+    expect(retryResult.connection).toBe(speech.connection);
+  }
+  expect(calls.map(({ url }) => url.hostname)).toEqual([
+    "api.elevenlabs.io",
+    "api.elevenlabs.io",
+    "generativelanguage.googleapis.com",
+    "generativelanguage.googleapis.com",
+  ]);
+  expect(calls[0].url.pathname).toBe("/v1/text-to-dialogue");
+  expect(calls[0].url.searchParams.get("output_format")).toBe("wav_24000");
+  expect(calls[0].headers.get("xi-api-key")).toBe("direct-test-key");
+  expect(calls[0].body.inputs).toEqual([{ text: "A quiet evening.", voice_id: "narrator" }]);
+  expect(calls[2].url.pathname).toBe("/v1beta/interactions");
+  expect(calls[2].headers.get("x-goog-api-key")).toBe("google-test-key");
+  expect(calls[2].headers.has("xi-api-key")).toBe(false);
+  expect(calls[3].body.input[0].content[0]).toEqual({
+    type: "text",
+    text: "Xin chào.",
+    annotations: [{ type: "speech_metadata", style: "Softly, with a brief pause." }],
+  });
+});
+
+test("manual credentials and voice stars are isolated by service", async () => {
+  const requests = [];
+  const { api, voicePlayground } = makeHarness({
+    env: { ELEVENLABS_API_KEY: "initial-eleven-key" },
+    fetchImpl: async (url, options) => {
+      requests.push({ host: new URL(url).host, headers: new Headers(options.headers) });
+      return jsonRes({ models: [] });
+    },
+  });
+  const configure = (connection, fields) =>
+    api.request("/api/voice/playground/config", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ connection, ...fields }),
+    });
+  const saved = await configure("google", { apiKey: "google-manual-test-key" });
+  expect(saved.status, await saved.clone().text()).toBe(200);
+  expect(await saved.clone().text()).not.toContain("google-manual-test-key");
+  expect((await saved.json()).connections).toMatchObject({
+    elevenlabs: { configured: true, source: "env" },
+    google: { configured: true, source: "override" },
+  });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].host).toBe("generativelanguage.googleapis.com");
+  expect(requests[0].headers.get("x-goog-api-key")).toBe("google-manual-test-key");
+  expect(requests[0].headers.get("xi-api-key")).toBeNull();
+  expect(
+    (await configure("google", { apiKey: "third-key", apiBase: "https://example.com" })).status,
+  ).toBe(400);
+  expect(requests).toHaveLength(1);
+
+  const voice = { id: "shared_id", name: "Same provider voice ID", provider: "elevenlabs" };
+  for (const connection of ["genvoice", "elevenlabs"]) {
+    const res = await api.request("/api/voice/playground/voice-favorites", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ voice: { ...voice, connection }, favorite: true }),
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+  }
+  expect(voicePlayground.listVoiceFavorites().map((row) => row.connection)).toEqual([
+    "elevenlabs",
+    "genvoice",
+  ]);
+  const cleared = await configure("google", { clearOverride: true });
+  expect((await cleared.json()).connections).toMatchObject({
+    elevenlabs: { configured: true, source: "env" },
+    google: { configured: false, source: "none" },
+  });
+});
+
+test("Dialogue uses provider-specific speaker contracts and archives a repeatable scene", async () => {
+  const wav = wrapPcm16ToWav(Buffer.alloc(24000 * 2), 24000);
+  const characters = "Xin chào.Chào Mai.Bắt đầu nhé.".split("");
+  const lengths = [9, 9, 12];
+  let low = 0;
+  const voiceSegments = lengths.map((length, dialogue_input_index) => {
+    const character_start_index = low;
+    low += length;
+    return { character_start_index, character_end_index: low, dialogue_input_index };
+  });
+  const requests = [];
+  const { api, voicePlayground } = makeHarness({
+    env: { ELEVENLABS_API_KEY: "test-eleven", GEMINI_API_KEY: "test-google" },
+    fetchImpl: async (raw, init) => {
+      const url = new URL(raw);
+      requests.push({ url, input: JSON.parse(init.body) });
+      if (url.pathname.endsWith("/with-timestamps")) {
+        const times = characters.map((_, index) => index * 0.025);
+        return jsonRes({
+          audio_base64: wav.toString("base64"),
+          voice_segments: voiceSegments,
+          [requests.length === 1 ? "alignment" : "normalized_alignment"]: {
+            characters,
+            character_start_times_seconds: times,
+            character_end_times_seconds: times.map((time) => time + 0.025),
+          },
+        });
+      }
+      return url.host === "api.elevenlabs.io"
+        ? new Response(wav, { headers: { "content-type": "audio/wav" } })
+        : jsonRes({
+            steps: [
+              { type: "model_output", content: [{ type: "audio", data: wav.toString("base64") }] },
+            ],
+          });
+    },
+  });
+  for (const connection of ["elevenlabs", "google"]) {
+    const response = await api.request("/api/voice/playground/dialogue", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        connection,
+        fromTemplateId: "pt_dialogue_fixture",
+        text: "[Mai]: Xin chào.\nNam: Chào Mai.\nMai: Bắt đầu nhé.",
+        speakers: {
+          Mai: {
+            voice_id: "Kore",
+            ...(connection === "google" ? { speech_style: "Quiet and deliberate." } : {}),
+          },
+          Nam: { voice_id: "Puck" },
+          ...(connection === "elevenlabs" ? { Guest: { voice_id: "guest_voice" } } : {}),
+        },
+        ...(connection === "elevenlabs"
+          ? { outputFormat: "wav_24000", exportTranscript: true }
+          : {}),
+      }),
+    });
+    expect(response.status, await response.clone().text()).toBe(202);
+    const item = await voicePlayground.waitForJob((await response.json()).job.id);
+    expect(item).toMatchObject({
+      kind: "dialogue",
+      connection,
+      durationSeconds: 1,
+      fromTemplateId: "pt_dialogue_fixture",
+    });
+    expect(item.dialogue.speakers.Mai.voice_id).toBe("Kore");
+    if (connection === "elevenlabs") {
+      expect(item.dialogue.speakers.Guest.voice_id).toBe("guest_voice");
+      expect(item.wordTimings.map(({ w, speakerId }) => [w, speakerId])).toEqual([
+        ["Xin", "Mai"],
+        ["chào.", "Mai"],
+        ["Chào", "Nam"],
+        ["Mai.", "Nam"],
+        ["Bắt", "Mai"],
+        ["đầu", "Mai"],
+        ["nhé.", "Mai"],
+      ]);
+    }
+    const beforeRejectedRetry = requests.length;
+    const rejectedRetry = await api.request(`/api/voice/playground/items/${item.id}/retry`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ speakerKey: "Mia", voiceId: "Puck" }),
+    });
+    expect(rejectedRetry.status).toBe(400);
+    expect(requests).toHaveLength(beforeRejectedRetry);
+    const retry = await voicePlayground.retryItem(item.id);
+    const repeated = await voicePlayground.waitForJob(retry.job.id);
+    expect(repeated.connection).toBe(connection);
+    expect(repeated.fromTemplateId).toBe("pt_dialogue_fixture");
+    expect(repeated.retry).toEqual({ parentId: item.id, rootId: item.id });
+    expect(voicePlayground.listVersions(repeated.id).map(({ id }) => id)).toEqual([
+      item.id,
+      repeated.id,
+    ]);
+    expect(repeated.wordTimings).toEqual(item.wordTimings);
+  }
+  expect(requests[0].url.pathname).toBe("/v1/text-to-dialogue/with-timestamps");
+  expect(requests[0].input.inputs).toEqual([
+    { voice_id: "Kore", text: "Xin chào." },
+    { voice_id: "Puck", text: "Chào Mai." },
+    { voice_id: "Kore", text: "Bắt đầu nhé." },
+  ]);
+  expect(requests[1].input).toEqual(requests[0].input);
+  expect(requests[2].url.pathname).toBe("/v1beta/interactions");
+  expect(requests[2].input.generation_config.speech_config.speakers).toEqual([
+    { speaker: "Mai", voice: "Kore" },
+    { speaker: "Nam", voice: "Puck" },
+  ]);
+  expect(requests[2].input.input[0].content[0]).toEqual({
+    type: "text",
+    text: "Xin chào.",
+    annotations: [{ type: "speech_metadata", speaker: "Mai", style: "Quiet and deliberate." }],
+  });
+  expect(requests[3].input).toEqual(requests[2].input);
+
+  for (const input of [
+    {
+      modelId: "eleven_v4",
+      speakers: { Mai: { voice_id: "Kore", provider: "minimax" }, Nam: { voice_id: "Puck" } },
+    },
+    {
+      modelId: "eleven_v4",
+      speakers: { Mai: { voice_id: "Kore", model_id: "eleven_v3" }, Nam: { voice_id: "Puck" } },
+    },
+    {
+      modelId: "eleven_v3",
+      voiceSettings: { similarity_boost: 0.5 },
+      speakers: { Mai: { voice_id: "Kore" }, Nam: { voice_id: "Puck" } },
+    },
+    {
+      connection: "google",
+      pauseBetweenTurns: 0.5,
+      speakers: { Mai: { voice_id: "Kore" }, Nam: { voice_id: "Puck" } },
+    },
+  ]) {
+    const res = await api.request("/api/voice/playground/dialogue", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        connection: "elevenlabs",
+        text: "Mai: Xin chào.\nNam: Chào.",
+        ...input,
+      }),
+    });
+    expect(res.status, await res.clone().text()).toBe(400);
+  }
+  expect(requests).toHaveLength(4);
+  const english = await voicePlayground.startDialogue({
+    connection: "elevenlabs",
+    text: "Châu: Let's start.\nNam: Ready when you are.",
+    speakers: { Châu: { voice_id: "Kore" }, Nam: { voice_id: "Puck" } },
+  });
+  await voicePlayground.waitForJob(english.job.id);
+  expect(requests[4].input.language_code).toBeUndefined();
+  expect(english.job.dialogueRecipe).toMatchObject({
+    connection: "elevenlabs",
+    languageCode: "auto",
+    text: "Châu: Let's start.\nNam: Ready when you are.",
+    speakers: { Châu: { voice_id: "Kore" }, Nam: { voice_id: "Puck" } },
+  });
+});
+
+test("an imported Dialogue recording without its cast stays playable and cannot retry as Speech", async () => {
+  const wav = wrapPcm16ToWav(Buffer.alloc(16000 * 2), 16000);
+  let paidPosts = 0;
+  const { api } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const url = new URL(raw);
+      if (init?.method === "POST") paidPosts++;
+      if (
+        url.pathname.endsWith("/history/scene-only") ||
+        url.pathname.endsWith("/history/scene-recovered")
+      )
+        return jsonRes({
+          status: "completed",
+          text: "Alex: Hello.\nRiley: Hi.",
+          voice_id: "actor",
+          result: { audio_url: "https://cdn.example/scene.wav" },
+        });
+      if (url.pathname === "/scene.wav") return new Response(wav);
+      return jsonRes({ id: "unexpected-charge" }, 202);
+    },
+  });
+  const post = (suffix, input) =>
+    api.request(`/api/voice/playground/${suffix}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  const imported = await post("remote-history/import", { taskId: "scene-only", kind: "dialogue" });
+  expect(imported.status).toBe(200);
+  const { item } = await imported.json();
+  expect(item).toMatchObject({ kind: "dialogue", durationSeconds: 1 });
+  const retry = await post(`items/${item.id}/retry`, {});
+  expect(retry.status).toBe(400);
+  expect((await retry.json()).error).toContain("saved Dialogue cast");
+  const recovery = await post("remote-history/import", {
+    taskId: "scene-recovered",
+    kind: "dialogue",
+    dialogueRecipe: {
+      connection: "genvoice",
+      text: "Alex: Xin chào.\nRiley: Bắt đầu.",
+      fromTemplateId: "pt_saved_scene",
+      speakers: {
+        Alex: { voice_id: "actor_a", language_code: "vi", voice_settings: { stability: 0.6 } },
+        Riley: { voice_id: "actor_b", language_code: "vi" },
+      },
+      pause_between_turns: 0.35,
+    },
+  });
+  expect(recovery.status).toBe(200);
+  expect((await recovery.json()).item).toMatchObject({
+    languageCode: "vi",
+    fromTemplateId: "pt_saved_scene",
+    dialogue: {
+      pause_between_turns: 0.35,
+      speakers: { Alex: { voice_settings: { stability: 0.6 } } },
+    },
+  });
+  expect(paidPosts).toBe(0);
+});
+
+test("GenVoice batch quotes without spending, preflights every entry and saves the effective recipe", async () => {
+  const audio = Object.fromEntries(
+    [1, 2, 3].map((id) => [`/paid_${id}.wav`, wrapPcm16ToWav(Buffer.alloc(32000, id), 16000)]),
+  );
+  const accepted = [];
+  let attempts = 0;
+  const pendingDownload = Promise.withResolvers();
+  const downloadStarted = Promise.withResolvers();
+  const pendingFeePoll = Promise.withResolvers();
+  const feeReported = Promise.withResolvers();
+  let downloadsOfSecondTake = 0;
+  let subtitleDownloads = 0;
+  let readsOfSecondHistory = 0;
+  let readsOfThirdHistory = 0;
+  let readsOfFirstHistory = 0;
+  const { api, voicePlayground } = makeHarness({
+    fetchImpl: async (raw, init = {}) => {
+      const url = new URL(raw);
+      if (url.pathname.endsWith("/auth/me")) return jsonRes({ id: "account_no_balance" });
+      if (url.pathname.endsWith("/models"))
+        return jsonRes(
+          url.searchParams.has("provider")
+            ? []
+            : [
+                {
+                  model_id: "eleven_v4",
+                  can_do_text_to_speech: true,
+                  maximum_text_length_per_request: 60,
+                  model_rates: { character_cost_multiplier: 0.5 },
+                },
+              ],
+        );
+      if (url.pathname.includes("/text-to-speech/") && init.method === "POST") {
+        const body = JSON.parse(init.body);
+        attempts++;
+        if ("seed" in body) return jsonRes({ message: "unsupported seed" }, 422);
+        accepted.push({ voice: url.pathname.split("/").at(-1), body });
+        return jsonRes({ id: `paid_${accepted.length}` }, 202);
+      }
+      if (url.pathname.includes("/history/paid_")) {
+        if (url.pathname.endsWith("_1")) {
+          if (readsOfFirstHistory++ === 0)
+            return jsonRes({ id: "paid_1", status: "processing", credits_deducted: 19 });
+          feeReported.resolve();
+          await pendingFeePoll.promise;
+        }
+        const second = url.pathname.endsWith("_2");
+        const original = second && readsOfSecondHistory++ === 0;
+        const lateSrt = url.pathname.endsWith("_3") && readsOfThirdHistory++ > 0;
+        return jsonRes({
+          status: "completed",
+          ...(url.pathname.endsWith("_1") || (second && !original)
+            ? {}
+            : { credits_deducted: url.pathname.endsWith("_3") ? 7 : 0 }),
+          result: {
+            audio_url: `https://cdn.example.com/${url.pathname.split("/").at(-1)}.wav`,
+            ...(original || lateSrt
+              ? { srt_url: `https://cdn.example.com/${url.pathname.split("/").at(-1)}.srt` }
+              : {}),
+          },
+        });
+      }
+      if (url.pathname === "/paid_2.srt")
+        return new Response("1\n00:00:00,000 --> 00:00:01,000\nChào.");
+      if (url.pathname === "/paid_3.srt")
+        return subtitleDownloads++ === 0
+          ? new Response("<html>Expired URL</html>", { headers: { "content-type": "text/html" } })
+          : new Response("1\n00:00:00,000 --> 00:00:01,000\nChào.");
+      if (url.pathname === "/paid_2.wav" && downloadsOfSecondTake++ === 0) {
+        downloadStarted.resolve();
+        await pendingDownload.promise;
+      }
+      if (/^\/paid_\d+\.wav$/.test(url.pathname))
+        return new Response(audio[url.pathname], { headers: { "content-type": "audio/wav" } });
+      return url.pathname.endsWith("/languages") ? jsonRes([]) : jsonRes({ voices: [] });
+    },
+  });
+  const send = (path, entries) =>
+    api.request(`/api/voice/playground/tts/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ entries }),
+    });
+  const text = "  [hushed] Chào.\n";
+  const voicePreviewUrl = "https://cdn.example.com/free-preview.mp3";
+  const entries = [
+    { voiceId: "actor_a", text, modelId: "eleven_v4", seed: 0, voicePreviewUrl },
+    { voiceId: "actor_b", text, modelId: "eleven_v4" },
+  ];
+  const quote = await send("quote", entries);
+  expect(quote.status).toBe(200);
+  expect(await quote.json()).toMatchObject({
+    balanceCredits: null,
+    totalCredits: null,
+    modelEstimateCredits: Math.ceil(text.trim().length * 0.5) * 2,
+    rows: [{ modelRateSource: "provider" }, { modelRateSource: "provider" }],
+  });
+  expect(attempts).toBe(0);
+  const invalid = await send("batch", [entries[0], { ...entries[1], provider: "minimax" }]);
+  expect(invalid.status).toBe(400);
+  const unknownModel = await send("batch", [
+    entries[0],
+    { ...entries[1], modelId: "eleven_v4_typo" },
+  ]);
+  expect(unknownModel.status).toBe(400);
+  for (const wrong of [
+    { modelId: "eleven_v4_typo" },
+    { text: "A".repeat(61) },
+    { exportTranscipt: true },
+  ]) {
+    const response = await api.request("/api/voice/playground/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...entries[0], ...wrong }),
+    });
+    expect(response.status).toBe(400);
+  }
+  expect(attempts).toBe(0);
+  const launched = await send("batch", entries);
+  expect(launched.status).toBe(202);
+  const { batchId, jobs } = await launched.json();
+  expect(jobs.map(({ batch }) => batch)).toEqual([
+    { id: batchId, index: 0, variationIndex: 0 },
+    { id: batchId, index: 1, variationIndex: 0 },
+  ]);
+  const cloud = (body) =>
+    api.request("/api/voice/playground/remote-history/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ taskId: "paid_3", kind: "tts", ...body }),
+    });
+  await downloadStarted.promise;
+  let recovered;
+  try {
+    await feeReported.promise;
+    expect(voicePlayground.getSpeechReceipt(jobs[1].id)).toMatchObject({
+      remoteTaskId: "paid_1",
+      creditsDeducted: 19,
+    });
+    const pending = await api.request(`/api/voice/playground/tts/receipts/${jobs[0].id}`);
+    expect(await pending.json()).toMatchObject({
+      receipt: { remoteTaskId: "paid_2", creditsDeducted: 0, batch: { id: batchId, index: 0 } },
+    });
+    expect((await cloud({ taskId: "paid_2", kind: "dialogue" })).status).toBe(409);
+    const response = await cloud({ taskId: "paid_2" });
+    expect(response.status).toBe(200);
+    recovered = (await response.json()).item;
+    await voicePlayground.patchItem(recovered.id, { title: "Chosen variant", rating: 5 });
+  } finally {
+    pendingDownload.resolve();
+    pendingFeePoll.resolve();
+  }
+  await voicePlayground.waitForAllJobs();
+  expect(accepted.map(({ voice }) => voice)).toEqual(["actor_b", "actor_a"]);
+  expect(accepted[1].body).not.toHaveProperty("voicePreviewUrl");
+  const archived = voicePlayground.getItem(recovered.id);
+  expect(
+    voicePlayground.listItems().filter(({ remoteTaskId }) => remoteTaskId === "paid_2"),
+  ).toHaveLength(1);
+  expect(archived).toMatchObject({
+    title: "Chosen variant",
+    rating: 5,
+    kind: "tts",
+    creditsDeducted: 0,
+    voicePreviewUrl,
+    srtText: expect.stringContaining("Chào."),
+  });
+  const completed = await api.request(`/api/voice/playground/tts/receipts/${jobs[0].id}`);
+  expect(await completed.json()).toMatchObject({
+    receipt: { itemId: archived.id, remoteTaskId: "paid_2" },
+  });
+  const recipe = await api.request(`/api/voice/playground/items/${archived.id}/recipe`);
+  expect(await recipe.json()).toMatchObject({
+    command: "generate tts",
+    input: { text: text.trim(), voiceId: "actor_a" },
+    requestedInput: { text, seed: 0, voiceId: "actor_a" },
+    effectiveRequest: { body: { text: text.trim(), model_id: "eleven_v4" } },
+  });
+  expect(archived.generationRecipe.effective.body.seed).toBeUndefined();
+  expect(voicePlayground.getItem(jobs[1].id).creditsDeducted).toBe(19);
+  expect(readFileSync(voicePlayground.audioFile(archived.audioFile))).toEqual(audio["/paid_2.wav"]);
+  expect(
+    readFileSync(voicePlayground.audioFile(voicePlayground.getItem(jobs[1].id).audioFile)),
+  ).toEqual(audio["/paid_1.wav"]);
+  const mismatch = await cloud({
+    taskId: "paid_2",
+    kind: "dialogue",
+    dialogueRecipe: {
+      text: "Alex: Wrong audio.\nMai: Chào.",
+      speakers: { Alex: { voice_id: "wrong_voice" }, Mai: { voice_id: "actor_a" } },
+    },
+  });
+  expect((await mismatch.json()).item).toMatchObject({ kind: "tts", text, voiceId: "actor_a" });
+  const first = await cloud({});
+  expect(first.status).toBe(200);
+  const firstItem = (await first.json()).item;
+  expect(firstItem.srtFile).toBeUndefined();
+  const spoofed = await cloud({ generationRecipe: archived.generationRecipe });
+  expect(spoofed.status).toBe(400);
+  const firstSrtRetry = await cloud({});
+  expect((await firstSrtRetry.json()).item.srtFile).toBeUndefined();
+  const withSrt = await cloud({});
+  expect(withSrt.status).toBe(200);
+  expect(await withSrt.json()).toMatchObject({
+    alreadyImported: true,
+    item: {
+      id: firstItem.id,
+      cloudRecipeUnverified: true,
+      srtText: expect.stringContaining("Chào."),
+      creditsDeducted: 7,
+    },
+  });
+  const captions = await api.request(`/api/voice/playground/items/${firstItem.id}/captions`);
+  expect(await captions.json()).toMatchObject({
+    source: "cues",
+    parts: [{ text: "Chào.", from: 0, to: 1 }],
+  });
+});
+
+test.each([
+  ["", 6, "built-in"],
+  ["0", 0, "provider"],
+])("the Speech quote distinguishes multiplier %j from a known zero", async (rate, fee, source) => {
+  const { voicePlayground } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      expect(init.method).not.toBe("POST");
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/models"))
+        return jsonRes([
+          { model_id: "eleven_v4", model_rates: { character_cost_multiplier: rate } },
+        ]);
+      if (path.endsWith("/auth/me")) return jsonRes({ credit_balance: 100 });
+      return jsonRes([]);
+    },
+  });
+  expect(
+    await voicePlayground.quoteTtsBatch({
+      entries: [{ text: "Hello.", voiceId: "narrator" }],
+    }),
+  ).toMatchObject({
+    balanceCredits: 100,
+    modelEstimateCredits: fee,
+    totalCredits: null,
+    rows: [{ modelRateSource: source }],
+  });
+});
+
+test("the charge observed during Speech processing remains provisional until final History", async () => {
+  const wav = wrapPcm16ToWav(Buffer.alloc(32000, 20), 16000);
+  let polls = 0;
+  const { voicePlayground } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/text-to-speech/narrator") && init.method === "POST")
+        return jsonRes({ id: "fee_pending" }, 202);
+      if (path.endsWith("/history/fee_pending")) {
+        if (++polls === 1) return jsonRes({ status: "processing", credits_deducted: 3 });
+        return jsonRes({
+          status: "completed",
+          ...(polls >= 3 ? { credits_deducted: 7 } : {}),
+          result: {
+            audio_url: "https://cdn.example.com/take.wav",
+            srt_url: "https://cdn.example.com/take.srt",
+          },
+        });
+      }
+      if (path === "/take.wav") return new Response(wav);
+      if (path === "/take.srt") return new Response("1\n00:00:00,000 --> 00:00:01,000\nChào.");
+      return jsonRes([]);
+    },
+  });
+  await voicePlayground.startTts({ text: "Chào.", voiceId: "narrator", exportTranscript: true });
+  await voicePlayground.waitForAllJobs();
+  const original = voicePlayground.listItems()[0];
+  expect(original).toMatchObject({
+    creditsDeducted: 3,
+    creditsSource: "processing",
+    srtText: expect.stringContaining("Chào."),
+  });
+  expect(await voicePlayground.importRemoteTask("fee_pending")).toMatchObject({
+    item: { id: original.id, creditsDeducted: 7, creditsSource: "history" },
+  });
+  expect(polls).toBe(3);
+});
+
+test("a canceled Speech task stops polling and keeps the provider's error", async () => {
+  let polls = 0;
+  const { voicePlayground } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/text-to-speech/narrator") && init.method === "POST")
+        return jsonRes({ id: "cancelled_task" }, 202);
+      if (path.endsWith("/history/cancelled_task")) {
+        polls++;
+        return jsonRes({ status: "cancelled", detail_error: "Rendering canceled upstream" });
+      }
+      return jsonRes([]);
+    },
+  });
+  await voicePlayground.startTts({ text: "Chào.", voiceId: "narrator" });
+  await voicePlayground.waitForAllJobs();
+  expect(voicePlayground.listJobs()).toMatchObject([
+    { remoteTaskId: "cancelled_task", status: "failed", error: "Rendering canceled upstream" },
+  ]);
+  expect(polls).toBe(1);
+});
+
+test("a concurrent Cloud import keeps the final History charge from the original Speech job", async () => {
+  const polling = Promise.withResolvers();
+  const complete = Promise.withResolvers();
+  const wav = wrapPcm16ToWav(Buffer.alloc(32000, 19), 16000);
+  let historyReads = 0;
+  let submits = 0;
+  const { voicePlayground } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/text-to-speech/narrator") && init.method === "POST") {
+        submits++;
+        return jsonRes({ id: "same_audio_task", credits_deducted: 3 }, 202);
+      }
+      if (path.endsWith("/history/same_audio_task")) {
+        const originalPoll = ++historyReads === 1;
+        if (originalPoll) {
+          polling.resolve();
+          await complete.promise;
+        }
+        return jsonRes({
+          id: "same_audio_task",
+          status: "completed",
+          ...(originalPoll ? { credits_deducted: 7 } : {}),
+          result: { audio_url: "https://cdn.example.com/same.wav" },
+        });
+      }
+      if (path === "/same.wav") return new Response(wav);
+      return jsonRes([]);
+    },
+  });
+  const {
+    jobs: [job],
+  } = await voicePlayground.startTts({
+    text: "Chào.",
+    voiceId: "narrator",
+  });
+  await polling.promise;
+  let id;
+  try {
+    const { item } = await voicePlayground.importRemoteTask("same_audio_task");
+    expect(item.creditsDeducted).toBe(3);
+    id = item.id;
+  } finally {
+    complete.resolve();
+  }
+  await voicePlayground.waitForAllJobs();
+  expect(submits).toBe(1);
+  expect(voicePlayground.listItems()).toMatchObject([
+    { id, creditsDeducted: 7, creditsSource: "history" },
+  ]);
+  expect(voicePlayground.getSpeechReceipt(job.id)).toMatchObject({
+    itemId: id,
+    creditsDeducted: 7,
+    creditsSource: "history",
+  });
+});
+
+test("a Speech acknowledgement reconciles an earlier Cloud import and both scopes reuse the saved audio", async () => {
+  const submitted = Promise.withResolvers();
+  const acknowledge = Promise.withResolvers();
+  let audioDownloads = 0;
+  let reportFee = false;
+  const pcm = Buffer.alloc(32000, 17);
+  Buffer.from([0xff, 0xfb, 0x90, 0x00]).copy(pcm);
+  const { voicePlayground: project } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const url = new URL(raw);
+      if (url.pathname.endsWith("/text-to-speech/narrator") && init?.method === "POST") {
+        submitted.resolve();
+        await acknowledge.promise;
+        return jsonRes({ id: "cloud_take", credits_deducted: 0 }, 202);
+      }
+      const task = {
+        id: "cloud_take",
+        status: "completed",
+        ...(reportFee ? { credits_deducted: 11 } : {}),
+        result: {
+          audio_url: "https://cdn.example.com/take.raw",
+          srt_url: "https://cdn.example.com/take.srt",
+        },
+      };
+      if (url.pathname.endsWith("/history/cloud_take")) return jsonRes(task);
+      if (url.pathname.endsWith("/history")) return jsonRes({ tasks: [task] });
+      if (url.pathname === "/take.srt")
+        return new Response("1\n00:00:00,000 --> 00:00:01,000\nLời thoại thật.");
+      if (url.pathname === "/take.raw") {
+        audioDownloads++;
+        return new Response(pcm, { headers: { "content-type": "audio/pcm" } });
+      }
+      return jsonRes([]);
+    },
+  });
+  const global = project.forScope("global");
+  await project.startTts({
+    text: "Lời thoại thật.",
+    voiceId: "narrator",
+    seed: 0,
+    outputFormat: "pcm_16000",
+  });
+  await submitted.promise;
+  let imported;
+  let importedGlobal;
+  try {
+    ({ item: imported } = await project.importRemoteTask("cloud_take", "dialogue", {
+      dialogueRecipe: {
+        text: "Alex: Wrong audio.\nMai: Chào.",
+        speakers: { Alex: { voice_id: "actor_a" }, Mai: { voice_id: "actor_b" } },
+      },
+    }));
+    await project.patchItem(imported.id, { title: "Keep this title", rating: 5 });
+    reportFee = true;
+    ({ item: importedGlobal } = await global.importRemoteTask("cloud_take"));
+    await global.patchItem(importedGlobal.id, { title: "Global title", rating: 4 });
+    await project.readSource({ sourceItemId: importedGlobal.id, allowOtherScope: true });
+  } finally {
+    reportFee = false;
+    acknowledge.resolve();
+  }
+  await project.waitForAllJobs();
+  expect(project.listItems()).toMatchObject([
+    {
+      id: imported.id,
+      title: "Keep this title",
+      rating: 5,
+      kind: "tts",
+      text: "Lời thoại thật.",
+      voiceId: "narrator",
+      seed: 0,
+      generationRecipe: { version: 1 },
+    },
+  ]);
+  expect(project.getItem(imported.id).dialogue).toBeUndefined();
+  const wav = wrapPcm16ToWav(pcm, 16000);
+  expect(readFileSync(project.audioFile(project.getItem(imported.id).audioFile))).toEqual(wav);
+  const copied = await project.copyToScope(imported.id, "global");
+  expect(copied).toMatchObject({
+    id: importedGlobal.id,
+    title: "Global title",
+    rating: 4,
+    mimeType: "audio/wav",
+    creditsDeducted: 11,
+    retentionPinned: true,
+    srtFile: importedGlobal.srtFile,
+  });
+  expect(readFileSync(global.audioFile(copied.audioFile))).toEqual(wav);
+  expect((await project.copyToScope(imported.id, "global")).id).toBe(copied.id);
+  expect(global.listItems()).toHaveLength(1);
+  rmSync(global.audioFile(copied.audioFile));
+  const repaired = await project.copyToScope(imported.id, "global");
+  expect(repaired).toMatchObject({ id: copied.id, rating: 4, creditsDeducted: 11 });
+  expect(readFileSync(global.audioFile(repaired.audioFile))).toEqual(wav);
+  const recovered = await global.importRemoteTask("cloud_take");
+  expect(recovered).toMatchObject({ alreadyImported: true, item: { id: copied.id, seed: 0 } });
+  expect(await global.fetchRemoteHistory({ kind: "tts" })).toMatchObject({
+    items: [{ id: "cloud_take", importedItemId: copied.id }],
+  });
+  expect(audioDownloads).toBe(3);
+});
+
+test.each([
+  ["text/html", "<html>Link expired</html>"],
+  ["application/octet-stream", "The signed audio link has expired."],
+  ["application/octet-stream", '{"error":"ExpiredToken"}'],
+])(
+  "an expired audio response (%s) leaves a paid Speech job recoverable",
+  async (contentType, body) => {
+    const wav = wrapPcm16ToWav(Buffer.alloc(32000, 17), 16000);
+    let expired = true;
+    let lateSubtitles = false;
+    let submissions = 0;
+    const { voicePlayground } = makeHarness({
+      fetchImpl: async (raw, init) => {
+        const url = new URL(raw);
+        if (init.method === "POST" && url.pathname.endsWith("/text-to-speech/narrator")) {
+          submissions++;
+          return jsonRes({ id: "expired_task", credits_deducted: 11 }, 202);
+        }
+        if (url.pathname.endsWith("/history/expired_task"))
+          return jsonRes({
+            id: "expired_task",
+            status: "completed",
+            ...(!expired && !lateSubtitles ? { credits_deducted: 7 } : {}),
+            result: {
+              audio_url: "https://cdn.example.com/expired.wav",
+              ...(lateSubtitles ? { srt_url: "https://cdn.example.com/late.srt" } : {}),
+            },
+          });
+        if (url.pathname === "/expired.wav")
+          return expired
+            ? new Response(body, { headers: { "content-type": contentType } })
+            : new Response(wav);
+        if (url.pathname === "/late.srt")
+          return new Response("1\n00:00:00,000 --> 00:00:01,000\nChào buổi sáng.");
+        return jsonRes([]);
+      },
+    });
+    const { jobs } = await voicePlayground.startTts({
+      text: "Chào buổi sáng.",
+      voiceId: "narrator",
+      name: "Opening narration",
+      notes: "Approved line reading",
+    });
+    await voicePlayground.waitForAllJobs();
+    expect(voicePlayground.listJobs()).toMatchObject([{ id: jobs[0].id, status: "failed" }]);
+    expect(voicePlayground.listItems()).toEqual([]);
+    expect(voicePlayground.getSpeechReceipt(jobs[0].id)).toMatchObject({
+      remoteTaskId: "expired_task",
+      creditsDeducted: 11,
+    });
+    expired = false;
+    const { item } = await voicePlayground.importRemoteTask("expired_task");
+    expect(item).toMatchObject({
+      creditsDeducted: 7,
+      mimeType: "audio/wav",
+      text: "Chào buổi sáng.",
+      title: "Opening narration",
+      notes: "Approved line reading",
+    });
+    expect(readFileSync(voicePlayground.audioFile(item.audioFile))).toEqual(wav);
+    expect(voicePlayground.listJobs()).toMatchObject([
+      { id: jobs[0].id, status: "completed", itemId: item.id, creditsDeducted: 7 },
+    ]);
+    expect(voicePlayground.listJobs()[0].error).toBeUndefined();
+    lateSubtitles = true;
+    expect(await voicePlayground.importRemoteTask("expired_task")).toMatchObject({
+      item: {
+        id: item.id,
+        creditsDeducted: 7,
+        srtText: expect.stringContaining("Chào buổi sáng."),
+      },
+    });
+    expect(submissions).toBe(1);
+  },
+);
+
+test.each([
+  ["task_a", "task_b"],
+  [301, 302],
+])(
+  "history for a different GenVoice task (%s) never supplies audio or charges to a Speech receipt",
+  async (taskId, otherId) => {
+    let audioDownloads = 0;
+    const { voicePlayground, api } = makeHarness({
+      fetchImpl: async (raw, init) => {
+        const url = new URL(raw);
+        if (url.pathname.endsWith("/text-to-speech/narrator") && init?.method === "POST")
+          return jsonRes({ id: taskId }, 202);
+        if (url.pathname.endsWith(`/history/${taskId}`))
+          return jsonRes({
+            id: otherId,
+            status: "completed",
+            credits_deducted: 5,
+            result: { audio_url: "https://cdn.example.com/task_b.wav" },
+          });
+        if (url.pathname === "/task_b.wav") {
+          audioDownloads++;
+          return new Response(wrapPcm16ToWav(Buffer.alloc(32000), 16000));
+        }
+        return jsonRes([]);
+      },
+    });
+    const { jobs } = await voicePlayground.startTts({
+      text: "Original script",
+      voiceId: "narrator",
+    });
+    await voicePlayground.waitForAllJobs();
+    expect(voicePlayground.listJobs()).toMatchObject([
+      { id: jobs[0].id, status: "failed", error: "GenVoice returned a different task ID" },
+    ]);
+    expect(voicePlayground.getSpeechReceipt(jobs[0].id).creditsDeducted).toBeUndefined();
+    const response = await api.request("/api/voice/playground/remote-history/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ taskId: String(taskId) }),
+    });
+    expect(response.status).toBe(502);
+    expect(voicePlayground.listItems()).toEqual([]);
+    expect(audioDownloads).toBe(0);
+  },
+);
+
+test("Speech refuses an expired submission and preserves a recoverable run identity before charging", async () => {
+  let posts = 0;
+  const {
+    api,
+    voicePlayground,
+    dir: project,
+  } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const url = new URL(raw);
+      if (init.method === "POST" && url.pathname.endsWith("/text-to-speech/narrator")) {
+        posts++;
+        return jsonRes({ id: "paid_run" }, 202);
+      }
+      if (url.pathname.endsWith("/history/paid_run"))
+        return jsonRes({
+          id: "paid_run",
+          status: "completed",
+          credits_deducted: 0,
+          result: { audio_url: "https://cdn.example.com/run.wav" },
+        });
+      if (url.pathname === "/run.wav")
+        return new Response(wrapPcm16ToWav(Buffer.alloc(32000, 17), 16000));
+      return jsonRes([]);
+    },
+  });
+  const send = (deadline) =>
+    api.request("/api/voice/playground/tts/batch", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-voice-playground-run": "test-speech-run",
+        "x-voice-playground-deadline": String(deadline),
+      },
+      body: JSON.stringify({ entries: [{ text: "Voice audition.", voiceId: "narrator" }] }),
+    });
+  expect((await send(Date.now() - 1)).status).toBe(408);
+  expect(posts).toBe(0);
+  const launched = await send(Date.now() + 30_000);
+  expect(launched.status).toBe(202);
+  const {
+    jobs: [job],
+  } = await launched.json();
+  await voicePlayground.waitForAllJobs();
+  const repeated = await send(Date.now() + 30_000);
+  expect((await repeated.json()).jobs).toMatchObject([{ id: job.id, status: "completed" }]);
+  const reopened = openVoicePlayground({ project });
+  try {
+    expect(reopened.getSpeechRun("test-speech-run")).toMatchObject({
+      jobs: [
+        {
+          id: job.id,
+          status: "completed",
+          itemId: job.id,
+          remoteTaskId: "paid_run",
+          creditsDeducted: 0,
+        },
+      ],
+    });
+  } finally {
+    reopened.close();
+  }
+  expect(posts).toBe(1);
+});
+
+test("Speech job history survives reopening with both the provider rejection and the archived take", async () => {
+  let posts = 0;
+  const { voicePlayground, playgroundDir } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const path = new URL(raw).pathname;
+      if (init.method === "POST" && path.includes("/text-to-speech/")) {
+        posts++;
+        return path.endsWith("/denied")
+          ? jsonRes({ error: "Insufficient credits" }, 402)
+          : jsonRes({ id: "recorded" }, 202);
+      }
+      if (path.endsWith("/history/recorded"))
+        return jsonRes({
+          id: "recorded",
+          status: "completed",
+          credits_deducted: 3,
+          result: { audio_url: "https://cdn.example.com/recorded.wav" },
+        });
+      if (path === "/recorded.wav") return new Response(wrapPcm16ToWav(Buffer.alloc(32000), 16000));
+      return jsonRes([]);
+    },
+  });
+  const {
+    jobs: [recorded, denied],
+  } = await voicePlayground.startTtsBatch(
+    {
+      entries: [
+        { text: "First line", voiceId: "narrator" },
+        { text: "Second line", voiceId: "denied" },
+      ],
+    },
+    { runId: "reopened-run" },
+  );
+  await voicePlayground.waitForAllJobs();
+  const reopened = openVoicePlayground({ dir: playgroundDir });
+  try {
+    const jobs = [
+      { id: recorded.id, status: "completed", itemId: recorded.id, creditsDeducted: 3 },
+      { id: denied.id, status: "failed", error: expect.stringContaining("Insufficient credits") },
+    ];
+    expect(reopened.listJobs()).toEqual(expect.arrayContaining(jobs.map(expect.objectContaining)));
+    expect(reopened.getSpeechRun("reopened-run").jobs).toMatchObject(jobs);
+    expect(posts).toBe(2);
+  } finally {
+    reopened.close();
+  }
+});
+
+test("Cloud recovery repairs an empty archived WAV and keeps the existing take and its metadata", async () => {
+  const audio = wrapPcm16ToWav(Buffer.alloc(32000, 6), 16000);
+  const empty = wrapPcm16ToWav(Buffer.alloc(0), 16000);
+  const { voicePlayground, playgroundDir } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      expect(init.method).not.toBe("POST");
+      const path = new URL(raw).pathname;
+      if (path === "/repaired.wav") return new Response(audio);
+      expect(path).toEndWith("/history/existing_speech");
+      return jsonRes({
+        id: "existing_speech",
+        status: "completed",
+        credits_deducted: 0,
+        result: { audio_url: "https://cdn.example.com/repaired.wav" },
+      });
+    },
+  });
+  const id = "pg_existing";
+  const audioFile = `${id}.wav`;
+  mkdirSync(join(playgroundDir, "audio"), { recursive: true });
+  writeFileSync(join(playgroundDir, "audio", audioFile), empty);
+  writeFileSync(
+    join(playgroundDir, "items.json"),
+    JSON.stringify({
+      version: 1,
+      items: [
+        {
+          id,
+          audioFile,
+          kind: "tts",
+          mimeType: "audio/wav",
+          title: "Edited by user",
+          rating: 5,
+          durationSeconds: 0,
+          bytes: empty.length,
+          remoteTaskId: "existing_speech",
+          srtText: "Existing subtitle",
+          creditsDeducted: 0,
+          creditsSource: "history",
+        },
+      ],
+    }),
+  );
+  const { item } = await voicePlayground.importRemoteTask("existing_speech");
+  expect(item).toMatchObject({
+    id,
+    title: "Edited by user",
+    rating: 5,
+    srtText: "Existing subtitle",
+    durationSeconds: 1,
+    creditsDeducted: 0,
+    replacedAudioFiles: [audioFile],
+  });
+  expect(voicePlayground.listItems()).toHaveLength(1);
+  expect(readFileSync(voicePlayground.audioFile(item.audioFile))).toEqual(audio);
+});
+
+test("replaying a saved Speech recipe keeps its effective contexts and tuning", async () => {
+  const bodies = [];
+  const audio = wrapPcm16ToWav(Buffer.alloc(32000, 9), 16000);
+  const { api, voicePlayground } = makeHarness({
+    fetchImpl: async (raw, init) => {
+      const path = new URL(raw).pathname;
+      if (path.endsWith("/text-to-speech/narrator") && init.method === "POST") {
+        bodies.push(JSON.parse(init.body));
+        if (bodies.length === 3) return jsonRes({ error: "Settings no longer available" }, 422);
+        return jsonRes({ id: `speech_${bodies.length}` }, 202);
+      }
+      if (path.includes("/history/speech_"))
+        return jsonRes({
+          id: path.split("/").at(-1),
+          status: "completed",
+          credits_deducted: 1,
+          result: { audio_url: "https://cdn.example.com/replay.wav" },
+        });
+      if (path === "/replay.wav") return new Response(audio);
+      return jsonRes([]);
+    },
+  });
+  const {
+    jobs: [first],
+  } = await voicePlayground.startTts({
+    voiceId: "narrator",
+    text: "[hushed] Chào buổi sáng.",
+    seed: 0,
+    previousText: "Chào.",
+  });
+  await voicePlayground.waitForAllJobs();
+  const recipe = await api
+    .request(`/api/voice/playground/items/${first.id}/recipe`)
+    .then((r) => r.json());
+  const submit = () =>
+    api.request("/api/voice/playground/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(recipe.input),
+    });
+  expect((await submit()).status).toBe(202);
+  await voicePlayground.waitForAllJobs();
+  const rejected = await submit();
+  const {
+    jobs: [last],
+  } = await rejected.json();
+  await voicePlayground.waitForAllJobs();
+  expect(bodies).toHaveLength(3);
+  expect(bodies.slice(1)).toEqual([bodies[0], bodies[0]]);
+  expect(voicePlayground.listJobs().find((job) => job.id === last.id)).toMatchObject({
+    status: "failed",
+    error: expect.stringContaining("Settings no longer available"),
+  });
+});
+
+test.each(["missing audio", "truncated audio", "missing index"])(
+  "Studio CLI resume repairs %s without submitting again",
+  async (damage) => {
+    const audio = wrapPcm16ToWav(Buffer.alloc(32000, 4), 16000);
+    let submissions = 0;
+    let downloads = 0;
+    const { api, dir, voicePlayground } = makeHarness({
+      fetchImpl: async (raw, init) => {
+        const path = new URL(raw).pathname;
+        if (path.endsWith("/text-to-speech/narrator") && init.method === "POST") {
+          submissions++;
+          return jsonRes({ id: "recover_audio" }, 202);
+        }
+        if (path.endsWith("/history/recover_audio"))
+          return jsonRes({
+            id: "recover_audio",
+            status: "completed",
+            credits_deducted: 7,
+            result: { audio_url: "https://cdn.example.com/resume.wav" },
+          });
+        if (path === "/resume.wav") {
+          downloads++;
+          return new Response(audio);
+        }
+        return jsonRes([]);
+      },
+    });
+    const output = [];
+    const errors = [];
+    const options = {
+      fetchImpl: (url, init) => api.request(new Request(url, init)),
+      out: (line) => output.push(line),
+      err: (line) => errors.push(line),
+    };
+    const checkpoint = join(dir, "resume.json");
+    expect(
+      await runVoicePlaygroundCli(
+        [
+          "generate",
+          "tts",
+          "--server",
+          "http://studio.invalid",
+          "--yes",
+          "--wait",
+          "3",
+          "--checkpoint",
+          checkpoint,
+          "--input",
+          '{"voiceId":"narrator","text":"Chào buổi sáng."}',
+        ],
+        options,
+      ),
+      errors.join("\n"),
+    ).toBe(0);
+    const original = JSON.parse(output.at(-1)).items[0];
+    const file = voicePlayground.audioFile(original.audioFile);
+    if (damage === "missing index") rmSync(join(voicePlayground.storageDir, "items.json"));
+    else if (damage === "truncated audio") writeFileSync(file, audio.subarray(0, 32));
+    else rmSync(file);
+    expect(
+      await runVoicePlaygroundCli(["resume", checkpoint, "--wait", "3"], options),
+      errors.join("\n"),
+    ).toBe(0);
+    const repaired = JSON.parse(output.at(-1)).items[0];
+    expect(repaired.id).toBe(original.id);
+    expect(repaired.creditsDeducted).toBe(7);
+    expect(repaired.generationRecipe).toEqual(original.generationRecipe);
+    expect(readFileSync(voicePlayground.audioFile(repaired.audioFile))).toEqual(audio);
+    expect(downloads).toBe(2);
+    expect(submissions).toBe(1);
+  },
+);
+
+test("concurrent Cloud recovery keeps the media of the same take after loss of the index", async () => {
+  const wav = wrapPcm16ToWav(Buffer.alloc(32000, 10), 16000);
+  let recovering = false;
+  let recoveringDownloads = 0;
+  let submissions = 0;
+  const bothDownloading = Promise.withResolvers();
+  const fetchImpl = async (raw, init) => {
+    const path = new URL(raw).pathname;
+    if (path.endsWith("/text-to-speech/narrator") && init.method === "POST") {
+      submissions++;
+      return jsonRes({ id: "recover_twice" }, 202);
+    }
+    if (path.endsWith("/history/recover_twice"))
+      return jsonRes({
+        status: "completed",
+        credits_deducted: 7,
+        result: { audio_url: "https://cdn.example.com/once.wav" },
+      });
+    if (path === "/once.wav") {
+      if (recovering) {
+        if (++recoveringDownloads === 2) bothDownloading.resolve();
+        await bothDownloading.promise;
+      }
+      return new Response(wav);
+    }
+    return jsonRes([]);
+  };
+  const { voicePlayground, dir, playgroundDir } = makeHarness({ fetchImpl });
+  const {
+    jobs: [original],
+  } = await voicePlayground.startTts({ voiceId: "narrator", text: "Chào." });
+  await voicePlayground.waitForAllJobs();
+  rmSync(join(playgroundDir, "items.json"));
+  const reopened = openVoicePlayground({
+    dir: playgroundDir,
+    project: dir,
+    globalDir: join(playgroundDir, "global"),
+    fetchImpl,
+    lookup: async () => [{ address: "93.184.216.34", family: 4 }],
+    configFile: join(dir, "other-voice.json"),
+    secretsFile: join(dir, "missing.env"),
+    env: { GENVOICE_API_KEY: "fixture-only" },
+  });
+  recovering = true;
+  try {
+    const results = await Promise.all([
+      voicePlayground.importRemoteTask("recover_twice"),
+      reopened.importRemoteTask("recover_twice"),
+    ]);
+    expect(results.map(({ item }) => item.id)).toEqual([original.id, original.id]);
+    expect(voicePlayground.listItems()).toHaveLength(1);
+    expect(readFileSync(voicePlayground.audioFile(results[0].item.audioFile))).toEqual(wav);
+    expect(submissions).toBe(1);
+  } finally {
+    reopened.close();
+  }
+});
+
+test("recordings search ranks Vietnamese text and returns a reusable GenVoice recipe", async () => {
+  const { api, playgroundDir } = makeHarness();
+  mkdirSync(playgroundDir, { recursive: true });
+  const createdAt = "2026-11-18T12:00:00Z";
+  const lead = {
+    id: "pg_scene_viet",
+    title: "Mai chào Việt Nam",
+    kind: "tts",
+    provider: "elevenlabs",
+    voiceId: "actor_vi",
+    voiceName: "Vietnamese narrator",
+    text: "[softly] Chào Việt Nam.",
+    tags: ["narration", "softly"],
+    modelId: "eleven_v4",
+    languageCode: "vi",
+    voiceSettings: { stability: 0.43, similarity_boost: 0.76 },
+    exportTranscript: true,
+    seed: 0,
+    durationSeconds: 4.1,
+    favorite: true,
+    creditsDeducted: 23,
+    rating: 5,
+    createdAt,
+  };
+  writeFileSync(
+    join(playgroundDir, "items.json"),
+    JSON.stringify({
+      version: 1,
+      items: [
+        lead,
+        {
+          ...lead,
+          id: "plain_take",
+          title: "Other take",
+          voiceId: "other_actor",
+          rating: 2,
+          favorite: false,
+          creditsDeducted: 0,
+        },
+      ],
+    }),
+  );
+  const results = await api.request(
+    "/api/voice/playground/recordings?q=viet+nam&favorite=1&minRating=4&tag=narration&minSeconds=4&sort=relevance",
+  );
+  expect(results.status).toBe(200);
+  const legacy = await (await api.request("/api/voice/playground/items/plain_take")).json();
+  expect(legacy.item.creditsDeducted).toBeUndefined();
+  expect(legacy.item.legacyCreditsDeducted).toBe(0);
+  expect(await results.json()).toMatchObject({
+    total: 1,
+    items: [{ id: lead.id, rating: 5, creditsDeducted: 23, scope: "project" }],
+  });
+  const recipe = await api.request(`/api/voice/playground/items/${lead.id}/recipe`);
+  expect(recipe.status).toBe(200);
+  expect(await recipe.json()).toMatchObject({
+    command: "generate tts",
+    input: {
+      connection: "genvoice",
+      provider: "elevenlabs",
+      voiceId: "actor_vi",
+      text: lead.text,
+      modelId: "eleven_v4",
+      languageCode: "vi",
+      voiceSettings: lead.voiceSettings,
+      seed: 0,
+      exportTranscript: true,
+    },
+  });
+  const base = "/api/voice/playground";
+  const archived = await api.request(`${base}/items/${lead.id}`, { method: "DELETE" });
+  expect((await archived.json()).archived).toBe(true);
+  expect((await (await api.request(`${base}/recordings?favorite=1`)).json()).total).toBe(0);
+  expect((await (await api.request(`${base}/recordings?archived=1`)).json()).items[0].id).toBe(
+    lead.id,
+  );
+  const restored = await api.request(`${base}/recordings`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: [lead.id, "missing"], patch: { archived: false, rating: 4 } }),
+  });
+  expect(await restored.json()).toMatchObject({
+    items: [{ id: lead.id, rating: 4 }],
+    missing: ["missing"],
+  });
+  expect((await (await api.request(`${base}/recordings?archived=1`)).json()).total).toBe(0);
+});
+
+test("archive expiry removes only eligible audio beyond the retention period", async () => {
+  const { api, playgroundDir } = makeHarness();
+  const old = "2025-01-01T00:00:00Z";
+  const audio = join(playgroundDir, "audio");
+  mkdirSync(audio, { recursive: true });
+  const items = [
+    { id: "expired", title: "Expired", archivedAt: old },
+    { id: "protected", title: "A film uses this", archivedAt: old, sourceTakeId: "01" },
+    { id: "parent", title: "Original", archivedAt: old },
+    { id: "replacement", title: "Replacement phrase", archivedAt: old },
+    { id: "shared_expired", title: "Expired alias", archivedAt: old },
+    { id: "shared_active", title: "Active alias" },
+    {
+      id: "edit",
+      title: "Edited take in use",
+      archivedAt: old,
+      sourceTakeId: "02",
+      version: { parentId: "parent", rootId: "parent", replacement: { id: "replacement" } },
+    },
+    { id: "new", title: "Recently archived", archivedAt: new Date().toISOString() },
+    { id: "active", title: "Active" },
+  ].map((item) => ({
+    ...item,
+    kind: "tts",
+    audioFile:
+      item.id === "shared_expired"
+        ? "Shared.wav"
+        : item.id === "shared_active"
+          ? "shared.wav"
+          : `${item.id}.wav`,
+    createdAt: old,
+  }));
+  const wav = wrapPcm16ToWav(Buffer.alloc(16000 * 2), 16000);
+  for (const item of items) writeFileSync(join(audio, item.audioFile), wav);
+  writeFileSync(join(playgroundDir, "items.json"), JSON.stringify({ items }));
+  const base = "/api/voice/playground/recordings";
+  expect(await (await api.request(`${base}/expired`)).json()).toMatchObject({
+    retentionDays: 30,
+    eligible: [{ id: "expired" }],
+    protected: 5,
+  });
+  const response = await api.request(`${base}/purge-expired`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: items.map(({ id }) => id) }),
+  });
+  const result = await response.json();
+  expect(result.purged).toEqual(["expired"]);
+  expect(result.failed.map(({ id }) => id)).toEqual([
+    "protected",
+    "parent",
+    "replacement",
+    "shared_expired",
+    "shared_active",
+    "edit",
+    "new",
+    "active",
+  ]);
+  expect(existsSync(join(audio, "expired.wav"))).toBe(false);
+  expect(existsSync(join(audio, "shared.wav"))).toBe(true);
+  for (const id of ["protected", "parent", "replacement", "edit", "new", "active"])
+    expect(existsSync(join(audio, `${id}.wav`))).toBe(true);
+});
+
+test("template PATCH accepts a replacement draft and archive metadata together", async () => {
+  const { api } = makeHarness();
+  const base = "/api/voice/playground/templates";
+  const send = (path, method, input) =>
+    api.request(path, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  const created = await send(base, "POST", {
+    title: "Initial setting",
+    draft: { mode: "tts", voiceId: "actor_a", text: "Hello" },
+  });
+  expect(created.status).toBe(201);
+  const { template } = await created.json();
+  const updated = await send(`${base}/${template.id}`, "PATCH", {
+    draft: { mode: "tts", voiceId: "actor_b", text: "[whispers] Chào" },
+    tags: ["quiet"],
+    rating: 5,
+    archived: true,
+  });
+  expect(updated.status).toBe(200);
+  expect(await updated.json()).toMatchObject({
+    template: {
+      draft: { voiceId: "actor_b", text: "[whispers] Chào" },
+      tags: ["quiet"],
+      rating: 5,
+    },
+  });
+  expect((await (await api.request(base)).json()).templates).toEqual([]);
+});
+
+test("a shortlisted voice keeps its provider identity and separate Project and Global aliases", async () => {
+  const { api, playgroundDir } = makeHarness();
+  const voice = {
+    id: "actor_snapshot",
+    name: "Deep Storyteller",
+    provider: "elevenlabs",
+    language: "vi",
+    gender: "female",
+  };
+  const send = (path, method, body) =>
+    api.request(`/api/voice/playground/${path}`, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const global = await send("profiles?scope=global", "POST", {
+    voice,
+    alias: "Narrator",
+    tags: ["casting"],
+  });
+  expect(global.status).toBe(201);
+  const { profile } = await global.json();
+  const local = await send("profiles?scope=project", "POST", {
+    voice,
+    alias: "Cô Mai",
+    rating: 5,
+    color: "#205080",
+  });
+  expect(local.status).toBe(201);
+  expect((await local.json()).profile).toMatchObject({
+    id: profile.id,
+    scope: "project",
+    alias: "Cô Mai",
+    voice: { name: "Deep Storyteller" },
+  });
+  const found = await api.request(
+    "/api/voice/playground/profiles?q=co+mai&includeGlobal=1&minRating=4&gender=female",
+  );
+  expect(await found.json()).toMatchObject({
+    total: 1,
+    profiles: [{ id: profile.id, alias: "Cô Mai", rating: 5 }],
+  });
+  const globalAgain = await api.request(
+    `/api/voice/playground/profiles/${profile.id}?scope=global`,
+  );
+  expect((await globalAgain.json()).profile.alias).toBe("Narrator");
+  const previewUrl = "/api/voice/playground/audio/actor_preview.wav?scope=project";
+  mkdirSync(join(playgroundDir, "audio"), { recursive: true });
+  writeFileSync(
+    join(playgroundDir, "audio", "actor_preview.wav"),
+    wrapPcm16ToWav(Buffer.alloc(32000), 16000),
+  );
+  const preview = await send("profiles?scope=project", "POST", {
+    voice: { ...voice, previewUrl },
+  });
+  expect(preview.status).toBe(201);
+  expect((await preview.json()).profile.voice.previewUrl).toBe(previewUrl);
+  const update = await send("profiles?scope=project", "POST", { voice, alias: "Cô Mai" });
+  expect((await update.json()).profile.voice.previewUrl).toBe(previewUrl);
+  const notShareable = await send("profiles?scope=global", "POST", {
+    voice: { ...voice, previewUrl },
+  });
+  expect(notShareable.status).toBe(400);
+  const projectOnly = await send("profiles", "POST", {
+    voice: { ...voice, id: "local_preview_actor", previewUrl },
+  });
+  const { profile: toShare } = await projectOnly.json();
+  const promoted = await send(`profiles/${toShare.id}/copies`, "POST", { scope: "global" });
+  expect(promoted.status).toBe(201);
+  const sharedPreview = (await promoted.json()).profile.voice.previewUrl;
+  expect(sharedPreview).toEndWith("?scope=global");
+  const playable = await api.request(sharedPreview);
+  expect(playable.status).toBe(200);
+  expect(Buffer.from(await playable.arrayBuffer())).toEqual(
+    readFileSync(join(playgroundDir, "audio", "actor_preview.wav")),
+  );
+  await send(`profiles/${profile.id}`, "PATCH", { archived: true });
+  expect((await (await api.request("/api/voice/playground/profiles")).json()).total).toBe(1);
+  expect(
+    (await (await api.request("/api/voice/playground/profiles?archived=1")).json()).profiles[0].id,
+  ).toBe(profile.id);
+  await send(`profiles/${profile.id}`, "PATCH", { archived: false });
+  expect(
+    (await (await api.request("/api/voice/playground/profiles")).json()).profiles.find(
+      (row) => row.id === profile.id,
+    ).alias,
+  ).toBe("Cô Mai");
+});
+
+test("Gemini casting maps Vietnamese to an exact locale and preserves the voice context", async () => {
+  const { api } = makeHarness({
+    env: { GEMINI_API_KEY: "a-gemini-testing-key" },
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      return jsonRes({
+        voices:
+          url.searchParams.get("language_code") === "vi-VN"
+            ? [
+                {
+                  id: "voice_narrator",
+                  display_name: "Narrator",
+                  language_code: "vi-VN",
+                  context: ["Audiobook"],
+                },
+              ]
+            : [],
+        next_page_token: "another-page",
+      });
+    },
+  });
+  const response = await api.request(
+    "/api/voice/playground/shared-voices?connection=google&language=vi",
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    voices: [
+      { connection: "google", id: "voice_narrator", language: "vi-VN", useCase: "Audiobook" },
+    ],
+    hasMore: true,
+    nextPageToken: "another-page",
+  });
 });
 
 const jsonRes = (data, status = 200) =>
@@ -40,15 +2041,81 @@ const jsonRes = (data, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
+let mp3Fixture;
 const makeMinimalMp3 = () => {
-  // Minimal valid MPEG1 Layer3 128kbps 44.1kHz frame (417 bytes) so mp3Seconds returns > 0
-  const frame = Buffer.alloc(417, 0);
-  frame[0] = 0xff;
-  frame[1] = 0xfb;
-  frame[2] = 0x90;
-  frame[3] = 0x00;
-  return frame;
+  if (!mp3Fixture) {
+    const result = Bun.spawnSync(
+      [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=250:sample_rate=44100",
+        "-t",
+        "0.12",
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "128k",
+        "-f",
+        "mp3",
+        "pipe:1",
+      ],
+      { windowsHide: true, stdout: "pipe", stderr: "pipe", timeout: 10_000 },
+    );
+    if (!result.success) throw new Error(result.stderr.toString());
+    mp3Fixture = result.stdout;
+  }
+  return mp3Fixture;
 };
+
+test("Cloud history distinguishes unknown charges from an explicitly reported free task", async () => {
+  const { api } = makeHarness({
+    fetchImpl: async (url) => {
+      if (String(url).includes("/voice-changer/history")) return jsonRes({ tasks: [] });
+      return jsonRes({
+        tasks: [
+          { id: "unknown_fee", status: "completed" },
+          { id: "free_task", status: "completed", credits_deducted: 0 },
+        ],
+      });
+    },
+  });
+  const result = await (await api.request("/api/voice/playground/remote-history")).json();
+  expect(result.items.find((item) => item.id === "unknown_fee").creditsDeducted).toBeUndefined();
+  expect(result.items.find((item) => item.id === "free_task").creditsDeducted).toBe(0);
+});
+
+test("casting favorites stay synchronized between the picker and the main library", async () => {
+  const { api } = makeHarness({ env: {} });
+  const voice = {
+    id: "cloud_actor",
+    name: "Cloud Actor",
+    age: "old",
+    accent: "british",
+    category: "shared",
+  };
+  const add = await api.request("/api/voice/playground/voice-favorites", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ voice, favorite: true }),
+  });
+  expect(add.status).toBe(200);
+  expect((await (await api.request("/api/favorites")).json()).effects).toContain(
+    "voice:cloud_actor",
+  );
+  const remove = await api.request("/api/favorites", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ kind: "effects", id: "voice:cloud_actor", on: false }),
+  });
+  expect(remove.status).toBe(200);
+  expect(
+    (await (await api.request("/api/voice/playground/voice-favorites")).json()).voices,
+  ).toEqual([]);
+});
 
 test.each(["playground", "film_take"])(
   "Voice Changer preserves %s input for retry and composer reuse",
@@ -238,6 +2305,7 @@ const makeHarness = (opts = {}) => {
     onEvent: (payload) => send("voice-playground", JSON.stringify(payload)),
     onVoiceChanged: () => send("voice"),
   });
+  playgroundControllers.push(voicePlayground);
 
   const film = {
     PROJECT: dir,
@@ -616,10 +2684,14 @@ describe("GenVoice Voice Playground API", () => {
 
     const { items } = await (await api.request("/api/voice/playground/items")).json();
     expect(items.length).toBe(2);
-    const first = items[0];
+    expect(items.map(({ seed }) => seed).sort()).toEqual([42, 43]);
+    const first = items.find(({ seed }) => seed === 43);
     expect(first.tags).toEqual(["excited", "pause"]);
     expect(first.voiceSettings).toEqual({ stability: 0.4, similarity_boost: 0.8 });
-    expect(first.seed).toBe(43);
+    expect(first.generationRecipe).toMatchObject({
+      requested: { seed: 42, variations: 2 },
+      effective: { body: { seed: 43 } },
+    });
     expect(first.outputFormat).toBe("mp3_44100_192");
     expect(first.srtText).toContain("Hello world");
 
@@ -631,6 +2703,12 @@ describe("GenVoice Voice Playground API", () => {
     const srtRes = await api.request(`/api/voice/playground/srt/${first.srtFile}`);
     expect(srtRes.status).toBe(200);
     expect(srtRes.headers.get("cache-control")).toBe("no-store");
+    expect(await srtRes.text()).toBe("1\n00:00:00,000 --> 00:00:01,000\nHello world\n");
+    const captionTrack = await api.request(`/api/voice/playground/srt/${first.srtFile}?format=vtt`);
+    expect(captionTrack.headers.get("content-type")).toBe("text/vtt; charset=utf-8");
+    expect(await captionTrack.text()).toBe(
+      "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello world\n",
+    );
 
     const delRes = await api.request(`/api/voice/playground/items/${first.id}`, {
       method: "DELETE",
@@ -1039,6 +3117,8 @@ describe("GenVoice Voice Playground API", () => {
     const { api, playgroundDir, voicePlayground, dir } = makeHarness({
       fetchImpl: async (url, init) => {
         const u = String(url);
+        if (u.endsWith("/minimax/voices/clone"))
+          return jsonRes({ id: "clone_large", status: "processing" });
         if (u.endsWith("/models")) {
           if (modelFail) return jsonRes({ detail: "temporary upstream error" }, 503);
           return jsonRes([
@@ -1166,6 +3246,37 @@ describe("GenVoice Voice Playground API", () => {
     expect(vcFormCount.n).toBe(1);
     const sourcesPath = join(playgroundDir, "sources");
     expect(readdirSync(sourcesPath)).toEqual([]);
+
+    const largeSample = new File(
+      [wrapPcm16ToWav(Buffer.alloc(21 * 1024 * 1024), 192000)],
+      "sample.wav",
+      { type: "audio/wav" },
+    );
+    const cloneForm = new FormData();
+    cloneForm.set("file", largeSample);
+    cloneForm.set(
+      "settings",
+      JSON.stringify({ name: "My voice", language: "English", permissionConfirmed: true }),
+    );
+    const cloneResponse = await api.request("/api/voice/playground/clones", {
+      method: "POST",
+      body: cloneForm,
+    });
+    expect(cloneResponse.status).toBe(202);
+    expect((await cloneResponse.json()).clone.remoteId).toBe("clone_large");
+    const largeSttForm = new FormData();
+    largeSttForm.set("file", largeSample);
+    largeSttForm.set("languageCode", "vi");
+    const largeSttResponse = await api.request("/api/voice/playground/stt/jobs", {
+      method: "POST",
+      body: largeSttForm,
+    });
+    expect(largeSttResponse.status).toBe(202);
+    await voicePlayground.waitForAllJobs();
+    expect(
+      voicePlayground.listJobs().some((job) => job.kind === "stt" && job.status === "completed"),
+    ).toBe(true);
+    sttFormSeen.length = 0;
 
     // Non-VC/STT routes still enforce the default 20 MB limit with JSON 413 error
     const bigTtsRes = await api.request("/api/voice/playground/tts", {
@@ -1977,6 +4088,15 @@ describe("GenVoice Voice Playground API", () => {
     const dlgItem = voicePlayground.listItems().find((x) => x.remoteTaskId === "dlg_fb_1");
     expect(dlgItem?.exportTranscript).toBe(false);
     expect(dlgItem?.fallbackNote).toContain("export_transcript");
+    const tuned = await voicePlayground.retryItem(dlgItem.id, {
+      speakerKey: "Bob",
+      voiceSettings: { stability: 0.83 },
+    });
+    await voicePlayground.waitForJob(tuned.job.id);
+    expect(dialogueBodies.at(-1).speakers.Bob.voice_settings.stability).toBe(0.83);
+    expect(dialogueBodies.at(-1).speakers.Alice.voice_settings).toEqual(
+      dialogueBodies[1].speakers.Alice.voice_settings,
+    );
 
     // 3. Remote import with metadata.output_format=pcm_24000 wraps WAV and reads metadata.voice_id
     const pcmRes = await api.request("/api/voice/playground/remote-history/import", {

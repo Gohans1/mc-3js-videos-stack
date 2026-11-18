@@ -22,27 +22,36 @@ function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
+const instant = "motion-safe:data-closed:animate-none motion-safe:data-open:animate-none";
+
+const confirmationFade =
+  `${instant} transition-opacity duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] data-ending-style:opacity-0 data-ending-style:duration-150 motion-reduce:duration-100 motion-reduce:data-ending-style:duration-100`;
+
 const overlayVariants = cva("", {
   variants: {
     variant: {
       default: "",
       settings: "bg-transparent supports-backdrop-filter:backdrop-blur-none",
-      workbench: "",
+      workbench: instant,
+      confirmation: "duration-200 data-closed:duration-150",
     },
+    motion: { default: "", none: instant, confirmation: confirmationFade },
   },
-  defaultVariants: { variant: "default" },
+  defaultVariants: { variant: "default", motion: "default" },
 });
 function DialogOverlay({
   className,
   variant,
+  motion,
   ...props
 }: DialogPrimitive.Backdrop.Props & VariantProps<typeof overlayVariants>) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
+      data-motion={motion}
       className={cn(
         "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 bg-scrim-strong fixed inset-0 isolate z-50 duration-100 supports-backdrop-filter:backdrop-blur-xs",
-        overlayVariants({ variant }),
+        overlayVariants({ variant, motion }),
         className,
       )}
       {...props}
@@ -53,13 +62,17 @@ function DialogOverlay({
 const dialogVariants = cva("", {
   variants: {
     variant: {
-      default: "",
-      settings: "bg-background gap-0 rounded-sm p-0",
-      workbench: "bg-background gap-0 rounded-sm p-0",
+      default: "data-open:zoom-in-95 data-closed:zoom-out-95",
+      settings: "bg-background data-open:zoom-in-95 data-closed:zoom-out-95 gap-0 rounded-sm p-0",
+      workbench:
+        "bg-background gap-0 rounded-sm p-0 motion-safe:data-closed:animate-none motion-safe:data-open:animate-none",
+      confirmation:
+        "data-open:zoom-in-97 data-closed:zoom-out-97 duration-200 data-closed:duration-150",
     },
     font: { default: "", md: "font-md" },
+    motion: { default: "", none: instant, confirmation: confirmationFade },
   },
-  defaultVariants: { variant: "default", font: "default" },
+  defaultVariants: { variant: "default", font: "default", motion: "default" },
 });
 
 function DialogContent({
@@ -68,6 +81,7 @@ function DialogContent({
   showCloseButton = true,
   variant,
   font,
+  motion,
   ...props
 }: DialogPrimitive.Popup.Props &
   VariantProps<typeof dialogVariants> & {
@@ -75,12 +89,14 @@ function DialogContent({
   }) {
   return (
     <DialogPortal>
-      <DialogOverlay variant={variant} />
+      <DialogOverlay variant={variant} motion={motion} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        data-variant={variant ?? "default"}
+        data-motion={motion}
         className={cn(
-          "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl p-4 ring-1 duration-100 outline-none sm:max-w-sm",
-          dialogVariants({ variant, font }),
+          "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl p-4 ring-1 duration-100 outline-none sm:max-w-sm",
+          dialogVariants({ variant, font, motion }),
           className,
         )}
         {...props}

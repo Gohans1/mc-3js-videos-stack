@@ -35,6 +35,7 @@ import {
   formatSoundDuration,
   type LibraryGroup,
   originOf,
+  originTitle,
   siblingsOf,
   soundCardText,
   type SoundKind,
@@ -66,16 +67,18 @@ import {
 } from "./voice-library-view";
 import {
   importRemoteHistoryTask,
-  openVoicePlaygroundWith,
+  openCastingVoice,
+  openFilmTakeRemix,
   patchPlaygroundItem,
   selectPlaygroundUid,
   setPlaygroundSubTab,
   setPlaygroundWorkbenchOpen,
+  togglePlaygroundVoiceFavorite,
   useVoicePlaygroundSelector,
 } from "./voice-playground-client";
 import {
-  composeFilmTakeRemixPreset,
   isSafeAudioUrl,
+  parseVoicePreviewTarget,
   playgroundAudioUrl,
 } from "./voice-playground-view";
 import { parseTakeScript, shortTryLabel, voiceActorTitle, type VoiceTakeItem } from "./voice-view";
@@ -227,7 +230,6 @@ function DockFrame({
             {subtitle}
           </span>
         </div>
-        {actions}
         <Tip label="Stop preview">
           <Button
             variant="tool"
@@ -240,6 +242,7 @@ function DockFrame({
           </Button>
         </Tip>
       </div>
+      <div className="flex flex-wrap items-center gap-1.5">{actions}</div>
       {options}
       {scrubber}
     </div>
@@ -270,6 +273,40 @@ const playgroundVoiceAsShared = (v: PlaygroundVoiceOption): SharedVoiceEntry => 
   featured: false,
   addedAt: 0,
 });
+
+function NativeVoiceFavorite({ voice }: { voice: PlaygroundVoiceOption }) {
+  const favorite = useVoicePlaygroundSelector(
+    (state) =>
+      state.favoriteVoices.some(
+        (saved) =>
+          saved.id === voice.id &&
+          (saved.provider ?? "elevenlabs") === (voice.provider ?? "elevenlabs") &&
+          (saved.connection ?? "genvoice") === (voice.connection ?? "genvoice"),
+      ),
+    false,
+  );
+  const [saving, setSaving] = useState(false);
+  return (
+    <Button
+      variant="favorite"
+      size="icon-sm"
+      aria-label={`Favorite ${voice.name}`}
+      aria-pressed={favorite}
+      aria-busy={saving}
+      disabled={saving}
+      onClick={async () => {
+        setSaving(true);
+        try {
+          await togglePlaygroundVoiceFavorite(voice, !favorite);
+        } finally {
+          setSaving(false);
+        }
+      }}
+    >
+      <Star className={favorite ? "fill-current" : ""} />
+    </Button>
+  );
+}
 
 /** Shared bottom preview bar keeping active playback visible across all Audio tabs. */
 export function AuditionDock({
@@ -316,14 +353,30 @@ export function AuditionDock({
     (s) => (isRemotePgTarget ? s.busyAction === `import:${pgRemoteId}` : false),
     isRemotePgTarget,
   );
-  const gvId = activeTarget.startsWith("gv:") ? activeTarget.slice(3) : "";
-  const gvCatalogMissing = Boolean(gvId && !voices.some((v) => v.id === gvId));
+  const gvTarget = parseVoicePreviewTarget(activeTarget);
+  const gvId = gvTarget?.id ?? "",
+    gvProvider = gvTarget?.provider ?? "elevenlabs";
+  const gvConnection = gvTarget?.connection ?? "genvoice";
+  const gvCatalogMissing = Boolean(
+    gvId &&
+    (gvConnection !== "genvoice" ||
+      gvProvider !== "elevenlabs" ||
+      !voices.some((v) => v.id === gvId)),
+  );
   const pgPreviewVoice = useVoicePlaygroundSelector(
     (s) =>
       gvId
-        ? (s.catalog.defaultVoices.find((v) => v.id === gvId) ??
-          s.sharedSearch.voices.find((v) => v.id === gvId) ??
-          null)
+        ? ([
+            s.previewVoice,
+            ...s.favoriteVoices,
+            ...s.catalog.defaultVoices,
+            ...s.sharedSearch.voices,
+          ].find(
+            (v) =>
+              v?.id === gvId &&
+              (v.connection ?? "genvoice") === gvConnection &&
+              (v.provider ?? "elevenlabs") === gvProvider,
+          ) ?? null)
         : null,
     gvCatalogMissing,
   );
@@ -367,14 +420,25 @@ export function AuditionDock({
     );
   };
 
-  // 1. ElevenLabs catalog voice preview (`gv:<id>`)
   if (activeTarget.startsWith("gv:")) {
-    const voiceId = activeTarget.slice(3);
-    const catalogVoice = voices.find((v) => v.id === voiceId);
+    const catalogVoice =
+      gvConnection === "genvoice" && gvProvider === "elevenlabs"
+        ? voices.find((v) => v.id === gvId)
+        : undefined;
     const voice = catalogVoice ?? (pgPreviewVoice ? playgroundVoiceAsShared(pgPreviewVoice) : null);
     if (!voice) return null;
     const isPlaying = now === activeTarget;
     const displayName = voiceDisplayName(voice.name);
+    const service =
+      gvConnection === "google"
+        ? "Google Gemini"
+        : gvConnection === "elevenlabs"
+          ? "ElevenLabs direct"
+          : gvProvider === "minimax"
+            ? "MiniMax"
+            : gvProvider === "capcut"
+              ? "CapCut"
+              : "ElevenLabs";
     const isCopied = copiedId === voice.id;
     return (
       <DockFrame
@@ -386,10 +450,17 @@ export function AuditionDock({
           if (voice.previewUrl) listenUrl(activeTarget, voice.previewUrl);
         }}
         title={displayName}
-        subtitle={voiceDetailLine(voice) || pgPreviewVoice?.language || voiceTitle(voice.category)}
+        subtitle={[
+          service,
+          voiceDetailLine(voice) || pgPreviewVoice?.language || voiceTitle(voice.category),
+        ].join(" · ")}
         actions={
           <>
-            <DockFavoriteButton kind="effects" id={`voice:${voice.id}`} name={displayName} />
+            {gvProvider === "elevenlabs" && gvConnection === "genvoice" ? (
+              <DockFavoriteButton kind="effects" id={`voice:${voice.id}`} name={displayName} />
+            ) : pgPreviewVoice ? (
+              <NativeVoiceFavorite voice={pgPreviewVoice} />
+            ) : null}
             <Tip label={isCopied ? "Copied ID" : "Copy voice ID"}>
               <Button
                 variant="secondary"
@@ -406,18 +477,21 @@ export function AuditionDock({
                 <span className="@max-[360px]:sr-only">{isCopied ? "Copied" : "Copy ID"}</span>
               </Button>
             </Tip>
-            <Tip label="Open voice in GenVoice Playground">
+            <Tip label="Open voice in Voice Playground">
               <Button
                 variant="secondary"
                 size="sm"
                 className="flex-none pointer-coarse:min-h-9"
                 aria-label={`Open ${displayName} in Playground`}
                 onClick={() =>
-                  openVoicePlaygroundWith({
-                    mode: "tts",
-                    voiceId: voice.id,
-                    voiceName: displayName,
-                  })
+                  openCastingVoice(
+                    pgPreviewVoice ?? {
+                      id: voice.id,
+                      name: displayName,
+                      provider: "elevenlabs",
+                      category: voice.category,
+                    },
+                  )
                 }
               >
                 <Sparkles className="size-3" />
@@ -430,7 +504,14 @@ export function AuditionDock({
                 size="sm"
                 className="flex-none pointer-coarse:min-h-9"
                 aria-label={`Use ${displayName} in note`}
-                onClick={() => openVoiceNote(displayName, voice.id)}
+                onClick={() =>
+                  openVoiceNote(
+                    gvProvider === "elevenlabs" && gvConnection === "genvoice"
+                      ? displayName
+                      : `${service} / ${displayName}`,
+                    voice.id,
+                  )
+                }
               >
                 <MessageSquarePlus className="size-3" />
                 <span className="@max-[360px]:sr-only">Use in note</span>
@@ -464,7 +545,8 @@ export function AuditionDock({
         playAriaLabel={`${isPlaying ? "Pause" : "Resume"} ${item.title}`}
         isPlaying={isPlaying}
         onTogglePlay={() => {
-          if (item.audioFile) listenUrl(activeTarget, playgroundAudioUrl(item.audioFile));
+          if (item.audioFile)
+            listenUrl(activeTarget, playgroundAudioUrl(item.audioFile, item.scope));
         }}
         title={item.title}
         subtitle={`${item.voiceName} · ${item.modelId} · ${formatSoundDuration(item.durationSeconds, "sfx")}`}
@@ -631,7 +713,7 @@ export function AuditionDock({
                 ]
               : []),
             ...take.tries.map((tryFile, i) => {
-              const label = shortTryLabel(take.id, tryFile);
+              const label = shortTryLabel(take.id, tryFile, take.alternatives);
               return {
                 key: tryFile,
                 label,
@@ -665,7 +747,7 @@ export function AuditionDock({
           <>
             {voiceActorTitle(take.voice)}
             {activeTryFile
-              ? ` · Alt: ${shortTryLabel(take.id, activeTryFile)}`
+              ? ` · Alt: ${shortTryLabel(take.id, activeTryFile, take.alternatives)}`
               : ` · ${take.file ? formatSoundDuration(take.seconds, "sfx") : "Unrendered"}`}
           </>
         }
@@ -691,7 +773,7 @@ export function AuditionDock({
                 size="sm"
                 className="flex-none pointer-coarse:min-h-9"
                 aria-label={`Remix take ${take.id} in Playground`}
-                onClick={() => openVoicePlaygroundWith(composeFilmTakeRemixPreset(take))}
+                onClick={() => void openFilmTakeRemix(take)}
               >
                 <Sparkles className="size-3" />
                 <span className="@max-[360px]:sr-only">Remix</span>
@@ -714,7 +796,7 @@ export function AuditionDock({
             id={scrubId}
             label={
               activeTryFile
-                ? `Take ${take.id} · ${shortTryLabel(take.id, activeTryFile)}`
+                ? `Take ${take.id} · ${shortTryLabel(take.id, activeTryFile, take.alternatives)}`
                 : `Take ${take.id}`
             }
             fallbackSeconds={activeTryFile ? 0 : take.seconds}
@@ -780,7 +862,7 @@ export function AuditionDock({
       : [];
 
   const soundSrc = sourceTitle(sourceOf(activeItem));
-  const soundOrigin = originOf(activeItem) === "synth" ? "Code-generated" : "Real / Studio";
+  const soundOrigin = originTitle(originOf(activeItem));
   const soundCategory = activeItem.category ? catTitle(activeItem.category) : null;
   const popoverBaseTitle = activeItem.title?.trim()
     ? cleanAudioTitle(activeItem.title.trim(), { mc: activeItem.kind === "mc" })

@@ -39,7 +39,12 @@ export const useBoot = (el: RefObject<Elements>) =>
     // A slider keeps focus after a drag too, and its arrows would then move it instead of stepping the film
     addEventListener("pointerup", () => {
       const at = document.activeElement;
-      if (at instanceof HTMLInputElement && at.type === "range") at.blur();
+      if (
+        at instanceof HTMLInputElement &&
+        at.type === "range" &&
+        !at.closest('[role="dialog"], [role="alertdialog"]')
+      )
+        at.blur();
     });
     // Chrome reports a ResizeObserver that skipped a frame as an error; it isn't one
     addEventListener("error", (e) => {

@@ -7,16 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-import type { PlaygroundStatus } from "../../src/voice-playground.mjs";
+import type { PlaygroundConnection, PlaygroundStatus } from "../../src/voice-playground.mjs";
 import { Tip } from "../components/Tip";
 import { savePlaygroundConfig, testPlaygroundConnection } from "./voice-playground-client";
 
-const sourceLabel = (source: PlaygroundStatus["source"]) => {
+const sourceLabel = (source: PlaygroundStatus["source"], envKey: string) => {
   switch (source) {
     case "override":
       return "Studio manual override";
     case "env":
-      return "Auto · GENVOICE_API_KEY env";
+      return `Auto · ${envKey}`;
     case "secrets_file":
       return "Auto · ~/.secrets/genvoice.env";
     default:
@@ -25,14 +25,33 @@ const sourceLabel = (source: PlaygroundStatus["source"]) => {
 };
 
 export function VoicePlaygroundKeyPopover({
-  status,
+  status: playgroundStatus,
+  connection = "genvoice",
   busyAction,
   showTooltip = true,
 }: {
   status: PlaygroundStatus;
+  connection?: PlaygroundConnection;
   busyAction: string | null;
   showTooltip?: boolean;
 }) {
+  const direct = connection !== "genvoice";
+  const serviceName =
+    connection === "google" ? "Google Gemini" : direct ? "ElevenLabs" : "GenVoice";
+  const envKey =
+    connection === "google" ? "GEMINI_API_KEY" : direct ? "ELEVENLABS_API_KEY" : "GENVOICE_API_KEY";
+  const status: PlaygroundStatus = direct
+    ? {
+        configured: false,
+        source: "none",
+        maskedKey: "",
+        hasOverride: false,
+        ...playgroundStatus.connections?.[connection],
+        account: null,
+        apiBase:
+          connection === "google" ? "generativelanguage.googleapis.com" : "api.elevenlabs.io",
+      }
+    : playgroundStatus;
   const apiKeyId = useId();
   const [open, setOpen] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -43,10 +62,12 @@ export function VoicePlaygroundKeyPopover({
   const isActive = Boolean(status.configured && !hasError);
   const isBusy = busyAction === "config" || busyAction === "status-test";
   const creditsLabel =
-    status.account && Number.isFinite(status.account.credit_balance)
+    status.account?.credit_balance != null
       ? `${status.account.credit_balance.toLocaleString()} cr`
       : isActive
-        ? "Connected"
+        ? direct && !playgroundStatus.connections?.[connection]?.verified
+          ? "Key set"
+          : "Connected"
         : hasError
           ? "Key Error"
           : "API Key";
@@ -56,7 +77,11 @@ export function VoicePlaygroundKeyPopover({
     const trimmedKey = apiKeyInput.trim();
     const trimmedBase = apiBaseInput.trim();
     if (!trimmedKey && !trimmedBase) {
-      setLocalError("Enter a GenVoice API key or custom base URL to override.");
+      setLocalError(
+        direct
+          ? `Enter a ${serviceName} API key.`
+          : "Enter a GenVoice API key or custom base URL to override.",
+      );
       return;
     }
     const bareBase = trimmedBase.replace(/\/+$/, "");
@@ -69,10 +94,11 @@ export function VoicePlaygroundKeyPopover({
     }
     try {
       const saved = await savePlaygroundConfig({
+        connection,
         ...(trimmedKey ? { apiKey: trimmedKey } : {}),
         ...(trimmedBase ? { apiBase: trimmedBase } : {}),
       });
-      if (saved?.error) {
+      if (!direct && saved?.error) {
         setLocalError(saved.error);
         return;
       }
@@ -86,7 +112,7 @@ export function VoicePlaygroundKeyPopover({
   const handleClearOverride = async () => {
     setLocalError(null);
     try {
-      await savePlaygroundConfig({ clearOverride: true });
+      await savePlaygroundConfig({ connection, clearOverride: true });
       setApiKeyInput("");
       setApiBaseInput("");
     } catch (e) {
@@ -95,10 +121,10 @@ export function VoicePlaygroundKeyPopover({
   };
 
   const tipText = isActive
-    ? `GenVoice API ready (${sourceLabel(status.source)}). Click to verify credits or override key.`
+    ? `${serviceName} key configured (${sourceLabel(status.source, envKey)}).`
     : hasError
-      ? `GenVoice API error: ${status.error}`
-      : "GenVoice API key missing — click to paste key (auto-reads GENVOICE_API_KEY env when set).";
+      ? `${serviceName} API error: ${status.error}`
+      : `${serviceName} key missing. Paste a key or set ${envKey}.`;
   const triggerNode = (
     <PopoverTrigger
       render={
@@ -106,7 +132,7 @@ export function VoicePlaygroundKeyPopover({
           type="button"
           variant="subtle"
           size="sm"
-          aria-label={`${creditsLabel} · GenVoice API key settings`}
+          aria-label={`${creditsLabel} · ${serviceName} API key settings`}
           title={!showTooltip ? tipText : undefined}
         />
       }
@@ -136,14 +162,18 @@ export function VoicePlaygroundKeyPopover({
         <div className="flex flex-col gap-2.5 p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <PopoverTitle>GenVoice API Connection</PopoverTitle>
-              <p className="text-muted-foreground text-xs">{sourceLabel(status.source)}</p>
+              <PopoverTitle>{serviceName} API Connection</PopoverTitle>
+              <p className="text-muted-foreground text-xs">{sourceLabel(status.source, envKey)}</p>
             </div>
             <Badge variant={isActive ? "done" : "check"}>
               {isActive ? (
                 <>
                   <CheckCircle2 />
-                  <span>Active</span>
+                  <span>
+                    {direct && !playgroundStatus.connections?.[connection]?.verified
+                      ? "Key set"
+                      : "Active"}
+                  </span>
                 </>
               ) : hasError ? (
                 <>
@@ -179,7 +209,7 @@ export function VoicePlaygroundKeyPopover({
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">Credits</span>
                   <span className="text-primary-text font-semibold tabular-nums">
-                    {status.account.credit_balance.toLocaleString()}
+                    {status.account.credit_balance?.toLocaleString() ?? "Unavailable"}
                   </span>
                 </div>
               </>
@@ -204,22 +234,26 @@ export function VoicePlaygroundKeyPopover({
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
               placeholder={
-                status.configured ? "Paste key to replace active…" : "sk-... GenVoice key"
+                status.configured ? "Paste key to replace active…" : `Paste ${serviceName} key`
               }
             />
-            <label
-              className="text-muted-foreground text-xs font-medium"
-              htmlFor={`${apiKeyId}-base`}
-            >
-              API endpoint (optional)
-            </label>
-            <Input
-              id={`${apiKeyId}-base`}
-              size="sm"
-              value={apiBaseInput}
-              onChange={(e) => setApiBaseInput(e.target.value)}
-              placeholder={status.apiBase || "https://api.genvoice.pro/v1"}
-            />
+            {!direct && (
+              <>
+                <label
+                  className="text-muted-foreground text-xs font-medium"
+                  htmlFor={`${apiKeyId}-base`}
+                >
+                  API endpoint (optional)
+                </label>
+                <Input
+                  id={`${apiKeyId}-base`}
+                  size="sm"
+                  value={apiBaseInput}
+                  onChange={(e) => setApiBaseInput(e.target.value)}
+                  placeholder={status.apiBase || "https://api.genvoice.pro/v1"}
+                />
+              </>
+            )}
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               <Button type="button" size="sm" disabled={isBusy} onClick={() => void handleSave()}>
                 {busyAction === "config" ? "Saving…" : "Save Override"}
@@ -229,7 +263,7 @@ export function VoicePlaygroundKeyPopover({
                 variant="secondary"
                 size="sm"
                 disabled={isBusy}
-                onClick={() => void testPlaygroundConnection()}
+                onClick={() => void testPlaygroundConnection(connection)}
               >
                 <RefreshCw
                   className={cn(

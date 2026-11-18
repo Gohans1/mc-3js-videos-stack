@@ -42,7 +42,7 @@ import { Tip } from "../components/Tip";
 import { chunkRows } from "../components/virtual-utils";
 import { VirtualList } from "../components/VirtualList";
 import { useStudio } from "../core/store";
-import { openVoiceNote } from "../notes/notes";
+import { openVoiceNote, originOf } from "../notes/notes";
 import { auditionTarget, listening, listenUrl, subscribeAudition } from "./sound";
 import {
   loadVoiceLibrary,
@@ -68,7 +68,9 @@ import {
   voiceStarId,
   voiceTitle,
 } from "./voice-library-view";
-import { openVoicePlaygroundWith } from "./voice-playground-client";
+import { openVoicePlaygroundWith, useVoicePlaygroundSelector } from "./voice-playground-client";
+import { filterSavedCastingVoices, type UnifiedPlaygroundEntry } from "./voice-playground-view";
+import { VoicePlaygroundSavedVoices } from "./VoicePlaygroundSavedVoices";
 
 const VOICE_ESTIMATED_CARD_PX = 64;
 
@@ -282,9 +284,10 @@ export const VoiceCard = memo(function VoiceCard({
                         variant="secondary"
                         size="sm"
                         className="h-6 flex-none pointer-coarse:min-h-9"
-                        onClick={() => {
+                        onClick={(e) => {
+                          const origin = originOf(e.currentTarget);
                           setInfoOpen(false);
-                          openVoiceNote(displayName, voice.id);
+                          openVoiceNote(displayName, voice.id, origin);
                         }}
                       >
                         <MessageSquarePlus className="size-3" />
@@ -303,15 +306,13 @@ export const VoiceCard = memo(function VoiceCard({
                 v4
               </Badge>
             )}
-            {voice.rate > 1 && (
-              <Badge
-                variant="claim"
-                className="flex-none"
-                title={`Consumes ${voice.rate}× credits per character`}
-              >
-                {voice.rate}×
-              </Badge>
-            )}
+            <Badge
+              variant="outline"
+              className="flex-none"
+              title="GenVoice has not documented this voice's billing multiplier. Check the actual charge after generation."
+            >
+              Fee unverified
+            </Badge>
             {inFilm && (
               <Badge variant="voice" className="flex-none" title="Used in current film narration">
                 In film
@@ -345,6 +346,7 @@ export function VoiceLibraryPane({
   copiedId = null,
   onCopyId,
   side = true,
+  favoriteEntries = [],
 }: {
   library: VoiceLibraryClientState;
   voices: readonly SharedVoiceEntry[];
@@ -358,11 +360,19 @@ export function VoiceLibraryPane({
   copiedId?: string | null;
   onCopyId?: (voice: SharedVoiceEntry) => void;
   side?: boolean;
+  favoriteEntries?: readonly UnifiedPlaygroundEntry[];
 }) {
   // Subscribe to playing voice ID string rather than 80ms auditionRev ticks so virtualized rows never re-render during playback
   const now = useSyncExternalStore(subscribeAudition, listening, listening);
   const targetNow = useSyncExternalStore(subscribeAudition, auditionTarget, auditionTarget);
   const effectFavs = useStudio((s) => s.favorites.effects);
+  const pgReady = useVoicePlaygroundSelector((state) => state.status?.configured, false);
+  const pgFavorites = useVoicePlaygroundSelector((state) => state.favoriteVoices, false);
+  const displayedCatalogIds = useMemo(() => new Set(voices.map((voice) => voice.id)), [voices]);
+  const hasSavedCasting =
+    leaf === "fav" &&
+    (filterSavedCastingVoices(pgFavorites, query, filters, displayedCatalogIds).length > 0 ||
+      favoriteEntries.length > 0);
   const favSet = useMemo(() => new Set(effectFavs), [effectFavs]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -565,7 +575,11 @@ export function VoiceLibraryPane({
     ) : !library.syncedAt && !library.voices.length && library.loaded && !library.error ? (
       <div className="text-tag bg-card/70 border-border/45 mb-1.5 rounded-lg border px-2.5 py-1.5">
         <span className="text-foreground/75">
-          {library.hasKey ? "Ready to sync English voices" : "Connect ElevenLabs API key to sync"}
+          {pgReady
+            ? "GenVoice is connected. The optional offline catalog has not been synced."
+            : library.hasKey
+              ? "Ready to sync English voices"
+              : "Optional offline catalog: separate ElevenLabs connection required."}
         </span>
       </div>
     ) : null;
@@ -591,7 +605,15 @@ export function VoiceLibraryPane({
           side && "min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-3",
         )}
       >
-        {syncBanner}
+        {leaf === "fav" && (
+          <VoicePlaygroundSavedVoices
+            query={query}
+            filters={filters}
+            displayedCatalogIds={displayedCatalogIds}
+            entries={favoriteEntries}
+          />
+        )}
+        {!hasSavedCasting && syncBanner}
         {library.error && (
           <p
             role="alert"
@@ -600,88 +622,102 @@ export function VoiceLibraryPane({
             {library.error}
           </p>
         )}
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              {empty.kind === "loading" ? (
-                <RefreshCw className="animate-spin motion-reduce:animate-none" />
-              ) : empty.kind === "nomatch" ? (
-                <SearchX />
-              ) : (
-                <Mic />
+        {!hasSavedCasting && (
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                {empty.kind === "loading" ? (
+                  <RefreshCw className="animate-spin motion-reduce:animate-none" />
+                ) : empty.kind === "nomatch" ? (
+                  <SearchX />
+                ) : (
+                  <Mic />
+                )}
+              </EmptyMedia>
+              <EmptyTitle>
+                {pgReady && empty.kind === "uncached" ? "Browse GenVoice voices" : empty.title}
+              </EmptyTitle>
+              <EmptyDescription>
+                <span className="text-foreground/75">
+                  {pgReady && empty.kind === "uncached"
+                    ? "Use the Playground voice picker to search GenVoice and save your favorite voices here."
+                    : empty.kind === "loading" && library.status === "syncing"
+                      ? `Downloading English voices (page ${library.pagesLoaded}, ${library.totalEnglishV4.toLocaleString()} v4 found so far)…`
+                      : empty.kind === "fetch-error"
+                        ? `Failed to load — ${empty.detail}`
+                        : empty.detail}
+                </span>
+              </EmptyDescription>
+            </EmptyHeader>
+            {empty.kind !== "loading" &&
+              (empty.kind === "fetch-error" || empty.kind === "nomatch" || library.hasKey) && (
+                <EmptyContent>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {empty.kind === "fetch-error" && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void loadVoiceLibrary(true)}
+                      >
+                        Retry
+                      </Button>
+                    )}
+                    {(empty.kind === "sync-error" ||
+                      empty.kind === "uncached" ||
+                      empty.kind === "empty-catalog") &&
+                      library.hasKey && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void syncVoiceLibraryNow()}
+                        >
+                          {empty.kind === "sync-error" ? "Retry sync" : "Sync English voices now"}
+                        </Button>
+                      )}
+                    {empty.kind === "nomatch" && query.trim() && (
+                      <Button variant="secondary" size="sm" onClick={onClearQuery}>
+                        Clear search
+                      </Button>
+                    )}
+                    {empty.kind === "nomatch" && hasActiveVoiceFilters(filters) && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onChangeFilters(DEFAULT_VOICE_FILTERS)}
+                      >
+                        Reset filters
+                      </Button>
+                    )}
+                    {empty.kind === "nomatch" &&
+                      filters.v4Mode !== "all" &&
+                      (leaf !== "fav" || hasVoiceFavs) && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onChangeFilters({ ...filters, v4Mode: "all" })}
+                        >
+                          Include non-v4 English voices
+                        </Button>
+                      )}
+                  </div>
+                </EmptyContent>
               )}
-            </EmptyMedia>
-            <EmptyTitle>{empty.title}</EmptyTitle>
-            <EmptyDescription>
-              <span className="text-foreground/75">
-                {empty.kind === "loading" && library.status === "syncing"
-                  ? `Downloading English voices (page ${library.pagesLoaded}, ${library.totalEnglishV4.toLocaleString()} v4 found so far)…`
-                  : empty.kind === "fetch-error"
-                    ? `Failed to load — ${empty.detail}`
-                    : empty.detail}
-              </span>
-            </EmptyDescription>
-          </EmptyHeader>
-          {empty.kind !== "loading" &&
-            (empty.kind === "fetch-error" || empty.kind === "nomatch" || library.hasKey) && (
-              <EmptyContent>
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  {empty.kind === "fetch-error" && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void loadVoiceLibrary(true)}
-                    >
-                      Retry
-                    </Button>
-                  )}
-                  {(empty.kind === "sync-error" ||
-                    empty.kind === "uncached" ||
-                    empty.kind === "empty-catalog") &&
-                    library.hasKey && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => void syncVoiceLibraryNow()}
-                      >
-                        {empty.kind === "sync-error" ? "Retry sync" : "Sync English voices now"}
-                      </Button>
-                    )}
-                  {empty.kind === "nomatch" && query.trim() && (
-                    <Button variant="secondary" size="sm" onClick={onClearQuery}>
-                      Clear search
-                    </Button>
-                  )}
-                  {empty.kind === "nomatch" && hasActiveVoiceFilters(filters) && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => onChangeFilters(DEFAULT_VOICE_FILTERS)}
-                    >
-                      Reset filters
-                    </Button>
-                  )}
-                  {empty.kind === "nomatch" &&
-                    filters.v4Mode !== "all" &&
-                    (leaf !== "fav" || hasVoiceFavs) && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onChangeFilters({ ...filters, v4Mode: "all" })}
-                      >
-                        Include non-v4 English voices
-                      </Button>
-                    )}
-                </div>
-              </EmptyContent>
-            )}
-        </Empty>
+          </Empty>
+        )}
       </div>
     );
   }
 
   return (
     <div className={cn("flex flex-col", side ? "min-h-0 flex-1" : "h-[min(70vh,28rem)] min-h-64")}>
+      {leaf === "fav" && (
+        <VoicePlaygroundSavedVoices
+          query={query}
+          filters={filters}
+          displayedCatalogIds={displayedCatalogIds}
+          entries={favoriteEntries}
+        />
+      )}
       {hasTopBanner && (
         <div className={cn("flex flex-col", side && "px-3 pt-2.5")}>
           {syncBanner}

@@ -36,6 +36,7 @@ const VoicePlaygroundWorkbenchDialog = lazy(() =>
     default: m.VoicePlaygroundWorkbenchDialog,
   })),
 );
+const VoiceRegionEditor = lazy(() => import("./sound/VoiceRegionEditor").then((m) => ({default:m.VoiceRegionEditor})));
 
 const subscribeViewport = (onChange: () => void) => {
   window.addEventListener("resize", onChange);
@@ -56,6 +57,7 @@ export function App() {
   };
   useStudioHotkeys();
   const pgEverOpened = useVoicePlaygroundSelector((s) => s.everOpened, false);
+  const regionOpen = useVoicePlaygroundSelector((s) => Boolean(s.regionEditor), false);
   const { vw, vh } = useViewport();
   const desktop = isDesktopViewport(vw, vh);
   const [rawSideW, setSideW] = useStoredSize("studio.sideWidth"),
@@ -283,6 +285,7 @@ export function App() {
             <VoicePlaygroundWorkbenchDialog />
           </Suspense>
         )}
+        {regionOpen && <Suspense fallback={null}><VoiceRegionEditor /></Suspense>}
       </TooltipProvider>
     </Toaster>
   );

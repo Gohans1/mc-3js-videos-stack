@@ -29,6 +29,14 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
   let auditionRev = 0;
   let auditionSeq = 0;
   let auditionTick: unknown = null;
+  let activeRange: { from: number; to: number } | undefined;
+  let onAuditionError: (() => void) | undefined;
+  let nativeMedia: Pick<AuditionAudioLike, "pause"> | null = null;
+  const stopNative = () => {
+    const previous = nativeMedia;
+    nativeMedia = null;
+    previous?.pause();
+  };
   const auditionSubs = new Set<() => void>();
 
   const notifyAudition = () => {
@@ -45,7 +53,14 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
 
   const startAuditionTick = () => {
     stopAuditionTick();
-    auditionTick = setTimer(notifyAudition, 80);
+    auditionTick = setTimer(updateProgress, 80);
+  };
+  const updateProgress = () => {
+    if (activeRange && !audio.paused && audio.currentTime >= activeRange.to) {
+      audio.pause();
+      audio.currentTime = activeRange.to;
+    }
+    notifyAudition();
   };
 
   const clearBrokenAudition = (seq: number) => {
@@ -53,13 +68,23 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
     stopAuditionTick();
     playing = false;
     target = "";
+    activeRange = undefined;
     audio.pause();
     notifyAudition();
     deps.onSoundBump();
-    deps.onPlayError("Could not play preview audio");
+    const reportError = onAuditionError;
+    onAuditionError = undefined;
+    if (reportError) reportError();
+    else deps.onPlayError("Could not play preview audio");
   };
 
-  const listenUrl = (id: string, url: string) => {
+  const listenUrl = (
+    id: string,
+    url: string,
+    range?: { from: number; to: number },
+    onError?: () => void,
+  ) => {
+    stopNative();
     if (target === id && !audio.paused) {
       auditionSeq++;
       stopAuditionTick();
@@ -70,8 +95,17 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
     const seq = ++auditionSeq;
     const resuming = target === id && audio.paused && Boolean(audio.src);
     target = id;
+    activeRange = range;
+    onAuditionError = onError;
     if (!resuming) audio.src = url;
     try {
+      if (range && (!resuming || audio.currentTime < range.from || audio.currentTime >= range.to)) {
+        try {
+          audio.currentTime = range.from;
+        } catch {
+          /* seek when metadata arrives */
+        }
+      }
       const pending = audio.play();
       if (pending && typeof pending.catch === "function") {
         void pending.catch((err: unknown) => {
@@ -91,15 +125,27 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
   const auditionTarget = () => target;
 
   const stopAudition = () => {
+    stopNative();
     if (!target && audio.paused) return;
     auditionSeq++;
     stopAuditionTick();
     playing = false;
     target = "";
+    activeRange = undefined;
     audio.pause();
     audio.currentTime = 0;
+    onAuditionError = undefined;
     notifyAudition();
     deps.onSoundBump();
+  };
+  const playNativeAudition = (media: Pick<AuditionAudioLike, "pause">) => {
+    if (nativeMedia === media) return;
+    stopAudition();
+    nativeMedia = media;
+  };
+  const releaseNativeAudition = (media: Pick<AuditionAudioLike, "pause">) => {
+    if (nativeMedia === media) nativeMedia = null;
+    media.pause();
   };
 
   const subscribeAudition = (fn: () => void) => {
@@ -153,15 +199,21 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
     deps.onSoundBump();
   });
   audio.addEventListener("error", () => clearBrokenAudition(auditionSeq));
-  audio.addEventListener("timeupdate", notifyAudition);
-  audio.addEventListener("loadedmetadata", notifyAudition);
+  audio.addEventListener("timeupdate", updateProgress);
+  audio.addEventListener("loadedmetadata", () => {
+    if (activeRange) audio.currentTime = activeRange.from;
+    notifyAudition();
+  });
 
   return {
     listenUrl,
     listen,
     listening,
+    auditionActive: () => Boolean(nativeMedia || !audio.paused),
     auditionTarget,
     stopAudition,
+    playNativeAudition,
+    releaseNativeAudition,
     subscribeAudition,
     auditionSnapshot,
     auditionProgress,

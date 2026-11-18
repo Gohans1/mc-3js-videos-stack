@@ -14,17 +14,31 @@ import {
 import { isIP } from "node:net";
 import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
 
+import { isNonGlobalIp } from "./network-address.ts";
 import { wavInfo } from "./sound.mjs";
 import { sanitizeError } from "./voice-library.mjs";
+import {
+  CAPCUT_TONES,
+  FALLBACK_PROVIDER_LANGUAGES,
+  languageForProvider,
+  PROVIDER_IDS,
+  providerForModel,
+} from "./voice-playground-providers.mjs";
 import {
   AUDIO_TAG_RE,
   DANGEROUS_KEYS,
   detectTextLanguage,
   extractAudioTags,
+  genVoiceTaskChargeSource,
+  isFailedGenVoiceTask,
   parseDialogueTurnNames,
+  SAFE_MEDIA_FILE,
+  SAFE_REMOTE_ID_RE,
   stripDialogueSpeakerBrackets,
 } from "./voice-playground-text.mjs";
 import { mp3Seconds } from "./voice.mjs";
+
+export { isNonGlobalIp } from "./network-address.ts";
 
 export {
   AUDIO_TAG_RE,
@@ -32,6 +46,8 @@ export {
   detectTextLanguage,
   extractAudioTags,
   parseDialogueTurnNames,
+  SAFE_MEDIA_FILE,
+  SAFE_REMOTE_ID_RE,
   stripDialogueSpeakerBrackets,
 };
 
@@ -41,10 +57,21 @@ export const MAX_SRT_BYTES = 8 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export const MAX_STT_BYTES = 90 * 1024 * 1024;
 export const CATALOG_TTL_MS = 10 * 60 * 1000;
-export const SAFE_MEDIA_FILE = /^[A-Za-z0-9_-]{1,120}\.(mp3|wav|ogg|m4a|webm)$/;
 export const SAFE_SRT_FILE = /^[A-Za-z0-9_-]{1,120}\.srt$/;
-export const SAFE_REMOTE_ID_RE = /^(?!\.\.?$)[A-Za-z0-9._-]{1,200}$/;
 export const isSafeRemoteId = (value) => typeof value === "string" && SAFE_REMOTE_ID_RE.test(value);
+
+export const assertGenVoiceTaskIdentity = (data, expectedId) => {
+  if (
+    [data.id, data.task_id].some(
+      (id) =>
+        id !== undefined &&
+        id !== null &&
+        id !== "" &&
+        (!["string", "number"].includes(typeof id) || String(id) !== String(expectedId)),
+    )
+  )
+    throw Object.assign(new Error("GenVoice returned a different task ID"), { status: 502 });
+};
 
 let tmpSeq = 0;
 export const nextTmp = () => `${process.pid}.${Date.now()}.${++tmpSeq}`;
@@ -364,90 +391,6 @@ export const BUILTIN_LANGUAGES = [
   { code: "th", name: "Thai" },
 ];
 
-const isNonGlobalIpv4 = (a, b, c) =>
-  a === 0 ||
-  a === 10 ||
-  a === 127 ||
-  (a === 100 && b >= 64 && b <= 127) ||
-  (a === 169 && b === 254) ||
-  (a === 172 && b >= 16 && b <= 31) ||
-  (a === 192 && b === 0 && c === 0) ||
-  (a === 192 && b === 0 && c === 2) ||
-  (a === 192 && b === 168) ||
-  (a === 198 && (b === 18 || b === 19)) ||
-  (a === 198 && b === 51 && c === 100) ||
-  (a === 203 && b === 0 && c === 113) ||
-  a >= 224;
-
-const parseIpv6Groups = (raw) => {
-  let addr = raw;
-  let v4Tail = null;
-  if (addr.includes(".")) {
-    const lastColon = addr.lastIndexOf(":");
-    if (lastColon < 0) return null;
-    const octs = addr
-      .slice(lastColon + 1)
-      .split(".")
-      .map(Number);
-    if (octs.length !== 4 || octs.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
-      return null;
-    v4Tail = [(octs[0] << 8) | octs[1], (octs[2] << 8) | octs[3]];
-    addr = addr.slice(0, lastColon);
-    if (addr.endsWith(":")) addr += "0";
-  }
-  const halves = addr.split("::");
-  if (halves.length > 2) return null;
-  const parseSide = (s) =>
-    s ? s.split(":").map((h) => (/^[0-9a-f]{1,4}$/i.test(h) ? Number.parseInt(h, 16) : -1)) : [];
-  const left = parseSide(halves[0]);
-  const right = halves.length === 2 ? parseSide(halves[1]) : [];
-  if (left.includes(-1) || right.includes(-1)) return null;
-  const targetGroups = v4Tail ? 6 : 8;
-  let groups;
-  if (halves.length === 2) {
-    const fill = targetGroups - left.length - right.length;
-    if (fill < 1) return null;
-    groups = [...left, ...Array(fill).fill(0), ...right];
-  } else {
-    if (left.length !== targetGroups) return null;
-    groups = left;
-  }
-  return v4Tail ? [...groups, ...v4Tail] : groups;
-};
-
-export const isNonGlobalIp = (rawAddr) => {
-  const clean = rawAddr
-    .replace(/^\[|\]$/g, "")
-    .split("%")[0]
-    .toLowerCase();
-  const ver = isIP(clean);
-  if (ver === 4) {
-    const [a, b, c] = clean.split(".").map(Number);
-    return isNonGlobalIpv4(a, b, c);
-  }
-  if (ver === 6) {
-    const g = parseIpv6Groups(clean);
-    if (!g || g.length !== 8) return true;
-    const zeroPrefix = g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0;
-    if (zeroPrefix && g[5] === 0 && g[6] === 0 && (g[7] === 0 || g[7] === 1)) return true;
-    if (zeroPrefix && (g[5] === 0xffff || g[5] === 0)) {
-      return isNonGlobalIpv4(g[6] >> 8, g[6] & 0xff, g[7] >> 8);
-    }
-    if (g[0] === 0x0064 && g[1] === 0xff9b) {
-      return isNonGlobalIpv4(g[6] >> 8, g[6] & 0xff, g[7] >> 8);
-    }
-    if (g[0] === 0x2002) {
-      return isNonGlobalIpv4(g[1] >> 8, g[1] & 0xff, g[2] >> 8);
-    }
-    if ((g[0] & 0xfe00) === 0xfc00) return true;
-    if ((g[0] & 0xffc0) === 0xfe80) return true;
-    if ((g[0] & 0xff00) === 0xff00) return true;
-    if (g[0] === 0x2001 && g[1] === 0x0db8) return true;
-    return false;
-  }
-  return true;
-};
-
 export const assertSafeMediaUrl = async (rawUrl, apiBase, lookupFn) => {
   let u;
   try {
@@ -534,9 +477,22 @@ export const audioDurationFromFile = (filePath) => {
 export const clampNum = (v, min, max) =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : undefined;
 
-export const sanitizeVoiceSettings = (raw, model) => {
+export const sanitizeVoiceSettings = (
+  raw,
+  model,
+  provider = model?.provider ?? providerForModel(model?.model_id),
+) => {
   const src = raw && typeof raw === "object" ? raw : {};
   const out = {};
+  if (provider !== "elevenlabs") {
+    const speed = clampNum(src.speed, 0.5, 2),
+      pitch = clampNum(src.pitch, -12, 12),
+      vol = clampNum(src.vol, 0.01, 10);
+    if (speed !== undefined) out.speed = +speed.toFixed(3);
+    if (pitch !== undefined) out.pitch = Math.round(pitch);
+    if (provider === "minimax" && vol !== undefined) out.vol = +vol.toFixed(3);
+    return out;
+  }
   const stability = clampNum(src.stability, 0, 1);
   if (stability !== undefined) {
     if (Array.isArray(model?.stability_values) && model.stability_values.length) {
@@ -575,15 +531,20 @@ export const sanitizeVoiceSettings = (raw, model) => {
 export const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 export const audioMimeForExt = (ext) =>
-  ext === ".wav"
-    ? "audio/wav"
-    : ext === ".ogg"
-      ? "audio/ogg"
-      : ext === ".m4a"
-        ? "audio/mp4"
-        : ext === ".webm"
-          ? "audio/webm"
-          : "audio/mpeg";
+  ({
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".m4a": "audio/mp4",
+    ".webm": "audio/webm",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".aiff": "audio/aiff",
+    ".aif": "audio/aiff",
+    ".opus": "audio/ogg",
+    ".avi": "video/x-msvideo",
+  })[ext] || "audio/mpeg";
 
 export const wrapPcm16ToWav = (pcmBytes, sampleRate = 44100) => {
   const buf = Buffer.isBuffer(pcmBytes) ? pcmBytes : Buffer.from(pcmBytes);
@@ -643,11 +604,11 @@ const hasValidMpegSync = (buf) => {
   return version !== 1 && bitrateIdx !== 0 && bitrateIdx !== 0x0f && sampleRateIdx !== 3;
 };
 
-const sniffContainerMagic = (audioBytes) => {
+export const sniffContainerMagic = (audioBytes) => {
   const buf = Buffer.isBuffer(audioBytes) ? audioBytes : Buffer.from(audioBytes ?? []);
   if (buf.byteLength < 4) return null;
   const h4 = buf.subarray(0, 4).toString("ascii");
-  if (h4 === "RIFF") return ".wav";
+  if (h4 === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WAVE") return ".wav";
   if (h4 === "OggS") return ".ogg";
   if (h4 === "fLaC") return ".flac";
   if (h4 === "FORM") return ".aiff";
@@ -656,6 +617,38 @@ const sniffContainerMagic = (audioBytes) => {
   if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return ".webm";
   if (hasValidMpegSync(buf)) return ".mp3";
   return null;
+};
+
+export const containerHasAudio = async (extension, bytes, signal) => {
+  if (!extension) return false;
+  const probe = Bun.spawn(
+    [
+      "ffprobe",
+      "-v",
+      "error",
+      "-protocol_whitelist",
+      "pipe",
+      "-select_streams",
+      "a",
+      "-count_packets",
+      "-show_entries",
+      "stream=nb_read_packets",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      "pipe:0",
+    ],
+    {
+      stdin: bytes,
+      stdout: "pipe",
+      stderr: "ignore",
+      windowsHide: true,
+      timeout: 10_000,
+      maxBuffer: 64 * 1024,
+      signal,
+    },
+  );
+  const [code, streams] = await Promise.all([probe.exited, new Response(probe.stdout).text()]);
+  return code === 0 && streams.split(/\r?\n/).some((count) => Number(count) > 0);
 };
 
 /** Returns true only when bytes look like headerless PCM rather than a self-describing container. */
@@ -727,49 +720,68 @@ export const sanitizeRemoteMediaUrl = (rawUrl, apiBase = DEFAULT_API_BASE) => {
   }
 };
 
-const normalizeCatalogModel = (m, fallback) => ({
-  model_id: String(m.model_id ?? ""),
-  name: String(m.name ?? fallback?.name ?? m.model_id ?? ""),
-  description: String(m.description || fallback?.description || ""),
-  can_do_text_to_speech:
-    m.can_do_text_to_speech !== undefined
-      ? Boolean(m.can_do_text_to_speech)
-      : Boolean(fallback?.can_do_text_to_speech),
-  can_do_voice_conversion:
-    m.can_do_voice_conversion !== undefined
-      ? Boolean(m.can_do_voice_conversion)
-      : Boolean(fallback?.can_do_voice_conversion),
-  can_use_style:
-    m.can_use_style !== undefined ? Boolean(m.can_use_style) : Boolean(fallback?.can_use_style),
-  can_use_speaker_boost:
-    m.can_use_speaker_boost !== undefined
-      ? Boolean(m.can_use_speaker_boost)
-      : Boolean(fallback?.can_use_speaker_boost),
-  supports_context:
-    typeof m.supports_context === "boolean" ? m.supports_context : fallback?.supports_context,
-  supports_speed:
-    typeof m.supports_speed === "boolean" ? m.supports_speed : fallback?.supports_speed,
-  supports_similarity:
-    typeof m.supports_similarity === "boolean"
-      ? m.supports_similarity
-      : fallback?.supports_similarity,
-  stability_values: Array.isArray(m.stability_values)
-    ? m.stability_values
-    : fallback?.stability_values,
-  maximum_text_length_per_request: Number(
-    m.maximum_text_length_per_request ?? fallback?.maximum_text_length_per_request ?? 10000,
-  ),
-  model_rates: {
-    character_cost_multiplier:
-      Number(
-        m.model_rates?.character_cost_multiplier ??
-          fallback?.model_rates?.character_cost_multiplier ??
-          1,
-      ) || 1,
+const PROVIDER_MODELS = [
+  { model_id: "speech-2.8-hd", name: "MiniMax Speech 2.8 HD", credit_ratio: 1 },
+  { model_id: "speech-2.8-turbo", name: "MiniMax Speech 2.8 Turbo", credit_ratio: 0.6 },
+  {
+    model_id: "capcut",
+    name: "CapCut",
+    credit_ratio: 0,
+    languages: ["en", "vi", "zh", "id", "es", "pt", "ja", "th"],
   },
-  languages:
-    Array.isArray(m.languages) && m.languages.length ? m.languages : (fallback?.languages ?? []),
-});
+];
+const catalogCreditRate = (value) => {
+  if (typeof value !== "number" && !(typeof value === "string" && value.trim())) return;
+  const rate = Number(value);
+  if (Number.isFinite(rate) && rate >= 0) return rate;
+};
+const normalizeCatalogModel = (m, fallback) => {
+  const provider = m.provider || providerForModel(m.model_id);
+  const native = provider !== "elevenlabs";
+  const providerRate =
+    catalogCreditRate(m.model_rates?.character_cost_multiplier) ??
+    catalogCreditRate(m.credit_ratio);
+  const rate =
+    providerRate ??
+    catalogCreditRate(fallback?.model_rates?.character_cost_multiplier) ??
+    catalogCreditRate(fallback?.credit_ratio);
+  return {
+    model_id: String(m.model_id ?? ""),
+    provider,
+    name: String(m.name ?? fallback?.name ?? m.model_id ?? ""),
+    description: String(m.description || fallback?.description || ""),
+    can_do_text_to_speech:
+      m.can_do_text_to_speech !== undefined
+        ? Boolean(m.can_do_text_to_speech)
+        : native || Boolean(fallback?.can_do_text_to_speech),
+    can_do_voice_conversion: Boolean(
+      m.can_do_voice_conversion ?? fallback?.can_do_voice_conversion,
+    ),
+    can_use_style: Boolean(m.can_use_style ?? fallback?.can_use_style),
+    can_use_speaker_boost: Boolean(m.can_use_speaker_boost ?? fallback?.can_use_speaker_boost),
+    supports_context: native ? false : (m.supports_context ?? fallback?.supports_context),
+    supports_speed: native || (m.supports_speed ?? fallback?.supports_speed),
+    supports_similarity: native ? false : (m.supports_similarity ?? fallback?.supports_similarity),
+    stability_values: Array.isArray(m.stability_values)
+      ? m.stability_values
+      : fallback?.stability_values,
+    maximum_text_length_per_request:
+      m.maximum_text_length_per_request ?? fallback?.maximum_text_length_per_request,
+    model_rates: rate === undefined ? {} : { character_cost_multiplier: rate },
+    ...(m !== fallback && providerRate !== undefined ? { rateSource: "provider" } : {}),
+    languages: (Array.isArray(m.languages) && m.languages.length
+      ? m.languages
+      : (fallback?.languages ?? [])
+    ).map((language) =>
+      typeof language === "string"
+        ? {
+            language_id: language,
+            name: BUILTIN_LANGUAGES.find((entry) => entry.code === language)?.name || language,
+          }
+        : language,
+    ),
+  };
+};
 
 /**
  * Stateful GenVoice HTTP client handling API key resolution, catalog caching, shared voice search, and task polling.
@@ -869,7 +881,9 @@ export const openGenvoiceClient = ({
       res = await fetchImpl(target, {
         ...init,
         headers,
-        signal: init.signal ?? AbortSignal.timeout(45_000),
+        signal: init.signal
+          ? AbortSignal.any([init.signal, AbortSignal.timeout(45_000)])
+          : AbortSignal.timeout(45_000),
       });
     } catch (err) {
       const wrapped = new Error(`GenVoice request failed: ${sanitizeError(err, cfg.apiKey)}`);
@@ -915,11 +929,16 @@ export const openGenvoiceClient = ({
       return null;
     }
     const { data } = await genvoiceRequest("/auth/me", {}, overrideCfg);
+    const rawBalance = data.credit_balance;
+    const balance =
+      typeof rawBalance === "number" || (typeof rawBalance === "string" && rawBalance.trim())
+        ? Number(rawBalance)
+        : NaN;
     const account = {
       id: String(data.id ?? ""),
       email: String(data.email ?? ""),
       name: String(data.name ?? ""),
-      credit_balance: Number(data.credit_balance ?? 0),
+      credit_balance: Number.isFinite(balance) && balance >= 0 ? balance : null,
       role: String(data.role ?? ""),
     };
     if (!overrideCfg) cachedAccount = account;
@@ -1040,13 +1059,17 @@ export const openGenvoiceClient = ({
     label,
     apiBase,
     lookup = lookupFn,
+    signal,
   ) => {
     let cur = rawUrl;
     for (let hop = 0; hop < 4; hop++) {
       await assertSafeMediaUrl(cur, apiBase, lookup);
+      signal?.throwIfAborted();
       const res = await fetchImpl(cur, {
         redirect: "manual",
-        signal: AbortSignal.timeout(60_000),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(60_000)])
+          : AbortSignal.timeout(60_000),
       });
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get("location");
@@ -1069,18 +1092,26 @@ export const openGenvoiceClient = ({
     if (!refresh && cachedCatalog && Date.now() - cachedCatalog.fetchedAt < CATALOG_TTL_MS) {
       return cachedCatalog.data;
     }
-    let models = BUILTIN_GENVOICE_MODELS;
+    let models = [...BUILTIN_GENVOICE_MODELS, ...PROVIDER_MODELS].map((model) =>
+      normalizeCatalogModel(model, model),
+    );
     let languages = BUILTIN_LANGUAGES;
+    const providerLanguages = { ...FALLBACK_PROVIDER_LANGUAGES, elevenlabs: languages };
     let defaultVoices = [];
     let liveSynced = false;
     let liveError = null;
 
     if (cfg.apiKey) {
-      const [modelsRes, langsRes, voicesRes] = await Promise.allSettled([
-        genvoiceRequest("/models"),
-        genvoiceRequest("/languages"),
-        genvoiceRequest("/default-voices?page_size=100"),
-      ]);
+      const [modelsRes, langsRes, voicesRes, minimaxRes, capcutRes, miniLangRes, capLangRes] =
+        await Promise.allSettled([
+          genvoiceRequest("/models"),
+          genvoiceRequest("/languages"),
+          genvoiceRequest("/default-voices?page_size=100"),
+          genvoiceRequest("/models?provider=minimax"),
+          genvoiceRequest("/models?provider=capcut"),
+          genvoiceRequest("/languages?provider=minimax"),
+          genvoiceRequest("/languages?provider=capcut"),
+        ]);
       const errors = [];
       if (modelsRes.status === "fulfilled" && Array.isArray(modelsRes.value.data)) {
         const builtinById = new Map(BUILTIN_GENVOICE_MODELS.map((b) => [b.model_id, b]));
@@ -1114,6 +1145,7 @@ export const openGenvoiceClient = ({
             const lang = v.language ?? v.labels?.language;
             return {
               id: v.voice_id,
+              provider: "elevenlabs",
               name: String(v.name ?? v.voice_id),
               category: String(v.category ?? "premade").toLowerCase(),
               description: String(v.description ?? ""),
@@ -1130,12 +1162,53 @@ export const openGenvoiceClient = ({
       } else if (voicesRes.status === "rejected") {
         errors.push(voicesRes.reason?.message || "Voices sync failed");
       }
+      for (const { result, provider } of [
+        { result: minimaxRes, provider: "minimax" },
+        { result: capcutRes, provider: "capcut" },
+      ]) {
+        if (result.status === "fulfilled" && Array.isArray(result.value.data)) {
+          const incoming = result.value.data
+            .filter((model) => providerForModel(model.model_id) === provider)
+            .map((model) =>
+              normalizeCatalogModel(
+                { ...model, provider },
+                PROVIDER_MODELS.find((entry) => entry.model_id === model.model_id),
+              ),
+            );
+          const byId = new Map(models.map((model) => [model.model_id, model]));
+          for (const model of incoming) byId.set(model.model_id, model);
+          models = [...byId.values()];
+        } else if (result.status === "rejected")
+          errors.push(result.reason?.message || `${provider} models unavailable`);
+      }
+      providerLanguages.elevenlabs = languages;
+      for (const { provider, result } of [
+        { provider: "minimax", result: miniLangRes },
+        { provider: "capcut", result: capLangRes },
+      ]) {
+        if (result.status === "fulfilled" && Array.isArray(result.value.data)) {
+          const entries = result.value.data.filter(
+            (language) =>
+              language && typeof language.code === "string" && typeof language.name === "string",
+          );
+          if (entries.length)
+            providerLanguages[provider] = entries.map((language) => ({
+              ...language,
+              code: provider === "minimax" ? language.name : language.code,
+            }));
+        } else if (result.status === "rejected")
+          errors.push(result.reason?.message || `${provider} languages unavailable`);
+      }
+      for (const fallback of PROVIDER_MODELS)
+        if (!models.some((model) => model.model_id === fallback.model_id))
+          models.push(normalizeCatalogModel(fallback, fallback));
       if (errors.length) liveError = errors.join("; ");
     }
 
     const data = {
       models,
       languages,
+      providerLanguages,
       defaultVoices,
       liveSynced,
       ...(liveError ? { error: liveError } : {}),
@@ -1145,6 +1218,9 @@ export const openGenvoiceClient = ({
   };
 
   const searchSharedVoices = async (queryParams = {}) => {
+    const provider = queryParams.provider ?? "elevenlabs";
+    if (!PROVIDER_IDS.includes(provider))
+      throw Object.assign(new Error("Choose elevenlabs, minimax or capcut"), { status: 400 });
     const qs = new URLSearchParams();
     const rawPageSize = Number(queryParams.pageSize ?? queryParams.page_size ?? 50);
     const pageSize = Number.isFinite(rawPageSize)
@@ -1152,6 +1228,112 @@ export const openGenvoiceClient = ({
       : 50;
     const rawPage = Number(queryParams.page ?? 0);
     const page = Number.isFinite(rawPage) ? Math.max(0, Math.trunc(rawPage)) : 0;
+    const useCases = String(queryParams.useCases ?? queryParams.useCase ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (provider !== "elevenlabs") {
+      qs.set("page_size", String(pageSize));
+      qs.set("page", String(page + 1));
+      for (const key of [
+        "search",
+        "gender",
+        "age",
+        "accent",
+        ...(provider === "capcut" ? ["emotion"] : []),
+      ])
+        if (typeof queryParams[key] === "string" && queryParams[key].trim())
+          qs.set(key, queryParams[key].trim());
+      if (queryParams.language)
+        qs.set(
+          "language",
+          languageForProvider(provider, String(queryParams.language), BUILTIN_LANGUAGES),
+        );
+      if (provider === "minimax" && useCases.length) qs.set("use_cases", useCases.join(","));
+      const { data } = await genvoiceRequest(`/${provider}/system-voices?${qs}`);
+      const voices = (Array.isArray(data.voice_list) ? data.voice_list : [])
+        .filter((voice) => voice && typeof voice.voice_id === "string")
+        .map((voice) => {
+          const tags = (
+            Array.isArray(voice.tag_list)
+              ? voice.tag_list
+              : Array.isArray(voice.tags)
+                ? voice.tags
+                : []
+          ).filter((tag) => typeof tag === "string");
+          const language = String(voice.language || (provider === "minimax" ? tags[0] : "") || "");
+          const gender = String(
+            voice.gender ||
+              tags.find((tag) => /^(male|female|non[- ]?binary|gender diversity)$/i.test(tag)) ||
+              "",
+          );
+          const age = String(
+            voice.age ||
+              tags.find((tag) =>
+                /^(young|youth|middle[- ]?aged|children?|elderly|old|baby|teenager)$/i.test(tag),
+              ) ||
+              "",
+          );
+          const accent = String(
+            voice.accent ||
+              (provider === "capcut"
+                ? CAPCUT_TONES.find((tone) =>
+                    tags.some((tag) => tag.trim().toLowerCase() === tone.toLowerCase()),
+                  )
+                : tags.find(
+                    (tag) =>
+                      tag !== language &&
+                      /^(?:[a-z]{2}[- ]|US |Standard$|British$|American$|Australian$|Indian$)/i.test(
+                        tag,
+                      ),
+                  )) ||
+              "",
+          );
+          const emotion = String(
+            voice.emotion ||
+              tags.find((tag) =>
+                /^(excited|plain|pleasure|shy|proud|admire|angery|angry|sad|disgust|flattery|fear|embarrassing|confused)$/i.test(
+                  tag,
+                ),
+              ) ||
+              "",
+          );
+          const useCase = String(
+            voice.use_case ||
+              (provider === "minimax"
+                ? tags
+                    .filter((tag) => ![language, gender, age, accent, emotion].includes(tag))
+                    .join(" · ")
+                : ""),
+          );
+          return {
+            id: voice.voice_id,
+            name: String(voice.voice_name || voice.name || voice.voice_id),
+            provider,
+            category: "system",
+            language,
+            gender,
+            age,
+            accent,
+            emotion,
+            useCase,
+            descriptive: tags.join(" · "),
+            description: String(voice.description || ""),
+            previewUrl: sanitizeRemoteMediaUrl(
+              voice.sample_audio || voice.preview_url,
+              resolveKeyConfig().apiBase,
+            ),
+            source: "shared",
+            ...(typeof voice.uniq_id === "string" ? { dubbingVoiceId: voice.uniq_id } : {}),
+            ...(typeof voice.platform === "string" ? { sourcePlatform: voice.platform } : {}),
+          };
+        });
+      return {
+        voices,
+        hasMore: data.has_more === true,
+        ...(Number.isFinite(data.total) ? { total: data.total } : {}),
+      };
+    }
     qs.set("page_size", String(pageSize));
     qs.set("page", String(page));
     for (const k of ["search", "category", "gender", "age", "accent", "sort"]) {
@@ -1163,33 +1345,77 @@ export const openGenvoiceClient = ({
     if (typeof reqLang === "string" && reqLang.trim()) {
       qs.set("required_languages", reqLang.trim());
     }
-    if (typeof queryParams.useCase === "string" && queryParams.useCase.trim()) {
-      qs.append("use_cases[]", queryParams.useCase.trim());
-    }
+    for (const useCase of useCases) qs.append("use_cases[]", useCase);
     const { data } = await genvoiceRequest(`/shared-voices?${qs.toString()}`);
+    const preview = (url) => sanitizeRemoteMediaUrl(url, resolveKeyConfig().apiBase);
     const voices = Array.isArray(data.voices)
-      ? data.voices.map((v) => ({
-          id: String(v.voice_id ?? ""),
-          name: String(v.name ?? ""),
-          category: String(v.category ?? "shared").toLowerCase(),
-          useCase: String(v.use_case ?? ""),
-          gender: String(v.gender ?? ""),
-          age: String(v.age ?? ""),
-          accent: String(v.accent ?? ""),
-          descriptive: String(v.descriptive ?? ""),
-          description: String(v.description ?? ""),
-          previewUrl: sanitizeRemoteMediaUrl(v.preview_url, resolveKeyConfig().apiBase),
-          rate: Number(v.rate ?? 1) || 1,
-          free: Boolean(v.free_users_allowed),
-          language: String(v.language ?? ""),
-          source: "shared",
-        }))
+      ? data.voices
+          .filter((voice) => isSafeRemoteId(voice?.voice_id))
+          .map((v) => {
+            const verifiedLanguages = Array.isArray(v.verified_languages)
+              ? v.verified_languages.flatMap((entry) => {
+                  const code = entry?.language_id || entry?.language_code || entry?.locale;
+                  if (typeof code !== "string" || !code) return [];
+                  return [
+                    {
+                      code,
+                      name: typeof entry.language === "string" ? entry.language : undefined,
+                      modelId: typeof entry.model_id === "string" ? entry.model_id : undefined,
+                      locale: typeof entry.locale === "string" ? entry.locale : undefined,
+                      accent: typeof entry.accent === "string" ? entry.accent : undefined,
+                      previewUrl: preview(entry.preview_url),
+                    },
+                  ];
+                })
+              : [];
+            const metrics = Object.fromEntries(
+              Object.entries({
+                usage1y: v.usage_character_count_1y,
+                usage7d: v.usage_character_count_7d,
+                clones: v.cloned_by_count,
+                addedAt: v.date_unix,
+              }).filter(([, value]) => Number.isInteger(value) && value >= 0),
+            );
+            return {
+              id: String(v.voice_id ?? ""),
+              name: String(v.name ?? ""),
+              ...(isSafeRemoteId(v.public_owner_id) ? { creatorId: v.public_owner_id } : {}),
+              provider: "elevenlabs",
+              category: String(v.category ?? "shared").toLowerCase(),
+              useCase: String(v.use_case ?? ""),
+              gender: String(v.gender ?? ""),
+              age: String(v.age ?? ""),
+              accent: String(v.accent ?? ""),
+              descriptive: String(v.descriptive ?? ""),
+              description: String(v.description ?? ""),
+              previewUrl:
+                preview(v.preview_url) ||
+                verifiedLanguages.find(({ previewUrl }) => previewUrl)?.previewUrl ||
+                "",
+              ...(verifiedLanguages.length ? { verifiedLanguages } : {}),
+              ...metrics,
+              ...(typeof v.featured === "boolean" ? { featured: v.featured } : {}),
+              ...(typeof v.live_moderation_enabled === "boolean"
+                ? { liveModeration: v.live_moderation_enabled }
+                : {}),
+              ...(typeof v.rate === "number" && Number.isFinite(v.rate) && v.rate >= 0
+                ? { rate: v.rate }
+                : {}),
+              ...(typeof v.free_users_allowed === "boolean" ? { free: v.free_users_allowed } : {}),
+              language: String(v.language ?? ""),
+              source: "shared",
+            };
+          })
       : [];
-    return { voices, hasMore: Boolean(data.has_more) };
+    return {
+      voices,
+      hasMore: Boolean(data.has_more),
+      ...(typeof data.last_sort_id === "string" ? { pageToken: data.last_sort_id } : {}),
+    };
   };
 
-  const resolveModelMeta = async (modelId) => {
-    const cat = await getCatalog();
+  const resolveModelMeta = async (modelId, catalog) => {
+    const cat = catalog ?? (await getCatalog());
     return (
       cat.models.find((m) => m.model_id === modelId) ??
       BUILTIN_GENVOICE_MODELS.find((m) => m.model_id === modelId) ??
@@ -1197,20 +1423,26 @@ export const openGenvoiceClient = ({
     );
   };
 
-  const pollGenvoiceTask = async ({ pollPath, job }) => {
+  const pollGenvoiceTask = async ({ pollPath, job, onCharge }) => {
     const deadline = Date.now() + maxPollMs;
     while (Date.now() < deadline) {
       await sleep(pollIntervalMs);
       const { data, cfg } = await genvoiceRequest(pollPath);
+      assertGenVoiceTaskIdentity(data, job.remoteTaskId);
       const progress = typeof data.progress === "number" ? data.progress : job.progress;
       job.status = data.status === "completed" ? "downloading" : data.status || "processing";
       job.progress = progress;
+      if (Number.isFinite(data.credits_deducted) && data.credits_deducted >= 0) {
+        job.creditsDeducted = data.credits_deducted;
+        job.creditsSource = genVoiceTaskChargeSource(data.status);
+        onCharge?.(job);
+      }
       onEmit?.({ type: "job", job: { ...job } });
       if (data.status === "completed") return { data, cfg };
-      if (data.status === "failed") {
+      if (isFailedGenVoiceTask(data.status)) {
         throw new Error(
           sanitizeError(
-            data.detail_error || data.error || "GenVoice generation failed",
+            data.detail_error || data.error || `GenVoice generation ${data.status}`,
             cfg.apiKey,
           ),
         );

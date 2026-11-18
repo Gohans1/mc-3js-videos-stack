@@ -95,6 +95,9 @@
   --color-reading-foreground: var(--reading-foreground);
   --color-slider-fill: var(--slider-fill);
   --color-slider-thumb: var(--slider-thumb);
+  --color-waveform-selection: var(--waveform-selection);
+  --color-waveform-ink-on-selection: var(--waveform-ink-on-selection);
+  --color-waveform-marker: var(--waveform-marker);
   --color-label: var(--label);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -380,6 +383,9 @@
   --reading-foreground: var(--fx-base-100);
   --slider-fill: var(--fx-base-200);
   --slider-thumb: var(--fx-paper);
+  --waveform-selection: var(--fx-base-500);
+  --waveform-ink-on-selection: var(--fx-black);
+  --waveform-marker: var(--fx-paper);
   color-scheme: dark;
 }
 
@@ -414,6 +420,63 @@
     caret-color: var(--primary);
     scrollbar-color: var(--slider) transparent;
     -webkit-tap-highlight-color: transparent;
+  }
+}
+
+[data-voice-playground] {
+  --primary: color-mix(in oklab, var(--fx-blue-200) 74%, var(--fx-paper));
+  --slider-fill: var(--fx-paper);
+}
+
+[data-voice-playground] [data-slot="sidebar-container"] {
+  inset-inline: 0 auto;
+  border-inline-start-width: 0;
+  border-inline-end: 1px solid var(--sidebar-border);
+}
+
+[data-voice-playground] [data-slot="slider-range"] {
+  background-color: var(--slider-fill);
+}
+
+[data-voice-playground] :is(
+  [data-slot="button"],
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"]
+):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  --tw-ring-color: transparent;
+}
+
+[data-voice-playback-icon] > svg {
+  grid-area: 1 / 1;
+  transition-property: opacity, scale, filter;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-voice-playback-icon] > svg[data-inactive] {
+  opacity: 0;
+  scale: 0.25;
+  filter: blur(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-voice-playback-icon] > svg {
+    transition-property: opacity;
+  }
+
+  [data-voice-playback-icon] > svg[data-inactive] {
+    scale: 1;
+    filter: none;
+  }
+}
+
+@starting-style {
+  [data-slot="dialog-content"][data-motion="confirmation"],
+  [data-slot="dialog-overlay"][data-motion="confirmation"] {
+    opacity: 0;
   }
 }
 

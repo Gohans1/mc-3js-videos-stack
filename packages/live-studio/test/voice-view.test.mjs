@@ -6,12 +6,15 @@ import {
   findTakeLineIndex,
   parseTakeScript,
   phraseBrickWindows,
+  registerVoiceNames,
   resizeNarrationBrickForSwap,
   shortTryLabel,
   sliceNarrationClip,
+  subscribeVoiceNames,
   voiceActorTitle,
   voiceClipLabel,
   voiceClipSummary,
+  voiceNamesSnapshot,
 } from "../app/sound/voice-view.ts";
 import { narrationLines } from "../src/narration.ts";
 import { mapTimeline, mapVoice } from "../src/timing-data.mjs";
@@ -620,5 +623,28 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     );
     assert.equal(summary02.matches[0]?.id, "02");
     assert.equal(summary02.matches[0]?.voiceTitle, "True");
+  });
+
+  test("registerVoiceNames notifies subscribers and advances snapshot revision only on actual changes", () => {
+    const startRev = voiceNamesSnapshot();
+    let notifications = 0;
+    const unsub = subscribeVoiceNames(() => {
+      notifications++;
+    });
+
+    const id = "DynamicVoiceTestId999";
+    assert.equal(voiceActorTitle(id), "Voice · Dynami");
+    registerVoiceNames([{ id, name: "Aria Showcase" }]);
+    assert.equal(voiceActorTitle(id), "Aria Showcase");
+    assert.equal(notifications, 1);
+    assert.ok(voiceNamesSnapshot() > startRev);
+
+    // Duplicate registration of the same mapping is a silent no-op
+    const revAfterFirst = voiceNamesSnapshot();
+    registerVoiceNames([{ id, name: "Aria Showcase" }]);
+    assert.equal(notifications, 1);
+    assert.equal(voiceNamesSnapshot(), revAfterFirst);
+
+    unsub();
   });
 });

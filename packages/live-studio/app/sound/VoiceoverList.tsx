@@ -28,8 +28,7 @@ import {
   voiceAuditionId,
 } from "./voice-client";
 import { voiceoverDisplayText } from "./voice-library-view";
-import { openVoicePlaygroundWith } from "./voice-playground-client";
-import { composeFilmTakeRemixPreset } from "./voice-playground-view";
+import { openFilmTakeRemix } from "./voice-playground-client";
 import {
   parseTakeScript,
   shortTryLabel,
@@ -251,7 +250,7 @@ export function VoiceoverList({
                         variant="ghost"
                         size="icon-sm"
                         aria-label={`Remix take ${take.id} in Voice Playground`}
-                        onClick={() => openVoicePlaygroundWith(composeFilmTakeRemixPreset(take))}
+                        onClick={() => void openFilmTakeRemix(take)}
                       >
                         <Sparkles className="size-3.5" />
                       </Button>
@@ -322,7 +321,10 @@ export function VoiceoverList({
                               {take.tries.map((tryFile) => {
                                 const tryId = voiceAuditionId("try", tryFile);
                                 const isTryPlaying = now === tryId;
-                                const label = shortTryLabel(take.id, tryFile);
+                                const label = shortTryLabel(take.id, tryFile, take.alternatives);
+                                const inUse = take.alternatives?.some(
+                                  (version) => version.file === tryFile && version.active,
+                                );
                                 const busy = promoting === `${take.id}:${tryFile}`;
                                 return (
                                   <div
@@ -351,12 +353,12 @@ export function VoiceoverList({
                                     <Button
                                       variant="secondary"
                                       size="sm"
-                                      disabled={promoting !== null}
+                                      disabled={promoting !== null || inUse}
                                       className="h-6 flex-none pointer-coarse:min-h-9"
                                       aria-label={`Use ${label} as active take ${take.id}`}
                                       onClick={() => handleUseTry(take.id, tryFile)}
                                     >
-                                      {busy ? "…" : "Use"}
+                                      {busy ? "…" : inUse ? "In use" : "Use"}
                                     </Button>
                                   </div>
                                 );

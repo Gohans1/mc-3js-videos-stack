@@ -1,6 +1,7 @@
 export interface SharedVoiceEntry {
   id: string;
   name: string;
+  creatorId?: string;
   category: string;
   useCase: string;
   gender: string;
@@ -52,6 +53,7 @@ export interface VoiceLibraryPayload extends VoiceLibraryState {
 
 export interface VoiceLibraryHandle {
   cacheFile: string;
+  voices: () => SharedVoiceEntry[];
   state: () => VoiceLibraryState;
   hasKey: () => boolean;
   ensureWarm: () => boolean;

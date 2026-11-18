@@ -9,6 +9,7 @@ import { createActivity } from "./activity.mjs";
 import { createApi } from "./api.mjs";
 import { createCliRunner } from "./cli-runner.ts";
 import { cliArgs } from "./cli.mjs";
+import { openFavorites } from "./favorites.mjs";
 import { openFilm } from "./film.mjs";
 import { openLessonFiles } from "./lesson-files.mjs";
 import { buildPage } from "./page.mjs";
@@ -151,9 +152,14 @@ const voiceLibrary = openVoiceLibrary({
   onEvent: () => send("voice-library"),
 });
 const cliRunner = createCliRunner(film);
+const favorites = openFavorites();
 const voicePlayground = openVoicePlayground({
   project: film.PROJECT,
+  archiveExpiry: true,
   voice: film.voice,
+  audioFavorites: favorites,
+  cachedVoices: voiceLibrary.voices,
+  onAudioFavoritesChanged: () => send("favorites"),
   onEvent: (payload) => send("voice-playground", JSON.stringify(payload)),
   onVoiceChanged: () => send("voice"),
 });
@@ -164,6 +170,7 @@ const api = createApi(film, {
   activity,
   lessons,
   voiceLibrary,
+  favorites,
   voicePlayground,
   port: PORT,
   cliRunner,

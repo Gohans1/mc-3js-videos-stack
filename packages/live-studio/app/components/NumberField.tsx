@@ -159,6 +159,8 @@ export const stepNumberField = (
 };
 
 export function NumberField({
+  id,
+  "aria-describedby": describedBy,
   value,
   onSave,
   live,
@@ -176,6 +178,8 @@ export function NumberField({
   variant = "scrub",
   size = "default",
 }: {
+  id?: string;
+  "aria-describedby"?: string;
   value: number | undefined;
   onSave: (v: number | undefined) => void;
   live?: (v: number) => void;
@@ -255,6 +259,8 @@ export function NumberField({
   };
   return (
     <Input
+      id={id}
+      aria-describedby={describedBy}
       variant={variant}
       size={size}
       type="text"

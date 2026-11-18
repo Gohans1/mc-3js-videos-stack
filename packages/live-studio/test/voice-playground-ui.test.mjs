@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -10,7 +10,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
 import { filmPlugin } from "../src/vite_film.mjs";
-import { BUILTIN_GENVOICE_MODELS } from "../src/voice-playground.mjs";
+import { wrapPcm16ToWav } from "../src/voice-playground-genvoice.mjs";
+import { playgroundExtensions } from "../src/voice-playground-routes.mjs";
+import { BUILTIN_GENVOICE_MODELS, openVoicePlayground } from "../src/voice-playground.mjs";
 
 const STUDIO_DIR = resolve(import.meta.dir, "..");
 
@@ -85,6 +87,7 @@ describe("Voice Playground SSR UI components", () => {
   let libraryMod;
   let inspectorMod;
   let workspaceMod;
+  let queueMod;
   let secondaryMod;
   let clientMod;
   let auditionDockMod;
@@ -259,6 +262,7 @@ describe("Voice Playground SSR UI components", () => {
     viewMod = await server.ssrLoadModule("/sound/voice-playground-view.ts");
     keyPopoverMod = await server.ssrLoadModule("/sound/VoicePlaygroundKeyPopover.tsx");
     composerMod = await server.ssrLoadModule("/sound/VoicePlaygroundComposer.tsx");
+    queueMod = await server.ssrLoadModule("/sound/VoicePlaygroundJobQueue.tsx");
     libraryMod = await server.ssrLoadModule("/sound/VoicePlaygroundLibrary.tsx");
     inspectorMod = await server.ssrLoadModule("/sound/VoicePlaygroundInspector.tsx");
     workspaceMod = await server.ssrLoadModule("/sound/VoicePlaygroundWorkspace.tsx");
@@ -276,6 +280,141 @@ describe("Voice Playground SSR UI components", () => {
 
   const renderUi = (node) =>
     renderToStaticMarkup(createElement(tooltipMod.TooltipProvider, { delay: 0 }, node));
+
+  test("Dialogue completion and archive reload keep individual voice names on older Speech takes", async () => {
+    const old = samplePgItem({
+      id: "single_identity",
+      voiceId: "warm_identity",
+      voiceName: "warm_identity",
+    });
+    const dialogue = samplePgItem({
+      id: "dialogue_identity",
+      kind: "dialogue",
+      voiceId: "warm_identity",
+      voiceName: "Alex (Warm Narrator) · Riley (Bright Storyteller)",
+      dialogue: {
+        speakers: {
+          Alex: { voice_id: "warm_identity", voice_name: "Warm Narrator" },
+          Riley: { voice_id: "bright_identity", voice_name: "Bright Storyteller" },
+        },
+      },
+    });
+    const identity = () => viewMod.buildUnifiedEntries([old], [], new Set())[0].voiceName;
+    clientMod.handleVoicePlaygroundEvent(
+      JSON.stringify({ type: "item", item: { ...old, voiceName: "Warm Narrator" } }),
+    );
+    expect(identity()).toBe("Warm Narrator");
+    clientMod.handleVoicePlaygroundEvent(JSON.stringify({ type: "item", item: dialogue }));
+    expect(identity()).toBe("Warm Narrator");
+    const direct = {
+      ...old,
+      id: "eleven_direct_identity",
+      connection: "elevenlabs",
+      voiceName: "Direct account actor",
+    };
+    clientMod.handleVoicePlaygroundEvent(JSON.stringify({ type: "item", item: direct }));
+    expect(identity()).toBe("Warm Narrator");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const path = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+      return Response.json(
+        path.includes("/catalog")
+          ? {
+              models: sampleModels(),
+              languages: [{ code: "en", name: "English" }],
+              defaultVoices: [{ id: "warm_identity", name: "Warm Narrator" }],
+            }
+          : path.includes("/items")
+            ? { items: [dialogue, old, direct] }
+            : {},
+      );
+    };
+    try {
+      await clientMod.loadPlaygroundAll({ refresh: true });
+      expect(identity()).toBe("Warm Narrator");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("ID-only favorites accepted by the API and legacy nameless favorites render safely", async () => {
+    const pg = openVoicePlayground({
+      project: join(tempDir, "favorite-render"),
+      globalDir: join(tempDir, "favorite-global"),
+      env: {},
+      secretsFile: join(tempDir, "none"),
+      configFile: join(tempDir, "config.json"),
+    });
+    try {
+      const api = playgroundExtensions(pg);
+      const response = await api.request("/voice-favorites", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ favorite: true, voice: { id: "id-only-actor" } }),
+      });
+      expect(response.status).toBe(200);
+      const { voices } = await response.json();
+      const { VoiceOptionRow } = await server.ssrLoadModule(
+        "/sound/VoicePlaygroundVoicePicker.tsx",
+      );
+      for (const voice of [voices[0], { ...voices[0], name: undefined }]) {
+        const html = renderUi(
+          createElement(VoiceOptionRow, {
+            voice,
+            selected: false,
+            nowPlayingId: "",
+            onSelect() {},
+          }),
+        );
+        expect(html).toContain("id-only-actor");
+        expect(html).toContain("Favorite id-only-actor");
+      }
+      expect(pg.listVoiceFavorites()[0].name).toBe("id-only-actor");
+      const removed = await api.request("/voice-favorites", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ favorite: false, voice: { id: "id-only-actor" } }),
+      });
+      expect((await removed.json()).voices).toEqual([]);
+    } finally {
+      pg.close();
+    }
+  });
+
+  test("favorite samples open with saved voices from all providers, including voices absent from the cache", async () => {
+    const { VoicePlaygroundVoicePicker } = await server.ssrLoadModule(
+      "/sound/VoicePlaygroundVoicePicker.tsx",
+    );
+    const originalFetch = globalThis.fetch;
+    const previousFavorites = clientMod.getPlaygroundSnapshot().favoriteVoices;
+    const favorites = [
+      { id: "uncached_narrator", name: "Uncached Narrator", provider: "elevenlabs" },
+      { id: "favorite_minimax", name: "Favorite MiniMax", provider: "minimax" },
+      { id: "favorite_capcut", name: "Favorite CapCut", provider: "capcut" },
+    ];
+    globalThis.fetch = async () => Response.json({ voices: favorites });
+    try {
+      await clientMod.togglePlaygroundVoiceFavorite(favorites[0], true);
+      const html = renderUi(
+        createElement(VoicePlaygroundVoicePicker, {
+          embedded: true,
+          favoritesOnly: true,
+          selectedId: "",
+          selectedName: "",
+          defaultVoices: [{ id: "unstarred", name: "Unstarred Default" }],
+          sharedSearch: { voices: [], hasMore: false, loading: false, error: null },
+          onSearchShared() {},
+          onSelect() {},
+        }),
+      );
+      for (const voice of favorites) expect(html).toContain(`Unfavorite ${voice.name}`);
+      expect(html).not.toContain("Unstarred Default");
+    } finally {
+      globalThis.fetch = async () => Response.json({ voices: previousFavorites });
+      await clientMod.togglePlaygroundVoiceFavorite(favorites[0], false);
+      globalThis.fetch = originalFetch;
+    }
+  });
 
   const makePgState = (draftOverrides = {}, rootOverrides = {}) => ({
     loaded: true,
@@ -399,11 +538,11 @@ describe("Voice Playground SSR UI components", () => {
     expect(v4Html).toContain("[excited]");
     expect(v4Html).toContain("Generate 2 Takes");
     expect(v4Html).toContain("Similarity Boost");
-    expect(v4Html).toContain("Export .srt Subtitles");
+    expect(v4Html).toContain("Request SRT subtitles");
     expect(v4Html).not.toContain(">Speed<");
     // Base UI Select items resolve human-readable labels instead of raw values
     expect(v4Html).toContain("Eleven v4");
-    expect(v4Html).toContain("English (en)");
+    expect(v4Html).toContain("Auto Detect");
 
     // 2. eleven_v3: renders discrete stability preset buttons (Creative 0.0 / Natural 0.5 / Robust 1.0) and Speed (0.7–1.2)
     const v3Html = renderUi(
@@ -445,7 +584,7 @@ describe("Voice Playground SSR UI components", () => {
     expect(dialogueHtml).toContain("Pause Between Turns");
     expect(dialogueHtml).toContain("Speakers (2)");
     expect(dialogueHtml).toContain("Add Speaker");
-    expect(dialogueHtml).toContain("Generate Dialogue");
+    expect(dialogueHtml).toContain("Generate dialogue");
     expect(dialogueHtml).toContain("Output &amp; Metadata");
     expect(dialogueHtml).toContain("Name: line");
     expect(dialogueHtml).toContain("Format as Alex / Riley");
@@ -462,7 +601,7 @@ describe("Voice Playground SSR UI components", () => {
     );
     expect(vcHtml).toContain("Remove background noise");
     expect(vcHtml).toContain("Upload File");
-    expect(vcHtml).toContain("Convert Voice");
+    expect(vcHtml).toContain("Convert voice");
     const savedVcHtml = renderUi(
       createElement(composerMod.VoicePlaygroundComposer, {
         pg: makePgState({
@@ -477,9 +616,9 @@ describe("Voice Playground SSR UI components", () => {
     expect(savedVcHtml).toContain("Saved original audio");
     const convertButton = savedVcHtml
       .match(/<button\b[^>]*>[\s\S]*?<\/button>/g)
-      .find((button) => button.includes("Convert Voice"));
+      .find((button) => button.includes("Convert voice"));
     expect(convertButton).toBeDefined();
-    expect(convertButton).not.toContain("disabled=");
+    expect(convertButton).not.toMatch(/\s(?:aria-disabled="true"|disabled(?:=|\s|>))/);
 
     // 6. STT mode (scribe_v2): renders result box and diarize/timestamps
     const sttHtml = renderUi(
@@ -501,7 +640,165 @@ describe("Voice Playground SSR UI components", () => {
     );
     expect(sttHtml).toContain("Scribe v2");
     expect(sttHtml).toContain("Watch what happens right behind that wall.");
-    expect(sttHtml).toContain("Diarize speakers");
+    expect(sttHtml).toContain("Identify speakers");
+    expect(sttHtml).toContain("Scribe v2 options");
+  });
+
+  test("Recordings distinguishes an empty Archive from a search with no matches", () => {
+    const archive = (query) =>
+      renderUi(
+        createElement(libraryMod.VoicePlaygroundLibrary, {
+          pg: makePgState(
+            {},
+            {
+              items: [],
+              filters: { ...viewMod.DEFAULT_PLAYGROUND_FILTERS, source: "archive", query },
+            },
+          ),
+          unifiedEntries: [],
+          sidebarNavigation: true,
+        }),
+      );
+
+    const empty = archive("");
+    expect(empty).toContain("No archived recordings or templates yet.");
+    expect(empty).toContain("Back to Recordings");
+    expect(empty).not.toContain("Clear filters");
+
+    const filtered = archive("a take that is not here");
+    expect(filtered).toContain("No recordings match “a take that is not here” with these filters.");
+    expect(filtered).toContain("Clear filters");
+    expect(filtered).not.toContain("Show all clips");
+  });
+
+  test("Compare quotes the saved Speech draft while another tool is open", async () => {
+    const original = clientMod.getPlaygroundSnapshot();
+    const originalFetch = globalThis.fetch;
+    const script = "[hushed] Xin chào.";
+    const voices = [
+      { id: "voice_a", name: "Lan", provider: "elevenlabs", category: "premade" },
+      { id: "voice_b", name: "Hùng", provider: "elevenlabs", category: "premade" },
+    ];
+    let submitted;
+    try {
+      clientMod.switchPlaygroundTool("tts");
+      clientMod.setComposerDraft({
+        connection: "genvoice",
+        provider: "elevenlabs",
+        text: script,
+        previousText: "Intro.",
+      });
+      clientMod.switchPlaygroundTool("voice_changer");
+      clientMod.setPlaygroundSubTab("compare");
+      globalThis.fetch = async (url, options) => {
+        const pathname = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (!pathname.includes("/tts/quote?")) throw new Error("Unexpected request: " + pathname);
+        submitted = JSON.parse(options.body);
+        return Response.json({ rows: [], totalCredits: null });
+      };
+
+      await clientMod.reviewGenVoiceSpeech(voices);
+      expect(
+        submitted.entries.map(({ voiceId, text, previousText }) => ({
+          voiceId,
+          text,
+          previousText,
+        })),
+      ).toEqual(voices.map(({ id }) => ({ voiceId: id, text: script, previousText: "Intro." })));
+      expect(clientMod.getPlaygroundSnapshot().draft.mode).toBe("voice_changer");
+    } finally {
+      globalThis.fetch = originalFetch;
+      clientMod.switchPlaygroundTool(original.draft.mode);
+      clientMod.setComposerDraft(() => original.draft);
+      clientMod.setPlaygroundSubTab(original.activeSubTab);
+    }
+  });
+
+  test("Compare labels the original batch script separately from the next Speech draft", async () => {
+    const { VoicePlaygroundCompare } = await server.ssrLoadModule(
+      "/sound/VoicePlaygroundCompare.tsx",
+    );
+    const { VoiceSpeechBatch } = await server.ssrLoadModule("/sound/VoiceSpeechBatch.tsx");
+    const item = samplePgItem({ text: "Recorded transcript." });
+    const entries = viewMod.buildUnifiedEntries([item], [], new Set());
+    const originalScript = "[hushed] Original script sent with the batch.";
+    const nextScript = "[bright] New Speech draft for a later batch.";
+    const pg = makePgState({ mode: "tts", text: nextScript });
+    const job = {
+      id: "cold-compare-job",
+      kind: "tts",
+      status: "completed",
+      voiceName: item.voiceName,
+      itemId: item.id,
+      generationRecipe: {
+        version: 1,
+        requested: { text: originalScript },
+        effective: { path: "/text-to-speech", body: { text: originalScript } },
+      },
+    };
+
+    const draft = renderUi(
+      createElement(VoiceSpeechBatch, { pg, onBrowse() {}, resultFocus: { current: null } }),
+    );
+    expect(draft).toContain("Script for the next batch");
+    expect(draft).toContain(nextScript);
+    expect(draft).not.toContain(originalScript);
+
+    const results = renderUi(
+      createElement(VoicePlaygroundCompare, { entries, batchJobs: [job], uids: [] }),
+    );
+    expect(results).toContain("Script used for this batch");
+    expect(results).toContain(originalScript);
+    expect(results).not.toContain(nextScript);
+  });
+
+  test("Results confirms a save only for a persisted take", async () => {
+    const { VoicePlaygroundResults } = await server.ssrLoadModule(
+      "/sound/VoicePlaygroundResults.tsx",
+    );
+    const pg = makePgState({ mode: "tts" }, { compareUids: [], usage: [] });
+    const entries = viewMod.buildUnifiedEntries(pg.items, [], new Set());
+    const results = (selected) =>
+      renderUi(createElement(VoicePlaygroundResults, { pg, entries, selected }));
+
+    expect(results(null)).toContain("No take yet");
+    expect(results(null)).not.toContain("Saved on disk");
+    expect(results(entries[0])).toContain("Saved on disk");
+
+    const withoutSrt = samplePgItem({ srtFile: undefined, srtText: undefined });
+    const [withoutSrtEntry] = viewMod.buildUnifiedEntries([withoutSrt], [], new Set());
+    expect(results(withoutSrtEntry)).toContain("GenVoice did not return SRT subtitles");
+    expect(results(withoutSrtEntry)).toContain("Transcribe to create SRT");
+    expect(results(entries[0])).not.toContain("GenVoice did not return SRT subtitles");
+
+    const transcribing = renderUi(
+      createElement(VoicePlaygroundResults, {
+        pg: makePgState(
+          { mode: "stt" },
+          {
+            jobs: [
+              {
+                id: "working_stt",
+                kind: "stt",
+                status: "processing",
+                title: "Transcribe Take 01",
+                modelId: "scribe_v2",
+                voiceId: "",
+                voiceName: "Scribe v2",
+                progress: 25,
+                createdAt: "2026-11-18T00:00:00Z",
+              },
+            ],
+          },
+        ),
+        entries: [],
+        selected: null,
+      }),
+    );
+    expect(transcribing).toContain(
+      "Transcription in progress. You can leave this page and check Jobs.",
+    );
+    expect(transcribing).not.toContain("No transcript yet");
   });
 
   test("VoicePlaygroundLibrary & VoicePlaygroundInspector render unified archive, tag facets, SRT, and film takes", () => {
@@ -556,7 +853,7 @@ describe("Voice Playground SSR UI components", () => {
     expect(inspectorHtml).toContain("All Recorded Parameters");
     expect(inspectorHtml).toContain("Duplicate to Editor");
     expect(inspectorHtml).toContain("Swap Voice");
-    expect(inspectorHtml).toContain("Change Voice");
+    expect(inspectorHtml).toContain("Convert this audio to another voice");
     expect(inspectorHtml).toContain("Transcribe");
     expect(inspectorHtml).toContain("gv_task_xyz");
     expect(inspectorHtml).toContain("4242");
@@ -623,15 +920,557 @@ describe("Voice Playground SSR UI components", () => {
     expect(emptyInspectorHtml).toContain("No voice clip selected");
   });
 
+  test("the queue identifies failed tasks, explains their error and offers a safe route to settings", () => {
+    const html = renderToStaticMarkup(
+      createElement(queueMod.VoicePlaygroundJobQueue, {
+        items: [],
+        jobs: [
+          {
+            id: "failed_stt",
+            kind: "stt",
+            status: "failed",
+            title: "Interview transcription",
+            error: "Archived source audio file unavailable",
+            progress: 0,
+            voiceId: "",
+            voiceName: "Scribe v2",
+            modelId: "scribe_v2",
+            createdAt: "2026-11-18T00:00:00Z",
+            finishedAt: "2026-11-18T00:01:02Z",
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("Interview transcription");
+    expect(html).toContain("Archived source audio file unavailable");
+    expect(html).toContain("1m 2s");
+    expect(html).toContain("Review settings");
+    expect(html).toContain("may charge credits");
+    expect(html).not.toContain("All tasks finished.");
+  });
+
+  test("Jobs keeps a failed replacement phrase in its section edit", () => {
+    const item = samplePgItem();
+    const parent = {
+      id: "section_edit",
+      kind: "region_edit",
+      status: "failed",
+      title: "Edit introduction",
+      error: "The selected voice is unavailable.",
+      createdAt: "2026-11-18T00:00:00Z",
+      regionEdit: { itemId: item.id, input: { mode: "regenerate" } },
+    };
+    const child = {
+      ...parent,
+      id: "replacement",
+      kind: "tts",
+      title: "Standalone replacement phrase",
+      parentJobId: parent.id,
+      regionEdit: undefined,
+    };
+    const html = (jobs) =>
+      renderToStaticMarkup(
+        createElement(queueMod.VoicePlaygroundJobQueue, { items: [item], jobs }),
+      );
+
+    const grouped = html([parent, child]);
+    expect(grouped).toContain("Edit introduction");
+    expect(grouped).toContain("Reopen section edit");
+    expect(grouped).not.toContain("Standalone replacement phrase");
+    expect(grouped).not.toContain("Review settings");
+
+    const orphan = html([child]);
+    expect(orphan).toContain("The section edit is unavailable.");
+    expect(orphan).not.toContain("Open Speech");
+  });
+
+  test("background transcription returns its job without blocking other creation tools", async () => {
+    const originalFetch = globalThis.fetch;
+    const job = {
+      id: "stt_background_ui",
+      kind: "stt",
+      status: "processing",
+      progress: 20,
+      title: "Interview transcription",
+      modelId: "scribe_v2",
+      voiceId: "",
+      voiceName: "Scribe v2",
+      createdAt: new Date().toISOString(),
+    };
+    const urls = [];
+    globalThis.fetch = async (url) => {
+      urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+      return Response.json({ job }, { status: 202 });
+    };
+    try {
+      await clientMod.runPlaygroundStt({
+        background: true,
+        itemId: "pg_source",
+        languageCode: "en",
+      });
+      expect(urls[0]).toContain("/stt/jobs");
+      expect(clientMod.getPlaygroundSnapshot().jobs.some((saved) => saved.id === job.id)).toBe(
+        true,
+      );
+      expect(clientMod.getPlaygroundSnapshot().busyAction).toBeNull();
+      clientMod.switchPlaygroundTool("tts");
+      expect(clientMod.getPlaygroundSnapshot().draft.mode).toBe("tts");
+    } finally {
+      globalThis.fetch = originalFetch;
+      clientMod.handleVoicePlaygroundEvent(
+        JSON.stringify({ type: "job", job: { ...job, status: "completed", progress: 100 } }),
+      );
+    }
+  });
+
+  test("an uploaded transcription source is retained for templates across tool switches, without generation", async () => {
+    const originalFetch = globalThis.fetch;
+    let release;
+    const urls = [];
+    globalThis.fetch = (url) => {
+      urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    };
+    try {
+      clientMod.resetComposerDraft("stt");
+      const pending = clientMod.saveUploadedSttSource(new File(["source"], "interview.wav"));
+      expect(clientMod.getPlaygroundSnapshot().sttSourceUpload.status).toBe("uploading");
+      expect(await clientMod.savePlaygroundTemplate("Still uploading", "project")).toBe(false);
+      clientMod.switchPlaygroundTool("tts");
+      release(Response.json({ sourceFile: "src_interview.wav", sourceLabel: "interview.wav" }));
+      await pending;
+      clientMod.switchPlaygroundTool("stt");
+      expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+        sttSourceFile: "src_interview.wav",
+        sttSourceLabel: "interview.wav",
+      });
+      expect(urls).toHaveLength(1);
+      expect(urls[0]).toContain("/sources");
+      const stale = clientMod.saveUploadedSttSource(new File(["old"], "old.wav"));
+      clientMod.resetComposerDraft("stt");
+      release(Response.json({ sourceFile: "src_old.wav" }));
+      await stale;
+      expect(clientMod.getPlaygroundSnapshot().draft.sttSourceFile).toBeFalsy();
+    } finally {
+      globalThis.fetch = originalFetch;
+      clientMod.resetComposerDraft("tts");
+    }
+  });
+
+  test("a Voice Changer source finishing after a tool switch stays with its original draft", async () => {
+    const originalFetch = globalThis.fetch;
+    let release;
+    globalThis.fetch = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    try {
+      clientMod.resetComposerDraft("voice_changer");
+      const pending = clientMod.saveUploadedVoiceSource(new File(["source"], "performance.wav"));
+      clientMod.switchPlaygroundTool("tts");
+      release(Response.json({ sourceFile: "src_kept.wav" }));
+      await pending;
+      clientMod.switchPlaygroundTool("voice_changer");
+      expect(clientMod.getPlaygroundSnapshot().draft.vcSourceFile).toBe("src_kept.wav");
+    } finally {
+      globalThis.fetch = originalFetch;
+      clientMod.resetComposerDraft("tts");
+    }
+  });
+
+  test("switching sidebar tools restores each script and model instead of overwriting another tool's draft", () => {
+    clientMod.setComposerDraft({
+      mode: "tts",
+      text: "My English and Vietnamese narration.",
+      modelId: "eleven_v4",
+      stability: 0.75,
+    });
+    clientMod.switchPlaygroundTool("dialogue");
+    clientMod.setComposerDraft({ text: "Alex: Xin chào.\nRiley: Hello.", pauseBetweenTurns: 0.8 });
+    clientMod.switchPlaygroundTool("dubbing");
+    clientMod.setComposerDraft({
+      dubbing: {
+        sourceLanguage: "en",
+        targetLanguage: "vi",
+        provider: "capcut",
+        voiceId: "actor_vi",
+        voiceLanguage: "vi",
+      },
+    });
+    clientMod.switchPlaygroundTool("tts");
+    expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+      mode: "tts",
+      text: "My English and Vietnamese narration.",
+      modelId: "eleven_v4",
+      stability: 0.75,
+    });
+    clientMod.switchPlaygroundTool("dialogue");
+    expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+      text: "Alex: Xin chào.\nRiley: Hello.",
+      pauseBetweenTurns: 0.8,
+    });
+    clientMod.switchPlaygroundTool("dubbing");
+    expect(clientMod.getPlaygroundSnapshot().draft.dubbing).toMatchObject({
+      targetLanguage: "vi",
+      voiceId: "actor_vi",
+    });
+    clientMod.resetComposerDraft("tts");
+  });
+
+  test("full casting returns to the intended dialogue role or native Dubbing recipe without changing the script", () => {
+    clientMod.switchPlaygroundTool("dialogue");
+    const before = structuredClone(clientMod.getPlaygroundSnapshot().draft);
+    clientMod.browseCastingVoices({ mode: "dialogue", speakerId: before.speakers[1].id });
+    clientMod.chooseCastingVoice({
+      id: "new_actor",
+      name: "New actor",
+      provider: "capcut",
+      language: "English",
+    });
+    const dialogue = clientMod.getPlaygroundSnapshot();
+    expect(dialogue.activeSubTab).toBe("create");
+    expect(dialogue.draft.text).toBe(before.text);
+    expect(dialogue.draft.speakers[0]).toEqual(before.speakers[0]);
+    expect(dialogue.draft.speakers[1]).toMatchObject({ voiceId: "new_actor", provider: "capcut" });
+    clientMod.switchPlaygroundTool("dubbing");
+    clientMod.browseCastingVoices({ mode: "dubbing" });
+    clientMod.chooseCastingVoice({
+      id: "123",
+      dubbingVoiceId: "native_actor",
+      name: "Actor",
+      provider: "minimax",
+      language: "Vietnamese",
+    });
+    expect(clientMod.getPlaygroundSnapshot().draft.dubbing).toMatchObject({
+      voiceId: "native_actor",
+      ttsVoiceId: "123",
+      voiceLanguage: "vi",
+    });
+    clientMod.resetComposerDraft("tts");
+  });
+
+  test("a catalog template starts a separate speech recipe and keeps the dialogue draft", () => {
+    clientMod.switchPlaygroundTool("dialogue");
+    clientMod.setComposerDraft({ text: "Alex: Keep my scene." });
+    clientMod.browseCastingVoices({
+      mode: "dialogue",
+      speakerId: clientMod.getPlaygroundSnapshot().draft.speakers[0].id,
+    });
+    clientMod.startVoiceTemplate({
+      id: "123",
+      name: "My narrator",
+      provider: "minimax",
+      language: "English",
+    });
+    expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+      mode: "tts",
+      provider: "minimax",
+      voiceId: "123",
+      title: "My narrator template",
+    });
+    expect(clientMod.getPlaygroundSnapshot().castingTarget).toBeNull();
+    clientMod.switchPlaygroundTool("dialogue");
+    expect(clientMod.getPlaygroundSnapshot().draft.text).toBe("Alex: Keep my scene.");
+    clientMod.resetComposerDraft("tts");
+  });
+
+  test("casting a legacy GenVoice sample returns Speech to GenVoice and keeps the current script", () => {
+    clientMod.resetComposerDraft("tts");
+    clientMod.setComposerDraft({ text: "A line to cast." });
+    clientMod.selectSpeechConnection("google");
+    expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+      connection: "google",
+      modelId: "gemini-3.8-flash-tts",
+    });
+    clientMod.chooseCastingVoice({ id: "legacy", name: "Legacy narrator", provider: "elevenlabs" });
+    expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+      connection: "genvoice",
+      modelId: "eleven_v4",
+      voiceId: "legacy",
+      text: "A line to cast.",
+    });
+    clientMod.resetComposerDraft("tts");
+  });
+
+  test("Speech submits the same available model that the composer shows", async () => {
+    const originalFetch = globalThis.fetch;
+    const flash = { ...sampleModels()[0], model_id: "eleven_flash_v2_5", name: "Flash v2.5" };
+    const state = makePgState();
+    let submitted;
+    globalThis.fetch = async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+      if (href.includes("/catalog")) return Response.json({ ...state.catalog, models: [flash] });
+      if (href.endsWith("/tts")) {
+        submitted = JSON.parse(init.body);
+        return Response.json({ jobs: [] }, { status: 202 });
+      }
+      return Response.json({});
+    };
+    try {
+      clientMod.resetComposerDraft("tts");
+      clientMod.setComposerDraft({
+        connection: "elevenlabs",
+        modelId: "eleven_v4",
+        voiceId: "a_direct_voice",
+      });
+      await clientMod.loadSpeechCatalog("elevenlabs");
+      const pg = clientMod.getPlaygroundSnapshot();
+      const rendered = renderUi(
+        createElement(composerMod.VoicePlaygroundComposer, {
+          pg,
+          unifiedEntries: [],
+          filmTakes: [],
+        }),
+      );
+      expect(rendered).toContain("Flash v2.5");
+      await clientMod.generateFromComposer();
+      expect(submitted).toMatchObject({ connection: "elevenlabs", modelId: "eleven_flash_v2_5" });
+    } finally {
+      clientMod.resetComposerDraft("tts");
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("Dialogue keeps current role names across services and only assigns voices from the selected service", () => {
+    clientMod.resetComposerDraft("dialogue");
+    clientMod.selectSpeechConnection("google");
+    const first = clientMod.getPlaygroundSnapshot().draft.speakers[0];
+    clientMod.selectSpeechConnection("genvoice");
+    clientMod.setComposerDraft((draft) => ({
+      ...draft,
+      text: "An: Hẹn gặp lại.\nRiley: Chào An.",
+      speakers: [{ ...draft.speakers[0], name: "An" }, ...draft.speakers.slice(1)],
+    }));
+    clientMod.selectSpeechConnection("google");
+    const reopened = clientMod.getPlaygroundSnapshot().draft;
+    expect(reopened.text).toContain("An:");
+    expect(reopened.speakers[0]).toMatchObject({
+      id: first.id,
+      name: "An",
+      voiceId: first.voiceId,
+    });
+    clientMod.browseCastingVoices({ mode: "dialogue", speakerId: first.id });
+    clientMod.chooseCastingVoice({
+      id: "different_service",
+      name: "MiniMax voice",
+      provider: "minimax",
+    });
+    expect(clientMod.getPlaygroundSnapshot().draft.speakers[0].voiceId).toBe(first.voiceId);
+    clientMod.chooseCastingVoice({ id: "Charon", name: "Charon", connection: "google" });
+    expect(clientMod.getPlaygroundSnapshot().draft.speakers[0]).toMatchObject({
+      name: "An",
+      voiceId: "Charon",
+    });
+    clientMod.resetComposerDraft("tts");
+  });
+
+  test("switching to a smaller Gemini cast keeps the full scene for GenVoice", () => {
+    clientMod.resetComposerDraft("dialogue");
+    const original = "Alex: Ready?\nRiley: Ready.\nAn: Let's start.";
+    clientMod.setComposerDraft((draft) => ({
+      ...draft,
+      text: original,
+      speakers: [...draft.speakers, { ...draft.speakers[0], id: "cast-three-An", name: "An" }],
+    }));
+    clientMod.selectSpeechConnection("google");
+    clientMod.setComposerDraft((draft) => ({
+      ...draft,
+      text: "Alex: Ready?\nRiley: Ready.",
+      speakers: draft.speakers.slice(0, 2),
+    }));
+    clientMod.selectSpeechConnection("genvoice");
+    const restored = clientMod.getPlaygroundSnapshot().draft;
+    expect(restored.text).toBe(original);
+    expect(restored.speakers.map(({ name }) => name)).toEqual(["Alex", "Riley", "An"]);
+    clientMod.resetComposerDraft("tts");
+  });
+
+  test("reviewing failed Speech twice preserves the draft and destination from before review", () => {
+    clientMod.resetComposerDraft("tts");
+    clientMod.setPlaygroundScope("project");
+    clientMod.setComposerDraft({ text: "The original draft.", title: "Next scene" });
+    const failed = {
+      id: "failed-speech-to-review",
+      kind: "tts",
+      status: "failed",
+      scope: "global",
+      title: "Previous scene",
+      modelId: "eleven_v4",
+      generationRecipe: {
+        requested: { text: "The failed take.", voiceId: "actor-a", voiceName: "Alex" },
+        effective: { body: { model_id: "eleven_v4" } },
+      },
+    };
+    try {
+      clientMod.reviewSpeechJob(failed);
+      expect(clientMod.getPlaygroundSnapshot()).toMatchObject({
+        draft: { text: "The failed take." },
+        scope: "global",
+      });
+      clientMod.setPlaygroundSubTab("jobs");
+      clientMod.reviewSpeechJob(failed);
+      clientMod.restorePreviousComposerDraft();
+      expect(clientMod.getPlaygroundSnapshot()).toMatchObject({
+        draft: { text: "The original draft.", title: "Next scene" },
+        scope: "project",
+      });
+    } finally {
+      clientMod.resetComposerDraft("tts");
+      clientMod.setPlaygroundScope("project");
+    }
+  });
+
+  test("reviewing a failed dialogue restores its service, scope, script and saved cast", () => {
+    clientMod.resetComposerDraft("dialogue");
+    clientMod.selectSpeechConnection("google");
+    clientMod.reviewDialogueJob({
+      kind: "dialogue",
+      status: "failed",
+      scope: "global",
+      title: "ElevenLabs scene",
+      dialogueRecipe: {
+        connection: "elevenlabs",
+        text: "Châu: Let's start.\nNam: I'm ready.",
+        speakers: { Châu: { voice_id: "actor-a" }, Nam: { voice_id: "actor-b" } },
+        modelId: "eleven_v4",
+        languageCode: "en",
+        voiceSettings: { stability: 0.8, similarity_boost: 0.43 },
+        seed: 0,
+        outputFormat: "wav_24000",
+      },
+    });
+    const { draft, scope, activeSubTab } = clientMod.getPlaygroundSnapshot();
+    expect(scope).toBe("global");
+    expect(activeSubTab).toBe("create");
+    expect(draft).toMatchObject({
+      mode: "dialogue",
+      connection: "elevenlabs",
+      text: "Châu: Let's start.\nNam: I'm ready.",
+      modelId: "eleven_v4",
+      languageCode: "en",
+      stability: 0.8,
+      similarityBoost: 0.43,
+      seedText: "0",
+      outputFormat: "wav_24000",
+      speakers: [
+        { name: "Châu", voiceId: "actor-a" },
+        { name: "Nam", voiceId: "actor-b" },
+      ],
+    });
+    clientMod.setPlaygroundScope("project");
+    clientMod.resetComposerDraft("tts");
+  });
+
+  test("opening a section edit keeps the workbench layer and returns to the selected recording", () => {
+    clientMod.setPlaygroundWorkbenchOpen(true);
+    clientMod.openRecordingEditor(samplePgItem());
+    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(true);
+    expect(clientMod.getPlaygroundSnapshot().regionEditor.returnToWorkbench).toBe(true);
+    let cancelled = false;
+    clientMod.changePlaygroundWorkbenchOpen(false, {
+      reason: "escape-key",
+      cancel() {
+        cancelled = true;
+      },
+    });
+    expect(cancelled).toBe(true);
+    expect(clientMod.getPlaygroundSnapshot().regionEditor).toBeNull();
+    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(true);
+    clientMod.changePlaygroundWorkbenchOpen(false, { reason: "escape-key", cancel() {} });
+    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(false);
+    clientMod.setPlaygroundWorkbenchOpen(true);
+    clientMod.openRecordingEditor(samplePgItem());
+    clientMod.closeRecordingEditor();
+    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(true);
+    expect(clientMod.getPlaygroundSnapshot().regionEditor).toBeNull();
+    clientMod.setPlaygroundWorkbenchOpen(false);
+  });
+
+  test("A/B comparison offers one shared film destination for the chosen take", async () => {
+    const { VoicePlaygroundCompare } = await server.ssrLoadModule(
+        "/sound/VoicePlaygroundCompare.tsx",
+      ),
+      voice = await server.ssrLoadModule("/sound/voice-client.ts"),
+      originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => Response.json({ takes: [sampleFilmTake()] });
+    try {
+      await voice.loadVoiceTakes();
+      const entries = viewMod.buildUnifiedEntries(
+        [samplePgItem({ id: "compare_a" }), samplePgItem({ id: "compare_b", voiceName: "Riley" })],
+        [],
+        new Set(),
+      );
+      const html = renderUi(
+        createElement(VoicePlaygroundCompare, { entries, uids: entries.map((entry) => entry.uid) }),
+      );
+      expect((html.match(/Replace film line/g) || []).length).toBe(1);
+      expect(html).toContain('aria-label="Play A ·');
+      expect(html).toContain('aria-label="Play B ·');
+    } finally {
+      globalThis.fetch = async () => Response.json({ takes: [] });
+      await voice.loadVoiceTakes();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("A/B comparison exposes each Dialogue role's model, language and native tuning", async () => {
+    const { VoicePlaygroundCompare } = await server.ssrLoadModule(
+      "/sound/VoicePlaygroundCompare.tsx",
+    );
+    const entries = viewMod.buildUnifiedEntries(
+      [
+        samplePgItem({
+          kind: "dialogue",
+          dialogue: {
+            speakers: {
+              Narrator: {
+                voice_id: "one",
+                voice_name: "My narrator",
+                provider: "minimax",
+                model_id: "speech-2.8-hd",
+                language_code: "Vietnamese",
+                voice_settings: { speed: 0.85, pitch: -2, vol: 0.75 },
+              },
+              Actor: {
+                voice_id: "two",
+                voice_name: "Cartoon actor",
+                provider: "capcut",
+                model_id: "capcut",
+                language_code: "en",
+                voice_settings: { speed: 1.15, pitch: 3 },
+              },
+            },
+            pause_between_turns: 0.25,
+          },
+        }),
+      ],
+      [],
+      new Set(),
+    );
+    const html = renderUi(
+      createElement(VoicePlaygroundCompare, { entries, uids: [entries[0].uid] }),
+    );
+    for (const text of [
+      "speech-2.8-hd",
+      "capcut",
+      "Vietnamese",
+      "0.85",
+      "-2 semitones",
+      "0.75",
+      "1.15",
+      "3 semitones",
+      "0.25s",
+    ])
+      expect(html).toContain(text);
+  });
+
   test("VoicePlaygroundInline mounts compact Studio panel cleanly", () => {
     clientMod.setPlaygroundSubTab("create");
     const inlineHtml = renderUi(createElement(workspaceMod.VoicePlaygroundInline));
     expect(inlineHtml).toContain("Voice Playground");
-    expect(inlineHtml).toContain("Eleven v4");
-    expect(inlineHtml).toContain("Workbench");
-    expect(inlineHtml).toContain("Create");
-    expect(inlineHtml).toContain("Library");
-    expect(inlineHtml).toContain("Inspect");
+    expect(inlineHtml).toContain("Open Voice Playground Workbench");
   });
 
   test("voice-playground-client deduplicates HTTP 202 + SSE jobs, resets stale drafts, and pages shared voices", async () => {
@@ -750,6 +1589,17 @@ describe("Voice Playground SSR UI components", () => {
       const afterGen = clientMod.getPlaygroundSnapshot();
       expect(afterGen.jobs.filter((j) => j.id === "job_dedup_1").length).toBe(1);
       expect(afterGen.jobs.find((j) => j.id === "job_dedup_1")?.status).toBe("processing");
+      clientMod.handleVoicePlaygroundEvent(
+        JSON.stringify({
+          type: "item",
+          scope: "project",
+          item: samplePgItem({ id: "reveal_project", scope: "project" }),
+        }),
+      );
+      clientMod.setPlaygroundLibraryScope("global");
+      clientMod.selectPlaygroundUid("pg:reveal_project");
+      expect(clientMod.getPlaygroundSnapshot().libraryScope).toBe("all");
+      expect(clientMod.getPlaygroundSnapshot().selectedUid).toBe("pg:reveal_project");
 
       // Shared voice pagination uses pageSize=40 and increments page on loadMoreSharedVoices
       await clientMod.searchLiveSharedVoices({ search: "warm", pageSize: 40 });
@@ -844,7 +1694,10 @@ describe("Voice Playground SSR UI components", () => {
         languageCode: "auto",
       });
       expect(sttAutoNull).toBeNull();
-      expect(clientMod.getPlaygroundSnapshot().error).toContain("not supported");
+      expect(clientMod.getPlaygroundSnapshot().composerError).toMatchObject({
+        mode: "stt",
+        message: expect.stringContaining("not supported"),
+      });
 
       // Valid ISO languageCode forwards to HTTP and surfaces server errors cleanly
       const sttNull = await clientMod.runPlaygroundStt({
@@ -852,7 +1705,10 @@ describe("Voice Playground SSR UI components", () => {
         languageCode: "en",
       });
       expect(sttNull).toBeNull();
-      expect(clientMod.getPlaygroundSnapshot().error).toBe("Payload Too Large");
+      expect(clientMod.getPlaygroundSnapshot().composerError).toEqual({
+        mode: "stt",
+        message: "Payload Too Large",
+      });
 
       const versionBeforeReset = clientMod.getPlaygroundSnapshot().draftVersion;
       clientMod.resetComposerDraft("tts");
@@ -897,7 +1753,7 @@ describe("Voice Playground SSR UI components", () => {
       if (u.includes("/catalog")) return Response.json(fixture.catalog);
       if (u.includes("/status")) return Response.json(fixture.status);
       if (u.endsWith("/items")) return Response.json({ items: [original], jobs: [] });
-      if (u.endsWith("/tts")) return postTts();
+      if (u.endsWith("/tts") || u.endsWith("/retry")) return postTts();
       return Response.json({});
     };
     try {
@@ -937,6 +1793,20 @@ describe("Voice Playground SSR UI components", () => {
       resolvePost(response(jobFor("own_while_inspecting")));
       await pending;
       expect(clientMod.getPlaygroundSnapshot().selectedUid).toBe("pg:selection_original");
+      for (const beforeResponse of [false, true]) {
+        const id = `retry_arrival_${beforeResponse}`;
+        clientMod.setPlaygroundSubTab("inspect");
+        postTts = () => {
+          if (beforeResponse) arrive(id);
+          return response(jobFor(id));
+        };
+        await clientMod.retryWithVoiceSwap(original.id, {}, { showJobs: true });
+        if (!beforeResponse) arrive(id);
+        expect(clientMod.getPlaygroundSnapshot()).toMatchObject({
+          activeSubTab: "inspect",
+          selectedUid: `pg:${id}`,
+        });
+      }
     } finally {
       globalThis.fetch = origFetch;
     }
@@ -1136,8 +2006,12 @@ describe("Voice Playground SSR UI components", () => {
           json: async () => payload,
         };
       }
-      if (reqUrl.includes("/items/id-a") && init?.method === "DELETE") {
-        const payload = { ok: true };
+      if (reqUrl.includes("/items/id-a") && init?.method === "PATCH") {
+        if (typeof init.body !== "string") throw new Error("Expected the JSON archive patch");
+        expect(JSON.parse(init.body)).toEqual({ archived: true });
+        const payload = {
+          item: { id: "id-a", title: "First Clip", archivedAt: "2026-11-16T00:00:00Z" },
+        };
         return {
           ok: true,
           status: 200,
@@ -1160,7 +2034,7 @@ describe("Voice Playground SSR UI components", () => {
           json: async () => payload,
         };
       }
-      const catalog = { models: [], defaultVoices: [] };
+      const catalog = { models: [], languages: [], defaultVoices: [] };
       return {
         ok: true,
         status: 200,
@@ -1263,10 +2137,15 @@ describe("Voice Playground SSR UI components", () => {
         "completed",
       );
 
-      // Deleting an item clears stale importedItemId in remoteHistory.items (both HTTP delete & SSE deleted)
+      // Archive keeps the item and its Cloud reference until a permanent deletion.
       await clientMod.loadRemoteHistory(0);
       expect(clientMod.getPlaygroundSnapshot().remoteHistory.items[0]?.importedItemId).toBe("id-a");
       await clientMod.deletePlaygroundItem("id-a");
+      expect(
+        clientMod.getPlaygroundSnapshot().items.find((item) => item.id === "id-a")?.archivedAt,
+      ).toBe("2026-11-16T00:00:00Z");
+      expect(clientMod.getPlaygroundSnapshot().remoteHistory.items[0]?.importedItemId).toBe("id-a");
+      clientMod.handleVoicePlaygroundEvent(JSON.stringify({ type: "deleted", id: "id-a" }));
       expect(clientMod.getPlaygroundSnapshot().remoteHistory.items[0]?.importedItemId).toBeNull();
     } finally {
       await act(async () => {
@@ -1377,6 +2256,297 @@ describe("Voice Playground SSR UI components", () => {
     expect(corruptInspectorHtml).not.toContain("BadNull");
   });
 
+  test("background clone completion and failure notify once per cloud voice while My voices is closed", async () => {
+    const { studio } = await server.ssrLoadModule("/core/store.ts");
+    const originalFetch = globalThis.fetch,
+      notices = [];
+    let phase = "processing";
+    const unsubscribe = studio.subscribe((next, previous) => {
+      if (next.status && next.status !== previous.status) notices.push(next.status);
+    });
+    globalThis.fetch = async () =>
+      Response.json({
+        clones: ["project", "global"].map((scope) => ({
+          id: `notice_${scope}`,
+          remoteId: "notice_remote",
+          scope,
+          phase,
+          settings: { name: "Vietnamese narrator" },
+          error: phase === "failed" ? "Sample rejected" : undefined,
+          lastCheckedAt: "2026-11-17T00:00:00Z",
+        })),
+        favoriteVoices: [],
+      });
+    try {
+      clientMod.setPlaygroundWorkbenchOpen(false);
+      await clientMod.loadPlaygroundClones();
+      phase = "failed";
+      await clientMod.loadPlaygroundClones();
+      expect(
+        notices.filter((text) => text.includes("Vietnamese narrator") && text.includes("failed")),
+      ).toHaveLength(1);
+      expect(notices.at(-1)).toContain("My voices");
+      const { VoiceCloneLibraryButton } = await server.ssrLoadModule(
+        "/sound/VoiceCloneLibrary.tsx",
+      );
+      expect(renderUi(createElement(VoiceCloneLibraryButton))).toContain("1 failed");
+      await clientMod.loadPlaygroundClones();
+      expect(notices).toHaveLength(1);
+      phase = "ready";
+      await clientMod.loadPlaygroundClones();
+      expect(
+        notices.filter((text) => text.includes("Vietnamese narrator") && text.includes("ready")),
+      ).toHaveLength(1);
+    } finally {
+      unsubscribe();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("clone creation sends the complete permitted sample and refreshes saved status without creating again", async () => {
+    const originalFetch = globalThis.fetch;
+    let phase = "processing",
+      creates = 0,
+      wire;
+    const record = () => ({
+      id: "clone_ui",
+      scope: "project",
+      phase,
+      remoteId: "native_ui",
+      settings: {
+        name: "My narrator",
+        language: "Vietnamese",
+        gender: "Female",
+        noiseReduction: false,
+        previewText: "Xin chao",
+      },
+      favorite: false,
+      permission: { confirmed: true, confirmedAt: "2026-11-17T00:00:00Z" },
+      createdAt: "2026-11-17T00:00:00Z",
+      updatedAt: "2026-11-17T00:00:00Z",
+      lastCheckedAt: "2026-11-17T00:00:00Z",
+      attempts: [],
+    });
+    globalThis.fetch = async (raw, init = {}) => {
+      const url = typeof raw === "string" ? raw : raw instanceof URL ? raw.href : raw.url;
+      if (url.includes("/clones") && init.method === "POST") {
+        creates++;
+        wire = init.body;
+        phase = "ready";
+        return Response.json({ clone: record() });
+      }
+      if (url.includes("/clones")) return Response.json({ clones: [record()], favoriteVoices: [] });
+      if (url.includes("/status"))
+        return Response.json({
+          configured: true,
+          source: "env",
+          apiBase: "https://fixture.invalid/v1",
+          account: { credit_balance: 100 },
+        });
+      if (url.includes("/items")) return Response.json({ items: [], jobs: [] });
+      return Response.json({
+        models: sampleModels(),
+        languages: [
+          { code: "en", name: "English" },
+          { code: "vi", name: "Vietnamese" },
+        ],
+        defaultVoices: [],
+        usage: [],
+      });
+    };
+    try {
+      await clientMod.loadPlaygroundClones();
+      expect(clientMod.getPlaygroundSnapshot().clones[0].phase).toBe("processing");
+      const input = {
+        name: "My narrator",
+        language: "Vietnamese",
+        gender: "Female",
+        noiseReduction: false,
+        previewText: "Xin chao",
+        permissionConfirmed: true,
+      };
+      await clientMod.createPlaygroundClone(
+        new File(["fixture"], "my-voice.wav"),
+        input,
+        "project",
+      );
+      expect(wire).toBeInstanceOf(FormData);
+      expect(JSON.parse(wire.get("settings"))).toEqual(input);
+      expect(wire.get("file").name).toBe("my-voice.wav");
+      await clientMod.loadPlaygroundAll({ liveStatus: true });
+      await clientMod.loadPlaygroundClones();
+      expect(clientMod.getPlaygroundSnapshot().clones[0].phase).toBe("ready");
+      expect(creates).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("Duplicate Dubbing retains a reusable original for templates and cannot invoke the paid TTS route", async () => {
+    const originalFetch = globalThis.fetch,
+      root = mkdtempSync(join(tmpdir(), "dubbing-duplicate-")),
+      globalDir = join(root, "global"),
+      original = wrapPcm16ToWav(Buffer.alloc(16000 * 2 * 0.4), 16000);
+    for (const folder of ["audio", "sources"])
+      mkdirSync(join(globalDir, folder), { recursive: true });
+    const item = samplePgItem({
+      id: "dub_saved",
+      scope: "global",
+      kind: "dubbing",
+      provider: "minimax",
+      voiceId: "12345",
+      voiceName: "Narrator",
+      modelId: "speech-2.8-hd",
+      audioFile: "dub_saved.wav",
+      isTemplate: false,
+      dubbing: {
+        sourceFile: "original.wav",
+        sourceLanguage: "en",
+        targetLanguage: "vi",
+        voiceId: "Vietnamese_Man",
+        ttsVoiceId: "12345",
+        modelId: "speech-2.8-hd",
+      },
+    });
+    writeFileSync(join(globalDir, "items.json"), JSON.stringify({ items: [item] }));
+    writeFileSync(join(globalDir, "audio", item.audioFile), original);
+    writeFileSync(join(globalDir, "sources", "original.wav"), original);
+    const pg = openVoicePlayground({
+        dir: join(root, "project"),
+        globalDir,
+        env: {},
+        configFile: join(root, "no-config"),
+        secretsFile: join(root, "no-secrets"),
+        fetchImpl: () => {
+          throw Error("Duplicate/template must not generate");
+        },
+      }),
+      api = playgroundExtensions(pg);
+    const paidRoutes = [];
+    globalThis.fetch = async (raw, init = {}) => {
+      const url = new URL(
+        typeof raw === "string" ? raw : raw instanceof URL ? raw.href : raw.url,
+        "http://studio.invalid",
+      );
+      if (/\/(tts|dialogue|voice-changer)$/.test(url.pathname)) paidRoutes.push(url.pathname);
+      return api.request(url.pathname.replace("/api/voice/playground", "") + url.search, init);
+    };
+    try {
+      await clientMod.duplicateEntryToComposer(
+        viewMod.buildUnifiedEntries([item], [], new Set())[0],
+      );
+      const draft = clientMod.getPlaygroundSnapshot().draft;
+      expect(draft.mode).toBe("dubbing");
+      expect(draft.dubbing.voiceId).toBe("Vietnamese_Man");
+      expect(readFileSync(pg.forScope("global").dubbingSourcePath(draft.dubbing.sourceId))).toEqual(
+        original,
+      );
+      expect(await clientMod.savePlaygroundTemplate("Reusable Vietnamese scene", "global")).toBe(
+        true,
+      );
+      expect(pg.forScope("global").listTemplates()[0].draft.dubbing.sourceId).toBe(
+        draft.dubbing.sourceId,
+      );
+      await clientMod.generateFromComposer();
+      expect(paidRoutes).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      pg.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("saved casting entrypoints preserve native recipes and templates, and their preview survives a changed search in the Dock", async () => {
+    const originalFetch = globalThis.fetch;
+    const voice = {
+      id: "67890",
+      name: "CapCut Cartoon",
+      provider: "capcut",
+      category: "system",
+      language: "en",
+      previewUrl: "https://fixture.invalid/cartoon.wav",
+    };
+    globalThis.fetch = async (raw) => {
+      const url = typeof raw === "string" ? raw : raw instanceof URL ? raw.href : raw.url;
+      if (url.includes("/status"))
+        return Response.json({
+          configured: true,
+          source: "env",
+          apiBase: "https://fixture.invalid/v1",
+          account: { credit_balance: 100 },
+        });
+      if (url.includes("/catalog"))
+        return Response.json({
+          models: [
+            ...sampleModels(),
+            {
+              provider: "capcut",
+              model_id: "capcut",
+              name: "CapCut",
+              can_do_text_to_speech: true,
+              supports_speed: true,
+              languages: [
+                { language_id: "en", name: "English" },
+                { language_id: "vi", name: "Vietnamese" },
+              ],
+            },
+          ],
+          languages: [
+            { code: "en", name: "English" },
+            { code: "vi", name: "Vietnamese" },
+          ],
+          defaultVoices: [],
+        });
+      if (url.includes("/items"))
+        return Response.json({ items: [], jobs: [], favoriteVoices: [voice] });
+      return Response.json({ voices: [], usage: [], hasMore: false });
+    };
+    try {
+      await clientMod.loadPlaygroundAll({ refresh: true });
+      clientMod.resetComposerDraft("tts");
+      clientMod.setComposerDraft({ languageCode: "vi", text: "Xin chao." });
+      clientMod.openCastingVoice(voice);
+      expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+        provider: "capcut",
+        modelId: "capcut",
+        languageCode: "vi",
+        voiceId: "67890",
+        text: "Xin chao.",
+      });
+      clientMod.setComposerDraft({ title: "CapCut Cartoon template", languageCode: "en" });
+      clientMod.openCastingVoice(voice);
+      expect(clientMod.getPlaygroundSnapshot().draft).toMatchObject({
+        provider: "capcut",
+        modelId: "capcut",
+        title: "CapCut Cartoon template",
+      });
+      clientMod.previewCastingVoice(voice);
+      await clientMod.searchLiveSharedVoices({ provider: "minimax", search: "another page" });
+      const dock = renderUi(
+        createElement(auditionDockMod.AuditionDock, {
+          libraryItems: [],
+          voices: [],
+          voiceTakes: [],
+          expandedGroup: null,
+          variantCursor: {},
+          copiedId: null,
+          onSelectVariant: () => {},
+          onAdvanceVariant: () => {},
+          onCopyVoiceId: () => {},
+          onClearExpanded: () => {},
+        }),
+      );
+      expect(dock).toContain("CapCut Cartoon");
+      expect(dock).toContain("CapCut");
+      expect(dock).toContain("Favorite CapCut Cartoon");
+      expect(dock).toContain("Open CapCut Cartoon in Playground");
+    } finally {
+      soundMod.stopAudition();
+      clientMod.setPlaygroundWorkbenchOpen(false);
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("Round 6 regressions: Inspector mounts null->entry->null without hooks crash, delete stops audition, pg-remote dock renders, and STT->TTS resets STS modelId", async () => {
     const { act } = await import("react");
     const { createRoot } = await import("react-dom/client");
@@ -1459,7 +2629,7 @@ describe("Voice Playground SSR UI components", () => {
           filmTakes: [],
         }),
       );
-      expect(deletingHtml).toContain("Deleting…");
+      expect(deletingHtml).toContain("Moving to Archive…");
       expect(deletingHtml).toContain('disabled=""');
 
       // 3. setComposerDraft switching back to tts after STS normalizes modelId away from eleven_multilingual_sts_v2
@@ -1474,11 +2644,14 @@ describe("Voice Playground SSR UI components", () => {
       globalThis.fetch = async (url) => {
         const u = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
         if (u.includes("/items/pg_play_1")) {
+          const payload = {
+            item: samplePgItem({ id: "pg_play_1", archivedAt: "2026-11-16T00:00:00Z" }),
+          };
           return {
             ok: true,
             status: 200,
-            text: async () => JSON.stringify({ ok: true }),
-            json: async () => ({ ok: true }),
+            text: async () => JSON.stringify(payload),
+            json: async () => payload,
           };
         }
         if (u.includes("/remote-history")) {
@@ -1542,9 +2715,31 @@ describe("Voice Playground SSR UI components", () => {
 
       soundMod.listenUrl("pg:pg_play_1", "/api/voice/playground/audio/pg_play_1.mp3");
       expect(soundMod.auditionTarget()).toBe("pg:pg_play_1");
+      clientMod.togglePlaygroundCompare("pg:pg_play_1");
+      expect(clientMod.getPlaygroundSnapshot().compareUids).toContain("pg:pg_play_1");
       await clientMod.deletePlaygroundItem("pg_play_1");
+      expect(clientMod.getPlaygroundSnapshot().compareUids).not.toContain("pg:pg_play_1");
       expect(soundMod.auditionTarget()).toBe("");
       expect(soundMod.listening()).toBe("");
+
+      const { VoicePlaygroundJobQueue } = await server.ssrLoadModule(
+        "/sound/VoicePlaygroundJobQueue.tsx",
+      );
+      const queueHtml = renderUi(
+        createElement(VoicePlaygroundJobQueue, {
+          jobs: [
+            {
+              id: "finished_deleted",
+              itemId: "pg_play_1",
+              title: "Deleted recording",
+              status: "completed",
+              createdAt: "2026-11-16T00:00:00Z",
+            },
+          ],
+          items: clientMod.getPlaygroundSnapshot().items,
+        }),
+      );
+      expect(queueHtml).not.toContain("Open take");
 
       await clientMod.loadRemoteHistory(0);
       clientMod.setPlaygroundSubTab("remote");
@@ -1641,8 +2836,7 @@ describe("Voice Playground SSR UI components", () => {
         }),
       );
       expect(failedComposerHtml).toContain("Take 2/2");
-      expect(failedComposerHtml).toContain("Upstream timeout");
-      expect(failedComposerHtml).toContain('aria-label="Dismiss error for Take 2/2"');
+      expect(failedComposerHtml.match(/Upstream timeout/g)).toHaveLength(1);
       expect(failedComposerHtml).toContain("aria-describedby=");
 
       // 6. Scribe v2 SttTranscriptDetails renders probability, speaker turns, and extra formats

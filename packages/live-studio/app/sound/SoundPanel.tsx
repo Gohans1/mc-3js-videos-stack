@@ -130,6 +130,7 @@ import {
   clipOf,
   cutAfter,
   edit,
+  ensureSoundLibrary,
   familyItemsOf,
   itemOf,
   kindOf,
@@ -180,6 +181,12 @@ import {
   setPlaygroundWorkbenchOpen,
   useVoicePlaygroundSelector,
 } from "./voice-playground-client";
+import {
+  activeFilmVoices,
+  buildUnifiedEntries,
+  filterSavedCastingVoices,
+  savedFavoriteEntries,
+} from "./voice-playground-view";
 import { filterVoiceTakes } from "./voice-view";
 import { VoiceChanger } from "./VoiceChanger";
 import { VoiceClipSection } from "./VoiceClipSection";
@@ -1054,6 +1061,9 @@ const singleSoundCard = (item: LibraryItem): LibraryGroup => ({
 function Library({ side }: { side: boolean }) {
   useStudio((s) => s.soundRev);
   useStudio((s) => s.groups);
+  useEffect(() => {
+    void ensureSoundLibrary();
+  }, []);
   const favs = useStudio((s) => s.favorites.sounds);
   const effectFavs = useStudio((s) => s.favorites.effects);
   const voiceTakes = useVoiceTakes();
@@ -1072,6 +1082,25 @@ function Library({ side }: { side: boolean }) {
   const voicesActive =
     open.voices || nav.group === "voices" || typed || activeTarget.startsWith("gv:");
   const voiceLib = useVoiceLibrary(voicesActive);
+  const savedCastingVoices = useVoicePlaygroundSelector(
+    (state) => state.favoriteVoices,
+    voicesActive,
+  );
+  const playgroundUsage = useVoicePlaygroundSelector((state) => state.usage, voicesActive);
+  const savedRecordings = useVoicePlaygroundSelector((state) => state.items, voicesActive);
+  const savedTemplates = useVoicePlaygroundSelector((state) => state.templates, voicesActive);
+  const starredTakeUids = useVoicePlaygroundSelector(
+    (state) => state.starredTakeUids,
+    voicesActive,
+  );
+  const favoriteEntries = useMemo(
+    () =>
+      savedFavoriteEntries(
+        buildUnifiedEntries(savedRecordings, voiceTakes, new Set(starredTakeUids), savedTemplates),
+        deferredQ,
+      ),
+    [savedRecordings, voiceTakes, starredTakeUids, savedTemplates, deferredQ],
+  );
   const [limit, setLimit] = useState(PAGE);
   const [variantCursor, setVariantCursor] = useState<Record<string, number>>({});
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -1113,8 +1142,13 @@ function Library({ side }: { side: boolean }) {
     [voiceTakes, deferredQ],
   );
   const filmVoiceIds = useMemo(
-    () => new Set(voiceTakes.map((t) => t.voice || "ZaZosYpkIGmSqOwAlfnk")),
-    [voiceTakes],
+    () =>
+      new Set(
+        activeFilmVoices(voiceTakes, playgroundUsage)
+          .filter((voice) => voice.provider === "elevenlabs")
+          .map((voice) => voice.voiceId),
+      ),
+    [voiceTakes, playgroundUsage],
   );
   const voiceFavKey = useMemo(() => effectFavs.filter(isVoiceStarId).join("\0"), [effectFavs]);
   const voiceFavs = useMemo(
@@ -1146,9 +1180,27 @@ function Library({ side }: { side: boolean }) {
     () => buildVoiceUseCaseIndex(voicesActive ? voiceLib.voices : [], facetVoiceFilters, deferredQ),
     [voicesActive, voiceLib.voices, facetVoiceFilters, deferredQ],
   );
+  const savedCastingMatches = useMemo(
+    () => filterSavedCastingVoices(savedCastingVoices, deferredQ, voiceFilters),
+    [savedCastingVoices, deferredQ, voiceFilters],
+  );
+  const extraCastingFavorites = useMemo(
+    () =>
+      savedCastingMatches.filter(
+        (voice) =>
+          (voice.provider && voice.provider !== "elevenlabs") ||
+          !voiceUseCaseIndex.matchingIds.has(voice.id),
+      ).length,
+    [savedCastingMatches, voiceUseCaseIndex],
+  );
   const voiceLeaves = useMemo(
-    () => voiceLeavesWithFavs(voiceUseCaseIndex, voiceFavs),
-    [voiceUseCaseIndex, voiceFavs],
+    () =>
+      voiceLeavesWithFavs(voiceUseCaseIndex, voiceFavs).map((leaf) =>
+        leaf.id === "fav"
+          ? { ...leaf, count: leaf.count + extraCastingFavorites + favoriteEntries.length }
+          : leaf,
+      ),
+    [voiceUseCaseIndex, voiceFavs, extraCastingFavorites, favoriteEntries.length],
   );
   const voiceSection = useMemo(
     () => ({ count: voiceLeaves[0]?.count ?? 0, leaves: voiceLeaves }),
@@ -1284,7 +1336,8 @@ function Library({ side }: { side: boolean }) {
         .join(" · ")}`
     : "Filter audio";
   const activeCount = isVoicesGroup
-    ? filteredVoices.length
+    ? filteredVoices.length +
+      (activeNav.leaf === "fav" ? extraCastingFavorites + favoriteEntries.length : 0)
     : isVoiceLeaf
       ? matchedVoiceTakes.length
       : groups.length;
@@ -1735,6 +1788,7 @@ function Library({ side }: { side: boolean }) {
             <VoiceLibraryPane
               library={voiceLib}
               voices={filteredVoices}
+              favoriteEntries={favoriteEntries}
               leaf={activeNav.leaf}
               query={deferredQ}
               filters={voiceFilters}

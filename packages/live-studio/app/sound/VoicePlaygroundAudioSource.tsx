@@ -8,8 +8,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
+import type { VoicePlaygroundItem } from "../../src/voice-playground.mjs";
 import { PLAYGROUND_MODE_PRESENTATION } from "./voice-playground-presentation";
 import { type VoiceTakeItem } from "./voice-view";
 
@@ -18,6 +20,31 @@ export type AudioSourceKind = "upload" | "playground" | "film_take";
 export interface FilmTakeAudioOption {
   value: string;
   label: string;
+}
+
+export function recordingSourceOptions(
+  entries: readonly (Pick<
+    VoicePlaygroundItem,
+    "title" | "durationSeconds" | "voiceName" | "scope"
+  > & { id: string })[],
+) {
+  const options = entries.map((entry) => ({
+    value: entry.id,
+    label: [
+      entry.title,
+      entry.voiceName,
+      entry.scope === "global" ? "Global" : "Project",
+      `${entry.durationSeconds.toFixed(1)} s`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  }));
+  const counts = new Map<string, number>();
+  for (const { label } of options) counts.set(label, (counts.get(label) ?? 0) + 1);
+  return options.map(({ value, label }) => ({
+    value,
+    label: counts.get(label) === 1 ? label : `${label} · ${value.slice(-8)}`,
+  }));
 }
 
 export function parseTakeRef(val: string): { kind: "takes" | "try"; file: string } | null {
@@ -69,7 +96,7 @@ export function VoicePlaygroundAudioSource({
   onFileChange: (file: File | null) => void;
   accept: string;
   uploadPlaceholder: string;
-  playgroundItems: ReadonlyArray<{ id: string; title: string; durationSeconds: number }>;
+  playgroundItems: readonly VoicePlaygroundItem[];
   selectedItemId: string;
   onSelectItemId: (id: string) => void;
   playgroundPlaceholder: string;
@@ -82,6 +109,7 @@ export function VoicePlaygroundAudioSource({
   children?: ReactNode;
 }) {
   const SourceIcon = itemIcon === "wave" ? AudioLines : FileAudio;
+  const options = recordingSourceOptions(playgroundItems);
 
   return (
     <>
@@ -94,30 +122,22 @@ export function VoicePlaygroundAudioSource({
         >
           {title}
         </span>
-        <div className="bg-raised-2 inline-flex max-w-full flex-wrap rounded-md p-0.5 text-xs">
-          {(
-            [
-              { id: "upload", label: "Upload File" },
-              { id: "playground", label: "Playground Clip" },
-              { id: "film_take", label: "Film Take" },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              aria-pressed={sourceKind === opt.id}
-              onClick={() => onSourceKindChange(opt.id)}
-              className={cn(
-                "focus-visible:ring-ring rounded px-2 py-0.5 font-medium transition-colors outline-none focus-visible:ring-2",
-                sourceKind === opt.id
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <ToggleGroup
+          variant="pick"
+          size="lg"
+          value={[sourceKind]}
+          aria-label="Audio source type"
+          className="flex-wrap"
+          onValueChange={([value]) => {
+            if (value === "upload" || value === "playground" || value === "film_take") {
+              onSourceKindChange(value);
+            }
+          }}
+        >
+          <ToggleGroupItem value="upload">Upload File</ToggleGroupItem>
+          <ToggleGroupItem value="playground">Playground Clip</ToggleGroupItem>
+          <ToggleGroupItem value="film_take">Film Take</ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {sourceKind === "upload" && (
@@ -141,21 +161,18 @@ export function VoicePlaygroundAudioSource({
 
       {sourceKind === "playground" && (
         <Select
-          items={playgroundItems.map((item) => ({
-            value: item.id,
-            label: `${item.title} (${item.durationSeconds.toFixed(1)}s)`,
-          }))}
+          items={options}
           value={selectedItemId}
           onValueChange={(v) => onSelectItemId(v ?? "")}
         >
-          <SelectTrigger className="h-8 w-full" aria-label="Source playground clip">
+          <SelectTrigger size="readable" className="w-full" aria-label="Source playground clip">
             <SourceIcon className="text-muted-foreground size-3.5" />
             <SelectValue placeholder={playgroundPlaceholder} />
           </SelectTrigger>
-          <SelectContent>
-            {playgroundItems.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                {item.title} ({item.durationSeconds.toFixed(1)}s)
+          <SelectContent finalFocus>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -168,11 +185,11 @@ export function VoicePlaygroundAudioSource({
           value={selectedTakeValue}
           onValueChange={(v) => onSelectTakeValue(v ?? "")}
         >
-          <SelectTrigger className="h-8 w-full" aria-label="Source film voice take">
+          <SelectTrigger size="readable" className="w-full" aria-label="Source film voice take">
             <SourceIcon className="text-muted-foreground size-3.5" />
             <SelectValue placeholder={takePlaceholder} />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent finalFocus>
             {filmTakeOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}

@@ -1,8 +1,16 @@
-import { Pause, Play, Scissors } from "lucide-react";
-import { memo, useState } from "react";
+import { Pause, Play, Scissors, SlidersHorizontal } from "lucide-react";
+import { memo, useId, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import { Section } from "../components/inspector";
@@ -12,6 +20,7 @@ import type { ClipRef } from "./slice";
 import { clipOf, listening, type OneShot } from "./sound";
 import {
   canSplitClipIntoBricks,
+  currentClipRecordingCandidates,
   currentClipVoiceSummary,
   listenVoiceFile,
   promoteVoiceTry,
@@ -19,13 +28,17 @@ import {
   useVoiceTakes,
   voiceAuditionId,
 } from "./voice-client";
-import { FAST_WPM, MIN_PACE_WORDS, shortTryLabel, SLOW_WPM } from "./voice-view";
+import { openFilmRecordingEditor } from "./voice-playground-client";
+import { buildUnifiedEntries } from "./voice-playground-view";
+import { FAST_WPM, MIN_PACE_WORDS, parseTakeScript, shortTryLabel, SLOW_WPM } from "./voice-view";
 
 export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip: ClipRef }) {
   useStudio((s) => s.soundRev);
   useStudio((s) => s.timingRev);
   useVoiceTakes();
   const [promoting, setPromoting] = useState<string | null>(null);
+  const editButtonId = useId();
+  const [editTakeId, setEditTakeId] = useState("");
 
   const c = clipOf(clip);
   if (!c || clip.list !== "sfx") return null;
@@ -33,7 +46,14 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
   const summary = currentClipVoiceSummary(c as OneShot);
   const splitCount = canSplitClipIntoBricks(clip);
   const now = listening();
-  const singleTake = summary.matches.length === 1 ? summary.matches[0].take : null;
+  const candidates = currentClipRecordingCandidates(c as OneShot);
+  const singleTake =
+    summary.matches.length === 1
+      ? summary.matches[0].take
+      : candidates.length === 1
+        ? candidates[0]!
+        : null;
+  const editTake = singleTake ?? candidates.find((take) => take.id === editTakeId);
   const offPace =
     summary.wpm !== null &&
     summary.wordCount >= MIN_PACE_WORDS &&
@@ -56,7 +76,10 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
       right={
         summary.wpm !== null ? (
           <span
-            className={cn("text-tag tabular-nums", offPace ? "text-warn" : "text-muted-foreground")}
+            className={cn(
+              "text-tag tabular-nums",
+              offPace ? "text-warn-text" : "text-muted-foreground",
+            )}
             title="Spoken words per minute inside this clip"
           >
             {summary.wpm} WPM
@@ -108,6 +131,44 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
           <span>Split into {splitCount} phrase bricks</span>
         </Button>
       )}
+      {candidates.length > 1 && !singleTake && (
+        <Select
+          items={candidates.map((take) => ({
+            value: take.id,
+            label: `Take ${take.id}: ${parseTakeScript(take.text).spoken}`,
+          }))}
+          value={editTake?.id ?? null}
+          onValueChange={(value) => setEditTakeId(value ?? "")}
+        >
+          <SelectTrigger className="w-full" aria-label="Recorded film line to edit">
+            <SelectValue placeholder="Choose a recorded line to edit…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {candidates.map((take) => (
+                <SelectItem key={take.id} value={take.id}>
+                  Take {take.id}: {parseTakeScript(take.text).spoken}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      )}
+      {(editTake?.file || candidates.length > 1) && (
+        <Button
+          id={editButtonId}
+          variant="secondary"
+          className="w-full"
+          disabled={promoting !== null || !editTake}
+          onClick={() => {
+            const entry = editTake && buildUnifiedEntries([], [editTake], new Set())[0];
+            if (entry) openFilmRecordingEditor(entry, editButtonId);
+          }}
+        >
+          <SlidersHorizontal />
+          Edit a section / restore version
+        </Button>
+      )}
 
       {singleTake &&
         singleTake.tries.length > 0 &&
@@ -120,12 +181,18 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
                 {singleTake.tries.map((tryFile) => {
                   const tryId = voiceAuditionId("try", tryFile);
                   const isPlaying = now === tryId;
-                  const label = shortTryLabel(singleTake.id, tryFile);
+                  const label = shortTryLabel(singleTake.id, tryFile, singleTake.alternatives);
+                  const inUse = singleTake.alternatives?.some(
+                    (version) => version.file === tryFile && version.active,
+                  );
                   const busy = promoting === `${singleTake.id}:${tryFile}`;
                   return (
                     <span
                       key={tryFile}
-                      className="bg-raised-3 inline-flex items-center gap-0.5 rounded-md p-0.5"
+                      className={cn(
+                        "bg-raised-3 inline-flex max-w-full min-w-0 items-center gap-0.5 rounded-md p-0.5",
+                        inUse && "bg-tint ring-primary/40 ring-1",
+                      )}
                     >
                       <button
                         type="button"
@@ -133,7 +200,7 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
                         aria-label={`${isPlaying ? "Stop" : "Preview"} ${label}`}
                         onClick={() => listenVoiceFile("try", tryFile)}
                         className={cn(
-                          "hover:bg-raised-4 focus-visible:ring-ring inline-flex h-6 items-center gap-1 rounded-sm px-2 text-xs transition-colors outline-none focus-visible:ring-2",
+                          "hover:bg-raised-4 focus-visible:ring-ring inline-flex min-h-7 min-w-0 flex-1 items-center gap-1 rounded-sm px-2 py-1 text-xs transition-colors outline-none focus-visible:ring-2",
                           isPlaying ? "text-primary-text" : "text-foreground",
                         )}
                       >
@@ -142,16 +209,16 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
                         ) : (
                           <Play className="size-3 fill-current" />
                         )}
-                        <span>{label}</span>
+                        <span className="min-w-0 text-start break-words">{label}</span>
                       </button>
                       <button
                         type="button"
-                        disabled={promoting !== null}
+                        disabled={promoting !== null || inUse}
                         aria-label={`Use ${label} for take ${singleTake.id}`}
                         onClick={() => handleUseTry(singleTake.id, tryFile)}
                         className="text-primary-text hover:bg-tint focus-visible:ring-ring inline-flex h-6 items-center rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 disabled:opacity-50"
                       >
-                        {busy ? "…" : "Use"}
+                        {busy ? "…" : inUse ? "In use" : "Use"}
                       </button>
                     </span>
                   );
@@ -160,7 +227,7 @@ export const VoiceClipSection = memo(function VoiceClipSection({ clip }: { clip:
               {activeTry && (
                 <AuditionScrubber
                   id={voiceAuditionId("try", activeTry)}
-                  label={`${singleTake.id} ${shortTryLabel(singleTake.id, activeTry)}`}
+                  label={`${singleTake.id} ${shortTryLabel(singleTake.id, activeTry, singleTake.alternatives)}`}
                   fallbackSeconds={0}
                   kind="sfx"
                 />

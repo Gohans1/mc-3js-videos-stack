@@ -18,6 +18,7 @@
     "render": "bun node_modules/live-studio/render.mjs",
     "framecheck": "bun node_modules/live-studio/framecheck.mjs",
     "voice:gen": "bun ../../scripts/voice/gen.ts",
+    "voice:playground": "bun ../../scripts/voice/playground.mjs",
     "voice:align": "bun ../../scripts/voice/align.ts",
     "voice:lips": "bun ../../scripts/voice/lips.ts",
     "voice:assemble": "bun ../../scripts/voice/assemble.ts",

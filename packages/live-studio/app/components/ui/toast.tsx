@@ -38,14 +38,23 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
   );
 }
 
-function Toast({ className, ...props }: ToastPrimitive.Root.Props) {
+type ToastMotion = "default" | "compact";
+
+function Toast({
+  className,
+  motion = "default",
+  ...props
+}: ToastPrimitive.Root.Props & { motion?: ToastMotion }) {
   return (
     <ToastPrimitive.Root
       data-slot="toast"
       className={cn(
         "font-md group/toast bg-popover text-popover-foreground focus-visible:border-ring focus-visible:ring-ring/50 pointer-events-auto absolute right-0 bottom-0 z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-md border shadow-lg will-change-transform outline-none focus-visible:ring-[3px] data-ending-style:pointer-events-none",
         "[--gap:0.75rem] [--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))]",
-        "h-(--height) [transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))] [transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms] motion-reduce:transition-none",
+        "h-(--height) [transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))] motion-reduce:transition-none",
+        motion === "compact"
+          ? "transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] data-ending-style:duration-150"
+          : "[transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms]",
         "after:absolute after:top-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full after:content-['']",
         "data-expanded:h-(--toast-height) data-expanded:[transform:translateX(var(--toast-swipe-movement-x))_translateY(var(--offset-y))]",
         "data-limited:opacity-0 data-starting-style:[transform:translateY(150%)]",
@@ -82,7 +91,10 @@ function ToastTitle({ className, ...props }: ToastPrimitive.Title.Props) {
   return (
     <ToastPrimitive.Title
       data-slot="toast-title"
-      className={cn("text-title font-semibold select-text min-w-0 [overflow-wrap:anywhere]", className)}
+      className={cn(
+        "text-title min-w-0 font-semibold [overflow-wrap:anywhere] select-text",
+        className,
+      )}
       {...props}
     />
   );
@@ -92,7 +104,10 @@ function ToastDescription({ className, ...props }: ToastPrimitive.Description.Pr
   return (
     <ToastPrimitive.Description
       data-slot="toast-description"
-      className={cn("text-muted-foreground text-sm select-text min-w-0 [overflow-wrap:anywhere]", className)}
+      className={cn(
+        "text-muted-foreground min-w-0 text-sm [overflow-wrap:anywhere] select-text",
+        className,
+      )}
       {...props}
     />
   );
@@ -172,11 +187,16 @@ function ToastIcon({ type }: { type: string | undefined }) {
   );
 }
 
-function ToastList({ compact }: { compact: boolean }) {
+function ToastList({ compact, motion }: { compact: boolean; motion: ToastMotion }) {
   const { toasts } = ToastPrimitive.useToastManager();
 
   return toasts.map((toastItem) => (
-    <Toast key={toastItem.id} toast={toastItem} className={compact ? "h-7! transform-none!" : undefined}>
+    <Toast
+      key={toastItem.id}
+      toast={toastItem}
+      motion={motion}
+      className={compact ? "h-7! transform-none!" : undefined}
+    >
       <ToastContent className={compact ? "gap-2 px-2 py-1" : undefined}>
         <ToastIcon type={toastItem.type} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -200,27 +220,29 @@ function Toaster({
   viewportClassName,
   portalContainer,
   compact = false,
+  motion = "default",
   ...props
 }: ToastPrimitive.Provider.Props & {
   viewportClassName?: string;
   portalContainer?: ToastPrimitive.Portal.Props["container"];
   compact?: boolean;
+  motion?: ToastMotion;
 }) {
   return (
     <ToastProvider toastManager={toastManager} {...props}>
       {children}
       <ToastPortal container={portalContainer}>
         <ToastViewport className={viewportClassName}>
-          <ToastList compact={compact} />
+          <ToastList compact={compact} motion={motion} />
         </ToastViewport>
       </ToastPortal>
     </ToastProvider>
   );
 }
 
-const showUndo = (title: string, undo: () => void, timeout = 10000) => {
+const showUndo = (title: string, undo: () => void, timeout = 10000, manager = toast) => {
   let done = false;
-  const id = toast.add({
+  const id = manager.add({
     title,
     timeout,
     actionProps: {
@@ -228,7 +250,7 @@ const showUndo = (title: string, undo: () => void, timeout = 10000) => {
       onClick: () => {
         if (done) return;
         done = true;
-        toast.close(id);
+        manager.close(id);
         undo();
       },
     },

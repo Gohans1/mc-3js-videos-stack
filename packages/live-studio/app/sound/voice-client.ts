@@ -1,8 +1,6 @@
-import { EDIT } from "film/edit";
 import { useSyncExternalStore } from "react";
 
 import { clockForTimeline } from "../../src/timing-state.mjs";
-import { warp } from "../../src/warp.mjs";
 import { getFile } from "../core/net";
 import { S } from "../core/state";
 import { get, say } from "../core/store";
@@ -25,6 +23,7 @@ import {
 import {
   findTakeLineIndex,
   resizeNarrationBrickForSwap,
+  recordingCandidatesForClip,
   sliceNarrationClip,
   subscribeVoiceNames,
   type SwappedVoiceSpan,
@@ -73,7 +72,11 @@ export const listenVoiceFile = (kind: "takes" | "try", file: string) => {
 };
 export { voiceAuditionId };
 
-export const promoteVoiceTry = async (takeId: string, tryFile: string): Promise<boolean> => {
+export const promoteVoiceTry = async (
+  takeId: string,
+  tryFile: string,
+  { showNotice = true } = {},
+): Promise<boolean> => {
   const priorVoiceBase = S.voiceBase;
   try {
     const r = await fetch("/api/voice/use-try", {
@@ -105,7 +108,7 @@ export const promoteVoiceTry = async (takeId: string, tryFile: string): Promise<
     invalidateSoundCaches();
     void loadVoice();
     notify();
-    say(`Take ${takeId} switched to ${tryFile}`);
+    if (showNotice) say(`Take ${takeId} switched to ${tryFile}`);
     return true;
   } catch {
     say("Could not switch voice take");
@@ -132,6 +135,8 @@ export const cachedVoiceClipLabel = (clip: OneShot): string => {
 
 export const currentClipVoiceSummary = (clip: OneShot) =>
   voiceClipSummary(clip, seconds(clip.name), S.voiceBase, takesState);
+export const currentClipRecordingCandidates = (clip:OneShot) =>
+  recordingCandidatesForClip(clip,sourceLanes()?.narration,seconds(clip.name),S.voice.placements ?? [],takesState);
 
 export const findUnsplitNarrationRef = (): { ref: ClipRef; count: number } | null => {
   const src = sourceLanes();
@@ -237,7 +242,7 @@ export const resolveVoiceTakeTarget = (
     typeof anchor === "number" &&
     Number.isFinite(anchor)
   ) {
-    const sec = clockForTimeline("voice").outputAt(warp(EDIT.voice.warp, anchor, 0, 1));
+    const sec = clockForTimeline("voice").outputAt(anchor);
     if (!Number.isFinite(sec)) return null;
     if (lanes?.narration) {
       const ref = pickNarrationClipForTake(take.id, sec);

@@ -36,7 +36,22 @@ import { writeLessonJson } from "./lesson-settings.mjs";
 import { noteNumbers } from "./notes.mjs";
 import { createPortsService } from "./ports.mjs";
 import { openVoiceLibrary } from "./voice-library.mjs";
-import { inside, SAFE_MEDIA_FILE, SAFE_REMOTE_ID_RE } from "./voice-playground-genvoice.mjs";
+import {
+  PlaygroundConfig,
+  PlaygroundConnectionQuery,
+  PlaygroundDialogue,
+  PlaygroundImportRemote,
+  PlaygroundPatch,
+  PlaygroundPromote,
+  PlaygroundRetry,
+  PlaygroundStt,
+  PlaygroundTts,
+  PlaygroundVoiceChanger,
+} from "./voice-playground-contract.ts";
+import { inside } from "./voice-playground-genvoice.mjs";
+import { voiceProjectId } from "./voice-playground-library.mjs";
+import { srtAsWebVtt } from "./voice-playground-recordings.mjs";
+import { playgroundExtensions, speechRequestOptions } from "./voice-playground-routes.mjs";
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 import { mountCollaboration } from "./collaboration-api.mjs";
@@ -136,131 +151,6 @@ const VoiceUseTry = z.object({
   takeId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
   tryFile: z.string().regex(/^[A-Za-z0-9_-]{1,120}\.(mp3|wav)$/),
 });
-const PlaygroundVoiceSettings = z
-  .object({
-    stability: z.number().min(0).max(1).optional(),
-    similarity_boost: z.number().min(0).max(1).optional(),
-    style: z.number().min(0).max(1).optional(),
-    use_speaker_boost: z.boolean().optional(),
-    speed: z.number().min(0.7).max(1.2).optional(),
-  })
-  .optional();
-const PlaygroundConfig = z.object({
-  apiKey: z.string().max(500).optional(),
-  apiBase: z.string().max(500).optional(),
-  clearOverride: z.boolean().optional(),
-});
-const PlaygroundTts = z.object({
-  voiceId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid voiceId"),
-  voiceName: z.string().max(200).optional(),
-  modelId: z.string().max(120).optional(),
-  languageCode: z.string().max(40).optional(),
-  text: z.string().min(1).max(40_000),
-  voiceSettings: PlaygroundVoiceSettings,
-  previousText: z.string().max(5000).optional(),
-  nextText: z.string().max(5000).optional(),
-  seed: z.number().int().min(0).max(4294967295).optional(),
-  outputFormat: z.string().max(40).optional(),
-  applyTextNormalization: z.enum(["auto", "on", "off"]).optional(),
-  exportTranscript: z.boolean().optional(),
-  variations: z.number().int().min(1).max(3).optional(),
-  name: z.string().max(200).optional(),
-  notes: z.string().max(2000).optional(),
-  sourceTakeId: z.string().max(80).optional(),
-  fromTemplateId: z.string().max(120).optional(),
-});
-const PlaygroundDialogueSpeaker = z.object({
-  voice_id: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid speaker voice_id"),
-  voice_name: z.string().max(200).optional(),
-  model_id: z.string().max(120).optional(),
-  language_code: z.string().max(40).optional(),
-  voice_settings: PlaygroundVoiceSettings,
-});
-const PlaygroundDialogue = z.object({
-  text: z.string().min(1).max(40_000),
-  speakers: z.record(z.string().min(1).max(120), PlaygroundDialogueSpeaker),
-  pause_between_turns: z.number().min(0).max(3).optional(),
-  exportTranscript: z.boolean().optional(),
-  name: z.string().max(200).optional(),
-  notes: z.string().max(2000).optional(),
-});
-const PlaygroundVoiceChanger = z.object({
-  sourceFile: z.string().regex(SAFE_MEDIA_FILE).optional(),
-  sourceItemId: z.string().max(120).optional(),
-  sourceTakeKind: z.enum(["takes", "try"]).optional(),
-  sourceTakeFile: z.string().max(240).optional(),
-  voiceId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid voiceId"),
-  voiceName: z.string().max(200).optional(),
-  modelId: z.string().max(120).optional(),
-  removeBackgroundNoise: z.boolean().optional(),
-  voiceSettings: PlaygroundVoiceSettings,
-  seed: z.number().int().min(0).max(4294967295).optional(),
-  name: z.string().max(200).optional(),
-  notes: z.string().max(2000).optional(),
-});
-const PlaygroundStt = z.object({
-  itemId: z.string().max(120).optional(),
-  sourceItemId: z.string().max(120).optional(),
-  sourceTakeKind: z.enum(["takes", "try"]).optional(),
-  sourceTakeFile: z.string().max(240).optional(),
-  languageCode: z.string().max(40).optional(),
-  timestampsGranularity: z.enum(["none", "word", "character"]).optional(),
-  diarize: z.boolean().optional(),
-  numSpeakers: z.number().int().min(1).max(32).optional(),
-  diarizationThreshold: z.number().min(0).max(1.5).optional(),
-  tagAudioEvents: z.boolean().optional(),
-  noVerbatim: z.boolean().optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  seed: z.number().int().min(0).max(2147483647).optional(),
-  fileFormat: z.enum(["pcm_s16le_16", "other"]).optional(),
-  useMultiChannel: z.boolean().optional(),
-  keyterms: z.array(z.string().max(49)).max(1000).optional(),
-  entityDetection: z.array(z.string().min(1).max(40)).max(20).optional(),
-  entityRedaction: z.array(z.string().min(1).max(40)).max(20).optional(),
-  entityRedactionMode: z.enum(["redacted", "entity_type", "enumerated_entity_type"]).optional(),
-  additionalFormats: z
-    .array(z.enum(["srt", "txt", "segmented_json", "docx", "pdf", "html"]))
-    .max(10)
-    .optional(),
-});
-const PlaygroundPatch = z.object({
-  favorite: z.boolean().optional(),
-  isTemplate: z.boolean().optional(),
-  templateName: z.string().max(120).optional(),
-  title: z.string().max(120).optional(),
-  notes: z.string().max(2000).optional(),
-  tags: z.array(z.string().max(200)).max(40).optional(),
-});
-const PlaygroundRetry = z.object({
-  voiceId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid voiceId").optional(),
-  voiceName: z.string().max(200).optional(),
-  speakerKey: z.string().max(120).optional(),
-  speakers: z.record(z.string().min(1).max(120), PlaygroundDialogueSpeaker).optional(),
-  pauseBetweenTurns: z.number().min(0).max(3).optional(),
-  modelId: z.string().max(120).optional(),
-  languageCode: z.string().max(40).optional(),
-  text: z.string().max(40_000).optional(),
-  voiceSettings: PlaygroundVoiceSettings,
-  previousText: z.string().max(5000).optional(),
-  nextText: z.string().max(5000).optional(),
-  seed: z.number().int().min(0).max(4294967295).optional(),
-  outputFormat: z.string().max(40).optional(),
-  applyTextNormalization: z.enum(["auto", "on", "off"]).optional(),
-  removeBackgroundNoise: z.boolean().optional(),
-  exportTranscript: z.boolean().optional(),
-  variations: z.number().int().min(1).max(3).optional(),
-  name: z.string().max(200).optional(),
-  notes: z.string().max(2000).optional(),
-});
-const PlaygroundPromote = z.object({
-  itemId: z.string().min(1).max(120),
-  takeId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
-});
-const PlaygroundImportRemote = z.object({
-  taskId: z.string().regex(SAFE_REMOTE_ID_RE, "Invalid taskId"),
-  kind: z.enum(["tts", "dialogue", "voice_changer"]).optional(),
-});
-
 // Formats that are compressed inside already: trying them again only costs time on a first visit
 const PACKED = /\.(png|jpe?g|webp|avif|gif|webm|mp3|mp4|m4a|ogg|opus|flac|woff2|ktx2)$/i;
 const PACK_MAX = 16 * 1024 * 1024; // bigger is held in memory per version: slim it in the film instead
@@ -282,13 +172,16 @@ export const createApi = (
       autoSync: false,
       onEvent: () => send("voice-library"),
     }),
+    favorites = openFavorites(),
     voicePlayground = openVoicePlayground({
       project: film?.PROJECT,
       voice: film?.voice,
+      audioFavorites: favorites,
+      cachedVoices: voiceLibrary.voices,
+      onAudioFavoritesChanged: () => send("favorites"),
       onEvent: (payload) => send("voice-playground", JSON.stringify(payload)),
       onVoiceChanged: () => send("voice"),
     }),
-    favorites = openFavorites(),
     port = null,
     ports = null,
     cliRunner,
@@ -650,7 +543,10 @@ export const createApi = (
     // Voice Changer (55 MB) and STT (95 MB) declare higher route limits below.
     if (
       c.req.path === "/api/voice/playground/voice-changer" ||
-      c.req.path === "/api/voice/playground/stt"
+      c.req.path === "/api/voice/playground/clones" ||
+      c.req.path === "/api/voice/playground/stt" ||
+      c.req.path === "/api/voice/playground/stt/jobs" ||
+      c.req.path === "/api/voice/playground/sources"
     ) {
       return next();
     }
@@ -776,7 +672,11 @@ export const createApi = (
 
   app.on("GET", ["/api/edit.json", "/edit.json"], (c) => text(c, readFileSync(film.EDIT)));
   app.get("/api/voice_map.json", (c) => fileOrMissing(c, film.VOICE_MAP));
-  app.get("/api/voice", (c) => (film.voice ? fresh(c, film.voice.read()) : c.body(null, 404)));
+  app.get("/api/voice", (c) =>
+    film.voice
+      ? fresh(c, voicePlayground.filmVoiceSnapshot?.() ?? film.voice.read())
+      : c.body(null, 404),
+  );
   app.get("/api/voice/audio/:kind/:file", (c) => {
     const f = film.voice?.audioFile(c.req.param("kind"), c.req.param("file"));
     return f ? sendFile(c, f, { onSound: true }) : c.body(null, 404);
@@ -820,41 +720,93 @@ export const createApi = (
     return c.json({ started: true, ...voiceLibrary.state() }, 202);
   });
 
+  app.route(
+    "/api/voice/playground",
+    playgroundExtensions(voicePlayground, {
+      favorites,
+      onFavoritesChanged: () => send("favorites"),
+      projectId: voiceProjectId(film.PROJECT),
+    }),
+  );
   // GenVoice (ElevenLabs v4 wrapper) Voice Playground API: config, catalog, async TTS/Dialogue/STS/STT, archive, templates
-  app.get("/api/voice/playground/status", async (c) =>
-    fresh(c, await voicePlayground.getStatus({ live: c.req.query("live") === "1" })),
+  app.get(
+    "/api/voice/playground/status",
+    zValidator("query", PlaygroundConnectionQuery),
+    async (c) =>
+      fresh(
+        c,
+        await c.get("playground").getStatus({
+          live: c.req.query("live") === "1",
+          ...c.req.valid("query"),
+        }),
+      ),
   );
   app.post("/api/voice/playground/config", jsonValidator(PlaygroundConfig), async (c) => {
     try {
-      return fresh(c, await voicePlayground.setConfig(c.req.valid("json")));
+      return fresh(c, await c.get("playground").setConfig(c.req.valid("json")));
     } catch (e) {
       return c.json({ error: e?.message ?? "Invalid Playground config" }, e?.status ?? 400);
     }
   });
-  app.get("/api/voice/playground/catalog", async (c) =>
-    fresh(c, await voicePlayground.getCatalog({ refresh: c.req.query("refresh") === "1" })),
+  app.get(
+    "/api/voice/playground/catalog",
+    zValidator("query", PlaygroundConnectionQuery),
+    async (c) =>
+      fresh(
+        c,
+        await c
+          .get("playground")
+          .getCatalog({ ...c.req.valid("query"), refresh: c.req.query("refresh") === "1" }),
+      ),
   );
-  app.get("/api/voice/playground/shared-voices", async (c) => {
-    try {
-      const q = c.req.query();
-      return fresh(c, await voicePlayground.searchSharedVoices(q));
-    } catch (e) {
-      return c.json({ error: e?.message ?? "Shared voices search failed" }, e?.status ?? 400);
-    }
-  });
+  app.get(
+    "/api/voice/playground/shared-voices",
+    zValidator("query", PlaygroundConnectionQuery),
+    async (c) => {
+      try {
+        const q = c.req.query();
+        return fresh(c, await c.get("playground").searchSharedVoices(q));
+      } catch (e) {
+        return c.json({ error: e?.message ?? "Shared voices search failed" }, e?.status ?? 400);
+      }
+    },
+  );
   app.get("/api/voice/playground/items", (c) =>
-    fresh(c, { items: voicePlayground.listItems(), jobs: voicePlayground.listJobs() }),
+    fresh(c, {
+      archiveIndexMissing: c.get("playground").hasArchiveIndex?.() === false,
+      items: c.get("playground").listItems({
+        includeGlobal: c.req.query("includeGlobal") === "1",
+        includeArchived: c.req.query("includeArchived") === "1",
+      }),
+      jobs: c.get("playground").listJobs({ includeGlobal: c.req.query("includeGlobal") === "1" }),
+      templates: [
+        ...c
+          .get("playground")
+          .listTemplates({ includeGlobal: c.req.query("includeGlobal") === "1" }),
+        ...(c.req.query("includeArchived") === "1"
+          ? c.get("playground").listTemplates({
+              includeGlobal: c.req.query("includeGlobal") === "1",
+              archived: true,
+            })
+          : []),
+      ],
+      favoriteVoices: c.get("playground").listVoiceFavorites(),
+      starredTakeUids: c.get("playground").listTakeFavorites(),
+    }),
   );
-  app.post("/api/voice/playground/tts", jsonValidator(PlaygroundTts), async (c) => {
+  app.post("/api/voice/playground/tts", jsonValidator(PlaygroundTts.strict()), async (c) => {
     try {
-      return c.json(await voicePlayground.startTts(c.req.valid("json")), 202);
+      return c.json(
+        await c.get("playground").startTts(c.req.valid("json"), speechRequestOptions(c)),
+        202,
+      );
     } catch (e) {
       return c.json({ error: e?.message ?? "TTS launch failed" }, e?.status ?? 400);
     }
   });
   app.post("/api/voice/playground/dialogue", jsonValidator(PlaygroundDialogue), async (c) => {
     try {
-      return c.json(await voicePlayground.startDialogue(c.req.valid("json")), 202);
+      return c.json(await c.get("playground").startDialogue(c.req.valid("json")), 202);
     } catch (e) {
       return c.json({ error: e?.message ?? "Dialogue launch failed" }, e?.status ?? 400);
     }
@@ -929,7 +881,7 @@ export const createApi = (
         } else {
           payload = validateSchema(PlaygroundVoiceChanger, await c.req.json());
         }
-        return c.json(await voicePlayground.startVoiceChanger(payload), 202);
+        return c.json(await c.get("playground").startVoiceChanger(payload), 202);
       } catch (e) {
         return c.json({ error: e?.message ?? "Voice changer failed" }, e?.status ?? 400);
       }
@@ -961,61 +913,70 @@ export const createApi = (
     }
     return items;
   };
-  app.post("/api/voice/playground/stt", jsonBodyLimit(95 * 1024 * 1024, "95 MB"), async (c) => {
-    try {
-      const ct = (c.req.header("content-type") ?? "").toLowerCase();
-      let payload;
-      if (ct.includes("multipart/form-data")) {
-        const form = await c.req.formData();
-        const file = form.get("file");
-        const bytes = file instanceof File ? Buffer.from(await file.arrayBuffer()) : undefined;
-        const valid = validateSchema(PlaygroundStt, {
-          itemId: formStr(form.get("itemId")) || undefined,
-          sourceItemId: formStr(form.get("sourceItemId")) || undefined,
-          sourceTakeKind: formStr(form.get("sourceTakeKind")) || undefined,
-          sourceTakeFile: formStr(form.get("sourceTakeFile")) || undefined,
-          languageCode: formStr(form.get("languageCode")) || undefined,
-          timestampsGranularity: formStr(form.get("timestampsGranularity")) || "word",
-          diarize: form.get("diarize") !== null ? form.get("diarize") === "true" : undefined,
-          numSpeakers: parseFiniteField(form.get("numSpeakers"), "numSpeakers"),
-          diarizationThreshold: parseFiniteField(
-            form.get("diarizationThreshold"),
-            "diarizationThreshold",
-          ),
-          tagAudioEvents:
-            form.get("tagAudioEvents") !== null ? form.get("tagAudioEvents") === "true" : undefined,
-          noVerbatim:
-            form.get("noVerbatim") !== null ? form.get("noVerbatim") === "true" : undefined,
-          temperature: parseFiniteField(form.get("temperature"), "temperature"),
-          seed: parseFiniteField(form.get("seed"), "seed"),
-          fileFormat: formStr(form.get("fileFormat")) || undefined,
-          useMultiChannel:
-            form.get("useMultiChannel") !== null
-              ? form.get("useMultiChannel") === "true"
-              : undefined,
-          keyterms: parseFormStringArray(form, "keyterms", undefined),
-          entityDetection: parseFormStringArray(form, "entityDetection", undefined),
-          entityRedaction: parseFormStringArray(form, "entityRedaction", undefined),
-          entityRedactionMode: formStr(form.get("entityRedactionMode")) || undefined,
-          additionalFormats: parseFormStringArray(form, "additionalFormats", ["srt"]),
-        });
-        payload = {
-          ...valid,
-          fileBytes: bytes,
-          fileName: file instanceof File ? file.name : undefined,
-          mimeType: file instanceof File ? file.type : undefined,
-        };
-      } else {
-        payload = validateSchema(PlaygroundStt, await c.req.json());
+  app.on(
+    "POST",
+    ["/api/voice/playground/stt", "/api/voice/playground/stt/jobs"],
+    jsonBodyLimit(95 * 1024 * 1024, "95 MB"),
+    async (c) => {
+      try {
+        const ct = (c.req.header("content-type") ?? "").toLowerCase();
+        let payload;
+        if (ct.includes("multipart/form-data")) {
+          const form = await c.req.formData();
+          const file = form.get("file");
+          const bytes = file instanceof File ? Buffer.from(await file.arrayBuffer()) : undefined;
+          const valid = validateSchema(PlaygroundStt, {
+            itemId: formStr(form.get("itemId")) || undefined,
+            sourceItemId: formStr(form.get("sourceItemId")) || undefined,
+            sourceTakeKind: formStr(form.get("sourceTakeKind")) || undefined,
+            sourceTakeFile: formStr(form.get("sourceTakeFile")) || undefined,
+            languageCode: formStr(form.get("languageCode")) || undefined,
+            timestampsGranularity: formStr(form.get("timestampsGranularity")) || "word",
+            diarize: form.get("diarize") !== null ? form.get("diarize") === "true" : undefined,
+            numSpeakers: parseFiniteField(form.get("numSpeakers"), "numSpeakers"),
+            diarizationThreshold: parseFiniteField(
+              form.get("diarizationThreshold"),
+              "diarizationThreshold",
+            ),
+            tagAudioEvents:
+              form.get("tagAudioEvents") !== null
+                ? form.get("tagAudioEvents") === "true"
+                : undefined,
+            noVerbatim:
+              form.get("noVerbatim") !== null ? form.get("noVerbatim") === "true" : undefined,
+            temperature: parseFiniteField(form.get("temperature"), "temperature"),
+            seed: parseFiniteField(form.get("seed"), "seed"),
+            fileFormat: formStr(form.get("fileFormat")) || undefined,
+            useMultiChannel:
+              form.get("useMultiChannel") !== null
+                ? form.get("useMultiChannel") === "true"
+                : undefined,
+            keyterms: parseFormStringArray(form, "keyterms", undefined),
+            entityDetection: parseFormStringArray(form, "entityDetection", undefined),
+            entityRedaction: parseFormStringArray(form, "entityRedaction", undefined),
+            entityRedactionMode: formStr(form.get("entityRedactionMode")) || undefined,
+            additionalFormats: parseFormStringArray(form, "additionalFormats", ["srt"]),
+          });
+          payload = {
+            ...valid,
+            fileBytes: bytes,
+            fileName: file instanceof File ? file.name : undefined,
+            mimeType: file instanceof File ? file.type : undefined,
+          };
+        } else {
+          payload = validateSchema(PlaygroundStt, await c.req.json());
+        }
+        if (c.req.path.endsWith("/jobs"))
+          return c.json(c.get("playground").startSpeechToText(payload), 202);
+        return c.json(await c.get("playground").runSpeechToText(payload));
+      } catch (e) {
+        return c.json({ error: e?.message ?? "Speech-to-text failed" }, e?.status ?? 400);
       }
-      return c.json(await voicePlayground.runSpeechToText(payload));
-    } catch (e) {
-      return c.json({ error: e?.message ?? "Speech-to-text failed" }, e?.status ?? 400);
-    }
-  });
+    },
+  );
   app.patch("/api/voice/playground/items/:id", jsonValidator(PlaygroundPatch), async (c) => {
     try {
-      const item = await voicePlayground.patchItem(c.req.param("id"), c.req.valid("json"));
+      const item = await c.get("playground").patchItem(c.req.param("id"), c.req.valid("json"));
       return item ? fresh(c, { item }) : c.json({ error: "Playground item not found" }, 404);
     } catch (e) {
       return c.json({ error: e?.message ?? "Failed to update item" }, e?.status ?? 500);
@@ -1023,15 +984,19 @@ export const createApi = (
   });
   app.delete("/api/voice/playground/items/:id", async (c) => {
     try {
-      const ok = await voicePlayground.deleteItem(c.req.param("id"));
-      return ok ? fresh(c, { ok: true }) : c.json({ error: "Playground item not found" }, 404);
+      const item = await c.get("playground").patchItem(c.req.param("id"), { archived: true });
+      return item
+        ? fresh(c, { ok: true, archived: true, item })
+        : c.json({ error: "Playground item not found" }, 404);
     } catch (e) {
       return c.json({ error: e?.message ?? "Failed to delete item" }, e?.status ?? 500);
     }
   });
   app.post("/api/voice/playground/items/:id/retry", jsonValidator(PlaygroundRetry), async (c) => {
     try {
-      const r = await voicePlayground.retryItem(c.req.param("id"), c.req.valid("json"));
+      const r = await c
+        .get("playground")
+        .retryItem(c.req.param("id"), c.req.valid("json"), speechRequestOptions(c));
       return r ? c.json(r, 202) : c.json({ error: "Playground item not found" }, 404);
     } catch (e) {
       return c.json({ error: e?.message ?? "Retry failed" }, e?.status ?? 400);
@@ -1041,7 +1006,12 @@ export const createApi = (
     try {
       const page = parseFiniteField(c.req.query("page"), "page") ?? 0;
       const pageSize = parseFiniteField(c.req.query("pageSize"), "pageSize") ?? 30;
-      return fresh(c, await voicePlayground.fetchRemoteHistory({ page, pageSize }));
+      return fresh(
+        c,
+        await c
+          .get("playground")
+          .fetchRemoteHistory({ page, pageSize, kind: c.req.query("kind") ?? "all" }),
+      );
     } catch (e) {
       return c.json({ error: e?.message ?? "Could not fetch GenVoice history" }, e?.status ?? 400);
     }
@@ -1051,31 +1021,49 @@ export const createApi = (
     jsonValidator(PlaygroundImportRemote),
     async (c) => {
       try {
-        const { taskId, kind } = c.req.valid("json");
-        return fresh(c, await voicePlayground.importRemoteTask(taskId, kind));
+        const { taskId, kind, ...recovery } = c.req.valid("json");
+        return fresh(
+          c,
+          await c.get("playground").importRemoteTask(taskId, kind, recovery, {
+            signal: c.req.raw.signal,
+          }),
+        );
       } catch (e) {
-        return c.json({ error: e?.message ?? "Import failed" }, e?.status ?? 400);
+        return c.json(
+          {
+            error: e?.message ?? "Import failed",
+            ...(Number.isFinite(e?.creditsDeducted)
+              ? { creditsDeducted: e.creditsDeducted, creditsSource: e.creditsSource }
+              : {}),
+          },
+          e?.status ?? 400,
+        );
       }
     },
   );
   app.post("/api/voice/playground/promote", jsonValidator(PlaygroundPromote), async (c) => {
     try {
-      const r = await voicePlayground.promoteToFilmTake(c.req.valid("json"));
+      const r = await c.get("playground").promoteToFilmTake(c.req.valid("json"));
       return r.error ? c.json({ error: r.error }, r.status ?? 400) : fresh(c, r);
     } catch (e) {
       return c.json({ error: e?.message ?? "Failed to promote voice item" }, e?.status ?? 500);
     }
   });
   app.get("/api/voice/playground/audio/:file", (c) => {
-    const f = voicePlayground.audioFile(c.req.param("file"));
+    const f = c.get("playground").audioFile(c.req.param("file"));
     return f ? sendFile(c, f) : c.body(null, 404);
   });
   app.get("/api/voice/playground/srt/:file", (c) => {
-    const f = voicePlayground.srtFile(c.req.param("file"));
+    const f = c.get("playground").srtFile(c.req.param("file"));
     if (!f) return c.body(null, 404);
     c.header("cache-control", "no-store");
+    const srt = readFileSync(f, "utf8");
+    if (c.req.query("format") === "vtt") {
+      c.header("content-type", "text/vtt; charset=utf-8");
+      return c.body(srtAsWebVtt(srt));
+    }
     c.header("content-type", "text/plain; charset=utf-8");
-    return c.body(readFileSync(f, "utf8"));
+    return c.body(srt);
   });
   app.get("/api/shots.json", (c) => text(c, Buffer.from(JSON.stringify(film.shotComments()))));
   app.get("/api/trials.json", (c) => {
@@ -1110,8 +1098,17 @@ export const createApi = (
 
   // The creator's stars, kept for every film (src/favorites.mjs); every open page of this studio hears a change
   app.get("/api/favorites", (c) => fresh(c, favorites.shown()));
-  app.post("/api/favorites", zValidator("json", FavoriteChange), (c) => {
-    const all = favorites.set(c.req.valid("json"));
+  app.post("/api/favorites", zValidator("json", FavoriteChange), async (c) => {
+    const change = c.req.valid("json");
+    const all = favorites.set(change);
+    if (change.kind === "effects" && !change.on && change.id.startsWith("voice:")) {
+      const raw = change.id.slice(6);
+      const match = raw.match(/^(minimax|capcut):(.*)$/);
+      await voicePlayground.setVoiceFavorite(
+        { id: match ? match[2] : raw, provider: match ? match[1] : "elevenlabs" },
+        false,
+      );
+    }
     send("favorites");
     return c.json(all);
   });

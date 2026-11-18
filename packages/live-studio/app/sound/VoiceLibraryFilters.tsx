@@ -127,9 +127,16 @@ export function VoiceFilterMenu({
     SORT_OPTIONS.find((s) => s.id === filters.sort)?.label ?? voiceTitle(filters.sort);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   return (
-    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+    <DropdownMenu
+      open={menuOpen}
+      onOpenChange={(open, { event }) => {
+        if (open) setKeyboardOpen(!(event instanceof MouseEvent) || event.detail === 0);
+        setMenuOpen(open);
+      }}
+    >
       <DropdownMenuTrigger
         render={
           <FilterTriggerButton
@@ -140,7 +147,11 @@ export function VoiceFilterMenu({
           />
         }
       />
-      <DropdownMenuContent align="end" className="w-60 max-w-(--available-width) overflow-hidden">
+      <DropdownMenuContent
+        align="end"
+        motion={keyboardOpen ? "none" : "popup"}
+        className="w-60 max-w-(--available-width) overflow-hidden"
+      >
         <div className="bg-backdrop -m-1 max-h-[calc(var(--available-height)-0.5rem)] overflow-y-auto overscroll-contain rounded-lg p-1">
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
@@ -216,26 +227,26 @@ export function VoiceFilterMenu({
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuLabel>
-              <span className="text-foreground/70">Credits & access</span>
+              <span className="text-foreground/70">Catalog labels · API fee unverified</span>
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={filters.access}
               onValueChange={(v) => set("access", v as VoiceFilters["access"])}
             >
               <DropdownMenuRadioItem value={ALL}>
-                <span className="min-w-0 flex-1 truncate">Any credit rate</span>
+                <span className="min-w-0 flex-1 truncate">Any catalog rate</span>
                 <span className="text-foreground/70 text-xs tabular-nums">
                   {activeV4Count.toLocaleString()}
                 </span>
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="standard">
-                <span className="min-w-0 flex-1 truncate">1× credit only</span>
+                <span className="min-w-0 flex-1 truncate">1× in catalog</span>
                 <span className="text-foreground/70 text-xs tabular-nums">
                   {facets.standardCount.toLocaleString()}
                 </span>
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="free">
-                <span className="min-w-0 flex-1 truncate">Free tier</span>
+                <span className="min-w-0 flex-1 truncate">Listed as free tier</span>
                 <span className="text-foreground/70 text-xs tabular-nums">
                   {facets.freeCount.toLocaleString()}
                 </span>

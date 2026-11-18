@@ -35,6 +35,70 @@ const createFakeAudio = () => {
 };
 
 describe("createAuditionController", () => {
+  test("source video, dubbed media and recording audition share one active playback without stopping a native resume", () => {
+    const audio = createFakeAudio(),
+      source = createFakeAudio(),
+      dubbed = createFakeAudio();
+    const ctrl = createAuditionController({
+      audio,
+      setInterval: () => 1,
+      clearInterval: () => {},
+      onSoundBump: () => {},
+      onPlayError: () => {},
+    });
+    ctrl.listenUrl("recording", "/recording.mp3");
+    audio.emit("play");
+    source.play();
+    ctrl.playNativeAudition(source);
+    expect(audio.paused).toBe(true);
+    expect(source.paused).toBe(false);
+    dubbed.play();
+    ctrl.playNativeAudition(dubbed);
+    expect(source.paused).toBe(true);
+    expect(dubbed.paused).toBe(false);
+    dubbed.pause();
+    dubbed.play();
+    ctrl.playNativeAudition(dubbed);
+    expect(dubbed.paused).toBe(false);
+    ctrl.listenUrl("comparison", "/comparison.mp3");
+    audio.emit("play");
+    expect(dubbed.paused).toBe(true);
+    expect(ctrl.listening()).toBe("comparison");
+    source.play();
+    ctrl.playNativeAudition(source);
+    ctrl.releaseNativeAudition(source);
+    expect(source.paused).toBe(true);
+    expect(ctrl.listening()).toBe("");
+    dubbed.play();
+    ctrl.playNativeAudition(dubbed);
+    ctrl.stopAudition();
+    expect(dubbed.paused).toBe(true);
+  });
+  test("a selected region starts at its boundary, stops there, replays and does not limit the next full clip", () => {
+    const audio = createFakeAudio();
+    const ctrl = createAuditionController({
+      audio,
+      setInterval: () => 1,
+      clearInterval: () => {},
+      onSoundBump: () => {},
+      onPlayError: () => {},
+    });
+    ctrl.listenUrl("region:one", "/one.wav", { from: 2, to: 4 });
+    audio.emit("loadedmetadata");
+    audio.emit("play");
+    expect(audio.currentTime).toBe(2);
+    audio.currentTime = 4.1;
+    audio.emit("timeupdate");
+    expect(audio.paused).toBe(true);
+    ctrl.listenUrl("region:one", "/one.wav", { from: 2, to: 4 });
+    expect(audio.currentTime).toBe(2);
+    ctrl.listenUrl("pg:two", "/two.wav");
+    audio.emit("play");
+    audio.currentTime = 5;
+    audio.emit("timeupdate");
+    expect(audio.paused).toBe(false);
+    ctrl.stopAudition();
+  });
   test("recovers cleanly on play() rejection: stops tick, resets listening, bumps state, and toasts once", async () => {
     const audio = createFakeAudio();
     const errs = [];
@@ -123,6 +187,26 @@ describe("createAuditionController", () => {
     expect(ctrl.listening()).toBe("");
     expect(audio.paused).toBe(true);
     expect(errs).toEqual(["Could not play preview audio"]);
+  });
+
+  test("reports a cloud preview failure to its row and keeps the global error for other previews", () => {
+    const audio = createFakeAudio();
+    const seen = [];
+    const ctrl = createAuditionController({
+      audio,
+      onSoundBump() {},
+      onPlayError: (message) => seen.push(message),
+    });
+
+    ctrl.listenUrl("cloud:recording", "https://example.com/cloud.mp3", undefined, () =>
+      seen.push("Cloud row"),
+    );
+    audio.emit("error");
+    audio.emit("error");
+    ctrl.listenUrl("gv:voice", "https://example.com/voice.mp3");
+    audio.emit("error");
+
+    expect(seen).toEqual(["Cloud row", "Could not play preview audio"]);
   });
 
   test("toggles pause on repeat listenUrl, seeks within bounds, and resets on ended", () => {

@@ -89,6 +89,7 @@ const normalizeCachedEntry = (entry) => {
   return {
     id: entry.id.trim(),
     name: entry.name.trim(),
+    ...(typeof entry.creatorId === "string" ? { creatorId: entry.creatorId } : {}),
     category: norm(entry.category) || "other",
     useCase: norm(entry.useCase) || "other",
     gender: norm(entry.gender),
@@ -171,6 +172,7 @@ export const normalizeSharedVoice = (raw) => {
   return {
     id,
     name,
+    ...(typeof raw.public_owner_id === "string" ? { creatorId: raw.public_owner_id } : {}),
     category: norm(raw.category) || "other",
     useCase: norm(raw.use_case) || "other",
     gender: norm(raw.gender),
@@ -608,6 +610,7 @@ export const openVoiceLibrary = (opts = {}) => {
 
   return {
     cacheFile,
+    voices: () => readDisk()?.voices ?? EMPTY_CATALOG.voices,
     state,
     hasKey,
     ensureWarm,

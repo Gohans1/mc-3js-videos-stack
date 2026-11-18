@@ -57,6 +57,7 @@
     "at": "bun packages/live-studio/wrong-place.mjs at",
     "note": "bun packages/live-studio/wrong-place.mjs note",
     "voice:gen": "bun packages/live-studio/wrong-place.mjs voice:gen",
+    "voice:playground": "bun scripts/voice/playground.mjs",
     "voice:align": "bun packages/live-studio/wrong-place.mjs voice:align",
     "voice:lips": "bun packages/live-studio/wrong-place.mjs voice:lips",
     "voice:assemble": "bun packages/live-studio/wrong-place.mjs voice:assemble",

@@ -2,6 +2,7 @@ import { nativeMediaSubcommands } from "./media-cli.ts";
 import { referenceMediaSubcommands } from "./media-reference-cli.ts";
 import { sdkMediaSubcommands } from "./media-sdk-cli.ts";
 // Shared CLI catalog schema, 100% repo command inventory, and pure argv/safety resolver (no Node built-ins; safe in browser & server).
+import { PLAYGROUND_CLI_COMMAND } from "./voice-playground-cli-catalog";
 
 export type CliCategoryId = "daily" | "voice" | "sound" | "render" | "setup" | "dev" | "pipeline";
 
@@ -417,6 +418,7 @@ const assetSelectionFlags: readonly CliFlagDef[] = [
 ];
 
 export const CLI_COMMANDS: readonly CliCommand[] = [
+  PLAYGROUND_CLI_COMMAND,
   // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
   {
     id: "help",
