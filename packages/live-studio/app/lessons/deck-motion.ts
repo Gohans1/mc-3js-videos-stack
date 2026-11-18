@@ -90,11 +90,18 @@ const capturePanel = (node: HTMLElement, key: string, copy: boolean): PanelSnaps
 };
 
 const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLElement => {
-  const { node, copy, rect, background, opacity } = panel;
+  const { key, node, copy, rect, background, opacity } = panel;
   const ghost = copy ?? (node.cloneNode(true) as HTMLElement);
   for (const drop of ghost.querySelectorAll("textarea, [role='dialog']")) drop.remove();
   ghost.removeAttribute("id");
-  for (const el of ghost.querySelectorAll("[id]")) el.removeAttribute("id");
+  ghost.removeAttribute("data-lessons-col");
+  ghost.removeAttribute("data-lesson-content");
+  ghost.dataset.lessonMotionKey = key;
+  for (const el of ghost.querySelectorAll("[id], [data-lesson-row], [data-lesson-back]")) {
+    el.removeAttribute("id");
+    el.removeAttribute("data-lesson-row");
+    el.removeAttribute("data-lesson-back");
+  }
   ghost.style.position = "absolute";
   ghost.style.left = `${rect.left - deckRect.left}px`;
   ghost.style.top = `${rect.top - deckRect.top}px`;

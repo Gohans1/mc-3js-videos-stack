@@ -716,7 +716,7 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       click(sheet.querySelector("[data-lesson-back]"));
       await frame();
       const overlay = document.querySelector("div[style*='z-index: 45']");
-      const ghost = overlay.querySelector(reader);
+      const ghost = overlay.querySelector('[data-lesson-motion-key="all:camera.md"]');
       const fade = ghost.getAnimations()[0];
       fade.currentTime = 60;
       const exitOpacity = Number(getComputedStyle(ghost).opacity);
@@ -757,8 +757,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       );
       await frame();
       const overlay = pane.querySelector("div[style*='z-index: 45']");
-      const oldColumnCopy = overlay?.querySelector(col);
-      const nextColumn = [...pane.querySelectorAll(col)].find(el => !el.closest("[inert]"));
+      const oldColumnCopy = overlay?.querySelector('[data-lesson-motion-key="dir:craft/ik"]');
+      const nextColumn = pane.querySelector(col);
       const realReader = pane.querySelector(reader);
       const frames = el => el?.getAnimations().flatMap(anim => anim.effect.getKeyframes()) ?? [];
       const outcome = {
