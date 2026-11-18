@@ -13,7 +13,7 @@ const HEADING_STYLE: Record<number, string> = {
   3: "text-lg/[1.4] font-semibold mt-4 first:mt-0",
   4: "text-base/[1.4] font-semibold mt-3.5 first:mt-0",
   5: "text-base/[1.4] font-medium mt-3 first:mt-0",
-  6: "text-sm/[1.4] font-medium tracking-[0.05em] mt-2.5 first:mt-0",
+  6: "text-label text-base/[1.4] font-medium tracking-[0.05em] mt-2.5 first:mt-0",
 };
 
 function RenderInlines({ tokens }: { tokens: readonly InlineToken[] }) {
@@ -76,7 +76,7 @@ function HeadingBlock({
   const level = Math.min(6, Math.max(1, block.depth));
   const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   return (
-    <div className={cn(cls, "text-lesson-heading flex items-start gap-2")}>
+    <div className={cn("text-lesson-heading flex items-start gap-2", cls)}>
       <Tag data-line={block.line} className="min-w-0 flex-1 text-balance wrap-anywhere">
         <RenderInlines tokens={block.inlines} />
       </Tag>

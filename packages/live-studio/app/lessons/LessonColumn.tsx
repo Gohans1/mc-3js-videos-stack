@@ -192,6 +192,7 @@ export function LessonColumnView({
   return (
     <section
       ref={sectionRef}
+      tabIndex={-1}
       data-lessons-col={col.key}
       aria-label={col.title}
       onClick={(e) => {
@@ -348,7 +349,7 @@ export function LessonColumnView({
             onChange={setQuery}
             label="Search lessons"
             placeholder={`Search ${scopedFilesCount} ${scopedFilesCount === 1 ? "lesson" : "lessons"}…`}
-            className="pointer-fine:[&_input]:text-sm"
+            className="[&_input]:tabular-nums pointer-fine:[&_input]:text-sm"
           />
           <p role="status" className="sr-only">
             {isSearching &&
@@ -384,7 +385,14 @@ export function LessonColumnView({
           <p role="status" className="text-warn-text text-sm/relaxed">
             {loaded ? "Could not refresh lessons." : "Could not load lessons."}
           </p>
-          <Button variant="outline" size="sm" onClick={() => void loadLessons()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              sectionRef.current?.focus({ preventScroll: true });
+              void loadLessons();
+            }}
+          >
             Retry
           </Button>
         </div>

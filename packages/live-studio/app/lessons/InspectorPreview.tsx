@@ -261,6 +261,11 @@ export function InspectorPreview({
               "Choose a note or write one to begin."
             )}
           </p>
+          {view === "lessons" && (
+            <p className="text-label text-xs/relaxed @min-[700px]/inspector:text-sm/relaxed">
+              Text prepared for matching from the included lesson files.
+            </p>
+          )}
           {error && !validationError && (
             <div className="flex">
               <Button size="sm" variant="outline" onClick={onReviewError}>

@@ -377,6 +377,7 @@ export function InspectorSettings({
                   ) : typeof value === "number" ? (
                     <Input
                       size="md"
+                      variant="numeric"
                       id={fieldId}
                       type="number"
                       step={field.key.startsWith("fit") || field.key === "spendCap" ? "0.01" : "1"}

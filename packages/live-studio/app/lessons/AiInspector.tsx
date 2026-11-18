@@ -103,6 +103,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const [pinnedActionsHeight, setPinnedActionsHeight] = useState(0);
   const controlsRef = useRef<HTMLDivElement>(null),
     errorRef = useRef<HTMLDivElement>(null),
+    noteRef = useRef<HTMLTextAreaElement>(null),
     actionsRef = useRef<HTMLDivElement>(null),
     lessonFilesSummaryRef = useRef<HTMLElement>(null);
   const running = useRef(false),
@@ -396,8 +397,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                           (!enabled || Boolean(validationError) || Boolean(reason))) ||
                         (Boolean(saveError) && (saving || !valid.success || !info))
                       }
-                      onClick={(event) => {
-                        if (event.detail === 0) controlsRef.current?.focus({ preventScroll: true });
+                      onClick={() => {
+                        const target =
+                          runError || saveError ? controlsRef.current : noteRef.current;
+                        target?.focus();
                         if (runError) void run();
                         else if (saveError) void save();
                         else setRetry((v) => v + 1);
@@ -455,12 +458,13 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     <Textarea
                       variant="inspector"
                       id="inspect-note-text"
+                      ref={noteRef}
                       aria-invalid={Boolean(noteError) || undefined}
                       aria-describedby={noteError ? "inspect-note-error" : undefined}
                       value={note.text}
                       className="max-h-48 overflow-y-auto overscroll-contain @min-[700px]/inspector:min-h-24"
                       onChange={(e) => changeNote({ ...note, text: e.target.value })}
-                      placeholder="The face is too small. Move the camera closer."
+                      placeholder="Describe what should change"
                     />
                     {noteError && (
                       <FieldError id="inspect-note-error" ref={revealFocusedFieldError}>

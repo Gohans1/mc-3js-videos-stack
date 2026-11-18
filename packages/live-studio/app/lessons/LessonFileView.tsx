@@ -100,6 +100,14 @@ function focusEditorLine(editor: HTMLTextAreaElement | null, line: number) {
   editor.setSelectionRange(start, start);
 }
 
+function focusReaderLine(scroller: HTMLElement | null, line: number) {
+  const target = scroller && findLineNode(scroller, line);
+  if (!target) return false;
+  target.tabIndex = -1;
+  target.focus({ preventScroll: true });
+  return true;
+}
+
 /** Reader, painted live editor, Contents navigator, and AI word-diff sheet for one lesson file. */
 export function LessonFileView({
   path: key,
@@ -178,10 +186,8 @@ export function LessonFileView({
         flyStop.current = scrollScrollerToLine(target, initialLine, false);
         setActiveLine(initialLine);
         if (editing) focusEditorLine(area.current, initialLine);
-        else {
-          const match = target?.querySelector<HTMLElement>("[data-lesson-search-match]");
-          (match ?? contentsTriggerRef.current)?.focus({ preventScroll: true });
-        }
+        else if (!focusReaderLine(target, initialLine))
+          contentsTriggerRef.current?.focus({ preventScroll: true });
       });
       return () => cancelAnimationFrame(frame);
     }
@@ -216,7 +222,10 @@ export function LessonFileView({
       const target = next === "edit" ? editScroller.current : readScroller.current;
       scrollScrollerToLine(target, keepLine, false);
       setActiveLine(keepLine);
-      if (next === "edit" && jumpLine !== undefined) focusEditorLine(area.current, jumpLine);
+      if (jumpLine !== undefined) {
+        if (next === "edit") focusEditorLine(area.current, jumpLine);
+        else focusReaderLine(target, jumpLine);
+      }
     });
   };
 
@@ -226,7 +235,7 @@ export function LessonFileView({
   };
 
   const flyToHeading = (line: number, smooth: boolean) => {
-    closeContents(!smooth);
+    setContentsOpen(false);
     setActiveLine(line);
     if (effectiveView === "changes") {
       switchView(preferredView, line, false);
@@ -234,6 +243,12 @@ export function LessonFileView({
     }
     flyStop.current?.();
     flyStop.current = scrollScrollerToLine(activeScroller(), line, smooth);
+    if (!smooth)
+      requestAnimationFrame(() => {
+        if (effectiveView === "edit") focusEditorLine(area.current, line);
+        else if (!focusReaderLine(readScroller.current, line))
+          contentsTriggerRef.current?.focus({ preventScroll: true });
+      });
   };
 
   const flyEdge = (toBottom: boolean, smooth: boolean) => {

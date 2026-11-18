@@ -136,9 +136,14 @@ export function animateDeckTransition({
   interrupted?: boolean;
   resume?: { key: string; opacity: string };
 }): DeckMotion | null {
-  if (!deck || !animate || prefersReduced()) return null;
+  if (!deck || !animate) return null;
+  const reduced = prefersReduced();
   const transition = classifyLessonTrailTransition(prevTrail, nextTrail);
-  if (transition.kind === "none" || (interrupted && !resume && transition.kind === "open-right"))
+  if (
+    transition.kind === "none" ||
+    (reduced && transition.kind !== "open-right") ||
+    (interrupted && !resume && transition.kind === "open-right")
+  )
     return null;
 
   const animations: Animation[] = [];
@@ -155,7 +160,12 @@ export function animateDeckTransition({
   // Unmount fold-out ghosts clipped inside the Lessons pane whenever columns or sheets are replaced or closed
   const hasOutgoingCols = Boolean(snapshot && snapshot.cols.length > transition.keepColumnCount);
   const hasOutgoingContent = Boolean(snapshot?.content && transition.closingContent);
-  if (snapshot && (hasOutgoingCols || hasOutgoingContent) && snapshot.deckRect.width > 0) {
+  if (
+    !reduced &&
+    snapshot &&
+    (hasOutgoingCols || hasOutgoingContent) &&
+    snapshot.deckRect.width > 0
+  ) {
     const outgoing: PanelSnapshot[] = [];
     for (let i = transition.keepColumnCount; i < snapshot.cols.length; i++) {
       outgoing.push(snapshot.cols[i]!);
@@ -212,6 +222,7 @@ export function animateDeckTransition({
 
   // Smooth horizontal FLIP for kept columns that repositioned when opening or folding back
   if (
+    !reduced &&
     snapshot &&
     snapshot.cols.length === prevTrail.columns.length &&
     liveCols.length === nextTrail.columns.length
@@ -243,9 +254,12 @@ export function animateDeckTransition({
       cancelAnims(el);
       if (typeof el.animate !== "function") continue;
       const key = el.dataset.lessonContent ?? el.dataset.lessonsCol;
-      const opacity = resume && resume.key === key ? resume.opacity : 0.82;
+      const opacity = resume && resume.key === key ? resume.opacity : reduced ? 0.9 : 0.82;
       animations.push(
-        el.animate([{ opacity }, { opacity: 1 }], { duration: ENTER_MS, easing: ENTER_EASE }),
+        el.animate([{ opacity }, { opacity: 1 }], {
+          duration: reduced ? 80 : ENTER_MS,
+          easing: ENTER_EASE,
+        }),
       );
     }
   }
