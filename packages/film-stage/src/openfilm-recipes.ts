@@ -53,3 +53,29 @@ export function expandTemplate(
   });
   return { items, slots, music: recipe.music };
 }
+import type { OpenFilmRecipe } from "./openfilm";
+
+export function resolveOpenFilmRecipe(
+  id: string,
+  recipes: readonly OpenFilmRecipe[],
+  width = 1920,
+  height = 1080,
+): OpenFilmRecipe | undefined {
+  const scale = 1920 / Math.max(width, height);
+  return (
+    recipes.find((r) => r.id === id) ??
+    (/^\/(?!\/)[^?#]*\.html(?:[?#].*)?$/.test(id)
+      ? {
+          id,
+          title: id.split("/").pop()!,
+          cat: "page",
+          group: "This film",
+          render: "page",
+          url: id,
+          w: Math.round(width * scale),
+          h: Math.round(height * scale),
+          fit: 1,
+        }
+      : undefined)
+  );
+}

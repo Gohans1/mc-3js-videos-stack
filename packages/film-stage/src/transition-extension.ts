@@ -6,7 +6,7 @@ export interface TransitionRenderer {
   prepare(
     progress: number,
     capture: (incoming: boolean) => HTMLCanvasElement,
-    props?: { vars?: Record<string, string>; text?: Record<string, string> },
+    props?: import("./openfilm-page").PageProps,
   ): Promise<void>;
   draw(): void;
   dispose(): void;

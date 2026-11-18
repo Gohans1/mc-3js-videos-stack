@@ -1,8 +1,6 @@
 import type { OpenFilmItem } from "film-stage/openfilm";
 import { useEffect, useRef } from "react";
 
-import { useLit } from "../activity/activity";
-import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { makeSnapper } from "../core/time";
@@ -16,7 +14,6 @@ export function OpenFilmTrack() {
   const doc = useOpenFilm((s) => s.doc),
     selected = useOpenFilm((s) => s.selected);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const lit = useLit("tab:openfilm");
   useEffect(() => {
     void readOpenFilm().catch((e) => say(e.message));
   }, []);
@@ -53,7 +50,6 @@ export function OpenFilmTrack() {
         g.fillStyle = tone("foreground");
         g.fillText(it.asset.split("/").pop()!, x + 5, y + 15);
         g.restore();
-        paintActivityMark(g, "openfilm", it.id, x, y + 20, width);
         boxes.push({ item: it, x, y, w: width });
       }
     };
@@ -120,7 +116,7 @@ export function OpenFilmTrack() {
       void saveOpenFilm(draft)
         .then(() => {
           set({ lib: "openfilm", side: "openfilm" });
-          useOpenFilm.setState({ selected: id });
+          useOpenFilm.setState({ selected: id, element: null });
         })
         .catch((e) => say(e.message));
     };
@@ -132,7 +128,6 @@ export function OpenFilmTrack() {
     };
     marks.openfilm = draw;
     const offResize = onShownResize(c, draw);
-    const offActivity = onClipActivity("openfilm", draw);
     c.addEventListener("pointerdown", down);
     c.addEventListener("pointermove", move);
     c.addEventListener("pointerup", up);
@@ -142,7 +137,6 @@ export function OpenFilmTrack() {
     return () => {
       marks.openfilm = () => {};
       offResize();
-      offActivity();
       c.removeEventListener("pointerdown", down);
       c.removeEventListener("pointermove", move);
       c.removeEventListener("pointerup", up);
@@ -154,7 +148,6 @@ export function OpenFilmTrack() {
   return (
     <div className="col-span-2 mt-1 grid grid-cols-subgrid">
       <button
-        data-ai-lit={lit || undefined}
         className="border-track-line bg-track-head text-ui text-label border-e px-1.5 text-left"
         onClick={() => set({ lib: "openfilm", side: "openfilm" })}
       >

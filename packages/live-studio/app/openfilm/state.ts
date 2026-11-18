@@ -7,7 +7,6 @@ import { OpenFilmTimeline as TimelineSchema } from "../../src/contract";
 import { timingPlan } from "../../src/linkage.mjs";
 import { clockForTimeline, timing, timingClock } from "../../src/timing-state.mjs";
 import type { LayerHistory } from "../../src/timing.mjs";
-import { lightItems } from "../activity/timeline-activity";
 import { S } from "../core/state";
 import { createTimedDoc } from "../core/timed-doc";
 import { loadOpenFilmCatalog, setOpenFilmTimeline } from "./render";
@@ -44,6 +43,7 @@ export const useOpenFilm = create<{
   loaded: boolean;
   doc: Doc;
   selected: string | null;
+  element: string | null;
   error: string;
   busy: boolean;
 }>(() => ({
@@ -51,6 +51,7 @@ export const useOpenFilm = create<{
   loaded: false,
   doc: { revision: 0, data: { items: [] } },
   selected: null,
+  element: null,
   error: "",
   busy: false,
 }));
@@ -63,11 +64,8 @@ export const openFilmDoc = createTimedDoc<OverlayTimeline>("openfilm", {
     });
     setOpenFilmTimeline(openFilmDoc.source ?? { items: [] });
     S.dirty = true;
+    S.finalAt = -1;
   },
-  received: (before, after) => lightItems("openfilm", before.items, after.items, (item) => item.id, (i) => {
-    const { id, from, to } = openFilmDoc.data!.items[i];
-    return { key: id, range: [from, to] };
-  }),
   saved: (state) => useOpenFilm.setState({ busy: state === "busy" }),
 });
 

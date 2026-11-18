@@ -1,4 +1,4 @@
-import { expandTemplate } from "film-stage/openfilm-recipes";
+import { expandTemplate, resolveOpenFilmRecipe } from "film-stage/openfilm-recipes";
 import { useEffect, useId, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { together } from "../core/doc";
 import { S } from "../core/state";
 import { say } from "../core/store";
 import { edit as editSound, lanes } from "../sound/sound";
+import { PageInspector } from "./PageInspector";
+import { PageProperties } from "./PageProperties";
 import { OpenFilmPreview } from "./Preview";
 import {
   loadOpenFilm,
@@ -29,6 +31,7 @@ type ApplyRequest = {
   props: { vars?: Record<string, string>; text?: Record<string, string> };
 };
 interface LibraryProps {
+  showInspector?: boolean;
   category?: string;
   onApply?: (request: ApplyRequest) => Promise<void>;
 }
@@ -71,14 +74,6 @@ function Inspector({
       return {};
     }
   }, [raw]);
-  const changeValue = (map: "text" | "vars", key: string, value: string) =>
-    setRaw(
-      JSON.stringify(
-        { ...props, [map]: { ...(props[map] as Record<string, string>), [key]: value } },
-        null,
-        2,
-      ),
-    );
   const save = async () => {
     setBusy(true);
     useOpenFilm.setState({ error: "" });
@@ -206,21 +201,12 @@ function Inspector({
           />
         </label>
       )}
-      {asset.props?.map((p) => {
-        const map = p.type === "text" ? "text" : "vars",
-          key = p.type === "text" ? p.at : p.var;
-        return key ? (
-          <label className="block text-xs" key={key} htmlFor={prefix + key}>
-            {p.name}
-            <Input
-              id={prefix + key}
-              value={(props[map] as Record<string, string> | undefined)?.[key] ?? ""}
-              placeholder="Original value"
-              onChange={(e) => changeValue(map, key, e.target.value)}
-            />
-          </label>
-        ) : null;
-      })}
+      <PageProperties
+        definitions={asset.props}
+        values={props}
+        defaults={{ vars: asset.vars }}
+        onChange={(next) => setRaw(JSON.stringify(next, null, 2))}
+      />
       {!["filter", "transition"].includes(category ?? "") && (
         <div className="grid grid-cols-2 gap-2">
           {(
@@ -272,8 +258,38 @@ function Inspector({
   );
 }
 
-export function OpenFilmLibrary({ category, onApply }: LibraryProps = {}) {
-  const { catalog, loaded, doc, selected, error } = useOpenFilm();
+export function OpenFilmDetails() {
+  const { catalog, selected, element, doc } = useOpenFilm();
+  const item = doc.data.items.find((it) => it.id === selected);
+  const recipe =
+    item &&
+    (resolveOpenFilmRecipe(
+      item.asset,
+      catalog.flatMap((r) => [r, ...(r.children ?? [])]),
+    ) as Recipe | undefined);
+  if (!item || !recipe)
+    return (
+      <p className="text-ui text-muted-foreground px-3">
+        Pick an overlay on the picture or timeline to edit it.
+      </p>
+    );
+  return (
+    <div className="min-h-0 overflow-y-auto px-3">
+      <PageInspector itemId={item.id} />
+      {!element && (
+        <Inspector
+          key={item.id + ":" + doc.revision}
+          asset={recipe}
+          item={item}
+          onClose={() => useOpenFilm.setState({ selected: null, element: null })}
+        />
+      )}
+    </div>
+  );
+}
+
+export function OpenFilmLibrary({ category, onApply, showInspector = true }: LibraryProps = {}) {
+  const { catalog, loaded, doc, selected, element, error } = useOpenFilm();
   const [query, setQuery] = useState(""),
     [kind, setKind] = useState(category ?? "effect"),
     [group, setGroup] = useState("");
@@ -285,9 +301,10 @@ export function OpenFilmLibrary({ category, onApply }: LibraryProps = {}) {
   const item = doc.data.items.find((it) => it.id === selected);
   const picked =
     item &&
-    catalog
-      .flatMap((r) => [r, ...(r.children ?? [])])
-      .find((r) => r.id === item.asset && (!category || category === r.cat));
+    (resolveOpenFilmRecipe(
+      item.asset,
+      catalog.flatMap((r) => [r, ...(r.children ?? [])]),
+    ) as Recipe | undefined);
   const asset = picked || choice?.recipe;
   const groups = [...new Set(catalog.filter((r) => r.cat === kind).map((r) => r.group))];
   const matches = catalog.filter(
@@ -304,7 +321,7 @@ export function OpenFilmLibrary({ category, onApply }: LibraryProps = {}) {
       <div className="space-y-2">
         <Input
           aria-label="Search OpenFilm assets"
-          placeholder="Search effects, titles, stickers…"
+          placeholder="Search assets or enter /your-page.html"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -359,11 +376,26 @@ export function OpenFilmLibrary({ category, onApply }: LibraryProps = {}) {
       {!catalog.length && (
         <p role="status" className="text-muted-foreground text-xs">
           {loaded
-            ? "Library is missing. Run bun run fetch:openfilm at the monorepo root."
+            ? "Enter /your-page.html to use this film's HTML. Run bun run fetch:openfilm for the asset library."
             : "Loading library…"}
         </p>
       )}
-      {asset && (
+      {resolveOpenFilmRecipe(query.trim(), []) && (
+        <Button
+          variant="secondary"
+          onClick={() => {
+            useOpenFilm.setState({ selected: null, element: null });
+            setChoice({
+              recipe: resolveOpenFilmRecipe(query.trim(), [])!,
+              revision: (choice?.revision ?? 0) + 1,
+            });
+          }}
+        >
+          Use this film's HTML page
+        </Button>
+      )}
+      {showInspector && item && <PageInspector itemId={item.id} />}
+      {asset && (!item || showInspector) && !element && (
         <Inspector
           key={(picked ? item!.id : asset.id + ":" + choice?.revision) + ":" + doc.revision}
           asset={asset}
@@ -372,7 +404,7 @@ export function OpenFilmLibrary({ category, onApply }: LibraryProps = {}) {
           onApply={onApply}
           onClose={() => {
             setChoice(null);
-            useOpenFilm.setState({ selected: null });
+            useOpenFilm.setState({ selected: null, element: null });
           }}
         />
       )}
@@ -382,7 +414,7 @@ export function OpenFilmLibrary({ category, onApply }: LibraryProps = {}) {
             type="button"
             key={recipe.id}
             onClick={() => {
-              useOpenFilm.setState({ selected: null, error: "" });
+              useOpenFilm.setState({ selected: null, element: null, error: "" });
               setChoice({ recipe, revision: (choice?.revision ?? 0) + 1 });
             }}
             className="bg-card hover:bg-tint focus-visible:ring-ring border-border min-h-12 rounded border px-2 py-2 text-left text-xs outline-none focus-visible:ring-2"

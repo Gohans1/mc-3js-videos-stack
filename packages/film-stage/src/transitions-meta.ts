@@ -25,6 +25,7 @@ export type TransitionEase =
   TransitionEasePreset | keyof typeof EASES | readonly [number, number, number, number];
 
 export type TransitionDef = {
+  uniforms?: Record<string, number | boolean | number[]>;
   id: string;
   title: string;
   tip: string;
@@ -653,6 +654,7 @@ export const TRANSITIONS = [
 export type BuiltinTransitionId = (typeof TRANSITIONS)[number]["id"];
 
 export type ShotTransition = {
+  params?: Record<string, number | boolean | number[]>;
   fx: string;
   len: number;
   ease?: TransitionEase;

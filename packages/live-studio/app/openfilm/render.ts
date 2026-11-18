@@ -53,6 +53,7 @@ export function withOpenFilm(
   timelineListeners.add(changed);
   let queue = Promise.resolve();
   return Object.assign(draw, {
+    inspectOpenFilm: () => layers?.inspect() ?? [],
     renderFrame(t: number) {
       const render = async () => {
         if (hasTransitions()) {

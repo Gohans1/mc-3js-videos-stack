@@ -247,27 +247,9 @@ export function Transport() {
     full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 items-center gap-1.5 rounded-b-lg px-3 py-1 in-data-cli-expanded:hidden in-data-lessons-focused:hidden in-data-wide:col-start-2">
-      <Button
-        variant="secondary"
-        size="md"
-        className="min-w-19 @max-[440px]:min-w-0"
-        aria-label={playing ? "Pause" : "Play"}
-        onClick={togglePlay}
-      >
-        {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
-        <span className="@max-[440px]:hidden">{playing ? "Pause" : "Play"}</span>
-      </Button>
-      <Button
-        size="md"
-        className="upright:flex-1 sideways:flex-1"
-        onClick={() => openNote(null)}
-        aria-label="Add note"
-      >
-        <Pencil data-icon="inline-start" />
-        <span className="@max-[420px]:hidden">Note</span>
-      </Button>
-      <Tip label="Draw on the picture (D): pen, arrow, box, or a path across seconds">
+    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 flex-col overflow-hidden rounded-b-lg in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2 in-data-cli-expanded:hidden">
+      {review && <ReviewScrubBar />}
+      <div className="flex min-w-0 items-center gap-1.5 px-3 py-1 @max-[380px]:gap-1 @max-[380px]:px-2">
         <Button
           variant="secondary"
           size="md"

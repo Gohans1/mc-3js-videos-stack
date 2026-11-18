@@ -7,6 +7,7 @@ import * as z from "zod";
 import { safePath } from "../../../scripts/openfilm/catalog.mjs";
 import { expandTemplate, makeCube, nativeCatalog } from "../../../scripts/openfilm/native.mjs";
 import { LOCAL } from "../../../scripts/vault.mjs";
+import { resolveOpenFilmRecipe } from "../../film-stage/src/openfilm-recipes.ts";
 import {
   AdjustmentTimeline,
   OpenFilmLayerShape,
@@ -82,7 +83,7 @@ export function openOpenFilm(project, conf = {}, options = {}) {
         .map((r) => r.id),
     );
     const unknown = data.items
-      .filter((it) => !known.has(it.asset))
+      .filter((it) => !known.has(it.asset) && !resolveOpenFilmRecipe(it.asset, []))
       .map(
         (it) =>
           `Unknown overlay asset: ${it.asset}; use its native cut/grade lane if it is a transition or filter`,
@@ -123,7 +124,7 @@ export function openOpenFilm(project, conf = {}, options = {}) {
   };
   const use = (input) => {
     const request = OpenFilmUse.parse(input),
-      recipe = openFilmCatalog().find((r) => r.id === request.asset);
+      recipe = resolveOpenFilmRecipe(request.asset, openFilmCatalog());
     if (!recipe) throw new Error(`Unknown OpenFilm asset: ${request.asset}`);
     const from = request.from ?? 0,
       to = request.to ?? from + (recipe.durationMs ?? 3000) / 1000;
@@ -135,10 +136,11 @@ export function openOpenFilm(project, conf = {}, options = {}) {
         {
           fx: `of:${recipe.id}`,
           len: to - from,
-          ...((request.vars || request.text) && {
+          ...((request.vars || request.text || request.elements) && {
             props: {
               ...(request.vars && { vars: request.vars }),
               ...(request.text && { text: request.text }),
+              ...(request.elements && { elements: request.elements }),
             },
           }),
         },

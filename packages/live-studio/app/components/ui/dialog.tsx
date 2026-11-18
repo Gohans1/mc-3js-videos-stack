@@ -66,6 +66,8 @@ const overlayVariants = cva("", {
   },
   defaultVariants: { variant: "default", motion: "default" },
 });
+type DialogMotion = "fade" | "instant" | "none" | "confirmation";
+
 const fadeDialog =
   "transition-opacity duration-100 ease-studio-out data-starting-style:opacity-0 data-ending-style:opacity-0";
 
@@ -75,7 +77,7 @@ function DialogOverlay({
   motion,
   ...props
 }: DialogPrimitive.Backdrop.Props &
-  VariantProps<typeof overlayVariants> & { motion?: "fade" | "instant" }) {
+  Omit<VariantProps<typeof overlayVariants>, "motion"> & { motion?: DialogMotion }) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
@@ -84,9 +86,11 @@ function DialogOverlay({
         "bg-scrim-strong fixed inset-0 isolate z-50 supports-backdrop-filter:backdrop-blur-xs",
         motion === "fade"
           ? fadeDialog
-          : motion === "instant"
+          : motion === "instant" || motion === "none"
             ? "transition-none"
-            : "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 duration-100",
+            : motion === "confirmation"
+              ? confirmationFade
+              : "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 duration-100",
         overlayVariants({ variant }),
         className,
       )}
@@ -120,9 +124,9 @@ function DialogContent({
   motion,
   ...props
 }: DialogPrimitive.Popup.Props &
-  VariantProps<typeof dialogVariants> & {
+  Omit<VariantProps<typeof dialogVariants>, "motion"> & {
     showCloseButton?: boolean;
-    motion?: "fade";
+    motion?: DialogMotion;
   }) {
   const presentation = React.useContext(InstantDialog) && motion === "fade" ? "instant" : motion;
   return (
@@ -131,14 +135,16 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         data-variant={variant ?? "default"}
-        data-motion={motion}
+        data-motion={presentation}
         className={cn(
           "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl border border-transparent p-4 ring-1 outline-none sm:max-w-sm forced-colors:border-[CanvasText]",
           presentation === "fade"
             ? fadeDialog
-            : presentation === "instant"
+            : presentation === "instant" || presentation === "none"
               ? "transition-none"
-              : "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100",
+              : presentation === "confirmation"
+                ? confirmationFade
+                : "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100",
           dialogVariants({ variant, font }),
           className,
         )}

@@ -21,6 +21,9 @@ const popoverContentVariants = cva(
       motion: {
         default: "data-open:animate-in data-closed:animate-out motion-reduce:animate-none",
         instant: "transition-none",
+        none: "transition-none",
+        anchored:
+          "transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] data-ending-style:scale-[0.97] data-ending-style:opacity-0 data-ending-style:duration-120 data-starting-style:scale-[0.97] data-starting-style:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-100 motion-reduce:data-ending-style:scale-100 motion-reduce:data-ending-style:duration-100 motion-reduce:data-starting-style:scale-100",
       },
     },
     defaultVariants: { variant: "default", motion: "default" },

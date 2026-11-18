@@ -60,7 +60,6 @@ import { playgroundExtensions, speechRequestOptions } from "./voice-playground-r
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
-import { openFilmResource, openOpenFilm, openFilmLut } from "./openfilm.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",

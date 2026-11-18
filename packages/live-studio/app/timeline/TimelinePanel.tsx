@@ -15,7 +15,6 @@ import { useStudio } from "../core/store";
 import { KeyHeads } from "../keys/KeyHeads";
 import { AudioMeter } from "../sound/AudioMeter";
 import { ClipMenu } from "../sound/ClipMenu";
-import { OpenFilmTrack } from "../openfilm/Track";
 import { TrackHeads } from "../sound/TrackHeads";
 import { TextHeads } from "../text/TextHeads";
 import { ROW_MAX, ROW_MIN, rowLayout, RULER_H, setRowLayout } from "./rows";
@@ -96,9 +95,8 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
     <div
       ref={bind("timeline")}
       className={cn(
-        "bg-background upright:mt-0 sideways:mt-0 upright:in-data-lessons-focused:hidden sideways:in-data-lessons-focused:hidden relative col-[1/-1] row-start-3 mt-1.5 grid h-[var(--edit-h,max(20rem,42dvh))] min-w-0 grid-cols-[7.5rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-lg px-3 pt-2 pb-3 select-none in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-[2/-1]",
-        "upright:h-auto upright:flex-none upright:grid-cols-[5.5rem_minmax(0,1fr)] upright:grid-rows-none upright:overflow-visible upright:rounded-none upright:pt-0 sideways:col-[1] sideways:block sideways:h-auto sideways:rounded-none sideways:pt-0 sideways:pb-1.5",
-        size === 0 ? "pb-0" : "upright:min-h-0 sideways:min-h-0 min-h-72",
+        "bg-background upright:mt-0 sideways:mt-0 relative col-[1/-1] row-start-3 mt-1.5 h-[min(var(--edit-h,max(20rem,42dvh)),var(--edit-max,calc(100dvh-220px)))] min-h-0 min-w-0 overflow-hidden rounded-lg select-none in-data-edit-folded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-[2/-1] in-data-cli-expanded:hidden in-data-cli-side:col-[1]",
+        "upright:h-auto upright:flex-none upright:overflow-visible upright:rounded-none upright:in-data-inspector-active:hidden sideways:col-[1] sideways:h-auto sideways:rounded-none",
       )}
     >
       <div

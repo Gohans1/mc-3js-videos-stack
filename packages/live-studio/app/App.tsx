@@ -22,7 +22,6 @@ import { useStudio } from "./core/store";
 import { useDeckShrinkLatch } from "./lessons/deck-latch";
 import { lessonTrailKey, useLessons } from "./lessons/lessons";
 import { LESSONS_LIBRARY_WIDTH } from "./lessons/tree";
-import { ReviewRoom } from "./notes/ReviewRoom";
 import { Stage } from "./picture/Stage";
 
 const ReviewRoom = lazy(() =>
@@ -194,7 +193,7 @@ export function App() {
         >
           <Stage bind={bind} />
           <Transport />
-          <TimelinePanel bind={bind} size={bounds.editH} />
+          <TimelinePanel bind={bind} />
           {showLibrary && <Library lessonsWidthPx={bounds.libW ?? desiredLibPx} />}
           {(showSideOnRight || showDetails) && (
             <Side wide={showLibrary} desktop={desktop} lessonsLockW={sideLatch.lockW} />

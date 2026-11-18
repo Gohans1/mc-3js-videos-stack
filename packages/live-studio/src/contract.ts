@@ -854,6 +854,7 @@ export const TextTimeline = z.looseObject({
 });
 
 export const OpenFilmLayerShape = z.object({
+  elements: z.array(PageElementOverride).optional(),
   id: z.string().min(1), asset: z.string().min(1), from: secs, to: secs,
   track: z.int().nonnegative().optional(), x: z.number().finite().optional(), y: z.number().finite().optional(),
   size: z.number().positive().max(4).optional(), rotate: z.number().finite().optional(), opacity: unit.optional(),

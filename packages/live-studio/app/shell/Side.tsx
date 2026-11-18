@@ -50,6 +50,9 @@ const TextLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TextLibrar
 const OpenFilmLibrary = lazy(() =>
   import("../openfilm/Library").then((m) => ({ default: m.OpenFilmLibrary })),
 );
+const OpenFilmDetails = lazy(() =>
+  import("../openfilm/Library").then((m) => ({ default: m.OpenFilmDetails })),
+);
 const TextPanel = lazy(() => loadPanels().then((m) => ({ default: m.TextPanel })));
 const SpeedPanel = lazy(() => loadPanels().then((m) => ({ default: m.FilmSpeedPanel })));
 
@@ -74,7 +77,6 @@ function TabUnderline({ inset = false, instant = false }: { inset?: boolean; ins
       aria-hidden
       className={cn(
         "tab-indicator pointer-events-none h-0.5",
-        !animated && "transition-none",
         inset ? "px-2.5" : "bg-primary rounded-full",
         instant && "transition-none",
       )}
@@ -239,6 +241,7 @@ export function Library({ lessonsWidthPx }: { lessonsWidthPx: number }) {
           ? cam
           : placed);
   const value = available(lib) ? lib : "notes";
+  const shown = LIBS;
   return (
     <aside
       aria-label="Library"

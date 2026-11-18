@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
-import { loadOpenFilmPage, type PageProps } from "./openfilm-page";
+import { loadOpenFilmPage, type PageElement, type PageProps } from "./openfilm-page";
 import { registerTransitionExtension } from "./transition-extension";
 import { TRANSITIONS } from "./transitions-meta";
+export { resolveOpenFilmRecipe } from "./openfilm-recipes";
+import { resolveOpenFilmRecipe } from "./openfilm-recipes";
 
 export interface OpenFilmRecipe {
   id: string;
@@ -12,6 +14,7 @@ export interface OpenFilmRecipe {
   group: string;
   render: string;
   path?: string;
+  url?: string;
   w?: number;
   h?: number;
   fit?: number;
@@ -135,7 +138,7 @@ function nativeTransition(recipe: OpenFilmRecipe, renderer: THREE.WebGLRenderer)
     ) {
       if (disposed) throw new Error("OpenFilm transition was disposed");
       if (recipe.render === "page") {
-        const key = JSON.stringify(props ?? {});
+        const key = JSON.stringify([props?.vars, props?.text]);
         if (!overlay || overlayProps !== key) {
           disposePage(overlay);
           overlayProps = key;
@@ -147,6 +150,7 @@ function nativeTransition(recipe: OpenFilmRecipe, renderer: THREE.WebGLRenderer)
           });
         }
         const page = await overlay;
+        page.setOverrides(props?.elements ?? []);
         const image = await page.seek((progress * (recipe.durationMs ?? 1000)) / 1000);
         screen.ctx.globalCompositeOperation = "copy";
         screen.ctx.drawImage(capture(progress >= 0.5), 0, 0, w, h);
@@ -154,6 +158,7 @@ function nativeTransition(recipe: OpenFilmRecipe, renderer: THREE.WebGLRenderer)
         screen.ctx.drawImage(image, 0, 0, w, h);
       } else {
         const page = await ready;
+        page.setOverrides(props?.elements ?? []);
         const doc = page.iframe.contentDocument!;
         const cut = recipe.id.startsWith("motions/cut-");
         const captures =
@@ -226,6 +231,43 @@ export function registerOpenFilm(recipes: OpenFilmRecipe[]) {
   }
 }
 
+export interface OverlayPlacement {
+  id: string;
+  width: number;
+  height: number;
+  displayWidth: number;
+  displayHeight: number;
+  frameWidth: number;
+  frameHeight: number;
+  x: number;
+  y: number;
+  rotate: number;
+}
+export interface OverlayInspection extends OverlayPlacement {
+  elements: PageElement[];
+  vars?: Record<string, string>;
+  hitTest: (x: number, y: number) => string | null;
+}
+
+export function overlayPoint(layer: OverlayPlacement, x: number, y: number): [number, number] {
+  const dx = (x - layer.x) * layer.frameWidth,
+    dy = (y - layer.y) * layer.frameHeight;
+  const r = (-layer.rotate * Math.PI) / 180;
+  return [
+    ((dx * Math.cos(r) - dy * Math.sin(r)) * layer.width) / layer.displayWidth + layer.width / 2,
+    ((dx * Math.sin(r) + dy * Math.cos(r)) * layer.height) / layer.displayHeight + layer.height / 2,
+  ];
+}
+export function overlayFramePoint(layer: OverlayPlacement, x: number, y: number): [number, number] {
+  const dx = ((x - layer.width / 2) * layer.displayWidth) / layer.width,
+    dy = ((y - layer.height / 2) * layer.displayHeight) / layer.height,
+    r = (layer.rotate * Math.PI) / 180;
+  return [
+    layer.x + (dx * Math.cos(r) - dy * Math.sin(r)) / layer.frameWidth,
+    layer.y + (dx * Math.sin(r) + dy * Math.cos(r)) / layer.frameHeight,
+  ];
+}
+
 export function makeOpenFilmLayers(renderer: THREE.WebGLRenderer, recipes: OpenFilmRecipe[]) {
   const screen = makeScreen(renderer);
   const motion = document.createElement("canvas");
@@ -234,12 +276,25 @@ export function makeOpenFilmLayers(renderer: THREE.WebGLRenderer, recipes: OpenF
   const motionCtx = motion.getContext("2d")!;
   const pages = new Map<string, Promise<Awaited<ReturnType<typeof loadOpenFilmPage>>>>();
   const catalog = new Map(recipes.map((r) => [r.id, r]));
+  let inspected: {
+    placement: OverlayPlacement;
+    page: Awaited<ReturnType<typeof loadOpenFilmPage>>;
+  }[] = [];
   return {
+    inspect(): OverlayInspection[] {
+      return inspected.map(({ placement, page }) => ({
+        ...placement,
+        elements: page.elements(),
+        hitTest: page.hitTest,
+        vars: page.variables(),
+      }));
+    },
     async render(
       items: OpenFilmItem[],
       t: number,
       timeAt: (item: OpenFilmItem) => number = () => t,
     ) {
+      inspected = [];
       const active = items
         .filter((it) => timeAt(it) >= it.from && timeAt(it) < it.to)
         .sort((a, b) => (a.track ?? 0) - (b.track ?? 0));
@@ -253,7 +308,9 @@ export function makeOpenFilmLayers(renderer: THREE.WebGLRenderer, recipes: OpenF
       screen.ctx.drawImage(renderer.domElement, 0, 0);
       screen.ctx.globalCompositeOperation = "source-over";
       for (const it of active) {
-        const recipe = catalog.get(it.asset);
+        const recipe =
+          catalog.get(it.asset) ??
+          resolveOpenFilmRecipe(it.asset, [], screen.canvas.width, screen.canvas.height);
         if (!recipe) throw new Error(`Unknown OpenFilm asset: ${it.asset}`);
         if (!["page", "motion"].includes(recipe.render))
           throw new Error(`Apply ${recipe.id} using its native ${recipe.cat} lane`);
@@ -262,16 +319,20 @@ export function makeOpenFilmLayers(renderer: THREE.WebGLRenderer, recipes: OpenF
           recipe.cat === "effect" || recipe.cat === "transition" || recipe.render === "motion";
         const ph = full ? h : Math.max(1, Math.round(h * (it.size ?? recipe.fit ?? 0.25)));
         const pw = full ? w : Math.max(1, Math.round((ph * (recipe.w ?? 1)) / (recipe.h ?? 1)));
+        const pageWidth = recipe.render === "motion" ? pw : (recipe.w ?? pw);
+        const pageHeight = recipe.render === "motion" ? ph : (recipe.h ?? ph);
         const vars = { ...recipe.vars, "--clip-length": `${it.to - it.from}s`, ...it.vars };
-        const key = JSON.stringify([it.id, it.asset, pw, ph, vars, it.text]);
+        const key = JSON.stringify([it.id, it.asset, pageWidth, pageHeight, vars, it.text]);
         used.add(key);
         if (!pages.has(key))
           pages.set(
             key,
             loadOpenFilmPage(
-              recipe.render === "motion" ? compositorUrl : resourceUrl(recipe.path!),
-              pw,
-              ph,
+              recipe.render === "motion"
+                ? compositorUrl
+                : (recipe.url ?? resourceUrl(recipe.path!)),
+              pageWidth,
+              pageHeight,
               { vars, text: it.text },
               { resetCanvasState: recipe.render === "page" },
             )
@@ -302,6 +363,7 @@ export function makeOpenFilmLayers(renderer: THREE.WebGLRenderer, recipes: OpenF
               }),
           );
         const page = await pages.get(key)!;
+        page.setOverrides(it.elements ?? []);
         if (recipe.render === "motion")
           (page.iframe.contentDocument!.getElementById("picture") as HTMLCanvasElement)
             .getContext("2d")!
@@ -341,6 +403,22 @@ export function makeOpenFilmLayers(renderer: THREE.WebGLRenderer, recipes: OpenF
         ctx.rotate(((it.rotate ?? 0) * Math.PI) / 180);
         ctx.drawImage(image, -pw / 2, -ph / 2, pw, ph);
         ctx.restore();
+        if (!isMotion && alpha > 0)
+          inspected.push({
+            page,
+            placement: {
+              id: it.id,
+              width: pageWidth,
+              height: pageHeight,
+              displayWidth: pw,
+              displayHeight: ph,
+              frameWidth: w,
+              frameHeight: h,
+              x: it.x ?? 0.5,
+              y: it.y ?? 0.5,
+              rotate: it.rotate ?? 0,
+            },
+          });
         if (isMotion) {
           screen.ctx.save();
           screen.ctx.globalAlpha = alpha;

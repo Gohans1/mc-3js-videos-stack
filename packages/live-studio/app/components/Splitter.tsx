@@ -130,7 +130,7 @@ export function Splitter({
             end(m);
             return;
           }
-          const size = fit(start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from));
+          const size = fit(start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from), start);
           if (resizeOnRelease) {
             previewSize = size;
             const offset = (size - start) * (before ? 1 : -1);

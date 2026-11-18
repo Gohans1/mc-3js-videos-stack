@@ -1,8 +1,12 @@
 import { getFontEmbedCSS, toCanvas } from "html-to-image";
 
+import { makePageEditor, type PageOverride } from "./page-edit";
+export type { PageElement, PageOverride } from "./page-edit";
+
 export interface PageProps {
   vars?: Record<string, string>;
   text?: Record<string, string>;
+  elements?: PageOverride[];
 }
 
 export async function loadOpenFilmPage(
@@ -114,20 +118,23 @@ export async function loadOpenFilmPage(
         sheet.insertRule(css, index);
       }
     }
-    const fontNodes = new Map<string, HTMLElement>();
-    for (const node of doc.querySelectorAll<HTMLElement>("body, body *"))
-      fontNodes.set(host.getComputedStyle(node).fontFamily, node);
-    const fontEmbedCSS = await wait("fonts", async () =>
-      [
-        ...new Set(
-          await Promise.all(
-            [...fontNodes.values()].map((node) =>
-              getFontEmbedCSS(node, { preferredFontFormat: "woff2" }),
+    const embeddedFonts = () => {
+      const fontNodes = new Map<string, HTMLElement>();
+      for (const node of doc.querySelectorAll<HTMLElement>("body, body *"))
+        fontNodes.set(host.getComputedStyle(node).fontFamily, node);
+      return wait("fonts", async () =>
+        [
+          ...new Set(
+            await Promise.all(
+              [...fontNodes.values()].map((node) =>
+                getFontEmbedCSS(node, { preferredFontFormat: "woff2" }),
+              ),
             ),
           ),
-        ),
-      ].join("\n"),
-    );
+        ].join("\n"),
+      );
+    };
+    const fontEmbedCSS = await embeddedFonts();
     await wait("font layout", async () => {
       doc.body.getBoundingClientRect();
       await doc.fonts.ready;
@@ -142,13 +149,24 @@ export async function loadOpenFilmPage(
       (key) => !key.startsWith("-webkit-mask-"),
     );
     let disposed = false;
+    const editor = makePageEditor(doc);
+    let overrides = props.elements ?? [];
+    let fontKey = "",
+      editedFonts = fontEmbedCSS;
     let queue = Promise.resolve<HTMLCanvasElement | null>(null);
     return {
       iframe,
       blend: blend as GlobalCompositeOperation,
+      setOverrides(value: PageOverride[]) {
+        overrides = value;
+      },
+      elements: editor.elements,
+      hitTest: editor.hitTest,
+      variables: editor.variables,
       seek(t: number) {
         const run = async () => {
           if (disposed) throw new Error(`${url}: page was disposed; load it again before seeking`);
+          editor.restore();
           // Source pages can leave shadow/composite state behind, so every seek starts from initialization state.
           captureContexts();
           for (const { ctx, state, transform, dash } of contexts.values()) {
@@ -222,20 +240,33 @@ export async function loadOpenFilmPage(
             );
           }
           try {
+            editor.apply(overrides);
+            const nextFontKey = JSON.stringify(
+              overrides.map((o) => [o.style?.["font-family"], o.style?.font]),
+            );
+            if (nextFontKey !== fontKey) {
+              await doc.fonts.ready;
+              editedFonts = overrides.some((o) => o.style?.["font-family"] || o.style?.font)
+                ? await embeddedFonts()
+                : fontEmbedCSS;
+              fontKey = nextFontKey;
+            }
             const image = await toCanvas(doc.body, {
               width,
               height,
               canvasWidth: width,
               canvasHeight: height,
               pixelRatio: 1,
-              fontEmbedCSS,
+              fontEmbedCSS: editedFonts,
               skipAutoScale: true,
               includeStyleProperties: styleProperties,
               filter: (node) => !["SCRIPT", "STYLE", "LINK"].includes(node.nodeName),
             });
             return image;
           } finally {
+            editor.restore();
             restore.reverse().forEach((undo) => undo());
+            editor.apply(overrides);
           }
         };
         const next = queue
@@ -249,6 +280,7 @@ export async function loadOpenFilmPage(
         return next;
       },
       dispose() {
+        editor.restore();
         disposed = true;
         iframe.remove();
       },

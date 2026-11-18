@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
+import { resolveOpenFilmRecipe } from "../packages/film-stage/src/openfilm-recipes.ts";
 import { resolveAsset } from "../packages/live-studio/src/asset-recipes.mjs";
 import { ASSET_LANES, openAssets } from "../packages/live-studio/src/assets.mjs";
 import { cliArgs, numberArg, secondArg } from "../packages/live-studio/src/cli.mjs";
@@ -25,6 +26,7 @@ Discover -> inspect -> place -> inspect the saved lane -> render -> edit:
 
 plan <template-id>           Preview layers, original music and camera-slot timings; writes nothing.
 use <id>                    Place in its native timeline; returns file, saved data and an editable target.
+use /page.html             Place a local page from the film's public assets.
 timeline                     Read one lane in heard/output seconds; default effects.
 edit <target>               Merge controls into one item; targets: effects:ID, text:ID, adjustment:ID,
                              transitions:N, audio:beds:ID or audio:sfx:ID. A bare ID means effects:ID.
@@ -197,11 +199,12 @@ export function runAsset(input = process.argv.slice(2), defaultSource) {
       const entries = allEntries(false, project),
         selection = args.kind ? kindFilter(args.kind.split(","), entries) : undefined;
       if (selection?.bad.length) usage(selection.bad.join("; "));
-      const recipe = resolveAsset(
-        id,
-        selection ? entries.filter(selection.test) : entries,
-        args.source,
-      );
+      const page = command === "use" && (!args.source || args.source === "openfilm")
+        ? resolveOpenFilmRecipe(id, [])
+        : undefined;
+      const recipe = page
+        ? { source: "openfilm", kind: "asset", upstreamId: page.id }
+        : resolveAsset(id, selection ? entries.filter(selection.test) : entries, args.source);
       result =
         command === "plan"
           ? api.plan(recipe, times.from ?? 0, times.to)

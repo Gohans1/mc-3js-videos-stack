@@ -131,6 +131,7 @@ declare module "film/scene" {
     prepareFrame?: (t: number) => Promise<void>;
       needsPreparation?: (t: number) => boolean;
     disposeOpenFilm?: () => void;
+    inspectOpenFilm?: () => import("film-stage/openfilm").OverlayInspection[];
     tools: Tools;
     describe?: (t: number) => ReviewSection[];
     checks?: Record<string, (...args: number[]) => string | string[]>; // CHECK=name:args in a draft render (render.mjs)

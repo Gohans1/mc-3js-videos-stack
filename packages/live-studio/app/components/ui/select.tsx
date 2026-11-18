@@ -64,6 +64,7 @@ function SelectContent({
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
+  fitContent,
   motion,
   ...props
 }: SelectPrimitive.Popup.Props & { fitContent?: boolean } & Pick<

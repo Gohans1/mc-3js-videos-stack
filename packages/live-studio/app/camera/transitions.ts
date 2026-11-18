@@ -1,6 +1,5 @@
 import { extendedTransitions } from "film-stage/transition-extension";
 import type { TransitionEase } from "film-stage/transitions";
-import { extendedTransitions } from "film-stage/transition-extension";
 
 import { effectLength, effectSpan, transitionAvailable } from "../../src/timing-effects.mjs";
 import { timingClock } from "../../src/timing-state.mjs";
