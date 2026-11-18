@@ -58,7 +58,9 @@ export function inspectorPreviewText(result: InspectResult, view: InspectorView)
   if (view === "trace")
     return result.ranked
       ? JSON.stringify({ ranked: result.ranked, trace: result.trace }, null, 2)
-      : "No Jev run for these inputs yet. Enable calls and choose Run Jev to see real scores and responses.";
+      : result.cache.cli
+        ? "Reused CLI matches. No Jev trace is available for these inputs."
+        : "No trace recorded yet. A new Inspector run records its Jev trace here.";
   if (view === "metadata") return JSON.stringify(result.noteInput, null, 2);
   const c = result.config;
   return [
@@ -83,6 +85,7 @@ export function inspectorPreviewText(result: InspectResult, view: InspectorView)
 
 export function InspectorPreview({
   hasNote,
+  canChooseNote,
   allFilesExcluded,
   result,
   previous,
@@ -94,6 +97,7 @@ export function InspectorPreview({
   failedRun,
 }: {
   hasNote: boolean;
+  canChooseNote: boolean;
   allFilesExcluded: boolean;
   result: InspectResult | null;
   previous?: InspectResult;
@@ -260,7 +264,9 @@ export function InspectorPreview({
       >
         {awaitingNote ? (
           <p className="text-muted-foreground text-sm/relaxed">
-            Write or choose a note to see what the AI receives.
+            {canChooseNote
+              ? "Write or choose a note to see what the AI receives."
+              : "Write a note to see what the AI receives."}
           </p>
         ) : !result ? (
           <p className="text-muted-foreground text-sm/relaxed">
@@ -282,7 +288,7 @@ export function InspectorPreview({
                   ))
               : allFilesExcluded
                 ? "Every lesson file in this scope is excluded. Select Include all in scope or reselect files."
-                : "No lesson files in this scope. Add or edit lessons in Deck."}
+                : "No lesson files in this scope. Choose another scope or add lessons in Deck."}
           </pre>
         )}
       </div>

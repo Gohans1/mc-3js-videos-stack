@@ -18,7 +18,7 @@ export function LessonChanges({
       <div className="flex-none px-3 pt-2 pb-2">
         <div className="mx-auto flex w-full max-w-[42rem] items-center gap-2">
           <span className="text-muted-foreground flex-1 text-sm">
-            Latest AI changes (already applied)
+            Latest file changes (already applied)
           </span>
           <Button variant="ghost" size="sm" onClick={onRead}>
             Clear diff

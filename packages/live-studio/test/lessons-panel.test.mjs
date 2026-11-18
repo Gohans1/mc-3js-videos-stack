@@ -446,7 +446,7 @@ describe("LessonsPanel rendered component behavior", () => {
       }),
     );
     assert.match(html, />1(?:<!-- -->)? (?:<!-- -->)?change<\/span>/);
-    assert.match(html, /Latest AI changes/);
+    assert.match(html, /Latest file changes/);
     assert.match(html, /aria-label="Delete craft\/walk\.md \(This film\)"/);
   });
 

@@ -566,3 +566,13 @@
     --tl-stem-offset: 48px;
   }
 }
+
+[data-inspector-controls] {
+  container-type: scroll-state;
+}
+
+@container scroll-state(scrollable: bottom) {
+  [data-inspector-scroll-cue] {
+    visibility: visible;
+  }
+}

@@ -309,7 +309,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
           role="region"
           tabIndex={0}
           aria-label="Inspector controls"
-          className="focus-visible:ring-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) [scrollbar-width:thin] overflow-y-auto overscroll-contain outline-none focus-visible:ring-2"
+          className="focus-visible:ring-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) scroll-pb-5 [scrollbar-width:thin] overflow-y-auto overscroll-contain outline-none focus-visible:ring-2"
           style={{ "--inspector-actions-offset": `${pinnedActionsHeight}px` } as CSSProperties}
         >
           <div
@@ -520,7 +520,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     Lesson files · {includedCount} of {scopedFiles.length} included
                   </summary>
                   <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
-                    Uncheck files to leave them out of this preview.
+                    Uncheck files to omit them from previews and Jev runs.
                   </p>
                   {scopedFiles.length === 0 && (
                     <p className="text-muted-foreground text-sm/relaxed">
@@ -547,7 +547,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 {scopedExcluded.length > 0 && (
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-muted-foreground text-sm tabular-nums">
-                      {scopedExcluded.length} excluded from preview
+                      {scopedExcluded.length} excluded
                     </span>
                     <Button
                       size="md"
@@ -641,9 +641,15 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
               </details>
             </fieldset>
           </div>
+          <div
+            aria-hidden
+            data-inspector-scroll-cue
+            className="from-background pointer-events-none invisible sticky bottom-0 -mt-5 h-5 bg-linear-to-t to-transparent"
+          />
         </div>
         <InspectorPreview
           hasNote={Boolean(note.text.trim())}
+          canChooseNote={availableNotes.length > 0}
           allFilesExcluded={scopedFiles.length > 0 && includedCount === 0}
           result={received?.value ?? null}
           previous={received?.previous}
