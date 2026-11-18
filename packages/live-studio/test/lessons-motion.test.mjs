@@ -364,6 +364,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       const l1Width = Math.round(pane.getBoundingClientRect().width);
       const l1Cols = document.querySelectorAll("[data-lessons-col]").length;
       const l1Anims = document.getAnimations({ subtree: true }).length;
+      const l1Entry = document.querySelector("[data-lessons-col='dir:craft']").getAnimations()
+        .flatMap(anim => anim.effect.getKeyframes());
       await waitMs(250);
 
       // Fold L1 -> L0 by clicking genuine blank area under L0 list
@@ -389,6 +391,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       await raf();
       const l1To0Overlay = document.querySelector("div[style*='z-index: 45']");
       const l1To0Anims = document.getAnimations({ subtree: true }).length;
+      const l1To0RootFade = document.querySelector("[data-lessons-col='/']").getAnimations()
+        .flatMap(anim => anim.effect.getKeyframes()).some(frame => Number(frame.opacity) < 1);
       const l1To0State = { folder: [...lessons.getState().folder], open: lessons.getState().open };
       const l1To0OverlayRect = l1To0Overlay?.getBoundingClientRect() ?? null;
       const l1To0PaneRect = pane.getBoundingClientRect();
@@ -459,9 +463,11 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
         l1Width,
         l1Cols,
         l1Anims,
+        l1EnteredFromRight: l1Entry.some(frame => frame.transform === "translateX(8px)"),
         afterGutterFolder,
         afterGapFolder,
         l1To0Anims,
+        l1To0RootFade,
         l1To0State,
         l1To0OverlayRect: l1To0OverlayRect ? { left: l1To0OverlayRect.left, right: l1To0OverlayRect.right } : null,
         l1To0PaneRect: { left: l1To0PaneRect.left, right: l1To0PaneRect.right },
@@ -486,11 +492,13 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.equal(result.l1Width, 540);
     assert.equal(result.l1Cols, 2);
     assert.ok(result.l1Anims > 0, "Expected WAAPI animation on L0 -> L1 drill-in");
+    assert.equal(result.l1EnteredFromRight, true);
     assert.deepEqual(result.afterGutterFolder, ["craft"]);
     assert.deepEqual(result.afterGapFolder, ["craft"]);
 
     assert.deepEqual(result.l1To0State, { folder: [], open: null });
     assert.ok(result.l1To0Anims > 0, "Expected real WAAPI fold animation on L1 -> L0");
+    assert.equal(result.l1To0RootFade, true);
     assert.ok(result.l1To0OverlayRect, "Expected exiting L1 overlay on L1 -> L0");
     assert.ok(result.l1To0OverlayRect.right <= result.l1To0PaneRect.right + 0.5);
     assert.ok(result.l1To0OverlayRect.right <= result.l1To0StageRect.left + 0.5);

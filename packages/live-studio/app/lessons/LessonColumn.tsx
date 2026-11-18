@@ -256,12 +256,12 @@ export function LessonColumnView({
             type="button"
             onClick={(e) => onFocusFolder(col.parts, e.detail > 0)}
             title={`Focus folder ${col.title}`}
-            className="text-foreground hover:bg-muted/70 focus-visible:ring-ring studio-press text-title/[1.3] min-w-0 flex-1 rounded px-1.5 py-0.5 text-start font-semibold wrap-anywhere outline-none focus-visible:ring-2"
+            className="text-foreground hover:bg-muted/70 focus-visible:ring-ring studio-press text-title/[1.4] min-w-0 flex-1 rounded px-1.5 py-0.5 text-start font-semibold wrap-anywhere outline-none focus-visible:ring-2"
           >
             {col.title}
           </button>
         ) : (
-          <span className="text-foreground text-title/[1.3] min-w-0 flex-1 font-semibold wrap-anywhere">
+          <span className="text-foreground text-title/[1.4] min-w-0 flex-1 font-semibold wrap-anywhere">
             {col.title}
           </span>
         )}
@@ -351,7 +351,7 @@ export function LessonColumnView({
         </div>
       )}
 
-      {showRootControls && scopedFilesCount > 0 && (
+      {showRootControls && (scopedFilesCount > 0 || isSearching) && (
         <div className="flex-none px-2.5 pb-1.5">
           <SearchBox
             name="lessons-search"
@@ -529,7 +529,7 @@ export function LessonColumnRow({
           aria-current={isActive ? "true" : undefined}
           onClick={(e) => onSelectDir(entry.parts, e.detail > 0)}
           className={cn(
-            "focus-visible:ring-ring studio-press group flex w-full items-center gap-2 text-start outline-none focus-visible:ring-2",
+            "focus-visible:ring-ring studio-press group flex w-full items-center gap-2 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset",
             "px-2.5 py-2 pointer-coarse:py-3",
             isActive
               ? "bg-primary/14 border-primary/55 text-foreground ms-1 w-[calc(100%-0.25rem)] rounded-s-lg rounded-e-none border border-e-0 font-semibold"
@@ -556,7 +556,7 @@ export function LessonColumnRow({
           <span
             className={cn(
               "min-w-0 flex-1 wrap-anywhere",
-              compact ? "text-sm/[1.35]" : "text-base/[1.35]",
+              compact ? "text-sm/[1.4]" : "text-base/[1.4]",
               isActive ? "font-semibold" : "font-medium",
             )}
           >
@@ -600,7 +600,7 @@ export function LessonColumnRow({
         data-lesson-row={entry.key}
         aria-current={isActive ? "true" : undefined}
         onClick={(e) => onSelectFile(f.key, matchMeta?.matchLine ?? null, e.detail > 0)}
-        className="focus-visible:ring-ring studio-press flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 ps-2.5 pe-1 text-start outline-none focus-visible:ring-2 pointer-coarse:py-3"
+        className="focus-visible:ring-ring studio-press flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 ps-2.5 pe-1 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset pointer-coarse:py-3"
       >
         <FileText
           aria-hidden

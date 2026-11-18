@@ -378,6 +378,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
               <Button
                 size="md"
                 variant={dirty ? "lit" : "outline"}
+                className="min-w-36"
                 disabled={!dirty || !info || !valid.success || saving || busy}
                 onClick={() => void save()}
                 aria-busy={saving}

@@ -5,6 +5,7 @@ import { classifyLessonTrailTransition, type LessonTrail } from "./tree";
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 const ENTER_MS = 125;
 const EXIT_MS = 150;
+const FOLDER_TRAVEL = "translateX(8px)";
 
 interface PanelSnapshot {
   key: string;
@@ -175,7 +176,8 @@ export function animateDeckTransition({
   );
   const cropped =
     previousCols.size !== prevTrail.columns.length || currentCols.size !== nextTrail.columns.length;
-  const replacesLayout = cropped || transition.closingContent;
+  const folderNavigation = !prevTrail.contentKey && !nextTrail.contentKey;
+  const replacesLayout = cropped || transition.closingContent || folderNavigation;
   const replaced = new Set<string>();
   if (!reduced && replacesLayout) {
     for (const [key, current] of currentCols) {
@@ -219,13 +221,21 @@ export function animateDeckTransition({
         scrollers(ghost).forEach((el, i) => {
           el.scrollTop = item.scrollTops[i] ?? 0;
         });
-        const crossfade = replacesLayout;
-        const anim = ghost.animate([{ opacity: item.opacity }, { opacity: 0 }], {
-          duration: crossfade ? ENTER_MS : EXIT_MS,
-          delay: crossfade ? 0 : Math.min(idx * 22, 60),
-          easing: "ease-out",
-          fill: "forwards",
-        });
+        const leavesFolder = folderNavigation && !currentCols.has(item.key);
+        const anim = ghost.animate(
+          leavesFolder
+            ? [
+                { opacity: item.opacity, transform: "none" },
+                { opacity: 0, transform: FOLDER_TRAVEL },
+              ]
+            : [{ opacity: item.opacity }, { opacity: 0 }],
+          {
+            duration: replacesLayout ? ENTER_MS : EXIT_MS,
+            delay: replacesLayout ? 0 : Math.min(idx * 22, 60),
+            easing: "ease-out",
+            fill: "forwards",
+          },
+        );
         animations.push(anim);
         const done = () => {
           ghost.remove();
@@ -265,11 +275,18 @@ export function animateDeckTransition({
     if (typeof el.animate !== "function") continue;
     const key = el.dataset.lessonContent ?? el.dataset.lessonsCol;
     const opacity = resume && resume.key === key ? resume.opacity : reduced ? 0.9 : 0.82;
+    const entersFolder =
+      !reduced && folderNavigation && key !== undefined && !previousCols.has(key);
     animations.push(
-      el.animate([{ opacity }, { opacity: 1 }], {
-        duration: reduced ? 80 : ENTER_MS,
-        easing: ENTER_EASE,
-      }),
+      el.animate(
+        entersFolder
+          ? [
+              { opacity, transform: FOLDER_TRAVEL },
+              { opacity: 1, transform: "none" },
+            ]
+          : [{ opacity }, { opacity: 1 }],
+        { duration: reduced ? 80 : ENTER_MS, easing: ENTER_EASE },
+      ),
     );
   }
 
