@@ -228,6 +228,7 @@ export const Tools = z.looseObject({
   materials: z.array(z.tuple([three("isMaterial", "a THREE.Material"), z.string()])).optional(),
   optics: OpticsTelemetry.optional(),
   cameraSample: fn.optional(),
+  cameraClock: z.literal(true).optional(),
   moveCameraAnchor: fn.optional(),
   // mc-assets/placed.ts makePlaced: what the creator drops into the scene from the Objects library, in one of the film's keyFiles
   placed: z
@@ -809,6 +810,7 @@ const ShotHit = z.looseObject({
 const ShotRow = z.looseObject({
   id: z.string().min(1).optional(),
   t: secs,
+  cameraClock: z.enum(["scene", "output"]).optional(),
   name: z.string().optional(),
   anim: Anim.optional(),
   transition: Transition.optional(),

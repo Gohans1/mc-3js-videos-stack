@@ -165,7 +165,7 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | --- | --- | --- |
 | 1 | ID bền vững và hòa giải sửa tay cho keyframe và shot | Qua review và kiểm thử |
 | 2 | Lấy mẫu camera, neo, tách shot, Hold, dán thuộc tính và spline | Qua review và kiểm thử |
-| 3 | Đồng hồ camera khi Freeze và Speed | Đang triển khai |
+| 3 | Đồng hồ camera khi Freeze và Speed | Qua review và kiểm thử |
 | 4 | CamPanel, lấy nét, chỉnh bố cục và nắn góc | Chờ |
 | 5 | Free Cam, đường bay 3D và kiểm tra xuyên tường | Chờ |
 | 6 | Timeline, easing, Graph Editor và thao tác keyframe | Chờ |
@@ -184,3 +184,15 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Lưu góc | Lấy mẫu trước AnimPanel và giữ đơn vị mm cùng neo có thể giải được. Dán thuộc tính chia Framing, Lens, DOF, Shake và Speed. |
 | Studio | Kiểm tra Orbit, Hold 1s, Split, lưu Free Cam và nhóm Paste bằng Chrome 1920×1080 trên phim thử riêng. |
 | Split đúng mốc | Dùng lại key hiện có làm tail. Khi gộp shot, Studio giữ ID gốc. |
+
+| Ghi chú đợt 3 | Chi tiết |
+| --- | --- |
+| Đồng hồ camera | Shot có thể dùng giờ cảnh hoặc giờ xuất. Chế độ giờ xuất phân bố đường bay theo thời lượng nhìn thấy của shot. |
+| Easing trong Studio | Camera vẫn có bảng easing khi timing hoặc Freeze đang bật. |
+| Kiểm tra Chrome | Tại hai thời điểm trong Freeze, cảnh đều ở giây 1. Camera đổi vị trí x từ 2,7424 sang 2 khi bật giờ xuất. |
+| Freeze đổi mốc | Camera giữ một đường thời gian liên tục qua đoạn giữ khung trong cùng shot. |
+| Sửa cut | Split, Roll và Merge quy đổi mốc cut theo giờ cảnh, giữ vị trí hiển thị của các key xung quanh. |
+| Keyframe trong Freeze | Camera tiếp tục hiện đồ thị và cho kéo key trên Freeze. Studio báo rõ khi mốc cắt không thể quy đổi về cùng khung. |
+| Freeze ở shot khác | Key hiện tại các lần phát lại của cùng cảnh và chỉ có một dòng lưu. Kiểm tra thêm, kéo và xóa trực tiếp trong Chrome. |
+| Biên Freeze | Key mới ở cuối Freeze thuộc khung đang chạy tiếp. Dán ở bản chiếu của key mở đầu giữ nguyên mốc gốc. |
+| Hold trong Freeze | Khoảng giữ góc kết thúc trong cùng lần phát camera, kể cả khi không có key ở mép Freeze. |

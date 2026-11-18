@@ -291,7 +291,8 @@ export async function buildScene(canvas, W, H, draft = false) {
     perform(t);
     placed.draw(t);
     scene.updateMatrixWorld();
-    const cameraTime = view === undefined ? t : viewTime(SHOTS_OUT, DURATION, view, t);
+    const trackTime = clocks?.camera ?? t;
+    const cameraTime = view === undefined ? trackTime : viewTime(SHOTS_OUT, DURATION, view, trackTime);
     const cam = sampleTrack(cameraTime);
     const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION, anims);
     camera.position.copy(cam.p);
@@ -373,7 +374,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   );
   const draw = Object.assign((t, nextClocks) => {
     clocks = nextClocks;
-    editTime = t;
+    editTime = clocks?.camera ?? t;
     composite(t);
   }, composite);
   draw.velocity = true;
@@ -470,6 +471,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     renderer,
     optics: opticsTelemetry,
     cameraSample,
+    cameraClock: true,
     moveCameraAnchor,
     placed,
     targets: [

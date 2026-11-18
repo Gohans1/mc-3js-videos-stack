@@ -1,12 +1,14 @@
 // The film's shots as data (package.json "live-studio".shotsTimeline), edited by hand like the camera keys (doc.ts: undo, saving,
 // manual edits are protected): a cut moved on the camera row (cam.ts rollCut), a shot renamed in the Camera tab. Each change puts a fresh
 // copy in EDIT.shots and runs the film's applyEdit, which rebuilds SHOTS and SHOTS_OUT from it in place.
+import { clockForTimeline } from "../../src/timing-state.mjs";
 import { equalJson } from "../../src/merge-edits.mjs";
 import { lightEdit } from "../activity/activity";
 import { changedRows, itemKey } from "../activity/timeline-activity";
 import { transitionOf, transitionSpan } from "./transitions";
 import { EDIT } from "film/edit";
 
+import { refreshTimedDocs } from "../core/timed-doc";
 import { createDoc } from "../core/doc";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { pruneShotSelection, transitionSelection } from "../core/selection";
@@ -17,6 +19,7 @@ import { refreshTimes } from "../timeline/timeline";
 export interface ShotRow {
   id?: string;
   t: number;
+  cameraClock?: "scene" | "output";
   name?: string;
   [k: string]: unknown;
 }
@@ -26,7 +29,9 @@ const changed = () => {
   (EDIT as Record<string, unknown>).shots = structuredClone(data);
   S.comments = data.map((s) => s.name ?? "");
   S.finalAt = -1;
+  const previousClock = clockForTimeline("cam");
   refreshTimes();
+  if (previousClock !== clockForTimeline("cam")) refreshTimedDocs();
   const state = get();
   set({ shotsRev: state.shotsRev + 1, ...pruneShotSelection(state, SHOTS_OUT.length) });
   if (S.render?.adjustments)
@@ -67,4 +72,10 @@ export const loadShots = async () => {
 export const renameShot = (i: number, name: string) =>
   doc.edit((s) => {
     s[i].name = name;
+  });
+
+export const setShotCameraClock = (i: number, mode: "scene" | "output") =>
+  doc.edit((shots) => {
+    if (mode === "output") shots[i].cameraClock = mode;
+    else delete shots[i].cameraClock;
   });

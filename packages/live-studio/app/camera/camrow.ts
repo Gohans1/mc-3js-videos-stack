@@ -1,8 +1,8 @@
-import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { EDIT } from "film/edit";
 
+import type { CameraSpan } from "../../src/camera-clock.mjs";
 import { cameraSpeed } from "../../src/camera-speed.mjs";
-import { timing, timingClock } from "../../src/timing-state.mjs";
+import { clockForTimeline, timing, timingClock } from "../../src/timing-state.mjs";
 import {
   compileTiming,
   frameVisible,
@@ -10,7 +10,9 @@ import {
   freezesOf,
   moveFreeze,
   playRanges,
+  segmentAt,
 } from "../../src/timing.mjs";
+import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { BLADE_CURSOR } from "../components/cursor";
 import { together } from "../core/doc";
 import { easeFn } from "../core/ease";
@@ -68,7 +70,6 @@ import {
 import {
   type CamKey,
   DEFAULT_EASE,
-  edit,
   groupRoom,
   holds,
   keys,
@@ -76,6 +77,7 @@ import {
   preview,
   previewRoll,
   restore,
+  retime,
   rollable,
   rollCut,
   rollRoom,
@@ -171,7 +173,7 @@ const drawSpeed = (
     w = S.el.camrow.clientWidth;
   for (let j = 0; j <= n; j++) {
     const t = a + ((x0 + Math.min(j / n, 1 - 1e-7) * (x1 - x0)) / w) * v;
-    speed.push(cameraSpeed(get().timing ? timingClock : null, from, to, f, t));
+    speed.push(cameraSpeed(get().timing ? clockForTimeline("cam") : null, from, to, f, t));
   }
   const peak = Math.max(1e-6, ...speed),
     y = (s: number) => floor - (s / peak) * (floor - top);
@@ -233,6 +235,41 @@ const animEdgeAt = (x: number, y: number, w: number, h: number, touch: boolean) 
   return pickAnimEdge(animHandles(w), x, touch ? 12 : 6, active, shotPick, hover);
 };
 
+const drawMotion = (
+  g: CanvasRenderingContext2D,
+  { sourceFrom: rawFrom, sourceTo: rawTo, from, to }: CameraSpan,
+  project: typeof timingClock.outputAt,
+  X: (t: number) => number,
+  w: number,
+  h: number,
+) => {
+  const cx0 = Math.max(-4, X(from) + 1),
+    cx1 = Math.min(w + 4, X(to) - 1);
+  if (cx1 <= cx0) return;
+  const top = PAD + HEAD + 3,
+    floor = h - PAD - FOOT - BAND - 2;
+  const sourceKeys = EDIT.cam as CamKey[];
+  for (let k = 1; k < sourceKeys.length; k++) {
+    const k0 = sourceKeys[k - 1],
+      k1 = sourceKeys[k];
+    if (k1.cut || k1.t <= k0.t || k1.t <= rawFrom || k0.t >= rawTo) continue;
+    const a = X(project(Math.max(k0.t, rawFrom), "after")),
+      b = X(project(Math.min(k1.t, rawTo), "before"));
+    if (b <= a || b < 0 || a > w) continue;
+    if (holds(k0, k1)) {
+      g.fillStyle = tone("muted-foreground");
+      g.fillRect(Math.max(cx0, a), floor - 1, Math.min(cx1, b) - Math.max(cx0, a), 1);
+      if (b - a > 70) {
+        g.font = `11px ${UI_FONT}`;
+        g.fillStyle = tone("clip-video-text");
+        g.fillText("hold", Math.max(cx0, a) + 10, (top + floor) / 2);
+      }
+      continue;
+    }
+    drawSpeed(g, a, b, k0.t, k1.t, k1.ease, top, floor);
+  }
+};
+
 const drawBlock = (
   g: CanvasRenderingContext2D,
   i: number,
@@ -242,12 +279,13 @@ const drawBlock = (
   h: number,
   on: boolean,
 ) => {
-  const { sourceFrom: rawFrom, sourceTo: rawTo, from: s, to: e } = span,
+  const { from: s, to: e } = span,
     x0 = X(s) + 1,
     x1 = X(e) - 1;
   if (x1 < 0 || x0 > w || x1 - x0 < 1) return;
   const y0 = PAD,
     y1 = h - PAD,
+    foot = y1 - FOOT - BAND,
     cx0 = Math.max(-4, x0),
     cx1 = Math.min(w + 4, x1),
     bw = cx1 - cx0;
@@ -281,30 +319,8 @@ const drawBlock = (
     g.fillStyle = tone("clip-video-text");
     g.fillText(`${label ? `Speed ${label} · ` : ""}${(e - s).toFixed(1)}s`, left + nw + 14, mid);
   }
-  // The camera's speed between this shot's keys
-  const top = y0 + HEAD + 3,
-    foot = y1 - FOOT - BAND,
-    floor = foot - 2;
-  const sourceKeys = EDIT.cam as CamKey[];
-  for (let k = 1; k < sourceKeys.length; k++) {
-    const k0 = sourceKeys[k - 1],
-      k1 = sourceKeys[k];
-    if (k1.cut || k1.t <= k0.t || k1.t <= rawFrom || k0.t >= rawTo) continue;
-    const a = X(timingClock.outputAt(Math.max(k0.t, rawFrom))),
-      b = X(timingClock.outputAt(Math.min(k1.t, rawTo), "before"));
-    if (b < 0 || a > w) continue;
-    if (holds(k0, k1)) {
-      g.fillStyle = tone("muted-foreground");
-      g.fillRect(Math.max(cx0, a), floor - 1, Math.min(cx1, b) - Math.max(cx0, a), 1);
-      if (b - a > 70) {
-        g.font = `11px ${UI_FONT}`;
-        g.fillStyle = tone("clip-video-text");
-        g.fillText("hold", Math.max(cx0, a) + 10, (top + floor) / 2);
-      }
-      continue;
-    }
-    drawSpeed(g, a, b, k0.t, k1.t, k1.ease, top, floor);
-  }
+  if (SHOTS_OUT[i].cameraClock !== "output" || !clockForTimeline("cam").cameraSpans)
+    drawMotion(g, span, timingClock.outputAt, X, w, h);
   // In, Out, Combo at the foot of the block, mapped across timing speed and freezes
   const an = animOf(i),
     clock = clockOf(),
@@ -352,6 +368,48 @@ const drawBlock = (
   }
 };
 
+const keyY = (h: number) => PAD + HEAD + (h - PAD * 2 - HEAD - BAND - FOOT) / 2;
+const insideOutputFreeze = (i: number) => {
+  const key = keys[i];
+  return (
+    !!key &&
+    segmentAt(timingClock, key.t)?.kind === "freeze" &&
+    clockForTimeline("cam").cameraRateAt?.(key.t) !== undefined
+  );
+};
+const drawDiamonds = (
+  g: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  picked: Set<number>,
+  overFreeze: boolean,
+) => {
+  const y = keyY(h),
+    r = 5;
+  keys.forEach((k, i) => {
+    if (insideOutputFreeze(i) !== overFreeze) return;
+    const x = xs[i];
+    if (x < -REACH || x > w + REACH) return;
+    g.beginPath();
+    g.moveTo(x, y - r);
+    g.lineTo(x + r, y);
+    g.lineTo(x, y + r);
+    g.lineTo(x - r, y);
+    closePathAndFill(g, k.cut || i === 0 ? tone("muted-foreground") : tone("foreground"));
+    if (picked.has(i)) {
+      g.strokeStyle = tone("pick");
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(x, y - r - 3);
+      g.lineTo(x + r + 3, y);
+      g.lineTo(x, y + r + 3);
+      g.lineTo(x - r - 3, y);
+      g.closePath();
+      g.stroke();
+    }
+  });
+};
+
 export const drawCamRow = () => {
   const c = S.el?.camrow;
   if (!c || !get().cam || !isElementShown(c)) return;
@@ -380,29 +438,7 @@ export const drawCamRow = () => {
     for (const span of ranges) drawBlock(g, i, span, X, w, h, any[i] && all[i]);
   });
   xs = keys.map((k) => X(k.t));
-  const y = PAD + HEAD + (h - PAD * 2 - HEAD - BAND - FOOT) / 2,
-    r = 5;
-  keys.forEach((k, i) => {
-    const x = xs[i];
-    if (x < -REACH || x > w + REACH) return;
-    g.beginPath();
-    g.moveTo(x, y - r);
-    g.lineTo(x + r, y);
-    g.lineTo(x, y + r);
-    g.lineTo(x - r, y);
-    closePathAndFill(g, k.cut || i === 0 ? tone("muted-foreground") : tone("foreground"));
-    if (picked.has(i)) {
-      g.strokeStyle = tone("pick");
-      g.lineWidth = 2;
-      g.beginPath();
-      g.moveTo(x, y - r - 3);
-      g.lineTo(x + r + 3, y);
-      g.lineTo(x, y + r + 3);
-      g.lineTo(x - r - 3, y);
-      g.closePath();
-      g.stroke();
-    }
-  });
+  drawDiamonds(g, w, h, picked, false);
   SHOTS_OUT.forEach((_, i) => {
     if (!transitionOf(i)) return;
     const { left, right } = transitionBox(i, w),
@@ -425,7 +461,14 @@ export const drawCamRow = () => {
     g.stroke();
     const sourceStart = shotsDoc.data?.[i]?.t;
     if (sourceStart !== undefined)
-      paintActivityMark(g, "transition", String(sourceStart), left + 2, TRANSITION_TOP + 2, right - left - 4);
+      paintActivityMark(
+        g,
+        "transition",
+        String(sourceStart),
+        left + 2,
+        TRANSITION_TOP + 2,
+        right - left - 4,
+      );
     if (on && right - left > 18) {
       g.fillStyle = tone("pick");
       g.fillRect(left + 3, cy - 5, 2, 10);
@@ -465,6 +508,11 @@ export const drawCamRow = () => {
     g.lineWidth = get().freezePick === i ? 2 : 1;
     g.strokeRect(left + 1, PAD + 1, width - 2, h - PAD * 2 - 2);
   }
+  for (const span of clockForTimeline("cam").cameraSpans ?? []) {
+    const scale = (span.to - span.from) / (span.sourceTo - span.sourceFrom);
+    drawMotion(g, span, (t) => span.from + (t - span.sourceFrom) * scale, X, w, h);
+  }
+  drawDiamonds(g, w, h, picked, true);
   if (freezeGhost) {
     const left = X(freezeGhost.from) + 1,
       width = X(freezeGhost.to) - left - 1;
@@ -529,8 +577,9 @@ const keyAt = (x: number, touch: boolean) => {
 };
 
 // As on the key rows: the playhead line comes first over the keys and cuts behind it, except the picked key
-const keyUnder = (x: number, w: number, touch: boolean) => {
+const keyUnder = (x: number, y: number, w: number, h: number, touch: boolean) => {
   const i = keyAt(x, touch);
+  if (insideOutputFreeze(i) && Math.abs(y - keyY(h)) > (touch ? 13 : 8)) return -1;
   return i >= 0 && onPlayhead(x, w, touch) && !picks().includes(i) ? -1 : i;
 };
 
@@ -575,6 +624,7 @@ export const attachCamRow = () => {
     along: Along | null;
     x: number;
     t: number;
+    now: number;
     snap: string;
     shots: string;
     roll: boolean;
@@ -636,7 +686,7 @@ export const attachCamRow = () => {
     if (e.button !== 0) return;
     const { x, y, w, h } = local(e),
       touch = e.pointerType === "touch",
-      i = keyUnder(x, w, touch),
+      i = keyUnder(x, y, w, h, touch),
       add = e.shiftKey || e.ctrlKey || e.metaKey;
     if (get().blade) {
       if (S.playing) setPlaying(false);
@@ -647,7 +697,7 @@ export const attachCamRow = () => {
     c.setPointerCapture(e.pointerId);
     const t = timeAt(x, w),
       freeze = freezeAt(t);
-    if (freeze >= 0 && !onPlayhead(x, w, touch)) {
+    if (freeze >= 0 && !insideOutputFreeze(i) && !onPlayhead(x, w, touch)) {
       set(transitionSelection({ kind: "freeze", index: freeze }, get().side));
       const f = freezesOf(timing)[freeze],
         [t0, t1] = freezeRange(timing, timingClock, freeze),
@@ -760,6 +810,7 @@ export const attachCamRow = () => {
         along,
         x,
         t: keys[i].t,
+        now: keys[i].t,
         snap: snapshot(),
         shots: shotsDoc.snapshot(),
         roll: !movable(i),
@@ -902,8 +953,9 @@ export const attachCamRow = () => {
     }
     if (!drag) {
       const t = timeAt(x, w),
-        f = freezeAt(t);
-      if (f >= 0) {
+        f = freezeAt(t),
+        i = keyUnder(x, y, w, h, false);
+      if (f >= 0 && !insideOutputFreeze(i)) {
         const [from, to] = freezeRange(timing, timingClock, f);
         c.style.cursor = (Math.min(t - from, to - t) / v) * w < 6 ? "ew-resize" : "default";
         return;
@@ -923,7 +975,6 @@ export const attachCamRow = () => {
         c.style.cursor = x - b.left < 6 || b.right - x < 6 ? "ew-resize" : "pointer";
         return;
       }
-      const i = keyUnder(x, w, false);
       c.style.cursor = edge
         ? "ew-resize"
         : i < 0
@@ -938,8 +989,8 @@ export const attachCamRow = () => {
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     drag.moved = true;
     c.style.cursor = drag.roll ? "ew-resize" : "default";
-    restore(drag.snap);
     shotsDoc.restore(drag.shots);
+    restore(drag.snap);
     const i = drag.i,
       snap = drag.magnet(
         drag.t + ((x - drag.x) / w) * v,
@@ -954,6 +1005,7 @@ export const attachCamRow = () => {
       const [lo, hi] = groupRoom(drag.group),
         { along } = drag,
         d = Math.max(lo, along?.room[0] ?? lo, Math.min(hi, along?.room[1] ?? hi, to - drag.t));
+      drag.now = drag.t + d;
       shiftCamKeys(drag.group, d, preview);
       along?.preview(d);
       snapLine(snap.target === null ? null : snappedTo([drag.t + d], [snap.target]));
@@ -965,6 +1017,7 @@ export const attachCamRow = () => {
     }
     const [lo, hi] = drag.roll ? rollRoom(i) : room(i),
       t = Math.max(lo, Math.min(hi, to));
+    drag.now = r3(t);
     if (drag.roll) previewRoll(i, t);
     else
       preview((ks) => {
@@ -1040,7 +1093,7 @@ export const attachCamRow = () => {
     }
     if (!drag) return;
     snapLine(null);
-    const { snap, shots, roll, moved, i, group, along, t: was } = drag;
+    const { snap, shots, roll, moved, i, group, along, t: was, now: t } = drag;
     drag = null;
     c.style.cursor = "";
     // A plain click brings the picture to the key, so the Camera tab and the frame show the same moment; on a picked group it
@@ -1050,9 +1103,8 @@ export const attachCamRow = () => {
       seek(keys[i].t);
       return;
     }
-    const t = keys[i].t;
-    restore(snap);
     shotsDoc.restore(shots);
+    restore(snap);
     along?.restore();
     if (e.type !== "pointerup" || t === was) return;
     if (along)
@@ -1062,10 +1114,7 @@ export const attachCamRow = () => {
       });
     else if (group.length > 1) shiftCamKeys(group, r3(t - was));
     else if (roll) rollCut(i, t);
-    else
-      edit((ks) => {
-        ks[i].t = t;
-      });
+    else retime(i, t);
   };
   c.addEventListener("pointerup", up);
   c.addEventListener("pointercancel", up);

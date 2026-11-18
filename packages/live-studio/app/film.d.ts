@@ -36,6 +36,7 @@ declare module "film/scene" {
     renderer?: THREE.WebGLRenderer;
     materials?: [THREE.Material, string][];
     optics?: OpticsTelemetry;
+    cameraClock?: true;
     cameraSample?: () => import("./camera/camera-edit").CameraView;
     moveCameraAnchor?: import("./camera/camera-edit").MoveCameraAnchor;
     rig?: THREE.Object3D;

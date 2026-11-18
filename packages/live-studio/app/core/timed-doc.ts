@@ -1,11 +1,16 @@
 import { mapTimeline } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
+import type { TimingClock } from "../../src/timing.mjs";
 import { createDoc, type Doc, type Hooks } from "./doc";
 
 export interface TimedDoc<T> extends Doc<T> {
   readonly source: T | null;
   refresh: () => void;
+  sourceSnapshot: () => string;
+  restoreSource: (snap: string) => void;
   editSource: (change: (d: T) => void) => void;
+  edit: (change: (d: T) => void, inputClock?: TimingClock) => void;
+  preview: (change: (d: T) => void, inputClock?: TimingClock) => void;
 }
 const refreshers = new Set<() => void>();
 export const refreshTimedDocs = () => {
@@ -24,11 +29,12 @@ export const createTimedDoc = <T extends object>(
     hooks.changed();
   };
   const source = createDoc<T>(name, { ...hooks, changed });
-  const changeSource = (change: (d: T) => void) => (data: T) => {
+  const changeSource = (change: (d: T) => void, inputClock?: TimingClock) => (data: T) => {
     const clock = clockForTimeline(name);
-    const next = mapTimeline(name, data, clock, false, null, durations());
+    const basis = inputClock ?? clock;
+    const next = mapTimeline(name, data, basis, false, null, durations());
     change(next);
-    const raw = mapTimeline(name, next, clock, true, data, durations());
+    const raw = mapTimeline(name, next, clock, true, data, durations(), basis);
     if (Array.isArray(data) && Array.isArray(raw)) data.splice(0, data.length, ...raw);
     else {
       for (const k of Object.keys(data)) delete (data as Record<string, unknown>)[k];
@@ -48,9 +54,11 @@ export const createTimedDoc = <T extends object>(
     },
     load: source.load,
     refresh,
+    sourceSnapshot: source.snapshot,
+    restoreSource: source.restore,
     editSource: (change) => source.edit(change),
-    edit: (change) => source.edit(changeSource(change)),
-    preview: (change) => source.preview(changeSource(change)),
+    edit: (change, inputClock) => source.edit(changeSource(change, inputClock)),
+    preview: (change, inputClock) => source.preview(changeSource(change, inputClock)),
     snapshot: () => JSON.stringify(view),
     restore: (snap) =>
       source.restore(

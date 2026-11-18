@@ -6,6 +6,7 @@ export function mapTimeline<T>(
   inverse?: boolean,
   previous?: T | null,
   durations?: Record<string, number>,
+  previousClock?: TimingClock,
 ): T;
 export function mapVoice<
   T extends { s: number; e: number; words: { s: number; e: number; w: string }[] },

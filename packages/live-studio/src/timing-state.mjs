@@ -1,3 +1,4 @@
+import { compileCameraClock } from "./camera-clock.mjs";
 import { compileLayerTiming, overlayTime } from "./layer-timing.mjs";
 import { LINKAGE_KINDS } from "./linkage.mjs";
 import { transitionAvailable } from "./timing-effects.mjs";
@@ -11,7 +12,15 @@ let pictureKey = "",
   layersKey = "";
 let layerClocks = {};
 let audioClock = layerClock;
-export const setTiming = (data, sourceDuration = timingClock.sourceDuration) => {
+let cameraClock = timingClock,
+  cameraShots = [],
+  cameraKey = "";
+export const setTiming = (
+  data,
+  sourceDuration = timingClock.sourceDuration,
+  shots = cameraShots,
+) => {
+  cameraShots = shots;
   timing = data;
   const nextPicture = JSON.stringify([
     sourceDuration,
@@ -24,6 +33,11 @@ export const setTiming = (data, sourceDuration = timingClock.sourceDuration) => 
   if (pictureKey !== nextPicture) {
     timingClock = compileTiming(data, sourceDuration);
     pictureKey = nextPicture;
+  }
+  const nextCamera = JSON.stringify([nextPicture, shots.map((shot) => [shot.t, shot.cameraClock])]);
+  if (cameraKey !== nextCamera) {
+    cameraClock = compileCameraClock(timingClock, shots);
+    cameraKey = nextCamera;
   }
   const nextLayers = JSON.stringify([sourceDuration, data.layers, data.layerKinds, nextPicture]);
   if (layersKey !== nextLayers) {
@@ -59,9 +73,11 @@ export const setTiming = (data, sourceDuration = timingClock.sourceDuration) => 
   }
 };
 export const clockForTimeline = (name) =>
-  name === "sound"
-    ? audioClock
-    : (layerClocks[name === "openfilm" ? "overlays" : name] ?? timingClock);
+  name === "cam"
+    ? cameraClock
+    : name === "sound"
+      ? audioClock
+      : (layerClocks[name === "openfilm" ? "overlays" : name] ?? timingClock);
 export const layerDuration = () =>
   Math.max(0, ...Object.values(layerClocks).map((clock) => clock.duration));
 
@@ -72,6 +88,7 @@ export const timedDraw = (draw) => {
       layers = layerClock.sourceAt(t);
     const adjustment = clockForTimeline("adjustment");
     return render(frame, {
+      camera: cameraClock.cameraRateAt?.(t) !== undefined ? cameraClock.sourceAt(t) : frame,
       layers,
       adjustments: adjustment.sourceAt(t),
       textTime: (item) => overlayTime(layerClock, t, item),
@@ -87,7 +104,8 @@ export const timedDraw = (draw) => {
   if (asyncFrame) out.renderFrame = (t) => at(t, asyncFrame);
   if (draw.describe) out.describe = (t) => draw.describe(frameAt(timingClock, t));
   if (draw.prepareFrame) out.prepareFrame = (t) => draw.prepareFrame(frameAt(timingClock, t));
-  if (draw.needsPreparation) out.needsPreparation = (t) => draw.needsPreparation(frameAt(timingClock, t));
+  if (draw.needsPreparation)
+    out.needsPreparation = (t) => draw.needsPreparation(frameAt(timingClock, t));
   if (draw.variants)
     out.variants = draw.variants.map((v) => ({
       ...v,

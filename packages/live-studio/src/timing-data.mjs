@@ -1,4 +1,5 @@
 import { isTornByReorder, remapOutputTime, startsOnHold, timebaseClock } from "./layer-timing.mjs";
+import { equalJson } from "./merge-edits.mjs";
 import { clipTiming, playRanges } from "./timing.mjs";
 
 const overlaySpan = (clock, basis, a, b) => {
@@ -18,6 +19,95 @@ const soundSpan = (clock, a, b) => {
   return { from, to: clock.outputAt(b, "before"), torn: false };
 };
 
+const outgoingCameraKeys = (rows) =>
+  new Set(
+    rows.flatMap((key, i) => {
+      if (!key.cut) return [];
+      const prev = rows[i - 1];
+      if (typeof key.tailId === "string") return [key.tailId];
+      return prev && !prev.cut && prev.t === key.t ? [prev.id ?? prev] : [];
+    }),
+  );
+const cameraEdge = (key, clock, outgoing, inverse = false) => {
+  if (!clock.cameraPicture) return !key.cut && key.t > 0 ? "before" : "after";
+  return key.cut || outgoing.has(key.id ?? key) || (!inverse && !clock.visible(key.t))
+    ? "before"
+    : "after";
+};
+const cameraPositions = (key, clock, edge) => {
+  if (key.cut) {
+    const cut = (clock.cameraPicture ?? clock).outputAt(key.t, edge);
+    const images = clock.cameraOutputsAt?.(key.t, "after") ?? [];
+    return [cut, ...images.filter((t) => Math.abs(t - cut) > 1e-9)].sort((a, b) => a - b);
+  }
+  const positions = clock.cameraOutputsAt?.(key.t, edge);
+  return positions?.length ? positions : [clock.outputAt(key.t, edge)];
+};
+const cameraVisible = (key, clock) =>
+  clock.visible(key.t) || (!key.cut && clock.visible(key.t - 1e-7));
+const cameraMeta = (key, t, alias) => ({ source: key.t, output: t, alias });
+const orderCameraRows = (a, b) =>
+  a.t - b.t ||
+  Number(!!a.cut || a.__timing?.source === 0) - Number(!!b.cut || b.__timing?.source === 0);
+
+const projectCameraRows = (rows, clock) => {
+  const outgoing = outgoingCameraKeys(rows);
+  return rows
+    .flatMap((key, index) => {
+      if (!cameraVisible(key, clock)) return [];
+      const positions = cameraPositions(key, clock, cameraEdge(key, clock, outgoing));
+      const alias = positions.length > 1 ? (key.id ?? index) : undefined;
+      const track = clock.placements || clock.cameraRateAt;
+      return positions.map((t) =>
+        track ? { ...key, t, __timing: cameraMeta(key, t, alias) } : { ...key, t },
+      );
+    })
+    .sort(orderCameraRows);
+};
+
+const unprojectCameraRows = (rows, clock, previous, previousClock) => {
+  const aliases = new Map();
+  const oldOutgoing = outgoingCameraKeys(previous ?? []);
+  const outgoing = outgoingCameraKeys(rows);
+  for (const [i, key] of (previous ?? []).entries()) {
+    if (!cameraVisible(key, previousClock)) continue;
+    const count = cameraPositions(
+      key,
+      previousClock,
+      cameraEdge(key, previousClock, oldOutgoing),
+    ).length;
+    if (count > 1) aliases.set(key.id ?? i, { key, count, seen: 0, best: null });
+  }
+  const result = [];
+  for (const key of rows) {
+    const { __timing: meta, ...fields } = key;
+    const edge = cameraEdge(key, clock, outgoing, true);
+    const basis = key.cut ? (clock.cameraPicture ?? clock) : clock;
+    const moved = !meta || Math.abs(key.t - meta.output) >= 1e-9;
+    const samePlacement =
+      !moved &&
+      (clock === previousClock ||
+        cameraPositions({ ...key, t: meta.source }, clock, edge).some(
+          (t) => Math.abs(t - key.t) < 1e-9,
+        ));
+    const candidate = { ...fields, t: samePlacement ? meta.source : basis.sourceAt(key.t, edge) };
+    const alias =
+      meta && (key.id === undefined || key.id === meta.alias) ? aliases.get(meta.alias) : undefined;
+    if (alias) {
+      alias.seen++;
+      const edited = moved || !equalJson({ ...fields, t: meta.source }, alias.key);
+      if (!alias.best || (edited && !alias.best.edited)) alias.best = { candidate, edited };
+    } else result.push(candidate);
+  }
+  // Removing any visible placement removes its shared key; an edit in one placement updates the shared row.
+  for (const alias of aliases.values())
+    if (alias.seen === alias.count) result.push(alias.best.candidate);
+  result.push(
+    ...structuredClone((previous ?? []).filter((key) => !cameraVisible(key, previousClock))),
+  );
+  return result.sort(orderCameraRows);
+};
+
 export const mapTimeline = (
   name,
   data,
@@ -25,6 +115,7 @@ export const mapTimeline = (
   inverse = false,
   previous = null,
   durations = {},
+  previousClock = clock,
 ) => {
   if (data === null) return null;
   if (name === "sound" && clock.forClip) {
@@ -45,8 +136,11 @@ export const mapTimeline = (
   }
   const out = structuredClone(data),
     time = inverse ? clock.sourceAt : clock.outputAt;
-  const keyVisible = (k) =>
-    clock.visible(k.t) || (name === "cam" && !k.cut && clock.visible(k.t - 1e-7));
+  if (name === "cam")
+    return inverse
+      ? unprojectCameraRows(out, clock, previous, previousClock)
+      : projectCameraRows(out, clock);
+  const keyVisible = (k) => clock.visible(k.t);
   const keys = (value, before, depth = 0) => {
     if (!value || typeof value !== "object") return value;
     if (Array.isArray(value)) {
@@ -54,27 +148,21 @@ export const mapTimeline = (
         value.every((k) => k && typeof k === "object" && !Array.isArray(k) && Number.isFinite(k.t))
       ) {
         const mapped = value
-          .filter((k) => inverse || keyVisible(k))
-          .map((k) => {
-            const edge = name === "cam" && !k.cut && k.t > 0 ? "before" : "after";
-            const meta = k.__timing;
+          .filter((key) => inverse || keyVisible(key))
+          .map((key) => {
+            const meta = key.__timing;
             const t =
-              inverse && meta && Math.abs(k.t - meta.output) < 1e-9 ? meta.source : time(k.t, edge);
-            const next = { ...k, t };
+              inverse && meta && Math.abs(key.t - meta.output) < 1e-9
+                ? meta.source
+                : time(key.t, "after");
+            const next = { ...key, t };
             if (inverse) delete next.__timing;
-            else if (clock.placements) next.__timing = { source: k.t, output: t };
+            else if (clock.placements) next.__timing = { source: key.t, output: t };
             return next;
           });
         if (inverse && Array.isArray(before))
-          mapped.push(...structuredClone(before.filter((k) => !keyVisible(k))));
-        return mapped.sort(
-          (a, b) =>
-            a.t - b.t ||
-            (name === "cam"
-              ? Number(!!a.cut || a.__timing?.source === 0) -
-                Number(!!b.cut || b.__timing?.source === 0)
-              : 0),
-        );
+          mapped.push(...structuredClone(before.filter((key) => !keyVisible(key))));
+        return mapped.sort((a, b) => a.t - b.t);
       }
       return value.map((v, i) => keys(v, before?.[i], depth + 1));
     }
@@ -98,7 +186,7 @@ export const mapTimeline = (
     }
     return value;
   };
-  if (name === "cam" || name.startsWith("keys/")) return keys(out, previous);
+  if (name.startsWith("keys/")) return keys(out, previous);
   if (name === "text" || name === "adjustment" || name === "openfilm") {
     for (const [index, item] of out.items.entries()) {
       const a = item.from,

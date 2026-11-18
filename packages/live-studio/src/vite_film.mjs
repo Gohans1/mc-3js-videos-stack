@@ -74,10 +74,10 @@ export const filmPlugin = (film) => {
         ${native}
         export const SHOTS_OUT = [];
         export let DURATION = 0;
-        setTiming(initial, source.DURATION);
+        setTiming(initial, source.DURATION, source.SHOTS_OUT);
         export function applyEdit() {
           source.applyEdit?.();
-          setTiming(timing, source.DURATION);
+          setTiming(timing, source.DURATION, source.SHOTS_OUT);
           DURATION = Math.max(1 / 30, timingClock.duration, layerDuration());
           SHOTS_OUT.splice(
             0,

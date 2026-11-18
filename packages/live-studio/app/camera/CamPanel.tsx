@@ -17,7 +17,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 
-import { FieldRow, KeyNav, Reset, SaveStatus, Section, SliderRow } from "../components/inspector";
+import {
+  FieldRow,
+  KeyNav,
+  Reset,
+  SaveStatus,
+  Section,
+  Segmented,
+  SliderRow,
+} from "../components/inspector";
 import { NumberField } from "../components/NumberField";
 import { Tip } from "../components/Tip";
 import { S } from "../core/state";
@@ -55,7 +63,7 @@ import {
   splitShot,
 } from "./cam";
 import { cameraKeyNavigation } from "./camera-edit";
-import { renameShot } from "./shots";
+import { renameShot, setShotCameraClock, shotsDoc } from "./shots";
 
 const CameraEasePanel = lazy(() =>
   import("../shell/LazyPanels").then((m) => ({ default: m.CameraEasePanel })),
@@ -74,7 +82,8 @@ function ShotSection({ shot }: { shot: number }) {
   useStudio((s) => s.shotsRev);
   const shots = useStudio((s) => s.shots),
     free = useStudio((s) => s.free),
-    sound = useStudio((s) => s.sound);
+    sound = useStudio((s) => s.sound),
+    timing = useStudio((s) => s.timing);
   const [a, b] = shotSpan(shot),
     name = S.comments[shot] ?? "";
   return (
@@ -134,6 +143,19 @@ function ShotSection({ shot }: { shot: number }) {
         </span>
         <span className="text-muted-foreground text-xs tabular-nums">{(b - a).toFixed(1)} s</span>
       </FieldRow>
+      {shots && timing && S.tools?.cameraClock && shotsDoc.data?.[shot] && (
+        <FieldRow label="Camera clock">
+          <Segmented
+            label="Camera clock"
+            value={shotsDoc.data[shot].cameraClock ?? "scene"}
+            items={[
+              { id: "scene", title: "Scene time" },
+              { id: "output", title: "Output time" },
+            ]}
+            onChange={(mode) => setShotCameraClock(shot, mode)}
+          />
+        </FieldRow>
+      )}
       {sound && shot > 0 && (
         <FieldRow label="Cut sound">
           <DropdownMenu>
@@ -427,7 +449,7 @@ export function CamPanel() {
       <Saved />
       <ShotSection shot={shownShot()} />
       {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}
-      <Section title="Keyframe easing" closed>
+      <Section title="Keyframe easing">
         <Suspense fallback={null}>
           <CameraEasePanel />
         </Suspense>

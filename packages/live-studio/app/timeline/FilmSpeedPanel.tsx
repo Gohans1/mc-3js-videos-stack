@@ -142,7 +142,7 @@ function TimingSpeedPanel() {
   useStudio((s) => s.timingRev);
   useStudio((s) => s.shotPick);
   useFrame();
-  const [tab, setTab] = useState<"standard" | "curve" | "velocity">("standard");
+  const [tab, setTab] = useState<"standard" | "curve" | "velocity" | "camera">("standard");
   const speedPreview = useRef<string | null>(null);
   const speedDoc = {
     snapshot: () => (speedPreview.current = timingDoc.snapshot()),
@@ -155,33 +155,41 @@ function TimingSpeedPanel() {
   const freeze = freezePick === null ? null : freezes[freezePick];
   if (freeze && !freeze.blank)
     return (
-      <Section
-        title="Freeze frame"
-        right={
-          <Button
-            variant="quiet"
-            size="icon"
-            aria-label="Delete freeze frame"
-            onClick={() => removeFreeze(freezePick!)}
-          >
-            <Trash2 />
-          </Button>
-        }
+      <div
+        data-arrow-scroll
+        className="scroll-fade flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 *:shrink-0"
       >
-        <SaveStatus state={saved} hideWhenIdle className="block pb-1" />
-        <FieldRow label="Duration">
-          <ValueBox
-            name="Freeze duration"
-            value={freeze.duration}
-            step={1 / 30}
-            digits={2}
-            unit="s"
-            min={1 / 30}
-            max={600}
-            onSave={(v) => setFreezeDuration(freezePick!, v)}
-          />
-        </FieldRow>
-      </Section>
+        <Section
+          title="Freeze frame"
+          right={
+            <Button
+              variant="quiet"
+              size="icon"
+              aria-label="Delete freeze frame"
+              onClick={() => removeFreeze(freezePick!)}
+            >
+              <Trash2 />
+            </Button>
+          }
+        >
+          <SaveStatus state={saved} hideWhenIdle className="block pb-1" />
+          <FieldRow label="Duration">
+            <ValueBox
+              name="Freeze duration"
+              value={freeze.duration}
+              step={1 / 30}
+              digits={2}
+              unit="s"
+              min={1 / 30}
+              max={600}
+              onSave={(v) => setFreezeDuration(freezePick!, v)}
+            />
+          </FieldRow>
+        </Section>
+        <Section title="Camera easing">
+          <CameraEasePanel />
+        </Section>
+      </div>
     );
   const shot = shownShot(),
     speed = shotSpeed(shot),
@@ -218,10 +226,11 @@ function TimingSpeedPanel() {
         items={[
           { id: "standard", title: "Standard" },
           { id: "curve", title: "Curve" },
-          { id: "velocity", title: "Velocity effects" },
+          { id: "velocity", title: "Velocity" },
+          { id: "camera", title: "Camera" },
         ]}
       />
-      <TabStage activeKey={tab} order={["standard", "curve", "velocity"]}>
+      <TabStage activeKey={tab} order={["standard", "curve", "velocity", "camera"]}>
         {tab === "standard" && (
           <Section
             title="Speed"
@@ -325,6 +334,7 @@ function TimingSpeedPanel() {
           </>
         )}
         {tab === "velocity" && <VelocityPanel key={shot} shot={shot} />}
+        {tab === "camera" && <CameraEasePanel />}
       </TabStage>
     </div>
   );

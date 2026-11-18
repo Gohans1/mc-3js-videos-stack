@@ -1,6 +1,8 @@
 import type { CameraMotion } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
+import { canPlaceCameraCut } from "../../src/camera-clock.mjs";
+import { clockForTimeline } from "../../src/timing-state.mjs";
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
 // camera row like the sound lanes (doc.ts: undo, saving, manual edits are protected). The film draws from EDIT.cam, so every change
 // puts a fresh copy there and the picture follows at once; its caches are keyed on that array, so it is never edited in place.
@@ -31,6 +33,7 @@ import { type ShotRow, shotsDoc } from "./shots";
 export type Point = [number, number, number] | Record<string, unknown>; // a world point, or the film's anchor ({"eye": [...]})
 export interface CamKey {
   id?: string;
+  __timing?: { source: number; output: number; alias?: string | number };
   t: number;
   p: Point;
   l: Point;
@@ -73,11 +76,11 @@ const doc = createTimedDoc<CamKey[]>("cam", {
   received: () => lightEdit("cam"),
   saved: (camSaved) => set({ camSaved }),
   replaced: (was) => {
-    if (was?.length !== keys.length && (get().camKey !== null || get().camPicks.length))
+    if (was?.length !== doc.source?.length && (get().camKey !== null || get().camPicks.length))
       setKey(null);
   },
 });
-export const { edit, preview, snapshot, restore } = doc;
+export const { edit, preview, sourceSnapshot: snapshot, restoreSource: restore } = doc;
 export const loadCam = async () => {
   set({ cam: !!(await doc.load()) });
 };
@@ -89,14 +92,28 @@ export const holds = (a: CamKey, b: CamKey) =>
   JSON.stringify([a.p, a.l, a.fov, a.mm, a.fstop, a.focus, a.handheld, a.roll, a.wave, a.bob]) ===
     JSON.stringify([b.p, b.l, b.fov, b.mm, b.fstop, b.focus, b.handheld, b.roll, b.wave, b.bob]);
 // The keys a key may move between: its shot's cut (or the film's start) and the next cut, never past its neighbours
-export const room = (i: number): [number, number] => [
-  i > 0 ? Math.min(keys[i].t, keys[i - 1].t + SAME) : 0,
-  i + 1 < keys.length ? Math.max(keys[i].t, keys[i + 1].t - SAME) : Infinity,
-];
-export const movable = (i: number) => i > 0 && !!keys[i] && !keys[i].cut;
+const placementRoom = (k: CamKey): [number, number] => {
+  const placement = clockForTimeline("cam").cameraSpans?.find(
+    (span) => k.t >= span.from && k.t < span.to,
+  );
+  return placement ? [placement.from, Math.max(k.t, placement.to - SAME)] : [0, Infinity];
+};
+export const room = (i: number): [number, number] => {
+  const [from, to] = placementRoom(keys[i]);
+  return [
+    Math.max(from, i > 0 ? Math.min(keys[i].t, keys[i - 1].t + SAME) : 0),
+    Math.min(to, i + 1 < keys.length ? Math.max(keys[i].t, keys[i + 1].t - SAME) : Infinity),
+  ];
+};
+export const movable = (i: number) =>
+  i > 0 && !!keys[i] && !keys[i].cut && keys[i].__timing?.source !== 0;
 export const setKey = (i: number | null) => {
   set(transitionSelection({ kind: "camKey", index: i }, get().side));
   S.dirty = true;
+};
+const selectPlacement = (id: string | undefined, t: number) => {
+  const i = keys.findIndex((row) => row.id === id && Math.abs(row.t - t) < SAME);
+  setKey(i >= 0 ? i : null);
 };
 // Selection includes fixed keys; group retiming and deletion still preserve shot boundaries.
 export const pickCamKeys = (is: number[], shots?: number[]) => {
@@ -114,6 +131,9 @@ export const groupRoom = (is: number[]): [number, number] => {
   let lo = -Infinity,
     hi = Infinity;
   for (const i of is) {
+    const [from, to] = placementRoom(keys[i]);
+    lo = Math.max(lo, from - keys[i].t);
+    hi = Math.min(hi, to - keys[i].t);
     let p = i - 1,
       n = i + 1;
     while (is.includes(p)) p--;
@@ -136,26 +156,32 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
       (k) =>
         k.t >= SAME &&
         k.t <= DURATION - SAME &&
-        !keys.some((x) => x.cut && Math.abs(x.t - k.t) < SAME),
+        !keys.some((x, i) => !movable(i) && Math.abs(x.t - k.t) < SAME),
     );
   if (!ok.length) {
-    say("Nothing pasted: these keyframes would land on a cut or off the film. Move the playhead");
+    say(
+      "Nothing pasted: these keyframes would land on a cut, the opening key, or off the film. Move the playhead",
+    );
     return;
   }
   edit((ks) => {
     for (const k of ok) {
       delete k.cut;
       delete k.tailId;
+      delete k.__timing;
       const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
       if (on > 0) {
-        ks[on] = { ...k, id: ks[on].id ?? newRowId() };
+        const target = ks[on];
+        ks[on] = { ...k, id: target.id ?? newRowId(), __timing: target.__timing };
         continue;
       }
       const i = ks.findIndex((x) => x.t > k.t);
       ks.splice(i < 0 ? ks.length : i, 0, { ...k, id: newRowId() });
     }
   });
-  pickCamKeys(ok.map((k) => keys.findIndex((x, i) => i > 0 && !x.cut && x.t === k.t)));
+  pickCamKeys(
+    ok.map((k) => keys.findIndex((x, i) => i > 0 && !x.cut && Math.abs(x.t - k.t) < 1e-6)),
+  );
   say(
     `${ok.length} keyframe${ok.length > 1 ? "s" : ""} pasted at ${stamp(S.t)}${ok.length < items.length ? `, ${items.length - ok.length} left out (on a cut or off the film)` : ""}`,
   );
@@ -172,11 +198,15 @@ export const removeCamKeys = (is: number[]) => {
 
 export const nearestKey = (t: number) =>
   keys.reduce((best, k, i) => (Math.abs(k.t - t) < Math.abs(keys[best].t - t) ? i : best), 0);
-export const retime = (i: number, t: number) =>
+export const retime = (i: number, t: number) => {
+  const id = keys[i]?.id;
+  const [a, b] = room(i);
+  const next = r3(Math.max(a, Math.min(b, t)));
   edit((ks) => {
-    const [a, b] = room(i);
-    ks[i].t = r3(Math.max(a, Math.min(b, t)));
+    ks[i].t = next;
   });
+  selectPlacement(id, next);
+};
 // fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
 export const setLens = (i: number, field: "fov" | "roll" | "wave", v: number | undefined) =>
   edit((ks) => {
@@ -223,17 +253,19 @@ export const removeKey = (i: number) => {
 // A still stretch: the same framing again `secs` later (or just before the next key), so the camera rests between the two
 export const holdAfter = (i: number, secs = 1) => {
   const k = keys[i],
-    next = keys[i + 1];
-  const t = r3(Math.min(k.t + secs, next ? next.t - SAME * 2 : k.t + secs));
+    next = keys[i + 1],
+    [, end] = placementRoom(k);
+  const t = r3(Math.min(k.t + secs, next ? next.t - SAME * 2 : Infinity, end));
   if (t - k.t < SAME * 2) {
     say("No room before the next keyframe. Move it later first");
     return;
   }
+  const id = newRowId();
   edit((ks) => {
     const { ease: _, cut: __, tailId: _tail, __timing: _timing, ...pose } = structuredClone(ks[i]);
-    ks.splice(i + 1, 0, { ...pose, id: newRowId(), t, motion: "hold" });
+    ks.splice(i + 1, 0, { ...pose, id, t, motion: "hold" });
   });
-  setKey(i + 1);
+  selectPlacement(id, t);
   say(`Camera holds ${stamp(k.t)} → ${stamp(t)}. Drag the new keyframe to hold longer`);
 };
 
@@ -287,7 +319,7 @@ const insertKey = (t: number, view: CameraView, free?: CameraView) => {
   const key = capturedKey(t, view, keys[i - 1], keys[i]);
   if (!key || (free && !withFraming(key, free))) return anchorUnavailable();
   edit((ks) => ks.splice(i, 0, key));
-  setKey(i);
+  selectPlacement(key.id, t);
   say(`Camera keyframe added at ${stamp(t)}. Ctrl+Z to undo`);
 };
 export const saveView = (only?: number) => {
@@ -332,26 +364,53 @@ const setHits = (row: ShotRow, hits: ShotHit[] | undefined) => {
   if (hits) row.hits = hits;
   else delete row.hits;
 };
-const rollWith = (i: number, t: number, cam: Apply<CamKey[]>, shots: Apply<ShotRow[]>) => {
+const applyShotAndCamera = (
+  shotEdit: () => void,
+  applyCamera: typeof edit,
+  cameraEdit: (ks: CamKey[], usePictureCut: boolean) => void,
+) => {
+  const clock = clockForTimeline("cam");
+  if (clock.cameraPicture) {
+    shotEdit();
+    applyCamera((ks) => cameraEdit(ks, true), clock);
+  } else {
+    applyCamera((ks) => cameraEdit(ks, false));
+    shotEdit();
+  }
+};
+
+const ambiguousCut = (at: number) => {
+  const picture = clockForTimeline("cam").cameraPicture;
+  return picture && !canPlaceCameraCut(picture, at);
+};
+
+const rollWith = (i: number, t: number, cam: typeof edit, shots: Apply<ShotRow[]>) => {
   const s = shotOfCut(i),
     tail = tailOf(i),
     [lo, hi] = rollRoom(i),
     at = r3(Math.max(lo, Math.min(hi, t))),
-    d = at - keys[i].t;
-  cam((ks) => {
-    if (tail >= 0) ks[tail].t = r3(ks[tail].t + d);
-    ks[i].t = at;
-  });
-  shots((sh) => {
-    if (!sh[s]) return;
-    const cutSource = r3(toSource(at));
-    sh[s].t = cutSource;
-    if (s > 0 && sh[s - 1]) {
-      const { prev, next } = repartitionAdjacentHits(sh[s - 1].hits, sh[s].hits, cutSource);
-      setHits(sh[s - 1], prev);
-      setHits(sh[s], next);
-    }
-  });
+    was = keys[i].t,
+    cutSource = r3(toSource(at));
+  if (ambiguousCut(at)) return say("Move the cut to a playing frame");
+  applyShotAndCamera(
+    () =>
+      shots((sh) => {
+        if (!sh[s]) return;
+        sh[s].t = cutSource;
+        if (s > 0 && sh[s - 1]) {
+          const { prev, next } = repartitionAdjacentHits(sh[s - 1].hits, sh[s].hits, cutSource);
+          setHits(sh[s - 1], prev);
+          setHits(sh[s], next);
+        }
+      }),
+    cam,
+    (ks, usePictureCut) => {
+      const next = usePictureCut ? SHOTS_OUT[s].t : at;
+      if (tail >= 0)
+        ks[tail].t = usePictureCut ? ks[tail].t + next - was : r3(ks[tail].t + next - was);
+      ks[i].t = next;
+    },
+  );
 };
 export const rollCut = (i: number, t: number) =>
   together(() => rollWith(i, t, edit, shotsDoc.edit));
@@ -406,6 +465,7 @@ export const splitShot = () => {
     say("A shot starts or ends here already. Move the playhead");
     return;
   }
+  if (ambiguousCut(t)) return say("Move the playhead to a playing frame to split the shot");
   const free = S.tools?.free.on ? viewFromFree() : undefined;
   const here = drawnView();
   const i = keys.findIndex((k) => k.t > t);
@@ -420,23 +480,34 @@ export const splitShot = () => {
     return anchorUnavailable();
   start.cut = true;
   start.tailId = tail?.id ?? false;
-  together(() => {
-    edit((ks) => ks.splice(at, 0, ...(tail ? [tail, start] : [start])));
-    shotsDoc.edit((sh) => {
-      const splitSource = r3(toSource(t));
-      const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
-      const { before, after } = splitShotHits(hits, splitSource);
-      setHits(sh[s], before);
-      sh.splice(s + 1, 0, {
-        ...structuredClone(rest),
-        ...(after ? { hits: after } : {}),
-        id: newRowId(),
-        t: splitSource,
-        name: secondName(name ?? `Shot ${s}`, sh),
-      });
-    });
-  });
-  setKey(at + (tail ? 1 : 0));
+  const splitSource = r3(toSource(t));
+  together(() =>
+    applyShotAndCamera(
+      () =>
+        shotsDoc.edit((sh) => {
+          const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
+          const { before, after } = splitShotHits(hits, splitSource);
+          setHits(sh[s], before);
+          sh.splice(s + 1, 0, {
+            ...structuredClone(rest),
+            ...(after ? { hits: after } : {}),
+            id: newRowId(),
+            t: splitSource,
+            name: secondName(name ?? `Shot ${s}`, sh),
+          });
+        }),
+      edit,
+      (ks, usePictureCut) => {
+        if (usePictureCut) {
+          start.t = SHOTS_OUT[s + 1].t;
+          if (reuseKey) ks[at - 1].t = start.t;
+          if (tail) tail.t = Math.min(tail.t, start.t);
+        }
+        ks.splice(at, 0, ...(tail ? [tail, start] : [start]));
+      },
+    ),
+  );
+  selectPlacement(start.id, start.t);
   say(
     `Shot ${s} split at ${stamp(t)}.${free ? "" : " Frame the new shot with Free camera (F)."}`,
     6000,
@@ -449,17 +520,21 @@ const mergeShot = (i: number) => {
     say("This cut has no shot of its own in shots.json. Ask the AI in a note");
     return;
   }
-  together(() => {
-    edit((ks) => {
-      ks.splice(i, 1);
-      if (tail >= 0) ks.splice(tail, 1);
-    });
-    shotsDoc.edit((sh) => {
-      const removed = sh[s];
-      if (s > 0) setHits(sh[s - 1], mergeShotHits(sh[s - 1].hits, removed?.hits));
-      sh.splice(s, 1);
-    });
-  });
+  together(() =>
+    applyShotAndCamera(
+      () =>
+        shotsDoc.edit((sh) => {
+          const removed = sh[s];
+          if (s > 0) setHits(sh[s - 1], mergeShotHits(sh[s - 1].hits, removed?.hits));
+          sh.splice(s, 1);
+        }),
+      edit,
+      (ks) => {
+        ks.splice(i, 1);
+        if (tail >= 0) ks.splice(tail, 1);
+      },
+    ),
+  );
   set(transitionSelection({ kind: "clearShots" }, get().side));
   say(`Shots ${s - 1} and ${s} merged. Ctrl+Z to undo`);
 };
