@@ -1,0 +1,11 @@
+https://github.com/openfilm/openfilm
+https://github.com/Leonxlnx/earshot
+https://github.com/Leonxlnx/cinetic
+https://github.com/bradautomates/claude-video
+https://github.com/kajisho5/ffmpeg-skill
+https://github.com/opencut-app/opencut
+https://github.com/storytold/filmcraft
+storytold/artcraft
+storytold/effectcraft
+storytold/photocraft
+...
