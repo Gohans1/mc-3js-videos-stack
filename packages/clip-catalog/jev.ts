@@ -65,16 +65,17 @@ const jevAsk = (state: unknown, questions: Record<string, unknown>, options: Jev
     });
     py.on("close", (code) => {
       clearTimeout(timer);
-      const said = err.split("\n").filter((l) => l.trim() && !jevNotes.has(l));
+      const lines = err.split(/\r?\n/).filter((l) => l.trim());
+      const said = lines.filter((l) => !jevNotes.has(l));
       for (const l of said) jevNotes.add(l);
-      if (code) return fail(new Error(said.at(-1)?.trim() || `jev.py exited ${code}`));
+      if (code) return fail(new Error(lines.at(-1)?.trim() || `jev.py exited ${code}`));
       if (said.length) console.error(said.join("\n"));
       try {
         const result = JSON.parse(out) as { answers: Answers; trace: unknown[] };
         for (const event of result.trace) options.onTrace?.(event as Record<string, unknown>);
         done(result.answers);
-      } catch {
-        fail(new Error("Jev returned an invalid response."));
+      } catch (e) {
+        fail(new Error(`jev.py returned invalid JSON: ${(e as Error).message}`));
       }
     });
     py.stdin.on("error", fail);
@@ -195,6 +196,7 @@ export async function jevRank<T>(
     );
   }
   options.onTrace?.({ phase: "final", candidates: list.map(q.text) });
+  if (!list.length) return [];
   return (await vote(q, list)).flatMap(([p, x]) =>
     (options.dedupe === false ? [x] : (same.get(q.text(x)) ?? [x])).map((y): [number, T] => [p, y]),
   );

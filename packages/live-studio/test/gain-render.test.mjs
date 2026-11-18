@@ -42,7 +42,7 @@ test("the live-lanes backing mix does not probe excluded missing sound effects d
   }
 });
 
-test("global speed and freeze retime the exported clips and duck windows on the same clock", () => {
+test("exported clips and native narration windows share speed/freeze timing without reapplying narrative warp", () => {
   const dir = mkdtempSync(join(tmpdir(), "studio-timing-mix-"));
   const run = (exe, args) => {
     const r = spawnSync(exe, args, { cwd: dir, encoding: "utf8", timeout: 30000 });
@@ -107,7 +107,7 @@ test("global speed and freeze retime the exported clips and duck windows on the 
     };
     assert.equal(rms(1.1, 1.9), 0);
     assert.ok(rms(0.2, 0.8) > 0.1 && rms(2.2, 3.2) > 0.1);
-    assert.deepEqual(windows, [[2.5, 2.75]]);
+    assert.deepEqual(windows, [[2, 2.125]]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

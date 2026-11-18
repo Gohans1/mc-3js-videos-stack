@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 
+import { Slider } from "@/components/Slider";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 
 import { FieldRow, Reset, Section, ValueBox } from "../components/inspector";

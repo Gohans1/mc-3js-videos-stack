@@ -5,7 +5,7 @@ import { buildScene } from "film/scene";
 import { drawCamPath } from "../camera/campath";
 import { AWAY } from "../core/device";
 import { S } from "../core/state";
-import { get, set } from "../core/store";
+import { get, invalidatePictures, set } from "../core/store";
 import { drawGizmo } from "../objects/placed";
 import { setPlaying } from "../playback/transport";
 import { drawTextSel } from "../text/onpicture";
@@ -14,16 +14,30 @@ import { frameSize } from "./frame";
 import { nightVision } from "./nightvision";
 
 // The gizmo goes on top only of the frame on screen, not of frames drawn for a still or a look-ahead
-export const render = (x: number) => {
-  if (x === S.t) drawFilmView();
+const draw = async (x: number) => {
+  if (x === S.t) await drawFilmView();
   nightVision(true);
-  S.render?.(x);
-  nightVision(false);
+  try {
+    if (S.render?.renderFrame) await S.render.renderFrame(x);
+    else S.render?.(x);
+  } finally {
+    nightVision(false);
+  }
   if (x === S.t) {
     drawCamPath();
     drawGizmo();
     drawTextSel();
   }
+};
+let drawing = Promise.resolve();
+export const render = (x: number, readFrame?: () => void) => {
+  // Readback finishes before another queued draw can replace a note's requested picture.
+  const next = drawing.then(async () => {
+    await draw(x);
+    readFrame?.();
+  });
+  drawing = next.catch(() => {});
+  return next;
 };
 
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
@@ -47,29 +61,33 @@ export const buildFinal = () => {
 };
 // The frame on screen at final quality, into the final canvas (hidden unless Final quality is on), seen from the free camera
 // when it is on
-export const drawFinalFrame = () => {
+export const drawFinalFrame = async () => {
   const fr = S.finalRender!,
     free = S.tools!.free;
   Object.assign(fr.tools.free, { on: free.on, fov: free.fov });
   fr.tools.free.p.copy(free.p);
   fr.tools.free.l.copy(free.l);
-  fr(S.t);
+  if (fr.renderFrame) await fr.renderFrame(S.t);
+  else fr(S.t);
 };
-export const drawFinal = () => {
-  drawFinalFrame();
+export const drawFinal = async () => {
+  await drawFinalFrame();
   drawGizmo(S.finalRender!.tools);
   S.finalAt = S.t;
   S.el.final.hidden = false;
+  if (!S.playing && get().review) invalidatePictures();
 };
 export const setFinal = async (on: boolean) => {
   if (AWAY) return;
   set({ final: on });
   if (!on) {
     S.el.final.hidden = true;
+    invalidatePictures();
     return;
   }
   if (S.playing) setPlaying(false);
   await buildFinal();
   S.finalAt = -1;
   S.dirty = true;
+  invalidatePictures();
 };

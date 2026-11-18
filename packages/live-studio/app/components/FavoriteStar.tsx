@@ -43,7 +43,6 @@ export function FavoriteStar({
           size={compact ? "icon-sm" : "icon-lg"}
           aria-label={`Favorite ${name}`}
           aria-pressed={on}
-          className={compact ? "pointer-coarse:size-9" : "pointer-coarse:size-10"}
           onClick={() => toggleFavorite(kind, id, name)}
         >
           <Star className={cn(on && "fill-current")} />

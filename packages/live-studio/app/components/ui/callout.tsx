@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const calloutVariants = cva("flex rounded-lg", {
   variants: {
     variant: {
-      warn: "bg-warn-bg text-ui text-warn items-center gap-2 px-2.5 py-1.5 [&>svg]:size-4 [&>svg]:shrink-0",
+      warn: "bg-warn-bg text-ui text-warn-text items-center gap-2 px-2.5 py-1.5 [&>svg]:size-4 [&>svg]:shrink-0",
       ok: "border-ok/25 bg-ok/10 text-label [&>svg]:text-ok-text items-start gap-1.5 border px-2 py-1.5 text-xs leading-relaxed [&>svg]:mt-0.5 [&>svg]:size-3.5 [&>svg]:shrink-0",
     },
   },

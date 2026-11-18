@@ -1,3 +1,5 @@
+import { lightEdit } from "../activity/activity";
+import { changedRows, itemKey } from "../activity/timeline-activity";
 import { narrationLines } from "../../src/narration.ts";
 import { mapVoice } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
@@ -63,6 +65,9 @@ export interface OneShot extends GainClip, AudioProcessing, BeatMarkers {
   try?: string[];
   [k: string]: unknown;
 }
+export const audioItemId = (list: ClipRef["list"], item: Bed | OneShot) =>
+  typeof item.id === "string" ? `${list}:${item.id}` : undefined;
+
 export interface Lanes {
   beds: Bed[];
   sfx: OneShot[];
@@ -175,6 +180,25 @@ const doc = createTimedDoc<Lanes>(
       normalize(l, span);
       tidy(l);
     }, // a film without tracks gets them here, and in the file with its next edit
+    received: (before, after) => {
+      if (!get().aiActivity) return;
+      const tracks = changedRows(before.tracks, after.tracks, (track) => track.id)
+        .map((i) => `track:sound:${after.tracks[i].id}`);
+      const ranges: [number, number][] = [];
+      for (const list of ["beds", "sfx"] as const) {
+        for (const i of changedRows<Bed | OneShot>(before[list], after[list], (item) =>
+          audioItemId(list, item) ?? JSON.stringify([item.track, item.name, item.from ?? item.at]),
+        ).slice(0, 20)) {
+          const clip = clipOf({ list, i });
+          if (!clip) continue;
+          if (clip.track !== undefined) tracks.push(`track:sound:${clip.track}`);
+          const id = audioItemId(list, clip);
+          if (id) tracks.push(itemKey("sound", id));
+          ranges.push(span({ list, i }));
+        }
+      }
+      lightEdit("sound", tracks, ranges);
+    },
     saved: (soundSaved) => set({ soundSaved }),
     replaced: (was) => {
       if (

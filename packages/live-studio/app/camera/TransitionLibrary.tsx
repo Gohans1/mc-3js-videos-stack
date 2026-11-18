@@ -1,4 +1,3 @@
-import { DURATION, SHOTS_OUT } from "film/scene";
 import { ChevronLeft, ChevronRight, Plus, Star } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -8,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { ChipGroup } from "../components/inspector";
 import { SearchBox } from "../components/SearchBox";
+import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { matcher } from "../core/search";
 import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
@@ -15,6 +15,7 @@ import { ownTransition, THIS_FILM, withFilmChip } from "../own/builtins";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { pickShot, playSpan, shownShot, stopSpan } from "./anim";
 import { shotsDoc } from "./shots";
+import { AssetSource } from "../openfilm/Source";
 import {
   transitionCategories,
   transitionCatOf,
@@ -267,7 +268,8 @@ function Look({ fx }: { fx: TransitionMeta }) {
   );
 }
 
-export function TransitionLibrary() {
+export function TransitionLibrary() { return <AssetSource category="transition"><NativeTransitionLibrary /></AssetSource>; }
+function NativeTransitionLibrary() {
   useStudio((s) => s.ready);
   useStudio((s) => s.shotsRev);
   useStudio((s) => s.timingRev);
@@ -285,7 +287,7 @@ export function TransitionLibrary() {
     ),
     at = SHOTS_OUT[shot]?.t,
     current = transitionOf(shot);
-  const all = transitions();
+  const all = transitions().filter((fx) => !fx.id.startsWith("of:"));
   const cats = useMemo(
     () => withFilmChip(transitionCategories(all), all.some(ownTransition)),
     [all],

@@ -59,5 +59,5 @@ export const tell = async (project, entry) => {
 // process is gone. scripts/studio_tell.py job() is its Python twin
 export const startJob = async (project, key, entry) => {
   await tell(project, { ...entry, job: { key, pid: process.pid } });
-  return (last) => tell(project, { ...last, job: { key, end: true } });
+  return (last) => tell(project, { surface: entry.surface, ...last, job: { key, end: true } });
 };

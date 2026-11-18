@@ -1,21 +1,23 @@
+import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
+import { drawTextSel } from "./onpicture";
+import { together } from "../core/doc";
 // CapCut's text tracks, over the camera row (its main track) on the same seconds as every other row: track 0 at the bottom, each
 // one above drawn over it on the picture. An item is dragged to move (up or down onto another track, above the top one for a new
 // track), by an edge to trim, with Alt held for a copy, and snaps to the playhead, cuts, words and other items' edges (Shift: no
 // snap). A box dragged over empty space picks what it touches here and on the rows below (timeline/rowbox.ts, across.ts); a click
 // on empty space drops the pick and moves the playhead there. Items are added from the Text library (TextLibrary.tsx).
-import { DURATION, SHOTS_OUT as SHOTS } from "film/scene";
-
-import { together } from "../core/doc";
+import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { FPS, makeSnapper, r3, snappedTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked as across } from "../timeline/across";
-import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import { isElementShown, onShownResize } from "../timeline/visible";
 import {
   edit,
   isShape,
@@ -49,7 +51,7 @@ const trackAt = (y: number) => rows() - 1 - Math.floor(y / ROW_H);
 
 export const drawTextRow = () => {
   const c = S.el?.textrow;
-  if (!c || !get().text || !c.getClientRects().length) return;
+  if (!c || !get().text || !isElementShown(c)) return;
   const height = textRowHeight();
   if (c.style.height !== `${height}px`) c.style.height = `${height}px`;
   const { g, w, h } = sized(c);
@@ -125,9 +127,9 @@ export const drawTextRow = () => {
       g.stroke();
     }
     g.globalAlpha = 1;
+    if (typeof it.id === "string") paintActivityMark(g, "text", it.id, cx0, y + CLIP_H - 2, cx1 - cx0);
     boxes.push({ i, x0, x1, y0: y, y1: y + CLIP_H });
   });
-  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = (skip: number[]) => {
@@ -178,6 +180,10 @@ type Drag = {
 };
 
 export const attachTextRow = () => {
+  onClipActivity("text", () => {
+    drawTextRow();
+    if (!S.playing) drawTextSel();
+  });
   const c = S.el.textrow;
   marks.text = drawTextRow;
   inBox.text = itemsInBox;
@@ -413,5 +419,5 @@ export const attachTextRow = () => {
     }
   });
   c.addEventListener("wheel", timelineWheel, { passive: false });
-  new ResizeObserver(drawTextRow).observe(c);
+  onShownResize(c, drawTextRow);
 };

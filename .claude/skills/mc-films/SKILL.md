@@ -24,7 +24,7 @@ The CLI serves guides that match the code checked out next to them. This stub ca
 
 ```bash
 bun run skills                      # every guide, one line each
-bun run help                        # every command where you stand; each takes --help
+bun run help                        # commands grouped by job; --json for all catalog IDs
 ```
 
 The creator's taste and filmmaking rules (voices, sound sources, how to review) live in the `gohans-3js-videos-skills` skill (`.claude/skills/gohans-3js-videos-skills/SKILL.md`).

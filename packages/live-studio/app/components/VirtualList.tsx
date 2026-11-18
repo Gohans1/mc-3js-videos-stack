@@ -11,7 +11,13 @@ import {
 
 import { cn } from "@/lib/utils";
 
-import { tableSpacers } from "./virtual-utils";
+import {
+  INITIAL_VIRTUAL_RECT,
+  measureVirtualElement,
+  observeVirtualRect,
+  scrollVirtualElement,
+  tableSpacers,
+} from "./virtual-utils";
 
 export interface VirtualListProps<T> {
   items: readonly T[];
@@ -89,7 +95,10 @@ function useKeyedVirtualizer<T>({
     getItemKey: (index) => getKey(items[index]!, index),
     overscan,
     gap,
-    initialRect: { width: 400, height: 800 },
+    initialRect: INITIAL_VIRTUAL_RECT,
+    observeElementRect: observeVirtualRect,
+    measureElement: measureVirtualElement,
+    scrollToFn: scrollVirtualElement,
     useFlushSync: false,
     rangeExtractor,
   });

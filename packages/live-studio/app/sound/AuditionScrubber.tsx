@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { Slider } from "@/components/ui/slider";
+import { Slider } from "@/components/Slider";
 import { cn } from "@/lib/utils";
 
 import { formatAuditionTime, type SoundKind } from "./library-view";
@@ -57,7 +57,7 @@ export function AuditionScrubber({
           }
         />
       </div>
-      <span className="text-tag text-foreground/75 flex-none tabular-nums">
+      <span className="text-foreground/75 flex-none text-xs tabular-nums">
         {formatAuditionTime(at, duration, kind, known)}
       </span>
     </div>

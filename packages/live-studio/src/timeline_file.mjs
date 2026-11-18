@@ -38,7 +38,7 @@ export const openTimelineFile = (project, rel, schema) => {
   const FILE = assertInsideDir(project, rel, "Timeline file");
   const protection = openEditProtection(project, relative(project, FILE).replaceAll("\\", "/"));
   const version = (buf = readFileSync(FILE)) => createHash("md5").update(buf).digest("base64url");
-  let written = null; // what the studio itself last wrote, so its own save is not mistaken for someone else's edit
+  let written = null, writer; // what the studio itself last wrote, so its own save is not mistaken for someone else's edit
   const read = () => {
     protection.reload();
     const protectedFile = protection.report().protected.length > 0;
@@ -96,10 +96,20 @@ export const openTimelineFile = (project, rel, schema) => {
       fresh = `${FILE}.new`;
     writeFileSync(fresh, text);
     renameSync(fresh, FILE);
+    writer = result.actor;
     written = version(Buffer.from(text));
     protection.remember(written, result.data);
     return { version: written, data: result.data, retained: result.retained };
   };
   const ownWrite = () => existsSync(FILE) && version() === written;
-  return { FILE, read, check, write, ownWrite, collaboration: protection.report, reloadProtection: protection.reload };
+  return {
+    FILE,
+    read,
+    check,
+    write,
+    ownWrite,
+    personWrite: () => ownWrite() && writer === "person",
+    collaboration: protection.report,
+    reloadProtection: protection.reload,
+  };
 };

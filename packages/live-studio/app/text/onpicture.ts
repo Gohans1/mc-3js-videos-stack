@@ -6,6 +6,7 @@ import { EDIT } from "film/edit";
 
 import { overlayTime } from "../../src/layer-timing.mjs";
 import { layerClock } from "../../src/timing-state.mjs";
+import { clipIsLit, hasClipActivity } from "../activity/timeline-activity";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import {
@@ -39,8 +40,16 @@ const boxesNow = () => {
 export const drawTextSel = () => {
   const el = S.el?.textsel;
   if (!el) return;
-  const picks = get().textPicks,
-    shown = picks.length ? boxesNow().filter((b) => picks.includes(b.i)) : [];
+  const picks = get().textPicks;
+  const recent = !S.playing && hasClipActivity("text");
+  if (!picks.length && !recent && !el.childElementCount) return;
+  const shown = picks.length || recent ? boxesNow().flatMap((box) => {
+    const id = items[box.i]?.id;
+    const picked = picks.includes(box.i);
+    return picked || (recent && typeof id === "string" && clipIsLit("text", id))
+      ? [{ box, picked }]
+      : [];
+  }) : [];
   const w = el.clientWidth,
     h = el.clientHeight;
   const svg = (tag: string) => document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -66,11 +75,13 @@ export const drawTextSel = () => {
     el.append(frame);
   }
   [...el.children].forEach((d, k) => {
-    const b = shown[k],
+    const entry = shown[k],
       frame = d as SVGSVGElement;
-    frame.style.display = b ? "" : "none";
-    if (!b) return;
+    frame.style.display = entry ? "" : "none";
+    if (!entry) return;
+    const { box: b, picked } = entry;
     frame.dataset.textIndex = String(b.i);
+    frame.toggleAttribute("data-text-activity", !picked);
     frame.setAttribute("viewBox", `0 0 ${w} ${h}`);
     const points = (
       b.corners ?? [
@@ -83,7 +94,9 @@ export const drawTextSel = () => {
     const path = points.map((p) => p.join(",")).join(" ");
     frame.children[0].setAttribute("points", path);
     frame.children[1].setAttribute("points", path);
+    frame.children[1].setAttribute("stroke", picked ? "var(--picture)" : "var(--ai)");
     points.forEach(([x, y], i) => {
+      (frame.children[i + 2] as SVGElement).style.display = picked ? "" : "none";
       frame.children[i + 2].setAttribute("cx", String(x));
       frame.children[i + 2].setAttribute("cy", String(y));
     });

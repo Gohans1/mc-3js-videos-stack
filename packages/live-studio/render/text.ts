@@ -22,20 +22,23 @@ export const textCheck = (render, cfg) => async () => {
   two.width = W;
   two.height = H;
   const g = two.getContext("2d", { willReadFrequently: true });
-  const grab = (t) => {
-    render(t);
+  const grab = async (t) => {
+    if (render.renderFrame) await render.renderFrame(t);
+    else render(t);
     g.drawImage(canvas(), 0, 0, W, H);
     return g.getImageData(0, 0, W, H).data;
   };
-  const all = EDIT.text.items,
+  const all = EDIT.text?.items,
     out = [];
+  if (!all)
+    return ['text: film has no EDIT.text.items to toggle (omit textTimeline or set "read": false)'];
   let faulty = 0;
   try {
     for (const line of lines) {
       EDIT.text.items = [all[line.i]];
-      const A = grab(line.at);
+      const A = await grab(line.at);
       EDIT.text.items = [];
-      const B = grab(line.at);
+      const B = await grab(line.at);
       const m = measure(A, B, W, H, line.ink, (line.px * Math.min(W, H)) / 1080);
       const v = verdict(line, m, ratio);
       out.push(...v.lines);

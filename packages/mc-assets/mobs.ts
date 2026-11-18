@@ -7,8 +7,16 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync } from "node:
 import { dirname, join } from "node:path";
 
 import { LOCAL } from "../../scripts/vault.mjs";
+import { cliArgs } from "../live-studio/src/cli.mjs";
 
-const VERSION = process.argv[2] ?? "1.21.11";
+const [VERSION = "1.21.11"] = cliArgs(
+  `Download Minecraft entity models, animation clips and textures into the local vault.
+  bun packages/mc-assets/mobs.ts [version]
+Default: 1.21.11. Network downloads; existing files are skipped so interrupted runs can resume.
+Output: vault root/mcasset/<version>. Run at the repo root.`,
+  [],
+  1,
+);
 const OUT = join(LOCAL, "mcasset", VERSION);
 const CLOUD = `https://assets.mcasset.cloud/${VERSION}`;
 const TREES = ["entity-models", "assets/minecraft/textures/entity"];

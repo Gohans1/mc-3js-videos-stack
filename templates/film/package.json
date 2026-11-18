@@ -9,6 +9,9 @@
     "help": "bun node_modules/live-studio/help.mjs",
     "skills": "bun ../../packages/live-studio/skills.mjs",
     "find": "bun ../../scripts/find.ts",
+    "reference": "bun ../../scripts/review/reference.mjs",
+    "openfilm": "bun ../../scripts/openfilm-use.mjs",
+    "asset": "bun ../../scripts/asset.mjs",
     "gap": "bun ../../scripts/gap.ts",
     "postinstall": "bun ../../packages/mc-assets/vendor.mjs",
     "studio": "bun node_modules/live-studio/src/live.mjs __PORT__",
@@ -36,8 +39,10 @@
     "link": "bun node_modules/live-studio/wrong-place.mjs link",
     "setup:vault": "bun node_modules/live-studio/wrong-place.mjs setup:vault",
     "setup:sound": "bun node_modules/live-studio/wrong-place.mjs setup:sound",
+    "setup:voices": "bun node_modules/live-studio/wrong-place.mjs setup:voices",
     "setup:mc-sound": "bun node_modules/live-studio/wrong-place.mjs setup:mc-sound",
     "fetch:sfx": "bun node_modules/live-studio/wrong-place.mjs fetch:sfx",
+    "fetch:openfilm": "bun node_modules/live-studio/wrong-place.mjs fetch:openfilm",
     "setup": "bun node_modules/live-studio/wrong-place.mjs setup",
     "pack:sound": "bun node_modules/live-studio/wrong-place.mjs pack:sound",
     "fetch:sound-raw": "bun node_modules/live-studio/wrong-place.mjs fetch:sound-raw",
@@ -45,14 +50,17 @@
     "eval:lessons": "bun node_modules/live-studio/wrong-place.mjs eval:lessons",
     "eval:load": "bun node_modules/live-studio/wrong-place.mjs eval:load",
     "test": "bun node_modules/live-studio/wrong-place.mjs test",
+    "test:parallel": "bun node_modules/live-studio/wrong-place.mjs test:parallel",
+    "ci": "bun node_modules/live-studio/wrong-place.mjs ci",
+    "doctor": "bun node_modules/live-studio/wrong-place.mjs doctor",
     "verify": "bun node_modules/live-studio/wrong-place.mjs verify",
     "lint": "bun node_modules/live-studio/wrong-place.mjs lint",
     "typecheck": "bun node_modules/live-studio/wrong-place.mjs typecheck",
     "fmt": "bun node_modules/live-studio/wrong-place.mjs fmt",
-    "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check",
-    "setup:voices": "bun node_modules/live-studio/wrong-place.mjs setup:voices"
+    "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "catalog:",
     "block-model-renderer": "catalog:",
     "fflate": "catalog:",
     "film-kit": "workspace:*",
@@ -61,9 +69,10 @@
     "math": "catalog:",
     "mc-actor": "workspace:*",
     "mc-assets": "workspace:*",
-    "n8ao": "2.0.1",
+    "n8ao": "catalog:",
     "postprocessing": "catalog:",
-    "three": "catalog:"
+    "three": "catalog:",
+    "three-good-godrays": "catalog:"
   },
   "live-studio": {
     "sound": [

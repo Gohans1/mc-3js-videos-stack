@@ -68,8 +68,9 @@ interface PageSlice {
     | "film"
     | "lessons"
     | "ports"
-    | "cli";
-  lib:
+    | "cli"
+    | "openfilm";
+  lib: "openfilm" |
     "notes" | "sound" | "objects" | "text" | "transition" | "adjust" | "film" | "lessons" | "ports" | "cli"; // on a wide screen: the left column's tab (side then picks the right column's)
   filmKind: string | null; // the Film tab's open kind (own-work.ts group id, "now" for On screen); null: its first
   favorites: Favorites; // core/favorites.ts

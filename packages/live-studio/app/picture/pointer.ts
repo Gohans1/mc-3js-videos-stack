@@ -4,7 +4,7 @@ import { PHONE } from "../core/device";
 import { S } from "../core/state";
 import { get } from "../core/store";
 import { sketch } from "../notes/ink";
-import { openNote } from "../notes/notes";
+import { openNote, pointOrigin } from "../notes/notes";
 import { gizmoBusy, hover, pickAt, selectTarget } from "../objects/placed";
 import { setPlaying } from "../playback/transport";
 import { startTextDrag, textAt } from "../text/onpicture";
@@ -105,12 +105,16 @@ export const attachPicture = () => {
   const tappedAt = (x: number, y: number, e: MouseEvent) => {
     if (!S.render || Math.hypot(e.clientX - x, e.clientY - y) > 4) return null;
     if (S.playing) setPlaying(false);
-    render(S.t);
+    void render(S.t);
     return frac(e);
   };
   // A note box opened mid-flight takes no focus, or the W still held would type into it
-  const pinNote = (x: number, y: number) =>
-    openNote({ x: +x.toFixed(4), y: +y.toFixed(4), ...lookAtClick(x, y) }, !flight.flying());
+  const pinNote = (x: number, y: number, e: MouseEvent) =>
+    openNote(
+      { x: +x.toFixed(4), y: +y.toFixed(4), ...lookAtClick(x, y) },
+      !flight.flying(),
+      pointOrigin(e.clientX, e.clientY),
+    );
   const armClick = () => {
     setTimeout(() => {
       if (gesture.kind === "pending_click") gesture = IDLE_VIEWPORT_GESTURE;
@@ -221,6 +225,6 @@ export const attachPicture = () => {
     gesture = IDLE_VIEWPORT_GESTURE;
     const at = tappedAt(x, y, e);
     if (!at) return;
-    pinNote(...at);
+    pinNote(...at, e);
   });
 };

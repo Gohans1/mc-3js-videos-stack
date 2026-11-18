@@ -1,3 +1,4 @@
+import { useLit } from "../activity/activity";
 import { Ellipsis, Headphones, Lock, LockOpen, Music2, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 
@@ -22,6 +23,7 @@ import { allClips, clipOf, lanes, setClips, setSolo, setTrack } from "./sound";
 import type { Track } from "./tracks";
 
 function Head({ t }: { t: Track }) {
+  const lit = useLit(`track:sound:${t.id}`);
   const [naming, setNaming] = useState(false);
   const live = useStudio((s) => s.liveLanes),
     solo = useStudio((s) => s.solo.includes(t.id));
@@ -32,6 +34,7 @@ function Head({ t }: { t: Track }) {
   };
   return (
     <li
+      data-ai-lit={lit || undefined}
       style={{ "--row-h": `${trackHeight(t.id)}px` }}
       className={cn(
         "border-background bg-track-head relative flex h-(--row-h) items-center border-b",

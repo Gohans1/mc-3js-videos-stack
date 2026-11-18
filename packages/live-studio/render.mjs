@@ -22,6 +22,7 @@ import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines, seenSound } from "./src/narration.ts";
+import { openFilmResource } from "./src/openfilm.mjs";
 import {
   fallbackTimingDuration,
   heardInOut,
@@ -628,6 +629,8 @@ const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   async fetch(req) {
+    const openfilm = openFilmResource(req);
+    if (openfilm) return openfilm;
     const url = decodeURIComponent(new URL(req.url).pathname);
     if (req.method === "POST") {
       const b = Buffer.from(await req.arrayBuffer());

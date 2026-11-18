@@ -5,7 +5,6 @@ import { say } from "../core/store";
 // here in the browser's own Save dialog; a browser without one (Firefox, Safari) downloads a PNG
 import { stamp } from "../core/time";
 import { setPlaying } from "../playback/transport";
-import { buildFinal, drawFinalFrame } from "./render";
 
 type Format = "image/png" | "image/jpeg";
 // Chrome's File System Access save dialog, which TypeScript's DOM types leave out (not in every browser)
@@ -63,12 +62,13 @@ export const exportStill = async () => {
   const t = S.t,
     place = await pickPlace(`${S.film}_${stamp(t).replace(":", "-")}`);
   if (!place) return;
+  const { buildFinal, drawFinalFrame } = await import("./render");
   await buildFinal();
   if (S.t !== t) {
     say("The playhead moved before the frame was drawn: export it again");
     return;
   } // a scrub during the first build
-  drawFinalFrame();
+  await drawFinalFrame();
   // Copied out at once: a WebGL canvas may be cleared once the page is next shown
   const c = document.createElement("canvas");
   c.width = S.el.final.width;

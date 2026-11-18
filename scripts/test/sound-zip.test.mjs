@@ -17,6 +17,56 @@ const put = (file, text) => {
   writeFileSync(file, text);
 };
 
+test("OpenFilm source, licenses and native audio travel together and source paths rebase after ZIP restore", async (t) => {
+  const { packSound, restoreSound } = await import("../sound_zip.mjs");
+  const { readAssetCatalog, writeAssetCatalog } = await import("../openfilm/catalog.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-openfilm-zip-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const old = { local: join(root, "old/vault"), external: join(root, "old/ext") };
+  const fresh = { local: join(root, "new/vault"), external: join(root, "new/ext") };
+  const html = "<html>editable transition</html>",
+    id = "transitions/wipe";
+  put(join(old.local, "openfilm/library", id, "files/wipe.html"), html);
+  put(join(old.local, "openfilm/library/LICENSE.md"), "CC0; Fluent Emoji Microsoft MIT notice");
+  put(join(old.local, "sound/sfx/transitions/of-sfx-whoosh.wav"), "native audio bytes");
+  put(
+    join(old.local, "sound/SOURCES.json"),
+    '{"of-sfx-whoosh":{"source":"openfilm","category":"transitions"}}',
+  );
+  writeAssetCatalog(
+    [
+      {
+        id,
+        kind: "page",
+        cat: "transition",
+        group: "wipe",
+        src: "wipe.html",
+        name: { en: "Wipe" },
+      },
+    ],
+    join(old.local, "openfilm/library"),
+  );
+  const zip = join(root, "private-assets.zip");
+  assert.equal((await packSound({ ...old, out: zip, log: () => {} })).files, 5);
+  await restoreSound({ zip, ...fresh, log: () => {} });
+  const [entry] = readAssetCatalog(join(fresh.local, "openfilm"));
+  assert.equal(entry.data.file, join(fresh.local, "openfilm/library", id, "files/wipe.html"));
+  assert.equal(readFileSync(entry.data.file, "utf8"), html);
+  assert.match(
+    readFileSync(join(fresh.local, "openfilm/library/LICENSE.md"), "utf8"),
+    /Microsoft MIT/,
+  );
+  assert.equal(
+    readFileSync(join(fresh.local, "sound/sfx/transitions/of-sfx-whoosh.wav"), "utf8"),
+    "native audio bytes",
+  );
+  assert.equal(
+    JSON.parse(readFileSync(join(fresh.local, "sound/SOURCES.json")))["of-sfx-whoosh"].category,
+    "transitions",
+  );
+  assert.deepEqual(await restoreSound({ zip, ...fresh, log: () => {} }), { written: 0, kept: 5 });
+});
+
 test("the sound zip holds every sound of the vault at its vault path and restores onto a new machine as it was", async (t) => {
   const { packSound, restoreSound } = await import("../sound_zip.mjs");
   const root = mkdtempSync(join(tmpdir(), "mc-sound-zip-"));

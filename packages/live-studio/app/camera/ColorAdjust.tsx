@@ -6,7 +6,7 @@ import {
   type HueKey,
   HUES,
   NEUTRAL_CURVE,
-} from "film-stage/grade-secondary";
+} from "film-stage/grade-meta";
 import { resetLookCurveChannel, resetLookCurves, resetLookHsl } from "film-stage/looks";
 import { useCallback, useEffect, useRef, useState } from "react";
 

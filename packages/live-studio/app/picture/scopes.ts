@@ -10,20 +10,31 @@ import { tone } from "../timeline/canvas";
 const W = 256,
   H = 144,
   LEVELS = 256;
-const tmp = (w: number, h: number) => {
+type ScopeCanvas = { c: HTMLCanvasElement; x: CanvasRenderingContext2D; img: ImageData };
+const tmp = (w: number, h: number): ScopeCanvas => {
   const c = Object.assign(document.createElement("canvas"), { width: w, height: h });
   return { c, x: c.getContext("2d")!, img: new ImageData(w, h) };
 };
-const parade = tmp(W * 3, LEVELS),
-  wave = tmp(W, LEVELS),
+let parade: ScopeCanvas,
+  wave: ScopeCanvas,
+  vector: ScopeCanvas,
+  bins: [Uint16Array, Uint16Array, Uint16Array],
+  vCount: Uint16Array,
+  vSum: Float32Array,
+  rgba: Uint8Array,
+  ready = false;
+
+const ensureBuffers = () => {
+  if (ready) return;
+  ready = true;
+  parade = tmp(W * 3, LEVELS);
+  wave = tmp(W, LEVELS);
   vector = tmp(LEVELS, LEVELS);
-const bins = [
-  new Uint16Array(W * LEVELS),
-  new Uint16Array(W * LEVELS),
-  new Uint16Array(W * LEVELS),
-];
-const vCount = new Uint16Array(LEVELS * LEVELS),
+  bins = [new Uint16Array(W * LEVELS), new Uint16Array(W * LEVELS), new Uint16Array(W * LEVELS)];
+  vCount = new Uint16Array(LEVELS * LEVELS);
   vSum = new Float32Array(LEVELS * LEVELS * 3);
+  rgba = new Uint8Array(W * H * 4);
+};
 
 // How bright a bin draws: a level a few pixels share still shows, a flat stretch of picture doesn't burn out
 const glow = (count: number, per: number) => Math.min(255, Math.sqrt(count / per) * 900);
@@ -41,6 +52,7 @@ let asked = 0,
   next: ImageBitmap | null = null;
 export const measureScopes = (src: HTMLCanvasElement | null) => {
   if (!src || !get().scopes) return;
+  ensureBuffers();
   const now = performance.now();
   if (S.playing && now - last < 100) return;
   last = now;
@@ -80,7 +92,6 @@ const readAll = async () => {
 // WebGL or canvas way (getImageData, VideoFrame.copyTo, readPixels into a pixel buffer behind a fence) makes a call that waits
 // on Chrome's GPU process, about 24 ms while the film plays: a hitch in the film at every reading (measured). A browser
 // without WebGPU reads through a canvas, hitches and all
-const rgba = new Uint8Array(W * H * 4);
 type Gpu = { device: GPUDevice; frame: GPUTexture; out: GPUBuffer } | null;
 let gpu: Promise<Gpu> | null = null,
   flat: OffscreenCanvasRenderingContext2D | null = null;

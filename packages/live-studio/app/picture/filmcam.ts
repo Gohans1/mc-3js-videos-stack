@@ -20,7 +20,7 @@ export const staleFilmView = () => {
 };
 
 // Called before the frame on screen is drawn: the free camera's view drawn next is what stays on the main canvas
-export const drawFilmView = () => {
+export const drawFilmView = async () => {
   const tools = S.tools,
     f = tools?.free,
     corner = S.el.filmview;
@@ -29,8 +29,8 @@ export const drawFilmView = () => {
   if (!shown && !keys.length) return; // nobody asks: no corner picture, no camera path to pose
   stale = false;
   f.on = false;
-  S.render!(S.t);
-  f.on = true;
+  try { if (S.render!.renderFrame) await S.render!.renderFrame(S.t); else S.render!(S.t); }
+  finally { f.on = true; }
   const cam = tools.camera;
   filmCam.position.copy(cam.position);
   filmCam.quaternion.copy(cam.quaternion);

@@ -42,9 +42,9 @@ Use the steps that serve the current scene or change. Measurements and presets s
 | Detect reference cuts/fades | bun run scenes clip.mp4; optional CPU, JSON/CSV/images in source-file seconds |
 | Read text in reference frames | bun run media ocr clip.mp4 --at 5,10; text boxes, scores, frames and source timestamps |
 | Local media tools | bun run media list; tool --help and core sound/review explain inputs and model limits |
-| Footage/NLE/QC backend | bun run media ffmpeg list; schema cut cho một parser, native argv sau --; bun run media qc --contract cho rule đo tùy chọn |
-| Chọn kiểm chứng theo ý đồ | Bun run skills get core --ref review dẫn tới bằng chứng cho hình, âm, nhịp, lời và chuyển động. |
-| Soi nhanh một render | Bun run framecheck --json giữ lỗi hình và ảnh; bun run sheet FILE frames TIMES trích ảnh đúng mốc. |
+| Discover media and NLE tools | Run bun run media ffmpeg list, then schema cut for the native parser. Pass native arguments after --. Use bun run media qc --contract to find optional checks. |
+| Choose a review check | Run bun run skills get core --ref review to choose evidence for picture, sound, pacing, dialogue, or motion. |
+| Inspect a render | Run bun run framecheck --json to save visual findings and evidence. Use bun run sheet FILE frames TIMES to extract frames at specific timestamps. |
 | Check arbitrary seeking | CHECK=order bun run render stills; optional sampled comparison of two capture orders |
 | Study a reference video | bun run reference inspect <video-or-URL> for pictures, captions and search; study/compare for measurements; see --ref review |
 | Select, place and edit sound | bun run skills get core --ref sound; find discovers, asset edits, earshot evaluates sound |
@@ -59,7 +59,7 @@ VAR=x bun run ... examples use POSIX or Bun Shell syntax. In PowerShell use $env
 
 | Clock | Used by |
 | --- | --- |
-| Giây phim sau Speed/Freeze | Notes, at, AT, CHECK, pace, listen, voice:cues và asset CLI. Sheet/framecheck dùng giây file với nguồn ngoài; đọc clock trước khi nối sang at. |
+| Film seconds, after Speed and Freeze | notes, at, AT, CHECK, pace, listen, voice:cues, and asset. Sheet and framecheck use file seconds for external footage. Read the result clock before passing a timestamp to at. |
 | Scene seconds, before Speed and Freeze | cam.json, key files, audio.json, text.json, adjust.json |
 | Narration seconds, before voice.warp | t in shots.json and beats in edit.json |
 
@@ -116,6 +116,7 @@ Gap reporting does not gate creativity or automatically justify another command.
 | references/render.md | Rendering, cache, output configuration and encode checks |
 | references/sound.md | Sound selection, mixing, levels and earshot |
 | references/voice.md | Takes, generation, alignment, lip sync and assembly |
+| references/voice-providers.md | Provider setup, capabilities, and verification status |
 | references/notes.md | Feedback, note states and lessons |
 | references/cli.md | CLI changes and keeping discovery, help and guides aligned |
 

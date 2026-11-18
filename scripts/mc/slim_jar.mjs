@@ -57,6 +57,15 @@ export function slimJar({ mcDir = join(process.cwd(), "assets/public/mc"), force
 }
 
 if (import.meta.main) {
+  const { cliArgs } = await import("../../packages/live-studio/src/cli.mjs");
+  cliArgs(
+    `Build a slim Minecraft asset ZIP and Brotli copy from a prepared game JAR.
+  bun scripts/mc/slim_jar.mjs [--mc-dir DIR] [--force]
+Default directory: assets/public/mc in the current film or repo.
+Writes slim ZIP/.br caches; --force rebuilds existing output. No downloads.`,
+    ["--mc-dir DIR", "--force"],
+    0,
+  );
   const { values } = parseArgs({
     options: { "mc-dir": { type: "string" }, force: { type: "boolean", default: false } },
   });

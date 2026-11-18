@@ -7,13 +7,22 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { STUDIO } from "../src/film.mjs";
-import { readFaults, sizeFaults } from "../src/readable.mjs";
+import { compileLayerTiming } from "../src/layer-timing.mjs";
+import {
+  fallbackTimingDuration,
+  readFaults,
+  sizeFaults,
+  textCheckSample,
+} from "../src/readable.mjs";
+import { frameVisible } from "../src/timing.mjs";
 
 const CHECK = fileURLToPath(new URL("../check.mjs", import.meta.url));
 
 test("check finds what the studio would refuse, offline: a broken timeline file and a sound name no folder has", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const root = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "film");
+  mkdirSync(dir);
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
   mkdirSync(join(dir, "src/timeline"));
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
@@ -379,8 +388,10 @@ test("check names a transition or anim one letter off a built-in, and leaves a f
 });
 
 test("check refuses a sound placed after the film ends, and only warns of a gain far over the file's own level", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const root = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "film");
+  mkdirSync(dir);
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
   mkdirSync(join(dir, "src/timeline"));
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
@@ -468,6 +479,10 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.match(many.stderr, /sfx\.1\.at|sfx\[1\]\.at/);
   assert.match(many.stderr, /"door_slamm" \(sfx\[0\]\) is no sound the studio has/);
   assert.match(many.stderr, /once these are fixed/);
+  assert.ok(
+    many.stderr.indexOf("door_slamm") < many.stderr.indexOf("once these are fixed"),
+    `expected missing-sound error before footer:\n${many.stderr}`,
+  );
 
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
@@ -874,6 +889,16 @@ test("text the film's end cuts off is read only until the end, its Out as far as
   // an Out takes half of what of it plays: 0.1 s of it before an end at 10.5 leaves 0.85 s read, enough for 11 letters
   const fading = { ...it, to: 11.4, out: { fx: "fade", len: 1 } };
   assert.deepEqual(readFaults(fading, { from: 9.6, to: 11.4 }, "16:9", 10.5), []);
+  // an In cut short by the film's end counts only the portion before the end, never negative readable time
+  const cutIn = {
+    kind: "text",
+    text: "HELLO THERE",
+    size: 56,
+    from: 9,
+    to: 12,
+    in: { fx: "fade", len: 3 },
+  };
+  assert.match(readFaults(cutIn, { from: 9, to: 12 }, "16:9", 9.5)[0], /readable about 0\.25 s/);
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -894,8 +919,10 @@ test("text the film's end cuts off is read only until the end, its Out as far as
 });
 
 test('a film that shuts the vault out ("soundVault": false) is told so, not to move into the repo', (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const root = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "film");
+  mkdirSync(dir);
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
   mkdirSync(join(dir, "src/timeline"));
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
@@ -1033,4 +1060,842 @@ test("cam.json flags unknown handheld shake presets and suggests the closest SHA
   assert.match(res.stderr, /\[1\]\.handheld\.kind "THE_WEDING".*did you mean "THE_WEDDING"/);
   assert.doesNotMatch(res.stderr, /"off"/);
   assert.doesNotMatch(res.stderr, /"walk_to_the_store"/);
+});
+
+test("whitespace-padded look fails check as runtime looks.ts drops it, and camera bob key is valid while bbo warns", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        camTimeline: "src/timeline/cam.json",
+        shotsTimeline: "src/timeline/shots.json",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 1, 3], l: [0, 1, 0], bob: 0.4 },
+      { t: 1, p: [0, 1, 3], l: [0, 1, 0], bbo: 0.2 },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([{ t: 0, adjust: { look: " teal-amber " } }]),
+  );
+  const res = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(res.status, 1, res.stdout + res.stderr);
+  assert.match(res.stderr, /" teal-amber ".*did you mean "teal-amber"/);
+  assert.match(res.stdout + res.stderr, /"bbo".*did you mean "bob"/);
+  assert.doesNotMatch(res.stdout + res.stderr, /"bob".*did you mean/);
+});
+
+test("Round 15: handheld matches normHandheld trim/precedence; mix.py defaults missing lufs and rejects missing edit.end without KeyError", (t) => {
+  const MIX = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-r15-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  const ff = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=0.5", "sound/sfx/beep.wav"],
+    { cwd: dir },
+  );
+  assert.equal(ff.status, 0, String(ff.stderr));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        camTimeline: "src/timeline/cam.json",
+        soundTimeline: "src/timeline/audio.json",
+        sfx: "sound/sfx",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 1, 3], l: [0, 1, 0], handheld: " off " },
+      { t: 1, p: [0, 1, 3], l: [0, 1, 0], handheld: " THE_CLOSEUP " },
+      { t: 2, p: [0, 1, 3], l: [0, 1, 0], handheld: { preset: " THE_CLOSEUP " } },
+      {
+        t: 3,
+        p: [0, 1, 3],
+        l: [0, 1, 0],
+        handheld: { preset: "THE_CLOSEUP", kind: "NOT_A_SHAKE" },
+      },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [{ name: "beep", at: 0.2, gain: 0 }] }),
+  );
+  const baseEdit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...baseEdit, end: 2 }));
+
+  const chk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(chk.status, 0, chk.stdout + chk.stderr);
+
+  // mix.py with lufs omitted should default to -14 LUFS and succeed (no KeyError: 'lufs')
+  const mixOk = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(mixOk.status, 0, mixOk.stdout + mixOk.stderr);
+
+  // mix.py without edit.end should exit cleanly with an actionable message, never KeyError traceback
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify(baseEdit));
+  const mixNoEnd = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(mixNoEnd.status, 1, mixNoEnd.stdout + mixNoEnd.stderr);
+  assert.doesNotMatch(mixNoEnd.stderr, /Traceback|KeyError/);
+  assert.match(mixNoEnd.stderr, /src\/edit\.json.*end/);
+});
+
+test("Round 16: choices.json precedence & validation, mix.py sound_choices fallback, and readFaults under Freeze/piecewise Speed", (t) => {
+  const MIX = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "check-r16-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "export default () => ({});");
+  const editBase = { voice: { take: 0, edits: {}, warp: [] }, beats: {} };
+  const ff = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", "sound/sfx/beep.wav"],
+    { cwd: dir },
+  );
+  assert.equal(ff.status, 0, String(ff.stderr));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        textTimeline: "src/timeline/text.json",
+        timingTimeline: "src/timeline/timing.json",
+        sfx: "sound/sfx",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [{ name: "beep", at: 0.2, gain: 0 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ freezes: [{ at: 0.5, duration: 5.0 }] }),
+  );
+  // Freeze holding the middle of a 1.0s clip for 5.0s: true In/Out are 0.4s each (5.60s readable >= 4.00s for 80 chars); uniform k=6 falsely stretched In/Out to 2.4s (3.60s -> warning!)
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...editBase, end: 1.0 }));
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        {
+          kind: "text",
+          text: "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+          from: 0,
+          to: 1.0,
+          in: { fx: "fadeIn", len: 0.4 },
+          out: { fx: "fadeOut", len: 0.4 },
+        },
+      ],
+    }),
+  );
+  const freezeChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(freezeChk.status, 0, freezeChk.stdout + freezeChk.stderr);
+  assert.doesNotMatch(freezeChk.stdout + freezeChk.stderr, /readable about/);
+
+  // Slow edges (0.25x for In/Out -> 1.0s each) + fast middle (5x -> 0.25s) on 30 chars (needs 1.50s, true readable 1.25s): must warn!
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...editBase, end: 4 }));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      speeds: [
+        { from: 0, to: 0.25, rate: 0.25 },
+        { from: 0.25, to: 1.5, rate: 5 },
+        { from: 1.5, to: 1.75, rate: 0.25 },
+      ],
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        {
+          kind: "text",
+          text: "Exactly thirty chars rightnow!",
+          from: 0,
+          to: 1.75,
+          in: { fx: "fadeIn", len: 0.25 },
+          out: { fx: "fadeOut", len: 0.25 },
+        },
+      ],
+    }),
+  );
+  const rampChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(rampChk.status, 0, rampChk.stdout + rampChk.stderr);
+  assert.match(rampChk.stdout, /readable about 1\.25 s for 30 characters/);
+
+  // Valid sound_choices.json must NOT hide a corrupt choices.json from check, and mix.py falls back to sound_choices.json
+  writeFileSync(join(dir, "sound_choices.json"), JSON.stringify({ beep: { set: "off" } }));
+  writeFileSync(join(dir, "choices.json"), "{ broken");
+  const badChoices = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(badChoices.status, 1, badChoices.stdout + badChoices.stderr);
+  assert.match(badChoices.stderr, /choices\.json/);
+
+  rmSync(join(dir, "choices.json"));
+  const mixFallback = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(mixFallback.status, 0, mixFallback.stdout + mixFallback.stderr);
+  assert.doesNotMatch(mixFallback.stdout + mixFallback.stderr, /-14\.0 LUFS/);
+});
+
+test("Round 17: textCheckSample skips zero-span cuts and clamps inside [from, to), and mix.py reports unfit() cleanly with timingTimeline", (t) => {
+  const MIX = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
+  assert.equal(textCheckSample({ from: 5, to: 5 }, { in: 0, out: 0 }, 0, 10, 30), null);
+  const clamped = textCheckSample({ from: 0, to: 10.5 }, { in: 0.2, out: 0.2 }, 9, 10, 30);
+  assert.ok(clamped !== null && clamped >= 9 && clamped < 10, `expected [9, 10), got ${clamped}`);
+  const tinyEnd = textCheckSample({ from: 9.99, to: 10 }, { in: 0, out: 0 }, 0, 10, 30);
+  assert.ok(
+    tinyEnd !== null && tinyEnd >= 9.99 && tinyEnd < 10,
+    `expected [9.99, 10), got ${tinyEnd}`,
+  );
+
+  const root = mkdtempSync(join(tmpdir(), "studio-mix-unfit-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "film");
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "mix-unfit-test",
+      "live-studio": {
+        edit: "src/edit.json",
+        audioTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 5, voice: { lines: [] } }));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ speeds: [{ from: 0, to: 5, rate: 1 }] }),
+  );
+  // Missing sfx[0].name must fail via unfit(), not KeyError traceback inside prepare_timing()
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], sfx: [{ at: 1, gain: 0 }] }),
+  );
+  const badSfx = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(badSfx.status, 1, badSfx.stdout + badSfx.stderr);
+  assert.match(badSfx.stderr, /sfx\[0\] has no name/);
+  assert.doesNotMatch(badSfx.stderr, /Traceback|KeyError|TypeError|AttributeError/);
+
+  // Missing beds list must also fail via unfit(), not KeyError on module import
+  writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ sfx: [] }));
+  const noBeds = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(noBeds.status, 1, noBeds.stdout + noBeds.stderr);
+  assert.match(noBeds.stderr, /no beds list/);
+  assert.doesNotMatch(noBeds.stderr, /Traceback|KeyError|TypeError|AttributeError/);
+});
+
+test("Round 18: text checks respect unlinked textClock.duration, blank freeze gaps, fallbackTimingDuration, and non-finite sourceAt", (t) => {
+  // 1) Unlinked textClock shorter than ends.layers rejects text after textClock.duration
+  const root = mkdtempSync(join(tmpdir(), "studio-text-clock-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "film");
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "text-clock-test",
+      "live-studio": {
+        edit: "src/edit.json",
+        textTimeline: "src/timeline/text.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 6 }));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      speeds: [{ from: 0, to: 6, rate: 0.5 }],
+      layerKinds: { text: { base: {}, changes: [] } },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({ items: [{ kind: "text", text: "Late text", size: 56, from: 6.5, to: 8 }] }),
+  );
+  const shortTextCheck = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(shortTextCheck.status, 1, shortTextCheck.stdout + shortTextCheck.stderr);
+  assert.match(shortTextCheck.stderr, /after the film ends \(6\.00 s heard\)/);
+
+  // 2) blank:true freeze does not count toward readable duration and textCheckSample avoids blank intervals
+  const timingBlank = { freezes: [{ at: 2, duration: 2, blank: true }] };
+  const blankClock = compileLayerTiming(timingBlank, 6, "text");
+  const blankAt25 = textCheckSample(
+    { from: 1.5, to: 4.5 },
+    { in: 0, out: 0 },
+    0,
+    8,
+    30,
+    blankClock,
+  );
+  assert.ok(
+    blankAt25 !== null && frameVisible(blankClock, blankAt25),
+    `expected visible sample, got ${blankAt25}`,
+  );
+  assert.equal(
+    textCheckSample({ from: 2.2, to: 3.8 }, { in: 0, out: 0 }, 0, 8, 30, blankClock),
+    null,
+  );
+
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify(timingBlank));
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        {
+          kind: "text",
+          text: "Readable long sentence that needs more than one second",
+          size: 56,
+          from: 1.5,
+          to: 2.5,
+        },
+      ],
+    }),
+  );
+  const blankCheck = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(blankCheck.status, 0, blankCheck.stdout + blankCheck.stderr);
+  assert.match(blankCheck.stdout, /readable about 1\.00 s/);
+
+  // 3) fallbackTimingDuration covers timing.gaps/layers/layerKinds/items when edit.end is omitted, and sourceAt guards non-finite t
+  const fbDur = fallbackTimingDuration([{ from: 0, to: 4 }], {
+    gaps: [{ from: 1, to: 3 }],
+    freezes: [],
+    speeds: [],
+    layers: { base: { cuts: [{ from: 2, to: 5 }] }, changes: [] },
+    layerKinds: { text: { base: {}, changes: [] } },
+  });
+  assert.ok(fbDur >= 5);
+  assert.ok(Number.isNaN(blankClock.sourceAt(Number.NaN)));
+});
+
+test("Round 19: check handles tail cuts without false fails, catches post-cut sounds, corrupt wavs, custom soundTimeline in mix.py, shots/adjust bounds, and sfx path escape", (t) => {
+  const MIX = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
+  const root = mkdtempSync(join(tmpdir(), "studio-r19-check-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "film");
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  const ffWav = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", "sound/sfx/beep.wav"],
+    { cwd: dir },
+  );
+  assert.equal(ffWav.status, 0, String(ffWav.stderr));
+
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "r19-check-test",
+      "live-studio": {
+        sfx: "sound/sfx",
+        soundTimeline: "src/timeline/custom_audio.json",
+        textTimeline: "src/timeline/text.json",
+        timingTimeline: "src/timeline/timing.json",
+        shotsTimeline: "src/timeline/shots.json",
+        adjustmentTimeline: "src/timeline/adjust.json",
+      },
+    }),
+  );
+  // 1) Tail cut removing text & sound whole must pass check (matches mix.py & render.mjs)
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ freezes: [{ at: 2, duration: 2 }], cuts: [{ from: 8, to: 10 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({ items: [{ kind: "text", text: "CUT WHOLE", size: 56, from: 8.5, to: 9.5 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/custom_audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [{ name: "beep", track: "bgm", from: 8.5, to: 9.5, gain: -6, fadeIn: 0, fadeOut: 0 }],
+      sfx: [{ name: "beep", track: "sfx", at: 8.5, length: 0.5, gain: 0 }],
+    }),
+  );
+  writeFileSync(join(dir, "src/timeline/shots.json"), JSON.stringify([{ t: 0 }, { t: 5 }]));
+  writeFileSync(
+    join(dir, "src/timeline/adjust.json"),
+    JSON.stringify({
+      items: [{ id: "a1", name: "Warm", from: 0, to: 5, track: 0, grade: { warmth: 10 } }],
+    }),
+  );
+  const tailOk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(tailOk.status, 0, tailOk.stdout + tailOk.stderr);
+
+  // mix.py also honors custom soundTimeline and renders sound/mix.wav
+  const mixCustom = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(mixCustom.status, 0, mixCustom.stdout + mixCustom.stderr);
+
+  // 2) Tail cut on sound + unlinked long textClock catches sound placed at 11..13 (after soundEnd=6, below ends.layers=14)
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      cuts: [{ from: 6, to: 10 }],
+      layerKinds: { text: { base: { freezes: [{ at: 2, duration: 4 }] }, changes: [] } },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/custom_audio.json"),
+    JSON.stringify({
+      beds: [{ name: "beep", track: "bgm", from: 11, to: 13, gain: -6, fadeIn: 0, fadeOut: 0 }],
+      sfx: [],
+    }),
+  );
+  const soundLate = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(soundLate.status, 1, soundLate.stdout + soundLate.stderr);
+
+  // 3) Corrupt .wav referenced in soundTimeline fails check
+  writeFileSync(join(dir, "sound/sfx/badwav.wav"), "not a wav");
+  writeFileSync(
+    join(dir, "src/timeline/custom_audio.json"),
+    JSON.stringify({
+      beds: [],
+      sfx: [{ name: "badwav", track: "sfx", at: 1, length: 0.5, gain: 0 }],
+    }),
+  );
+  const badWavCheck = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(badWavCheck.status, 1, badWavCheck.stdout + badWavCheck.stderr);
+
+  // 4) Negative shot.t rejected, shot past edit.end warned without inverted bounds, late adjustment rejected
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  writeFileSync(join(dir, "src/timeline/custom_audio.json"), JSON.stringify({ beds: [], sfx: [] }));
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([{ t: -1 }, { t: 15, hits: [{ t: 16, amount: 0.5 }] }]),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/adjust.json"),
+    JSON.stringify({
+      items: [{ id: "a1", name: "Late", from: 20, to: 25, track: 0, grade: { warmth: 10 } }],
+    }),
+  );
+  const boundsCheck = spawnSync("bun", [CHECK, "--json"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 60000,
+  });
+  assert.equal(boundsCheck.status, 1, boundsCheck.stdout + boundsCheck.stderr);
+  assert.doesNotMatch(boundsCheck.stdout, /15s\.\.10s/);
+
+  // 5) Escaping sfx path caught even without soundTimeline
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "r19-escape-test",
+      "live-studio": { sfx: "../../outside" },
+    }),
+  );
+  const escCheck = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(escCheck.status, 1, escCheck.stdout + escCheck.stderr);
+});
+
+test("Round 20: check uses per-clip clocks for beds vs sfx, rejects escaping soundVault without soundTimeline, missing timingTimeline, and file path for sfx", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-r20-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  const wav = join(dir, "sound/sfx/beep.wav");
+  const hdr = Buffer.alloc(44 + 800 * 2);
+  hdr.write("RIFF", 0);
+  hdr.writeUInt32LE(36 + 1600, 4);
+  hdr.write("WAVEfmt ", 8);
+  hdr.writeUInt32LE(16, 16);
+  hdr.writeUInt16LE(1, 20);
+  hdr.writeUInt16LE(1, 22);
+  hdr.writeUInt32LE(8000, 24);
+  hdr.writeUInt32LE(16000, 28);
+  hdr.writeUInt16LE(2, 32);
+  hdr.writeUInt16LE(16, 34);
+  hdr.write("data", 36);
+  hdr.writeUInt32LE(1600, 40);
+  writeFileSync(wav, hdr);
+  const demoEdit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...demoEdit, end: 10 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "r20-check-test",
+      "live-studio": {
+        sfx: "sound/sfx",
+        soundVault: false,
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+
+  // 1a) sfx cut at 6..10 while audio bed track stays 10s: valid bed 7..9 must pass
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ layerKinds: { sfx: { base: { cuts: [{ from: 6, to: 10 }] }, changes: [] } } }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [{ name: "beep", track: "bgm", from: 7, to: 9, gain: -6, fadeIn: 0, fadeOut: 0 }],
+      sfx: [],
+    }),
+  );
+  const bedPass = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(bedPass.status, 0, bedPass.stdout + bedPass.stderr);
+
+  // 1b) sfx freeze extends layerDuration to 14s while audio bed track stays 10s: bed 11..13 is past audio end (10s) and must fail
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      layerKinds: { sfx: { base: { freezes: [{ at: 2, duration: 4 }] }, changes: [] } },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [{ name: "beep", track: "bgm", from: 11, to: 13, gain: -6, fadeIn: 0, fadeOut: 0 }],
+      sfx: [],
+    }),
+  );
+  const bedLate = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(bedLate.status, 1, bedLate.stdout + bedLate.stderr);
+
+  // 2) Configured timingTimeline missing on disk must fail
+  rmSync(join(dir, "src/timeline/timing.json"));
+  const missingTiming = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(missingTiming.status, 1, missingTiming.stdout + missingTiming.stderr);
+  assert.match(missingTiming.stderr, /timing\.json/);
+
+  // 3) Escaping soundVault caught even without soundTimeline or sfx
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "r20-escape",
+      "live-studio": { soundVault: "../../../outside-escape" },
+    }),
+  );
+  const escVault = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(escVault.status, 1, escVault.stdout + escVault.stderr);
+  assert.match(escVault.stderr, /soundVault/);
+
+  // 4) Regular file for sfx rejected in pathFaults
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ name: "r20-file-sfx", "live-studio": { sfx: "package.json" } }),
+  );
+  const fileSfx = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(fileSfx.status, 1, fileSfx.stdout + fileSfx.stderr);
+  assert.match(fileSfx.stderr, /sfx.*file/i);
+});
+
+test("Round 21: check catches sfx start >= file length, missing edit.json with soundTimeline, explicit voice:true without full_voice.wav, and folder soundSources; mix.py skips impossible start/absent optional files safely", (t) => {
+  const MIX = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-r21-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  const ff = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", "sound/sfx/beep.wav"],
+    { cwd: dir },
+  );
+  assert.equal(ff.status, 0, String(ff.stderr));
+  const demoEdit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...demoEdit, end: 5 }));
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "r21-check-test",
+      "live-studio": {
+        sfx: "sound/sfx",
+        soundVault: false,
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+
+  // 1) sfx[].start >= fileDur with length omitted must fail check (and mix.py must not crash)
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [],
+      sfx: [{ name: "beep", at: 0, start: 5, gain: 0, reverse: true }],
+    }),
+  );
+  const badStartChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(badStartChk.status, 1, badStartChk.stdout + badStartChk.stderr);
+  assert.match(badStartChk.stderr, /start/);
+
+  // 2) mix.py handles omitted voice without full_voice.wav AND skips sfx start >= fileDur (even under timing) without crashing
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ speeds: [{ from: 0, to: 5, rate: 1 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [],
+      sfx: [{ name: "beep", at: 0, start: 5, gain: 0, reverse: true }],
+    }),
+  );
+  const mixSafe = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(mixSafe.status, 0, mixSafe.stdout + mixSafe.stderr);
+
+  // 3) Explicit voice:true without narration and missing full_voice.wav must fail check
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: true, beds: [], sfx: [] }),
+  );
+  const voiceTrueChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(voiceTrueChk.status, 1, voiceTrueChk.stdout + voiceTrueChk.stderr);
+  assert.match(voiceTrueChk.stderr, /full_voice\.wav/);
+
+  // 4) Missing src/edit.json when soundTimeline is configured fails check and mix.py reports unfit cleanly (no Traceback)
+  rmSync(join(dir, "src/edit.json"));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [] }),
+  );
+  const noEditChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(noEditChk.status, 1, noEditChk.stdout + noEditChk.stderr);
+  assert.match(noEditChk.stderr, /edit\.json/);
+  const noEditMix = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(noEditMix.status, 1, noEditMix.stdout + noEditMix.stderr);
+  assert.doesNotMatch(noEditMix.stderr, /Traceback/);
+
+  // 5) Directory passed to soundSources rejected in pathFaults
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ name: "r21-src-dir", "live-studio": { soundSources: { ok: "sound" } } }),
+  );
+  const srcDirChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(srcDirChk.status, 1, srcDirChk.stdout + srcDirChk.stderr);
+  assert.match(srcDirChk.stderr, /soundSources.*folder/i);
+});
+
+test("Round 22: mix.py creates missing sound/ folder on custom-sfx film, and check catches sfx start >= file length even when length is set", (t) => {
+  const MIX = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-r22-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sfx"), { recursive: true });
+  const ff = spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", "sfx/beep.wav"], {
+    cwd: dir,
+  });
+  assert.equal(ff.status, 0, String(ff.stderr));
+  const demoEdit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...demoEdit, end: 3 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "r22-check-test",
+      "live-studio": { sfx: "sfx", soundVault: false, soundTimeline: "src/timeline/audio.json" },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [{ name: "beep", at: 0, gain: 0 }] }),
+  );
+  // 1) Custom sfx folder without sound/ dir passes check and mix.py creates sound/ without FileNotFoundError
+  const okChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(okChk.status, 0, okChk.stdout + okChk.stderr);
+  const mixOut = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(mixOut.status, 0, mixOut.stdout + mixOut.stderr);
+  assert.doesNotMatch(mixOut.stderr, /Traceback|FileNotFoundError/);
+
+  // 2) sfx[].start >= fileDur with explicit length set must fail check
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [],
+      sfx: [{ name: "beep", at: 0, start: 5, length: 0.5, gain: 0 }],
+    }),
+  );
+  const badStartWithLen = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(badStartWithLen.status, 1, badStartWithLen.stdout + badStartWithLen.stderr);
+  assert.match(badStartWithLen.stderr, /start/);
+});
+
+test("Round 23: check rejects valid-header zero-second audio files that ffprobe/mix.py cannot read", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-r23-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  const zeroWav = Buffer.alloc(44);
+  zeroWav.write("RIFF", 0);
+  zeroWav.writeUInt32LE(36, 4);
+  zeroWav.write("WAVEfmt ", 8);
+  zeroWav.writeUInt32LE(16, 16);
+  zeroWav.writeUInt16LE(1, 20);
+  zeroWav.writeUInt16LE(1, 22);
+  zeroWav.writeUInt32LE(44100, 24);
+  zeroWav.writeUInt32LE(88200, 28);
+  zeroWav.writeUInt16LE(2, 32);
+  zeroWav.writeUInt16LE(16, 34);
+  zeroWav.write("data", 36);
+  zeroWav.writeUInt32LE(0, 40);
+  writeFileSync(join(dir, "sound/sfx/empty.wav"), zeroWav);
+  const demoEdit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...demoEdit, end: 3 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "r23-check-test",
+      "live-studio": {
+        sfx: "sound/sfx",
+        soundVault: false,
+        soundTimeline: "src/timeline/audio.json",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [{ name: "empty", at: 0, gain: 0 }] }),
+  );
+  const chk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(chk.status, 1, chk.stdout + chk.stderr);
+  assert.match(chk.stderr, /empty/);
+});
+
+test("a shared camera and key-file path keeps every applicable schema", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "check-shared-schema-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  const file = "src/timeline/cam.json";
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": { camTimeline: file, keyFiles: { [file]: "cam" }, soundVault: false },
+    }),
+  );
+  for (const fov of ["wide", 50]) {
+    writeFileSync(join(dir, file), JSON.stringify([{ t: 0, p: [0, 1, 5], l: [0, 1, 0], fov }]));
+    const checked = spawnSync("bun", [CHECK, "--json"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    assert.equal(checked.status, typeof fov === "string" ? 1 : 0, checked.stdout + checked.stderr);
+    const report = JSON.parse(checked.stdout);
+    if (typeof fov === "string") assert.match(JSON.stringify(report.problems), /cam\.json.*fov/);
+  }
+});
+
+test("an existing choices directory is reported as a file problem", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "check-choices-directory-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { soundVault: false } }),
+  );
+  mkdirSync(join(dir, "choices.json"));
+  const checked = spawnSync("bun", [CHECK, "--json"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  assert.equal(checked.status, 1, checked.stdout + checked.stderr);
+  assert.match(JSON.stringify(JSON.parse(checked.stdout).problems), /choices\.json.*folder/);
+});
+
+test("invalid ancestor vault paths produce a named JSON problem instead of crashing", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "check-vault-path-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "film");
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  writeFileSync(join(root, "vault.json"), JSON.stringify({ root: 123 }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [] }),
+  );
+  for (const soundVault of [undefined, false]) {
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        "live-studio": { soundTimeline: "src/timeline/audio.json", sfx: "sound/sfx", soundVault },
+      }),
+    );
+    const checked = spawnSync("bun", [CHECK, "--json"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    assert.equal(checked.status, soundVault === false ? 0 : 1);
+    const report = JSON.parse(checked.stdout);
+    assert.equal(report.ok, soundVault === false);
+    if (soundVault !== false)
+      assert.match(JSON.stringify(report.problems), /vault\.json.*root.*folder path/);
+  }
+});
+
+test("check probes the default narration whenever the mixer will play it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "check-default-voice-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "assets/public/agent"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        sfx: "sound/sfx",
+        soundVault: false,
+      },
+    }),
+  );
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 3 }));
+  writeFileSync(join(dir, "assets/public/agent/full_voice.wav"), "truncated voice file");
+  for (const voice of [true, undefined, false]) {
+    writeFileSync(
+      join(dir, "src/timeline/audio.json"),
+      JSON.stringify({ voice, beds: [], sfx: [] }),
+    );
+    const checked = spawnSync("bun", [CHECK, "--json"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    assert.equal(checked.status, voice === false ? 0 : 1, checked.stdout + checked.stderr);
+    const report = JSON.parse(checked.stdout);
+    assert.equal(report.ok, voice === false);
+    if (voice !== false)
+      assert.match(
+        JSON.stringify(report.problems),
+        /full_voice\.wav.*corrupt|corrupt.*full_voice\.wav/,
+      );
+  }
 });

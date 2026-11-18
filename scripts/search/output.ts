@@ -22,6 +22,8 @@ export const dualSearchOutput = (
   semantic: OpenFilmResult,
   options: {
     limit: number;
+    offset?: number;
+    nextPage?: string;
     json: boolean;
     notes: string[];
     foreign: boolean;
@@ -29,8 +31,9 @@ export const dualSearchOutput = (
     where: (entries: Entry[]) => string[];
   },
 ) => {
-  const words = keyword.slice(0, options.limit),
-    hits = semantic.hits.slice(0, options.limit);
+  const offset = options.offset ?? 0;
+  const words = keyword.slice(offset, offset + options.limit),
+    hits = semantic.hits.slice(offset, offset + options.limit);
   const wordKeys = new Set(words.map(assetKey));
   const notes = [
     ...options.notes,
@@ -64,7 +67,7 @@ export const dualSearchOutput = (
         keyword: {
           scope: "filtered catalog",
           total: keyword.length,
-          results: words.map((entry, i) => summary(entry, i + 1)),
+          results: words.map((entry, i) => summary(entry, offset + i + 1)),
         },
         semantic: {
           scope: "openfilm",
@@ -72,8 +75,8 @@ export const dualSearchOutput = (
           scoreMeaning: "similarity, not confidence; listen/view before choosing",
           results: hits.map(({ entry, score }, i) => ({
             ...(wordKeys.has(assetKey(entry))
-              ? { key: assetKey(entry), rank: i + 1 }
-              : summary(entry, i + 1)),
+              ? { key: assetKey(entry), rank: offset + i + 1 }
+              : summary(entry, offset + i + 1)),
             similarity: score,
             alsoKeyword: wordKeys.has(assetKey(entry)),
           })),
@@ -83,7 +86,7 @@ export const dualSearchOutput = (
       2,
     );
   return [
-    `BM25 — catalog keywords: ${words.length} of ${keyword.length} matches`,
+    `BM25 — catalog keywords: ${words.length ? `entries ${offset + 1}-${offset + words.length}` : `0 entries at offset ${offset}`} of ${keyword.length} matches`,
     ...(words.length
       ? words.map(options.line)
       : ["No keyword matches; this does not establish that the asset is absent."]),
@@ -101,6 +104,9 @@ export const dualSearchOutput = (
       : []),
     ...options.where([...words, ...hits.map((hit) => hit.entry)]),
     ...notes.map((note) => `note: ${note}`),
+    ...(options.nextPage && Math.max(keyword.length, semantic.hits.length) > offset + options.limit
+      ? [`next page: ${options.nextPage}`]
+      : []),
     "next: bun run find --show <id> for file, license, settings and usage. Listen/view before choosing; --offline reads saved searches without network.",
   ].join("\n");
 };

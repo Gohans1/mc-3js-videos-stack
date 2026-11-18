@@ -276,3 +276,91 @@ test("automatic history observes a real source edit and survives closing its wat
   assert.equal(history.list().length, 2);
   assert.equal(history.list()[0].kind, "auto");
 });
+
+test("restoring OpenFilm overlays reloads the live document's protection", (t) => {
+  const { project } = setup(t);
+  mkdirSync(join(project, "src/timeline"));
+  const file = join(project, "src/timeline/openfilm.json");
+  const initial = { items: [{ id: "overlay", asset: "effects/grain", from: 0, to: 1 }] };
+  writeFileSync(file, JSON.stringify(initial));
+  const film = openFilm(project, { send() {} });
+  try {
+    const saved = film.history.capture("Original overlays", "named");
+    const current = film.openfilm.read();
+    const result = film.openfilm.write(current.version, {
+      items: [{ ...current.data.items[0], to: 3 }],
+    });
+    assert.ok(result.version, JSON.stringify(result));
+    film.history.restore(saved.id, film.history.current().fingerprint);
+    assert.equal(JSON.parse(readFileSync(file, "utf8")).items[0].to, 1);
+    assert.equal(film.openfilm.read().data.items[0].to, 1);
+    assert.equal(JSON.parse(readFileSync(file, "utf8")).items[0].to, 1);
+  } finally {
+    film.stop();
+  }
+});
+
+test("history includes a configured overlay timeline outside src", (t) => {
+  const { project, history } = setup(t);
+  mkdirSync(join(project, "editing"));
+  writeFileSync(
+    join(project, "package.json"),
+    JSON.stringify({
+      "live-studio": { openfilmTimeline: "editing/overlays.json" },
+    }),
+  );
+  const file = join(project, "editing/overlays.json");
+  writeFileSync(file, "original overlays");
+  const saved = history.capture("Original overlays", "named");
+  writeFileSync(file, "edited overlays");
+  assert.notEqual(history.current().fingerprint, saved.fingerprint);
+  history.restore(saved.id, history.current().fingerprint);
+  assert.equal(readFileSync(file, "utf8"), "original overlays");
+});
+
+test("a live history read keeps an asset successfully added by the CLI", (t) => {
+  const { project } = setup(t);
+  writeFileSync(
+    join(project, "package.json"),
+    JSON.stringify({
+      "live-studio": { textTimeline: "src/text.json" },
+    }),
+  );
+  const file = join(project, "src/text.json");
+  writeFileSync(file, JSON.stringify({ items: [] }));
+  const film = openFilm(project, { send() {} });
+  try {
+    film.text.write(film.text.read().version, {
+      items: [{ id: "human", kind: "text", text: "Human title", from: 0, to: 1 }],
+    });
+    const props = join(project, "props.json");
+    writeFileSync(props, JSON.stringify({ text: "CLI title" }));
+    const cli = Bun.spawnSync(
+      [
+        process.execPath,
+        "scripts/asset.mjs",
+        "use",
+        "text/in/fade",
+        "--film",
+        project,
+        "--from",
+        "2",
+        "--to",
+        "4",
+        "--props-file",
+        props,
+      ],
+      { timeout: 15000 },
+    );
+    assert.equal(cli.exitCode, 0, cli.stderr.toString());
+    assert.equal(JSON.parse(readFileSync(file, "utf8")).items.length, 2);
+    film.history.current();
+    assert.deepEqual(
+      film.text.read().data.items.map((item) => item.text),
+      ["Human title", "CLI title"],
+    );
+    assert.equal(JSON.parse(readFileSync(file, "utf8")).items.length, 2);
+  } finally {
+    film.stop();
+  }
+});

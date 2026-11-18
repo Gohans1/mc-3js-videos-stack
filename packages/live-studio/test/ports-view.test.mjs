@@ -12,7 +12,6 @@ import { createServer } from "vite";
 
 import { TooltipProvider } from "../app/components/ui/tooltip.tsx";
 import {
-  clearCachedPortsSnapshot,
   describeWorktree,
   fetchPortsSnapshot,
   formatRelativeScanAge,
@@ -390,7 +389,7 @@ describe("PortsPanel read-only rendering and URL safety", () => {
   });
 
   test("shouldSkipBackgroundRefresh and in-memory snapshot cache behave cleanly", () => {
-    clearCachedPortsSnapshot();
+    setCachedPortsSnapshot(null);
     assert.equal(getCachedPortsSnapshot(), null);
     assert.equal(shouldSkipBackgroundRefresh({ visibilityState: "hidden", inFlight: null }), true);
     assert.equal(
@@ -422,7 +421,7 @@ describe("PortsPanel read-only rendering and URL safety", () => {
     );
     assert.match(cachedHtml, /cell-break/);
     assert.doesNotMatch(cachedHtml, /Scanning active studios/);
-    clearCachedPortsSnapshot();
+    setCachedPortsSnapshot(null);
   });
 });
 
@@ -614,7 +613,7 @@ describe("store & Side.tsx Ports tab navigation integration", () => {
   }, 60_000);
 
   afterEach(() => {
-    clearCachedPortsSnapshot();
+    setCachedPortsSnapshot(null);
     if (storeMod) storeMod.set({ side: "notes", lib: "notes" });
   });
 

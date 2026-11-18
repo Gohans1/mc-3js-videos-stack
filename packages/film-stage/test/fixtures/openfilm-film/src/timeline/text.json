@@ -1,0 +1,18 @@
+{
+ "items": [
+  {
+   "track": 0,
+   "timebase": {"base": {"speeds": [], "freezes": [], "cuts": [], "gaps": []}, "changes": [], "sourceDuration": 4},
+   "from": 0,
+   "to": 4,
+   "kind": "text",
+   "in": {"fx": "up", "len": 0.5},
+   "text": "Shared CLI - native text",
+   "x": 0.5,
+   "y": 0.8,
+   "size": 36,
+   "color": "#f7f8f8",
+   "id": "a0b5ee21-0c67-442c-aac1-04820196291b"
+  }
+ ]
+}

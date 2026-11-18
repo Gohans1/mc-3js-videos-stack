@@ -1,4 +1,3 @@
-import { DURATION } from "film/scene";
 // The bar over the timeline, as CapCut's: the pointer's mode (select, or split where clicked), undo and redo, then the cuts at the
 // playhead (split, delete left, delete right, delete), and on the right auto snapping, the preview axis and the zoom (to the whole
 // film, out, CapCut's slider, in). Each does what its key does, so a beginner can see the tools before learning them
@@ -23,11 +22,12 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
+import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 
 import { Tip } from "../components/Tip";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
+import { DURATION } from "../core/filmMeta";
 import { get, setPref, useStudio } from "../core/store";
 import { rangeText } from "../core/time";
 import { BeatMenu } from "../sound/BeatMenu";
@@ -72,9 +72,11 @@ function Tool({
 
 // CapCut's zoom slider, left the whole film, right the closest (6 s): even steps of the slider are even ratios of zoom
 function ZoomSlider() {
-  const ZOOM_RANGE = Math.log(DURATION / ZOOM_MIN);
-  const span = useStudio((s) => Math.min(s.span, DURATION)),
-    at = ZOOM_RANGE > 0 ? Math.log(DURATION / span) / ZOOM_RANGE : 0;
+  useStudio((s) => s.metaRev);
+  const total = DURATION || ZOOM_MIN;
+  const ZOOM_RANGE = Math.log(total / ZOOM_MIN);
+  const span = useStudio((s) => Math.min(s.span, total)),
+    at = ZOOM_RANGE > 0 ? Math.log(total / span) / ZOOM_RANGE : 0;
   return (
     <div className="w-24 px-1.5 pointer-coarse:hidden">
       <Slider
@@ -84,7 +86,7 @@ function ZoomSlider() {
         step={0.01}
         value={at}
         onValueChange={(v: number | readonly number[]) =>
-          zoomTo(DURATION / Math.exp((typeof v === "number" ? v : v[0]) * ZOOM_RANGE))
+          zoomTo(total / Math.exp((typeof v === "number" ? v : v[0]) * ZOOM_RANGE))
         }
       />
     </div>
@@ -111,7 +113,7 @@ export function TimelineBar() {
     <div
       role="toolbar"
       aria-label="Timeline tools"
-      className="scroll-fade-x sideways:hidden col-span-full -m-0.5 mb-1 flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto overscroll-x-contain p-0.5 *:shrink-0"
+      className="scroll-fade-x scroll-fade-12 sideways:hidden col-span-full -m-0.5 mb-1 flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto overscroll-x-contain p-0.5 *:shrink-0"
     >
       <Tool
         label="Select (A)"
@@ -125,10 +127,10 @@ export function TimelineBar() {
         pressed={blade}
         onClick={() => setBlade(!blade)}
       />
-      <span aria-hidden className="bg-border mx-1.5 h-5 w-px" />
+      <span aria-hidden className="bg-border mx-1 h-5 w-px" />
       <Tool label="Undo (Ctrl+Z)" icon={Undo2} onClick={undo} disabled={!canUndo()} />
       <Tool label="Redo (Ctrl+Y)" icon={Redo2} onClick={redo} disabled={!canRedo()} />
-      <span aria-hidden className="bg-border mx-1.5 h-5 w-px" />
+      <span aria-hidden className="bg-border mx-1 h-5 w-px" />
       <Tool
         label="Split at the playhead (Ctrl+B): the picked sound clips, or the shot"
         icon={Scissors}
@@ -216,7 +218,7 @@ export function TimelineBar() {
         pressed={previewAxis}
         onClick={togglePreviewAxis}
       />
-      <span aria-hidden className="bg-border mx-1.5 h-5 w-px" />
+      <span aria-hidden className="bg-border mx-1 h-5 w-px" />
       <Tool label="Zoom to fit (Shift+Z): the whole film" icon={ScanSearch} onClick={zoomToFit} />
       <Tool label="Zoom out (-)" icon={ZoomOut} onClick={() => zoomSpan(1.5)} />
       <ZoomSlider />

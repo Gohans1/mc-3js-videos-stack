@@ -1,9 +1,9 @@
-import { ActivityRail } from "./activity/ActivityRail";
 import { type CSSProperties, lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { ActivityRail } from "./activity/ActivityRail";
 import { cliStore, useCliStore } from "./cli/cli-store";
 import { Splitter, useStoredSize } from "./components/Splitter";
 import {
@@ -21,8 +21,11 @@ import type { Bind, Elements } from "./core/state";
 import { useStudio } from "./core/store";
 import { useDeckShrinkLatch } from "./lessons/deck-latch";
 import { useLessons } from "./lessons/lessons";
-import { ReviewRoom } from "./notes/ReviewRoom";
 import { Stage } from "./picture/Stage";
+
+const ReviewRoom = lazy(() =>
+  import("./shell/LazyPanels").then((m) => ({ default: m.ReviewRoom })),
+);
 import { useBoot } from "./shell/boot";
 import { Library, Side, useEditable, useWide } from "./shell/Side";
 import { Transport } from "./shell/Transport";
@@ -190,12 +193,16 @@ export function App() {
         >
           <Stage bind={bind} />
           <Transport />
-          <TimelinePanel bind={bind} size={bounds.editH} />
+          <TimelinePanel bind={bind} />
           {showLibrary && <Library lessonsLockW={libLatch.lockW} />}
           {(showSideOnRight || showDetails) && (
             <Side wide={showLibrary} desktop={desktop} lessonsLockW={sideLatch.lockW} />
           )}
-          {review && <ReviewRoom />}
+          {review && (
+            <Suspense fallback={null}>
+              <ReviewRoom />
+            </Suspense>
+          )}
           <PasteAttributes />
           {/* Full-height Library on the left in wide mode; timeline pushed right beside it */}
           <div className="upright:hidden sideways:hidden pointer-events-none relative col-[1/-1] row-start-3 in-data-edit-folded:-top-[5px] in-data-inspector-active:hidden in-data-review:hidden in-data-wide:col-[2/-1] in-data-cli-expanded:hidden in-data-cli-side:col-[1]">

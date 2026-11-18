@@ -321,7 +321,7 @@ export function Slider({
         <div
           data-slot="slider-thumb"
           className={cn(
-            "ring-ring/30 absolute top-1/2 left-(--thumb-pos) block shrink-0 -translate-x-1/2 -translate-y-1/2 rounded-full border border-slider-thumb bg-slider-thumb transition-shadow select-none after:absolute after:-inset-2 hover:ring-2 active:ring-2 has-[:focus-visible]:ring-2",
+            "ring-ring/30 border-slider-thumb bg-slider-thumb absolute top-1/2 left-(--thumb-pos) block shrink-0 -translate-x-1/2 -translate-y-1/2 rounded-full border transition-shadow select-none after:absolute after:-inset-2 hover:ring-2 active:ring-2 has-[:focus-visible]:ring-2",
             disabled && "pointer-events-none opacity-50",
             metrics.thumb,
           )}

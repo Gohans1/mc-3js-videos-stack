@@ -115,6 +115,10 @@ const DRAW = new Set([
   "velocityEffects",
   "adjustments",
   "disposeTransitions",
+  "renderFrame",
+  "prepareFrame",
+  "needsPreparation",
+  "disposeOpenFilm",
 ]);
 export const otherKeys = (of: object, part: "draw" | "tools" = "draw") =>
   Object.keys(of).filter((k) => !(part === "tools" ? TOOLS : DRAW).has(k));

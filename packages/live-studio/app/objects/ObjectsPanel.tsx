@@ -1,3 +1,4 @@
+import { useActivity } from "../activity/activity";
 import {
   Box,
   ChevronLeft,
@@ -42,44 +43,39 @@ import { cn } from "@/lib/utils";
 import { timingClock } from "../../src/timing-state.mjs";
 import { CurveEditor, EaseTiles } from "../components/EasePicker";
 import { EmptyCard, Segmented } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { NumberField } from "../components/NumberField";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
+import { engine } from "../core/engine";
 import { matcher } from "../core/search";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { FPS, stamp } from "../core/time";
 import { keyNav } from "../keys/keynav";
-import { lookAtClick } from "../picture/look";
 import { seek } from "../playback/transport";
 import {
-  addInFront,
-  cancelPreviewTransform,
   canPlace,
   clearClip,
   type GizmoMode,
   OBJECT_EASE,
   placedData,
   placedDoc,
-  previewTransform,
   removeObject,
   renameObject,
   resetTransform,
   select,
   setClip,
   setClipRate,
-  setGizmo,
   setKeyEase,
   setSnap,
   setTransform,
   setVisible,
-  shownTransform,
   startedBy,
-  startObjectCarry,
   titleOf,
   toggleKey,
   tools,
-} from "./placed";
+} from "./placed-data";
 
 type Item = { what: string; kind: "block" | "mob" | "custom"; title: string };
 let catalog: Promise<Item[]> | null = null;
@@ -141,20 +137,41 @@ function Num({
 // Where the object is at the playhead, as drawn, and the playhead's frame: read a few times a second, so the panel follows
 // playback, seeking and the gizmo
 const useShown = (name: string) => {
-  const [v, setV] = useState(() => ({ shown: shownTransform(name), frame: Math.round(S.t * FPS) }));
+  const [v, setV] = useState(() => ({
+    shown: engine.shownTransform(name),
+    frame: Math.round(S.t * FPS),
+  }));
   useEffect(() => {
-    let last = "";
+    let last = "",
+      timer = 0,
+      lastPush = 0;
     const read = () => {
-      const now = { shown: shownTransform(name), frame: Math.round(S.t * FPS) };
+      timer = 0;
+      lastPush = performance.now();
+      const now = { shown: engine.shownTransform(name), frame: Math.round(S.t * FPS) };
       const s = JSON.stringify(now);
       if (s !== last) {
         last = s;
         setV(now);
       }
     };
+    const schedule = () => {
+      const elapsed = performance.now() - lastPush;
+      if (elapsed >= 120) {
+        clearTimeout(timer);
+        read();
+      } else if (!timer) {
+        timer = window.setTimeout(read, 120 - elapsed);
+      }
+    };
     read();
-    const id = setInterval(read, 120);
-    return () => clearInterval(id);
+    const offRendered = S.watch("rendered", schedule);
+    const offTime = S.watch("time", schedule);
+    return () => {
+      offRendered();
+      offTime();
+      clearTimeout(timer);
+    };
   }, [name]);
   return v;
 };
@@ -229,7 +246,7 @@ function Inspector({ name }: { name: string }) {
       <div className="flex items-center gap-1.5">
         <ToggleGroup
           value={[gizmo]}
-          onValueChange={(v: string[]) => v[0] && setGizmo(v[0] as GizmoMode)}
+          onValueChange={(v: string[]) => v[0] && engine.setGizmo(v[0] as GizmoMode)}
           spacing={1}
           className="flex-1"
           aria-label="Gizmo"
@@ -329,8 +346,8 @@ function Inspector({ name }: { name: string }) {
             key={n}
             name={`Position ${n}`}
             value={r(at[i], 3)}
-            live={(v) => previewTransform(name, { at: axis(at, i, v) })}
-            onCancel={() => cancelPreviewTransform(name)}
+            live={(v) => engine.previewTransform(name, { at: axis(at, i, v) })}
+            onCancel={() => engine.cancelPreviewTransform(name)}
             onSave={(v) => setTransform(name, { at: axis(at, i, v) })}
           />
         ))}
@@ -341,8 +358,8 @@ function Inspector({ name }: { name: string }) {
             name={`Rotation ${n} (degrees)`}
             step={1}
             value={r(rot[i], 1)}
-            live={(v) => previewTransform(name, { rot: axis(rot, i, v) })}
-            onCancel={() => cancelPreviewTransform(name)}
+            live={(v) => engine.previewTransform(name, { rot: axis(rot, i, v) })}
+            onCancel={() => engine.cancelPreviewTransform(name)}
             onSave={(v) => setTransform(name, { rot: axis(rot, i, v) })}
           />
         ))}
@@ -351,8 +368,8 @@ function Inspector({ name }: { name: string }) {
           name="Scale"
           step={0.0625}
           value={r(scale, 3)}
-          live={(v) => previewTransform(name, { scale: v })}
-          onCancel={() => cancelPreviewTransform(name)}
+          live={(v) => engine.previewTransform(name, { scale: v })}
+          onCancel={() => engine.cancelPreviewTransform(name)}
           onSave={(v) => setTransform(name, { scale: v })}
         />
         <span className="col-span-2" />
@@ -387,7 +404,7 @@ function Inspector({ name }: { name: string }) {
             onClick={() => seek(k.t)}
             className={cn(
               "bg-background text-muted-foreground hover:text-foreground rounded-md px-1.5 py-0.5 text-xs tabular-nums",
-              Math.abs(k.t - S.t) < 0.5 / FPS && "bg-tint text-primary",
+              Math.abs(k.t - S.t) < 0.5 / FPS && "bg-tint text-primary-text",
             )}
           >
             {stamp(k.t)}
@@ -438,7 +455,7 @@ function ClipRow({ name, clips }: { name: string; clips: string[] }) {
   const now = run?.clip ?? clips.find((c) => /idle/i.test(c)) ?? STILL,
     here = by && Math.abs(by.t - S.t) < 0.5 / FPS;
   const link =
-    "rounded-sm font-medium text-foreground underline decoration-dotted underline-offset-2 outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring";
+    "rounded-sm font-medium text-foreground underline decoration-dotted underline-offset-2 outline-none hover:text-primary-text focus-visible:ring-2 focus-visible:ring-ring";
   return (
     <div className="flex flex-col gap-1">
       <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_4.5rem] items-center gap-1.5">
@@ -547,6 +564,7 @@ const order = (a: Item, b: Item) =>
     : a.title.localeCompare(b.title);
 // What the film holds already, Unreal's Outliner in one line: a click selects it, on the picture and on its timeline row
 function InFilm() {
+  const lights = useActivity((state) => state.lit);
   useStudio((s) => s.keysRev);
   const object = useStudio((s) => s.object),
     names = Object.keys(placedData());
@@ -558,10 +576,11 @@ function InFilm() {
         {names.map((n) => (
           <button
             key={n}
+            data-ai-lit={(`object:${n}` in lights) || undefined}
             type="button"
             aria-pressed={object === n}
             onClick={() => select(n)}
-            className="bg-card text-ui text-label hover:bg-raised-2 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary h-7 max-w-full truncate rounded-md px-2"
+            className="bg-card text-ui text-label hover:bg-raised-2 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary-text h-7 max-w-full truncate rounded-md px-2"
           >
             {n}
           </button>
@@ -609,7 +628,7 @@ export function ObjectLibrary({ side = false }: { side?: boolean }) {
     const move = (ev: PointerEvent) => {
       if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return;
       stop();
-      startObjectCarry(what, ev, lookAtClick);
+      engine.startObjectCarry(what, ev);
     };
     addEventListener("pointermove", move);
     addEventListener("pointerup", stop);
@@ -655,54 +674,62 @@ export function ObjectLibrary({ side = false }: { side?: boolean }) {
         <p className="text-muted-foreground px-0.5 text-xs">
           Drag onto the picture, or click + to add it in the middle of the view.
         </p>
-        <ul className="flex flex-col">
-          {shown.slice(0, CAP).map((x) => (
-            <li
-              key={x.what}
-              onPointerDown={press(x.what)}
-              onDragStart={(e) => e.preventDefault()}
-              className="group hover:bg-card flex min-h-11 cursor-grab touch-none items-center gap-2 rounded-lg px-1 select-none active:cursor-grabbing"
-            >
-              <Icon item={x} />
-              <span className="flex min-w-0 flex-1 flex-col py-1">
-                <span className="text-ui truncate first-letter:uppercase">{x.title}</span>
-                <span translate="no" className="text-muted-foreground truncate text-xs">
-                  {x.what}
+        <TabStage
+          activeKey={kind}
+          order={KINDS.map((k) => k.id)}
+          axis="y"
+          distance={6}
+          duration={150}
+        >
+          <ul className="flex flex-col">
+            {shown.slice(0, CAP).map((x) => (
+              <li
+                key={x.what}
+                onPointerDown={press(x.what)}
+                onDragStart={(e) => e.preventDefault()}
+                className="group hover:bg-card flex min-h-11 cursor-grab touch-none items-center gap-2 rounded-lg px-1 transition-colors duration-150 select-none active:cursor-grabbing"
+              >
+                <Icon item={x} />
+                <span className="flex min-w-0 flex-1 flex-col py-1">
+                  <span className="text-ui truncate first-letter:uppercase">{x.title}</span>
+                  <span translate="no" className="text-muted-foreground truncate text-xs">
+                    {x.what}
+                  </span>
                 </span>
-              </span>
-              <Tip label="Add in the middle of the view">
-                <Button
-                  variant="quiet"
-                  size="icon-lg"
-                  className="flex-none pointer-coarse:size-10"
-                  aria-label={`Add ${titleOf(x.what)}`}
-                  onClick={() => addInFront(x.what, lookAtClick)}
-                >
-                  <Plus />
-                </Button>
-              </Tip>
-            </li>
-          ))}
-          {items && shown.length > CAP && (
-            <li className="text-muted-foreground px-1 py-2 text-xs">
-              Showing {CAP} of {shown.length}. Type to narrow it down.
-            </li>
-          )}
-          {items && !shown.length && (
-            <li className="text-ui text-muted-foreground flex flex-col items-start gap-1.5 px-1 py-2">
-              {!items.length
-                ? "Couldn't list the film's blocks and mobs"
-                : typed
-                  ? `No ${meta.one}s match "${q.trim()}"`
-                  : `This film has no ${meta.one}s`}
-              {elsewhere.map((k) => (
-                <Button key={k.id} variant="secondary" size="md" onClick={() => setKind(k.id)}>
-                  {found[k.id].length} in {k.title}
-                </Button>
-              ))}
-            </li>
-          )}
-        </ul>
+                <Tip label="Add in the middle of the view">
+                  <Button
+                    variant="quiet"
+                    size="icon-lg"
+                    className="flex-none pointer-coarse:size-10"
+                    aria-label={`Add ${titleOf(x.what)}`}
+                    onClick={() => engine.addObjectInFront(x.what)}
+                  >
+                    <Plus />
+                  </Button>
+                </Tip>
+              </li>
+            ))}
+            {items && shown.length > CAP && (
+              <li className="text-muted-foreground px-1 py-2 text-xs">
+                Showing {CAP} of {shown.length}. Type to narrow it down.
+              </li>
+            )}
+            {items && !shown.length && (
+              <li className="text-ui text-muted-foreground flex flex-col items-start gap-1.5 px-1 py-2">
+                {!items.length
+                  ? "Couldn't list the film's blocks and mobs"
+                  : typed
+                    ? `No ${meta.one}s match "${q.trim()}"`
+                    : `This film has no ${meta.one}s`}
+                {elsewhere.map((k) => (
+                  <Button key={k.id} variant="secondary" size="md" onClick={() => setKind(k.id)}>
+                    {found[k.id].length} in {k.title}
+                  </Button>
+                ))}
+              </li>
+            )}
+          </ul>
+        </TabStage>
       </div>
     </section>
   );

@@ -1,10 +1,14 @@
 """Render Earshot's 252 DSP sound-bank recipes into vault/sound/sfx/<category>/*.wav (resume-safe, 48 kHz 16-bit PCM)."""
+from __future__ import annotations
 import json
 import os
 import sys
 import wave
 from pathlib import Path
-import numpy as np
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
 
 CATEGORY_MAP = {
     "whoosh_fast": "transitions", "whoosh_big": "transitions", "pro_whoosh_big": "transitions",
@@ -61,6 +65,7 @@ def valid_wav(path: Path) -> bool:
 
 
 def write_pcm16(path: Path, y: np.ndarray, sr: int = 48000) -> None:
+    import numpy as np
     arr = np.clip(np.asarray(y, dtype=np.float32), -1.0, 1.0)
     channels = 1 if arr.ndim == 1 else arr.shape[1]
     pcm = np.round(arr * 32767.0).astype("<i2").tobytes()
@@ -79,8 +84,13 @@ def write_pcm16(path: Path, y: np.ndarray, sr: int = 48000) -> None:
 
 
 def main() -> None:
-    earshot_dir = Path(sys.argv[1]).resolve()
-    vault_sound = Path(sys.argv[2]).resolve()
+    import argparse
+    parser = argparse.ArgumentParser(description="Render Earshot DSP recipes into the sound vault; keeps valid WAVs and resumes missing recipes.")
+    parser.add_argument("earshot_dir", type=Path, help="Earshot source directory containing earshot/forge/bank.py; requires NumPy")
+    parser.add_argument("vault_sound", type=Path, help="Sound vault directory; writes 48 kHz PCM WAVs in sfx/<category>/")
+    args = parser.parse_args(["--help"] if sys.argv[1:2] == ["help"] else None)
+    earshot_dir = args.earshot_dir.resolve()
+    vault_sound = args.vault_sound.resolve()
     sys.path.insert(0, str(earshot_dir))
     from earshot.forge import bank
 

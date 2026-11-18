@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/openfilm/skill-replicate",
+  "commit": "eef1ee5eda2a2aaeec60a3f133d73b86dd53c053",
+  "path": "skills/replicate/scripts/measure.mjs",
+  "license": "MIT",
+  "sha256": "d7f7d85b4f41fc3f79a154dd528eda630ba96e33497023afded5efc6597ded41"
+}

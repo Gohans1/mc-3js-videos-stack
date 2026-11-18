@@ -178,9 +178,9 @@ test.each([1920, 960])(
     expect(audio).toBeGreaterThanOrEqual(0);
     expect(tabs.slice(audio)).toEqual(
       (width >= 1280
-        ? ["Audio", "Text", "Objects", "Transitions", "Adjustment"]
-        : ["Audio", "Text", "Objects", "Keyframes", "Transitions", "Camera"]
-      ).map((text) => ({ text, disabled: true })),
+        ? ["Audio", "Text", "Effects", "Objects", "Transitions", "Adjustment"]
+        : ["Audio", "Text", "Effects", "Objects", "Keyframes", "Transitions", "Camera"]
+      ).map((text) => ({ text, disabled: text !== "Effects" })),
     );
   },
 );

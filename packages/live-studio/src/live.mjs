@@ -87,9 +87,10 @@ const page = await buildPage(film, {
     ];
     if (names.length)
       activity.add({
+        surface: "film",
         say: `Changed the code: ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`,
       });
-    if (broken) activity.add({ say: "The film's code builds again", level: "ok" });
+    if (broken) activity.add({ say: "The film's code builds again", level: "ok", surface: "film" });
     broken = false;
   },
   onError: (message, first) => {
@@ -107,6 +108,7 @@ const page = await buildPage(film, {
       activity.add({
         say: `The film's code does not build${what ? `: ${what.slice(0, 120)}` : ""}${where}`,
         level: "fail",
+        surface: "film",
       });
     }
     broken = true;

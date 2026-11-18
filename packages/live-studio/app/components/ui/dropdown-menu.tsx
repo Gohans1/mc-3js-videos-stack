@@ -13,7 +13,7 @@ const dropdownContentVariants = cva("", {
     },
     motion: {
       popup:
-        "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100 motion-reduce:animate-none",
+        "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-97 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-97 duration-150 data-closed:duration-120",
       none: "",
     },
   },

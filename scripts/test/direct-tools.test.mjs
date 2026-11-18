@@ -1,12 +1,46 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "../..");
 const run = (exe, file, args, cwd) =>
   spawnSync(exe, [join(ROOT, file), ...args], { cwd, encoding: "utf8", timeout: 30_000 });
+
+test("maintenance help and argument errors stop before downloads or output writes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "maintenance-help-"));
+  try {
+    const preload = join(dir, "no-network.mjs");
+    writeFileSync(
+      preload,
+      'globalThis.fetch = () => { throw new Error("Unexpected network access"); };',
+    );
+    for (const [exe, file] of [
+      ["bun", "packages/mc-assets/mobs.ts"],
+      ["bun", "scripts/mc/slim_jar.mjs"],
+      ["bun", "packages/live-studio/src/stale.mjs"],
+      ["python", "scripts/compute_mc_peaks.py"],
+      ["python", "scripts/render_earshot_bank.py"],
+    ]) {
+      for (const [arg, status] of [
+        ["--help", 0],
+        ["--hlep", 2],
+      ]) {
+        const result = spawnSync(
+          exe,
+          [...(exe === "bun" ? ["--preload", preload] : []), join(ROOT, file), arg],
+          { cwd: dir, encoding: "utf8", timeout: 10000 },
+        );
+        expect(result.status, `${file} ${arg}: ${result.stderr}`).toBe(status);
+        if (status === 0) expect(result.stdout).toMatch(/usage|bun |python /i);
+      }
+    }
+    expect(readdirSync(dir)).toEqual(["no-network.mjs"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 25000);
 
 test("asset picking refuses a missing parent model and keeps the existing ZIP", async () => {
   const { zipSync, strToU8 } = await import("fflate");
@@ -39,6 +73,8 @@ test("asset picking refuses a missing parent model and keeps the existing ZIP", 
 });
 
 for (const [exe, file] of [
+  ["bun", "scripts/evals/load/compare.mjs"],
+  ["bun", "scripts/evals/load/frame.mjs"],
   ["bun", "scripts/timeline_fmt.ts"],
   ["python", "scripts/timeline_fmt.py"],
   ["bun", "packages/mc-assets/pick.mjs"],

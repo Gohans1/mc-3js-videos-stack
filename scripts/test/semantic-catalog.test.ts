@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { importedEntries } from "../imported-catalog";
+import { assetFromEntry } from "../semantic/catalog";
 
 test("a shared vault override includes mocap in the same catalog used for find and embedding builds", () => {
   const root = mkdtempSync(join(tmpdir(), "semantic-shared-mocap-"));
@@ -31,43 +31,6 @@ test("a shared vault override includes mocap in the same catalog used for find a
     );
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(["mixamo/shared_fixture"]);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-import { assetFromEntry } from "../semantic/catalog";
-
-test("a separate catalog retains its source metadata and resolves assets and previews beside the catalog", () => {
-  const root = mkdtempSync(join(tmpdir(), "imported-catalog-"));
-  const file = join(root, "assets.json");
-  try {
-    expect(importedEntries(file)).toEqual([]);
-    mkdirSync(join(root, "library/effects/snow"), { recursive: true });
-    writeFileSync(join(root, "library/effects/snow/preview.mp4"), "offline-preview");
-    writeFileSync(
-      file,
-      JSON.stringify([
-        {
-          kind: "asset",
-          id: "snow",
-          cat: "effect",
-          title: "Snow",
-          about: "Snow falls",
-          src: "openfilm",
-          data: {
-            file: "library/effects/snow/files/page.html",
-            upstreamId: "effects/snow",
-            license: "CC0",
-          },
-        },
-      ]),
-    );
-    const entry = importedEntries(file)[0]!;
-    expect(entry.data?.file).toBe(join(root, "library/effects/snow/files/page.html"));
-    expect(entry.data?.license).toBe("CC0");
-    expect(assetFromEntry(entry).media?.file).toBe(join(root, "library/effects/snow/preview.mp4"));
-    writeFileSync(file, '[{"id":"broken"}]');
-    expect(() => importedEntries(file)).toThrow(/catalog.*row/i);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

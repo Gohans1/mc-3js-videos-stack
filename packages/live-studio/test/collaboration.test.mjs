@@ -9,6 +9,7 @@ import * as z from "zod";
 
 import { mountCollaboration } from "../src/collaboration-api.mjs";
 import { AdjustmentTimeline, SoundTimeline } from "../src/contract.ts";
+import { openOpenFilm } from "../src/openfilm.mjs";
 import { openTimelineFile } from "../src/timeline_file.mjs";
 
 const setup = (t, data) => {
@@ -185,6 +186,34 @@ test("deleting the last object field keeps independent fields added by the agent
   timeline.write(base.version, { camera: {}, music: "old" });
   writeFileSync(file, JSON.stringify({ camera: { fov: 50, x: 8 }, music: "new" }));
   assert.deepEqual(timeline.read().data, { camera: { x: 8 }, music: "new" });
+});
+
+test("the OpenFilm agent API acknowledges an overlay change without protecting it as a human edit", async (t) => {
+  const { project } = setup(t, {});
+  const file = openOpenFilm(project);
+  file.use({ asset: "effects/grain", from: 0, to: 1 });
+  const base = file.read();
+  const app = new Hono();
+  mountCollaboration(app, (name) => (name === "openfilm" ? file : null));
+  const response = await app.request("/api/collaboration/openfilm", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      base: base.version,
+      data: {
+        items: [{ ...base.data.items[0], to: 3 }],
+      },
+    }),
+  });
+  assert.equal(response.status, 200, await response.text());
+  assert.equal(file.read().data.items[0].to, 3);
+  assert.equal(
+    file.collaboration().protected.includes("/items/@" + base.data.items[0].id + "/to"),
+    false,
+  );
+  const current = file.read();
+  writeFileSync(file.FILE, JSON.stringify({ items: [{ ...current.data.items[0], to: 4 }] }));
+  assert.equal(file.read().data.items[0].to, 4);
 });
 
 test("a human's first save remains protected after reopening a newly created timeline", (t) => {

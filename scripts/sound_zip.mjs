@@ -1,4 +1,4 @@
-// One zip of every sound in the vault, each file at its vault path: a new machine (or a new project) unzips it instead of
+// One zip of the vault's sounds and OpenFilm source, each file at its vault path: a new machine unzips it instead of
 // fetching Mixkit again and waiting hours on the Sonniss torrents. yazl writes ZIP64 by itself past 4 GB or 65,535 files.
 import { spawn } from "node:child_process";
 import {
@@ -22,11 +22,11 @@ import { crc32 } from "node:zlib";
 import yauzl from "yauzl";
 import yazl from "yazl";
 
-const PARTS = ["sound", "sfx", "mc-sound"];
+const PARTS = ["sound", "sfx", "openfilm", "mc-sound"];
 // a build's own cache (dot files) and a write cut short (*.part)
 const SKIP = /(^|\/)\.|\.part(\.\w+)?$/;
-// audio does not deflate: stored, it packs and unpacks at disk speed
-const STORED = /\.(wav|ogg|mp3|flac|m4a)$/i;
+// Store audio for packing speed and keep already-compressed media intact
+const STORED = /\.(wav|ogg|mp3|flac|m4a|mp4|png|jpe?g|webp|zip|woff2)$/i;
 
 // A Drive share link (.../file/d/<id>/view, ...?id=<id>) as the URL of the file itself: confirm=t skips the virus-scan
 // page Drive puts before anything too big to scan. Any other link is fetched as it is
@@ -118,7 +118,7 @@ export async function packSound({ local, out, log = console.log }) {
   } finally {
     rmSync(partial, { force: true });
   }
-  log(`${out}: ${files} sounds, ${(bytes / 2 ** 30).toFixed(2)} GB`);
+  log(`${out}: ${files} files, ${(bytes / 2 ** 30).toFixed(2)} GB`);
   return { files, bytes };
 }
 
@@ -186,6 +186,6 @@ export async function restoreSound({ zip, local, log = console.log }) {
     });
     file.readEntry();
   });
-  log(`${zip}: ${written} sounds restored, ${kept} already there`);
+  log(`${zip}: ${written} files restored, ${kept} already there`);
   return { written, kept };
 }

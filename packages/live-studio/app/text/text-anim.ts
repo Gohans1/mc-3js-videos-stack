@@ -5,7 +5,7 @@ import {
   TEXT_IN,
   TEXT_OUT,
   TITLE_EASES,
-} from "film-stage/titles";
+} from "film-stage/titles-catalog";
 
 import type { Ease } from "../core/ease";
 

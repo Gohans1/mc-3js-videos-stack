@@ -9,6 +9,7 @@ import { get, say, set, ui } from "../core/store";
 import { SAME, stamp } from "../core/time";
 import { tone } from "../timeline/canvas";
 import { IDLE_INK_GESTURE, type InkGesture, stepInk } from "./ink-gesture";
+import type { ComposeOrigin } from "./notes";
 import { spanFade } from "./pinfade";
 import { shapeOf } from "./shape";
 import { type Compose, type Hit, type InkKind, type Mark, type Note } from "./slice";
@@ -113,6 +114,12 @@ const label = (
   g.fillText(text, x + pad, y + 0.5);
 };
 // A note's words under where its drawing starts, as a pin's (studio.css .pin i): one line cut with an ellipsis, inside the picture
+interface LabelBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 const words = (
   g: CanvasRenderingContext2D,
   text: string,
@@ -120,23 +127,50 @@ const words = (
   w: number,
   h: number,
   scale: number,
+  placed: LabelBox[] = [],
 ) => {
   g.font = `600 ${Math.round(11 * scale)}px system-ui,Segoe UI,sans-serif`;
   let s = text.replace(/\s+/g, " ").trim();
-  const most = 240 * scale;
+  const most = Math.min(240 * scale, Math.max(40, w - 8 - 6 * scale));
   if (g.measureText(s).width > most) {
     while (s && g.measureText(`${s}…`).width > most) s = s.slice(0, -1);
     s = `${s.trimEnd()}…`;
   }
   const lw = g.measureText(s).width + 6 * scale;
-  label(
-    g,
-    s,
-    Math.max(4, Math.min(w - lw - 4, x * w - lw / 2)),
-    y * h + (y > 0.88 ? -18 : 18) * scale,
-    tone("foreground"),
-    scale,
-  );
+  const hh = 15 * scale;
+  const step = hh + 2 * scale;
+  const minCy = hh / 2 + 4;
+  const maxCy = Math.max(minCy, h - hh / 2 - 4);
+  const left = Math.max(4, Math.min(w - lw - 4, x * w - lw / 2));
+  const baseCy = Math.max(minCy, Math.min(maxCy, y * h + (y > 0.88 ? -18 : 18) * scale));
+  let cy = baseCy;
+  let bestOverlap = Infinity;
+  const maxSteps = Math.max(4, Math.ceil((maxCy - minCy) / step));
+  const offsets = [0];
+  for (let k = 1; k <= maxSteps; k++) offsets.push(k * step, -k * step);
+  const seen = new Set<number>();
+  for (const offset of offsets) {
+    const candidate = Math.round(Math.max(minCy, Math.min(maxCy, baseCy + offset)));
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    const top = candidate - hh / 2;
+    let overlap = 0;
+    for (const r of placed) {
+      const ix = Math.min(left + lw, r.right) - Math.max(left, r.left);
+      const iy = Math.min(top + hh, r.bottom) - Math.max(top, r.top);
+      if (ix > 0 && iy > 0) overlap += ix * iy;
+    }
+    if (overlap === 0) {
+      cy = candidate;
+      break;
+    }
+    if (overlap < bestOverlap) {
+      bestOverlap = overlap;
+      cy = candidate;
+    }
+  }
+  placed.push({ left, top: cy - hh / 2, right: left + lw, bottom: cy + hh / 2 });
+  label(g, s, left, cy, tone("foreground"), scale);
 };
 // One mark as seen at film second `now`: solid on its own frame, faint with its time elsewhere
 export const drawMark = (
@@ -254,28 +288,36 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
   const w = r.width,
     h = r.height,
     scale = Math.max(0.75, Math.min(1.4, Math.max(w, h) / 960));
+  const placedLabels: LabelBox[] = [];
   if (here) {
     for (const { n, marks, fade } of here) {
       for (const m of marks) drawMark(g, m, S.t, w, h, tone("ink-saved"), scale, fade);
-      if (!n.pin && n.text) {
+      const labelText = n.text.trim();
+      if (!n.pin && labelText) {
         g.globalAlpha = fade;
-        words(g, n.text, marks[0].pts[0], w, h, scale);
+        words(g, labelText, marks[0].pts[0], w, h, scale, placedLabels);
         g.globalAlpha = 1;
       }
     }
   }
   for (const m of inkMarks) drawMark(g, m, S.t, w, h, tone("ink"), scale);
   if (inkMarks.length && compose && !compose.pin && draft.trim())
-    words(g, draft, inkMarks[0].pts[0], w, h, scale);
+    words(g, draft, inkMarks[0].pts[0], w, h, scale, placedLabels);
 };
 
 // ---------- Drawing with the pointer. look(x, y) names what is under a point at the current frame, as a pin's tap does
 let hooks = {
   look: (_x: number, _y: number): Hit => ({ what: "" }),
-  begin: () => {},
+  begin: (_origin?: ComposeOrigin) => {},
   pause: () => {},
 };
 let live: { mark: Mark; smart: boolean } | null = null;
+const pointerOrigin = (e: PointerEvent): ComposeOrigin => ({
+  left: e.clientX,
+  top: e.clientY,
+  width: 0,
+  height: 0,
+});
 
 const at = (e: PointerEvent): [number, number] => {
   const r = S.el.ink.getBoundingClientRect();
@@ -284,9 +326,14 @@ const at = (e: PointerEvent): [number, number] => {
     +Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)).toFixed(4),
   ];
 };
-const startStroke = (kind: "pen" | "arrow" | "box", p: [number, number], smart = false) => {
+const startStroke = (
+  kind: "pen" | "arrow" | "box",
+  p: [number, number],
+  smart = false,
+  origin?: ComposeOrigin,
+) => {
   hooks.pause();
-  hooks.begin();
+  hooks.begin(origin);
   const mark: Mark = { kind, t: +S.t.toFixed(3), pts: kind === "pen" ? [p] : [p, p] };
   live = { mark, smart };
   inkMarks.push(mark);
@@ -350,7 +397,7 @@ const dropStroke = () => {
 // release made the arrow, box or pen stroke its shape reads as (shape.ts)
 export const sketch = {
   start: (e: PointerEvent, from: PointerEvent) => {
-    startStroke("pen", at(from), true);
+    startStroke("pen", at(from), true, pointerOrigin(from));
     moveStroke(e);
   },
   move: moveStroke,
@@ -386,8 +433,9 @@ export const attachInk = (opts: typeof hooks) => {
     gesture = res.gesture;
     if (res.effect === "start_path") {
       hooks.pause();
-      hooks.begin();
-    } else if (res.effect === "start_stroke" && tool && tool !== "path") startStroke(tool, at(e));
+      hooks.begin(pointerOrigin(e));
+    } else if (res.effect === "start_stroke" && tool && tool !== "path")
+      startStroke(tool, at(e), false, pointerOrigin(e));
   });
   c.addEventListener("pointermove", (e) => {
     const res = stepInk(gesture, { type: "move", id: e.pointerId, x: e.clientX, y: e.clientY });

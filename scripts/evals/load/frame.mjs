@@ -3,11 +3,19 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { cliArgs } from "../../../packages/live-studio/src/cli.mjs";
+
 const here = dirname(fileURLToPath(import.meta.url)),
   root = resolve(here, "../../..");
-const objects = process.argv.includes("--objects");
-if (process.argv.slice(2).some((arg) => arg !== "--objects"))
-  throw new Error("Usage: bun scripts/evals/load/frame.mjs [--objects]");
+const args = cliArgs(
+  `Measure frame scheduling in a real browser at the repo root.
+  bun scripts/evals/load/frame.mjs [--objects]
+--objects measures Minecraft add/replace/remove with prepared asset caches.
+Writes scripts/evals/load/runs/frame-*/ evidence; stops after 180 seconds. No paid requests.`,
+  ["--objects"],
+  0,
+);
+const objects = args.includes("--objects");
 const dir = join(here, "runs", `frame-${new Date().toISOString().replaceAll(/[:.]/g, "-")}`);
 mkdirSync(dir, { recursive: true });
 const result = {

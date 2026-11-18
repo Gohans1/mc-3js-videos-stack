@@ -4,15 +4,15 @@ Every flag lives in `bun run render --help` and `bun run deliver --help`. This r
 
 ## From draft to upload
 
-| Hoàn thiện footage tùy chọn | Lệnh và giới hạn |
+| Finish external footage | Commands and limits |
 | --- | --- |
-| Tìm cờ native | bun run media ffmpeg list; schema export và export --help, không nhập workflow của skill ngoài |
-| Master cho NLE | bun run media ffmpeg export --minutes 10 -- renders/final.mp4 --preset prores -o renders/master.mov; DNxHR/alpha/key-fill đọc schema export |
-| Bảo toàn đầu ra | Đọc native.verified, verification, source_carry, warnings và unverified; mất subtitle/tag có thể chỉ báo cảnh báo, source_carry không so từng byte |
-| Timeline dựng | render --export-timeline trong backend đọc project footage gốc, xuất FCPXML/EDL/OTIO với not_exported; shader và scene code cần bake thành clip |
-| Thời gian và file | --out/--minutes trước dấu -- điều khiển job; mọi argv native sau dấu --, timestamp là giây file, native -o chọn file riêng |
-| Bộ đo bổ sung | bun run media qc --contract cho loop seam, subtitle/word timing, alpha/key-fill và delivery package; FAIL/UNKNOWN là dữ liệu, không phải lệnh cấm sáng tạo |
-| FFmpeg 9 | Mixer đọc graph bằng -/filter_complex theo cú pháp chính chủ; -filter_complex_script cũ đã bị bỏ |
+| Find native flags | Run bun run media ffmpeg list, then use schema export or export --help for the built-in exporter. |
+| Export an NLE master | Run bun run media ffmpeg export --minutes 10 -- renders/final.mp4 --preset prores -o renders/master.mov. See schema export for DNxHR, alpha, and key/fill. |
+| Check export integrity | Read native.verified, verification, source_carry, warnings, and unverified. Missing subtitles or tags may appear only as warnings, and source_carry does not compare individual bytes. |
+| Export an editing timeline | Native render --export-timeline reads a footage project and writes FCPXML, EDL, or OTIO. Review not_exported and bake shaders and scene code to clips where needed. |
+| Set time and output | Use --out and --minutes before -- to configure the job. Pass native arguments after --, use file seconds for timestamps, and set native -o to choose the media file. |
+| Run additional checks | Run bun run media qc --contract for loop seams, subtitle and word timing, alpha and key/fill, and delivery packaging. Review each FAIL or UNKNOWN against the intended result. |
+| FFmpeg 9 | The mixer reads filter graphs through -/filter_complex. FFmpeg 9 removed -filter_complex_script. |
 
 Inside a film:
 
@@ -46,7 +46,7 @@ Source: support.google.com/youtube/answer/1722171.
 
 | Item           | Value                                                                                          | Made by                       |
 | -------------- | ---------------------------------------------------------------------------------------------- | ----------------------------- |
-| Container      | MP4 Fast Start; kiểm A/V sync trước khi đổi edit list | Mix tối ưu Fast Start và giữ clock hình. |
+| Container | MP4 Fast Start. Check A/V sync before changing the edit list. Mix enables Fast Start and preserves the picture clock. |
 | Picture        | H.264 High, 8-bit 4:2:0, BT.709, constant frame rate, a keyframe every 0.5 s                   | `render final`                |
 | Landscape size | 1440p by default; `RES=2160` or `RES=1080`                                                     | `render final`                |
 | Shorts size    | 1080x1920, at most 3 minutes                                                                   | `render final` at ratio 9:16  |

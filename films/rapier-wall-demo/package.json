@@ -3,9 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "assets:semantic": "bun ../../scripts/asset-search.ts",
-    "history": "bun ../../packages/live-studio/history.mjs",
-    "collab": "bun ../../packages/live-studio/collab.mjs",
+    "asset": "bun ../../scripts/asset.mjs",
     "studio": "bun node_modules/live-studio/src/live.mjs 4327",
     "notes": "bun node_modules/live-studio/notes.mjs",
     "note": "bun node_modules/live-studio/note.mjs",
@@ -34,6 +32,7 @@
     "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check",
     "skills": "bun ../../packages/live-studio/skills.mjs",
     "find": "bun ../../scripts/find.ts",
+    "reference": "bun ../../scripts/review/reference.mjs",
     "gap": "bun ../../scripts/gap.ts",
     "postinstall": "bun ../../packages/mc-assets/vendor.mjs",
     "at": "bun ../../scripts/at.ts",
@@ -49,7 +48,11 @@
     "deliver": "python ../../scripts/review/deliver.py",
     "sfx:get": "python ../../scripts/sound/get_sfx.py",
     "mix": "python ../../scripts/sound/mix.py",
-    "listen": "python ../../scripts/sound/listen.py"
+    "listen": "python ../../scripts/sound/listen.py",
+    "setup:voices": "bun node_modules/live-studio/wrong-place.mjs setup:voices",
+    "assets:semantic": "bun ../../scripts/asset-search.ts",
+    "history": "bun ../../packages/live-studio/history.mjs",
+    "collab": "bun ../../packages/live-studio/collab.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",

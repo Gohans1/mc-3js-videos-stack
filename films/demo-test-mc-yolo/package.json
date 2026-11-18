@@ -3,9 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "assets:semantic": "bun ../../scripts/asset-search.ts",
-    "history": "bun ../../packages/live-studio/history.mjs",
-    "collab": "bun ../../packages/live-studio/collab.mjs",
+    "asset": "bun ../../scripts/asset.mjs",
     "studio": "bun node_modules/live-studio/src/live.mjs 4326",
     "notes": "bun node_modules/live-studio/notes.mjs",
     "note": "bun node_modules/live-studio/note.mjs",
@@ -33,6 +31,7 @@
     "fmt:check": "bun node_modules/live-studio/wrong-place.mjs fmt:check",
     "skills": "bun ../../packages/live-studio/skills.mjs",
     "find": "bun ../../scripts/find.ts",
+    "reference": "bun ../../scripts/review/reference.mjs",
     "gap": "bun ../../scripts/gap.ts",
     "postinstall": "bun ../../packages/mc-assets/vendor.mjs",
     "at": "bun ../../scripts/at.ts",
@@ -48,7 +47,10 @@
     "deliver": "python ../../scripts/review/deliver.py",
     "sfx:get": "python ../../scripts/sound/get_sfx.py",
     "mix": "python ../../scripts/sound/mix.py",
-    "listen": "python ../../scripts/sound/listen.py"
+    "listen": "python ../../scripts/sound/listen.py",
+    "assets:semantic": "bun ../../scripts/asset-search.ts",
+    "history": "bun ../../packages/live-studio/history.mjs",
+    "collab": "bun ../../packages/live-studio/collab.mjs"
   },
   "dependencies": {
     "block-model-renderer": "catalog:",
@@ -96,6 +98,9 @@
     "liveLanes": true,
     "chrome": "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
     "ratio": "9:16",
-    "preload": ["mc/client_assets.zip", "vendor/bmr_assets.zip"]
+    "preload": [
+      "mc/client_assets.zip",
+      "vendor/bmr_assets.zip"
+    ]
   }
 }

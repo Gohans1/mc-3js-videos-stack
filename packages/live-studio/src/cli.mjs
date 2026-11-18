@@ -20,8 +20,14 @@ export const jsonFile = (file, root = process.cwd()) => {
 // stdout and exits 0; an option it does not know, an option missing its value or a word too many stops it (exit 2) saying
 // what it takes, so a typo or a probe never runs the default job (gen's default spends voice credits).
 // options: its flags, "--shot N" for one that takes a value; null lets any word through. words: how many plain words it takes
-export const cliArgs = (help, options = [], words = Infinity, argv = process.argv.slice(2)) => {
-  if (argv.includes("-h") || argv.includes("--help") || argv[0] === "help") {
+export const cliArgs = (
+  help,
+  options = [],
+  words = Infinity,
+  argv = process.argv.slice(2),
+  { helpWord = true } = {},
+) => {
+  if (argv.includes("-h") || argv.includes("--help") || (helpWord && argv[0] === "help")) {
     console.log(help.trim());
     process.exit(0);
   }

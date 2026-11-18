@@ -4,7 +4,7 @@ import { buildScene, SHOTS_OUT as SHOTS } from "film/scene";
 // one frame is drawn whenever something changed
 import * as THREE from "three";
 
-import { aiSpans, listenActivity, loadActivity } from "./activity/activity";
+import { aiSpans, listenActivity, loadActivity, onActivitySpans } from "./activity/activity";
 import { keys as camKeys, loadCam } from "./camera/cam";
 import { attachCamRow } from "./camera/camrow";
 import { loadLayers } from "./camera/layers";
@@ -57,6 +57,7 @@ import { formatOpticsHud } from "./picture/hud";
 import { lookAtClick } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
 import { drawFinal, finalCanvas, render, setFinal } from "./picture/render";
+import { readOpenFilm } from "./openfilm/state";
 import { measureScopes } from "./picture/scopes";
 import {
   loadMix,
@@ -77,7 +78,7 @@ import { attachTextRow } from "./text/textrow";
 import { attachAcross } from "./timeline/across";
 import { restoreInOut } from "./timeline/inout";
 import { attachPreviewAxis, peekTime } from "./timeline/peek";
-import { attachTimeline, drawTimelines, loadVoice, marks, refreshTimes } from "./timeline/timeline";
+import { attachTimeline, drawTimelineActivity, drawTimelines, loadVoice, marks, refreshTimes } from "./timeline/timeline";
 import { loadTiming } from "./timeline/timing";
 
 registerEngine({
@@ -187,8 +188,9 @@ const listen = () => {
   onEvent("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
   onEvent("timing", loadTiming);
   onEvent("adjustment", reloadNotice("layersRev", "Color adjustment updated", loadLayers));
+  onEvent("openfilm", () => { void readOpenFilm().catch(showError); });
   onEvent("text", reloadNotice("textRev", "Titles updated", loadText)); // an agent edited the titles: the picture takes them now
-  onEvent("notes", () => { void loadNotes({ notify: true }); });
+  onEvent("notes", () => loadNotes({ notify: true }));
   onEvent("voice", () => {
     invalidateTagPrefix("/api/voice");
     invalidateTagPrefix("/api/mix");
@@ -214,7 +216,7 @@ const listen = () => {
       clearPrefetch();
       invalidateTagPrefix("/api/voice");
       invalidateTagPrefix("/api/sfx/");
-      loadNotes();
+      loadNotes({ notify: true });
       loadVoice();
       loadVoiceTakes();
       handleVoiceLibraryEvent();
@@ -228,6 +230,7 @@ const listen = () => {
       loadShots();
       loadText();
       loadLayers();
+      void readOpenFilm().catch(showError);
       loadFavorites();
       void loadActivity();
       if (lessons.getState().loaded) void loadLessons();
@@ -267,6 +270,7 @@ export const start = async (el: Elements) => {
   // could not show or clear
   if (!PHONE) {
     attachTimeline();
+    onActivitySpans(drawTimelineActivity);
     attachPreviewAxis();
     restoreInOut();
     attachLanes();
@@ -443,12 +447,12 @@ document.addEventListener("visibilitychange", () => {
   scheduleLoop();
 });
 // A film that throws at one moment still lets the dev move to another: the error shows and the next frame comes anyway
-const loop = () => {
+const loop = async () => {
   loopKind = 0;
   loopId = 0;
   inFrame = true;
   try {
-    frame();
+    await frame();
   } catch (e) {
     showError(e);
   } finally {
@@ -464,7 +468,7 @@ let lastCaptionText: string | null = null;
 let lastHudEl: HTMLElement | null = null;
 let lastHudText: string | null = null;
 
-const frame = () => {
+const frame = async () => {
   const dt = Math.min(0.1, (performance.now() - lastFrame) / 1000); // a frame after a stall moves a little, never across the room
   lastFrame = performance.now();
   fly(dt);
@@ -474,7 +478,7 @@ const frame = () => {
     if (S.dirty) staleFilmView(); // anything but the free camera's own move may change what the film camera sees
     S.dirty = S.viewMoved = false;
     const a = performance.now();
-    render(peeked ?? S.t);
+    await render(peeked ?? S.t);
     followChips();
     drawMs = drawMs * 0.9 + (performance.now() - a) * 0.1;
     frames++;
@@ -530,7 +534,7 @@ const frame = () => {
         S.el.final.hidden = true;
         S.finalAt = -1;
       } else if (S.finalAt !== S.t) {
-        drawFinal();
+        await drawFinal();
         finalNow = true;
       }
     }
@@ -547,10 +551,12 @@ const frame = () => {
     }
     window.__live = { t: S.t, shot: i, drawMs };
   } else if (warm.length) {
-    // While nothing is asked of it: touch one more shot, nearest first, so its shaders and textures are ready before the first
-    // jump there. The current frame is redrawn in the same task, so the screen never shows the detour
-    render(SHOTS[warm.shift()!].t + 0.1);
-    render(S.t);
+    // Async preparation can paint between awaits; warm only synchronous film renderers on the visible canvas.
+    if (S.render?.renderFrame) warm.length = 0;
+    else {
+      await render(SHOTS[warm.shift()!].t + 0.1);
+      await render(S.t);
+    }
   }
   const now = performance.now();
   if (now - fpsAt > 500 || (!S.playing && get().perf.includes("fps"))) {

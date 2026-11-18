@@ -1,17 +1,17 @@
 # mc-3js-videos-stack
 
-Phim Minecraft dựng bằng Three.js: mã chung ở packages/, phim ở films/, mẫu ở templates/film/.
+Minecraft films built with Three.js. Shared code lives in packages/, films in films/, and the starter in templates/film/.
 
-## Bắt đầu
+## Get started
 
-Cài theo [INSTALL.md](INSTALL.md); tạo phim bằng bun run new-film <tên> [cổng].
+Follow [INSTALL.md](INSTALL.md), then create a film with bun run new-film <name> [port].
 
-Đọc [AGENTS.md](AGENTS.md); cách dùng Studio: bun run skills get core (hợp đồng phim: --ref contract).
+Read [AGENTS.md](AGENTS.md) for repo instructions. Run bun run skills get core for the Studio workflow, or add --ref contract for the film contract.
 
-Chạy bun run studio trong phim; kiểm hình, tiếng và mở ảnh render trước khi báo xong.
+Run bun run studio from the film folder. Check the picture and sound, and open the rendered frames before reporting completion.
 
-## Nguồn
+## Resources
 
-[Skill làm phim](.claude/skills/gohans-3js-videos-skills/SKILL.md) giữ gu và luật chung; AGENTS.md chỉ đường.
+The [filmmaking skill](.claude/skills/gohans-3js-videos-skills/SKILL.md) covers creative direction and shared rules. AGENTS.md maps the repo.
 
-Tài nguyên tách kho nhẹ trong repo khỏi kho nặng theo vault.json.
+vault.json separates lightweight assets in the repo from the larger asset vault.

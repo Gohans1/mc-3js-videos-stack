@@ -1,8 +1,7 @@
 import type { Grade } from "film-stage/grade";
-import { WHEEL_KEYS, type WheelKey, type WheelValue } from "film-stage/grade-wheels";
+import { WHEEL_KEYS, type WheelKey, type WheelValue } from "film-stage/grade-meta";
 import { resetLookWheel, resetLookWheels } from "film-stage/looks";
 import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useRef } from "react";
-import { Color, LinearSRGBColorSpace } from "three";
 
 import {
   Select,
@@ -24,14 +23,15 @@ const bound = (x: number, lo = -1, hi = 1) => Math.min(hi, Math.max(lo, x));
 // Hue positions measured from the user's CapCut color-wheel screenshot c1c52e07.
 const RING_HUES = [347.368, 279.718, 224.615, 193.663, 110, 54.247, 30.286, 11.172, -12.632];
 const polar = (rgb: RGB) => {
-  const lo = Math.min(...rgb),
-    hi = Math.max(...rgb),
-    radius = (hi - lo) / 2,
+  const [r, g, b] = rgb,
+    lo = Math.min(r, g, b),
+    hi = Math.max(r, g, b),
+    d = hi - lo,
+    radius = d / 2,
     light = (hi + lo) / 2;
-  const hsl = { h: 0, s: 0, l: 0 };
-  if (radius)
-    new Color(...(rgb.map((v) => (v - lo) / (hi - lo)) as RGB)).getHSL(hsl, LinearSRGBColorSpace);
-  let hue = hsl.h * 360;
+  let hue = d
+    ? (hi === r ? (g - b) / d + (g < b ? 6 : 0) : hi === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60
+    : 0;
   if (hue > RING_HUES[0]) hue -= 360;
   const i = Math.max(
     0,
@@ -40,15 +40,18 @@ const polar = (rgb: RGB) => {
   const angle = ((i + (RING_HUES[i] - hue) / (RING_HUES[i] - RING_HUES[i + 1])) * Math.PI) / 4;
   return { x: Math.sin(angle) * radius, y: -Math.cos(angle) * radius, light };
 };
+const hue2rgb = (t: number) => {
+  const u = ((t % 1) + 1) % 1;
+  return u < 1 / 6 ? 6 * u : u < 0.5 ? 1 : u < 2 / 3 ? (2 / 3 - u) * 6 : 0;
+};
 const fromXY = (x: number, y: number, light: number): RGB => {
   const angle = ((Math.atan2(x, -y) / (Math.PI * 2) + 1) % 1) * 8,
     i = Math.floor(angle),
     h = (RING_HUES[i] + (RING_HUES[i + 1] - RING_HUES[i]) * (angle - i)) / 360,
     radius = Math.min(1, Math.hypot(x, y));
-  return new Color()
-    .setHSL(h, 1, 0.5, LinearSRGBColorSpace)
-    .toArray()
-    .map((v) => bound(light + (v * 2 - 1) * radius)) as RGB;
+  return [hue2rgb(h + 1 / 3), hue2rgb(h), hue2rgb(h - 1 / 3)].map((v) =>
+    bound(light + (v * 2 - 1) * radius),
+  ) as RGB;
 };
 
 function Wheel({

@@ -1,7 +1,7 @@
 import { S } from "../core/state";
 import { get } from "../core/store";
 import { getAudioCtx, hasSounding } from "../sound/clock";
-import { listening as auditionActive } from "../sound/sound";
+import { auditionActive } from "../sound/sound";
 
 let last = -Infinity;
 

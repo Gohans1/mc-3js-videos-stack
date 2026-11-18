@@ -1,0 +1,8 @@
+[
+ {
+  "t": 0,
+  "name": "Front",
+  "adjust": {"lut": {"name": "Warm film", "url": "/studio-luts/6b75a04f748cec97d6e9bb8c86c4afc1ab1899206872dab735e0bae8c02f0c8d.cube", "amount": 100}}
+ },
+ {"t": 2, "name": "Side", "transition": {"fx": "of:transitions/dissolve", "len": 2, "props": {}}}
+]

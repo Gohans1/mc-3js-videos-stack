@@ -1,4 +1,3 @@
-import { DURATION, SHOTS_OUT } from "film/scene";
 import { useState } from "react";
 
 import {
@@ -20,6 +19,7 @@ import {
 // Each also sits in the Camera and Animation tabs, which is where a keyboard reaches them
 import { cn } from "@/lib/utils";
 
+import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import type { Bind } from "../core/state";
 import { S } from "../core/state";

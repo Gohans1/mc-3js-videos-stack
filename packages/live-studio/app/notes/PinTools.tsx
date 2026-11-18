@@ -4,6 +4,7 @@ import { Type } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import { ui, useStudio } from "../core/store";
@@ -50,10 +51,10 @@ export function PinTools() {
         title="Type the note (the box on the right)"
         onClick={() => ui.focusNote()}
       >
-        <Type />
+        <Type aria-hidden data-icon="inline-start" />
         <span className="@max-[720px]:sr-only">Text</span>
       </Button>
-      <span aria-hidden className="bg-hairline-strong mx-1 h-5 w-px" />
+      <Separator orientation="vertical" className="mx-1 h-5 data-vertical:self-center" />
       {TOOLS.map(([id, name, icon, help]) => (
         <Button
           key={id}

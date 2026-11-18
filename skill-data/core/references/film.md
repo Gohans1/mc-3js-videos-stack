@@ -1,45 +1,44 @@
-# Phim mới, dữ liệu và vault
+# New films, data and vault
 
-## Tạo và kết nối
+## Create and connect
 
-Máy mới chạy bun run setup tại thư mục gốc trước; thiếu thư mục vault tại máy thì lệnh thoát 1 và chỉ cách khôi phục. Máy đã sẵn sàng chỉ cần bun run new-film cave-escape 47920 rồi chuyển vào films/cave-escape, chạy bun run check và bun run studio.
+On a new machine run bun run setup at the root; a missing local vault exits 1 with recovery instructions. On a prepared machine run bun run new-film cave-escape 47920, enter films/cave-escape, then run bun run check and bun run studio.
 
-new-film tự sao template, cài dependency, nối vault và dựng picked.zip; không cần chạy setup:vault hoặc link lần nữa. Cổng có thể bỏ qua, mặc định cao hơn cổng đã gán cho các phim; chỉ xem là chạy được sau khi mở URL Studio và thấy cảnh.
+new-film copies the template, installs dependencies, copies vault assets and builds picked.zip; setup:vault and link need not run again. The port is optional and defaults above assigned film ports; verify by opening the Studio URL and seeing the scene.
 
-## Chọn đúng lệnh
+## Choose the right command
 
-| Lệnh tại thư mục gốc                      | Vai trò                                                                                                                                               |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| bun run setup                             | Chuẩn bị máy: bun install, setup:vault, link; tải tài nguyên và tái sử dụng kết quả khi chạy lại.                                                     |
-| bun run setup:vault                       | Chỉ tải và dựng vault; cần cài dependency trước bằng bun install.                                                                                     |
-| bun run new-film cave-escape              | Tạo phim mới hoàn chỉnh từ template, không ghi đè phim đã có.                                                                                         |
-| bun run link cave-escape                  | Cập nhật bản sao asset thật từ vault và dựng picks sau khi đổi kho hoặc pack/picks.json; không cài dependency hay tải tài nguyên.                     |
-| bun packages/live-studio/init.mjs PROJECT | Nối project mới hoặc có sẵn vào Studio và cài dependency; không nối vault hay dựng picks. Xem trước bằng --dry-run; phim trong repo ưu tiên new-film. |
+| Root command | Role |
+| --- | --- |
+| bun run setup | Prepare a machine: bun install, setup:vault and link; downloads assets and reuses completed work |
+| bun run setup:vault | Download/build only the vault; install dependencies with bun install first |
+| bun run new-film cave-escape | Create a complete film from the template without replacing an existing film |
+| bun run link cave-escape | Refresh real asset copies and picks after changing the vault or pack/picks.json; no installs or downloads |
+| bun packages/live-studio/init.mjs PROJECT | Connect a new/existing project to Studio and install dependencies; does not copy vault assets or build picks. Preview with --dry-run; prefer new-film within this repo |
 
-## Tiếp tục khi lỗi
+## Recover after failure
 
-Phim đã được sao nhưng bước sau thất bại: giữ thư mục, sửa lỗi rồi chạy bun packages/live-studio/init.mjs films/cave-escape và bun run link cave-escape tại thư mục gốc. Sau đó vào phim chạy bun run check và bun run studio; không chạy new-film cùng tên để ghi đè.
+If copying succeeded but a later step failed, keep the film, fix the error, then run bun packages/live-studio/init.mjs films/cave-escape and bun run link cave-escape at the root. Enter the film, run bun run check and bun run studio; do not recreate the same film name.
 
-Thiếu tài nguyên có nguồn tải: bun run setup:vault; motion, packs và tools riêng phải chép thành thư mục thật vào vault trên C:. externalRoot chỉ chứa sound-raw, gói tải gốc và backup; INSTALL.md ghi giấy phép và cách chuẩn bị.
+Use bun run setup:vault for assets with known download sources; copy private motion, packs and tools into real vault directories on C:. externalRoot holds only sound-raw, original downloads and backups; read INSTALL.md for preparation and licenses.
 
-PowerShell: chuyển thư mục và chạy từng lệnh riêng; MC_VAULT_EXTERNAL chỉ đổi nơi giữ gói thô và backup. Bun cài dependency cho toàn bộ workspace và cập nhật bun.lock ở gốc; không tạo lockfile riêng trong phim.
+In PowerShell change directory and run commands separately; MC_VAULT_EXTERNAL only changes raw-download/backup storage. Bun installs the workspace together and updates the root bun.lock; do not create film lockfiles.
 
-## Worktree trên Windows
+## Windows worktrees
 
-Asset và code phải là file/thư mục thật trên C:, không tạo junction hay symlink; chỉ link node_modules do Bun quản lý được giữ. Mỗi WT tự cài dependency bằng Bun, tránh nối cả node_modules sang checkout chính.
+Keep assets and code as real files/directories on C:, without junctions or symlinks; retain dependency links managed by Bun. Install dependencies independently in each worktree instead of linking its whole node_modules to the main checkout.
 
-Dùng Git for Windows từ 2.54 trở lên; bản cũ có thể xoá đích junction khi dọn WT, kể cả cùng ổ C:. Trước khi xoá WT, duyệt không theo link và gỡ từng link không đệ quy, rồi kiểm tra dữ liệu đích vẫn nguyên; chỉ xoá branch đã merge hoặc đã sao lưu xác thực.
+Use Git for Windows 2.54 or newer; older versions can delete junction targets during worktree removal, even on the same drive. Before removal, enumerate without following links, detach each link nonrecursively and verify targets remain intact; retire branches only after verified integration or backup.
 
-## Lưu các hướng dựng
+## Keep edit directions
 
-Film → Versions lưu bản đặt tên và các bản tự lưu; trước khi khôi phục luôn có bản dự phòng của trạng thái hiện tại.
-Lệnh bun run history --film films/tên list, save hoặc restore giữ code, timeline được cấu hình và lựa chọn pack/picks.json; media và package chung không được đóng băng nên đây không phải bản render tái lập tuyệt đối.
+Film → Versions saves named and automatic versions; restoring first retains the current state as a backup. bun run history --film films/<name> list, save or restore keeps configured source/timeline files and pack/picks.json, while media and shared packages remain current.
 
-Lịch sử cục bộ nằm trong .studio/history.sqlite; đóng Studio rồi sao lưu cả .studio khi chuyển máy.
+Local history lives in .studio/history.sqlite; stop Studio before copying .studio to another machine.
 
-## Dữ liệu phim
+## Film data
 
-A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`: drafts at 720x1280, the final at 1080x1920.
+A Shorts film sets "ratio": "9:16" under "live-studio" in package.json: drafts at 720x1280 and final at 1080x1920.
 
 ## What each file holds
 
@@ -53,6 +52,7 @@ A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`
 | `src/timeline/cam.json`                 | Camera keys and cuts                                                                                  | Scene     |
 | `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                                    | Scene     |
 | `src/timeline/text.json`, `adjust.json` | On-screen text, colour and look layers                                                                | Scene     |
+| `src/timeline/openfilm.json` | HTML/CSS/canvas effects, stickers and animated text; optional `openfilmTimeline` overrides this path | Layer timebase |
 | `src/timeline/timing.json`              | Speed, Freeze, velocity: what turns scene seconds into heard seconds                                  | Scene     |
 | Key files (`"live-studio".keyFiles`)    | Keyed rows for characters and props                                                                   | Scene     |
 | `renders/`                              | Everything render, sheet, framecheck and listen write (ignored by git)                                |           |
@@ -60,6 +60,8 @@ A Shorts film sets `"ratio": "9:16"` under `"live-studio"` in its `package.json`
 | `lessons/`                              | This film's lessons (`../../lessons/` for every film, nested `.md` ok); `bun run notes ID` picks both |           |
 
 After every JSON edit run `bun run check`: the studio's own schemas, every sound name, misspelt keys, an off-target `lufs` or a runaway `drive`. The full contract: `bun run skills get core --ref contract`.
+
+`openfilm.json` stores each layer's interval against its saved `timebase`; `bun run asset timeline` and `edit` use heard seconds and preserve that mapping. Audio, cuts and grades use their existing native timelines; see `bun run asset --help`.
 
 ## What a film can name
 
@@ -73,39 +75,37 @@ bun run find sit --from stand --to sitFloor  # mocap by posture
 
 Every schema is open (`looseObject`): a film may make its own objects, transitions, anims and checks. Where each goes: `bun run skills get core --ref contract`.
 
-## Script chạy trực tiếp
+## Direct maintenance scripts
 
-Các đường dẫn dưới đây tính từ thư mục phim; thêm --help để xem đủ tham số trước khi chạy. Đây là công cụ hỗ trợ, không bắt buộc dùng mocap, định dạng timeline hay vật lý có sẵn để sáng tạo.
+Paths below are relative to a film. bun run help direct lists catalog IDs and help support; bun run help <id> --json describes one tool without executing it.
 
-| Việc                 | Lệnh và luồng                                                                                                                                                                                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Đo catalogue         | python ../../packages/clip-catalog/batch.py catalog mixamo --limit 1; đọc vault/motion và ghi catalog/<lib>.jsonl dùng chung toàn repo. Chạy lại để tiếp tục hoặc thử lại clip lỗi; tên clip giữ nguyên khoảng trắng.                                             |
-| Kiểm tên và tư thế   | python ../../packages/clip-catalog/catalog_check.py; bất đồng là gợi ý xem lại, không phải lệnh cấm động tác. --fights mở cả clip chiến đấu; lỗi tải cần sửa trước khi đánh giá.                                                                                  |
-| Review bằng mắt      | Chạy batch.py sheets rồi catalog_review.py; mở trang JPG được pages.json liệt kê, ghi desc/mood/prop/style từng ô và nộp bằng --page 0 --notes notes.json. Trang đếm từ 0, ô từ 1; giữ nguyên pages.json tới khi review xong, --fix chỉ sửa một clip đã tồn tại.  |
-| Từ vựng review       | --help của catalog_review.py liệt kê nhãn tìm kiếm; desc và flaw mô tả tự do. Ảnh chỉ có tám thời điểm nên cần xem thêm chuyển động bằng lab/clip.ts khi nghi ngờ.                                                                                                |
-| So sánh tìm kiếm     | python ../../packages/clip-catalog/catalog_eval.py renders/picks-v1.txt --limit 1; gửi mô tả tới Jev, có thể dùng quota trả phí. Mỗi cảnh lưu checkpoint .txt.jsonl, --resume tiếp tục cùng dữ liệu/tham số; đổi code hoặc catalogue thì dùng tên đầu ra mới.     |
-| Quét retarget        | python ../../packages/clip-catalog/batch.py sweep mixamo --limit 1 rồi sweep_report.py mixamo; --diff OLD.jsonl so với bản cũ. Ngưỡng chỉ gợi ý kiểm hình, không kết luận chất lượng diễn xuất.                                                                   |
-| Giới hạn và chạy lại | Batch tối đa 600 giây mỗi nhóm, --limit giới hạn tổng clip; log nằm trong vault/motion/catalog/logs. Lỗi/ngắt giữ kết quả hoàn tất; sau đổi code đo/retarget, cất JSONL và sheets cũ trước khi đo lại để không dùng dữ liệu cũ.                                   |
-| Bash cũ              | catalog.sh, sweep.sh và catalog_review.sh chuyển tới cùng batch.py tương ứng catalog, sweep, sheets. Windows chạy Python trực tiếp, không cần Bash hay GNU timeout.                                                                                               |
-| Xem một clip         | LAB_CLIP=lib/name ENTRY=lab/clip.ts bun run render stills rồi python ../../packages/clip-catalog/sheet_clip.py. PowerShell đặt biến qua $env:LAB_CLIP và $env:ENTRY, xóa chúng sau khi chạy.                                                                      |
-| Nhặt asset           | Sửa pack/picks.json rồi bun ../../packages/mc-assets/pick.mjs hoặc bun run link <phim> ở gốc; pick.py chỉ chuyển tiếp cho cùng bộ dựng Bun. picked.zip giữ namespace/model/texture và không được đưa lên Git khi giấy phép chưa cho phép.                         |
-| Runtime renderer     | bun ../../packages/mc-assets/vendor.mjs sao chép WASM và entity pack đã cài vào assets/public; postinstall của phim tự gọi. Chạy lại sau nâng cấp block-model-renderer, không sửa file vendor bằng tay.                                                           |
-| Format tùy chọn      | bun ../../scripts/timeline_fmt.ts hoặc python ../../scripts/timeline_fmt.py giữ bố cục gọn 140 cột; đều đọc hết JSON trước khi ghi. Hàm load/save/dump vẫn import được, schema mở và code riêng vẫn dùng bình thường.                                             |
-| Lệnh riêng phim      | bun run help đọc scripts từ package.json của phim; đọc --help và file thực thi trước khi chạy lệnh như bake:physics. Bake phải nói rõ file bị ghi và giây scene/narration/heard; đây là bước chuẩn bị riêng của phim, không phải quy trình bắt buộc cho mọi phim. |
-| Dữ liệu và công cụ   | Vault không nằm trong Git; chép motion từ máy cũ vào vault/motion thật trên C: rồi chạy link, không có bước tự tải motion. Python tạo ảnh cần Pillow, cài bằng uv pip install pillow vào venv đang dùng; đánh giá Jev cần route/key riêng như jev.py chỉ rõ.      |
+| Task | Command and workflow |
+| --- | --- |
+| Measure motion catalog | python ../../packages/clip-catalog/batch.py catalog mixamo --limit 1 reads vault/motion and writes shared catalog/<lib>.jsonl. Rerun to resume or retry failed clips; clip names retain spaces |
+| Check names and postures | python ../../packages/clip-catalog/catalog_check.py; disagreements suggest inspection rather than forbid motion. --fights includes combat clips; resolve load failures before judging |
+| Visual review | Run batch.py sheets, then catalog_review.py; open JPG pages listed in pages.json and submit per-cell desc/mood/prop/style with --page 0 --notes notes.json. Pages start at 0, cells at 1; keep pages.json until complete, and --fix edits an existing clip |
+| Review vocabulary | catalog_review.py --help lists search labels; desc and flaw are free text. Eight sampled times can miss movement; inspect lab/clip.ts when uncertain |
+| Compare search | python ../../packages/clip-catalog/catalog_eval.py renders/picks-v1.txt --limit 1 calls Jev and can spend quota. Each scene checkpoints to .txt.jsonl; --resume requires the same data/parameters, and changed code/catalog needs a new output name |
+| Retarget sweep | python ../../packages/clip-catalog/batch.py sweep mixamo --limit 1, then sweep_report.py mixamo; --diff OLD.jsonl compares a baseline. Thresholds suggest visual review, not acting quality |
+| Bounds and retry | Batches stop after at most 600 seconds per group; --limit caps total clips and vault/motion/catalog/logs retains logs. Interrupted runs keep completed results; archive old JSONL/sheets after changing measurement or retargeting code |
+| Legacy Bash | catalog.sh, sweep.sh and catalog_review.sh forward to batch.py catalog, sweep and sheets. On Windows call Python directly; Bash/GNU timeout are unnecessary |
+| Inspect one clip | LAB_CLIP=lib/name ENTRY=lab/clip.ts bun run render stills, then python ../../packages/clip-catalog/sheet_clip.py. In PowerShell set and restore/remove $env:LAB_CLIP and $env:ENTRY |
+| Pick assets | Edit pack/picks.json, then bun ../../packages/mc-assets/pick.mjs, or bun run link <film> at the root. pick.py forwards to the same Bun builder; keep licensed picked.zip files out of Git unless permitted |
+| Runtime renderer files | bun ../../packages/mc-assets/vendor.mjs copies installed WASM/entity packs to assets/public; film postinstall calls it. Rerun after upgrading block-model-renderer instead of editing vendor files |
+| Optional formatting | bun ../../scripts/timeline_fmt.ts or python ../../scripts/timeline_fmt.py keeps compact 140-column rows; both parse all JSON before writing. Their load/save/dump APIs and open schemas remain available |
+| Film-specific commands | bun run help reads the film's own scripts; inspect help and source before running a custom bake. A bake must name its written files and scene/narration/heard clock; it is preparation for that film |
+| Data and dependencies | The vault is outside Git; copy old motion to real vault/motion on C: then run link, as motion is not auto-downloaded. Image tools need Pillow in the active venv via uv pip install pillow; Jev evaluation needs the route/key described in jev.py |
 
-## Thử lệnh riêng
+## Test in isolation
 
-Thử lệnh trên WT riêng, cài dependency bằng Bun và sao các asset cần dùng thành file thật; không chia sẻ node_modules thủ công. Trước khi dọn bản thử, tuân thủ mục Worktree trên Windows ở trên.
+Use a separate worktree with its own Bun installation and real copies of required assets. Follow Windows worktree cleanup above; never share node_modules manually.
 
-## Thử lệnh riêng biệt
+From the root, create a uniquely named test film with bun run new-film <unused-name>, or copy only the film needed to reproduce a problem. A familiar folder name does not make its contents disposable.
 
-Từ root, dùng bun run new-film <tên-thử-chưa-tồn-tại> để tạo phim thử độc lập, hoặc sao chép đúng phim cần tái hiện lỗi. Không dùng một tên thư mục cố định rồi mặc định rằng có thể xóa nó.
-
-| Cần gì                     | Cách làm                                                                                                        |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Thử parser và schema       | Dùng template trong phim thử, chỉ chép dữ liệu tối thiểu cần thiết                                              |
-| Tái hiện lỗi của phim thật | Sao chép src, cấu hình và media cần thiết; không chép hay dùng chung notes có thể ghi về bản gốc                |
-| Cần render có sẵn          | Sao chép riêng video và cuts.json vào renders của phim thử                                                      |
-| Dữ liệu bản thử            | Dùng file thật trên C:; node_modules do Bun cài trong WT, không dùng chung với checkout gốc                     |
-| Dọn phim thử               | Chỉ xóa đúng thư mục do phiên này tạo, sau khi xác minh đường dẫn và các junction; giữ kết quả cần review trước |
+| Need | Approach |
+| --- | --- |
+| Parser or schema check | Use the template and the minimum required test data |
+| Reproduce a real film issue | Copy src, configuration and required media; never share writable notes with the original |
+| Existing render evidence | Copy the video and cuts.json into the test film's renders |
+| Test assets | Real files on C:; Bun installs node_modules inside the test worktree |
+| Cleanup | Verify the exact directory and junctions; remove only what this session created, keeping review evidence first |

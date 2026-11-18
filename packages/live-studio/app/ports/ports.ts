@@ -155,19 +155,12 @@ export function describeWorktree(studio: StudioPort): WorktreeDescription {
 
 let cachedPortsSnapshot: PortsSnapshot | null = null;
 
-/** Returns the most recent snapshot cached in memory across tab switches. */
 export function getCachedPortsSnapshot(): PortsSnapshot | null {
   return cachedPortsSnapshot;
 }
 
-/** Updates the in-memory snapshot cache used to avoid remount loading flashes. */
 export function setCachedPortsSnapshot(snapshot: PortsSnapshot | null): void {
   cachedPortsSnapshot = snapshot;
-}
-
-/** Clears the in-memory snapshot cache (primarily for isolated UI tests). */
-export function clearCachedPortsSnapshot(): void {
-  cachedPortsSnapshot = null;
 }
 
 /** Returns true when a focus/visibility event should avoid interrupting an active or hidden scan. */

@@ -36,12 +36,26 @@ const FIND_KINDS = [
   "anim",
   "text",
   "shape",
+  "sticker",
+  "filter",
+  "look",
+  "effect",
+  "template",
+  "asset",
   "font",
   "adjust",
   "velocity",
   "ease",
 ];
-const FIND_SOURCES = ["minecraft", "earshot", "mixkit", "mixamo", "film-stage"];
+const FIND_SOURCES = [
+  "minecraft",
+  "earshot",
+  "mixkit",
+  "mixamo",
+  "film-stage",
+  "builtin",
+  "openfilm",
+];
 const WORKSPACE_PACKAGES = [
   "packages/live-studio",
   "packages/film-kit",

@@ -152,6 +152,7 @@ export const openFilmHistory = (
         "textTimeline",
         "adjustmentTimeline",
         "timingTimeline",
+        "openfilmTimeline",
       ].map((key) => config?.[key]),
       ...Object.keys(config?.keyFiles ?? {}),
     ];

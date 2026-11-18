@@ -121,8 +121,8 @@ test("each block has its own limit and text labels distinguish similarity from c
 
 test("dual text gives shared placement instructions once after both result blocks", async () => {
   const text = await run(["stone"], pool, noJev, undefined, favorites, lookup);
-  expect(text.match(/where \(in /g)).toHaveLength(1);
-  expect(text.indexOf("where (in ")).toBeGreaterThan(text.indexOf("OpenFilm semantic"));
+  expect(text.match(/where: /g)).toHaveLength(1);
+  expect(text.indexOf("where: ")).toBeGreaterThan(text.indexOf("OpenFilm semantic"));
   expect(text).toContain("audio.json sfx[]");
 });
 
@@ -193,7 +193,7 @@ test("shared placement instructions retain lanes needed by either branch", async
     favorites,
     lookup,
   );
-  expect(text.match(/where \(in /g)).toHaveLength(1);
+  expect(text.match(/where: /g)).toHaveLength(1);
   expect(text).toContain("shots.json shot.transition");
   expect(text).toContain("audio.json sfx[]");
 });
@@ -266,4 +266,46 @@ test("an explicit vector-index failure keeps its existing keyword fallback inste
   expect(text).toContain("semantic unavailable");
   expect(text).toContain("mc-step-stone");
   expect(text).not.toContain("OpenFilm semantic");
+});
+
+test("dual search applies the requested offset to each independent result order", async () => {
+  const output = JSON.parse(
+    await run(
+      ["stone", "--offset", "1", "-n", "1", "--json"],
+      pool,
+      noJev,
+      undefined,
+      favorites,
+      lookup,
+    ),
+  );
+  expect(output.keyword.results.map((hit: Entry) => hit.id)).toEqual(["of-step"]);
+  expect(semanticEntries(output).map((hit) => hit.id)).toEqual(["of-theme"]);
+  expect(output.keyword.results[0].rank).toBe(2);
+  expect(output.semantic.results[0].rank).toBe(2);
+});
+
+test("OpenFilm lookup can return a nonrepresentative sound take", async () => {
+  const takes: Entry[] = [1, 2].map((variant) => ({
+    ...pool[1]!,
+    id: `take-${variant}`,
+    data: { ...pool[1]!.data, family: "footsteps", variant },
+  }));
+  const output = JSON.parse(
+    await run(
+      ["stone", "--json"],
+      takes,
+      noJev,
+      undefined,
+      favorites,
+      async (_query, eligible) => ({
+        hits: eligible
+          .filter((entry) => entry.id === "take-2")
+          .map((entry) => ({ entry, score: 0.9 })),
+        categories: ["sound"],
+        notes: [],
+      }),
+    ),
+  );
+  expect(semanticEntries(output).map((hit) => hit.id)).toEqual(["take-2"]);
 });

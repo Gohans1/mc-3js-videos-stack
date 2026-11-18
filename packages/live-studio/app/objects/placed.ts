@@ -28,7 +28,7 @@ import {
 import type { KeyRef } from "../keys/slice";
 import { setPlaying } from "../playback/transport";
 import { path, showPath } from "./path";
-import { addObject, type GizmoMode, placedData, setTransform, titleOf, tools } from "./placed-data";
+import { addObject, placedData, setTransform, titleOf, tools } from "./placed-data";
 import {
   boundsOf,
   hitTarget,
@@ -37,6 +37,7 @@ import {
   type SceneTarget,
   targetsForKeys,
   type TransformBinding,
+  type TransformMode as GizmoMode,
 } from "./targets";
 
 export * from "./placed-data";

@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 
 import { Segmented } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, set, useStudio } from "../core/store";
 import { applyPreset, gradeOf, gradeTarget, importLut, loadGrades, putGrade } from "./adjust";
 import { addLayer } from "./layers";
+import { AssetSource } from "../openfilm/Source";
 
 export function ImportLut({ onError }: { onError: (error: string) => void }) {
   const file = useRef<HTMLInputElement>(null),
@@ -52,7 +54,8 @@ export function ImportLut({ onError }: { onError: (error: string) => void }) {
   );
 }
 
-export function AdjustLibrary() {
+export function AdjustLibrary() { return <AssetSource category="filter"><NativeAdjustLibrary /></AssetSource>; }
+function NativeAdjustLibrary() {
   const [part, setPart] = useState<"presets" | "luts">("presets"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState<string | null>(null);
@@ -78,74 +81,80 @@ export function AdjustLibrary() {
           { id: "luts", title: "LUT" },
         ]}
       />
-      {part === "presets" && (
-        <button
-          type="button"
-          draggable={layers}
-          disabled={!ready || !layers || !S.render?.adjustments}
-          onDragStart={(e) => {
-            e.dataTransfer.setData("application/x-studio-adjustment", "new");
-            e.dataTransfer.effectAllowed = "copy";
-          }}
-          onClick={() => addLayer()}
-          className="bg-card hover:bg-accent focus-visible:ring-ring flex size-22 shrink-0 flex-col items-center justify-center gap-2 rounded-md text-xs outline-none focus-visible:ring-2 disabled:opacity-50"
-        >
-          <SlidersHorizontal className="size-5" />
-          <span>
-            Custom
-            <br />
-            adjustment
-          </span>
-        </button>
-      )}
-      {part === "luts" && (
-        <div>
-          <ImportLut onError={setError} />
-        </div>
-      )}
-      {error && <Callout role="alert">{error}</Callout>}
-      <ul className="flex min-h-0 flex-col gap-2 overflow-y-auto">
-        {list.map((item) => (
-          <li key={item.id}>
-            <Button
-              variant="secondary"
-              size="row"
-              className="w-full"
-              disabled={!ready || !shots || !S.render?.adjustments || busy !== null}
-              onClick={async () => {
-                setBusy(item.id);
-                setError("");
-                const shot = gradeTarget();
-                try {
-                  if (part === "presets") await applyPreset(item.id, shot);
-                  else
-                    await putGrade(shot, {
-                      ...gradeOf(shot),
-                      lut: { url: item.id, name: item.name, amount: 100 },
-                    });
-                  set(transitionSelection({ kind: "adjustTarget", target: shot }, get().side));
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setBusy(null);
-                }
-              }}
-            >
-              <SlidersHorizontal />
-              <span className="w-full truncate text-start">
-                {busy === item.id ? "Applying…" : item.name}
-              </span>
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {!list.length && (
-        <p className="text-ui text-muted-foreground">
-          {part === "presets"
-            ? "Save a look from Adjust to reuse it in any film."
-            : "Import a .cube or .3dl LUT to color your shots."}
-        </p>
-      )}
+      <TabStage
+        activeKey={part}
+        order={["presets", "luts"]}
+        className="flex min-h-0 flex-1 flex-col gap-3"
+      >
+        {part === "presets" && (
+          <button
+            type="button"
+            draggable={layers}
+            disabled={!ready || !layers || !S.render?.adjustments}
+            onDragStart={(e) => {
+              e.dataTransfer.setData("application/x-studio-adjustment", "new");
+              e.dataTransfer.effectAllowed = "copy";
+            }}
+            onClick={() => addLayer()}
+            className="bg-card hover:bg-accent focus-visible:ring-ring flex size-22 shrink-0 flex-col items-center justify-center gap-2 rounded-md text-xs outline-none focus-visible:ring-2 disabled:opacity-50"
+          >
+            <SlidersHorizontal className="size-5" />
+            <span>
+              Custom
+              <br />
+              adjustment
+            </span>
+          </button>
+        )}
+        {part === "luts" && (
+          <div>
+            <ImportLut onError={setError} />
+          </div>
+        )}
+        {error && <Callout role="alert">{error}</Callout>}
+        <ul className="flex min-h-0 flex-col gap-2 overflow-y-auto">
+          {list.map((item) => (
+            <li key={item.id}>
+              <Button
+                variant="secondary"
+                size="row"
+                className="w-full"
+                disabled={!ready || !shots || !S.render?.adjustments || busy !== null}
+                onClick={async () => {
+                  setBusy(item.id);
+                  setError("");
+                  const shot = gradeTarget();
+                  try {
+                    if (part === "presets") await applyPreset(item.id, shot);
+                    else
+                      await putGrade(shot, {
+                        ...gradeOf(shot),
+                        lut: { url: item.id, name: item.name, amount: 100 },
+                      });
+                    set(transitionSelection({ kind: "adjustTarget", target: shot }, get().side));
+                  } catch (e) {
+                    setError((e as Error).message);
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+              >
+                <SlidersHorizontal />
+                <span className="w-full truncate text-start">
+                  {busy === item.id ? "Applying…" : item.name}
+                </span>
+              </Button>
+            </li>
+          ))}
+        </ul>
+        {!list.length && (
+          <p className="text-ui text-muted-foreground">
+            {part === "presets"
+              ? "Save a look from Adjust to reuse it in any film."
+              : "Import a .cube or .3dl LUT to color your shots."}
+          </p>
+        )}
+      </TabStage>
     </div>
   );
 }

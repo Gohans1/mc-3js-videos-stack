@@ -29,10 +29,10 @@ find discovers assets; earshot find locates a region in a selected file. asset e
 | Check data | bun run check validates names/schema; it does not prove the sound fits |
 | Make a draft with sound | bun run mix renders/draft_video.mp4; open renders/draft.mp4, since draft_video.mp4 has no soundtrack |
 | Measure/locate | bun run listen; read renders/listen.json, then bun run at 12.4 to locate active rows |
-| Track nguồn ngoài | Mix tạo video từ các track hình và AAC mới. Phụ đề, data và các track khác được báo và giữ trong nguồn. |
-| Đo đoạn cực ngắn | Đo một cửa sổ dưới 400 ms bằng peak dBTP và onset. Mix và deliver báo LUFS không đo được khi tín hiệu không đủ điều kiện qua cổng EBU. |
-| Đo lại một đoạn vừa sửa | Bun run listen --at 12.4 đo stem và gợi lệnh Earshot khi draft có âm và còn hiện hành. Với bản giao hoặc preview, chạy earshot timeline trên đường dẫn đó. |
-| Nghe riêng đoạn render thử | Mix tự lấy mốc của chunk/span chuẩn, hoặc thêm --start 40 cho file khác. Đọc đường dẫn renders/mixed_*/preview.mp4 và dùng giây file khi phân tích. |
+| Preserve source tracks | Mix creates a video from the picture tracks and new AAC audio. It reports subtitle, data, and other tracks and leaves them in the source file. |
+| Measure a short window | Below 400 ms, check true peak (dBTP) and onset. Mix and deliver report LUFS as unavailable when the signal does not pass the EBU gate. |
+| Recheck a changed span | Run bun run listen --at 12.4 to measure stems and get an Earshot command when the draft audio is current. Use earshot timeline on the exported file for a delivery or preview. |
+| Check an excerpt | Mix reads the start time from standard chunk and span filenames. Pass --start 40 for other files. Use file seconds when inspecting renders/mixed_*/preview.mp4. |
 
 find and asset also run at the root; asset needs --film films/<name> for film actions. bun run help <command> names the working directory; the command's --help gives syntax.
 
@@ -138,8 +138,8 @@ Base audio judgments on measured results and relevant numbers; similarity scores
 | --- | --- |
 | First listen or changed data | Builds whole-film stems under renders/listen_stems; read --help before running a long film |
 | listen --at <s> | Focuses the report while reusing whole-film stems. Each row averages rolling 400 ms LUFS readings, so use the encoded file for exact onset and peak timing. |
-| Thay asset âm | Listen và mix theo dõi file âm thực sự được chọn, kể cả trong vault và thư mục con. Dùng listen --fresh để buộc tạo lại stem; nếu xử lý lỗi, giữ bộ stem trước. Đuôi soundtrack ngắn hơn hình được đệm im lặng. Mix giải mã nguồn và kiểm từng track hình trước khi thay file. Nếu đích đang mở và thao tác ghi thất bại, bản MP4, WAV và sidecar cũ được giữ. |
-| Phổ âm và các mức | Listen --sheet dùng stem trước master, thêm --at để thu hẹp cửa sổ. Với MP4 xuất rồi, dùng earshot sheet FILE để thấy phổ đúng file. |
+| Replace a sound asset | Listen and mix track the selected audio file, including vault files and subfolders. Use listen --fresh to rebuild stems. Processing errors keep the previous stems. Mix pads short audio with silence and checks decoded picture tracks before replacing output. A failed write keeps the previous MP4, WAV, and sidecar. |
+| Inspect spectrum and levels | listen --sheet uses stems before mastering. Add --at to narrow the window. Use earshot sheet FILE to measure the exported MP4. |
 | Voice LOST or THIN | Lower masking beds/SFX or duck the bed; listen and at identify cues |
 | LOUDER or LOUD with no voice | Inspect the remaining mix levels instead of automatically raising narration |
 | BURIED | Raise the hit or lower its surrounding bed, then inspect the mix |
@@ -149,7 +149,7 @@ Base audio judgments on measured results and relevant numbers; similarity scores
 
 mix limits drive then applies linear gain toward lufs, default -14 LUFS, with a pre-encode ceiling of -1.5 dBTP. If the target is unreachable, read the drive advice; above +12 warns because limiting can flatten hits.
 
-Ngưỡng 15 LU là mục tiêu cân bằng, dưới 8 LU là rủi ro bị lấn. Đối chiếu bản xuất để xác nhận từ nghe được, danh tính âm và ý đồ.
+Aim for 15 LU of separation. Below 8 LU, check for masking. Listen to the export to confirm that the words remain audible and that each sound fits the scene.
 
 ## Sources and licenses
 
@@ -197,12 +197,12 @@ Native regression checks require the optional effects, separate and timeline set
 
 ## Local sound library and metadata
 
-| Âm footage và loop | Cách dùng tùy chọn |
+| External audio and loops | Commands and checks |
 | --- | --- |
-| Đúng số sample | media ffmpeg audio -- track.wav --tempo 1.1 --sample-rate 48000 --length-samples 96000 -o exact.wav; đọc verification sau decode |
-| Đồng bộ recording | schema sync cho offset/confidence/drift; không đo miệng khớp tiếng, không thay ba clock phim |
-| Điểm nối loop | media qc request.json với rules.audio.loop_seam đo click/level/spectrum tại wrap hoặc seams; tự chọn ngưỡng, không kết luận âm hay/dở |
-| Tránh mất ý đồ mix | Giữ mix/listen/earshot; loudness native có thể fallback dynamic, nhiều thao tác hình reencode audio, xem schema trước |
+| Match the sample count | Run media ffmpeg audio -- track.wav --tempo 1.1 --sample-rate 48000 --length-samples 96000 -o exact.wav, then read the decoded verification results. |
+| Sync a recording | Use schema sync to find offset, confidence, and drift. These measurements apply to file alignment. Check lip sync and the three film clocks separately. |
+| Inspect a loop seam | Run media qc request.json with rules.audio.loop_seam to measure clicks, level, and spectrum at the wrap or listed seams. Set thresholds for the project and listen to the result. |
+| Preserve the mix | Keep mix, listen, and Earshot for film audio. Check the native schema for loudness fallback and whether a video operation re-encodes audio. |
 
 | Need | Optional command |
 | --- | --- |

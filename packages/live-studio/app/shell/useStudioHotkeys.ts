@@ -3,22 +3,27 @@
 // free. Ctrl + and Ctrl - stay the browser's page zoom (CapCut zooms its timeline with them; here = and - do). Letters match
 // the key's place, not its letter, so they work on any keyboard layout; typing in the note box never reaches them
 import { type UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
-import { DURATION } from "film/scene";
 
 import { saveView } from "../camera/cam";
 import { copyCam } from "../camera/camline";
 import { AWAY } from "../core/device";
 import { redo, undo } from "../core/doc";
+import { engine } from "../core/engine";
+import { DURATION } from "../core/filmMeta";
 import { hasAnySelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set, setPref, useStudio } from "../core/store";
 import { FPS } from "../core/time";
 import { INK_KEYS, setInk, toolsOpen, undoInk } from "../notes/ink";
-import { nextNoteTime, openNote, setReview } from "../notes/notes";
-import { setGizmo } from "../objects/placed";
+import {
+  approveReviewCurrent,
+  cancelNote,
+  nextNoteTime,
+  openNote,
+  setReview,
+  stepReview,
+} from "../notes/notes";
 import { chooseInGroup } from "../options/options";
-import { setFov, setFree } from "../picture/freecam";
-import { setFinal } from "../picture/render";
 import {
   jumpShot,
   nudgeVolume,
@@ -71,7 +76,7 @@ const fresh = (f: () => void) => (e: KeyboardEvent) => {
 };
 // = and - zoom the timeline; in the free camera they change its lens instead
 const zoomKey = (d: -1 | 1) => () => {
-  if (get().free) setFov(-2 * d);
+  if (get().free) engine.setFov(-2 * d);
   else zoomSpan(d > 0 ? 1 / 1.5 : 1.5);
 };
 
@@ -98,6 +103,7 @@ const REVIEW_KEYS = new Set([
 
 export function useStudioHotkeys() {
   const settingsOpen = useStudio((s) => s.settingsOpen);
+  const composeOpen = useStudio((s) => s.compose !== null);
   const ink = useStudio((s) => s.ink),
     picks = useStudio((s) => s.clips.length),
     sound = useStudio((s) => s.sound);
@@ -125,6 +131,19 @@ export function useStudioHotkeys() {
     camPicks > 0 ||
     keyPicks > 0 ||
     textPicks > 0;
+  // A popup open on top (a "?" or a menu) takes Esc for itself first
+  const escPopups: UseHotkeyDefinition[] = [
+    {
+      hotkey: "Escape",
+      callback: () => set({ settingsOpen: false }),
+      options: { enabled: settingsOpen },
+    },
+    {
+      hotkey: "Escape",
+      callback: () => setInk(null),
+      options: { enabled: !settingsOpen && !!ink },
+    },
+  ];
   const keys: UseHotkeyDefinition[] = [
     // ---- CapCut's own
     // In the free camera Space flies up (picture/flight.ts), as in Minecraft
@@ -232,7 +251,7 @@ export function useStudioHotkeys() {
       callback: fresh(() => setInk(get().ink ? null : "pen")),
       options: { enabled: !free },
     },
-    { hotkey: "F", callback: fresh(() => setFree(!get().free)) },
+    { hotkey: "F", callback: fresh(() => engine.setFree(!get().free)) },
     { hotkey: "J", callback: () => shuttleOn(-1) },
     {
       hotkey: "K",
@@ -243,36 +262,30 @@ export function useStudioHotkeys() {
     { hotkey: "L", callback: () => shuttleOn(1) },
     { hotkey: "Shift+K", callback: () => saveView(), options: { enabled: cam } },
     { hotkey: "Alt+C", callback: copyCam },
-    { hotkey: "G", callback: fresh(() => setFinal(!get().final)), options: { enabled: !AWAY } },
+    {
+      hotkey: "G",
+      callback: fresh(() => engine.setFinal(!get().final)),
+      options: { enabled: !AWAY },
+    },
     { hotkey: "Mod+ArrowUp", callback: () => nudgeVolume(true) },
     { hotkey: "Mod+ArrowDown", callback: () => nudgeVolume(false) },
     // Unreal's gizmo keys; in the free camera W and E walk instead
     {
       hotkey: "W",
-      callback: () => setGizmo("translate"),
+      callback: () => engine.setGizmo("translate"),
       options: { enabled: object !== null && !free },
     },
     {
       hotkey: "E",
-      callback: () => setGizmo("rotate"),
+      callback: () => engine.setGizmo("rotate"),
       options: { enabled: object !== null && !free },
     },
     {
       hotkey: "R",
-      callback: () => setGizmo("scale"),
+      callback: () => engine.setGizmo("scale"),
       options: { enabled: object !== null && !free },
     },
-    // A popup open on top (a "?" or a menu) takes Esc for itself first
-    {
-      hotkey: "Escape",
-      callback: () => set({ settingsOpen: false }),
-      options: { enabled: settingsOpen },
-    },
-    {
-      hotkey: "Escape",
-      callback: () => setInk(null),
-      options: { enabled: !settingsOpen && !!ink },
-    },
+    ...escPopups,
     {
       hotkey: "Escape",
       callback: () => setBlade(false),
@@ -298,16 +311,34 @@ export function useStudioHotkeys() {
     ),
     // W A S D, Space, Shift, Q and E fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts
   ];
+  const reviewOnlyKeys: UseHotkeyDefinition[] = [
+    ...escPopups,
+    {
+      hotkey: "Escape",
+      callback: () => cancelNote(),
+      options: { enabled: !settingsOpen && !ink && composeOpen },
+    },
+    {
+      hotkey: "Escape",
+      callback: () => setReview(false),
+      options: { enabled: !settingsOpen && !ink && !composeOpen },
+    },
+    { hotkey: "ArrowUp", callback: () => void stepReview(-1) },
+    { hotkey: "ArrowDown", callback: () => void stepReview(1) },
+    { hotkey: "A", callback: () => void approveReviewCurrent() },
+  ];
   // Any modal dialog open over the page takes the keys: Delete or Space must not reach the timeline under it
   const modal = useStudio((s) => s.modal !== null);
-  // In the Review room the timeline is out of sight: only keys that watch, move the playhead or write a note, so a Delete or an
-  // undo never changes a clip nobody can see
+  // In the Review room the timeline is out of sight: only keys that watch, move the playhead, walk notes, approve, or write
   const review = useStudio((s) => s.review);
   useHotkeys(
     modal
       ? []
       : review
-        ? keys.filter((k) => typeof k.hotkey === "string" && REVIEW_KEYS.has(k.hotkey))
+        ? [
+            ...keys.filter((k) => typeof k.hotkey === "string" && REVIEW_KEYS.has(k.hotkey)),
+            ...reviewOnlyKeys,
+          ]
         : keys,
     {
       preventDefault: true,

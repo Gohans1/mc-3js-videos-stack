@@ -25,6 +25,7 @@ import { HelpTip } from "../components/HelpTip";
 import { Tip } from "../components/Tip";
 import { AWAY } from "../core/device";
 import { engine } from "../core/engine";
+import { armActivityChime } from "../activity/chime";
 import { FLY_SPEED } from "../core/prefs";
 import { S } from "../core/state";
 import { set, setPref, useStudio } from "../core/store";
@@ -517,6 +518,7 @@ export function Settings() {
       meter: x.meter,
       ratio: x.ratio,
       aiActivity: x.aiActivity,
+      activityChime: x.activityChime,
     })),
   );
   const step = (d: number) => seek(S.t + d);
@@ -633,6 +635,16 @@ export function Settings() {
             checked={s.aiActivity}
             onChange={(on) => setPref("aiActivity", on)}
             help="Under the picture, a dot lit while the AI works and its latest step beside it (click it for the steps before). The note it reads or answers, the lesson file it reads or writes and the seconds it looks at or renders light up for a moment. Nothing moves the playhead, scrolls or takes the focus. Kept in this browser."
+          />
+          <SwitchRow
+            id="activity-chime"
+            label="Play a chime for review and errors"
+            checked={s.activityChime}
+            onChange={(on) => {
+              setPref("activityChime", on);
+              if (on) armActivityChime();
+            }}
+            help="Sounds once for a note that needs your attention or an activity error, while the Studio is focused and the film is paused. Kept in this browser."
           />
           <SwitchRow
             id="try-on"

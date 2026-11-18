@@ -23,6 +23,7 @@ import { get, set, setPref, useStudio } from "../core/store";
 
 const choices: { kind: LinkageKind; title: string; colour: string; audio?: boolean }[] = [
   { kind: "text", title: "Text", colour: "bg-timeline-text" },
+  { kind: "overlays", title: "Overlays", colour: "bg-timeline-text" },
   { kind: "adjustment", title: "Adjust", colour: "bg-clip-adjust" },
   { kind: "audio", title: "Audio", colour: "bg-clip-audio", audio: true },
   { kind: "sfx", title: "Sound effects", colour: "bg-clip-audio", audio: true },

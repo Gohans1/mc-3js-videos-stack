@@ -8,14 +8,10 @@ export function killProcessTree(pid, fallbackKill) {
         stdio: "ignore",
         timeout: 5000,
       });
-    } catch {
-      /* fallback below */
-    }
+    } catch {}
     try {
       fallbackKill();
-    } catch {
-      /* already exited */
-    }
+    } catch {}
     return;
   }
   try {
@@ -30,8 +26,6 @@ export function killProcessTree(pid, fallbackKill) {
   setTimeout(() => {
     try {
       process.kill(-pid, "SIGKILL");
-    } catch {
-      /* exited cleanly */
-    }
+    } catch {}
   }, 1500).unref?.();
 }

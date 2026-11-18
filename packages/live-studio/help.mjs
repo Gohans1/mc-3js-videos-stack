@@ -11,8 +11,7 @@ const GROUPS = [
   [
     "Start here",
     {
-      skills:
-        "for an AI agent: bun run skills get core before guessing from a command's --help (the loop, the three clocks, what costs money)",
+      skills: "bun run skills get core for the workflow, film clocks, and command costs",
       gap: 'keep a missing capability and what you tried (or why blocked): bun run gap "<need>" --did "<outcome>"; bare, historical reports',
     },
   ],
@@ -130,13 +129,25 @@ const GROUPS = [
   ],
 ];
 
-const HELP = `Discover commands in the current repo root or film folder; this does not run them.
-  bun run help             commands grouped by job; in a film, also its file map
-  bun run help <command>   where to read that command's --help
-  bun run help direct      direct tools and package commands, with their catalog IDs
-  bun run help --json      all command summaries; add a command ID for its full schema
-  bun run skills get core  the workflow; --ref review to pick picture/audio checks, --ref contract for scene hooks
-Built-ins are a starting kit: write custom code or tools when the film needs them.`;
+const HELP = `Discover mc-films commands from the repo root or a film folder.
+
+Usage: bun run help [command] [--json]
+
+Start here:
+  bun run skills get core              Read the workflow and time conventions
+  bun run skills get core --ref review Choose picture, sound, and timing checks
+  bun run skills get core --ref contract Read the film contract and scene hooks
+
+Commands:
+  bun run help                         List commands by task and show the film file map when available
+  bun run help <command>               Find where to run the command and how to open its help
+  bun run help direct                  List direct tools and package commands with catalog IDs
+
+Options:
+  --json                               List command IDs and summaries as JSON
+  <command> --json                     Show one command's catalog schema, e.g. bun run help at --json
+
+Run a command's own --help for its current flags and examples.`;
 const argv = cliArgs(HELP, ["--json"], 1, process.argv.slice(2), {
   helpWord: !process.argv.includes("--json"),
 });

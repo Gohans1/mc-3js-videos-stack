@@ -121,8 +121,9 @@ export const seenCheck = (render, cfg) => {
   };
 
   // one frame: render(t) poses the film and draws its real frame, then the ID passes measure the target
-  const measureAt = (t, obj) => {
-    render(t);
+  const measureAt = async (t, obj) => {
+    if (render.renderFrame) await render.renderFrame(t);
+    else render(t);
     const gl = canvas();
     if (!small) {
       small = document.createElement("canvas");
@@ -203,13 +204,16 @@ export const seenCheck = (render, cfg) => {
   return async (target, from, to, step = 1 / 30) => {
     if (typeof target !== "string" || !(to > from) || !(step > 0))
       return ["ERROR usage: CHECK=seen:<target>,<from s>,<to s>"];
-    const obj = findTarget(render.tools, target);
-    if (!obj || target === "cam") return [targetHelp(render.tools, target, { camera: false })];
-    if (!render.tools.camera.isPerspectiveCamera)
+    const tools = render.tools ?? {};
+    if (!tools.scene || !tools.camera)
+      return ["ERROR CHECK=seen requires draw.tools.scene and draw.tools.camera on the film"];
+    const obj = findTarget(tools, target);
+    if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
+    if (!tools.camera.isPerspectiveCamera)
       return ["ERROR seen: the film camera is not a PerspectiveCamera"];
     const frames = [];
     for (let i = 0, n = Math.round((to - from) / step); i <= n; i++) {
-      const fr = measureAt(from + i * step, obj);
+      const fr = await measureAt(from + i * step, obj);
       delete fr.masks;
       frames.push(fr);
     }
@@ -255,8 +259,8 @@ export const seenCheck = (render, cfg) => {
       tint.height = FH;
       const tc = tint.getContext("2d"),
         img = tc.createImageData(tint.width, tint.height);
-      shown.forEach((w, k) => {
-        const { masks } = measureAt(w.t, obj),
+      for (const [k, w] of shown.entries()) {
+        const { masks } = await measureAt(w.t, obj),
           x0 = (k % 2) * TW,
           y0 = Math.floor(k / 2) * TH;
         s.drawImage(gl, x0, y0, TW, TH);
@@ -298,7 +302,7 @@ export const seenCheck = (render, cfg) => {
         s.strokeStyle = "#000";
         s.lineWidth = 2;
         s.strokeRect(x0, y0, TW, TH);
-      });
+      }
       lines.push({ still: `${tag}_worst.jpg`, canvas: sheet });
     }
     return lines;

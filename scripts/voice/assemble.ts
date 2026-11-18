@@ -555,6 +555,7 @@ if (isMain) {
   envTypos(["LIVE_PROJECT"]);
   const film = needFilm(process.env.LIVE_PROJECT);
   const ended = await startJob(film, "voice:assemble", {
+    surface: "sound",
     say: "Assembling voice takes onto full_voice.wav",
   });
   let res: Awaited<ReturnType<typeof runAssemble>>;

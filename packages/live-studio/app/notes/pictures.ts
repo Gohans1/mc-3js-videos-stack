@@ -22,8 +22,11 @@ const withSnapshotSource = async <T>(
   });
   if (!source) return read(null);
   if (source === "final") return read(finalEl!);
-  engine.render(at);
-  return read(S.el.canvas);
+  let result!: T;
+  await engine.render(at, () => {
+    result = read(S.el.canvas);
+  });
+  return result;
 };
 export const snapshot = (pin: Pin | null | undefined, at: number, marks: Mark[] = []) =>
   withSnapshotSource(at, (from) => {
@@ -78,8 +81,7 @@ export const momentStrip = async (at: number) => {
   g.font = "bold 20px Consolas,monospace";
   for (const [i, d] of STRIP.entries()) {
     const x = Math.min(Math.max(0, at + d), DURATION - 0.02);
-    engine.render(x);
-    g.drawImage(S.el.canvas, i * w, 0, w, h);
+    await engine.render(x, () => g.drawImage(S.el.canvas, i * w, 0, w, h));
     g.fillStyle = tone("scrim-strong");
     g.fillRect(i * w + 4, 4, 128, 28);
     g.fillStyle = d === 0 ? tone("primary") : tone("picture");

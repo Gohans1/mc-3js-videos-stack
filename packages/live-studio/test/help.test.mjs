@@ -7,6 +7,125 @@ import { join } from "node:path";
 
 const HELP = join(import.meta.dir, "../help.mjs");
 
+test("JSON lookup can describe the help command itself", () => {
+  const result = spawnSync("bun", [HELP, "help", "--json"], { encoding: "utf8", timeout: 10000 });
+  expect(result.status, result.stderr).toBe(0);
+  expect(JSON.parse(result.stdout).data.commands[0].id).toBe("help");
+});
+
+test("a direct tool's printed help command runs from the stated film directory", () => {
+  const cwd = join(import.meta.dir, "../../../templates/film");
+  const result = spawnSync("bun", [HELP, "mc:slim-jar"], { cwd, encoding: "utf8", timeout: 10000 });
+  expect(result.status, result.stderr).toBe(0);
+  const command = result.stdout.match(/run in film[^:]*: (.+)/)?.[1];
+  expect(command).toBeTruthy();
+  const help = spawnSync("bun", ["exec", command], { cwd, encoding: "utf8", timeout: 10000 });
+  expect(help.status, help.stderr).toBe(0);
+  expect(help.stdout).toContain("slim Minecraft asset ZIP");
+});
+
+test("direct help also locates repo tools from a standalone film outside the monorepo", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "standalone-help-"));
+  try {
+    mkdirSync(join(cwd, "src"));
+    writeFileSync(join(cwd, "src/scene.ts"), "");
+    const result = spawnSync("bun", [HELP, "mc:slim-jar"], {
+      cwd,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const command = result.stdout.match(/run in film: (.+)/)?.[1];
+    expect(command).toBeTruthy();
+    const help = spawnSync("bun", ["exec", command], { cwd, encoding: "utf8", timeout: 10000 });
+    expect(help.status, help.stderr).toBe(0);
+    expect(help.stdout).toContain("slim Minecraft asset ZIP");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("package and legacy help run in their stated directory in the caller's native shell", () => {
+  const ids = [
+    "film-kit:test",
+    ...(process.platform === "win32"
+      ? ["catalog:tag-sh", "catalog:review-sh", "catalog:sweep-sh"]
+      : []),
+  ];
+  for (const id of ids) {
+    const result = spawnSync("bun", [HELP, id], { encoding: "utf8", timeout: 10000 });
+    expect(result.status, result.stderr).toBe(0);
+    const [, cwd, command] = result.stdout.match(/run in ([^:]+): (.+)/) ?? [];
+    expect(cwd).toBeTruthy();
+    const shell = process.platform === "win32" ? "powershell.exe" : "sh";
+    const args =
+      process.platform === "win32" ? ["-NoProfile", "-Command", command] : ["-c", command];
+    const help = spawnSync(shell, args, {
+      cwd: join(
+        import.meta.dir,
+        "../../..",
+        cwd === "root" ? "" : cwd === "film" ? "templates/film" : cwd,
+      ),
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    expect(help.status, help.stderr).toBe(0);
+    expect(help.stdout).toMatch(/bun test|usage:/i);
+  }
+});
+
+test("help exposes the shared catalog without executing commands, including direct tools", () => {
+  const list = spawnSync("bun", [HELP, "--json"], { encoding: "utf8", timeout: 10000 });
+  expect(list.status, list.stderr).toBe(0);
+  const { data } = JSON.parse(list.stdout);
+  expect(data.scope).toBe("root");
+  expect(data.commands.some((c) => c.id === "catalog:review")).toBe(true);
+  expect(data.commands.find((c) => c.id === "render").availableHere).toBe(false);
+  expect(data.commands.find((c) => c.id === "find").flags).toBeUndefined();
+  const one = spawnSync("bun", [HELP, "catalog:review", "--json"], {
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  expect(one.status, one.stderr).toBe(0);
+  expect(JSON.parse(one.stdout).data.commands[0].flags.some((f) => f.flag === "--missing")).toBe(
+    true,
+  );
+  const direct = spawnSync("bun", [HELP, "timeline:fmt"], { encoding: "utf8", timeout: 10000 });
+  expect(direct.status, direct.stderr).toBe(0);
+  expect(direct.stdout).toContain("scripts/timeline_fmt.ts");
+  expect(direct.stdout).toContain("--help");
+});
+
+test("JSON discovery keeps a film's custom scripts and rejects unknown command IDs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "help-json-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "src/scene.ts"), "");
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ scripts: { "custom:bake": "bun bake.ts" } }),
+    );
+    const result = spawnSync("bun", [HELP, "--json"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const { data } = JSON.parse(result.stdout);
+    expect(data.scope).toBe("film");
+    expect(data.commands.find((c) => c.id === "custom:bake").availableHere).toBe(true);
+    const wrong = spawnSync("bun", [HELP, "missing-command", "--json"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    expect(wrong.status).toBe(2);
+    expect(wrong.stdout).toBe("");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("help validates the entire request before directing an agent to a command", () => {
   for (const args of [["skills", "extra"], ["skills", "--bogus"], ["toString"]]) {
     const r = spawnSync("bun", [HELP, ...args], { encoding: "utf8", timeout: 10000 });
@@ -20,6 +139,9 @@ test("help documents discovery, and sends commands to their real working directo
   const usage = spawnSync("bun", [HELP, "--help"], { encoding: "utf8", timeout: 10000 });
   expect(usage.status).toBe(0);
   expect(usage.stdout).toContain("bun run help <command>");
+  const commands = spawnSync("bun", [HELP], { encoding: "utf8", timeout: 10000 });
+  expect(commands.status).toBe(0);
+  expect(commands.stdout).toMatch(/\n {2}earshot\s+ears, its own CLI/);
   const root = spawnSync("bun", [HELP, "render"], { encoding: "utf8", timeout: 10000 });
   expect(root.status).toBe(0);
   expect(root.stdout).toContain("cd films/<name>");

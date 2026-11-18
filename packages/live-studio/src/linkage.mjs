@@ -1,5 +1,6 @@
 export const LINKAGE_DEFAULTS = {
   text: true,
+  overlays: true,
   adjustment: true,
   audio: false,
   sfx: true,

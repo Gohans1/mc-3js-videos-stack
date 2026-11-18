@@ -72,7 +72,7 @@ function Body({ go }: { go: RefObject<HTMLButtonElement | null> }) {
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="text-foreground font-medium">{c.title}</span>
               <span className="text-muted-foreground text-xs">{c.value}</span>
-              {c.warn && !off.has(c.id) && <span className="text-warn text-xs">{c.warn}</span>}
+              {c.warn && !off.has(c.id) && <span className="text-warn-text text-xs">{c.warn}</span>}
             </span>
           </FieldLabel>
         ))}

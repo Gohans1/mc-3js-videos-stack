@@ -1,29 +1,18 @@
 import type { Ease } from "../core/ease";
 import { engine } from "../core/engine";
+import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
-import { transitionSelection } from "../core/selection";
 import { FPS, r3, stamp } from "../core/time";
 import { files } from "../keys/keys";
 
-export type GizmoMode = "translate" | "rotate" | "scale";
-export type TransformMode = GizmoMode;
-
-export interface TargetRow {
-  edit: string;
-  path: string[];
-}
-export interface TargetTransform {
-  at: number[];
-  rot: number[];
-  scale: number;
-}
-export interface TransformBinding {
-  row: TargetRow;
-  axes: Partial<Record<TransformMode, [boolean, boolean, boolean]>>;
-  read(key: Record<string, unknown>): TargetTransform;
-  write(key: Record<string, unknown>, value: TargetTransform): void;
-}
+export type {
+  TargetRow,
+  TargetTransform,
+  TransformBinding,
+  TransformMode,
+  TransformMode as GizmoMode,
+} from "./targets";
 
 export interface PlacedKey {
   t: number;

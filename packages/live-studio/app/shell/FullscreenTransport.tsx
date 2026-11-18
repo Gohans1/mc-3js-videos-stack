@@ -1,11 +1,11 @@
-import { DURATION } from "film/scene";
 import { Minimize, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
+import { DURATION } from "../core/filmMeta";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { FPS, pad } from "../core/time";
@@ -17,6 +17,7 @@ const timecode = (frame: number) =>
   `${pad(Math.floor(frame / (3600 * FPS)))}:${pad(Math.floor(frame / (60 * FPS)) % 60)}:${pad(Math.floor(frame / FPS) % 60)}:${pad(frame % FPS)}`;
 
 function Controls() {
+  useStudio((s) => s.metaRev);
   const frame = useFrame(),
     playing = useStudio((s) => s.playing);
   const bar = useRef<HTMLDivElement>(null);
@@ -62,13 +63,14 @@ function Controls() {
         {playing ? <Pause /> : <Play />}
       </Button>
       <span className="flex shrink-0 gap-1 tabular-nums">
-        <span className="text-primary">{timecode(frame)}</span>
+        <span className="text-primary-text">{timecode(frame)}</span>
         <span>/</span>
         <span>{timecode(Math.round(DURATION * FPS))}</span>
       </span>
       <Slider
         aria-label="Full screen playhead"
-        className="min-w-8 flex-1 [&_[data-slot=slider-thumb]]:size-2 [&_[data-slot=slider-track]]:h-0.5"
+        appearance="mini"
+        className="min-w-8 flex-1"
         min={0}
         max={end}
         step={1}

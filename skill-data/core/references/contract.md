@@ -6,7 +6,7 @@ The studio, `bun run check` and every render read a film through this contract. 
 
 | Part                           | Rule                                                                                                                                                                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/scene.ts` exports         | `SHOTS`, `SHOTS_OUT` (the shots as heard), `DURATION`, `applyEdit`, and `buildScene(canvas, W, H, draft)` returning `draw(t)`                                                                                                        |
+| `src/scene.ts` exports         | `SHOTS`, `SHOTS_OUT` (the shots as heard), `DURATION`, and `buildScene(canvas, W, H, draft)` returning `draw(t)`. `applyEdit` is required unless the `timingTimeline` wrapper supplies it |
 | `draw(t)`                      | Draws any `t` on its own, never from the frame before: renders split the film into chunks and jump straight to any second                                                                                                            |
 | `src/edit.ts` and data         | `setEdit` merges `src/edit.json` (narration takes and script, `voice.warp`, beats) with the files in `src/timeline/` (cam, shots, keys, text, adjust, audio, timing)                                                                 |
 | `package.json` `"live-studio"` | Names each timeline file (`soundTimeline`, `camTimeline`, `shotsTimeline`, `textTimeline`, `adjustmentTimeline`, `timingTimeline`, `keyFiles`), the `sound` folders and `ratio`. `bun run help` in a film prints this film's own map |
@@ -18,6 +18,8 @@ The studio, `bun run check` and every render read a film through this contract. 
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
 | Narration seconds                    | `t` in `shots.json`, beats in `src/edit.json`; `fromSource` turns them into scene seconds through `voice.warp` |
 | Scene seconds (before Speed, Freeze) | `cam.json`, key files, `audio.json`, `text.json`, `adjust.json`                                                |
+
+Word and mouth timestamps index native audio samples; narration clips place them on the scene clock, then Speed/Freeze produces heard seconds. voice.warp moves narrative anchors, never stretches sample timings.
 
 To slow, speed or hold a stretch, change `timing.json` (Speed, Freeze); never shift every key by hand. `bun run at <heard second>` converts between the clocks.
 
@@ -57,6 +59,9 @@ The built-ins are a starting kit, not the limit: anything Three.js can draw belo
 | A close look from set spots  | A page in `lab/` importing `live-studio/lab` (copy `templates/film/lab/showcase.ts`)                                                                                                                                                                                             | `ENTRY=lab/x.ts bun run render stills`; `LAB_VIEW=v` reaches it as `cfg.lab.view` |
 | A kind of your own           | A list of `{ id, title, tip, ...anything }` on `draw` or `draw.tools` under a name of yours (`draw.weather = [{ id: "rain", ... }]`)                                                                                                                                             | The studio's Film tab lists it as its own kind, named after the key               |
 | A field of your own on a row | Any key the studio doesn't read on a shot (beside `anim`, `transition`, `hits`, `adjust`), a camera key (beside `mm`, `fov`, `fstop`, `focus`, `handheld`), a text row, sound row, or adjustment (beside `grade.look`); typos 1 letter off built-in keys warn in `bun run check` | Film tab, Custom fields: each name with its values and the seconds it is set at   |
+| Rigid-body physics (Rapier)  | Pre-bake offline in Bun with `@dimforge/rapier3d-compat` to `src/timeline/*.json`; sample in `draw(t)`                                                                                                                                                                           | Deterministic scrub & render via `draw(t)`                                        |
+| AO & post-processing         | Wired in `src/scene.ts` via `n8ao` (`N8AOPostPass`) and `postprocessing` (`EffectComposer`, AgX)                                                                                                                                                                                 | Every scrub and render passes through the composer chain                          |
+| Volumetric godrays           | Pre-installed `three-good-godrays` (`GodraysPass`); `PointLight`/`DirectionalLight` only (not `SpotLight`), before `ToneMappingEffect`                                                                                                                                           | Shadow-mapped light shafts in `EffectComposer`                                    |
 
 The creator sees all of the above in the studio's Film tab, view only, under CapCut's kinds (Audio, Text, Stickers, Effects, Transitions, Animation), then 3D, Custom fields, A/B choices, Checks, your own kinds and Other. A `title` and a one-line `tip` on each is what they read there; nothing you hand over is refused or dropped.
 
@@ -83,3 +88,35 @@ The creator sees all of the above in the studio's Film tab, view only, under Cap
 | Mocap through one `loadClips(refs, steve)` in `buildScene`                                                                                | It keeps each bake between loads; `loadClip` bakes every time                                         |
 | A loop over many poses that reads only his bones: `steve.updateBones()` and `steve.soleNow()`, then one `g.updateMatrixWorld(true)` after | A full update or `getWorldPosition` per pose walks his whole tree; this was seconds of a phone's load |
 | A change to how the film loads: `bun run eval:load` at the repo root, before and after                                                    | Desk and phone, first visit and reload; phone runs swing ~30%, so repeat one                          |
+
+## Effects library and custom pages
+
+`bun run find` discovers and inspects the shared catalogue; `bun run asset --help` places and edits assets with JSON output and heard seconds. Audio uses `audio.json`, transitions use `shots.json`, grades use `adjust.json`, native text/shapes use `text.json`, and HTML/CSS/canvas layers use `openfilm.json` with undo, trim/drag and Linkage in the studio.
+
+| Task | Command and result |
+| --- | --- |
+| Discover | `bun run find --kind transition` includes native and imported transitions; use words to search, or filter, text, sticker, effect, template or sound as kinds. Code helpers, camera and mocap remain in the same catalogue |
+| Select source or group | `--source builtin` selects native presets; `--source openfilm` selects that provider, including audio. Bare `--source` or `--group` lists values; `--group fade` narrows one visual group |
+| Read controls | `bun run find --show <id>` includes the placement ID, full recipe, selectors/vars, defaults, units and exampleProps. Use the full ID and `--source` if a short alias is ambiguous |
+| Continue a page | Follow the next-page command with the same filters and `--offset N`; `-n N` sets page size, up to 200. Pagination applies to offline lists and word searches |
+| Place | `bun run asset use <id> --film films/<name> --from 2 --to 5 --props-file controls.json`; cut placement also needs `--shot N`. Native text needs a text string; HTML text uses a selector map, as show/help describe |
+| Read or revise | `asset timeline --lane <lane>` returns heard times and targets; pass the returned target to `asset edit` with a props file, or `asset remove`. Lanes are effects, text, adjustment, transitions and audio; effects is the default |
+| Keep identity | New items have UUID targets; older native rows without IDs use their current row index. Read timeline again after reordering those rows; removing a transition preserves its shot |
+| Duration in code | If a film has no edit.end, pass `--duration <scene seconds>` from its exported DURATION for retiming or cuts. Use the same value for placement, timeline, edit and remove; unknown retiming clocks are rejected before writing |
+| Templates | `asset plan <id>` previews camera slots, overlays and music without writes; `asset use` places overlays/music. Camera slots guide custom 3D staging; they do not replace the scene |
+| Verify | `asset validate` checks configured lane shapes and overlay IDs; use `bun run check` for film checks, then view a still or clip. Data validation does not prove the rendered look or sound |
+| Linked audio holds | A heard interval may have no source-time equivalent inside Freeze or a removed/reordered span; asset rejects an inexact audio edit before writing. Use an independent audio/SFX history in timing.json or a custom output-time mix for that cue |
+
+Creative controls stay editable JSON; native text/shapes retain custom fields, while HTML text uses selectors and CSS vars exposed by the source page. Build custom Three.js code or pages whenever useful; the catalogue and Studio are starting tools, not creative constraints.
+
+`find --show` returns exampleProps and units: x/y are 0-1, native text/shape size is pixels at a 1080px short side, and HTML overlay size is a scale. Put the example in a UTF-8 JSON file and pass `--props-file`; this avoids PowerShell quote escaping and accepts a BOM.
+
+`asset list/info` are compatibility aliases to find's text output; action commands keep JSON output and share find's catalogue. `bun run openfilm` selects the OpenFilm source; `fetch:openfilm` imports it, and runtime file/config names remain compatible with existing films.
+
+The studio groups pickers by use under Audio, Text, Transitions, Adjustment and Effects; OpenFilm is a source filter. Source, fonts, WAVs and licenses stay in the vault; `pack:sound` preserves their structure for another machine.
+
+`film-stage/openfilm-page` exports `loadOpenFilmPage(url, width, height, props, { timeoutMs })` for same-origin HTML/CSS/canvas/WebGL; `await page.seek(t)` returns a canvas and `page.dispose()` removes the iframe. The page exposes `window.film.frame(t)` and optional `ready` as a promise or function; the host awaits both, serializes seeks, reports the URL/phase/time, and times out each phase after 15 seconds by default.
+
+WebGL needs `preserveDrawingBuffer: true` for capture, and resources must allow reading/capture. Custom `draw.renderFrame(t)` is preserved and awaited during rendering; the host's real clock stays untouched.
+
+The async hook receives the same scene seconds and layer clocks after Speed/Freeze as `draw`. `resetCanvasState` is only for library compatibility: it tracks contexts the page creates, resets only 2D canvases still in the DOM, and leaves untouched canvases, offscreen sprite caches and WebGL alone.

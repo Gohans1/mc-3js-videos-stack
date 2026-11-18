@@ -46,14 +46,163 @@ const subGeo = (geo, g) => {
   for (const [n, a] of Object.entries(geo.attributes)) out.setAttribute(n, new THREE.BufferAttribute(a.array.slice(g.start * a.itemSize, (g.start + g.count) * a.itemSize), a.itemSize, a.normalized));
   return out;
 };
-// a skinned mesh's posed vertices (Box3 and geometry alone keep the bind pose)
-// (each vertex skinned once, then laid out by the index: a box's corners are shared by 3 faces)
+// Cached static layout for skinned world baking: avoids per-variant toNonIndexed(), getVertexPosition(), clone(), applyMatrix4()
+const skinCache = new WeakMap();
+const _pm = new THREE.Matrix4();
+const _bm = new THREE.Matrix4();
+const expandAttr = (attr, idx, outCount) => {
+  const sz = attr.itemSize,
+    arr = new Float32Array(outCount * sz);
+  if (attr.normalized || attr.isInterleavedBufferAttribute) {
+    const get = [attr.getX, attr.getY, attr.getZ, attr.getW];
+    for (let i = 0; i < outCount; i++) {
+      const k = idx ? idx[i] : i,
+        o = i * sz;
+      for (let s = 0; s < sz; s++) arr[o + s] = get[s].call(attr, k);
+    }
+  } else {
+    const src = attr.array;
+    if (idx) {
+      for (let i = 0; i < outCount; i++) {
+        const k = idx[i] * sz,
+          o = i * sz;
+        for (let s = 0; s < sz; s++) arr[o + s] = src[k + s];
+      }
+    } else arr.set(src);
+  }
+  return new THREE.BufferAttribute(arr, sz, false);
+};
+const prepSkin = (o) => {
+  let c = skinCache.get(o.geometry);
+  if (c !== undefined) return c;
+  const g = o.geometry;
+  const idxAttr = g.index;
+  const posAttr = g.attributes.position,
+    skinIdxAttr = g.attributes.skinIndex,
+    skinWgtAttr = g.attributes.skinWeight;
+  if (
+    idxAttr?.isInterleavedBufferAttribute ||
+    posAttr.isInterleavedBufferAttribute ||
+    skinIdxAttr.isInterleavedBufferAttribute ||
+    skinWgtAttr.isInterleavedBufferAttribute ||
+    posAttr.normalized ||
+    skinIdxAttr.normalized ||
+    skinWgtAttr.normalized
+  ) {
+    skinCache.set(g, null);
+    return null;
+  }
+  const idx = idxAttr ? idxAttr.array : null;
+  const nVerts = posAttr.count;
+  const outCount = idx ? idx.length : nVerts;
+  c = {
+    idx,
+    pos: posAttr.array,
+    skinIdx: skinIdxAttr.array,
+    skinWgt: skinWgtAttr.array,
+    uv: g.attributes.uv ? expandAttr(g.attributes.uv, idx, outCount) : null,
+    color: g.attributes.color ? expandAttr(g.attributes.color, idx, outCount) : null,
+    nVerts,
+    outCount,
+    bonesLen: o.skeleton.bones.length,
+    mats: new Float32Array(o.skeleton.bones.length * 16),
+    worldPos: new Float32Array(nVerts * 3),
+  };
+  skinCache.set(g, c);
+  return c;
+};
+const fastPosedWorld = (o) => {
+  const c = prepSkin(o);
+  if (!c) return null;
+  _pm.multiplyMatrices(o.matrixWorld, o.bindMatrixInverse);
+  const { bones, boneInverses } = o.skeleton;
+  const { pos, skinIdx, skinWgt, mats, idx, nVerts, outCount, worldPos } = c;
+  for (let b = 0; b < c.bonesLen; b++) {
+    _bm.multiplyMatrices(_pm, bones[b].matrixWorld).multiply(boneInverses[b]).multiply(o.bindMatrix);
+    mats.set(_bm.elements, b * 16);
+  }
+  for (let i = 0; i < nVerts; i++) {
+    const p3 = i * 3,
+      x = pos[p3],
+      y = pos[p3 + 1],
+      z = pos[p3 + 2],
+      s4 = i * 4;
+    let ox = 0,
+      oy = 0,
+      oz = 0;
+    for (let k = 0; k < 4; k++) {
+      const w = skinWgt[s4 + k];
+      if (w === 0) continue;
+      const m = skinIdx[s4 + k] * 16;
+      ox += (mats[m] * x + mats[m + 4] * y + mats[m + 8] * z + mats[m + 12]) * w;
+      oy += (mats[m + 1] * x + mats[m + 5] * y + mats[m + 9] * z + mats[m + 13]) * w;
+      oz += (mats[m + 2] * x + mats[m + 6] * y + mats[m + 10] * z + mats[m + 14]) * w;
+    }
+    worldPos[p3] = ox;
+    worldPos[p3 + 1] = oy;
+    worldPos[p3 + 2] = oz;
+  }
+  const outPos = new Float32Array(outCount * 3);
+  const outNorm = new Float32Array(outCount * 3);
+  if (idx) {
+    for (let i = 0; i < outCount; i++) {
+      const k = idx[i] * 3,
+        o3 = i * 3;
+      outPos[o3] = worldPos[k];
+      outPos[o3 + 1] = worldPos[k + 1];
+      outPos[o3 + 2] = worldPos[k + 2];
+    }
+  } else outPos.set(worldPos);
+  for (let i = 0; i < outCount * 3; i += 9) {
+    const ax = outPos[i],
+      ay = outPos[i + 1],
+      az = outPos[i + 2];
+    const bx = outPos[i + 3],
+      by = outPos[i + 4],
+      bz = outPos[i + 5];
+    const cx = outPos[i + 6],
+      cy = outPos[i + 7],
+      cz = outPos[i + 8];
+    const cbx = cx - bx,
+      cby = cy - by,
+      cbz = cz - bz;
+    const abx = ax - bx,
+      aby = ay - by,
+      abz = az - bz;
+    let nx = cby * abz - cbz * aby;
+    let ny = cbz * abx - cbx * abz;
+    let nz = cbx * aby - cby * abx;
+    const len2 = nx * nx + ny * ny + nz * nz;
+    if (len2 > 0) {
+      const inv = 1 / Math.sqrt(len2);
+      nx *= inv;
+      ny *= inv;
+      nz *= inv;
+    }
+    outNorm[i] = outNorm[i + 3] = outNorm[i + 6] = nx;
+    outNorm[i + 1] = outNorm[i + 4] = outNorm[i + 7] = ny;
+    outNorm[i + 2] = outNorm[i + 5] = outNorm[i + 8] = nz;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(outPos, 3));
+  geo.setAttribute("normal", new THREE.BufferAttribute(outNorm, 3));
+  if (c.uv) geo.setAttribute("uv", new THREE.BufferAttribute(c.uv.array, c.uv.itemSize));
+  if (c.color)
+    geo.setAttribute("color", new THREE.BufferAttribute(c.color.array, c.color.itemSize));
+  return geo;
+};
 const posed = (o) => {
-  const idx = o.geometry.index, g = idx ? o.geometry.toNonIndexed() : o.geometry.clone();
-  const n = o.geometry.attributes.position.count, at = new Float32Array(n * 3), v = new THREE.Vector3();
+  const idx = o.geometry.index,
+    g = idx ? o.geometry.toNonIndexed() : o.geometry.clone();
+  const n = o.geometry.attributes.position.count,
+    at = new Float32Array(n * 3),
+    v = new THREE.Vector3();
   for (let i = 0; i < n; i++) o.getVertexPosition(i, v).toArray(at, i * 3);
   const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const k = (idx ? idx.getX(i) : i) * 3; p.setXYZ(i, at[k], at[k + 1], at[k + 2]); }
+  for (let i = 0; i < p.count; i++) {
+    const k = (idx ? idx.getX(i) : i) * 3;
+    p.setXYZ(i, at[k], at[k + 1], at[k + 2]);
+  }
   g.computeVertexNormals();
   return g;
 };
@@ -65,19 +214,35 @@ const bake = (objects) => {
     root.traverse((o) => {
       if (!o.isMesh || !o.visible) return;
       const mats = [o.material].flat();
-      const base = o.isSkinnedMesh ? posed(o) : o.geometry;
-      const parts = Array.isArray(o.material) && base.groups.length
-        ? base.groups.map((g) => [mats[g.materialIndex], subGeo(base, g)]) : [[mats[0], base.index ? base.toNonIndexed() : base.clone()]];
+      let parts;
+      const fast =
+        o.isSkinnedMesh && !Array.isArray(o.material) && !o.geometry.groups.length
+          ? fastPosedWorld(o)
+          : null;
+      if (fast) {
+        parts = [[mats[0], fast]];
+      } else {
+        const base = o.isSkinnedMesh ? posed(o) : o.geometry;
+        parts =
+          Array.isArray(o.material) && base.groups.length
+            ? base.groups.map((g) => [mats[g.materialIndex], subGeo(base, g)])
+            : [[mats[0], base.index ? base.toNonIndexed() : base.clone()]];
+        for (const [, geo] of parts) {
+          geo.applyMatrix4(o.matrixWorld);
+          for (const n of Object.keys(geo.attributes))
+            if (!["position", "normal", "uv", "color"].includes(n)) geo.deleteAttribute(n);
+        }
+      }
       for (const [mat, geo] of parts) {
-        geo.applyMatrix4(o.matrixWorld);
-        for (const n of Object.keys(geo.attributes)) if (!["position", "normal", "uv", "color"].includes(n)) geo.deleteAttribute(n);
         const k = `${mat.uuid}|${Object.keys(geo.attributes).sort().join()}`;
         if (!buckets.has(k)) buckets.set(k, { mat, geos: [] });
         buckets.get(k).geos.push(geo);
       }
     });
   }
-  return [...buckets.values()].map(({ mat, geos }) => [mat, mergeGeometries(geos)]).filter(([, g]) => g);
+  return [...buckets.values()]
+    .map(({ mat, geos }) => [mat, geos.length === 1 ? geos[0] : mergeGeometries(geos)])
+    .filter(([, g]) => g);
 };
 
 // props: the scene objects every cell has that are not blocks (in Steve's cell's coordinates); actor: an extra Steve
@@ -89,9 +254,13 @@ export async function buildCellBlock({ sources, scene, props, actor, clips, crtI
   const own = cells.findIndex(([cx, cz]) => !cx && !cz); // Steve's: only its corridor, unless draw's `self` (his cell red)
   const n = cells.length, group = new THREE.Group(), M = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
   const mats = [], ims = [], mine = [];
+  const lit = new Map();
   const selfLit = (mat) => {
+    const hit = lit.get(mat.uuid);
+    if (hit) return hit;
     const m = mat.clone();
     if (m.emissive) { m.emissiveMap = m.map; m.userData.base = m.color.clone(); mats.push(m); }
+    lit.set(mat.uuid, m);
     return m;
   };
   // ofOwn: the copy in his cell too, shown only while draw's `self` asks
@@ -108,15 +277,20 @@ export async function buildCellBlock({ sources, scene, props, actor, clips, crtI
   const seat = (g) => { g.scale.setScalar(S); g.position.set(0.5, 0.5, 0.5); return g; }; // like the room: a block spans x..x+1
   const built = async (blocks, extra, keep, ofOwn) => {
     const g = seat((await createScene(sources, blocks, { lighting: "scene", animate: false })).group);
-    scene.add(g);
-    instance(bake([g, ...extra]), keep, ofOwn);
-    g.removeFromParent();
+    return () => {
+      scene.add(g);
+      instance(bake([g, ...extra]), keep, ofOwn);
+      g.removeFromParent();
+    };
   };
-  await built([...buildCell(), { id: `gohans:${crtId}`, pos: [DESK.crt, 1, DESK.z], properties: { facing: "south" } }], props.map((o) => o.clone()), (i) => i !== own, true);
-  // its own pass: createScene keeps one block per position, so the keyboard sharing the CRT's would drop the CRT
-  await built([{ id: `gohans:${crtId}_keys`, pos: [DESK.crt, 1, DESK.z], properties: { facing: "south" } }], [], (i) => i !== own, true);
-  // the corridor along each row's doors
-  await built(Array.from({ length: (ROOM.x1 + 3) * 2 }, (_, i) => ({ id: "polished_deepslate", pos: [-1 + (i >> 1), -1, ROOM.z1 + 2 + (i & 1)] })), [], () => true);
+  const builtSteps = await Promise.all([
+    built([...buildCell(), { id: `gohans:${crtId}`, pos: [DESK.crt, 1, DESK.z], properties: { facing: "south" } }], props.map((o) => o.clone()), (i) => i !== own, true),
+    // its own pass: createScene keeps one block per position, so the keyboard sharing the CRT's would drop the CRT
+    built([{ id: `gohans:${crtId}_keys`, pos: [DESK.crt, 1, DESK.z], properties: { facing: "south" } }], [], (i) => i !== own, true),
+    // the corridor along each row's doors
+    built(Array.from({ length: (ROOM.x1 + 3) * 2 }, (_, i) => ({ id: "polished_deepslate", pos: [-1 + (i >> 1), -1, ROOM.z1 + 2 + (i & 1)] })), [], () => true),
+  ]);
+  for (const step of builtSteps) step();
 
   // the inmates (no two alike): VARIANTS bodies baked once (a furniture pose in its place, or a clip frame at the
   // origin), each drawn instanced; a clip body gets its own spot and heading in every cell through its instance matrix.

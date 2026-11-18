@@ -6,7 +6,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { useStudio } from "../core/store";
 import { rangeText } from "../core/time";
-import { choose, optionLabel, pinPick } from "./options";
+import { choose, optionLabel, pinPick, warmTrialAudio } from "./options";
 import { type GroupView } from "./slice";
 
 function Chip({ group: g, range }: { group: GroupView; range: [number, number] }) {
@@ -15,6 +15,8 @@ function Chip({ group: g, range }: { group: GroupView; range: [number, number] }
     <div
       role="group"
       aria-label={`${g.title}, ${rangeText(range)}`}
+      onPointerEnter={() => void warmTrialAudio()}
+      onFocusCapture={() => void warmTrialAudio()}
       className="upright:px-1 upright:pt-0.75 upright:pb-1 bg-scrim pointer-events-auto max-w-full flex-none rounded-lg px-1.5 pt-1 pb-1.5"
     >
       <p

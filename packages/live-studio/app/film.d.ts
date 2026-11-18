@@ -127,6 +127,10 @@ declare module "film/scene" {
   }
   export interface Draw {
     (t: number): void;
+    renderFrame?: (t: number) => Promise<void>;
+    prepareFrame?: (t: number) => Promise<void>;
+      needsPreparation?: (t: number) => boolean;
+    disposeOpenFilm?: () => void;
     tools: Tools;
     describe?: (t: number) => ReviewSection[];
     checks?: Record<string, (...args: number[]) => string | string[]>; // CHECK=name:args in a draft render (render.mjs)

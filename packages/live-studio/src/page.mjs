@@ -266,6 +266,11 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
             codeSplitting: {
               groups: [
                 {
+                  name: "vendor-react",
+                  test: /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+                  priority: 50,
+                },
+                {
                   name: "vite-helpers",
                   test: /\0vite[\\/]preload-helper|preload-helper/,
                   priority: 40,

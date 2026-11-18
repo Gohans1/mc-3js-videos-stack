@@ -39,7 +39,7 @@ Tất tần tật repo/tools/kiến thức/etc... Phục vụ cho làm videos 3j
 
 ### Audio Tags (research nếu cần)
 
-- Không giới hạn danh sách cố định (_"There is no definitive ElevenLabs Audio Tags list"_): được tự chế vô hạn bằng ngôn ngữ tự nhiên trong ngoặc vuông `[...]`, ví dụ `[out of breath after running up the stairs]`, `[nervous, trying to sound confident]`.
+- Không giới hạn danh sách cố định ("There is no definitive ElevenLabs Audio Tags list"): được tự chế vô hạn bằng ngôn ngữ tự nhiên trong ngoặc vuông `[...]`, ví dụ `[out of breath after running up the stairs]`, `[nervous, trying to sound confident]`.
 - English Audio Tags only
 
 ### Giọng kể Ngôi thứ 3 (Fern / Atrium / Blackfiles)

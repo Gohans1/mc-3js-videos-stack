@@ -1,10 +1,11 @@
 import type { AdjustmentFile, AdjustmentLayer } from "film-stage/grade-layers";
 import { EDIT } from "film/edit";
-import { DURATION } from "film/scene";
 
+import { DURATION } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
+import { lightItems } from "../activity/timeline-activity";
 import { S } from "../core/state";
-import { get, set, showError } from "../core/store";
+import { get, invalidatePictures, set, showError } from "../core/store";
 import { FPS, r3 } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
 
@@ -31,12 +32,17 @@ const changed = () => {
     .then(() => {
       S.dirty = true;
       S.finalAt = -1;
+      invalidatePictures();
     })
     .catch(showError);
 };
 export const layersDoc = createTimedDoc<AdjustmentFile>("adjustment", {
   label: "adjustment layers",
   changed,
+  received: (before, after) => lightItems("adjust", before.items, after.items, (item) => item.id, (i) => {
+    const { id, from, to, track } = layerItems()[i];
+    return { key: id, track, range: [from, to] };
+  }),
   saved: (layersSaved) => set({ layersSaved }),
 });
 export const loadLayers = async () => set({ layers: !!(await layersDoc.load()) });

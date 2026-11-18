@@ -1,3 +1,4 @@
+import { together } from "../core/doc";
 // The key rows under the camera row, on the same seconds as the stretch above: per key file a heading line, then one row per list
 // of keys in it (keys/keys.ts), names in the column beside (keys/KeyHeads.tsx). A diamond per key, labelled with what it says
 // ("sits up", "tense"); a solid line between two keys that differ (something changes there), a dotted one where the row holds.
@@ -5,19 +6,18 @@
 // the playhead, words and cuts (Shift: no snap). A box dragged over empty space picks every key it touches (Shift/Ctrl add), on
 // these rows and the others it crosses (timeline/rowbox.ts, across.ts), and a drag on a picked key moves all of it;
 // a click on a key seeks there; empty space starts a selection box. A touch dragged over empty space scrubs.
-import { SHOTS_OUT as SHOTS } from "film/scene";
-
-import { together } from "../core/doc";
+import { SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
 import { makeSnapper, snappedTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
-import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
+import { keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import { isElementShown, onShownResize } from "../timeline/visible";
 import {
   editKeys,
   HEAD_H,
@@ -57,7 +57,7 @@ const diamond = (g: CanvasRenderingContext2D, x: number, y: number, r: number) =
 
 export const drawKeyRows = () => {
   const c = S.el?.keyrows;
-  if (!c || !get().keyFiles?.length || !c.getClientRects().length) return;
+  if (!c || !get().keyFiles?.length || !isElementShown(c)) return;
   const height = linesHeight();
   if (c.style.height !== `${height}px`) c.style.height = `${height}px`;
   const { g, w, h } = sized(c);
@@ -151,7 +151,6 @@ export const drawKeyRows = () => {
   // Cuts, faint, over everything: a key is often put on one by eye
   g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
-  drawPlayhead(g, X(S.t), h);
 };
 
 const snapPoints = () => [
@@ -343,5 +342,5 @@ export const attachKeyRows = () => {
   c.addEventListener("pointercancel", up);
   c.addEventListener("lostpointercapture", up);
   c.addEventListener("wheel", timelineWheel, { passive: false });
-  new ResizeObserver(drawKeyRows).observe(c);
+  onShownResize(c, drawKeyRows);
 };

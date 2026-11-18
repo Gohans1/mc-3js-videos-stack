@@ -5,6 +5,7 @@ import {
   ALL,
   buildNavTree,
   categoryHeading,
+  cleanAudioTitle,
   collapseSwapFamilies,
   editionOptions,
   editionTitle,
@@ -820,4 +821,98 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     assert.match(soundCardDetail(items[0]), /YouTube Content ID/);
     assert.doesNotMatch(soundCardDetail(items[1]), /Content ID/);
   });
+  test("cleanAudioTitle strips extensions, fixes typos, normalizes shout/camel/snake cases, and keeps acronyms", () => {
+    assert.equal(cleanAudioTitle("DoorKick2.wav"), "Door Kick 2");
+    assert.equal(cleanAudioTitle("Bed creak.wav"), "Bed Creak");
+    assert.equal(cleanAudioTitle("IN-BREATHS"), "In Breaths");
+    assert.equal(cleanAudioTitle("acess denied buzz"), "Access Denied Buzz");
+    assert.equal(cleanAudioTitle("AK47"), "AK47");
+    assert.equal(cleanAudioTitle("akm (quiet tone)"), "AKM (Quiet Tone)");
+    assert.equal(cleanAudioTitle("CCTV_alert;v2.mp3"), "CCTV Alert v2");
+    assert.equal(cleanAudioTitle("h&k br smg - loop"), "H&K BR SMG — Loop");
+    assert.equal(cleanAudioTitle("walk in the rain"), "Walk in the Rain");
+    assert.equal(cleanAudioTitle("alert - a test"), "Alert — A Test");
+    assert.equal(
+      cleanAudioTitle("Dragging Chair on Concrete floor, Wide Room 05"),
+      "Dragging Chair on Concrete Floor, Wide Room 05",
+    );
+    assert.equal(cleanAudioTitle("Colt M1911 .45 acp Pistol"), "Colt M1911 .45 ACP Pistol");
+    assert.equal(cleanAudioTitle("fuze switch flick"), "Fuse Switch Flick");
+    assert.equal(cleanAudioTitle("Beginning Of The End"), "Beginning of the End");
+    assert.equal(cleanAudioTitle("Allay · Idle With Item"), "Allay · Idle with Item");
+    assert.equal(cleanAudioTitle("blastfurnace_fire_crackle"), "Blast Furnace Fire Crackle");
+    assert.equal(cleanAudioTitle("bonemeal1"), "Bone Meal 1");
+    assert.equal(cleanAudioTitle("chestopen"), "Chest · Open");
+    assert.equal(cleanAudioTitle("chestclosed"), "Chest · Closed");
+    assert.equal(cleanAudioTitle("levelup"), "Level Up");
+    assert.equal(cleanAudioTitle("Anvil Break", { mc: true }), "Anvil · Break");
+    assert.equal(cleanAudioTitle("Anvil Land", { mc: true }), "Anvil · Land");
+    assert.equal(cleanAudioTitle("Door Open", { mc: true }), "Door · Open");
+    assert.equal(cleanAudioTitle("Door Open"), "Door Open");
+  });
+
+  test("categoryLeaves sorts SFX categories by display title rather than raw slug id", () => {
+    const items = [
+      { name: "sfx-a", title: "Click", category: "clicks", seconds: 0.2 },
+      { name: "sfx-b", title: "Shutter", category: "shutter", seconds: 0.3 },
+      { name: "sfx-c", title: "Laser", category: "sci-fi", seconds: 0.5 },
+    ];
+    const tree = buildNavTree(items, [], () => "sfx", 0);
+    const sfxLeaves = tree.find((s) => s.id === "sfx").leaves.map((l) => l.title);
+    assert.deepEqual(sfxLeaves, ["All", "Camera shutter", "Clicks", "Sci-fi & lasers"]);
+  });
+
+  test("categoryLeaves uses natural numeric collator order when sorting category titles", () => {
+    const items = [
+      { name: "a10", title: "Ten", category: "stage-10", seconds: 0.2 },
+      { name: "a2", title: "Two", category: "stage-2", seconds: 0.2 },
+    ];
+    const tree = buildNavTree(items, [], () => "sfx", 0);
+    const sfxLeaves = tree.find((s) => s.id === "sfx").leaves.map((l) => l.title);
+    assert.deepEqual(sfxLeaves, ["All", "Stage 2", "Stage 10"]);
+  });
+});
+
+test("cleanAudioTitle & soundCardDetail > strips dangling commas/periods, expands Sonniss compounds, and cleans detail titles", () => {
+  expect(cleanAudioTitle("Umbrella 1, compact, close, slide, fold, snap,")).toBe(
+    "Umbrella 1, Compact, Close, Slide, Fold, Snap",
+  );
+  expect(cleanAudioTitle("The soundcatcher antique grinder wood drawer 2.8.")).toBe(
+    "The Soundcatcher Antique Grinder Wood Drawer 2.8",
+  );
+  expect(cleanAudioTitle("And... wait")).toBe("And... Wait");
+  expect(cleanAudioTitle("Tubular, pvcpipe, hollowbase, vinyltube, clothsweep")).toBe(
+    "Tubular, PVC Pipe, Hollow Base, Vinyl Tube, Cloth Sweep",
+  );
+  expect(cleanAudioTitle("416 5.56mm 1m left off axis clean six shots x")).toBe(
+    "416 5.56mm 1m Left Off Axis Clean Six Shots",
+  );
+  expect(
+    cleanAudioTitle(
+      "Audiobeast medium warehouse browning M2 .50 machine gun 03m MS raw 002 burst x",
+    ),
+  ).toBe("Audiobeast Medium Warehouse Browning M2 .50 Machine Gun 03m MS Raw 002 Burst");
+  expect(cleanAudioTitle("AK4 long corridor single shots blanks behind gun in corner m")).toBe(
+    "AK4 Long Corridor Single Shots Blanks Behind Gun in Corner",
+  );
+  expect(cleanAudioTitle("Air compressor, Omega, air release, x")).toBe(
+    "Air Compressor, Omega, Air Release",
+  );
+  expect(cleanAudioTitle("UI sound pack 04 error v")).toBe("UI Sound Pack 04 Error");
+  expect(cleanAudioTitle("Pm lft 181 UI, hud, beep, lofi, reto, scifi, clik, g")).toBe(
+    "Pm Lft 181 UI, HUD, Beep, Lo-Fi, Retro, Sci-Fi, Click",
+  );
+  expect(cleanAudioTitle("6monsters from2feet .45acp casing 50BMG 48khz")).toBe(
+    "6 Monsters from 2 Feet .45 ACP Casing 50 BMG 48khz",
+  );
+  expect(cleanAudioTitle("Model x")).toBe("Model X");
+  expect(
+    soundCardDetail({
+      name: "bed_creak",
+      title: "Bed creak.wav",
+      for: "the bed frame",
+      source: "film",
+      origin: "real",
+    }),
+  ).toBe("Bed Creak — the bed frame — Real / Studio · This film — ID: bed_creak");
 });

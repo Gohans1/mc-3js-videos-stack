@@ -1,6 +1,6 @@
 // Runs a test page in headless Chrome (Bun.WebView over CDP; Edge or Chrome, software WebGL via SwiftShader) so a test drives
 // the real shaders instead of a JavaScript copy of them. The entry is bundled for the browser and served on a free port.
-export async function openPage(entry: string) {
+export async function openPage(entry: string, extra?: (req: Request) => Response | undefined) {
   const built = await Bun.build({ entrypoints: [entry], target: "browser" });
   if (!built.success) throw new AggregateError(built.logs, `could not bundle ${entry}`);
   // CSS the page imports (fonts arrive inlined as data URLs) comes out as its own asset
@@ -12,6 +12,8 @@ export async function openPage(entry: string) {
   const server = Bun.serve({
     port: 0,
     fetch: (req) => {
+      const response = extra?.(req);
+      if (response) return response;
       const file = files.get(new URL(req.url).pathname);
       if (file) return new Response(file);
       return new Response(

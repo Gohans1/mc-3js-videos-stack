@@ -47,12 +47,15 @@ const OwnPanel = lazy(() => loadPanels().then((m) => ({ default: m.OwnPanel })))
 const PortsPanel = lazy(() => loadPanels().then((m) => ({ default: m.PortsPanel })));
 const SoundPanel = lazy(() => loadPanels().then((m) => ({ default: m.SoundPanel })));
 const TextLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TextLibrary })));
+const OpenFilmLibrary = lazy(() =>
+  import("../openfilm/Library").then((m) => ({ default: m.OpenFilmLibrary })),
+);
 const TextPanel = lazy(() => loadPanels().then((m) => ({ default: m.TextPanel })));
 const SpeedPanel = lazy(() => loadPanels().then((m) => ({ default: m.FilmSpeedPanel })));
 
 type SideTab = StudioState["side"];
 type Lib = StudioState["lib"];
-const CORE_TABS = ["notes", "lessons", "film", "ports", "cli"] as const;
+const CORE_TABS = ["notes", "lessons", "film", "ports", "cli", "openfilm"] as const;
 type CoreTab = (typeof CORE_TABS)[number];
 
 // CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
@@ -217,6 +220,7 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "cli", title: "CLI", icon: Terminal },
   { id: "film", title: "Film", icon: Clapperboard },
   { id: "text", title: "Text", icon: Type },
+  { id: "openfilm", title: "Effects", icon: Blend },
   { id: "objects", title: "Objects", icon: Boxes },
   { id: "transition", title: "Transitions", icon: Blend },
   { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
@@ -317,6 +321,8 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
               </div>
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "openfilm" ? (
+              <OpenFilmLibrary />
             ) : value === "cli" ? (
               <CliPanel />
             ) : value === "ports" ? (
@@ -601,6 +607,7 @@ export function Side({
     "cli",
     "film",
     "text",
+    "openfilm",
     "objects",
     "keys",
     "transition",
@@ -669,6 +676,9 @@ export function Side({
             <Tabs.Tab value="text" {...aiTab("text", value)} disabled={!text} className={tab}>
               Text
             </Tabs.Tab>
+            <Tabs.Tab value="openfilm" {...aiTab("openfilm", value)} className={tab}>
+              Effects
+            </Tabs.Tab>
             <Tabs.Tab value="objects" {...aiTab("objects", value)} disabled={!placed} className={tab}>
               Objects
             </Tabs.Tab>
@@ -712,6 +722,8 @@ export function Side({
               <KeyPanel />
             ) : value === "film" ? (
               <OwnPanel />
+            ) : value === "openfilm" ? (
+              <OpenFilmLibrary />
             ) : value === "cli" ? (
               <CliPanel />
             ) : value === "ports" ? (

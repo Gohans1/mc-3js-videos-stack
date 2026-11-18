@@ -1270,6 +1270,10 @@ test("voice:cues reads a line a Freeze cuts in two as its two heard pieces, each
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
   mkdirSync(join(dir, "voice/takes"), { recursive: true });
   writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { timingTimeline: "src/timeline/timing.json" } }),
+  );
+  writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({ takes: [{ id: "01", t: 0, text: "One two three." }] }),
   );
@@ -1330,4 +1334,313 @@ test("voice:gen names the takes whose audio says other words than src/edit.json,
   assert.deepEqual(unheardWords(dir), [
     { id: "02", heard: "A heavy steel door.", text: "A heavy iron door, sealed." },
   ]);
+});
+
+test("voice sync CLI prints help, rejects unknown flags with exit 2, and errors cleanly when API key is missing", (t) => {
+  const syncScript = join(ROOT, "scripts/voice/sync.ts");
+  const dir = mkdtempSync(join(tmpdir(), "voice-sync-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const help = spawnSync(process.execPath, [syncScript, "--help"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /Sync all English voices/);
+
+  const badFlag = spawnSync(process.execPath, [syncScript, "--bogus"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.equal(badFlag.status, 2);
+
+  const missingKey = spawnSync(process.execPath, [syncScript], {
+    cwd: dir,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GENVOICE_API_KEY: "",
+      ELEVENLABS_API_KEY: "",
+    },
+  });
+  assert.notEqual(missingKey.status, 0);
+  assert.match(`${missingKey.stdout}\n${missingKey.stderr}`, /API key/i);
+});
+
+test("Round 18: buildVoiceCues respects warped edit.end over raw wavDur and reads .ogg narration duration via audioInfo", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-cues-r18-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound"), { recursive: true });
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+
+  // Part 1: 5s .ogg narration via soundSources without explicit length
+  const ffOgg = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=5", "sound/voice.ogg"],
+    { cwd: dir },
+  );
+  assert.equal(ffOgg.status, 0, String(ffOgg.stderr));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+        soundSources: { voice: "sound/voice.ogg" },
+      },
+    }),
+  );
+  writeFileSync(join(dir, "src/timeline/timing.json"), "{}");
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      end: 10,
+      voice: {
+        warp: [
+          [0, 0],
+          [10, 6],
+        ],
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ narration: "voice", beds: [], sfx: [{ name: "voice", at: 0, gain: 0 }] }),
+  );
+  const voiceMap = {
+    lines: [{ s: 1, e: 2, text: "hello world", words: [{ w: "hello", s: 1, e: 2 }] }],
+  };
+  const saveVoiceMap = () =>
+    writeFileSync(join(dir, "renders/live/voice_map.json"), JSON.stringify(voiceMap));
+  saveVoiceMap();
+  // Make sure full_voice.wav with 10s also tests warped edit.end < wavDur
+  const cuesOgg = buildVoiceCues(dir);
+  assert.equal(cuesOgg.lines.length, 1);
+  assert.equal(cuesOgg.duration, 6);
+
+  // Part 2: 10s WAV file with voice.warp compressing edit.end 10 -> 6 must stay duration 6, not 10
+  const ffWav = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=10", "sound/voice.wav"],
+    { cwd: dir },
+  );
+  assert.equal(ffWav.status, 0, String(ffWav.stderr));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+        soundSources: { voice: "sound/voice.wav" },
+      },
+    }),
+  );
+  saveVoiceMap();
+  const cuesWav = buildVoiceCues(dir);
+  assert.equal(cuesWav.duration, 6);
+  assert.equal(cuesWav.gaps.at(-1)?.to, 6);
+});
+
+test("Round 19: cues honors voice:false when lines exist, caps at edit.end, reads .mp3 duration, and follows narration try[] swap", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-cues-r19-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  mkdirSync(join(dir, "sound"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 5 }));
+  writeFileSync(join(dir, "src/scene.ts"), "export {};\n");
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [] }),
+  );
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({
+      lines: [{ s: 1, e: 2, text: "hidden", words: [{ w: "hidden", s: 1, e: 2 }] }],
+    }),
+  );
+  const offCues = buildVoiceCues(dir);
+  assert.equal(offCues.voiceOff, true);
+  assert.equal(offCues.hasLines, true);
+  assert.deepEqual(offCues.lines, []);
+  assert.deepEqual(offCues.gaps, [{ from: 0, to: 5, dur: 5, afterLine: -1 }]);
+  const cli = spawnSync("bun", [join(ROOT, "scripts/voice/cues.ts")], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.match(cli.stderr, /narration: off/);
+  assert.doesNotMatch(cli.stdout, /hidden/);
+
+  // 2) Overlong spoken line past edit.end keeps duration capped at edit.end and clamps speech
+  writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: [], sfx: [] }));
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({
+      lines: [
+        {
+          s: 4,
+          e: 7,
+          text: "inside outside",
+          words: [
+            { w: "inside", s: 4, e: 4.5 },
+            { w: "outside", s: 5.5, e: 7 },
+          ],
+        },
+      ],
+    }),
+  );
+  const capped = buildVoiceCues(dir);
+  assert.equal(capped.duration, 5);
+  assert.equal(capped.lines.length, 1);
+  assert.equal(capped.lines[0].e, 5);
+  assert.deepEqual(capped.lines[0].words, [{ w: "inside", s: 4, e: 4.5 }]);
+
+  // 3) .mp3 narration via soundSources without explicit length and choices.json try[] swap
+  const ffMp3 = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=4", "sound/narr.mp3"],
+    { cwd: dir },
+  );
+  assert.equal(ffMp3.status, 0, String(ffMp3.stderr));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+        soundSources: { narr: "sound/narr.mp3", narr_alt: "sound/narr.mp3" },
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "narr",
+      beds: [],
+      sfx: [{ name: "narr", try: ["narr_alt"], at: 1, gain: 0 }],
+    }),
+  );
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ narr: { set: "narr_alt" } }));
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({
+      lines: [{ s: 0.5, e: 2, text: "swapped", words: [{ w: "swapped", s: 0.5, e: 2 }] }],
+    }),
+  );
+  const mp3Swapped = buildVoiceCues(dir);
+  assert.equal(mp3Swapped.lines.length, 1);
+  assert.equal(mp3Swapped.lines[0].s, 1.5);
+  assert.equal(mp3Swapped.lines[0].e, 3);
+});
+
+test("Round 20: choices.json try swap clears c.start on swapped clip and keeps unswapped secondary narration clips", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-cues-r20-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  const wav = (file, secs) => {
+    const samples = Math.floor(8000 * secs);
+    const buf = Buffer.alloc(44 + samples * 2);
+    buf.write("RIFF", 0);
+    buf.writeUInt32LE(36 + samples * 2, 4);
+    buf.write("WAVEfmt ", 8);
+    buf.writeUInt32LE(16, 16);
+    buf.writeUInt16LE(1, 20);
+    buf.writeUInt16LE(1, 22);
+    buf.writeUInt32LE(8000, 24);
+    buf.writeUInt32LE(16000, 28);
+    buf.writeUInt16LE(2, 32);
+    buf.writeUInt16LE(16, 34);
+    buf.write("data", 36);
+    buf.writeUInt32LE(samples * 2, 40);
+    writeFileSync(file, buf);
+  };
+  wav(join(dir, "sound/sfx/narr.wav"), 5);
+  wav(join(dir, "sound/sfx/narr_alt.wav"), 4);
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        sfx: "sound/sfx",
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 10 }));
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({
+      lines: [
+        { s: 0.5, e: 1.5, text: "first", words: [{ w: "first", s: 0.5, e: 1.5 }] },
+        { s: 2.5, e: 3.5, text: "second", words: [{ w: "second", s: 2.5, e: 3.5 }] },
+      ],
+    }),
+  );
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ narr: { set: "narr_alt" } }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "narr",
+      beds: [],
+      sfx: [
+        { name: "narr", try: ["narr_alt"], at: 1, start: 2, gain: 0 },
+        { name: "narr", at: 6, start: 2, length: 2, gain: 0 },
+      ],
+    }),
+  );
+  const cues = buildVoiceCues(dir);
+  assert.deepEqual(
+    cues.lines.map((l) => [l.text, l.s, l.e]),
+    [
+      ["first", 1.5, 2.5],
+      ["second", 3.5, 4.5],
+      ["second", 6.5, 7.5],
+    ],
+  );
+});
+
+test("Round 21: buildVoiceCues uses full film duration for trailing gap when layerKinds.voice is shorter than picture", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "voice-cues-r21-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { timingTimeline: "src/timeline/timing.json" } }),
+  );
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 10 }));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      freezes: [{ at: 3, duration: 5 }],
+      layerKinds: { voice: { base: {}, changes: [] } },
+    }),
+  );
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({
+      lines: [
+        { s: 0, e: 2, text: "a", words: [] },
+        { s: 4, e: 6, text: "b", words: [] },
+      ],
+    }),
+  );
+  const cues = buildVoiceCues(dir);
+  assert.equal(cues.duration, 15);
+  assert.deepEqual(cues.gaps.at(-1), { from: 6, to: 15, dur: 9, afterLine: 1 });
 });

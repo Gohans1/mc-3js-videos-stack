@@ -5,26 +5,38 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { Separator } from "@/components/ui/separator";
 
 import { Tip } from "../components/Tip";
 import { useStudio } from "../core/store";
 import { clearInk, INK_KEYS, setInk, undoInk } from "./ink";
+import { modKeyLabel } from "./note-card-meta";
 import { type InkKind } from "./slice";
 
 export const TOOLS: [InkKind, string, ReactNode, string][] = [
-  ["pen", "Pen", <Pencil key="icon" />, "Draw freely"],
-  ["arrow", "Arrow", <ArrowUpRight key="icon" />, "Drag from one spot to another"],
-  ["box", "Box", <Square key="icon" />, "Drag a box around an area"],
+  ["pen", "Pen", <Pencil key="icon" aria-hidden data-icon="inline-start" />, "Draw freely"],
+  [
+    "arrow",
+    "Arrow",
+    <ArrowUpRight key="icon" aria-hidden data-icon="inline-start" />,
+    "Drag from one spot to another",
+  ],
+  [
+    "box",
+    "Box",
+    <Square key="icon" aria-hidden data-icon="inline-start" />,
+    "Drag a box around an area",
+  ],
   [
     "path",
     "Path",
-    <Route key="icon" />,
+    <Route key="icon" aria-hidden data-icon="inline-start" />,
     "Click a point, jump to a later second, click the next one. The AI reads it as moving between them over time",
   ],
 ];
 
 export const ToolKey = ({ id }: { id: InkKind }) => (
-  <Kbd aria-hidden className="ml-0.5 pointer-coarse:hidden">
+  <Kbd aria-hidden className="ms-0.5 pointer-coarse:hidden">
     {INK_KEYS.indexOf(id) + 1}
   </Kbd>
 );
@@ -54,8 +66,8 @@ export function InkBar() {
           <ToolKey id={id} />
         </Button>
       ))}
-      <span aria-hidden className="bg-hairline-strong mx-1 h-5 w-px" />
-      <Tip label="Undo last stroke (Ctrl+Z)">
+      <Separator orientation="vertical" className="mx-1 h-5 data-vertical:self-center" />
+      <Tip label={`Undo last stroke (${modKeyLabel()}Z)`}>
         <Button
           variant="tool"
           size="icon-lg"
@@ -64,7 +76,7 @@ export function InkBar() {
           disabled={!drawn}
           onClick={undoInk}
         >
-          <Undo2 />
+          <Undo2 aria-hidden />
         </Button>
       </Tip>
       <Tip label="Clear every stroke on this note">
@@ -86,7 +98,7 @@ export function InkBar() {
           aria-label="Stop drawing"
           onClick={() => setInk(null)}
         >
-          <X />
+          <X aria-hidden />
         </Button>
       </Tip>
     </div>

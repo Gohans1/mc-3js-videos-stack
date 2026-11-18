@@ -10,6 +10,7 @@ import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { addPreset, type Preset, PRESETS, SHAPES } from "./text";
+import { AssetSource } from "../openfilm/Source";
 
 const familyOf = (font?: string) =>
   S.tools?.titles?.fonts.find((f) => f.id === font)?.css ?? "system-ui, sans-serif";
@@ -91,7 +92,7 @@ function Look({ p }: { p: Preset }) {
     );
   if (it.kind !== "text")
     return (
-      <span aria-hidden className="text-title text-primary font-semibold">
+      <span aria-hidden className="text-title text-primary-text font-semibold">
         ◇
       </span>
     );
@@ -140,7 +141,8 @@ function Tile({ p, own }: { p: Preset; own?: boolean }) {
   );
 }
 
-export function TextLibrary() {
+export function TextLibrary() { return <AssetSource category="text"><NativeTextLibrary /></AssetSource>; }
+function NativeTextLibrary() {
   useStudio((s) => s.ready);
   const extraShapes: Preset[] = (S.tools?.titles?.shapes ?? [])
     .filter((s) => !SHAPES.some((b) => b.item.kind === s.id))

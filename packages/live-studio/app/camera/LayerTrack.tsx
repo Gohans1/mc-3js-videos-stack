@@ -1,22 +1,25 @@
-import { DURATION, SHOTS_OUT } from "film/scene";
 import { Eye, EyeOff, Lock, LockOpen, SlidersHorizontal } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 
+import { useActivity, useLit } from "../activity/activity";
+import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { Tip } from "../components/Tip";
 import { together } from "../core/doc";
+import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, useStudio } from "../core/store";
 import { FPS, makeSnapper, r3 } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { allClips, beatTimes, span } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
-import { drawPlayhead, sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import { isElementShown, onShownResize } from "../timeline/visible";
 import {
   addLayer,
   layerItems,
@@ -59,7 +62,7 @@ function attach(canvas: HTMLCanvasElement) {
   let boxes: Box[] = [],
     gesture: Gesture = { kind: "idle" };
   const draw = () => {
-    if (!canvas.getClientRects().length) return;
+    if (!isElementShown(canvas)) return;
     canvas.style.height = `${trackCount() * ROW}px`;
     const { g, w, h } = sized(canvas),
       { a, v } = view(),
@@ -101,10 +104,10 @@ function attach(canvas: HTMLCanvasElement) {
         g.roundRect(l + 1, y0 + 1, Math.max(0, r - l - 2), HEIGHT - 2, 3);
         g.stroke();
       }
+      paintActivityMark(g, "adjust", it.id, l + 2, y0 + HEIGHT - 2, r - l - 4);
       boxes.push({ id: it.id, x0, x1, y0, y1: y0 + HEIGHT });
     }
     g.globalAlpha = 1;
-    drawPlayhead(g, X(S.t), h);
   };
   const hit = (x: number, y: number) =>
     boxes.findLast((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1);
@@ -119,7 +122,10 @@ function attach(canvas: HTMLCanvasElement) {
       box = hit(x, y);
     if (S.playing) setPlaying(false);
     canvas.setPointerCapture(e.pointerId);
-    if (!box && onPlayhead(x, w, e.pointerType === "touch")) {
+    if (
+      (!box || (x > box.x0 + 6 && x < box.x1 - 6)) &&
+      onPlayhead(x, w, e.pointerType === "touch")
+    ) {
       gesture = { kind: "scrub" };
       holdView(true);
       return;
@@ -317,7 +323,11 @@ function attach(canvas: HTMLCanvasElement) {
   canvas.addEventListener("pointercancel", cancel);
   canvas.addEventListener("wheel", wheel, { passive: false });
   window.addEventListener("keydown", key);
+  const stopResize = onShownResize(canvas, draw);
+  const stopActivity = onClipActivity("adjust", draw);
   return () => {
+    stopActivity();
+    stopResize();
     marks.layers = () => {};
     inBox.layers = () => [];
     canvas.removeEventListener("pointerdown", down);
@@ -333,10 +343,11 @@ export function LayerTrack() {
   const ref = useRef<HTMLCanvasElement>(null),
     enabled = useStudio((s) => s.layers);
   useStudio((s) => s.layersRev);
+  const lit = useLit("tab:adjust"), lights = useActivity((state) => state.lit);
   useEffect(() => attach(ref.current!), []);
   return (
-    <div className={`col-span-2 mb-1 grid grid-cols-subgrid ${enabled ? "" : "hidden"}`}>
-      <ul aria-label="Adjustment tracks" className="border-track-line bg-track-head border-e">
+    <div className={`col-span-2 grid grid-cols-subgrid ${enabled ? "" : "hidden"}`}>
+      <ul data-ai-lit={lit || undefined} aria-label="Adjustment tracks" className="border-track-line bg-track-head border-e">
         {Array.from({ length: trackCount() }, (_, row) => {
           const track = trackCount() - row - 1,
             state = layerTrack(track),
@@ -347,7 +358,7 @@ export function LayerTrack() {
               f.tracks[track] = { ...f.tracks[track], [prop]: value || undefined };
             });
           return (
-            <li key={track} className="border-background flex h-7 items-center border-b">
+            <li key={track} data-ai-lit={(`track:adjust:${track}` in lights) || undefined} className="border-background flex h-7 items-center border-b">
               <Tip label={`${name}: select its clips`}>
                 <Button
                   variant="quiet"

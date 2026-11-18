@@ -20,10 +20,12 @@ import { Activity, createActivity } from "./activity.mjs";
 import { CLI_CATEGORIES, CLI_COMMANDS } from "./cli-catalog.ts";
 import { CliRunHttpError, createCliRunner, scanCliContext } from "./cli-runner.ts";
 import { CliTemplateUpsertSchema, openCliTemplates } from "./cli-templates.ts";
+import { mountCollaboration } from "./collaboration-api.mjs";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
+import { mountHistory } from "./history-api.mjs";
 import { LessonJevConfigSchema } from "./lesson-config.ts";
 import { openLessonFiles } from "./lesson-files.mjs";
 import {
@@ -34,6 +36,7 @@ import {
 } from "./lesson-inspector.mjs";
 import { writeLessonJson } from "./lesson-settings.mjs";
 import { noteNumbers } from "./notes.mjs";
+import { openFilmLut, openFilmResource, openOpenFilm } from "./openfilm.mjs";
 import { createPortsService } from "./ports.mjs";
 import { openVoiceLibrary } from "./voice-library.mjs";
 import {
@@ -54,8 +57,6 @@ import { srtAsWebVtt } from "./voice-playground-recordings.mjs";
 import { playgroundExtensions, speechRequestOptions } from "./voice-playground-routes.mjs";
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
-import { mountCollaboration } from "./collaboration-api.mjs";
-import { mountHistory } from "./history-api.mjs";
 
 const MIME = {
   ".gltf": "application/json",
@@ -435,6 +436,53 @@ export const createApi = (
   };
 
   const app = new Hono();
+  const openfilmPackage = film.PROJECT && join(film.PROJECT, "package.json");
+  const openfilm =
+    film.openfilm ??
+    (film.PROJECT
+      ? openOpenFilm(
+          film.PROJECT,
+          film.pkg?.["live-studio"] ??
+            (existsSync(openfilmPackage)
+              ? JSON.parse(readFileSync(openfilmPackage, "utf8"))["live-studio"]
+              : {}) ??
+            {},
+        )
+      : null);
+  app.get("/_openfilm/*", (c) => openFilmResource(c.req.raw) ?? c.notFound());
+  app.get("/api/openfilm", (c) => (openfilm ? c.json(openfilm.read()) : noSound(c)));
+  app.post(
+    "/api/openfilm",
+    bodyLimit({ maxSize: 20 * 1024 * 1024 }),
+    zValidator("json", SoundSave),
+    (c) => {
+      try {
+        const { base, data } = c.req.valid("json"),
+          result = openfilm.write(base, data);
+        return result.conflict
+          ? c.json(result, 409)
+          : result.problems
+            ? c.json(result, 400)
+            : c.json(result);
+      } catch (error) {
+        return c.json({ error: error.message }, 400);
+      }
+    },
+  );
+  app.post("/api/openfilm/use", bodyLimit({ maxSize: 1024 * 1024 }), async (c) => {
+    try {
+      return c.json(openfilm.use(await c.req.json()));
+    } catch (error) {
+      return c.json({ error: error.message }, 400);
+    }
+  });
+  app.post("/api/openfilm/lut", bodyLimit({ maxSize: 1024 * 1024 }), async (c) => {
+    try {
+      return c.json(openFilmLut(film.PROJECT, (await c.req.json()).asset));
+    } catch (error) {
+      return c.json({ error: error.message }, 400);
+    }
+  });
 
   // The page names the build it came from, so after the studio restarts it can tell whether it is still the current one
   let lastBuiltHtml = null,
@@ -1353,6 +1401,7 @@ export const createApi = (
       ["shots", film.shots],
       ["text", film.text],
       ["adjustment", film.adjustment],
+      ["openfilm", openfilm],
       ["timing", film.timing],
       ...film.keyFiles.map((k, i) => [`keys/${i}`, k]),
     ]).get(name);
@@ -1455,6 +1504,21 @@ export const createApi = (
     }
     try {
       const { run } = await runner.start(body);
+      const key = `cli:${run.runId}`;
+      activity.add({ say: `Running CLI: ${run.commandId}`, surface: "cli", job: { key } });
+      let unsubscribe;
+      unsubscribe = runner.subscribe(run.runId, Infinity, ({ event, data }) => {
+        if (event !== "done") return;
+        unsubscribe?.();
+        const stopped = data.status === "stopped";
+        const failed = !stopped && (data.status === "error" || data.exitCode !== 0);
+        activity.add({
+          say: `CLI ${stopped ? "stopped" : failed ? "failed" : "finished"}: ${run.commandId}`,
+          surface: "cli",
+          level: failed ? "fail" : undefined,
+          job: { key, end: true },
+        });
+      });
       return c.json(
         {
           runId: run.runId,

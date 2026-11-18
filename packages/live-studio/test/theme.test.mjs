@@ -10,19 +10,18 @@ const css = readFileSync(new URL("../app/index.css", import.meta.url), "utf8");
 const own = (scale) =>
   [...css.matchAll(new RegExp(`^\\s*--${scale}-([a-z]+):`, "gm"))].map((m) => m[1]);
 
-test("the theme names some steps of its own", () => {
-  assert.ok(own("text").length > 0);
-  assert.ok(own("shadow").length > 0);
-});
-
 test("a theme font size stays beside a text colour, and replaces another size", () => {
-  for (const n of own("text")) {
+  const sizes = own("text");
+  assert.ok(sizes.length > 0);
+  for (const n of sizes) {
     assert.equal(cn(`text-${n}`, "text-primary"), `text-${n} text-primary`, `text-${n}`);
     assert.equal(cn("text-sm", `text-${n}`), `text-${n}`, `text-${n}`);
   }
 });
 
 test("a theme shadow replaces another shadow", () => {
-  for (const n of own("shadow"))
+  const shadows = own("shadow");
+  assert.ok(shadows.length > 0);
+  for (const n of shadows)
     assert.equal(cn("shadow-sm", `shadow-${n}`), `shadow-${n}`, `shadow-${n}`);
 });

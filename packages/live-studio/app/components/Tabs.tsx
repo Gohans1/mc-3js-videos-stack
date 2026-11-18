@@ -24,7 +24,6 @@ interface TabsContextValue {
   registerTab: (value: string, el: HTMLButtonElement | null) => void;
   setListEl: (el: HTMLDivElement | null) => void;
   setIndicatorEl: (el: HTMLSpanElement | null) => void;
-  syncIndicator: () => void;
   syncTabStop: () => void;
 }
 
@@ -222,7 +221,6 @@ function Root({
       registerTab,
       setListEl,
       setIndicatorEl,
-      syncIndicator,
       syncTabStop,
     }),
     [
@@ -233,7 +231,6 @@ function Root({
       registerTab,
       setListEl,
       setIndicatorEl,
-      syncIndicator,
       syncTabStop,
     ],
   );

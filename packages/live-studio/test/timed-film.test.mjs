@@ -11,6 +11,28 @@ import { mapTimeline } from "../src/timing-data.mjs";
 import { layerClock, setTiming, timedDraw, timingClock } from "../src/timing-state.mjs";
 import { filmPlugin } from "../src/vite_film.mjs";
 
+test("custom async rendering receives the same source frame and layer clocks through Speed and Freeze", async () => {
+  setTiming({ speeds: [{ from: 0, to: 10, rate: 2 }], freezes: [{ at: 2, duration: 1 }] }, 10);
+  const source = Object.assign(
+    function (frame, clocks) {
+      assert.equal(this, undefined);
+      return { frame, layers: clocks.layers, visible: clocks.pictureVisible };
+    },
+    {
+      async renderFrame(frame, clocks) {
+        assert.equal(this, source);
+        await Promise.resolve();
+        return { frame, layers: clocks?.layers, visible: clocks?.pictureVisible };
+      },
+    },
+  );
+  const draw = timedDraw(source);
+  for (const heard of [0.5, 1.25, 2.5])
+    assert.deepEqual(await draw.renderFrame(heard), draw(heard));
+  assert.equal((await draw.renderFrame(0.5)).frame, 1);
+  assert.equal((await draw.renderFrame(1.25)).frame, 2);
+});
+
 test("a text or adjustment placed inside a freeze uses its own advancing clock in preview and render", () => {
   setTiming({ freezes: [{ at: 0, duration: 6 }] }, 10);
   const item = mapTimeline(
@@ -109,6 +131,12 @@ test("a relocated freeze samples its captured scene frame while unrelated layers
 });
 
 test("the built film exposes output times while camera and procedural motion sample the same source frame", async (t) => {
+  const previousWindow = globalThis.window;
+  globalThis.window = new EventTarget();
+  t.after(() => {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  });
   const dir = mkdtempSync(join(tmpdir(), "studio-timed-film-")),
     src = join(dir, "src");
   t.after(() => rmSync(dir, { recursive: true, force: true }));

@@ -45,6 +45,38 @@ test("dual evaluation measures each branch and verifies keyword retention throug
   expect(result.newCandidates).toBe(1);
 });
 
+test("dual evaluation retains entry-owned kind words and folds ranked sound families", async () => {
+  const entries: Entry[] = [
+    { id: "a", kind: "sfx", cat: "nature", title: "sound sound sound rain", about: "rain" },
+    { id: "b", kind: "sfx", cat: "nature", title: "rain rain", about: "rain" },
+    { id: "plain", kind: "bgm", cat: "warm", title: "Warm piano", about: "" },
+    { id: "score", kind: "bgm", cat: "warm", title: "Warm score", about: "" },
+    ...[1, 2].map((variant) => ({
+      id: `door-${variant}`,
+      kind: "sfx",
+      cat: "foley",
+      title: "Door slam",
+      about: "",
+      data: { family: "door", variant },
+    })),
+  ];
+  for (const [query, kind, ids] of [
+    ["sound rain", "sfx", ["a", "b"]],
+    ["sound", "sfx", ["a"]],
+    ["warm score", "bgm", ["score", "plain"]],
+    ["door slam", "sfx", ["door-1"]],
+  ] as const) {
+    const expected = ids.map((id) => assetKey(entries.find((entry) => entry.id === id)!));
+    const result = await evaluateDualCase(
+      { id: query, query, kind, language: "en", group: "fixture", relevant: expected },
+      entries,
+      async () => ({ hits: [], categories: [], notes: [] }),
+    );
+    expect(result.top.keyword, query).toEqual(expected);
+    expect(result.keywordUnchanged, query).toBe(true);
+  }
+});
+
 test("a stopped evaluation retains complete checkpoint rows and repairs only its unfinished tail", () => {
   const folder = mkdtempSync(join(tmpdir(), "dual-checkpoint-")),
     file = join(folder, "rows.jsonl");

@@ -1,16 +1,5 @@
+import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { EDIT } from "film/edit";
-// The camera row under the timeline, on the same seconds as the stretch above it, laid out as CapCut's main track: each shot is
-// a block (its name and length in the header) holding a diamond per camera key (camera/cam.ts) and, between two keys, the
-// camera's speed through that span as its ease spends it (high: fast, flat on the floor: standing still). A shot's In and Out
-// show as bands at the foot of its block, a Combo as a band the whole way. A click picks a shot (its Camera and Animation tabs)
-// and leaves the playhead where it is; the playhead moves only when grabbed by its line (a touch drag scrubs anywhere). A mouse
-// drag draws the box over the rows (timeline/rowbox.ts) that picks the keys it covers, Shift/Ctrl+click adds or drops one;
-// dragging a picked key moves them all (cam.ts groupRoom) with whatever else the box picked on other rows (timeline/across.ts),
-// Delete removes them. A diamond is dragged to retime it inside its
-// shot, snapping to frames, the playhead and words (Shift: no snap); a click on one brings the playhead to it. The gap between two blocks is the cut: it drags too when the film keeps its shots as data (cam.ts
-// rollCut), the shots on both sides giving and taking. Right-click a block for its menu (CameraTrack.tsx).
-// In split mode (blade.ts) a click splits the shot there: the playhead goes to it, so the new shot's first frame shows.
-import { DURATION, SHOTS_OUT } from "film/scene";
 
 import { cameraSpeed } from "../../src/camera-speed.mjs";
 import { timing, timingClock } from "../../src/timing-state.mjs";
@@ -26,6 +15,18 @@ import { BLADE_CURSOR } from "../components/cursor";
 import { together } from "../core/doc";
 import { easeFn } from "../core/ease";
 import { shotIndex } from "../core/film";
+// The camera row under the timeline, on the same seconds as the stretch above it, laid out as CapCut's main track: each shot is
+// a block (its name and length in the header) holding a diamond per camera key (camera/cam.ts) and, between two keys, the
+// camera's speed through that span as its ease spends it (high: fast, flat on the floor: standing still). A shot's In and Out
+// show as bands at the foot of its block, a Combo as a band the whole way. A click picks a shot (its Camera and Animation tabs)
+// and leaves the playhead where it is; the playhead moves only when grabbed by its line (a touch drag scrubs anywhere). A mouse
+// drag draws the box over the rows (timeline/rowbox.ts) that picks the keys it covers, Shift/Ctrl+click adds or drops one;
+// dragging a picked key moves them all (cam.ts groupRoom) with whatever else the box picked on other rows (timeline/across.ts),
+// Delete removes them. A diamond is dragged to retime it inside its
+// shot, snapping to frames, the playhead and words (Shift: no snap); a click on one brings the playhead to it. The gap between two blocks is the cut: it drags too when the film keeps its shots as data (cam.ts
+// rollCut), the shots on both sides giving and taking. Right-click a block for its menu (CameraTrack.tsx).
+// In split mode (blade.ts) a click splits the shot there: the playhead goes to it, so the new shot's first frame shows.
+import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, noSnap, say, set } from "../core/store";
@@ -34,7 +35,7 @@ import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
 import { bladeLine } from "../timeline/blade";
-import { drawPlayhead, keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
+import { keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
@@ -46,6 +47,7 @@ import {
   sourceShot,
   timingDoc,
 } from "../timeline/timing";
+import { isElementShown, onShownResize } from "../timeline/visible";
 import {
   animOf,
   clockOf,
@@ -352,7 +354,7 @@ const drawBlock = (
 
 export const drawCamRow = () => {
   const c = S.el?.camrow;
-  if (!c || !get().cam || !c.getClientRects().length) return;
+  if (!c || !get().cam || !isElementShown(c)) return;
   const { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(),
@@ -421,6 +423,9 @@ export const drawCamRow = () => {
     g.moveTo(cx + 3, cy - 4);
     g.lineTo(cx - 3, cy + 4);
     g.stroke();
+    const sourceStart = shotsDoc.data?.[i]?.t;
+    if (sourceStart !== undefined)
+      paintActivityMark(g, "transition", String(sourceStart), left + 2, TRANSITION_TOP + 2, right - left - 4);
     if (on && right - left > 18) {
       g.fillStyle = tone("pick");
       g.fillRect(left + 3, cy - 5, 2, 10);
@@ -488,7 +493,6 @@ export const drawCamRow = () => {
     g.fillStyle = tone("pick");
     g.fillRect(x, 0, 1, h);
   }
-  drawPlayhead(g, X(S.t), h);
 };
 const closePathAndFill = (g: CanvasRenderingContext2D, style: string) => {
   g.closePath();
@@ -554,6 +558,7 @@ const shotsInBox = (r: { x0: number; x1: number; y0: number; y1: number }) => {
 export const attachCamRow = () => {
   const c = S.el.camrow;
   marks.cam = drawCamRow;
+  onClipActivity("transition", drawCamRow);
   inBox.shots = shotsInBox;
   inBox.cam = (r) => {
     const shots = shotsInBox(r);
@@ -1017,7 +1022,7 @@ export const attachCamRow = () => {
     if (press) {
       const { shot, add } = press;
       press = null;
-      if (boxEnd()) return;
+      if (boxEnd(shot < 0 && e.type === "pointerup" ? e : undefined)) return;
       if (e.type === "pointerup" && !add) {
         if (shot < 0) {
           set(transitionSelection({ kind: "none" }, get().side));
@@ -1108,5 +1113,5 @@ export const attachCamRow = () => {
     if (was >= 0 || get().blade) drawCamRow();
   });
   c.addEventListener("wheel", timelineWheel, { passive: false });
-  new ResizeObserver(drawCamRow).observe(c);
+  onShownResize(c, drawCamRow);
 };

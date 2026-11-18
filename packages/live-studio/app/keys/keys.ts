@@ -3,6 +3,8 @@
 // (contract.mjs keyRows), so a film needs no setup beyond naming the file and the EDIT key it reads it from. Each change puts a
 // fresh copy in EDIT[that key], which the film reads every frame and caches on, so it is never edited in place.
 // Keys only move in time between the keys around them: their order is the film's.
+import { equalJson } from "../../src/merge-edits.mjs";
+import { lightEdit } from "../activity/activity";
 import { EDIT } from "film/edit";
 
 import { keyRows, rowAt } from "../../src/contract-keys.ts";
@@ -206,6 +208,18 @@ const ensureFiles = () => {
       doc: createTimedDoc<object>(`keys/${f}`, {
         label: x.file.split("/").pop()!,
         changed: () => changed(f),
+        received: (before, after) => {
+          if (!get().aiActivity) return;
+          const changed = rowsOf(f).filter((row) =>
+            !equalJson(rowAt(before, row.path), rowAt(after, row.path)),
+          );
+          lightEdit("keys", [`keys-file:${f}`, ...changed.map((row) => `keys-row:${row.id}`)]);
+          if (x.edit !== S.tools?.placed?.key) return;
+          const oldObjects = before as Record<string, unknown>;
+          const newObjects = after as Record<string, unknown>;
+          const names = Object.keys(newObjects).filter((name) => !equalJson(oldObjects[name], newObjects[name]));
+          lightEdit("objects", names.map((name) => `object:${name}`));
+        },
         saved: (keysSaved) => set({ keysSaved }),
         replaced: (was) => replaced(f, was),
       }),

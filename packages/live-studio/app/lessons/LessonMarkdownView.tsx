@@ -49,7 +49,7 @@ function RenderInlines({
           return (
             <code
               key={i}
-              className="bg-backdrop border-border/60 text-primary rounded border px-1 py-0.5 font-mono text-sm"
+              className="bg-backdrop border-border/60 text-primary-text rounded border px-1 py-0.5 font-mono text-sm"
             >
               {tok.text}
             </code>
@@ -58,7 +58,7 @@ function RenderInlines({
           return (
             <span
               key={i}
-              className="text-primary decoration-primary/50 underline decoration-from-font underline-offset-2"
+              className="text-primary-text decoration-primary/50 underline decoration-from-font underline-offset-2"
             >
               {tok.text}
             </span>
@@ -69,7 +69,7 @@ function RenderInlines({
             href={tok.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary decoration-primary/50 hover:decoration-primary underline decoration-from-font underline-offset-2"
+            className="text-primary-text decoration-primary/50 hover:decoration-primary underline decoration-from-font underline-offset-2"
           >
             {tok.text}
           </a>

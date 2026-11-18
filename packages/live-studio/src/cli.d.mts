@@ -3,6 +3,7 @@ export declare const cliArgs: (
   options?: string[] | null,
   words?: number,
   argv?: string[],
+  settings?: { helpWord?: boolean },
 ) => string[];
 export declare const numberArg: (
   name: string,

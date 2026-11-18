@@ -17,8 +17,10 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { runInNewContext } from "node:vm";
 
+import { build as buildCn } from "cn/build";
+
 import { openFilm, STUDIO } from "../src/film.mjs";
-import { buildPage } from "../src/page.mjs";
+import { buildPage, syncCnTables } from "../src/page.mjs";
 
 // A copy of the demo film, so saves here never touch the real one
 const dir = mkdtempSync(join(tmpdir(), "studio-page-"));
@@ -121,7 +123,7 @@ test(VENDOR_BUDGET_TEST, () => {
           head: { appendChild: (link) => links.add(link.href) },
         },
       });
-    const paths = [...links].filter((p) => /^\/_studio\/vendor-ui[-~]/.test(p));
+    const paths = [...links].filter((p) => /^\/_studio\/(?:vendor-ui[-~]|vendor-react-)/.test(p));
     assert.ok(paths.length > 0);
     const bytes = paths.reduce((sum, path) => {
       const file = join(page.dir, path);
@@ -223,4 +225,30 @@ test("vendor chunks stay cached across film edits with fresh .br and .gz sibling
     assert.equal(existsSync(join(code, `${v}.br`)), true, `clearOld evicted active ${v}.br`);
     assert.equal(existsSync(join(code, `${v}.gz`)), true, `clearOld evicted active ${v}.gz`);
   }
+});
+
+test("syncCnTables preserves existing CRLF/formatted file without spurious rewrites and matches app/index.css", async () => {
+  const cnDir = mkdtempSync(join(dir, "cn-sync-"));
+  const cssPath = join(STUDIO, "app/index.css");
+  const outPath = join(cnDir, "cn-tables.ts");
+
+  // 1. Checked-in app/lib/cn-tables.ts (formatted / CRLF) must match app/index.css without rewriting
+  const repoTables = readFileSync(join(STUDIO, "app/lib/cn-tables.ts"), "utf8");
+  const crlf = repoTables.replaceAll("\r\n", "\n").replaceAll("\n", "\r\n");
+  writeFileSync(outPath, crlf);
+  const beforeStat = statSync(outPath).mtimeMs;
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(await syncCnTables({ cssPath, outPath }), false);
+  assert.equal(readFileSync(outPath, "utf8"), crlf);
+  assert.equal(statSync(outPath).mtimeMs, beforeStat);
+
+  // 2. When outPath is missing or stale, syncCnTables writes fresh tables from buildCn
+  rmSync(outPath);
+  assert.equal(await syncCnTables({ cssPath, outPath }), true);
+  const refOut = join(cnDir, "ref-cn-tables.ts");
+  await buildCn({ cwd: STUDIO, css: cssPath, full: true, out: refOut });
+  assert.equal(
+    readFileSync(outPath, "utf8"),
+    readFileSync(refOut, "utf8").replaceAll("./ref-cn-tables.ts", "./cn-tables.ts"),
+  );
 });

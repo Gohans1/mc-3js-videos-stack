@@ -11,18 +11,63 @@ const SKILLS = fileURLToPath(new URL("../skills.mjs", import.meta.url));
 const run = (args, cwd = ROOT) =>
   spawnSync("bun", [SKILLS, ...args], { cwd, encoding: "utf8", timeout: 10000 });
 
+test("skills JSON supports discovery, selected content and resource paths without text wrappers", () => {
+  const list = run(["list", "--json"]);
+  assert.equal(list.status, 0, list.stderr);
+  assert.ok(JSON.parse(list.stdout).data.some((g) => g.name === "core"));
+  const selected = run(["get", "core", "--ref", "notes", "--ref", "notes.md", "--json"]);
+  assert.equal(selected.status, 0, selected.stderr);
+  const guide = JSON.parse(selected.stdout).data;
+  assert.deepEqual(
+    guide.files.map((f) => f.path),
+    ["references/notes.md"],
+  );
+  assert.equal(
+    guide.files[0].content,
+    readFileSync(join(DATA, "core/references/notes.md"), "utf8"),
+  );
+  assert.ok(guide.references.includes("references/sound.md"));
+  const resource = run(["path", "earshot", "--json"], join(ROOT, "templates/film"));
+  assert.equal(resource.status, 0, resource.stderr);
+  assert.equal(JSON.parse(resource.stdout).data.path, join(ROOT, ".claude/skills/earshot"));
+});
+
 test("skills rejects requests whose extra words or conflicting modes would be ignored", () => {
   for (const args of [
     ["list", "core"],
     ["list", "-1"],
     ["-1"],
     ["get", "core", "--ref", "sound", "--full"],
+    ["path", "core", "--ref", "sound"],
+    ["path", "core", "--full"],
   ]) {
     const r = run(args);
     assert.equal(r.status, 2, args.join(" "));
     assert.equal(r.stdout, "");
     assert.match(r.stderr, /list|--ref|--full/);
   }
+});
+
+test("skills path locates guide and agent-skill resources independently of the working directory", () => {
+  for (const cwd of [ROOT, join(ROOT, "templates/film")]) {
+    const directory = run(["path"], cwd);
+    assert.equal(directory.status, 0, directory.stderr);
+    assert.equal(directory.stdout.trim(), DATA);
+    for (const [name, expected] of [
+      ["core", join(DATA, "core")],
+      ["earshot", join(ROOT, ".claude/skills/earshot")],
+      ["real-sound", join(ROOT, ".claude/skills/real-sound")],
+    ]) {
+      const result = run(["path", name], cwd);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), expected);
+      assert.ok(readFileSync(join(result.stdout.trim(), "SKILL.md"), "utf8").length > 0);
+    }
+  }
+  const missing = run(["path", "nope"]);
+  assert.equal(missing.status, 2);
+  assert.equal(missing.stdout, "");
+  assert.match(missing.stderr, /no guide|no skill/);
 });
 
 test("repo-document recovery points to existing files from the caller's directory, including hidden directories", () => {

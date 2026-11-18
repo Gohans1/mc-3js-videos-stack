@@ -687,3 +687,87 @@ test("a cached hybrid query accepts a database path relative to the caller", asy
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+test("cached semantic search retains every eligible take in a sound family", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "semantic-family-"));
+  const file = join(folder, "index.sqlite");
+  const index = openIndex(file);
+  const entries: Entry[] = [1, 2].map((variant) => ({
+    kind: "sfx",
+    id: `take-${variant}`,
+    title: "Stone steps",
+    about: "footsteps",
+    cat: "foley",
+    data: { family: "footsteps", variant },
+  }));
+  try {
+    for (const [axis, entry] of entries.entries()) {
+      const asset = assetFromEntry(entry);
+      index.stage(asset, "fixture", [{ from: 0, to: 0 }]);
+      index.complete(index.pending(asset.key)[0]!, { vector: vector(axis), usage: {} });
+    }
+    await searchIndex(index, "quiet walk", new Set(entries.map(assetKey)), {
+      allowApi: true,
+      embed: async () => ({ vector: vector(1), usage: {} }),
+    });
+    const output = JSON.parse(
+      await findRun(
+        ["quiet walk", "--semantic", "--json", "--db", file],
+        entries,
+        undefined,
+        undefined,
+        favoriteLists(join(folder, "favorites")),
+      ),
+    );
+    expect(output.mode).toBe("hybrid");
+    expect(output.results[0].id).toBe("take-2");
+  } finally {
+    index.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("semantic hybrid and offline fallback page their ranked results before limiting", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "semantic-pagination-"));
+  const file = join(folder, "index.sqlite");
+  const index = openIndex(file);
+  const entries: Entry[] = ["a", "b", "c"].map((id) => ({
+    kind: "sfx",
+    id: `rain-${id}`,
+    title: "Rain",
+    about: "Rain",
+    cat: "weather",
+  }));
+  const favorites = favoriteLists(join(folder, "favorites"));
+  try {
+    for (const entry of entries) {
+      const asset = assetFromEntry(entry);
+      index.stage(asset, "fixture", [{ from: 0, to: 0 }]);
+      index.complete(index.pending(asset.key)[0]!, { vector: vector(0), usage: {} });
+    }
+    await searchIndex(index, "rain", new Set(entries.map(assetKey)), {
+      allowApi: true,
+      embed: async () => ({ vector: vector(0), usage: {} }),
+    });
+    for (const db of [file, join(folder, "absent.sqlite")]) {
+      const args = ["rain", "--semantic", "--json", "--db", db];
+      const all = JSON.parse(
+        await findRun([...args, "-n", "3"], entries, undefined, undefined, favorites),
+      );
+      const second = JSON.parse(
+        await findRun(
+          [...args, "-n", "1", "--offset", "1"],
+          entries,
+          undefined,
+          undefined,
+          favorites,
+        ),
+      );
+      expect(second.mode).toBe(db === file ? "hybrid" : "keyword-fallback");
+      expect(second.results.map((entry: Entry) => entry.id)).toEqual([all.results[1].id]);
+    }
+  } finally {
+    index.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});

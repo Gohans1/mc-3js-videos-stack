@@ -16,12 +16,12 @@ Commands help an AI discover capabilities, locate results and verify its work. R
 
 Load details on demand, following agent-browser skills get core. Keep discovery stubs thin and avoid copying complete flag lists into workflow guides.
 
-| Backend gốc | Cách dùng |
+| Native backend | How to use it |
 | --- | --- |
-| Kiểm chứng phim | Bun run skills get core --ref review chọn lệnh theo ý đồ; framecheck --json trả kết quả đo, sheet frames kèm timestamp giải mã. |
-| FFmpeg tùy chọn | media ffmpeg list --json là inventory gọn; schema <tool> lấy parser thật, contract -- --static giữ contract đầy đủ |
-| Chuyển argv | Catalog chỉ cho field passthrough khai báo rõ nhận option; lệnh thường vẫn chặn cờ ẩn trong positional, không qua shell |
-| Kiểm thay đổi backend | Giữ LICENSE/upstream.json và hash nguồn, không sửa vendor; cập nhật bản pin rồi chạy lại test và media đại diện |
+| Verify a film | Run bun run skills get core --ref review to choose a check. framecheck --json returns measurements, and sheet frames reports decoded timestamps. |
+| Discover FFmpeg tools | Use media ffmpeg list --json for the tool list, schema <tool> for its native arguments, and contract -- --static for the full contract. |
+| Pass native arguments | The catalog forwards options only through fields marked as passthrough. Other positionals reject hidden flags. Arguments go directly to the process without a shell. |
+| Update the backend | Keep LICENSE, upstream.json, and the source hash. Update the upstream pin without editing vendor files, then rerun tests and check representative media. |
 
 ## Contract
 
@@ -34,6 +34,7 @@ Load details on demand, following agent-browser skills get core. Keep discovery 
 | JSON output | Support --json where structured results help; stdout contains one JSON value, diagnostics go to stderr |
 | Results | Name findings, times, files/rows or artifact paths; add next: only for useful follow-ups |
 | Missing data | Name the command or action that supplies it |
+| Language | Write CLI help, diagnostics, and guides in plain English. Preserve user text and provider data |
 | Costs | Help states credits, downloads and long work; voice generation and assets:semantic build preview until --yes; voice --dry-run always previews |
 | Small external searches | Ordinary find may query OpenFilm; --offline uses its cache. find --jev uses paid quota without --yes; do not extend these exceptions to unrelated operations |
 | Long work | Set a timeout and checkpoint completed results when resuming is possible |

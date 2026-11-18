@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 
+import { ROOT } from "../../../scripts/vault.mjs";
 import { SoundTimeline } from "./contract.ts";
 import { openTimelineFile } from "./timeline_file.mjs";
 import { assertInsideDir } from "./voice-map.mjs";
@@ -356,7 +357,10 @@ export const findVaults = (project, conf) => {
       for (const key of ["root", "externalRoot"])
         if (vcfg[key] != null && typeof vcfg[key] !== "string")
           throw new Error(`${vf}: "${key}" must be a folder path`);
-      const vroot = resolve(d, vcfg.root ?? "vault");
+      const vroot = resolve(
+        d,
+        (relative(ROOT, d) === "" ? process.env.MC_VAULT_ROOT : undefined) ?? vcfg.root ?? "vault",
+      );
       const mcLocal = join(vroot, "mc-sound");
       const mcDir = existsSync(mcLocal) ? mcLocal : null;
       const sndDir = existsSync(join(vroot, "sound")) ? join(vroot, "sound") : null;

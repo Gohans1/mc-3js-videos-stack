@@ -2,12 +2,12 @@ import { Move3d, Rotate3d, Scale3d } from "lucide-react";
 
 import { Button } from "../components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import { engine } from "../core/engine";
 import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { keyOf } from "../keys/keys";
 import type { KeyRef } from "../keys/slice";
 import { seek } from "../playback/transport";
-import { nativeTransform, setGizmo } from "./placed";
 import type { TransformMode } from "./targets";
 
 const modes = [
@@ -18,7 +18,7 @@ const modes = [
 
 export function TargetTransformTools({ selected }: { selected: KeyRef }) {
   const mode = useStudio((s) => s.gizmo),
-    binding = nativeTransform(selected);
+    binding = engine.nativeTransform(selected);
   if (!binding) return null;
   const t = keyOf(selected).t;
   const active = binding.axes[mode] ? mode : Object.keys(binding.axes)[0];
@@ -32,7 +32,7 @@ export function TargetTransformTools({ selected }: { selected: KeyRef }) {
         onValueChange={(v: string[]) => {
           if (v[0]) {
             seek(t);
-            setGizmo(v[0] as TransformMode);
+            engine.setGizmo(v[0] as TransformMode);
           }
         }}
         spacing={1}

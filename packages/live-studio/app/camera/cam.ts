@@ -4,11 +4,12 @@
 // A key's time moves only inside its shot. A cut belongs to the film's SHOTS as much as to the camera, so a cut key moves only
 // when the film keeps its shots as data (shots.ts), and then both move together (rollCut), and a shot can be split at the playhead
 // or merged with the one before (splitShot, removeKey on a cut), CapCut's Split and its undo.
+import { lightEdit } from "../activity/activity";
 import { EDIT, toSource } from "film/edit";
-import { DURATION, SHOTS_OUT } from "film/scene";
 
 import { together } from "../core/doc";
 import type { Ease } from "../core/ease";
+import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
@@ -50,6 +51,7 @@ const changed = () => {
 const doc = createTimedDoc<CamKey[]>("cam", {
   label: "camera",
   changed,
+  received: () => lightEdit("cam"),
   saved: (camSaved) => set({ camSaved }),
   replaced: (was) => {
     if (was?.length !== keys.length && (get().camKey !== null || get().camPicks.length))

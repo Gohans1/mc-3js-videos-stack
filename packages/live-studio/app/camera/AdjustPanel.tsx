@@ -1,5 +1,5 @@
 import type { Grade } from "film-stage/grade";
-import { ADJUSTMENTS, type BasicKey } from "film-stage/grade-color";
+import { ADJUSTMENTS, type BasicKey } from "film-stage/grade-meta";
 import { resolveGrade } from "film-stage/looks";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -34,6 +34,7 @@ import {
   Segmented,
   SliderRow,
 } from "../components/inspector";
+import { TabStage } from "../components/Motion";
 import { S } from "../core/state";
 import { get, say, set, useStudio } from "../core/store";
 import {
@@ -184,146 +185,148 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
             {error}
           </Callout>
         )}
-        {part === "hsl" ? (
-          <HSLAdjust shot={shot} grade={resolved} disabled={locked} />
-        ) : part === "curves" ? (
-          <CurvesAdjust shot={shot} grade={resolved} disabled={locked} />
-        ) : part === "wheels" ? (
-          <WheelsAdjust shot={shot} grade={resolved} disabled={locked} />
-        ) : (
-          <>
-            <Section
-              title="Adjust"
-              on={resolved.enabled !== false}
-              disabled={locked}
-              onCheck={(on) =>
-                change(shot, (g) => {
-                  g.enabled = on;
-                })
-              }
-              right={<Reset label="Reset adjustments" onClick={() => resetGrade(shot)} />}
-            >
-              {grade.look && (
-                <FieldRow
-                  label="Look"
-                  nav={
-                    <Reset
-                      label="Clear look"
-                      disabled={locked}
-                      onClick={() =>
-                        change(shot, (g) => {
-                          delete g.look;
-                        })
-                      }
-                    />
-                  }
-                >
-                  <span className="text-ui truncate font-mono text-xs" title={grade.look}>
-                    {grade.look}
-                  </span>
-                </FieldRow>
-              )}
-              {(["Color", "Lightness", "Effects"] as const).map((group) => (
-                <div key={group} className="flex flex-col gap-1">
-                  <h3 className="text-muted-foreground border-b pb-2 text-xs">{group}</h3>
-                  {ADJUSTMENTS.filter((x) => x.group === group).map((x) => (
-                    <SliderRow
-                      key={x.id}
-                      label={x.title}
-                      value={resolved.basic?.[x.id] ?? 0}
-                      min={x.min}
-                      max={x.max}
-                      step={1}
-                      digits={0}
-                      origin={0}
-                      compact
-                      gradient={x.group === "Color" ? x.id : undefined}
-                      disabled={resolved.enabled === false}
-                      doc={doc}
-                      preview={(v) => value(shot, x.id, v, false)}
-                      save={(v) => value(shot, x.id, v)}
-                    />
-                  ))}
-                </div>
-              ))}
-            </Section>
-            <Section
-              title="LUT"
-              right={
-                <Reset
-                  label="Remove LUT"
-                  disabled={!resolved.lut}
-                  onClick={() =>
-                    change(shot, (g) => {
-                      delete g.lut;
-                    })
-                  }
-                />
-              }
-            >
-              <Select
-                value={resolved.lut?.url ?? "none"}
-                items={[
-                  { value: "none", label: "None" },
-                  ...library.luts.map((l) => ({ value: l.url, label: l.name })),
-                ]}
-                onValueChange={(url) => {
-                  const lut = library.luts.find((l) => l.url === url);
-                  setError("");
-                  if (!lut)
-                    change(shot, (g) => {
-                      delete g.lut;
-                    });
-                  else
-                    void putGrade(shot, { ...grade, lut: { ...lut, amount: 100 } }).catch(
-                      (e: Error) => setError(e.message),
-                    );
-                }}
+        <TabStage activeKey={part} order={["basic", "hsl", "curves", "wheels"]}>
+          {part === "hsl" ? (
+            <HSLAdjust shot={shot} grade={resolved} disabled={locked} />
+          ) : part === "curves" ? (
+            <CurvesAdjust shot={shot} grade={resolved} disabled={locked} />
+          ) : part === "wheels" ? (
+            <WheelsAdjust shot={shot} grade={resolved} disabled={locked} />
+          ) : (
+            <>
+              <Section
+                title="Adjust"
+                on={resolved.enabled !== false}
+                disabled={locked}
+                onCheck={(on) =>
+                  change(shot, (g) => {
+                    g.enabled = on;
+                  })
+                }
+                right={<Reset label="Reset adjustments" onClick={() => resetGrade(shot)} />}
               >
-                <SelectTrigger aria-label="LUT" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {library.luts.map((lut) => (
-                    <SelectItem key={lut.url} value={lut.url}>
-                      {lut.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div>
-                <ImportLut onError={setError} />
-              </div>
-              {resolved.lut && (
-                <SliderRow
-                  compact
-                  label="Intensity"
-                  value={resolved.lut.amount ?? 100}
-                  min={0}
-                  max={100}
-                  step={1}
-                  digits={0}
-                  doc={doc}
-                  preview={(v) =>
-                    change(
-                      shot,
-                      (g) => {
+                {grade.look && (
+                  <FieldRow
+                    label="Look"
+                    nav={
+                      <Reset
+                        label="Clear look"
+                        disabled={locked}
+                        onClick={() =>
+                          change(shot, (g) => {
+                            delete g.look;
+                          })
+                        }
+                      />
+                    }
+                  >
+                    <span className="text-ui truncate font-mono text-xs" title={grade.look}>
+                      {grade.look}
+                    </span>
+                  </FieldRow>
+                )}
+                {(["Color", "Lightness", "Effects"] as const).map((group) => (
+                  <div key={group} className="flex flex-col gap-1">
+                    <h3 className="text-muted-foreground border-b pb-2 text-xs">{group}</h3>
+                    {ADJUSTMENTS.filter((x) => x.group === group).map((x) => (
+                      <SliderRow
+                        key={x.id}
+                        label={x.title}
+                        value={resolved.basic?.[x.id] ?? 0}
+                        min={x.min}
+                        max={x.max}
+                        step={1}
+                        digits={0}
+                        origin={0}
+                        compact
+                        gradient={x.group === "Color" ? x.id : undefined}
+                        disabled={resolved.enabled === false}
+                        doc={doc}
+                        preview={(v) => value(shot, x.id, v, false)}
+                        save={(v) => value(shot, x.id, v)}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </Section>
+              <Section
+                title="LUT"
+                right={
+                  <Reset
+                    label="Remove LUT"
+                    disabled={!resolved.lut}
+                    onClick={() =>
+                      change(shot, (g) => {
+                        delete g.lut;
+                      })
+                    }
+                  />
+                }
+              >
+                <Select
+                  value={resolved.lut?.url ?? "none"}
+                  items={[
+                    { value: "none", label: "None" },
+                    ...library.luts.map((l) => ({ value: l.url, label: l.name })),
+                  ]}
+                  onValueChange={(url) => {
+                    const lut = library.luts.find((l) => l.url === url);
+                    setError("");
+                    if (!lut)
+                      change(shot, (g) => {
+                        delete g.lut;
+                      });
+                    else
+                      void putGrade(shot, { ...grade, lut: { ...lut, amount: 100 } }).catch(
+                        (e: Error) => setError(e.message),
+                      );
+                  }}
+                >
+                  <SelectTrigger aria-label="LUT" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {library.luts.map((lut) => (
+                      <SelectItem key={lut.url} value={lut.url}>
+                        {lut.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div>
+                  <ImportLut onError={setError} />
+                </div>
+                {resolved.lut && (
+                  <SliderRow
+                    compact
+                    label="Intensity"
+                    value={resolved.lut.amount ?? 100}
+                    min={0}
+                    max={100}
+                    step={1}
+                    digits={0}
+                    doc={doc}
+                    preview={(v) =>
+                      change(
+                        shot,
+                        (g) => {
+                          g.lut = { ...(g.lut ?? resolved.lut!), amount: v };
+                        },
+                        false,
+                      )
+                    }
+                    save={(v) =>
+                      change(shot, (g) => {
                         g.lut = { ...(g.lut ?? resolved.lut!), amount: v };
-                      },
-                      false,
-                    )
-                  }
-                  save={(v) =>
-                    change(shot, (g) => {
-                      g.lut = { ...(g.lut ?? resolved.lut!), amount: v };
-                    })
-                  }
-                />
-              )}
-            </Section>
-          </>
-        )}
+                      })
+                    }
+                  />
+                )}
+              </Section>
+            </>
+          )}
+        </TabStage>
       </fieldset>
       <Footer>
         {showLibrary && (
@@ -336,7 +339,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
             }
           >
             <DialogTrigger render={<Button variant="secondary" size="sm" />}>Presets</DialogTrigger>
-            <DialogContent>
+            <DialogContent className="flex max-h-[85dvh] flex-col">
               <DialogHeader>
                 <DialogTitle>Adjustment</DialogTitle>
                 <DialogDescription>Choose a saved preset or LUT for this shot.</DialogDescription>

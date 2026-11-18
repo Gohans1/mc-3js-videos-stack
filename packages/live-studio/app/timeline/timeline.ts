@@ -57,6 +57,7 @@ export const marks = {
   cam: () => {}, // and camera/camrow.ts its own
   keys: () => {}, // and keys/keyrows.ts the key rows
   layers: () => {},
+  openfilm: () => {},
   text: () => {}, // and text/textrow.ts the text tracks
 };
 
@@ -832,11 +833,17 @@ const syncPlayhead = () => {
   }
   if (line.hidden) line.hidden = false;
 };
-export const drawTimelines = () => {
+export const drawTimelineActivity = () => {
   if (!S.el?.detail) return; // no timeline in this layout (a phone's, PhoneApp)
   drawRuler();
   drawDetail();
+};
+
+export const drawTimelines = () => {
+  if (!S.el?.detail) return;
+  drawTimelineActivity();
   marks.layers();
+  marks.openfilm();
   marks.text();
   marks.cam();
   marks.keys();

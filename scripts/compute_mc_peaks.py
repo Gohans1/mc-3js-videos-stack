@@ -74,7 +74,11 @@ def write_atomic(target: Path, payload: dict):
 
 
 def main():
-    vault = Path(sys.argv[1]).resolve()
+    import argparse
+    parser = argparse.ArgumentParser(description="Build resumable waveform peaks for mc, bgm and sfx in a vault sound directory.")
+    parser.add_argument("vault", type=Path, help="Sound directory; writes PEAKS.json and .peaks-cache.json, checkpoints every 500 files")
+    args = parser.parse_args(["--help"] if sys.argv[1:2] == ["help"] else None)
+    vault = args.vault.resolve()
     out_file = vault / "PEAKS.json"
     cache_file = vault / ".peaks-cache.json"
 

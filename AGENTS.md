@@ -1,16 +1,15 @@
 # Human's Reminder (Above All Rules)
 
 - Thỏa sức sáng tạo, vọc vạch, bay nhảy, làm bất kì điều gì m thích để làm ra 3js videos đẳng cấp nhất
-
-## Live-studio
-
-- live-studio chỉ là live-preview cho con người, mục đích của nó chỉ là để dev có công cụ feedback hiệu quả hơn cho bạn, sinh ra là để match/đuổi-kịp sự sáng tạo của bạn, đừng vì quá gò bó mình vào bất kì format/luật-lệ nào của nó mà mất đi sự tự do và sáng tạo. Nó (KHÔNG phải rào chắn) mà là BÀN ĐẠP(hãy coi nó như thể là starter pack) để giúp bạn vươn đến tiềm năng cao nhất để làm ra VIDEOS đẳng cấp nhất có thể, chứ không phải để gò bó bạn bằng những luật lệ quan liêu cồng kềnh. Bạn là chúa của sự sáng tạo và đẳng cấp, không có gì có thể ngăn cản.
-- Trong live-studio chưa có format/luật-lệ/tools/khả-năng/cơ-hội/templates/packages/etc... để bạn làm ra videos đẳng cấp? -> vượt lên trên nó, cứ thoải mái mà custom, nhớ báo cáo lại là được. (ĐỪNG ỷ lại vào đồ có sẵn mà quên mất khả năng sáng tạo tự code 3D đỉnh cao)
-
-# Skills
-
-- Luôn luôn dùng SKILL(và CLI): `mc-films` C:\Users\ADMIN\Desktop\gohans-monorepo-3js-mc\.claude\skills\mc-films
-- Sound/âm-thanh/SFX/BGM/Voice/Audio/etc...: `earshot`; `real-sound`
+- Khi làm video nào, nhớ đọc AGENTS.md của root project film của nó và tuân thủ
+## SYSTEM RULES for AI Agent đang BUILD project
+- ưu tiên linh hoạt, ko mất data, thêm sửa xóa các kiểu dễ bảo trì dễ mở rộng dễ tùy biến, best practice, ko trick lỏ ko hack bẩn ko lách luật,
+- Tiêu chí là AI first, AI phải dc tự do sáng tạo làm mọi thứ ko gò bó, con người và UI theo sau. Nhưng vẫn phải cực sướng cho người và AI nhé.
+- ưu tiên PC(dev dùng màn 1920x1080), tạm thời kệ mobile nhé
+- Nếu task có liên quan, thì hãy nhớ để ý là có cần sửa CLI hay docs hay skill hay .md hay help ,etc... nói chung là liên quan đến ghi chú,gợi nhớ, guide, cho AI các kiểu ko nhé, nhớ tuân thủ theo format cấu trúc và cách viết văn của file đó đừng tự ý viết thả rác bừa bãi theo cách viết riêng hay tự chế gì riêng nhé. tự biết là loại tài liệu nào viết cho AI hay viết cho người mà viết cho phù hợp văn phong nhé (tham khảo cách `agent-browser` làm CLI và hệ thống docs trong CLI của nó)
+- you own codebase, t giao cho m toàn quyền tự do lựa chọn và quyết định và triển khai bất kì điều gì m muốn/thích, miễn là làm xong việc, và điều đó là tốt nhất cho t và AI trong hiện tại và tương lai.
+- cứ tiếp tục công việc đi, t giao cho m toàn quyền đấy. 
+- Research nếu cần và nhớ verify kĩ. 
 
 # Bản đồ
 

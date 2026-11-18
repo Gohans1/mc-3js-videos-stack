@@ -538,7 +538,7 @@ describe("/api/cli routes, security & process runtime", () => {
     expect(unconfJson.code).toBe("CONFIRM_REQUIRED");
     expect(unconfJson.confirmMessage).toBeTruthy();
 
-    const noHelp = await postRun({ commandId: "mc:slim-jar", mode: "help" });
+    const noHelp = await postRun({ commandId: "voice:genvoice", mode: "help" });
     expect(noHelp.status).toBe(400);
     expect((await noHelp.json()).code).toBe("NO_HELP");
 

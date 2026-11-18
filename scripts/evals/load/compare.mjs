@@ -2,11 +2,17 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const [before, after, output] = process.argv.slice(2);
-if (![before, after, output].every((s) => s && /^[\w-]+$/.test(s)))
-  throw new Error(
-    "Usage: bun scripts/evals/load/compare.mjs <before-run> <after-run> <output-stem>",
-  );
+import { cliArgs } from "../../../packages/live-studio/src/cli.mjs";
+
+const HELP = `Compare recorded Studio load evaluations; run at the repo root.
+  bun scripts/evals/load/compare.mjs <before-run> <after-run> <output-stem>
+Reads scripts/evals/load/runs/<run>; writes <output-stem>.json and .csv there.
+Run IDs and output stem accept letters, digits, underscores and hyphens. No browser or network work.`;
+const [before, after, output] = cliArgs(HELP, [], 3);
+if (![before, after, output].every((s) => s && /^[\w-]+$/.test(s))) {
+  console.error(HELP);
+  process.exit(2);
+}
 const root = join(import.meta.dir, "runs");
 const file = (run, name) => readFileSync(join(root, run, name));
 const json = (run, name) => JSON.parse(file(run, name));
