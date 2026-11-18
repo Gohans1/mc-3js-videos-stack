@@ -156,8 +156,8 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
     ],
   },
   {
-    title: "AI output wording",
-    hint: "Changes the AI output preview. Matching files must be available to see their labels.",
+    title: "Note formatting",
+    hint: "Formats the note sent to the AI. Include lesson files to preview their labels.",
     view: "ai",
     fields: [
       { key: "sectionLabel", label: "Lesson label", help: "Printed before a matched file." },

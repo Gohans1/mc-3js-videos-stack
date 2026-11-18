@@ -82,7 +82,7 @@ export function TimelinePanel({ bind, size }: { bind: Bind; size: number | null 
     <div
       ref={bind("timeline")}
       className={cn(
-        "bg-background upright:mt-0 sideways:mt-0 upright:in-data-inspector-active:hidden sideways:in-data-inspector-active:hidden relative col-[1/-1] row-start-3 mt-1.5 grid h-[var(--edit-h,max(20rem,42dvh))] min-w-0 grid-cols-[7.5rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-lg px-3 pt-2 pb-3 select-none in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-inspector-active:hidden in-data-review:hidden in-data-wide:col-[2/-1]",
+        "bg-background upright:mt-0 sideways:mt-0 upright:in-data-lessons-focused:hidden sideways:in-data-lessons-focused:hidden relative col-[1/-1] row-start-3 mt-1.5 grid h-[var(--edit-h,max(20rem,42dvh))] min-w-0 grid-cols-[7.5rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-lg px-3 pt-2 pb-3 select-none in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-[2/-1]",
         "upright:h-auto upright:flex-none upright:grid-cols-[5.5rem_minmax(0,1fr)] upright:grid-rows-none upright:overflow-visible upright:rounded-none upright:pt-0 sideways:col-[1] sideways:block sideways:h-auto sideways:rounded-none sideways:pt-0 sideways:pb-1.5",
         size === 0 ? "pb-0" : "upright:min-h-0 sideways:min-h-0 min-h-72",
       )}

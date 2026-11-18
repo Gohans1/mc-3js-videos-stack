@@ -541,7 +541,7 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       const timingRowBtn = [...document.querySelectorAll("[data-lessons-col='/'] button[data-lesson-row]")].find((b) =>
         b.textContent?.trim().startsWith("timing"),
       );
-      const timingLabel = timingRowBtn.querySelector("span.truncate");
+      const timingLabel = timingRowBtn.querySelector("span.wrap-anywhere");
       const timingDelWrap = timingRowBtn.nextElementSibling;
       const timingDelBtn = timingDelWrap.querySelector("button");
       const sideIdleDelW = Math.round(timingDelWrap.getBoundingClientRect().width);
@@ -653,9 +653,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     })()`);
 
     assert.equal(res.libBeforeW, 800);
-    // Side-column hover-reveal delete control collapses cleanly when idle so filenames stay readable, expanding on focus
-    assert.equal(res.sideIdleDelW, 0);
-    assert.ok(res.sideFocusDelW >= 24);
+    assert.ok(res.sideIdleDelW >= 24);
+    assert.equal(res.sideFocusDelW, res.sideIdleDelW);
     assert.ok(
       res.sideLabelW >= 40 && res.sideLabelW >= res.sideLabelScrollW,
       `Expected readable filename width: ${res.sideLabelW} < ${res.sideLabelScrollW}`,
@@ -697,5 +696,29 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.ok(Math.abs(res.sideSettledL0Left - res.sideSettledPaneLeft) < 1);
     assert.equal(res.sideOverlayGone, true);
     assert.deepEqual(pageErrors, []);
+  });
+
+  test("a narrowed desktop reader stays visible at 200% text size and ArrowLeft returns to the lesson row", async () => {
+    const result = await view.evaluate(`(async () => {
+      const { lessons, setDock } = window.__DECK_TEST__;
+      const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      setDock("start");
+      lessons.setState({ folder: [], open: "all:camera.md" });
+      await frame();
+      const pane = document.querySelector("[data-testid=lessons-pane]");
+      pane.style.width = "260px";
+      await frame();
+      document.documentElement.style.fontSize = "32px";
+      await frame();
+      const back = pane.querySelector("[data-lesson-back]");
+      const aside = pane.getBoundingClientRect();
+      const rect = back.getBoundingClientRect();
+      const visible = rect.left >= aside.left && rect.right <= aside.right;
+      back.focus();
+      back.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      await frame();
+      return { visible, open: lessons.getState().open, focused: document.activeElement.dataset.lessonRow };
+    })()`);
+    assert.deepEqual(result, { visible: true, open: null, focused: "file:all:camera.md" });
   });
 });

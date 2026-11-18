@@ -25,7 +25,7 @@ export function LessonChanges({
           </Button>
         </div>
       </div>
-      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2">
         <div className="mx-auto w-full max-w-[42rem]">
           {news.hunks.map((h) => {
             let lineCursor = h.line;
@@ -58,7 +58,7 @@ export function LessonChanges({
                         aria-hidden
                         className={cn(
                           "w-2.5 flex-none font-mono select-none",
-                          r.kind === "added" ? "text-ok" : "text-destructive",
+                          r.kind === "added" ? "text-ok-text" : "text-destructive-text",
                         )}
                       >
                         {r.kind === "added" ? "+" : r.kind === "removed" ? "−" : ""}

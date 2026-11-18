@@ -703,3 +703,24 @@ test("loadLessons prunes stale seen snapshots when files are removed outside the
   await loadLessons();
   assert.equal(lessons.getState().seen["all:temp.md"], undefined);
 });
+
+test("a failed first load allows retry and a failed refresh keeps the loaded lessons", async () => {
+  lessons.setState({ loaded: false, files: [], edits: {} });
+  getHandler = async () => new Response(null, { status: 503 });
+  await loadLessons();
+  assert.equal(lessons.getState().loadFailed, true);
+  assert.equal(lessons.getState().loaded, false);
+
+  resetHandlers();
+  await loadLessons();
+  const loaded = lessons.getState();
+  assert.equal(loaded.loadFailed, false);
+  assert.equal(loaded.files.length, 2);
+
+  getHandler = async () => {
+    throw new Error("offline");
+  };
+  await loadLessons();
+  assert.equal(lessons.getState().loadFailed, true);
+  assert.equal(lessons.getState().files, loaded.files);
+});

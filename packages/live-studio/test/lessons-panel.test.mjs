@@ -214,7 +214,7 @@ describe("LessonsPanel rendered component behavior", () => {
     assert.match(html, /data-lessons-col="dir:craft"/);
     assert.match(html, /data-lessons-col="dir:craft\/ik"/);
     assert.match(html, /data-lesson-content="all:craft\/ik\/foot\.md"/);
-    assert.doesNotMatch(html, /aria-label="Back to the lessons"/);
+    assert.match(html, /aria-label="Back to lesson list"/);
 
     setPanelState({
       dir: "lessons",
@@ -234,7 +234,7 @@ describe("LessonsPanel rendered component behavior", () => {
     );
     assert.match(rootOpenHtml, /data-lessons-col="\/"/);
     assert.match(rootOpenHtml, /data-lesson-content="all:camera\.md"/);
-    assert.doesNotMatch(rootOpenHtml, /aria-label="Back to the lessons"/);
+    assert.match(rootOpenHtml, /aria-label="Back to lesson list"/);
   });
 
   test("renders compact file sheet with Back button when desktop=false", () => {
@@ -253,7 +253,7 @@ describe("LessonsPanel rendered component behavior", () => {
     });
 
     const html = renderToStaticMarkup(createElement(panelMod.LessonsPanel, { desktop: false }));
-    assert.match(html, /aria-label="Back to the lessons"/);
+    assert.match(html, /aria-label="Back to lesson list"/);
     assert.match(html, /data-lesson-content="all:camera\.md"/);
     assert.doesNotMatch(html, /data-lessons-col=/);
 
@@ -324,11 +324,11 @@ describe("LessonsPanel rendered component behavior", () => {
         }),
       ),
     );
-    assert.match(html, /aria-label="Unsaved words inside folder"/);
-    assert.doesNotMatch(html, /aria-label="Changed inside folder"/);
+    assert.match(html, />Draft</);
+    assert.doesNotMatch(html, />Updated</);
   });
 
-  test("LessonColumnRow prefers changed indicator over draft indicator on folders with unseen AI updates", () => {
+  test("LessonColumnRow shows both unseen updates and drafts in a folder", () => {
     const html = renderToStaticMarkup(
       createElement(
         "ul",
@@ -353,8 +353,8 @@ describe("LessonsPanel rendered component behavior", () => {
         }),
       ),
     );
-    assert.match(html, /aria-label="Changed inside folder"/);
-    assert.doesNotMatch(html, /aria-label="Unsaved words inside folder"/);
+    assert.match(html, />Updated</);
+    assert.match(html, />Draft</);
   });
 
   test("LessonColumnRow renders accessible scope badge and delete confirmation control", () => {
@@ -403,9 +403,9 @@ describe("LessonsPanel rendered component behavior", () => {
     };
     const validHtml = renderToStaticMarkup(createElement(formMod.NewLessonForm, baseProps));
     assert.match(validHtml, /value="craft\/"/);
-    assert.match(validHtml, /role="radio"[^>]*aria-checked="true"[^>]*>Film</);
-    assert.match(validHtml, /role="radio"[^>]*aria-checked="false"[^>]*>Global</);
-    assert.match(validHtml, />This film only \(project lessons\/\)\. One file per topic\.</);
+    assert.match(validHtml, /role="radio"[^>]*aria-checked="true"[^>]*>This film</);
+    assert.match(validHtml, /role="radio"[^>]*aria-checked="false"[^>]*>Every film</);
+    assert.match(validHtml, />Use letters, numbers, hyphens or underscores\./);
     assert.match(validHtml, />Create</);
     assert.doesNotMatch(validHtml, /role="alert"/);
 
@@ -450,7 +450,7 @@ describe("LessonsPanel rendered component behavior", () => {
     assert.match(html, /aria-label="Delete craft\/walk\.md \(This film\)"/);
   });
 
-  test("L0 side column renders scope filter radio counts alongside open note sheet", () => {
+  test("L0 side column renders a scope select alongside an open lesson", () => {
     setPanelState({
       dir: "lessons",
       projectDir: "films/cell-break/lessons",
@@ -466,12 +466,10 @@ describe("LessonsPanel rendered component behavior", () => {
     });
 
     const html = renderToStaticMarkup(createElement(panelMod.LessonsPanel, { desktop: true }));
-    assert.match(html, /role="radiogroup"[^>]*aria-label="Filter lessons by scope"/);
+    assert.match(html, /<button[^>]*aria-label="Filter lessons by scope"[^>]*>/);
     assert.match(html, /data-lessons-col="\/"/);
     assert.match(html, /data-lesson-content="all:camera\.md"/);
     assert.match(html, />All \(3\)</);
-    assert.match(html, />Film \(1\)</);
-    assert.match(html, />Global \(2\)</);
   });
 
   test("ConfirmDeleteButton exposes accessible label and attachArmedDeleteDismiss only disarms on outside interactions or Escape", () => {

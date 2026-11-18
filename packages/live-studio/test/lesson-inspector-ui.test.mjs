@@ -226,7 +226,7 @@ test("mounted Inspector keeps previews free, runs only after opt-in, reacts to l
       `[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`,
     );
   await wait("document.getElementById('inspect-note-text')");
-  await click("AI output");
+  await click("Note for AI");
   expect(await view.evaluate("document.getElementById('inspect-new-path')")).toBeNull();
   expect(await view.evaluate("document.body.textContent.includes('Try lesson edits')")).toBe(false);
   await view.evaluate(`(() => {
@@ -390,7 +390,7 @@ test("the full 960px Studio shell reserves multiline Inspector output and restor
     [...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Deck').click();
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     return {off:off.height,on:on.height,stable:off.top===on.top&&off.height===on.height,
-      restored:!document.querySelector('[data-inspector-active]')&&!!document.querySelector('[aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom"]')?.getBoundingClientRect().height};
+      restored:!document.querySelector('[data-lessons-focused]')&&!!document.querySelector('[aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom"]')?.getBoundingClientRect().height};
   })()`);
   expect(result.off).toBeGreaterThanOrEqual(180);
   expect(result.on).toBeGreaterThanOrEqual(180);
@@ -533,7 +533,7 @@ test("a stored folded panel cannot hide the focused Inspector workspace", async 
     await view.evaluate("localStorage.setItem('studio.lessonsWidth','0')");
     await navigateFixture("?shell");
     await waitFor(
-      "document.querySelector('[data-inspector-output]')?.textContent.includes('Preview ready')",
+      "document.querySelector('[data-inspector-output]')?.textContent.includes('Add a note to preview')",
     );
     expect(
       await view.evaluate(
@@ -576,9 +576,9 @@ test("Save failures survive a later dry response and retry Save without blocking
   })()`);
   try {
     await waitFor(
-      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Save'&&!b.disabled)",
+      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Save CLI settings'&&!b.disabled)",
     );
-    await clickButton("Save");
+    await clickButton("Save CLI settings");
     await waitFor("document.body.textContent.includes('QA settings unavailable')");
     const named = await view.evaluate(
       "document.querySelector('[data-inspector-controls]').textContent.includes('Settings were not saved')",
@@ -612,7 +612,7 @@ test("Save failures survive a later dry response and retry Save without blocking
     ).toBe(false);
     await clickButton("Retry save");
     await waitFor(
-      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Saved'&&b.disabled)",
+      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Settings saved'&&b.disabled)",
     );
     expect(await view.evaluate("window.saveProbe.calls")).toBe(2);
     expect(
@@ -683,3 +683,52 @@ test.each([
     }
   },
 );
+
+test("the Inspector includes only files from the chosen lesson scope", async () => {
+  await view.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 1920,
+    height: 1080,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await navigateFixture("");
+  await waitFor(
+    "document.querySelector('#inspect-scope') && !document.querySelector('#inspect-scope').disabled",
+  );
+  await view.evaluate(`(() => {
+    const session = window.inspectTest.session;
+    session.setState({ config: { ...session.getState().config, scopeFilter: "film" } });
+    [...document.querySelectorAll("summary")].find(s => s.textContent.includes("Lesson files")).parentElement.open = true;
+  })()`);
+  await waitFor("document.body.textContent.includes('Files: 0')");
+  expect(await view.evaluate("document.querySelectorAll('[data-inspector-file]').length")).toBe(0);
+  expect(
+    await view.evaluate(
+      `[...document.querySelectorAll("summary")].find(s => s.textContent.includes("Lesson files")).textContent`,
+    ),
+  ).toContain("0 of 0");
+});
+
+test("a reader remains usable at 200% desktop magnification", async () => {
+  await view.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 960,
+    height: 540,
+    deviceScaleFactor: 2,
+    mobile: false,
+  });
+  await navigateFixture("?shell");
+  await waitFor("window.inspectTest && document.querySelector('[data-inspector-output]')");
+  await view.evaluate(`(() => {
+    const { lessons, studio } = window.inspectTest;
+    studio.setState({ side: "lessons" });
+    lessons.setState({ subTab: "deck", open: "all:camera.md" });
+  })()`);
+  await waitFor("document.querySelector('[data-lessons-focused] [data-lesson-content]')");
+  const visible = await view.evaluate(`(() => {
+    const sheet = document.querySelector("[data-lesson-content]");
+    const edit = [...sheet.querySelectorAll("[role=radio]")].find(button => button.textContent.trim() === "Edit");
+    const { x, y, width, height } = edit.getBoundingClientRect();
+    return edit.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+  })()`);
+  expect(visible).toBe(true);
+});

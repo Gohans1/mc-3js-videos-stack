@@ -19,7 +19,7 @@ import {
 import type { Bind, Elements } from "./core/state";
 import { useStudio } from "./core/store";
 import { useDeckShrinkLatch } from "./lessons/deck-latch";
-import { useLessons } from "./lessons/lessons";
+import { lessonTrailKey, useLessons } from "./lessons/lessons";
 import { ReviewRoom } from "./notes/ReviewRoom";
 import { Stage } from "./picture/Stage";
 import { useBoot } from "./shell/boot";
@@ -113,7 +113,8 @@ export function App() {
     if (!cliSelected && cliPanelMode === "expanded") cliStore.setState({ panelMode: "embedded" });
   }, [cliSelected, cliPanelMode]);
   const inspectorActive = useLessons((s) => s.subTab === "inspector");
-  const focusedInspector = !showLibrary && side === "lessons" && inspectorActive;
+  const focusedLessons =
+    !showLibrary && side === "lessons" && (inspectorActive || (desktop && vh < 640));
   const targetBounds = clampSplitterLayout({
     vw,
     vh,
@@ -124,20 +125,28 @@ export function App() {
     rawReviewW: reviewW,
     editMin: EDIT_MIN,
   });
-  const lessonTrailKey = useLessons((s) => `${s.folder.join("/")}\0${s.open ?? ""}`);
+  const trailKey = useLessons(lessonTrailKey);
+  const animateDeckFold = useLessons((s) => s.foldingTrail === trailKey);
   const desiredLibPx =
     targetBounds.libW === 0 ? 0 : Math.min(targetBounds.libW ?? 400, targetBounds.libMax);
   const desiredSidePx =
     targetBounds.sideW === 0 ? 0 : Math.min(targetBounds.sideW ?? 360, targetBounds.sideMax);
   const libLatch = useDeckShrinkLatch({
     desiredW: desiredLibPx,
-    trailKey: lessonTrailKey,
-    active: showLibrary && lib === "lessons" && targetBounds.libW !== 0,
+    trailKey,
+    animate: animateDeckFold,
+    active: !inspectorActive && showLibrary && lib === "lessons" && targetBounds.libW !== 0,
   });
   const sideLatch = useDeckShrinkLatch({
     desiredW: desiredSidePx,
-    trailKey: lessonTrailKey,
-    active: showSideOnRight && desktop && side === "lessons" && targetBounds.sideW !== 0,
+    trailKey,
+    animate: animateDeckFold,
+    active:
+      !inspectorActive &&
+      showSideOnRight &&
+      desktop &&
+      side === "lessons" &&
+      targetBounds.sideW !== 0,
   });
   const bounds =
     libLatch.lockW !== null || sideLatch.lockW !== null
@@ -173,7 +182,7 @@ export function App() {
           data-cli-expanded={cliExpanded ? (showLibrary ? "library" : "side") : undefined}
           data-side-folded={
             (desktop &&
-              !focusedInspector &&
+              !focusedLessons &&
               (showSideOnRight || showDetails) &&
               bounds.sideW === 0) ||
             undefined
@@ -182,7 +191,7 @@ export function App() {
           data-edit-folded={(desktop && bounds.editH === 0) || undefined}
           data-wide={review || cliExpanded ? undefined : wideAttr}
           data-review={review || undefined}
-          data-inspector-active={focusedInspector || undefined}
+          data-lessons-focused={focusedLessons || undefined}
           className="bg-backdrop upright:gap-0 upright:bg-background upright:p-0 sideways:gap-0 sideways:bg-background sideways:p-0 upright:flex upright:flex-col sideways:grid-cols-[minmax(0,1fr)_min(36%,320px)] grid h-dvh grid-cols-[minmax(0,1fr)_min(var(--side-w,360px),var(--side-max,calc(100%_-_378px)))] grid-rows-[minmax(0,1fr)_auto_auto] gap-x-1.5 overflow-hidden p-1.5 text-sm data-cli-expanded:grid data-cli-expanded:grid-cols-[minmax(0,1fr)] data-cli-expanded:grid-rows-[minmax(0,1fr)] data-review:grid-cols-[min(var(--review-w,max(34rem,52%)),var(--review-max,calc(100%_-_378px)))_minmax(0,1fr)] data-review:grid-rows-[minmax(0,1fr)_auto] data-[wide=2]:grid-cols-[min(var(--lib-w,400px),var(--lib-max,calc(100%_-_378px)))_minmax(0,1fr)] data-[wide=3]:grid-cols-[min(var(--lib-w,400px),var(--lib-max,calc(100%_-_644px)))_minmax(0,1fr)_minmax(0,min(var(--side-w,340px),var(--side-max,calc(100%_-_644px))))]"
         >
           <Stage bind={bind} />
@@ -195,7 +204,7 @@ export function App() {
           {review && <ReviewRoom />}
           <PasteAttributes />
           {/* Full-height Library on the left in wide mode; timeline pushed right beside it */}
-          <div className="upright:hidden sideways:hidden pointer-events-none relative col-[1/-1] row-start-3 in-data-edit-folded:-top-[5px] in-data-inspector-active:hidden in-data-review:hidden in-data-wide:col-[2/-1] in-data-cli-expanded:hidden in-data-cli-side:col-[1]">
+          <div className="upright:hidden sideways:hidden pointer-events-none relative col-[1/-1] row-start-3 in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-edit-folded:-top-[5px] in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-[2/-1]">
             <Splitter
               label="Timeline height"
               across
@@ -259,7 +268,7 @@ export function App() {
           {(showSideOnRight || showDetails) && (
             <div
               ref={sideCell}
-              className="upright:hidden sideways:hidden pointer-events-none relative z-30 col-start-2 row-span-2 row-start-1 in-data-inspector-active:hidden in-data-review:hidden in-data-wide:col-start-3 in-data-cli-expanded:hidden in-data-cli-side:row-span-3"
+              className="upright:hidden sideways:hidden pointer-events-none relative z-30 col-start-2 row-span-2 row-start-1 in-data-cli-expanded:hidden in-data-cli-side:row-span-3 in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-start-3"
             >
               <Splitter
                 key={lessonsWideSide ? "lessons-side" : "side"}

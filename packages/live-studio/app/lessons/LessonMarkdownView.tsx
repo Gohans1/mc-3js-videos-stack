@@ -1,6 +1,7 @@
-import { Check } from "lucide-react";
+import { Check, Pencil } from "lucide-react";
 import { useMemo } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -15,13 +16,7 @@ const HEAD_COLOR: Record<number, string> = {
   6: "text-md-h6 text-base/[1.4] font-semibold uppercase tracking-[0.05em] text-balance mt-2.5 first:mt-0",
 };
 
-function RenderInlines({
-  tokens,
-  allowLinks = true,
-}: {
-  tokens: readonly InlineToken[];
-  allowLinks?: boolean;
-}) {
+function RenderInlines({ tokens }: { tokens: readonly InlineToken[] }) {
   return (
     <>
       {tokens.map((tok, i) => {
@@ -49,19 +44,10 @@ function RenderInlines({
           return (
             <code
               key={i}
-              className="bg-backdrop border-border/60 text-primary rounded border px-1 py-0.5 font-mono text-sm"
+              className="bg-backdrop border-border/60 text-primary-text rounded border px-1 py-0.5 font-mono text-sm"
             >
               {tok.text}
             </code>
-          );
-        if (!allowLinks)
-          return (
-            <span
-              key={i}
-              className="text-primary decoration-primary/50 underline decoration-from-font underline-offset-2"
-            >
-              {tok.text}
-            </span>
           );
         return (
           <a
@@ -69,7 +55,7 @@ function RenderInlines({
             href={tok.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary decoration-primary/50 hover:decoration-primary underline decoration-from-font underline-offset-2"
+            className="text-primary-text decoration-primary/50 hover:decoration-primary underline decoration-from-font underline-offset-2"
           >
             {tok.text}
           </a>
@@ -87,25 +73,25 @@ function HeadingBlock({
   onJumpEdit?: (line: number) => void;
 }) {
   const cls = HEAD_COLOR[block.depth] ?? HEAD_COLOR[4];
-  const content = (
-    <button
-      type="button"
-      onClick={() => onJumpEdit?.(block.line)}
-      aria-label={`Edit "${block.title}" at line ${block.line}`}
-      title={`Edit at line ${block.line}`}
-      className="focus-visible:ring-ring inline-flex max-w-full cursor-pointer items-baseline gap-1.5 rounded text-start outline-none hover:opacity-85 focus-visible:ring-2"
-    >
-      <span className="text-balance wrap-anywhere">
-        <RenderInlines tokens={block.inlines} allowLinks={false} />
-      </span>
-    </button>
-  );
   const level = Math.min(6, Math.max(1, block.depth));
   const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   return (
-    <Tag data-line={block.line} className={cls}>
-      {content}
-    </Tag>
+    <div className={cn(cls, "flex items-start gap-2")}>
+      <Tag data-line={block.line} className="min-w-0 flex-1 text-balance wrap-anywhere">
+        <RenderInlines tokens={block.inlines} />
+      </Tag>
+      {onJumpEdit && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Edit “${block.title}” at line ${block.line}`}
+          title={`Edit at line ${block.line}`}
+          onClick={() => onJumpEdit(block.line)}
+        >
+          <Pencil aria-hidden />
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -226,7 +212,7 @@ export function LessonMarkdownView({
               </thead>
               <tbody>
                 {b.rows.map((r, ri) => (
-                  <tr key={ri} className="border-border/50 border-t hover:bg-white/[0.03]">
+                  <tr key={ri} className="border-border/50 hover:bg-surface-subtle border-t">
                     {b.headers.map((_, ci) => {
                       const cell = r[ci] ?? "";
                       return (

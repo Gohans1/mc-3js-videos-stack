@@ -20,7 +20,7 @@ import type { InspectorView, InspectResult } from "./inspector-types";
 
 export function InspectorCode({ children }: { children: string }) {
   return (
-    <pre className="bg-backdrop text-foreground border-border max-h-96 overflow-auto overscroll-contain rounded-md border p-3 font-mono text-sm/relaxed break-words whitespace-pre-wrap">
+    <pre className="bg-backdrop text-foreground border-border max-h-96 overflow-auto overscroll-contain rounded-md border p-3 font-mono text-sm/relaxed wrap-anywhere whitespace-pre-wrap">
       {children}
     </pre>
   );
@@ -82,6 +82,8 @@ export function inspectorPreviewText(result: InspectResult, view: InspectorView)
 }
 
 export function InspectorPreview({
+  hasNote,
+  allFilesExcluded,
   result,
   previous,
   view,
@@ -91,6 +93,8 @@ export function InspectorPreview({
   error,
   failedRun,
 }: {
+  hasNote: boolean;
+  allFilesExcluded: boolean;
   result: InspectResult | null;
   previous?: InspectResult;
   view: InspectorView;
@@ -100,8 +104,9 @@ export function InspectorPreview({
   error: string;
   failedRun: boolean;
 }) {
-  const text = result ? inspectorPreviewText(result, view) : "";
-  const before = previous ? inspectorPreviewText(previous, view) : "";
+  const awaitingNote = view === "ai" && !hasNote;
+  const text = result && !awaitingNote ? inspectorPreviewText(result, view) : "";
+  const before = previous && !awaitingNote ? inspectorPreviewText(previous, view) : "";
   const lines = useMemo(
     () => (before ? diffLines(before, text) : [{ value: text, added: false, removed: false }]),
     [before, text],
@@ -149,61 +154,64 @@ export function InspectorPreview({
         )}
       >
         <h3 className="sr-only">Live preview</h3>
-        <div className="scroll-fade-x flex items-center justify-between gap-2 overflow-x-auto overscroll-x-contain">
+        <div className="scroll-fade-x sideways:flex-nowrap sideways:overflow-x-auto upright:flex-nowrap upright:overflow-x-auto flex flex-wrap items-center gap-2 overscroll-x-contain">
           <ToggleGroup
             variant="segment"
             aria-label="Preview content"
+            className="sideways:max-w-none sideways:flex-nowrap upright:max-w-none upright:flex-nowrap max-w-full flex-wrap"
             value={[view]}
             onValueChange={(v) => {
               if (v[0] === "ai" || v[0] === "lessons") onViewChange(v[0]);
             }}
           >
             <ToggleGroupItem value="ai" tone="ai">
-              AI output
+              Note for AI
             </ToggleGroupItem>
             <ToggleGroupItem value="lessons" tone="source">
               Jev input
             </ToggleGroupItem>
           </ToggleGroup>
-          <Select
-            value={view === "ai" || view === "lessons" ? null : view}
-            items={details}
-            onValueChange={(v) => {
-              if (details.some((d) => d.value === v)) onViewChange(v as InspectorView);
-            }}
-          >
-            <SelectTrigger
-              size="readable"
-              aria-label="Detailed preview"
-              className="w-20 max-w-28 min-w-20 flex-1"
+          <div className="sideways:min-w-32 upright:min-w-32 flex min-w-[min(100%,8rem)] flex-1 items-center justify-end gap-2">
+            <Select
+              value={view === "ai" || view === "lessons" ? null : view}
+              items={details}
+              onValueChange={(v) => {
+                if (details.some((d) => d.value === v)) onViewChange(v as InspectorView);
+              }}
             >
-              <SelectValue placeholder="More" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {details.map((d) => (
-                  <SelectItem key={d.value} value={d.value}>
-                    {d.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Copy preview"
-            disabled={!text || updating || Boolean(error)}
-            onClick={copy}
-          >
-            <Copy />
-          </Button>
+              <SelectTrigger
+                size="readable"
+                aria-label="Detailed preview"
+                className="max-w-40 min-w-0 flex-1"
+              >
+                <SelectValue placeholder="More views" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {details.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Copy preview"
+              disabled={!text || updating || Boolean(error)}
+              onClick={copy}
+            >
+              <Copy aria-hidden />
+            </Button>
+          </div>
         </div>
         <div className="flex flex-col gap-1">
           <p className="sr-only">{titles[view]}</p>
           <p
             role="status"
-            className="text-muted-foreground text-xs/relaxed @min-[700px]/inspector:text-sm/relaxed"
+            className="text-muted-foreground text-xs/relaxed tabular-nums @min-[700px]/inspector:text-sm/relaxed"
           >
             {error ? (
               failedRun ? (
@@ -217,6 +225,8 @@ export function InspectorPreview({
               ) : (
                 "Loading preview…"
               )
+            ) : awaitingNote ? (
+              "Add a note to preview"
             ) : result ? (
               <>
                 {previous && <span className="sr-only">{change + ". "}</span>}
@@ -246,14 +256,18 @@ export function InspectorPreview({
         aria-busy={updating}
         data-inspector-result
         ref={scroller}
-        className="focus-visible:ring-ring min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-4 outline-none focus-visible:ring-2"
+        className="focus-visible:ring-ring min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-3 outline-none focus-visible:ring-2"
       >
-        {!result ? (
+        {awaitingNote ? (
+          <p className="text-muted-foreground text-sm/relaxed">
+            Write or choose a note to see what the AI receives.
+          </p>
+        ) : !result ? (
           <p className="text-muted-foreground text-sm/relaxed">
             The preview uses the real lessons in Deck. Editing here never calls Jev automatically.
           </p>
         ) : (
-          <pre className="max-w-[75ch] font-mono text-sm/relaxed break-words whitespace-pre-wrap">
+          <pre className="max-w-[72ch] font-mono text-sm/relaxed wrap-anywhere whitespace-pre-wrap">
             {text
               ? lines
                   .filter((part) => !part.removed)
@@ -266,13 +280,16 @@ export function InspectorPreview({
                       {part.value}
                     </span>
                   ))
-              : "No lesson files in this scope. Add or edit lessons in Deck."}
+              : allFilesExcluded
+                ? "Every lesson file in this scope is excluded. Select Include all in scope or reselect files."
+                : "No lesson files in this scope. Add or edit lessons in Deck."}
           </pre>
         )}
       </div>
       <div className="border-border text-muted-foreground flex flex-none flex-wrap gap-x-3 gap-y-1 border-t px-3 py-1 text-xs/relaxed tabular-nums @min-[700px]/inspector:px-4">
         <span className="hidden @min-[20rem]/inspector:inline">
-          Files: <strong className="text-primary font-semibold">{result?.pool.length ?? 0}</strong>
+          Files:{" "}
+          <strong className="text-primary-text font-semibold">{result?.pool.length ?? 0}</strong>
         </span>
         <span
           className={

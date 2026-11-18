@@ -9,7 +9,7 @@ const textareaVariants = cva(
     variants: {
       variant: {
         inspector:
-          "border-input-border bg-input focus-visible:ring-ring/30 px-3 py-2 text-sm/relaxed focus-visible:ring-2 pointer-coarse:text-base",
+          "border-input-border bg-backdrop focus-visible:ring-ring/30 px-3 py-2 text-sm/relaxed focus-visible:ring-2 pointer-coarse:text-base",
         default:
           "border-input bg-backdrop text-ui/relaxed focus-visible:ring-ring/30 px-2 py-2 focus-visible:ring-2",
         note: "border-primary bg-background text-title/normal focus-visible:ring-primary sideways:px-2 sideways:py-1.5 px-2.5 py-2 focus-visible:ring-1 pointer-coarse:text-base",

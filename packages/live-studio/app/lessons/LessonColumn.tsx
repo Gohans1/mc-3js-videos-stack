@@ -20,12 +20,20 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import { Segmented } from "../components/inspector";
 import { SearchBox } from "../components/SearchBox";
-import { ConfirmDeleteButton, SCOPE_LABEL, SCOPE_SHORT } from "./lesson-ui";
-import { type LessonFile, type LessonScope, type LessonScopeFilter } from "./lessons";
+import { ConfirmDeleteButton, SCOPE_LABEL } from "./lesson-ui";
+import { type LessonFile, type LessonScope, type LessonScopeFilter, loadLessons } from "./lessons";
 import { parseLessonHeadings } from "./markdown";
 import { NewLessonForm } from "./NewLessonForm";
 import {
@@ -91,6 +99,7 @@ export function LessonColumnView({
   layout,
   activeOpen,
   loaded,
+  loadFailed,
   isSearching,
   query,
   setQuery,
@@ -111,6 +120,7 @@ export function LessonColumnView({
   naming,
   setNaming,
   submitted,
+  openExisting,
   setSubmitted,
   errMsg,
   onCreateLesson,
@@ -128,6 +138,7 @@ export function LessonColumnView({
   layout: LessonDeckLayout;
   activeOpen: string | null;
   loaded: boolean;
+  loadFailed?: boolean;
   isSearching: boolean;
   query: string;
   setQuery: (q: string) => void;
@@ -148,6 +159,7 @@ export function LessonColumnView({
   naming: string | null;
   setNaming: (v: string) => void;
   submitted: boolean;
+  openExisting?: boolean;
   setSubmitted: (b: boolean) => void;
   errMsg: string | null;
   onCreateLesson: () => void;
@@ -171,12 +183,17 @@ export function LessonColumnView({
   const stepped = layout.showAncestors && col.depth > 0 && layout.mode !== "compact-file";
   const parentParts = col.parts.slice(0, -1);
   const parentName = parentParts.at(-1) ?? "lessons";
+  const scopeOptions = [
+    { value: "both" as const, label: `All (${filesCount})` },
+    { value: "film" as const, label: `This film (${filmCount})` },
+    { value: "all" as const, label: `Every film (${allCount})` },
+  ];
 
   return (
     <section
       ref={sectionRef}
       data-lessons-col={col.key}
-      aria-label={`Level ${col.depth}: ${col.title}`}
+      aria-label={col.title}
       onClick={(e) => {
         if (
           !shouldFoldBlankAreaClick({
@@ -208,40 +225,41 @@ export function LessonColumnView({
         isSoleColumn
           ? "min-w-0 flex-1"
           : isSideColumn
-            ? cn("sticky left-(--deck-left) z-(--deck-z) mt-(--deck-top) flex-none", sideWidthClass)
-            : "z-(--deck-z) mt-(--deck-top) min-w-64 flex-1",
+            ? cn(
+                "sticky left-(--deck-left) z-(--deck-z) mt-(--deck-top) flex-none @max-[19rem]/lesson-deck:hidden",
+                sideWidthClass,
+              )
+            : "z-(--deck-z) mt-(--deck-top) min-w-64 flex-1 @max-[19rem]/lesson-deck:mt-0 @max-[19rem]/lesson-deck:min-w-0",
         col.depth % 2 === 1 ? "bg-card" : "bg-background",
-        stepped && "shadow-sheet rounded-ss-xl border-s border-t",
+        stepped &&
+          "shadow-sheet rounded-ss-xl border-s border-t @max-[19rem]/lesson-deck:rounded-none @max-[19rem]/lesson-deck:border-0 @max-[19rem]/lesson-deck:shadow-none",
         stepped && (isLeafList ? "border-primary/45" : "border-border/85"),
         !stepped && !isSoleColumn && "border-border/80 border-e",
       )}
     >
-      <header className="border-border/60 flex h-10 flex-none items-center gap-1.5 border-b px-2.5">
-        {!layout.showAncestors && col.depth > 0 && (
+      <header className="border-border/60 flex min-h-10 flex-none items-center gap-1.5 border-b px-2.5 py-1">
+        {col.depth > 0 && (
           <Button
             variant="ghost"
             size="icon-sm"
             aria-label={`Back to ${parentName}`}
             title={`Back to ${parentName}`}
-            onClick={() => onFoldTo(parentParts, true)}
+            onClick={(e) => onFoldTo(parentParts, e.detail > 0)}
           >
             <ChevronLeft aria-hidden />
           </Button>
         )}
-        <span className="bg-muted text-muted-foreground flex-none rounded px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums">
-          L{col.depth}
-        </span>
         {showDeeperBackCue ? (
           <button
             type="button"
-            onClick={() => onFocusFolder(col.parts, true)}
+            onClick={(e) => onFocusFolder(col.parts, e.detail > 0)}
             title={`Focus folder ${col.title}`}
-            className="text-foreground hover:bg-muted/70 focus-visible:ring-ring studio-press text-title/[1.3] min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-start font-semibold outline-none focus-visible:ring-2"
+            className="text-foreground hover:bg-muted/70 focus-visible:ring-ring studio-press text-title/[1.3] min-w-0 flex-1 rounded px-1.5 py-0.5 text-start font-semibold wrap-anywhere outline-none focus-visible:ring-2"
           >
             {col.title}
           </button>
         ) : (
-          <span className="text-foreground text-title/[1.3] min-w-0 flex-1 truncate font-semibold">
+          <span className="text-foreground text-title/[1.3] min-w-0 flex-1 font-semibold wrap-anywhere">
             {col.title}
           </span>
         )}
@@ -251,6 +269,7 @@ export function LessonColumnView({
               variant="secondary"
               size="sm"
               aria-expanded={showFormHere}
+              data-new-lesson
               onClick={onToggleForm}
             >
               <Plus aria-hidden data-icon="inline-start" />
@@ -266,6 +285,7 @@ export function LessonColumnView({
                   col.parts.length ? `New lesson in ${col.parts.join("/")}` : "New lesson"
                 }
                 aria-expanded={showFormHere}
+                data-new-lesson
                 onClick={onToggleForm}
               >
                 <Plus aria-hidden />
@@ -276,38 +296,47 @@ export function LessonColumnView({
 
       {showRootControls && (hasProject || filmCount > 0) && (
         <div className="flex-none px-2.5 pt-2 pb-1">
-          <Segmented<LessonScopeFilter>
-            label="Filter lessons by scope"
-            value={activeFilter}
-            fit={compactControls}
-            className={cn("tabular-nums", !compactControls && "[&_[role=radio]]:text-sm")}
-            items={
-              compactControls
-                ? [
-                    {
-                      id: "both",
-                      title: `All (${filesCount})`,
-                      ariaLabel: `All lessons (${filesCount})`,
-                    },
-                    {
-                      id: "film",
-                      title: `Film (${filmCount})`,
-                      ariaLabel: `This film (${filmCount})`,
-                    },
-                    {
-                      id: "all",
-                      title: `Global (${allCount})`,
-                      ariaLabel: `Every film (${allCount})`,
-                    },
-                  ]
-                : [
-                    { id: "both", title: `All (${filesCount})` },
-                    { id: "film", title: `This film (${filmCount})` },
-                    { id: "all", title: `Every film (${allCount})` },
-                  ]
-            }
-            onChange={onChangeFilter}
-          />
+          {!compactControls && (
+            <Segmented<LessonScopeFilter>
+              label="Filter lessons by scope"
+              animateIndicator={false}
+              value={activeFilter}
+              className="tabular-nums @max-[19rem]/lesson-deck:hidden [&_[role=radio]]:text-sm"
+              items={scopeOptions.map(({ value, label }) => ({ id: value, title: label }))}
+              onChange={onChangeFilter}
+            />
+          )}
+          <div
+            className={cn(
+              "tabular-nums",
+              !compactControls && "hidden @max-[19rem]/lesson-deck:block",
+            )}
+          >
+            <Select
+              value={activeFilter}
+              items={scopeOptions}
+              onValueChange={(value) => {
+                if (value) onChangeFilter(value);
+              }}
+            >
+              <SelectTrigger
+                aria-label="Filter lessons by scope"
+                size="readable"
+                className="w-full"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {scopeOptions.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       )}
 
@@ -336,6 +365,7 @@ export function LessonColumnView({
             if (submitted) setSubmitted(false);
           }}
           showErr={submitted && !!errMsg}
+          openExisting={openExisting}
           errMsg={errMsg}
           compact={compactControls}
           onSubmit={onCreateLesson}
@@ -343,8 +373,21 @@ export function LessonColumnView({
         />
       )}
 
-      {col.depth === 0 && !loaded && (
-        <p className="text-muted-foreground px-3 py-4 text-sm">Reading the lessons…</p>
+      {col.depth === 0 && loadFailed && (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+          <p role="status" className="text-warn-text text-sm/relaxed">
+            {loaded ? "Could not refresh lessons." : "Could not load lessons."}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void loadLessons()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {col.depth === 0 && !loaded && !loadFailed && (
+        <p role="status" className="text-muted-foreground px-3 py-4 text-sm">
+          Loading lessons…
+        </p>
       )}
 
       {col.depth === 0 && loaded && !scopedFilesCount && naming === null && (
@@ -358,18 +401,23 @@ export function LessonColumnView({
                 {activeFilter === "film"
                   ? "No lessons for this film yet"
                   : activeFilter === "all" && filesCount > 0
-                    ? "No global lessons yet"
+                    ? "No lessons shared across films yet"
                     : "No lessons yet"}
               </EmptyTitle>
               <EmptyDescription>
                 {activeFilter === "film"
-                  ? "Add rules specific to this film, or switch to All to see global lessons."
-                  : "The AI writes one when you ask it to Remember a note, or start one with New."}
+                  ? "Create a lesson for this film or select All to see lessons from both scopes."
+                  : "Create a lesson or use Remember on a note to turn it into a lesson."}
               </EmptyDescription>
             </EmptyHeader>
             {activeFilter === "film" && hasProject && (
               <EmptyContent>
-                <Button variant="secondary" size="md" onClick={() => openForm("film")}>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  data-new-lesson
+                  onClick={() => openForm("film")}
+                >
                   New film lesson
                 </Button>
               </EmptyContent>
@@ -390,12 +438,21 @@ export function LessonColumnView({
                   <Search aria-hidden />
                 </EmptyMedia>
                 <EmptyTitle>No matching lessons</EmptyTitle>
-                <EmptyDescription>
+                <EmptyDescription className="max-w-full min-w-0 wrap-anywhere">
                   Nothing in your lessons matches “{query.trim()}”.
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button variant="secondary" size="md" onClick={() => setQuery("")}>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => {
+                    setQuery("");
+                    sectionRef.current
+                      ?.querySelector<HTMLInputElement>('input[type="search"]')
+                      ?.focus();
+                  }}
+                >
                   Clear search
                 </Button>
               </EmptyContent>
@@ -453,11 +510,11 @@ export function LessonColumnRow({
       <li data-ai-lit={entry.isLit || undefined}>
         <button
           type="button"
-          data-lesson-row
+          data-lesson-row={entry.key}
           aria-current={isActive ? "true" : undefined}
-          onClick={() => onSelectDir(entry.parts, true)}
+          onClick={(e) => onSelectDir(entry.parts, e.detail > 0)}
           className={cn(
-            "focus-visible:ring-ring studio-press group flex w-full items-center gap-2 text-start transition-colors outline-none focus-visible:ring-2",
+            "focus-visible:ring-ring studio-press group flex w-full items-center gap-2 text-start outline-none focus-visible:ring-2",
             "px-2.5 py-2 pointer-coarse:py-3",
             isActive
               ? "bg-primary/14 border-primary/55 text-foreground ms-1 w-[calc(100%-0.25rem)] rounded-s-lg rounded-e-none border border-e-0 font-semibold"
@@ -465,36 +522,42 @@ export function LessonColumnRow({
           )}
         >
           {isActive ? (
-            <FolderOpen aria-hidden className="text-primary size-4 flex-none" />
+            <FolderOpen
+              aria-hidden
+              size={16}
+              strokeWidth={2}
+              absoluteStrokeWidth
+              className="text-primary flex-none"
+            />
           ) : (
-            <Folder aria-hidden className="text-muted-foreground size-4 flex-none" />
+            <Folder
+              aria-hidden
+              size={16}
+              strokeWidth={1.5}
+              absoluteStrokeWidth
+              className="text-muted-foreground flex-none"
+            />
           )}
           <span
             className={cn(
-              "min-w-0 flex-1 truncate",
+              "min-w-0 flex-1 wrap-anywhere",
               compact ? "text-sm/[1.35]" : "text-base/[1.35]",
               isActive ? "font-semibold" : "font-medium",
             )}
           >
             {entry.name}
           </span>
-          {entry.hasChanged ? (
-            <span
-              aria-label="Changed inside folder"
-              className="bg-primary size-1.5 flex-none rounded-full"
-            />
-          ) : entry.hasDraft ? (
-            <span
-              aria-label="Unsaved words inside folder"
-              className="bg-warn size-1.5 flex-none rounded-full"
-            />
-          ) : null}
-          <span className="text-muted-foreground text-xs tabular-nums">{entry.fileCount}</span>
+          {entry.hasChanged && <span className="text-primary-text text-xs">Updated</span>}
+          {entry.hasDraft && <span className="text-warn-text text-xs">Draft</span>}
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {entry.fileCount}
+            <span className="sr-only"> {entry.fileCount === 1 ? "lesson" : "lessons"}</span>
+          </span>
           <ChevronRight
             aria-hidden
             className={cn(
-              "size-3.5 flex-none transition-transform",
-              isActive ? "text-primary translate-x-0.5" : "text-muted-foreground/60",
+              "size-3.5 flex-none",
+              isActive ? "text-primary" : "text-muted-foreground",
             )}
           />
         </button>
@@ -519,20 +582,23 @@ export function LessonColumnRow({
     >
       <button
         type="button"
-        data-lesson-row
+        data-lesson-row={entry.key}
         aria-current={isActive ? "true" : undefined}
-        onClick={() => onSelectFile(f.key, matchMeta?.matchLine ?? null, true)}
+        onClick={(e) => onSelectFile(f.key, matchMeta?.matchLine ?? null, e.detail > 0)}
         className="focus-visible:ring-ring studio-press flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 ps-2.5 pe-1 text-start outline-none focus-visible:ring-2 pointer-coarse:py-3"
       >
         <FileText
           aria-hidden
-          className={cn("size-4 flex-none", isActive ? "text-primary" : "text-muted-foreground")}
+          size={16}
+          strokeWidth={isActive ? 2 : 1.5}
+          absoluteStrokeWidth
+          className={cn("flex-none", isActive ? "text-primary" : "text-muted-foreground")}
         />
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span
               className={cn(
-                "text-foreground min-w-0 truncate",
+                "text-foreground min-w-0 wrap-anywhere",
                 compact ? "text-sm/[1.35]" : "text-base/[1.35]",
                 isActive ? "font-semibold" : "font-medium",
               )}
@@ -540,34 +606,31 @@ export function LessonColumnRow({
               {label}
             </span>
             <Badge variant={f.scope === "film" ? "lessonFilm" : "lessonAll"} className="flex-none">
-              {compact ? SCOPE_SHORT[f.scope] : SCOPE_LABEL[f.scope]}
+              {SCOPE_LABEL[f.scope]}
             </Badge>
           </span>
           {!compact && (
             <span className="text-muted-foreground text-ui/[1.4] mt-0.5 block truncate tabular-nums">
               {heads.length} {heads.length === 1 ? "section" : "sections"}
               {rules > 0 && ` · ${rules} ${rules === 1 ? "rule" : "rules"}`}
-              {entry.isDraft && " · unsaved words"}
             </span>
           )}
+          {entry.isDraft && <span className="text-warn-text mt-0.5 block text-xs">Draft</span>}
           {matchMeta?.snippet && (
-            <span className="text-primary/90 text-ui/[1.45] mt-0.5 block truncate tabular-nums">
+            <span className="text-primary-text text-ui/[1.45] mt-0.5 block wrap-anywhere tabular-nums">
               L{matchMeta.matchLine}: {matchMeta.snippet}
             </span>
           )}
         </span>
         {entry.isChanged && (
-          <span className="text-primary text-ui flex flex-none items-center gap-1 font-medium">
+          <span className="text-primary-text text-ui flex flex-none items-center gap-1 font-medium">
             <span aria-hidden className="bg-primary size-1.5 rounded-full" />
-            {!compact && "Updated"}
+            <span className={compact ? "sr-only" : undefined}>Updated</span>
           </span>
         )}
         <ChevronRight
           aria-hidden
-          className={cn(
-            "size-3.5 flex-none transition-transform",
-            isActive ? "text-primary translate-x-0.5" : "text-muted-foreground/60",
-          )}
+          className={cn("size-3.5 flex-none", isActive ? "text-primary" : "text-muted-foreground")}
         />
       </button>
       <ConfirmDeleteButton

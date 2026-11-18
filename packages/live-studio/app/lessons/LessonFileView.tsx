@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 
 import { useLitAny } from "../activity/activity";
 import { SaveStatus, Segmented } from "../components/inspector";
-import { TabStage } from "../components/Motion";
 import { lessonChanges } from "./changes";
 import { ConfirmDeleteButton, HEAD, SCOPE_LABEL, TEXT } from "./lesson-ui";
 import { LessonChanges } from "./LessonChanges";
@@ -25,6 +24,7 @@ import {
   markRead,
   openLesson,
   parseLessonKey,
+  saveLesson,
   setLessonView,
   takePick,
   typeLesson,
@@ -83,12 +83,14 @@ export function LessonFileView({
   depthPill,
   initialLine,
   showBack = false,
+  onBack = () => openLesson(null),
   onDelete,
 }: {
   path: string;
   depthPill?: string;
   initialLine: number | null;
   showBack?: boolean;
+  onBack?: (animate: boolean) => void;
   onDelete: () => void;
 }) {
   const file = useLessons((s) => s.files.find((f) => f.key === key)),
@@ -178,7 +180,7 @@ export function LessonFileView({
     });
   };
 
-  const flyToHeading = (line: number) => {
+  const flyToHeading = (line: number, smooth: boolean) => {
     setContentsOpen(false);
     setActiveLine(line);
     if (effectiveView === "changes") {
@@ -186,15 +188,17 @@ export function LessonFileView({
       return;
     }
     flyStop.current?.();
-    flyStop.current = scrollScrollerToLine(activeScroller(), line, true);
+    flyStop.current = scrollScrollerToLine(activeScroller(), line, smooth);
   };
 
-  const flyEdge = (toBottom: boolean) => {
+  const flyEdge = (toBottom: boolean, smooth: boolean) => {
     setContentsOpen(false);
     const scroller = activeScroller();
     if (!scroller) return;
     flyStop.current?.();
-    flyStop.current = flyTo(scroller, toBottom ? scroller.scrollHeight : 0);
+    const target = toBottom ? scroller.scrollHeight : 0;
+    if (smooth) flyStop.current = flyTo(scroller, target);
+    else scroller.scrollTop = target;
   };
 
   const goTo = (line: number) => switchView("edit", line, false);
@@ -243,8 +247,8 @@ export function LessonFileView({
             title: (
               <span className="inline-flex items-center gap-1.5 tabular-nums">
                 <GitCompare aria-hidden className="size-3.5" />
-                <span className="text-ok">+{news.added}</span>
-                <span className="text-destructive">−{news.removed}</span>
+                <span className="text-ok-text">+{news.added}</span>
+                <span className="text-destructive-text">−{news.removed}</span>
               </span>
             ),
           },
@@ -256,27 +260,28 @@ export function LessonFileView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         data-ai-lit={lit || undefined}
-        className="flex flex-none items-center gap-1 rounded-md px-2 py-1.5"
+        className="flex flex-none flex-wrap items-start gap-1.5 px-2 py-1.5"
       >
         {showBack && (
           <Button
             variant="ghost"
             size="icon-lg"
-            title="Back to lessons"
-            aria-label="Back to the lessons"
-            onClick={() => openLesson(null)}
+            data-lesson-back
+            title="Back to lesson list"
+            aria-label="Back to lesson list"
+            onClick={(e) => onBack(e.detail > 0)}
           >
             <ChevronLeft aria-hidden />
           </Button>
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+        <div className="min-w-24 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             {depthPill && (
               <span className="bg-muted text-muted-foreground flex-none rounded px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums">
                 {depthPill}
               </span>
             )}
-            <span className="text-foreground min-w-0 truncate text-base/[1.3] font-semibold">
+            <span className="text-foreground min-w-0 text-base/[1.3] font-semibold wrap-anywhere">
               {displayPath}
             </span>
             <Badge variant={scope === "film" ? "lessonFilm" : "lessonAll"} className="flex-none">
@@ -287,11 +292,11 @@ export function LessonFileView({
             className="text-muted-foreground text-ui/[1.35] truncate"
             title={folder ? `${folder}/${displayPath}` : displayPath}
           >
-            {edit?.failed ? (
-              <span className="text-warn font-semibold">Not saved: {edit.failed}</span>
-            ) : (
-              <SaveStatus state={edit ? "busy" : null} idleText="Saved" />
-            )}
+            <SaveStatus
+              state={edit ? (edit.failed ? "fail" : "busy") : null}
+              idleText="Saved"
+              failText="Draft"
+            />
           </div>
         </div>
         <Popover open={contentsOpen} onOpenChange={setContentsOpen}>
@@ -308,17 +313,21 @@ export function LessonFileView({
           >
             <ListTree aria-hidden />
           </PopoverTrigger>
-          <PopoverContent align="end" className="max-h-[60vh] w-72 overflow-y-auto">
+          <PopoverContent
+            align="end"
+            motion="instant"
+            className="max-h-[60vh] w-72 overflow-y-auto overscroll-contain"
+          >
             <div className="border-border/80 mb-1.5 flex items-center justify-between gap-1 border-b pb-1.5">
               <span className="text-muted-foreground text-ui px-1 font-medium tabular-nums">
                 Contents ({heads.length})
               </span>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="xs" onClick={() => flyEdge(false)}>
+                <Button variant="ghost" size="xs" onClick={(e) => flyEdge(false, e.detail > 0)}>
                   <ArrowUp aria-hidden data-icon="inline-start" />
                   Top
                 </Button>
-                <Button variant="ghost" size="xs" onClick={() => flyEdge(true)}>
+                <Button variant="ghost" size="xs" onClick={(e) => flyEdge(true, e.detail > 0)}>
                   <ArrowDown aria-hidden data-icon="inline-start" />
                   Bottom
                 </Button>
@@ -332,18 +341,18 @@ export function LessonFileView({
                     key={h.line}
                     type="button"
                     aria-current={active ? "true" : undefined}
-                    onClick={() => flyToHeading(h.line)}
+                    onClick={(e) => flyToHeading(h.line, e.detail > 0)}
                     className={cn(
-                      "hover:bg-muted focus-visible:ring-ring studio-press flex w-full items-baseline gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.35] outline-none focus-visible:ring-2",
+                      "hover:bg-muted focus-visible:ring-ring studio-press flex w-full items-start gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.35] outline-none focus-visible:ring-2",
                       active && "bg-primary/12 ring-primary/35 ring-1 ring-inset",
                     )}
                     style={{ "--indent": `${8 + (h.depth - 1) * 10}px` }}
                   >
-                    <span className={cn("min-w-0 flex-1 truncate font-medium", HEAD[h.depth])}>
+                    <span className={cn("min-w-0 flex-1 font-medium wrap-anywhere", HEAD[h.depth])}>
                       {h.title}
                     </span>
                     {h.bullets > 0 && (
-                      <span className="bg-muted text-muted-foreground/80 rounded px-1 text-xs tabular-nums">
+                      <span className="bg-muted text-label rounded px-1 text-xs tabular-nums">
                         {h.bullets}
                       </span>
                     )}
@@ -360,9 +369,20 @@ export function LessonFileView({
           onConfirm={onDelete}
         />
       </div>
+      {edit?.failed && (
+        <div className="flex flex-none flex-wrap items-center gap-2 px-3 pb-2">
+          <p role="status" className="text-warn-text min-w-0 flex-1 text-sm/relaxed wrap-anywhere">
+            Could not save the lesson. Your draft is still here.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => void saveLesson(key)}>
+            Retry save
+          </Button>
+        </div>
+      )}
       <div className="border-border/60 flex flex-none flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b px-3 pb-1.5">
         <Segmented
           label="Lesson view mode"
+          animateIndicator={false}
           value={effectiveView}
           className="[&_[role=radio]]:text-sm"
           items={viewItems}
@@ -377,13 +397,7 @@ export function LessonFileView({
         </span>
       </div>
 
-      <TabStage
-        activeKey={effectiveView}
-        order={["read", "edit", "changes"]}
-        distance={10}
-        duration={165}
-        className="flex min-h-0 flex-1 flex-col"
-      >
+      <div className="flex min-h-0 flex-1 flex-col">
         {effectiveView === "changes" && news ? (
           <LessonChanges
             news={news}
@@ -394,7 +408,7 @@ export function LessonFileView({
           <div
             ref={readScroller}
             onScroll={(e) => setActiveLine(findVisibleLine(e.currentTarget))}
-            className="scroll-fade min-h-0 flex-1 overflow-y-auto px-3 py-3"
+            className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3"
           >
             <LessonMarkdownView text={text} onJumpEdit={goTo} />
           </div>
@@ -402,7 +416,7 @@ export function LessonFileView({
           <div
             ref={editScroller}
             onScroll={(e) => setActiveLine(findVisibleLine(e.currentTarget))}
-            className="scroll-fade min-h-0 flex-1 overflow-y-auto px-3 py-1"
+            className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-1"
           >
             {/* the painted copy sets the height and draws the words; the textarea over it takes the typing, its own words see-through */}
             <div className="focus-within:ring-ring relative mx-auto grid w-full max-w-[42rem] grid-cols-[minmax(0,1fr)] rounded-md focus-within:ring-2 focus-within:ring-inset">
@@ -440,7 +454,7 @@ export function LessonFileView({
             </div>
           </div>
         )}
-      </TabStage>
+      </div>
     </div>
   );
 }

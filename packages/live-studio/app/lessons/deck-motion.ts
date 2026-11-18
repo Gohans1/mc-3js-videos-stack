@@ -12,6 +12,8 @@ interface PanelSnapshot {
   key: string;
   rect: DOMRect;
   node: HTMLElement;
+  background: string;
+  scrollTops: number[];
 }
 
 export interface DeckSnapshot {
@@ -64,12 +66,22 @@ export function selectVisibleOutgoing<T extends { rect: ClipRectLike }>(
   );
 }
 
-const cloneGhost = (src: HTMLElement, rect: DOMRect, deckRect: DOMRect, z: number): HTMLElement => {
-  const scrollerSel = "[data-arrow-scroll], .scroll-fade";
-  const scrollTops = [...src.querySelectorAll<HTMLElement>(scrollerSel)].map((el) => el.scrollTop);
-  const ghost = src.cloneNode(true) as HTMLElement;
+const scrollers = (node: HTMLElement) => [
+  ...node.querySelectorAll<HTMLElement>("[data-arrow-scroll], .scroll-fade"),
+];
+
+const capturePanel = (node: HTMLElement, key: string): PanelSnapshot => ({
+  key,
+  node,
+  rect: node.getBoundingClientRect(),
+  background: getComputedStyle(node).backgroundColor,
+  scrollTops: scrollers(node).map((el) => el.scrollTop),
+});
+
+const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLElement => {
+  const { node, rect, background } = panel;
+  const ghost = node.cloneNode(true) as HTMLElement;
   for (const drop of ghost.querySelectorAll("textarea, [role='dialog']")) drop.remove();
-  const cs = getComputedStyle(src);
   ghost.style.position = "absolute";
   ghost.style.left = `${rect.left - deckRect.left}px`;
   ghost.style.top = `${rect.top - deckRect.top}px`;
@@ -78,30 +90,19 @@ const cloneGhost = (src: HTMLElement, rect: DOMRect, deckRect: DOMRect, z: numbe
   ghost.style.margin = "0";
   ghost.style.flex = "none";
   ghost.style.zIndex = String(z);
-  ghost.style.backgroundColor = cs.backgroundColor;
+  ghost.style.backgroundColor = background;
   ghost.style.pointerEvents = "none";
-  [...ghost.querySelectorAll<HTMLElement>(scrollerSel)].forEach((el, i) => {
-    el.scrollTop = scrollTops[i] ?? 0;
-  });
   return ghost;
 };
 
 /** Captures live bounding boxes and clones outgoing column snapshots synchronously before folding state changes. */
 export function captureDeckSnapshot(deck: HTMLElement | null): DeckSnapshot | null {
   if (!deck) return null;
-  const cols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")].map((el, i) => ({
-    key: el.dataset.lessonsCol ?? String(i),
-    rect: el.getBoundingClientRect(),
-    node: el,
-  }));
+  const cols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")].map((el, i) =>
+    capturePanel(el, el.dataset.lessonsCol ?? String(i)),
+  );
   const contentEl = deck.querySelector<HTMLElement>("[data-lesson-content]");
-  const content = contentEl
-    ? {
-        key: contentEl.dataset.lessonContent ?? "",
-        rect: contentEl.getBoundingClientRect(),
-        node: contentEl,
-      }
-    : null;
+  const content = contentEl ? capturePanel(contentEl, contentEl.dataset.lessonContent ?? "") : null;
   return { deckRect: deck.getBoundingClientRect(), cols, content };
 }
 
@@ -148,6 +149,8 @@ export function animateDeckTransition({
     const visibleOut = selectVisibleOutgoing(outgoing, clip);
     if (visibleOut.length > 0 && typeof document !== "undefined") {
       const overlay = document.createElement("div");
+      overlay.inert = true;
+      overlay.setAttribute("aria-hidden", "true");
       overlay.style.position = "fixed";
       overlay.style.left = `${clip.left}px`;
       overlay.style.top = `${clip.top}px`;
@@ -161,8 +164,11 @@ export function animateDeckTransition({
       let remaining = visibleOut.length;
       const removeOverlay = () => overlay.remove();
       visibleOut.forEach((item, idx) => {
-        const ghost = cloneGhost(item.node, item.rect, clipRect, idx + 1);
+        const ghost = cloneGhost(item, clipRect, idx + 1);
         overlay.append(ghost);
+        scrollers(ghost).forEach((el, i) => {
+          el.scrollTop = item.scrollTops[i] ?? 0;
+        });
         const flyX = Math.min(
           Math.max(56, item.rect.width * 0.45),
           Math.max(56, clip.right - item.rect.left + 24),

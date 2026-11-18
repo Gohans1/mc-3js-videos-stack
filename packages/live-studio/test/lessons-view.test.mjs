@@ -216,10 +216,11 @@ describe("filterLessons & findActiveHeading", () => {
 });
 
 describe("LessonMarkdownView accessibility & heading nesting", () => {
-  test("HeadingBlock flattens links inside its edit button and exposes an Edit aria-label", () => {
+  test("a heading keeps its link and has a separate named edit button", () => {
     const html = renderToStaticMarkup(
       createElement(LessonMarkdownView, {
         text: "# See [Guide](https://example.com) and `code`\n",
+        onJumpEdit: () => {},
       }),
     );
     const buttonMatch = html.match(/<button[^>]*>[\s\S]*?<\/button>/);
@@ -227,6 +228,7 @@ describe("LessonMarkdownView accessibility & heading nesting", () => {
     assert.equal(/<a[\s>]/.test(buttonMatch[0]), false, "button must not nest interactive <a>");
     assert.match(buttonMatch[0], /aria-label="Edit .*line 1"/);
     assert.match(buttonMatch[0], /Guide/);
+    assert.match(html, /<h1[^>]*>.*<a[^>]*>Guide<\/a>.*<\/h1>/);
   });
 
   test("task list items announce completed vs incomplete state to screen readers", () => {

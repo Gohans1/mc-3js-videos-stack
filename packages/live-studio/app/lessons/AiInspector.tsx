@@ -10,6 +10,15 @@ import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   Select,
@@ -34,6 +43,7 @@ import type { InspectNote, InspectorInfo, InspectorView, InspectResult } from ".
 import { InspectorCode, InspectorPreview } from "./InspectorPreview";
 import { inspectorSettingErrors, InspectorSettings } from "./InspectorSettings";
 import { JevSafetyBanner } from "./JevSafetyBanner";
+import { SCOPE_LABEL } from "./lesson-ui";
 import { lessons, parseLessonKey, useLessons } from "./lessons";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -53,19 +63,23 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 const scopes = [
-  { value: "both", label: "This film + shared" },
-  { value: "film", label: "This film only" },
-  { value: "all", label: "Shared lessons only" },
+  { value: "both", label: "All lessons" },
+  { value: "film", label: SCOPE_LABEL.film },
+  { value: "all", label: SCOPE_LABEL.all },
 ];
 type RequestFailure = { key: string; message: string };
 
-export function AiInspector({ active }: { active: boolean }) {
+export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDeck: () => void }) {
   const { files, edits, inspectorLiveEnabled } = useLessons((s) => s);
   const liveNotes = useStudio((s) => s.notes),
     ready = useStudio((s) => s.ready);
   const [info, setInfo] = useState<InspectorInfo | null>(null);
   const availableNotes = ready ? liveNotes : (info?.notes ?? []);
   const { config, saved, note, excluded } = useInspectorSession();
+  const scope = config.scopeFilter;
+  const scopedFiles = scope === "both" ? files : files.filter((file) => file.scope === scope);
+  const scopedExcluded = scopedFiles.filter((file) => excluded.includes(file.key));
+  const includedCount = scopedFiles.length - scopedExcluded.length;
   const [view, setView] = useState<InspectorView>("ai");
   const [change, setChange] = useState("Ready");
   const [busy, setBusy] = useState(false);
@@ -126,7 +140,13 @@ export function AiInspector({ active }: { active: boolean }) {
   const configKey = JSON.stringify(config);
   const dirty = configKey !== saved;
   const saveError = saveFailure?.key === configKey ? saveFailure.message : "";
-  const saveLabel = saving ? "Saving…" : saveError ? "Retry save" : dirty ? "Save" : "Saved";
+  const saveLabel = saving
+    ? "Saving…"
+    : saveError
+      ? "Retry save"
+      : dirty
+        ? "Save CLI settings"
+        : "Settings saved";
   const accept = (key: string, value: InspectResult) =>
     setReceived((previous) => ({
       key,
@@ -148,7 +168,6 @@ export function AiInspector({ active }: { active: boolean }) {
     setView(nextView);
     setChange(label + " changed");
   };
-  const deck = () => lessons.setState({ subTab: "deck", inspectorLiveEnabled: false });
   const includeFile = (key: string, included: boolean) => {
     useInspectorSession.setState({
       excluded: included ? excluded.filter((x) => x !== key) : [...excluded, key],
@@ -283,14 +302,14 @@ export function AiInspector({ active }: { active: boolean }) {
       onKeyDown={(e) => e.stopPropagation()}
     >
       <h2 className="sr-only">AI Inspector</h2>
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,4fr)] @min-[700px]/inspector:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] @min-[700px]/inspector:grid-rows-1 @min-[20rem]/inspector:@max-[700px]/inspector:grid-rows-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,4fr)] @min-[700px]/inspector:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] @min-[700px]/inspector:grid-rows-1 @min-[20rem]/inspector:@max-[700px]/inspector:grid-rows-[minmax(0,2fr)_minmax(0,3fr)] @max-[700px]/inspector:[@media(min-width:821px)_and_(min-height:521px)]:grid-rows-[repeat(2,minmax(0,1fr))]">
         <div
           data-inspector-controls
           ref={controlsRef}
           role="region"
           tabIndex={0}
           aria-label="Inspector controls"
-          className="focus-visible:ring-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) overflow-y-auto overscroll-contain outline-none focus-visible:ring-2"
+          className="focus-visible:ring-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) [scrollbar-width:thin] overflow-y-auto overscroll-contain outline-none focus-visible:ring-2"
           style={{ "--inspector-actions-offset": `${pinnedActionsHeight}px` } as CSSProperties}
         >
           <div
@@ -311,7 +330,6 @@ export function AiInspector({ active }: { active: boolean }) {
                 variant={dirty ? "lit" : "outline"}
                 disabled={!dirty || !info || !valid.success || saving || busy}
                 onClick={() => void save()}
-                aria-label={`${saveLabel} · notes CLI settings`}
                 aria-busy={saving}
               >
                 {saveLabel}
@@ -319,7 +337,7 @@ export function AiInspector({ active }: { active: boolean }) {
             </JevSafetyBanner>
           </div>
           <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-6 p-4">
-            {(error || runError || saveError) && (
+            {(configError || error || runError || saveError) && (
               <Alert variant="destructive">
                 <AlertTitle>
                   {runError
@@ -329,7 +347,7 @@ export function AiInspector({ active }: { active: boolean }) {
                       : "Preview needs attention"}
                 </AlertTitle>
                 <AlertDescription>
-                  {runError || saveError || error}
+                  {runError || saveError || configError || error}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="md"
@@ -370,7 +388,7 @@ export function AiInspector({ active }: { active: boolean }) {
               <section className="flex flex-col gap-3" aria-labelledby="inspect-note-heading">
                 <h3
                   id="inspect-note-heading"
-                  className="text-ink flex items-center gap-2 text-base font-semibold"
+                  className="text-ink-text flex items-center gap-2 text-base/[1.3] font-semibold"
                 >
                   <MessageSquareText className="size-4" aria-hidden />
                   Creator’s note
@@ -413,13 +431,13 @@ export function AiInspector({ active }: { active: boolean }) {
                       variant="inspector"
                       id="inspect-note-text"
                       value={note.text}
-                      className="max-h-48 overflow-y-auto @min-[700px]/inspector:min-h-24"
+                      className="max-h-48 overflow-y-auto overscroll-contain @min-[700px]/inspector:min-h-24"
                       onChange={(e) => changeNote({ ...note, text: e.target.value })}
                       placeholder="The face is too small. Move the camera closer."
                     />
                   </Field>
                   <details>
-                    <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium outline-none focus-visible:ring-2">
+                    <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2">
                       Replies{note.asks?.length ? " · " + note.asks.length : " · optional"}
                     </summary>
                     <Field>
@@ -429,7 +447,7 @@ export function AiInspector({ active }: { active: boolean }) {
                       <Textarea
                         variant="inspector"
                         id="inspect-replies"
-                        className="max-h-40 overflow-y-auto"
+                        className="max-h-40 overflow-y-auto overscroll-contain"
                         value={(note.asks ?? []).map((a) => a.text).join("\n")}
                         onChange={(e) =>
                           changeNote({
@@ -453,22 +471,16 @@ export function AiInspector({ active }: { active: boolean }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3
                     id="inspect-lessons-heading"
-                    className="text-primary flex items-center gap-2 text-base font-semibold"
+                    className="text-primary-text flex items-center gap-2 text-base/[1.3] font-semibold"
                   >
                     <BookOpenText className="size-4" aria-hidden />
                     Lessons from Deck
                   </h3>
-                  <Button size="md" variant="outline" onClick={deck}>
+                  <Button size="md" variant="outline" onClick={onOpenDeck}>
                     Edit in Deck
                     <ArrowUpRight data-icon="inline-end" />
                   </Button>
                 </div>
-                <p className="text-muted-foreground text-sm/relaxed">
-                  <strong className="text-primary font-semibold tabular-nums">
-                    {files.length}
-                  </strong>{" "}
-                  real files. Deck edits apply here live.
-                </p>
                 <Field>
                   <FieldLabel variant="row" htmlFor="inspect-scope">
                     Search lessons in
@@ -504,16 +516,19 @@ export function AiInspector({ active }: { active: boolean }) {
                   View extracted lessons
                 </Button>
                 <details>
-                  <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium outline-none focus-visible:ring-2">
-                    Lesson files · {files.filter((f) => !excluded.includes(f.key)).length}/
-                    {files.length} included
+                  <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2">
+                    Lesson files · {includedCount} of {scopedFiles.length} included
                   </summary>
                   <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
-                    Uncheck a file to leave it out of this preview. Check it again to restore it.
-                    Files in Deck stay unchanged.
+                    Uncheck files to leave them out of this preview.
                   </p>
+                  {scopedFiles.length === 0 && (
+                    <p className="text-muted-foreground text-sm/relaxed">
+                      Add lessons in Deck or choose another scope.
+                    </p>
+                  )}
                   <FieldGroup>
-                    {files.map((file, i) => (
+                    {scopedFiles.map((file, i) => (
                       <Field key={file.key} orientation="horizontal" data-inspector-file>
                         <Checkbox
                           id={"inspect-file-" + i}
@@ -521,29 +536,33 @@ export function AiInspector({ active }: { active: boolean }) {
                           onCheckedChange={(checked) => includeFile(file.key, checked)}
                         />
                         <FieldLabel variant="row" htmlFor={"inspect-file-" + i}>
-                          <span className="min-w-0 break-words">
-                            {file.path} · {file.scope === "film" ? "This film" : "Shared"}
+                          <span className="min-w-0 wrap-anywhere">
+                            {file.path} · {SCOPE_LABEL[file.scope]}
                           </span>
                         </FieldLabel>
                       </Field>
                     ))}
                   </FieldGroup>
                 </details>
-                {excluded.length > 0 && (
+                {scopedExcluded.length > 0 && (
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-muted-foreground text-sm">
-                      {excluded.length} excluded from preview
+                    <span className="text-muted-foreground text-sm tabular-nums">
+                      {scopedExcluded.length} excluded from preview
                     </span>
                     <Button
                       size="md"
                       variant="outline"
                       onClick={() => {
-                        useInspectorSession.setState({ excluded: [] });
+                        useInspectorSession.setState({
+                          excluded: excluded.filter(
+                            (key) => !scopedExcluded.some((file) => file.key === key),
+                          ),
+                        });
                         setView("lessons");
-                        setChange("All files restored");
+                        setChange("Files in this scope restored");
                       }}
                     >
-                      Restore all
+                      Include all in scope
                     </Button>
                   </div>
                 )}
@@ -554,10 +573,7 @@ export function AiInspector({ active }: { active: boolean }) {
                     <Settings2 className="size-4" aria-hidden />
                     Advanced settings
                   </span>
-                  <ChevronDown
-                    className="size-4 transition-transform duration-150 ease-out group-open/advanced:rotate-180 motion-reduce:transition-none"
-                    aria-hidden
-                  />
+                  <ChevronDown className="size-4 group-open/advanced:rotate-180" aria-hidden />
                 </summary>
                 <p className="text-muted-foreground mt-1 mb-4 text-sm/relaxed">
                   Prompts, matching rules and output format. Each edit opens its related preview.
@@ -574,24 +590,41 @@ export function AiInspector({ active }: { active: boolean }) {
                   >
                     Reset defaults
                   </Button>
-                  <Button
-                    size="md"
-                    variant="ghost"
-                    onClick={() =>
-                      void request("/api/lessons/inspect-cache", { method: "DELETE" })
-                        .then(() => {
-                          setRetry((v) => v + 1);
-                          setChange("Inspector cache cleared");
-                          toast.add({
-                            title: "Inspector cache cleared",
-                            description: "CLI matches are kept.",
-                          });
-                        })
-                        .catch((e: Error) => setError(e.message))
-                    }
-                  >
-                    Clear Inspector cache
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger render={<Button size="md" variant="ghost" />}>
+                      Clear Inspector cache
+                    </DialogTrigger>
+                    <DialogContent showCloseButton={false}>
+                      <DialogTitle>Clear Inspector cache?</DialogTitle>
+                      <DialogDescription>
+                        This removes saved Inspector matches and run details. Future runs may call
+                        Jev again. Lesson files and CLI matches stay available.
+                      </DialogDescription>
+                      <DialogFooter>
+                        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                        <DialogClose
+                          render={<Button variant="destructive" />}
+                          onClick={() =>
+                            void request("/api/lessons/inspect-cache", { method: "DELETE" })
+                              .then(() => {
+                                setRetry((v) => v + 1);
+                                setChange("Inspector cache cleared");
+                                toast.add({ title: "Inspector cache cleared" });
+                              })
+                              .catch(() =>
+                                toast.add({
+                                  title: "Could not clear Inspector cache",
+                                  description: "Check the Studio connection and try again.",
+                                  type: "error",
+                                }),
+                              )
+                          }
+                        >
+                          Clear cache
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
                 <details className="mt-4">
                   <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-2 font-medium outline-none focus-visible:ring-2">
@@ -610,6 +643,8 @@ export function AiInspector({ active }: { active: boolean }) {
           </div>
         </div>
         <InspectorPreview
+          hasNote={Boolean(note.text.trim())}
+          allFilesExcluded={scopedFiles.length > 0 && includedCount === 0}
           result={received?.value ?? null}
           previous={received?.previous}
           view={view}

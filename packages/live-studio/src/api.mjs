@@ -20,10 +20,12 @@ import { Activity, createActivity } from "./activity.mjs";
 import { CLI_CATEGORIES, CLI_COMMANDS } from "./cli-catalog.ts";
 import { CliRunHttpError, createCliRunner, scanCliContext } from "./cli-runner.ts";
 import { CliTemplateUpsertSchema, openCliTemplates } from "./cli-templates.ts";
+import { mountCollaboration } from "./collaboration-api.mjs";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
+import { mountHistory } from "./history-api.mjs";
 import { LessonJevConfigSchema } from "./lesson-config.ts";
 import { openLessonFiles } from "./lesson-files.mjs";
 import {
@@ -33,14 +35,13 @@ import {
   inspectorInfo,
 } from "./lesson-inspector.mjs";
 import { writeLessonJson } from "./lesson-settings.mjs";
+import { LESSON_PATH_MAX } from "./lesson-template.ts";
 import { noteNumbers } from "./notes.mjs";
 import { createPortsService } from "./ports.mjs";
 import { openVoiceLibrary } from "./voice-library.mjs";
 import { inside, SAFE_MEDIA_FILE, SAFE_REMOTE_ID_RE } from "./voice-playground-genvoice.mjs";
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
-import { mountCollaboration } from "./collaboration-api.mjs";
-import { mountHistory } from "./history-api.mjs";
 
 const MIME = {
   ".gltf": "application/json",
@@ -84,13 +85,13 @@ const NoteIn = z.object({
 const LessonScope = z.enum(["film", "all"]).default("all");
 const LessonSave = z.object({
   scope: LessonScope,
-  path: z.string().max(200),
+  path: z.string().max(LESSON_PATH_MAX),
   text: z.string().max(1_000_000),
   base: z.string().nullable(),
 });
 const LessonDelete = z.object({
   scope: LessonScope,
-  path: z.string().max(200),
+  path: z.string().max(LESSON_PATH_MAX),
   base: z.string().nullable(),
 });
 // note-state.mjs says which of these may happen to a note now; {remove}/{restore} are the file's own

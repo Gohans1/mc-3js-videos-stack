@@ -5,10 +5,26 @@ import { Button } from "@/components/ui/button";
 import { showUndo, toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
-import { deleteLesson, type LessonScope, parseLessonKey } from "./lessons";
+import {
+  deleteLesson,
+  type LessonScope,
+  parseLessonKey,
+  type RecoverableLessonDraft,
+} from "./lessons";
+
+export function downloadLessonDrafts(drafts: readonly RecoverableLessonDraft[]) {
+  const single = drafts.length === 1 ? drafts[0] : undefined;
+  const text =
+    single?.text ?? drafts.map((draft) => `# ${draft.path}\n\n${draft.text}`).join("\n\n---\n\n");
+  const url = URL.createObjectURL(new Blob([text], { type: "text/markdown" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = single?.path.split("/").at(-1) ?? "lesson-drafts.md";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 export const SCOPE_LABEL: Record<LessonScope, string> = { film: "This film", all: "Every film" };
-export const SCOPE_SHORT: Record<LessonScope, string> = { film: "Film", all: "Global" };
 
 // md-phone's heading colours, one per level (index.css --color-md-h*)
 export const HEAD = [
@@ -82,11 +98,11 @@ export function ConfirmDeleteButton({
       ref={wrapRef}
       onMouseLeave={() => setArmed(false)}
       className={cn(
-        "flex-none transition-opacity",
+        "flex-none transition-opacity duration-150 motion-reduce:transition-none",
         revealOnRowHover &&
           (armed
             ? "me-0.5 w-auto opacity-100"
-            : "w-0 overflow-hidden opacity-0 group-focus-within/row:me-0.5 group-focus-within/row:w-auto group-focus-within/row:opacity-100 group-hover/row:me-0.5 group-hover/row:w-auto group-hover/row:opacity-100 focus-within:me-0.5 focus-within:w-auto focus-within:opacity-100 pointer-coarse:me-0.5 pointer-coarse:w-auto pointer-coarse:opacity-100"),
+            : "me-0.5 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100"),
       )}
     >
       <Button
@@ -117,7 +133,9 @@ export async function removeLessonWithUndo(key: string, onBeforeRemove?: () => v
   if (!res.removed) {
     toast.add({
       title: res.conflict ? "Kept lesson with AI changes" : "Could not delete lesson",
-      description: res.conflict ? "Adopted the AI's newer version instead of deleting." : res.error,
+      description: res.conflict
+        ? "The latest version is open. Review it before deleting again."
+        : "Check the Studio connection and try deleting again.",
       type: res.conflict ? "info" : "error",
     });
     return;
@@ -127,7 +145,8 @@ export async function removeLessonWithUndo(key: string, onBeforeRemove?: () => v
       if (!ok) {
         toast.add({
           title: "Could not restore lesson",
-          description: "The AI already wrote a new file or the studio didn't answer.",
+          description:
+            "Check the Studio connection and whether a lesson already exists at this path.",
           type: "error",
         });
       }

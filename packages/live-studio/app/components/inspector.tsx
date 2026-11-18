@@ -31,6 +31,7 @@ export function Segmented<T extends string>({
   fit,
   tone = "neutral",
   size = "default",
+  animateIndicator = true,
 }: {
   value: T;
   items: { id: T; title: ReactNode; ariaLabel?: string }[];
@@ -41,6 +42,7 @@ export function Segmented<T extends string>({
   fit?: boolean;
   tone?: "neutral" | "accent";
   size?: "default" | "comfortable";
+  animateIndicator?: boolean;
 }) {
   const [back, on] = vertical ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"];
   const groupRef = useRef<HTMLDivElement>(null);
@@ -121,7 +123,7 @@ export function Segmented<T extends string>({
       {pill && pill.w > 0 && pill.h > 0 && (
         <span
           aria-hidden
-          data-animated={animated || undefined}
+          data-animated={(animateIndicator && animated) || undefined}
           style={{
             "--pill-x": `${pill.x}px`,
             "--pill-y": `${pill.y}px`,
