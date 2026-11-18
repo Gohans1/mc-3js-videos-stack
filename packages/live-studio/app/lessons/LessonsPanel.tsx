@@ -99,6 +99,7 @@ export function LessonsPanel(props: LessonsPanelProps = {}) {
         <Segmented
           label="Lessons view"
           animateIndicator={false}
+          keepClickFocus
           value={tab}
           items={[
             { id: "deck", title: "Deck" },

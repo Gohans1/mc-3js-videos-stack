@@ -499,6 +499,7 @@ export function LessonFileView({
         <Segmented
           label="Lesson view mode"
           animateIndicator={false}
+          keepClickFocus
           value={effectiveView}
           className="[&_[role=radio]]:text-sm"
           items={viewItems}

@@ -435,6 +435,21 @@ test("deleteLesson surfaces 409 conflict without losing newer AI changes", async
   assert.equal(lessons.getState().open, "all:walk.md");
 });
 
+test("deleteLesson treats an already-missing file as an external removal and keeps its draft", async () => {
+  lessons.setState((s) => ({
+    ...s,
+    files: [{ key: "all:walk.md", scope: "all", path: "walk.md", tag: "t1", text: "# Walk\n" }],
+    edits: { "all:walk.md": { text: "# Draft\n", base: "t1" } },
+    open: "all:walk.md",
+  }));
+  deleteHandler = async () => Response.json({ removed: false, missing: true });
+
+  assert.deepEqual(await deleteLesson("all:walk.md"), { removed: false, missing: true });
+  assert.equal(lessons.getState().open, null);
+  assert.equal(lessons.getState().files.length, 0);
+  assert.deepEqual(lessons.getState().aiNotice?.drafts, [{ path: "walk.md", text: "# Draft\n" }]);
+});
+
 test("loadLessons skips failed drafts and ignores stale out-of-order GET responses", async () => {
   lessons.setState((s) => ({
     ...s,

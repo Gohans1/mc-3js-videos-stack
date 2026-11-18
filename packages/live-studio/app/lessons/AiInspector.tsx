@@ -38,6 +38,7 @@ import {
   type LessonJevConfig,
   LessonJevConfigSchema,
 } from "../../src/lesson-config";
+import { LESSON_TEXT_MAX } from "../../src/lesson-template";
 import { useStudio } from "../core/store";
 import { useInspectorSession } from "./inspector-session";
 import type { InspectNote, InspectorInfo, InspectorView, InspectResult } from "./inspector-types";
@@ -127,19 +128,23 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       : config.route === "paid"
         ? "Paid · OpenRouter"
         : "Auto provider may charge";
-  const body = useMemo(
-    () => ({
-      note,
-      config,
-      drafts: [
-        ...Object.entries(edits).map(([key, e]) => ({ ...parseLessonKey(key), text: e.text })),
-        ...excluded.map((key) => ({ ...parseLessonKey(key), text: null })),
-      ],
-    }),
-    [note, config, edits, excluded],
-  );
-  const bodyKey = JSON.stringify(body);
-  const previewKey = JSON.stringify([bodyKey, files.map((f) => [f.key, f.tag]), retry]);
+  const drafts = useMemo(() => {
+    const omitted = new Set(excluded);
+    return [
+      ...Object.entries(edits)
+        .filter(([key]) => !omitted.has(key))
+        .map(([key, edit]) => ({ ...parseLessonKey(key), text: edit.text })),
+      ...excluded.map((key) => ({ ...parseLessonKey(key), text: null })),
+    ].filter((draft) => scope === "both" || draft.scope === scope);
+  }, [edits, excluded, scope]);
+  const oversizedDraft = drafts.find(({ text }) => text !== null && text.length > LESSON_TEXT_MAX);
+  const bodyKey = JSON.stringify({ note, config, drafts: oversizedDraft ? [] : drafts });
+  const previewKey = JSON.stringify([
+    bodyKey,
+    oversizedDraft?.path,
+    files.map((f) => [f.key, f.tag]),
+    retry,
+  ]);
   const currentBody = useRef(previewKey);
   useLayoutEffect(() => {
     currentBody.current = previewKey;
@@ -168,7 +173,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const noteIssues = validNote.success ? [] : validNote.error.issues;
   const noteError = noteIssues.find((issue) => issue.path[0] !== "asks")?.message;
   const repliesError = noteIssues.find((issue) => issue.path[0] === "asks")?.message;
-  const validationError = noteError || repliesError || configError;
+  const validationError =
+    noteError ||
+    repliesError ||
+    configError ||
+    (oversizedDraft ? "Shorten or exclude the lesson draft." : "");
   const fieldErrors = inspectorSettingErrors(valid.success ? [] : valid.error.issues);
   const configKey = JSON.stringify(config);
   const dirty = configKey !== saved;
@@ -366,20 +375,22 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
           : !includedCount
             ? "Include a lesson file."
             : "";
-  const reason = validationError
-    ? "Check the highlighted fields."
-    : !note.text.trim()
-      ? "Write a note."
-      : chargeReported
-        ? "Review Provider & billing."
-        : missingLessons ||
-          (error
-            ? "Retry the preview to run Jev."
-            : updating
-              ? "Updating preview…"
-              : !received?.value.pool.length
-                ? "No lesson files available."
-                : "");
+  const reason = oversizedDraft
+    ? "Shorten or exclude the lesson draft."
+    : validationError
+      ? "Check the highlighted fields."
+      : !note.text.trim()
+        ? "Write a note."
+        : chargeReported
+          ? "Review Provider & billing."
+          : missingLessons ||
+            (error
+              ? "Retry the preview to run Jev."
+              : updating
+                ? "Updating preview…"
+                : !received?.value.pool.length
+                  ? "No lesson files available."
+                  : "");
   const noteOptions = [
     { value: "simulation", label: "Write a preview note" },
     ...availableNotes.map((n) => ({ value: n.id ?? "", label: n.text })),
@@ -636,6 +647,27 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 <Button size="md" variant="ghost" onClick={() => choosePreviewView("lessons")}>
                   View extracted lessons
                 </Button>
+                {oversizedDraft && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Lesson draft is too long</AlertTitle>
+                    <AlertDescription>
+                      Shorten <span className="wrap-anywhere">{oversizedDraft.path}</span> in Deck
+                      to {LESSON_TEXT_MAX.toLocaleString("en-US")} characters, or exclude it from
+                      this preview.
+                      <div className="flex">
+                        <Button
+                          size="md"
+                          variant="outline"
+                          onClick={() =>
+                            includeFile(`${oversizedDraft.scope}:${oversizedDraft.path}`, false)
+                          }
+                        >
+                          Exclude this lesson
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {loadFailed ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <p role="status" className="text-warn-text text-sm">

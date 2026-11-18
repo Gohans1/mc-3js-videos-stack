@@ -237,7 +237,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
   },
   {
     title: "Remembering a rule",
-    hint: "Changes the learn-instruction preview.",
+    hint: "Changes the Remember prompt preview.",
     view: "learn",
     fields: [
       {

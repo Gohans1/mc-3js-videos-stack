@@ -457,7 +457,7 @@ export const setLessonView = (key: string, mode: LessonViewMode, remember = true
 
 export type DeleteLessonResult =
   | { removed: true; path: string; restore: () => Promise<boolean> }
-  | { removed: false; conflict?: boolean; error?: string };
+  | { removed: false; conflict?: boolean; missing?: boolean; error?: string };
 
 const deleting = new Set<string>();
 
@@ -501,6 +501,10 @@ export const deleteLesson = async (
     saveSeq += 1;
     savedAtSeq.set(key, saveSeq);
     onBeforeRemove?.();
+    if (body.missing === true) {
+      adoptExternalVersion(key, null, null);
+      return { removed: false, missing: true };
+    }
     const nextEdits = omitKey(get().edits, key);
     set((s) => {
       const nextFiles = s.files.filter((x) => x.key !== key);

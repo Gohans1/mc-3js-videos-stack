@@ -51,6 +51,7 @@ export function NewLessonForm({
     >
       {hasProject && (
         <Segmented<LessonScope>
+          keepClickFocus
           label="New lesson scope"
           animateIndicator={false}
           value={newScope}

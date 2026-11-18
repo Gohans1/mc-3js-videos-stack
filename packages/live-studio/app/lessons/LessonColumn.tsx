@@ -302,6 +302,7 @@ export function LessonColumnView({
             <Segmented<LessonScopeFilter>
               label="Filter lessons by scope"
               animateIndicator={false}
+              keepClickFocus
               value={activeFilter}
               className="tabular-nums @max-[19rem]/lesson-deck:hidden [&_[role=radio]]:text-sm"
               items={scopeOptions.map(({ value, label }) => ({ id: value, title: label }))}

@@ -598,6 +598,25 @@ test("a failed manual run stays visible until an explicit retry and a successful
   }
 });
 
+test("an oversized lesson draft can be excluded without losing its text", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  await fillNote("Camera framing");
+  await waitFor("document.body.textContent.includes('Files: 1')");
+  await view.evaluate(
+    "window.inspectTest.lessons.setState({edits:{'all:camera.md':{text:'x'.repeat(1000001),base:'fixture'}}})",
+  );
+  await waitFor("document.body.textContent.includes('Lesson draft is too long')");
+  expect(
+    await view.evaluate("document.querySelector('[data-inspector-controls]').textContent"),
+  ).toContain("Shorten camera.md in Deck to 1,000,000 characters");
+  await clickButton("Exclude this lesson");
+  await waitFor("document.body.textContent.includes('Files: 0')");
+  expect(
+    await view.evaluate("window.inspectTest.lessons.getState().edits['all:camera.md'].text.length"),
+  ).toBe(1000001);
+});
+
 test("a failed lesson list load offers recovery without claiming there are no lessons", async () => {
   await navigateFixture();
   await waitFor("window.inspectTest.session.getState().hydrated");

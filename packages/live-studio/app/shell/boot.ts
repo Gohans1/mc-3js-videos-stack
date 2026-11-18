@@ -18,7 +18,7 @@ const dropClickFocus = (e: MouseEvent) => {
     const at = document.activeElement;
     if (
       at instanceof HTMLElement &&
-      !at.closest("[data-cli-panel], [data-cli-dialog]") &&
+      !at.closest("[data-cli-panel], [data-cli-dialog], [data-keep-click-focus]") &&
       at.matches("button, summary, [role=tab], [role=switch], [role=checkbox], [role=radio]") &&
       !at.closest('[role="dialog"], [role="alertdialog"]') &&
       !at.matches("[aria-haspopup][aria-expanded=true]")
