@@ -59,14 +59,14 @@ const timeFraction = (ks, t, i) =>
   i < 0 || ks[i + 1].t <= ks[i].t
     ? 1
     : THREE.MathUtils.clamp((t - ks[i].t) / (ks[i + 1].t - ks[i].t), 0, 1);
-const progressAt = (ks, t, i) => {
+const progressAt = (ks, t, i, channel) => {
   if (i < 0) return 1;
   if (t <= ks[0].t) return 0;
   const a = ks[i],
     b = ks[i + 1];
   if (b.t <= a.t) return 1;
-  if (b.motion === "hold") return Number(t >= b.t);
-  return t >= b.t ? 1 : easeOf(b.ease)((t - a.t) / (b.t - a.t));
+  if (b.motion === "hold") return Number(b.reversePath ? t > a.t : t >= b.t);
+  return t >= b.t ? 1 : easeOf(b.easeChannels?.[channel] ?? b.ease)((t - a.t) / (b.t - a.t));
 };
 // Camera shake for impacts only: [{t, d, amp}] (amp in metres, roll in radians x 0.1). Decorrelated x/y/roll noise that
 // starts at full and decays to nothing over d; keep d <= ~0.6 s and match amp to the hit (a door kick 0.02, a blast 0.06)
@@ -96,6 +96,7 @@ type HandheldConfig = {
 };
 
 export type FocusTargetSpec =
+  | null
   | number
   | string
   | { target: string; offset?: readonly [number, number, number] }
@@ -111,7 +112,7 @@ const spanAt = (ks, t) => {
       const x = dt > 1e-9 ? THREE.MathUtils.clamp((t - ks[i].t) / dt, 0, 1) : 1;
       const u =
         ks[i + 1].motion === "hold"
-          ? Number(x === 1)
+          ? Number(ks[i + 1].reversePath ? x > 0 : x === 1)
           : ks[i + 1].ease !== undefined
             ? easeOf(ks[i + 1].ease)(x)
             : x * x * (3 - 2 * x);
@@ -121,8 +122,13 @@ const spanAt = (ks, t) => {
   return { i: last, j: last, u: 1 };
 };
 
-const lerpKey = (ks, t, f, d) => {
-  const { i, j, u } = spanAt(ks, t);
+const channelProgress = (ks, t, span, channel) => {
+  const ease = ks[span.j].easeChannels?.[channel];
+  if (span.i === span.j || ease === undefined || ks[span.j].motion === "hold") return span.u;
+  return easeOf(ease)(timeFraction(ks, t, span.i));
+};
+const lerpKey = (ks, f, d, span, u) => {
+  const { i, j } = span;
   return THREE.MathUtils.lerp(ks[i][f] ?? d, ks[j][f] ?? d, u);
 };
 
@@ -311,30 +317,37 @@ export function cameraAt(t, keys, opts?: { aspect?: number; resolveAnchor?: Reso
     ? compileCameraPath(ks, opts?.resolveAnchor)
     : (s.path ??= compileCameraPath(ks));
   const idx = spanIndex(ks, t);
-  const u = progressAt(ks, t, idx);
-  const { p, l } = path.pose(idx, u);
+  const u = progressAt(ks, t, idx, "position");
+  const lookU = progressAt(ks, t, idx, "aim");
+  const pose = path.pose(idx, u);
+  const p = pose.p,
+    l = lookU === u ? pose.l : path.pose(idx, lookU).l;
   const distance = path.distanceAt(idx, timeFraction(ks, t, idx));
 
   const span = spanAt(ks, t);
   const c0 = carryAt(ks, span.i, aspect);
   const c1 = span.j === span.i ? c0 : carryAt(ks, span.j, aspect);
-  const fov = c0.fov === c1.fov ? c0.fov : lmix(c0.fov, c1.fov, span.u);
+  const lensU = channelProgress(ks, t, span, "lens");
+  const dofU = channelProgress(ks, t, span, "dof");
+  const shakeU = channelProgress(ks, t, span, "shake");
+  const rollU = channelProgress(ks, t, span, "roll");
+  const fov = c0.fov === c1.fov ? c0.fov : lmix(c0.fov, c1.fov, lensU);
   const mm = mmOf(fov, aspect);
 
   // Interpolate aperture radius (1/fstop) so fading from sharp (0) to shallow DOF avoids passing near f/0.1.
   const a0 = c0.fstop > 0 ? 1 / c0.fstop : 0;
   const a1 = c1.fstop > 0 ? 1 / c1.fstop : 0;
-  const ap = THREE.MathUtils.lerp(a0, a1, span.u);
+  const ap = THREE.MathUtils.lerp(a0, a1, dofU);
   const fstop = ap > 1e-6 ? 1 / ap : 0;
 
   let focus: FocusValue | undefined;
-  if (span.u <= 0 || sameFocus(c0.focus, c1.focus)) focus = c0.focus;
-  else if (span.u >= 1) focus = c1.focus;
-  else focus = { from: c0.focus, to: c1.focus, u: span.u };
+  if (dofU <= 0 || sameFocus(c0.focus, c1.focus)) focus = c0.focus;
+  else if (dofU >= 1) focus = c1.focus;
+  else focus = { from: c0.focus, to: c1.focus, u: dofU };
 
-  let roll = lerpKey(ks, t, "roll", 0);
-  const wave = lerpKey(ks, t, "wave", 1);
-  const bob = lerpKey(ks, t, "bob", 0);
+  let roll = lerpKey(ks, "roll", 0, span, rollU);
+  const wave = lerpKey(ks, "wave", 1, span, shakeU);
+  const bob = lerpKey(ks, "bob", 0, span, shakeU);
   const base = { p: p.clone(), l: l.clone(), fov, roll };
 
   let speed = 0;
@@ -361,7 +374,7 @@ export function cameraAt(t, keys, opts?: { aspect?: number; resolveAnchor?: Reso
   l.y += wave * 0.08 * Math.sin(t * 0.71 + 1.3);
   roll += wave * 0.012 * Math.sin(t * 0.53) + step * amt * 0.06;
 
-  const shakes = blendHandheld(c0.hh, c1.hh, span.u);
+  const shakes = blendHandheld(c0.hh, c1.hh, shakeU);
   let strongest: HandheldConfig | undefined;
   for (const shake of shakes) {
     const offset = sampleHandheld(shake, 1, t);
@@ -369,9 +382,9 @@ export function cameraAt(t, keys, opts?: { aspect?: number; resolveAnchor?: Reso
     if (!strongest || shake.amount >= strongest.amount) strongest = shake;
   }
   const sampleMm =
-    span.u <= 0 || c0.mm === c1.mm
+    lensU <= 0 || c0.mm === c1.mm
       ? c0.mm
-      : span.u >= 1
+      : lensU >= 1
         ? c1.mm
         : c0.mm !== undefined && c1.mm !== undefined
           ? mm

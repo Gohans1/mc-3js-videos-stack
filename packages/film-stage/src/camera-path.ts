@@ -13,7 +13,9 @@ interface PathKey {
   p: CameraPoint;
   l: CameraPoint;
   motion?: CameraMotion;
+  reversePath?: boolean;
   ease?: unknown;
+  easeChannels?: { position?: unknown };
 }
 
 const isPoint = (point: unknown): point is readonly [number, number, number] =>
@@ -59,6 +61,7 @@ class OrbitCurve extends Curve<Vector3> {
     end: Vector3,
     private readonly from: Vector3,
     private readonly to: Vector3,
+    private readonly reversed = false,
   ) {
     super();
     const relative = start.clone().sub(from);
@@ -69,6 +72,7 @@ class OrbitCurve extends Curve<Vector3> {
   }
 
   getPoint(t: number, target = new Vector3()) {
+    if (this.reversed) t = 1 - t;
     return target
       .lerpVectors(this.from, this.to, t)
       .add(
@@ -109,7 +113,9 @@ export const compileCameraPath = (keys: PathKey[], resolve?: ResolveCameraAnchor
       to = targets[i + 1];
     const position =
       mode === "orbit"
-        ? new OrbitCurve(a, b, from, to)
+        ? key.reversePath
+          ? new OrbitCurve(b, a, to, from, true)
+          : new OrbitCurve(a, b, from, to)
         : mode === "smooth" && !a.equals(b)
           ? smoothCurve(positions, i)
           : new LineCurve3(a, b);
@@ -118,7 +124,7 @@ export const compileCameraPath = (keys: PathKey[], resolve?: ResolveCameraAnchor
     position.arcLengthDivisions = SAMPLES_PER_SPAN;
     look.arcLengthDivisions = SAMPLES_PER_SPAN;
     const length = mode === "hold" ? 0 : position.getLength();
-    const travel = length ? traveled(easeOf(key.ease)) : null;
+    const travel = length ? traveled(easeOf(key.easeChannels?.position ?? key.ease)) : null;
     const span = { length, offset: total, position, look, hold: mode === "hold", travel };
     total += length * (travel?.[SAMPLES_PER_SPAN] ?? 0);
     return span;

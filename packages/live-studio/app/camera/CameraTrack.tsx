@@ -28,11 +28,22 @@ import { SAME } from "../core/time";
 import { seek } from "../playback/transport";
 import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { askPaste, copyAttrs, hasAttrs } from "../timeline/attributes";
+import { copy } from "../timeline/clipboard";
 import { addFreeze } from "../timeline/timing";
 import { animOf, clearAnims, pickShot, shotSpan, type Slot, SLOT_NAMES } from "./anim";
-import { keys, removeKey, splitShot } from "./cam";
+import {
+  applyEasyEase,
+  holdAfter,
+  keys,
+  movable,
+  removeKey,
+  seekCameraKey,
+  setKey,
+  setKeyLocked,
+  splitShot,
+} from "./cam";
 import { SHOT_NAME_ID } from "./CamPanel";
-import { cutAtPointer, shotAtPointer } from "./camrow";
+import { cameraKeyAtPointer, cutAtPointer, shotAtPointer } from "./camrow";
 import { setTransition, TRANSITION_DRAG, transitionOf } from "./transitions";
 
 const openTab = (i: number, side: "cam" | "anim" | "transition", slot?: Slot) => {
@@ -49,6 +60,9 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
     sound = useStudio((s) => s.sound),
     timing = useStudio((s) => s.timing);
   const [shot, setShot] = useState(-1);
+  const [keyIndex, setKeyIndex] = useState(-1);
+  useStudio((s) => s.camRev);
+  const key = keys[keyIndex];
   const [a, b] = shot >= 0 ? shotSpan(shot) : [0, DURATION];
   const cut = shot > 0 ? keys.findIndex((k) => k.cut && Math.abs(k.t - a) < SAME) : -1;
   const inside = S.t > a + SAME * 3 && S.t < b - SAME * 3,
@@ -58,6 +72,12 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
       <ContextMenuTrigger
         className={cn(!shown && "hidden")}
         onContextMenu={(e) => {
+          const i = cameraKeyAtPointer(e);
+          setKeyIndex(i);
+          if (i >= 0) {
+            setKey(i);
+            return;
+          }
           const s = shotAtPointer(e);
           setShot(s);
           if (s >= 0) pickShot(s);
@@ -84,7 +104,50 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
         />
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-52">
-        {shot < 0 || !SHOTS_OUT[shot] ? (
+        {key ? (
+          <>
+            <ContextMenuGroup>
+              <ContextMenuLabel>
+                {key.cut ? "Camera cut" : "Camera keyframe " + (keyIndex + 1)}
+              </ContextMenuLabel>
+            </ContextMenuGroup>
+            <ContextMenuItem onClick={() => seekCameraKey(keyIndex)}>
+              Go to keyframe
+            </ContextMenuItem>
+            <ContextMenuItem disabled={!movable(keyIndex)} onClick={copy}>
+              Copy keyframe<ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem onClick={copyAttrs}>
+              Copy attributes<ContextMenuShortcut>Ctrl+Alt+C</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem disabled={!hasAttrs() || key.locked} onClick={askPaste}>
+              Paste attributes<ContextMenuShortcut>Ctrl+Alt+V</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={!movable(keyIndex)}
+              onClick={() => applyEasyEase([keyIndex])}
+            >
+              Easy Ease<ContextMenuShortcut>F9</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={!movable(keyIndex)}
+              onClick={() => applyEasyEase([keyIndex], true)}
+            >
+              Easy Ease In<ContextMenuShortcut>Shift+F9</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => holdAfter(keyIndex)}>Hold 1 s</ContextMenuItem>
+            <ContextMenuItem onClick={() => setKeyLocked(keyIndex, !key.locked)}>
+              {key.locked ? "Unlock keyframe" : "Lock keyframe"}
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={key.locked || (!movable(keyIndex) && !(key.cut && data))}
+              onClick={() => removeKey(keyIndex)}
+            >
+              {key.cut ? "Delete cut and merge shots" : "Delete keyframe"}
+            </ContextMenuItem>
+          </>
+        ) : shot < 0 || !SHOTS_OUT[shot] ? (
           <ContextMenuGroup>
             <ContextMenuLabel>No shot here</ContextMenuLabel>
           </ContextMenuGroup>

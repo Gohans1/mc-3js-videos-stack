@@ -24,7 +24,7 @@ import type { CameraPick } from "./slice";
 
 type PointField = "p" | "l";
 const worldPoint = (point: readonly [number, number, number]) => new Vector3(...point);
-const resolveKeyPoint = (key: CamKey, field: PointField) => {
+export const resolveKeyPoint = (key: CamKey, field: PointField) => {
   const point = key[field];
   if (Array.isArray(point)) return worldPoint(point);
   const actual = S.tools?.resolveCameraAnchor?.(point);
@@ -34,7 +34,7 @@ const resolveKeyPoint = (key: CamKey, field: PointField) => {
 };
 const unavailable = () =>
   say("This film must provide cameraSample or resolveCameraAnchor to edit a tracked point");
-const storedPoint = (point: Point, world: Vector3) =>
+export const storedPoint = (point: Point, world: Vector3) =>
   Array.isArray(point)
     ? vectorPoint(world)
     : S.tools?.moveCameraAnchor?.(point, vectorPoint(world));

@@ -626,6 +626,7 @@ export function SliderRow({
             data-gradient={gradient}
             onValueChange={(v: number | readonly number[]) => previewLive(at(one(v)))}
             onValueCommitted={(v: number | readonly number[]) => commitSave(at(one(v)))}
+            onValueCancelled={cancelLive}
           />
         </div>
         <ValueBox

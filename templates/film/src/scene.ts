@@ -300,18 +300,24 @@ export async function buildScene(canvas, W, H, draft = false) {
     placed.draw(t);
     scene.updateMatrixWorld();
   };
-  const sampleCameraPath = (times) => {
+  const sampleCameraFrames = (times, sample) => {
+    if (!EDIT.cam.some((key) => !Array.isArray(key.p) || !Array.isArray(key.l))) {
+      return times.map(({ camera }) => sample(sampleTrack(camera), camera));
+    }
     try {
       return times.map(({ world, camera }) => {
         poseScene(world);
-        const cam = sampleTrack(camera);
-        animate(cam, camera, SHOTS_OUT, DURATION, anims);
-        return { p: cam.p, l: cam.l, fov: cam.fov, base: cam.base };
+        return sample(sampleTrack(camera), camera);
       });
     } finally {
       poseScene(worldTime);
     }
   };
+  const sampleCameraTrack = (times) => sampleCameraFrames(times, (cam) => cam.sample);
+  const sampleCameraPath = (times) => sampleCameraFrames(times, (cam, camera) => {
+    animate(cam, camera, SHOTS_OUT, DURATION, anims);
+    return { p: cam.p, l: cam.l, fov: cam.fov, base: cam.base };
+  });
   const frame = (t, view) => {
     const scouting = free.on && !free.previewEffects;
     const activeView = view === undefined || view === shotAt(t);
@@ -498,6 +504,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     optics: opticsTelemetry,
     cameraSample,
     sampleCameraPath,
+    sampleCameraTrack,
     cameraClock: true,
     moveCameraAnchor,
     resolveCameraAnchor,

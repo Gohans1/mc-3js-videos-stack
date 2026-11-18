@@ -168,7 +168,7 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | 3 | Đồng hồ camera khi Freeze và Speed | Qua review và kiểm thử |
 | 4 | CamPanel, lấy nét, chỉnh bố cục và nắn góc | Qua review và kiểm thử |
 | 5 | Free Cam, đường bay 3D và kiểm tra xuyên tường | Qua review và kiểm thử |
-| 6 | Timeline, easing, Graph Editor và thao tác keyframe | Chờ |
+| 6 | Timeline, easing, Graph Editor và thao tác keyframe | Đã kiểm thử, chờ review |
 | 7 | Preview, HUD, Guides, so góc và Shotlist | Chờ |
 | 8 | Quang học khi xuất, hiệu ứng, recipe và Take | Chờ |
 
@@ -214,3 +214,14 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Đường bay | Hiện vị trí, hướng ngắm và đường sau AnimPanel. Kéo tay nắm p/l trong Free Cam và dùng va chạm để soi đoạn xuyên vật. |
 | Chrome | Tầm mắt cao 1,62 m, chặn trước vật cản và khôi phục sương tuyến tính. Đã kéo gizmo p, lưu key và thử đẩy khỏi vật. |
 | Lịch sử Free Cam | Khôi phục luôn Fly/Walk. Orbit chuyển sang Fly và quay lại lịch sử sẽ trả đúng góc Walk trên sàn. |
+
+| Ghi chú đợt 6 | Chi tiết |
+| --- | --- |
+| Timeline | Menu tại keyframe, F9 và Shift+F9, ngoặc vuông nhảy key, Alt+mũi tên dời một frame. Snap theo shot, in/out, note, beat và biên từ thoại. |
+| Graph Editor | Đồ thị Speed hoặc Value, easing từng kênh, giữ đường tham chiếu và các thao tác Scale, Breakdown, Time Reverse, Equalize, Falloff. |
+| Slider | Shift giảm độ nhạy khi kéo. Escape hủy thay đổi đang xem thử. |
+| Chrome | F9, Shift+F9 và Alt+mũi tên lưu đúng. Đã lưu easing Lens, giữ đường tham chiếu, đảo ID theo thứ tự và đổi tỉ lệ thời gian. |
+| Graph trong Freeze và Orbit | Lấy mẫu cùng đồng hồ với trình xem. Tại Chrome, 29 mẫu giữa Freeze đứng yên và đường Orbit vẫn cong theo tọa độ thật. |
+| Đảo thời gian | Đảo đúng hướng Hold và đường Orbit, giữ quang học kế thừa. Chấm key Hold nằm đúng đầu mút. |
+| Neo động | Transform và Falloff dùng tọa độ thế giới rồi đổi về neo tại khung hình của từng key. Khi neo di chuyển trong Hold, đồ thị Speed vẫn hiện vận tốc. |
+| Hủy kéo | Chrome đưa FOV từ 45,7° lên 101,8° trong lúc kéo rồi Escape trả về 45,7°. Tệp camera giữ nguyên. |

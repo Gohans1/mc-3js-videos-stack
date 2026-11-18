@@ -3,11 +3,11 @@ import { mmOf } from "film-stage/camera";
 import type { CamKey, Point } from "./cam";
 
 const keyFields = {
-  framing: ["p", "l", "roll", "motion"],
+  framing: ["p", "l", "roll", "motion", "reversePath"],
   lens: ["fov", "mm"],
   dof: ["fstop", "focus"],
   shake: ["handheld", "wave", "bob"],
-  speed: ["ease"],
+  speed: ["ease", "easeChannels"],
 } as const;
 export type CameraFieldGroup = keyof typeof keyFields;
 

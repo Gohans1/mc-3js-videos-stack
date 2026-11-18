@@ -229,6 +229,7 @@ export const Tools = z.looseObject({
   optics: OpticsTelemetry.optional(),
   cameraSample: fn.optional(),
   sampleCameraPath: fn.optional(),
+  sampleCameraTrack: fn.optional(),
   cameraClock: z.literal(true).optional(),
   moveCameraAnchor: fn.optional(),
   resolveCameraAnchor: fn.optional(),
@@ -622,15 +623,17 @@ const CamKey = z.looseObject({
   locked: z.boolean().optional(),
   reason: z.string().optional(),
   ease: Ease.optional(),
+  easeChannels: z.object({ position: Ease.optional(), aim: Ease.optional(), lens: Ease.optional(), dof: Ease.optional(), roll: Ease.optional(), shake: Ease.optional() }).optional(),
   fov: z.number().positive().optional(),
   mm: z.number().positive().optional(),
-  focus: FocusTarget.optional(),
+  focus: FocusTarget.nullish(),
   fstop: z.number().nonnegative().optional(),
   handheld: Handheld.optional(),
   wave: z.number().optional(),
   roll: z.number().optional(),
   bob: z.number().finite().optional(),
   motion: z.enum(["smooth", "linear", "hold", "orbit"]).optional(),
+  reversePath: z.boolean().optional(),
 });
 export const FOCUS_KEYS = [...Object.keys(FocusTargetObj.shape), ...Object.keys(FocusPoint.shape)];
 export const HANDHELD_KEYS = Object.keys(HandheldShape.shape);

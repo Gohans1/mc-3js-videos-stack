@@ -5,6 +5,7 @@ export let timingClock: TimingClock;
 export let layerClock: TimingClock;
 export function clockForTimeline(name: string): CameraClock;
 export function layerDuration(): number;
+export function cameraTimesAt(t: number): { world: number; camera: number };
 export function setTiming(
   data: Timing,
   sourceDuration?: number,

@@ -1,4 +1,4 @@
-import type { CameraMotion } from "film-stage/camera";
+import type { CameraChannel, CameraMotion } from "film-stage/camera";
 import { cameraKeyOptics } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
@@ -17,11 +17,13 @@ import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set, showError } from "../core/store";
-import { r3, SAME, stamp } from "../core/time";
+import { FPS, r3, SAME, stamp } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
 import { readSceneFrame } from "../picture/render";
+import { seekExact } from "../playback/transport";
 import {
   type CameraFieldGroup,
+  cameraKeyNavigation,
   cameraTailIndex,
   type CameraView,
   copyCameraFields,
@@ -48,11 +50,13 @@ export interface CamKey {
   wave?: number;
   bob?: number;
   motion?: CameraMotion;
+  reversePath?: boolean;
   cut?: boolean;
   tailId?: string | false;
   locked?: boolean;
   reason?: string;
   ease?: Ease;
+  easeChannels?: Partial<Record<CameraChannel, Ease>>;
   [k: string]: unknown;
 }
 
@@ -261,6 +265,38 @@ export const setEase = (i: number, ease: Ease | undefined) =>
     if (ease === undefined) delete ks[i].ease;
     else ks[i].ease = ease;
   });
+export const applyEasyEase = (indices: number[], incoming = false) => {
+  const curve: Ease = [1 / 3, incoming ? 1 / 3 : 0, 2 / 3, 1];
+  edit((rows) => {
+    for (const i of indices.filter(movable)) {
+      rows[i].ease = [...curve];
+      if (rows[i].motion === "hold") delete rows[i].motion;
+    }
+  });
+};
+export const seekCameraKey = (index: number) => {
+  if (!keys[index]) return;
+  seekExact(cameraKeyFrameTime(index));
+  setKey(index);
+};
+const cameraPicks = () => {
+  const { camKey, camPicks } = get();
+  return camPicks.length ? camPicks : camKey === null ? [] : [camKey];
+};
+export const easeCameraPicks = (incoming: boolean) => applyEasyEase(cameraPicks(), incoming);
+export const nudgeCameraPicks = (direction: -1 | 1) => {
+  const picked = cameraPicks().filter(movable);
+  if (!picked.length) return;
+  const [min, max] = groupRoom(picked);
+  const offset = Math.max(min, Math.min(max, direction / FPS));
+  if (offset) shiftCamKeys(picked, offset);
+};
+export const stepCameraKey = (direction: -1 | 1) => {
+  const nav = cameraKeyNavigation(keys, S.t, get().camKey, SAME);
+  const index = direction < 0 ? nav.prev : nav.next;
+  if (index !== null) seekCameraKey(index);
+};
+
 export const pasteKeyAttrs = (from: CamKey, to: number[], what: CameraFieldGroup[]) =>
   edit((ks) => {
     for (const i of to) {
@@ -361,6 +397,7 @@ const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: Ca
     cut: _cut,
     tailId: _tail,
     ease: _ease,
+    easeChannels: _channels,
     motion: _motion,
     __timing: _timing,
     locked: _locked,
@@ -375,6 +412,7 @@ const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: Ca
   if (incoming && !incoming.cut) {
     key.motion = incoming.motion;
     key.ease = structuredClone(incoming.ease);
+    key.easeChannels = structuredClone(incoming.easeChannels);
   }
   return withFraming(key, view) ? key : null;
 };
@@ -487,8 +525,18 @@ const rollWith = (i: number, t: number, cam: typeof edit, shots: Apply<ShotRow[]
     },
   );
 };
-export const rollCut = (i: number, t: number) =>
+const speechAtCut = (t: number) =>
+  S.voiceOut.flatMap((line) => line.words).find((word) => word.s < t && t < word.e)?.w;
+export const rollCut = (i: number, t: number) => {
+  const shot = shotOfCut(i);
+  const was = SHOTS_OUT[shot]?.t;
   together(() => rollWith(i, t, edit, shotsDoc.edit));
+  const at = SHOTS_OUT[shot]?.t;
+  if (at !== undefined && at !== was) {
+    const word = speechAtCut(at);
+    if (word) say("Cut crosses the spoken word “" + word + "”");
+  }
+};
 export const previewRoll = (i: number, t: number) => rollWith(i, t, preview, shotsDoc.preview);
 
 // ---------- Split and merge (CapCut's Split, B). Splitting at the playhead changes nothing on screen: the first half keeps its move
@@ -585,6 +633,9 @@ export const splitShot = () => {
     ),
   );
   selectPlacement(start.id, start.t);
+  const word = speechAtCut(start.t);
+  if (word)
+    return say("Shot split at " + stamp(start.t) + ". The cut crosses “" + word + "”.", 6000);
   say(
     `Shot ${s} split at ${stamp(t)}.${free ? "" : " Frame the new shot with Free camera (F)."}`,
     6000,

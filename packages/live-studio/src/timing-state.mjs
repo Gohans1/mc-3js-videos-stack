@@ -81,14 +81,22 @@ export const clockForTimeline = (name) =>
 export const layerDuration = () =>
   Math.max(0, ...Object.values(layerClocks).map((clock) => clock.duration));
 
+export const cameraTimesAt = (t) => {
+  const world = frameAt(timingClock, t);
+  return {
+    world,
+    camera: cameraClock.cameraRateAt?.(t) === undefined ? world : cameraClock.sourceAt(t),
+  };
+};
+
 export const timedDraw = (draw) => {
   const asyncFrame = draw.renderFrame?.bind(draw);
   const at = (t, render) => {
-    const frame = frameAt(timingClock, t),
-      layers = layerClock.sourceAt(t);
+    const { world: frame, camera } = cameraTimesAt(t);
+    const layers = layerClock.sourceAt(t);
     const adjustment = clockForTimeline("adjustment");
     return render(frame, {
-      camera: cameraClock.cameraRateAt?.(t) !== undefined ? cameraClock.sourceAt(t) : frame,
+      camera,
       layers,
       adjustments: adjustment.sourceAt(t),
       textTime: (item) => overlayTime(layerClock, t, item),

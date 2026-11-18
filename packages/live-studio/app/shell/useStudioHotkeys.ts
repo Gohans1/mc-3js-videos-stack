@@ -4,8 +4,7 @@
 // the key's place, not its letter, so they work on any keyboard layout; typing in the note box never reaches them
 import { type UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
 
-import { restoreFreeView } from "../picture/freecam";
-import { saveView } from "../camera/cam";
+import { easeCameraPicks, nudgeCameraPicks, saveView, stepCameraKey } from "../camera/cam";
 import { copyCam } from "../camera/camline";
 import { AWAY } from "../core/device";
 import { redo, undo } from "../core/doc";
@@ -25,6 +24,7 @@ import {
   stepReview,
 } from "../notes/notes";
 import { chooseInGroup } from "../options/options";
+import { restoreFreeView } from "../picture/freecam";
 import {
   jumpShot,
   nudgeVolume,
@@ -113,6 +113,8 @@ export function useStudioHotkeys() {
     cam = useStudio((s) => s.cam),
     keyPicks = useStudio((s) => s.keyPicks.length),
     free = useStudio((s) => s.free);
+  const cameraSide = useStudio((s) => s.side === "cam" || s.side === "speed");
+  const cameraSelected = camKey !== null || camPicks > 0;
   const object = useStudio((s) => s.object),
     shots = useStudio((s) => s.shots),
     blade = useStudio((s) => s.blade),
@@ -181,8 +183,24 @@ export function useStudioHotkeys() {
       callback: () => trimSelected("right"),
       options: { enabled: (picks > 0 || textPicks > 0 || layerPicks > 0 || shotPicked) && !free },
     },
-    { hotkey: "[", callback: () => free ? restoreFreeView(-1) : selectSide(-1), options: { enabled: free || sound } },
-    { hotkey: "]", callback: () => free ? restoreFreeView(1) : selectSide(1), options: { enabled: free || sound } },
+    {
+      hotkey: "[",
+      callback: () => {
+        if (free) restoreFreeView(-1);
+        else if (cam && (cameraSide || cameraSelected || !sound)) stepCameraKey(-1);
+        else selectSide(-1);
+      },
+      options: { enabled: free || sound || cam },
+    },
+    {
+      hotkey: "]",
+      callback: () => {
+        if (free) restoreFreeView(1);
+        else if (cam && (cameraSide || cameraSelected || !sound)) stepCameraKey(1);
+        else selectSide(1);
+      },
+      options: { enabled: free || sound || cam },
+    },
     {
       hotkey: "Mod+A",
       callback: () => setClips(allClips().filter((c) => !locked(c))),
@@ -262,6 +280,26 @@ export function useStudioHotkeys() {
     },
     { hotkey: "L", callback: () => shuttleOn(1) },
     { hotkey: "Shift+K", callback: () => saveView(), options: { enabled: cam } },
+    {
+      hotkey: "F9",
+      callback: () => easeCameraPicks(false),
+      options: { enabled: cam && cameraSelected },
+    },
+    {
+      hotkey: "Shift+F9",
+      callback: () => easeCameraPicks(true),
+      options: { enabled: cam && cameraSelected },
+    },
+    {
+      hotkey: "Alt+ArrowLeft",
+      callback: () => nudgeCameraPicks(-1),
+      options: { enabled: cam && cameraSelected },
+    },
+    {
+      hotkey: "Alt+ArrowRight",
+      callback: () => nudgeCameraPicks(1),
+      options: { enabled: cam && cameraSelected },
+    },
     { hotkey: "Alt+C", callback: copyCam },
     {
       hotkey: "G",

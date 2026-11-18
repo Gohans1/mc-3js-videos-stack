@@ -11,6 +11,10 @@ export type Ease = string | Bezier;
 const beziers = new Map<string, (x: number) => number>();
 // fallback: what a key without an ease gets in the film that plays it (the camera's "smooth", an object's "inout")
 export const easeFn = (e: Ease | undefined, fallback: string): ((x: number) => number) | null => {
+  if (typeof e === "string" && e.startsWith("reverse:")) {
+    const original = easeFn(e.slice(8), fallback);
+    return original ? (u) => 1 - original(1 - u) : null;
+  }
   if (Array.isArray(e)) {
     const k = e.join();
     if (!beziers.has(k)) beziers.set(k, BezierEasing(...e));

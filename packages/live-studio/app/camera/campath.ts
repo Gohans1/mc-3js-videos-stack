@@ -4,8 +4,7 @@ import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 
 import { gap } from "../../checks/contact.mjs";
-import { clockForTimeline, timingClock } from "../../src/timing-state.mjs";
-import { frameAt } from "../../src/timing.mjs";
+import { cameraTimesAt, clockForTimeline } from "../../src/timing-state.mjs";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
@@ -67,12 +66,6 @@ let shownField: Field = "p";
 let gizmo: TransformControls | null = null;
 let drag: { index: number; field: Field; snap: string; point: THREE.Vector3 } | null = null;
 
-const viewTimes = (t: number) => {
-  if (!get().timing) return { world: t, camera: t };
-  const world = frameAt(timingClock, t);
-  const cam = clockForTimeline("cam");
-  return { world, camera: cam.cameraRateAt?.(t) === undefined ? world : cam.sourceAt(t) };
-};
 const cameraRange = () => {
   const independent = clockForTimeline("cam").cameraSpans?.find(
     (span) => S.t >= span.from && S.t < span.to,
@@ -86,7 +79,9 @@ const cameraRange = () => {
 };
 const sample = (times: number[]) => {
   const tools = S.tools!;
-  const clockTimes = times.map(viewTimes);
+  const clockTimes = get().timing
+    ? times.map(cameraTimesAt)
+    : times.map((t) => ({ world: t, camera: t }));
   if (tools.sampleCameraPath) return tools.sampleCameraPath(clockTimes);
   const track = EDIT.cam as CamKey[];
   return clockTimes.map(({ camera }) =>

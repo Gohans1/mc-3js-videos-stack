@@ -41,6 +41,7 @@ declare module "film/scene" {
     optics?: OpticsTelemetry;
     cameraClock?: true;
     sampleCameraPath?: (times: readonly CameraPathTime[]) => CameraPathPose[];
+    sampleCameraTrack?: (times: readonly CameraPathTime[]) => import("./camera/camera-edit").CameraView[];
     cameraSample?: () => import("./camera/camera-edit").CameraView;
     moveCameraAnchor?: import("./camera/camera-edit").MoveCameraAnchor;
     resolveCameraAnchor?: import("film-stage/camera").ResolveCameraAnchor;

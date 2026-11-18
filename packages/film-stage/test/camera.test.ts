@@ -411,3 +411,46 @@ test("a world focus point stays on the same surface as the camera moves", () => 
   expect(resolveFocusDistance(focus, new THREE.Vector3(0, 0, -2), resolve).distance).toBe(4);
   expect(resolveFocusDistance(focus, new THREE.Vector3(0, 0, -4), resolve).distance).toBe(2);
 });
+
+test("camera channels can ease position and focal angle independently", () => {
+  const src = [
+    { t: 0, p: [0, 0, 0], l: [0, 0, -3], fov: 40, wave: 0 },
+    {
+      t: 1,
+      p: [4, 0, 0],
+      l: [4, 0, -3],
+      fov: 60,
+      wave: 0,
+      ease: "linear",
+      easeChannels: { lens: [0.42, 0, 1, 1] },
+    },
+  ];
+  const shot = cameraAt(0.25, src);
+  expect(shot.base.p.x).toBeCloseTo(1, 4);
+  expect(shot.fov).toBeLessThan(43);
+});
+
+test("reversed Hold jumps after its first key without changing either endpoint", () => {
+  const keys = [
+    { t: 0, p: [5, 0, 4], l: [5, 0, 0], fstop: 8, wave: 0 },
+    { t: 2, p: [1, 0, 4], l: [1, 0, 0], fstop: 2, motion: "hold", reversePath: true, wave: 0 },
+  ];
+  expect(cameraAt(0, keys).sample.p[0]).toBe(5);
+  expect(cameraAt(1, keys).sample.p[0]).toBe(1);
+  expect(cameraAt(1, keys).sample.l[0]).toBe(1);
+  expect(cameraAt(1, keys).sample.fstop).toBe(2);
+  expect(cameraAt(1, keys).speed).toBe(0);
+  expect(cameraAt(2, keys).sample.p[0]).toBe(1);
+});
+
+test("reversed antipodal orbit travels back along the same hemisphere", () => {
+  const keys = [
+    { t: 0, p: [0, 2, -5], l: [0, 2, 0], wave: 0 },
+    { t: 2, p: [0, 2, 5], l: [0, 2, 0], wave: 0, motion: "orbit" },
+  ];
+  const reversed = [
+    { ...keys[1], t: 0 },
+    { ...keys[0], t: 2, motion: "orbit", reversePath: true },
+  ];
+  expect(cameraAt(0.6, reversed).base.p.distanceTo(cameraAt(1.4, keys).base.p)).toBeLessThan(1e-6);
+});

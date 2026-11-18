@@ -154,6 +154,7 @@ export interface SliderProps extends Omit<
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
   onValueChange?: (value: number | readonly number[]) => void;
   onValueCommitted?: (value: number | readonly number[]) => void;
+  onValueCancelled?: () => void;
 }
 
 export function Slider({
@@ -172,6 +173,7 @@ export function Slider({
   onKeyDown,
   onValueChange,
   onValueCommitted,
+  onValueCancelled,
   ...props
 }: SliderProps) {
   const isControlled = value !== undefined;
@@ -192,6 +194,7 @@ export function Slider({
     onCommit: (v) => onCommitRef.current?.(v),
   });
   const drag = dragRef.current;
+  const anchor = useRef<{ raw: number; value: number; fine: boolean } | null>(null);
 
   const metrics = APPEARANCE[appearance];
   const halfThumb = metrics.halfThumb;
@@ -224,32 +227,45 @@ export function Slider({
         : r.width > 0
           ? (clientX - r.left) / r.width
           : 0;
-    return quantize(min + ratio * rangeSpan, min, max, step);
+    return min + ratio * rangeSpan;
   };
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (disabled || e.button !== 0) return;
+    if (disabled || !e.isPrimary || e.button !== 0) return;
+    e.preventDefault();
     inputRef.current?.focus({ preventScroll: true });
-    const next = valueFromPointer(e.clientX);
+    const raw = valueFromPointer(e.clientX);
+    const initial = e.shiftKey ? latestRef.current : raw;
+    anchor.current = { raw, value: initial, fine: e.shiftKey };
+    const next = quantize(initial, min, max, step);
     if (drag.start(e.currentTarget, e.pointerId, next)) emitChange(next);
   };
 
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.active || disabled) return;
-    const next = valueFromPointer(e.clientX);
+    const raw = valueFromPointer(e.clientX);
+    if (!anchor.current || anchor.current.fine !== e.shiftKey)
+      anchor.current = { raw, value: latestRef.current, fine: e.shiftKey };
+    const at = anchor.current;
+    const next = quantize(at.value + (raw - at.raw) * (at.fine ? 0.1 : 1), min, max, step);
     if (drag.move(next)) emitChange(next);
   };
 
   const finishPointer = (e: PointerEvent<HTMLDivElement>) => {
+    anchor.current = null;
     drag.end(e.currentTarget, e.pointerId);
   };
 
   const cancelPointer = (e: PointerEvent<HTMLDivElement>) => {
-    drag.cancel(e.type === "lostpointercapture" ? null : e.currentTarget, e.pointerId);
+    anchor.current = null;
+    if (drag.cancel(e.type === "lostpointercapture" ? null : e.currentTarget, e.pointerId))
+      onValueCancelled?.();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape" && drag.cancel(controlRef.current)) {
+      anchor.current = null;
+      onValueCancelled?.();
       e.preventDefault();
     }
     onKeyDown?.(e);

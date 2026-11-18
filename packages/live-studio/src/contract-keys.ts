@@ -64,6 +64,7 @@ export const CAM_KEYS = [
   "locked",
   "reason",
   "ease",
+  "easeChannels",
   "fov",
   "mm",
   "focus",
@@ -73,6 +74,7 @@ export const CAM_KEYS = [
   "roll",
   "bob",
   "motion",
+  "reversePath",
 ];
 export const SHOT_KEYS = ["id", "t", "cameraClock", "name", "anim", "transition", "adjust", "hits"];
 export const SHOT_SLOT_KEYS = [

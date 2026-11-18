@@ -1,6 +1,9 @@
 // @ts-nocheck
 import BezierEasing from "bezier-easing";
 
+export const CAMERA_CHANNELS = ["position", "aim", "lens", "dof", "roll", "shake"] as const;
+export type CameraChannel = (typeof CAMERA_CHANNELS)[number];
+
 // Pure Cinetic exponential, log-scale, impact-pulse and monotone-spline primitives so films and the studio share one math bank.
 export const expOut = (k = 6) => {
   const d = 1 - Math.exp(-k);
@@ -115,6 +118,10 @@ export const EASES = {
 // A key's ease may also be a CSS cubic-bezier [x1, y1, x2, y2] (the studio's curve editor writes these)
 const beziers = new WeakMap();
 export const easeOf = (e) => {
+  if (typeof e === "string" && e.startsWith("reverse:")) {
+    const original = easeOf(e.slice(8));
+    return (u: number) => 1 - original(1 - u);
+  }
   if (!Array.isArray(e)) return EASES[e] ?? EASES.smooth;
   if (!beziers.has(e)) beziers.set(e, BezierEasing(...e));
   return beziers.get(e);

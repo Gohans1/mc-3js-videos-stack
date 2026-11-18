@@ -20,12 +20,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import { type Ratio, RATIOS } from "../../src/frame.ts";
+import { armActivityChime } from "../activity/chime";
 import { copyCam } from "../camera/camline";
 import { HelpTip } from "../components/HelpTip";
 import { Tip } from "../components/Tip";
 import { AWAY } from "../core/device";
 import { engine } from "../core/engine";
-import { armActivityChime } from "../activity/chime";
 import { FLY_SPEED } from "../core/prefs";
 import { S } from "../core/state";
 import { set, setPref, useStudio } from "../core/store";
@@ -229,7 +229,16 @@ function Options() {
 }
 
 const KEYS: [ReactNode, ReactNode][] = [
-  ["Right-click the picture", "pick an object or title there; right-click empty space to clear the selection"],
+  [<Kbd key="cam-ease">F9 / Shift+F9</Kbd>, "Easy Ease / Easy Ease In on the selected camera keys"],
+  [<Kbd key="cam-nudge">Alt+← / Alt+→</Kbd>, "move the selected camera keys one frame"],
+  [
+    <Kbd key="cam-nav">[ / ]</Kbd>,
+    "previous / next camera key in Camera and Speed, or previous / next Free Camera view",
+  ],
+  [
+    "Right-click the picture",
+    "pick an object or title there; right-click empty space to clear the selection",
+  ],
   [
     "Drag the picture",
     "the free camera comes on from the view you see and turns with the drag (Shift+drag: orbit); F leaves it",

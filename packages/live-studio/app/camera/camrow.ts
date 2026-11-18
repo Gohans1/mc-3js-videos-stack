@@ -33,6 +33,7 @@ import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, noSnap, say, set } from "../core/store";
 import { makeSnapper, r3, snappedTo, snapTo, stamp } from "../core/time";
+import { noteMarks } from "../notes/notes";
 import { seek, setPlaying } from "../playback/transport";
 import { beatTimes } from "../sound/sound";
 import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/across";
@@ -266,7 +267,7 @@ const drawMotion = (
       }
       continue;
     }
-    drawSpeed(g, a, b, k0.t, k1.t, k1.ease, top, floor);
+    drawSpeed(g, a, b, k0.t, k1.t, k1.easeChannels?.position ?? k1.ease, top, floor);
   }
 };
 
@@ -550,8 +551,11 @@ const closePathAndFill = (g: CanvasRenderingContext2D, style: string) => {
 
 const snapPoints = () => [
   S.t,
+  ...SHOTS_OUT.map((shot) => shot.t),
+  ...(get().inOut ?? []),
+  ...noteMarks().map((note) => note.t),
   ...beatTimes(),
-  ...S.voiceOut.flatMap((l) => l.words.map((w) => w.s)),
+  ...S.voiceOut.flatMap((l) => l.words.flatMap((word) => [word.s, word.e])),
 ];
 const freezeAt = (t: number) =>
   freezesOf(timing).findIndex((f, i) => {
@@ -584,6 +588,15 @@ const keyUnder = (x: number, y: number, w: number, h: number, touch: boolean) =>
 };
 
 // The shot block under a right-click, for its menu (CameraTrack.tsx); -1 off the film
+export const cameraKeyAtPointer = (e: { clientX: number; clientY: number }) => {
+  const bounds = S.el.camrow.getBoundingClientRect();
+  const x = e.clientX - bounds.left;
+  const y = e.clientY - bounds.top;
+  if (Math.abs(y - keyY(bounds.height)) > 9) return -1;
+  const index = keyAt(x, false);
+  return freezeAt(timeAt(x, bounds.width)) >= 0 && !insideOutputFreeze(index) ? -1 : index;
+};
+
 export const shotAtPointer = (e: { clientX: number }) => {
   const c = S.el.camrow,
     r = c.getBoundingClientRect();

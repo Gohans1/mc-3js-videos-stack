@@ -7,14 +7,24 @@ import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { useFrameKey } from "../core/useFrameKey";
 import { DEFAULT_EASE, edit, keys, preview, restore, setEase, shownKey, snapshot } from "./cam";
+import { CameraGraph } from "./CameraGraph";
 
 const camDoc = { snapshot, restore };
 
 export function CameraEasePanel() {
   useStudio((s) => s.camRev);
   useFrameKey(() => shownKey(S.t));
-  const i = shownKey(S.t),
-    k = keys[i];
+  const i = shownKey(S.t);
+  return (
+    <>
+      <CameraKeyEase index={i} />
+      <CameraGraph index={i} />
+    </>
+  );
+}
+
+function CameraKeyEase({ index: i }: { index: number }) {
+  const k = keys[i];
   if (!k || i === 0 || k.cut) {
     return (
       <EmptyCard className="mx-3 mt-1" title={!k ? "No keyframe picked" : "A shot starts here"}>
@@ -46,6 +56,7 @@ export function CameraEasePanel() {
           items={CAMERA_MOTIONS.map((id) => ({ id, title: id[0].toUpperCase() + id.slice(1) }))}
           onChange={(motion) =>
             edit((rows) => {
+              if (rows[i].motion !== motion) delete rows[i].reversePath;
               rows[i].motion = motion;
             })
           }

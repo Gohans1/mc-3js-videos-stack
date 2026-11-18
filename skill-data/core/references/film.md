@@ -54,6 +54,7 @@ A Shorts film sets "ratio": "9:16" under "live-studio" in package.json: drafts a
 | Đường camera | motion trên key sau chọn smooth, linear, hold hoặc orbit. Bước chân theo độ dài đường bay trong shot. | Camera |
 | Neo camera | p và l có thể dùng target cùng offset. Thêm space local để lấy hệ trục của đối tượng. | Camera |
 | Ghi chú key camera | reason hiện lý do chọn góc máy, locked bảo vệ thao tác Studio. focus nhận mét, target hoặc point theo tọa độ cảnh. | Camera |
+| Easing theo kênh | easeChannels nhận position, aim, lens, dof, roll hoặc shake. Kênh thiếu dùng easing chung của key. | Camera |
 | Thời gian camera | Đặt cameraClock output trên shot để camera chạy đều qua thời lượng xuất dù cảnh Freeze hoặc Speed Ramp. | Camera |
 | `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                                    | Scene     |
 | `src/timeline/text.json`, `adjust.json` | On-screen text, colour and look layers                                                                | Scene     |
