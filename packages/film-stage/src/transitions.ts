@@ -94,7 +94,7 @@ export function makeTransitions(
   frame: (t: number, shot?: number) => void,
   shots: () => Shot[],
   end: () => number,
-  free: { on: boolean },
+  free: { on: boolean; previewEffects?: boolean },
   finish?: (t: number) => void,
   enabled?: (cut: number) => boolean,
   extra?: readonly TransitionDef[],
@@ -153,8 +153,9 @@ export function makeTransitions(
   };
 
   const quad = new FullScreenQuad();
+  const active = (t: number) => free.on && !free.previewEffects ? null : transitionAt(shots(), end(), t, catalogue);
   const draw = (t: number) => {
-    const tr = free.on ? null : transitionAt(shots(), end(), t, catalogue);
+    const tr = active(t);
     const def = tr ? findTransition(tr.fx, catalogue) : null;
     if (!tr || !def || enabled?.(shots()[tr.shot].t) === false) {
       frame(t);
@@ -212,11 +213,11 @@ export function makeTransitions(
   };
   draw.transitions = catalogue;
   draw.needsPreparation = (t: number) => {
-    const tr = free.on ? null : transitionAt(shots(), end(), t, catalogue);
+    const tr = active(t);
     return !!tr && !!transitionExtension(tr.fx)?.create;
   };
   draw.prepareFrame = async (t: number) => {
-    const tr = free.on ? null : transitionAt(shots(), end(), t, catalogue);
+    const tr = active(t);
     if (!tr || enabled?.(shots()[tr.shot].t) === false) return;
     const extension = extensionFor(tr.fx);
     if (!extension) return;

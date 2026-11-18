@@ -1,6 +1,7 @@
+import { applyCameraPick, cancelCameraPick } from "../camera/camera-framing";
 // Preview input: a click or tap pins a note, a right-click picks an object or title, and a right drag draws a note.
 // A left drag moves a title or wakes Free Camera from the film view. On a phone the picture is for notes only.
-import { applyCameraPick, cancelCameraPick } from "../camera/camera-framing";
+import { cameraGizmoBusy, pickCameraPath } from "../camera/campath";
 import { PHONE } from "../core/device";
 import { S } from "../core/state";
 import { get } from "../core/store";
@@ -12,7 +13,16 @@ import { setPlaying } from "../playback/transport";
 import { startTextDrag, textAt, textDoubleClick } from "../text/onpicture";
 import { pickText } from "../text/text";
 import { frameSize } from "./frame";
-import { flight, flyCam, moveCam, setFree, turnAbout } from "./freecam";
+import {
+  flight,
+  flyCam,
+  moveCam,
+  orbitFree,
+  rememberFreeView,
+  setFree,
+  setOrbitPivot,
+  turnAbout,
+} from "./freecam";
 import { IDLE_VIEWPORT_GESTURE, stepViewport, type ViewportGesture } from "./gesture";
 import { lookAtClick } from "./look";
 import { render } from "./render";
@@ -33,10 +43,10 @@ export const attachPicture = () => {
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const;
   };
   const stepCamDrag = (mode: "look" | "orbit" | "slide", dx: number, dy: number) => {
-    if (!S.tools) return;
+    if (!S.tools || get().freeLocked) return;
     const f = S.tools.free;
     if (mode === "look") turnAbout(f.p, f.l, -dx * 0.0025, dy * 0.0025);
-    else if (mode === "orbit") turnAbout(f.l, f.p, -dx * 0.005, -dy * 0.005);
+    else if (mode === "orbit") orbitFree(-dx * 0.005, -dy * 0.005);
     else {
       const s = f.p.distanceTo(f.l) * 0.0012;
       moveCam(0, -dx * s, dy * s);
@@ -44,6 +54,7 @@ export const attachPicture = () => {
     S.viewMoved = true;
   };
   canvas.addEventListener("pointerdown", (e) => {
+    if (e.button === 0 && e.altKey && S.tools?.free.on && !get().cameraPick) return;
     const prev = gesture;
     const next = stepViewport(gesture, {
       type: "press",
@@ -57,11 +68,12 @@ export const attachPicture = () => {
       raw: e,
     });
     if (next.gesture === prev) return;
-    if (e.button === 0 && gizmoBusy()) {
+    if (e.button === 0 && (gizmoBusy() || cameraGizmoBusy())) {
       gesture = IDLE_VIEWPORT_GESTURE;
       return;
     } // the gizmo's handle under the pointer takes this drag
     gesture = next.gesture;
+    if (S.tools?.free.on) rememberFreeView();
     if (next.capture) canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
@@ -96,6 +108,7 @@ export const attachPicture = () => {
         return;
       }
       setFree(true, true);
+      rememberFreeView();
       canvas.setPointerCapture(gesture.id);
       hover(null);
       stepCamDrag(gesture.mode, e.clientX - prev.x, e.clientY - prev.y);
@@ -196,7 +209,7 @@ export const attachPicture = () => {
   addEventListener(
     "keydown",
     (e) => {
-      if (!S.tools?.free.on || get().modal !== null) return;
+      if (!S.tools?.free.on || get().freeLocked || get().modal !== null) return;
       if (
         e.target instanceof HTMLElement &&
         (e.target.closest(
@@ -206,7 +219,9 @@ export const attachPicture = () => {
             e.target.closest("button, summary, [role=checkbox], [role=switch], [role=radio]")))
       )
         return;
+      const wasFlying = flight.flying();
       if (!e.ctrlKey && !e.metaKey && !e.altKey && flight.press(e.code, e.timeStamp / 1000)) {
+        if (!wasFlying) rememberFreeView();
         e.preventDefault();
         S.viewMoved = true;
       } else chord();
@@ -228,17 +243,31 @@ export const attachPicture = () => {
     gesture = res.gesture;
     if (res.dropSketch || sketch.on()) sketch.drop();
   });
+  let lastWheel = -Infinity;
   canvas.addEventListener(
     "wheel",
     (e) => {
       if (!S.tools?.free.on) return;
       e.preventDefault();
+      if (get().freeLocked) return;
+      if (e.timeStamp - lastWheel > 250) rememberFreeView();
+      lastWheel = e.timeStamp;
       moveCam((e.deltaY > 0 ? -1 : 1) * (e.shiftKey ? 0.03 : 0.12), 0, 0);
     },
     { passive: false },
   );
   // On click, not pointerup: a phone only lets the note box take focus and raise its keyboard from a click
   canvas.addEventListener("click", (e) => {
+    if (e.button === 0 && e.altKey && S.tools?.free.on && !get().cameraPick) {
+      if (get().freeLocked) return;
+      const [x, y] = frac(e),
+        t = S.t;
+      void render(t, () => {
+        const hit = lookAtClick(x, y);
+        if (hit.world) setOrbitPivot(hit.world);
+      });
+      return;
+    }
     if (e.button !== 0 || gesture.kind !== "pending_click") return;
     const { x, y } = gesture;
     gesture = IDLE_VIEWPORT_GESTURE;
@@ -250,7 +279,7 @@ export const attachPicture = () => {
       return;
     }
     const at = tappedAt(x, y, e);
-    if (!at) return;
+    if (!at || pickCameraPath(...at)) return;
     pinNote(...at, e);
   });
 };

@@ -37,6 +37,8 @@ Each hook turns on one part of the studio. The template sets all of these:
 | `draw.tools.renderer`, `composer`                                | The final render's motion blur (sub-frames in the film's own GL)                                                                       |
 | Lưu camera | cameraSample trả góc trước hiệu ứng. moveCameraAnchor đổi offset của neo khi lưu góc mới. |
 | Neo camera | cameraAnchors liệt kê target và label. resolveCameraAnchor giải điểm hiện tại, moveCameraAnchor đổi offset khi sửa. |
+| Đường bay trong Studio | sampleCameraPath nhận thời gian cảnh và camera. Trả p/l/fov đã qua AnimPanel, kèm base trước hiệu ứng nếu có. |
+| Free Cam | free.previewEffects bật quang học, grading và transition khi dựng góc. |
 | Đồng hồ camera | draw nhận clocks.camera riêng cho đường bay. Bật tools.cameraClock để Studio hiện điều khiển trên shot. |
 | `draw.eases`, `draw.keyEases`                                    | Ease names on camera and key rows                                                                                                      |
 | `draw.anims`, film-stage transitions                             | The Animation tab and the shots' `transition` and `anim`                                                                               |

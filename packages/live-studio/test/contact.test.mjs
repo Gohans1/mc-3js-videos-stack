@@ -5,7 +5,7 @@ import { test } from "node:test";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
-import { gap, surface } from "../checks/contact.mjs";
+import { capsuleHits, gap, raycastSurface, surface } from "../checks/contact.mjs";
 
 const at = (g, x, y, z) => g.applyMatrix4(new THREE.Matrix4().makeTranslation(x, y, z));
 const box = (w, h, d, x = 0, y = 0, z = 0) =>
@@ -79,4 +79,19 @@ test("a mirrored placement keeps inside inside", () => {
     surface(g, new THREE.Matrix4().makeScale(-1, 1, 1)),
   ]).d;
   close(d, -0.05);
+});
+
+test("walk capsule hits a thin wall without treating a level floor as an obstacle", () => {
+  const identity = new THREE.Matrix4();
+  const floor = surface(box(8, 0.2, 8, 0, -0.1, 0), identity);
+  const wall = surface(box(0.05, 3, 4, 1, 1.5, 0), identity);
+  const ground = raycastSurface(
+    new THREE.Ray(new THREE.Vector3(0, 2, 0), new THREE.Vector3(0, -1, 0)),
+    [floor],
+  );
+  close(ground.point.y, 0);
+  const capsule = (x) =>
+    new THREE.Line3(new THREE.Vector3(x, 0.14, 0), new THREE.Vector3(x, 1.62, 0));
+  assert.equal(capsuleHits(capsule(0), 0.14, [floor, wall]), false);
+  assert.equal(capsuleHits(capsule(0.9), 0.14, [floor, wall]), true);
 });

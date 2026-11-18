@@ -83,6 +83,8 @@ export const drawFinalFrame = async () => {
   const fr = S.finalRender!,
     free = S.tools!.free;
   Object.assign(fr.tools.free, { on: free.on, fov: free.fov });
+  if (fr.tools.free.previewEffects !== undefined)
+    fr.tools.free.previewEffects = free.previewEffects ?? false;
   fr.tools.free.p.copy(free.p);
   fr.tools.free.l.copy(free.l);
   if (fr.renderFrame) await fr.renderFrame(S.t);

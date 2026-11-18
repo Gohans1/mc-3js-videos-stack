@@ -167,7 +167,7 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | 2 | Lấy mẫu camera, neo, tách shot, Hold, dán thuộc tính và spline | Qua review và kiểm thử |
 | 3 | Đồng hồ camera khi Freeze và Speed | Qua review và kiểm thử |
 | 4 | CamPanel, lấy nét, chỉnh bố cục và nắn góc | Qua review và kiểm thử |
-| 5 | Free Cam, đường bay 3D và kiểm tra xuyên tường | Chờ |
+| 5 | Free Cam, đường bay 3D và kiểm tra xuyên tường | Qua review và kiểm thử |
 | 6 | Timeline, easing, Graph Editor và thao tác keyframe | Chờ |
 | 7 | Preview, HUD, Guides, so góc và Shotlist | Chờ |
 | 8 | Quang học khi xuất, hiệu ứng, recipe và Take | Chờ |
@@ -206,3 +206,11 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Neo và chuyển góc | Đọc cảnh tại mốc của key trước khi đổi neo. Chép cả hướng nghiêng tương đối; Chrome xác nhận nguồn 30° → 40° dán từ −20° thành −10°. |
 | Phim cũ | Studio có thể đọc góc đã lấy mẫu tại key khi phim dùng cameraSample và thiếu hàm giải neo. Lưu Free Cam nhớ góc lúc bấm và tính offset ở khung key. |
 | Chép vào neo động | Tính offset tại từng key đích. Chrome tại giây 4,500 render đúng x=7,114 như tọa độ đã lưu. |
+
+| Ghi chú đợt 5 | Chi tiết |
+| --- | --- |
+| Free Cam | Có chế độ xem hiệu ứng phim, khóa góc, lịch sử, chọn tâm xoay và Top, Front, Side. |
+| Đi bộ | Tầm mắt 1,62 m, đo mặt sàn và chặn tường bằng BVH. |
+| Đường bay | Hiện vị trí, hướng ngắm và đường sau AnimPanel. Kéo tay nắm p/l trong Free Cam và dùng va chạm để soi đoạn xuyên vật. |
+| Chrome | Tầm mắt cao 1,62 m, chặn trước vật cản và khôi phục sương tuyến tính. Đã kéo gizmo p, lưu key và thử đẩy khỏi vật. |
+| Lịch sử Free Cam | Khôi phục luôn Fly/Walk. Orbit chuyển sang Fly và quay lại lịch sử sẽ trả đúng góc Walk trên sàn. |

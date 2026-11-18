@@ -46,9 +46,10 @@ export const createFlight = (onWake?: () => void) => {
       held.delete(code);
       if (code === "KeyW") sprint = false;
     },
-    clear() {
+    clear(immediate = false) {
       held.clear();
       sprint = false;
+      if (immediate) v.fill(0);
     },
     flying: () => held.size > 0,
     active: () => held.size > 0 || v[0] !== 0 || v[1] !== 0 || v[2] !== 0,

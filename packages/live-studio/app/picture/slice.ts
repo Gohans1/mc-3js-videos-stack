@@ -6,6 +6,10 @@ export interface PictureSlice {
   ratio: Ratio; // the film's frame shape (frame.ts), from its package.json
   captions: boolean;
   guides: boolean; // thirds and safe areas over the picture (Guides.tsx)
+  freeLook: boolean;
+  freeLocked: boolean;
+  freeNavigation: "fly" | "walk";
+  cameraPath: boolean;
   free: boolean;
   flySpeed: number; // the free camera's, blocks a second (flight.ts)
   nightVision: boolean; // the free camera's view lit up to find the way (nightvision.ts)
@@ -17,5 +21,5 @@ export interface PictureSlice {
 }
 export const pictureSlice: Omit<
   PictureSlice,
-  "captions" | "guides" | "flySpeed" | "nightVision" | "filmView" | "scopes"
-> = { ratio: "16:9", free: false, final: false, still: null, comparing: false };
+  "captions" | "guides" | "flySpeed" | "nightVision" | "filmView" | "scopes" | "freeLook"
+> = { ratio: "16:9", free: false, freeLocked: false, freeNavigation: "fly", cameraPath: true, final: false, still: null, comparing: false };

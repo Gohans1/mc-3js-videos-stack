@@ -202,7 +202,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     Object.assign(now, { B, R, Lh, look, feet });
   };
 
-  const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
+  const free = { on: false, previewEffects: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
   const lookAt = V(0, 0, 0),
     head = V(0, 0, 0);
   const velocityEffect = makeVelocity(renderer);
@@ -285,7 +285,8 @@ export async function buildScene(canvas, W, H, draft = false) {
   const sampleTrack = (t) =>
     cameraAt(t, EDIT.cam, { aspect: W / H, resolveAnchor: resolveCameraAnchor });
   let clocks,
-    editTime = 0;
+    editTime = 0,
+    worldTime = 0;
   const cameraSample = () => {
     const cam = sampleTrack(editTime);
     const focus =
@@ -294,10 +295,28 @@ export async function buildScene(canvas, W, H, draft = false) {
         : cam.focus;
     return { ...cam.sample, focus };
   };
-  const frame = (t, view) => {
+  const poseScene = (t) => {
     perform(t);
     placed.draw(t);
     scene.updateMatrixWorld();
+  };
+  const sampleCameraPath = (times) => {
+    try {
+      return times.map(({ world, camera }) => {
+        poseScene(world);
+        const cam = sampleTrack(camera);
+        animate(cam, camera, SHOTS_OUT, DURATION, anims);
+        return { p: cam.p, l: cam.l, fov: cam.fov, base: cam.base };
+      });
+    } finally {
+      poseScene(worldTime);
+    }
+  };
+  const frame = (t, view) => {
+    const scouting = free.on && !free.previewEffects;
+    const activeView = view === undefined || view === shotAt(t);
+    worldTime = t;
+    poseScene(t);
     const trackTime = clocks?.camera ?? t;
     const cameraTime = view === undefined ? trackTime : viewTime(SHOTS_OUT, DURATION, view, trackTime);
     const cam = sampleTrack(cameraTime);
@@ -305,14 +324,14 @@ export async function buildScene(canvas, W, H, draft = false) {
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
     camera.fov = cam.fov;
-    if (free.on) {
+    if (free.on && activeView) {
       camera.fov = free.fov;
       camera.position.copy(free.p);
       lookAt.copy(free.l);
     }
     camera.up.set(0, 1, 0);
     camera.lookAt(lookAt);
-    if (!free.on) camera.rotateZ(cam.roll);
+    if (!scouting) camera.rotateZ(cam.roll);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
     head.copy(camera.position);
@@ -332,7 +351,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;
     const adjVisible = clocks?.adjustmentsVisible ?? clocks?.layersVisible ?? true;
     const activeLayerLook =
-      !free.on && adjVisible
+      !scouting && adjVisible
         ? [...activeAdjustments(EDIT.adjustments, adjAt, clocks?.adjustmentTime)]
             .reverse()
             .find((it) => it.grade?.enabled !== false && it.grade?.look)?.grade?.look
@@ -342,23 +361,23 @@ export async function buildScene(canvas, W, H, draft = false) {
       shot,
       shotEntry,
       activeLayerLook,
-      free.on,
+      scouting,
     );
     Object.assign(now, { optics: opticsTelemetry });
     renderer.clear();
-    if (clocks?.pictureVisible !== false || free.on) {
+    if (clocks?.pictureVisible !== false || scouting) {
       dof.update({
         fstop: effectiveFstop,
         focusDistance: focusM ?? fallbackFocus,
         mm: renderedMm,
         widthPx: W,
       });
-      adjust(shot, shotEntry?.adjust, t, free.on);
+      adjust(shot, shotEntry?.adjust, t, scouting);
       composer.render(0);
-      if (!free.on) velocityEffect(clocks?.velocity ?? null, cam.optics);
-      if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
+      if (!scouting) velocityEffect(clocks?.velocity ?? null, cam.optics);
+      if (!scouting) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
     }
-    if (!free.on && clocks?.layersVisible !== false)
+    if (!scouting && clocks?.layersVisible !== false)
       titles(EDIT.text.items, clocks?.layers ?? t, camera, EDIT.text.tracks, clocks?.textTime);
   };
 
@@ -374,7 +393,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       layerAdjust(
         visible ? activeAdjustments(EDIT.adjustments, at, clocks?.adjustmentTime) : [],
         at,
-        free.on,
+        free.on && !free.previewEffects,
       );
     },
     (cut) => clocks?.transitionVisible?.(cut) ?? true,
@@ -478,6 +497,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     renderer,
     optics: opticsTelemetry,
     cameraSample,
+    sampleCameraPath,
     cameraClock: true,
     moveCameraAnchor,
     resolveCameraAnchor,

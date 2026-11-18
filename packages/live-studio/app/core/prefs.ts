@@ -54,6 +54,7 @@ const PREFS = {
   previewAxis: flag("previewAxis", true), // CapCut's, on as there (timeline/peek.ts)
   previewAudio: flag("previewAudio", false), // the preview axis plays the sound under the pointer too (Shift+S; timeline/peek.ts)
   nightVision: flag("nightVision", false),
+  freeLook: flag("freeCameraLook", true),
   scopes: flag("scopes", false), // CapCut's Color oscilloscope under the picture (picture/Oscilloscope.tsx)
   meter: flag("audioMeter", true), // the master meter beside the timeline (sound/AudioMeter.tsx)
   aiActivity: flag("aiActivity", true), // what the AI is doing, lit as it works (activity/activity.ts)

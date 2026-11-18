@@ -228,6 +228,7 @@ export const Tools = z.looseObject({
   materials: z.array(z.tuple([three("isMaterial", "a THREE.Material"), z.string()])).optional(),
   optics: OpticsTelemetry.optional(),
   cameraSample: fn.optional(),
+  sampleCameraPath: fn.optional(),
   cameraClock: z.literal(true).optional(),
   moveCameraAnchor: fn.optional(),
   resolveCameraAnchor: fn.optional(),

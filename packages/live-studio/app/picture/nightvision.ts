@@ -10,21 +10,17 @@ const lamp = new THREE.AmbientLight(0xffffff, 0);
 lamp.name = "studio night vision";
 
 // Around the film's draw of the main view: on before it, off after it
-let fogWas: number | null = null;
+let restoreFog: (() => void) | null = null;
 export const nightVision = (on: boolean) => {
-  const tools = S.tools;
-  if (!tools) return;
-  const fog = tools.scene.fog as THREE.FogExp2 | THREE.Fog | null;
-  if (on && tools.free.on && get().nightVision) {
-    if (lamp.parent !== tools.scene) tools.scene.add(lamp);
-    lamp.intensity = 2.5;
-    if (fog && "density" in fog) {
-      fogWas = fog.density;
-      fog.density = 0;
-    }
-    return;
-  }
+  restoreFog?.();
+  restoreFog = null;
   lamp.intensity = 0;
-  if (fog && "density" in fog && fogWas !== null) fog.density = fogWas;
-  fogWas = null;
+  const tools = S.tools;
+  if (!on || !tools?.free.on || !get().nightVision) return;
+  if (lamp.parent !== tools.scene) tools.scene.add(lamp);
+  lamp.intensity = 2.5;
+  const { scene } = tools;
+  const fog = scene.fog;
+  scene.fog = null;
+  restoreFog = () => { scene.fog = fog; };
 };

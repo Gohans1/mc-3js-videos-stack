@@ -9,6 +9,7 @@ declare module "film/scene" {
   }
   export interface FreeCam {
     on: boolean;
+    previewEffects?: boolean;
     p: THREE.Vector3;
     l: THREE.Vector3;
     fov: number;
@@ -25,6 +26,8 @@ declare module "film/scene" {
     look?: string;
     impulse?: string;
   }
+  export interface CameraPathTime { world: number; camera: number; }
+  export interface CameraPathPose { p: THREE.Vector3; l: THREE.Vector3; fov: number; base?: { p: THREE.Vector3; l: THREE.Vector3 }; }
   export interface Tools {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -37,6 +40,7 @@ declare module "film/scene" {
     materials?: [THREE.Material, string][];
     optics?: OpticsTelemetry;
     cameraClock?: true;
+    sampleCameraPath?: (times: readonly CameraPathTime[]) => CameraPathPose[];
     cameraSample?: () => import("./camera/camera-edit").CameraView;
     moveCameraAnchor?: import("./camera/camera-edit").MoveCameraAnchor;
     resolveCameraAnchor?: import("film-stage/camera").ResolveCameraAnchor;

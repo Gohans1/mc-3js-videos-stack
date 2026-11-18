@@ -4,7 +4,7 @@
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import { handheld as makeHandheld, type ShakeName, SHAKES } from "film-kit/handheld";
 import { fovOf, mmOf } from "film-kit/lens";
-export { dollyZoom, PRIME_LENSES } from "film-kit/lens";
+export { dofParams, dollyZoom, PRIME_LENSES } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";

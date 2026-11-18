@@ -4,7 +4,7 @@
 // back). A solid block, a slab or a torch closes; a flat card (grass, flowers, cobweb, paper, a one-plane pane) does not,
 // so a point behind a card is only near it. Double-sided faces have no back, so they are never "inside".
 import * as THREE from "three";
-import { MeshBVH } from "three-mesh-bvh";
+import { ExtendedTriangle, MeshBVH } from "three-mesh-bvh";
 
 export const REACH = 0.15; // m: gaps farther than this are not reported (inside: any depth)
 
@@ -65,7 +65,50 @@ export function gap(p, list) {
       if (far && ray.direction.dot(far.face.normal) * (s.flip ? -1 : 1) > 0) d = -dist;
     }
     if (d > REACH) continue;
-    if (d < best.d) best = { d, surface: s.label };
+    if (d < best.d)
+      best = {
+        d,
+        surface: s.label,
+        point: w.clone(),
+        normal: n.clone().multiplyScalar(s.flip ? -1 : 1),
+      };
   }
   return best;
+}
+
+export function raycastSurface(worldRay, surfaces, far = Infinity) {
+  let best = null;
+  for (const item of surfaces) {
+    if (!worldRay.intersectsBox(item.box)) continue;
+    ray.copy(worldRay).applyMatrix4(item.inv);
+    const hit = bvhOf(item.g).raycastFirst(ray, THREE.DoubleSide);
+    if (!hit) continue;
+    const point = hit.point.applyMatrix4(item.matrix);
+    const distance = point.distanceTo(worldRay.origin);
+    if (distance > far || (best && best.distance <= distance)) continue;
+    const normal = hit.face.normal.applyMatrix3(nm.getNormalMatrix(item.matrix)).normalize();
+    best = { point, normal, distance };
+  }
+  return best;
+}
+
+const worldTriangle = new ExtendedTriangle();
+export function capsuleHits(segment, radius, surfaces) {
+  const extent = new THREE.Box3()
+    .setFromPoints([segment.start, segment.end])
+    .expandByScalar(radius);
+  return surfaces.some((item) => {
+    if (!item.box.intersectsBox(extent)) return false;
+    const local = extent.clone().applyMatrix4(item.inv);
+    return bvhOf(item.g).shapecast({
+      intersectsBounds: (box) => box.intersectsBox(local),
+      intersectsTriangle: (triangle) => {
+        worldTriangle.a.copy(triangle.a).applyMatrix4(item.matrix);
+        worldTriangle.b.copy(triangle.b).applyMatrix4(item.matrix);
+        worldTriangle.c.copy(triangle.c).applyMatrix4(item.matrix);
+        worldTriangle.needsUpdate = true;
+        return worldTriangle.closestPointToSegment(segment) < radius - 1e-4;
+      },
+    });
+  });
 }

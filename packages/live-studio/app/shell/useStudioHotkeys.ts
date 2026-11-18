@@ -4,6 +4,7 @@
 // the key's place, not its letter, so they work on any keyboard layout; typing in the note box never reaches them
 import { type UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
 
+import { restoreFreeView } from "../picture/freecam";
 import { saveView } from "../camera/cam";
 import { copyCam } from "../camera/camline";
 import { AWAY } from "../core/device";
@@ -180,8 +181,8 @@ export function useStudioHotkeys() {
       callback: () => trimSelected("right"),
       options: { enabled: (picks > 0 || textPicks > 0 || layerPicks > 0 || shotPicked) && !free },
     },
-    { hotkey: "[", callback: () => selectSide(-1), options: { enabled: sound } },
-    { hotkey: "]", callback: () => selectSide(1), options: { enabled: sound } },
+    { hotkey: "[", callback: () => free ? restoreFreeView(-1) : selectSide(-1), options: { enabled: free || sound } },
+    { hotkey: "]", callback: () => free ? restoreFreeView(1) : selectSide(1), options: { enabled: free || sound } },
     {
       hotkey: "Mod+A",
       callback: () => setClips(allClips().filter((c) => !locked(c))),

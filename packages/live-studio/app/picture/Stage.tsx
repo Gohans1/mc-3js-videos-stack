@@ -13,6 +13,7 @@ import { OptionChips } from "../options/OptionChips";
 import { reloadNow } from "../playback/transport";
 import { FullscreenTransport } from "../shell/FullscreenTransport";
 import { CompareOverlay } from "./Compare";
+import { FreeCameraControls } from "./FreeCameraControls";
 import { FilmView } from "./FilmView";
 import { Guides } from "./Guides";
 import { Oscilloscope } from "./Oscilloscope";
@@ -143,6 +144,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           <OptionChips ref={bind("chips")} />
           <FilmView bind={bind} />
         </div>
+        {!phone && <FreeCameraControls />}
         {!phone && <FullscreenTransport />}
         {!phone && loading && (
           <div
