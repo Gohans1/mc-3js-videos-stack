@@ -143,7 +143,7 @@ export const attachPicture = () => {
     if (!origin) return;
     const at = tappedAt(origin[0], origin[1], e);
     if (!at) return;
-    const title = S.tools?.free.on ? -1 : textAt(...at);
+    const title = get().text ? textAt(...at) : -1;
     if (title >= 0) pickText([title]);
     else selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
   });
