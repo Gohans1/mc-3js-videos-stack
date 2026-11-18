@@ -39,6 +39,26 @@ test("a single black frame, a one-frame flash and a held still are found", () =>
   assert.deepEqual(kinds(run(90, (i) => frame(100, i < 30 ? i : 30))), ["FROZEN"]);
 });
 
+test("a flash and its return have the same classification across container rate hints", () => {
+  const times = Array.from({ length: 23 }, (_, i) => i / 12);
+  const m = meter(W, H);
+  for (let i = 0; i < times.length; i++) m.push(frame(i === 10 ? 225 : 100, i));
+  for (const hint of [10, 24]) {
+    const faults = m.report(hint, [], times, 1 / 12).faults;
+    assert.deepEqual(
+      faults.map((f) => [f.kind, f.t]),
+      [["FLASH", times[10]]],
+    );
+  }
+});
+
+test("a one-second freeze includes the first identical picture", () => {
+  const result = run(60, (i) => (i < 30 ? frame(120, 0) : frame(80, i)));
+  const frozen = result.find((fault) => fault.kind === "FROZEN");
+  assert.equal(frozen?.t, 0);
+  assert.equal(frozen?.to, 1);
+});
+
 test("a jump away from a cut is a JUMP, the same change on a cut is not", () => {
   const make = (i) => frame(i < 30 ? 80 : 160, i);
   assert.ok(kinds(run(60, make)).includes("JUMP"));

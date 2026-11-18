@@ -8,6 +8,7 @@ import { chunksOf } from "../src/frame";
 import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
+import { orderCheck } from "./order";
 import { seenCheck } from "./seen";
 import { textCheck } from "./text";
 import { touchCheck } from "./touch";
@@ -59,13 +60,22 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
     });
   }
-  // framecheck.mjs: a cut is not a jump. Only a whole clip render writes them (a SPAN run keeps draft_video.mp4 as it was),
-  // so they stay the cuts of the video framecheck reads
-  if (cfg.clip && !cfg.clip.span)
-    await post("/still/cuts.json", JSON.stringify(SHOTS.slice(1).map((s) => s.t)));
+  if (cfg.clip)
+    await post(
+      "/cuts",
+      JSON.stringify({
+        times: SHOTS.slice(1).map((s) => s.t),
+        variants: (render.variants ?? []).map((v) => v.id),
+      }),
+    );
   // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
   // an item { still, canvas } is written as renders/<still>
   const builtin = {
+    order: orderCheck(
+      render,
+      DURATION,
+      SHOTS.map((s) => s.t),
+    ),
     motion: motionCheck(
       render,
       cfg,
@@ -102,6 +112,10 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     log(`${name} done in ${((performance.now() - t1) / 1000).toFixed(1)}s`);
   }
   if (cfg.inspect) {
+    if (!render.tools?.free) {
+      log("ERROR INSPECT requires draw.tools.free on the film");
+      return;
+    }
     const [px, py, pz, lx, ly, lz, fov] = cfg.inspect;
     Object.assign(render.tools.free, { on: true, fov });
     render.tools.free.p.set(px, py, pz);
@@ -186,11 +200,12 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
 
   // SAMPLES sub-frames over a 180-degree shutter (half a frame), averaged as light (render/accum.ts)
   let acc = null;
-  const draw = (frame, samples) => {
+  const draw = async (frame, samples) => {
     const t = frame / FPS;
     ctx.globalAlpha = 1;
     if (samples === 1) {
-      render(t);
+      if (render.renderFrame) await render.renderFrame(t);
+      else render(t);
       ctx.drawImage(canvas, 0, 0);
     } else {
       // in the film's own context when it shares its renderer (draw.tools.renderer): no copy through the CPU per sample
@@ -209,7 +224,9 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       acc.reset();
       for (let i = 0; i < samples; i++) {
         const ts = (frame + (i / samples) * 0.5) / FPS;
-        render(shotAt(ts) === shotAt(t) ? ts : t); // never blur across a cut
+        const at = shotAt(ts) === shotAt(t) ? ts : t;
+        if (render.renderFrame) await render.renderFrame(at);
+        else render(at);
         acc.add(canvas);
       }
       ctx.drawImage(acc.resolve(), 0, 0);
@@ -244,7 +261,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   };
 
   for (const s of cfg.stills ?? [])
-    await still(s.name, draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
+    await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
 
   // The film in chunks of cfg.clip.chunk seconds, each its own mp4 starting on a keyframe, so render.mjs joins them by stream copy
   const chunks = chunkCount;
@@ -270,7 +287,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     output.addVideoTrack(source, { frameRate: FPS });
     await output.start();
     for (let f = first; f <= last; f++) {
-      const sample = new VideoSample(draw(f, cfg.clip.samples), {
+      const sample = new VideoSample(await draw(f, cfg.clip.samples), {
         timestamp: (f - first) / FPS,
         duration: 1 / FPS,
       });

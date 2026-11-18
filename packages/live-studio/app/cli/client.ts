@@ -65,7 +65,8 @@ export async function stopCliRun(runId: string): Promise<CliRunSnapshot | null> 
   const res = await fetch(`/api/cli/runs/${encodeURIComponent(runId)}/stop`, {
     method: "POST",
   });
-  if (!res.ok) return null;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await readErrorMessage(res, `Stop request failed (${res.status})`));
   const body = await res.json().catch(() => null);
   return (body?.run as CliRunSnapshot | undefined) ?? null;
 }

@@ -7,7 +7,10 @@ ffmpeg's ebur128 measures the result. -14 LUFS is what YouTube plays at.
   bun run mix renders/draft_video.mp4  also muxes it -> renders/draft.mp4, the draft with its sound (bun run render clip
                                        makes the silent video first)
   bun run mix renders/final_video.mp4  the same for bun run render final -> renders/final.mp4, the file to upload
-Is it heard right (voice buried, a sound too loud, dead air)? bun run listen measures it."""
+  bun run mix renders/span_40-44.mp4 -> a separate MP4 under renders/mixed_*/, with sound from film second 40
+  bun run mix other.mp4 --start 40  the same with an explicit film offset (default 0 for external files)
+Mux outputs carry the video tracks and new AAC. Other tracks remain in the source file.
+Use bun run listen for pre-master measurements, then inspect the encoded audio with earshot."""
 import json
 import math
 import os
@@ -21,55 +24,17 @@ from pathlib import Path
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 from process import render as process_audio
-
-# bun run mix [video]: every word checked before the mix starts (--raw and --measure are the studio's own calls)
-if __name__ == "__main__" and sys.argv[1:2] in (["-h"], ["--help"], ["help"]):
-    print(__doc__)
-    raise SystemExit
-if __name__ == "__main__" and sys.argv[1:2] not in (["--raw"], ["--measure"]) and sys.argv[1:]:
-    if len(sys.argv) > 2 or sys.argv[1].startswith("-"):
-        print(f"bun run mix, or bun run mix <video> to put the sound on it; got {' '.join(sys.argv[1:])} (--help for more)", file=sys.stderr)
-        raise SystemExit(2)
-    videos = sorted(p.as_posix() for p in Path("renders").glob("*_video.mp4")) if Path("renders").is_dir() else []
-    if not Path(sys.argv[1]).is_file():
-        print(f"no {sys.argv[1]} (the pictures here: {', '.join(videos) or 'none yet'}); bun run render clip makes renders/draft_video.mp4", file=sys.stderr)
-        raise SystemExit(2)
-    # the result is always renders/draft.mp4 (or final.mp4): a mixed copy given here would put its old picture there
-    heard = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", sys.argv[1]],
-                           capture_output=True, text=True, timeout=30).stdout.strip()
-    if heard:
-        print(f"{sys.argv[1]} already has sound: mix puts the soundtrack on a picture-only render ({', '.join(videos) or 'bun run render clip makes renders/draft_video.mp4'})", file=sys.stderr)
-        raise SystemExit(2)
-if not (Path.cwd() / "src/timeline/audio.json").exists():
-    print("no src/timeline/audio.json here: run it inside a film (cd films/<name>)", file=sys.stderr)
-    raise SystemExit(2)
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from studio_tell import job  # noqa: E402
+from review.stale import render_context  # noqa: E402
+from seconds import heard_second  # noqa: E402
 
 ROOT = Path.cwd()  # the film's folder: bun run mix runs it there
-E = json.loads((ROOT / "src/edit.json").read_text(encoding="utf8"))
-A = json.loads((ROOT / "src/timeline/audio.json").read_text(encoding="utf8"))
-# A track muted in the studio (audio.json "tracks", mute) is left out of every mix; a track's gain (dB) is a volume after each
-# clip's own chain, so normalizing a clip (measure_clip) leaves it out
-MUTED = {t["id"] for t in A.get("tracks", []) if t.get("mute")}
-A["beds"], A["sfx"] = ([e for e in A[k] if e.get("track") not in MUTED] for k in ("beds", "sfx"))
-TRACKS = {t["id"]: t for t in A.get("tracks", [])}
-
-
-def track_chain(e):
-    """The track's own EQ (tracks[].filters) and volume, on every clip of it: each is linear, so per clip equals the bus"""
-    t = TRACKS.get(e.get("track"), {})
-    db = float(t.get("gain", 0))
-    return [*_safe_filters(t.get("filters")), *([f"volume={db:.4g}dB"] if db else [])]
-
-
-PROJECTED_VOICE = LEGACY_TIMELINE = None
-PKG = ROOT / "package.json"
-CONFIG = (json.loads(PKG.read_text(encoding="utf8")) if PKG.exists() else {}).get("live-studio", {})
-SFX = ROOT / CONFIG.get("sfx", "sound/sfx")
-SOURCES = CONFIG.get("soundSources", {})
 REAL_ROOT = ROOT.resolve()
-SAFE_NAME = re.compile(r"^\w[\w.-]*$")
+READ_DOCUMENTS = {}
 ALLOWED_AUDIO_FILTER = re.compile(
-    r"^(?:lowpass|highpass|bandpass|bandreject|allpass|equalizer|lowshelf|highshelf|bass|treble|acompressor|alimiter|agate|asoftclip|aecho|aphaser|aflanger|achorus|vibrato|tremolo|stereowiden|extrastereo|volume|dynaudnorm|adeclick|adeclip|afftdn|deesser)(?:=[A-Za-z0-9_.:=|+\s%-]+)?$"
+    r"^(?:lowpass|highpass|bandpass|bandreject|allpass|equalizer|lowshelf|highshelf|bass|treble|acompressor|alimiter|agate|asoftclip|aecho|aphaser|aflanger|achorus|vibrato|tremolo|stereowiden|extrastereo|volume|dynaudnorm|adeclick|adeclip|afftdn|deesser)(?:=[A-Za-z0-9_.:=|+ %-]+)?$"
 )
 
 
@@ -83,11 +48,12 @@ def _inside(base: Path, target: Path) -> bool:
 def _assert_in_root(target: Path, label: str = "Path") -> Path:
     abs_root = ROOT.absolute()
     abs_target = target.absolute() if target.is_absolute() else (abs_root / target).absolute()
-    base = abs_root if _inside(abs_root, abs_target) else (REAL_ROOT if _inside(REAL_ROOT, abs_target) else None)
+    norm_target = Path(os.path.normpath(abs_target))
+    base = abs_root if _inside(abs_root, norm_target) else (REAL_ROOT if _inside(REAL_ROOT, norm_target) else None)
     if base is None:
         raise ValueError(f"{label} escapes film directory: {str(target)!r}")
     cur = base
-    for seg in abs_target.relative_to(base).parts:
+    for seg in norm_target.relative_to(base).parts:
         cur = cur / seg
         try:
             st = cur.lstat()
@@ -97,12 +63,186 @@ def _assert_in_root(target: Path, label: str = "Path") -> Path:
             raise ValueError(f"{label} cannot traverse symlink or junction: {str(target)!r}")
         if not _inside(REAL_ROOT, cur.resolve()):
             raise ValueError(f"{label} escapes film directory: {str(target)!r}")
-    return abs_target
+    return norm_target
+
+
+def _is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def media_identity(path):
+    st = Path(path).stat()
+    return {"size": st.st_size, "mtimeMs": st.st_mtime_ns // 1_000_000}
+
+
+def stored_path(path):
+    path = Path(path).absolute()
+    return (path.relative_to(ROOT) if path.is_relative_to(ROOT) else path).as_posix()
+
+
+def _read_json(path: Path, label: str, *, expect_dict: bool = False):
+    try:
+        READ_DOCUMENTS[stored_path(path)] = media_identity(path)
+        raw = path.read_text(encoding="utf8")
+    except OSError as e:
+        raise SystemExit(f"{label}: could not read ({e.strerror or e})")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"{label}: invalid JSON (line {e.lineno}, col {e.colno}): fix the syntax error")
+    if expect_dict and not isinstance(data, dict):
+        raise SystemExit(f"{label}: not a JSON object: bun run check names every fault")
+    return data
+
+
+def _read_stdin_json(label: str):
+    try:
+        data = json.load(sys.stdin)
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"{label}: invalid JSON (line {e.lineno}, col {e.colno})")
+    except Exception as e:
+        raise SystemExit(f"{label}: could not read JSON from stdin ({e})")
+    if not isinstance(data, dict):
+        raise SystemExit(f"{label}: JSON input must be an object")
+    return data
+
+
+_IS_MAIN = __name__ == "__main__"
+_MODE = "mix"
+_RAW_OUT = None
+_RAW_LIVE_LANES = False
+_MEASURE_ARGS = None
+_VIDEO_ARG = None
+
+# bun run mix [video]: every word checked before the mix starts (--raw and --measure are the studio's own calls)
+if _IS_MAIN:
+    _argv = sys.argv[1:]
+    if _argv[:1] == ["help"] or "-h" in _argv or "--help" in _argv:
+        print(__doc__.strip())
+        raise SystemExit(0)
+    if _argv == ["--resolve-audio"]:
+        _MODE = "resolve_audio"
+    elif _argv[:1] == ["--raw"]:
+        _rest = _argv[1:]
+        _flags = [a for a in _rest if a.startswith("-")]
+        _pos = [a for a in _rest if not a.startswith("-")]
+        if any(f != "--live-lanes" for f in _flags) or len(_pos) != 1:
+            print("usage: bun run mix --raw <out.wav> [--live-lanes] (--help for more)", file=sys.stderr)
+            raise SystemExit(2)
+        _MODE, _RAW_OUT, _RAW_LIVE_LANES = "raw", _pos[0], "--live-lanes" in _flags
+    elif _argv[:1] == ["--measure"]:
+        if len(_argv) != 3 or _argv[1] not in ("beds", "sfx") or not _argv[2].isdigit():
+            print("usage: bun run mix --measure <beds|sfx> <index> (--help for more)", file=sys.stderr)
+            raise SystemExit(2)
+        _MODE, _MEASURE_ARGS = "measure", (_argv[1], int(_argv[2]))
+    elif _argv:
+        _audio_start = None
+        if len(_argv) == 3 and _argv[1] == "--start":
+            _audio_start = heard_second(_argv[2])
+            if _audio_start is None or not 0 <= _audio_start < 1e6:
+                print(f"--start needs a nonnegative film second, got {_argv[2]!r}", file=sys.stderr)
+                raise SystemExit(2)
+            _argv = _argv[:1]
+        if len(_argv) != 1 or _argv[0].startswith("-"):
+            print(f"bun run mix, or bun run mix <video> to put the sound on it; got {' '.join(_argv)} (--help for more)", file=sys.stderr)
+            raise SystemExit(2)
+        _VIDEO_ARG = _argv[0]
+        try:
+            _video_path = _assert_in_root(Path(_VIDEO_ARG), "Video")
+        except ValueError as e:
+            print(e, file=sys.stderr)
+            raise SystemExit(2)
+        videos = sorted(p.as_posix() for p in Path("renders").glob("*_video.mp4")) if Path("renders").is_dir() else []
+        if not _video_path.is_file():
+            print(f"no {_VIDEO_ARG} (the pictures here: {', '.join(videos) or 'none yet'}); bun run render clip makes renders/draft_video.mp4", file=sys.stderr)
+            raise SystemExit(2)
+        _probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "json", str(_video_path)],
+                                capture_output=True, text=True, timeout=30)
+        try:
+            _streams = {stream.get("codec_type") for stream in json.loads(_probe.stdout).get("streams", [])}
+            _streams.discard(None)
+        except ValueError:
+            _streams = set()
+        if _probe.returncode != 0 or "video" not in _streams:
+            print(f"{_VIDEO_ARG} is not a readable video ({', '.join(videos) or 'bun run render clip makes renders/draft_video.mp4'})", file=sys.stderr)
+            raise SystemExit(2)
+        if "audio" in _streams:
+            print(f"{_VIDEO_ARG} already has sound: mix puts the soundtrack on a picture-only render ({', '.join(videos) or 'bun run render clip makes renders/draft_video.mp4'})", file=sys.stderr)
+            raise SystemExit(2)
+
+PKG = ROOT / "package.json"
+if not PKG.exists():
+    READ_DOCUMENTS[stored_path(PKG)] = None
+try:
+    _PKG_DATA = _read_json(_assert_in_root(PKG, "package.json"), "package.json", expect_dict=True) if PKG.exists() else {}
+except ValueError as e:
+    raise SystemExit(str(e))
+_RAW_CFG = _PKG_DATA.get("live-studio")
+if _RAW_CFG is not None and not isinstance(_RAW_CFG, dict):
+    raise SystemExit('package.json: "live-studio" must be a JSON object')
+CONFIG = _RAW_CFG or {}
+_SOUND_CFG = CONFIG.get("soundTimeline", "src/timeline/audio.json")
+if not isinstance(_SOUND_CFG, str) or not _SOUND_CFG.strip():
+    raise SystemExit('package.json: "live-studio.soundTimeline" must be a relative file path')
+SOUND_REL = _SOUND_CFG
+try:
+    SOUND_PATH = _assert_in_root(ROOT / SOUND_REL, "Sound timeline")
+except ValueError as e:
+    raise SystemExit(str(e))
+if _MODE != "measure" and not SOUND_PATH.is_file():
+    _msg = f"no {SOUND_REL} here: run it inside a film (cd films/<name>)"
+    if _IS_MAIN:
+        print(_msg, file=sys.stderr)
+        raise SystemExit(2)
+    raise SystemExit(_msg)
+
+EDIT_PATH = ROOT / "src/edit.json"
+if not EDIT_PATH.exists():
+    READ_DOCUMENTS[stored_path(EDIT_PATH)] = None
+try:
+    E = _read_json(_assert_in_root(EDIT_PATH, "src/edit.json"), "src/edit.json") if EDIT_PATH.is_file() else None
+except ValueError as e:
+    raise SystemExit(str(e))
+A = _read_stdin_json("Audio timeline stdin") if _MODE == "measure" else _read_json(SOUND_PATH, SOUND_REL)
+# A track muted in the studio (audio.json "tracks", mute) is left out of every mix; a track's gain (dB) is a volume after each
+# clip's own chain, so normalizing a clip (measure_clip) leaves it out
+_tracks = A.get("tracks") if isinstance(A, dict) and isinstance(A.get("tracks"), list) else []
+MUTED = {t["id"] for t in _tracks if isinstance(t, dict) and t.get("mute") and isinstance(t.get("id"), str)}
+if isinstance(A, dict) and _MODE != "measure":
+    for _k in ("beds", "sfx"):
+        if isinstance(A.get(_k), list):
+            A[_k] = [e for e in A[_k] if not isinstance(e, dict) or not isinstance(e.get("track"), str) or e.get("track") not in MUTED]
+TRACKS = {t["id"]: t for t in _tracks if isinstance(t, dict) and isinstance(t.get("id"), str)}
+
+
+def track_chain(e):
+    """The track's own EQ (tracks[].filters) and volume, on every clip of it: each is linear, so per clip equals the bus"""
+    tid = e.get("track") if isinstance(e, dict) else None
+    t = TRACKS.get(tid, {}) if isinstance(tid, str) else {}
+    raw_gain = t.get("gain", 0)
+    db = float(raw_gain) if raw_gain is not None else 0.0
+    return [*_safe_filters(t.get("filters")), *([f"volume={db:.4g}dB"] if db else [])]
+
+
+PROJECTED_VOICE = LEGACY_TIMELINE = None
+_SFX_CFG = CONFIG.get("sfx", "sound/sfx")
+if not isinstance(_SFX_CFG, str) or not _SFX_CFG.strip():
+    raise SystemExit('package.json: "live-studio.sfx" must be a folder path')
+SFX = ROOT / _SFX_CFG
+_SOURCES_CFG = CONFIG.get("soundSources", {})
+if not isinstance(_SOURCES_CFG, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in _SOURCES_CFG.items()):
+    raise SystemExit('package.json: "live-studio.soundSources" must map sound names to file paths')
+SOURCES = _SOURCES_CFG
+SAFE_NAME = re.compile(r"^\w[\w.-]*$")
 
 
 def _safe_filters(items):
     out = []
-    for raw in items or ():
+    if items is None:
+        return out
+    if not isinstance(items, list):
+        raise ValueError(f"Unsafe or invalid ffmpeg audio filter list: {items!r}")
+    for raw in items:
         if not isinstance(raw, str) or not ALLOWED_AUDIO_FILTER.match(raw):
             raise ValueError(f"Unsafe or invalid ffmpeg audio filter: {raw!r}")
         out.append(raw)
@@ -110,8 +250,22 @@ def _safe_filters(items):
 
 
 # What was picked in the studio: {sound name: {set: option name, gain: x}}. The studio writes it, never this script
-CHOICES = ROOT / "choices.json"
-CHOICES_MAP = json.loads(CHOICES.read_text(encoding="utf8")) if CHOICES.exists() else {}
+CHOICES = next((ROOT / f for f in ("choices.json", "sound_choices.json") if (ROOT / f).exists()), ROOT / "choices.json")
+try:
+    choice_file = _assert_in_root(CHOICES, CHOICES.name) if CHOICES.exists() else None
+    audio_choices = {"file": choice_file.name, **media_identity(choice_file)} if choice_file else None
+    CHOICES_MAP = _read_json(choice_file, CHOICES.name, expect_dict=True) if choice_file else {}
+except ValueError as e:
+    raise SystemExit(str(e))
+for _cname, _centry in CHOICES_MAP.items():
+    if _centry is None:
+        continue
+    if not isinstance(_centry, dict):
+        raise SystemExit(f"{CHOICES.name}: {_cname!r} must be a JSON object")
+    if _centry.get("set") is not None and not isinstance(_centry["set"], str):
+        raise SystemExit(f"{CHOICES.name}: {_cname!r}.set must be a string")
+    if _centry.get("gain") is not None and (not _is_num(_centry["gain"]) or _centry["gain"] <= 0):
+        raise SystemExit(f"{CHOICES.name}: {_cname!r}.gain must be a positive number")
 STEMS = ROOT / "assets/public/agent/stems"  # served by the studio as /agent/stems
 
 
@@ -126,13 +280,27 @@ def _find_vaults():
     cfg = CONFIG.get("soundVault")
     if cfg is False:
         return ()
+    if cfg is not None and not isinstance(cfg, str):
+        raise SystemExit('package.json: "live-studio.soundVault" must be false or a relative directory path')
     if isinstance(cfg, str):
         cand = ROOT / cfg
-        if cand.is_symlink():
-            raise ValueError(f"soundVault cannot be a symlink: {cfg!r}")
-        p = cand.resolve()
         repo_root = _repo_vault_root()
-        allowed = _inside(REAL_ROOT, p) or (repo_root is not None and _inside(repo_root, p))
+        abs_cand = cand.absolute() if cand.is_absolute() else (ROOT.absolute() / cand).absolute()
+        allowed_roots = [r for r in (REAL_ROOT, repo_root) if r is not None]
+        for seg_base in (ROOT.absolute(), *allowed_roots):
+            if abs_cand.is_relative_to(seg_base):
+                cur = seg_base
+                for seg in abs_cand.relative_to(seg_base).parts:
+                    cur = cur / seg
+                    try:
+                        st = cur.lstat()
+                    except OSError:
+                        break
+                    if os.path.islink(cur) or (st.st_file_attributes & 0x400 if hasattr(st, "st_file_attributes") else False):
+                        raise ValueError(f"soundVault cannot traverse symlink or junction: {cfg!r}")
+                break
+        p = cand.resolve()
+        allowed = any(_inside(r, p) or p == r for r in allowed_roots)
         if not allowed:
             raise ValueError(f"soundVault escapes allowed root: {cfg!r}")
         return (p,) if p.exists() else ()
@@ -140,6 +308,7 @@ def _find_vaults():
         vf = d / "vault.json"
         if vf.exists():
             try:
+                READ_DOCUMENTS[stored_path(vf)] = media_identity(vf)
                 vcfg = json.loads(vf.read_text(encoding="utf8"))
             except Exception:
                 vcfg = {}
@@ -179,36 +348,46 @@ def audio_file(name):
     if not isinstance(name, str) or not SAFE_NAME.match(name):
         raise ValueError(f"Invalid audio source name: {name!r}")
     if name in SOURCES:
-        candidate = ROOT / SOURCES[name]
-        if candidate.is_symlink() or not _inside(REAL_ROOT, candidate.resolve()):
-            raise ValueError(f"Audio source escapes film directory: {name!r}")
-        return candidate
-    if not SFX.is_symlink() and _inside(REAL_ROOT, SFX.resolve()):
+        return _assert_in_root(ROOT / SOURCES[name], "Audio source")
+    sfx_ok = False
+    try:
+        sfx_real = _assert_in_root(SFX, "SFX folder")
+        sfx_ok = sfx_real is not None
+    except ValueError:
+        sfx_ok = False
+    if sfx_ok:
         for ext in (".wav", ".ogg"):
             direct = SFX / f"{name}{ext}"
             if direct.exists():
-                if direct.is_symlink() or not _inside(REAL_ROOT, direct.resolve()):
-                    raise ValueError(f"Audio file escapes film directory: {name!r}")
-                return direct
+                return _assert_in_root(direct, "Audio file")
     hit = _sound_index().get(name)
     if hit is not None:
         return hit
     if name == "narration":
         fallback = ROOT / "assets/public/agent/full_voice.wav"
         if fallback.exists():
-            if fallback.is_symlink() or not _inside(REAL_ROOT, fallback.resolve()):
-                raise ValueError("Narration audio escapes film directory")
-            return fallback
-    default_out = SFX / f"{name}.wav"
-    if SFX.is_symlink() or not _inside(REAL_ROOT, default_out.resolve()):
-        raise ValueError(f"Audio path escapes film directory: {name!r}")
-    return default_out
+            return _assert_in_root(fallback, "Narration audio")
+    return _assert_in_root(SFX / f"{name}.wav", "Audio path")
+
+
+def resolve_audio_sources(names):
+    selected = {}
+    for name in names:
+        try:
+            path = audio_file(name)
+            selected[name] = stored_path(path) if path.is_file() else None
+        except (ValueError, OSError):
+            selected[name] = None
+    return selected
 
 
 @cache
 def present(name):
     """The sound's file, or one line saying it is missing instead of a traceback from ffmpeg"""
-    f = audio_file(name)
+    try:
+        f = audio_file(name)
+    except ValueError as e:
+        raise SystemExit(str(e))
     if not f.exists():
         raise SystemExit(f'no sound "{name}" in {SFX.relative_to(ROOT).as_posix()}/ or the vault: bun run check names every missing one, a near name or another film that has it, and how to replace it')
     return f
@@ -216,22 +395,43 @@ def present(name):
 
 def loudness(name):
     """Mean level in dB, so an option comes in at the level of the sound it stands in for (the room hum is 28 dB up)."""
-    r = subprocess.run(["ffmpeg", "-v", "info", "-i", str(present(name)), "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True, timeout=30)
-    return float(re.search(r"mean_volume: (-?[\d.]+) dB", r.stderr).group(1))
+    src = present(name)
+    r = subprocess.run(["ffmpeg", "-xerror", "-v", "info", "-i", str(src), "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        err = r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "ffmpeg failed"
+        raise SystemExit(f"{src}: could not read loudness ({err})")
+    m = re.search(r"mean_volume: (-?[\d.]+) dB", r.stderr)
+    return float(m.group(1)) if m else -91.0
 
 
 @cache
 def seconds(name):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(present(name))], capture_output=True, text=True, timeout=30)
-    return float(r.stdout)
+    src = present(name)
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(src)], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        err = r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "ffprobe failed"
+        raise SystemExit(f"{src}: could not probe duration ({err})")
+    try:
+        dur = float(r.stdout.strip())
+    except ValueError:
+        raise SystemExit(f"{src}: unreadable or corrupt audio file (missing duration)")
+    if not math.isfinite(dur) or dur < 0:
+        raise SystemExit(f"{src}: invalid audio duration ({dur})")
+    return dur
 
 
 def options(e):
-    return [e["name"], *e.get("try", [])]
+    return list(dict.fromkeys([e["name"], *e.get("try", [])]))
+
+
+_CHOICES_RESOLVED = False
 
 
 def as_option(e, name, gain=1.0):
     """The same placement played with another sound. Its start offset belongs to the original file, so an option plays from its own start."""
+    gain = float(gain)
+    if not math.isfinite(gain) or gain <= 0:
+        raise ValueError(f"{e.get('name', name)!r}: choice gain must be positive (got {gain!r})")
     if name == e["name"] and gain == 1.0:
         return e
     out = {**e, "name": name, "gain": e["gain"] + loudness(e["name"]) - loudness(name) + 20 * math.log10(gain)}
@@ -239,30 +439,139 @@ def as_option(e, name, gain=1.0):
         out["gainKeys"] = [{**k, "gain": k["gain"] + out["gain"] - e["gain"]} for k in e["gainKeys"]]
     if name != e["name"]:
         out.pop("start", None)
+        if e.get("_auto_length"):
+            out.pop("length", None)
     return out
 
 
 def unfit():
     """The first row missing a field every row of its list must have (the ones the mix reads), said as bun run check would
     place it; None when all rows have them. bun run mix and listen stop on it before any work, check names every fault."""
+    if not isinstance(E, dict):
+        return 'src/edit.json: missing or not a JSON object: bun run check names every fault'
+    end = E.get("end")
+    if isinstance(end, bool) or not isinstance(end, (int, float)) or end <= 0:
+        return 'src/edit.json: no "end" (seconds after 0): bun run mix needs it for sound/mix.wav'
+    voice = E.get("voice")
+    if isinstance(voice, dict) and "lines" in voice:
+        lines = voice["lines"]
+        if not isinstance(lines, list) or any(not isinstance(line, list) or len(line) != 2 or not all(_is_num(t) for t in line) for line in lines):
+            return 'src/edit.json: voice.lines must be a list of [start, end] seconds'
+    if not isinstance(A, dict):
+        return f"{SOUND_REL}: not a JSON object: bun run check names every fault"
+    if A.get("voice") is True and not A.get("narration") and not (ROOT / "assets/public/agent/full_voice.wav").is_file():
+        return f'{SOUND_REL}: "voice" is true without "narration", and assets/public/agent/full_voice.wav does not exist'
+    for top_key in ("lufs", "drive", "voiceGain", "voiceStrength"):
+        if A.get(top_key) is not None and not _is_num(A[top_key]):
+            return f"{SOUND_REL}: {top_key} must be a finite number"
+    if A.get("voiceStrength") is not None and not 0 <= A["voiceStrength"] <= 100:
+        return f"{SOUND_REL}: voiceStrength must be between 0 and 100"
+    if A.get("narration") is not None and (not isinstance(A["narration"], str) or not A["narration"]):
+        return f"{SOUND_REL}: narration must be a sound name"
+    tracks = A.get("tracks")
+    if tracks is not None:
+        if not isinstance(tracks, list):
+            return f"{SOUND_REL}: tracks must be a list"
+        for i, t in enumerate(tracks):
+            if not isinstance(t, dict) or not isinstance(t.get("id"), str) or not t["id"]:
+                return f"{SOUND_REL}: tracks[{i}] must have a string id"
+            if t.get("gain") is not None and not _is_num(t["gain"]):
+                return f"{SOUND_REL}: tracks[{i}] gain must be a finite number"
+            try:
+                _safe_filters(t.get("filters"))
+            except ValueError as e:
+                return f"{SOUND_REL}: tracks[{i}] {e}"
     need = {"beds": ("name", "from", "to", "gain", "fadeIn", "fadeOut"), "sfx": ("name", "at", "gain")}
     for kind, keys in need.items():
         rows = A.get(kind)
         if not isinstance(rows, list):
-            return f"src/timeline/audio.json: no {kind} list: bun run check names every fault"
+            return f"{SOUND_REL}: no {kind} list: bun run check names every fault"
         for i, row in enumerate(rows):
             gone = next((k for k in keys if not isinstance(row, dict) or row.get(k) is None), None)
             if gone:
-                return f"src/timeline/audio.json: {kind}[{i}] has no {gone}: bun run check names every fault and where"
+                return f"{SOUND_REL}: {kind}[{i}] has no {gone}: bun run check names every fault and where"
+            if not isinstance(row["name"], str) or not row["name"]:
+                return f"{SOUND_REL}: {kind}[{i}].name must be a non-empty string"
+            num_keys = ("from", "to", "gain", "fadeIn", "fadeOut") if kind == "beds" else ("at", "gain")
+            for nk in num_keys:
+                if not _is_num(row[nk]):
+                    return f"{SOUND_REL}: {kind}[{i}].{nk} must be a finite number"
+            if kind == "beds":
+                if row["from"] < -1e-4:
+                    return f"{SOUND_REL}: beds[{i}].from must be >= 0 (got {row['from']})"
+                if row["fadeIn"] < 0 or row["fadeOut"] < 0:
+                    return f"{SOUND_REL}: beds[{i}] fadeIn/fadeOut must be >= 0"
+                if row.get("duck") is not None and (not _is_num(row["duck"]) or row["duck"] < 0):
+                    return f"{SOUND_REL}: beds[{i}].duck must be >= 0"
+            else:
+                if row["at"] < -1e-4:
+                    return f"{SOUND_REL}: sfx[{i}].at must be >= 0 (got {row['at']})"
+                if row.get("length") is not None and not _is_num(row["length"]):
+                    return f"{SOUND_REL}: sfx[{i}].length must be a finite number"
+                for fk in ("fadeIn", "fadeOut"):
+                    if row.get(fk) is not None and (not _is_num(row[fk]) or row[fk] < 0):
+                        return f"{SOUND_REL}: sfx[{i}].{fk} must be >= 0"
+            if row.get("start") is not None and (not _is_num(row["start"]) or row["start"] < 0):
+                return f"{SOUND_REL}: {kind}[{i}].start must be >= 0"
+            if row.get("rate") is not None and (not _is_num(row["rate"]) or row["rate"] <= 0):
+                return f"{SOUND_REL}: {kind}[{i}].rate must be > 0"
+            if row.get("pan") is not None and (not _is_num(row["pan"]) or not -1 <= row["pan"] <= 1):
+                return f"{SOUND_REL}: {kind}[{i}].pan must be between -1 and 1"
+            if row.get("voiceStrength") is not None and (not _is_num(row["voiceStrength"]) or not 0 <= row["voiceStrength"] <= 100):
+                return f"{SOUND_REL}: {kind}[{i}].voiceStrength must be between 0 and 100"
+            if row.get("voiceFilter") is not None and row["voiceFilter"] not in ("none", "telephone", "walkieTalkie", "megaphone"):
+                return f"{SOUND_REL}: {kind}[{i}].voiceFilter unknown: {row['voiceFilter']!r}"
+            if row.get("try") is not None and (not isinstance(row["try"], list) or any(not isinstance(o, str) or not o for o in row["try"])):
+                return f"{SOUND_REL}: {kind}[{i}].try must be a list of sound names"
+            if row.get("gainKeys") is not None:
+                if not isinstance(row["gainKeys"], list) or any(not isinstance(k, dict) or not _is_num(k.get("t")) or not _is_num(k.get("gain")) for k in row["gainKeys"]):
+                    return f"{SOUND_REL}: {kind}[{i}].gainKeys entries must have finite time and gain"
+            try:
+                _safe_filters(row.get("filters"))
+            except ValueError as e:
+                return f"{SOUND_REL}: {kind}[{i}] {e}"
     return None
+
+
+def _picked(e):
+    c = (CHOICES_MAP.get(e["name"]) or {}) if isinstance(CHOICES_MAP, dict) else {}
+    if c.get("set") == "off":
+        return None
+    gain = c.get("gain", 1.0)
+    return as_option(e, c["set"] if c.get("set") in options(e) else e["name"], 1.0 if gain is None else gain)
 
 
 def chosen(e):
     """None when the studio's Tắt was picked (set "off"): the sound is left out of the mix."""
-    c = CHOICES_MAP.get(e["name"]) or {}
-    if c.get("set") == "off":
+    if e.get("_off"):
         return None
-    return as_option(e, c["set"] if c.get("set") in options(e) else e["name"], c.get("gain", 1.0))
+    return e if _CHOICES_RESOLVED else _picked(e)
+
+
+def resolve_choices(drop_off=True):
+    global _CHOICES_RESOLVED
+    if _CHOICES_RESOLVED or not isinstance(A, dict):
+        return
+    narr = A.get("narration")
+    if narr:
+        narr_clips = [c for c in A.get("sfx") or [] if isinstance(c, dict) and c.get("name") == narr]
+        for c in narr_clips:
+            c["_narration"] = True
+        nc = (CHOICES_MAP.get(narr) or {}) if isinstance(CHOICES_MAP, dict) else {}
+        if nc.get("set") and nc.get("set") != "off":
+            if narr_clips and all(nc["set"] in options(c) for c in narr_clips):
+                A["narration"] = nc["set"]
+    for list_name in ("beds", "sfx"):
+        out = []
+        for item in A.get(list_name) or []:
+            c = _picked(item)
+            if c is None:
+                if not drop_off:
+                    out.append({**item, "_off": True})
+                continue
+            out.append(c)
+        A[list_name] = out
+    _CHOICES_RESOLVED = True
 
 
 # Ducking (a bed's "duck": N dB under the narration): the same shape as the studio's app/sound/duck.ts, change both together
@@ -271,7 +580,8 @@ ATTACK, RELEASE = 0.3, 0.8
 
 def warped(x):
     """A source second as heard, through the voice edit's warp (live-studio src/edit.ts map)."""
-    w = E["voice"].get("warp") or []
+    voice = E.get("voice") if isinstance(E, dict) and isinstance(E.get("voice"), dict) else {}
+    w = voice.get("warp") or []
     if len(w) < 2:
         return x
     if x <= w[0][0]:
@@ -279,21 +589,24 @@ def warped(x):
     if x >= w[-1][0]:
         return x - w[-1][0] + w[-1][1]
     i = max(k for k in range(len(w) - 1) if w[k][0] <= x)
-    return w[i][1] + (x - w[i][0]) / (w[i + 1][0] - w[i][0]) * (w[i + 1][1] - w[i][1])
+    dx = w[i + 1][0] - w[i][0]
+    return w[i][1] if dx == 0 else w[i][1] + (x - w[i][0]) / dx * (w[i + 1][1] - w[i][1])
 
 
-SOURCE_END = END = warped(E["end"])
+_edit_end = E.get("end") if isinstance(E, dict) else None
+SOURCE_END = END = warped(_edit_end) if isinstance(_edit_end, (int, float)) and not isinstance(_edit_end, bool) else 0.0
 
 
-def voice_intervals():
-    intervals = [[warped(a), warped(b)] for a, b in E["voice"].get("lines", [])]
+def voice_intervals(clips=None):
+    voice = E.get("voice") if isinstance(E, dict) and isinstance(E.get("voice"), dict) else {}
+    intervals = [[a, b] for a, b in voice.get("lines", [])]
     if A.get("narration"):
         projected = []
-        for clip in A["sfx"]:
-            if clip["name"] != A["narration"]:
+        for clip in A["sfx"] if clips is None else clips:
+            if clip.get("_off") or not (clip.get("_narration") or clip["name"] == A["narration"]):
                 continue
-            rate, start = clip.get("rate", 1), clip.get("start", 0)
-            length = clip["length"] if "length" in clip else (seconds(clip["name"]) - start) / rate
+            rate, start = float(clip.get("rate") or 1), float(clip.get("start") or 0)
+            length = float(clip["length"]) if clip.get("length") is not None else (seconds(clip["name"]) - start) / rate
             end = start + length * rate
             for a, b in intervals:
                 if b <= start or a >= end:
@@ -305,23 +618,52 @@ def voice_intervals():
     return intervals
 
 
-def prepare_timing():
+def prepare_timing(apply_choices=True, drop_off=True):
     global A, END, PROJECTED_VOICE, LEGACY_TIMELINE
     END, PROJECTED_VOICE, LEGACY_TIMELINE = SOURCE_END, None, None
+    if unfit():
+        return
+    if apply_choices:
+        resolve_choices(drop_off=drop_off)
     path = CONFIG.get("timingTimeline")
     if not path:
         return
-    timing = json.loads(_assert_in_root(ROOT / path, "Timing timeline").read_text(encoding="utf8"))
+    if not isinstance(path, str) or not path.strip():
+        raise SystemExit('package.json: "live-studio.timingTimeline" must be a relative file path')
+    try:
+        timing_path = _assert_in_root(ROOT / path, "Timing timeline")
+    except ValueError as e:
+        raise SystemExit(str(e))
+    if not timing_path.is_file():
+        raise SystemExit(f"{path}: missing timingTimeline file (set in package.json; restore it, write {{}}, or remove timingTimeline)")
+    timing = _read_json(timing_path, path, expect_dict=True)
     if not timing.get("layers") and not any(timing.get(k) for k in ("speeds", "freezes", "cuts", "gaps", "main", "layerKinds")):
         return
+    no_len = {i for i, c in enumerate(A["sfx"]) if c.get("length") is None}
     payload = {"timing": timing, "duration": SOURCE_END, "audio": A,
-               "durations": {c["name"]: seconds(c["name"]) for c in A["sfx"] if "length" not in c},
-               "voiceIntervals": voice_intervals()}
+               "durations": {c["name"]: seconds(c["name"]) for c in A["sfx"] if c.get("length") is None},
+               "voiceIntervals": voice_intervals(),
+               "voiceClips": [{"from": c["at"],
+                               "to": c["at"] + (c["length"] if c.get("length") is not None else
+                                                 (seconds(c["name"]) - (c.get("start") or 0)) / (c.get("rate") or 1)),
+                               "intervals": voice_intervals([c])}
+                              for c in A["sfx"] if c.get("_narration") or c["name"] == A.get("narration")]
+                              if A.get("narration") else None}
     cli = Path(__file__).resolve().parents[2] / "packages/live-studio/src/timing-audio-cli.mjs"
     runner = shutil.which("bun") or shutil.which("node") or "node"
-    r = subprocess.run([runner, str(cli)], input=json.dumps(payload), capture_output=True, text=True, check=True, timeout=20)
-    result = json.loads(r.stdout)
+    try:
+        r = subprocess.run([runner, str(cli)], input=json.dumps(payload), capture_output=True, text=True, check=True, timeout=20)
+        result = json.loads(r.stdout)
+    except subprocess.CalledProcessError as e:
+        msg = (e.stderr or e.stdout or str(e)).strip().splitlines()[-1] if (e.stderr or e.stdout) else str(e)
+        raise SystemExit(f"{path}: failed to apply timing ({msg})")
+    except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as e:
+        raise SystemExit(f"{path}: failed to apply timing ({e})")
     A, END = result["audio"], result["end"]
+    if not apply_choices:
+        for i in no_len:
+            if i < len(A["sfx"]) and "length" in A["sfx"][i]:
+                A["sfx"][i]["_auto_length"] = True
     PROJECTED_VOICE, LEGACY_TIMELINE = result["voiceIntervals"], result["legacyTimeline"]
 
 
@@ -358,34 +700,101 @@ def gain_filter(keys, base):
     """Clip-local, linear dB automation; aeval evaluates each sample, matching Web Audio's exponential gain ramps."""
     if not keys:
         return None
-    expression = f"({keys[0]['gain'] - base:.12g})"
-    for a, b in zip(keys, keys[1:]):
-        expression += f"+({b['gain'] - a['gain']:.12g})*clip((t-({a['t']:.12g}))/({b['t'] - a['t']:.12g}),0,1)"
+    ordered = sorted(keys, key=lambda k: k["t"])
+    expression = f"({ordered[0]['gain'] - base:.12g})"
+    for a, b in zip(ordered, ordered[1:]):
+        dt = b["t"] - a["t"]
+        dg = b["gain"] - a["gain"]
+        if dt <= 0:
+            expression += f"+({dg:.12g})*gte(t,{a['t']:.12g})"
+        else:
+            expression += f"+({dg:.12g})*clip((t-({a['t']:.12g}))/({dt:.12g}),0,1)"
     return f"aeval='val(ch)*pow(10,({expression})/20)':c=same"
 
 
-def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None):
+def picture_properties(path, *, decode=False):
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v", "-count_packets",
+                        *(["-count_frames"] if decode else []),
+                        "-show_entries", "stream=index,nb_read_packets,nb_read_frames,duration,start_time:stream_disposition=attached_pic:format=start_time,format_name",
+                        "-of", "json", str(path)], capture_output=True, text=True, timeout=600 if decode else 120)
+    if r.returncode or r.stderr.strip():
+        raise ValueError(f"{path}: picture check failed; previous output kept. {r.stderr.strip()[-500:]}")
+    data = json.loads(r.stdout)
+    streams = data.get("streams", [])
+    from review.sheet_view import picture_bounds, presentation_bounds
+    picture_end = 0
+    for stream in streams:
+        stream["attached"] = bool(stream.get("disposition", {}).get("attached_pic"))
+        if stream["attached"]:
+            continue
+        if decode and not stream.get("nb_read_frames"):
+            raise ValueError(f"{path}: no decoded frames in a picture track; previous output kept")
+        selector = str(stream["index"])
+        _, stop, origin = picture_bounds(path, stream, data["format"], selector=selector)
+        stream["presentation"] = presentation_bounds(path, origin, selector)
+        picture_end = max(picture_end, stop)
+    if not picture_end:
+        raise ValueError(f"{path}: no timed picture track; previous output kept")
+    return streams, picture_end
+
+
+def publish(outputs, scratch):
+    backups = []
+    for i, (_, destination) in enumerate(outputs):
+        backup = scratch / f"backup-{i}"
+        if destination.exists():
+            os.link(destination, backup)
+        backups.append(backup)
+    published = []
+    try:
+        for (source, destination), backup in zip(outputs, backups):
+            source.replace(destination)
+            published.append((destination, backup))
+    except OSError:
+        for destination, backup in reversed(published):
+            if backup.exists():
+                backup.replace(destination)
+            else:
+                destination.unlink()
+        raise
+
+
+def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None, source_bindings=None):
     with tempfile.TemporaryDirectory(prefix="studio-mix-clips-") as folder:
-        _build(out, beds, sfx, voice, span, master, float_output, end, Path(folder))
+        _build(out, beds, sfx, voice, span, master, float_output, end, Path(folder), source_bindings)
 
 
-def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
+def _build(out, beds, sfx, voice, span, master, float_output, end, folder, source_bindings):
     inputs, chains = [], []
     end = END if end is None else end
 
     def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None):
+        if length is not None and length <= 0:
+            return
+        if source_bindings is not None:
+            stored = stored_path(path)
+            source_bindings["files"][stored] = media_identity(path)
+            if processing and processing.get("name"):
+                source_bindings["names"][processing["name"]] = stored
         i = len(chains)  # one chain per input file, so this is the input's index
         timing = (processing or {}).get("__timing")
+        rate = float((processing or {}).get("rate") or 1)
         # a bed that runs past its file's end crossfades into the next pass (process.py loop_xfade), never a hard -stream_loop jump
         file = seconds(processing["name"]) if loop and processing else 0
-        wraps = bool(loop and processing and length is not None) and start + length * processing.get("rate", 1) > file
-        if processing and (timing or wraps or processing.get("dialogue") or processing.get("rate", 1) != 1 or processing.get("pitch", 0) or processing.get("reverse") or (processing.get("voiceFilter", "none") != "none" and processing.get("voiceStrength", 100) > 0)):
-            length = length if length is not None else (seconds(processing["name"]) - start) / processing.get("rate", 1)
+        wraps = bool(loop and processing and length is not None) and start + length * rate > file
+        if processing and (timing or wraps or processing.get("dialogue") or rate != 1 or (processing.get("pitch") or 0) or processing.get("reverse") or ((processing.get("voiceFilter") or "none") != "none" and (processing.get("voiceStrength") if processing.get("voiceStrength") is not None else 100) > 0)):
+            length = length if length is not None else (seconds(processing["name"]) - start) / rate
+            if length <= 0 and not timing:
+                return
             processed = folder / f"{i}.wav"
             settings = {**processing, "start": start, "duration": timing["duration"] if timing else length, "loop": loop}
             if timing:
                 settings["timeline"] = timing["timeline"]
-            process_audio(path, processed, settings)
+            try:
+                process_audio(path, processed, settings)
+            except (RuntimeError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+                msg = (e.stderr or e.stdout or str(e)).strip().splitlines()[-1] if isinstance(e, subprocess.CalledProcessError) and (e.stderr or e.stdout) else str(e)
+                raise SystemExit(f"audio processing failed for {processing.get('name', path)}: {msg}")
             path, start = processed, 0
         inputs.extend(["-i", str(path)])
         f = [f"atrim=start={start}" + (f":duration={length}" if length else ""), "asetpts=PTS-STARTPTS",
@@ -397,50 +806,78 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder):
             f.append(f"afade=t=in:d={fade_in}")
         if fade_out and length:
             f.append(f"afade=t=out:st={max(0, length - fade_out)}:d={fade_out}")
-        samples = math.floor(at * 48000 + 0.5)
+        samples = max(0, math.floor(at * 48000 + 0.5))
         f.append(f"adelay={samples}S|{samples}S")
         chains.append(f"[{i}:a]{','.join(f)}[a{i}]")
 
     # Dialogue compression (4:1 above -30 dBFS, fast attack) and a voice limiter bring the hushed narration's peaks to
     # about 11 dB over its loudness, so the loudness pass below can stay linear
-    if voice and A.get("voice", True) and not A.get("narration"):
-        add(ROOT / "assets/public/agent/full_voice.wav", 0, float(A.get("voiceGain", 0)), length=END,
+    has_voice = A.get("voice") is True or (A.get("voice") is None and (ROOT / "assets/public/agent/full_voice.wav").is_file())
+    if voice and not A.get("narration") and has_voice:
+        add(_assert_in_root(ROOT / "assets/public/agent/full_voice.wav", "Voice audio"), 0, float(A.get("voiceGain") or 0), length=END,
             processing={"dialogue": True, **({"__timing": {"duration": SOURCE_END, "timeline": LEGACY_TIMELINE}} if LEGACY_TIMELINE else {})})
     for b in beds:
         if b["to"] <= b["from"]:
             continue
-        duck = duck_expr(b["from"], b["to"], float(b["duck"])) if b.get("duck") and (A.get("narration") or A.get("voice", True)) else None
-        add(present(b["name"]), float(b["from"]), float(b["gain"]), float(b.get("start", 0)), float(b["to"] - b["from"]), float(b["fadeIn"]), float(b["fadeOut"]), loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*_safe_filters(b.get("filters")), *track_chain(b), *([duck] if duck else []), *([pan_filter(float(b["pan"]))] if b.get("pan") else [])])
+        duck_db = float(b["duck"]) if b.get("duck") is not None else 0.0
+        duck = duck_expr(b["from"], b["to"], duck_db) if duck_db and (A.get("narration") or has_voice) else None
+        add(present(b["name"]), float(b["from"]), float(b["gain"]), float(b.get("start") or 0), float(b["to"] - b["from"]), float(b["fadeIn"]), float(b["fadeOut"]), loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*_safe_filters(b.get("filters")), *track_chain(b), *([duck] if duck else []), *([pan_filter(float(b["pan"]))] if b.get("pan") else [])])
     for s in sfx:
-        if "length" in s and s["length"] <= 0:
+        start_at = float(s.get("start") or 0)
+        if (s.get("length") is not None and float(s["length"]) <= 0) or start_at >= seconds(s["name"]):
             continue
-        add(present(s["name"]), float(s["at"]), float(s["gain"]), float(s.get("start", 0)), float(s["length"]) if "length" in s and s["length"] is not None else None, float(s.get("fadeIn", 0)), float(s.get("fadeOut", 0)), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])])
+        add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, float(s["length"]) if s.get("length") is not None else None, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])])
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
-    drive_db = float(A.get("drive", 0))
+    drive_db = float(A.get("drive") or 0)
     graph = chains + [
         # audio.drive dB into the limiter first: hits (a slam, a drawer) stand ~20 dB over the average, too far apart for the
         # linear -14 LUFS pass below; the limiter trims them so the gap fits. Then the
         # safety limiter at about -7 dBFS. The loudness pass after it stays linear (listen.level): a dynamic one lifts
         # every quiet stretch (the CCTV hiss came up level with the voice), so drive is the only lever for more loudness
         f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={end},asetpts=N/SR/TB,atrim=duration={end}"
-        + (f",volume={drive_db}dB,alimiter=limit=0.45:level=false" if master else "")
+        + (f",volume={drive_db}dB,alimiter=limit=0.45:level=false:latency=true" if master else "")
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
     ]
+    out.parent.mkdir(parents=True, exist_ok=True)
     script = out.with_name(out.name + ".graph.txt")
-    script.write_text(";\n".join(graph), encoding="utf8")
+    script.write_text(";\r\n".join(graph), encoding="utf8")
     codec = ["-c:a", "libopus", "-b:a", "96k"] if out.suffix == ".webm" else ["-c:a", "pcm_f32le" if float_output else "pcm_s16le"]
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex_script", str(script), "-map", "[out]", "-ar", "48000", *codec, str(out)], check=True, timeout=120 if float_output else 300)
-    script.unlink()
+    try:
+        subprocess.run(["ffmpeg", "-xerror", "-v", "error", "-y", *inputs, "-/filter_complex", str(script), "-map", "[out]", "-ar", "48000", *codec, str(out)],
+                       check=True, stderr=subprocess.PIPE, text=True, errors="replace", timeout=120 if float_output else 300)
+    except subprocess.CalledProcessError as e:
+        source = re.search(r"\bin#(\d+)[/ ]", e.stderr)
+        paths = [inputs[i + 1] for i, arg in enumerate(inputs) if arg == "-i"]
+        detail = next(iter(e.stderr.splitlines()), f"exit {e.returncode}")
+        name = f" reading {paths[int(source[1])]}" if source and int(source[1]) < len(paths) else ""
+        raise SystemExit(f"ffmpeg mix failed{name}: {detail}")
+    except subprocess.TimeoutExpired:
+        raise SystemExit("ffmpeg mix timed out")
+    finally:
+        script.unlink(missing_ok=True)
 
 
 def measure_clip(kind, index):
-    c = chosen({**A[kind][index], "track": None})  # --measure reads the unsaved lanes, unfiltered, from stdin
+    if kind not in ("beds", "sfx"):
+        raise ValueError(f"Unknown clip kind: {kind!r}")
+    rows = A.get(kind)
+    if not isinstance(rows, list) or index < 0 or index >= len(rows) or not isinstance(rows[index], dict):
+        raise ValueError(f"{kind}[{index}] does not exist")
+    c = chosen({**rows[index], "track": None})  # --measure reads the unsaved lanes, unfiltered, from stdin
     if c is None:
         raise ValueError("Choose an audible sound option before normalizing")
-    start = c["from"] if kind == "beds" else c["at"]
-    length = c["to"] - start if kind == "beds" else c.get("length", (seconds(c["name"]) - c.get("start", 0)) / c.get("rate", 1))
+    start_key = "from" if kind == "beds" else "at"
+    if c.get("name") is None or c.get(start_key) is None or c.get("gain") is None or (kind == "beds" and c.get("to") is None):
+        raise ValueError(f"{kind}[{index}] is missing required clip fields")
+    start = float(c[start_key])
+    if kind == "beds":
+        length = float(c["to"]) - start
+    elif c.get("length") is not None:
+        length = float(c["length"])
+    else:
+        length = (seconds(c["name"]) - float(c.get("start") or 0)) / float(c.get("rate") or 1)
     if length < 0.4:
         raise ValueError("Loudness needs at least 0.4 seconds of audio")
     with tempfile.TemporaryDirectory(prefix="studio-loudness-") as folder:
@@ -455,83 +892,225 @@ def measure_clip(kind, index):
 def studio(out):
     """The studio's mix without the sounds that have options, plus one stem per option covering just the stretch where that
     sound plays, and trials.json beside the mix saying where they are: switching an option is heard at once, with no remix."""
-    tried = lambda e: "try" in e
+    groups = {}
+    for kind, entries in (("bed", A["beds"]), ("sfx", A["sfx"])):
+        for e in entries:
+            groups.setdefault(e["name"], []).append((kind, e))
+    alternatives = {name: list(dict.fromkeys(o for _, e in group for o in options(e))) for name, group in groups.items()}
+    tried = lambda e: len(alternatives[e["name"]]) > 1
     build(out, [b for b in A["beds"] if not tried(b)], [s for s in A["sfx"] if not tried(s)])
     vault_sources = {}
     for v in VAULTS:
         if (v / "SOURCES.json").exists():
-            vault_sources.update(json.loads((v / "SOURCES.json").read_text(encoding="utf8")))
+            data = _read_json(v / "SOURCES.json", str(v / "SOURCES.json"), expect_dict=True)
+            vault_sources.update(data)
     film_sources_file = _assert_in_root(SFX / "SOURCES.json", "Film SOURCES.json")
-    film_sources = json.loads(film_sources_file.read_text(encoding="utf8")) if film_sources_file.exists() else {}
+    film_sources = _read_json(film_sources_file, f"{SFX.relative_to(ROOT).as_posix()}/SOURCES.json", expect_dict=True) if film_sources_file.exists() else {}
     sources = {**vault_sources, **film_sources}
     safe_stems = _assert_in_root(STEMS, "Stems directory")
     shutil.rmtree(safe_stems, ignore_errors=True)
     trials = {}
-    for kind, entries in (("bed", A["beds"]), ("sfx", A["sfx"])):
-        for name in dict.fromkeys(e["name"] for e in entries if tried(e)):
-            group = [e for e in entries if e["name"] == name]
+    for name, group in groups.items():
+        if len(alternatives[name]) < 2:
+            continue
+        spans = []
+        for kind, e in group:
             if kind == "bed":
-                span = (min(b["from"] for b in group), max(b["to"] for b in group))
+                spans.append((float(e["from"]), float(e["to"])))
             else:  # a one-shot without a length rings as long as its longest option
-                longest = max(seconds(o) for o in options(group[0]))
-                span = (min(s["at"] for s in group), max(s["at"] + s.get("length", longest) for s in group))
-            (safe_stems / name).mkdir(parents=True, exist_ok=True)
-            opts = []
-            for o in options(group[0]):
-                one = [as_option(e, o) for e in group]
-                build(safe_stems / name / f"{o}.webm", one if kind == "bed" else [], one if kind == "sfx" else [], voice=False, span=span)
-                opts.append({"id": o, "title": sources.get(o, {}).get("title", o), "files": [f"/agent/stems/{name}/{o}.webm"], "source": sources.get(o, {}).get("url", "")})
-            trials[name] = {"title": f"{name.replace('_', ' ')} ({kind})", "kind": "stem", "from": span[0], "to": span[1], "options": opts}
+                def _opt_end(s):
+                    rate = float(s.get("rate") or 1)
+                    if s.get("length") is not None and not s.get("_auto_length"):
+                        return float(s["at"]) + float(s["length"])
+                    longest = max((seconds(o) - (float(s.get("start") or 0) if o == s["name"] else 0.0)) / rate for o in options(s))
+                    cur = float(s["length"]) if s.get("length") is not None else longest
+                    return float(s["at"]) + max(cur, longest)
+                spans.append((float(e["at"]), _opt_end(e)))
+        span = (min(a for a, _ in spans), max(b for _, b in spans))
+        (safe_stems / name).mkdir(parents=True, exist_ok=True)
+        opts = []
+        for o in alternatives[name]:
+            one = [(kind, as_option(e, o if o in options(e) else e["name"])) for kind, e in group]
+            build(safe_stems / name / f"{o}.webm", [e for kind, e in one if kind == "bed"], [e for kind, e in one if kind == "sfx"], voice=False, span=span)
+            opts.append({"id": o, "title": sources.get(o, {}).get("title", o), "files": [f"/agent/stems/{name}/{o}.webm"], "source": sources.get(o, {}).get("url", "")})
+        kinds = "/".join(dict.fromkeys(kind for kind, _ in group))
+        trials[name] = {"title": f"{name.replace('_', ' ')} ({kinds})", "kind": "stem", "from": span[0], "to": span[1], "options": opts}
     out.with_name("trials.json").write_text(json.dumps(trials, ensure_ascii=False), encoding="utf8")
 
 
-if __name__ == "__main__" and sys.argv[1:2] == ["--raw"] and "--live-lanes" in sys.argv:
-    A = {**A, "beds": [], "sfx": []}
+if _IS_MAIN and _MODE == "resolve_audio":
+    names = _read_stdin_json("Audio source names").get("names")
+    if not isinstance(names, list) or not all(isinstance(name, str) and SAFE_NAME.fullmatch(name) for name in names):
+        raise SystemExit("audio source names must be a JSON array of valid names")
+    print(json.dumps(resolve_audio_sources(names)))
+    raise SystemExit(0)
 
-if __name__ != "__main__" or sys.argv[1:2] != ["--measure"]:
+if _IS_MAIN and _MODE == "raw" and _RAW_LIVE_LANES:
+    A = {**(A if isinstance(A, dict) else {}), "beds": [], "sfx": []}
+
+if not _IS_MAIN:
     prepare_timing()
 
 
-if __name__ == "__main__":
-    if sys.argv[1:2] == ["--measure"]:
-        A = json.load(sys.stdin)
-        prepare_timing()
-        print(json.dumps(measure_clip(sys.argv[2], int(sys.argv[3]))))
-        raise SystemExit
-    if sys.argv[1:2] == ["--raw"]:
-        if "--live-lanes" in sys.argv:
-            build(Path(sys.argv[2]), [], [], master=False)
-            shutil.rmtree(_assert_in_root(STEMS, "Stems directory"), ignore_errors=True)
-            Path(sys.argv[2]).with_name("trials.json").write_text("{}", encoding="utf8")
-        else:
-            studio(Path(sys.argv[2]))
-        raise SystemExit
+if _IS_MAIN:
+    if _MODE == "measure":
+        try:
+            prepare_timing(drop_off=False)
+            print(json.dumps(measure_clip(*_MEASURE_ARGS)))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(str(e), file=sys.stderr)
+            raise SystemExit(1)
     if why := unfit():
         print(why, file=sys.stderr)
         raise SystemExit(1)
-    raw = _assert_in_root(ROOT / "sound/mix_raw.wav", "Mix raw output")
-    build(raw, [c for b in A["beds"] if (c := chosen(b))], [c for s in A["sfx"] if (c := chosen(s))])
-    out = _assert_in_root(ROOT / "sound/mix.wav", "Mix output")
-    from listen import fit_encoded, level, loudness_report
-    if len(sys.argv) > 1:
-        # the final (bun run render final) goes out as the upload: AAC at YouTube's 384 kbps for stereo, moov up front, no edit list
-        final = Path(sys.argv[1]).name == "final_video.mp4"
-        name = "final.mp4" if final else "draft.mp4"
-        muxed = _assert_in_root(ROOT / "renders" / name, "Muxed mp4 output")
+    prepare_timing(apply_choices=(_MODE != "raw" or _RAW_LIVE_LANES))
+    if _MODE == "raw":
+        try:
+            raw_out = _assert_in_root(Path(_RAW_OUT), "Raw mix output")
+            if _RAW_LIVE_LANES:
+                build(raw_out, [], [], master=False)
+                shutil.rmtree(_assert_in_root(STEMS, "Stems directory"), ignore_errors=True)
+                raw_out.with_name("trials.json").write_text("{}", encoding="utf8")
+            else:
+                studio(raw_out)
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(str(e), file=sys.stderr)
+            raise SystemExit(1)
+    onto = f" onto {Path(_VIDEO_ARG).as_posix()}" if _VIDEO_ARG else ""
+    context = render_context(_video_path) if _VIDEO_ARG else None
+    render = context["render"] if context else None
+    if context and context.get("error") and _audio_start is None:
+        raise SystemExit(f"{context['error']}; pass --start explicitly to create a separate preview")
+    start = _audio_start if _VIDEO_ARG and _audio_start is not None else render["start"] if render else 0
+    whole = bool(render and not render["kind"] and not render["mixed"] and start == 0)
+    if _VIDEO_ARG and start >= END:
+        print(f"mix starts at {start:g} s, past the soundtrack ({END:g} s)", file=sys.stderr)
+        raise SystemExit(2)
+    if context and context["stale"]:
+        print(f"STALE: {context['stale']['message']}", file=sys.stderr)
+    ended = job(ROOT, "mix", f"Mixing the sound{onto}")
+    try:
+        if _VIDEO_ARG:
+            directory = _assert_in_root(ROOT / "renders", "Mux output directory")
+            directory.mkdir(exist_ok=True)
+            final = bool(whole and render["final"])
+            if whole:
+                output = directory / ("final.mp4" if final else "draft.mp4")
+            else:
+                run = Path(tempfile.mkdtemp(prefix="mixed_", dir=directory))
+                output = run / "preview.mp4"
+            muxed = _assert_in_root(output, "Muxed mp4 output")
+        if _VIDEO_ARG:
+            print(f"Checking picture before replacing {output.relative_to(ROOT).as_posix()} (full decode; it may take several minutes) ...", file=sys.stderr)
+            picture_input = media_identity(_video_path)
+            before, picture_end = picture_properties(_video_path, decode=True)
+        with tempfile.TemporaryDirectory(prefix="mix-", dir=ROOT) as tmp:
+            scratch = Path(tmp)
+            raw, out = scratch / "raw.wav", scratch / "mix.wav"
+            outputs = []
+            used = {"files": {}, "names": {}} if _VIDEO_ARG else None
+            build(raw, [c for b in A["beds"] if (c := chosen(b))], [c for s in A["sfx"] if (c := chosen(s))],
+                  source_bindings=used)
+            from listen import fit_encoded, level, loudness_report, measured_loudness
+            target_lufs = float(A["lufs"]) if A.get("lufs") is not None else -14.0
+            if _VIDEO_ARG:
+                staged = scratch / "mux.mp4"
 
-        def mux(wav):
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", sys.argv[1], "-i", str(wav), "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
-                            "-b:a", "384k" if final else "192k", "-movflags", "+faststart", "-use_editlist", "0", "-shortest", str(muxed)],
-                           check=True, timeout=300)
-            return muxed
-        held, taken = fit_encoded(raw, out, float(A["lufs"]), mux)
-    else:
-        held, taken = level(raw, out, float(A["lufs"])), 0.0
-    print("\n".join(loudness_report("sound/mix.wav", float(A["lufs"]), held, float(A.get("drive", 0)))))
-    if taken:
-        print(f"  the AAC encode lifted its true peak over -1 dBTP: the mix went {taken:.1f} dB lower so renders/{name} stays under")
-    if len(sys.argv) > 1:
-        print(f"muxed renders/{name}" + (" (the file to upload; bun run deliver checks it against YouTube's spec)" if final else ""))
-    print("NOT checked here, and needed before calling it ready: whether every word is heard over the beds, the end fades, "
-          "no hit is buried: bun run listen (about a second per film second the first time)"
-          + ("" if len(sys.argv) > 1 else "; bun run mix renders/draft_video.mp4 puts it on the draft"))
+                def mux(wav):
+                    try:
+                        subprocess.run(["ffmpeg", "-xerror", "-v", "error", "-y", "-i", str(_video_path), "-ss", f"{start:.9f}",
+                                        "-i", str(wav), "-map", "0:v", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac",
+                                        "-b:a", "384k" if final else "192k", "-af", f"apad,atrim=duration={picture_end:.9f}",
+                                        "-movflags", "+faststart", str(staged)], check=True, timeout=300)
+                    except subprocess.CalledProcessError as e:
+                        raise SystemExit(f"ffmpeg mux failed (exit {e.returncode})")
+                    except subprocess.TimeoutExpired:
+                        raise SystemExit("ffmpeg mux timed out")
+                    return staged
+
+                held, taken, measured, peak = fit_encoded(raw, out, target_lufs, mux)
+                if peak > -1.0:
+                    raise ValueError(f"encoded peak is still {peak:+.1f} dBTP; previous output kept")
+                after, _ = picture_properties(staged)
+                if len(before) != len(after):
+                    raise ValueError("mux changed the number of picture tracks; previous output kept")
+                for original, copied in zip(before, after):
+                    if not original.get("nb_read_packets") or original["nb_read_packets"] != copied.get("nb_read_packets"):
+                        raise ValueError("mux changed a picture packet count; previous output kept")
+                    if original["attached"] != copied["attached"]:
+                        raise ValueError("mux changed a picture attachment; previous output kept")
+                    if original["attached"]:
+                        continue
+                    original_times, original_end = original["presentation"]
+                    copied_times, copied_end = copied["presentation"]
+                    if (len(original_times) != len(copied_times) or abs(original_end - copied_end) > 0.001
+                            or any(abs(a - b) > 0.001 for a, b in zip(original_times, copied_times))):
+                        raise ValueError("mux changed a picture's presentation timing; previous output kept")
+                if media_identity(_video_path) != picture_input:
+                    raise ValueError("picture changed during mux; previous output kept")
+                bindings = [{"path": path, **(stamp if stamp is not None else {"missing": True})}
+                            for path, stamp in {**used["files"], **READ_DOCUMENTS}.items()]
+                evidence = {**media_identity(staged), "audioInputs": bindings, "audioSources": used["names"],
+                            "audioChoices": audio_choices, "pictureInput": picture_input}
+                if whole:
+                    cut_info = context["cuts"] or {}
+                    evidence["cuts"] = cut_info.get("times")
+                sidecar = scratch / "review.json"
+                sidecar.write_text(json.dumps(evidence), encoding="utf8")
+                outputs.extend([(staged, muxed), (sidecar, muxed.with_suffix(".mp4.review.json"))])
+            else:
+                held, taken = level(raw, out, target_lufs), 0.0
+            if _VIDEO_ARG and not whole:
+                status = f"preview audio {measured_loudness(measured, peak)}"
+                report = [status]
+            else:
+                raw_output = _assert_in_root(ROOT / "sound/mix_raw.wav", "Mix raw output")
+                mix_output = _assert_in_root(ROOT / "sound/mix.wav", "Mix output")
+                raw_output.parent.mkdir(exist_ok=True)
+                outputs.extend([(raw, raw_output), (out, mix_output)])
+                report = loudness_report(out, target_lufs, held, float(A.get("drive") or 0), describe_upload=False)
+                report[0] = report[0].replace(str(out), "sound/mix.wav", 1)
+                status = report[0].split(": ", 1)[1]
+            publish(outputs, scratch)
+        print("\r\n".join(report))
+        job_level = "ok"
+        if _VIDEO_ARG:
+            shown = muxed.relative_to(ROOT).as_posix()
+            omitted = _streams - {"video", "audio"}
+            if omitted:
+                print(f"  source tracks kept only in the source file: {', '.join(sorted(omitted))}")
+            if whole:
+                status = f"encoded audio: {measured_loudness(measured, peak)}"
+                print(f"  {status}")
+                if peak == float("-inf"):
+                    print("  encoded audio is silent")
+                    if final:
+                        job_level = "warn"
+                elif measured is not None and measured < target_lufs - 1:
+                    print(f"  encoded audio is {target_lufs - measured:.1f} LU below the mix target")
+                if picture_end + 0.001 < END:
+                    print(f"  picture ends at {picture_end:g} s; soundtrack from there to {END:g} s stays in sound/mix.wav")
+            if taken:
+                print(f"  the AAC encode lifted its true peak over -1 dBTP: the mix went {taken:.1f} dB lower")
+            print(f"muxed {shown}" + (" (technical upload check: bun run deliver)" if final else ""))
+            if not whole:
+                print(f"  file second 0 uses film audio from {start:g} s; inspect this exact file with sheet or earshot")
+        ended(f"Mixed the sound{onto}: {status}", level=job_level)
+        if _VIDEO_ARG and not whole:
+            print(f'next: bun run sheet "{shown}" overview for the picture; earshot timeline "{shown}" for encoded audio events')
+        else:
+            print("next: bun run listen for masking, cut levels and mono (first run renders the stems)"
+                  + ("" if _VIDEO_ARG else "; bun run mix renders/draft_video.mp4 puts it on the draft"))
+    except SystemExit as e:
+        detail = str(e.code).strip() if isinstance(e.code, str) else "mix stopped"
+        ended(f"Mix stopped: {detail}", level="fail")
+        raise
+    except Exception as e:
+        ended(f"Mix failed: {e}", level="fail")
+        raise SystemExit(f"mix failed: {e}")

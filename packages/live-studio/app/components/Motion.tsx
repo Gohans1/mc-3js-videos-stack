@@ -32,6 +32,7 @@ export function TabStage({
   distance = 10,
   duration = 180,
   animateMount = false,
+  animated = true,
   className,
   children,
 }: {
@@ -41,6 +42,7 @@ export function TabStage({
   distance?: number;
   duration?: number;
   animateMount?: boolean;
+  animated?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -57,7 +59,7 @@ export function TabStage({
     const prev = prevKeyRef.current;
     prevKeyRef.current = activeKey;
 
-    if (prev === null && !animateMount) return;
+    if (!animated || (prev === null && !animateMount)) return;
     if (prev === activeKey) return;
 
     const el = ref.current;
@@ -89,7 +91,7 @@ export function TabStage({
       anim.cancel();
       if (animRef.current === anim) animRef.current = null;
     };
-  }, [activeKey, animateMount, axis, distance, duration]);
+  }, [activeKey, animated, animateMount, axis, distance, duration]);
 
   return (
     <div ref={ref} className={className}>

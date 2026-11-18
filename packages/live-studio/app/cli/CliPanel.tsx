@@ -1,20 +1,20 @@
 import { AlertTriangle, Maximize2, Minimize2, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { TabStage } from "@/components/Motion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 
 import { type CliCategoryId, findCliCommand } from "../../src/cli-catalog.ts";
 import { useDialogModal } from "../core/store";
 import {
-  clearConsoleRun,
   cliStore,
   commitSaveTemplate,
   consumeFocusConsoleRun,
   dispatchCliRun,
   ensureCliLoaded,
   getOrCreateDraft,
+  hideConsoleRun,
   openCommandWorkbench,
   openTemplateInWorkbench,
   removeTemplate,
@@ -30,7 +30,7 @@ import {
 } from "./cli-store";
 import { CliBrowse } from "./CliBrowse";
 import { CliRunAnnouncement } from "./CliConsole";
-import { CliConfirmDialog, CliSaveTemplateDialog } from "./CliDialogs";
+import { CliConfirmDialog, CliResetDialog, CliSaveTemplateDialog } from "./CliDialogs";
 import { CliWorkbench } from "./CliWorkbench";
 import {
   buildTemplatePreviewCommand,
@@ -40,14 +40,17 @@ import {
 } from "./model";
 
 export function CliPanel() {
+  const [resetOpen, setResetOpen] = useState(false);
   const helpOpen = useCliStore((s) => s.helpOpen);
   const catalog = useCliStore((s) => s.catalog);
-  const loadingCatalog = useCliStore((s) => s.loadingCatalog);
   const catalogError = useCliStore((s) => s.catalogError);
   const templates = useCliStore((s) => s.templates);
   const templatesError = useCliStore((s) => s.templatesError);
   const view = useCliStore((s) => s.view);
   const panelMode = useCliStore((s) => s.panelMode);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousView = useRef(view);
+  const browseReturnKey = useRef<string | null>(null);
   const searchQuery = useCliStore((s) => s.searchQuery);
   const selectedCategory = useCliStore((s) => s.selectedCategory);
   const activeCommandId = useCliStore((s) => s.activeCommandId);
@@ -70,7 +73,24 @@ export function CliPanel() {
     void ensureCliLoaded();
   }, []);
 
+  useLayoutEffect(() => {
+    if (previousView.current === view) return;
+    previousView.current = view;
+    const panel = panelRef.current;
+    if (view === "browse") {
+      const key = browseReturnKey.current;
+      browseReturnKey.current = null;
+      const trigger =
+        key && panel?.querySelector<HTMLElement>(`[data-cli-entry="${CSS.escape(key)}"]`);
+      (trigger || panel?.querySelector<HTMLElement>('input[name="cli-search"]'))?.focus();
+      return;
+    }
+    const output = focusConsoleRunId && panel?.querySelector<HTMLElement>("[data-cli-output]");
+    (output || panel?.querySelector<HTMLElement>("[data-cli-command-title]"))?.focus();
+  }, [view, focusConsoleRunId]);
+
   useDialogModal("cliHelp", helpOpen);
+  useDialogModal("cliReset", resetOpen);
   useDialogModal("cliConfirm", Boolean(confirmPending));
   useDialogModal("cliTemplate", saveDialogOpen);
 
@@ -85,11 +105,14 @@ export function CliPanel() {
           <Alert variant="destructive">
             <AlertTriangle aria-hidden />
             <AlertTitle>Could not load CLI catalog</AlertTitle>
-            <AlertDescription>{catalogError}</AlertDescription>
+            <AlertDescription size="prose" className="wrap-anywhere">
+              <span className="block">{catalogError}</span>
+              Check Studio’s connection, then retry.
+            </AlertDescription>
           </Alert>
         ) : (
-          <p className="text-muted-foreground text-sm">
-            {loadingCatalog ? "Loading repo CLIs…" : "Preparing CLI workbench…"}
+          <p role="status" className="text-muted-foreground text-sm">
+            Loading commands…
           </p>
         )}
         {catalogError && (
@@ -172,8 +195,9 @@ export function CliPanel() {
 
   const panelControls = (
     <Button
-      size="comfortable"
+      size="wrapping"
       variant="secondary"
+      className="max-w-full"
       aria-label={panelMode === "expanded" ? "Restore CLI panel" : "Expand CLI panel"}
       onClick={() =>
         cliStore.setState({ panelMode: panelMode === "expanded" ? "embedded" : "expanded" })
@@ -186,6 +210,7 @@ export function CliPanel() {
 
   return (
     <div
+      ref={panelRef}
       data-cli-panel
       onKeyDown={(event) => {
         if (
@@ -193,6 +218,7 @@ export function CliPanel() {
           !event.defaultPrevented &&
           panelMode === "expanded" &&
           !helpOpen &&
+          !resetOpen &&
           !confirmPending &&
           !saveDialogOpen
         ) {
@@ -209,11 +235,7 @@ export function CliPanel() {
         run={activeRun ?? lastRun}
         isStopping={Boolean(activeRun && stoppingRunId === activeRun.runId)}
       />
-      <TabStage
-        activeKey={`${view}:${panelMode}`}
-        order={[`browse:${panelMode}`, `workbench:${panelMode}`]}
-        className="relative flex min-h-0 flex-1 flex-col"
-      >
+      <div className="relative flex min-h-0 flex-1 flex-col">
         {view === "browse" ? (
           <CliBrowse
             panelControls={panelControls}
@@ -234,7 +256,10 @@ export function CliPanel() {
             onSearchChange={(q) => cliStore.setState({ searchQuery: q })}
             onSelectCategory={(cat) => cliStore.setState({ selectedCategory: cat })}
             onRefreshCatalog={() => void retryCliPanel()}
-            onOpenCommand={(id, opts) => openCommandWorkbench(id, opts)}
+            onOpenCommand={(id, opts) => {
+              browseReturnKey.current = opts?.focusRunId ? "recent-output" : id;
+              openCommandWorkbench(id, opts);
+            }}
             onRunTemplate={handleRunTemplate}
             onEditTemplate={(tpl) => openTemplateInWorkbench(tpl)}
             onDeleteTemplate={(tpl) => removeTemplate(tpl.id)}
@@ -272,11 +297,11 @@ export function CliPanel() {
             onUpdateField={(bucket, key, value, spec, exclusiveGroup, optionalValue) =>
               updateDraftField(command.id, bucket, key, value, spec, exclusiveGroup, optionalValue)
             }
-            onReset={() => resetCommandDraft(command.id)}
+            onReset={() => setResetOpen(true)}
             onUpdatePendingInput={(key, value) => updatePendingInput(command.id, key, value)}
             onRun={(req, confirmMeta) => void dispatchCliRun(req, { confirmMeta })}
             onStopRun={(id) => void stopCurrentRun(id)}
-            onClearConsole={() => clearConsoleRun(command.id)}
+            onClearConsole={() => hideConsoleRun(command.id)}
             onToggleExpandConsole={() =>
               cliStore.setState((s) => ({ consoleExpanded: !s.consoleExpanded }))
             }
@@ -284,7 +309,19 @@ export function CliPanel() {
             onOpenSaveTemplate={() => cliStore.setState({ saveDialogOpen: true, saveError: null })}
           />
         )}
-      </TabStage>
+      </div>
+
+      <CliResetDialog
+        open={resetOpen}
+        onCancel={() => setResetOpen(false)}
+        onConfirm={() => {
+          setResetOpen(false);
+          resetCommandDraft(command.id);
+        }}
+        returnFocus={() =>
+          panelRef.current?.querySelector<HTMLElement>('[aria-label="Reset options"]') ?? true
+        }
+      />
 
       <CliConfirmDialog
         request={confirmPending?.dialog ?? null}
@@ -321,6 +358,8 @@ export function CliPanel() {
             name,
             targetFilm,
             draft: effectiveDraft,
+          }).then((saved) => {
+            if (saved) toast.add({ title: "Template saved" });
           });
         }}
       />

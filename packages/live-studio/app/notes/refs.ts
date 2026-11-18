@@ -56,7 +56,7 @@ export const addRefs = async (files: Iterable<File>) => {
       bmp.close();
       made.push({ id: crypto.randomUUID(), src, strokes: [], url: src });
     } catch {
-      say(`Couldn’t read ${f.name || "that picture"}`);
+      say(`Couldn’t read ${f.name || "that picture"}. Try another image.`);
     }
   }
   if (made.length && get().compose === compose) keep([...get().refs, ...made]);

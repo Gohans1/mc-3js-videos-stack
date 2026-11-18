@@ -7,6 +7,7 @@
 @import "./studio.css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant phone (&:where([data-phone], [data-phone] *));
 /* A phone held upright: picture on top, notes under it. A phone on its side: picture beside a narrow notes column */
 @custom-variant upright {
   @media (max-width: 820px) and (min-height: 521px), (max-width: 559px) {
@@ -22,7 +23,6 @@
 @theme inline {
   --color-input-border: var(--input-border);
   --color-destructive-text: var(--destructive-text);
-
   --font-heading: inherit;
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-md: "Inter Variable", "Inter", var(--font-sans);
@@ -90,6 +90,9 @@
   --color-clip-wave: var(--clip-wave);
   --color-clip-label: var(--clip-label);
   --color-slider: var(--slider);
+  --color-transcribe: var(--transcribe);
+  --color-transcribe-text: var(--transcribe-text);
+  --color-reading-foreground: var(--reading-foreground);
   --color-slider-fill: var(--slider-fill);
   --color-slider-thumb: var(--slider-thumb);
   --color-label: var(--label);
@@ -141,22 +144,20 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* CapCut 9.7's type steps (px, so a phone's larger rem leaves them be) and the studio's floating surfaces. A name added
+/* CapCut 9.7's type steps (rem relative to desktop 16px, preserving step order when a phone sets 18px) and floating surfaces. A name added
    here goes in lib/utils.ts too, or cn() takes text-ui for a colour and drops it beside text-primary */
 @theme {
-  --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
-  --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
-  --text-title: 15px; /* a panel's or dialog's heading */
+  --text-tag: 0.6875rem; /* 11px at 16px root: tags, meter numbers, phone chips */
+  --text-ui: 0.8125rem; /* 13px at 16px root: panel text, labels, fields, buttons */
+  --text-title: 0.9375rem; /* 15px at 16px root: panel headings and reading prose */
   --shadow-float: 0 4px 16px oklch(0.1696 0.0017 17.3 / 0.55); /* a bar over the picture */
   --shadow-sheet: 0 8px 20px oklch(0.1696 0.0017 17.3 / 0.65); /* the note sheet over the picture on a phone */
 }
 
 /* The film's frame shape, until picture/frame.ts sets it from the film */
 :root {
-  --destructive-text: #FF8F92;
   --input-border: #7A7A7A;
-  --scrollbar-thumb: #404040;
-
+  --destructive-text: #FF8F92;
   --frame: 16 / 9;
 }
 
@@ -303,6 +304,7 @@
   --picture-foreground: var(--fx-black);
   --alarm: var(--fx-red-600);
   --alarm-bg: var(--fx-red-950);
+  /* Step under --foreground (base-200) and above --muted-foreground (base-400). */
   --label: var(--fx-base-300);
   --tooltip: var(--fx-black);
   --curve-bg: var(--fx-black);
@@ -373,6 +375,9 @@
   --level-near: var(--fx-orange-400);
   --level-over: var(--fx-red-400);
   --slider: var(--fx-base-800);
+  --transcribe: var(--fx-cyan-300);
+  --transcribe-text: var(--fx-cyan-200);
+  --reading-foreground: var(--fx-base-100);
   --slider-fill: var(--fx-base-200);
   --slider-thumb: var(--fx-paper);
   color-scheme: dark;
@@ -397,6 +402,14 @@
       font-size: 18px;
     }
   }
+  /* PhoneApp: sleek compact 15px scale so preview + 3-5 notes fit on screen without desktop bloat */
+  html[data-phone] {
+    font-size: 15px;
+  }
+  /* Keep mobile inputs at >= 16px computed size so iOS/mobile browsers never auto-zoom on focus */
+  html[data-phone] textarea {
+    font-size: max(1rem, 16px);
+  }
   :root {
     caret-color: var(--primary);
     scrollbar-color: var(--slider) transparent;
@@ -412,32 +425,55 @@
 @utility safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
 }
+@utility safe-bottom-compact {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+}
+@utility phone-toast-bottom {
+  bottom: calc(3.5rem + env(safe-area-inset-bottom));
+}
 /* The phone page's height and its picture's: what the on-screen keyboard leaves (core/device.ts --app-h) */
 @utility phone-h {
   height: var(--app-h, 100dvh);
 }
 @utility phone-picture-h {
-  max-height: calc(var(--app-h, 100dvh) * 0.58);
+  max-height: calc(var(--app-h, 100dvh) * 0.48);
 }
 
-.cli-reveal {
-  height: var(--collapsible-panel-height);
-  overflow: hidden;
-  opacity: 1;
-  transition:
-    height 200ms cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 160ms ease;
+[data-fit-content] [data-slot="select-item-text"] {
+  min-width: 0;
+  flex-shrink: 1;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
-.cli-reveal[data-starting-style],
-.cli-reveal[data-ending-style] {
-  height: 0;
-  opacity: 0;
-}
-.cli-reveal[hidden] {
-  display: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cli-reveal {
-    transition: none;
+
+[data-cli-dialog] {
+  animation: none;
+  transition: opacity 250ms cubic-bezier(0.23, 1, 0.32, 1);
+
+  &[data-starting-style],
+  &[data-ending-style] {
+    opacity: 0;
   }
+
+  &[data-ending-style] {
+    transition-duration: 200ms;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-cli-dialog] {
+    transition-property: opacity, scale;
+
+    &[data-starting-style],
+    &[data-ending-style] {
+      scale: 0.96;
+    }
+  }
+}
+
+[data-slot="dialog-content"][data-variant="workbench"] {
+  --slider: var(--fx-base-500);
+}
+
+[data-slot="dialog-content"][data-variant="confirmation"] {
+  --primary: var(--fx-blue-200);
 }

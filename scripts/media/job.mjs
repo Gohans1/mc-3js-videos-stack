@@ -12,7 +12,15 @@ import { join, resolve } from "node:path";
 
 import { killProcessTree } from "../../packages/live-studio/src/kill-process.mjs";
 
-export async function runMediaJob({ tool, command, out, minutes, cwd = process.cwd(), env = {} }) {
+export async function runMediaJob({
+  tool,
+  command,
+  out,
+  minutes,
+  cwd = process.cwd(),
+  env = {},
+  stdoutFile,
+}) {
   mkdirSync(out, { recursive: true });
   const folder = mkdtempSync(join(resolve(out), "run-"));
   const file = join(folder, "job.json");
@@ -32,6 +40,7 @@ export async function runMediaJob({ tool, command, out, minutes, cwd = process.c
   };
   save();
   const log = openSync(join(folder, "process.log"), "a");
+  const stdout = stdoutFile ? openSync(join(folder, stdoutFile), "wx") : log;
   let child;
   let stopped;
   let timer;
@@ -45,7 +54,7 @@ export async function runMediaJob({ tool, command, out, minutes, cwd = process.c
     child = spawn(command[0], command.slice(1), {
       cwd,
       env: { ...process.env, ...env, MC_MEDIA_RUN_DIR: folder },
-      stdio: ["ignore", log, log],
+      stdio: ["ignore", stdout, log],
       windowsHide: true,
       detached: process.platform !== "win32",
     });
@@ -66,6 +75,7 @@ export async function runMediaJob({ tool, command, out, minutes, cwd = process.c
     process.removeListener("SIGINT", interrupt);
     process.removeListener("SIGTERM", interrupt);
     closeSync(log);
+    if (stdout !== log) closeSync(stdout);
   }
   report.finishedAt = new Date().toISOString();
   report.artifacts = readdirSync(folder).filter((name) => name !== "job.json");

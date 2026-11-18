@@ -32,7 +32,7 @@ const toggleVariants = cva(
         default:
           "h-7 min-w-7 px-2 has-data-[icon=inline-end]:pe-1.5 has-data-[icon=inline-start]:ps-1.5 pointer-coarse:min-h-10",
         sm: "h-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-2 text-xs has-data-[icon=inline-end]:pe-1.5 has-data-[icon=inline-start]:ps-1.5 pointer-coarse:min-h-10 [&_svg:not([class*='size-'])]:size-3",
-        strip: "text-ui h-auto min-h-7 rounded-md px-2 @[440px]:flex-1 pointer-coarse:min-h-10",
+        strip: "text-ui h-auto min-h-7 gap-0.5 rounded-md px-1 @[380px]:gap-1 @[380px]:px-1.5 @[440px]:flex-1 pointer-coarse:min-h-10",
         lg: "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pe-2 has-data-[icon=inline-start]:ps-2 pointer-coarse:min-h-10",
         "icon-sm":
           "size-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-0 pointer-coarse:size-10 pointer-coarse:min-w-10 [&_svg:not([class*='size-'])]:size-3",
@@ -41,8 +41,7 @@ const toggleVariants = cva(
       tone: {
         neutral: "",
         ai: "aria-pressed:bg-ai/20 aria-pressed:text-ai-text aria-pressed:ring-ai/40",
-        source:
-          "aria-pressed:bg-primary/15 aria-pressed:text-primary-text aria-pressed:ring-primary/40",
+        source: "aria-pressed:bg-primary/15 aria-pressed:text-primary-text aria-pressed:ring-primary/40",
       },
     },
     defaultVariants: {

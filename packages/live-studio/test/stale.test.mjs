@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { seenSound } from "../src/narration.ts";
 import { staleVideo } from "../src/stale.mjs";
+import { renderIdentity, writeRenderEvidence } from "../src/video.mjs";
 
 const film = () => {
   const dir = mkdtempSync(join(tmpdir(), "stale-"));
@@ -25,6 +26,7 @@ const film = () => {
   ])
     writeFileSync(join(dir, f), "x");
   const at = (f, s) => utimesSync(join(dir, f), s, s);
+  at("package.json", 1000);
   at("src/scene.ts", 1000);
   at("src/timeline/cam.json", 1000);
   at("src/timeline/audio.json", 1000);
@@ -38,6 +40,22 @@ test("a video rendered after every change to the film is current, and a sound-on
     expect(staleVideo(dir, "renders/draft_video.mp4")).toBeNull();
     at("src/timeline/audio.json", 5000);
     expect(staleVideo(dir, "renders/draft_video.mp4")).toBeNull();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a sound pick can change without aging picture; the render's visual choices still matter", () => {
+  const { dir, at } = film();
+  try {
+    const video = "renders/draft_video.mp4";
+    writeRenderEvidence(join(dir, video), { cuts: [], pictureChoices: { costume: "blue" } });
+    const picks = join(dir, "choices.json");
+    writeFileSync(picks, JSON.stringify({ costume: { set: "blue" }, hit: { set: "soft" } }));
+    at("choices.json", 5000);
+    expect(staleVideo(dir, video)).toBeNull();
+    writeFileSync(picks, JSON.stringify({ costume: { set: "red" }, hit: { set: "soft" } }));
+    expect(staleVideo(dir, video)?.file).toBe("choices.json");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -84,10 +102,37 @@ test("a draft with sound is older than its picture, or than its sound, and says 
     expect(staleVideo(dir, "renders/draft.mp4")?.file).toBe("assets/public/agent/full_voice.wav");
 
     at("assets/public/agent/full_voice.wav", 1000);
-    at("src/scene.ts", 3600);
+    at("src/scene.ts", 2500);
     expect(staleVideo(dir, "renders/draft.mp4")?.message).toMatch(
       /older than src\/scene\.ts[^\n]*bun run render clip[^\n]*then bun run mix renders\/draft_video\.mp4/,
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("mixed freshness sees removed audio choices and restored input pictures", () => {
+  const { dir, at } = film();
+  try {
+    const picture = join(dir, "renders/draft_video.mp4");
+    const output = join(dir, "renders/draft.mp4");
+    const choices = join(dir, "choices.json");
+    writeFileSync(choices, "{}");
+    writeFileSync(output, "x");
+    at("choices.json", 1800);
+    at("renders/draft.mp4", 3000);
+    writeRenderEvidence(picture, { cuts: [], pictureChoices: {} });
+    writeRenderEvidence(output, {
+      cuts: [],
+      pictureInput: renderIdentity(picture),
+      audioChoices: { file: "choices.json", ...renderIdentity(choices) },
+    });
+    expect(staleVideo(dir, output)).toBeNull();
+    rmSync(choices);
+    expect(staleVideo(dir, output)?.file).toBe("choices.json");
+    writeFileSync(picture, "another picture");
+    at("renders/draft_video.mp4", 1700);
+    expect(staleVideo(dir, output)?.file).toBe("renders/draft_video.mp4");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

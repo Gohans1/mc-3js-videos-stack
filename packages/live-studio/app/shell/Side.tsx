@@ -31,6 +31,7 @@ import { stopCliHotkeyPropagation, stopCliTabHotkeyPropagation } from "../cli/mo
 import { Segmented } from "../components/inspector";
 import { TabStage } from "../components/Motion";
 import { set, studio, type StudioState, useStudio } from "../core/store";
+import { NoteStatusGlyph } from "../notes/note-parts";
 import { NoteList } from "../notes/NoteList";
 
 const loadPanels = () => import("./LazyPanels");
@@ -51,25 +52,32 @@ const SpeedPanel = lazy(() => loadPanels().then((m) => ({ default: m.FilmSpeedPa
 
 type SideTab = StudioState["side"];
 type Lib = StudioState["lib"];
-type CoreTab = "notes" | "lessons" | "film" | "ports" | "cli";
+const CORE_TABS = ["notes", "lessons", "film", "ports", "cli"] as const;
+type CoreTab = (typeof CORE_TABS)[number];
 
 // CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
 const tab =
   "relative flex h-10 upright:h-9 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-foreground/65 outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] pointer-coarse:h-11";
 const coreTab =
   "px-2.5 upright:px-2 not-data-active:hover:text-foreground data-active:bg-tint data-active:text-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary-text";
-const isCore = (id: string): id is CoreTab =>
-  id === "notes" || id === "lessons" || id === "film" || id === "ports" || id === "cli";
+const isCore = (id: string): id is CoreTab => CORE_TABS.some((value) => value === id);
 const tabs =
   "relative flex flex-none items-center gap-4 overflow-x-auto bg-card px-3 upright:gap-2 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
 
-function TabUnderline({ inset = false }: { inset?: boolean }) {
+function TabUnderline({
+  inset = false,
+  animated = true,
+}: {
+  inset?: boolean;
+  animated?: boolean;
+}) {
   return (
     <Tabs.Indicator
       aria-hidden
       className={cn(
         "tab-indicator pointer-events-none h-0.5",
+        !animated && "transition-none",
         inset ? "px-2.5" : "bg-primary rounded-full",
       )}
     >
@@ -130,18 +138,16 @@ export const useEditable = () => {
 function NotesCount({ open, check, asking }: { open: number; check: number; asking: number }) {
   if (open <= 0 && check <= 0 && asking <= 0) return null;
   const parts: {
-    key: string;
+    key: "check" | "asking" | "open";
     textCls: string;
-    dotCls: string;
     count: number;
     label: string;
   }[] = [
     ...(check > 0
       ? [
           {
-            key: "check",
+            key: "check" as const,
             textCls: "text-warn-text",
-            dotCls: "bg-warn",
             count: check,
             label: `${check} to check`,
           },
@@ -150,9 +156,8 @@ function NotesCount({ open, check, asking }: { open: number; check: number; aski
     ...(asking > 0
       ? [
           {
-            key: "asking",
+            key: "asking" as const,
             textCls: "text-ai-text",
-            dotCls: "bg-ai",
             count: asking,
             label: `${asking} asking`,
           },
@@ -161,9 +166,8 @@ function NotesCount({ open, check, asking }: { open: number; check: number; aski
     ...(open > 0
       ? [
           {
-            key: "open",
+            key: "open" as const,
             textCls: "text-primary-text",
-            dotCls: "bg-primary",
             count: open,
             label: `${open} to fix`,
           },
@@ -175,29 +179,33 @@ function NotesCount({ open, check, asking }: { open: number; check: number; aski
       title={parts.map((p) => p.label).join(" · ")}
       className="bg-backdrop/90 text-tag border-hairline inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono leading-none tabular-nums"
     >
-      {parts.map((p, i) => (
-        <Fragment key={p.key}>
-          {i > 0 && (
-            <span aria-hidden className="text-muted-foreground/50">
-              /
-            </span>
-          )}
-          <span className={cn(p.textCls, "inline-flex items-center gap-1 font-semibold")}>
-            <span aria-hidden className={cn(p.dotCls, "size-1.5 rounded-full")} />
-            {p.count}
-            <span className="sr-only">, {p.label}</span>
-          </span>
-        </Fragment>
+      {parts.map((p) => (
+        <span
+          key={p.key}
+          className={cn(p.textCls, "inline-flex items-center gap-0.5 font-semibold")}
+        >
+          <NoteStatusGlyph
+            state={p.key === "asking" ? "check" : p.key}
+            asking={p.key === "asking"}
+            className="size-2.5"
+          />
+          <span aria-hidden>{p.count}</span>
+          <span className="sr-only">{p.label}</span>
+        </span>
       ))}
     </span>
   );
 }
 
-// A tab lit while the AI is at a note or lesson file under it (activity/activity.ts), unless it is the tab open: then the card
-// or the file itself is lit
 const useAiTabs = () => {
+  const enabled = useStudio((s) => s.aiActivity);
   const lit = useActivity((s) => s.lit);
-  return (id: string, open: string) => (id !== open && `tab:${id}` in lit) || undefined;
+  return (id: string, open: string, aliases: readonly string[] = []) => {
+    const on = enabled &&
+      (id !== open || (id !== "notes" && id !== "lessons")) &&
+      [id, ...aliases].some((name) => `tab:${name}` in lit);
+    return { "data-ai-lit": on || undefined, "aria-description": on ? "Recent activity" : undefined };
+  };
 };
 
 // Wide: the left column. CapCut's toolbar: an icon over each library's name
@@ -214,9 +222,9 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "adjust", title: "Adjustment", icon: SlidersHorizontal },
 ];
 const tool =
-  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] [&_svg]:size-5";
+  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] [&>svg]:size-5";
 const coreTool =
-  "data-active:bg-tint data-active:text-foreground data-active:[&_svg]:text-primary-text";
+  "data-active:bg-tint data-active:text-foreground data-active:[&>svg]:text-primary-text";
 export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null } = {}) {
   const { sound, text, cam, placed, open, check, asking } = useParts(),
     lib = useStudio((s) => s.lib),
@@ -231,7 +239,6 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
         : id === "transition" || id === "adjust"
           ? cam
           : placed);
-  const shown = LIBS;
   const value = available(lib) ? lib : "notes";
   return (
     <aside
@@ -250,15 +257,15 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
             onKeyDown={stopCliTabHotkeyPropagation}
             className="scroll-fade-x relative flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain px-2 pt-1 pb-1"
           >
-            <TabUnderline inset />
-            {shown.map((l) => (
+            <TabUnderline inset animated={false} />
+            {LIBS.map((l) => (
               <Fragment key={l.id}>
                 <Tabs.Tab
                   value={l.id}
                   disabled={!available(l.id)}
                   data-cli-tab={l.id === "cli" || undefined}
                   data-tone={l.id === "notes" ? notesTone : undefined}
-                  data-ai-lit={aiTab(l.id, value)}
+                  {...aiTab(l.id, value)}
                   className={cn(tool, "flex-none", isCore(l.id) && coreTool)}
                 >
                   <l.icon aria-hidden />
@@ -267,7 +274,7 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
                     {l.id === "notes" && <NotesCount open={open} check={check} asking={asking} />}
                   </span>
                 </Tabs.Tab>
-                {l.id === "cli" && shown.some((x) => !isCore(x.id)) && (
+                {l.id === "cli" && LIBS.some((x) => !isCore(x.id)) && (
                   <Separator
                     orientation="vertical"
                     className="mx-1 h-7 data-vertical:self-center"
@@ -284,7 +291,8 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
         >
           <TabStage
             activeKey={value}
-            order={shown.map((l) => l.id)}
+            animated={value !== "notes" && value !== "cli"}
+            order={LIBS.map((l) => l.id)}
             className="relative flex min-h-0 flex-1 flex-col"
           >
             {value === "notes" ? (
@@ -363,6 +371,7 @@ const groupOf = (s: StudioState): Group =>
 function Details() {
   const { sound, text, cam, keys, placed } = useParts(),
     side = useStudio((s) => s.side);
+  const aiTab = useAiTabs();
   const has: Record<Group, boolean> = {
     cam,
     transition: cam,
@@ -379,7 +388,7 @@ function Details() {
   return (
     <aside
       aria-label="Details"
-      className="bg-background col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-review:hidden in-data-side-folded:hidden"
+      className="bg-background col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:hidden in-data-review:hidden in-data-side-folded:hidden"
     >
       <Tabs.Root
         value={value}
@@ -389,7 +398,7 @@ function Details() {
         <Tabs.List aria-label="Details" className={tabs}>
           <TabUnderline />
           {list.map((x) => (
-            <Tabs.Tab key={x.id} value={x.id} className={tab}>
+            <Tabs.Tab key={x.id} value={x.id} {...aiTab(x.id, value)} className={tab}>
               {x.title}
             </Tabs.Tab>
           ))}
@@ -624,7 +633,7 @@ export function Side({
             <Tabs.Tab
               value="notes"
               data-tone={notesTone}
-              data-ai-lit={aiTab("notes", value)}
+              {...aiTab("notes", value)}
               className={cn(tab, coreTab)}
             >
               <MessageSquareText aria-hidden />
@@ -633,13 +642,13 @@ export function Side({
             </Tabs.Tab>
             <Tabs.Tab
               value="lessons"
-              data-ai-lit={aiTab("lessons", value)}
+              {...aiTab("lessons", value)}
               className={cn(tab, coreTab)}
             >
               <BookOpenText aria-hidden />
               Lessons
             </Tabs.Tab>
-            <Tabs.Tab value="film" className={cn(tab, coreTab)}>
+            <Tabs.Tab value="film" {...aiTab("film", value)} className={cn(tab, coreTab)}>
               <Clapperboard aria-hidden />
               Film
             </Tabs.Tab>
@@ -647,29 +656,29 @@ export function Side({
               <Network aria-hidden />
               Ports
             </Tabs.Tab>
-            <Tabs.Tab value="cli" data-cli-tab className={cn(tab, coreTab)}>
+            <Tabs.Tab value="cli" {...aiTab("cli", value)} data-cli-tab className={cn(tab, coreTab)}>
               <Terminal aria-hidden />
               CLI
             </Tabs.Tab>
             {(sound || text || placed || keys || cam) && (
               <Separator orientation="vertical" className="mx-0.5 h-5 data-vertical:self-center" />
             )}
-            <Tabs.Tab value="sound" disabled={!sound} className={tab}>
+            <Tabs.Tab value="sound" {...aiTab("sound", value)} disabled={!sound} className={tab}>
               Audio
             </Tabs.Tab>
-            <Tabs.Tab value="text" disabled={!text} className={tab}>
+            <Tabs.Tab value="text" {...aiTab("text", value)} disabled={!text} className={tab}>
               Text
             </Tabs.Tab>
-            <Tabs.Tab value="objects" disabled={!placed} className={tab}>
+            <Tabs.Tab value="objects" {...aiTab("objects", value)} disabled={!placed} className={tab}>
               Objects
             </Tabs.Tab>
-            <Tabs.Tab value="keys" disabled={!keys} className={tab}>
+            <Tabs.Tab value="keys" {...aiTab("keys", value)} disabled={!keys} className={tab}>
               Keyframes
             </Tabs.Tab>
-            <Tabs.Tab value="transition" disabled={!cam} className={tab}>
+            <Tabs.Tab value="transition" {...aiTab("transition", value)} disabled={!cam} className={tab}>
               Transitions
             </Tabs.Tab>
-            <Tabs.Tab value="cam" disabled={!cam} className={tab}>
+            <Tabs.Tab value="cam" {...aiTab("cam", value, ["speed", "adjust", "anim"])} disabled={!cam} className={tab}>
               {layer ? "Adjustment" : "Camera"}
             </Tabs.Tab>
           </Tabs.List>

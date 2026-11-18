@@ -1,110 +1,68 @@
-# Sound: place, mix, and hear it in numbers
+# Sound: discover, place, mix and verify
 
-An AI cannot hear, so it has two kinds of ears. `bun run listen` measures the mix: the narration against everything else in LU (EBU R128), each fault with its heard second. `earshot`, a CLI of its own, says what a sound is, how well it fits words, and where hits land on the picture (below).
+Choose steps for the current change; reuse available sounds instead of searching/downloading again. The default workflow uses the film's audio timeline and bun run mix so Studio, checks and preview share data.
 
-## The sound loop
+## Choose the right tool
 
-Inside a film:
+| Task | Tool and scope |
+| --- | --- |
+| Find sounds and inspect sources | bun run find; --kind sfx, bgm, mc or sound; --show <id> includes file, license and recipe |
+| Find/download missing CC0 Freesound audio | bun run sfx:get in a film; find searches online, then pin selected IDs in sound/sfx_list.json and download |
+| Place, read, edit or remove cues | bun run asset; use find IDs to place, and the returned target to edit that cue |
+| Judge candidates, clean regions or differences | earshot is a separate CLI; read earshot <command> -h |
+| Build soundtrack or mux video | bun run mix in a film; outputs sound/mix.wav and a video with sound |
+| Measure masking, gain, mono and silence | bun run listen in a film; level measurements do not identify a sound |
+| Create/edit narration | bun run skills get core --ref voice; voice:playground for casting/archive, voice:gen for edit.json takes |
+| Cue design, sources and licenses | bun run skills path real-sound; open SKILL.md in that directory |
 
-```bash
-bun run find rain --kind sfx                 # also bgm, mc (Minecraft) or sound (all three)
-bun run sfx:get find "cat meow"              # a Freesound CC0 sound the vault lacks: pin its id in sound/sfx_list.json
-bun run sfx:get                              # then fetch every pinned sound
-                                             # place rows in src/timeline/audio.json (beds, sfx; scene seconds, gain in dB)
-bun run check                                # wrong sound names, misspelt keys (gian for gain), lufs outside -20..-12, drive over +12
-bun run mix renders/draft_video.mp4          # sound/mix.wav, and renders/draft.mp4 with it
-bun run listen                               # every fault, also in renders/listen.json with what plays there
-bun run at 12.4                              # the rows playing at a fault; change a gain, then:
-bun run listen --at 12.4                     # the 2 s around it, next to the last listen (after a sound edit it renders the stems again first)
-```
+find discovers assets; earshot find locates a region in a selected file. asset edits timelines, mix renders output and listen measures the mix; each has a separate role.
 
-The first `listen` renders two stems at about a second per film second; later runs reuse `renders/listen_stems/` until `src/` or the film's sounds change. After a vault sound changes, run `bun run listen --fresh`.
+## Film workflow
 
-In `audio.json`, `tracks[].gain` is a whole track and a clip's `filters` is an ffmpeg EQ chain (the studio's Inspector writes it).
+| Step | Command and result |
+| --- | --- |
+| Find candidates | bun run find rain --kind sfx; --kind sound also includes music and Minecraft sounds |
+| Inspect a candidate | bun run find --show <id>; read file, license, placement ID and exampleProps |
+| Choose/trim the source | earshot rank "rain on a metal roof" <file1> <file2> --top 3; earshot find <file> "a clean rain texture" --top 3 for a specific region |
+| Place | bun run asset use <id> --from 12 --to 15 --props-file controls.json; JSON identifies the written file, data and cue target |
+| Read/revise | bun run asset timeline --lane audio; bun run asset edit <target> --props-file changes.json; bun run asset remove <target> removes the cue and keeps its source file |
+| Check data | bun run check validates names/schema; it does not prove the sound fits |
+| Make a draft with sound | bun run mix renders/draft_video.mp4; open renders/draft.mp4, since draft_video.mp4 has no soundtrack |
+| Measure/locate | bun run listen; read renders/listen.json, then bun run at 12.4 to locate active rows |
+| Track nguồn ngoài | Mix tạo video từ các track hình và AAC mới. Phụ đề, data và các track khác được báo và giữ trong nguồn. |
+| Đo đoạn cực ngắn | Đo một cửa sổ dưới 400 ms bằng peak dBTP và onset. Mix và deliver báo LUFS không đo được khi tín hiệu không đủ điều kiện qua cổng EBU. |
+| Đo lại một đoạn vừa sửa | Bun run listen --at 12.4 đo stem và gợi lệnh Earshot khi draft có âm và còn hiện hành. Với bản giao hoặc preview, chạy earshot timeline trên đường dẫn đó. |
+| Nghe riêng đoạn render thử | Mix tự lấy mốc của chunk/span chuẩn, hoặc thêm --start 40 cho file khác. Đọc đường dẫn renders/mixed_*/preview.mp4 và dùng giây file khi phân tích. |
 
-A sound edit never needs a new picture: `bun run mix renders/draft_video.mp4` puts it on the draft, and `render clip` keeps every chunk (the sound timeline is not in a chunk's stamp).
+find and asset also run at the root; asset needs --film films/<name> for film actions. bun run help <command> names the working directory; the command's --help gives syntax.
 
-## Tìm theo ý cảnh
+## Search by the scene
 
-bun run find "<câu tìm>" trả BM25 toàn catalog đã lọc trước, rồi khối semantic chỉ từ OpenFilm; mỗi khối giữ thứ tự riêng và có tối đa -n mục, mặc định 12. Không cần chọn nguồn hoặc bật semantic; --source chỉ giới hạn nguồn khi có chủ ý, --kind sound gồm sfx, bgm và mc.
+bun run find "<words>" shows filtered keyword matches, then independent OpenFilm semantic candidates; each block keeps its order and at most -n results (default 12). --source is an explicit provider filter; --kind sound includes sfx, bgm and mc, while mc-only searches do not call OpenFilm.
 
-Các bộ lọc áp dụng cho cả hai khối; --kind mc không gọi OpenFilm, âm thanh gọi đúng sound/music và hình dùng asset/sticker, asset/transition hoặc nhóm asset tương ứng. ID lặp có nhãn also BM25; điểm semantic là độ gần, không phải xác suất phù hợp, cần nghe/xem trước khi chọn.
+Filters apply to both blocks; similarity is not confidence, so listen/view before choosing. --json keeps keyword.results and semantic.results separate; --offline reads saved lookups without network and remote failures keep keyword matches.
 
---show <id> chỉ file, giấy phép, preview và mẫu đặt; trang OpenFilm có saved.json mô tả nút chỉnh, cần đọc và chuyển nguồn vào src/scene.ts khi chưa có lane timeline tương ứng. Preview có thể là bản minh họa trên ảnh nền, không thay thế việc kiểm tra nguồn đã tích hợp.
+--show identifies files, licenses, controls and placement; source-only pages still need integration and verification in the scene. --origin real is the existing Real / Studio grouping and does not establish recording provenance; retain explicit unknown origin from source metadata.
 
---origin real là nhóm Real / Studio hiện có, không xác minh xuất xứ bản thu; --show giữ nguyên provenance unknown nếu nguồn ghi vậy. Chỉ dùng giấy phép và thông tin nguồn đã kiểm tra để kết luận quyền dùng hoặc xuất xứ, không suy từ tên asset hay điểm earshot.
+## Clocks and editable data
 
---json thường có schemaVersion 2: keyword.results chứa bản ghi đầy đủ, semantic.results giữ thứ hạng riêng; mục alsoKeyword true chỉ có key, rank, similarity và cờ, tra bản đầy đủ trong keyword.results theo key. Mục semantic khác vẫn đầy đủ; không đọc id/file trực tiếp từ mọi mục semantic như cấu trúc cũ, chế độ --semantic riêng giữ schema cũ.
+| Data | Meaning |
+| --- | --- |
+| asset --from, --to and edit times | Heard seconds after Speed/Freeze; --to is exclusive |
+| Hand-edited audio.json | Scene seconds before Speed/Freeze; use the configured soundTimeline file |
+| gain | dB; find --show exampleProps are a starting point, not a universal level |
+| Music and ambience | Music uses beds; bed: true in controls.json places ambience in beds |
+| Source trim | start is source-file seconds; length is cue playback duration in audio.json. At constant rate without other retiming, an earshot start/end region uses length = (end - start) / rate; rate defaults to 1 |
+| Track gain and EQ | tracks[].gain affects the track; clip filters contain the Inspector's FFmpeg EQ chain |
+| Edit target | Keep the returned target; older index-based rows require rereading timeline after reordering |
+| Duration defined in code | Read asset --help about --duration when edit.end is absent and clock conversion is needed |
+| Film-local pinned sounds | sound/sfx_list.json selects Freesound IDs; sound/sfx holds files/SOURCES.json. Run find inside the film to include them |
 
-BM25 dùng tiếng Anh; câu tiếng Việt chỉ có thể tìm semantic OpenFilm, muốn tìm cả Minecraft thì dùng từ khóa tiếng Anh. Mô tả hiển thị bỏ tag lặp và text chỉ in hướng đặt chung một lần, không đổi dữ liệu catalog hoặc thứ hạng.
+Cue --to is playback end, separate from source trim. Linked holds may have no exact source-time equivalent; asset rejects such edits before writing, while --ref contract explains independent audio clocks or output-time mixing.
 
-OpenFilm chỉ nhận câu tìm, loại và giới hạn kết quả, không nhận file hoặc API key; timeout mỗi loại 2,5 giây, tối đa hai loại đồng thời. --offline hoặc MC_FIND_OFFLINE=1 chỉ đọc cache 24 giờ; lỗi mạng/cache giữ nguyên BM25 và ghi lý do, cache nằm ở MC_FIND_CACHE hoặc .studio/openfilm-search.sqlite, đường dẫn biến môi trường tính từ gốc repo.
+Custom JSON edits and other mixers/mastering/mux tools remain valid; connect their output to preview and verify parts the built-ins cannot inspect. Gain/bed/SFX changes can reuse pictures; narration, lip sync or pacing changes that affect pictures need rerendering.
 
-Chế độ index dưới đây là tùy chọn riêng, giữ dữ liệu Gemini đã chuẩn bị; tìm thường không mở index này hay dùng quota Gemini/OpenRouter. Không chạy build hoặc query --yes nếu chỉ cần hai khối tìm kiếm mặc định.
-
-bun run assets:semantic plan chỉ đếm catalog và in mẫu key, không gọi API hay ghi vector; build cũng chỉ xem trước nếu thiếu --yes. Chọn key hoặc manifest trước khi build --yes, đặt --max-requests, --max-seconds, --rpm và --tpm theo quota; mỗi chunk hoàn tất được lưu ngay nên chạy lại tiếp tục phần thiếu hoặc lỗi.
-
-bun run find --semantic "<ý cảnh>" ghép thứ hạng từ khóa và vector, giữ bộ lọc catalog; câu đã cache chạy offline, --yes mới cho phép gửi câu mới. Gemini là mặc định, auto cũng dùng Gemini; OpenRouter chỉ dùng khi chọn rõ, lỗi không tự đổi provider hay luân phiên key.
-
-Trong chế độ find --semantic, --json giữ mode, query, notes và results cũ; khi API/index lỗi, mode là keyword-fallback và đầu ra vẫn là JSON. semantic.input cho biết đã dùng media hay chỉ text, segment là giây trên nguồn gốc; score là độ gần vector, không phải xác suất đúng, cần nghe/xem để chọn đoạn chính xác hơn.
-
-Đặt MC_SEMANTIC_DB, MC_SEMANTIC_MANIFEST và MC_SEMANTIC_QUOTA_DB trong .env.local để build và find dùng chung dữ liệu ngoài worktree; manifest đã cấu hình bị thiếu thì dừng, không quay sang catalog khác. status phân biệt toàn catalog với phần đã xếp hàng, hoàn tất hoặc cần cập nhật; chỉ build mới kiểm lại byte media.
-
-Các đường dẫn trong biến môi trường tính từ gốc repo, còn cờ đường dẫn tính từ nơi đang đứng. Lệnh trong phim nhận mặc định dotenv của repo, giữ ưu tiên biến đã truyền.
-
---env-file và --no-env-file bỏ qua mặc định repo khi gọi entrypoint Bun trực tiếp; package script có thể mở Bun con không nhận các cờ của cha. Muốn cô lập, gọi bun --no-env-file <đường-dẫn-đầy-đủ/scripts/asset-search.ts> trực tiếp; BUN_OPTIONS=--no-env-file áp dụng cả Bun con theo [cơ chế của Bun](https://bun.com/docs/runtime/environment-variables).
-
-MC_SEMANTIC_DAILY_LIMIT giới hạn nội bộ, mặc định 1000 lượt mỗi ngày Pacific; mọi lần gọi kể cả lỗi, retry và câu tìm mới đều giữ chỗ trước khi gửi. --retries mặc định 2 cho lỗi tạm 429/503, giữ giới hạn lượt/thời gian; quota ngày dừng ngay, còn 429 không rõ nguyên nhân không đồng nghĩa hết quota ngày.
-
-Giữ nguyên ledger của cùng project khi đổi --db hoặc khôi phục vector; snapshot cũ không chứng minh ngân sách hôm nay còn dư. Build/query dùng --yes mới gọi API, còn xem plan/status và tìm câu đã cache không tiêu lượt.
-
-remove bỏ mục khỏi tìm kiếm và giữ cache để thêm lại không tốn lượt; remove --purge mới xóa cả cache, redo --part N chỉ đặt lại chunk cần sửa. bun run assets:semantic backup <file-mới.sqlite> tạo snapshot index và ledger nếu đã có, không ghi đè đích; không sao chép riêng file database đang mở cùng WAL.
-
-Để bỏ một mục khỏi các lần build sau, xóa cả dòng nguồn trong catalog hoặc manifest; remove chỉ tác động index hiện tại. Xóa vector không hoàn lại lượt gọi đã dùng.
-
-Tên/mô tả đi cùng media của đúng asset trong một vector; audio chia tối đa 30 giây và giữ timestamp, video không chứa nhánh âm thanh. Catalog nhập dùng preview có sẵn; FBX/GLB hoặc mục thiếu preview dùng mô tả, không tự dựng hay bịa nội dung media.
-
-Đổi model, số chiều hoặc recipe cần database riêng; file cũ được giữ nguyên, chỉ chạy một builder mỗi database. Worktree dùng MC_VAULT_ROOT trỏ tới vault thật để đọc chung asset; CLI nhận manifest riêng để AI bổ sung hoặc thử bất kỳ nguồn nào.
-
-Gemini free tier có thể dùng đầu vào cải thiện sản phẩm; kiểm tra quyền chia sẻ theo nguồn, đặc biệt nội dung có điều khoản hạn chế AI. Pilot nhỏ không chứng minh chất lượng cả kho; [Google nêu audio tối ưu cho lời nói](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-multimodal-embeddings), luôn nghe/xem trước khi chọn và dùng Jev khi cần đánh giá khác.
-
-## Đo chất lượng tìm kiếm
-
-bun run eval:find --mode dual --plan kiểm tra số mẫu và catalog; bỏ --plan để đánh giá hai khối qua chính CLI, mặc định chỉ đọc cache. --live cho phép gọi OpenFilm với --max-seconds và --max-requests; mỗi phản hồi được lưu ngay, cùng --out tiếp tục report dở qua checkpoint .jsonl nhưng không ghi đè report hoàn tất.
-
-Eval dual dùng bộ 400 mục và pilot 28 câu hiện có, đổi đáp án về ID đại diện của nhóm bản thu và dùng pool sound chung cho âm thanh, không lọc nguồn theo đáp án. Report tách số đo từng khối, ứng viên mới, độ trễ, mục chưa sẵn sàng và kiểm tra BM25 giữ nguyên thứ tự; tổng hai khối có tối đa 24 chỗ nên không gọi đó là cải thiện ranking top 12.
-
-bun run assets:semantic eval scripts/evals/semantic/known-item.json --out <report-mới.json> so từ khóa, vector và kết hợp; chỉ dùng câu đã cache, không gọi API. Bộ known-item có 400 asset khác nhau từ 64 nhóm loại/nguồn; đáp án dựa trên metadata nên chỉ đo tìm đúng mục, không chứng minh hợp cảnh bằng nghe/xem.
-
-scenes-pilot.json giữ 14 ý cảnh Anh–Việt, tương đương 28 câu có tương quan, chưa đủ kết luận chất lượng toàn kho. Tăng bộ ý cảnh độc lập và đáp án đã nghe/xem trước khi tuyên bố chất lượng; không tính bản dịch thành mẫu độc lập hay suy khoảng tin cậy từ mẫu tiện tay.
-
-Report giữ từng câu, top 10, Hit@1/5/10, MRR@10, Recall@10, nDCG@10, độ trễ p50/p95 và tách theo ngôn ngữ/nhóm. scored loại câu thiếu cache, hit5AllCases vẫn tính chúng vào mẫu số; missingCatalog/missingEmbeddings cho biết phần kho chưa sẵn sàng.
-
-complete chỉ báo query và ID sẵn sàng, không xác nhận chất lượng hay byte media hiện tại. catalog.definitions so metadata với catalog hiện tại, có thể khác manifest có chủ đích; build kiểm lại nội dung trước khi so phiên bản.
-
-Để bổ sung cache, dùng query --yes cho đúng query trong bộ case, giữ ledger và hạn mức của project; chạy lại eval sau mỗi đợt embedding. Đầu ra mới không ghi đè report cũ, thiếu dữ liệu vẫn lưu report và exit 1; thời gian eval không gồm API hay nạp catalog, không dùng để quảng cáo tốc độ tìm câu mới.
-
-Chỉ số theo [Sentence Transformers](https://sbert.net/docs/package_reference/sentence_transformer/evaluation.html); nhãn chỉ liệt kê mục đã biết đúng, các lựa chọn chưa chấm vẫn có thể phù hợp. Giữ nguyên bộ case khi so hai phiên bản và ghi rõ khác biệt catalog/index khi so dịch vụ khác.
-
-## Ears: earshot
-
-`earshot` runs locally on the CPU (`earshot -h`, `earshot <command> -h`). Every call loads its models first, about 20-40 s, so put every candidate in one call; a file it has heard before is cached, and the same call again takes about 2 s. Quote its numbers when you report ("z +3.1 strong", "p_real 0.96"). Its own manual, with every loop and how far to trust each number, is the installed earshot agent skill; open its SKILL.md rather than requesting an mc-films guide.
-
-| You want                                    | Run inside the film                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The best of several candidates              | `earshot rank "<what it sounds like>" <file> <file> ... --top 3`; `bun run find` prints this line with the paths                                                                                                                                                                                                                                                                                                                                                                           |
-| What one sound is                           | `earshot describe <file>` (`bun run find --show <id>` prints its path)                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| The clean moment inside a long file         | `earshot find <file> "<what it sounds like>" --top 3`; its start and end become the row's `start` and `length`                                                                                                                                                                                                                                                                                                                                                                             |
-| A real recording, or code-made              | `earshot realness <file>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| What plays when, and the hits on the cuts   | `earshot timeline renders/draft.mp4 --cues renders/cuts.json --from 25 --to 40 --detail low` (after `bun run mix renders/draft_video.mp4`; `draft_video.mp4` has no sound); `bun run listen --at <s>` prints it for `s`                                                                                                                                                                                                                                                                    |
-| The same as a picture                       | `earshot sheet renders/draft.mp4 -o renders/ear_sheet.png --cues renders/cuts.json --from 25 --to 40`, then open the PNG                                                                                                                                                                                                                                                                                                                                                                   |
-| Did a sound change help                     | Copy `renders/draft.mp4` to `renders/before.mp4`, `bun run mix renders/draft_video.mp4`, then `earshot ab renders/before.mp4 renders/draft.mp4 --query "<the sound you want>" --a-start 30 --a-end 36 --b-start 30 --b-end 36` (the stretch you changed: mix brings the whole film back to its `lufs`). "Nearly the same" with nothing measured means the change is small inside the mix: compare `over bed` of that hit in `earshot timeline` of both files, or `bun run listen --at <s>` |
-| A sound neither the vault nor Freesound has | `earshot sfx list --kind hit`, then `earshot sfx render <id> -o sound/sfx/<name>.wav` (`--pitch E2` or Hz, `--dur` seconds): `<name>` is now this film's sound for `audio.json`. The file is written even when its `checks:` are not `clean`: then try `--dur` or another id                                                                                                                                                                                                               |
-| Is earshot set up                           | `earshot doctor`; not on PATH: `INSTALL.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-
-Describe the sound, not its job, and in English: "a heavy iron door slamming in a stone room", not "the door for the chase". Its models learnt from English captions; a query in another language ranks differently and earshot does not warn. earshot says what a sound is, never whether it is right for the story: that call is the creator's. Never run `earshot llm`: it uploads the audio to Google, and only the creator can agree to that.
-
-Pipeline mặc định dùng audio.json và bun run mix để studio và check đọc cùng dữ liệu; real-sound vẫn hữu ích cho nguồn âm, giấy phép và thiết kế cue. Có thể dùng mixer, master hoặc mux riêng, nhưng phải nối đầu ra vào cách preview của phim và tự xem/nghe, kiểm chứng phần công cụ tích hợp không đọc được.
+## Load earshot when needed
 
 ## Optional local media tools
 
@@ -157,32 +115,104 @@ Native regression checks require the optional effects, separate and timeline set
 Foley is an optional young alpha project, supplementing earshot with a persistent catalog. The adapter exposes index/search/status/describe; its native CLI/MCP remains available, and PANNs CC-BY-4.0, CLAP Apache-2.0 and AudioSet notices stay separate from Foley's MIT code license.
 
 ## Mix loudness processing
+bun run skills path earshot returns the skill directory; open SKILL.md and its relevant reference. earshot doctor checks the environment; read INSTALL.md if the executable is missing.
 
-The mix goes through `drive` dB into a limiter, then one linear gain brings it to `lufs` (-14), or only as far as its true peak stays under -1.5 dBTP (room for the AAC encode). Never a dynamic loudness pass: it lifts every quiet stretch, room tone up to the voice (AES TD1004).
+| Goal | Command |
+| --- | --- |
+| Rank candidates | earshot rank "<sound description>" <file1> <file2> --top 3 |
+| Identify sound | earshot describe <file> |
+| Find a clean region | earshot find <file> "<sound description>" --top 3 |
+| Assess recording versus synthesis | earshot realness <file>; supporting evidence, not proof of provenance or license |
+| Inspect timing and cuts | earshot timeline renders/draft.mp4 --cues renders/cuts.json --from 25 --to 40 --detail low; omit --cues if absent |
+| Inspect sound with pictures | earshot sheet renders/draft.mp4 -o renders/ear_sheet.png --from 25 --to 40; open the PNG |
+| Compare before/after | Keep renders/before.mp4 before remixing; earshot ab renders/before.mp4 renders/draft.mp4 --query "<sound description>" --a-start 30 --a-end 36 --b-start 30 --b-end 36 |
+| Synthesize when appropriate | earshot sfx list --kind hit, then earshot sfx render <id> -o sound/sfx/<name>.wav; label this synthesized audio |
 
-When mix says it stopped short, it names the `drive` value to set: the limiter takes the peaks and each dB of drive buys a third to a half of one. Raising the narration barely helps, its own limiter holds it. Past +12 the hits flatten into the bed, so `bun run check` warns; listen whether they still land. A film 2 LU under -14 only plays a little quieter on YouTube.
+Describe sound in English, such as "a heavy iron door slamming in a stone room", rather than its story role. Rank candidates together to avoid repeated model loads; file caching does not imply the model stays loaded between CLI calls.
 
-## Targets
+Base audio judgments on measured results and relevant numbers; similarity scores support creative intent. earshot llm uploads audio externally and requires the creator's agreement to that transfer.
 
-| Measure                 | Target                                                                             |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| Narration over the rest | 15 LU or more is clear; 8-15 thin; under 8 words get lost (AES TD1009)             |
-| Beds under narration    | Narrated documentaries keep beds 24-31 LU under the voice                          |
-| A sound effect          | Close to the voice, about 10 LU under, never over it                               |
-| A hit you should hear   | About +6 dB over the second before it, or it is `BURIED`                           |
-| Level at a cut          | A jump over 6 LU is flagged; fine when the story calls for it                      |
-| One speaker (a phone)   | The narration loses at most 1.5 dB, the rest 6 dB, or it is `MONO`                 |
-| The upload              | -14 LUFS, true peak -1 dBTP or under (YouTube turns louder down, never quieter up) |
+## Mixing, cache and diagnosis
 
-## listen's faults and their fixes
+| Situation | Action |
+| --- | --- |
+| First listen or changed data | Builds whole-film stems under renders/listen_stems; read --help before running a long film |
+| listen --at <s> | Focuses the report while reusing whole-film stems. Each row averages rolling 400 ms LUFS readings, so use the encoded file for exact onset and peak timing. |
+| Thay asset âm | Listen và mix theo dõi file âm thực sự được chọn, kể cả trong vault và thư mục con. Dùng listen --fresh để buộc tạo lại stem; nếu xử lý lỗi, giữ bộ stem trước. Đuôi soundtrack ngắn hơn hình được đệm im lặng. Mix giải mã nguồn và kiểm từng track hình trước khi thay file. Nếu đích đang mở và thao tác ghi thất bại, bản MP4, WAV và sidecar cũ được giữ. |
+| Phổ âm và các mức | Listen --sheet dùng stem trước master, thêm --at để thu hẹp cửa sổ. Với MP4 xuất rồi, dùng earshot sheet FILE để thấy phổ đúng file. |
+| Voice LOST or THIN | Lower masking beds/SFX or duck the bed; listen and at identify cues |
+| LOUDER or LOUD with no voice | Inspect the remaining mix levels instead of automatically raising narration |
+| BURIED | Raise the hit or lower its surrounding bed, then inspect the mix |
+| MONO | Check widening, phase and oversized stems |
+| near silence or abrupt end | Check the intended silence/fade; retain deliberate choices |
+| Small A/B difference | mix normalizes the whole film to lufs; compare the same region and hit-to-bed relationship |
 
-| Line                           | Fix                                                                                                                   |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `LOST`, `THIN`                 | Lower the bed or sound playing there (listen names the rows), or duck the bed under the voice                         |
-| `LOUDER`, `LOUD with no voice` | Lower the rest in that stretch; the voice is not the problem                                                          |
-| `BURIED`                       | Raise that sound's gain, or lower the bed under it                                                                    |
-| `MONO`                         | Drop a stereowiden or extrastereo filter, swap a recording with a flipped side, or lower stems driven far over 0 dBFS |
-| `near silence`                 | Dead air; keep it only when meant                                                                                     |
-| `abrupt end`                   | Fade the beds out before the end                                                                                      |
+mix limits drive then applies linear gain toward lufs, default -14 LUFS, with a pre-encode ceiling of -1.5 dBTP. If the target is unreachable, read the drive advice; above +12 warns because limiting can flatten hits.
 
-Âm nằm trong vault chưa đủ chứng minh quyền dùng: đọc SOURCES.json và giấy phép của đúng asset trước khi phát hành, ghi credit khi cần. Minecraft music có contentId có thể bị claim; bun run listen --sheet vẽ spectrogram và mức âm qua earshot sheet.
+Ngưỡng 15 LU là mục tiêu cân bằng, dưới 8 LU là rủi ro bị lấn. Đối chiếu bản xuất để xác nhận từ nghe được, danh tính âm và ý đồ.
+
+## Sources and licenses
+
+Vault availability does not prove permission: read the asset's SOURCES.json/license and provide required credit before release. Minecraft music with contentId can be claimed; real-sound guides source/license checks without replacing asset evidence.
+
+fetch:sfx downloads Mixkit; fetch:sound-raw preserves raw packs; setup:sound builds the library/metadata; fetch:openfilm imports its library and pack:sound includes sources/licenses. These are preparation tools, not steps to repeat per cue; openfilm and asset list/info are compatibility aliases, while find discovers and asset edits.
+
+## Optional local media tools
+
+Discover with bun run media list, check with media doctor, and install only the needed backend with media setup <tool>. Each run has a deadline, a fresh evidence folder and cached models; these tools never change audio.json or replace creative decisions.
+
+| Need | Use and limits |
+| --- | --- |
+| Clean noisy speech | bun run media denoise recording.mp4 --from 5 --to 13; DeepFilterNet CPU, output WAV at 48 kHz, keep the original because ambience or consonants may disappear |
+| Lightweight sound labels | bun run media ced recording.wav --top-k 5; CED Tiny CPU gives independent AudioSet scores, not event times or verified probabilities |
+| Draft a voice locally | bun run media tts --text "The door opens."; Kokoro CPU, --voice/--language choose supported voices, no Vietnamese preset and no forced word alignment |
+| Compose editable notes | bun run media midi sting.mid; FluidSynth CPU renders MIDI with a licensed SoundFont, --soundfont selects another file with its own terms |
+| Fingerprint music | bun run media fingerprint bgm.wav --length 30; Chromaprint emits raw fingerprints for comparison, without a title database or copyright judgement |
+| Ask about recorded sound | bun run media caption recording.mp4 --from 5 --to 13 --prompt "Describe the sounds."; experimental MiDashengLM CPU, response.json and source audio stay beside result.json |
+| Trust model text | Caption and vision outputs are unverified hypotheses; small models have hallucinated in local trials, so check retained evidence and use earshot for independent sound comparison |
+| Native options and setup | media <tool> --help; pinned Windows binaries and model hashes live in scripts/media/tools.json, caption setup also needs CMake and MinGW and may need --minutes 20 on a cold build |
+
+The runtime, weights and bundled dependencies have separate licenses: Kokoro uses eSpeak-ng GPL notices, FluidR3 GM retains its MIT grant, and third-party SoundFonts/voices keep their own terms. setup downloads retained assets; inference remains local and a short-lived model server binds only to 127.0.0.1.
+
+## Optional SDK tools
+
+These commands use independent CPU environments, source-file seconds and fresh evidence folders. setup pins the tested packages; beat/separate/locate install CPU Torch from its official index, while Basic Pitch keeps Python 3.10 and its legacy resampy dependency isolated.
+
+| Need | Use and limits |
+| --- | --- |
+| Evidence extent | Read audioCoverage in the CLI and result.json for the requested and analyzed ranges. If audio ends early, partial/empty exposes the uncovered tail so silence and time outside the audio are visible separately. |
+| Music beats and bar starts | bun run media beat bgm.wav --from 0 --to 25 estimates beats/downbeats in file seconds. Verify model estimates against the evidence WAV, which keeps track offsets through resampling and may absorb timestamp gaps up to 2 ms. |
+| Speech intervals | bun run media vad reference.mp4 --from 5 --to 15; Silero returns start/end, without words or speaker identity; --config is native Silero settings JSON |
+| Melody to editable MIDI | bun run media melody melody.wav; Basic Pitch keeps melody.mid, model-output.npz and source-timed notes; repeated notes or whole mixes can be misread, MIDI remains local to the selected excerpt |
+| Custom sound processing | bun run media effects voice.wav --config effects.json --tail 2; config is an array of objects with name and parameters, e.g. Gain/gain_db or Reverb/room_size, using native Pedalboard classes. Plugins receive float PCM headroom, effect.wav exports PCM24, and saved decodeCommand replays the input PCM and speaker labels. |
+| Vocals and backing | bun run media separate clip.mp4 --from 0 --to 8; Kim Vocal 2 is a small CPU starting model, --config forwards Separator parameters except owned paths/device, --model selects a licensed cached model; upstream ONNX chooses CPU threads and has no supported SDK thread limit |
+| Find a described sound | bun run media locate clip.wav --query "a man speaking" --query "a dog barking"; PE-A Small preserves raw logits every 40 ms, --threshold groups suggested spans and is not a calibrated probability or accuracy guarantee |
+| Model/config choices | media <tool> --help; --model accepts a file, or a local Transformers directory for locate; --config forwards backend JSON where advertised and cannot redirect artifact paths, including Basic Pitch debug_file |
+| Inspect a timeline handoff | bun run media timeline edit.otio; read/write roundtrip verifies references, ranges and metadata, without modifying the film |
+| Create a timeline handoff | media timeline edit.json accepts fps and tracks of kind Video/Audio, each with clips; clip url/start/duration or gap:true/duration use frame units, metadata stays intact |
+
+OTIO core writes .otio; NLE-specific formats need their own supported adapter or baked media. These tools do not translate draw(t), scene speed curves or shader effects automatically, and model output never becomes an artistic gate.
+
+Native regression checks require the optional effects, separate and timeline setups: bun test ./scripts/test/media-sdk.native.mjs. They verify PitchShift frequency/duration, failure on an unavailable stem and OTIO fields with generated fixtures; they do not download models and retain their temporary evidence paths.
+
+## Local sound library and metadata
+
+| Âm footage và loop | Cách dùng tùy chọn |
+| --- | --- |
+| Đúng số sample | media ffmpeg audio -- track.wav --tempo 1.1 --sample-rate 48000 --length-samples 96000 -o exact.wav; đọc verification sau decode |
+| Đồng bộ recording | schema sync cho offset/confidence/drift; không đo miệng khớp tiếng, không thay ba clock phim |
+| Điểm nối loop | media qc request.json với rules.audio.loop_seam đo click/level/spectrum tại wrap hoặc seams; tự chọn ngưỡng, không kết luận âm hay/dở |
+| Tránh mất ý đồ mix | Giữ mix/listen/earshot; loudness native có thể fallback dynamic, nhiều thao tác hình reencode audio, xem schema trước |
+
+| Need | Optional command |
+| --- | --- |
+| Build a searchable sound library | bun run media foley index --config library.toml --limit 20 --workers 1; native TOML explicitly selects [library] root and [storage] data_dir outside it |
+| Search by meaning | bun run media foley search "a man speaking" --config library.toml; JSON preserves candidate scores and license fields, not a verdict of correctness or permission |
+| Inspect an asset / progress | media foley describe 2 --config library.toml; media foley status --config library.toml reports errors and pending model stages |
+| Choose local models | In native TOML use [models] enabled=true, device="cpu", clap=["htsat-unfused"] for this PC; first CLAP use downloads the upstream pinned checkpoint |
+| Resume indexing | Reuse the same TOML/data_dir and rerun index; SQLite/cache survive timeout, --limit caps analyses rather than the library scan |
+| Read Broadcast WAV fields | bun run media metadata recording.wav; BWF MetaEdit exports XML and verifies that the input hash remains unchanged |
+
+Foley is an optional young alpha project, supplementing earshot with a persistent catalog. The adapter exposes index/search/status/describe; its native CLI/MCP remains available, and PANNs CC-BY-4.0, CLAP Apache-2.0 and AudioSet notices stay separate from Foley's MIT code license.
+
+Ordinary --json uses schemaVersion 2: keyword.results holds full records; semantic hits with alsoKeyword:true reference them by key and keep their own rank and similarity. Other semantic hits hold full records; --semantic keeps its existing schema.

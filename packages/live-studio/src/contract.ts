@@ -327,6 +327,7 @@ export const Edit = z.looseObject({
   voice: z.looseObject({
     edits: z.record(z.string(), z.unknown()),
     warp: z.array(z.tuple([time, time])),
+    lines: z.array(z.tuple([time, time])).optional(),
   }),
   takes: z
     .array(Take)

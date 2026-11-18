@@ -1,11 +1,20 @@
 // src/notes.mjs: a note keeps every picture sent with it, a retry is not a second note, and × can be undone
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
 import {
+  noteNumberMap,
   noteRangePill,
   noteSecond,
   noteShotTitle,
@@ -13,7 +22,8 @@ import {
   resolveNoteMedia,
 } from "../app/notes/note-card-meta.ts";
 import { spanFade } from "../app/notes/pinfade.ts";
-import { createNotes } from "../src/notes.mjs";
+import { createApi } from "../src/api.mjs";
+import { createNotes, watchNotesFile } from "../src/notes.mjs";
 import { compileTiming } from "../src/timing.mjs";
 
 const pic = (s) => `data:image/jpeg;base64,${Buffer.from(s).toString("base64")}`;
@@ -75,6 +85,14 @@ test("a note written during a held frame stays at its own second while that fram
     20,
   );
   assert.equal(noteSecond({ t: 9, srcT: 9, scene: 0 }, voiceOnly, later), 0);
+  // malformed t: null with shot context must not throw inside frameAt/sourceAt; non-finite srcT must not turn t into NaN
+  assert.equal(
+    noteSecond({ t: null, shot: 0, context: { shot: { into: 1.5 } } }, voiceOnly, held, [
+      { t: 0, name: "a" },
+    ]),
+    7.5,
+  );
+  assert.equal(noteSecond({ t: 4, srcT: "oops" }, voiceOnly, held, []), 4);
 });
 
 test("a note keeps its frame, the pin's close-up, the seconds around it and one picture per drawn moment", () => {
@@ -112,6 +130,25 @@ test("a note keeps its frame, the pin's close-up, the seconds around it and one 
   }
 });
 
+test("a note keeps the reference pictures the creator pasted, in the order pasted", () => {
+  const dir = mkdtempSync(join(tmpdir(), "notes-"));
+  try {
+    const notes = createNotes(dir);
+    notes.add({ note: { id: "ref1", t: 3, text: "like this" }, refs: [pic("r0"), pic("r1")] }, {});
+    const [n] = notes.read();
+    assert.deepEqual(n.refs, ["notes/img/ref1_r0.jpg", "notes/img/ref1_r1.jpg"]);
+    assert.equal(notes.picture("ref1_r1").toString(), "r1");
+    notes.add({ note: { id: "bare", t: 4, text: "x", refs: ["../../etc/x"] } }, {});
+    assert.equal(
+      notes.read()[1].refs,
+      undefined,
+      "what a note's pictures are is the server's to say",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("× moves a note aside and undo brings it back with the words it had", () => {
   const dir = mkdtempSync(join(tmpdir(), "notes-"));
   try {
@@ -130,7 +167,7 @@ test("× moves a note aside and undo brings it back with the words it had", () =
   }
 });
 
-test("resolveNoteMedia serves persisted /api/note-img URLs for both open and done notes, falls back to unsent data URLs, and handles missing images", () => {
+test("resolveNoteMedia serves persisted /api/note-img URLs (the pasted pictures too) for both open and done notes, falls back to unsent data URLs, and handles missing images", () => {
   const openSaved = {
     id: "mw9jknxt",
     done: false,
@@ -140,12 +177,14 @@ test("resolveNoteMedia serves persisted /api/note-img URLs for both open and don
   assert.deepEqual(resolveNoteMedia(openSaved, []), {
     thumb: "/api/note-img/mw9jknxt.jpg",
     crop: "/api/note-img/mw9jknxt_crop.jpg",
+    refs: [],
   });
 
   const doneSaved = { id: "mw3t3iip", done: true, img: "notes/img/mw3t3iip.jpg" };
   assert.deepEqual(resolveNoteMedia(doneSaved, []), {
     thumb: "/api/note-img/mw3t3iip.jpg",
     crop: null,
+    refs: [],
   });
 
   const unsentOnly = { id: "new123", done: false };
@@ -154,14 +193,27 @@ test("resolveNoteMedia serves persisted /api/note-img URLs for both open and don
       note: unsentOnly,
       img: "data:image/jpeg;base64,/9j/main",
       crop: "data:image/jpeg;base64,/9j/crop",
+      refs: ["data:image/jpeg;base64,/9j/ref"],
     },
   ];
   assert.deepEqual(resolveNoteMedia(unsentOnly, queue), {
     thumb: "data:image/jpeg;base64,/9j/main",
     crop: "data:image/jpeg;base64,/9j/crop",
+    refs: ["data:image/jpeg;base64,/9j/ref"],
   });
+  assert.deepEqual(
+    resolveNoteMedia(
+      { id: "sent1", refs: ["notes/img/sent1_r0.jpg", "notes/img/sent1_r1.jpg"] },
+      [],
+    ).refs,
+    ["/api/note-img/sent1_r0.jpg", "/api/note-img/sent1_r1.jpg"],
+  );
 
-  assert.deepEqual(resolveNoteMedia({ id: "bare1", done: false }, []), { thumb: null, crop: null });
+  assert.deepEqual(resolveNoteMedia({ id: "bare1", done: false }, []), {
+    thumb: null,
+    crop: null,
+    refs: [],
+  });
 });
 
 test("note card metadata helpers format shot titles, strip file provenance from pin chips, and extract valid In-to-Out ranges", () => {
@@ -197,4 +249,155 @@ test("spanFade holds 1 inside a drawn span, fades out over NOTE_FADE*rate after 
   assert.equal(spanFade([20, 23], 21.5, 1), 1);
   assert.ok(spanFade([20, 23], 24.5, 1) > 0 && spanFade([20, 23], 24.5, 1) < 1);
   assert.equal(spanFade([20, 23], 27, 1), 0);
+});
+
+test("noteNumberMap uses server numbers to preserve deleted gaps and falls back cleanly", () => {
+  const notes = [{ id: "a" }, { id: "c" }];
+  assert.deepEqual(noteNumberMap(notes, '{"a":1,"c":3}'), { a: 1, c: 3 });
+  assert.deepEqual(noteNumberMap(notes, null), { a: 1, c: 2 });
+  assert.deepEqual(noteNumberMap(notes, "not-json"), { a: 1, c: 2 });
+});
+
+test("notes HTTP endpoints immediately emit 'notes' SSE event and expose x-note-numbers without changing body", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "notes-api-"));
+  try {
+    const notes = createNotes(dir);
+    let synced = 0;
+    const sent = [];
+    const app = createApi(
+      {
+        dir,
+        PROJECT: dir,
+        notes,
+        stamp: async () => ({ version: "v1" }),
+        syncNotes: () => {
+          synced += 1;
+        },
+        openRead: () => {
+          throw new Error("unused");
+        },
+        PUBLIC: dir,
+        LITE: dir,
+      },
+      {
+        page: { dir, html: () => "<!doctype html><head></head>", error: () => null },
+        events: new Set(),
+        send: (kind) => sent.push(kind),
+      },
+    );
+
+    const add1 = await app.request("/api/notes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        note: {
+          id: "n1",
+          t: 1,
+          time: "00:01.000",
+          shot: 0,
+          text: "first",
+          at: "2026-11-14T10:00:01.000Z",
+        },
+      }),
+    });
+    assert.equal(add1.status, 200);
+    assert.deepEqual(sent, ["notes"]);
+    assert.equal(synced, 1);
+
+    await app.request("/api/notes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        note: {
+          id: "n2",
+          t: 2,
+          time: "00:02.000",
+          shot: 0,
+          text: "second",
+          at: "2026-11-14T10:00:02.000Z",
+        },
+      }),
+    });
+    await app.request("/api/notes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        note: {
+          id: "n3",
+          t: 3,
+          time: "00:03.000",
+          shot: 0,
+          text: "third",
+          at: "2026-11-14T10:00:03.000Z",
+        },
+      }),
+    });
+    notes.change("n2", { remove: true });
+
+    sent.length = 0;
+    const okFix = await app.request("/notes/n1", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fix: { what: "fixed first" } }),
+    });
+    assert.equal(okFix.status, 200);
+    assert.deepEqual(sent, ["notes"]);
+
+    sent.length = 0;
+    const badApprove = await app.request("/api/notes/missing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ approve: true }),
+    });
+    assert.equal(badApprove.status, 409);
+    assert.deepEqual(sent, []);
+
+    const listRes = await app.request("/api/notes");
+    assert.equal(listRes.status, 200);
+    const body = await listRes.json();
+    assert.deepEqual(
+      body.map((x) => x.id),
+      ["n1", "n3"],
+    );
+    assert.deepEqual(JSON.parse(listRes.headers.get("x-note-numbers") ?? "{}"), { n1: 1, n3: 3 });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("watchNotesFile detects atomic rename writes even before file exists and suppresses duplicates", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "notes-watch-"));
+  const file = join(dir, "notes", "notes.jsonl");
+  mkdirSync(join(dir, "notes"), { recursive: true });
+  let hits = 0;
+  const w = watchNotesFile(
+    file,
+    () => {
+      hits += 1;
+    },
+    { debounceMs: 25 },
+  );
+  try {
+    const tmp = `${file}.tmp`;
+    writeFileSync(tmp, '{"id":"a","t":1,"text":"hi","shot":0,"time":"00:01.000"}\n');
+    renameSync(tmp, file);
+    for (let i = 0; i < 40 && hits < 1; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(hits, 1);
+
+    // Identical content rewrite is ignored
+    writeFileSync(tmp, '{"id":"a","t":1,"text":"hi","shot":0,"time":"00:01.000"}\n');
+    renameSync(tmp, file);
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(hits, 1);
+
+    // Synced own write does not double-fire
+    writeFileSync(tmp, '{"id":"b","t":2,"text":"two","shot":0,"time":"00:02.000"}\n');
+    renameSync(tmp, file);
+    w.sync();
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(hits, 1);
+  } finally {
+    w.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

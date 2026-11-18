@@ -1,13 +1,14 @@
 // framecheck.mjs: the encoded video's picture faults, measured at the film's own shape
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { mediaFixture } from "../../../scripts/test/media-fixture.mjs";
+import { writeRenderEvidence } from "../src/video.mjs";
 
 const FRAMECHECK = fileURLToPath(new URL("../framecheck.mjs", import.meta.url));
 const media = mediaFixture();
@@ -94,8 +95,15 @@ test("a SPAN run's video is measured on the film's clock, with only the cuts ins
 test("a fault's picture is the frame before it, the frame, and the frame after", (t) => {
   const dir = film(t, "16:9");
   flip(join(dir, "renders/draft_video.mp4"));
-  const out = framecheck(dir);
+  const out = framecheck(dir, "--json");
   assert.equal(out.status, 0, out.stdout + out.stderr);
+  const report = JSON.parse(out.stdout);
+  const jump = report.findings.find((finding) => finding.kind === "JUMP");
+  assert.equal(jump?.fileTime, 1);
+  const strip = join(dir, jump.strip);
+  const next = JSON.parse(framecheck(dir, "--json").stdout);
+  assert.notEqual(next.index, report.index);
+  assert.ok(readFileSync(strip).length);
   // the left tile of the three is the last grey frame
   const px = spawnSync(
     "ffmpeg",
@@ -103,7 +111,7 @@ test("a fault's picture is the frame before it, the frame, and the frame after",
       "-v",
       "error",
       "-i",
-      join(dir, "renders/frames_JUMP_1.00.jpg"),
+      strip,
       "-vf",
       "crop=8:8:100:100,scale=1:1",
       "-f",
@@ -122,7 +130,7 @@ test("a fault's picture is the frame before it, the frame, and the frame after",
       "-v",
       "error",
       "-i",
-      join(dir, "renders/frames_JUMP_1.00.jpg"),
+      strip,
       "-vf",
       "crop=8:8:740:100,scale=1:1",
       "-f",
@@ -134,6 +142,31 @@ test("a fault's picture is the frame before it, the frame, and the frame after",
     { encoding: "buffer" },
   );
   assert.ok(at.stdout[0] > 240, `the frame itself is white, got ${at.stdout[0]}`);
+});
+
+test("a foreign chunk name cannot borrow the film's cut or clock", (t) => {
+  const dir = film(t, "16:9");
+  mkdirSync(join(dir, "references/chunks"), { recursive: true });
+  flip(join(dir, "references/chunks/c01.mp4"));
+  writeFileSync(join(dir, "renders/cuts.json"), "[1, 31]");
+  const out = framecheck(dir, "references/chunks/c01.mp4");
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stdout, /JUMP 1\.00/);
+  assert.match(out.stdout, /file seconds/);
+  assert.doesNotMatch(out.stdout, /bun run at |CHUNKS=/);
+});
+
+test("a stale picture is measured without jump exemptions from the current edit", (t) => {
+  const dir = film(t, "16:9");
+  const video = join(dir, "renders/draft_video.mp4");
+  flip(video);
+  writeFileSync(join(dir, "renders/cuts.json"), "[1]");
+  utimesSync(video, 1000, 1000);
+  const out = framecheck(dir);
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stdout, /STALE/);
+  assert.match(out.stdout, /JUMP 1\.00/);
+  assert.doesNotMatch(out.stdout, /bun run at /);
 });
 
 test("a fault in the upload's picture is drawn again by render final, never by render clip", (t) => {
@@ -152,22 +185,71 @@ test("a fault in the upload's picture is drawn again by render final, never by r
   );
 });
 
-test("a cuts.json that is no list of seconds is a fault named, not a crash", (t) => {
+test("framecheck treats a long VFR hold as a hold rather than a brief flash", (t) => {
   const dir = film(t, "16:9");
-  flip(join(dir, "renders/draft_video.mp4"));
-  writeFileSync(join(dir, "renders/cuts.json"), "{}");
-  const out = framecheck(dir);
-  assert.equal(out.status, 1, out.stdout + out.stderr);
-  assert.match(out.stderr, /renders\/cuts\.json is no list of seconds/);
+  const video = join(dir, "renders/draft_video.mp4");
+  media(video, [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=gray:s=160x90:r=25:d=0.28,drawbox=c=white:t=fill:enable='eq(n,1)'",
+    "-vf",
+    "setpts='if(gte(N,2),(2.52+(N-2)/25)/TB,PTS)'",
+    "-fps_mode",
+    "vfr",
+    "-c:v",
+    "libx264",
+  ]);
+  writeRenderEvidence(video, { cuts: [0.5] });
+  const out = framecheck(dir, video, "--json");
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  const { findings } = JSON.parse(out.stdout);
+  assert.ok(!findings.some((a) => a.kind === "FLASH"));
+  assert.ok(findings.some((a) => a.kind === "JUMP" && Math.abs(a.fileTime - 0.04) < 1e-6));
+  const hold = findings.find((a) => a.kind === "FROZEN");
+  assert.ok(hold?.fileEnd - hold?.fileTime > 2);
 });
 
-test("a negative second in cuts.json is no cut: refused like any other broken cuts.json", (t) => {
+test("framecheck refuses a truncated packet instead of reporting a clean prefix", (t) => {
   const dir = film(t, "16:9");
-  flip(join(dir, "renders/draft_video.mp4"));
-  writeFileSync(join(dir, "renders/cuts.json"), "[-1]");
-  const out = framecheck(dir);
+  const video = join(dir, "truncated.mp4");
+  media(video, [
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=s=320x180:r=24:d=2",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-movflags",
+    "+faststart",
+  ]);
+  writeFileSync(video, readFileSync(video).subarray(0, -100));
+  const out = framecheck(dir, video, "--json");
   assert.equal(out.status, 1, out.stdout + out.stderr);
-  assert.match(out.stderr, /renders\/cuts\.json is no list of seconds/);
+  assert.match(out.stderr, /corrupt input packet|Invalid data found/i);
+  assert.equal(out.stdout.trim(), "");
+});
+
+test("a new cut list cannot override the metadata belonging to the video", (t) => {
+  const dir = film(t, "16:9");
+  const video = join(dir, "renders/draft_video.mp4");
+  flip(video);
+  const cutsFile = join(dir, "renders/cuts.json");
+  writeFileSync(cutsFile, "[2]");
+  const newer = new Date(Date.now() + 3000);
+  utimesSync(cutsFile, newer, newer);
+  const legacy = JSON.parse(framecheck(dir, "--json").stdout);
+  assert.ok(legacy.findings.some((f) => f.kind === "JUMP"));
+  assert.equal(legacy.cuts.status, "unavailable");
+
+  writeRenderEvidence(video, { cuts: [1] });
+  writeFileSync(join(dir, "renders/cuts.json"), "{}");
+  const bound = JSON.parse(framecheck(dir, "--json").stdout);
+  assert.equal(bound.cuts.status, "bound");
+  assert.deepEqual(bound.cutsUsed, [1]);
+  assert.ok(!bound.findings.some((f) => f.kind === "JUMP"));
 });
 
 test("what comes after a clean upload picture is the mix and deliver; a fault in a mixed draft is mixed again", (t) => {
@@ -206,5 +288,8 @@ test("START takes heard seconds as notes print them", (t) => {
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /JUMP 61\.00/);
   // the commands it hands on read the same seconds only with the same START
-  assert.match(out.stdout.trim().split(/\r?\n/).at(-1), /then START=60 bun run framecheck again$/);
+  assert.match(
+    out.stdout.trim().split(/\r?\n/).at(-1),
+    /next: START=60 bun run sheet renders\/draft_video\.mp4 frames 61/,
+  );
 });

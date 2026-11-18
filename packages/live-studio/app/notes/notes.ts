@@ -1,10 +1,13 @@
 import { EDIT, fromSource, toSource } from "film/edit";
 
-import { showUndo } from "@/components/ui/toast";
+import { showUndo, toast } from "@/components/ui/toast";
 
+import { remapOutputTime } from "../../src/layer-timing.mjs";
 import { applyChange, type NoteChange, noteState, WORD_NEAR } from "../../src/note-state.mjs";
 import { timingClock } from "../../src/timing-state.mjs";
-import { frameAt } from "../../src/timing.mjs";
+import { frameAt, visibleOutputAt } from "../../src/timing.mjs";
+import { activityNotice, lightNotes } from "../activity/activity";
+import { playActivityChime } from "../activity/chime";
 import { camLine } from "../camera/camline";
 import { PHONE } from "../core/device";
 import { onDocMutated } from "../core/doc";
@@ -20,9 +23,7 @@ import { stored } from "../core/storage";
 import { get, invalidatePictures, say, set, ui } from "../core/store";
 import { FPS, stamp } from "../core/time";
 import { captionAt } from "../picture/captions";
-import { frameSize } from "../picture/frame";
 import { seek, setPlaying } from "../playback/transport";
-import { tone } from "../timeline/canvas";
 import { inOutAt } from "../timeline/inout";
 import { wordNear } from "../timeline/timeline";
 import {
@@ -38,7 +39,6 @@ import {
 import {
   clearInk,
   drawInk,
-  drawMark,
   inkHooks,
   inkMarks,
   inkSpan,
@@ -48,9 +48,10 @@ import {
 } from "./ink";
 import { noteNumberMap, noteSecond, resolveNoteMedia } from "./note-card-meta";
 import { matchesNoteFilters, sortPlacedNotes } from "./note-views-model";
+import { momentStrip, pinCrop, snapshot } from "./pictures";
 import { type ActivePinNote, activeStageNotes, type PinLike, resolvePinLayout } from "./pinfade";
 import { refHooks, restoreRefs, setRefs } from "./refs";
-import { nextReviewNeighborId, pickSnapshotSource, stepReviewPickId } from "./review-nav";
+import { nextReviewNeighborId, stepReviewPickId } from "./review-nav";
 import {
   type Compose,
   type ComposeCreate,
@@ -193,88 +194,10 @@ export const clearNoteFilters = () =>
 
 // ---------- Pictures that go with a note: the frame with the pin, the area under it unmarked, and the seconds around it
 // (a press during playback lands after what was being reacted to, and a note about a cut is about those seconds)
-const shownAt = (x: number) => {
-  engine.render(x);
-  return S.el.canvas;
-};
-const snapshotSource = (at: number): HTMLCanvasElement | null => {
-  const finalEl = engine.finalCanvas();
-  const source = pickSnapshotSource({
-    at,
-    playhead: S.t,
-    finalAt: S.finalAt,
-    hasFinal: !!finalEl,
-    hasRender: !!S.render,
-  });
-  if (!source) return null;
-  return source === "final" ? finalEl! : shownAt(at);
-};
-const snapshot = (pin: Pin | null | undefined, at: number, marks: Mark[] = []) => {
-  const from = snapshotSource(at);
-  if (!from) return null;
-  const c = document.createElement("canvas"),
-    [w, h] = frameSize(960);
-  c.width = w;
-  c.height = h;
-  const g = c.getContext("2d")!;
-  g.drawImage(from, 0, 0, w, h);
-  for (const m of marks) drawMark(g, m, at, w, h, tone("ink"));
-  if (pin) {
-    g.strokeStyle = tone("primary");
-    g.lineWidth = 3;
-    g.beginPath();
-    g.arc(pin.x * w, pin.y * h, 14, 0, 7);
-    g.stroke();
-    g.strokeStyle = tone("stage");
-    g.lineWidth = 1;
-    g.beginPath();
-    g.arc(pin.x * w, pin.y * h, 16, 0, 7);
-    g.stroke();
-  }
-  return c.toDataURL("image/jpeg", 0.85);
-};
-const pinCrop = (pin: Pin, at: number) => {
-  const from = snapshotSource(at) ?? S.el.canvas,
-    side = Math.round(Math.min(from.width, from.height) * 0.34);
-  const c = document.createElement("canvas");
-  c.width = c.height = 480;
-  c.getContext("2d")!.drawImage(
-    from,
-    pin.x * from.width - side / 2,
-    pin.y * from.height - side / 2,
-    side,
-    side,
-    0,
-    0,
-    480,
-    480,
-  );
-  return c.toDataURL("image/jpeg", 0.85);
-};
 const spread = <T>(xs: T[], n: number) =>
   xs.length <= n
     ? xs
     : Array.from({ length: n }, (_, i) => xs[Math.round((i * (xs.length - 1)) / (n - 1))]);
-const STRIP = [-2, -1, 0, 1];
-const momentStrip = (at: number) => {
-  const [w, h] = frameSize(400),
-    c = document.createElement("canvas");
-  c.width = w * STRIP.length;
-  c.height = h;
-  const g = c.getContext("2d")!;
-  g.font = "bold 20px Consolas,monospace";
-  STRIP.forEach((d, i) => {
-    const x = Math.min(Math.max(0, at + d), DURATION - 0.02);
-    g.drawImage(shownAt(x), i * w, 0, w, h);
-    g.fillStyle = tone("scrim-strong");
-    g.fillRect(i * w + 4, 4, 128, 28);
-    g.fillStyle = d === 0 ? tone("primary") : tone("picture");
-    g.fillText(stamp(x), i * w + 8, 25);
-    g.fillStyle = tone("stage");
-    g.fillRect(i * w, 0, 2, h);
-  });
-  return c.toDataURL("image/jpeg", 0.8);
-};
 // Everything around the moment, as the film stood when the note was written
 const noteContext = (c: ComposeCreate) => {
   const { voiceOut } = S,
@@ -442,7 +365,20 @@ export const flushNotes = async () => {
         // 409: the note moved on meanwhile (the AI answered it, it was deleted): sending it again would never land
         if (r.status === 409) {
           dropOp(id, op);
-          say(`Not sent: ${await r.text()}`);
+          const words = "again" in op ? op.again : "text" in op ? op.text : undefined;
+          if (words) {
+            toast.add({
+              title: "Note update wasn’t sent. Copy your text before closing.",
+              description: words,
+              type: "error",
+              timeout: 0,
+            });
+          } else {
+            say(
+              "The note changed before this update was sent. Check the latest version and try again.",
+              6000,
+            );
+          }
           await loadNotes();
           continue;
         }
@@ -471,10 +407,78 @@ const applied = (n: Note, op: NoteChange) => {
 let noteNumById: Record<string, number> = {};
 export const noteNum = (id: string): number | null => noteNumById[id] ?? null;
 
-export const loadNotes = async () => {
+const announceNoteChanges = (previous: Note[], notes: Note[]) => {
+  const byId = new Map(previous.map((n) => [n.id, n]));
+  const updates = notes.flatMap((note) => {
+    const before = byId.get(note.id);
+    if (!before) return [];
+    const state = noteState(note),
+      was = noteState(before);
+    if (state === "done" && was !== "done")
+      return [{ note, status: note.approved ? "approved" : "marked done" }];
+    if (state !== "check") return [];
+    const reply = note.fixes?.at(-1),
+      prior = before.fixes?.at(-1);
+    if (
+      was === state &&
+      note.fixes?.length === before.fixes?.length &&
+      reply?.at === prior?.at &&
+      reply?.what === prior?.what &&
+      reply?.ask === prior?.ask
+    )
+      return [];
+    return [{ note, status: reply?.ask ? "has a question" : "ready to check" }];
+  });
+  if (!updates.length) return;
+  const notices = activityNotice();
+  lightNotes(updates.map(({ note }) => note.id));
+  if (updates.some(({ note }) => noteState(note) === "check")) playActivityChime();
+  if (updates.length > 1) {
+    const id = notices.add({
+      title: `${updates.length} notes updated`,
+      type: "info",
+      timeout: 8000,
+      actionProps: {
+        children: "Open Notes",
+        onClick: () => {
+          notices.close(id);
+          setReview(false);
+          set({ lib: "notes", side: "notes" });
+        },
+      },
+    });
+    return;
+  }
+  const [{ note, status }] = updates;
+  const number = noteNum(note.id);
+  const id = notices.add({
+    title: `Note${number === null ? "" : ` #${number}`} ${status}`,
+    description: note.text.trim().replace(/\s+/g, " ").slice(0, 120),
+    type: noteState(note) === "done" ? "success" : "info",
+    timeout: 8000,
+    actionProps: {
+      children: PHONE ? "View note" : "Jump to frame",
+      onClick: () => {
+        notices.close(id);
+        const current = get().notes.find((n) => n.id === note.id);
+        if (!current) return;
+        const preview = S.el?.view;
+        if (PHONE || get().review || (preview && !preview.getClientRects().length)) reviewNote(current);
+        else goToNote(current);
+      },
+    },
+  });
+};
+
+let notesRequest = 0,
+  appliedNotesRequest = 0;
+export const loadNotes = async ({ notify = false } = {}) => {
+  const request = ++notesRequest;
   const res = await getFile("/api/notes");
   const numHeader = res.headers.get("x-note-numbers");
   const have: Note[] = await res.json();
+  if (request < appliedNotesRequest) return;
+  appliedNotesRequest = request;
   noteNumById = noteNumberMap(have, numHeader);
   const ops = unsentOps(),
     mine = get().notes;
@@ -501,6 +505,8 @@ export const loadNotes = async () => {
       }, n),
     );
   changed(notes);
+  // Compare against the visible notes so the server's echo of a local action stays quiet.
+  if (notify) announceNoteChanges(mine, notes);
   if (flushing) set({ saved: "busy" });
 };
 
@@ -608,7 +614,8 @@ const openBox = (compose: Compose, words = "", focus = true, origin?: ComposeOri
   if (focus) ui.focusNote();
   else ui.cancelNoteFocus();
 };
-export const openNote = (pin: Pin | null, focus = true, origin?: ComposeOrigin) => {
+export const openNote = async (pin: Pin | null, focus = true, origin?: ComposeOrigin) => {
+  if (savingNote) await savingNote;
   const { compose, draft } = get();
   if (compose?.kind === "edit") {
     ui.focusNote();
@@ -618,10 +625,10 @@ export const openNote = (pin: Pin | null, focus = true, origin?: ComposeOrigin) 
   // Words already written belong to the note they were written for: a new place starts a new note. On the same frame a click just moves the pin
   if (compose && draft.trim() && Math.abs(S.t - compose.t) > 0.01 && !inkMarks.length) {
     set({ compose: { ...compose, resume: false } });
-    saveNote();
+    await saveNote();
   }
   if (S.playing) setPlaying(false);
-  engine.render(S.t);
+  void engine.render(S.t);
   const i = shotIndex(S.t);
   openBox(
     {
@@ -680,7 +687,8 @@ export const restoreDraft = () => {
   openBox(compose, words);
 };
 // An old note opens in the same box, with its words. Nothing is overwritten until Xong
-export const editOldNote = (n: Note, origin?: ComposeOrigin) => {
+export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
+  if (savingNote) await savingNote;
   const { compose, draft } = get();
   if (compose?.kind === "edit" && compose.id === n.id) {
     ui.focusNote();
@@ -690,7 +698,7 @@ export const editOldNote = (n: Note, origin?: ComposeOrigin) => {
   const at = noteAt(n);
   if (compose && isComposeDirty(compose, draft, more())) {
     set({ compose: { ...compose, resume: false } });
-    saveNote();
+    await saveNote();
   } else if (compose) closeNote();
   if (S.playing) setPlaying(false);
   openBox(
@@ -731,6 +739,7 @@ export const closeNote = (reason: "save" | "cancel" = "cancel") => {
 };
 // Cancel asks nothing: the words stay one press away in case it was a slip
 export const cancelNote = () => {
+  if (get().noteSaving) return;
   const { compose: was, draft: words } = get();
   if (!was) return;
   const strokes = inkMarks.slice(),
@@ -738,10 +747,10 @@ export const cancelNote = () => {
   const lost = isComposeDirty(was, words, strokes.length > 0 || refs.length > 0);
   closeNote();
   if (lost)
-    showUndo(was.kind === "edit" ? `Edit at ${was.time} discarded` : "Note discarded", () => {
+    showUndo(was.kind === "edit" ? `Edit at ${was.time} discarded` : "Note discarded", async () => {
       if (get().compose) {
         set({ compose: { ...get().compose!, resume: false } });
-        saveNote();
+        await saveNote();
       }
       if (S.playing) setPlaying(false);
       if (was.kind === "create") seek(was.t);
@@ -750,7 +759,7 @@ export const cancelNote = () => {
       openBox({ ...was, resume: false }, words);
     });
 };
-export const saveNote = () => {
+const saveNoteNow = async () => {
   const { compose, draft, notes } = get();
   const body = draft.trim();
   if (!compose) return;
@@ -805,31 +814,49 @@ export const saveNote = () => {
     strip: string | null = null,
     frames: { t: number; img: string }[] = [];
   try {
-    strip = momentStrip(compose.t);
+    strip = await momentStrip(compose.t);
   } catch {}
   // A drawing over several seconds: one picture per second it was drawn at, with what was drawn there and the rest faint. Past
   // 8 of them: the first, the last and 6 evenly between, so a long path still shows where it starts and ends
   if (strokes.length)
     try {
-      frames = spread(inkTimes(strokes), 8).flatMap((t) => {
-        const frameImg = snapshot(null, t, strokes);
-        return frameImg ? [{ t: +t.toFixed(3), img: frameImg }] : [];
-      });
+      for (const t of spread(inkTimes(strokes), 8)) {
+        const frameImg = await snapshot(null, t, strokes);
+        if (frameImg) frames.push({ t: +t.toFixed(3), img: frameImg });
+      }
     } catch {}
   try {
-    engine.render(compose.t);
-    img = snapshot(n.pin, compose.t, strokes);
-    if (n.pin) crop = pinCrop(n.pin, compose.t);
+    img = await snapshot(n.pin, compose.t, strokes);
+    if (n.pin) crop = await pinCrop(n.pin, compose.t);
   } catch {}
-  engine.render(S.t);
+  await engine.render(S.t);
   S.dirty = true;
-  changed([...notes, n]);
+  changed([...get().notes, n]);
   keepUnsent([
     ...unsent(),
     { note: n, img, crop, strip, frames, ...(refs.length ? { refs } : {}) },
   ]);
   flushNotes();
   closeNote("save");
+};
+
+let savingNote: Promise<void> | null = null;
+export const saveNote = () => {
+  if (savingNote) return savingNote;
+  set({ noteSaving: true });
+  savingNote = saveNoteNow()
+    .catch(() => {
+      toast.add({
+        title: "Couldn’t save the note",
+        description: "Try saving it again.",
+        type: "error",
+      });
+    })
+    .finally(() => {
+      savingNote = null;
+      set({ noteSaving: false });
+    });
+  return savingNote;
 };
 
 export const removeNote = (n: Note) => {
@@ -853,6 +880,13 @@ export const reopenNote = (n: Note) =>
 // The creator's side of the AI's answer (note-state.mjs): approve a fix, or send words back and the note is the AI's again
 export const approveNote = (n: Note) =>
   changeNote(n.id, { approve: true }, `Approved: note at ${stamp(noteAt(n))}`);
+export const setReplyDraft = (id: string, words: string) => {
+  const replyDrafts = new Map(get().replyDrafts);
+  if (words) replyDrafts.set(id, words);
+  else replyDrafts.delete(id);
+  set({ replyDrafts });
+};
+
 export const answerNote = (n: Note, words: string) =>
   changeNote(n.id, { again: words }, `Back to the AI with your words: note at ${stamp(noteAt(n))}`);
 export const rememberNote = (n: Note, scope: "film" | "all" | null) =>
@@ -863,9 +897,39 @@ export const rememberNote = (n: Note, scope: "film" | "all" | null) =>
       ? `The AI will keep what this note teaches, for ${scope === "all" ? "every film" : "this film"}`
       : "No longer to remember",
   );
-export const goToNote = (n: Note) => {
+export const goToNote = (n: Note, newVisit = !get().review) => {
+  const at = noteAt(n);
+  if (!Number.isFinite(at) || at < 0 || at > DURATION) {
+    say("This note is outside the current preview");
+    return;
+  }
+  if (!PHONE && (newVisit || !get().noteReturn) && Math.abs(S.t - at) >= 0.5 / FPS) {
+    set({ noteReturn: { at: S.t, clock: timingClock } });
+  }
   if (S.playing) setPlaying(false);
-  seek(noteAt(n));
+  seek(at);
+};
+
+const noteReturnTime = ({ clock, at }: NonNullable<ReturnType<typeof get>["noteReturn"]>) => {
+  if (clock === timingClock) return at;
+  const placement = clock.placements?.find((item) => item.from <= at && at < item.to);
+  const moved = placement && timingClock.placements?.find((item) => item.id === placement.id);
+  if (placement?.kind === "clip" && moved?.kind === "clip") {
+    const segments = timingClock.segments.filter((s) => s.from >= moved.from && s.to <= moved.to);
+    return visibleOutputAt({ ...timingClock, segments }, clock.sourceAt(at)) ?? moved.from;
+  }
+  if (placement?.kind === "gap" && moved?.kind === "gap")
+    return moved.from + ((at - placement.from) / (placement.to - placement.from)) * (moved.to - moved.from);
+  return remapOutputTime(clock, timingClock, at);
+};
+
+export const returnFromNote = () => {
+  const position = get().noteReturn;
+  if (!position) return;
+  set({ noteReturn: null });
+  if (S.playing) setPlaying(false);
+  seek(noteReturnTime(position));
+  setReview(false);
 };
 // From two seconds before the note, playing, to see the moment come and go
 export const playNote = (n: Note) => {
@@ -877,7 +941,7 @@ export const playNote = (n: Note) => {
 let nowPicturesRev = -1;
 const nowPictures = new Map<string, { key: string; url: string }>();
 onDocMutated(invalidatePictures);
-export const nowPicture = (n: Note) => {
+export const nowPicture = async (n: Note) => {
   if (!S.render) return null;
   const rev = get().pictureRev;
   if (nowPicturesRev !== rev) {
@@ -891,10 +955,11 @@ export const nowPicture = (n: Note) => {
   if (!cached || cached.key !== key) {
     let url: string | null = null;
     try {
-      url = snapshot(n.pin, at, marks);
-      engine.render(S.t);
+      url = await snapshot(n.pin, at, marks);
+      await engine.render(S.t);
       S.dirty = true;
     } catch {}
+    if (get().pictureRev !== rev) return null;
     if (url !== null) nowPictures.set(n.id, { key, url });
   }
   return nowPictures.get(n.id)?.url ?? null;
@@ -912,10 +977,15 @@ export const focusReviewRow = (id: string | null) => {
 };
 
 export const reviewList = (tab: "open" | "check" | "asking" | "done") => {
-  const groups = shownNotes();
-  if (tab === "check") return groups.check.filter((x) => !x.n.fixes?.at(-1)?.ask);
-  if (tab === "asking") return groups.check.filter((x) => Boolean(x.n.fixes?.at(-1)?.ask));
-  return groups[tab];
+  const state = tab === "asking" ? "check" : tab;
+  const matchesTab = ({ n }: Placed) =>
+    state !== "check" || Boolean(n.fixes?.at(-1)?.ask) === (tab === "asking");
+  const group = shownNotes()[state];
+  const visible = state === "check" ? group.filter(matchesTab) : group;
+  const targetId = get().reviewTarget;
+  if (!targetId || visible.some(({ n }) => n.id === targetId)) return visible;
+  const target = indexed()[state].find((row) => row.n.id === targetId && matchesTab(row));
+  return target ? [target, ...visible] : visible;
 };
 
 export const stepReview = (delta: -1 | 1) => {
@@ -941,7 +1011,7 @@ export const approveReviewCurrent = () => {
   const list = reviewList(reviewTab);
   if (!list.length) return false;
   const idx = reviewPick ? list.findIndex((x) => x.n.id === reviewPick) : 0;
-  const current = list[Math.max(0, idx)];
+  const current = list[idx];
   if (!current || noteState(current.n) !== "check" || current.n.fixes?.at(-1)?.ask) return false;
   const nextId = nextReviewNeighborId(
     list.map((x) => x.n.id),
@@ -988,12 +1058,13 @@ const restoreReviewFocus = () => {
 export const setReview = (on: boolean, opener?: Element | null, noteId?: string) => {
   if (!on) {
     if (get().review) {
-      set({ review: false });
+      set({ review: false, reviewTarget: null });
       restoreReviewFocus();
     }
     return;
   }
-  if (!get().review) {
+  const opening = !get().review;
+  if (opening) {
     const active = opener ?? (typeof document !== "undefined" ? document.activeElement : null);
     reviewReturnEl =
       active instanceof HTMLElement &&
@@ -1028,18 +1099,66 @@ export const setReview = (on: boolean, opener?: Element | null, noteId?: string)
   const pickId = keep ? reviewPick : (targetList[0]?.n.id ?? null);
   set({ review: true, reviewTab: tab, reviewPick: pickId });
   const first = pickId ? get().notes.find((x) => x.id === pickId) : undefined;
-  if (first) goToNote(first); // the picture opens on the note the room opens on
+  if (first) goToNote(first, opening); // the picture opens on the note the room opens on
   if (pickId) focusReviewRow(pickId);
 };
 // The Review room opened on one note, in its own tab
 export const reviewNote = (n: Note, opener?: Element | null) => {
   const st = noteState(n);
   set({
+    reviewTarget: n.id,
     reviewPick: n.id,
     reviewTab: st === "check" && n.fixes?.at(-1)?.ask ? "asking" : st,
   });
   setReview(true, opener, n.id);
 };
+export const copyNoteLink = async (note: Note) => {
+  const url = new URL(location.pathname, location.origin);
+  url.hash = new URLSearchParams({ note: note.id }).toString();
+  try {
+    await navigator.clipboard.writeText(url.href);
+    say("Note link copied");
+  } catch {
+    say("Could not copy the note link");
+  }
+};
+
+export const followNoteLinks = () => {
+  const open = () => {
+    const url = new URL(location.href);
+    const params = new URLSearchParams(url.hash.slice(1));
+    const id = params.get("note");
+    if (id === null) return;
+    params.delete("note");
+    url.hash = params.toString();
+    history.replaceState(history.state, "", url);
+    const note = get().notes.find((n) => n.id === id);
+    if (!note) {
+      say("This note is no longer available in this film");
+      return;
+    }
+    if (!get().compose && !S.playing) {
+      reviewNote(note);
+      return;
+    }
+    const notices = activityNotice();
+    const toastId = notices.add({
+      title: "Linked note ready to open",
+      timeout: 8000,
+      actionProps: {
+        children: "Open Review",
+        onClick: () => {
+          notices.close(toastId);
+          const current = get().notes.find((n) => n.id === id);
+          if (current) reviewNote(current);
+        },
+      },
+    });
+  };
+  addEventListener("hashchange", open);
+  open();
+};
+
 export const copyAll = () => {
   navigator.clipboard?.writeText(
     openNotes()

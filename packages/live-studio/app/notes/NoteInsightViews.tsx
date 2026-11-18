@@ -525,35 +525,30 @@ function CalendarDayCell({
               key: "check",
               n: breakdown.check,
               label: "To check",
-              dot: "bg-warn",
               cls: "text-warn-text",
             },
             breakdown.asking > 0 && {
               key: "asking",
               n: breakdown.asking,
               label: "AI asks",
-              dot: "bg-ai",
               cls: "text-ai-text",
             },
             breakdown.open > 0 && {
               key: "open",
               n: breakdown.open,
               label: "To fix",
-              dot: "bg-primary",
               cls: "text-primary-text",
             },
             breakdown.done > 0 && {
               key: "done",
               n: breakdown.done,
               label: "Done",
-              dot: "bg-ok",
               cls: "text-ok-text",
             },
           ].filter(Boolean) as {
-            key: string;
+            key: "check" | "asking" | "open" | "done";
             n: number;
             label: string;
-            dot: string;
             cls: string;
           }[];
           const compactNarrow = dots.length > 2 || dots.some((d) => d.n >= 10);
@@ -568,10 +563,11 @@ function CalendarDayCell({
                   <div className="flex w-full items-center justify-between gap-1 font-mono text-xs leading-tight tabular-nums @[380px]:hidden">
                     <span className="inline-flex items-center gap-0.5">
                       {dots.map((d) => (
-                        <span
+                        <NoteStatusGlyph
                           key={d.key}
-                          aria-hidden
-                          className={cn("size-1.5 rounded-full", d.dot)}
+                          state={d.key === "asking" ? "check" : d.key}
+                          asking={d.key === "asking"}
+                          className="size-2.5"
                         />
                       ))}
                     </span>
@@ -590,7 +586,11 @@ function CalendarDayCell({
                       className={cn("inline-flex items-center gap-0.5 font-semibold", d.cls)}
                       title={d.label}
                     >
-                      <span aria-hidden className={cn("size-1.5 rounded-full", d.dot)} />
+                      <NoteStatusGlyph
+                        state={d.key === "asking" ? "check" : d.key}
+                        asking={d.key === "asking"}
+                        className="size-2.5"
+                      />
                       {d.n}
                     </span>
                   ))}
@@ -753,7 +753,7 @@ export function NoteCalendarView({ items }: { items: readonly PlacedWithState[] 
             <div className="flex-none">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-                  <h3 className="text-foreground text-base font-semibold text-balance tabular-nums">
+                  <h3 className="text-foreground text-base leading-tight font-semibold text-balance tabular-nums">
                     {monthLabel}
                   </h3>
                   {undatedCount > 0 && (
@@ -827,7 +827,7 @@ export function NoteCalendarView({ items }: { items: readonly PlacedWithState[] 
 
             <div className="mt-2.5">
               <div className="mb-1.5 flex flex-none items-center justify-between">
-                <h3 className="text-foreground flex items-center text-base font-semibold text-balance tabular-nums">
+                <h3 className="text-foreground flex items-center text-base leading-tight font-semibold text-balance tabular-nums">
                   <CalendarDays aria-hidden className="text-label me-1.5 inline size-3.5" />
                   {formatDayKey(activeKey)} ({activeCell?.items.length ?? 0})
                 </h3>
@@ -925,7 +925,7 @@ function FeedCard({
                 alt={`Frame at ${stamp(t)}`}
                 onError={() => setFailedThumb(media.thumb)}
                 className={cn(
-                  "block size-full object-contain transition-opacity duration-150 motion-reduce:transition-none",
+                  "note-image-outline block size-full object-contain transition-opacity duration-150 motion-reduce:transition-none",
                   state === "done" && "opacity-75 group-hover/card:opacity-100",
                 )}
               />
@@ -939,7 +939,7 @@ function FeedCard({
               <img
                 src={media.crop}
                 alt={`Pin: ${n.pin.what}`}
-                className="border-primary/80 bg-backdrop pointer-events-none absolute bottom-2 left-2 size-9 rounded-md border object-cover shadow-md"
+                className="border-primary/80 bg-backdrop pointer-events-none absolute bottom-2 left-2 size-9 rounded-md border object-cover shadow-md note-image-outline"
               />
             )}
           </button>
@@ -1246,6 +1246,41 @@ export function NoteChartView({
   const circumference = 2 * Math.PI * 39;
   const focusCircumference = 2 * Math.PI * 47.5;
 
+  const kpis = [
+    {
+      id: "status:check",
+      label: "To check",
+      count: readyCheckCount,
+      dot: "bg-warn",
+      text: "text-warn-text",
+      selected: "ring-warn/70 z-10 ring-1 ring-inset",
+    },
+    {
+      id: "status:asking",
+      label: "AI asks",
+      count: stats.asks,
+      dot: "bg-ai",
+      text: "text-ai-text",
+      selected: "ring-ai/70 z-10 ring-1 ring-inset",
+    },
+    {
+      id: "status:open",
+      label: "To fix",
+      count: stats.counts.open,
+      dot: "bg-primary",
+      text: "text-primary-text",
+      selected: "ring-primary/70 z-10 ring-1 ring-inset",
+    },
+    {
+      id: "status:done",
+      label: "Done",
+      count: stats.counts.done,
+      dot: "bg-ok",
+      text: "text-ok-text",
+      selected: "ring-ok/65 z-10 ring-1 ring-inset",
+    },
+  ] as const;
+
   const pickKpiStatus = (s: "status:check" | "status:asking" | "status:open" | "status:done") => {
     setMetric("status");
     setDrillKey((prev) => (metric === "status" && prev === s ? null : s));
@@ -1262,84 +1297,30 @@ export function NoteChartView({
           stats.asks > 0 ? "grid-cols-2 @[340px]:grid-cols-4" : "grid-cols-3",
         )}
       >
-        <button
-          type="button"
-          aria-pressed={metric === "status" && drillKey === "status:check"}
-          onClick={() => pickKpiStatus("status:check")}
-          className={cn(
-            "focus-visible:ring-ring bg-backdrop/90 hover:bg-surface-subtle flex cursor-pointer flex-col items-start px-2.5 py-2 text-start transition-colors outline-none focus-visible:z-10 focus-visible:ring-2 motion-reduce:transition-none",
-            metric === "status" &&
-              drillKey === "status:check" &&
-              "ring-warn/70 z-10 ring-1 ring-inset",
-          )}
-        >
-          <div className="text-label flex items-center gap-1 text-xs font-medium">
-            <span aria-hidden className="bg-warn size-1.5 rounded-full" />
-            To check
-          </div>
-          <div className="text-warn-text mt-0.5 font-mono text-base font-semibold tabular-nums">
-            {readyCheckCount}
-          </div>
-        </button>
-        {stats.asks > 0 && (
-          <button
-            type="button"
-            aria-pressed={metric === "status" && drillKey === "status:asking"}
-            onClick={() => pickKpiStatus("status:asking")}
-            className={cn(
-              "focus-visible:ring-ring bg-backdrop/90 hover:bg-surface-subtle flex cursor-pointer flex-col items-start px-2.5 py-2 text-start transition-colors outline-none focus-visible:z-10 focus-visible:ring-2 motion-reduce:transition-none",
-              metric === "status" &&
-                drillKey === "status:asking" &&
-                "ring-ai/70 z-10 ring-1 ring-inset",
-            )}
-          >
-            <div className="text-label flex items-center gap-1 text-xs font-medium">
-              <span aria-hidden className="bg-ai size-1.5 rounded-full" />
-              AI asks
-            </div>
-            <div className="text-ai-text mt-0.5 font-mono text-base font-semibold tabular-nums">
-              {stats.asks}
-            </div>
-          </button>
-        )}
-        <button
-          type="button"
-          aria-pressed={metric === "status" && drillKey === "status:open"}
-          onClick={() => pickKpiStatus("status:open")}
-          className={cn(
-            "focus-visible:ring-ring bg-backdrop/90 hover:bg-surface-subtle flex cursor-pointer flex-col items-start px-2.5 py-2 text-start transition-colors outline-none focus-visible:z-10 focus-visible:ring-2 motion-reduce:transition-none",
-            metric === "status" &&
-              drillKey === "status:open" &&
-              "ring-primary/70 z-10 ring-1 ring-inset",
-          )}
-        >
-          <div className="text-label flex items-center gap-1 text-xs font-medium">
-            <span aria-hidden className="bg-primary size-1.5 rounded-full" />
-            To fix
-          </div>
-          <div className="text-primary-text mt-0.5 font-mono text-base font-semibold tabular-nums">
-            {stats.counts.open}
-          </div>
-        </button>
-        <button
-          type="button"
-          aria-pressed={metric === "status" && drillKey === "status:done"}
-          onClick={() => pickKpiStatus("status:done")}
-          className={cn(
-            "focus-visible:ring-ring bg-backdrop/90 hover:bg-surface-subtle flex cursor-pointer flex-col items-start px-2.5 py-2 text-start transition-colors outline-none focus-visible:z-10 focus-visible:ring-2 motion-reduce:transition-none",
-            metric === "status" &&
-              drillKey === "status:done" &&
-              "ring-ok/65 z-10 ring-1 ring-inset",
-          )}
-        >
-          <div className="text-label flex items-center gap-1 text-xs font-medium">
-            <span aria-hidden className="bg-ok size-1.5 rounded-full" />
-            Done
-          </div>
-          <div className="text-ok-text mt-0.5 font-mono text-base font-semibold tabular-nums">
-            {stats.counts.done}
-          </div>
-        </button>
+        {kpis
+          .filter((kpi) => kpi.id !== "status:asking" || stats.asks > 0)
+          .map((kpi) => (
+            <button
+              key={kpi.id}
+              type="button"
+              aria-pressed={metric === "status" && drillKey === kpi.id}
+              onClick={() => pickKpiStatus(kpi.id)}
+              className={cn(
+                "focus-visible:ring-ring bg-backdrop/90 hover:bg-surface-subtle flex cursor-pointer flex-col items-start px-2.5 py-2 text-start transition-colors outline-none focus-visible:z-10 focus-visible:ring-2 motion-reduce:transition-none",
+                metric === "status" && drillKey === kpi.id && kpi.selected,
+              )}
+            >
+              <div className="text-label flex items-center gap-1 text-xs font-medium">
+                <span aria-hidden className={cn(kpi.dot, "size-1.5 rounded-full")} />
+                {kpi.label}
+              </div>
+              <div
+                className={cn(kpi.text, "mt-0.5 font-mono text-base font-semibold tabular-nums")}
+              >
+                {kpi.count}
+              </div>
+            </button>
+          ))}
         <div className="bg-backdrop/95 col-span-full flex items-center gap-3 px-2.5 py-1.5">
           <div className="text-label shrink-0 text-xs font-medium">Approved</div>
           <div aria-hidden className="bg-hairline h-1.5 flex-1 overflow-hidden rounded-full">
@@ -1562,7 +1543,7 @@ export function NoteChartView({
         <Card size="sm" className="shrink-0">
           <CardContent>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-balance tabular-nums">
+              <h3 className="text-base leading-tight font-semibold text-balance tabular-nums">
                 {selected.label}
                 {selected.subtitle ? ` · ${selected.subtitle}` : ""} ({selected.items.length})
               </h3>

@@ -11,7 +11,7 @@ export const STATES = ["open", "check", "done"];
 export const noteState = (n) => (STATES.includes(n.state) ? n.state : n.done ? "done" : "open");
 // a line of notes.jsonl that is a note: #N counts only these, so every CLI numbers them alike
 export const wholeNote = (n) =>
-  !!n && "id" in n && "t" in n && "text" in n && "shot" in n && "time" in n;
+  n !== null && typeof n === "object" && "id" in n && "t" in n && "text" in n && "shot" in n && "time" in n;
 
 const to = (n, state) => {
   n.state = state;

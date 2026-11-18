@@ -19,8 +19,10 @@ export function useHorizontalScrollEdges(
     const el = ref.current;
     if (!el) return;
     const sync = () => {
-      const canLeft = el.scrollLeft > EDGE_THRESHOLD_PX;
-      const canRight = el.scrollLeft + el.clientWidth < el.scrollWidth - EDGE_THRESHOLD_PX;
+      const max = el.scrollWidth - el.clientWidth;
+      const position = el.scrollLeft + (getComputedStyle(el).direction === "rtl" ? max : 0);
+      const canLeft = position > EDGE_THRESHOLD_PX;
+      const canRight = position < max - EDGE_THRESHOLD_PX;
       setEdges((prev) =>
         prev.canLeft === canLeft && prev.canRight === canRight ? prev : { canLeft, canRight },
       );

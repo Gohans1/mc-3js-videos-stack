@@ -48,14 +48,16 @@ const buttonVariants = cva(
           "bg-backdrop text-foreground/85 hover:bg-raised-3 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint aria-pressed:hover:text-primary-text aria-pressed:ring-primary rounded-md aria-pressed:ring-1", // CapCut's 36px audio cover tile
         approve:
           "border-warn/45 bg-warn/16 text-warn-text not-aria-disabled:hover:border-warn/75 not-aria-disabled:hover:bg-warn/25 disabled:text-muted-foreground aria-disabled:text-muted-foreground disabled:border-hairline disabled:bg-surface-subtle aria-disabled:border-hairline aria-disabled:bg-surface-subtle font-semibold disabled:opacity-100 aria-disabled:opacity-100", // refined Linear obsidian-gold approval CTA
-        ai: "border-ai/45 bg-ai/16 text-ai-text not-aria-disabled:hover:border-ai/75 not-aria-disabled:hover:bg-ai/25 disabled:text-muted-foreground aria-disabled:text-muted-foreground disabled:border-hairline disabled:bg-surface-subtle aria-disabled:border-hairline aria-disabled:bg-surface-subtle font-semibold disabled:opacity-100 aria-disabled:opacity-100", // refined Linear lavender answer CTA
+        ai: "border-ai/45 bg-ai/16 text-ai-text not-aria-disabled:hover:border-ai/75 not-aria-disabled:hover:bg-ai/25 not-aria-disabled:hover:text-foreground disabled:text-muted-foreground aria-disabled:text-muted-foreground disabled:border-hairline disabled:bg-surface-subtle aria-disabled:border-hairline aria-disabled:bg-surface-subtle font-semibold disabled:opacity-100 aria-disabled:opacity-100", // refined Linear lavender answer CTA
         warn: "border-warn/45 bg-warn-bg/70 text-warn-text hover:border-warn hover:bg-warn-bg border",
         choice:
-          "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint", // one of a list, picked
+          "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:border-primary aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint", // one of a list, picked
       },
       size: {
         comfortable:
           "h-9 gap-1.5 px-2 text-sm leading-normal pointer-coarse:h-11 [&_svg:not([class*='size-'])]:size-4",
+        wrapping:
+          "min-h-9 gap-1.5 px-2 py-1.5 text-sm leading-normal whitespace-normal pointer-coarse:min-h-11 [&_svg:not([class*='size-'])]:size-4",
         default:
           "h-7 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pe-1.5 has-data-[icon=inline-start]:ps-1.5 pointer-coarse:h-10 [&_svg:not([class*='size-'])]:size-3.5",
         tab: "text-ui/relaxed h-7 gap-1 px-2 has-data-[icon=inline-end]:pe-1.5 has-data-[icon=inline-start]:ps-1.5 pointer-coarse:h-10 [&_svg:not([class*='size-'])]:size-3.5",

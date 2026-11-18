@@ -1,7 +1,7 @@
 // scripts/review/sheet.py: a cut up close names the shots either side, and the rows that place it
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -17,14 +17,8 @@ test("sheet cut N says which shots meet there and the transition between them; a
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "renders"));
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
-  media(join(dir, "renders/draft_video.mp4"), [
-    "-f",
-    "lavfi",
-    "-i",
-    "testsrc2=s=320x180:r=30:d=3",
-    "-pix_fmt",
-    "yuv420p",
-  ]);
+  writeFileSync(join(dir, "src/scene.ts"), "");
+  writeFileSync(join(dir, "src/edit.json"), '{"end":3}');
   writeFileSync(join(dir, "renders/cuts.json"), "[1, 2]");
   writeFileSync(
     join(dir, "package.json"),
@@ -38,6 +32,14 @@ test("sheet cut N says which shots meet there and the transition between them; a
       { t: 2, name: "the hall", transition: { fx: "dissolve", len: 0.5 } },
     ]),
   );
+  media(join(dir, "renders/draft_video.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=s=320x180:r=30:d=3",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
   const sheet = (...args) =>
     spawnSync("python", [SHEET, ...args], { cwd: dir, encoding: "utf8", timeout: 60000 });
 
@@ -79,6 +81,7 @@ const film = (t, cuts, video = "renders/draft_video.mp4") => {
     "yuv420p",
   ]);
   writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify(cuts));
+  utimesSync(join(dir, "renders/cuts.json"), 1000, 1000);
   const sheet = (...args) =>
     spawnSync("python", [SHEET, ...args], { cwd: dir, encoding: "utf8", timeout: 60000 });
   return Object.assign(sheet, { dir });
@@ -97,6 +100,24 @@ test("sheet cut N near the film's start shows the frames there are instead of re
   const r = sheet("renders/draft_video.mp4", "cut", "0");
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /cut 0 at 0\.10 s/);
+});
+
+test("cut uses current film context; stale and external files keep their frame commands", (t) => {
+  const sheet = film(t, [1], "renders/reference.mp4");
+  const foreign = sheet("renders/reference.mp4", "cut", "0");
+  assert.equal(foreign.status, 2);
+  assert.match(foreign.stderr, /overview or frames TIMES/);
+  copyFileSync(
+    join(sheet.dir, "renders/reference.mp4"),
+    join(sheet.dir, "renders/draft_video.mp4"),
+  );
+  mkdirSync(join(sheet.dir, "src"));
+  writeFileSync(join(sheet.dir, "src/scene.ts"), "");
+  utimesSync(join(sheet.dir, "renders/draft_video.mp4"), 1000, 1000);
+  const stale = sheet("renders/draft_video.mp4", "shots");
+  assert.equal(stale.status, 2);
+  assert.match(stale.stderr, /older than src\/scene\.ts/);
+  assert.equal(sheet("renders/draft_video.mp4", "frames", "1").status, 0);
 });
 
 test("sheet cut on a film of one shot says so instead of naming cuts 0--1", (t) => {
@@ -175,16 +196,16 @@ test("sheet shots counts the shots it lays out", (t) => {
 });
 
 test("a start between two thousandths still holds the frames cut lays out next to it", (t) => {
-  const sheet = film(t, [10.1]);
-  const r = spawnSync("python", [SHEET, "renders/draft_video.mp4", "cut", "0"], {
+  const video = "renders/span_10.0144-13.0144.mp4";
+  const sheet = film(t, [10.1], video);
+  const r = spawnSync("python", [SHEET, video, "cut", "0"], {
     cwd: sheet.dir,
     encoding: "utf8",
     timeout: 60000,
-    env: { ...process.env, START: "10.0144" },
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   // 0.25 and 0.15 s before the cut both fall before the video: its first frame, once
-  assert.match(r.stdout, /10\.014s, 10\.05s, 10\.15s, 10\.25s, 10\.45s/);
+  assert.match(r.stdout, /10\.0144s, 10\.05s, 10\.15s, 10\.25s, 10\.45s/);
 });
 
 test("only a render's chunks folder makes a chunk: my_chunks/c02.mp4 starts at 0", (t) => {
@@ -227,7 +248,17 @@ test("a cuts.json of anything but a list of seconds is refused, never read as cu
 
 test("the last line says what to do next, a cut's row lookup included; START takes heard seconds", (t) => {
   const sheet = film(t, [1, 2]);
-  const cut = sheet("renders/draft_video.mp4", "cut", "1");
+  mkdirSync(join(sheet.dir, "src"));
+  writeFileSync(join(sheet.dir, "src/scene.ts"), "export const DURATION = 3;");
+  utimesSync(join(sheet.dir, "src/scene.ts"), 1000, 1000);
+  let cut = sheet("renders/draft_video.mp4", "cut", "1");
+  assert.equal(cut.status, 0, cut.stdout + cut.stderr);
+  assert.match(cut.stdout, /AT=2 LIST=1 bun run render stills/);
+  assert.doesNotMatch(cut.stdout, /bun run at 2/);
+  writeFileSync(join(sheet.dir, "src/edit.json"), '{"end":3}');
+  utimesSync(join(sheet.dir, "src/scene.ts"), 1000, 1000);
+  utimesSync(join(sheet.dir, "src/edit.json"), 1000, 1000);
+  cut = sheet("renders/draft_video.mp4", "cut", "1");
   assert.match(
     cut.stdout.trim().split(/\r?\n/).at(-1),
     /^next: open it to look; bun run at 2 names every row that places it/,
@@ -241,5 +272,41 @@ test("the last line says what to do next, a cut's row lookup included; START tak
     env: { ...process.env, START: "1:00" },
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /film seconds from 60 s on \(START\)/);
+  assert.match(r.stdout, /manual seconds from 60 s on \(START\)/);
+});
+
+test("sheet cut tolerates broken package.json or shotsTimeline metadata instead of crashing", (t) => {
+  const sheet = film(t, [1, 2]);
+  writeFileSync(join(sheet.dir, "package.json"), "{not-json");
+  utimesSync(join(sheet.dir, "package.json"), 1000, 1000);
+  const brokenPkg = sheet("renders/draft_video.mp4", "cut", "1");
+  assert.equal(brokenPkg.status, 0, brokenPkg.stdout + brokenPkg.stderr);
+  assert.doesNotMatch(brokenPkg.stderr, /Traceback/);
+
+  mkdirSync(join(sheet.dir, "src/timeline"), { recursive: true });
+  writeFileSync(
+    join(sheet.dir, "package.json"),
+    JSON.stringify({ "live-studio": { shotsTimeline: "src/timeline/shots.json" } }),
+  );
+  writeFileSync(
+    join(sheet.dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      { t: 0, name: "a" },
+      { t: 1, name: "b" },
+      { t: 2, name: "c", transition: { fx: "wipe", len: null } },
+    ]),
+  );
+  utimesSync(join(sheet.dir, "package.json"), 1000, 1000);
+  utimesSync(join(sheet.dir, "src/timeline/shots.json"), 1000, 1000);
+  const nullLen = sheet("renders/draft_video.mp4", "cut", "1");
+  assert.equal(nullLen.status, 0, nullLen.stdout + nullLen.stderr);
+  assert.match(nullLen.stdout, /wipe 0 s/);
+});
+
+test("bare bun run sheet without renders/still_*.jpg exits 2 with a clear hint", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sheet-no-stills-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = spawnSync("python", [SHEET], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /no renders\/still_\*\.jpg/);
 });

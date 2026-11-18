@@ -10,8 +10,15 @@ import tempfile
 
 
 def filters(settings):
-    rate = settings.get("rate", 1)
-    duration, start = settings["duration"], settings.get("start", 0)
+    if "duration" not in settings or settings["duration"] is None:
+        raise ValueError("Missing required duration in audio process settings")
+    rate = settings.get("rate")
+    rate = 1 if rate is None else float(rate)
+    if not math.isfinite(rate) or rate <= 0:
+        raise ValueError(f"Invalid playback rate: {rate!r}")
+    duration, start = float(settings["duration"]), float(settings.get("start") or 0)
+    if not math.isfinite(duration) or duration < 0 or not math.isfinite(start) or start < 0:
+        raise ValueError(f"Invalid trim bounds: start={start!r}, duration={duration!r}")
     chain = ["aformat=sample_fmts=flt:sample_rates=48000:channel_layouts=stereo"]
     if settings.get("dialogue"):
         # Process before trimming so a split retains the original compressor envelope and limiter delay.
@@ -30,24 +37,32 @@ def loop_xfade(source, output, seconds):
 
     probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=channels,sample_rate",
                             "-of", "json", str(source)], check=True, capture_output=True, text=True, timeout=60)
-    stream = json.loads(probe.stdout)["streams"][0]
+    streams = json.loads(probe.stdout).get("streams") or []
+    if not streams:
+        raise RuntimeError(f"No audio stream found in {source}")
+    stream = streams[0]
     ch, sr = int(stream["channels"]), int(stream["sample_rate"])
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(source), "-f", "f32le", "-acodec", "pcm_f32le", "-"],
+    raw = subprocess.run(["ffmpeg", "-xerror", "-v", "error", "-i", str(source), "-f", "f32le", "-acodec", "pcm_f32le", "-"],
                          check=True, capture_output=True, timeout=120).stdout
     x = np.frombuffer(raw, dtype=np.float32).reshape(-1, ch)
     d, need = len(x), math.ceil(seconds * sr)
     if need <= d:
         return False
+    if d == 0:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"anullsrc=r={sr}:cl={'mono' if ch == 1 else 'stereo'}",
+                        "-af", f"atrim=end_sample={need}", "-c:a", "pcm_f32le", str(output)], check=True, timeout=120)
+        return True
     xf = min(round(1.5 * sr), d // 4)
     p = d - xf
     need += 1
-    ramp = np.arange(xf) / xf
+    ramp = np.arange(xf) / xf if xf > 0 else np.empty(0, dtype=np.float64)
     out = np.zeros((need, ch), dtype=np.float64)
     for k in range(need // p + 1):
         w = np.ones(d)
-        if k > 0:
-            w[:xf] *= np.sin(np.pi / 2 * ramp)
-        w[p:] *= np.cos(np.pi / 2 * ramp)
+        if xf > 0:
+            if k > 0:
+                w[:xf] *= np.sin(np.pi / 2 * ramp)
+            w[p:] *= np.cos(np.pi / 2 * ramp)
         at = k * p
         n = min(d, need - at)
         if n > 0:
@@ -87,39 +102,48 @@ def voice_filters(preset):
 
 def retime_timeline(source, output, timeline, folder):
     rate = 48000
-    plays = [s for s in timeline if s["kind"] == "play" and not s.get("blank")]
-    total = round(timeline[-1]["to"] * rate)
-    if not plays:
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-af", f"atrim=end_sample={total}", "-c:a", "pcm_f32le", str(output)], check=True, timeout=120)
+    plays = [s for s in timeline if s["kind"] == "play" and not s.get("blank") and s["sourceTo"] > s["sourceFrom"] and s["to"] > s["from"]]
+    total = round(timeline[-1]["to"] * rate) if timeline else 0
+    if not plays or total <= 0:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-af", f"atrim=end_sample={max(0, total)}", "-c:a", "pcm_f32le", str(output)], check=True, timeout=120)
         return
     cut, stretched, mapping = (Path(folder) / n for n in ("sequence-cut.wav", "sequence-timed.wav", "sequence-map.txt"))
     ranges = []
     for s in plays:
         a, b = round(s["sourceFrom"] * rate), round(s["sourceTo"] * rate)
+        if b <= a:
+            continue
         if ranges and ranges[-1][1] == a:
             ranges[-1][1] = b
         else:
             ranges.append([a, b])
+    if not ranges:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-af", f"atrim=end_sample={total}", "-c:a", "pcm_f32le", str(output)], check=True, timeout=120)
+        return
     graph = [f"[0:a]apad=whole_len={max(b for _, b in ranges)},asplit={len(ranges)}" + "".join(f"[in{i}]" for i in range(len(ranges)))]
     for i, (a, b) in enumerate(ranges):
         graph.append(f"[in{i}]atrim=start_sample={a}:end_sample={b},asetpts=PTS-STARTPTS[part{i}]")
     points, input_at, output_at = {0: 0}, 0, 0
     for s in plays:
         a, b = round(s["sourceFrom"] * rate), round(s["sourceTo"] * rate)
-        length = round(s["to"] * rate) - round(s["from"] * rate)
+        if b <= a:
+            continue
+        length = max(0, round(s["to"] * rate) - round(s["from"] * rate))
         span = s["sourceTo"] - s["sourceFrom"]
         slope = (s["rate1"] - s["rate0"]) / span
         def elapsed(x):
             return x / s["rate0"] if abs(slope) < 1e-10 else math.log1p(slope * x / s["rate0"]) / slope
+        total_elapsed = elapsed(span)
         steps = 1 if s["rate0"] == s["rate1"] else max(1, math.ceil(span * 30))
         for j in range(steps + 1):
             u = j / steps
-            points[input_at + round((b - a) * u)] = output_at + round(length * elapsed(span * u) / elapsed(span))
+            frac = u if total_elapsed <= 0 else elapsed(span * u) / total_elapsed
+            points[input_at + round((b - a) * u)] = output_at + round(length * frac)
         input_at += b - a
         output_at += length
     graph.append("".join(f"[part{i}]" for i in range(len(ranges))) + f"concat=n={len(ranges)}:v=0:a=1[cut]")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(source), "-filter_complex", ";".join(graph), "-map", "[cut]", "-c:a", "pcm_f32le", str(cut)], check=True, timeout=120)
-    if any(a != b for a, b in points.items()):
+    subprocess.run(["ffmpeg", "-xerror", "-v", "error", "-y", "-i", str(source), "-filter_complex", ";".join(graph), "-map", "[cut]", "-c:a", "pcm_f32le", str(cut)], check=True, timeout=120)
+    if output_at > 0 and input_at > 0 and any(a != b for a, b in points.items()):
         # R3 4.0.0 divides by zero for a 0 -> 0 entry (upstream issue #124); endpoints are defined by -D.
         # Its updateRatioFromMap advances one pending key per process block; sub-block keys accumulate audible timing drift.
         frames = sorted(points)
@@ -129,19 +153,28 @@ def retime_timeline(source, output, timeline, folder):
             left, right = frames[i:i + 2]
             b = round(points[left] + (points[right] - points[left]) * (a - left) / (right - left))
             sampled.append(f"{a} {b}\n")
-        mapping.write_text("".join(sampled), encoding="ascii")
-        stretch_with(rubberband(), "-q", "-3", "--centre-focus", "-D", str(output_at / rate), "-M", str(mapping), str(cut), str(stretched))
+        if sampled:
+            mapping.write_text("".join(sampled), encoding="ascii")
+            stretch_with(rubberband(), "-q", "-3", "--centre-focus", "-D", str(output_at / rate), "-M", str(mapping), str(cut), str(stretched))
+        else:
+            stretch_with(rubberband(), "-q", "-3", "--centre-focus", "-D", str(output_at / rate), str(cut), str(stretched))
     else:
         stretched = cut
     runs = []
     for s in timeline:
-        length = round(s["to"] * rate) - round(s["from"] * rate)
-        kind = "freeze" if s.get("blank") else s["kind"]
+        length = max(0, round(s["to"] * rate) - round(s["from"] * rate))
+        if length == 0:
+            continue
+        is_play = s["kind"] == "play" and not s.get("blank") and s["sourceTo"] > s["sourceFrom"]
+        kind = "play" if is_play else "freeze"
         if runs and runs[-1][0] == kind:
             runs[-1][1] += length
         else:
             runs.append([kind, length])
     play_count = sum(kind == "play" for kind, _ in runs)
+    if not runs or play_count == 0:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-af", f"atrim=end_sample={total}", "-c:a", "pcm_f32le", str(output)], check=True, timeout=120)
+        return
     graph = [f"[0:a]apad=whole_len={output_at},asplit={play_count}" + "".join(f"[in{i}]" for i in range(play_count))]
     cursor, play_i = 0, 0
     for i, (kind, length) in enumerate(runs):
@@ -157,24 +190,33 @@ def retime_timeline(source, output, timeline, folder):
 
 def render(source, output, settings):
     # FFmpeg's rubberband filter uses realtime R2 without offline alignment; use the upstream R3 CLI for exact clip duration.
-    rate, pitch = settings.get("rate", 1), settings.get("pitch", 0)
+    raw_rate, raw_pitch = settings.get("rate"), settings.get("pitch")
+    rate = 1 if raw_rate is None else float(raw_rate)
+    pitch = 0 if raw_pitch is None else float(raw_pitch)
+    if not math.isfinite(rate) or rate <= 0:
+        raise ValueError(f"Invalid playback rate: {rate!r}")
+    if not math.isfinite(pitch):
+        raise ValueError(f"Invalid pitch: {pitch!r}")
     shift = 2 ** (pitch / 12) * (rate if settings.get("changePitch") else 1)
     stretch = rate != 1 or shift != 1
     executable = rubberband() if stretch else None
-    voice = voice_filters(settings.get("voiceFilter", "none"))
-    strength = settings.get("voiceStrength", 100) / 100
+    voice = voice_filters(settings.get("voiceFilter") or "none")
+    raw_strength = settings.get("voiceStrength")
+    strength = (100 if raw_strength is None else float(raw_strength)) / 100
     effect = bool(voice and strength > 0)
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    chain = filters(settings)
     with tempfile.TemporaryDirectory(prefix="studio-audio-process-") as folder:
         if settings.get("loop"):
             looped = Path(folder) / "looped.wav"
-            if loop_xfade(source, looped, settings.get("start", 0) + settings["duration"] * rate):
+            if loop_xfade(source, looped, float(settings.get("start") or 0) + float(settings["duration"]) * rate):
                 source = looped
         destination = output
         if settings.get("timeline"):
             output = Path(folder) / "source-processed.wav"
         trimmed = Path(folder) / "trimmed.wav"
         timed = Path(folder) / "timed.wav" if effect else output
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(source), "-af", ",".join(filters(settings)), "-c:a", "pcm_f32le", str(trimmed if stretch else timed)], check=True, timeout=120)
+        subprocess.run(["ffmpeg", "-xerror", "-v", "error", "-y", "-i", str(source), "-af", ",".join(chain), "-c:a", "pcm_f32le", str(trimmed if stretch else timed)], check=True, timeout=120)
         if stretch:
             stretch_with(executable, "-q", "-3", "--centre-focus", "-T", str(rate), "-f", str(shift), str(trimmed), str(timed))
         if effect:
@@ -185,4 +227,23 @@ def render(source, output, settings):
 
 
 if __name__ == "__main__":
-    render(sys.argv[1], sys.argv[2], json.load(sys.stdin))
+    if len(sys.argv) != 3:
+        print("usage: python process.py <source> <output> < settings.json", file=sys.stderr)
+        raise SystemExit(2)
+    try:
+        settings = json.load(sys.stdin)
+    except json.JSONDecodeError as e:
+        print(f"process.py: invalid JSON on stdin (line {e.lineno}, col {e.colno})", file=sys.stderr)
+        raise SystemExit(2)
+    if not isinstance(settings, dict):
+        print("process.py: settings JSON must be an object", file=sys.stderr)
+        raise SystemExit(2)
+    if not Path(sys.argv[1]).is_file():
+        print(f"process.py: missing source file {sys.argv[1]}", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        render(sys.argv[1], sys.argv[2], settings)
+    except (ValueError, RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        msg = (e.stderr or e.stdout or str(e)).strip().splitlines()[-1] if isinstance(e, subprocess.CalledProcessError) and (e.stderr or e.stdout) else str(e)
+        print(f"process.py: {msg}", file=sys.stderr)
+        raise SystemExit(1)

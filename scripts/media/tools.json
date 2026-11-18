@@ -1,12 +1,20 @@
 {
+  "qc": {
+    "name": "qc-skill",
+    "version": "1.4.0",
+    "summary": "Opt-in loop seams, subtitle/word timing, alpha/key-fill and cross-artifact delivery measurements.",
+    "packages": [],
+    "runtime": ["python", "ffmpeg", "ffprobe"],
+    "worker": "scripts/media/qc.py",
+    "discoveryFlags": ["--contract"],
+    "codeLicense": "MIT",
+    "source": "https://github.com/kajisho5/qc-skill/tree/v1.4.0"
+  },
   "ocr": {
     "name": "RapidOCR",
     "summary": "Read text boxes from images or timestamped video frames on CPU.",
     "python": "3.12",
-    "packages": [
-      "rapidocr==3.10.0",
-      "onnxruntime==1.32.0"
-    ],
+    "packages": ["rapidocr==3.10.0", "onnxruntime==1.32.0"],
     "worker": "scripts/media/ocr.py",
     "codeLicense": "Apache-2.0",
     "modelLicense": "Apache-2.0 for models in upstream registry; resources have separate terms",
@@ -18,9 +26,7 @@
     "summary": "Enhance noisy speech locally at 48 kHz, preserving the source.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "denoise"
-    ],
+    "arguments": ["denoise"],
     "codeLicense": "MIT OR Apache-2.0",
     "modelLicense": "MIT OR Apache-2.0",
     "assets": [
@@ -52,9 +58,7 @@
     "summary": "Classify audio with a tiny CPU model; independent AudioSet scores, not onset localization.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "ced"
-    ],
+    "arguments": ["ced"],
     "codeLicense": "MIT",
     "modelLicense": "Apache-2.0; AudioSet labels CC-BY-4.0",
     "assets": [
@@ -82,9 +86,7 @@
     "summary": "Render editable MIDI into offline instrument audio.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "midi"
-    ],
+    "arguments": ["midi"],
     "codeLicense": "LGPL-2.1-or-later",
     "modelLicense": "FluidR3 GM MIT; original notices retained",
     "assets": [
@@ -124,9 +126,7 @@
     "summary": "Generate local audio fingerprints for near-duplicate comparison, without network lookup.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "fingerprint"
-    ],
+    "arguments": ["fingerprint"],
     "codeLicense": "LGPL-2.1; build dependencies have separate notices",
     "modelLicense": "No model",
     "assets": [
@@ -147,9 +147,7 @@
     "summary": "Generate local English/other supported voice drafts on CPU; no Vietnamese preset.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "tts"
-    ],
+    "arguments": ["tts"],
     "codeLicense": "Apache-2.0; eSpeak-ng GPL-3.0-or-later, loader MIT",
     "modelLicense": "Kokoro Apache-2.0",
     "assets": [
@@ -195,9 +193,7 @@
     "summary": "Describe audio locally using a small CPU language model.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "caption"
-    ],
+    "arguments": ["caption"],
     "codeLicense": "MIT runtime; Xiaomi Apache-2.0 model code",
     "modelLicense": "Apache-2.0",
     "assets": [
@@ -230,9 +226,7 @@
     "summary": "Describe an image or selected video frame using a small CPU vision model.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "vision"
-    ],
+    "arguments": ["vision"],
     "codeLicense": "MIT",
     "modelLicense": "Apache-2.0",
     "assets": [
@@ -264,19 +258,13 @@
   "beat": {
     "name": "Beat This!",
     "summary": "Find music beats/downbeats on CPU; advisory source-file timestamps.",
-    "packages": [
-      "beat-this==1.1.0",
-      "soundfile==0.13.1"
-    ],
+    "packages": ["beat-this==1.1.0", "soundfile==0.13.1"],
     "source": "https://github.com/CPJKU/beat_this/tree/v1.1.0",
     "codeLicense": "MIT",
     "modelLicense": "MIT",
     "python": "3.12",
     "worker": "scripts/media/sdk.py",
-    "cpuPackages": [
-      "torch==2.8.0+cpu",
-      "torchaudio==2.8.0+cpu"
-    ],
+    "cpuPackages": ["torch==2.8.0+cpu", "torchaudio==2.8.0+cpu"],
     "defaultModel": "models/small0.ckpt",
     "assets": [
       {
@@ -286,33 +274,23 @@
         "sha256": "6074be2c4d490c5f6101fcc374a1ec72ae93456e23bb6019783b849f5dc7d47b"
       }
     ],
-    "arguments": [
-      "beat"
-    ]
+    "arguments": ["beat"]
   },
   "effects": {
     "name": "Pedalboard",
     "summary": "Render a custom native plugin chain with a retained tail.",
-    "packages": [
-      "pedalboard==0.9.26",
-      "soundfile==0.13.1"
-    ],
+    "packages": ["pedalboard==0.9.26", "soundfile==0.13.1"],
     "source": "https://github.com/spotify/pedalboard/tree/v0.9.26",
     "codeLicense": "GPL-3.0",
     "modelLicense": null,
     "python": "3.12",
     "worker": "scripts/media/sdk.py",
-    "arguments": [
-      "effects"
-    ]
+    "arguments": ["effects"]
   },
   "vad": {
     "name": "sherpa-onnx / Silero VAD",
     "summary": "Find speech intervals without transcribing or identifying speakers.",
-    "packages": [
-      "sherpa-onnx==2.0.1",
-      "soundfile==0.14.0"
-    ],
+    "packages": ["sherpa-onnx==2.0.1", "soundfile==0.14.0"],
     "source": "https://github.com/k2-fsa/sherpa-onnx/tree/v2.0.1",
     "codeLicense": "Apache-2.0",
     "modelLicense": "Silero MIT",
@@ -327,9 +305,7 @@
         "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
       }
     ],
-    "arguments": [
-      "vad"
-    ]
+    "arguments": ["vad"]
   },
   "melody": {
     "name": "Basic Pitch",
@@ -345,27 +321,18 @@
     "modelLicense": "Apache-2.0 bundled ICASSP 2022 model",
     "python": "3.10",
     "worker": "scripts/media/sdk.py",
-    "arguments": [
-      "melody"
-    ]
+    "arguments": ["melody"]
   },
   "separate": {
     "name": "Audio Separator / Kim Vocal 2",
     "summary": "Separate local vocals/instrumental stems on CPU; inspect artifacts and model rights.",
-    "packages": [
-      "audio-separator[cpu]==0.48.0",
-      "audioread==3.1.0",
-      "soundfile==0.14.0"
-    ],
+    "packages": ["audio-separator[cpu]==0.48.0", "audioread==3.1.0", "soundfile==0.14.0"],
     "source": "https://github.com/nomadkaraoke/python-audio-separator/tree/v0.48.0",
     "codeLicense": "MIT",
     "modelLicense": "Kimberley Jensen permits commercial use: https://github.com/KimberleyJensen/kmdx-net_music-source-separation/issues/3 ; not inferred from wrapper MIT",
     "python": "3.12",
     "worker": "scripts/media/sdk.py",
-    "cpuPackages": [
-      "torch==2.8.0+cpu",
-      "torchaudio==2.8.0+cpu"
-    ],
+    "cpuPackages": ["torch==2.8.0+cpu", "torchaudio==2.8.0+cpu"],
     "defaultModel": "models/Kim_Vocal_2.onnx",
     "assets": [
       {
@@ -393,27 +360,18 @@
         "sha256": "6a2021b9aa355c10f845b68c73944d47bd9e1fdf37b8a584b14ce8f88b09bb2f"
       }
     ],
-    "arguments": [
-      "separate"
-    ]
+    "arguments": ["separate"]
   },
   "locate": {
     "name": "PE-A-Frame Small / Transformers",
     "summary": "Locate described sounds using raw frame logits; thresholds are not calibrated probabilities.",
-    "packages": [
-      "transformers==5.23.0",
-      "accelerate==1.16.0",
-      "soundfile==0.14.0"
-    ],
+    "packages": ["transformers==5.23.0", "accelerate==1.16.0", "soundfile==0.14.0"],
     "source": "https://huggingface.co/facebook/pe-a-frame-small/tree/e5fc71c1f0be50279f52f292390b589780079e13",
     "codeLicense": "Apache-2.0 (Transformers runtime)",
     "modelLicense": "Apache-2.0",
     "python": "3.12",
     "worker": "scripts/media/sdk.py",
-    "cpuPackages": [
-      "torch==2.8.0+cpu",
-      "torchaudio==2.8.0+cpu"
-    ],
+    "cpuPackages": ["torch==2.8.0+cpu", "torchaudio==2.8.0+cpu"],
     "defaultModel": "models/pe-a-frame-small",
     "assets": [
       {
@@ -459,24 +417,18 @@
         "sha256": "c16e13355ed389742590152634aa4923a6bc6cd180958d73ed43283fa1f0e8a2"
       }
     ],
-    "arguments": [
-      "locate"
-    ]
+    "arguments": ["locate"]
   },
   "timeline": {
     "name": "OpenTimelineIO",
     "summary": "Write/read OTIO references, frame ranges and metadata; verify JSON roundtrip.",
-    "packages": [
-      "opentimelineio==0.18.1"
-    ],
+    "packages": ["opentimelineio==0.18.1"],
     "source": "https://github.com/AcademySoftwareFoundation/OpenTimelineIO",
     "codeLicense": "Apache-2.0",
     "modelLicense": null,
     "python": "3.12",
     "worker": "scripts/media/sdk.py",
-    "arguments": [
-      "timeline"
-    ]
+    "arguments": ["timeline"]
   },
   "tapir": {
     "name": "DeepMind TAPIR",
@@ -486,14 +438,9 @@
       "tapnet[torch] @ git+https://github.com/google-deepmind/tapnet@ceedd60bb9f6c9f7c74796e4445aff6c6ddf7c9b",
       "opencv-python==5.0.0.93"
     ],
-    "cpuPackages": [
-      "torch==2.8.0+cpu",
-      "torchvision==0.23.0+cpu"
-    ],
+    "cpuPackages": ["torch==2.8.0+cpu", "torchvision==0.23.0+cpu"],
     "worker": "scripts/media/tracking.py",
-    "arguments": [
-      "tapir"
-    ],
+    "arguments": ["tapir"],
     "source": "https://github.com/google-deepmind/tapnet/tree/ceedd60bb9f6c9f7c74796e4445aff6c6ddf7c9b",
     "codeLicense": "Apache-2.0",
     "modelLicense": "Apache-2.0; dataset terms separate",
@@ -517,18 +464,10 @@
     "name": "RF-DETR Nano / ByteTrack",
     "summary": "Detect COCO objects and follow boxes/IDs on CPU; retain unverified predictions.",
     "python": "3.12",
-    "packages": [
-      "rfdetr==1.12.1",
-      "trackers==2.7.0"
-    ],
-    "cpuPackages": [
-      "torch==2.8.0+cpu",
-      "torchvision==0.23.0+cpu"
-    ],
+    "packages": ["rfdetr==1.12.1", "trackers==2.7.0"],
+    "cpuPackages": ["torch==2.8.0+cpu", "torchvision==0.23.0+cpu"],
     "worker": "scripts/media/tracking.py",
-    "arguments": [
-      "track"
-    ],
+    "arguments": ["track"],
     "source": "https://github.com/roboflow/trackers/tree/2.7.0",
     "codeLicense": "Apache-2.0",
     "modelLicense": "Apache-2.0; dataset terms separate",
@@ -554,16 +493,12 @@
     "summary": "Read/export Broadcast WAV metadata without editing the source.",
     "packages": [],
     "worker": "scripts/media/native.py",
-    "arguments": [
-      "metadata"
-    ],
+    "arguments": ["metadata"],
     "source": "https://mediaarea.net/BWFMetaEdit",
     "codeLicense": "Public-domain core; bundled dependency notices retained",
     "modelLicense": null,
     "binary": "bin/bwfmetaedit.exe",
-    "requiredFiles": [
-      "bin/c2pa_c.dll"
-    ],
+    "requiredFiles": ["bin/c2pa_c.dll"],
     "assets": [
       {
         "url": "https://mediaarea.net/download/binary/bwfmetaedit/26.08.1/BWFMetaEdit_CLI_26.08.1_Windows_x64.zip",
@@ -582,9 +517,7 @@
       "foley[models] @ git+https://github.com/Soverance/Foley@d0cde57534f5ffa5f955985154e8fc2af6faa1bb",
       "transformers==5.23.0"
     ],
-    "cpuPackages": [
-      "torch==2.8.0+cpu"
-    ],
+    "cpuPackages": ["torch==2.8.0+cpu"],
     "worker": "scripts/media/library.py",
     "source": "https://github.com/Soverance/Foley/tree/d0cde57534f5ffa5f955985154e8fc2af6faa1bb",
     "codeLicense": "MIT",

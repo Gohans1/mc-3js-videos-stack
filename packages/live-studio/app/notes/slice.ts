@@ -173,6 +173,8 @@ export type NoteFacet =
 export type NoteSort = "film" | "activity" | "newest" | "oldest";
 
 export interface NotesSlice {
+  noteReturn: { at: number; clock: import("../../src/timing.mjs").TimingClock } | null;
+  reviewTarget: string | null;
   notes: Note[];
   noteSearch: string;
   noteStatus: NoteStatusFilter;
@@ -183,7 +185,9 @@ export interface NotesSlice {
   noteView: NoteView;
   saved: "busy" | "fail" | null;
   compose: Compose | null;
+  noteSaving: boolean;
   draft: string;
+  replyDrafts: ReadonlyMap<string, string>;
   refs: RefPic[]; // the note being written's pasted pictures
   nearNote: string | null;
   ink: InkKind | null; // the drawing tool in hand, null when a tap on the picture pins a note
@@ -193,6 +197,8 @@ export interface NotesSlice {
   reviewPick: string | null; // the note open in the room
 }
 export const notesSlice: NotesSlice = {
+  noteReturn: null,
+  reviewTarget: null,
   notes: [],
   noteSearch: "",
   noteStatus: "all",
@@ -203,7 +209,9 @@ export const notesSlice: NotesSlice = {
   noteView: "cards",
   saved: null,
   compose: null,
+  noteSaving: false,
   draft: "",
+  replyDrafts: new Map(),
   refs: [],
   nearNote: null,
   ink: null,

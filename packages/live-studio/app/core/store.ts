@@ -30,7 +30,9 @@ export type ModalKind =
   | "reviewImage"
   | "phoneDownload"
   | "voicePlayground"
+  | "voiceRegion"
   | "cliConfirm"
+  | "cliReset"
   | "cliHelp"
   | "cliTemplate"
   | null;
@@ -73,6 +75,7 @@ interface PageSlice {
   favorites: Favorites; // core/favorites.ts
   gradeLibrary: GradeLibrary;
   aiActivity: boolean; // what the AI is doing shown as it works (a setting, core/prefs.ts; activity/activity.ts)
+  activityChime: boolean;
   pictureRev: number;
 }
 export type StudioState = PageSlice &

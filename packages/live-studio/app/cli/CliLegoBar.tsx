@@ -61,7 +61,7 @@ export function CliLegoBar({
   if (supportsFilm)
     targetItems.push({
       value: "active",
-      label: `Current project: ${context?.activeFilm ?? "unknown"}`,
+      label: `Current film: ${context?.activeFilm ?? "Unknown film"}`,
     });
   if (supportsRoot) targetItems.push({ value: "root", label: "Repo root" });
 
@@ -133,10 +133,11 @@ export function CliLegoBar({
               <SelectValue>
                 {draft.targetFilm === "root"
                   ? "Repo root"
-                  : (context?.activeFilm ?? "Current project")}
+                  : (context?.activeFilm ?? "Current film")}
               </SelectValue>
             </SelectTrigger>
             <SelectContent
+              fitContent
               finalFocus
               className="[--text-ui:0.875rem]"
               onKeyDown={stopCliHotkeyPropagation}
@@ -161,6 +162,7 @@ export function CliLegoBar({
             <SelectValue />
           </SelectTrigger>
           <SelectContent
+            fitContent
             finalFocus
             className="[--text-ui:0.875rem]"
             onKeyDown={stopCliHotkeyPropagation}
@@ -184,6 +186,7 @@ export function CliLegoBar({
             <SelectValue />
           </SelectTrigger>
           <SelectContent
+            fitContent
             finalFocus
             className="[--text-ui:0.875rem]"
             onKeyDown={stopCliHotkeyPropagation}
@@ -208,6 +211,7 @@ export function CliLegoBar({
                 <SelectValue placeholder="Subcommand…" />
               </SelectTrigger>
               <SelectContent
+                fitContent
                 finalFocus
                 className="[--text-ui:0.875rem]"
                 onKeyDown={stopCliHotkeyPropagation}
@@ -238,6 +242,7 @@ export function CliLegoBar({
                 <SelectValue placeholder="Action…" />
               </SelectTrigger>
               <SelectContent
+                fitContent
                 finalFocus
                 className="[--text-ui:0.875rem]"
                 onKeyDown={stopCliHotkeyPropagation}
@@ -255,7 +260,12 @@ export function CliLegoBar({
 
       {/* Exact live assembled command */}
       <div className="bg-backdrop border-hairline-subtle flex min-w-0 items-start justify-between gap-1.5 rounded-lg border px-2 py-1.5">
-        <code className="text-code-foreground h-16 min-w-0 flex-1 overflow-y-auto font-mono text-base leading-6 font-medium break-words select-all">
+        <code
+          tabIndex={0}
+          aria-label="Command preview"
+          role="region"
+          className="text-code-foreground focus-visible:ring-ring h-16 min-w-0 flex-1 overflow-auto overscroll-contain font-mono text-base leading-normal font-medium wrap-anywhere select-all focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+        >
           {spec.displayCommand}
         </code>
         <div className="flex shrink-0 items-center gap-0.5">

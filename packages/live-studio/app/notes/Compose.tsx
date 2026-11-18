@@ -64,22 +64,26 @@ export function Compose({
   className?: string;
 }) {
   const compose = useStudio((s) => s.compose),
+    noteSaving = useStudio((s) => s.noteSaving),
     draft = useStudio((s) => s.draft),
     drawn = useStudio((s) => s.inkSaid),
     refs = useStudio((s) => s.refs),
     notes = useStudio((s) => s.notes);
+  const animateCompose = PHONE || !dock;
   const [openCompose, setOpenCompose] = useState<ComposeSpec | null>(compose);
   const [exitState, setExitState] = useState<ExitState | null>(null);
   if (compose) {
     if (openCompose !== compose) setOpenCompose(compose);
     if (exitState) setExitState(null);
   } else if (openCompose) {
-    const snap = composeExitSnapshot(openCompose) ?? { draft: "", drawn: "", refs: [] };
-    setExitState({
-      compose: openCompose,
-      reason: composeExitReason(openCompose),
-      ...snap,
-    });
+    if (animateCompose) {
+      const snap = composeExitSnapshot(openCompose) ?? { draft: "", drawn: "", refs: [] };
+      setExitState({
+        compose: openCompose,
+        reason: composeExitReason(openCompose),
+        ...snap,
+      });
+    }
     setOpenCompose(null);
   }
 
@@ -194,7 +198,7 @@ export function Compose({
     enteredKeyRef.current = composeKey;
     const resumeHeight = resumeHeightRef.current;
     resumeHeightRef.current = null;
-    if (typeof card.animate !== "function") return;
+    if (!animateCompose || typeof card.animate !== "function") return;
     const origin = composeOrigin(current);
     const mode = shouldAnimateEnter({
       origin,
@@ -260,7 +264,7 @@ export function Compose({
       outer.style.overflow = "";
       card.style.transformOrigin = "";
     };
-  }, [composeKey, dock, inline, hasIdle, cramped]);
+  }, [composeKey, dock, inline, hasIdle, cramped, animateCompose]);
 
   // Asymmetric exit (/emil-design-eng: faster than enter, interruptible, masks swap cleanly & collapses height so list glides up)
   useLayoutEffect(() => {
@@ -507,6 +511,7 @@ export function Compose({
             </>
           )}
           <Textarea
+            disabled={noteSaving}
             ref={text}
             name="note"
             aria-label="Note"
@@ -586,7 +591,7 @@ export function Compose({
                           src={r.url}
                           alt=""
                           decoding="async"
-                          className="block h-12 w-auto max-w-32 object-cover"
+                          className="note-image-outline block h-12 w-auto max-w-32 object-cover"
                         />
                       </button>
                       <Button
@@ -648,11 +653,12 @@ export function Compose({
             size={PHONE ? "phone-cta" : "md"}
             className="upright:flex-1 sm:min-w-28"
             disabled={
+              noteSaving ||
               !isComposeDirty(shownCompose, shownDraft, Boolean(shownDrawn) || shownRefs.length > 0)
             }
             onClick={saveNote}
           >
-            {isEdit ? "Save" : "Add note"}
+            {noteSaving ? "Saving…" : isEdit ? "Save" : "Add note"}
           </Button>
           {!isEdit && shownRefs.length === 0 && (
             <Button
@@ -681,14 +687,11 @@ export function Compose({
               <span className="min-w-0">
                 {isEdit ? "Enter saves" : "Enter adds"} · Shift+Enter new line · Esc cancels
               </span>
-              {Boolean(shownDraft.trim() || shownDrawn || shownRefs.length > 0) && (
-                <span className="text-ok-text shrink-0 font-medium">Draft saved</span>
-              )}
             </>
           ) : isEdit ? (
-            "Enter saves · Shift+Enter new line · Esc cancels. Your draft survives a reload."
+            "Enter saves · Shift+Enter new line · Esc cancels."
           ) : (
-            "Enter adds · Shift+Enter new line · Esc cancels · paste or drop a picture to show what you mean. Your draft survives a reload."
+            "Enter adds · Shift+Enter new line · Esc cancels · paste or drop a picture to show what you mean."
           )}
         </small>
       </div>

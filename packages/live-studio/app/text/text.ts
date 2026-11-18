@@ -4,9 +4,10 @@
 // Tracks are CapCut's text tracks: 0 sits just over the camera row and each one above is drawn over it; two items never overlap
 // on one track, so an item dropped or moved onto another goes up to the first track with room
 import { EDIT } from "film/edit";
-import { DURATION } from "film/scene";
 
+import { DURATION } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
+import { lightItems } from "../activity/timeline-activity";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { FPS, r3, stamp } from "../core/time";
@@ -72,6 +73,13 @@ const changed = () => {
 const doc = createTimedDoc<TextFile>("text", {
   label: "text",
   changed,
+  received: (before, after) => lightItems("text", before.items, after.items,
+    (item) => typeof item.id === "string" ? item.id : `position:${item.track ?? 0}:${item.from}:${item.to}`,
+    (i) => {
+      const it = items[i];
+      return { key: typeof it.id === "string" ? it.id : undefined, track: it.track ?? 0, range: [it.from, it.to] };
+    },
+  ),
   saved: (textSaved) => set({ textSaved }),
   replaced: (was) => {
     if (was?.items.length !== items.length && get().textPicks.length) pickText([]);

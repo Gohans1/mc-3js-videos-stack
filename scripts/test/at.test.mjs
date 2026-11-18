@@ -6,9 +6,20 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { voiceFileOf } from "../../packages/live-studio/src/voice-map.mjs";
 import { whatsAt } from "../at.ts";
 
 const AT = resolve(dirname(fileURLToPath(import.meta.url)), "../at.ts");
+
+const makeAudio = (file, seconds) => {
+  mkdirSync(dirname(file), { recursive: true });
+  const made = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", `sine=d=${seconds}`, file],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(made.status, 0, made.stderr);
+};
 
 // A film whose first 10 scene seconds play at 2x: the heard second 4.1 shows scene second 8.2
 const film = (t) => {
@@ -259,8 +270,10 @@ test("a sound on a muted track and a second inside a gap say what is really hear
   );
   const got = whatsAt(dir, 2.5);
   assert.equal(got.blank, true);
-  assert.equal(got.sounds[0]?.muted, true);
-  assert.equal(whatsAt(dir, 5).blank, false);
+  assert.deepEqual(got.sounds, []);
+  const after = whatsAt(dir, 5);
+  assert.equal(after.blank, false);
+  assert.equal(after.sounds[0]?.muted, true);
 });
 
 test("a sound whose file's length cannot be read is still heard, its end unknown", (t) => {
@@ -328,6 +341,32 @@ test("#N numbers the notes as bun run notes does: a line missing its fields is n
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^note #1 \(hand, open\)/m);
+});
+
+test("#N counts a note the creator deleted, as bun run notes does, so the numbers after it never move", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  const whole = { t: 8.2, scene: 8.2, text: "the hand", shot: 1, time: "00:08.200" };
+  writeFileSync(
+    join(dir, "notes/deleted.jsonl"),
+    JSON.stringify({ ...whole, id: "gone", at: "2026-11-01T00:00:00Z" }) + "\n",
+  );
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    JSON.stringify({ ...whole, id: "hand", at: "2026-11-02T00:00:00Z" }) + "\n",
+  );
+  const r = spawnSync("bun", [AT, "#2"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^note #2 \(hand, open\)/m);
+  const gone = spawnSync("bun", [AT, "#1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(gone.status, 2);
+  assert.match(gone.stderr, /note #1 \(gone\) was deleted by the creator/);
 });
 
 test("a second inside a gap names no shot, camera key or moving row: the picture is black", (t) => {
@@ -521,6 +560,7 @@ test("a velocity effect playing is named with its row", (t) => {
 
 test("a script line not voiced yet is the next one only when no voiced line comes before it", (t) => {
   const dir = film(t);
+  makeAudio(voiceFileOf(dir), 20);
   writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
   writeFileSync(
     join(dir, "src/edit.json"),
@@ -718,7 +758,7 @@ test('a voice turned off ("voice": false, no narration clip) is not heard, as th
   const said = () =>
     spawnSync("bun", [AT, "5"], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" })
       .stdout;
-  // a film with no voice lines is silent, not a voice turned off
+  assert.equal(whatsAt(dir, 5).voiceOff, true);
   assert.match(said(), /^narration: silent here/m);
   mkdirSync(join(dir, "renders/live"), { recursive: true });
   writeFileSync(
@@ -728,17 +768,8 @@ test('a voice turned off ("voice": false, no narration clip) is not heard, as th
   assert.match(said(), /^narration: off, src\/timeline\/audio\.json "voice": false/m);
 });
 
-test("a black second names what blacks it out: a gap row of main[], a Freeze left blank, or gaps[]", (t) => {
+test("a black second names what blacks it out: a gap row of main[], a Freeze left blank, gaps[], or picture ended", (t) => {
   const dir = film(t);
-  const said = (timing, at) => {
-    writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify(timing));
-    const r = spawnSync("bun", [AT, String(at)], {
-      env: { ...process.env, LIVE_PROJECT: dir },
-      encoding: "utf8",
-    });
-    assert.equal(r.status, 0, r.stderr);
-    return r.stdout.split("\n")[0];
-  };
   const main = {
     main: [
       { id: "a", kind: "clip", sourceFrom: 0, sourceTo: 4 },
@@ -746,15 +777,38 @@ test("a black second names what blacks it out: a gap row of main[], a Freeze lef
       { id: "b", kind: "clip", sourceFrom: 4, sourceTo: 20 },
     ],
   };
-  assert.match(said(main, 4.5), /black here, src\/timeline\/timing\.json main\[\] \(a gap row\)/);
-  assert.match(
-    said({ freezes: [{ at: 2, duration: 1, blank: true }] }, 2.5),
-    /black here, src\/timeline\/timing\.json freezes\[\] \(a Freeze left blank/,
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify(main));
+  assert.equal(whatsAt(dir, 4.5).blackBy, "main[] (a gap row)");
+
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ freezes: [{ at: 2, duration: 1, blank: true }] }),
   );
+  assert.match(whatsAt(dir, 2.5).blackBy ?? "", /freezes\[\] \(a Freeze left blank/);
+
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ gaps: [{ from: 2, to: 3 }] }),
+  );
+  const r = spawnSync("bun", [AT, "2.5"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
   assert.match(
-    said({ gaps: [{ from: 2, to: 3 }] }, 2.5),
+    r.stdout.split("\n")[0],
     /black here, a gap in src\/timeline\/timing\.json gaps\[\]/,
   );
+
+  // Layer freeze past timingClock.duration should report picture ended, not gaps[]
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 10 }));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      layerKinds: { text: { base: { freezes: [{ at: 4, duration: 4 }] }, changes: [] } },
+    }),
+  );
+  assert.match(whatsAt(dir, 11).blackBy ?? "", /picture ended/);
 });
 
 test("a draft's cut is in --json too, and said to be the last render's when the film changed after it", (t) => {
@@ -895,8 +949,24 @@ test("an adjustment whose grade sets nothing is said to change nothing", (t) => 
     JSON.stringify({
       items: [
         { id: "a", name: "Empty", from: 0, to: 20, track: 0, grade: {} },
-        { id: "b", name: "Warm", from: 0, to: 20, track: 0, grade: { temp: 20 } },
-        { id: "c", name: "Fincher", from: 0, to: 20, track: 0, grade: { look: "noir-slate" } },
+        { id: "b", name: "Warm", from: 0, to: 20, track: 0, grade: { basic: { temp: 20 } } },
+        {
+          id: "c",
+          name: "Off",
+          from: 0,
+          to: 20,
+          track: 0,
+          grade: { enabled: false, basic: { temp: 20 } },
+        },
+        { id: "d", name: "Zero", from: 0, to: 20, track: 0, grade: { basic: { temp: 0 } } },
+        {
+          id: "e",
+          name: "LutZero",
+          from: 0,
+          to: 20,
+          track: 0,
+          grade: { lut: { enabled: false, amount: 50 } },
+        },
       ],
     }),
   );
@@ -906,8 +976,109 @@ test("an adjustment whose grade sets nothing is said to change nothing", (t) => 
   });
   assert.match(
     r.stdout,
-    /^looks .*items\[0\] Empty \(its grade sets nothing\), items\[1\] Warm, items\[2\] Fincher \(look: noir-slate\)$/m,
+    /^looks .*items\[0\] Empty \(its grade sets nothing\), items\[1\] Warm, items\[2\] Off \(disabled\), items\[3\] Zero \(its grade sets nothing\), items\[4\] LutZero \(its grade sets nothing\)$/m,
   );
+});
+
+test("noteSecond with null t and valid shot, and negative note t, never crash or print bogus 00:00.000", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"));
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    [
+      JSON.stringify({
+        id: "badt",
+        t: null,
+        shot: 0,
+        time: "",
+        at: "1",
+        context: { shot: { into: 2 } },
+        text: "hi",
+      }),
+      JSON.stringify({ id: "negt", t: -2, shot: 9, time: "", at: "1", text: "neg" }),
+    ].join("\n"),
+  );
+  const run = (arg) =>
+    spawnSync("bun", [AT, arg], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" });
+  const r = run("#1");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^00:01\.000 heard/m);
+  assert.doesNotMatch(r.stdout, /was written at 00:00\.000/);
+  const neg = run("#2");
+  assert.equal(neg.status, 2);
+  assert.doesNotMatch(neg.stderr, /-1:-2/);
+});
+
+test("freeze inside a cut, short-shot nearby transition, sound_choices duration, and unvoiced script lines", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  conf["live-studio"].sfx = "sound/sfx";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+
+  // Cut-out freeze must not report held
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ cuts: [{ from: 1, to: 4 }], freezes: [{ at: 2, duration: 2 }] }),
+  );
+  assert.equal(whatsAt(dir, 2.5).held, null);
+
+  // Transition separated by a <1s intermediate shot is still within 1s
+  writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      { t: 0, name: "s0" },
+      { t: 4, name: "s1" },
+      { t: 4.5, name: "s2", transition: { fx: "dissolve", len: 0.4 } },
+      { t: 8, name: "s3" },
+    ]),
+  );
+  assert.deepEqual(
+    whatsAt(dir, 3.7).cuts.map((c) => c.row),
+    [2],
+  );
+
+  // sound_choices.json + picked sound file duration
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  const mkWav = (name, dur) => {
+    const f = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", `sine=d=${dur}`, `sound/sfx/${name}.wav`],
+      {
+        cwd: dir,
+      },
+    );
+    assert.equal(f.status, 0, String(f.stderr));
+  };
+  mkWav("orig", 0.5);
+  mkWav("alt", 2.0);
+  writeFileSync(join(dir, "sound_choices.json"), JSON.stringify({ orig: { set: "alt" } }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "voice",
+      tracks: [{ id: "v", mute: true }],
+      beds: [],
+      sfx: [
+        { name: "voice", at: 0, length: 5, gain: 0, track: "v" },
+        { name: "orig", try: ["alt"], at: 1, gain: 0 },
+      ],
+    }),
+  );
+  // At 2.5s, orig (0.5s) would have ended at 1.5s, but alt (2.0s) runs until 3.0s
+  const at25 = whatsAt(dir, 2.5);
+  assert.equal(at25.sounds[0]?.picked, "alt");
+  assert.ok(Math.abs((at25.sounds[0]?.to ?? 0) - 3) < 0.05);
+
+  // At 8s (outside muted clip 0..5), unvoiced script_lines (including without until at exact t) is visible
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ end: 20, script_lines: [{ t: 8, text: "UNVOICED AT EIGHT" }] }),
+  );
+  const at8 = whatsAt(dir, 8);
+  assert.equal(at8.narrationMuted, null);
+  assert.equal(at8.script?.text, "UNVOICED AT EIGHT");
 });
 
 test("camera optics (mm, fstop, focus, handheld) and shot look + active trauma hits show up in --json and text", (t) => {
@@ -1033,7 +1204,7 @@ test("whatsAt handles camera keys using anchor objects for p and l without throw
   assert.equal(parsed.cam.mm, 50);
 });
 
-test("disabled shot adjust and disabled adjustment layer grade never report an active look", (t) => {
+test("disabled shot adjust and disabled adjustment layer grade never report an active look, while enabled layer look shows (look: ...)", (t) => {
   const dir = film(t);
   const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
   conf["live-studio"].shotsTimeline = "src/timeline/shots.json";
@@ -1062,6 +1233,14 @@ test("disabled shot adjust and disabled adjustment layer grade never report an a
           track: 0,
           grade: { look: "noir-slate", enabled: false },
         },
+        {
+          id: "f",
+          name: "Fincher",
+          from: 0,
+          to: 20,
+          track: 1,
+          grade: { look: "teal-amber" },
+        },
       ],
     }),
   );
@@ -1069,8 +1248,9 @@ test("disabled shot adjust and disabled adjustment layer grade never report an a
   const got = whatsAt(dir, 1.0);
   assert.ok(got.shot);
   assert.equal(got.shot.look, undefined);
-  assert.equal(got.looks.length, 1);
+  assert.equal(got.looks.length, 2);
   assert.equal(got.looks[0]?.text, "Muted (disabled)");
+  assert.equal(got.looks[1]?.text, "Fincher (look: teal-amber)");
 
   const r = spawnSync("bun", [AT, "1.0"], {
     env: { ...process.env, LIVE_PROJECT: dir },
@@ -1078,5 +1258,792 @@ test("disabled shot adjust and disabled adjustment layer grade never report an a
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Muted \(disabled\)/);
-  assert.doesNotMatch(r.stdout, /teal-amber|noir-slate/);
+  assert.match(r.stdout, /Fincher \(look: teal-amber\)/);
+  assert.doesNotMatch(r.stdout, /shot look:|noir-slate/);
+});
+
+test('voice:false with unlaid voice/takes never suggests voice:assemble; shot.adjust without look shows in text; "off" narration clip is silenced', (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  mkdirSync(join(dir, "voice/takes"), { recursive: true });
+  writeFileSync(join(dir, "voice/takes/01_line.wav"), "x");
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ voice: false, beds: [], sfx: [] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([{ t: 0, name: "grade", adjust: { basic: { contrast: 15 } } }]),
+  );
+
+  const cellStyle = spawnSync("bun", [AT, "5"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(cellStyle.status, 0, cellStyle.stderr);
+  assert.doesNotMatch(cellStyle.stdout, /voice:assemble/);
+  assert.match(cellStyle.stdout, /shot adjust:/);
+
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ voice_clip: { set: "off" } }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "voice_clip",
+      tracks: [{ id: "v", mute: true }],
+      beds: [],
+      sfx: [{ name: "voice_clip", at: 0, length: 5, gain: 0, track: "v" }],
+    }),
+  );
+  assert.equal(whatsAt(dir, 2).narrationMuted, null);
+});
+
+test("Round 15: swapped sfx ignores orig start, voiceOff clears json narration/nextLine, and cam evaluates before cam[0].t", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].sfx = "sound/sfx";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  writeFileSync(join(dir, "src/timeline/timing.json"), "{}");
+
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  for (const [name, dur] of [
+    ["orig", 5],
+    ["alt", 2],
+  ]) {
+    const f = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", `sine=d=${dur}`, `sound/sfx/${name}.wav`],
+      { cwd: dir },
+    );
+    assert.equal(f.status, 0, String(f.stderr));
+  }
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ orig: { set: "alt" } }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [],
+      sfx: [
+        { name: "orig", at: 1, start: 4, gain: 0, try: ["alt"] },
+        { name: "orig", at: 6, start: 4, gain: 0 },
+      ],
+    }),
+  );
+  // Row 0 swaps to alt (plays 1.0..3.0s because mix.py pops start); row 1 has no try[] so plays orig from start=4 (6.0..7.0s)
+  const at2 = whatsAt(dir, 2);
+  assert.equal(at2.sounds.length, 1);
+  assert.equal(at2.sounds[0].picked, "alt");
+  assert.ok(Math.abs(at2.sounds[0].to - 3) < 0.05);
+  const at65 = whatsAt(dir, 6.5);
+  assert.equal(at65.sounds.length, 1);
+  assert.ok(Math.abs(at65.sounds[0].to - 7) < 0.05);
+
+  // voice:false with voice_map.json present must leave json narration & nextLine null
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({
+      lines: [{ s: 0.5, e: 2.5, text: "hello", words: [{ w: "hello", s: 0.5, e: 2.5 }] }],
+    }),
+  );
+  const vOff = whatsAt(dir, 1);
+  assert.equal(vOff.voiceOff, true);
+  assert.equal(vOff.narration, null);
+  assert.equal(vOff.nextLine, null);
+
+  // cam[0].t > scene still evaluates cameraAt clamped to key 0
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 3, p: [0, 1, 5], l: [0, 1, 0], fov: 50 },
+      { t: 10, p: [0, 1, 5], l: [0, 1, 0], fov: 50 },
+    ]),
+  );
+  const r1 = spawnSync("bun", [AT, "1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r1.status, 0, r1.stderr);
+  assert.match(r1.stdout, /camera optics:/);
+  assert.ok(whatsAt(dir, 1).cam !== null);
+});
+
+test("Round 16: swapped try[] and shared c.name respect timing speeds, and off choice silences audio.narration lines", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].sfx = "sound/sfx";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ speeds: [{ from: 0, to: 10, rate: 2 }] }),
+  );
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  for (const [name, dur] of [
+    ["orig", 5],
+    ["alt", 2],
+  ]) {
+    const f = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", `sine=d=${dur}`, `sound/sfx/${name}.wav`],
+      { cwd: dir },
+    );
+    assert.equal(f.status, 0, String(f.stderr));
+  }
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ orig: { set: "alt" } }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [],
+      sfx: [
+        { name: "orig", at: 2, start: 4, gain: 0, try: ["alt"] },
+        { name: "orig", at: 6, start: 4, gain: 0 },
+      ],
+    }),
+  );
+  // Row 0 swaps to alt (2s from 0 -> 1.0s at 2x, playing 1.0..2.0s heard); row 1 plays orig from start=4 (1s -> 0.5s at 2x, playing 3.0..3.5s heard)
+  const at15 = whatsAt(dir, 1.5);
+  assert.equal(at15.sounds.length, 1);
+  assert.equal(at15.sounds[0].picked, "alt");
+  assert.ok(Math.abs(at15.sounds[0].to - 2) < 0.05, `expected to ~2, got ${at15.sounds[0].to}`);
+  const at325 = whatsAt(dir, 3.25);
+  assert.equal(at325.sounds.length, 1);
+  assert.equal(at325.sounds[0].picked, null);
+  assert.ok(
+    Math.abs(at325.sounds[0].to - 3.5) < 0.05,
+    `expected to ~3.5, got ${at325.sounds[0].to}`,
+  );
+
+  // choices.json "off" on audio.narration must silence narration, nextLine, and script
+  makeAudio(join(dir, "sound/sfx/voice_clip.wav"), 5);
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(
+    join(dir, "renders/live/voice_map.json"),
+    JSON.stringify({
+      lines: [
+        {
+          s: 0.5,
+          e: 2.5,
+          text: "hello world",
+          words: [{ w: "hello", s: 0.5, e: 2.5 }],
+        },
+      ],
+    }),
+  );
+  writeFileSync(join(dir, "choices.json"), "{}");
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "voice_clip",
+      beds: [],
+      sfx: [{ name: "voice_clip", at: 0, length: 5, gain: 0 }],
+    }),
+  );
+  const onAt1 = whatsAt(dir, 1);
+  assert.ok(onAt1.narration !== null, "expected active narration line before choices off");
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ voice_clip: { set: "off" } }));
+  const offAt1 = whatsAt(dir, 1);
+  assert.equal(offAt1.narration, null);
+  assert.equal(offAt1.nextLine, null);
+  assert.equal(offAt1.narrationOff, "choices.json");
+  const cliOff = spawnSync("bun", [AT, "0"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(cliOff.status, 0, cliOff.stderr);
+  assert.match(cliOff.stdout, /narration: off \(choices\.json/);
+});
+
+test("Round 17: disabled non-look adjustment prints (disabled) and openSound defaults to sound/sfx", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  // Intentionally omit live-studio.sfx like templates/film does; mix.py defaults to sound/sfx
+  delete conf["live-studio"].sfx;
+  conf["live-studio"].adjustmentTimeline = "src/timeline/adjust.json";
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  writeFileSync(
+    join(dir, "src/timeline/adjust.json"),
+    JSON.stringify({
+      items: [
+        {
+          id: "a",
+          name: "DisabledExp",
+          from: 0,
+          to: 10,
+          track: 0,
+          grade: { enabled: false, basic: { exposure: 25 } },
+        },
+      ],
+    }),
+  );
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  for (const [name, dur] of [
+    ["orig", 5],
+    ["alt", 2],
+  ]) {
+    const f = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", `sine=d=${dur}`, `sound/sfx/${name}.wav`],
+      { cwd: dir },
+    );
+    assert.equal(f.status, 0, String(f.stderr));
+  }
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ orig: { set: "alt" } }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [],
+      sfx: [{ name: "orig", at: 1, gain: 0, try: ["alt"] }],
+    }),
+  );
+  // at=1 with 2s alt under 2x speed plays 0.5..1.5s heard
+  const res = whatsAt(dir, 1);
+  assert.equal(res.sounds.length, 1);
+  assert.equal(res.sounds[0].picked, "alt");
+  assert.ok(Math.abs(res.sounds[0].to - 1.5) < 0.05, `expected to ~1.5, got ${res.sounds[0].to}`);
+  const out = spawnSync("bun", [AT, "1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(out.status, 0, out.stderr);
+  assert.match(out.stdout, /DisabledExp \(disabled\)/);
+
+  // Off sfx without length still resolves disk duration via audioInfo, never falsely claiming missing file
+  writeFileSync(join(dir, "choices.json"), JSON.stringify({ orig: { set: "off" } }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], sfx: [{ name: "orig", at: 2, gain: 0 }] }),
+  );
+  // orig is 5s starting at 2 -> 2..7s on scene, at 2x speed -> 1.0..3.5s heard
+  const offSfx = whatsAt(dir, 2);
+  assert.equal(offSfx.sounds.length, 1);
+  assert.equal(offSfx.sounds[0].picked, "off");
+  assert.ok(
+    Math.abs(offSfx.sounds[0].to - 3.5) < 0.05,
+    `expected to ~3.5, got ${offSfx.sounds[0].to}`,
+  );
+  const cliOffSfx = spawnSync("bun", [AT, "2"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(cliOffSfx.status, 0, cliOffSfx.stderr);
+  assert.doesNotMatch(cliOffSfx.stdout, /file is not on this machine/);
+});
+
+test("Round 19: at respects cam cut boundary, .mp3 soundSources & cut unknown-length sfx, hidden adjustments, and script_lines timing", (t) => {
+  const dir = film(t);
+  const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  conf["live-studio"].adjustmentTimeline = "src/timeline/adjust.json";
+  conf["live-studio"].soundSources = { hitmp3: "sound/hit.mp3" };
+  writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
+  mkdirSync(join(dir, "sound"), { recursive: true });
+  const ffMp3 = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=2", "sound/hit.mp3"],
+    { cwd: dir },
+  );
+  assert.equal(ffMp3.status, 0, String(ffMp3.stderr));
+
+  // 1) Camera cut:true stops forward interpolation span at [0]
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 2, 5], l: [0, 0, 0], fov: 40 },
+      { t: 5, p: [10, 2, 5], l: [0, 0, 0], fov: 20, cut: true },
+      { t: 10, p: [10, 2, 0], l: [0, 0, 0], fov: 20 },
+    ]),
+  );
+  // 2) Hidden adjustment item still active (grade-layers.ts only hides by track.hidden)
+  writeFileSync(
+    join(dir, "src/timeline/adjust.json"),
+    JSON.stringify({
+      items: [
+        { id: "a1", name: "Warm", from: 0, to: 10, track: 0, hidden: true, grade: { warmth: 20 } },
+      ],
+    }),
+  );
+  // 3) .mp3 soundSources + unknown-length missing sfx inside cut + script_lines in cut vs active
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      end: 10,
+      script_lines: [
+        { t: 6.5, text: "CUT LINE" },
+        { t: 8.5, text: "NEXT LINE" },
+      ],
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ cuts: [{ from: 6, to: 8 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [],
+      sfx: [
+        { name: "hitmp3", at: 2, gain: 0 },
+        { name: "missing_in_cut", at: 6.5, gain: 0 },
+      ],
+    }),
+  );
+
+  const at2 = whatsAt(dir, 2.5);
+  assert.equal(at2.cam.before, 0);
+  assert.equal(at2.cam.after, null);
+  assert.equal(at2.sounds.length, 1);
+  assert.equal(at2.sounds[0].name, "hitmp3");
+  assert.ok(Math.abs(at2.sounds[0].to - 4) < 0.05, `expected to ~4, got ${at2.sounds[0].to}`);
+  assert.equal(at2.looks.length, 1);
+  assert.equal(at2.script?.text, "NEXT LINE");
+
+  const cliCutSfx = whatsAt(dir, 6.2);
+  assert.equal(cliCutSfx.sounds.length, 0);
+
+  const out2 = spawnSync("bun", [AT, "2.5"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(out2.status, 0, out2.stderr);
+  assert.doesNotMatch(out2.stdout, /-> \[1\]/);
+
+  // 4) script_lines lookahead follows heard order across reordered main[]
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({
+      end: 10,
+      script_lines: [{ t: 2, text: "REORDERED NEXT" }],
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({
+      main: [
+        { id: "c1", kind: "clip", sourceFrom: 5, sourceTo: 10 },
+        { id: "c2", kind: "clip", sourceFrom: 0, sourceTo: 5 },
+      ],
+    }),
+  );
+  assert.equal(whatsAt(dir, 1).script?.text, "REORDERED NEXT");
+  const reorderedCli = spawnSync("bun", [AT, "1"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(reorderedCli.status, 0, reorderedCli.stderr);
+  assert.match(reorderedCli.stdout, /the next one/);
+});
+
+test("Round 20: at '#N' moves note onto visible freeze past blank padBefore", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "at-freeze-r20-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "notes"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "export {};\n");
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { timingTimeline: "src/timeline/timing.json" } }),
+  );
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 10 }));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ freezes: [{ at: 3, duration: 2, padBefore: 1.5 }] }),
+  );
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    `${JSON.stringify({ id: "n1", t: 4, scene: 3, done: false, shot: 1, time: "", text: "on freeze", at: "2026-11-01T00:00:00Z" })}\n`,
+  );
+  const r = spawnSync("bun", [AT, "#1", "--json"], {
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const got = JSON.parse(r.stdout);
+  assert.equal(got.note.heard, 4.5);
+  assert.equal(got.blank, false);
+});
+
+test("Round 21: whatsAt lists nearby open note when t is null and scene places it", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "notes"), { recursive: true });
+  writeFileSync(
+    join(dir, "notes/notes.jsonl"),
+    `${JSON.stringify({ id: "nullt", t: null, scene: 8.2, done: false, shot: 1, time: "", text: "legacy null t", at: "2026-11-01T00:00:00Z" })}\n`,
+  );
+  const at4 = whatsAt(dir, 4.1);
+  assert.deepEqual(
+    at4.notes.map((n) => n.id),
+    ["nullt"],
+  );
+});
+
+test("Round 22: camera varying fov doesn't throw lmix, mix.py honors swapped sfx under speeds and off-narration ducking, and at keeps cam end across voice cues", (t) => {
+  const MIX = resolve(dirname(AT), "sound/mix.py");
+  // 1) Camera keyframes with different fov must interpolate cleanly (no ReferenceError: lmix is not defined)
+  const dirCam = film(t);
+  writeFileSync(
+    join(dirCam, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 2, 5], l: [0, 1, 0], fov: 50 },
+      { t: 10, p: [0, 2, 0], l: [0, 1, 0], fov: 30 },
+    ]),
+  );
+  const gotCam = whatsAt(dirCam, 2.5);
+  assert.ok(gotCam.cam && gotCam.cam.fov > 30 && gotCam.cam.fov < 50);
+
+  // 2) mix.py vs at on try[]-swapped sfx under timing.json + "off" narration not ducking beds
+  const dirMix = mkdtempSync(join(tmpdir(), "at-mix-r22-"));
+  t.after(() => rmSync(dirMix, { recursive: true, force: true }));
+  mkdirSync(join(dirMix, "src/timeline"), { recursive: true });
+  mkdirSync(join(dirMix, "sound/sfx"), { recursive: true });
+  writeFileSync(join(dirMix, "src/scene.ts"), "");
+  writeFileSync(
+    join(dirMix, "package.json"),
+    JSON.stringify({
+      name: "r22-at-mix",
+      "live-studio": {
+        sfx: "sound/sfx",
+        soundVault: false,
+        soundTimeline: "src/timeline/audio.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dirMix, "src/edit.json"),
+    JSON.stringify({
+      end: 6,
+      voice: {
+        edits: {},
+        warp: [],
+        lines: [
+          [0, 2],
+          [0, 2],
+        ],
+      },
+      beats: {},
+    }),
+  );
+  writeFileSync(
+    join(dirMix, "src/timeline/timing.json"),
+    JSON.stringify({ speeds: [{ from: 0, to: 10, rate: 2 }] }),
+  );
+  for (const [name, dur] of [
+    ["orig_short", 3],
+    ["alt", 4],
+    ["hum", 5],
+    ["narr", 3],
+  ]) {
+    const ff = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-y", "-f", "lavfi", "-i", `sine=f=440:d=${dur}`, `sound/sfx/${name}.wav`],
+      { cwd: dirMix, encoding: "utf8" },
+    );
+    assert.equal(ff.status, 0, ff.stderr);
+  }
+  writeFileSync(
+    join(dirMix, "choices.json"),
+    JSON.stringify({ orig_short: { set: "alt" }, narr: { set: "off" } }),
+  );
+  writeFileSync(
+    join(dirMix, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      narration: "narr",
+      beds: [{ name: "hum", from: 0, to: 4, gain: 0, fadeIn: 0, fadeOut: 0, duck: 20 }],
+      sfx: [
+        { name: "orig_short", at: 2, start: 4, gain: 0, try: ["alt"] },
+        { name: "narr", at: 0, gain: 0 },
+      ],
+    }),
+  );
+  const atSwapped = whatsAt(dirMix, 2.5);
+  assert.equal(atSwapped.sounds.find((s) => s.name === "orig_short")?.picked, "alt");
+  const mixRun = spawnSync("python", [MIX], { cwd: dirMix, encoding: "utf8", timeout: 60000 });
+  assert.equal(mixRun.status, 0, mixRun.stdout + mixRun.stderr);
+  // 2.0..2.8s has alt swapped onto orig_short (ffmpeg sine default RMS ~ -23 dB vs -91 dB when truncated/skipped)
+  const volTail = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "info",
+      "-i",
+      "sound/mix_raw.wav",
+      "-af",
+      "atrim=2.0:2.8,volumedetect",
+      "-f",
+      "null",
+      "-",
+    ],
+    { cwd: dirMix, encoding: "utf8" },
+  );
+  const mTail = /mean_volume:\s*([-\d.]+)\s*dB/.exec(volTail.stderr);
+  assert.ok(mTail && Number(mTail[1]) > -40, volTail.stderr);
+  // 0.2..1.2s has hum while narr is "off" -> hum stays unducked (~ -23 dB vs ~ -43 dB ducked 20 dB)
+  const volDuck = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "info",
+      "-i",
+      "sound/mix_raw.wav",
+      "-af",
+      "atrim=0.2:1.2,volumedetect",
+      "-f",
+      "null",
+      "-",
+    ],
+    { cwd: dirMix, encoding: "utf8" },
+  );
+  const mDuck = /mean_volume:\s*([-\d.]+)\s*dB/.exec(volDuck.stderr);
+  assert.ok(mDuck && Number(mDuck[1]) > -30, volDuck.stderr);
+
+  // 3) Omitted edit.end keeps cam timing scope across buildVoiceCues before nextScript()
+  const dirScript = mkdtempSync(join(tmpdir(), "at-script-r22-"));
+  t.after(() => rmSync(dirScript, { recursive: true, force: true }));
+  mkdirSync(join(dirScript, "src/timeline"), { recursive: true });
+  mkdirSync(join(dirScript, "assets/public/agent"), { recursive: true });
+  writeFileSync(join(dirScript, "src/scene.ts"), "");
+  writeFileSync(
+    join(dirScript, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        camTimeline: "src/timeline/cam.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dirScript, "src/edit.json"),
+    JSON.stringify({
+      voice: { edits: {}, warp: [], lines: [[2, 4]] },
+      script_lines: [{ t: 14, text: "REORDERED EARLY SCRIPT" }],
+    }),
+  );
+  writeFileSync(
+    join(dirScript, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 2, 5], l: [0, 1, 0] },
+      { t: 20, p: [0, 2, 0], l: [0, 1, 0] },
+    ]),
+  );
+  writeFileSync(
+    join(dirScript, "src/timeline/timing.json"),
+    JSON.stringify({
+      main: [
+        { id: "c1", kind: "clip", sourceFrom: 12, sourceTo: 20 },
+        { id: "c2", kind: "clip", sourceFrom: 0, sourceTo: 12 },
+      ],
+    }),
+  );
+  writeFileSync(
+    join(dirScript, "assets/public/agent/voice_map.json"),
+    JSON.stringify({
+      lines: [
+        {
+          id: "001",
+          text: "Hello later",
+          s: 2,
+          e: 4,
+          words: [{ w: "Hello", s: 2, e: 3 }],
+        },
+      ],
+    }),
+  );
+  const gotScript = whatsAt(dirScript, 1.0);
+  assert.equal(gotScript.script?.text, "REORDERED EARLY SCRIPT");
+});
+
+test("Round 23: at marks unlaid takes as silent until assemble, hides beds/sfx in freeze and gap, and enforces start/EOF/rate/try on sfx with explicit length", (t) => {
+  // 1) voice/takes with .words.json but no full_voice.wav -> at reports silent + unlaid (mix.py has no voice), voice:cues warns on stderr
+  const dirUnlaid = film(t);
+  writeFileSync(
+    join(dirUnlaid, "src/edit.json"),
+    JSON.stringify({ end: 15, takes: [{ id: "01", at: 0, text: "Hello world" }] }),
+  );
+  mkdirSync(join(dirUnlaid, "voice/takes"), { recursive: true });
+  writeFileSync(join(dirUnlaid, "voice/takes/01.mp3"), "fake");
+  writeFileSync(
+    join(dirUnlaid, "voice/takes/01.mp3.words.json"),
+    JSON.stringify({
+      dur: 2,
+      words: [
+        { w: "Hello", s: 0.1, e: 0.6 },
+        { w: "world", s: 0.7, e: 1.5 },
+      ],
+    }),
+  );
+  const gotUnlaid = whatsAt(dirUnlaid, 0.4);
+  assert.equal(gotUnlaid.narration, null);
+  assert.equal(gotUnlaid.unlaid, true);
+  const cliUnlaid = spawnSync("bun", [AT, "0.4"], {
+    env: { ...process.env, LIVE_PROJECT: dirUnlaid },
+    encoding: "utf8",
+  });
+  assert.equal(cliUnlaid.status, 0, cliUnlaid.stderr);
+  assert.match(cliUnlaid.stdout, /narration: silent here.*voice:assemble/);
+
+  const CUES = fileURLToPath(new URL("../voice/cues.ts", import.meta.url));
+  const cuesCli = spawnSync("bun", [CUES], {
+    env: { ...process.env, LIVE_PROJECT: dirUnlaid },
+    encoding: "utf8",
+  });
+  assert.equal(cuesCli.status, 0, cuesCli.stderr);
+  assert.match(cuesCli.stdout, /Hello world/);
+  assert.match(cuesCli.stderr, /voice:assemble/);
+
+  // 2) beds & sfx must not show during freeze or gap spans where mix.py/process.py emit silence
+  const dirTiming = film(t);
+  const confTiming = JSON.parse(readFileSync(join(dirTiming, "package.json"), "utf8"));
+  confTiming["live-studio"].timingTimeline = "src/timeline/timing.json";
+  writeFileSync(join(dirTiming, "package.json"), JSON.stringify(confTiming));
+  writeFileSync(join(dirTiming, "src/edit.json"), JSON.stringify({ end: 12 }));
+  writeFileSync(
+    join(dirTiming, "src/timeline/timing.json"),
+    JSON.stringify({
+      freezes: [{ at: 2, duration: 2 }],
+      gaps: [{ from: 6, to: 8 }],
+    }),
+  );
+  // source 0..2 -> heard 0..2 (play); freeze @2 len 2 -> heard 2..4 (freeze); source 2..6 -> heard 4..8 (play); gap 6..8 -> heard 8..10 (blank gap); source 8..12 -> heard 10..14 (play)
+  writeFileSync(
+    join(dirTiming, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [{ name: "drone", from: 0, to: 10, gain: 0, fadeIn: 0, fadeOut: 0 }],
+      sfx: [{ name: "tone", at: 0, length: 10, gain: 0 }],
+    }),
+  );
+  assert.deepEqual(
+    whatsAt(dirTiming, 1.0).sounds.map((s) => s.name),
+    ["drone", "tone"],
+  );
+  assert.deepEqual(whatsAt(dirTiming, 3.0).sounds, []);
+  assert.deepEqual(
+    whatsAt(dirTiming, 5.0).sounds.map((s) => s.name),
+    ["drone", "tone"],
+  );
+  assert.deepEqual(whatsAt(dirTiming, 9.0).sounds, []);
+  assert.deepEqual(
+    whatsAt(dirTiming, 10.5).sounds.map((s) => s.name),
+    ["drone", "tone"],
+  );
+
+  // 3) sfx with explicit length: start >= seconds skipped, EOF + rate clamped, and try[] swap ignores orig start & clamps to replacement EOF
+  const dirLen = film(t);
+  writeFileSync(join(dirLen, "src/timeline/timing.json"), "{}");
+  mkdirSync(join(dirLen, "sound/sfx"), { recursive: true });
+  for (const [name, dur] of [
+    ["beep_1s", 1],
+    ["clip_15", 1.5],
+    ["alt_08", 0.8],
+  ]) {
+    const ff = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-y", "-f", "lavfi", "-i", `sine=f=440:d=${dur}`, `sound/sfx/${name}.wav`],
+      { cwd: dirLen, encoding: "utf8" },
+    );
+    assert.equal(ff.status, 0, ff.stderr);
+  }
+  writeFileSync(join(dirLen, "choices.json"), JSON.stringify({ beep_1s: { set: "alt_08" } }));
+  writeFileSync(
+    join(dirLen, "src/timeline/audio.json"),
+    JSON.stringify({
+      voice: false,
+      beds: [],
+      sfx: [
+        // unswapped start >= seconds with explicit length -> skipped
+        { name: "beep_1s", at: 5, start: 5, length: 1, gain: 0 },
+        // EOF clamped + rate 2x: avail = (1.5 - 0.5) / 2 = 0.5s (0..0.5, NOT 0..5)
+        { name: "clip_15", at: 0, start: 0.5, rate: 2, length: 5, gain: 0 },
+        // swapped to alt_08 (0.8s): drops orig start=5 and clamps to 0.8s (10..10.8)
+        { name: "beep_1s", at: 10, start: 5, length: 2, gain: 0, try: ["alt_08"] },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    whatsAt(dirLen, 0.25).sounds.map((s) => s.name),
+    ["clip_15"],
+  );
+  assert.deepEqual(whatsAt(dirLen, 1.0).sounds, []);
+  assert.deepEqual(whatsAt(dirLen, 5.2).sounds, []);
+  assert.deepEqual(
+    whatsAt(dirLen, 10.4).sounds.map((s) => s.picked),
+    ["alt_08"],
+  );
+  assert.deepEqual(whatsAt(dirLen, 11.2).sounds, []);
+});
+
+test("at and voice cues preserve declared reorder playback before capping at audio EOF", async (t) => {
+  const { buildVoiceCues } = await import("../voice/cues.ts");
+  const dir = film(t);
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  const made = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=0.5", join(dir, "sound/sfx/tone.wav")],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(made.status, 0, made.stderr);
+  const put = (file, value) => writeFileSync(join(dir, file), JSON.stringify(value));
+  put("src/edit.json", { end: 10 });
+  put("src/timeline/timing.json", {
+    main: [
+      { id: "late", kind: "clip", sourceFrom: 5, sourceTo: 10 },
+      { id: "early", kind: "clip", sourceFrom: 0, sourceTo: 5 },
+    ],
+    speeds: [{ from: 0, to: 10, rate: 2 }],
+  });
+  const audio = { voice: false, beds: [], sfx: [{ name: "tone", at: 4, length: 4, gain: 0 }] };
+  put("src/timeline/audio.json", audio);
+  const heard = whatsAt(dir, 4.8);
+  assert.equal(heard.sounds.length, 1);
+  assert.equal(heard.sounds[0].to, 5);
+  assert.equal(whatsAt(dir, 5.1).sounds.length, 0);
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  put("renders/live/voice_map.json", {
+    lines: [{ text: "hello", s: 0.1, e: 0.4, words: [{ w: "hello", s: 0.1, e: 0.4 }] }],
+  });
+  put("src/timeline/audio.json", { ...audio, narration: "tone" });
+  assert.deepEqual(
+    buildVoiceCues(dir).lines.map((line) => [line.s, line.e]),
+    [[4.6, 4.9]],
+  );
+  assert.equal(whatsAt(dir, 4.8).narration?.text, "hello");
+});
+
+test("at applies physical EOF after compiling repeated SFX playback", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  const made = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-f", "lavfi", "-i", "sine=d=1", join(dir, "sound/sfx/tone.wav")],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(made.status, 0, made.stderr);
+  const put = (file, value) => writeFileSync(join(dir, file), JSON.stringify(value));
+  put("src/edit.json", { end: 4 });
+  put("src/timeline/audio.json", {
+    voice: false,
+    beds: [],
+    sfx: [{ name: "tone", at: 0, length: 4, gain: 0 }],
+  });
+  for (const rate of [1, 2]) {
+    put("src/timeline/timing.json", {
+      main: [
+        { id: "a", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+        { id: "b", kind: "clip", sourceFrom: 0, sourceTo: 2 },
+      ],
+      speeds: [{ from: 0, to: 4, rate }],
+    });
+    for (const [at, active] of [
+      [0.5, true],
+      [1.5, false],
+      [2.5, true],
+      [3.5, false],
+    ]) {
+      const got = whatsAt(dir, at / rate);
+      assert.equal(got.sounds.length, active ? 1 : 0, `${at / rate}s at ${rate}x`);
+      if (active) assert.equal(got.sounds[0].to, 3 / rate);
+    }
+  }
 });

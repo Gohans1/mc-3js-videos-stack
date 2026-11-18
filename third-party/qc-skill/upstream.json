@@ -1,0 +1,133 @@
+{
+  "source": "https://github.com/kajisho5/qc-skill",
+  "version": "1.4.0",
+  "commit": "9c61ed7d239b60061b164782e93c5a1008a8be91",
+  "license": "MIT",
+  "unchanged": true,
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "7522b29e4d6e90f2a8fab15f07d224b1064c70692a872be9996ac1a88cf474e9"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "739119aeacdf0b627fd634b26ea5c3f0ab4c65e4bf9e2774fad3a71f31b750aa"
+    },
+    {
+      "path": "src/qc_skill/__init__.py",
+      "sha256": "bcddd2fcc304add0be36e6015a476a477590f79c1f8fd35b0a10cecb7853a96a"
+    },
+    {
+      "path": "src/qc_skill/cache.py",
+      "sha256": "742bc429fb76e690f7e3a61b0be9a0cfede0adb210f1952fd673709ca1e6e38d"
+    },
+    {
+      "path": "src/qc_skill/canonical.py",
+      "sha256": "c5228348faededf604a8900fcd67d8a26a9643aa6cce5c1f5cfd9ff8a7fd113f"
+    },
+    {
+      "path": "src/qc_skill/capabilities.py",
+      "sha256": "84eb0195816f00c255a320a5d80be856a1b06801c2319bb7b05a8487e78a1be1"
+    },
+    {
+      "path": "src/qc_skill/cli.py",
+      "sha256": "5bcd80fcb24540910cdfc2b8a076a61e3469fe1335cc44558766bca9deae575f"
+    },
+    {
+      "path": "src/qc_skill/contract.py",
+      "sha256": "91e043f9ce332fdddbd67c6b7eddd53676cf94ae5f3e93d2624f2da81b820bd2"
+    },
+    {
+      "path": "src/qc_skill/engine.py",
+      "sha256": "174eaa4027219993371a76d11fc52a7ab1f6f7982f3fd43497751a05b4dc76b4"
+    },
+    {
+      "path": "src/qc_skill/errors.py",
+      "sha256": "dc9c89b24e838c0287d19254d20c9e7ab7f59d0edabea9ab46a26c750c8880ee"
+    },
+    {
+      "path": "src/qc_skill/measurements/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/qc_skill/measurements/_decode_errors.py",
+      "sha256": "ae397c66e162a3a1c9554474ec8dacb87bf281ab7c5ead25433b3a677017470f"
+    },
+    {
+      "path": "src/qc_skill/measurements/alpha_edge.py",
+      "sha256": "ab203d8885b2bcad79500c88941bbdc98d75f263485ec05345585629443fa999"
+    },
+    {
+      "path": "src/qc_skill/measurements/audio.py",
+      "sha256": "5e36a78b58c1945cfcffcbb2ee0d43fcf1de2c60e461d5ca7b0919359fad026f"
+    },
+    {
+      "path": "src/qc_skill/measurements/frames.py",
+      "sha256": "65fb76cddce7b988b0f6d217e8a18ce7d0150eb4a4c4516f65c19ab449c40da3"
+    },
+    {
+      "path": "src/qc_skill/measurements/key_fill.py",
+      "sha256": "a5b770341c32d2e0ffd30169fd776094e24c77ca4fa26bfb347f3b1c3e54bcf4"
+    },
+    {
+      "path": "src/qc_skill/measurements/loop_seam.py",
+      "sha256": "3117e22be9aab3ecd64c936cc7603c2531b02c2b179850feaeed57da6089b8c4"
+    },
+    {
+      "path": "src/qc_skill/measurements/reference.py",
+      "sha256": "295da6599e79764b08059a90c5d9a48308b05fdd6c7956f44872519e2dadf2c5"
+    },
+    {
+      "path": "src/qc_skill/measurements/stinger.py",
+      "sha256": "9a1799c039bfd893727075a7e22282c8a111b53f209cf2a1942167f697faeff2"
+    },
+    {
+      "path": "src/qc_skill/measurements/subtitle.py",
+      "sha256": "8ed179db02573e737659d9c1eefb69f8e49ff0cfaedcb23c068e1b0271729d0f"
+    },
+    {
+      "path": "src/qc_skill/measurements/temporal.py",
+      "sha256": "5c05c1c39c551475051473bf991940e4a8990f57b39c684240fc050b320152e4"
+    },
+    {
+      "path": "src/qc_skill/measurements/text_legibility.py",
+      "sha256": "4f3d9475fa22dd907f6be7061b5300c4a61b76265e1c17d575ea4d72244204cd"
+    },
+    {
+      "path": "src/qc_skill/measurements/transcript.py",
+      "sha256": "039cbdc6b93a6a0201f1d84bacb2225f7e2048bf867021587b5fdc262b4794c3"
+    },
+    {
+      "path": "src/qc_skill/measurements/video.py",
+      "sha256": "28b73dadf555ce2079d122463374a86244edd3cd4a7ebda710369abd561d128e"
+    },
+    {
+      "path": "src/qc_skill/measurements/video_loop_seam.py",
+      "sha256": "c8f39aff85731e5497acd803aa3f341647329ee4632c78f2e31fc0aa1a0b3217"
+    },
+    {
+      "path": "src/qc_skill/models.py",
+      "sha256": "7846a67bc691b3ba764606ae1e6818c792d2540ef339f4636a89d5ba06968d1b"
+    },
+    {
+      "path": "src/qc_skill/probe.py",
+      "sha256": "3f67c0e282262587549715a44edc08cb4ebe8fea799f59c3ced37ef777b50976"
+    },
+    {
+      "path": "src/qc_skill/rules.py",
+      "sha256": "ee2fe4d9d841ac5d9d4d3dfc4297f8381fc038be497410b76e955612f86e114c"
+    },
+    {
+      "path": "src/qc_skill/runner.py",
+      "sha256": "c092c1199bf4820334b94188f6448242d658134cff7e616f442ad6c987c3f7b7"
+    },
+    {
+      "path": "src/qc_skill/schemas.py",
+      "sha256": "9452375d98bece698803679e015edbc0b36717adfda188f73e2898c1e61e4068"
+    },
+    {
+      "path": "src/qc_skill/security.py",
+      "sha256": "3117bd252b95644b228d17c059ccf0f29cd54738b6950439f783fce17f03cde8"
+    }
+  ]
+}

@@ -262,6 +262,11 @@ describe("CLI workbench keyboard and validation in Chrome", () => {
       await webview.press("Tab");
       assert.equal(
         await webview.evaluate("document.activeElement?.getAttribute('aria-label')"),
+        "Command preview",
+      );
+      await webview.press("Tab");
+      assert.equal(
+        await webview.evaluate("document.activeElement?.getAttribute('aria-label')"),
         "Copy command",
       );
       assert.equal(runRequests, 0);
@@ -288,8 +293,42 @@ describe("CLI workbench keyboard and validation in Chrome", () => {
     );
     await fill("Query Words / Scene", "reset-me");
     await webview.evaluate("document.querySelector('[aria-label=\"Reset options\"]').click()");
+    await waitUntil(
+      "document.querySelector('[role=dialog]')?.textContent.includes('Reset options?')",
+      "reset confirmation",
+    );
+    await webview.press("Escape");
+    await waitUntil("!document.querySelector('[role=dialog]')", "reset canceled");
+    assert.equal(await webview.evaluate(`(${field("Query Words / Scene")}).value`), "reset-me");
+    await webview.evaluate("document.querySelector('[aria-label=\"Reset options\"]').click()");
+    await waitUntil("document.querySelector('[role=dialog]')", "reset confirmation reopened");
+    await webview.evaluate(
+      "[...document.querySelectorAll('[role=dialog] button')].find(n=>n.textContent==='Reset options').click()",
+    );
     await waitUntil(`(${field("Query Words / Scene")}).value===''`, "pending text reset");
     assert.equal(runRequests, 0);
+  });
+
+  test("opening and returning from a command preserves keyboard position", async () => {
+    const command =
+      "[...document.querySelectorAll('button')].find(n=>n.textContent.startsWith('helpList commands'))";
+    await waitUntil(command, "help command shown");
+    await webview.evaluate(`(${command}).focus()`);
+    await webview.press("Enter");
+    await waitUntil(
+      "document.activeElement === document.querySelector('[data-cli-workbench] h2')",
+      "focus reaches command heading",
+      3000,
+    );
+    await webview.evaluate(
+      "[...document.querySelectorAll('button')].find(n=>n.textContent==='Commands').focus()",
+    );
+    await webview.press("Enter");
+    await waitUntil(
+      `document.activeElement === (${command})`,
+      "focus returns to the help command",
+      3000,
+    );
   });
 
   test("opening a long command guide starts at its heading without execution", async () => {
@@ -407,7 +446,7 @@ describe("CLI workbench keyboard and validation in Chrome", () => {
       "[...document.querySelectorAll('button')].find(n=>n.textContent==='Run command').click()",
     );
     await waitUntil(
-      "document.querySelector('[data-cli-workbench]')?.textContent.includes('Command could not run')",
+      "document.querySelector('[data-cli-workbench]')?.textContent.includes('Could not start command')",
       "fixture run rejection",
     );
     assert.equal(postedRequests[0]?.path, "/api/cli/run");
@@ -486,6 +525,21 @@ describe("CLI workbench keyboard and validation in Chrome", () => {
       3000,
     );
     assert.equal(runRequests, 0);
+  });
+
+  test("workbench and console actions fit the minimum desktop sidebar at 200% text size", async () => {
+    await webview.evaluate(
+      "(()=>{document.documentElement.style.fontSize='32px';Object.assign(document.querySelector('#cli-test-panel').style,{width:'260px',height:'1012px'});window.__CLI_TEST__.open('help')})()",
+    );
+    const buttonsFit = (selector) =>
+      `(()=>{const panel=document.querySelector('#cli-test-panel').getBoundingClientRect();const buttons=[...document.querySelectorAll('${selector}')];return buttons.length>0&&buttons.every(b=>{const r=b.getBoundingClientRect();return r.left>=panel.left&&r.right<=panel.right;});})()`;
+    await waitUntil(buttonsFit("[data-cli-actions] button"), "configure action buttons fit", 3000);
+    await webview.evaluate(`window.__CLI_TEST__.seedRun(${JSON.stringify(completedHelpRun)})`);
+    await waitUntil(
+      buttonsFit('[aria-label="Command output"] button'),
+      "console action buttons fit",
+      3000,
+    );
   });
 
   test("output and its expand control stay reachable at 200% text size", async () => {

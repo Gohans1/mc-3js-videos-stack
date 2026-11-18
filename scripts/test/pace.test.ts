@@ -1,7 +1,7 @@
 // pace.ts: how long each shot runs and how long the picture holds still, from a film's cuts and its frames
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,13 @@ test("a new picture is a cut, or a third of the frame changed since the last new
   ];
   // 10 frames a second; a cut at 2.5 s where nothing in the picture changes still starts a new picture
   expect(newPictures(frames, 10, [2.5])).toEqual([0, 1.1, 1.3, 1.5, 2.5]);
+});
+
+test("every planned cut counts, including cuts between the same two samples and after the last sample", () => {
+  const frames = Array.from({ length: 15 }, () => flat(0));
+  expect(newPictures(frames, 10, [0, 1.004, 1.065, 1.093, 1.453, 1.5])).toEqual([
+    0, 1.004, 1.065, 1.093, 1.453,
+  ]);
 });
 
 test("the report names the long shot, the hold with what the narration says over it, and the first 30 s", () => {
@@ -90,7 +97,7 @@ test("a word that starts just before a hold and runs into it is said over the ho
 });
 
 // the command on a film folder with a video in renders/: pace measures whole films only
-const paceOn = (video: string, make: string[], cuts = "[1]") => {
+const paceOn = (video: string, make: string[], cuts = "[1]", stale = false) => {
   const dir = mkdtempSync(join(tmpdir(), "pace-"));
   mkdirSync(join(dir, "src"));
   mkdirSync(join(dir, "renders/chunks"), { recursive: true });
@@ -98,6 +105,7 @@ const paceOn = (video: string, make: string[], cuts = "[1]") => {
   writeFileSync(join(dir, "package.json"), "{}");
   writeFileSync(join(dir, "renders/cuts.json"), cuts);
   media(join(dir, video), ["-f", "lavfi", "-i", ...make]);
+  if (stale) utimesSync(join(dir, video), 1000, 1000);
   const r = spawnSync("bun", [PACE, video], {
     cwd: dir,
     encoding: "utf8",
@@ -115,6 +123,16 @@ test("a span or a chunk is no whole film: pace refuses it, naming the video it m
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/measures the whole film[^\n]*renders\/draft_video\.mp4/);
   }
+});
+
+test("pace refuses to attach the current editorial timeline to a foreign or stale file", () => {
+  const foreign = paceOn("renders/reference.mp4", clip);
+  expect(foreign.status).toBe(2);
+  expect(foreign.stderr).toMatch(/reference study/);
+  const stale = paceOn("renders/draft_video.mp4", clip, "[1]", true);
+  expect(stale.status).toBe(2);
+  expect(stale.stderr).toMatch(/STALE/);
+  expect(stale.stdout).not.toMatch(/shots:/);
 });
 
 test("a picture is no video: pace refuses it", () => {

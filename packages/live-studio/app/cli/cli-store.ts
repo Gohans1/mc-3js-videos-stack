@@ -26,6 +26,7 @@ import {
 } from "./client";
 import {
   type CliCommandDraft,
+  type CliRunError,
   createInitialDraft,
   draftFromTemplate,
   formatTargetBadgeText,
@@ -50,11 +51,12 @@ export interface CliUiState {
   editingTemplateId: string | null;
   activeRun: CliRunSnapshot | null;
   lastRun: CliRunSnapshot | null;
+  hiddenRunId: string | null;
   stoppingRunId: string | null;
   consoleExpanded: boolean;
   focusConsoleRunId: string | null;
   submittingRun: boolean;
-  runError: string | null;
+  runError: CliRunError | null;
   clearedHint: string | null;
   confirmPending: {
     request: CliRunRequest;
@@ -85,6 +87,7 @@ export const cliStore = createStore<CliUiState>(() => ({
   editingTemplateId: null,
   activeRun: null,
   lastRun: null,
+  hiddenRunId: null,
   stoppingRunId: null,
   consoleExpanded: false,
   focusConsoleRunId: null,
@@ -226,7 +229,7 @@ export async function syncCliRuns(): Promise<void> {
     const { active, last } = await fetchCliRuns();
     cliStore.setState((s) => ({
       activeRun: active,
-      lastRun: last ?? s.lastRun,
+      lastRun: last && last.runId !== s.hiddenRunId ? last : s.lastRun,
       stoppingRunId:
         active && active.status === "running" && s.stoppingRunId === active.runId
           ? s.stoppingRunId
@@ -500,7 +503,7 @@ export async function dispatchCliRun(
   } catch (err) {
     cliStore.setState({
       submittingRun: false,
-      runError: err instanceof Error ? err.message : String(err),
+      runError: { operation: "start", message: err instanceof Error ? err.message : String(err) },
     });
     return;
   }
@@ -524,7 +527,10 @@ export async function dispatchCliRun(
       });
       return;
     }
-    cliStore.setState({ submittingRun: false, runError: res.error });
+    cliStore.setState({
+      submittingRun: false,
+      runError: { operation: "start", message: res.error },
+    });
     return;
   }
 
@@ -553,7 +559,7 @@ export async function stopCurrentRun(runId: string): Promise<void> {
   } catch (err) {
     cliStore.setState({
       stoppingRunId: null,
-      runError: err instanceof Error ? err.message : String(err),
+      runError: { operation: "stop", message: err instanceof Error ? err.message : String(err) },
     });
     return;
   }
@@ -594,10 +600,10 @@ export async function stopCurrentRun(runId: string): Promise<void> {
   }));
 }
 
-export function clearConsoleRun(commandId: string) {
-  cliStore.setState((s) => ({
-    lastRun: s.lastRun?.commandId === commandId ? null : s.lastRun,
-  }));
+export function hideConsoleRun(commandId: string) {
+  cliStore.setState((s) =>
+    s.lastRun?.commandId === commandId ? { lastRun: null, hiddenRunId: s.lastRun.runId } : {},
+  );
 }
 
 export async function commitSaveTemplate(input: {

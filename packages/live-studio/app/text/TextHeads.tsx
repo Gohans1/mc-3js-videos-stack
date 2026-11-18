@@ -3,6 +3,7 @@ import { Eye, EyeOff, Lock, LockOpen, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 
+import { useActivity, useLit } from "../activity/activity";
 import { Tip } from "../components/Tip";
 import { useStudio } from "../core/store";
 import { items, pickText, setTrack, trackState, tracksUsed } from "./text";
@@ -10,9 +11,10 @@ import { ROW_H } from "./textrow";
 
 export function TextHeads() {
   useStudio((s) => s.textRev);
+  const lit = useLit("tab:text"), lights = useActivity((state) => state.lit);
   const count = Math.max(1, tracksUsed());
   return (
-    <ul aria-label="Text tracks" className="border-track-line bg-track-head border-e">
+    <ul data-ai-lit={lit || undefined} aria-label="Text tracks" className="border-track-line bg-track-head border-e">
       {Array.from({ length: count }, (_, row) => {
         const track = count - 1 - row,
           state = trackState(track),
@@ -20,6 +22,7 @@ export function TextHeads() {
         return (
           <li
             key={track}
+            data-ai-lit={(`track:text:${track}` in lights) || undefined}
             style={{ "--row-h": `${ROW_H}px` }}
             className="border-background flex h-(--row-h) items-center border-b"
           >

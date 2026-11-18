@@ -76,12 +76,18 @@ export function meter(w, h, mask = () => true) {
       la = lb;
       lb = lc;
     },
-    report(fps, cuts = []) {
+    report(fps, cuts = [], times, lastDuration) {
       const n = L.length,
-        t = (i) => i / fps,
+        t = (i) => times?.[i] ?? i / fps,
         f = (x) => x.toFixed(2),
         faults = [];
-      const nearCut = (i) => cuts.some((c) => Math.abs(c - t(i)) <= 1.5 / fps);
+      const duration = (i) => (i + 1 < n ? t(i + 1) - t(i) : lastDuration || 1 / fps);
+      const nearCut = (i) => {
+        const tolerance = times
+          ? Math.min(0.075, 1.5 * Math.min(duration(i), duration(i - 1)))
+          : 1.5 / fps;
+        return cuts.some((c) => Math.abs(c - t(i)) <= tolerance);
+      };
       const runs = (test, long, kind, say) => {
         for (let i = 0; i < n;) {
           if (!test(i)) {
@@ -90,8 +96,9 @@ export function meter(w, h, mask = () => true) {
           }
           let j = i;
           while (j + 1 < n && test(j + 1)) j++;
-          if (t(j) - t(i) + 1 / fps >= long - 1e-9)
-            faults.push({ kind, t: t(i), to: t(j), say: say(i, j) });
+          const end = t(j) + duration(j);
+          if (end - t(i) >= long - 1e-9)
+            faults.push({ kind, t: t(i), to: kind === "FROZEN" ? end : t(j), say: say(i, j) });
           i = j + 1;
         }
       };
@@ -101,24 +108,32 @@ export function meter(w, h, mask = () => true) {
         "BLACK",
         (i, j) => `${j - i + 1} frame(s) with brightness ${f(least(L.slice(i, j + 1)))}`,
       );
+      const flashSteps = new Set();
       for (let i = 1; i + 1 < n; i++) {
         const up = L[i] - L[i - 1],
           down = L[i + 1] - L[i];
+        const localFrame = Math.max(duration(i - 1), i + 2 < n ? duration(i + 1) : 0);
         if (
+          L[i] >= DARK &&
+          duration(i) <= Math.min(0.125, 1.5 * localFrame) + 1e-9 &&
           Math.abs(up) > FLASH &&
           Math.abs(down) > FLASH &&
           Math.sign(up) !== Math.sign(down) &&
           !nearCut(i) &&
           !nearCut(i + 1)
-        )
+        ) {
           faults.push({
             kind: "FLASH",
             t: t(i),
             say: `one frame ${up > 0 ? "brighter" : "darker"}: ${f(L[i - 1])} -> ${f(L[i])} -> ${f(L[i + 1])}`,
           });
+          flashSteps.add(i);
+          flashSteps.add(i + 1);
+        }
       }
       // a jump needs no frame after it: the video's last frame is measured too
       for (let i = 1; i < n; i++) {
+        if (flashSteps.has(i) || L[i] < DARK || L[i - 1] < DARK) continue;
         const around = [...D.slice(Math.max(1, i - 5), i), ...D.slice(i + 1, i + 6)].sort(
           (x, y) => x - y,
         );
@@ -137,29 +152,22 @@ export function meter(w, h, mask = () => true) {
         (i, j) =>
           `up to ${f(most(S.slice(i, j + 1)) * 100)}% of the picture flickering frame to frame`,
       );
-      runs(
-        (i) => i > 0 && D[i] < SAME,
-        FROZEN_LONG,
-        "FROZEN",
-        (i, j) => `the same picture for ${f((j - i + 2) / fps)} s (a still the film means?)`,
-      );
-      // one bad frame is one fault: a black frame is not also a flash, a flash not also the two jumps into and out of it
-      const at = (kind, tt) =>
-        faults.some(
-          (x) => x.kind === kind && tt > x.t - 0.5 / fps && tt < (x.to ?? x.t) + 0.5 / fps,
-        );
-      const one = faults.filter(
-        (x) =>
-          !(x.kind === "FLASH" && at("BLACK", x.t)) &&
-          !(
-            x.kind === "JUMP" && ["FLASH", "BLACK"].some((k) => at(k, x.t) || at(k, x.t - 1 / fps))
-          ),
-      );
-      faults.length = 0;
-      faults.push(...one);
+      for (let i = 0; i < n;) {
+        let j = i;
+        while (j + 1 < n && D[j + 1] < SAME) j++;
+        const end = t(j) + duration(j);
+        if (end - t(i) >= FROZEN_LONG - 1e-9)
+          faults.push({
+            kind: "FROZEN",
+            t: t(i),
+            to: end,
+            say: `the same picture for ${f(end - t(i))} s (a still the film means?)`,
+          });
+        i = j + 1;
+      }
       faults.sort((x, y) => x.t - y.t);
       const lines = [
-        `${n} frames, ${f(n / fps)} s at ${fps} fps${n ? `: brightness ${f(least(L))}-${f(most(L))}` : ""}, ${cuts.length} cuts known`,
+        `${n} frames, ${f(n ? t(n - 1) - t(0) + duration(n - 1) : 0)} s at ${fps} fps${n ? `: brightness ${f(least(L))}-${f(most(L))}` : ""}, ${cuts.length} cuts known`,
       ];
       for (const x of faults)
         lines.push(

@@ -49,12 +49,20 @@ export function CliRunAnnouncement({
   return (
     <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
       {run && <span>{run.commandId}: </span>}
-      <StatusBadge run={run} isStopping={isStopping} />
+      <CliRunStatusBadge run={run} isStopping={isStopping} />
     </div>
   );
 }
 
-function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStopping?: boolean }) {
+export function CliRunStatusBadge({
+  run,
+  isStopping,
+  showExitCode = false,
+}: {
+  run: CliRunSnapshot | null;
+  isStopping?: boolean;
+  showExitCode?: boolean;
+}) {
   if (!run) {
     return (
       <Badge appearance="text" size="comfortable" variant="tag">
@@ -75,7 +83,7 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
     return (
       <Badge appearance="text" size="comfortable" variant="check">
         <Square aria-hidden />
-        Stopped{run.signal ? ` (${run.signal})` : ""}
+        Stopped{showExitCode && run.signal ? ` (${run.signal})` : ""}
       </Badge>
     );
   }
@@ -91,7 +99,7 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
     return (
       <Badge appearance="text" size="comfortable" variant="done">
         <CheckCircle2 aria-hidden />
-        Exit 0
+        {showExitCode ? "Completed · Exit 0" : "Completed"}
       </Badge>
     );
   }
@@ -99,69 +107,14 @@ function StatusBadge({ run, isStopping }: { run: CliRunSnapshot | null; isStoppi
     return (
       <Badge appearance="text" size="comfortable" variant="check">
         <AlertTriangle aria-hidden />
-        Exit 2 · Usage
+        {showExitCode ? "Failed · Exit 2" : "Failed"}
       </Badge>
     );
   }
   return (
     <Badge appearance="text" size="comfortable" variant="destructive">
       <XCircle aria-hidden />
-      Exit {run.exitCode ?? 1}
-    </Badge>
-  );
-}
-
-/** Compact run status pill shared across the Browse banner and compact workbench tab. */
-export function CliRunCompactBadge({
-  run,
-  isStopping = false,
-  donePrefix = "",
-  compact = false,
-}: {
-  run: CliRunSnapshot;
-  isStopping?: boolean;
-  donePrefix?: string;
-  compact?: boolean;
-}) {
-  if (run.status === "running") {
-    return (
-      <Badge appearance="text" size="comfortable" variant={isStopping ? "check" : "open"}>
-        <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
-        {isStopping ? (compact ? "Stopping" : "Stopping…") : compact ? "Live" : "Running"}
-      </Badge>
-    );
-  }
-  if (run.status === "stopped") {
-    return (
-      <Badge appearance="text" size="comfortable" variant="check">
-        Stopped
-      </Badge>
-    );
-  }
-  if (run.status === "error") {
-    return (
-      <Badge appearance="text" size="comfortable" variant="destructive">
-        Failed
-      </Badge>
-    );
-  }
-  if (run.exitCode === 0) {
-    return (
-      <Badge appearance="text" size="comfortable" variant="done">
-        {donePrefix}Exit 0
-      </Badge>
-    );
-  }
-  if (run.exitCode === 2) {
-    return (
-      <Badge appearance="text" size="comfortable" variant="check">
-        Exit 2
-      </Badge>
-    );
-  }
-  return (
-    <Badge appearance="text" size="comfortable" variant="destructive">
-      Exit {run.exitCode ?? 1}
+      {showExitCode && run.exitCode != null ? `Failed · Exit ${run.exitCode}` : "Failed"}
     </Badge>
   );
 }
@@ -275,10 +228,16 @@ export function CliConsole({
   };
 
   const hasText = rawText.length > 0 || Boolean(run?.error);
+  const recovery =
+    run?.status === "error"
+      ? "Check that the command’s required tools are installed and Studio can run them, then try again."
+      : run?.status === "done" && run.exitCode !== 0
+        ? "Read the output for details, then check the command options before running it again."
+        : null;
 
   return (
     <section
-      aria-label="AI output console"
+      aria-label="Command output"
       className={cn(
         "bg-card border-hairline flex min-w-0 flex-col overflow-hidden rounded-xl border",
         expanded || compact ? "min-h-0 flex-1" : run ? "min-h-[190px] flex-1" : "flex-none",
@@ -289,7 +248,7 @@ export function CliConsole({
           {showHeading && (
             <h3 className="text-heading-foreground mr-1 text-base font-semibold">Output</h3>
           )}
-          <StatusBadge run={run} isStopping={isStopping} />
+          <CliRunStatusBadge run={run} isStopping={isStopping} showExitCode />
           {run && (
             <span className="text-muted-foreground font-mono text-sm tabular-nums">
               {formatDurationMs(elapsedMs)}
@@ -302,11 +261,11 @@ export function CliConsole({
           )}
           {run?.truncated && (
             <Badge appearance="text" size="comfortable" variant="claim">
-              2 MB cap
+              Output truncated at 2 MB
             </Badge>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1">
           {isRunning && (
             <Button variant="destructive" size="comfortable" disabled={isStopping} onClick={onStop}>
               {isStopping ? (
@@ -319,9 +278,9 @@ export function CliConsole({
           )}
           <Tip label={wrap ? "Turn off line wrap" : "Wrap long lines"}>
             <Button
-              variant="quiet"
+              variant={wrap ? "outline" : "quiet"}
               size="icon-lg"
-              aria-label={wrap ? "Disable line wrap" : "Wrap long lines"}
+              aria-label="Wrap long lines"
               aria-pressed={wrap}
               onClick={() => setWrap((w) => !w)}
             >
@@ -350,11 +309,11 @@ export function CliConsole({
               {expanded ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
             </Button>
           </Tip>
-          <Tip label="Clear output">
+          <Tip label="Hide output">
             <Button
               variant="ghost"
               size="icon-lg"
-              aria-label="Clear output"
+              aria-label="Hide output"
               disabled={!run || isRunning}
               onClick={onClear}
             >
@@ -367,7 +326,7 @@ export function CliConsole({
       {run && (
         <div className="bg-surface-subtle border-hairline-subtle flex min-w-0 items-center justify-between gap-2 border-b px-2.5 py-1">
           <span
-            className="text-muted-foreground min-w-0 truncate font-mono text-sm"
+            className="text-muted-foreground min-w-0 font-mono text-sm wrap-anywhere"
             title={run.cwd}
           >
             Runs in: {run.cwd}
@@ -398,7 +357,7 @@ export function CliConsole({
             aria-label="Verbatim command output"
             onScroll={handleScroll}
             className={cn(
-              "bg-backdrop focus-visible:ring-ring min-h-0 flex-1 overflow-auto p-2.5 font-mono text-sm leading-relaxed outline-none focus-visible:ring-2",
+              "bg-backdrop focus-visible:ring-ring min-h-0 flex-1 overflow-auto overscroll-contain p-2.5 font-mono text-sm leading-relaxed outline-none focus-visible:ring-2",
               wrap ? "wrap-break-word whitespace-pre-wrap" : "whitespace-pre",
             )}
           >
@@ -437,11 +396,17 @@ export function CliConsole({
               onClick={jumpToBottom}
             >
               <ArrowDown aria-hidden />
-              Latest
+              Jump to latest
             </Button>
           </div>
         )}
       </div>
+
+      {recovery && (
+        <p className="border-hairline text-muted-foreground border-t px-2.5 py-1.5 text-sm leading-normal">
+          {recovery}
+        </p>
+      )}
 
       {outputsHint && (
         <div className="border-hairline flex min-w-0 items-center justify-between gap-2 border-t px-2.5 py-1.5">

@@ -11,12 +11,13 @@ import {
   ChevronsLeftRight,
   ClipboardCheck,
   Crosshair,
+  Link2,
   MessageCircleQuestion,
   Play,
   Plus,
   X,
 } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +38,7 @@ import { cn } from "@/lib/utils";
 
 import { noteState, noteThread } from "../../src/note-state.mjs";
 import { useLit, useLitAny } from "../activity/activity";
-import { Segmented } from "../components/inspector";
-import { TabStage, useEnterMotion } from "../components/Motion";
+import { SaveStatus, Segmented } from "../components/inspector";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { VirtualList } from "../components/VirtualList";
@@ -59,6 +59,7 @@ import {
   approveNote,
   approveReviewCurrent,
   clearNoteFilters,
+  copyNoteLink,
   focusReviewRow,
   goToNote,
   noteMedia,
@@ -69,6 +70,7 @@ import {
   playNote,
   rememberNote,
   reviewList,
+  setReplyDraft,
   setReview,
   stepReview,
 } from "./notes";
@@ -83,11 +85,11 @@ const kindOf = (n: Note): Kind => {
   const s = noteState(n);
   return s === "check" ? (lastFix(n)?.ask ? "ask" : "fix") : s;
 };
-const REPLY: Record<Kind, { hint: string; send: string }> = {
-  fix: { hint: "What still needs work? Enter sends it back to the AI", send: "Needs work" },
-  ask: { hint: "Your answer. Enter sends it to the AI", send: "Answer" },
-  open: { hint: "Add to this note. Enter sends it", send: "Add" },
-  done: { hint: "What needs work again? Enter reopens it", send: "Reopen" },
+const REPLY: Record<Kind, { label: string; send: string }> = {
+  fix: { label: "What still needs work", send: "Send to AI" },
+  ask: { label: "Your answer to the AI", send: "Send to AI" },
+  open: { label: "Add to this note", send: "Send to AI" },
+  done: { label: "What needs work again", send: "Reopen and send" },
 };
 const TABS: { id: ReviewTab; title: string }[] = [
   { id: "check", title: "To check" },
@@ -98,7 +100,7 @@ const TABS: { id: ReviewTab; title: string }[] = [
 const pic = (rel: string) => `/api/note-img/${rel.split("/").pop()}`;
 
 // The note's own picture over the film as it is now at that moment, split by a handle: drag it, or use the arrow keys on it
-function Compare({ n, at, banner }: { n: Note; at: number; banner?: ReactNode }) {
+function Compare({ n, at }: { n: Note; at: number }) {
   const then = noteMedia(n).thumb;
   const fix = lastFix(n);
   const showDiff = !!fix && !fix.ask && noteState(n) !== "open";
@@ -108,26 +110,32 @@ function Compare({ n, at, banner }: { n: Note; at: number; banner?: ReactNode })
   // drawn by the film's renderer, outside React's render, after the room has painted: a render of the film takes a moment
   const [now, setNow] = useState<string | null>(null);
   useEffect(() => {
-    const f = requestAnimationFrame(() => setNow(nowPicture(n)));
-    return () => cancelAnimationFrame(f);
-  }, [n, at, loading, final, pictureRev]);
+    if (!then || !showDiff) return;
+    let alive = true;
+    const f = requestAnimationFrame(() => {
+      void nowPicture(n).then((url) => {
+        if (alive) setNow(url);
+      });
+    });
+    return () => {
+      alive = false;
+      cancelAnimationFrame(f);
+    };
+  }, [n, at, final, loading, pictureRev, showDiff, then]);
   const [split, setSplit] = useState(50);
-  if (!then && !now) return null;
+  if (!then) return null;
   if (!showDiff) {
-    const single = now ?? then;
-    if (!single) return null;
     return (
       <>
-        {banner}
         <div className="bg-backdrop/90 border-hairline flex w-full justify-center rounded-lg border p-2">
-          <figure className="bg-backdrop ring-hairline upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md ring-1">
+          <figure className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md note-image-outline">
             <img
-              src={single}
-              alt={now ? `The film now at ${stamp(at)}` : `Saved frame at ${stamp(at)}`}
+              src={then}
+              alt={`Saved frame at ${stamp(at)}`}
               className="absolute inset-0 size-full object-contain"
             />
             <figcaption className="pointer-events-none absolute inset-2 flex items-end justify-end">
-              <Badge variant="frame">{now ? "Current frame" : "Saved frame"}</Badge>
+              <Badge variant="frame">Saved frame</Badge>
             </figcaption>
           </figure>
         </div>
@@ -136,10 +144,9 @@ function Compare({ n, at, banner }: { n: Note; at: number; banner?: ReactNode })
   }
   return (
     <>
-      {banner}
       <div className="bg-backdrop/90 border-hairline flex w-full justify-center rounded-lg border p-2">
         <figure
-          className="bg-backdrop has-focus-visible:ring-ring ring-hairline upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md ring-1 has-focus-visible:ring-2"
+          className="bg-backdrop has-focus-visible:ring-ring upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md note-image-outline has-focus-visible:ring-2"
           style={{ "--split": `${split}%`, "--hide": `${100 - split}%` }}
         >
           {now && (
@@ -234,7 +241,7 @@ function Pictures({ n, open }: { n: Note; open: (p: { src: string; alt: string }
             alt=""
             decoding="async"
             className={cn(
-              "block w-full",
+              "note-image-outline block w-full",
               p.wide ? "bg-backdrop h-24 object-contain" : "h-18 object-cover",
             )}
           />
@@ -420,6 +427,7 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
     lit = useLit(`note:${n.id}`),
     media = noteMedia(n),
     hasPictures =
+      Boolean(media.thumb) ||
       media.refs.length > 0 ||
       typeof n.strip === "string" ||
       Boolean(media.crop) ||
@@ -440,14 +448,16 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
         </AlertDescription>
       </Alert>
     ) : null;
-  const [words, setWords] = useState("");
+  const newBuild = useStudio((s) => s.newBuild);
+  const words = useStudio((s) => s.replyDrafts.get(n.id) ?? "");
+  const replyId = useId();
   const [big, setBig] = useState<{ src: string; alt: string } | null>(null);
   useDialogModal("reviewImage", !!big);
   const box = useRef<HTMLTextAreaElement>(null);
   const send = () => {
     const w = words.trim();
     if (!w || !answerNote(n, w)) return;
-    setWords("");
+    setReplyDraft(n.id, "");
     if (!replyStaysInList(kind)) next();
   };
   return (
@@ -475,6 +485,11 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
               <span className="truncate">{pinShortLabel(n.pin?.what)}</span>
             </Badge>
           )}
+          <Tip label="Copy note link">
+            <Button variant="quiet" size="icon-sm" aria-label="Copy note link" onClick={() => void copyNoteLink(n)}>
+              <Link2 aria-hidden />
+            </Button>
+          </Tip>
           <Tip label="Play from 2 s before (Space stops)">
             <Button variant="subtle" size="sm" onClick={() => playNote(n)}>
               <Play aria-hidden data-icon="inline-start" />
@@ -482,8 +497,15 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
             </Button>
           </Tip>
         </div>
+        {newBuild && (
+          <Alert className="mb-2 max-w-[65ch]">
+            <AlertDescription>
+              New preview build available. Now shows the loaded version until you use Reload in the player.
+            </AlertDescription>
+          </Alert>
+        )}
         {hasPictures && aiSummary}
-        <Compare n={n} at={t} banner={hasPictures ? null : aiSummary} />
+        <Compare n={n} at={t} />
         <div className="mt-2">
           <Pictures n={n} open={setBig} />
         </div>
@@ -504,14 +526,22 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
         )}
       </div>
       <div className="bg-backdrop/90 border-hairline flex-none border-t p-2 @lg:p-2.5">
+        <div className="text-ui mb-1 flex flex-wrap items-center justify-between gap-x-2">
+          <label htmlFor={replyId} className="text-label font-medium">
+            {REPLY[kind].label}
+          </label>
+          <span id={replyId + "-hint"} className="text-muted-foreground">
+            Enter sends · Shift+Enter adds a line
+          </span>
+        </div>
         <Textarea
+          id={replyId}
           ref={box}
           variant="note"
           name="reply"
-          aria-label={REPLY[kind].hint}
-          placeholder={REPLY[kind].hint}
+          aria-describedby={replyId + "-hint"}
           value={words}
-          onChange={(e) => setWords(e.target.value)}
+          onChange={(e) => setReplyDraft(n.id, e.target.value)}
           onKeyDown={(e) => {
             e.stopPropagation();
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -551,7 +581,7 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
             <img
               src={big.src}
               alt={big.alt}
-              className="block h-auto max-h-[78vh] w-full object-contain"
+              className="note-image-outline block h-auto max-h-[78vh] w-full object-contain"
             />
           )}
         </DialogContent>
@@ -617,7 +647,7 @@ function Row({ p, on, pick }: { p: Placed; on: boolean; pick: () => void }) {
             src={thumb}
             alt=""
             loading="lazy"
-            className="ring-hairline aspect-video w-18 flex-none rounded-sm object-cover ring-1"
+            className="aspect-video w-18 flex-none rounded-sm object-cover note-image-outline"
           />
         ) : (
           <span className="bg-backdrop text-muted-foreground ring-hairline-subtle flex aspect-video w-18 flex-none items-center justify-center rounded-sm ring-1">
@@ -702,8 +732,8 @@ function ReviewTabLabel({
 export function ReviewRoom() {
   useStudio((s) => s.notes);
   useStudio((s) => s.noteSort);
+  const saved = useStudio((s) => s.saved);
   const roomRef = useRef<HTMLElement>(null);
-  useEnterMotion(roomRef, { x: -12, y: 0, scale: 0.992, duration: 210 });
   const tab = useStudio((s) => s.reviewTab),
     pickId = useStudio((s) => s.reviewPick),
     q = useStudio((s) => s.noteSearch),
@@ -721,7 +751,7 @@ export function ReviewRoom() {
   };
   const list = lists[tab],
     matched = list.findIndex((p) => p.n.id === pickId),
-    i = Math.max(0, matched),
+    i = pickId === null ? 0 : matched,
     p = list[i] ?? null;
   useEffect(() => {
     if (get().compose) return;
@@ -754,6 +784,15 @@ export function ReviewRoom() {
     }
   };
   const fixes = lists.check.filter((x) => kindOf(x.n) === "fix");
+  const search = (noteSearch: string) => {
+    set({ noteSearch });
+    const { reviewTab, reviewPick } = get();
+    const matching = reviewList(reviewTab);
+    if (matching.some(({ n }) => n.id === reviewPick)) return;
+    const first = matching[0];
+    set({ reviewPick: first?.n.id ?? null });
+    if (first) goToNote(first.n);
+  };
   const keys = (e: KeyboardEvent) => {
     // Global useStudioHotkeys skips <input> arrows/letters; Escape bubbles so settingsOpen -> ink -> compose -> review priority holds.
     if (
@@ -782,13 +821,13 @@ export function ReviewRoom() {
       className="font-md bg-background upright:flex-1 upright:rounded-none sideways:rounded-none sideways:row-span-3 @container col-start-1 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg outline-none"
     >
       <header className="bg-backdrop/90 border-hairline flex flex-none flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-3 py-1.5">
-        <h2 className="flex min-h-8 items-center gap-1.5 text-lg font-semibold tracking-tight text-balance">
+        <h2 className="flex min-h-8 items-center gap-1.5 text-lg leading-tight font-semibold tracking-tight text-balance">
           <ClipboardCheck aria-hidden className="text-label size-4" />
           Review
         </h2>
         <Segmented
-          label="Which notes"
-          className="border-hairline bg-backdrop/75"
+          label="Review status"
+          className="border-hairline bg-backdrop/75 [&_.segmented-pill]:transition-none"
           value={tab}
           onChange={(v) => {
             const first = lists[v][0];
@@ -801,6 +840,7 @@ export function ReviewRoom() {
           }))}
         />
         <div className="ms-auto flex items-center gap-1.5">
+          <SaveStatus state={saved} failText="Not sent. Retrying…" hideWhenIdle />
           <Tip label="Add a note at the playhead (M)">
             <Button
               variant="subtle"
@@ -809,7 +849,7 @@ export function ReviewRoom() {
               onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
             >
               <Plus aria-hidden data-icon="inline-start" />
-              Note
+              New note
             </Button>
           </Tip>
           <Tip label="Back to editing (Esc or N)">
@@ -835,18 +875,14 @@ export function ReviewRoom() {
             <SearchBox
               name="review-search"
               value={q}
-              onChange={(x) => set({ noteSearch: x })}
+              onChange={search}
               label="Search notes"
               placeholder="Search notes…"
               className="w-full"
             />
             <ActiveFilterChips />
           </div>
-          <TabStage
-            activeKey={tab}
-            order={["check", "asking", "open", "done"]}
-            className="flex min-h-0 min-w-0 flex-1 flex-col"
-          >
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {list.length > 0 ? (
               <VirtualList
                 items={list}
@@ -863,7 +899,21 @@ export function ReviewRoom() {
             ) : (
               <p className="text-muted-foreground p-3 text-sm leading-relaxed text-pretty">
                 {q.trim() ? (
-                  `No notes match “${q.trim()}”.`
+                  <>
+                    No notes match “{q.trim()}”.{" "}
+                    <Button
+                      variant="link"
+                      size="inline"
+                      onClick={() => {
+                        search("");
+                        roomRef.current
+                          ?.querySelector<HTMLInputElement>('input[name="review-search"]')
+                          ?.focus();
+                      }}
+                    >
+                      Clear search
+                    </Button>
+                  </>
                 ) : hasSideFilters ? (
                   <>
                     No notes match your active filters.{" "}
@@ -895,11 +945,11 @@ export function ReviewRoom() {
                   }}
                 >
                   <Check aria-hidden data-icon="inline-start" />
-                  Approve all {fixes.length} fixes
+                  <span className="tabular-nums">Approve all {fixes.length} fixes</span>
                 </Button>
               </div>
             )}
-          </TabStage>
+          </div>
           <p className="text-muted-foreground border-hairline-subtle flex flex-none flex-wrap items-center gap-x-2 gap-y-1 border-t px-3 py-1.5 text-xs @max-lg:hidden pointer-coarse:hidden">
             <span className="inline-flex items-center gap-1 whitespace-nowrap">
               <Kbd>↑</Kbd> <Kbd>↓</Kbd> move
@@ -920,22 +970,9 @@ export function ReviewRoom() {
             </span>
           </p>
         </div>
-        <TabStage
-          activeKey={tab}
-          order={["check", "asking", "open", "done"]}
-          axis="x"
-          distance={8}
-          duration={160}
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-        >
-          {p ? (
-            <Detail key={p.n.id} p={p} next={next} />
-          ) : (
-            <div className="text-muted-foreground grid flex-1 place-items-center p-6 text-center text-sm leading-relaxed text-pretty">
-              Pick a note.
-            </div>
-          )}
-        </TabStage>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {p && <Detail key={p.n.id} p={p} next={next} />}
+        </div>
       </div>
       <Compose dock inline />
     </section>

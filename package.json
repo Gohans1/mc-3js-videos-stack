@@ -25,6 +25,7 @@
   "type": "module",
   "scripts": {
     "assets:semantic": "bun scripts/asset-search.ts",
+    "reference": "bun scripts/review/reference.mjs",
     "history": "bun packages/live-studio/history.mjs",
     "collab": "bun packages/live-studio/collab.mjs",
     "help": "bun packages/live-studio/help.mjs",

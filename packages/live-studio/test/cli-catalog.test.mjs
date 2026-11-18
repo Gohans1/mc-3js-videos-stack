@@ -16,6 +16,26 @@ import {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
+test("FFmpeg native argv preserves its explicit option boundary without weakening other commands", () => {
+  for (const invocation of [
+    ["probe", "--", "a clip.mp4"],
+    ["contract", "--", "--static", "--tool", "cut"],
+    ["export", "--minutes", "10", "--", "clip.mp4", "--preset", "prores", "-o", "master.mov"],
+  ]) {
+    const result = buildCliInvocation({
+      commandId: "media",
+      subcommandPath: ["ffmpeg"],
+      args: { invocation },
+    });
+    expect(result.validationErrors).toEqual([]);
+    expect(result.argvTokens).toEqual(["ffmpeg", ...invocation]);
+  }
+  const ordinary = buildCliInvocation({ commandId: "find", args: { words: "door --jev" } });
+  expect(ordinary.validationErrors.some((error) => error.includes("looks like an option"))).toBe(
+    true,
+  );
+});
+
 test("media setup preserves custom deadline and evidence parent in catalog argv", () => {
   const result = buildCliInvocation({
     commandId: "media",
@@ -24,7 +44,27 @@ test("media setup preserves custom deadline and evidence parent in catalog argv"
     flags: { "--minutes": 20, "--out": "renders/install" },
   });
   expect(result.validationErrors).toEqual([]);
-  expect(result.argvTokens).toEqual(["setup", "caption", "--minutes", "20", "--out", "renders/install"]);
+  expect(result.argvTokens).toEqual([
+    "setup",
+    "caption",
+    "--minutes",
+    "20",
+    "--out",
+    "renders/install",
+  ]);
+});
+
+test("skills subcommands preserve JSON output in resolved invocations", () => {
+  for (const verb of ["list", "get", "path"]) {
+    const result = buildCliInvocation({
+      commandId: "skills",
+      subcommandPath: [verb],
+      args: verb === "list" ? {} : { name: "core" },
+      flags: { "--json": true },
+    });
+    expect(result.validationErrors).toEqual([]);
+    expect(result.argvTokens).toEqual([verb, ...(verb === "list" ? [] : ["core"]), "--json"]);
+  }
 });
 
 test("media native tools remain discoverable and preserve their structured arguments", () => {
@@ -47,8 +87,22 @@ test("media native tools remain discoverable and preserve their structured argum
 
 test("reference media catalog preserves repeated points and a complete Foley search phrase", () => {
   for (const { request, expected } of [
-    {request: { subcommandPath: ["tapir"], args: { source: "clip.mp4" }, flags: { "--point": ["1,2", "3,4"] } }, expected: ["tapir", "clip.mp4", "--point", "1,2", "--point", "3,4"]},
-    {request: { subcommandPath: ["foley", "search"], args: { value: "a man speaking" }, flags: { "--config": "library.toml" } }, expected: ["foley", "search", "a man speaking", "--config", "library.toml"]},
+    {
+      request: {
+        subcommandPath: ["tapir"],
+        args: { source: "clip.mp4" },
+        flags: { "--point": ["1,2", "3,4"] },
+      },
+      expected: ["tapir", "clip.mp4", "--point", "1,2", "--point", "3,4"],
+    },
+    {
+      request: {
+        subcommandPath: ["foley", "search"],
+        args: { value: "a man speaking" },
+        flags: { "--config": "library.toml" },
+      },
+      expected: ["foley", "search", "a man speaking", "--config", "library.toml"],
+    },
   ]) {
     const result = buildCliInvocation({ commandId: "media", ...request }, BASE_CONTEXT);
     expect(result.validationErrors).toEqual([]);
@@ -426,6 +480,19 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
 
     // 4) Bidirectional disk entrypoint coverage across scripts/ and packages/
     const INTERNAL_WORKER_OR_HELPER_FILES = new Map([
+      ["scripts/review/sheet_view.py", "overview/frame extraction helper dispatched by sheet.py"],
+      [
+        "scripts/review/reference_inspect.py",
+        "reference inspect worker dispatched by reference.mjs",
+      ],
+      [
+        "scripts/review/reference_source.py",
+        "optional yt-dlp source acquisition for reference inspect",
+      ],
+      [
+        "scripts/review/reference_transcript.py",
+        "raw-preserving transcript import for reference inspect",
+      ],
       ["scripts/evals/load/compare.mjs", "developer helper comparing recorded performance runs"],
       ["scripts/evals/load/frame.mjs", "developer frame-measurement probe for load evaluations"],
       ["scripts/evals/find/dual.ts", "dual search evaluation dispatched by eval:find --mode dual"],
@@ -439,6 +506,8 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ["scripts/review/stale.py", "shared staleness helper module wrapping src/stale.mjs"],
       ["scripts/seconds.py", "shared heard-second parsing library imported by Python CLIs"],
       ["scripts/media/ocr.py", "RapidOCR SDK adapter spawned by the media CLI"],
+      ["scripts/media/qc.py", "bundled deterministic QC worker spawned by the media CLI"],
+      ["scripts/media/ffmpeg.mjs", "bundled FFmpeg dispatcher imported by the media CLI"],
       ["scripts/media/native.py", "native CPU media adapter spawned by the media CLI"],
       ["scripts/media/install.py", "verified native asset installer spawned by media setup"],
       ["scripts/media/sdk.py", "local SDK media worker spawned by the media CLI"],
@@ -455,7 +524,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         "scripts/sound/process.py",
         "stdin JSON FFmpeg/Rubberband worker spawned by Live Studio audio",
       ],
-
+      ["scripts/studio_tell.py", "shared Studio activity reporter library imported by Python CLIs"],
       [
         "scripts/voice/words.py",
         "internal WHISPERX_PYTHON GPU alignment worker spawned by scripts/voice/align.ts",
@@ -694,7 +763,7 @@ describe("cli-catalog resolver rules", () => {
     expect(buildCliInvocation({ commandId: "skills" }, BASE_CONTEXT).validationErrors).toEqual([]);
     expect(buildCliInvocation({ commandId: "sfx:get" }, BASE_CONTEXT).validationErrors).toEqual([]);
 
-    const noHelp = buildCliInvocation({ commandId: "mc:slim-jar", mode: "help" }, BASE_CONTEXT);
+    const noHelp = buildCliInvocation({ commandId: "voice:genvoice", mode: "help" }, BASE_CONTEXT);
     expect(noHelp.meta.helpMode).toBe("none");
     expect(noHelp.validationErrors.length).toBeGreaterThan(0);
   });
@@ -958,7 +1027,7 @@ describe("cli-catalog resolver rules", () => {
       BASE_CONTEXT,
     );
     expect(sheetMissingTarget.validationErrors).toContain(
-      "Missing required argument: Times / shots / cut",
+      "Missing required argument: Times / overview / frames / shots / cut",
     );
 
     const sheetMissingCut = buildCliInvocation(
@@ -978,6 +1047,25 @@ describe("cli-catalog resolver rules", () => {
     );
     expect(sheetCutOk.validationErrors).toEqual([]);
     expect(sheetCutOk.argvTokens).toEqual(["renders/draft_video.mp4", "cut", "4"]);
+
+    const nativeFrames = buildCliInvocation(
+      {
+        commandId: "sheet",
+        args: { video: "renders/draft_video.mp4", target: "frames", frameTimes: "12.2-12.6/12" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(nativeFrames.validationErrors).toEqual([]);
+    expect(nativeFrames.argvTokens).toEqual(["renders/draft_video.mp4", "frames", "12.2-12.6/12"]);
+    const overview = buildCliInvocation(
+      {
+        commandId: "sheet",
+        args: { video: "renders/draft_video.mp4", target: "overview", overviewRange: "10-20/16" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(overview.validationErrors).toEqual([]);
+    expect(overview.argvTokens).toEqual(["renders/draft_video.mp4", "overview", "10-20/16"]);
 
     const sheetShots = buildCliInvocation(
       { commandId: "sheet", args: { video: "renders/draft_video.mp4", target: "shots" } },
@@ -1177,7 +1265,7 @@ describe("cli-catalog resolver rules", () => {
       BASE_CONTEXT,
     );
     expect(sheetSkipVideo.validationErrors).toContain(
-      "Fill Video (Omit = Still PNGs) before setting Times / shots / cut.",
+      "Fill Video (Omit = Still PNGs) before setting Times / overview / frames / shots / cut.",
     );
   });
 
@@ -1253,7 +1341,12 @@ describe("cli-catalog resolver rules", () => {
     const sheetClip = buildCliInvocation({ commandId: "catalog:sheet-clip" }, BASE_CONTEXT);
     expect(sheetClip.validationErrors).toEqual([]);
     expect(sheetClip.cwdMode).toBe("film");
-    expect(sheetClip.meta.helpMode).toBe("none");
+    const sheetHelp = buildCliInvocation(
+      { commandId: "catalog:sheet-clip", mode: "help" },
+      BASE_CONTEXT,
+    );
+    expect(sheetHelp.validationErrors).toEqual([]);
+    expect(sheetHelp.argvTokens).toEqual(["--help"]);
     expect(sheetClip.displayCommand).toBe("python ../../packages/clip-catalog/sheet_clip.py");
   });
 

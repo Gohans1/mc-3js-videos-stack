@@ -201,7 +201,7 @@ export function CliConfirmDialog({
               <span className="text-muted-foreground font-mono text-sm break-all">
                 Runs in: {request.cwd}
               </span>
-              <pre className="text-foreground max-h-36 overflow-auto font-mono text-sm break-all whitespace-pre-wrap">
+              <pre className="text-foreground max-h-36 overflow-auto overscroll-contain font-mono text-sm break-all whitespace-pre-wrap">
                 {request.displayCommand}
               </pre>
             </div>
@@ -313,6 +313,7 @@ export function SaveTemplatePanel({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent
+                fitContent
                 finalFocus
                 className="[--text-ui:0.875rem]"
                 onKeyDown={stopCliHotkeyPropagation}
@@ -325,13 +326,13 @@ export function SaveTemplatePanel({
               </SelectContent>
             </Select>
             <FieldDescription size="comfortable">
-              Templates run in the current Studio project, or the repo root when supported.
+              The template uses this folder when you run it.
             </FieldDescription>
           </Field>
         )}
 
         <div className="bg-backdrop border-hairline min-w-0 rounded-lg border p-2">
-          <pre className="text-muted-foreground max-h-24 overflow-auto font-mono text-sm break-all whitespace-pre-wrap">
+          <pre className="text-muted-foreground max-h-24 overflow-auto overscroll-contain font-mono text-sm break-all whitespace-pre-wrap">
             {displayCommand}
           </pre>
         </div>
@@ -340,7 +341,10 @@ export function SaveTemplatePanel({
           <Alert variant="destructive">
             <AlertTriangle aria-hidden />
             <AlertTitle>Could not save template</AlertTitle>
-            <AlertDescription>{saveError}</AlertDescription>
+            <AlertDescription size="prose" className="wrap-anywhere">
+              <span className="block">{saveError}</span>
+              Try saving again. If it still fails, check Studio’s connection and write access.
+            </AlertDescription>
           </Alert>
         )}
       </div>
@@ -364,7 +368,7 @@ export function SaveTemplatePanel({
           disabled={!trimmed || saving}
           onClick={() => handleSubmit(false)}
         >
-          {editingExisting ? "Update template" : "Save template"}
+          {saving ? "Saving template…" : editingExisting ? "Update template" : "Save template"}
         </Button>
       </DialogFooter>
     </>
@@ -394,7 +398,41 @@ export function CliSaveTemplateDialog({
 }: SaveTemplateFormProps & { open: boolean }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && props.onClose()}>
-      {open && <SaveTemplateForm {...props} />}
+      <SaveTemplateForm {...props} />
+    </Dialog>
+  );
+}
+
+export function CliResetDialog({
+  open,
+  onConfirm,
+  onCancel,
+  returnFocus,
+}: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  returnFocus: () => HTMLElement | true;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent data-cli-dialog finalFocus={returnFocus} showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Reset options?</DialogTitle>
+          <DialogDescription variant="comfortable">
+            Restore the command’s defaults and discard changes to this draft. Saved templates stay
+            available.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="secondary" size="comfortable" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" size="comfortable" onClick={onConfirm}>
+            Reset options
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   );
 }

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const toast = ToastPrimitive.createToastManager();
+const activityToast = ToastPrimitive.createToastManager();
 
 function ToastProvider({ ...props }: ToastPrimitive.Provider.Props) {
   return <ToastPrimitive.Provider {...props} />;
@@ -171,19 +172,22 @@ function ToastIcon({ type }: { type: string | undefined }) {
   );
 }
 
-function ToastList() {
+function ToastList({ compact }: { compact: boolean }) {
   const { toasts } = ToastPrimitive.useToastManager();
 
   return toasts.map((toastItem) => (
-    <Toast key={toastItem.id} toast={toastItem}>
-      <ToastContent>
+    <Toast key={toastItem.id} toast={toastItem} className={compact ? "h-7! transform-none!" : undefined}>
+      <ToastContent className={compact ? "gap-2 px-2 py-1" : undefined}>
         <ToastIcon type={toastItem.type} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <ToastTitle />
-          <ToastDescription />
+          <ToastTitle
+            className={compact ? "truncate text-sm" : undefined}
+            title={compact && typeof toastItem.title === "string" ? toastItem.title : undefined}
+          />
+          <ToastDescription className={compact ? "sr-only" : undefined} />
         </div>
-        <ToastAction />
-        <ToastClose />
+        <ToastAction className={compact ? "h-6 px-2" : undefined} />
+        <ToastClose className={compact ? "size-6" : undefined} />
       </ToastContent>
     </Toast>
   ));
@@ -195,17 +199,19 @@ function Toaster({
   toastManager = toast,
   viewportClassName,
   portalContainer,
+  compact = false,
   ...props
 }: ToastPrimitive.Provider.Props & {
   viewportClassName?: string;
   portalContainer?: ToastPrimitive.Portal.Props["container"];
+  compact?: boolean;
 }) {
   return (
     <ToastProvider toastManager={toastManager} {...props}>
       {children}
       <ToastPortal container={portalContainer}>
         <ToastViewport className={viewportClassName}>
-          <ToastList />
+          <ToastList compact={compact} />
         </ToastViewport>
       </ToastPortal>
     </ToastProvider>
@@ -233,6 +239,7 @@ const createToastManager = ToastPrimitive.createToastManager;
 const useToastManager = ToastPrimitive.useToastManager;
 
 export {
+  activityToast,
   Toaster,
   Toast,
   ToastAction,

@@ -51,7 +51,6 @@ import {
 import { cn } from "@/lib/utils";
 
 import { useLit } from "../activity/activity";
-import { prefersReduced, TabStage } from "../components/Motion";
 import { Tip } from "../components/Tip";
 import { chunkRows, tableGapBetween } from "../components/virtual-utils";
 import { useVirtualTable, VirtualList } from "../components/VirtualList";
@@ -481,7 +480,6 @@ export function NoteBoardView({
     const idx = activeCols.findIndex((c) => c.key === key);
     if (idx >= 0) setColIdx(idx);
     colRefs.current[key]?.scrollIntoView({
-      behavior: prefersReduced() ? "auto" : "smooth",
       inline: "start",
       block: "nearest",
     });
@@ -581,11 +579,7 @@ export function NoteBoardView({
         </div>
       )}
 
-      <TabStage
-        activeKey={groupBy}
-        order={["status", "shot"]}
-        className="flex min-h-0 flex-1 flex-col"
-      >
+      <div className="flex min-h-0 flex-1 flex-col">
         <div
           ref={boardScrollRef}
           onScroll={syncColFromScroll}
@@ -639,7 +633,7 @@ export function NoteBoardView({
                   <header className="border-hairline-subtle bg-surface-subtle flex h-9 flex-none items-center justify-between gap-2 border-b px-2.5">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <NoteStatusGlyph state={col.state} asking={col.asking} />
-                      <h3 className="text-foreground truncate text-base font-semibold text-balance">
+                      <h3 className="text-foreground truncate text-base leading-tight font-semibold text-balance">
                         {col.label}
                       </h3>
                       <span className="text-muted-foreground text-ui font-mono font-medium tabular-nums">
@@ -712,7 +706,7 @@ export function NoteBoardView({
               >
                 <header className="border-hairline-subtle bg-surface-subtle flex h-9 flex-none items-center justify-between gap-2 border-b px-2.5">
                   <h3
-                    className="text-foreground min-w-0 truncate text-base font-semibold text-balance"
+                    className="text-foreground min-w-0 truncate text-base leading-tight font-semibold text-balance"
                     title={col.subtitle ?? col.title}
                   >
                     {col.title}
@@ -777,7 +771,7 @@ export function NoteBoardView({
             ))}
           </div>
         )}
-      </TabStage>
+      </div>
     </div>
   );
 }
@@ -1496,7 +1490,7 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
                     <NoteStatusGlyph state={row.state} asking={row.asking} />
                     <h3
                       className={cn(
-                        "text-base font-semibold text-balance",
+                        "text-base leading-tight font-semibold text-balance",
                         noteStatusTextClass(row.state, row.asking),
                       )}
                     >
@@ -1570,7 +1564,7 @@ function GalleryCard({
               alt={`Frame at ${stamp(t)}`}
               onError={() => setFailedCover(cover)}
               className={cn(
-                "block size-full object-cover transition-opacity duration-150 motion-reduce:transition-none",
+                "note-image-outline block size-full object-cover transition-opacity duration-150 motion-reduce:transition-none",
                 state === "done" && "opacity-75 group-hover/card:opacity-100",
               )}
             />
@@ -1585,7 +1579,7 @@ function GalleryCard({
           <img
             src={media.crop}
             alt={`Pin: ${n.pin.what}`}
-            className="border-primary/80 bg-backdrop pointer-events-none absolute bottom-1.5 left-1.5 size-10 rounded-md border object-cover shadow-md"
+            className="border-primary/80 bg-backdrop pointer-events-none absolute bottom-1.5 left-1.5 size-10 rounded-md border object-cover shadow-md note-image-outline"
           />
         )}
         <span className="text-picture bg-scrim-strong pointer-events-none absolute top-1.5 left-1.5 rounded-md px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums">

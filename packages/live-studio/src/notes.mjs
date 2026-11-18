@@ -3,10 +3,14 @@
 // × only moves a note to notes/deleted.jsonl, and copies pile up in renders/notes_backup.
 import {
   appendFileSync,
+  closeSync,
   copyFileSync,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
   renameSync,
   statSync,
   watch as fsWatch,
@@ -18,23 +22,73 @@ import { applyChange, wholeNote } from "./note-state.mjs";
 
 const BACKUP_EVERY = 5 * 60e3;
 
+const parseLine = (line) => {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+};
 const lines = (file) =>
-  (existsSync(file) ? readFileSync(file, "utf8") : "").split(/\r?\n/).flatMap((l) => {
-    try {
-      return l.trim() ? [JSON.parse(l)] : [];
-    } catch {
-      return [];
-    }
-  });
+  (existsSync(file) ? readFileSync(file, "utf8") : "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map(parseLine);
+
+export const readNoteRows = (project) => lines(join(project, "notes/notes.jsonl"));
+
+const archiveLines = (file) => {
+  const bytes = existsSync(file) ? readFileSync(file) : Buffer.alloc(0);
+  const rows = [];
+  for (let start = 0; start < bytes.length;) {
+    const newline = bytes.indexOf(10, start);
+    const end = newline < 0 ? bytes.length : newline + 1;
+    rows.push(bytes.subarray(start, end));
+    start = end;
+  }
+  return rows;
+};
+const archiveDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+const hasThreadText = (entries, key) =>
+  entries == null || (
+    Array.isArray(entries) && entries.every((entry) =>
+      typeof entry?.[key] === "string" && (entry.at == null || typeof entry.at === "string"),
+    )
+  );
+const isArchivedNote = (n) =>
+  typeof n?.id === "string" &&
+  /^[a-z0-9]+$/.test(n.id) &&
+  typeof n.text === "string" &&
+  Number.isFinite(n.t) &&
+  (n.time == null || typeof n.time === "string") &&
+  (n.shot == null || Number.isFinite(n.shot)) &&
+  (n.at == null || typeof n.at === "string") &&
+  hasThreadText(n.fixes, "what") &&
+  hasThreadText(n.asks, "text") &&
+  hasThreadText(n.edits, "was");
+const parseArchiveLine = (bytes) => {
+  try {
+    const line = archiveDecoder.decode(bytes);
+    if (!line.trim()) return undefined;
+    const note = parseLine(line);
+    return isArchivedNote(note) ? note : null;
+  } catch {
+    return null;
+  }
+};
+
+export const readDeletedNotes = (project) =>
+  archiveLines(join(project, "notes/deleted.jsonl")).map(parseArchiveLine).filter((note) => note !== undefined);
+
 // #N, as every command names a note (notes, note, at): its place among every note written, in the order written, the ones
-// the creator deleted counted too, so a delete never moves a number an AI read before it onto another note. id -> {n, gone}
+// the creator deleted counted too. Keep historical slots even when an archive row fails recovery validation. id -> {n, gone}
 export const noteNumbers = (project) => {
   const seen = new Map();
-  for (const [file, gone] of [
-    ["notes/notes.jsonl", false],
-    ["notes/deleted.jsonl", true],
+  for (const [notes, gone] of [
+    [readNoteRows(project), false],
+    [lines(join(project, "notes/deleted.jsonl")), true],
   ])
-    for (const n of lines(join(project, file)))
+    for (const n of notes)
       if (wholeNote(n) && !seen.has(n.id)) seen.set(n.id, { at: n.at ?? "", gone });
   const byAge = [...seen].toSorted(([, a], [, b]) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
   return new Map(byAge.map(([id, { gone }], i) => [id, { n: i + 1, gone }]));
@@ -48,7 +102,7 @@ export const findNote = (project, key) => {
   return hit ? { id: hit[0], ...hit[1] } : null;
 };
 export const deletedSaid = ({ id, n }) =>
-  `note #${n} (${id}) was deleted by the creator: nothing to answer there (the notes: bun run notes)`;
+  `note #${n} (${id}) was deleted by the creator: nothing to answer there (bun run notes --deleted)`;
 
 export const createNotes = (project) => {
   const file = join(project, "notes/notes.jsonl");
@@ -81,19 +135,34 @@ export const createNotes = (project) => {
       join(backups, `notes-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`),
     );
   };
-  const write = (all) => {
-    backup();
-    const fresh = `${file}.new`;
-    writeFileSync(fresh, all.map((n) => JSON.stringify(n) + "\n").join(""), { flush: true });
+  const replace = (target, text) => {
+    const fresh = `${target}.new`;
+    writeFileSync(fresh, text, { flush: true });
     for (let i = 0; ; i++) {
       try {
-        renameSync(fresh, file);
+        renameSync(fresh, target);
         return;
       } catch (e) {
         // Windows refuses while something is reading it
         if (i >= 20) throw e;
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
       }
+    }
+  };
+  const write = (all) => {
+    backup();
+    replace(file, all.map((n) => JSON.stringify(n) + "\n").join(""));
+  };
+  const archive = (note) => {
+    const fd = openSync(deleted, "a+");
+    try {
+      const { size } = fstatSync(fd);
+      const last = Buffer.alloc(1);
+      if (size) readSync(fd, last, 0, 1, size - 1);
+      const separator = size && last[0] !== 10 ? "\n" : "";
+      appendFileSync(fd, separator + JSON.stringify(note) + "\n", { flush: true });
+    } finally {
+      closeSync(fd);
     }
   };
   const savePicture = (name, dataUrl) =>
@@ -148,23 +217,27 @@ export const createNotes = (project) => {
     const all = read();
     let n = all.find((x) => x.id === id);
     if (n && c.remove) {
-      appendFileSync(deleted, JSON.stringify(n) + "\n", { flush: true });
+      archive(n);
       write(all.filter((x) => x !== n));
     } else if (c.restore) {
-      const gone = parse(deleted);
+      let archived;
+      const kept = archiveLines(deleted).filter((line) => {
+        const row = parseArchiveLine(line);
+        if (!row || row.id !== id) return true;
+        archived = row;
+        return false;
+      });
       if (!n) {
-        n = gone.findLast((x) => x.id === id);
-        if (n) all.push(n);
+        if (!archived) return { ok: false, why: `no such note: ${id}` };
+        n = archived;
+        all.push(n);
+        if (typeof c.text === "string") n.text = c.text;
+        write(all);
+      } else if (typeof c.text === "string" && c.text !== n.text) {
+        n.text = c.text;
+        write(all);
       }
-      if (n && typeof c.text === "string") n.text = c.text;
-      write(all);
-      writeFileSync(
-        deleted,
-        gone
-          .filter((x) => x.id !== id)
-          .map((x) => JSON.stringify(x) + "\n")
-          .join(""),
-      );
+      if (archived) replace(deleted, Buffer.concat(kept));
     } else if (n) {
       const r = applyChange(n, c);
       if (r.ok) write(all);

@@ -31,6 +31,7 @@ import {
   ensureNote,
   flushNotes,
   followNotes,
+  followNoteLinks,
   loadNotes,
   noteMarks,
   restoreDraft,
@@ -187,7 +188,7 @@ const listen = () => {
   onEvent("timing", loadTiming);
   onEvent("adjustment", reloadNotice("layersRev", "Color adjustment updated", loadLayers));
   onEvent("text", reloadNotice("textRev", "Titles updated", loadText)); // an agent edited the titles: the picture takes them now
-  onEvent("notes", loadNotes);
+  onEvent("notes", () => { void loadNotes({ notify: true }); });
   onEvent("voice", () => {
     invalidateTagPrefix("/api/voice");
     invalidateTagPrefix("/api/mix");
@@ -386,6 +387,7 @@ export const start = async (el: Elements) => {
   loop();
   extras.then(() => {
     restoreDraft();
+    followNoteLinks();
     window.__readyAt = Date.now();
     reportWeight();
     const idle = window.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 250));

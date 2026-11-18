@@ -83,27 +83,49 @@ const BASE_FIXTURE_NUMBERS = {
 let currentNumbers = { ...BASE_FIXTURE_NUMBERS };
 
 const HARNESS_CODE = `
-import { createElement, useRef, useState } from "react";
+import { createElement, lazy, Suspense, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "/index.css";
 import { TooltipProvider } from "/components/ui/tooltip.tsx";
+import { Toaster } from "/components/ui/toast.tsx";
+import { loadText } from "/text/text.ts";
+import { TextHeads } from "/text/TextHeads.tsx";
+import { setTiming } from "../src/timing-state.mjs";
+import { setFilmSource } from "/core/filmMeta.ts";
+import { Transport } from "/shell/Transport.tsx";
+import { ActivityRail } from "/activity/ActivityRail.tsx";
+import { listenActivity, onActivitySpans } from "/activity/activity.ts";
+import { Segmented } from "/components/inspector.tsx";
+import { onEvent } from "/core/events.ts";
 import { S } from "/core/state.ts";
 import { get, set, studio, useStudio } from "/core/store.ts";
 import { Compose } from "/notes/Compose.tsx";
 import { NoteList } from "/notes/NoteList.tsx";
-import { loadNotes, setReview } from "/notes/notes.ts";
+import { changeNote, loadNotes, reviewNote, setReview, followNoteLinks } from "/notes/notes.ts";
 import { RefSketchBoard } from "/notes/RefSketch.tsx";
 import { ReviewRoom } from "/notes/ReviewRoom.tsx";
 
+const Library = lazy(() => import("/shell/Side.tsx").then(({ Library }) => ({ default: Library })));
+onEvent("notes", () => loadNotes({ notify: true }));
+listenActivity();
+window.timelineActivityDraws = 0;
+onActivitySpans(() => { window.timelineActivityDraws++; });
+
+onEvent("text", loadText);
+setTiming({}, 12);
+setFilmSource({ DURATION: 12, SHOTS: [], SHOTS_OUT: [], applyEdit() {} });
+followNoteLinks();
 const PIXEL = ${JSON.stringify(PIXEL_PNG)};
 if (!S.el) {
   S.el = {
-    audio: { readyState: 0, currentTime: 0, playbackRate: 1, paused: true, volume: 1, muted: false },
+    audio: { readyState: 0, currentTime: 0, playbackRate: 1, paused: true, volume: 1, muted: false, pause() {} },
   };
 }
 
 function Harness() {
   const [mode, setMode] = useState("notes");
+  const [segmentedValue, setSegmentedValue] = useState("alpha");
+  const choices = [{id:"alpha",title:"Alpha"},{id:"beta",title:"Beta"},{id:"gamma",title:"Gamma"}];
   const undoRef = useRef(null);
   const review = useStudio((s) => s.review);
   const refs = useStudio((s) => s.refs);
@@ -115,8 +137,13 @@ function Harness() {
     set,
     studio,
     loadNotes,
+    loadText: () => { setTiming({}, 12); return loadText(); },
+    changeNote,
+    reviewNote,
     setReview,
+    setTiming,
     setMode,
+    setSegmentedValue,
     getRef: () => get().refs[0] ?? refItem,
     undoSketch: () => undoRef.current?.(),
   };
@@ -124,7 +151,21 @@ function Harness() {
   return (
     <TooltipProvider delay={0}>
       <div className="bg-background text-foreground flex h-screen w-[440px] flex-col overflow-hidden">
-        {mode === "ref" ? (
+        {mode === "segmented" ? (
+          <div data-segmented-harness style={{ width: "100%" }}>
+            <Segmented fit label="Horizontal choices" value={segmentedValue} items={choices} onChange={setSegmentedValue} />
+            <Segmented vertical label="Vertical choices" value={segmentedValue} items={choices} onChange={setSegmentedValue} />
+          </div>
+        ) : mode === "library" ? (
+          <>
+            <Suspense fallback={null}><Library /></Suspense>
+            {review && <ReviewRoom />}
+            <TextHeads />
+            <Toaster />
+            <ActivityRail />
+            <Transport />
+          </>
+        ) : mode === "ref" ? (
           <div className="p-3">
             <RefSketchBoard r={refItem} undoRef={undoRef} />
           </div>
@@ -149,6 +190,15 @@ describe("notes UI mounted Chrome DOM interactions", () => {
   let baseUrl;
   let webview;
   let currentNotes = fixtureNotes();
+  let textDocument = { version: "text-base", data: { items: [
+    { id: "title", kind: "text", from: 1, to: 2, track: 0, text: "Opening" },
+    { id: "caption", kind: "text", from: 3, to: 4, track: 1, text: "End" },
+  ] } };
+  const sseClients = new Set();
+  const sendEvent = (event, data = "") => {
+    for (const client of sseClients) client.write(`event: ${event}\ndata: ${data}\n\n`);
+  };
+  const sendNotes = () => sendEvent("notes");
 
   const SETTLE_TIME_ANIMS =
     "await Promise.all(document.getAnimations().filter((a) => a.timeline === document.timeline).map((a) => a.finished.catch(() => {})));";
@@ -177,8 +227,12 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       window.__DOM_TEST__.set({
         ready: true,
         review: false,
+        reviewPick: null,
+        reviewTarget: null,
+        noteReturn: null,
         compose: null,
         draft: "",
+        replyDrafts: new Map(),
         refs: [],
         noteView: "cards",
         noteStatus: "all",
@@ -244,7 +298,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       server: { middlewareMode: true, hmr: false, fs: { strict: false } },
     });
 
-    const sseClients = new Set();
     httpServer = createHttpServer((req, res) => {
       const url = new URL(req.url, "http://127.0.0.1");
       if (url.pathname === "/@vite/client") {
@@ -333,7 +386,13 @@ describe("notes UI mounted Chrome DOM interactions", () => {
           }
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ ok: true }));
+          if (body && "approve" in body) sendNotes();
         });
+        return;
+      }
+      if (url.pathname === "/api/text") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(textDocument));
         return;
       }
       if (
@@ -343,7 +402,11 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       ) {
         res.writeHead(200, { "content-type": "application/json" });
         res.end(
-          url.pathname === "/api/lessons" ? JSON.stringify({ files: [] }) : JSON.stringify({}),
+          url.pathname === "/api/lessons"
+            ? JSON.stringify({ files: [] })
+            : url.pathname === "/api/activity"
+              ? JSON.stringify({ boot: 1, now: Date.now(), lines: [], running: [] })
+              : "{}",
         );
         return;
       }
@@ -461,6 +524,47 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Review Remember",
     );
   }, 20000);
+
+  test("Escape returns focus to Answer after opening inline feedback by keyboard", async () => {
+    const answer = `document.querySelector('button[aria-label^="Answer AI question"]')`;
+    await webview.evaluate(`(${answer}).focus()`);
+    await webview.press("Enter");
+    await waitUntil(
+      `document.activeElement === document.querySelector('textarea[name="feedback-n-ask"]')`,
+      "inline feedback focused",
+    );
+    await webview.press("Escape");
+    await waitUntil(
+      `!document.querySelector('textarea[name="feedback-n-ask"]') && document.activeElement === (${answer})`,
+      "Answer trigger regains focus",
+    );
+  });
+
+  test("Review keeps an unsent reply on the note it was written for", async () => {
+    await webview.evaluate(
+      `window.__DOM_TEST__.set({ review: true, reviewTab: "check", reviewPick: "n-check" })`,
+    );
+    await waitUntil(`document.querySelector('textarea[name="reply"]')`, "reply box opened");
+    await webview.evaluate(`(() => {
+      const reply = document.querySelector('textarea[name="reply"]');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(reply, "Keep the softer lighting");
+      reply.dispatchEvent(new Event("input", { bubbles: true }));
+      [...document.querySelectorAll('[role="radio"]')].find((button) => button.textContent.includes("AI asks")).click();
+    })()`);
+    await waitUntil(`document.querySelector('[data-review-row="n-ask"]')`, "question selected");
+    assert.equal(
+      await webview.evaluate(`document.querySelector('textarea[name="reply"]').value`),
+      "",
+    );
+    await webview.evaluate(
+      `[...document.querySelectorAll('[role="radio"]')].find((button) => button.textContent.includes("To check")).click()`,
+    );
+    await waitUntil(`document.querySelector('[data-review-row="n-check"]')`, "fix selected again");
+    assert.equal(
+      await webview.evaluate(`document.querySelector('textarea[name="reply"]').value`),
+      "Keep the softer lighting",
+    );
+  });
 
   test("preserves Edit parity across check/done states and cancels clean Compose via Escape", async () => {
     // Check note Edit -> opens Compose in edit mode -> Escape closes cleanly
@@ -1262,7 +1366,7 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     try {
       await webview.resize(320, 300);
       await webview.evaluate(
-        `(() => { const host = document.querySelector('[aria-label="Notes"]').parentElement; host.style.width = "320px"; host.style.height = "300px"; window.__DOM_TEST__.S.comments = ["Opening wide", "Main"]; document.documentElement.style.fontSize = "200%"; document.querySelector('button[aria-label="New note"]').click(); })()`,
+        `(() => { const host = document.querySelector('[aria-label="Notes"]').parentElement; host.style.width = "320px"; host.style.height = "300px"; window.__DOM_TEST__.S.t = 0; window.__DOM_TEST__.S.comments = ["Opening wide", "Main"]; document.documentElement.style.fontSize = "200%"; document.querySelector('button[aria-label="New note"]').click(); })()`,
       );
       await waitUntil(`document.querySelector('textarea[name="note"]')`, "Compose open");
       await waitUntil(
@@ -1819,4 +1923,217 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       await webview.resize(1024, 720);
     }
   }, 25000);
+  test("live note changes alert the creator on Lessons and light the note without switching tabs", async () => {
+    const toastCount = (title) =>
+      `[...document.querySelectorAll('[data-slot="toast-title"]')].filter(x => x.textContent === ${JSON.stringify(title)}).length`;
+    const notesTab = `[...document.querySelectorAll('[role="tab"]')].find(x => x.textContent.startsWith('Notes'))`;
+    await webview.evaluate(`(() => {
+      const { S, set, setMode } = window.__DOM_TEST__;
+      window.__DOM_TEST__.setTiming({ main: [
+        { id: 'a', kind: 'clip', sourceFrom: 0, sourceTo: 6 },
+        { id: 'b', kind: 'clip', sourceFrom: 0, sourceTo: 6 },
+      ] }, 12);
+      S.t = 8;
+      S.playing = true;
+      set({ lib: 'lessons', aiActivity: true, playing: true, newBuild: true });
+      setMode('library');
+    })()`);
+    await waitUntil(notesTab, "Notes tab beside Lessons", 15000);
+    assert.equal(await webview.evaluate(`${notesTab}.hasAttribute('data-ai-lit')`), false);
+    assert.equal(await webview.evaluate(`document.querySelectorAll('[data-slot="toast-title"]').length`), 0);
+
+    currentNotes = currentNotes.map((n) =>
+      n.id === "n-open"
+        ? {
+            ...n,
+            state: "check",
+            done: true,
+            fixes: [...n.fixes, { what: "Rim light fixed", at: "2026-11-15T10:00:00.000Z" }],
+          }
+        : n,
+    );
+    sendNotes();
+    await waitUntil(`${toastCount("Note #3 ready to check")} === 1`, "one toast for the remote fix");
+    await waitUntil(`(() => {
+      const rail = document.querySelector('[aria-label="Studio activity"]');
+      const notice = rail?.querySelector('[data-slot="toast"]');
+      if (!notice) return false;
+      const a = rail.getBoundingClientRect(), b = notice.getBoundingClientRect();
+      return b.height > 0 && b.top >= a.top - 1 && b.bottom <= a.bottom + 1 &&
+        b.left >= a.left - 1 && b.right <= a.right + 1;
+    })()`, "the notice lives inside the reserved activity rail");
+    await waitUntil(`${notesTab}.hasAttribute('data-ai-lit')`, "inactive Notes tab lights up");
+    assert.deepEqual(await webview.evaluate("({ at: window.__DOM_TEST__.S.t, playing: window.__DOM_TEST__.S.playing })"), { at: 8, playing: true });
+
+    assert.notEqual(await webview.evaluate(`getComputedStyle(${notesTab}).boxShadow`), "none");
+    assert.equal(await webview.evaluate(`document.querySelector('[role="tab"][aria-selected="true"]').textContent`), "Lessons");
+    await webview.evaluate(`${notesTab}.click()`);
+    await waitUntil(`document.querySelector('[data-note="n-open"][data-ai-lit]')`, "changed note lights up");
+
+    currentNotes = currentNotes.map((n) =>
+      n.id === "n-open" ? { ...n, state: "done", approved: "2026-11-15T11:00:00.000Z" } : n,
+    );
+    sendNotes();
+    await waitUntil(`${toastCount("Note #3 approved")} === 1`, "toast for the remote approval");
+    await waitUntil(
+      `document.querySelector('button[data-tone="done"][data-ai-lit][aria-expanded="false"]')`,
+      "collapsed Done section lights up",
+    );
+    await webview.evaluate("window.beforeNotesRefresh = window.__DOM_TEST__.get().notes");
+    sendNotes();
+    await waitUntil("window.beforeNotesRefresh !== window.__DOM_TEST__.get().notes", "duplicate event has reloaded notes");
+    assert.equal(await webview.evaluate(toastCount("Note #3 approved")), 1);
+
+    await webview.evaluate(`window.__DOM_TEST__.changeNote('n-check', { approve: true })`);
+    await waitUntil(`window.__DOM_TEST__.get().notes.find(n => n.id === 'n-check').approved === '2026-11-15T12:00:00.000Z'`, "server echoed local approval");
+    assert.equal(await webview.evaluate(toastCount("Note #1 approved")), 0);
+
+    const toastAction = `[...document.querySelectorAll('[data-slot="toast"]')]
+      .find(x => x.querySelector('[data-slot="toast-title"]')?.textContent === 'Note #3 approved')
+      .querySelector('[data-slot="toast-action"]')`;
+    assert.match(await webview.evaluate(`${toastAction}.textContent`), /Jump to/);
+    await webview.evaluate(`${toastAction}.click()`);
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.get().review"), false);
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.playing"), false);
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.t"), 1);
+    const back = `document.querySelector('button[aria-label="Back to previous frame"]')`;
+    await waitUntil(back, "return control is available in the main preview");
+    await webview.evaluate(`${back}.click()`);
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.t"), 8);
+
+    await webview.evaluate(`(() => {
+      const { get, set, reviewNote } = window.__DOM_TEST__;
+      set({ noteSearch: 'Pan settle' });
+      reviewNote(get().notes.find(n => n.id === 'n-open'));
+    })()`);
+    await waitUntil(
+      `document.querySelector('[aria-label="Review notes"] [data-note="n-open"]')?.textContent.includes('Brighten rim light near edge')`,
+      "explicit Review opens the requested note despite the current filter",
+    );
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.get().noteSearch"), "Pan settle");
+    currentNotes = currentNotes.map((note) => note.id === "n-done"
+      ? { ...note, state: "check", fixes: [...note.fixes, { what: "Pan fixed again", at: "2026-11-15T15:00:00.000Z" }] } : note);
+    sendNotes();
+    await waitUntil(`${toastCount("Note #4 ready to check")} === 1`, "new fix arrives during Review");
+    await webview.evaluate(`[...document.querySelectorAll('[data-slot="toast"]')]
+      .find(x => x.querySelector('[data-slot="toast-title"]')?.textContent === 'Note #4 ready to check')
+      .querySelector('[data-slot="toast-action"]').click()`);
+    await waitUntil(`document.querySelector('[aria-label="Review notes"] [data-note="n-done"]')`, "toast selects the exact note already in Review");
+
+    assert.match(await webview.evaluate(`document.querySelector('[aria-label="Review notes"]').textContent`), /New preview build available/);
+    await webview.evaluate(`window.__DOM_TEST__.setTiming({ main: [
+      { id: 'b', kind: 'clip', sourceFrom: 0, sourceTo: 6 },
+      { id: 'a', kind: 'clip', sourceFrom: 0, sourceTo: 6 },
+    ] }, 12)`);
+    await webview.evaluate(`${back}.click()`);
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.get().review"), false);
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.t"), 2);
+    await webview.evaluate(`window.__DOM_TEST__.set({ noteSearch: '', newBuild: false })`);
+    await webview.evaluate("window.__DOM_TEST__.S.dirty = false");
+    sendEvent("activity", JSON.stringify({ id: 1, say: "Reading the scene", when: Date.now() }));
+    await waitUntil(`document.querySelector('[aria-label^="Reading the scene"]')`, "text-only activity reached the rail");
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.dirty"), false);
+    assert.equal(await webview.evaluate("window.timelineActivityDraws"), 0);
+    sendEvent("activity", JSON.stringify({ id: 2, say: "Checking the cut", when: Date.now(), at: 2, to: 3 }));
+    await waitUntil("window.timelineActivityDraws === 1", "time range redraws the timeline");
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.dirty"), false);
+
+    await webview.evaluate("window.__DOM_TEST__.loadText()");
+    const textTab = `[...document.querySelectorAll('[role="tab"]')].find(x => x.textContent === 'Text')`;
+    await waitUntil(`${textTab} && !${textTab}.disabled`, "Text tab enabled after initial data");
+    assert.equal(await webview.evaluate(`${textTab}.hasAttribute('data-ai-lit')`), false);
+    textDocument = {
+      version: "text-external",
+      data: { items: textDocument.data.items.map((item) =>
+        item.id === "caption" ? { ...item, text: "Closing credits" } : item) },
+    };
+    sendEvent("text");
+    await waitUntil(`${textTab}.hasAttribute('data-ai-lit')`, "external text edit lights its tab");
+    assert.equal(await webview.evaluate(`[...document.querySelectorAll('[aria-label="Text tracks"] li[data-ai-lit] button[aria-label^="Select"]')].map(x => x.getAttribute("aria-label")).join("")`), "Select Text 2");
+    assert.equal(await webview.evaluate(`document.querySelector('[role="tab"][aria-selected="true"]').textContent.startsWith("Notes")`), true);
+    await webview.evaluate("window.__DOM_TEST__.set({ aiActivity: false })");
+    await waitUntil(`!${textTab}.hasAttribute('data-ai-lit')`, "turning activity off clears the tab cue");
+    currentNotes = currentNotes.map((note) => note.id === "n-ask"
+      ? { ...note, state: "done", approved: "2026-11-15T16:00:00.000Z" } : note);
+    sendNotes();
+    await waitUntil(`${toastCount("Note #2 approved")} === 1`, "remote note notices stay available with AI activity off");
+    assert.equal(await webview.evaluate(`document.querySelector('[aria-label="Studio activity"]') === null`), true);
+  }, 30000);
+
+
+  test("a local note link resolves its exact target and does not jump for a missing note", async () => {
+    await webview.evaluate(`(() => {
+      const { S, set } = window.__DOM_TEST__;
+      S.t = 8;
+      set({ noteSearch: 'Pan settle', playing: false });
+      location.hash = 'note=n-open';
+    })()`);
+    await waitUntil(`document.querySelector('[aria-label="Review notes"] [data-note="n-open"]')`, "link opens the linked note despite the filter");
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.t"), 1);
+    const copy = `document.querySelector('button[aria-label="Copy note link"]')`;
+    await webview.evaluate(`(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true, value: { writeText: async (value) => { window.copiedNoteLink = value; } }
+      });
+      ${copy}.click();
+    })()`);
+    const url = new URL(await webview.evaluate("window.copiedNoteLink"));
+    assert.equal(url.origin, new URL(baseUrl).origin);
+    assert.equal(url.hash, "#note=n-open");
+    assert.equal(url.search, "");
+    await webview.evaluate(`(() => {
+      delete navigator.clipboard;
+      window.__DOM_TEST__.setReview(false);
+      location.hash = 'note=gone';
+    })()`);
+    await waitUntil(`window.__DOM_TEST__.get().status.includes('no longer available')`, "missing note notice");
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.S.t"), 1);
+    assert.equal(await webview.evaluate("window.__DOM_TEST__.get().review"), false);
+  });
+
+  test("Segmented keeps its indicator aligned through keyboard selection, resize and a missing value", async () => {
+    await webview.evaluate(
+      `(() => { window.__DOM_TEST__.setSegmentedValue("alpha"); window.__DOM_TEST__.setMode("segmented"); })()`,
+    );
+    const group = (label) => `document.querySelector('[role="radiogroup"][aria-label="${label}"]')`;
+    const aligned = (label) => `(() => {
+      const root = ${group(label)}, pill = root?.querySelector('.segmented-pill');
+      const selected = root?.querySelector('[aria-checked="true"]');
+      if (!pill || !selected) return false;
+      const a = pill.getBoundingClientRect(), b = selected.getBoundingClientRect();
+      return Math.abs(a.left-b.left)<0.75 && Math.abs(a.top-b.top)<0.75 && Math.abs(a.width-b.width)<0.75 && Math.abs(a.height-b.height)<0.75;
+    })()`;
+    await waitUntil(aligned("Horizontal choices"), "initial horizontal selection indicator");
+    await waitUntil(aligned("Vertical choices"), "initial vertical selection indicator");
+    await webview.evaluate(`(() => {
+      const radio = ${group("Horizontal choices")}.querySelector('[aria-checked="true"]');
+      radio.focus(); radio.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+    })()`);
+    await waitUntil(
+      `document.activeElement?.textContent === 'Beta' && document.activeElement.getAttribute('aria-checked') === 'true'`,
+      "horizontal arrow selection and focus",
+    );
+    await waitUntil(aligned("Horizontal choices"), "horizontal indicator follows selection");
+    await webview.evaluate(`(() => {
+      const radio = ${group("Vertical choices")}.querySelector('[aria-checked="true"]');
+      radio.focus(); radio.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+    })()`);
+    await waitUntil(
+      `document.activeElement?.textContent === 'Gamma' && document.activeElement.getAttribute('aria-checked') === 'true'`,
+      "vertical arrow selection and focus",
+    );
+    await waitUntil(aligned("Vertical choices"), "vertical indicator follows selection");
+    await webview.evaluate(
+      `document.querySelector('[data-segmented-harness]').style.width = '320px'`,
+    );
+    await waitUntil(aligned("Horizontal choices"), "indicator follows resized controls");
+    await webview.evaluate(`window.__DOM_TEST__.setSegmentedValue('missing')`);
+    await waitUntil(
+      `document.querySelectorAll('.segmented-pill').length === 0`,
+      "missing selection clears indicators",
+    );
+    await webview.evaluate(`window.__DOM_TEST__.setSegmentedValue('alpha')`);
+    await waitUntil(aligned("Horizontal choices"), "indicator returns with a valid value");
+    assert.deepEqual(await webview.evaluate("window.__DOM_ERRORS__"), []);
+  });
 });

@@ -16,6 +16,7 @@ export interface Hooks<T> {
   label: string; // what the say lines call it: "audio", "camera"
   changed: () => void; // after every change to data
   tidy?: (d: T) => void; // after every kept edit and every load, before drawing
+  received?: (before: T, after: T) => void;
   saved?: (state: "busy" | "fail" | null) => void;
   // After undo, redo or a load put other data in (was: what it held): picks kept as places in a list may now point at other
   // things (an undone paste leaves the next clip at its place), so each file drops its picks when its lists changed length
@@ -241,13 +242,15 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     side.version = got.version;
     held = null;
     restoredPreviewBase = null;
-    const old = data;
+    const old = data,
+      before = old !== null && hooks.received ? (JSON.parse(kept) as T) : null;
     data = got.data;
     hooks.tidy?.(data);
     kept = JSON.stringify(data);
     hooks.changed();
     emitMutated();
     hooks.replaced?.(old);
+    if (before !== null && !equalJson(before, data)) hooks.received?.(before, data);
   };
   const release = () => {
     if (held && !shown) take(held);

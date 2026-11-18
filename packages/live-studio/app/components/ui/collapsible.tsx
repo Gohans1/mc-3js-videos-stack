@@ -9,7 +9,6 @@ const contentVariants = cva("", {
   variants: {
     variant: {
       default: "",
-      reveal: "cli-reveal",
       animated:
         "h-(--collapsible-panel-height) overflow-hidden transition-[height,opacity] duration-200 ease-out data-ending-style:h-0 data-ending-style:opacity-0 data-starting-style:h-0 data-starting-style:opacity-0 motion-reduce:transition-none",
     },

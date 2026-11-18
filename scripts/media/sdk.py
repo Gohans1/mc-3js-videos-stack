@@ -1,5 +1,12 @@
 """Local SDK media tools; run with bun run media <tool> --help.
 Audio --from/--to and output timestamps use seconds in the source file.
+The evidence WAV keeps track offsets on the container clock. Audio is decoded
+and resampled from the beginning, then cut on the output sample grid.
+Read audioCoverage for the analyzed extent when the requested range outlasts audio.
+Audio format changes may also produce a PCM intermediate and decodePreparationCommand.
+effects requires --config with at least one plugin. It keeps float PCM until the plugins run.
+Replace the last replay argv element with a fresh output path.
+The effects decodeCommand keeps PCM and speaker labels.
 CLI --out DIR is the parent of a fresh run-* folder; --minutes N bounds the worker
 (default 5). The bun wrapper handles these flags; standalone --out must be empty.
 Models stay in the tool cache; inference never uploads media or changes timelines.
@@ -16,12 +23,11 @@ import math
 import os
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from audio_sdk import event_spans, process_audio
+from audio_sdk import audio_coverage, audio_replay_command, decode_audio, event_spans, pack_effect_input, process_audio
 from native import digest
 from ocr import second
 from timeline import process_timeline, validate_timeline
@@ -64,7 +70,7 @@ def main():
         if args.end is not None and args.end <= args.start:
             raise ValueError("--to must be after --from")
         if args.config:
-            config = json.loads(args.config.read_text(encoding="utf-8"))
+            config = json.loads(args.config.read_text(encoding="utf-8-sig"))
         if args.tool == "effects":
             if not args.config or not isinstance(config, list) or not config:
                 raise ValueError("effects requires --config with a nonempty plugin array")
@@ -131,15 +137,19 @@ def main():
         else:
             wav = out / "input.wav"
             rate = 16000 if args.tool == "vad" else 44100 if args.tool == "separate" else 48000
-            command = ["ffmpeg", "-v", "error", "-nostdin", "-ss", str(args.start), "-i", str(source), "-vn"]
-            if args.end is not None:
-                command += ["-t", str(args.end - args.start)]
-            if args.tool in ("vad", "locate", "beat"):
-                command += ["-ac", "1"]
-            command += ["-ar", str(rate), "-c:a", "pcm_s16le", str(wav)]
-            result["decodeCommand"] = command
+            effects = args.tool == "effects"
+
+            def record_command(key, command):
+                result[key] = audio_replay_command(command, wavex=effects and key == "decodeCommand")
+                save()
+
+            pcm_codec = "pcm_f32le" if effects else "pcm_s16le"
+            decode_audio(source, wav, args.start, args.end, rate,
+                         args.tool in ("vad", "locate", "beat"), record_command, pcm_codec=pcm_codec)
+            if effects:
+                pack_effect_input(wav)
+            result["audioCoverage"] = audio_coverage(wav, args.start, args.end)
             save()
-            subprocess.run(command, check=True, timeout=120)
             details = process_audio(args, config, model, wav, out)
             json.dumps(details, allow_nan=False)
             result.update(details)
@@ -153,4 +163,6 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
     raise SystemExit(main())

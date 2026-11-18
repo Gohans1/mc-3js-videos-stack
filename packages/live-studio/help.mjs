@@ -1,7 +1,9 @@
 // bun run help: every command of the package.json here (the repo root's or a film's), one line each, grouped by the job
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { buildCliInvocation, CLI_COMMANDS } from "./src/cli-catalog.ts";
 import { cliArgs } from "./src/cli.mjs";
 
 /** @type {[string, Record<string, string>][]} */
@@ -27,14 +29,17 @@ const GROUPS = [
       check:
         "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
       at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",
-      find: "BM25 catalog matches, then independent OpenFilm semantic candidates; shared filters, --json for AI, --offline for cached-only search",
-      "assets:semantic":
-        "incremental multimodal search: plan, build/resume, query, remove/redo or backup; Gemini/OpenRouter API only with --yes (--help)",
+      find: "native/imported assets and code helpers; BM25 then independent OpenFilm semantic candidates; --json for AI, --offline for cached-only search",
+      "assets:semantic": "incremental multimodal search: plan, build/resume, query, remove/redo or backup; API only with --yes (--help)",
+      asset:
+        "place and edit assets selected with find; JSON output, editable targets and heard seconds",
     },
   ],
   [
     "Narration",
     {
+      "voice:playground":
+        "GenVoice casting, Project/Global archives, templates and section editing; --help then schema <command>; paid actions preview until --yes",
       "voice:gen":
         "narration takes from ElevenLabs for src/edit.json takes (previews; spends credits only with --yes)",
       "voice:align":
@@ -49,30 +54,36 @@ const GROUPS = [
     "Sound",
     {
       "sfx:get": "fetch the CC0 Freesound sounds the film pins, or search Freesound (find)",
-      mix: "the soundtrack: sound/mix.wav; mix <video> puts it on the draft (renders/draft.mp4)",
+      mix: "film soundtrack; mix <video> writes draft/final for whole-film renders, a separate preview for excerpts",
       listen:
-        "the mix in numbers: voice buried under beds/sfx, sounds louder than it, jumps at cuts, dead air (--sheet: a picture)",
+        "current mix before mastering: masking, loud SFX, level jumps, mono and near silence; --at for one window",
     },
   ],
   [
     "Look and review",
     {
       render:
-        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move's speed",
-      sheet: "contact sheets of the stills or of a video's frames, to look at many at once",
-      scenes: "suggest cuts in a local reference video (PySceneDetect, optional CPU tool): JSON, CSV, scene images and HTML; file seconds",
-      media: "optional local media tools: list, doctor, setup; audio, OCR, tracking, sound catalog, WAV metadata and OTIO (--help)",
-      framecheck: "the last check on the encoded video: black, flashes, jumps, shimmer, freezes",
-      pace: "how the film moves: shot lengths, and where the picture holds still under the narration",
+        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=order checks history-dependent frames",
+      sheet:
+        "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence; each new run has index.json",
+      scenes:
+        "suggest cuts in a local reference video (PySceneDetect, optional CPU tool): JSON, CSV, scene images and HTML; file seconds",
+      media:
+        "optional local media tools: audio/OCR/tracking/catalog/OTIO and bundled FFmpeg finishing/QC (media ffmpeg --help)",
+      framecheck:
+        "encoded picture faults: black, flashes, jumps, shimmer, freezes; --json gives retained evidence",
+      reference:
+        "inspect <video|URL> for timestamped pictures/captions and targeted follow-ups; study/compare for measured timing and pictures; optional, no quality gate",
+      pace: "current whole-film render: shot lengths and picture holds with planned narration",
       deliver:
-        "the upload against YouTube's spec (renders/final.mp4), each fault with its fix; --youtube: approximate local compression preview and banding checks (no upload)",
+        "technical upload profile (renders/final.mp4); --youtube adds a local compression and banding preview",
     },
   ],
   [
     "The creator's notes",
     {
-      notes: "the creator's open notes (ID for one in full, --shot N for a shot's)",
-      note: "answer one: bun run note done (waits for the creator's check), ask, or learned (--help)",
+      notes: "the creator's open notes (up to 25; ID for one in full, --shot N, --sort, --limit)",
+      note: "answer one: bun run note done (waits for the creator's check), ask, learned, or restore a deleted note (--help)",
     },
   ],
   [
@@ -82,7 +93,8 @@ const GROUPS = [
         "create from templates/film, install dependencies, link vault and build picks: bun run new-film <name> [port]; prepared vault required",
       setup:
         "a new machine in one go: bun install, setup:vault, link (--sound-zip <zip> restores the sound)",
-      "pack:sound": "every sound of the vault in one zip, for setup --sound-zip on another machine",
+      "pack:sound":
+        "every sound and the complete OpenFilm source in one private zip, for setup --sound-zip on another machine",
       "setup:vault": "fill the vault on a new machine (downloads, verified)",
       "setup:sound": "rebuild vault/sound/{bgm,sfx} with credits and peaks",
       "setup:mc-sound": "rebuild the Minecraft sound vault from the game and packs",
@@ -90,13 +102,21 @@ const GROUPS = [
         "sync the English voice catalogue to vault/voices/shared-en.json (network, no voice credits)",
       "fetch:sfx": "download the Mixkit sound effects",
       "fetch:sound-raw": "download the raw sound packs (Kenney) into the external vault",
+      "fetch:openfilm":
+        "import all OpenFilm audio as native WAVs and keep editable visual source; resumable, --verify checks coverage",
+      openfilm:
+        "compatibility alias for asset with the OpenFilm source selected; use asset for the shared workflow",
       link: "reconnect the prepared vault and rebuild picks for every film (or those named); no install or download",
     },
   ],
   [
     "Code",
     {
-      test: "every package's tests",
+      test: "every package's tests; accepts native Bun test flags",
+      "test:parallel": "the full suite with 2 isolated Bun workers; supports timings and shards",
+      ci: "lint, typecheck and the full parallel test suite together; includes Studio build tests",
+      doctor:
+        "React Doctor source diagnostics (advisory, 120s budget); --json for structured results",
       verify: "lint and typecheck together",
       lint: "oxlint",
       typecheck: "bun check",
@@ -113,13 +133,84 @@ const GROUPS = [
 const HELP = `Discover commands in the current repo root or film folder; this does not run them.
   bun run help             commands grouped by job; in a film, also its file map
   bun run help <command>   where to read that command's --help
-  bun run skills get core  the workflow; --ref contract for custom scenes and hooks
+  bun run help direct      direct tools and package commands, with their catalog IDs
+  bun run help --json      all command summaries; add a command ID for its full schema
+  bun run skills get core  the workflow; --ref review to pick picture/audio checks, --ref contract for scene hooks
 Built-ins are a starting kit: write custom code or tools when the film needs them.`;
-const [asked] = cliArgs(HELP, [], 1);
+const argv = cliArgs(HELP, ["--json"], 1, process.argv.slice(2), {
+  helpWord: !process.argv.includes("--json"),
+});
+const asked = argv.find((a) => a !== "--json");
 const pkgFile = join(process.cwd(), "package.json");
 const scripts = existsSync(pkgFile)
   ? (JSON.parse(readFileSync(pkgFile, "utf8")).scripts ?? {})
   : {};
+const film = existsSync(join(process.cwd(), "src/scene.ts"));
+const scope = film ? "film" : "root";
+const direct = CLI_COMMANDS.filter((c) => c.runner !== "bun-script");
+const known = CLI_COMMANDS.find((c) => c.id === asked);
+if (argv.includes("--json")) {
+  if (asked && asked !== "direct" && !known && !Object.hasOwn(scripts, asked)) {
+    console.error(`no command ${asked}; bun run help --json lists command IDs`);
+    process.exit(2);
+  }
+  const catalog = asked === "direct" ? direct : asked ? (known ? [known] : []) : CLI_COMMANDS;
+  const commands = catalog.map((c) => ({
+    ...(asked && asked !== "direct"
+      ? c
+      : {
+          id: c.id,
+          summary: c.summary,
+          runner: c.runner,
+          cwdModes: c.cwdModes,
+          helpMode: c.meta.helpMode,
+        }),
+    availableHere:
+      c.runner === "bun-script"
+        ? Object.hasOwn(scripts, c.target) && !String(scripts[c.target]).includes("wrong-place.mjs")
+        : c.cwdModes.includes(scope),
+  }));
+  for (const [id, script] of Object.entries(scripts)) {
+    if (
+      (id === "postinstall" && !asked) ||
+      CLI_COMMANDS.some((c) => c.runner === "bun-script" && c.target === id) ||
+      (asked && asked !== id)
+    )
+      continue;
+    if (asked === "direct") continue;
+    commands.push({
+      id,
+      script,
+      runner: "bun-script",
+      availableHere: !String(script).includes("wrong-place.mjs"),
+    });
+  }
+  console.log(JSON.stringify({ success: true, data: { cwd: process.cwd(), scope, commands } }));
+  process.exit(0);
+}
+const describe = (command) => {
+  const helpId =
+    process.platform === "win32" &&
+    ["catalog:tag-sh", "catalog:review-sh", "catalog:sweep-sh"].includes(command.id)
+      ? "catalog:batch"
+      : command.id;
+  const invocation =
+    command.meta.helpMode === "none"
+      ? null
+      : buildCliInvocation(
+          { commandId: helpId, mode: "help" },
+          {
+            activeFilm: film ? "." : null,
+            repoRoot: fileURLToPath(new URL("../..", import.meta.url)).replaceAll("\\", "/"),
+          },
+        );
+  const directory = command.packageDir ?? invocation?.cwdMode ?? command.cwdModes.join(" or ");
+  const helpCommand =
+    command.runner === "package-script" && invocation
+      ? `bun run ${command.target} ${invocation.argvTokens.join(" ")}`
+      : invocation?.displayCommand;
+  return `${command.id}: ${command.summary}\n  run in ${directory}: ${helpCommand ?? "no standalone help; read this command's schema with bun run help " + command.id + " --json"}`;
+};
 // "bun run help find" is how one asks about one command
 if (asked) {
   if (Object.hasOwn(scripts, asked)) {
@@ -142,15 +233,16 @@ if (asked) {
     process.exit(0);
   }
   if (asked === "direct") {
-    console.log(
-      "Direct maintenance scripts: bun run skills get core --ref film (section Script chạy trực tiếp). Each script takes --help; these are independent of package.json commands.",
-    );
+    console.log(direct.map(describe).join("\n\n"));
+    process.exit(0);
+  }
+  if (known) {
+    console.log(describe(known));
     process.exit(0);
   }
   console.error(`no command ${asked} here: bun run help lists them`);
   process.exit(2);
 }
-const film = existsSync(join(process.cwd(), "src/scene.ts"));
 // postinstall runs by itself after bun install; a command of the other place (wrong-place.mjs) only says where it runs
 const stubs = Object.keys(scripts).filter((k) => String(scripts[k]).includes("wrong-place.mjs"));
 const said = new Set(["help", "postinstall", ...stubs]);
@@ -160,21 +252,22 @@ for (const [title, cmds] of GROUPS) {
     .filter(([k]) => k in scripts && !said.has(k))
     .map(([k, about]) => {
       said.add(k);
-      return `  ${k.padEnd(16)}${about}`;
+      return `  ${k.padEnd(18)}${about}`;
     });
   // earshot is a CLI of its own, not a script here: named so an AI knows it can hear what a sound is, not only its level
-  if (film && title === "Sound" && lines.length)
+  if (title === "Sound")
     lines.push(
-      `  ${"earshot".padEnd(16)}ears, its own CLI (earshot <command> -h): which sound fits, what plays when, hits on the cuts${Bun.which("earshot") ? "" : " (not on PATH: INSTALL.md)"}; which call for what: bun run skills get core --ref sound`,
+      `  ${"earshot".padEnd(18)}ears, its own CLI (earshot <command> -h): which sound fits, what plays when, hits on the cuts${Bun.which("earshot") ? "" : " (not on PATH: INSTALL.md)"}; which call for what: bun run skills get core --ref sound`,
     );
   if (lines.length) out.push(`${out.length ? "\n" : ""}${title}`, ...lines);
 }
 const rest = Object.keys(scripts).filter((k) => !said.has(k));
-if (rest.length) out.push("\nOther", ...rest.map((k) => `  ${k.padEnd(16)}${scripts[k]}`));
+if (rest.length) out.push("\nOther", ...rest.map((k) => `  ${k.padEnd(18)}${scripts[k]}`));
 out.push(
   "\nDirect maintenance scripts",
   "  mocap catalogue, sweep, review/eval; asset pick/vendor; timeline formatting",
   "  bun run help direct — paths, working directory and workflow: bun run skills get core --ref film",
+  "  bun run help --json — all command IDs; bun run help <id> --json — arguments, flags, cost and effects",
 );
 // Where a film keeps what: its own package.json "live-studio" names the timeline files, so the map is this film's
 if (film) {
@@ -194,6 +287,10 @@ if (film) {
     ["src/scene.ts", "the film's code: buildScene, draw(t)"],
     ["src/edit.json", "narration takes and script, voice warp, beats, the film's own settings"],
     ...Object.entries(what).flatMap(([k, about]) => (conf[k] ? [[conf[k], about]] : [])),
+    [
+      conf.openfilmTimeline ?? "src/timeline/openfilm.json",
+      "HTML/CSS/canvas effects, stickers and animated text",
+    ],
     ...Object.entries(conf.keyFiles ?? {}).map(([f, name]) => [
       f,
       `${name}: keyed rows (moves, poses, values over time)`,

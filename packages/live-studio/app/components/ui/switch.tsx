@@ -21,7 +21,7 @@ function Switch({
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className="data-checked:bg-primary-foreground data-unchecked:bg-foreground pointer-events-none block rounded-full ring-0 transition-transform duration-200 ease-out group-data-[size=comfortable]/switch:size-5 group-data-[size=default]/switch:size-3.5 group-data-[size=sm]/switch:size-3 group-data-[size=comfortable]/switch:data-checked:translate-x-[calc(100%-3px)] group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=comfortable]/switch:data-unchecked:translate-x-px group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 motion-reduce:transition-none"
+        className="data-checked:bg-primary-foreground data-unchecked:bg-foreground pointer-events-none block rounded-full ring-0 transition-transform duration-200 ease-out group-data-instant/switch:transition-none group-data-[size=comfortable]/switch:size-5 group-data-[size=default]/switch:size-3.5 group-data-[size=sm]/switch:size-3 group-data-[size=comfortable]/switch:data-checked:translate-x-[calc(100%-3px)] group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=comfortable]/switch:data-unchecked:translate-x-px group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 motion-reduce:transition-none"
       />
     </SwitchPrimitive.Root>
   );

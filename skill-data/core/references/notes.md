@@ -7,9 +7,12 @@ The creator watches the film in the studio and pins notes to a second, with pict
 Inside a film:
 
 ```bash
-bun run notes                                # the open notes, one line each, #1 written first
+bun run notes                                # the open notes, one line each (up to 25; --limit 0 for all, --sort back for creator replies first)
 bun run notes 3                              # one in full: where they tapped, the words, actions, version, pictures
-bun run notes --shot 3                       # every open note of one shot
+bun run notes --shot 3                       # open notes of one shot (up to 25; --help for all flags)
+bun run notes --shot 3 --json                # selected notes and total as JSON, without Jev
+bun run notes --deleted                     # recoverable deleted notes; --json works here too
+bun run note restore mw6hr1fm                # restore by the stable ID from the deleted list
 bun run at '#3'                              # where note 3 is heard now, and every row there
                                              # fix it, then look at the new frames (references/review.md)
 bun run note done 3 "what changed"           # the note waits for the creator's check
@@ -30,10 +33,20 @@ A reopened note tags its index line (`[back to you]` or `[back to you: reworded]
 
 `#N` counts every note ever written, the ones the creator deleted too: a number never moves to another note, and answering a deleted one says so. The answer prints `#N id "words"`: check it is the note you meant.
 
+In JSON, recordedTime is the saved playback second. Use bun run at ID for the current position after timing edits.
+
+When Studio is closed, run note writes one at a time. With Studio running, the commands send writes through Studio.
+
+Use Jump to frame on a single-note toast and Back to previous frame in the player. Review can copy a link to that note in the same Studio.
+
+Studio shows a toast when a note is answered or approved elsewhere. With AI activity on, the note or its tab lights up, and desktop notices have their own row at the bottom of Studio.
+
+Timeline edits light their tab and the affected track or clip where Studio can identify it. Open AI activity history for the file or command. Sound is optional in Settings and plays only for actions needing attention while Studio is quiet.
+
 ## Lessons: what a note teaches
 
-Lessons > AI Inspector dùng lessons thật từ Deck để xem đầu vào, payload Jev và phần note CLI; bỏ chọn file chỉ loại tạm khỏi preview, chọn lại để khôi phục. Preview miễn phí, chỉ Run Jev sau khi bật quyền mới gọi API; Save lưu cấu hình tại notes/lessons-config.json, tắt Allow Jev from the notes CLI để CLI chỉ dùng cache.
+Lessons > AI Inspector uses the Deck's actual lessons to inspect inputs, Jev payload and note CLI output; deselection only excludes a file from the current preview. Preview is free, Run Jev requires permission, and Save writes notes/lessons-config.json; disable Allow Jev from the notes CLI to use cached results only.
 
-`bun run notes ID` names the files in both this film's `lessons/` and the repo root's `../../lessons/` (every film's, including nested `.md` subfolders) that Jev picks for the note's words and the creator's answers, each with its headings by line: open the lines you need. When the creator asks to remember a note (Remember: this film, or every film), keep the rule where it lasts: in code if it can be (a default, or a check that fails), else in the film's `src` or `lessons/<topic>.md` for this film, and `../../lessons/<topic>.md` for every film (nested `folder/file.md` names using letters, digits, `-` and `_` appear in the studio too). Jev mặc định đọc đường dẫn, frontmatter và heading; Inspector cho đổi nội dung được đọc. Then `bun run note learned ID "the rule, where"`; the creator sees it on the note.
+`bun run notes ID` names the files in both this film's `lessons/` and the repo root's `../../lessons/` (every film's, including nested `.md` subfolders) that Jev picks for the note's words and the creator's answers, each with its headings by line: open the lines you need. When the creator asks to remember a note (Remember: this film, or every film), keep the rule where it lasts: in code if it can be (a default, or a check that fails), else in the film's `src` or `lessons/<topic>.md` for this film, and `../../lessons/<topic>.md` for every film (nested `folder/file.md` names using letters, digits, `-` and `_` appear in the studio too). Jev reads paths, frontmatter and headings by default; Inspector controls which content is included. Then `bun run note learned ID "the rule, where"`; the creator sees it on the note.
 
 Never edit `notes/notes.jsonl` by hand. A note keeps the second it was written at; a later Speed or Freeze edit moves where it is heard, and `bun run at '#N'` works that out.

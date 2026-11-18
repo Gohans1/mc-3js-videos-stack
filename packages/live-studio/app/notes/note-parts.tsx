@@ -34,7 +34,6 @@ import { Empty as UiEmpty, EmptyDescription, EmptyHeader } from "@/components/ui
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import { useEnterMotion } from "../components/Motion";
 import { Tip } from "../components/Tip";
 import { PHONE } from "../core/device";
 import { set, useDialogModal, useStudio } from "../core/store";
@@ -63,6 +62,7 @@ import {
   removeNote,
   reopenNote,
   reviewNote,
+  setReplyDraft,
 } from "./notes";
 import type { Fix, Mark, Note, NoteState } from "./slice";
 
@@ -644,7 +644,7 @@ export function NoteHistoryDisclosure({
             open && "rotate-180",
           )}
         />
-        <span>
+        <span className="tabular-nums">
           History ({prior.length} prior {prior.length === 1 ? "entry" : "entries"})
         </span>
       </button>
@@ -881,7 +881,7 @@ export function RefsChip({
               key={src}
               src={src}
               alt={`Reference ${i + 1}, as you sent it`}
-              className="block h-auto max-h-[78vh] w-full object-contain"
+              className="note-image-outline block h-auto max-h-[78vh] w-full object-contain"
             />
           ))}
         </DialogContent>
@@ -977,7 +977,7 @@ export function NoteThumb({
               goToNote(note);
             }}
             className={cn(
-              "group/thumb bg-backdrop hover:outline-primary/85 focus-visible:ring-ring outline-hairline relative flex-none cursor-pointer overflow-hidden rounded-md shadow-xs outline-1 -outline-offset-1 transition-opacity duration-150 ease-out focus-visible:ring-2 motion-reduce:transition-none",
+              "group/thumb bg-backdrop hover:outline-primary/85 focus-visible:ring-ring relative flex-none cursor-pointer overflow-hidden rounded-md shadow-xs outline-1 -outline-offset-1 outline-transparent transition-opacity duration-150 ease-out focus-visible:ring-2 motion-reduce:transition-none",
               muted && "opacity-75 group-hover/card:opacity-100 hover:opacity-100",
               size === "sm" || dense
                 ? portrait
@@ -1001,7 +1001,7 @@ export function NoteThumb({
           width={w}
           height={h}
           alt=""
-          className={cn("block size-full", dense && portrait ? "object-contain" : "object-cover")}
+          className={cn("note-image-outline block size-full", dense && portrait ? "object-contain" : "object-cover")}
         />
         <span
           aria-hidden
@@ -1021,11 +1021,11 @@ export function NoteThumb({
           <PreviewCard.Popup
             data-note-preview={note.id}
             className={cn(
-              "font-md bg-popover text-popover-foreground shadow-float ring-hairline-strong motion-safe:data-closed:animate-out motion-safe:data-closed:fade-out-0 motion-safe:data-closed:zoom-out-95 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:zoom-in-95 max-w-sm origin-(--transform-origin) overflow-hidden rounded-xl p-1.5 ring-1 motion-safe:duration-150",
+              "font-md bg-popover text-popover-foreground shadow-float ring-hairline-strong max-w-sm origin-(--transform-origin) overflow-hidden rounded-xl p-1.5 ring-1",
               portrait ? "w-60" : "w-96",
             )}
           >
-            <div className="bg-backdrop outline-hairline relative overflow-hidden rounded-lg outline-1 -outline-offset-1">
+            <div className="bg-backdrop relative overflow-hidden rounded-lg note-image-outline">
               <img
                 src={media.thumb}
                 width={w}
@@ -1039,7 +1039,7 @@ export function NoteThumb({
                   width={480}
                   height={480}
                   alt={`Pinned detail: ${note.pin.what}`}
-                  className="border-primary/75 bg-backdrop pointer-events-none absolute bottom-1.5 left-1.5 size-14 rounded-md border object-cover shadow-md"
+                  className="border-primary/75 bg-backdrop pointer-events-none absolute bottom-1.5 left-1.5 size-14 rounded-md border object-cover shadow-md note-image-outline"
                 />
               )}
             </div>
@@ -1068,39 +1068,37 @@ export function InlineFeedbackBox({
   note,
   ask,
   onDone,
+  showQuestion = true,
 }: {
   note: Note;
   ask: boolean;
+  showQuestion?: boolean;
   onDone: () => void;
 }) {
-  const [words, setWords] = useState("");
+  const words = useStudio((s) => s.replyDrafts.get(note.id) ?? "");
   const box = useRef<HTMLTextAreaElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const active = document.activeElement;
-    if (active instanceof HTMLElement && active !== box.current) {
-      returnFocusRef.current = active;
-    }
+    if (active instanceof HTMLElement) returnFocusRef.current = active;
+    box.current?.focus();
   }, []);
-  useEnterMotion(wrapRef, { y: -4, scale: 0.99, duration: 150 });
   const cancel = () => {
     const prev = returnFocusRef.current;
+    setReplyDraft(note.id, "");
     onDone();
     if (prev?.isConnected) requestAnimationFrame(() => prev.focus({ preventScroll: true }));
   };
   const submit = () => {
     const trimmed = words.trim();
-    if (!trimmed) return;
-    answerNote(note, trimmed);
-    setWords("");
+    if (!trimmed || !answerNote(note, trimmed)) return;
+    setReplyDraft(note.id, "");
     onDone();
   };
   const label = ask ? "Your answer to the AI" : "What still needs work";
-  const askPrompt = ask ? note.fixes?.at(-1)?.what : undefined;
+  const askPrompt = ask && showQuestion ? note.fixes?.at(-1)?.what : undefined;
   return (
     <div
-      ref={wrapRef}
       className="border-border/70 bg-background/75 mt-2 rounded-lg border p-2"
       onClick={(e) => e.stopPropagation()}
     >
@@ -1112,13 +1110,12 @@ export function InlineFeedbackBox({
       )}
       <Textarea
         ref={box}
-        autoFocus
         variant="note"
         name={`feedback-${note.id}`}
         aria-label={label}
         placeholder={ask ? "Answer the AI…" : "Say what’s still wrong or add detail…"}
         value={words}
-        onChange={(e) => setWords(e.target.value)}
+        onChange={(e) => setReplyDraft(note.id, e.target.value)}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

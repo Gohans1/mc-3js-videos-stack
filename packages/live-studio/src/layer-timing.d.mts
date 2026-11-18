@@ -1,4 +1,5 @@
 import type { LayerHistory, Timing, TimingClock } from "./timing.mjs";
+export function isTornByReorder(clock: TimingClock, from: number, to: number): boolean;
 export function compileLayerTiming(
   timing: Timing,
   sourceDuration: number,

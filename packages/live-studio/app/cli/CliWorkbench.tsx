@@ -12,7 +12,6 @@ import {
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Segmented } from "@/components/inspector";
-import { TabStage } from "@/components/Motion";
 import { Tip } from "@/components/Tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +38,8 @@ import { CliFieldControl } from "./CliFieldControl";
 import { CliLegoBar } from "./CliLegoBar";
 import {
   type CliCommandDraft,
+  type CliRunError,
+  cliRunErrorCopy,
   formatTargetBadgeText,
   hasFieldValidationError,
   isFieldValueActive,
@@ -112,7 +113,7 @@ export function CliWorkbench({
   consoleExpanded: boolean;
   focusConsoleRunId?: string | null;
   submittingRun: boolean;
-  runError: string | null;
+  runError: CliRunError | null;
   clearedHint: string | null;
   onBack: () => void;
   onSelectCategory: (cat: CliCategoryId) => void;
@@ -366,7 +367,9 @@ export function CliWorkbench({
     <>
       {legoBar}
 
-      <p className="text-label px-1 text-sm leading-normal">{activeSummary}</p>
+      <p className="text-label max-w-prose px-1 text-sm leading-normal text-pretty">
+        {activeSummary}
+      </p>
 
       {spec.guardReason && (
         <Alert variant="warn">
@@ -400,7 +403,7 @@ export function CliWorkbench({
         <div key={`${command.id}:${subPathKey}`} className="flex min-w-0 flex-col gap-2.5">
           {spec.argsDef.length > 0 && (
             <Collapsible open={visibleArgs.length > 0}>
-              <CollapsibleContent variant="reveal">
+              <CollapsibleContent>
                 <section
                   aria-label="Positional arguments"
                   className="flex min-w-0 flex-col gap-1.5"
@@ -435,7 +438,7 @@ export function CliWorkbench({
 
           {spec.envDef.length > 0 && (
             <Collapsible open={visibleEnv.length > 0}>
-              <CollapsibleContent variant="reveal">
+              <CollapsibleContent>
                 <section
                   aria-label="Environment overrides"
                   className="flex min-w-0 flex-col gap-1.5"
@@ -531,26 +534,12 @@ export function CliWorkbench({
                     aria-hidden
                     className={
                       moreOpen
-                        ? "text-muted-foreground size-4 shrink-0 rotate-180 transition-transform duration-150 motion-reduce:transition-none"
-                        : "text-muted-foreground size-4 shrink-0 transition-transform duration-150 motion-reduce:transition-none"
+                        ? "text-muted-foreground size-4 shrink-0 rotate-180"
+                        : "text-muted-foreground size-4 shrink-0"
                     }
                   />
                 </CollapsibleTrigger>
-                <CollapsibleContent
-                  variant="reveal"
-                  onTransitionEnd={(event) => {
-                    if (event.target !== event.currentTarget || event.propertyName !== "height")
-                      return;
-                    const focused = document.activeElement;
-                    if (
-                      focused instanceof HTMLElement &&
-                      event.currentTarget.contains(focused) &&
-                      focused.getAttribute("aria-invalid") === "true"
-                    ) {
-                      focused.scrollIntoView({ block: "nearest" });
-                    }
-                  }}
-                >
+                <CollapsibleContent>
                   <div className="border-hairline grid min-w-0 grid-cols-1 gap-4 border-t p-3 @min-[480px]/cli-form:grid-cols-2">
                     {advancedFlags.map((flag) => (
                       <CliFieldControl
@@ -616,13 +605,13 @@ export function CliWorkbench({
           {activeRun ? (
             <Button
               variant="destructive"
-              size="comfortable"
+              size="wrapping"
               disabled={isStoppingThis}
               focusableWhenDisabled
               onClick={() => {
                 if (!isStoppingThis) onStopRun(activeRun.runId);
               }}
-              className="w-35"
+              className="w-35 max-w-full"
             >
               {isStoppingThis ? (
                 <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
@@ -633,7 +622,7 @@ export function CliWorkbench({
             </Button>
           ) : (
             <Button
-              size="comfortable"
+              size="wrapping"
               variant={
                 spec.meta.effect === "destructive"
                   ? "destructive"
@@ -651,7 +640,7 @@ export function CliWorkbench({
               onClick={() => {
                 if (canRun) triggerExecute();
               }}
-              className="w-35"
+              className="w-35 max-w-full"
             >
               {submittingRun ? (
                 <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
@@ -667,7 +656,8 @@ export function CliWorkbench({
           <Button
             ref={guideButtonRef}
             variant="secondary"
-            size="comfortable"
+            size="wrapping"
+            className="max-w-full"
             onClick={() => onHelpOpenChange(true)}
           >
             <BookOpen aria-hidden />
@@ -706,16 +696,17 @@ export function CliWorkbench({
           <ArrowLeft aria-hidden />
           Commands
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
           <Tip label={editingTemplateName ? "Update template" : "Save template"}>
             <Button
               variant="subtle"
-              size="comfortable"
+              size="wrapping"
+              className="max-w-full"
               aria-label={editingTemplateName ? "Update template" : "Save template"}
               onClick={onOpenSaveTemplate}
             >
               <BookmarkPlus aria-hidden />
-              <span className="hidden @min-[420px]/cli-workbench:inline">
+              <span className="hidden @min-[360px]/cli-workbench:inline">
                 {editingTemplateName ? "Update template" : "Save template"}
               </span>
             </Button>
@@ -724,22 +715,20 @@ export function CliWorkbench({
         </div>
       </div>
       <div className={cn("flex min-w-0 flex-none flex-col gap-1", outputOnly && "sr-only")}>
-        <h2 className="text-heading-foreground font-mono text-xl leading-tight font-semibold break-words">
+        <h2
+          data-cli-command-title
+          tabIndex={-1}
+          className="text-heading-foreground font-mono text-xl leading-tight font-semibold wrap-anywhere"
+        >
           {[command.label, ...spec.subcommands.map((sub) => sub.label)].join(" ")}
         </h2>
-        <p className="text-muted-foreground text-sm">
-          Current Studio:{" "}
-          <span className="text-label font-medium">
-            {catalog.context.activeFilm ?? "No film open"}
-          </span>
-          {targetLabel !== catalog.context.activeFilm && <span> · {targetLabel}</span>}
-        </p>
       </div>
       {runError && (
         <Alert variant="destructive" className="flex-none">
-          <AlertTitle>Command could not run</AlertTitle>
-          <AlertDescription>
-            {runError} Check the options and your connection, then try again.
+          <AlertTitle>{cliRunErrorCopy(runError).title}</AlertTitle>
+          <AlertDescription size="prose" className="wrap-anywhere">
+            <span className="block">{runError.message}</span>
+            {cliRunErrorCopy(runError).recovery}
           </AlertDescription>
         </Alert>
       )}
@@ -750,17 +739,14 @@ export function CliWorkbench({
           onChange={setCompactTab}
           tone="accent"
           size="comfortable"
+          animateIndicator={false}
           items={[
             { id: "builder", title: "Configure" },
             { id: "output", title: "Output" },
           ]}
         />
       )}
-      <TabStage
-        activeKey={`${drawerScopeKey}:${compactTab}:${consoleExpanded}`}
-        animateMount
-        duration={180}
-        distance={6}
+      <div
         className={cn(
           "min-h-0 min-w-0 flex-1 overflow-hidden",
           widePane && !consoleExpanded
@@ -775,13 +761,13 @@ export function CliWorkbench({
             <div
               data-cli-configure
               data-arrow-scroll
-              className="@container/cli-form flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto pr-1 [overflow-anchor:none]"
+              className="@container/cli-form flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto overscroll-contain pe-1 [overflow-anchor:none]"
             >
               {builderFieldsContent}
             </div>
             <div
               data-arrow-scroll
-              className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto [overflow-anchor:none]"
+              className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto overscroll-contain [overflow-anchor:none]"
             >
               <CliBehaviorStrip
                 meta={spec.meta}
@@ -795,7 +781,7 @@ export function CliWorkbench({
           <div
             data-cli-configure
             data-arrow-scroll
-            className="@container/cli-form flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto pr-1 [overflow-anchor:none]"
+            className="@container/cli-form flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pe-1 [overflow-anchor:none]"
           >
             {builderFieldsContent}
             <h3 className="text-heading-foreground border-hairline border-t pt-3 text-base font-semibold">
@@ -810,13 +796,13 @@ export function CliWorkbench({
         ) : (
           consoleSection
         )}
-      </TabStage>
+      </div>
       {!outputOnly && (
         <footer
           data-cli-actions
           className="border-hairline flex flex-none flex-col gap-2 border-t pt-3"
         >
-          <p className="text-label truncate text-sm" title={targetLabel}>
+          <p className="text-label text-sm wrap-anywhere">
             <CliAccessLabel effect={spec.meta.effect} /> · <CliCostLabel cost={spec.meta.cost} /> ·{" "}
             {targetLabel}
           </p>

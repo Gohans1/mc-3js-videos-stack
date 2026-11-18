@@ -7,6 +7,7 @@ import * as z from "zod";
 // with end: true as it stops, so the studio shows it busy in between; its pid lets the studio end it for a command killed
 // before its end line (an agent's timeout, a closed terminal: Windows runs no exit handler then)
 export const Activity = z.object({
+  surface: z.enum(["film", "cli", "sound", "text", "cam", "adjust", "openfilm", "keys", "speed", "transition", "objects"]).optional(),
   say: z.string().trim().min(1).max(200),
   notes: z
     .array(z.string().regex(/^[a-z0-9]+$/))
@@ -77,6 +78,7 @@ export const createActivity = (send, { keep = 40, every = 3000 } = {}) => {
         add({
           say: `${key[0].toUpperCase()}${key.slice(1)} stopped before it ended`,
           level: "fail",
+          surface: a.surface,
           job: { key, end: true },
         });
   };

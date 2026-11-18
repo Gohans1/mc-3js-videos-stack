@@ -390,6 +390,23 @@ export function getEffectLabel(effect: CliMeta["effect"]): string {
   }
 }
 
+export interface CliRunError {
+  operation: "start" | "stop";
+  message: string;
+}
+
+export function cliRunErrorCopy(error: CliRunError) {
+  return error.operation === "stop"
+    ? {
+        title: "Could not stop command",
+        recovery: "Check Studio’s connection, then select Stop again.",
+      }
+    : {
+        title: "Could not start command",
+        recovery: "Review the command options and Studio’s connection, then try again.",
+      };
+}
+
 export function getSpeedLabel(speed: CliMeta["speed"]): string {
   switch (speed) {
     case "instant":
@@ -426,7 +443,7 @@ export function resolveSaveTemplateTargets(opts: {
     return { items: [], defaultTarget: "root" };
   }
 
-  const items: SelectOptionItem[] = [{ value: "active", label: "Current Studio project" }];
+  const items: SelectOptionItem[] = [{ value: "active", label: "Current film" }];
   if (opts.supportsRootTarget) items.push({ value: "root", label: "Repo root" });
 
   const defaultTarget = items.some((item) => item.value === opts.initialTargetFilm)

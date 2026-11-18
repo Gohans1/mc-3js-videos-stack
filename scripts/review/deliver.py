@@ -1,18 +1,18 @@
-"""The last look before upload: the finished video checked against YouTube's upload spec (support.google.com/youtube/answer/
-1722171), each fault with the command or setting that fixes it. Run inside the film.
+"""Technical upload checks for an encoded file. Uses this project's delivery profile and YouTube's recommendations.
+Decodes the selected picture and audio streams and checks MP4 structure, timing and loudness. Use sheet/earshot for the content, timing and creative intent.
   bun run deliver                  renders/final.mp4, the file to upload (bun run mix renders/final_video.mp4 makes it)
   bun run deliver <video>          any other video
-  bun run deliver --youtube        approximate LOCAL compression preview: renders/youtube_preview.mp4 (AV1 at
+  bun run deliver --youtube        approximate LOCAL compression preview: renders/youtube_*/preview.mp4 (AV1 at
                                    4 Mbps, 1440 lines; Shorts 1080x1920 at 3 Mbps). No upload or actual YouTube rendition.
                                    Measures where this fixed-bitrate local re-encode adds bands to smooth light
                                    (Netflix CAMBI, 0 none, 5 a little, 24 unwatchable), each with a picture of it. About 3x the
                                    video's length on this PC: a 10 min film takes half an hour, so name seconds
-  bun run deliver --youtube 9-15   the same for those seconds of the video only, in seconds
-Checked: MP4 with the moov atom up front and no edit lists, H.264 High 8-bit 4:2:0 in BT.709 at a constant frame rate, a
-keyframe at least every second, 1440p or 2160p (Shorts: 1080x1920, 3 min at most), AAC stereo 48 kHz (asked at 384 kbps: bun run mix
-asks that; ffmpeg's AAC lands under it on purpose, so the rate is shown, not judged), sound as long
-as the picture, -14 LUFS (YouTube turns louder down, never quieter up) with true peak at -1 dBTP or under.
-Exit 0 ready, 1 something to fix (each FIX line), 2 a wrong word. Why these numbers: bun run skills get core --ref render."""
+  bun run deliver --youtube 9-15   the same for file seconds 9-15. Choose one range per picture format.
+The project targets MP4 Fast Start, H.264 High 8-bit 4:2:0 BT.709 SDR, frames at a constant rate and keys
+at most 1 s apart. Landscape minimum 1080p (default master 1440p), portrait target 1080x1920. Audio target AAC stereo
+48 kHz, matching track duration, -14 LUFS integrated and at most -1 dBTP. Track duration alone cannot establish sync.
+Checks use the default audio track, or the first if none is marked default.
+Exit 0 passes the configured checks, 1 has a FIX finding or check/preview failure, 2 is invalid input. Why these numbers: bun run skills get core --ref render."""
 import json
 import math
 import os
@@ -21,12 +21,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from fractions import Fraction
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sound"))
-from listen import YOUTUBE, loudness  # noqa: E402
+from listen import YOUTUBE, loudness, measured_loudness  # noqa: E402
 from seconds import SAY, heard_second, meant  # noqa: E402  (listen puts scripts/ on the path)
-from stale import stale  # noqa: E402
+from stale import render_context  # noqa: E402
+from sheet_view import DECODE_BEFORE_TRIM, audio_bounds, display_size, displayed_time, extract_displayed_frame, picture_bounds, pixel_aspect, presentation_times, seconds  # noqa: E402
 from studio_tell import job  # noqa: E402
 
 USAGE = "bun run deliver [<video>] [--youtube [<from>-<to>]] (--help for more)"
@@ -65,15 +67,22 @@ def boxes(video):
             at += size
 
     with open(video, "rb") as f:
-        while (head := f.read(8)) and len(head) == 8:
+        end = os.fstat(f.fileno()).st_size
+        while head := f.read(8):
+            if len(head) != 8:
+                raise ValueError("truncated MP4 box header")
             size, kind = int.from_bytes(head[:4], "big"), head[4:8].decode("latin1")
             skip = size - 8
             if size == 1:
-                skip = int.from_bytes(f.read(8), "big") - 16
+                full = f.read(8)
+                if len(full) != 8:
+                    raise ValueError(f"truncated MP4 {kind} box header")
+                skip = int.from_bytes(full, "big") - 16
             order.append(kind)
-            # 0 runs to the file's end; a size under its own header is damage, and seeking back by it walks in a loop
-            if size == 0 or skip < 0:
+            if size == 0:
                 break
+            if skip < 0 or f.tell() + skip > end:
+                raise ValueError(f"truncated or invalid MP4 {kind} box")
             if kind == "moov":
                 walk(f.read(skip), b"moov")
             else:
@@ -81,13 +90,35 @@ def boxes(video):
     return order, edits
 
 
-def key_gap(video, long):
-    """The longest stretch without a keyframe, to the video's end too, in seconds (reads only the keyframes)"""
-    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey", "-show_entries",
-                        "frame=pts_time", "-of", "csv=p=0", str(video)], capture_output=True, text=True, timeout=600)
-    keys = [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", r.stdout)]
-    ends = [*keys, long] if keys else [0.0, long]
-    return max(b - a for a, b in zip(ends, ends[1:]))
+def picture_cadence(video, pic, duration, origin):
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "V:0", "-show_entries",
+                        "frame=key_frame,best_effort_timestamp,width,height,sample_aspect_ratio,pix_fmt,"
+                        "color_range,color_space,color_primaries,color_transfer,chroma_location",
+                        "-of", "json", str(video)], capture_output=True, text=True, timeout=600)
+    if r.returncode or r.stderr.strip():
+        raise RuntimeError(r.stderr.strip()[-500:] or "ffprobe could not decode the picture")
+    format_fields = ("width", "height", "sample_aspect_ratio", "pix_fmt", "color_range",
+                     "color_space", "color_primaries", "color_transfer", "chroma_location")
+    frames = [(f.get("key_frame"), int(f["best_effort_timestamp"]), tuple(f.get(k) for k in format_fields))
+              for f in json.loads(r.stdout).get("frames", []) if "best_effort_timestamp" in f]
+    if not frames:
+        raise RuntimeError("ffprobe found no decoded picture timestamps")
+    time_base = Fraction(pic["time_base"])
+    tick = float(time_base)
+    formats = [(round(t * tick - origin, 9), shape) for i, (_, t, shape) in enumerate(frames)
+              if not i or shape != frames[i - 1][2]]
+    keys = [t * tick for key, t, _ in frames if key]
+    ends = [frames[0][1] * tick, *keys, frames[0][1] * tick + duration]
+    gap = max(b - a for a, b in zip(ends, ends[1:]))
+    spacing = [b[1] - a[1] for a, b in zip(frames, frames[1:])]
+    if not spacing or (shortest := min(spacing)) == (longest := max(spacing)):
+        return gap, None, formats
+    nominal = pic.get("r_frame_rate") or "0/0"
+    if longest - shortest == 1 and rate({"avg_frame_rate": nominal}):
+        period = 1 / (Fraction(nominal) * time_base)
+        if math.floor(period) == shortest and math.ceil(period) == longest:
+            return gap, None, formats
+    return gap, (shortest * tick, longest * tick), formats
 
 
 def rate(stream):
@@ -95,202 +126,284 @@ def rate(stream):
     return float(num) / float(den) if float(den) else 0.0
 
 
-def check(video, info):
-    """(summary line, [(FIX|ADVICE, words)]) for one video against the upload spec"""
-    # the mix that wrote this file: a draft.mp4 comes from the draft, anything else is taken for the upload
-    remix = f"bun run mix renders/{'draft_video' if Path(video).name == 'draft.mp4' else 'final_video'}.mp4"
+def streams(info):
+    picture = next((s for s in info["streams"] if s["codec_type"] == "video" and not s.get("disposition", {}).get("attached_pic")), None)
+    audio = [s for s in info["streams"] if s["codec_type"] == "audio"]
+    sound = next((s for s in audio if s.get("disposition", {}).get("default")), audio[0] if audio else None)
+    return picture, sound, len(audio)
+
+
+def check(video, info, picked, render=None, bounds=None):
+    """Delivery summary, findings and picture bounds or None for an audio-only file."""
+    remix = None
+    if render and not render["kind"]:
+        flavor = "final" if render["final"] else "draft"
+        remix = f"bun run mix renders/{flavor}_video.mp4"
+    draw = "; bun run render final writes that profile" if render else ""
     out = []
     fix = lambda words: out.append(("FIX", words))  # noqa: E731
     advise = lambda words: out.append(("ADVICE", words))  # noqa: E731
-    remux = f"ffmpeg -i {video} -c copy -movflags +faststart -use_editlist 0 <out>.mp4 (lossless)"
-    pic = next((s for s in info["streams"] if s["codec_type"] == "video"), None)
-    snd = next((s for s in info["streams"] if s["codec_type"] == "audio"), None)
+    remux = f'ffmpeg -n -i "{video}" -map 0 -c copy -movflags +faststart <out>.mp4 (if all streams fit MP4)'
+    pic, snd, audio_count = picked
     if not pic:
-        return f"{video}: no picture", [("FIX", "no video stream: bun run render final makes the picture")]
-    order, edits = boxes(video)
-    late = "moov" in order and "mdat" in order and order.index("moov") > order.index("mdat")
-    box = [*(["the moov atom sits after the media (YouTube asks it up front, Fast Start)"] if late else []),
-           *(["it has an edit list (YouTube asks none: the picture can shift against the sound)"] if edits else [])]
-    if box:
-        fix(f"{' and '.join(box)}: {remux}")
-    w, h, fps = pic["width"], pic["height"], rate(pic)
+        return f"{video}: no picture", [("FIX", "no video stream; supply a file with a picture track")], None, []
+    pictures = [s for s in info["streams"] if s["codec_type"] == "video" and not s.get("disposition", {}).get("attached_pic")]
+    if len(pictures) > 1:
+        default = next((s["index"] for s in pictures if s.get("disposition", {}).get("default")), None)
+        extra = f" (default is #{default})" if default is not None and default != pic["index"] else ""
+        advise(f"{len(pictures)} picture streams; checked and previewed only first picture stream #{pic['index']}{extra}.")
+    if audio_count > 1:
+        advise(f"{audio_count} audio streams; only stream #{snd['index']} was checked (default or first). Use media ffmpeg probe to inspect the track list.")
+    container = info["format"].get("format_name", "")
+    brand = info["format"].get("tags", {}).get("major_brand", "").strip()
+    if "mp4" not in container.split(",") or brand == "qt" or brand.startswith(("3gp", "3g2", "mj2")):
+        fix(f"container {container or 'unknown'} {brand}: project profile targets MP4. Use media ffmpeg export to inspect carry, or {remux}")
+    else:
+        order, edits = boxes(video)
+        late = "moov" in order and "mdat" in order and order.index("moov") > order.index("mdat")
+        if "moov" not in order or "mdat" not in order:
+            fix("MP4 is missing required moov or mdat boxes")
+        if late:
+            fix(f"the moov atom sits after the media (Fast Start places it first): {remux}")
+        if edits:
+            advise("MP4 has an edit list. YouTube recommends avoiding them; verify A/V timing before retiming or remuxing.")
+    w, h = display_size(pic)
+    fps = rate(pic)
     name = {"h264": "H.264"}.get(pic["codec_name"], pic["codec_name"])
     if pic["codec_name"] != "h264" or pic.get("profile") != "High":
-        advise(f"{name} {pic.get('profile', '')}: YouTube asks H.264 High; bun run render final writes it")
+        advise(f"{name} {pic.get('profile', '')}: target H.264 High{draw}")
     if pic.get("pix_fmt") != "yuv420p":
         advise(f"{pic.get('pix_fmt')}: YouTube asks 8-bit 4:2:0 (yuv420p) for SDR")
     tags = {pic.get(k, "unknown") for k in ("color_primaries", "color_transfer", "color_space")}
     if tags != {"bt709"} or pic.get("color_range") not in (None, "tv"):
-        advise(f"colour tagged {'/'.join(sorted(tags))}{' ' + pic['color_range'] if 'color_range' in pic else ''}: YouTube asks BT.709 limited range, "
-               f"else it guesses. ffmpeg -i {video} -c copy -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:"
-               "matrix_coefficients=1:video_full_range_flag=0 <out>.mp4")
-    # a mux shifts the average a hair (mix's final.mp4: 29.998 against 30): only a real spread of frame lengths counts
-    avg, nominal = rate({"avg_frame_rate": pic.get("avg_frame_rate")}), rate({"avg_frame_rate": pic.get("r_frame_rate")})
-    if nominal and abs(avg - nominal) > nominal * 0.001:
-        advise(f"variable frame rate ({pic.get('r_frame_rate')} vs {pic.get('avg_frame_rate')} on average): YouTube asks constant")
-    long = float(info["format"].get("duration") or pic.get("duration") or 0)
-    gap = key_gap(video, long)
+        advise(f"colour tagged {'/'.join(sorted(tags))}{' ' + pic['color_range'] if 'color_range' in pic else ''}: target BT.709 limited range for SDR. "
+               "Confirm the source color space before converting or correcting tags.")
+    bounds = bounds or picture_bounds(video, pic, info["format"])
+    pic_from, pic_to, origin = bounds
+    long = pic_to - pic_from
+    gap, varied, formats = picture_cadence(video, pic, long, origin)
+    if len(formats) > 1:
+        advise("decoded picture format changes; use a constant-format range for the preview")
+    if varied and varied[0] <= 0:
+        advise("duplicate or out-of-order picture timestamps; inspect the stream before delivery")
+    elif varied:
+        advise(f"variable frame rate: decoded frame spacing {varied[0] * 1000:.2f}-{varied[1] * 1000:.2f} ms; the project targets constant cadence")
     if gap > 1.01:
         advise(f"keyframes {gap:.1f} s apart at most: YouTube asks a closed GOP of half the frame rate (0.5 s); render final keys every 0.5 s")
     if w % 2 or h % 2:
         fix(f"{w}x{h} has an odd side: 4:2:0 needs both even")
     if h > w:
         if w < 1080 or h * 9 != w * 16:
-            fix(f"{w}x{h} upright: a Short is 1080x1920 (9:16); bun run render final with package.json live-studio.ratio 9:16")
+            fix(f"{w}x{h} upright: target 1080x1920 (9:16){draw}")
         elif w > 1080:
-            advise(f"{w}x{h}: Shorts play at 1080x1920 at most; render final makes 1080x1920 for a Shorts film unless RES says more")
+            advise(f"{w}x{h}: project target is 1080x1920{draw}")
         if long > SHORTS_LONGEST:
             fix(f"{long:.0f} s upright: a Short is {SHORTS_LONGEST // 60} min at most, longer plays as an ordinary video")
     elif min(w, h) < 1080:
-        fix(f"{w}x{h} ({min(w, h)}p) is a draft size: bun run render final (1440p; RES=2160 for 4K)")
+        fix(f"{w}x{h} ({min(w, h)}p) is below the project's landscape minimum (1080p){draw}")
     elif min(w, h) < 1440:
-        advise(f"{min(w, h)}p: YouTube serves a 1440p or bigger upload in better codecs even to 1080p viewers; RES=1440 bun run render final")
+        advise(f"{min(w, h)}p: this project's default landscape master is 1440p{draw}")
     if not snd:
-        fix(f"no sound: {remix} puts the soundtrack on the picture")
+        fix(f"no sound: {remix} puts the soundtrack on the picture" if remix else "no sound: supply or add the intended audio track")
     else:
+        sound_fix = f"; {remix}" if remix else ""
         if snd["codec_name"] != "aac":
-            advise(f"{snd['codec_name']} sound: YouTube asks AAC-LC; {remix} writes it")
+            advise(f"{snd['codec_name']} sound: target AAC-LC{sound_fix}")
         if snd.get("channels") == 1:
-            fix(f"mono sound: YouTube asks stereo (or 5.1); {remix} writes stereo")
+            fix(f"mono sound: target stereo or 5.1{sound_fix}")
         if int(snd.get("sample_rate", 0)) not in (48000, 96000):
-            advise(f"{int(snd.get('sample_rate', 0)) / 1000:g} kHz: YouTube asks 48 or 96 kHz; {remix} writes 48")
-        heard = float(snd.get("duration") or long)
-        seen = float(pic.get("duration") or long)
-        if abs(heard - seen) > 0.1:
-            fix(f"the sound is {abs(heard - seen):.2f} s {'shorter' if heard < seen else 'longer'} than the picture: "
-                f"{remix} again (it cuts the mix to the picture)")
-        i, lra, tp = loudness(video)
-        if i < YOUTUBE - 1:
-            fix(f"{i:.1f} LUFS: YouTube never turns it up, it plays {YOUTUBE - i:.1f} dB quieter than the videos around it. "
-                f"{remix} again; if it says it stopped short, set audio.json drive as it says")
+            advise(f"{int(snd.get('sample_rate', 0)) / 1000:g} kHz: target 48 or 96 kHz{sound_fix}")
+        snd_from, snd_to = audio_bounds(video, origin, snd, container)
+        if max(abs(snd_from - pic_from), abs(snd_to - pic_to)) > 0.1:
+            fix(f"audio covers {snd_from:g}-{snd_to:g} s and picture covers {pic_from:g}-{pic_to:g} s on the file clock{sound_fix}")
+        i, _, tp = loudness(video, f"0:{snd['index']}")
+        if tp == float("-inf"):
+            fix(f"selected audio stream is silent{sound_fix}")
+        elif i is None:
+            if snd_to - snd_from >= 0.4 - 1e-6:
+                fix(f"no 400 ms audio block clears the EBU gate; selected track misses the {YOUTUBE:g} LUFS target{sound_fix}")
+            else:
+                advise("integrated loudness needs a 400 ms audio window; inspect the true peak for this short track")
+        elif i < YOUTUBE - 1:
+            fix(f"{i:.1f} LUFS: {YOUTUBE - i:.1f} LU quieter than the project target ({YOUTUBE:g} LUFS){sound_fix}")
         elif i > YOUTUBE + 1:
-            advise(f"{i:.1f} LUFS: YouTube turns it down {i - YOUTUBE:.1f} dB to {YOUTUBE:g}, the loudness bought with limiting is lost; "
-                   f"audio.json lufs {YOUTUBE:g}")
+            advise(f"{i:.1f} LUFS: above the project target ({YOUTUBE:g} LUFS){sound_fix}")
         if tp > -1:
-            fix(f"true peak {tp:+.1f} dBTP: over -1 the AAC encode clips; {remix} again: it measures the encoded file and "
-                "lowers the mix by what the codec added")
+            fix(f"true peak {tp:+.1f} dBTP: exceeds the project's -1 dBTP ceiling{sound_fix}")
     mbps = int(pic.get("bit_rate") or info["format"].get("bit_rate") or 0) / 1e6
     sound = (f", {snd['codec_name'].upper()} {int(snd.get('sample_rate', 0)) / 1000:g} kHz {'stereo' if snd.get('channels') == 2 else str(snd.get('channels')) + ' ch'}"
-             f" {int(snd.get('bit_rate') or 0) / 1000:.0f} kbps, {i:.1f} LUFS, peak {tp:+.1f} dBTP" if snd else ", no sound")
-    return f"{video}: {w}x{h} {fps:g} fps {name} {pic.get('profile', '')} {mbps:.1f} Mbps{sound}, {long:.1f} s", out
+             f" {int(snd.get('bit_rate') or 0) / 1000:.0f} kbps, {measured_loudness(i, tp)}" if snd else ", no sound")
+    return f"{video}: {w}x{h} {fps:g} fps {name} {pic.get('profile', '')} {mbps:.1f} Mbps{sound}, {long:.1f} s", out, bounds, formats
 
 
-def cambi(video, start, length, width, tmp, tag, shown=None):
-    """CAMBI per sampled frame (every 5th) of a stretch of video, scaled to `width`: {second: worst}, the seconds counted
-    from `shown` (default `start`), so a preview cut from the upload keys its seconds the same way"""
+def cambi(video, input_options, deadline, picture_filter, tmp, tag):
+    """CAMBI sampled every fifth frame on the same presentation clock for source and preview."""
     log = f"cambi_{tag}.json"
-    graph = (f"[0:v]scale={width}:-2:flags=lanczos,format=yuv420p,split[a][b];"
+    graph = (f"[0:V:0]{picture_filter},format=yuv420p,split[a][b];"
              f"[a][b]libvmaf=feature=name=cambi:n_subsample=5:log_fmt=json:log_path={log}")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(length), "-i", str(Path(video).resolve()),
-                    "-lavfi", graph, "-f", "null", "-"], check=True, timeout=600 + length * 20, cwd=tmp)
+    subprocess.run(["ffmpeg", "-nostdin", "-xerror", "-v", "error", "-y", *input_options, "-i", str(Path(video).resolve()),
+                    "-lavfi", graph, "-f", "null", "-"], check=True, timeout=deadline, cwd=tmp)
     frames = json.loads((Path(tmp) / log).read_text(encoding="utf8"))["frames"]
-    fps = rate(next(s for s in probe(video)["streams"] if s["codec_type"] == "video")) or 30
-    worst = {}
-    for f in frames:
-        score = f["metrics"].get("cambi")
-        if score is not None:
-            s = int((start if shown is None else shown) + f["frameNum"] / fps)
-            worst[s] = max(worst.get(s, 0.0), score)
-    return worst
+    return {f["frameNum"]: f["metrics"]["cambi"] for f in frames if "cambi" in f["metrics"]}
 
 
-def band_picture(video, preview, second, out, offset, last):
+def band_picture(video, preview, at, out, offset, origin, source_times, preview_times, preview_size):
     """The upload and the re-encode side by side at one second, with a row below that exaggerates small steps of light
     (each picture minus its blur, x16) so a band shows as a contour line"""
-    graph = ("[0:v]scale=960:-2,format=gray,split[a][a2];[1:v]scale=960:-2,format=gray,split[b][b2];"
+    width, height = preview_size
+    proof_height = max(2, round(960 * height / width / 2) * 2)
+    scale = f"scale=960:{proof_height}:reset_sar=1,format=gray"
+    graph = (f"[0:V:0]{scale},split[a][a2];[1:V:0]{scale},split[b][b2];"
              "[a2]split[x][y];[y]gblur=sigma=8[yb];[x][yb]blend=all_expr='128+(A-B)*16'[ae];"
              "[b2]split[p][q];[q]gblur=sigma=8[qb];[p][qb]blend=all_expr='128+(A-B)*16'[be];"
              "[a][b]hstack[top];[ae][be]hstack[bottom];[top][bottom]vstack")
-    # the middle of the second, kept inside the stretch the preview holds (from `offset`, to the last frame)
-    at = max(min(second + 0.5, last), offset)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{at:.3f}", "-i", str(video), "-ss",
-                    f"{at - offset:.3f}", "-i", str(preview), "-lavfi", graph, "-frames:v", "1", str(out)],
-                   check=True, timeout=120)
+    source_frame = displayed_time(source_times, at)
+    preview_time = at - offset
+    preview_frame = displayed_time(preview_times, preview_time)
+    with tempfile.TemporaryDirectory(prefix="band-frames-") as tmp:
+        source_image, preview_image = Path(tmp) / "source.png", Path(tmp) / "preview.png"
+        extract_displayed_frame(video, source_image, source_frame, origin=origin)
+        extract_displayed_frame(preview, preview_image, preview_frame)
+        subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(source_image), "-i", str(preview_image),
+                        "-lavfi", graph.replace("0:V:0", "0:v:0").replace("1:V:0", "1:v:0"), "-frames:v", "1", str(out)],
+                       check=True, timeout=120)
 
 
-def youtube(video, span, root, named=""):
-    info = probe(video)
-    pic = next(s for s in info["streams"] if s["codec_type"] == "video")
-    long = float(info["format"].get("duration") or pic.get("duration") or 0)
-    start, end = span or (0.0, long)
-    if not 0 <= start < end <= long + 0.05:
-        print(f"--youtube {start:g}-{end:g} is outside the video: it is {long:.2f} s long", file=sys.stderr)
-        return 2, []
+def youtube(video, span, root, pic, snd, picture, whole, cut_info, sequential, formats):
+    first, stop, origin = picture
+    start, end = span or (first, stop)
+    end = min(end, stop)
     length = end - start
-    width, bitrate = PREVIEW["wide" if pic["width"] >= pic["height"] else "upright"]
-    width = min(width, pic["width"])
+    change = next((t for t, _ in formats[1:] if round(start, 9) < t < round(end, 9)), None)
+    if change is not None:
+        print(f"Cannot compare CAMBI across a picture-format change at {seconds(change)} file seconds. "
+              "Choose a range on one side of the change or normalize the source first.", file=sys.stderr)
+        return 1, []
+    _, frame_format = next((part for part in reversed(formats) if part[0] <= round(start, 9)), formats[0])
+    frame_w, frame_h, sar = frame_format[:3]
+    square_width = max(2, round(frame_w * pixel_aspect(sar, {}) / 2) * 2)
+    display_w, display_h = display_size({**pic, "width": square_width, "height": frame_h})
+    width, bitrate = PREVIEW["wide" if display_w >= display_h else "upright"]
+    width = min(width, display_w)
+    preview_height = max(2, round(display_h * width / display_w / 2) * 2)
     out = root / "renders"
     out.mkdir(exist_ok=True)
-    for old in out.glob("youtube_bands_*s.png"):
-        old.unlink()
-    preview = out / "youtube_preview.mp4"
-    print(f"local compression preview of {length:.0f} s (AV1 {bitrate}bps, {width} wide; approximate, not an actual YouTube rendition) and measuring bands in both, "
+    out = Path(tempfile.mkdtemp(prefix="youtube_", dir=out))
+    preview = out / "preview.mp4"
+    shown = preview.relative_to(root).as_posix()
+    staged = len(formats) > 1
+    audio = ["-i", str(video)] if snd and staged else [
+        "-ss", str(start), "-t", str(length), "-i", str(video),
+    ] if snd and not sequential else []
+    sound_filter = f"aresample=async=1:first_pts=0,apad,atrim=duration={length}"
+    if sequential:
+        absolute = origin + start
+        sound_filter = f"atrim=start={absolute:.9f}:end={origin + end:.9f},asetpts=PTS-({absolute:.9f}/TB)," + sound_filter
+    sound_map = ["-map", f"{1 if audio else 0}:{snd['index']}", "-af", sound_filter] if snd else []
+    print(f"preview: {shown}; its second 0 starts at source file second {seconds(start)}", flush=True)
+    print(f"local compression preview of {length:.3g} s (AV1 {bitrate}bps, {width} wide; approximate, not an actual YouTube rendition) and measuring bands in both, "
           f"about {max(10, length * 3):.0f} s{' (a few seconds judge banding as well: --youtube <from>-<to>)' if length > 60 else ''} ...",
           file=sys.stderr)
-    try:
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(length), "-i", str(video), "-map", "0:v:0",
-                        "-map", "0:a:0?", "-vf", f"scale={width}:-2:flags=lanczos", "-c:v", "libsvtav1", "-preset", "10", "-b:v",
-                        bitrate, "-c:a", "aac", "-b:a", "128k", str(preview)], check=True, timeout=600 + length * 20,
-                       env={**os.environ, "SVT_LOG": "1"})  # SVT-AV1 prints its whole config to stderr unless told errors only
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-        print(f"Local compression preview failed: {e}", file=sys.stderr)
-        return 1, []
-    try:
-        with tempfile.TemporaryDirectory(prefix="deliver-") as tmp:
-            before = cambi(video, start, length, width, tmp, "upload")
-            after = cambi(preview, 0, length, width, tmp, "preview", shown=start)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-        print(f"CAMBI banding measurement failed: {e}", file=sys.stderr)
-        return 1, []
-    added = sorted(s for s, v in after.items() if v >= BANDS and v - before.get(s, 0.0) >= ADDED)
-    spans = []
-    for s in added:
-        if spans and s - spans[-1][1] <= 1:
-            spans[-1][1] = s
-        else:
-            spans.append([s, s])
-    worst_up = max(before.values(), default=0.0)
-    gain = {s: v - before.get(s, 0.0) for s, v in after.items()}
-    at = max(gain, key=gain.get, default=None)
-    print(f"bands (Netflix CAMBI): what counts is what YouTube's re-encode adds to the upload, at most "
-          f"{gain.get(at, 0.0):+.1f} (second {at}); a viewer notices a gain of {ADDED:g} where it reaches {BANDS:g}. The upload "
-          f"alone scores up to {worst_up:.1f}: CAMBI counts the steps between flat Minecraft tiles too, so that is no fault by itself. "
-          "Preview: renders/youtube_preview.mp4")
-    cuts_file = root / "renders/cuts.json"
-    cuts = None  # no shots known; [] is a film of one shot
-    if cuts_file.exists() and video.resolve().parent == out.resolve():
+    with tempfile.TemporaryDirectory(prefix="deliver-") as tmp:
         try:
-            cuts = json.loads(cuts_file.read_text(encoding="utf8"))
-        except ValueError:
-            cuts = None
-        # a dict or a string would iterate into cuts nobody made
-        if not isinstance(cuts, list) or not all(type(c) in (int, float) and math.isfinite(c) and c >= 0 for c in cuts):
-            cuts = None
-            print("renders/cuts.json is no list of seconds: the bands are named without their shots (bun run render clip writes it again)")
-    peaks = [max(range(a, b + 1), key=lambda s: after[s] - before.get(s, 0.0)) for a, b in spans]
-    for (a, b), peak in zip(spans[:6], peaks):
-        picture = out / f"youtube_bands_{peak}s.png"
-        band_picture(video, preview, peak, picture, start, min(end, long) - 1 / (rate(pic) or 30))
-        shot = f", shot {sum(c <= peak for c in cuts)} (renders/cuts.json)" if cuts is not None else ""
-        print(f"BANDS {a}-{b + 1} s{shot}: the re-encode scores {after[peak]:.1f} where the upload has {before.get(peak, 0.0):.1f}; "
-              f"look: {picture.relative_to(root)} (top: upload | re-encode, bottom: the same with small steps of light x16)")
+            source_times = presentation_times(video, origin)
+            base = displayed_time(source_times, start)
+            seek = max(0, base - 0.000002)
+            fps = min(60, max(24, rate({"avg_frame_rate": pic.get("r_frame_rate")}) or 30))
+            samples = max(1, math.ceil(length * fps - 1e-9))
+            scale = f"scale={width}:{preview_height}:flags=lanczos:reset_sar=1"
+            source, picture_stream = video, pic["index"]
+            offset = max(0, start - base)
+            if sequential:
+                settings = ["-copyts"]
+                window = f"trim=start={origin + base - 0.000005:.9f}:end={origin + end:.9f},"
+            else:
+                settings = ["-ss", str(seek), "-t", str(end - seek)]
+                window = ""
+            deadline = 600 + length * 20 + (start * 2 if sequential else 0)
+            if staged:
+                source, picture_stream = Path(tmp) / "picture.nut", 0
+                # Isolate the chosen format before filters that buffer frames.
+                subprocess.run(["ffmpeg", "-nostdin", "-xerror", "-v", "error", "-y", "-copyts", "-i", str(video),
+                                "-map", f"0:{pic['index']}", "-vf", window + "setpts=PTS-STARTPTS," + scale,
+                                "-c:v", "ffv1", "-enc_time_base", "filter", "-fps_mode", "passthrough",
+                                str(source)], check=True, timeout=deadline)
+                window = ""
+            picture_filter = (f"{window}settb=AVTB,setpts=PTS-STARTPTS-({offset:.9f}/TB),fps={fps:.9f}:start_time=0:round=up,"
+                              f"tpad=stop_mode=clone:stop_duration={length:.9f},trim=end_frame={samples},setpts=PTS-STARTPTS,{scale}")
+            subprocess.run(["ffmpeg", "-nostdin", "-xerror", "-v", "error", "-y", *settings, "-i", str(source),
+                            *audio, "-map", f"0:{picture_stream}", *sound_map, "-vf", picture_filter, "-c:v", "libsvtav1",
+                            "-preset", "10", "-b:v", bitrate, "-c:a", "aac", "-b:a", "128k", str(preview)],
+                           check=True, timeout=deadline, env={**os.environ, "SVT_LOG": "1"})
+            preview_times = presentation_times(preview, 0)
+            if len(preview_times) != samples or any(abs(t - i / fps) > 0.001 for i, t in enumerate(preview_times)):
+                raise ValueError(f"preview did not match the {samples}-frame sample grid; output kept for investigation")
+        except (subprocess.SubprocessError, OSError, ValueError, KeyError) as e:
+            print(f"Local compression preview failed: {e}", file=sys.stderr)
+            return 1, []
+        # libvmaf CAMBI requires at least one dimension of 216 pixels.
+        if max(width, preview_height) < 216:
+            print(f"CAMBI unavailable for {width}x{preview_height}: both dimensions are below 216 pixels. Preview kept.")
+            print(f'next: inspect "{shown}"; preview seconds are relative to {seconds(start)} s of "{video}"')
+            return 0, []
+        try:
+            before = cambi(source, settings, deadline, picture_filter, tmp, "upload")
+            after = cambi(preview, ["-t", str(length + 1 / fps)], deadline, scale, tmp, "preview")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            print(f"CAMBI banding measurement failed: {e}", file=sys.stderr)
+            return 1, []
+    gain = {n: after[n] - before[n] for n in set(before) & set(after) if start + n / fps < end}
+    if not gain:
+        print("CAMBI returned no matching source/preview samples", file=sys.stderr)
+        return 1, []
+    worst = max(gain, key=gain.get)
+    print(f"bands (Netflix CAMBI): largest measured gain {gain[worst]:+.1f} at source second {start + worst / fps:.6g}; "
+          f"flags require gain {ADDED:g} and preview score {BANDS:g}. Source scores reach {max(before.values()):.1f}. Preview: {shown}")
+    buckets = {}
+    for n, delta in sorted(gain.items()):
+        if delta >= ADDED and after[n] >= BANDS:
+            sec = int(start + n / fps)
+            if sec not in buckets or delta > gain[buckets[sec]]:
+                buckets[sec] = n
+    spans = []
+    for sec, peak in buckets.items():
+        if spans and sec == spans[-1][1] + 1:
+            spans[-1][1] = sec
+            if gain[peak] > gain[spans[-1][2]]:
+                spans[-1][2] = peak
+        else:
+            spans.append([sec, sec, peak])
+    cuts = cut_info.get("times") if cut_info else None
+    if cut_info and cut_info.get("reason"):
+        print(cut_info["reason"])
+    ranges = [(max(start, a), min(end, b + 1)) for a, b, _ in spans]
+    try:
+        for i, ((a, b), (_, _, peak)) in enumerate(zip(ranges[:6], spans[:6])):
+            at = start + peak / fps
+            picture = out / f"youtube_bands_{i:02d}.png"
+            band_picture(video, preview, at, picture, start, origin, source_times, preview_times,
+                         (width, preview_height))
+            shot = f", shot {sum(c <= at for c in cuts)} ({cut_info['file']})" if cuts is not None else ""
+            print(f"BANDS {a:g}-{b:g} s{shot}: the re-encode scores {after[peak]:.1f} where the upload has {before[peak]:.1f} "
+                  f"at {at:.6g} s; look: {picture.relative_to(root).as_posix()} (top: source | preview, bottom: steps of light x16)")
+    except (subprocess.SubprocessError, OSError, ValueError, KeyError) as e:
+        print(f"band comparison image failed: {e}", file=sys.stderr)
+        return 1, []
     if len(spans) > 6:
         print(f"  and {len(spans) - 6} more stretches")
     if spans:
-        print("fix: smooth light (a lit floor, sky, fog, a vignette) loses its in-between levels in the re-encode. The studio's "
-              "Smooth dither is too fine to survive it (on a test gradient a grain of +-3 levels was wiped out, +-8 survived this "
-              "rung, nothing survived 1080p at 1 Mbps). What holds: texture in the scene itself (dust, haze with noise, textured "
-              "blocks instead of a bare lit plane), or visible grain over those seconds: an Adjustment in src/timeline/adjust.json "
-              "with grade.basic.particles (the studio's Particles slider).")
-        print(f"next: bun run at {peaks[0]} names the shot; then render final, mix, and bun run deliver {named}--youtube "
-              f"{spans[0][0]}-{min(spans[0][1] + 1, long):g} on the same seconds until it names none")
+        print("Inspect the comparison before changing the source. Fine gradients can be sensitive to the bitrate.")
+        if whole:
+            print(f"bun run at {start + spans[0][2] / fps:.6g} locates the current film rows; inspect the grade or texture there.")
     else:
-        print("the re-encode adds no bands a viewer would notice")
-        print("next: watch renders/youtube_preview.mp4 yourself: the meter counts only bands")
-    return 0, [(a, b + 1) for a, b in spans]
+        print("No additional banding above the configured CAMBI thresholds in these samples.")
+    print(f'next: inspect "{shown}" and the comparison images; preview seconds are relative to {seconds(start)} s of "{video}"')
+    return 0, ranges
 
 
 def main(args):
+    sys.stdout.reconfigure(encoding="utf8")
+    sys.stderr.reconfigure(encoding="utf8")
     if args[:1] == ["help"] or "-h" in args or "--help" in args:
         print(__doc__)
         return 0
@@ -307,7 +420,8 @@ def main(args):
                     print(f"--youtube {nxt}: the first second must come before the second one, like --youtube 9-15", file=sys.stderr)
                     return 2
                 i += 1
-            elif nxt and not nxt.startswith("-") and not nxt.lower().endswith((".mp4", ".mov", ".mkv", ".webm")):
+            elif nxt and not nxt.startswith("-") and (
+                    video is not None or (re.match(r"^\d[\d:.]*-", nxt) and not Path(nxt).is_file())):
                 print(f"--youtube takes heard seconds as <from>-<to> ({SAY} each), like --youtube 9-15; got {nxt}{next((meant(x) for x in nxt.split('-') if meant(x)), '')}", file=sys.stderr)
                 return 2
         elif a.startswith("-"):
@@ -322,6 +436,7 @@ def main(args):
     root = Path.cwd()
     named = video is not None
     video = Path(video or "renders/final.mp4")
+    argument = f'"{video}"' if any(c.isspace() for c in str(video)) else str(video)
     if video.is_dir():
         print(f"{video} is a folder: give it the video, as {(video / 'final.mp4').as_posix()}", file=sys.stderr)
         return 2
@@ -340,16 +455,37 @@ def main(args):
         info = probe(video)
     except SystemExit as e:
         print(e.code, file=sys.stderr)
-        return 1
-    long = float(info["format"].get("duration") or 0)
-    if span and span[1] > long + 0.05:
-        print(f"--youtube {span[0]:g}-{span[1]:g} runs past the video's end: it is {long:.2f} s long", file=sys.stderr)
         return 2
-    through = " and through YouTube's re-encode" if preview else ""
+    picked = streams(info)
+    pic, snd, _ = picked
+    bounds = None
+    if span and pic:
+        try:
+            bounds = picture_bounds(video, pic, info["format"])
+        except (KeyError, ValueError, IndexError, OSError, subprocess.SubprocessError) as e:
+            print(f"could not determine picture duration of {video}: {e}", file=sys.stderr)
+            return 1
+        first, stop, _ = bounds
+        if not (first <= span[0] < stop and span[1] <= stop + 0.05):
+            print(f"--youtube {span[0]:g}-{span[1]:g} is outside the picture range {first:g}-{stop:.2f} file seconds", file=sys.stderr)
+            return 2
+    through = " and a local compression preview" if preview else ""
     ended = job(root, "deliver", f"Checking {video.as_posix()} for upload{through}")
-    summary, found = check(video, info)
-    if old := stale(video):
-        found.insert(0, ("FIX", old))
+    context = render_context(video)
+    whole = context["render"] and not context["render"]["kind"] and not context["stale"]
+    print("Checking the selected picture and audio streams (full decode; longer files can take several minutes) ...", file=sys.stderr)
+    try:
+        summary, found, bounds, formats = check(video, info, picked, context["render"], bounds)
+    except (OSError, ValueError, KeyError, IndexError, RuntimeError, subprocess.SubprocessError) as e:
+        print(f"could not check {video}: {e}", file=sys.stderr)
+        ended(f"Delivery check failed for {video.as_posix()}", level="fail")
+        return 1
+    first, stop, origin = bounds or (0, 0, 0)
+    long = stop - first
+    if old := context["stale"]:
+        found.insert(0, ("FIX", old["message"]))
+    if context.get("error"):
+        found.insert(0, ("ADVICE", context["error"]))
     print(summary)
     for kind, words in found:
         print(f"{kind} {words}")
@@ -357,23 +493,25 @@ def main(args):
     if fixes:
         print(f"{fixes} to fix before upload")
     else:
-        print("ready to upload" + (" (the ADVICE lines are worth a look)" if found else ""))
+        print("passes configured technical upload checks" + (" (review the ADVICE lines)" if found else ""))
+    print("For picture, audio content and precise A/V timing, inspect the encoded file with sheet and earshot.")
     # sound alone has no picture to re-encode: its FIX line already says so
     bands = []
-    if preview and any(s["codec_type"] == "video" for s in info["streams"]):
-        code, bands = youtube(video, span, root, f"{video} " if named else "")
+    if preview and pic:
+        sequential = info["format"].get("format_name") in DECODE_BEFORE_TRIM or len(formats) > 1
+        code, bands = youtube(video, span, root, pic, snd, (first, stop, origin), whole,
+                              context["cuts"] if whole else None, sequential, formats)
         if code:
             ended(f"Stopped checking {video.as_posix()}", level="fail")
             return code
     elif fixes:
-        print(f"next: each FIX line says its fix; then bun run deliver {video} again")
+        print(f"next: review the FIX lines, then bun run deliver {argument} again")
     else:
-        print(f"next: bun run deliver {f'{video} ' if named else ''}--youtube makes an approximate local compression preview and shows where it "
+        print(f"next: bun run deliver {argument + ' ' if named else ''}--youtube makes an approximate local compression preview and shows where it "
               f"bands (about {max(10, long * 3):.0f} s here{'; a few seconds judge it as well: --youtube <from>-<to>' if long > 60 else ''})")
     # a whole film's seconds are the studio's; a chunk's or a span's start elsewhere, so their bands are named, not lit
-    whole = video.name in ("final.mp4", "final_video.mp4", "draft.mp4", "draft_video.mp4")
     ended(f"{video.as_posix()}: {fixes} to fix before upload" if fixes else
-          f"{video.as_posix()}: ready to upload" + (f"; YouTube's re-encode bands {len(bands)} stretch{'es' if len(bands) > 1 else ''}" if bands else ""),
+          f"{video.as_posix()}: technical checks pass" + (f"; local preview bands {len(bands)} stretch{'es' if len(bands) > 1 else ''}" if bands else ""),
           level="fail" if fixes else "warn" if bands else "ok",
           **({"marks": [{"at": a, "to": b, "say": "BANDS after YouTube's re-encode"} for a, b in bands]} if whole and bands else {}))
     return 1 if fixes else 0

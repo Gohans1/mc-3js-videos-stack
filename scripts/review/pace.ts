@@ -20,17 +20,18 @@ import {
 } from "../../packages/live-studio/src/cli.mjs";
 import { ratioOf } from "../../packages/live-studio/src/frame.ts";
 import { staleVideo } from "../../packages/live-studio/src/stale.mjs";
-import { probeVideo, videoStart } from "../../packages/live-studio/src/video.mjs";
+import { startJob } from "../../packages/live-studio/src/tell.mjs";
+import { filmVideo, probeVideo, renderCuts } from "../../packages/live-studio/src/video.mjs";
 
 const HELP = `How the film moves: how long each shot runs, and every stretch where the picture holds still, with what the
-narration says over it. Run inside the film, on a video bun run render clip made.
+planned narration says over it. Use a current whole-film render. Use reference study for other files.
   bun run pace                         renders/draft_video.mp4, with renders/cuts.json
-  bun run pace renders/final_video.mp4 any whole-film video
+  bun run pace renders/final_video.mp4 the whole final
   bun run pace --hold 12               call a hold from 12 s with no new picture (default 8: twice the 4 s average shot
                                        of popular films since 2000; in a Short 5, twice their 2.5 s)
 A Short (package.json "live-studio".ratio "9:16") is read against Shorts: their shot lengths and its first 3 s.
 A new picture is a cut, or a third of the frame looking different from the last new picture (a slow pan adds up).
-Measures only: exit 0 once measured, whatever it finds (a long hold can be the point); 2 when there is no video or cuts.
+Measures only: exit 0 once measured, whatever it finds (a long hold can be the point); 1 on a decode error; 2 when the full render or current cut context is unavailable.
 Why these numbers: bun run skills get core --ref review.`;
 
 export const CHANGED = 24;
@@ -46,16 +47,21 @@ export const newPictures = (frames: Uint8Array[], fps: number, cuts: number[]) =
     c = 0;
   frames.forEach((f, i) => {
     const t = i / fps;
-    let cut: number | null = null;
-    while (c < cuts.length && cuts[c] <= t + 1e-9) cut = cuts[c++];
-    if (anchor && cut === null) {
+    const next = c;
+    while (c < cuts.length && cuts[c] <= t + 1e-9) {
+      if (cuts[c] > 0) out.push(cuts[c]);
+      c++;
+    }
+    if (!anchor) out.push(t);
+    else if (next === c) {
       let n = 0;
       for (let k = 0; k < f.length; k++) if (Math.abs(f[k] - anchor[k]) > CHANGED) n++;
       if (n / f.length < SHARE - 1e-9) return;
+      out.push(t);
     }
-    out.push(cut ?? t);
     anchor = f;
   });
+  while (c < cuts.length && cuts[c] < frames.length / fps) out.push(cuts[c++]);
   return out;
 };
 
@@ -67,6 +73,10 @@ const said = (words: Word[], a: number, b: number) => {
     .join(" ");
   return text ? `"${text.length > 70 ? `${text.slice(0, 69)}…` : text}"` : "no narration";
 };
+
+// each stretch from one new picture to the next
+export const stills = (news: number[], length: number) =>
+  news.map((a, i) => ({ a, b: news[i + 1] ?? length, len: (news[i + 1] ?? length) - a }));
 
 export const paceReport = ({
   length,
@@ -96,9 +106,7 @@ export const paceReport = ({
     return inQ.length ? (inQ.reduce((n, s) => n + s.len, 0) / inQ.length).toFixed(1) : "-";
   });
   const longest = shots.toSorted((p, q) => q.len - p.len).slice(0, 3);
-  const gaps = news
-    .map((t, i) => ({ a: t, b: news[i + 1] ?? length }))
-    .map((g) => ({ ...g, len: g.b - g.a }));
+  const gaps = stills(news, length);
   const holds = gaps.filter((g) => g.len >= hold);
   const near = gaps
     .filter((g) => g.len < hold)
@@ -173,7 +181,8 @@ if (import.meta.main) {
     process.exit(2);
   }
   // shot lengths, the first seconds and the narration over a hold are the whole film's, from its second 0
-  const part = videoStart(video).kind;
+  const render = filmVideo(PROJECT, video);
+  const part = render?.kind;
   if (part) {
     console.error(
       `${shown} is a ${part} of the film; pace measures the whole film: bun run pace renders/draft_video.mp4 (framecheck and sheet read a ${part})`,
@@ -190,22 +199,26 @@ if (import.meta.main) {
     console.error(`${shown} is no video: give it a render's mp4, as renders/draft_video.mp4`);
     process.exit(2);
   }
-  const cutsFile = join(PROJECT, "renders/cuts.json");
-  if (!existsSync(cutsFile)) {
+  if (!render) {
     console.error(
-      "no renders/cuts.json, the shots' cuts: bun run render clip writes it with the video",
+      `${shown} has no film timeline context: bun run reference study "${shown}" measures the file itself`,
     );
     process.exit(2);
   }
-  const written = readJson(cutsFile);
-  if (!Array.isArray(written) || written.some((c) => typeof c !== "number" || !(c >= 0))) {
-    console.error("renders/cuts.json is no list of seconds: bun run render clip writes it again");
-    process.exit(1);
-  }
-  // render writes them in order, each once; one edited by hand may not be, and every shot is read from one cut to the next
-  const cuts: number[] = [...new Set<number>(written)].toSorted((a, b) => a - b);
   const stale = staleVideo(PROJECT, video);
-  if (stale) console.log(`STALE: ${stale.message}`);
+  if (stale) {
+    console.error(
+      `STALE: ${stale.message}\nTo inspect this file as it is: bun run sheet "${shown}" overview`,
+    );
+    process.exit(2);
+  }
+  const cutInfo = renderCuts(PROJECT, video);
+  if (!("times" in cutInfo)) {
+    console.error(cutInfo.reason);
+    process.exit(cutInfo.status === "invalid" ? 1 : 2);
+  }
+  const cuts = [...new Set(cutInfo.times)].toSorted((a, b) => a - b);
+  const ended = await startJob(PROJECT, "pace", { say: `Measuring the pace of ${shown}` });
   // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape
   const tall = short ? "16/9" : "9/16";
   const w = 64,
@@ -214,10 +227,13 @@ if (import.meta.main) {
   const ff = spawnSync(
     "ffmpeg",
     [
+      "-xerror",
       "-v",
       "error",
       "-i",
       video,
+      "-map",
+      "0:V:0",
       "-vf",
       `fps=${FPS},crop=iw:min(ih\\,trunc(iw*${tall}/2)*2):0:0,scale=${w}:${h}:flags=area,format=gray`,
       "-f",
@@ -230,6 +246,7 @@ if (import.meta.main) {
     console.error(
       `ffmpeg could not read ${shown}: ${String(ff.stderr).trim() || ff.error?.message}`,
     );
+    await ended({ say: `Could not measure pace of ${shown}`, level: "fail" });
     process.exit(1);
   }
   const frames = Array.from(
@@ -238,12 +255,19 @@ if (import.meta.main) {
   );
   if (!frames.length) {
     console.error(`${shown} has no frames to measure: bun run render clip makes it again`);
+    await ended({ say: `Could not measure pace of ${shown}`, level: "fail" });
     process.exit(1);
   }
   let words: Word[] = [];
   try {
     const { buildVoiceCues } = await import("../voice/cues.ts");
-    words = buildVoiceCues(PROJECT).lines.flatMap((l: { words?: Word[] }) => l.words ?? []);
+    const cues = buildVoiceCues(PROJECT);
+    if (!cues.voiceOff && !cues.voiceMuted && !cues.audioFault)
+      words = cues.lines.flatMap((l: { words?: Word[] }) => l.words ?? []);
+    if (words.length)
+      console.log(
+        "Words are planned narration from voice:cues. Check the encoded audio separately.",
+      );
   } catch (e) {
     // a film with no narration yet has none to read; the holds are said without words either way
     console.log(
@@ -254,4 +278,12 @@ if (import.meta.main) {
   console.log(`pace of ${shown}, ${s2(length)} s heard`);
   const news = newPictures(frames, FPS, cuts);
   for (const l of paceReport({ length, cuts, news, words, hold, short })) console.log(l);
+  const holds = stills(news, length).filter((g) => g.len >= hold);
+  await ended({
+    say: `Pace of ${shown}: ${holds.length ? `${holds.length} hold${holds.length > 1 ? "s" : ""} of ${hold} s or more with no new picture` : `a new picture every ${s2(length / news.length)} s, no hold of ${hold} s`}`,
+    level: holds.length ? "warn" : "ok",
+    ...(holds.length && {
+      marks: holds.map((g) => ({ at: g.a, to: g.b, say: `HOLD ${g.len.toFixed(1)} s` })),
+    }),
+  });
 }

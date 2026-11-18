@@ -6,7 +6,15 @@ import {
   Diamond,
   RotateCcw,
 } from "lucide-react";
-import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
@@ -31,6 +39,7 @@ export function Segmented<T extends string>({
   fit,
   tone = "neutral",
   size = "default",
+  animateIndicator = true,
 }: {
   value: T;
   items: { id: T; title: ReactNode; ariaLabel?: string }[];
@@ -41,6 +50,7 @@ export function Segmented<T extends string>({
   fit?: boolean;
   tone?: "neutral" | "accent";
   size?: "default" | "comfortable";
+  animateIndicator?: boolean;
 }) {
   const [back, on] = vertical ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"];
   const groupRef = useRef<HTMLDivElement>(null);
@@ -50,55 +60,41 @@ export function Segmented<T extends string>({
   const [pill, setPill] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const activeIdx = items.findIndex((x) => x.id === value);
 
-  useLayoutEffect(() => {
-    const sync = () => {
-      const btn = activeIdx >= 0 ? btnRefs.current[activeIdx] : null;
-      if (!btn) {
-        setPill(null);
-        return;
-      }
-      const next = {
-        x: btn.offsetLeft,
-        y: btn.offsetTop,
-        w: btn.offsetWidth,
-        h: btn.offsetHeight,
-      };
-      setPill((prev) =>
-        prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
-          ? prev
-          : next,
-      );
+  const syncPill = useCallback(() => {
+    const btn = activeIdx >= 0 ? btnRefs.current[activeIdx] : null;
+    if (!btn) return;
+    const next = {
+      x: btn.offsetLeft,
+      y: btn.offsetTop,
+      w: btn.offsetWidth,
+      h: btn.offsetHeight,
     };
-    sync();
+    setPill((prev) =>
+      prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
+        ? prev
+        : next,
+    );
+  }, [activeIdx]);
+
+  useLayoutEffect(() => {
+    const btn = activeIdx >= 0 ? btnRefs.current[activeIdx] : null;
+    if (btn) syncPill();
+    else setPill(null);
     if (!mountedRef.current) {
       mountedRef.current = true;
       const raf = requestAnimationFrame(() => setAnimated(true));
       return () => cancelAnimationFrame(raf);
     }
-  }, [activeIdx, items.length, vertical]);
+  }, [activeIdx, items.length, vertical, syncPill]);
 
   useEffect(() => {
     const group = groupRef.current;
     if (!group || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => {
-      const btn = activeIdx >= 0 ? btnRefs.current[activeIdx] : null;
-      if (!btn) return;
-      const next = {
-        x: btn.offsetLeft,
-        y: btn.offsetTop,
-        w: btn.offsetWidth,
-        h: btn.offsetHeight,
-      };
-      setPill((prev) =>
-        prev && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h
-          ? prev
-          : next,
-      );
-    });
+    const ro = new ResizeObserver(syncPill);
     ro.observe(group);
     for (const el of btnRefs.current) if (el) ro.observe(el);
     return () => ro.disconnect();
-  }, [activeIdx, items.length]);
+  }, [items.length, syncPill]);
 
   return (
     <div
@@ -121,7 +117,7 @@ export function Segmented<T extends string>({
       {pill && pill.w > 0 && pill.h > 0 && (
         <span
           aria-hidden
-          data-animated={animated || undefined}
+          data-animated={(animateIndicator && animated) || undefined}
           style={{
             "--pill-x": `${pill.x}px`,
             "--pill-y": `${pill.y}px`,

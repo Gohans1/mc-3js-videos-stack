@@ -47,22 +47,31 @@ export const setTiming = (data, sourceDuration = timingClock.sourceDuration) => 
     audioClock = {
       ...layerClocks.sfx,
       forClip: (clip, list, data) =>
-        layerClocks[clip.name === data.narration ? "voice" : list === "beds" ? "audio" : "sfx"],
+        layerClocks[
+          clip._narration || clip.name === data.narration
+            ? "voice"
+            : list === "beds"
+              ? "audio"
+              : "sfx"
+        ],
     };
     layersKey = nextLayers;
   }
 };
 export const clockForTimeline = (name) =>
-  name === "sound" ? audioClock : (layerClocks[name] ?? timingClock);
+  name === "sound"
+    ? audioClock
+    : (layerClocks[name === "openfilm" ? "overlays" : name] ?? timingClock);
 export const layerDuration = () =>
   Math.max(0, ...Object.values(layerClocks).map((clock) => clock.duration));
 
 export const timedDraw = (draw) => {
-  const out = Object.assign((t) => {
+  const asyncFrame = draw.renderFrame?.bind(draw);
+  const at = (t, render) => {
     const frame = frameAt(timingClock, t),
       layers = layerClock.sourceAt(t);
     const adjustment = clockForTimeline("adjustment");
-    return draw(frame, {
+    return render(frame, {
       layers,
       adjustments: adjustment.sourceAt(t),
       textTime: (item) => overlayTime(layerClock, t, item),
@@ -73,8 +82,12 @@ export const timedDraw = (draw) => {
       transitionVisible: (at) => transitionAvailable(timingClock, at),
       velocity: velocityAt(timing.velocity, frame),
     });
-  }, draw);
+  };
+  const out = Object.assign((t) => at(t, draw), draw);
+  if (asyncFrame) out.renderFrame = (t) => at(t, asyncFrame);
   if (draw.describe) out.describe = (t) => draw.describe(frameAt(timingClock, t));
+  if (draw.prepareFrame) out.prepareFrame = (t) => draw.prepareFrame(frameAt(timingClock, t));
+  if (draw.needsPreparation) out.needsPreparation = (t) => draw.needsPreparation(frameAt(timingClock, t));
   if (draw.variants)
     out.variants = draw.variants.map((v) => ({
       ...v,

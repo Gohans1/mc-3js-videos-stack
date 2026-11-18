@@ -1,112 +1,122 @@
 ---
 name: core
-description: Hướng dẫn mc-films về tìm lệnh, dựng và kiểm chứng phim, ba đồng hồ thời gian, chi phí và các tài liệu chuyên sâu. Đọc trước khi dùng CLI của repo.
+description: Discover mc-films commands, build and verify films, understand the three clocks and costs, and load focused workflow references. Read before using the repo CLI.
 ---
 
 # mc-films
 
-CLI và live-studio là bộ khởi đầu để dựng, xem và nhận feedback; chúng không giới hạn sáng tạo. Tự viết Three.js, công cụ hoặc kiểm tra riêng khi cần; giữ draw(t) tái hiện đúng bất kỳ thời điểm nào.
+The CLI and live studio are starting tools for creating, previewing and receiving feedback. Write custom Three.js code, tools or checks when useful; keep draw(t) able to reproduce any time independently.
 
-## Tìm đúng thông tin
+## Find the right information
 
-| Cần gì                                          | Đọc ở đâu                                                   |
-| ----------------------------------------------- | ----------------------------------------------------------- |
-| Danh mục lệnh; trong phim có thêm bản đồ file   | bun run help                                                |
-| Lệnh thuộc repo hay phim                        | bun run help <command>                                      |
-| Cú pháp, tham số, ví dụ và chi phí của một lệnh | bun run <command> --help                                    |
-| Quy trình chung                                 | bun run skills get core                                     |
-| Một chủ đề                                      | bun run skills get core --ref sound; lặp --ref để chọn thêm |
-| Toàn bộ hướng dẫn và references                 | bun run skills get core --full; không kết hợp --ref         |
-| Công cụ media đang lọc và thử                    | docs/research/media-tools.md tại root; đọc trực tiếp, không phải --ref |
+| Need | Read |
+| --- | --- |
+| Commands grouped by job; a film also prints its file map | bun run help |
+| Where a command runs | bun run help <command> |
+| All catalog IDs, including direct maintenance tools | bun run help --json; bun run help direct for a text list |
+| One command's arguments, flags, effects and cost | bun run help <id> --json; its executable's --help is authoritative |
+| Current syntax and runnable examples | bun run <command> --help; direct tools: bun run help <id> |
+| Media tool research and current verification | docs/research/media-tools.md at repo root; open directly |
+| Shared workflow | bun run skills get core |
+| One topic | bun run skills get core --ref sound; repeat --ref for more |
+| Guide and all references | bun run skills get core --full; do not combine with --ref |
+| Structured guide discovery or content | Add --json to skills list, get or path; success output is a single JSON value |
+| A separate skill's resources | bun run skills path earshot or bun run skills path real-sound; open SKILL.md in the returned directory |
 
-Ở root dùng lệnh quản lý repo; ở films/<name> dùng lệnh của phim. -h, --help hoặc từ help đầu tiên chỉ in hướng dẫn; --ref chỉ thuộc skills get.
+Run repo commands at the root and film commands in films/<name>. Maintained repo entry points print help before work with -h, --help or a leading help; package scripts and separate CLIs follow their own help conventions.
 
-## Quy trình theo nhu cầu
+## Choose steps for the current task
 
-Chọn các bước phục vụ cảnh đang dựng, không cần chạy cả chuỗi cho mọi thay đổi. Số đo và preset là gợi ý; quyết định nhịp, hình và âm thanh theo ý đồ của phim.
+Use the steps that serve the current scene or change. Measurements and presets support creative choices; they do not dictate pacing, pictures or sound.
 
-| Việc                            | Lệnh hoặc nơi chỉnh                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------ |
-| Tìm chất liệu, preset           | bun run find <words>: BM25 rồi OpenFilm semantic riêng; --json cho AI, --offline chỉ dùng cache; đọc --ref sound |
-| Dựng cảnh và hiệu ứng riêng     | src/scene.ts; bun run skills get core --ref contract                           |
-| Chỉnh dữ liệu                   | Các file timeline ghi trong package.json của phim; bun run check sau khi chỉnh |
-| Giữ một hướng dựng              | Film → Versions; bun run history --film films/tên --help |
-| Xem tại giây nghe thấy          | bun run at 35.6; AT=35.6 bun run render stills; mở ảnh được in ra              |
-| Xem chuyển động                 | SPAN=40,44 bun run render clip; mở video                                       |
-| Xem nhiều khung hình            | bun run sheet                                                                  |
-| Dò cảnh video tham khảo          | bun run scenes <video>; tùy chọn CPU, mốc theo file nguồn, không sửa timeline |
-| Đọc chữ trong ảnh/video          | bun run media ocr <file> --at 5,10; JSON kèm vùng chữ, score, frame và giây nguồn |
-| Công cụ âm/hình local tùy chọn | bun run media list; --help từng tool; sound/review nêu cách dùng và giới hạn model |
-| Kiểm tra hình và nhịp của draft | bun run render clip; bun run framecheck; bun run pace                          |
-| Ghép âm thanh vào draft         | bun run mix renders/draft_video.mp4; tạo renders/draft.mp4                     |
-| Đo mức âm                       | bun run listen; không dùng số đo mức âm để kết luận tiếng gì hoặc có hợp cảnh  |
-| Nghe và đánh giá âm             | earshot là CLI riêng; bun run skills get core --ref sound                      |
-| Nhận feedback                   | bun run studio; mở link và đọc bun run notes                                   |
+| Task | Command or file |
+| --- | --- |
+| Find assets and presets | bun run find <words> returns keyword matches then independent OpenFilm semantic candidates; --json for AI, --offline uses saved searches |
+| Keep an edit direction | Film → Versions, or bun run history --film films/<name> --help |
+| Discover effects, text, stickers, templates and sounds | bun run find --kind transition; filter --source, inspect --show <id>, place/edit with bun run asset --help; see --ref contract |
+| Build a custom scene or effect | src/scene.ts; bun run skills get core --ref contract |
+| Edit data | Timeline files named by the film's package.json; run bun run check after editing |
+| Inspect one heard second | bun run at 35.6; AT=35.6 bun run render stills; open the printed image |
+| Inspect motion | SPAN=40,44 bun run render clip; open the video |
+| Inspect multiple frames | bun run sheet |
+| Detect reference cuts/fades | bun run scenes clip.mp4; optional CPU, JSON/CSV/images in source-file seconds |
+| Read text in reference frames | bun run media ocr clip.mp4 --at 5,10; text boxes, scores, frames and source timestamps |
+| Local media tools | bun run media list; tool --help and core sound/review explain inputs and model limits |
+| Footage/NLE/QC backend | bun run media ffmpeg list; schema cut cho một parser, native argv sau --; bun run media qc --contract cho rule đo tùy chọn |
+| Chọn kiểm chứng theo ý đồ | Bun run skills get core --ref review dẫn tới bằng chứng cho hình, âm, nhịp, lời và chuyển động. |
+| Soi nhanh một render | Bun run framecheck --json giữ lỗi hình và ảnh; bun run sheet FILE frames TIMES trích ảnh đúng mốc. |
+| Check arbitrary seeking | CHECK=order bun run render stills; optional sampled comparison of two capture orders |
+| Study a reference video | bun run reference inspect <video-or-URL> for pictures, captions and search; study/compare for measurements; see --ref review |
+| Select, place and edit sound | bun run skills get core --ref sound; find discovers, asset edits, earshot evaluates sound |
+| Attach sound to the draft | bun run mix renders/draft_video.mp4; creates renders/draft.mp4 |
+| Measure audio levels | bun run listen; level measurements cannot identify a sound or decide whether it fits |
+| Hear and evaluate sound | earshot is a separate CLI; see --ref sound |
+| Receive feedback | bun run studio; open the link and read bun run notes |
 
-Các ví dụ VAR=x bun run ... dùng cú pháp shell POSIX hoặc Bun Shell. PowerShell: $env:AT='35.6'; bun run render stills; Remove-Item Env:AT (nếu biến đã có giá trị, lưu và khôi phục nó).
+VAR=x bun run ... examples use POSIX or Bun Shell syntax. In PowerShell use $env:AT='35.6', run the command, then remove Env:AT or restore its previous value.
 
-## Ba đồng hồ
+## The three clocks
 
-| Đồng hồ                             | Nơi dùng                                                          |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| Giây nghe thấy, sau Speed và Freeze | Notes, at, AT, CHECK, sheet, framecheck, pace, listen, voice:cues |
-| Giây cảnh, trước Speed và Freeze    | cam.json, key files, audio.json, text.json, adjust.json           |
-| Giây lời kể, trước voice.warp       | t trong shots.json và beats trong edit.json                       |
+| Clock | Used by |
+| --- | --- |
+| Giây phim sau Speed/Freeze | Notes, at, AT, CHECK, pace, listen, voice:cues và asset CLI. Sheet/framecheck dùng giây file với nguồn ngoài; đọc clock trước khi nối sang at. |
+| Scene seconds, before Speed and Freeze | cam.json, key files, audio.json, text.json, adjust.json |
+| Narration seconds, before voice.warp | t in shots.json and beats in edit.json |
 
-bun run at <giây nghe thấy> đổi giữa các đồng hồ và chỉ file, dòng đang phát. Giây nhận dạng 65, 1:05 hoặc 01:05.250; shots đếm từ 0.
+bun run at <heard-second> converts clocks and names the active files and rows. Time accepts 65, 1:05 or 01:05.250; shots count from 0.
 
-## Sửa feedback và giao phim
+## Answer feedback and deliver
 
-| Việc                         | Cách làm                                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------------- |
-| Đọc và định vị note          | bun run notes; bun run notes 3; bun run at '#3'                                           |
-| Xác nhận đã sửa              | Xem/nghe kết quả mới rồi bun run note done 3 "what changed"; người tạo duyệt trong studio |
-| Cần hiểu thêm                | bun run note ask 3 "your question"                                                        |
-| Ghi quy tắc được yêu cầu nhớ | bun run skills get core --ref notes                                                       |
-| Final khi được yêu cầu       | bun run render final; bun run mix renders/final_video.mp4; bun run deliver                |
+| Task | Action |
+| --- | --- |
+| Read and locate a note | bun run notes; bun run notes 3; bun run at '#3' |
+| Report a verified fix | Inspect the new result, then bun run note done 3 "what changed"; the creator approves in Studio |
+| Ask about a note | bun run note ask 3 "your question" |
+| Keep a requested lesson | bun run skills get core --ref notes |
+| Produce the final when requested | bun run render final; bun run mix renders/final_video.mp4; bun run deliver |
 
-Không chỉnh notes/notes.jsonl bằng tay. Final xuất ra renders/final.mp4; kiểm tra kỹ thuật pass chưa thay thế việc xem/nghe phim và chưa có nghĩa là đã upload.
+Never edit notes/notes.jsonl by hand. The final is renders/final.mp4; passing technical checks does not replace viewing/listening or mean it was uploaded.
 
-## Chi phí và tác dụng phụ
+## Costs and side effects
 
-| Việc                            | Lưu ý                                                                                       |
-| ------------------------------- | ------------------------------------------------------------------------------------------- |
-| voice:gen --yes                 | Tốn credits; chạy không --yes để xem trước, chỉ tạo lại take cần sửa                        |
-| find --jev                      | Gọi dịch vụ ngoài, có quota/chi phí; tìm bằng từ khóa trước khi cần tìm theo nghĩa          |
-| find <words>                    | Có thể gửi câu tìm tới OpenFilm; hai khối độc lập, --offline không gọi mạng, lỗi vẫn giữ BM25 |
-| assets:semantic build --yes, find --semantic --yes | Gửi media/câu tìm tới Gemini hoặc OpenRouter, dùng quota/credits; plan và cache offline không gọi API |
-| render final, deliver --youtube | Có thể lâu; xem --help và giới hạn đoạn cần kiểm tra                                        |
-| Thử lệnh có ghi dữ liệu         | Dùng phim thử riêng; bun run skills get core --ref film                                     |
-| Lệnh lỗi                        | Đọc lỗi và kiểm tra kết quả đã ghi; không mặc định mã thoát lỗi đồng nghĩa chưa thay đổi gì |
+| Operation | Check |
+| --- | --- |
+| voice:gen --yes | Spends credits; omit --yes to preview, regenerate only the takes being changed |
+| find <words> | May send query text to OpenFilm; --offline avoids network and failures keep keyword matches |
+| assets:semantic build --yes, find --semantic --yes | Sends media/query to Gemini or explicitly OpenRouter; plan and cached queries stay offline |
+| find --jev | External requests use quota or money; start with offline words when appropriate |
+| render final, deliver --youtube | Can take time; read --help and bound the interval being inspected |
+| Testing commands that write | Use an isolated test film; see --ref film |
+| Failed commands | Read the error and inspect completed output; a nonzero exit does not prove nothing changed |
 
-Mã 0 là lệnh thành công; 1 thường là lỗi dữ liệu hoặc công việc; 2 thường là sai cách gọi hay thiếu điều kiện. Dòng next: nếu có là gợi ý bước tiếp, không phải yêu cầu bắt buộc.
+Exit 0 means the command completed; 1 usually indicates a job/data failure, and 2 a usage/precondition error. A next: line suggests a useful follow-up, not a mandatory step.
 
-## Thiếu khả năng hoặc gặp lỗi
+## Missing capability or failure
 
-| Tình huống                             | Cách tiếp tục                                                                                   |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| CLI thiếu khả năng                     | Tự dùng code/công cụ phù hợp rồi bun run gap "<need>" --did "<outcome>" --cmd <command>         |
-| Chưa tìm được cách tiếp tục            | Ghi --did "stopped: <why>"; không bịa rằng đã xử lý được                                        |
-| Đọc bun run gap                        | Đây là lịch sử báo thiếu, có thể đã được giải quyết; kiểm tra code hiện tại trước khi thêm lệnh |
-| Cần schema hoặc hook chưa rõ           | bun run skills get core --ref contract; packages/live-studio/src/contract.ts                    |
-| STALE                                  | Video cũ hơn dữ liệu; render lại loại video đang kiểm tra                                       |
-| Âm vault đã đổi nhưng listen còn cache | bun run listen --fresh                                                                          |
-| Lệnh sai thư mục                       | Chuyển tới root hoặc films/<name> theo thông báo                                                |
-| earshot chưa chạy được                 | earshot doctor; xem INSTALL.md                                                                  |
+| Situation | Continue with |
+| --- | --- |
+| CLI lacks a capability | Use suitable code/tools, then bun run gap "<need>" --did "<outcome>" --cmd <command> |
+| Still blocked | Record --did "stopped: <why>"; never invent a successful workaround |
+| Reading bun run gap | Historical reports may already be resolved; check current code before adding a command |
+| Need a schema or hook | bun run skills get core --ref contract; packages/live-studio/src/contract.ts |
+| STALE | Inputs are newer than the video; rerender the video being inspected |
+| Vault audio changed but listen uses cache | bun run listen --fresh |
+| Wrong directory | Move to the root or films/<name> as the error says |
+| earshot unavailable | earshot doctor; read INSTALL.md |
 
-Gap không phải điều kiện để được sáng tạo; số báo cáo không tự quyết định phải thêm lệnh mới. Log nằm trong checkout hiện tại, phải commit và đồng bộ riêng nếu cần chia sẻ.
+Gap reporting does not gate creativity or automatically justify another command. Logs belong to the current checkout; commit and synchronize them separately when sharing is needed.
 
-## Đọc thêm đúng chủ đề
+## Load the relevant topic
 
-| Reference của core     | Khi cần                                         |
-| ---------------------- | ----------------------------------------------- |
-| references/film.md     | Tạo phim, bản đồ file, vault, phim thử          |
-| references/contract.md | Scene, schema mở, hook và khả năng tự mở rộng   |
-| references/review.md   | Xem, đo hình, chữ và nhịp                       |
-| references/render.md   | Render, cache, cấu hình xuất và kiểm tra encode |
-| references/sound.md    | Âm thanh, mix, mức âm và earshot                |
-| references/voice.md    | Takes, tạo lời kể, căn từ, lip sync và ghép lời |
-| references/notes.md    | Feedback, trạng thái note và lessons            |
-| references/cli.md      | Thêm hoặc sửa CLI và giữ tài liệu khớp code     |
+| Core reference | When needed |
+| --- | --- |
+| references/film.md | New films, file maps, vault and isolated test films |
+| references/contract.md | Scene hooks, effects, custom HTML, open schemas and extensions |
+| references/review.md | Picture/text/pacing checks, frame order and reference videos |
+| references/render.md | Rendering, cache, output configuration and encode checks |
+| references/sound.md | Sound selection, mixing, levels and earshot |
+| references/voice.md | Takes, generation, alignment, lip sync and assembly |
+| references/notes.md | Feedback, note states and lessons |
+| references/cli.md | CLI changes and keeping discovery, help and guides aligned |
 
-INSTALL.md ở root là file đọc trực tiếp về cài đặt, vault và giấy phép; không phải --ref. Quy tắc sáng tạo riêng nằm ở .claude/skills/gohans-3js-videos-skills/SKILL.md; đây không phải guide do skills get phục vụ.
+INSTALL.md is a root file about installation, vault and licenses; open it directly, not with --ref. Creative direction lives in .claude/skills/gohans-3js-videos-skills/SKILL.md; skills get does not serve that separate skill.

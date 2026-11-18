@@ -69,7 +69,7 @@ import { cn } from "@/lib/utils";
 
 import { useLit, useLitAny } from "../activity/activity";
 import { type SaveState, SaveStatus } from "../components/inspector";
-import { prefersReduced, TabStage } from "../components/Motion";
+import { prefersReduced } from "../components/Motion";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { PHONE, useUpright } from "../core/device";
@@ -104,7 +104,6 @@ import {
   isNoteAsking,
   isOverflowNoteView,
   NOTE_FACETS,
-  NOTE_VIEWS,
   type NoteView,
   PRIMARY_NOTE_VIEWS,
 } from "./note-views-model";
@@ -434,7 +433,12 @@ const CheckCard = memo(function CheckCard({ p: { n, t } }: { p: Placed }) {
         showEdit
       />
       {replying && (
-        <InlineFeedbackBox note={n} ask={!!fix?.ask} onDone={() => setReplying(false)} />
+        <InlineFeedbackBox
+          note={n}
+          ask={!!fix?.ask}
+          showQuestion={PHONE}
+          onDone={() => setReplying(false)}
+        />
       )}
     </article>
   );
@@ -488,7 +492,7 @@ function FilterMenu({
           }
         >
           <ListFilter aria-hidden data-icon="inline-start" />
-          <span className="hidden @[320px]:inline">Filter</span>
+          <span className="hidden @[336px]:inline">Filter</span>
           {activeCount > 0 && <Badge variant="count">{activeCount}</Badge>}
         </DropdownMenuTrigger>
       </Tip>
@@ -531,7 +535,7 @@ function FilterMenu({
                     onValueChange={(v) => set({ noteShot: v === "all" ? null : Number(v) })}
                   >
                     <DropdownMenuRadioItem value="all">
-                      All shots ({allItems.length})
+                      <span className="tabular-nums">All shots ({allItems.length})</span>
                     </DropdownMenuRadioItem>
                     {shotOptions.map((opt) => (
                       <DropdownMenuRadioItem key={opt.shot} value={String(opt.shot)}>
@@ -630,7 +634,7 @@ function SortMenu({ fixedReason }: { fixedReason?: string }) {
           }
         >
           <ArrowUpDown aria-hidden data-icon="inline-start" />
-          <span className="hidden @[320px]:inline">{active.title}</span>
+          <span className="hidden @[336px]:inline">{active.title}</span>
         </DropdownMenuTrigger>
       </Tip>
       <DropdownMenuContent
@@ -737,7 +741,7 @@ export function NoteViewBar({
   const choices = [...PRIMARY_NOTE_VIEWS, ...EXTRA_NOTE_VIEWS];
   return (
     <div className="@container/note-views w-full">
-      <div className="@xs/note-views:hidden">
+      <div className="@[344px]/note-views:hidden">
         <Select
           value={view}
           items={choices.map((id) => ({ value: id, label: NOTE_VIEW_META[id].label }))}
@@ -763,7 +767,7 @@ export function NoteViewBar({
           </SelectContent>
         </Select>
       </div>
-      <div className="bg-backdrop/90 border-hairline hidden w-fit max-w-full items-center gap-0.5 rounded-lg border p-0.5 @xs/note-views:flex">
+      <div className="bg-backdrop/90 border-hairline hidden w-fit max-w-full items-center gap-0.5 rounded-lg border p-0.5 @[344px]/note-views:flex">
         <div className="scroll-fade-x min-w-0 flex-1 [scrollbar-width:none] overflow-x-auto overscroll-x-contain">
           <ToggleGroup
             value={overflowActive ? [] : [view]}
@@ -913,7 +917,7 @@ export function NoteStatusStrip({
               <span
                 aria-hidden
                 className={cn(
-                  "size-1.5 shrink-0 rounded-full transition-opacity motion-reduce:transition-none",
+                  "hidden size-1.5 shrink-0 rounded-full transition-opacity motion-reduce:transition-none @[380px]:inline-block",
                   sf.id === "check"
                     ? "bg-warn"
                     : sf.id === "asking"
@@ -1036,6 +1040,11 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
   useStudio((s) => (!PHONE && s.noteScope === "shot" ? s.shot : "")); // "In current shot" follows the playhead from shot to shot
   const [doneOpen, setDoneOpen] = useState(false);
   const [crampedOverlay, setCrampedOverlay] = useState(false);
+  const controls = useRef<HTMLDivElement>(null);
+  const clearSearch = () => {
+    set({ noteSearch: "" });
+    controls.current?.querySelector<HTMLInputElement>('input[name="note-search"]')?.focus();
+  };
   const list = useRef<HTMLDivElement>(null),
     touched = useRef(-1e9),
     focused = useRef<string | null>(null);
@@ -1225,7 +1234,8 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
         <h3
           className={cn(
             "flex items-center gap-1.5 px-0.5 font-semibold text-balance tabular-nums",
-            PHONE ? "h-5.5 text-xs" : "h-7 text-base",
+            PHONE ? "h-5.5 text-xs" : "min-h-7 text-base",
+            "leading-tight",
             h.tone,
           )}
         >
@@ -1246,17 +1256,29 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
       if (anyFiltered && notes.length > 0)
         return (
           <Empty>
-            {status === "check"
-              ? narrowed
-                ? "Nothing waiting to check matching filters."
-                : "Nothing waiting to check."
-              : status === "asking"
-                ? narrowed
-                  ? "No AI questions matching filters."
-                  : "No AI questions waiting."
-                : "No open notes match your filters."}{" "}
-            <Button variant="link" size="inline" onClick={clearNoteFilters}>
-              Reset filters
+            {q.trim() ? (
+              <>No notes match “{q.trim()}”.</>
+            ) : status === "check" ? (
+              narrowed ? (
+                "Nothing waiting to check matching filters."
+              ) : (
+                "Nothing waiting to check."
+              )
+            ) : status === "asking" ? (
+              narrowed ? (
+                "No AI questions matching filters."
+              ) : (
+                "No AI questions waiting."
+              )
+            ) : (
+              "No notes match your filters."
+            )}{" "}
+            <Button
+              variant="link"
+              size="inline"
+              onClick={q.trim() ? clearSearch : clearNoteFilters}
+            >
+              {q.trim() ? "Clear search" : "Reset filters"}
             </Button>
           </Empty>
         );
@@ -1266,7 +1288,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
             ? "Nothing left to fix"
             : PHONE
               ? "No notes yet. Tap the picture or Note to add one"
-              : "No notes yet. Click the picture or press M to add one"}
+              : "No notes yet. Select New note or press M."}
         </Empty>
       );
     }
@@ -1299,6 +1321,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
             PHONE
               ? "min-h-7.5 gap-1.5 rounded-md px-2 text-xs"
               : "min-h-8.5 gap-2 rounded-lg px-2.5 text-base pointer-coarse:min-h-10",
+            "leading-tight",
           )}
         >
           <ChevronRight
@@ -1337,6 +1360,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
         className="flex min-h-0 flex-1 flex-col"
       >
         <div
+          ref={controls}
           role="group"
           aria-label="Note controls"
           className="mx-auto max-h-[50%] w-full max-w-4xl flex-none overflow-y-auto overscroll-contain"
@@ -1351,6 +1375,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
               className={cn(
                 "flex shrink-0 items-center px-0.5 font-semibold tracking-tight text-balance whitespace-nowrap tabular-nums",
                 PHONE ? "min-h-5 text-sm" : "upright:min-h-6 min-h-7 text-lg",
+                "leading-tight",
               )}
             >
               <span>Notes</span>
@@ -1380,7 +1405,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
               </Tip>
             )}
             {!PHONE && ix.check.length + ix.open.length + ix.done.length > 0 && (
-              <Tip label="Review room: notes and pictures, big (N)">
+              <Tip label="Review notes (N)">
                 <Button
                   variant={check.length > 0 ? "approve" : "subtle"}
                   size="md"
@@ -1438,8 +1463,8 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
                   value={q}
                   onChange={(x) => set({ noteSearch: x })}
                   label="Search notes"
-                  placeholder="Search #id, note…"
-                  className="min-w-0 flex-1 basis-40"
+                  placeholder="Search notes or #12"
+                  className="min-w-0 flex-1 basis-28"
                 />
                 <FilterMenu allItems={allRawItems} />
                 <SortMenu fixedReason={SORT_FIXED_REASON[view]} />
@@ -1449,9 +1474,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
             </div>
           )}
         </div>
-        <TabStage
-          activeKey={notes.length === 0 ? "cards" : view}
-          order={NOTE_VIEWS}
+        <div
           className={cn(
             "border-hairline-subtle flex min-h-0 w-full flex-1 flex-col border-t",
             (view === "cards" || view === "list" || view === "feed") && "mx-auto max-w-4xl",
@@ -1525,7 +1548,13 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
               </Empty>
             </div>
           ) : (
-            <Suspense fallback={null}>
+            <Suspense
+              fallback={
+                <Empty>
+                  <span role="status">Loading notes view…</span>
+                </Empty>
+              }
+            >
               {view === "board" ? (
                 <NoteBoardView items={allItems} statusFilter={status} />
               ) : view === "table" ? (
@@ -1545,7 +1574,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
               )}
             </Suspense>
           )}
-        </TabStage>
+        </div>
       </div>
       {composeDock && (
         <Compose

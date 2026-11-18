@@ -4,13 +4,17 @@
 // a panel or takes the focus, so the creator watching or writing a note is never pulled away. Settings turns it off
 import { createStore, useStore } from "zustand";
 
-import type { ActivityEntry, ActivityState as Told } from "../../src/activity.mjs";
+import { activityToast, toast } from "@/components/ui/toast";
+
+import type { ActivityEntry, ActivityState as Told, ActivitySurface } from "../../src/activity.mjs";
+import { PHONE } from "../core/device";
 import { onEvent } from "../core/events";
-import { S } from "../core/state";
-import { get as studio } from "../core/store";
+import { get as studio, studio as studioStore } from "../core/store";
+import { listenForChimeActivation, playActivityChime } from "./chime";
 import { anyKeyLit, LIT_MS, mergeLitKeys, pruneLitMap } from "./lit";
 
 export { anyKeyLit, LIT_MS };
+export const activityNotice = () => (PHONE || !studio().aiActivity ? toast : activityToast);
 export const IDLE_MS = 90e3; // and the AI shows as idle after this long without a word
 const JOB_MS = 3600e3; // a render the studio never said ended stops showing busy after render's own hour
 const KEEP = 40; // lines listed, as the server keeps
@@ -24,6 +28,7 @@ type Span = {
   until: number;
   job?: string;
   from?: string;
+  surface?: ActivitySurface;
   level?: ActivityEntry["level"];
 };
 interface ActivityState {
@@ -54,29 +59,56 @@ const prune = () => {
   const now = Date.now(),
     { lit, spans, jobs } = get();
   const nextLit = pruneLitMap(lit, now),
-    kept = spans.filter((s) => s.until > now);
-  set({
-    lit: nextLit,
-    spans: kept,
-    jobs: Object.fromEntries(Object.entries(jobs).filter(([, since]) => now - since < JOB_MS)),
-  });
-  if (kept.length !== spans.length) S.dirty = true; // the ruler draws the spans
-  const next = Math.min(...Object.values(nextLit), ...kept.map((s) => s.until));
+    kept = spans.filter((s) => s.until > now),
+    entries = Object.entries(jobs),
+    activeJobs = entries.filter(([, since]) => now - since < JOB_MS);
+  if (nextLit !== lit || kept.length !== spans.length || activeJobs.length !== entries.length) {
+    set({
+      lit: nextLit,
+      spans: kept.length === spans.length ? spans : kept,
+      jobs: activeJobs.length === entries.length ? jobs : Object.fromEntries(activeJobs),
+    });
+  }
+  const next = Math.min(
+    ...Object.values(nextLit),
+    ...kept.map((s) => s.until),
+    ...activeJobs.map(([, since]) => since + JOB_MS),
+  );
   clearTimeout(pruneTimer);
   if (Number.isFinite(next)) pruneTimer = window.setTimeout(prune, Math.max(50, next - now));
 };
 
-// Lit afresh: a key still lit goes dark for a frame first, so its glow starts over
 const light = (keys: string[]) => {
   if (!keys.length) return;
-  const on = () => {
-    set({ lit: mergeLitKeys(get().lit, keys) });
+  set({ lit: mergeLitKeys(get().lit, keys) });
+};
+
+const noteLights = (ids: readonly string[]) =>
+  ids.length ? ["tab:notes", ...ids.map((id) => `note:${id}`)] : [];
+
+export const lightNotes = (ids: readonly string[]) => {
+  if (studio().aiActivity) {
+    light(noteLights(ids));
     prune();
-  };
-  const { lit } = get();
-  if (!keys.some((k) => k in lit)) return on();
-  set({ lit: Object.fromEntries(Object.entries(lit).filter(([k]) => !keys.includes(k))) });
-  requestAnimationFrame(on);
+  }
+};
+
+export const lightEdit = (
+  surface: ActivitySurface,
+  keys: string[] = [],
+  ranges: (readonly [number, number])[] = [],
+) => {
+  if (!studio().aiActivity) return;
+  light([`tab:${surface}`, ...[...new Set(keys)].slice(0, 40)]);
+  const until = Date.now() + LIT_MS;
+  if (ranges.length) {
+    const fresh = ranges
+      .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b >= a)
+      .slice(0, 20)
+      .map(([a, b]) => ({ a, b, until, surface }));
+    set({ spans: [...get().spans.filter((span) => span.surface !== surface), ...fresh] });
+  }
+  prune();
 };
 
 const hear = (a: ActivityEntry) => {
@@ -103,9 +135,9 @@ const hear = (a: ActivityEntry) => {
     const notes = a.notes ?? [],
       lessons = a.lessons ?? [];
     light([
-      ...notes.map((id) => `note:${id}`),
+      ...(a.surface ? [`tab:${a.surface}`] : []),
+      ...noteLights(notes),
       ...lessons.map((p) => `lesson:${p}`),
-      ...(notes.length ? ["tab:notes"] : []),
       ...(lessons.length ? ["tab:lessons"] : []),
     ]);
     const running = job && !job.end ? job.key : undefined,
@@ -128,13 +160,28 @@ const hear = (a: ActivityEntry) => {
         level,
       });
     if (lit.length) set({ spans: [...get().spans, ...lit] });
+    if (a.level === "fail") {
+      activityNotice().add({ title: a.say, type: "error", timeout: 10_000 });
+      playActivityChime();
+    }
   }
-  S.dirty = true;
   prune();
 };
 
 // The stretches of the film the AI is at, for the ruler (timeline/timeline.ts marks.ai)
 export const aiSpans = () => (studio().aiActivity ? get().spans : []);
+
+export const onActivitySpans = (draw: () => void) => {
+  let queued = false;
+  return activity.subscribe((current, previous) => {
+    if (queued || current.spans === previous.spans) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      draw();
+    });
+  });
+};
 
 // The lines from before this page opened, or from while its line was down: listed, nothing lit for them but a render still
 // running, which shows busy and its seconds as if heard live. The studio's list of running jobs is the truth: one that ended
@@ -143,7 +190,10 @@ let boot = 0;
 export const loadActivity = async () => {
   let got: Told;
   try {
-    const r = await fetch("/api/activity");
+    const map = (window as { __PREFETCH?: Record<string, Promise<Response | null>> }).__PREFETCH;
+    const early = map?.["/api/activity"];
+    if (early) delete map["/api/activity"];
+    const r = (early ? await early : null) ?? (await fetch("/api/activity"));
     if (!r.ok) return;
     got = await r.json();
   } catch {
@@ -156,7 +206,8 @@ export const loadActivity = async () => {
     last = mine.at(-1)?.id ?? 0;
   boot = got.boot;
   const jobs = Object.fromEntries(got.running.map((a) => [a.job!.key, a.when + skew])),
-    spans = get().spans.filter((x) => !x.job || x.job in jobs);
+    previous = get().spans,
+    spans = previous.filter((x) => !x.job || x.job in jobs);
   if (studio().aiActivity)
     for (const a of got.running)
       if (a.at !== undefined && !spans.some((x) => x.job === a.job!.key))
@@ -172,13 +223,19 @@ export const loadActivity = async () => {
       ? [...mine, ...got.lines.filter((a) => a.id > last).map(seen)].slice(-KEEP)
       : got.lines.map(seen),
     jobs,
-    spans,
+    spans: spans.length === previous.length && spans.every((span, i) => span === previous[i]) ? previous : spans,
   });
-  S.dirty = true;
   prune();
 };
 
 export const listenActivity = () => {
+  listenForChimeActivation();
+  studioStore.subscribe((next, previous) => {
+    if (previous.aiActivity && !next.aiActivity) {
+      set({ lit: {}, spans: [] });
+      prune();
+    }
+  });
   onEvent("activity", (data) => {
     let a: ActivityEntry;
     try {

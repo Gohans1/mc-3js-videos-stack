@@ -15,8 +15,6 @@ import {
 } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 
-import { ROOT } from "../../../scripts/vault.mjs";
-
 import { SoundTimeline } from "./contract.ts";
 import { openTimelineFile } from "./timeline_file.mjs";
 import { assertInsideDir } from "./voice-map.mjs";
@@ -24,6 +22,18 @@ import { assertInsideDir } from "./voice-map.mjs";
 const inside = (root, file) => {
   const r = relative(root, file);
   return Boolean(r) && !r.startsWith("..") && !isAbsolute(r);
+};
+
+const NAME = /^\w[\w.-]*$/;
+
+export const pickSoundClip = (clip, choice) => {
+  const pick = choice?.set;
+  if (pick === "off") return null;
+  if (pick && pick !== clip.name && (clip.try ?? []).includes(pick)) {
+    const { start: _, ...rest } = clip;
+    return { ...rest, name: pick };
+  }
+  return clip;
 };
 
 // ---------- WAV & Ogg Vorbis: length from headers, and a coarse level curve for the lanes
@@ -71,8 +81,8 @@ export const wavInfo = (file) => {
     const c = chunks(fd, statSync(file).size);
     if (!c?.fmt || !c.data) return null;
     const f = format(fd, c);
-    if (!f) return null;
-    return { ...f, seconds: c.data.len / (f.rate * f.channels * (f.bits / 8)) };
+    if (!f || ![1, 3].includes(f.tag) || (f.tag === 3 && f.bits !== 32)) return null;
+    return { ...f, seconds: Math.floor(c.data.len / (f.channels * (f.bits / 8))) / f.rate };
   } finally {
     closeSync(fd);
   }
@@ -121,6 +131,42 @@ export const oggInfo = (file) => {
 };
 export const audioInfo = (file) =>
   file.toLowerCase().endsWith(".ogg") ? oggInfo(file) : wavInfo(file);
+
+const probedAudio = new Map();
+// Header parser handles .wav/.ogg at zero cost; ffprobe runs once per mtime/size for compressed formats (e.g. .mp3).
+export const probeAudio = (file) => {
+  const header = audioInfo(file);
+  if (header) return header;
+  try {
+    const st = statSync(file);
+    const key = `${file}:${st.mtimeMs}:${st.size}`;
+    if (probedAudio.has(key)) return probedAudio.get(key);
+    const res = spawnSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=index,codec_name:format=duration",
+        "-of",
+        "json",
+        file,
+      ],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    const out = res.status === 0 ? JSON.parse(res.stdout) : null;
+    const duration = out?.streams?.[0]?.codec_name ? out.format?.duration : undefined;
+    const secs = duration ? Number(duration) : NaN;
+    const val = Number.isFinite(secs) && secs >= 0 ? { seconds: secs } : null;
+    if (probedAudio.size >= 512) probedAudio.delete(probedAudio.keys().next().value);
+    probedAudio.set(key, val);
+    return val;
+  } catch {
+    return null;
+  }
+};
 
 const PEAK_STEP = 0.02;
 export const wavPeaks = (file, step = PEAK_STEP, digits = 6) => {
@@ -252,7 +298,8 @@ const readJsonCached = (file) => {
     const { mtimeMs } = statSync(file),
       hit = jsonCache.get(file);
     if (hit?.mtimeMs === mtimeMs) return hit.data;
-    const data = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+    const parsed = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+    const data = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
     if (jsonCache.size >= 64 && !jsonCache.has(file)) {
       jsonCache.delete(jsonCache.keys().next().value);
     }
@@ -305,8 +352,11 @@ export const findVaults = (project, conf) => {
   for (let d = resolve(project), prev = ""; d !== prev; prev = d, d = dirname(d)) {
     const vf = join(d, "vault.json");
     if (existsSync(vf)) {
-      const vcfg = readJsonCached(vf),
-        vroot = resolve(d, (relative(ROOT, d) === "" ? process.env.MC_VAULT_ROOT : undefined) ?? vcfg.root ?? "vault");
+      const vcfg = readJsonCached(vf);
+      for (const key of ["root", "externalRoot"])
+        if (vcfg[key] != null && typeof vcfg[key] !== "string")
+          throw new Error(`${vf}: "${key}" must be a folder path`);
+      const vroot = resolve(d, vcfg.root ?? "vault");
       const mcLocal = join(vroot, "mc-sound");
       const mcDir = existsSync(mcLocal) ? mcLocal : null;
       const sndDir = existsSync(join(vroot, "sound")) ? join(vroot, "sound") : null;
@@ -363,7 +413,7 @@ const treeStamp = (root, maxDepth = 2, includeFiles = false) => {
   return out.join(";");
 };
 
-const walkAudio = (root, vaultDir, realBound, parts = [], out = new Map()) => {
+export const walkAudio = (root, vaultDir, realBound, parts = [], out = new Map()) => {
   if (!root || !realBound || !existsSync(root)) return out;
   if (parts.length === 0 && !vaultDir) {
     try {
@@ -381,7 +431,7 @@ const walkAudio = (root, vaultDir, realBound, parts = [], out = new Map()) => {
     return out;
   }
   for (const d of entries) {
-    if (d.name.startsWith(".")) continue;
+    if (d.name.startsWith(".") || /\.part\.(?:wav|ogg)$/i.test(d.name)) continue;
     if (!vaultDir && d.isSymbolicLink()) continue;
     const full = join(root, d.name);
     if (d.isDirectory()) {
@@ -409,10 +459,20 @@ const walkAudio = (root, vaultDir, realBound, parts = [], out = new Map()) => {
         if (!ok) continue;
       }
       const ext = extname(d.name);
+      const name = d.name.slice(0, -ext.length);
+      if (!NAME.test(name)) continue;
+      const previous = out.get(name);
+      // Later vaults override earlier ones; WAV wins within each root.
+      if (
+        ext.toLowerCase() === ".ogg" &&
+        previous?.vaultDir === vaultDir &&
+        previous?.file.toLowerCase().endsWith(".wav")
+      )
+        continue;
       const kind =
         parts[0] === "bgm" || parts[0] === "sfx" || parts[0] === "mc" ? parts[0] : undefined;
       const category = (kind ? parts.slice(1) : parts).join("/") || undefined;
-      out.set(d.name.slice(0, -ext.length), {
+      out.set(name, {
         file: full,
         kind,
         category,
@@ -430,9 +490,8 @@ export const openSound = (project, conf = {}) => {
   if (typeof conf.soundVault === "string") validateStringVault(project, conf.soundVault);
   const currentVaults = () => findVaults(project, conf);
   const timeline = openTimelineFile(project, conf.soundTimeline, SoundTimeline);
-  const NAME = /^\w[\w.-]*$/;
   const ROLES = ["riser", "whoosh", "impact", "downlifter"]; // a cut sweetener's part (get_sfx.py sweeteners; app/sound/hit.ts)
-  const ORIGINS = ["real", "synth"];
+  const ORIGINS = ["real", "synth", "unknown"];
   const KINDS = ["bgm", "sfx", "mc"];
 
   const infos = new Map();
@@ -471,7 +530,7 @@ export const openSound = (project, conf = {}) => {
       const { mtimeMs } = statSync(resolved),
         have = infos.get(resolved);
       if (have?.mtimeMs === mtimeMs) return have;
-      const fresh = { mtimeMs, wav: audioInfo(resolved) };
+      const fresh = { mtimeMs, wav: probeAudio(resolved) };
       if (infos.size >= 2048 && !infos.has(resolved)) {
         infos.delete(infos.keys().next().value);
       }
@@ -487,7 +546,7 @@ export const openSound = (project, conf = {}) => {
       entry?.fromVault && entry.vaultDir
         ? (vaultPeaks ?? readJsonCached(join(entry.vaultDir, "PEAKS.json")))?.[name]?.seconds
         : undefined;
-    if (!(seconds > 0)) {
+    if (!(Number.isFinite(seconds) && seconds > 0)) {
       const file = entry?.file ?? fileOf(name);
       const meta = info(name, file);
       if (!meta) return null;
@@ -621,9 +680,9 @@ export const openSound = (project, conf = {}) => {
       .filter((n) => NAME.test(n) && (locals.has(n) || vc.entries.has(n) || fileOf(n)))
       .sort((a, b) => a.localeCompare(b))
       .flatMap((name) => {
-        const entry = Object.hasOwn(conf.soundSources ?? {}, name)
-          ? undefined
-          : (locals.get(name) ?? vc.entries.get(name));
+        const resolved = resolveSound(name);
+        if (!resolved) return [];
+        const entry = resolved.entry ?? { file: resolved.file };
         const item = buildItem(name, entry, vc.sources[name], filmSources[name]);
         return item ? [item] : [];
       });

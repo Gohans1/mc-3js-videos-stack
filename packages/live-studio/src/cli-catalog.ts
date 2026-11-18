@@ -1,7 +1,7 @@
-// Shared CLI catalog schema, 100% repo command inventory, and pure argv/safety resolver (no Node built-ins; safe in browser & server).
 import { nativeMediaSubcommands } from "./media-cli.ts";
-import { sdkMediaSubcommands } from "./media-sdk-cli.ts";
 import { referenceMediaSubcommands } from "./media-reference-cli.ts";
+import { sdkMediaSubcommands } from "./media-sdk-cli.ts";
+// Shared CLI catalog schema, 100% repo command inventory, and pure argv/safety resolver (no Node built-ins; safe in browser & server).
 
 export type CliCategoryId = "daily" | "voice" | "sound" | "render" | "setup" | "dev" | "pipeline";
 
@@ -44,6 +44,7 @@ export interface CliArgDef {
   label: string;
   type: CliFieldType;
   multi?: boolean;
+  passthrough?: boolean;
   required?: boolean;
   requiredWhen?: CliVisibleWhen;
   choiceSource?: CliChoiceSource;
@@ -434,6 +435,9 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Leave blank to list commands. Enter find to print where its help is; this does not run find.",
       },
     ],
+    flags: [
+      { key: "--json", flag: "--json", label: "JSON output", type: "boolean", tier: "common" },
+    ],
     meta: {
       effect: "read",
       cost: "free",
@@ -521,10 +525,13 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     id: "skills",
     label: "skills",
     category: "daily",
-    summary: "List AI guides from skill-data/ or read a guide and its reference docs.",
+    summary: "Read version-matched AI guides or locate a repo agent skill and its resources.",
     runner: "bun-script",
     target: "skills",
     cwdModes: ["film", "root"],
+    flags: [
+      { key: "--json", flag: "--json", label: "JSON output", type: "boolean", tier: "common" },
+    ],
     meta: {
       effect: "read",
       cost: "free",
@@ -534,9 +541,31 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     },
     subcommands: [
       {
+        id: "list",
+        label: "list",
+        summary: "List the available version-matched guides.",
+        inheritFlags: true,
+      },
+      {
+        id: "path",
+        label: "path",
+        summary: "Print a guide or repo agent-skill directory; open SKILL.md there.",
+        inheritFlags: true,
+        args: [
+          {
+            key: "name",
+            label: "Guide or agent skill (optional)",
+            type: "string",
+            placeholder: "earshot",
+            hint: "core, earshot, real-sound, or another repo skill. Omit for skill-data/.",
+          },
+        ],
+      },
+      {
         id: "get",
         label: "get",
         summary: "Read a skill guide (e.g. core) and optionally specific reference sections.",
+        inheritFlags: true,
         args: [
           {
             key: "name",
@@ -577,7 +606,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "find",
     category: "daily",
     summary:
-      "Search sounds, music, mocap clips, transitions, anims, fonts, looks, or star favorites.",
+      "Find native/imported assets and code helpers; inspect recipes, source and placement IDs, or star favorites.",
     runner: "bun-script",
     target: "find",
     cwdModes: ["film", "root"],
@@ -601,7 +630,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         ...bareListCopy("kinds & groups"),
         choiceSource: "findKinds",
         tier: "common",
-        hint: "e.g. sfx, bgm, mc, sound, mocap, asset/effect, asset/sticker, transition, anim, text, shape; omit value to list groups",
+        hint: "e.g. sound, mocap, transition, text, filter, sticker, effect, template, anim, font, adjust, velocity, ease; omit value to list groups",
       },
       {
         key: "--source",
@@ -613,6 +642,24 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         choiceSource: "findSources",
         tier: "common",
         hint: "Omit value to list all available sources & mod packs with counts",
+      },
+      {
+        key: "--group",
+        flag: "--group",
+        label: "Category / Visual Group",
+        type: "string",
+        optionalValue: true,
+        ...bareListCopy("catalogue groups"),
+        tier: "advanced",
+        hint: "Native category or imported visual group, e.g. Basic or fade",
+      },
+      {
+        key: "--offset",
+        flag: "--offset",
+        label: "Page offset",
+        type: "number",
+        tier: "advanced",
+        hint: "Skip N entries in offline lists or word results; combine with -n",
       },
       {
         key: "--jev",
@@ -699,7 +746,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "csv",
         tier: "common",
         placeholder: "dissolve",
-        hint: "Inspect files, licence and settings; native entries have paste snippets, imported visuals expose source files.",
+        hint: "Full recipe, source, units, example controls and placement ID; code helpers include scene snippets",
       },
       {
         key: "--dur",
@@ -1151,11 +1198,12 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     args: [
       {
         key: "secondOrNote",
-        label: "Second / #Note / ID",
+        label: "Playback time or note",
         type: "string",
         required: true,
         choiceSource: "notes",
         placeholder: "35.6 or 00:35.633 or #52",
+        hint: "Enter playback seconds, a timecode, or a note number or ID.",
       },
     ],
     flags: [
@@ -1222,6 +1270,21 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         tier: "common",
       },
       {
+        key: "--deleted",
+        flag: "--deleted",
+        label: "Deleted Notes",
+        type: "boolean",
+        tier: "common",
+      },
+      {
+        key: "--json",
+        flag: "--json",
+        label: "Structured JSON",
+        type: "boolean",
+        tier: "common",
+        hint: "Export selected notes without Jev lesson lookup",
+      },
+      {
         key: "--cam",
         flag: "--cam",
         label: "Include Film Cam Line",
@@ -1233,7 +1296,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       effect: "read",
       cost: "optional-paid",
       costHint:
-        "List mode is free; detail ID or --shot mode runs Jev lesson lookup when keys are configured.",
+        "List and --json are free. Text detail runs Jev lesson lookup when configured.",
       speed: "instant",
       cancellable: true,
       helpMode: "flag",
@@ -1244,7 +1307,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "note",
     category: "daily",
     summary:
-      "Respond to a creator note as fixed (done), question (ask), or lasting rule (learned).",
+      "Respond to a creator note or restore a deleted one.",
     runner: "bun-script",
     target: "note",
     cwdModes: ["film"],
@@ -1320,6 +1383,12 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             placeholder: "Kept framing rule in lessons/cam.md",
           },
         ],
+      },
+      {
+        id: "restore",
+        label: "restore",
+        summary: "Restore a deleted note using its stable ID from notes --deleted.",
+        args: [{ key: "id", label: "Deleted Note ID", type: "string", required: true }],
       },
     ],
   },
@@ -1811,7 +1880,17 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         choiceSource: "renders",
         placeholder: "renders/draft_video.mp4",
-        hint: "Muxes soundtrack -> renders/draft.mp4 or renders/final.mp4",
+        hint: "Whole-film renders update draft/final; other videos get separate previews",
+      },
+    ],
+    flags: [
+      {
+        key: "--start",
+        flag: "--start",
+        label: "Film Audio Start",
+        type: "string",
+        tier: "advanced",
+        placeholder: "40",
       },
     ],
     meta: {
@@ -1820,7 +1899,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       speed: "short",
       cancellable: true,
       helpMode: "flag",
-      outputsHint: "Writes sound/mix.wav (and renders/draft.mp4 or final.mp4 if video provided)",
+      outputsHint: "Writes sound/mix.wav and canonical draft/final, or renders/mixed_*/preview.mp4",
     },
   },
   {
@@ -3090,7 +3169,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cost: "free",
       speed: "short",
       cancellable: true,
-      helpMode: "none",
+      helpMode: "flag",
       confirm: {
         mode: "always",
         message: "Renders Earshot's 252 DSP bank WAVs into <vaultSoundDir>/sfx/<category>/.",
@@ -3121,18 +3200,163 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cost: "free",
       speed: "short",
       cancellable: true,
-      helpMode: "none",
+      helpMode: "flag",
       outputsHint: "Writes <vaultDir>/PEAKS.json and .peaks-cache.json",
     },
   },
 
+  {
+    id: "reference",
+    label: "reference",
+    category: "render",
+    summary:
+      "Inspect reference pictures/captions, study timing or compare videos; no required style or quality score.",
+    runner: "bun-script",
+    target: "reference",
+    cwdModes: ["film", "root"],
+    args: [
+      {
+        key: "operation",
+        label: "Operation",
+        type: "enum",
+        options: ["inspect", "study", "compare"],
+        required: true,
+      },
+      { key: "reference", label: "Reference Video / URL", type: "string", required: true },
+      {
+        key: "remake",
+        label: "Remake Video",
+        type: "string",
+        requiredWhen: { field: "operation", in: ["compare"] },
+        visibleWhen: { field: "operation", in: ["compare"] },
+      },
+    ],
+    flags: [
+      { key: "--out", flag: "--out", label: "Report Folder", type: "string" },
+      {
+        key: "--transcript",
+        flag: "--transcript",
+        label: "VTT / SRT / Segment JSON",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--detail",
+        flag: "--detail",
+        label: "Evidence",
+        type: "enum",
+        options: ["overview", "transcript"],
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--start",
+        flag: "--start",
+        label: "Source Start",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--end",
+        flag: "--end",
+        label: "Source End",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--at",
+        flag: "--at",
+        label: "Pinned Source Seconds",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--frames",
+        flag: "--frames",
+        label: "Frame Budget (1–96)",
+        type: "number",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--scenes",
+        flag: "--scenes",
+        label: "Add Estimated Scene Changes",
+        type: "boolean",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--find",
+        flag: "--find",
+        label: "Find Transcript Text",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--language",
+        flag: "--language",
+        label: "URL Caption Language",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--cookies",
+        flag: "--cookies",
+        label: "Explicit URL Cookie Jar",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--cookies-from-browser",
+        flag: "--cookies-from-browser",
+        label: "Explicit URL Browser / Profile",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--js-runtime",
+        flag: "--js-runtime",
+        label: "URL JavaScript Runtime",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--minutes",
+        flag: "--minutes",
+        label: "Time Limit (minutes)",
+        type: "number",
+        placeholder: "5",
+      },
+      {
+        key: "--fit",
+        flag: "--fit",
+        label: "Scale Remake Timing",
+        type: "boolean",
+        visibleWhen: { field: "operation", in: ["compare"] },
+      },
+      {
+        key: "--film",
+        flag: "--film",
+        label: "Optional OpenFilm film.html",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["compare"] },
+      },
+    ],
+    meta: {
+      effect: "write",
+      cost: "free",
+      speed: "long",
+      cancellable: true,
+      helpMode: "flag",
+      outputsHint:
+        "Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
+    },
+  },
   // ── RENDER & QA REVIEW ───────────────────────────────────────────────────────────────────────────
   {
     id: "render",
     label: "render",
     category: "render",
     summary:
-      "Render draft stills, video chunks, captions, lossless poster, final upload, or motion/text checks.",
+      "Render draft stills, video chunks, captions, lossless poster, final upload, or motion/text/order checks.",
     runner: "bun-script",
     target: "render",
     cwdModes: ["film"],
@@ -3144,6 +3368,21 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         required: true,
         options: renderTargetValues,
         default: "stills",
+      },
+      {
+        key: "frameTimes",
+        label: "Native Frame Times",
+        type: "string",
+        visibleWhen: { field: "target", in: ["frames"] },
+        requiredWhen: { field: "target", in: ["frames"] },
+        placeholder: "12.2-12.6/12",
+      },
+      {
+        key: "overviewRange",
+        label: "Overview Range (Optional)",
+        type: "string",
+        visibleWhen: { field: "target", in: ["overview"] },
+        placeholder: "10-20/16",
       },
     ],
     env: [
@@ -3185,11 +3424,11 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       },
       {
         key: "CHECK",
-        label: "CHECK (motion/seen/touch/text)",
+        label: "CHECK (motion/seen/touch/text/order)",
         type: "string",
         visibleWhen: { field: "target", in: ["stills", "all"] },
         tier: "common",
-        placeholder: "motion:cam,81,83 or text",
+        placeholder: "motion:cam,81,83 or order:20,25 or text",
       },
       {
         key: "SAMPLES",
@@ -3254,7 +3493,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "sheet",
     category: "render",
     summary:
-      "Build 3x2 contact sheets from rendered stills, video seconds, shot midpoints, or one cut.",
+      "Inspect file pictures: bounded overview, exact native frames, shot/cut sheets, or rendered stills.",
     runner: "bun-script",
     target: "sheet",
     cwdModes: ["film"],
@@ -3268,10 +3507,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       },
       {
         key: "target",
-        label: "Times / shots / cut",
+        label: "Times / overview / frames / shots / cut",
         type: "string",
         requiredWhen: { field: "video", nonEmpty: true },
-        placeholder: "10,20,30 or shots or cut",
+        placeholder: "overview, frames, shots, cut, or 10,20,30",
       },
       {
         key: "cutIndex",
@@ -3280,6 +3519,21 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         visibleWhen: { field: "target", in: ["cut"] },
         requiredWhen: { field: "target", in: ["cut"] },
         placeholder: "4",
+      },
+      {
+        key: "frameTimes",
+        label: "Native Frame Times",
+        type: "string",
+        visibleWhen: { field: "target", in: ["frames"] },
+        requiredWhen: { field: "target", in: ["frames"] },
+        placeholder: "12.2-12.6/12",
+      },
+      {
+        key: "overviewRange",
+        label: "Overview Range (Optional)",
+        type: "string",
+        visibleWhen: { field: "target", in: ["overview"] },
+        placeholder: "10-20/16",
       },
     ],
     env: [
@@ -3297,7 +3551,8 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       speed: "short",
       cancellable: true,
       helpMode: "flag",
-      outputsHint: "Writes renders/sheet_*.jpg",
+      outputsHint:
+        "Overview/frames retain renders/review_*/index.json and pictures; legacy modes write sheet_*.jpg",
     },
   },
   {
@@ -3406,6 +3661,48 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       ...sdkMediaSubcommands,
       ...referenceMediaSubcommands,
       {
+        id: "qc",
+        label: "qc",
+        summary:
+          "Optional loop seams, subtitles/word timing, alpha/key-fill and delivery-package checks.",
+        args: [{ key: "request", label: "QC Request JSON", type: "string" }],
+        flags: [
+          { key: "--contract", flag: "--contract", label: "Native Rule Contract", type: "boolean" },
+          { key: "--out", flag: "--out", label: "Evidence Parent", type: "string" },
+          { key: "--minutes", flag: "--minutes", label: "Deadline Minutes", type: "number" },
+          { key: "--dry-run", flag: "--dry-run", label: "Validate Request Only", type: "boolean" },
+        ],
+        meta: {
+          effect: "write",
+          speed: "long",
+          outputsHint:
+            "Retains original request and native verdicts. Process success and measured FAIL/UNKNOWN are distinct; no creative gate.",
+        },
+      },
+      {
+        id: "ffmpeg",
+        label: "ffmpeg",
+        summary:
+          "Pinned native footage backend: contract/list/doctor, QC, sync, alpha/NLE exports and advanced edits.",
+        args: [
+          {
+            key: "invocation",
+            label: "Native Invocation",
+            type: "string",
+            multi: true,
+            passthrough: true,
+            placeholder: "probe -- clip.mp4",
+            hint: "Tool, wrapper --out/--minutes, then -- and native arguments. Use list --json or contract -- --static --tool NAME for parser-derived fields.",
+          },
+        ],
+        meta: {
+          effect: "write",
+          speed: "long",
+          outputsHint:
+            "Fresh run evidence; native outputs follow native paths. Execution does not imply verified media; native ASR may download models.",
+        },
+      },
+      {
         id: "list",
         label: "list",
         summary: "List tools, upstream sources and license boundaries.",
@@ -3421,10 +3718,16 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         id: "setup",
         label: "setup",
-        summary: "Install pinned packages or verified native binaries/models; network, no inference.",
+        summary:
+          "Install pinned packages or verified native binaries/models; network, no inference.",
         args: [{ key: "tool", label: "Tool", type: "string", required: true, placeholder: "ocr" }],
         flags: [
-          { key: "--minutes", flag: "--minutes", label: "Deadline Minutes per Step", type: "number" },
+          {
+            key: "--minutes",
+            flag: "--minutes",
+            label: "Deadline Minutes per Step",
+            type: "number",
+          },
           { key: "--out", flag: "--out", label: "Evidence Parent", type: "string" },
         ],
         meta: { effect: "install", speed: "long" },
@@ -3515,6 +3818,9 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "renders/draft_video.mp4",
       },
     ],
+    flags: [
+      { key: "--json", flag: "--json", label: "JSON Report", type: "boolean", tier: "common" },
+    ],
     env: [
       {
         key: "START",
@@ -3530,14 +3836,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       speed: "short",
       cancellable: true,
       helpMode: "flag",
-      outputsHint: "Writes renders/frames_<KIND>_<s>.jpg on detected faults",
+      outputsHint: "Writes renders/framecheck_*/index.json and fault strips",
     },
   },
   {
     id: "pace",
     label: "pace",
     category: "render",
-    summary: "Measure shot durations and stagnant holds against narration words.",
+    summary:
+      "Measure shot durations and holds on a current whole-film render, with planned narration.",
     runner: "bun-script",
     target: "pace",
     cwdModes: ["film"],
@@ -3573,7 +3880,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "deliver",
     category: "render",
     summary:
-      "Audit final upload against YouTube specs and optionally check AV1 re-encode banding (--youtube).",
+      "Check a file against the project upload profile; optionally measure local AV1 preview banding.",
     runner: "bun-script",
     target: "deliver",
     cwdModes: ["film"],
@@ -3607,7 +3914,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: true,
       helpMode: "flag",
       outputsHint:
-        "Exit 0 ready, 1 FIX issues; --youtube writes renders/youtube_preview.mp4 + PNGs",
+        "Exit 0 technical checks pass, 1 FIX issues; --youtube retains a fresh renders/youtube_*/ run",
     },
   },
   {
@@ -3628,12 +3935,21 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "renders/draft_video.mp4",
       },
     ],
+    flags: [
+      {
+        key: "--json",
+        flag: "--json",
+        label: "Render Context JSON",
+        type: "boolean",
+        tier: "advanced",
+      },
+    ],
     meta: {
       effect: "read",
       cost: "free",
       speed: "instant",
       cancellable: false,
-      helpMode: "none",
+      helpMode: "flag",
     },
   },
 
@@ -4399,7 +4715,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "bun-file",
     target: "packages/mc-assets/pick.mjs",
     cwdModes: ["film"],
-    meta: { effect: "write", cost: "free", speed: "short", cancellable: true, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "short", cancellable: true, helpMode: "flag" },
   },
   {
     id: "mc:mobs",
@@ -4416,7 +4732,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cost: "free",
       speed: "short",
       cancellable: true,
-      helpMode: "none",
+      helpMode: "flag",
       confirm: {
         mode: "always",
         message: "Downloads Minecraft entity assets from assets.mcasset.cloud into vault/mcasset/.",
@@ -4436,7 +4752,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       { key: "--mc-dir", flag: "--mc-dir", label: "Minecraft Dir", type: "string", tier: "common" },
       { key: "--force", flag: "--force", label: "Force Rebuild", type: "boolean", tier: "common" },
     ],
-    meta: { effect: "write", cost: "free", speed: "short", cancellable: true, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "short", cancellable: true, helpMode: "flag" },
   },
   {
     id: "catalog:search",
@@ -4709,7 +5025,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "python-file",
     target: "packages/clip-catalog/catalog_check.py",
     cwdModes: ["root"],
-    meta: { effect: "read", cost: "free", speed: "short", cancellable: true, helpMode: "none" },
+    meta: { effect: "read", cost: "free", speed: "short", cancellable: true, helpMode: "flag" },
   },
   {
     id: "studio:init",
@@ -4737,7 +5053,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cost: "free",
       speed: "short",
       cancellable: true,
-      helpMode: "none",
+      helpMode: "flag",
       confirm: {
         mode: "always",
         message:
@@ -4763,7 +5079,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "mixamo ual1 ual2",
       },
     ],
-    meta: { effect: "write", cost: "free", speed: "long", cancellable: true, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "long", cancellable: true, helpMode: "flag" },
   },
   {
     id: "catalog:review-sh",
@@ -4774,7 +5090,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "bash-file",
     target: "packages/clip-catalog/catalog_review.sh",
     cwdModes: ["film"],
-    meta: { effect: "write", cost: "free", speed: "long", cancellable: true, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "long", cancellable: true, helpMode: "flag" },
   },
   {
     id: "catalog:sweep-sh",
@@ -4794,7 +5110,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "mixamo",
       },
     ],
-    meta: { effect: "write", cost: "free", speed: "long", cancellable: true, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "long", cancellable: true, helpMode: "flag" },
   },
   {
     id: "catalog:sheet-clip",
@@ -4810,7 +5126,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cost: "free",
       speed: "short",
       cancellable: true,
-      helpMode: "none",
+      helpMode: "flag",
       outputsHint: "Writes renders/clip_sheet_front.jpg and renders/clip_sheet_left.jpg",
     },
   },
@@ -4823,7 +5139,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "python-file",
     target: "packages/mc-assets/pick.py",
     cwdModes: ["film"],
-    meta: { effect: "write", cost: "free", speed: "short", cancellable: true, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "short", cancellable: true, helpMode: "flag" },
   },
   {
     id: "timeline:fmt",
@@ -4833,7 +5149,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "bun-file",
     target: "scripts/timeline_fmt.ts",
     cwdModes: ["film"],
-    meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "flag" },
   },
   {
     id: "timeline:fmt-py",
@@ -4844,7 +5160,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "python-file",
     target: "scripts/timeline_fmt.py",
     cwdModes: ["film"],
-    meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "none" },
+    meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "flag" },
   },
 ];
 
@@ -5290,7 +5606,7 @@ export function buildCliInvocation(
         : def.multi
           ? tokenizeWords(String(raw).trim())
           : [String(raw).trim()];
-      validateArgumentTokens(def, tokens, validationErrors);
+      if (!def.passthrough) validateArgumentTokens(def, tokens, validationErrors);
       argvTokens.push(...tokens);
     }
 

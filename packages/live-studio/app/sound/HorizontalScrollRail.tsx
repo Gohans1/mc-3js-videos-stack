@@ -10,8 +10,8 @@ import {
 } from "./use-scroll-edges";
 
 const EDGE_SCROLL_CONTROLS = [
-  { key: "left", dir: -1, posCls: "start-1", Icon: ChevronLeft },
-  { key: "right", dir: 1, posCls: "end-1", Icon: ChevronRight },
+  { key: "left", dir: -1, posCls: "left-1", Icon: ChevronLeft },
+  { key: "right", dir: 1, posCls: "right-1", Icon: ChevronRight },
 ] as const;
 
 export function HorizontalScrollRail({

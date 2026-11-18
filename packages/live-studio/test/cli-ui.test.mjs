@@ -126,7 +126,7 @@ test("command lifecycle uses a persistent polite status without reading stdout",
   for (const [run, expected] of [
     [null, "Ready"],
     [{ ...base, status: "running" }, "Running"],
-    [{ ...base, status: "done", exitCode: 0 }, "Exit 0"],
+    [{ ...base, status: "done", exitCode: 0 }, "Completed"],
   ]) {
     const html = renderToStaticMarkup(
       wrapTree(createElement(cliConsole.CliRunAnnouncement, { run })),
@@ -288,12 +288,16 @@ test("execution errors stay visible in compact Output and expanded consoles", ()
             { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context },
             command,
             draft,
-            { lastRun: run, runError: "Studio is offline", ...view },
+            {
+              lastRun: run,
+              runError: { operation: "start", message: "Studio is offline" },
+              ...view,
+            },
           ),
         ),
       ),
     );
-    assert.ok(html.includes("Command could not run"));
+    assert.ok(html.includes("Could not start command"));
     assert.ok(html.includes("Studio is offline"));
   }
 });
@@ -312,11 +316,11 @@ for (const mode of ["execute", "help"]) {
       const request = { commandId: "help", targetFilm: "root", mode };
       await assert.doesNotReject(() => dispatchCliRun(request));
       assert.equal(cliStore.getState().submittingRun, false);
-      assert.equal(cliStore.getState().runError, "Failed to fetch");
+      assert.equal(cliStore.getState().runError?.message, "Failed to fetch");
       await dispatchCliRun(request);
       assert.equal(calls, 2);
       assert.equal(cliStore.getState().submittingRun, false);
-      assert.equal(cliStore.getState().runError, "Retry request reached Studio");
+      assert.equal(cliStore.getState().runError?.message, "Retry request reached Studio");
     } finally {
       globalThis.fetch = originalFetch;
       cliStore.setState(savedState);
@@ -338,12 +342,36 @@ test("network rejection releases Stop so the running command can be stopped agai
     cliStore.setState({ activeRun: running, stoppingRunId: null, runError: null });
     await assert.doesNotReject(() => stopCurrentRun("run-offline"));
     assert.equal(cliStore.getState().stoppingRunId, null);
-    assert.equal(cliStore.getState().runError, "Failed to fetch");
+    assert.equal(cliStore.getState().runError?.message, "Failed to fetch");
+    assert.equal(cliStore.getState().runError?.operation, "stop");
     assert.equal(cliStore.getState().activeRun?.runId, "run-offline");
     await stopCurrentRun("run-offline");
     assert.equal(calls, 2);
     assert.equal(cliStore.getState().activeRun, null);
     assert.equal(cliStore.getState().lastRun?.status, "stopped");
+  } finally {
+    globalThis.fetch = originalFetch;
+    cliStore.setState(savedState);
+  }
+});
+
+test("a stop service error stays visible and leaves the run available to stop again", async () => {
+  const originalFetch = globalThis.fetch;
+  const savedState = cliStore.getState();
+  const activeRun = { runId: "stop-unavailable", status: "running", commandId: "help", output: [] };
+  try {
+    globalThis.fetch = async (url) =>
+      url.endsWith("/stop")
+        ? Response.json({ error: "Stop service unavailable" }, { status: 503 })
+        : Response.json({ active: activeRun, last: null });
+    cliStore.setState({ activeRun, stoppingRunId: null, runError: null });
+    await stopCurrentRun(activeRun.runId);
+    assert.deepEqual(cliStore.getState().runError, {
+      operation: "stop",
+      message: "Stop service unavailable",
+    });
+    assert.equal(cliStore.getState().stoppingRunId, null);
+    assert.equal(cliStore.getState().activeRun?.runId, activeRun.runId);
   } finally {
     globalThis.fetch = originalFetch;
     cliStore.setState(savedState);
@@ -710,7 +738,7 @@ describe("CLI tab SSR UI rendering", () => {
         }),
       ),
     );
-    assert.ok(consoleHtml.includes("Exit 2 · Usage"));
+    assert.ok(consoleHtml.includes("Failed · Exit 2"));
     assert.ok(consoleHtml.includes("Missing query"));
     assert.ok(consoleHtml.includes("Usage: bun run find"));
     assert.ok(consoleHtml.includes("data-arrow-scroll"));
@@ -1057,7 +1085,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
           selectedCategory: "all",
           activeRun: null,
           lastRun: null,
-          runError: "Film directory missing",
+          runError: { operation: "start", message: "Film directory missing" },
           templatesError: "Failed to save templates.json",
           catalogError: "Catalog refresh HTTP 500",
           onDismissRunError: () => {},
@@ -1115,7 +1143,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         },
       );
       assert.equal(cliStore.getState().view, "browse");
-      assert.equal(cliStore.getState().runError, "Film locked by render");
+      assert.equal(cliStore.getState().runError?.message, "Film locked by render");
     } finally {
       globalThis.fetch = origFetch;
       cliStore.setState(savedState);

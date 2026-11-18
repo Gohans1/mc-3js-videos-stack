@@ -1,0 +1,4 @@
+LICENSE -text
+package.json -text
+scripts/** -text
+templates/** -text

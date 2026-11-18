@@ -137,12 +137,12 @@ function MultiTokenInput({
               key={`${item}-${idx}`}
               className="bg-surface-subtle border-hairline inline-flex max-w-full items-center gap-1 rounded-md border py-0.5 pr-0.5 pl-1.5 font-mono text-sm"
             >
-              <span className="truncate">{item}</span>
+              <span className="min-w-0 wrap-anywhere">{item}</span>
               <button
                 type="button"
                 aria-label={`Remove ${item}`}
                 onClick={() => removeItem(idx)}
-                className="text-muted-foreground hover:text-destructive focus-visible:ring-ring inline-flex size-6 items-center justify-center rounded-sm outline-none focus-visible:ring-2 pointer-coarse:size-10"
+                className="text-muted-foreground hover:text-destructive focus-visible:ring-ring inline-flex size-6 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 pointer-coarse:size-10"
               >
                 <X aria-hidden className="size-3" />
               </button>
@@ -182,11 +182,12 @@ function DetectedChoicesHelper({
             <Button
               key={opt.value}
               variant="choice"
-              size="comfortable"
+              size="wrapping"
+              className="max-w-full"
               aria-pressed={pressed}
               onClick={() => (multi ? onPickMulti(opt.value) : onPickSingle(opt.value))}
             >
-              {opt.label}
+              <span className="min-w-0 wrap-anywhere">{opt.label}</span>
             </Button>
           );
         })}
@@ -216,6 +217,7 @@ function DetectedChoicesHelper({
         <SelectValue />
       </SelectTrigger>
       <SelectContent
+        fitContent
         finalFocus
         className="[--text-ui:0.875rem]"
         onKeyDown={stopCliHotkeyPropagation}
@@ -278,6 +280,7 @@ function CliFieldContent({
             )}
           </div>
           <Switch
+            data-instant
             size="comfortable"
             id={id}
             aria-describedby={descriptionId}
@@ -324,6 +327,7 @@ function CliFieldContent({
             )}
           </div>
           <Switch
+            data-instant
             size="comfortable"
             id={`${id}-sw`}
             aria-describedby={descriptionId}
@@ -335,7 +339,7 @@ function CliFieldContent({
           />
         </div>
         <Collapsible open={enabled} className="contents">
-          <CollapsibleContent variant="reveal">
+          <CollapsibleContent>
             {def.type === "enum" && options.length > 0 ? (
               <Select
                 items={bareEnumItems}
@@ -354,6 +358,7 @@ function CliFieldContent({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent
+                  fitContent
                   finalFocus
                   className="[--text-ui:0.875rem]"
                   onKeyDown={stopCliHotkeyPropagation}
@@ -464,11 +469,12 @@ function CliFieldContent({
             <Button
               key={opt.value}
               variant="choice"
-              size="comfortable"
+              size="wrapping"
+              className="max-w-full"
               aria-pressed={picked.includes(opt.value)}
               onClick={() => toggle(opt.value)}
             >
-              {opt.label}
+              <span className="min-w-0 wrap-anywhere">{opt.label}</span>
             </Button>
           ))}
         </div>
@@ -513,6 +519,7 @@ function CliFieldContent({
             <SelectValue placeholder={def.placeholder ?? "Select option…"} />
           </SelectTrigger>
           <SelectContent
+            fitContent
             finalFocus
             className="[--text-ui:0.875rem]"
             onKeyDown={stopCliHotkeyPropagation}
@@ -644,7 +651,6 @@ export function CliFieldControl({
   return (
     <Collapsible open={visible} className="contents">
       <CollapsibleContent
-        variant="reveal"
         className={props.def.type === "number" ? "min-w-0" : "col-span-full min-w-0"}
       >
         <CliFieldContent {...props} />

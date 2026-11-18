@@ -1,3 +1,4 @@
+import { ActivityRail } from "./activity/ActivityRail";
 import { type CSSProperties, lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Toaster } from "@/components/ui/toast";
@@ -113,7 +114,7 @@ export function App() {
     if (!cliSelected && cliPanelMode === "expanded") cliStore.setState({ panelMode: "embedded" });
   }, [cliSelected, cliPanelMode]);
   const inspectorActive = useLessons((s) => s.subTab === "inspector");
-  const focusedInspector = !showLibrary && side === "lessons" && inspectorActive;
+  const focusedInspector = !review && !showLibrary && side === "lessons" && inspectorActive;
   const targetBounds = clampSplitterLayout({
     vw,
     vh,
@@ -274,6 +275,7 @@ export function App() {
               />
             </div>
           )}
+          <ActivityRail />
         </div>
         <audio ref={bind("audio")} preload="auto" />
         {pgEverOpened && (

@@ -69,6 +69,9 @@ test("render refuses AT past the end and a backwards CHECK at once, saying the f
     extra.stderr,
     /CHECK motion:cam,1,2,3: motion takes 3 values, <target>,<from s>,<to s>; got 4/,
   );
+  const empty = render({ CHECK: "order:10.01,10.04" });
+  assert.equal(empty.status, 2, empty.stdout + empty.stderr);
+  assert.match(empty.stderr, /order.*starts at or after the film's end/);
 });
 
 test("a film whose code does not build is named by file and line, in plain words, with nothing rendered", (t) => {
@@ -287,12 +290,21 @@ test("render final's captions are named as the upload's picture, never as the dr
 
 test("a CHUNKS run that joins a chunk drawn before a narration move still says the video is stale", async (t) => {
   // the mouths follow the narration clips: a scene that reads the sound timeline draws them
-  const film = chromeFilm(t, 40, { soundTimeline: "src/timeline/audio.json" });
+  const film = chromeFilm(t, 31, { soundTimeline: "src/timeline/audio.json" });
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
   const scene = join(film.dir, "src/scene.ts");
   writeFileSync(
     scene,
-    `import sound from "./timeline/audio.json";\nglobalThis.filmSound = sound;\n${readFileSync(scene, "utf8")}`,
+    `import * as THREE from "three";
+import sound from "./timeline/audio.json";
+globalThis.filmSound = sound;
+export const DURATION = 31, SHOTS_OUT = [];
+export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
+  const renderer = new THREE.WebGLRenderer({ canvas });
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  return () => renderer.render(scene, camera);
+};`,
   );
   mkdirSync(join(film.dir, "src/timeline"));
   const audio = (at) =>
@@ -300,16 +312,182 @@ test("a CHUNKS run that joins a chunk drawn before a narration move still says t
       join(film.dir, "src/timeline/audio.json"),
       JSON.stringify({ narration: "voice", sfx: [{ name: "voice", at, start: 0, length: 2 }] }),
     );
+  const { staleVideo } = await import("../src/stale.mjs");
+  audio(1);
+  const span = film.render("clip", { SPAN: "0.12,0.8" });
+  assert.equal(span.status, 0, span.stdout + span.stderr);
+  const file = "renders/span_0.13-0.8.mp4";
+  assert.ok(span.stdout.includes(`bun run sheet ${file} overview`));
+  assert.equal(staleVideo(film.dir, file), null);
+  audio(1.4);
+  assert.match(staleVideo(film.dir, file)?.message, /narration clips moved/);
   audio(1);
   const whole = film.render("clip");
   assert.equal(whole.status, 0, whole.stdout + whole.stderr);
-  audio(35);
+  const { renderCuts } = await import("../src/video.mjs");
+  assert.equal(renderCuts(film.dir, "renders/draft_video.mp4").status, "bound");
+  audio(30.2);
   const part = film.render("clip", { CHUNKS: "0" });
   assert.equal(part.status, 0, part.stdout + part.stderr);
   assert.match(part.stdout, /chunk 1 was drawn before the film's last change/);
-  const { staleVideo } = await import("../src/stale.mjs");
+  assert.equal(renderCuts(film.dir, "renders/draft_video.mp4").status, "unavailable");
   assert.match(
     staleVideo(film.dir, join(film.dir, "renders/draft_video.mp4"))?.message ?? "fresh",
     /narration clips moved/,
   );
 });
+
+test("ENTRY=folder and running outside a film exit 2 before any build, and a dead Chrome fails fast instead of hanging", (t) => {
+  const empty = mkdtempSync(join(tmpdir(), "render-empty-"));
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
+  const outside = spawnSync("bun", [RENDER, "stills"], {
+    cwd: empty,
+    encoding: "utf8",
+    timeout: 20000,
+    env: { ...process.env, LIVE_PROJECT: empty },
+  });
+  assert.equal(outside.status, 2, outside.stdout + outside.stderr);
+  assert.match(outside.stderr, /cd films\/<name> first/);
+
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "lab"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { chrome: process.execPath } }),
+  );
+  const badEntry = spawnSync("bun", [RENDER, "stills"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 20000,
+    env: { ...process.env, LIVE_PROJECT: dir, ENTRY: "lab" },
+  });
+  assert.equal(badEntry.status, 2, badEntry.stdout + badEntry.stderr);
+  assert.match(badEntry.stderr, /ENTRY=lab is no file in the film/);
+
+  const deadChrome = spawnSync("bun", [RENDER, "stills"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 20000,
+    env: { ...process.env, LIVE_PROJECT: dir, AT: "1" },
+  });
+  assert.equal(deadChrome.status, 1, deadChrome.stdout + deadChrome.stderr);
+  assert.match(deadChrome.stderr, /ERROR Chrome exited/);
+  assert.match(deadChrome.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
+});
+
+test("CHECK=motion:cam works without draw.tools.free, and seen/touch name missing hooks instead of crashing", (t) => {
+  const film = chromeFilm(t, 1);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const scene = join(film.dir, "src/scene.ts");
+  writeFileSync(
+    scene,
+    `import * as THREE from "three";
+export const DURATION = 1, SHOTS_OUT = [];
+export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
+  const renderer = new THREE.WebGLRenderer({ canvas });
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  camera.position.set(0, 1, 3);
+  return Object.assign((t: number) => { camera.position.x = t; renderer.render(scene, camera); }, { tools: { scene, camera } });
+};`,
+  );
+  const cam = film.render("stills", { CHECK: "motion:cam,0,0.4" });
+  assert.equal(cam.status, 0, cam.stdout + cam.stderr);
+
+  writeFileSync(
+    scene,
+    `import * as THREE from "three";
+export const DURATION = 1, SHOTS_OUT = [];
+export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
+  const renderer = new THREE.WebGLRenderer({ canvas });
+  renderer.setSize(W, H, false);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  return () => renderer.render(scene, camera);
+};`,
+  );
+  for (const kind of ["seen", "touch"]) {
+    const out = film.render("stills", { CHECK: `${kind}:hero,0,0.4` });
+    assert.equal(out.status, 1, out.stdout + out.stderr);
+    assert.match(
+      out.stderr,
+      new RegExp(`ERROR CHECK=${kind} requires draw\\.tools\\.scene and draw\\.tools\\.camera`),
+    );
+    assert.doesNotMatch(out.stderr, /TypeError/);
+  }
+});
+
+test("CHECK=order awaits custom frames, writes evidence for state leaks and leaves the film's video alone", (t) => {
+  const film = chromeFilm(t, 1);
+  assert.ok(film, "headless Chrome is required for order verification");
+  const scene = join(film.dir, "src/scene.ts");
+  const source = (
+    stateful,
+  ) => `export const DURATION = 1, SHOTS_OUT = [{t:0},{t:0.5,transition:{fx:'of:transitions/dissolve',len:0.2}}];
+export function buildScene(canvas, W, H) {
+  canvas.width=W; canvas.height=H; const ctx=canvas.getContext('2d'); let n=0;
+  return Object.assign(() => { throw Error('sync draw must not replace renderFrame'); }, {
+    async renderFrame(t) { await new Promise(r=>setTimeout(r,1)); ctx.fillStyle='rgb('+(${stateful ? "++n * 7" : "Math.round(t * 200)"})+',0,0)'; ctx.fillRect(0,0,W,H); }
+  });
+}`;
+  writeFileSync(scene, source(false));
+  const pass = film.render("stills", { CHECK: "order:0:00,0:00.8" });
+  assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+  const file = join(film.dir, "renders/order.json");
+  const report = JSON.parse(readFileSync(file, "utf8"));
+  assert.ok(report.times.includes(0.5));
+  assert.deepEqual(report.failures, []);
+  assert.ok(report.times.every((s) => s >= 0 && s < 0.8));
+  assert.ok(!existsSync(join(film.dir, "renders/draft_video.mp4")));
+
+  writeFileSync(scene, source(true));
+  const fail = film.render("stills", { CHECK: "order:0,0.8" });
+  assert.equal(fail.status, 1, fail.stdout + fail.stderr);
+  assert.match(fail.stderr, /ERROR order:.*depend on draw order/);
+  const bad = JSON.parse(readFileSync(file, "utf8"));
+  assert.ok(bad.failures.length > 0);
+  for (const image of bad.evidence) assert.ok(existsSync(join(film.dir, image)));
+  assert.match(fail.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
+}, 60000);
+
+test("native async frames preserve source time and layer clocks through Speed and Freeze", (t) => {
+  const film = chromeFilm(t, 2, { timingTimeline: "src/timing.json" });
+  assert.ok(film, "headless Chrome is required for async timing verification");
+  writeFileSync(
+    join(film.dir, "src/timing.json"),
+    JSON.stringify({ speeds: [{ from: 0, to: 2, rate: 2 }], freezes: [{ at: 1, duration: 0.5 }] }),
+  );
+  writeFileSync(
+    join(film.dir, "src/scene.ts"),
+    `export const DURATION=2, SHOTS_OUT=[];
+export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=canvas.getContext('2d');return Object.assign(()=>{throw Error('use async hook')},{async renderFrame(t,clocks){if(!clocks)throw Error('missing layer clocks');await Promise.resolve();g.fillStyle='rgb('+Math.round(t*100)+',0,0)';g.fillRect(0,0,W,H);}});}`,
+  );
+  const rendered = film.render("stills", { AT: "0.25,0.75" });
+  assert.equal(rendered.status, 0, rendered.stdout + rendered.stderr);
+  for (const [heard, red] of [
+    [0.25, 50],
+    [0.75, 100],
+  ]) {
+    const pixel = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        join(film.dir, `renders/still_${heard}s.jpg`),
+        "-vf",
+        "format=rgb24,crop=1:1:0:0",
+        "-f",
+        "rawvideo",
+        "-",
+      ],
+      { timeout: 10000 },
+    );
+    assert.equal(pixel.status, 0, pixel.stderr.toString());
+    assert.ok(
+      Math.abs(pixel.stdout[0] - red) <= 3,
+      `heard ${heard}: expected red ${red}, got ${pixel.stdout[0]}`,
+    );
+  }
+}, 30000);

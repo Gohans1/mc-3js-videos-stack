@@ -70,7 +70,7 @@ export function CliHazardBadges({
       {showPaid && (
         <Badge appearance="text" size="comfortable" variant="check">
           <Coins aria-hidden />
-          {meta.cost === "paid" ? "Paid" : "Optional $"}
+          {meta.cost === "paid" ? "Paid API" : "Paid options"}
         </Badge>
       )}
       {hasMissing && (
@@ -86,7 +86,7 @@ export function CliHazardBadges({
         </Badge>
       )}
       {meta.effect === "install" && (
-        <Badge appearance="text" size="comfortable" variant="open">
+        <Badge appearance="text" size="comfortable" variant="check">
           <Download aria-hidden />
           Install
         </Badge>
@@ -98,7 +98,7 @@ export function CliHazardBadges({
         </Badge>
       )}
       {meta.effect === "daemon" && !showGuarded && (
-        <Badge appearance="text" size="comfortable" variant="open">
+        <Badge appearance="text" size="comfortable" variant="tag">
           <Server aria-hidden />
           Server
         </Badge>

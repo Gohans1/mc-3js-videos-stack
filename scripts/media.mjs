@@ -4,17 +4,20 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, numberArg } from "../packages/live-studio/src/cli.mjs";
+import { ffmpegCli } from "./media/ffmpeg.mjs";
 import { runMediaJob } from "./media/job.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TOOLS = JSON.parse(readFileSync(join(ROOT, "scripts/media/tools.json"), "utf8"));
 const HOME = resolve(process.env.MC_MEDIA_HOME || join(ROOT, "vault/tools/media"));
+const PYTHON_STDIO = { PYTHONIOENCODING: "utf-8" };
 const HELP = `Optional local media tools for AI, with independent environments and retained evidence.
   bun run media list [--json]             Available tools and upstream/license information
   bun run media doctor [tool] [--json]    Installed package versions; does not load/download models
   bun run media setup <tool>              Install pinned packages or verified Windows binaries/models
   bun run media <tool> --help             Tool-specific inputs, outputs and native configuration
   bun run media <tool> <arguments>        Run a structured local adapter
+  bun run media ffmpeg --help            Pinned FFmpeg finishing/inspection backend, native contract
   --out DIR       Parent for fresh run-* evidence folders (default renders/media/<tool>)
   --minutes N     Wall-clock deadline (default 5; setup default 10). Logs and finished files survive failure.
 MC_MEDIA_HOME overrides the environment/model cache root (default vault/tools/media).
@@ -31,7 +34,35 @@ const fail = (message) => {
 };
 const python = (id) =>
   join(HOME, id, "env", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+const runtimeVersions = (binaries) =>
+  Object.fromEntries(
+    binaries.map((binary) => {
+      const result = spawnSync(binary, [binary === "python" ? "--version" : "-version"], {
+        encoding: "utf8",
+        timeout: 10_000,
+        windowsHide: true,
+      });
+      return [
+        binary,
+        { available: result.status === 0, version: result.stdout?.split(/\r?\n/)[0] },
+      ];
+    }),
+  );
 const [verb, ...rest] = process.argv.slice(2);
+const BUNDLED = {
+  id: "ffmpeg",
+  name: "ffmpeg-skill",
+  version: "3.10.1",
+  codeLicense: "MIT",
+  summary:
+    "Bundled optional footage finishing/QC tools; media ffmpeg list and contract for native arguments.",
+  source: "https://github.com/kajisho5/ffmpeg-skill/tree/v3.10.1",
+};
+
+if (verb === "ffmpeg") {
+  await ffmpegCli(rest);
+  process.exit(process.exitCode ?? 0);
+}
 
 if (!verb || ["help", "--help", "-h"].includes(verb)) {
   console.log(HELP);
@@ -40,19 +71,24 @@ if (!verb || ["help", "--help", "-h"].includes(verb)) {
 if (verb === "list" || verb === "doctor") {
   const args = cliArgs(HELP, ["--json"], verb === "doctor" ? 1 : 0, rest);
   const id = args.find((arg) => arg !== "--json");
-  if (id && !TOOLS[id]) fail(`unknown tool ${id}`);
+  if (id && !TOOLS[id] && id !== "ffmpeg") fail(`unknown tool ${id}`);
   const results = Object.entries(TOOLS)
     .filter(([key]) => !id || key === id)
     .map(([key, tool]) => {
       const result = {
         id: key,
         ...tool,
-        ...(tool.binary
-          ? { binaryPath: join(HOME, key, tool.binary) }
-          : { pythonPath: python(key) }),
+        ...(tool.runtime
+          ? {}
+          : tool.binary
+            ? { binaryPath: join(HOME, key, tool.binary) }
+            : { pythonPath: python(key) }),
       };
       if (verb === "doctor") result.installed = false;
-      if (verb === "doctor" && tool.binary) {
+      if (verb === "doctor" && tool.runtime) {
+        result.runtime = runtimeVersions(tool.runtime);
+        result.installed = Object.values(result.runtime).every((runtime) => runtime.available);
+      } else if (verb === "doctor" && tool.binary) {
         const required = [
           tool.binary,
           tool.defaultModel,
@@ -93,11 +129,19 @@ if (verb === "list" || verb === "doctor") {
       }
       return result;
     });
+  if (!id || id === "ffmpeg") {
+    const bundled = { ...BUNDLED };
+    if (verb === "doctor") {
+      bundled.runtime = runtimeVersions(["python", "ffmpeg", "ffprobe"]);
+      bundled.installed = Object.values(bundled.runtime).every((runtime) => runtime.available);
+    }
+    results.push(bundled);
+  }
   if (args.includes("--json")) console.log(JSON.stringify(results, null, 2));
   else
     for (const tool of results)
       console.log(
-        `${tool.id}: ${tool.name} — ${tool.summary}${verb === "doctor" ? ` (${tool.installed ? (tool.binary ? "setup complete; run tool to verify runtime" : "packages ready; model availability is separate") : "needs setup"})` : ""}\n  ${tool.source}`,
+        `${tool.id}: ${tool.name} — ${tool.summary}${verb === "doctor" ? ` (${tool.installed ? (tool.id === "ffmpeg" ? "runtime ready; media ffmpeg doctor for capabilities" : tool.binary ? "setup complete; run tool to verify runtime" : "packages ready; model availability is separate") : "needs setup"})` : ""}\n  ${tool.source}`,
       );
   process.exit(verb === "doctor" && results.some((tool) => !tool.installed) ? 1 : 0);
 }
@@ -114,11 +158,12 @@ if (rest.some((arg) => ["--help", "-h"].includes(arg)) || rest[0] === "help") {
   else {
     const help = spawnSync(
       "python",
-      [join(ROOT, tool.worker), ...(tool.arguments ?? []), "--help"],
+      ["-B", join(ROOT, tool.worker), ...(tool.arguments ?? []), "--help"],
       {
         encoding: "utf8",
         timeout: 15_000,
         windowsHide: true,
+        env: { ...process.env, ...PYTHON_STDIO },
       },
     );
     process.stdout.write(help.stdout ?? "");
@@ -174,13 +219,20 @@ if (setup) {
 } else {
   if (args[0] === "help") args[0] = "--help";
   const worker = join(ROOT, tool.worker);
-  const preflight = spawnSync("python", [worker, ...(tool.arguments ?? []), ...args, "--dry-run"], {
-    encoding: "utf8",
-    timeout: 30_000,
-    windowsHide: true,
-    env: { ...process.env, MC_MEDIA_TOOL_HOME: join(HOME, id) },
-  });
-  if (preflight.status !== 0 || args.some((arg) => ["--help", "-h", "--dry-run"].includes(arg))) {
+  const preflight = spawnSync(
+    "python",
+    ["-B", worker, ...(tool.arguments ?? []), ...args, "--dry-run"],
+    {
+      encoding: "utf8",
+      timeout: 30_000,
+      windowsHide: true,
+      env: { ...process.env, ...PYTHON_STDIO, MC_MEDIA_TOOL_HOME: join(HOME, id) },
+    },
+  );
+  if (
+    preflight.status !== 0 ||
+    args.some((arg) => ["--help", "-h", "--dry-run", ...(tool.discoveryFlags ?? [])].includes(arg))
+  ) {
     process.stdout.write(preflight.stdout ?? "");
     process.stderr.write(preflight.stderr ?? "");
     if (preflight.error) console.error(preflight.error.message);
@@ -198,6 +250,7 @@ if (setup) {
     tool: id,
     command: [
       tool.packages.length ? python(id) : "python",
+      "-B",
       worker,
       ...(tool.arguments ?? []),
       ...args,
@@ -205,10 +258,16 @@ if (setup) {
     out,
     minutes,
     env: {
+      ...PYTHON_STDIO,
       MC_MEDIA_MODELS_DIR: models,
       MC_MEDIA_TOOL_HOME: join(HOME, id),
       MC_MEDIA_TIMEOUT_SECONDS: String(minutes * 60),
     },
   });
+  if (tool.worker === "scripts/media/sdk.py" && report.artifacts.includes("result.json")) {
+    const result = JSON.parse(readFileSync(join(report.folder, "result.json"), "utf8"));
+    if (result.audioCoverage) report.audioCoverage = result.audioCoverage;
+    if (result.error) report.error ??= result.error;
+  }
   process.exit(finish(report) ? 0 : report.status === "interrupted" ? 130 : 1);
 }

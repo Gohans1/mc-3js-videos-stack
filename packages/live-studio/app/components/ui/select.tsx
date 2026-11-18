@@ -63,10 +63,10 @@ function SelectContent({
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  fitContent = false,
+  alignItemWithTrigger = !fitContent,
   ...props
-}: SelectPrimitive.Popup.Props &
-  Pick<
+}: SelectPrimitive.Popup.Props & { fitContent?: boolean } & Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
@@ -85,8 +85,11 @@ function SelectContent({
           finalFocus={(closedBy) => closedBy === "keyboard"}
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
+          data-fit-content={fitContent || undefined}
           className={cn(
-            "bg-popover text-popover-foreground ring-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg shadow-md ring-1 duration-100 data-[align-trigger=true]:animate-none motion-reduce:animate-none",
+            "bg-popover text-popover-foreground ring-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 motion-safe:data-[align-trigger=false]:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-[align-trigger=false]:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg shadow-md ring-1 duration-100 data-[align-trigger=true]:animate-none motion-reduce:animate-none",
+            fitContent &&
+              "w-max max-w-[min(32rem,var(--available-width))] min-w-[min(var(--anchor-width),var(--available-width))] animate-none! [&_[data-slot=select-item]]:pe-7",
             className,
           )}
           {...props}
@@ -120,7 +123,10 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
+      <SelectPrimitive.ItemText
+        data-slot="select-item-text"
+        className="flex flex-1 shrink-0 gap-2 whitespace-nowrap"
+      >
         {children}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator

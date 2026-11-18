@@ -9,31 +9,24 @@ import { LESSONS, lessonsFor } from "./src/lessons.mjs";
 import { noteDetailFormat } from "./src/note-detail.mjs";
 import { noteLessonFormat, toLearn } from "./src/note-format.mjs";
 import { noteState, noteThread, wholeNote } from "./src/note-state.mjs";
-import { deletedSaid, findNote, noteNumbers } from "./src/notes.mjs";
+import { deletedSaid, findNote, noteNumbers, readDeletedNotes, readNoteRows } from "./src/notes.mjs";
 import { tell } from "./src/tell.mjs";
 
 const ROOT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 
-const loadNotes = () => {
-  const file = join(ROOT, "notes/notes.jsonl");
-  const lines = existsSync(file)
-    ? readFileSync(file, "utf8")
-        .split(/\r?\n/)
-        .filter((l) => l.trim())
-    : [];
-  const notes = lines.map((l) => {
-    try {
-      return JSON.parse(l);
-    } catch {
-      return null;
-    }
-  });
-  const whole = notes.filter(wholeNote);
+const loadNotes = (archived) => {
+  const path = archived ? "notes/deleted.jsonl" : "notes/notes.jsonl";
+  const active = readNoteRows(ROOT);
+  const notes = archived ? readDeletedNotes(ROOT) : active;
+  let whole = archived ? notes.filter(Boolean) : notes.filter(wholeNote);
   if (whole.length !== notes.length)
-    console.error(`${notes.length - whole.length} malformed notes skipped: see notes/notes.jsonl`);
-  // #N counts every note, done and deleted ones too, so a note keeps its number as the round goes on
+    console.error(`${notes.length - whole.length} malformed notes skipped: see ${path}`);
   const numbers = noteNumbers(ROOT);
-  for (const n of whole) n.n = numbers.get(n.id).n;
+  if (archived) {
+    const activeIds = new Set(active.map((n) => n?.id));
+    whole = [...new Map(whole.filter((n) => !activeIds.has(n.id)).map((n) => [n.id, n])).values()];
+  }
+  for (const n of whole) n.n = numbers.get(n.id)?.n ?? null;
   const deleted = [...numbers.values()].filter((x) => x.gone).length;
   return { notes: whole, deleted };
 };
@@ -48,14 +41,15 @@ const backKind = (n, thread = noteThread(n, { rewordings: true })) => {
 };
 const SORT_RANK = { back: 0, open: 1, check: 2, done: 3 };
 const rankOf = (n) => SORT_RANK[isBack(n) ? "back" : noteState(n)];
+const byNumber = (a, b) => (a.n ?? 0) - (b.n ?? 0);
 const SORT = {
-  written: { label: "in the order written", cmp: (a, b) => a.n - b.n },
+  written: { label: "in the order written", cmp: byNumber },
   back: {
     label: "back-to-you first, then order written",
-    cmp: (a, b) => rankOf(a) - rankOf(b) || a.n - b.n,
+    cmp: (a, b) => rankOf(a) - rankOf(b) || byNumber(a, b),
   },
-  film: { label: "in film order", cmp: (a, b) => a.t - b.t || a.n - b.n },
-  newest: { label: "newest first", cmp: (a, b) => b.n - a.n },
+  film: { label: "in film order", cmp: (a, b) => a.t - b.t || byNumber(a, b) },
+  newest: { label: "newest first", cmp: (a, b) => byNumber(b, a) },
 };
 
 const filmNow = () => {
@@ -93,7 +87,10 @@ const oneLine = (n) => {
   const chars = [...raw];
   const text =
     chars.length > LINE_TEXT_MAX ? `${chars.slice(0, LINE_TEXT_MAX - 1).join("")}…` : raw;
-  return `#${n.n} ${n.id} ${n.time} shot ${n.shot}${tags.length ? ` [${tags.join(", ")}]` : ""} ${text}`;
+  const number = n.n == null ? "" : `#${n.n} `;
+  const time = n.time ?? `${n.t}s`;
+  const shot = n.shot == null ? "" : ` shot ${n.shot}`;
+  return `${number}${n.id} ${time}${shot}${tags.length ? ` [${tags.join(", ")}]` : ""} ${text}`;
 };
 
 const noteNoun = (count, done) => `${done ? "" : "open "}note${count === 1 ? "" : "s"}`;
@@ -140,6 +137,132 @@ const SCOPE = { film: "this film", all: "every film" };
 const LESSONS_HERE = relative(ROOT, LESSONS).replaceAll("\\", "/");
 const PROJECT_LESSONS = join(ROOT, "lessons");
 const hasProjectLessons = resolve(PROJECT_LESSONS) !== resolve(LESSONS);
+const HELP = `The creator's notes from the studio, for the AI about to act on them. Run inside the film.
+  bun run notes                 the open notes, one line each, up to ${DEFAULT_LIMIT}, in the order written (#1 first)
+  bun run notes ID [ID ...]     everything about those notes (ID: the id, as mw6hr1fm, or the number, as 3 or #3): where
+                                they tapped, the words, the actions, the version, pictures, and the parts of
+                                ${hasProjectLessons ? `lessons/ (this film) and ${LESSONS_HERE}/ (every film), including nested .md folders,` : `${LESSONS_HERE}/ (including nested .md folders)`} Jev says the note needs — returning only file names and headings by line
+                                (read those files directly for full details)
+  bun run notes --shot 3        everything about one shot's open notes (up to ${DEFAULT_LIMIT})
+  --sort written|back|film|newest   order: written (#1 first, default), back (BACK TO YOU replies first),
+                                    film (second in the film), newest (latest #N first)
+  --limit N                     max notes printed (default ${DEFAULT_LIMIT}; 0 for all)
+  --deleted                     list recoverable deleted notes (restore with bun run note restore ID)
+  --json                        return { notes, total } without spending on lesson lookup
+  --done                        fixed notes too            --cam   the film camera's line too (a free-camera note
+                                                                   always prints the one it was seen through)
+A fixed note waits for the creator's check in the studio; their answer brings it back here with their words.
+Lessons > AI Inspector previews the shared inputs/output without API calls; Run Jev is a manual opt-in.
+Save writes notes/lessons-config.json (prompts, selection, output and CLI enable switch); matching results are cached.
+Answer one: bun run note done|ask|learned ID "words" (bun run note --help). Never edit notes.jsonl by hand.`;
+const validateSort = (mode) => {
+  if (!Object.hasOwn(SORT, mode)) {
+    console.error(
+      `unknown --sort ${JSON.stringify(mode)}: expected ${Object.keys(SORT).join(", ")}`,
+    );
+    process.exit(2);
+  }
+  return mode;
+};
+const args = cliArgs(HELP, ["--shot N", "--sort MODE", "--limit N", "--done", "--cam", "--json", "--deleted"]);
+let shot = null;
+let sort = "written";
+let limitArg;
+let done = false;
+let cam = false;
+let json = false;
+let archived = false;
+const ids = [];
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === "--done") done = true;
+  else if (a === "--cam") cam = true;
+  else if (a === "--json") json = true;
+  else if (a === "--deleted") archived = true;
+  else if (a === "--shot") shot = numberArg("--shot", args[++i], { min: 0, int: true });
+  else if (a === "--limit") limitArg = numberArg("--limit", args[++i], { min: 0, int: true });
+  else if (a === "--sort") sort = validateSort(args[++i]);
+  else if (a.startsWith("-")) {
+    console.error(
+      `unknown option ${a}: bun run notes [ID ... | --shot N] [--sort MODE] [--limit N] [--done] [--cam] [--json] [--deleted] (--help for more)`,
+    );
+    process.exit(2);
+  } else ids.push(a);
+}
+if (ids.length && (shot !== null || limitArg !== undefined)) {
+  console.error(
+    `give note IDs or --${shot !== null ? "shot N" : "limit N"}, not both (--help for more)`,
+  );
+  process.exit(2);
+}
+const limit = limitArg ?? DEFAULT_LIMIT;
+// a film, or at least a folder the studio has written notes into
+if (!existsSync(join(ROOT, "notes/notes.jsonl"))) needFilm(ROOT);
+const { notes, deleted } = loadNotes(archived);
+let pick;
+if (ids.length) {
+  // a note by its id or by the #N the list shows
+  const byKey = new Map(
+    notes.flatMap((n) => [
+      [n.id, n],
+      ...(n.n === null ? [] : [[`#${n.n}`, n], [String(n.n), n]]),
+    ]),
+  );
+  if (archived) for (const n of notes) byKey.set(n.id, n);
+  const unknown = ids.filter((id) => !byKey.has(id));
+  if (unknown.length) {
+    const none = [];
+    for (const id of unknown) {
+      const x = findNote(ROOT, id);
+      if (x?.gone && !archived) console.error(deletedSaid(x));
+      else none.push(id);
+    }
+    if (none.length)
+      console.error(
+        `no such note: ${none.join(", ")} (the ids: bun run notes, or --done for fixed ones too)`,
+      );
+    process.exit(2);
+  }
+  const want = new Set(ids.map((id) => byKey.get(id)));
+  pick = notes.filter((n) => want.has(n));
+} else {
+  pick = notes.filter((n) => archived || done || isOpen(n));
+  if (shot !== null) pick = pick.filter((n) => n.shot === shot);
+}
+// how many shots the film has, when its shots file says (a number past them is a typo, not a quiet shot)
+const shotCount = () => {
+  try {
+    const rel = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"))["live-studio"]
+      ?.shotsTimeline;
+    return rel ? JSON.parse(readFileSync(join(ROOT, rel), "utf8")).length : null;
+  } catch {
+    return null;
+  }
+};
+const ordered = pick.toSorted(SORT[sort].cmp);
+const hidden = !ids.length && limit > 0 ? ordered.slice(limit) : [];
+const shown = hidden.length ? ordered.slice(0, limit) : ordered;
+if (json) {
+  const rows = shown.map((n) => {
+    const { n: number, t: recordedTime, time: recordedTimecode, cam: camera, ...note } = n;
+    return {
+      ...note,
+      number,
+      state: noteState(n),
+      recordedTime,
+      recordedTimecode,
+      ...(camera && (cam || n.freeCam) ? { cam: camera } : {}),
+    };
+  });
+  await Bun.write(Bun.stdout, JSON.stringify({ notes: rows, total: ordered.length }) + "\n");
+  process.exit(0);
+}
+if (archived) {
+  const footer = hidden.length ? ` (showing ${shown.length}; use --limit 0 for all)` : "";
+  console.log(`${ordered.length} deleted notes${footer}. Restore one: bun run note restore ID`);
+  for (const note of shown) console.log(oneLine(note));
+  process.exit(0);
+}
 const lessonConfig = readLessonConfig(ROOT);
 const { learnPrompt } = noteLessonFormat({
   root: ROOT,
@@ -156,111 +279,12 @@ const formatDetail = noteDetailFormat({
 });
 const detail = (n, showCam, lessons) => console.log(formatDetail(n, showCam, lessons).join("\n"));
 
-const HELP = `The creator's notes from the studio, for the AI about to act on them. Run inside the film.
-  bun run notes                 the open notes, one line each, up to ${DEFAULT_LIMIT}, in the order written (#1 first)
-  bun run notes ID [ID ...]     everything about those notes (ID: the id, as mw6hr1fm, or the number, as 3 or #3): where
-                                they tapped, the words, the actions, the version, pictures, and the parts of
-                                ${hasProjectLessons ? `lessons/ (this film) and ${LESSONS_HERE}/ (every film), including nested .md folders,` : `${LESSONS_HERE}/ (including nested .md folders)`} Jev says the note needs — returning only file names and headings by line
-                                (read those files directly for full details)
-  bun run notes --shot 3        everything about one shot's open notes (up to ${DEFAULT_LIMIT})
-  --sort written|back|film|newest   order: written (#1 first, default), back (BACK TO YOU replies first),
-                                    film (second in the film), newest (latest #N first)
-  --limit N                     max notes printed (default ${DEFAULT_LIMIT}; 0 for all)
-  --done                        fixed notes too            --cam   the film camera's line too (a free-camera note
-                                                                   always prints the one it was seen through)
-A fixed note waits for the creator's check in the studio; their answer brings it back here with their words.
-Lessons > AI Inspector previews the shared inputs/output without API calls; Run Jev is a manual opt-in.
-Save writes notes/lessons-config.json (prompts, selection, output and CLI enable switch); matching results are cached.
-Answer one: bun run note done|ask|learned ID "words" (bun run note --help). Never edit notes.jsonl by hand.`;
-const validateSort = (mode) => {
-  if (!Object.hasOwn(SORT, mode)) {
-    console.error(
-      `unknown --sort ${JSON.stringify(mode)}: expected ${Object.keys(SORT).join(", ")}`,
-    );
-    process.exit(2);
-  }
-  return mode;
-};
-const args = cliArgs(HELP, ["--shot N", "--sort MODE", "--limit N", "--done", "--cam"]);
-let shot = null;
-let sort = "written";
-let limitArg;
-let done = false;
-let cam = false;
-const ids = [];
-for (let i = 0; i < args.length; i++) {
-  const a = args[i];
-  if (a === "--done") done = true;
-  else if (a === "--cam") cam = true;
-  else if (a === "--shot") shot = numberArg("--shot", args[++i], { min: 0, int: true });
-  else if (a === "--limit") limitArg = numberArg("--limit", args[++i], { min: 0, int: true });
-  else if (a === "--sort") sort = validateSort(args[++i]);
-  else if (a.startsWith("-")) {
-    console.error(
-      `unknown option ${a}: bun run notes [ID ... | --shot N] [--sort MODE] [--limit N] [--done] [--cam] (--help for more)`,
-    );
-    process.exit(2);
-  } else ids.push(a);
-}
-if (ids.length && (shot !== null || limitArg !== undefined)) {
-  console.error(
-    `give note IDs or --${shot !== null ? "shot N" : "limit N"}, not both (--help for more)`,
-  );
-  process.exit(2);
-}
-const limit = limitArg ?? DEFAULT_LIMIT;
-// a film, or at least a folder the studio has written notes into
-if (!existsSync(join(ROOT, "notes/notes.jsonl"))) needFilm(ROOT);
-const { notes, deleted } = loadNotes();
-let pick;
-if (ids.length) {
-  // a note by its id or by the #N the list shows
-  const byKey = new Map(
-    notes.flatMap((n) => [
-      [n.id, n],
-      [`#${n.n}`, n],
-      [String(n.n), n],
-    ]),
-  );
-  const unknown = ids.filter((id) => !byKey.has(id));
-  if (unknown.length) {
-    const none = [];
-    for (const id of unknown) {
-      const x = findNote(ROOT, id);
-      if (x?.gone) console.error(deletedSaid(x));
-      else none.push(id);
-    }
-    if (none.length)
-      console.error(
-        `no such note: ${none.join(", ")} (the ids: bun run notes, or --done for fixed ones too)`,
-      );
-    process.exit(2);
-  }
-  const want = new Set(ids.map((id) => byKey.get(id)));
-  pick = notes.filter((n) => want.has(n));
-} else {
-  pick = notes.filter((n) => done || isOpen(n));
-  if (shot !== null) pick = pick.filter((n) => n.shot === shot);
-}
-// how many shots the film has, when its shots file says (a number past them is a typo, not a quiet shot)
-const shotCount = () => {
-  try {
-    const rel = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"))["live-studio"]
-      ?.shotsTimeline;
-    return rel ? JSON.parse(readFileSync(join(ROOT, rel), "utf8")).length : null;
-  } catch {
-    return null;
-  }
-};
 if (shot !== null && !pick.length) {
   const count = shotCount();
   console.log(
     `no ${done ? "" : "open "}notes on shot ${shot}${done ? "" : ` (${notes.filter((n) => n.shot === shot && !isOpen(n)).length} fixed or done there: --done lists them too)`}${count !== null && shot >= count ? `; the film has shots 0-${count - 1}` : ""}`,
   );
 }
-const ordered = pick.toSorted(SORT[sort].cmp);
-const hidden = !ids.length && limit > 0 ? ordered.slice(limit) : [];
-const shown = hidden.length ? ordered.slice(0, limit) : ordered;
 if (ids.length || shot !== null) {
   // only here, where one note is read in full: the list stays one line a note, and Jev is paid only once a note's words change.
   // A note to remember too, answered or not: its rule joins the file Jev picks
