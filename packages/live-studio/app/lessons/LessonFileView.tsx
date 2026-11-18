@@ -9,7 +9,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,13 +68,8 @@ function findVisibleLine(scroller: HTMLElement | null): number {
   return active;
 }
 
-function scrollScrollerToLine(
-  scroller: HTMLElement | null,
-  line: number,
-  smooth: boolean,
-): () => void {
-  if (!scroller) return () => {};
-  const nodes = [...scroller.querySelectorAll<HTMLElement>("[data-line]")];
+function findLineNode(scroller: HTMLElement, line: number): HTMLElement | null {
+  const nodes = scroller.querySelectorAll<HTMLElement>("[data-line]");
   let target: HTMLElement | null = null;
   for (const el of nodes) {
     const n = Number(el.dataset.line);
@@ -85,7 +80,16 @@ function scrollScrollerToLine(
       break;
     }
   }
-  if (!target) return () => {};
+  return target;
+}
+
+function scrollScrollerToLine(
+  scroller: HTMLElement | null,
+  line: number,
+  smooth: boolean,
+): () => void {
+  const target = scroller && findLineNode(scroller, line);
+  if (!scroller || !target) return () => {};
   const top =
     target.getBoundingClientRect().top -
     scroller.getBoundingClientRect().top +
@@ -173,6 +177,17 @@ export function LessonFileView({
       });
     }
   }, [key, initialLine]);
+
+  useLayoutEffect(() => {
+    const scroller = readScroller.current;
+    if (!scroller || initialLine === null) return;
+    const marker = findLineNode(scroller, initialLine);
+    if (!marker) return;
+    marker.dataset.lessonSearchMatch = "";
+    return () => {
+      delete marker.dataset.lessonSearchMatch;
+    };
+  }, [effectiveView, initialLine, text]);
 
   const activeScroller = () =>
     effectiveView === "edit" ? editScroller.current : readScroller.current;
@@ -470,7 +485,7 @@ export function LessonFileView({
           <div
             ref={readScroller}
             onScroll={(e) => setActiveLine(findVisibleLine(e.currentTarget))}
-            className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3"
+            className="scroll-fade [&_[data-lesson-search-match]]:bg-primary/15 min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [&_[data-lesson-search-match]]:rounded-sm"
           >
             <LessonMarkdownView text={text} onJumpEdit={goTo} />
           </div>

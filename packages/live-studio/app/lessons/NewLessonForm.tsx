@@ -87,8 +87,8 @@ export function NewLessonForm({
           </Button>
         </div>
         <FieldDescription id={hintId}>
-          Use A–Z, numbers, hyphens or underscores. Use / between folders. Keep the path within{" "}
-          {LESSON_PATH_MAX} characters, including .md.
+          Use A–Z, numbers, hyphens or underscores. Use one slash between folders. Keep the path
+          within {LESSON_PATH_MAX} characters, including .md.
         </FieldDescription>
         {showErr && <FieldError id={errId}>{errMsg}</FieldError>}
       </Field>

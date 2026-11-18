@@ -81,7 +81,7 @@ export function App() {
         : !s.open && s.folder.length === 0
           ? null
           : s.open
-            ? Math.min(1040, Math.max(800, (s.folder.length + 1) * 192 + 384))
+            ? Math.min(1200, Math.max(800, (s.folder.length + 1) * 192 + 600))
             : Math.min(960, Math.max(540, (s.folder.length + 1) * 192 + 128)),
     );
   const { showLibrary, showDetails, showSideOnRight, wideAttr } = wideLayout({

@@ -401,7 +401,7 @@ function LessonDeckPanel({
         ? "Enter a lesson name after the slash."
         : "Enter a lesson name."
       : !LESSON_NAME.test(trimmed)
-        ? "Use unaccented letters and replace spaces with hyphens, as in craft/goc-may."
+        ? "Use A–Z, numbers, hyphens or underscores in each part. Separate folders with one slash, as in craft/camera."
         : !existingLesson && lessonPath(trimmed).length > LESSON_PATH_MAX
           ? `Shorten the path to ${LESSON_PATH_MAX} characters or fewer, including .md.`
           : null;

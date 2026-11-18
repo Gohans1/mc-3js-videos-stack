@@ -598,7 +598,7 @@ export function LessonColumnRow({
           <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span
               className={cn(
-                "text-foreground min-w-0 wrap-anywhere",
+                "text-foreground min-w-0 text-balance wrap-anywhere",
                 compact ? "text-sm/[1.4]" : "text-base/[1.4]",
                 isActive ? "font-semibold" : "font-medium",
               )}

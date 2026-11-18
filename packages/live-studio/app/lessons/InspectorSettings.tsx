@@ -27,7 +27,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
       {
         key: "extractMode",
         label: "Content to read",
-        help: "Headings keeps input short. Full text also sends the lesson body.",
+        help: "Reads headings and the metadata selected below. Full lesson text also includes the body.",
       },
       {
         key: "wordsLimit",
@@ -144,7 +144,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
       {
         key: "route",
         label: "Provider",
-        help: "Auto tries free OpenCode Zen first, then paid OpenRouter when needed.",
+        help: "Auto prefers free OpenCode Zen. Paid OpenRouter can go first if Zen is unavailable or out of quota.",
       },
       { key: "freeModel", label: "Free model ID", help: "Model sent to OpenCode Zen." },
       { key: "paidModel", label: "Paid model ID", help: "Model sent to OpenRouter." },
@@ -259,7 +259,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
 ];
 const options: Partial<Record<keyof LessonJevConfig, { value: string; label: string }[]>> = {
   extractMode: [
-    { value: "headers", label: "Headings only" },
+    { value: "headers", label: "Headings and metadata" },
     { value: "full", label: "Full lesson text" },
   ],
   frontmatterMode: [
@@ -268,7 +268,7 @@ const options: Partial<Record<keyof LessonJevConfig, { value: string; label: str
     { value: "none", label: "No metadata" },
   ],
   route: [
-    { value: "auto", label: "Auto · free, then paid" },
+    { value: "auto", label: "Auto · free preferred" },
     { value: "free", label: "Free only · OpenCode Zen" },
     { value: "paid", label: "Paid only · OpenRouter" },
   ],
@@ -291,6 +291,12 @@ export function inspectorSettingErrors(issues: readonly ZodIssue[]) {
             : issue.message;
   }
   return errors;
+}
+
+export function revealFocusedFieldError(message: HTMLElement | null) {
+  const describedBy = document.activeElement?.getAttribute("aria-describedby");
+  if (message && describedBy?.split(" ").includes(message.id))
+    message.scrollIntoView({ block: "nearest" });
 }
 
 export function InspectorSettings({
@@ -402,6 +408,7 @@ export function InspectorSettings({
                   )}
                   <p
                     id={descriptionId}
+                    ref={error ? revealFocusedFieldError : undefined}
                     role={error ? "alert" : undefined}
                     className={
                       error

@@ -95,6 +95,7 @@ export function InspectorPreview({
   runningJev,
   change,
   error,
+  validationError,
   failedRun,
 }: {
   hasNote: boolean;
@@ -108,13 +109,17 @@ export function InspectorPreview({
   runningJev: boolean;
   change: string;
   error: string;
+  validationError: string;
   failedRun: boolean;
 }) {
   const awaitingNote = view === "ai" && !hasNote;
   const requestPending = updating || runningJev;
   const showPrevious = requestPending || Boolean(error);
   const text = result && !awaitingNote ? inspectorPreviewText(result, view) : "";
-  const before = previous && !awaitingNote ? inspectorPreviewText(previous, view) : "";
+  const before =
+    previous && !awaitingNote && (view !== "ai" || previous.words.trim())
+      ? inspectorPreviewText(previous, view)
+      : "";
   const lines = useMemo(
     () => (before ? diffLines(before, text) : [{ value: text, added: false, removed: false }]),
     [before, text],
@@ -122,9 +127,7 @@ export function InspectorPreview({
   const changed = lines
     .filter((p) => p.added)
     .reduce((sum, p) => sum + p.value.trimEnd().split("\n").length, 0);
-  const removed = lines
-    .filter((p) => p.removed)
-    .reduce((sum, p) => sum + p.value.trimEnd().split("\n").length, 0);
+  const removed = lines.some((part) => part.removed);
   const scroller = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const parent = scroller.current,
@@ -179,7 +182,7 @@ export function InspectorPreview({
               Extracted lessons
             </ToggleGroupItem>
           </ToggleGroup>
-          <div className="sideways:min-w-32 upright:min-w-32 flex min-w-[min(100%,8rem)] flex-1 items-center justify-end gap-2">
+          <div className="sideways:min-w-32 upright:min-w-32 flex min-w-[min(100%,13.5rem)] flex-1 items-center justify-end gap-2">
             <Select
               value={view === "ai" || view === "lessons" ? null : view}
               items={details}
@@ -189,8 +192,8 @@ export function InspectorPreview({
             >
               <SelectTrigger
                 size="readable"
-                aria-label="Detailed preview"
-                className="max-w-40 min-w-0 flex-1"
+                aria-label="More views"
+                className="max-w-44 min-w-0 flex-1"
               >
                 <SelectValue placeholder="More views" />
               </SelectTrigger>
@@ -224,6 +227,8 @@ export function InspectorPreview({
             {error ? (
               failedRun ? (
                 "Jev run failed"
+              ) : validationError ? (
+                `Preview paused · ${validationError}`
               ) : (
                 "Preview paused"
               )
@@ -239,15 +244,12 @@ export function InspectorPreview({
               "Add a note to preview"
             ) : result ? (
               <>
-                {previous && <span className="sr-only">{change + ". "}</span>}
-                {changed || removed ? (
-                  <>
-                    <span className="text-ok-text">{changed} added</span>
-                    {removed > 0 && (
-                      <span className="text-destructive-text">{" · " + removed + " removed"}</span>
-                    )}
-                  </>
-                ) : previous ? (
+                {before && <span className="sr-only">{change + ". "}</span>}
+                {changed > 0 ? (
+                  <span className="text-ok-text">{changed} added</span>
+                ) : removed ? (
+                  "Preview updated"
+                ) : before ? (
                   "Output unchanged"
                 ) : (
                   "Preview ready"

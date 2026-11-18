@@ -42,7 +42,11 @@ import { useStudio } from "../core/store";
 import { useInspectorSession } from "./inspector-session";
 import type { InspectNote, InspectorInfo, InspectorView, InspectResult } from "./inspector-types";
 import { InspectorCode, InspectorPreview } from "./InspectorPreview";
-import { inspectorSettingErrors, InspectorSettings } from "./InspectorSettings";
+import {
+  inspectorSettingErrors,
+  InspectorSettings,
+  revealFocusedFieldError,
+} from "./InspectorSettings";
 import { JevSafetyBanner } from "./JevSafetyBanner";
 import { SCOPE_LABEL } from "./lesson-ui";
 import { lessons, parseLessonKey, useLessons } from "./lessons";
@@ -362,7 +366,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
             </JevSafetyBanner>
           </div>
           <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-6 p-4">
-            {(validationError || error || runError || saveError) && (
+            {(runError || saveError || (!validationError && error)) && (
               <Alert variant="destructive">
                 <AlertTitle>
                   {runError
@@ -372,29 +376,24 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                       : "Preview needs attention"}
                 </AlertTitle>
                 <AlertDescription>
-                  {runError || saveError || validationError || error}
-                  {(runError || saveError || configError || (!validationError && error)) && (
-                    <div className="flex flex-wrap gap-2">
-                      {(runError || saveError || (!validationError && error)) && (
-                        <Button
-                          size="md"
-                          variant="outline"
-                          disabled={
-                            busy ||
-                            (Boolean(runError) &&
-                              (!enabled || Boolean(validationError) || Boolean(reason))) ||
-                            (Boolean(saveError) && (saving || !valid.success || !info))
-                          }
-                          onClick={() =>
-                            runError ? void run() : saveError ? void save() : setRetry((v) => v + 1)
-                          }
-                        >
-                          {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
-                        </Button>
-                      )}
-                      {configError && <ResetSettingsDialog onReset={resetConfig} />}
-                    </div>
-                  )}
+                  {runError || saveError || error}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="md"
+                      variant="outline"
+                      disabled={
+                        busy ||
+                        (Boolean(runError) &&
+                          (!enabled || Boolean(validationError) || Boolean(reason))) ||
+                        (Boolean(saveError) && (saving || !valid.success || !info))
+                      }
+                      onClick={() =>
+                        runError ? void run() : saveError ? void save() : setRetry((v) => v + 1)
+                      }
+                    >
+                      {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
+                    </Button>
+                  </div>
                 </AlertDescription>
               </Alert>
             )}
@@ -451,7 +450,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                       onChange={(e) => changeNote({ ...note, text: e.target.value })}
                       placeholder="The face is too small. Move the camera closer."
                     />
-                    {noteError && <FieldError id="inspect-note-error">{noteError}</FieldError>}
+                    {noteError && (
+                      <FieldError id="inspect-note-error" ref={revealFocusedFieldError}>
+                        {noteError}
+                      </FieldError>
+                    )}
                   </Field>
                   <details>
                     <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2">
@@ -480,7 +483,9 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                         }
                       />
                       {repliesError && (
-                        <FieldError id="inspect-replies-error">{repliesError}</FieldError>
+                        <FieldError id="inspect-replies-error" ref={revealFocusedFieldError}>
+                          {repliesError}
+                        </FieldError>
                       )}
                     </Field>
                   </details>
@@ -597,9 +602,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
               </section>
               <details className="group/advanced border-border border-t pt-3">
                 <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-2 font-medium outline-none focus-visible:ring-2">
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                     <Settings2 className="size-4" aria-hidden />
                     Advanced settings
+                    {configError && <span className="text-destructive-text">· Check fields</span>}
                   </span>
                   <ChevronDown className="size-4 group-open/advanced:rotate-180" aria-hidden />
                 </summary>
@@ -679,6 +685,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
           runningJev={busy}
           change={change}
           error={validationError || runError || error}
+          validationError={validationError}
           failedRun={Boolean(runError)}
         />
       </div>
