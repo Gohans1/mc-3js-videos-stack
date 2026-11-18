@@ -405,7 +405,7 @@ describe("LessonsPanel rendered component behavior", () => {
     assert.match(validHtml, /value="craft\/"/);
     assert.match(validHtml, /role="radio"[^>]*aria-checked="true"[^>]*>This film</);
     assert.match(validHtml, /role="radio"[^>]*aria-checked="false"[^>]*>Every film</);
-    assert.match(validHtml, />Use letters, numbers, hyphens or underscores\./);
+    assert.match(validHtml, />Use A–Z, numbers, hyphens or underscores\./);
     assert.match(validHtml, />Create</);
     assert.doesNotMatch(validHtml, /role="alert"/);
 

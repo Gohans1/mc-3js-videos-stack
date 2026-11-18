@@ -27,14 +27,14 @@ export function InspectorCode({ children }: { children: string }) {
 }
 const details = [
   { value: "prompt", label: "Prompts" },
-  { value: "learn", label: "Learn" },
+  { value: "learn", label: "Remember prompt" },
   { value: "requests", label: "Requests" },
   { value: "trace", label: "Run trace" },
   { value: "metadata", label: "Metadata" },
 ];
 const titles: Record<InspectorView, string> = {
   ai: "What the AI receives",
-  lessons: "What Jev reads from Deck",
+  lessons: "Extracted lesson text",
   prompt: "Assembled Jev prompts",
   learn: "Instruction for remembering a rule",
   requests: "Prepared requests",
@@ -172,7 +172,7 @@ export function InspectorPreview({
               Note for AI
             </ToggleGroupItem>
             <ToggleGroupItem value="lessons" tone="source">
-              Jev input
+              Extracted lessons
             </ToggleGroupItem>
           </ToggleGroup>
           <div className="sideways:min-w-32 upright:min-w-32 flex min-w-[min(100%,8rem)] flex-1 items-center justify-end gap-2">
@@ -277,15 +277,22 @@ export function InspectorPreview({
             {text
               ? lines
                   .filter((part) => !part.removed)
-                  .map((part, i) => (
-                    <span
-                      key={i}
-                      data-changed={part.added || undefined}
-                      className={cn("rounded-sm", part.added && "bg-ok/20 text-foreground")}
-                    >
-                      {part.value}
-                    </span>
-                  ))
+                  .map((part, i) =>
+                    part.added ? (
+                      <span key={i} data-changed className="bg-ok/20 text-foreground rounded-sm">
+                        {part.value.split(/(?<=\n)/).map((line, index) => (
+                          <span key={index}>
+                            <span aria-hidden className="text-ok-text select-none">
+                              +{" "}
+                            </span>
+                            {line}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span key={i}>{part.value}</span>
+                    ),
+                  )
               : allFilesExcluded
                 ? "Every lesson file in this scope is excluded. Select Include all in scope or reselect files."
                 : "No lesson files in this scope. Choose another scope or add lessons in Deck."}
@@ -310,7 +317,7 @@ export function InspectorPreview({
             ? "Live result"
             : result?.status === "cached"
               ? "Cached result · no call"
-              : "Preview · no API call"}
+              : "Preview · no Jev call"}
         </span>
       </div>
     </section>

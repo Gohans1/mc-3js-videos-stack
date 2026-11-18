@@ -610,10 +610,13 @@ export function LessonColumnRow({
             </Badge>
           </span>
           {!compact && (
-            <span className="text-muted-foreground text-ui/[1.4] mt-0.5 block truncate tabular-nums">
+            <span className="text-label text-ui/[1.4] mt-0.5 block truncate tabular-nums">
               {heads.length} {heads.length === 1 ? "section" : "sections"}
               {rules > 0 && ` · ${rules} ${rules === 1 ? "rule" : "rules"}`}
             </span>
+          )}
+          {entry.isChanged && (
+            <span className="text-primary-text mt-0.5 block text-xs">Updated</span>
           )}
           {entry.isDraft && <span className="text-warn-text mt-0.5 block text-xs">Draft</span>}
           {matchMeta?.snippet && (
@@ -622,12 +625,6 @@ export function LessonColumnRow({
             </span>
           )}
         </span>
-        {entry.isChanged && (
-          <span className="text-primary-text text-ui flex flex-none items-center gap-1 font-medium">
-            <span aria-hidden className="bg-primary size-1.5 rounded-full" />
-            <span className={compact ? "sr-only" : undefined}>Updated</span>
-          </span>
-        )}
         <ChevronRight
           aria-hidden
           className={cn("size-3.5 flex-none", isActive ? "text-primary" : "text-muted-foreground")}

@@ -200,9 +200,9 @@ test("external lesson edits refresh the dry Inspector even when note and drafts 
     view.evaluate(`new Promise((resolve,reject) => {
     const start=Date.now(); const tick=()=>{if(document.body.textContent.includes(${JSON.stringify(text)})) return resolve(true); if(Date.now()-start>12000) return reject(new Error("Missing preview: " + ${JSON.stringify(text)})); setTimeout(tick,20);}; tick();
   })`);
-  await wait("Jev input");
+  await wait("Extracted lessons");
   await view.evaluate(
-    "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Jev input').click()",
+    "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Extracted lessons').click()",
   );
   await wait("lessons/camera.md: # Camera");
   writeFileSync(join(root, "lessons/camera.md"), "# External camera edit");
@@ -251,7 +251,7 @@ test("mounted Inspector keeps previews free, runs only after opt-in, reacts to l
   await view.evaluate(
     "window.inspectTest.lessons.setState({ edits: { 'all:camera.md': { text: '# Handheld', base: '1' } } })",
   );
-  await click("Jev input");
+  await click("Extracted lessons");
   await wait("document.body.textContent.includes('lessons/camera.md: # Handheld')");
   const layout = await view.evaluate(`(() => {
     const controls=document.querySelector('[data-inspector-controls]');

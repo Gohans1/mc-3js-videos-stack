@@ -16,12 +16,12 @@ export function LessonChanges({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-none px-3 pt-2 pb-2">
-        <div className="mx-auto flex w-full max-w-[42rem] items-center gap-2">
+        <div className="mx-auto flex w-full max-w-[42rem] flex-wrap items-center gap-2">
           <span className="text-muted-foreground flex-1 text-sm">
             Latest file changes (already applied)
           </span>
           <Button variant="ghost" size="sm" onClick={onRead}>
-            Clear diff
+            Mark as read
           </Button>
         </div>
       </div>

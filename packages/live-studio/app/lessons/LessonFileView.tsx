@@ -1,4 +1,13 @@
-import { ArrowDown, ArrowUp, ChevronLeft, Eye, GitCompare, ListTree, Pencil } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronLeft,
+  Eye,
+  GitCompare,
+  ListTree,
+  Pencil,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -343,12 +352,24 @@ export function LessonFileView({
                     aria-current={active ? "true" : undefined}
                     onClick={(e) => flyToHeading(h.line, e.detail > 0)}
                     className={cn(
-                      "hover:bg-muted focus-visible:ring-ring studio-press flex w-full items-start gap-2 rounded-sm border-s-2 border-transparent py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.35] outline-none focus-visible:ring-2",
-                      active && "bg-primary/12 border-primary",
+                      "hover:bg-muted focus-visible:ring-ring studio-press relative flex w-full items-start gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.35] outline-none focus-visible:ring-2",
+                      active && "bg-primary/12",
                     )}
-                    style={{ "--indent": `${8 + (h.depth - 1) * 10}px` }}
+                    style={{ "--indent": `${26 + (h.depth - 1) * 10}px` }}
                   >
-                    <span className={cn("min-w-0 flex-1 font-medium wrap-anywhere", HEAD[h.depth])}>
+                    {active && (
+                      <Check
+                        aria-hidden
+                        className="text-primary-text absolute start-2 top-2 size-3.5"
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 wrap-anywhere",
+                        active ? "font-semibold" : "font-medium",
+                        HEAD[h.depth],
+                      )}
+                    >
                       {h.title}
                     </span>
                     {h.bullets > 0 && (
@@ -356,7 +377,7 @@ export function LessonFileView({
                         {h.bullets}
                       </span>
                     )}
-                    <span className="text-muted-foreground text-xs tabular-nums">{h.line}</span>
+                    <span className="text-label text-xs tabular-nums">{h.line}</span>
                   </button>
                 );
               })}
@@ -423,7 +444,7 @@ export function LessonFileView({
               <pre
                 ref={painted}
                 aria-hidden
-                className={cn(TEXT, "text-foreground/90 col-start-1 row-start-1 m-0")}
+                className={cn(TEXT, "text-foreground col-start-1 row-start-1 m-0")}
               >
                 {lines.map((l, i) => (
                   <span

@@ -379,7 +379,7 @@ function LessonDeckPanel({
   const errMsg = !trimmed
     ? "Enter a lesson name."
     : !LESSON_NAME.test(trimmed)
-      ? "Use a name like camera/framing."
+      ? "Use unaccented letters and replace spaces with hyphens, as in craft/goc-may."
       : !existingLesson && lessonPath(trimmed).length > LESSON_PATH_MAX
         ? `Shorten the path to ${LESSON_PATH_MAX} characters or fewer, including .md.`
         : null;

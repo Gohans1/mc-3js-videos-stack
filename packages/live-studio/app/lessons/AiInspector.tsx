@@ -519,9 +519,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                   <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2">
                     Lesson files · {includedCount} of {scopedFiles.length} included
                   </summary>
-                  <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
-                    Uncheck files to omit them from previews and Jev runs.
-                  </p>
+                  {scopedFiles.length > 0 && (
+                    <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
+                      Uncheck files to omit them from previews and Jev runs.
+                    </p>
+                  )}
                   {scopedFiles.length === 0 && (
                     <p className="text-muted-foreground text-sm/relaxed">
                       Add lessons in Deck or choose another scope.

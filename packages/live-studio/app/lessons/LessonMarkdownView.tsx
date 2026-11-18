@@ -111,7 +111,7 @@ export function LessonMarkdownView({
     );
   }
   return (
-    <article className="font-md text-foreground/95 mx-auto flex w-full max-w-[42rem] flex-col gap-3.5 text-base/[1.6]">
+    <article className="font-md text-foreground mx-auto flex w-full max-w-[42rem] flex-col gap-3.5 text-base/[1.6]">
       {blocks.map((b) => {
         if (b.type === "heading")
           return <HeadingBlock key={b.line} block={b} onJumpEdit={onJumpEdit} />;
@@ -126,7 +126,7 @@ export function LessonMarkdownView({
             <blockquote
               key={b.line}
               data-line={b.line}
-              className="border-primary/50 bg-card/60 text-muted-foreground rounded-r-md border-l-2 py-2 pr-3.5 pl-3.5 text-pretty italic"
+              className="border-hairline-strong bg-card/60 text-label rounded-e-md border-s px-3.5 py-2 text-pretty italic"
             >
               <RenderInlines tokens={b.inlines} />
             </blockquote>
