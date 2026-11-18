@@ -174,13 +174,11 @@ test.each([1920, 960])(
     const list=document.querySelector('[aria-label="${label}"]');
     return [...list.querySelectorAll('[role=tab]')].map(tab=>({text:tab.textContent.trim(),disabled:tab.disabled}));
   })()`);
-    const audio = tabs.findIndex((tab) => tab.text === "Audio");
-    expect(audio).toBeGreaterThanOrEqual(0);
-    expect(tabs.slice(audio)).toEqual(
-      (width >= 1280
-        ? ["Audio", "Text", "Objects", "Transitions", "Adjustment"]
-        : ["Audio", "Text", "Objects", "Keyframes", "Transitions", "Camera"]
-      ).map((text) => ({ text, disabled: true })),
+    const editingTabs = width >= 1280
+      ? ["Audio", "Text", "Effects", "Objects", "Transitions", "Adjustment"]
+      : ["Audio", "Text", "Effects", "Objects", "Keyframes", "Transitions", "Camera"];
+    expect(tabs.filter((tab) => editingTabs.includes(tab.text))).toEqual(
+      editingTabs.map((text) => ({ text, disabled: text !== "Effects" })),
     );
   },
 );
