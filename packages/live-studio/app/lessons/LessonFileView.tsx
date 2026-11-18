@@ -8,7 +8,7 @@ import {
   ListTree,
   Pencil,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { useLitAny } from "../activity/activity";
 import { SaveStatus, Segmented } from "../components/inspector";
 import { lessonChanges } from "./changes";
-import { ConfirmDeleteButton, HEAD, SCOPE_LABEL, TEXT } from "./lesson-ui";
+import { ConfirmDeleteButton, SCOPE_LABEL, TEXT } from "./lesson-ui";
 import { LessonChanges } from "./LessonChanges";
 import { LessonMarkdownView } from "./LessonMarkdownView";
 import {
@@ -89,14 +89,12 @@ function scrollScrollerToLine(
 /** Reader, painted live editor, Contents navigator, and AI word-diff sheet for one lesson file. */
 export function LessonFileView({
   path: key,
-  depthPill,
   initialLine,
   showBack = false,
   onBack = () => openLesson(null),
   onDelete,
 }: {
   path: string;
-  depthPill?: string;
   initialLine: number | null;
   showBack?: boolean;
   onBack?: (animate: boolean) => void;
@@ -139,7 +137,7 @@ export function LessonFileView({
     const end = lines.findIndex((l, i) => i > 0 && /^(?:---|\.\.\.)\s*$/.test(l));
     return end === -1 ? 0 : end + 1;
   }, [lines]);
-  const depthAt = useMemo(() => new Map(heads.map((h) => [h.line, h.depth])), [heads]);
+  const headingLines = useMemo(() => new Set(heads.map((heading) => heading.line)), [heads]);
   const activeHeadLine = useMemo(() => findActiveHeading(heads, activeLine), [heads, activeLine]);
 
   // Clean up any running flyTo scroll animation on unmount or file switch
@@ -285,13 +283,17 @@ export function LessonFileView({
         )}
         <div className="min-w-24 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-            {depthPill && (
-              <span className="bg-muted text-muted-foreground flex-none rounded px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums">
-                {depthPill}
-              </span>
-            )}
             <span className="text-foreground min-w-0 text-base/[1.4] font-semibold wrap-anywhere">
-              {displayPath}
+              {displayPath.split("/").map((segment, index) => (
+                <Fragment key={index}>
+                  {index > 0 && (
+                    <>
+                      /<wbr />
+                    </>
+                  )}
+                  {segment}
+                </Fragment>
+              ))}
             </span>
             <Badge variant={scope === "film" ? "lessonFilm" : "lessonAll"} className="flex-none">
               {SCOPE_LABEL[scope]}
@@ -365,9 +367,8 @@ export function LessonFileView({
                     )}
                     <span
                       className={cn(
-                        "min-w-0 flex-1 wrap-anywhere",
+                        "text-popover-foreground min-w-0 flex-1 wrap-anywhere",
                         active ? "font-semibold" : "font-medium",
-                        HEAD[h.depth],
                       )}
                     >
                       {h.title}
@@ -452,7 +453,7 @@ export function LessonFileView({
                     data-line={i + 1}
                     className={cn(
                       i < frontEnd && "text-muted-foreground",
-                      depthAt.has(i + 1) && HEAD[depthAt.get(i + 1)!],
+                      headingLines.has(i + 1) && "text-lesson-heading",
                     )}
                   >
                     {l}

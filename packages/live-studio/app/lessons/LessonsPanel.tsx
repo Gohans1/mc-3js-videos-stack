@@ -592,7 +592,6 @@ function LessonDeckPanel({
           <LessonFileView
             key={activeOpen}
             path={activeOpen}
-            depthPill={layout.showAncestors ? `L${contentDepth}` : undefined}
             initialLine={initialLine}
             showBack={layout.showAncestors}
             onBack={closeLesson}

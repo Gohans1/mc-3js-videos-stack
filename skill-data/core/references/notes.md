@@ -32,7 +32,9 @@ A reopened note tags its index line (`[back to you]` or `[back to you: reworded]
 
 ## Lessons: what a note teaches
 
-Lessons > AI Inspector dùng lessons thật từ Deck để xem đầu vào, payload Jev và phần note CLI; bỏ chọn file chỉ loại tạm khỏi preview, chọn lại để khôi phục. Preview miễn phí, chỉ Run Jev sau khi bật quyền mới gọi API; Save lưu cấu hình tại notes/lessons-config.json, tắt Allow Jev from the notes CLI để CLI chỉ dùng cache.
+Trong Lessons > AI Inspector, Note for AI hiển thị phần note gửi cho AI, Extracted lessons hiển thị nội dung trích từ Deck và More views mở payload Jev. Preview miễn phí, chọn lại file để khôi phục file đã loại tạm.
+
+Bật Jev calls rồi bấm Run Jev để gửi yêu cầu (tuyến trả phí có thể tính tiền). Save CLI settings lưu cấu hình vào notes/lessons-config.json, tắt Allow Jev from the notes CLI để CLI chỉ dùng cache.
 
 `bun run notes ID` names the files in both this film's `lessons/` and the repo root's `../../lessons/` (every film's, including nested `.md` subfolders) that Jev picks for the note's words and the creator's answers, each with its headings by line: open the lines you need. When the creator asks to remember a note (Remember: this film, or every film), keep the rule where it lasts: in code if it can be (a default, or a check that fails), else in the film's `src` or `lessons/<topic>.md` for this film, and `../../lessons/<topic>.md` for every film (nested `folder/file.md` names using letters, digits, `-` and `_` appear in the studio too). Jev mặc định đọc đường dẫn, frontmatter và heading; Inspector cho đổi nội dung được đọc. Then `bun run note learned ID "the rule, where"`; the creator sees it on the note.
 

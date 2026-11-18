@@ -444,6 +444,38 @@ test("an oversized preview note keeps its text and identifies the field to short
   );
 });
 
+test("resetting Inspector settings confirms before discarding a draft and leaves the CLI save intact", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  const promptField = await view.evaluate(`(()=>{
+    for(const name of ['Advanced settings','Prompts for Jev'])
+      [...document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes(name)).open=true;
+    const label=[...document.querySelectorAll('label')].find(l=>l.textContent==='Extra instructions');
+    const field=document.getElementById(label.htmlFor);
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'Keep this unsaved direction');
+    field.dispatchEvent(new Event('input',{bubbles:true}));
+    return field.id;
+  })()`);
+  const promptValue = `document.getElementById(${JSON.stringify(promptField)}).value`;
+  const savedValue = "window.inspectTest.session.getState().saved";
+  const savedBefore = await view.evaluate(savedValue);
+  await clickButton("Reset defaults");
+  await waitFor(
+    "document.querySelector('[role=dialog]')?.textContent.includes('discards unsaved edits')",
+  );
+  expect(await view.evaluate(promptValue)).toBe("Keep this unsaved direction");
+  await clickButton("Cancel");
+  await waitFor("!document.querySelector('[role=dialog]')");
+  expect(await view.evaluate(promptValue)).toBe("Keep this unsaved direction");
+  await clickButton("Reset defaults");
+  await waitFor("document.querySelector('[role=dialog]')");
+  await view.evaluate(
+    "[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent.trim()==='Reset defaults').click()",
+  );
+  await waitFor(`${promptValue} === ''`);
+  expect(await view.evaluate(savedValue)).toBe(savedBefore);
+});
+
 test("a failed manual run stays visible until an explicit retry and a successful run remains live", async () => {
   const callsBefore = paidCalls;
   await navigateFixture();

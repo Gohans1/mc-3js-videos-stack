@@ -48,7 +48,9 @@ import { SCOPE_LABEL } from "./lesson-ui";
 import { lessons, parseLessonKey, useLessons } from "./lessons";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await fetch(url, init).catch((cause) => {
+    throw new Error("Could not reach Studio. Check the connection and try again.", { cause });
+  });
   const body = await response.json();
   if (!response.ok)
     throw new Error(
@@ -174,6 +176,8 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     setView(nextView);
     setChange(label + " changed");
   };
+  const resetConfig = () =>
+    changeConfig(DEFAULT_LESSON_JEV_CONFIG, "enabled", "Default settings", "ai");
   const includeFile = (key: string, included: boolean) => {
     useInspectorSession.setState({
       excluded: included ? excluded.filter((x) => x !== key) : [...excluded, key],
@@ -295,13 +299,23 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       setSaving(false);
     }
   };
-  const reason = !note.text.trim()
-    ? "Write a note."
-    : updating
-      ? "Updating…"
-      : !received?.value.pool.length
-        ? "Add lessons."
+  const missingLessons = !files.length
+    ? "Add a lesson in Deck."
+    : !scopedFiles.length
+      ? "Choose a scope with lessons."
+      : !includedCount
+        ? "Include a lesson file."
         : "";
+  const reason = validationError
+    ? "Check the highlighted fields."
+    : !note.text.trim()
+      ? "Write a note."
+      : missingLessons ||
+        (updating
+          ? "Updating preview…"
+          : !received?.value.pool.length
+            ? "No lesson files available."
+            : "");
   const noteOptions = [
     { value: "simulation", label: "Write a preview note" },
     ...availableNotes.map((n) => ({ value: n.id ?? "", label: n.text })),
@@ -377,22 +391,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                           {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
                         </Button>
                       )}
-                      {configError && (
-                        <Button
-                          size="md"
-                          variant="outline"
-                          onClick={() =>
-                            changeConfig(
-                              DEFAULT_LESSON_JEV_CONFIG,
-                              "enabled",
-                              "Default settings",
-                              "ai",
-                            )
-                          }
-                        >
-                          Reset defaults
-                        </Button>
-                      )}
+                      {configError && <ResetSettingsDialog onReset={resetConfig} />}
                     </div>
                   )}
                 </AlertDescription>
@@ -605,15 +604,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 </p>
                 <InspectorSettings config={config} onChange={changeConfig} errors={fieldErrors} />
                 <div className="mt-6 flex flex-wrap gap-2">
-                  <Button
-                    size="md"
-                    variant="outline"
-                    onClick={() =>
-                      changeConfig(DEFAULT_LESSON_JEV_CONFIG, "enabled", "Default settings", "ai")
-                    }
-                  >
-                    Reset defaults
-                  </Button>
+                  <ResetSettingsDialog onReset={resetConfig} />
                   <Dialog>
                     <DialogTrigger render={<Button size="md" variant="ghost" />}>
                       Clear Inspector cache
@@ -687,5 +678,26 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         />
       </div>
     </div>
+  );
+}
+
+function ResetSettingsDialog({ onReset }: { onReset: () => void }) {
+  return (
+    <Dialog>
+      <DialogTrigger render={<Button size="md" variant="outline" />}>Reset defaults</DialogTrigger>
+      <DialogContent showCloseButton={false}>
+        <DialogTitle>Reset Inspector settings?</DialogTitle>
+        <DialogDescription>
+          Reset replaces the current settings and discards unsaved edits. Select Save CLI settings
+          to apply the defaults to the notes CLI.
+        </DialogDescription>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+          <DialogClose render={<Button variant="destructive" />} onClick={onReset}>
+            Reset defaults
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

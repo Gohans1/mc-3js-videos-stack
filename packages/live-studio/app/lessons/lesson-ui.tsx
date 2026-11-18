@@ -26,17 +26,6 @@ export function downloadLessonDrafts(drafts: readonly RecoverableLessonDraft[]) 
 
 export const SCOPE_LABEL: Record<LessonScope, string> = { film: "This film", all: "Every film" };
 
-// md-phone's heading colours, one per level (index.css --color-md-h*)
-export const HEAD = [
-  "",
-  "text-md-h1",
-  "text-md-h2",
-  "text-md-h3",
-  "text-md-h4",
-  "text-md-h5",
-  "text-md-h6",
-];
-
 export const TEXT = "font-md text-base/[1.6] whitespace-pre-wrap wrap-anywhere [tab-size:4] p-3";
 
 /** Wires outside-pointer, outside-focus, Escape, and idle timeout dismissal while keeping mouse blur (dropClickFocus) safe. */

@@ -440,7 +440,6 @@ describe("LessonsPanel rendered component behavior", () => {
     const html = renderToStaticMarkup(
       createElement(fileViewMod.LessonFileView, {
         path: "film:craft/walk.md",
-        depthPill: "L2",
         initialLine: null,
         onDelete: () => {},
       }),

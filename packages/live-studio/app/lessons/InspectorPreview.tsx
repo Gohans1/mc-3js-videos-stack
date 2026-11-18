@@ -112,7 +112,7 @@ export function InspectorPreview({
 }) {
   const awaitingNote = view === "ai" && !hasNote;
   const requestPending = updating || runningJev;
-  const showPrevious = runningJev || failedRun;
+  const showPrevious = requestPending || Boolean(error);
   const text = result && !awaitingNote ? inspectorPreviewText(result, view) : "";
   const before = previous && !awaitingNote ? inspectorPreviewText(previous, view) : "";
   const lines = useMemo(
