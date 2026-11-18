@@ -529,7 +529,10 @@ function LessonDeckPanel({
 
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       const rows = [...colEl.querySelectorAll<HTMLButtonElement>("button[data-lesson-row]")];
-      const current = target.closest<HTMLButtonElement>("button[data-lesson-row]");
+      const current =
+        target instanceof HTMLLIElement
+          ? target.querySelector<HTMLButtonElement>("button[data-lesson-row]")
+          : target.closest<HTMLButtonElement>("button[data-lesson-row]");
       const idx = current ? rows.indexOf(current) : -1;
       if (idx === -1) return;
       e.preventDefault();

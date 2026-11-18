@@ -730,6 +730,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       await frame();
       const listItemFocused = document.activeElement.matches("li") &&
         document.activeElement.querySelector('[data-lesson-row="file:all:camera.md"]') !== null;
+      document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key:"ArrowDown", bubbles:true }));
+      const arrowTarget = document.activeElement.dataset.lessonRow;
       const overlay = document.querySelector("div[style*='z-index: 45']");
       const ghost = overlay.querySelector('[data-lesson-motion-key="all:camera.md"]');
       const fade = ghost.getAnimations()[0];
@@ -748,6 +750,7 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
         visibleGhostControls,
         contentsKeptFocus,
         listItemFocused,
+        arrowTarget,
         readerFocused: document.activeElement === reopened,
         oldGhostMounted: ghost.isConnected,
       };
@@ -758,6 +761,7 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.equal(result.visibleGhostControls, 0);
     assert.equal(result.contentsKeptFocus, true);
     assert.equal(result.listItemFocused, true);
+    assert.equal(result.arrowTarget, "file:all:timing.md");
     assert.equal(result.readerFocused, true);
     assert.equal(result.oldGhostMounted, false);
   });

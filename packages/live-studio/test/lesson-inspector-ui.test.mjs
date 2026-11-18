@@ -572,8 +572,23 @@ test("a failed manual run stays visible until an explicit retry and a successful
     expect(
       await view.evaluate("document.querySelector('[data-inspector-controls]').textContent"),
     ).not.toContain("The provider may still charge");
+    expect(
+      await view.evaluate(
+        "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Run Jev').disabled",
+      ),
+    ).toBe(true);
+    await clickButton("Review Provider & billing");
+    expect(await view.evaluate("document.activeElement.id")).toEndWith("-spendCap");
+    await view.evaluate(`(() => {
+      const input=document.activeElement;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'0.07');
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+    })()`);
     judgeFailure = "";
-    await clickButton("Retry Jev");
+    await waitFor(
+      "[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Run Jev'&&!b.disabled)",
+    );
+    await clickButton("Run Jev");
     await waitFor("document.body.textContent.includes('Live result')");
     await view.evaluate("new Promise(r=>setTimeout(r,900))");
     expect(await view.evaluate("document.body.textContent.includes('Live result')")).toBe(true);
@@ -581,6 +596,25 @@ test("a failed manual run stays visible until an explicit retry and a successful
   } finally {
     judgeFailure = "";
   }
+});
+
+test("a failed lesson list load offers recovery without claiming there are no lessons", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  await fillNote("Camera framing");
+  await waitFor("document.body.textContent.includes('Files: 1')");
+  await view.evaluate(
+    "window.inspectTest.lessons.setState({files:[],loaded:false,loadFailed:true,inspectorLiveEnabled:true})",
+  );
+  await waitFor("document.body.textContent.includes('Could not load lesson files.')");
+  const controls = await view.evaluate(
+    "document.querySelector('[data-inspector-controls]').textContent",
+  );
+  expect(controls).toContain("Retry loading lesson files.");
+  expect(controls).not.toContain("Add a lesson in Deck.");
+  expect(controls).not.toContain("0 of 0 included");
+  await clickButton("Retry loading lessons");
+  await waitFor("document.body.textContent.includes('Lesson files · 1 of 1 included')");
 });
 
 test("cold settings stay locked until the genuine initial response arrives", async () => {

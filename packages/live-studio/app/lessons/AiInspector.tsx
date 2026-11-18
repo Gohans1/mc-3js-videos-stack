@@ -49,7 +49,7 @@ import {
 } from "./InspectorSettings";
 import { JevSafetyBanner } from "./JevSafetyBanner";
 import { SCOPE_LABEL } from "./lesson-ui";
-import { lessons, parseLessonKey, useLessons } from "./lessons";
+import { lessons, loadLessons, parseLessonKey, useLessons } from "./lessons";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init).catch((cause) => {
@@ -78,10 +78,10 @@ const scopes = [
   { value: "film", label: SCOPE_LABEL.film },
   { value: "all", label: SCOPE_LABEL.all },
 ];
-type RequestFailure = { key: string; message: string };
+type RequestFailure = { key: string; message: string; chargeReported?: boolean };
 
 export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDeck: () => void }) {
-  const { files, edits, inspectorLiveEnabled } = useLessons((s) => s);
+  const { files, edits, loaded, loadFailed, inspectorLiveEnabled } = useLessons((s) => s);
   const liveNotes = useStudio((s) => s.notes),
     ready = useStudio((s) => s.ready);
   const [info, setInfo] = useState<InspectorInfo | null>(null);
@@ -109,6 +109,8 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     errorRef = useRef<HTMLDivElement>(null),
     noteRef = useRef<HTMLTextAreaElement>(null),
     actionsRef = useRef<HTMLDivElement>(null),
+    advancedRef = useRef<HTMLDetailsElement>(null),
+    chargeThresholdRef = useRef<HTMLInputElement>(null),
     lessonFilesSummaryRef = useRef<HTMLElement>(null);
   const running = useRef(false),
     generation = useRef(0);
@@ -157,7 +159,9 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     return () => observer.disconnect();
   }, []);
   const updating = received?.key !== previewKey;
-  const runError = runFailure?.key === previewKey ? runFailure.message : "";
+  const matchingRunFailure = runFailure?.key === previewKey ? runFailure : null;
+  const runError = matchingRunFailure?.message ?? "";
+  const chargeReported = matchingRunFailure?.chargeReported === true;
   const valid = LessonJevConfigSchema.safeParse(config);
   const configError = valid.success ? "" : "Fix the highlighted settings in Advanced settings.";
   const validNote = InspectorNoteSchema.safeParse(note);
@@ -183,6 +187,15 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const revealPreviewError = () => {
     errorRef.current?.scrollIntoView({ block: "start" });
     errorRef.current?.focus({ preventScroll: true });
+  };
+  const reviewBilling = () => {
+    const threshold = chargeThresholdRef.current;
+    const billing = threshold?.closest("details");
+    if (!threshold || !billing || !advancedRef.current) return;
+    advancedRef.current.open = true;
+    billing.open = true;
+    threshold.focus({ preventScroll: true });
+    threshold.scrollIntoView({ block: "nearest" });
   };
   const accept = (key: string, value: InspectResult) =>
     setReceived((previous) => ({
@@ -262,7 +275,16 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     };
   }, [bodyKey, previewKey, info, active, busy, validationError, retry, updating]);
   const run = async () => {
-    if (!enabled || running.current || validationError || updating) return;
+    if (
+      !enabled ||
+      running.current ||
+      validationError ||
+      updating ||
+      chargeReported ||
+      !loaded ||
+      loadFailed
+    )
+      return;
     if (runFailureToast.current) {
       toast.close(runFailureToast.current);
       runFailureToast.current = null;
@@ -289,11 +311,13 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       });
     } catch (e) {
       const failure = e as Error;
+      const chargeReported = failure.cause === "charge-reported";
       const message =
-        usesFreeModel || failure.cause === 424 || failure.cause === "charge-reported"
+        usesFreeModel || failure.cause === 424 || chargeReported
           ? failure.message
           : `${failure.message} The provider may still charge for this attempt.`;
-      if (currentBody.current === snapshot) setRunFailure({ key: snapshot, message });
+      if (currentBody.current === snapshot)
+        setRunFailure({ key: snapshot, message, chargeReported });
       runFailureToast.current = toast.add({
         title: "Jev run failed",
         description: message,
@@ -331,25 +355,31 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       setSaving(false);
     }
   };
-  const missingLessons = !files.length
-    ? "Add a lesson in Deck."
-    : !scopedFiles.length
-      ? "Choose a scope with lessons."
-      : !includedCount
-        ? "Include a lesson file."
-        : "";
+  const missingLessons = loadFailed
+    ? "Retry loading lesson files."
+    : !loaded
+      ? "Loading lesson files…"
+      : !files.length
+        ? "Add a lesson in Deck."
+        : !scopedFiles.length
+          ? "Choose a scope with lessons."
+          : !includedCount
+            ? "Include a lesson file."
+            : "";
   const reason = validationError
     ? "Check the highlighted fields."
     : !note.text.trim()
       ? "Write a note."
-      : missingLessons ||
-        (error
-          ? "Retry the preview to run Jev."
-          : updating
-            ? "Updating preview…"
-            : !received?.value.pool.length
-              ? "No lesson files available."
-              : "");
+      : chargeReported
+        ? "Review Provider & billing."
+        : missingLessons ||
+          (error
+            ? "Retry the preview to run Jev."
+            : updating
+              ? "Updating preview…"
+              : !received?.value.pool.length
+                ? "No lesson files available."
+                : "");
   const noteOptions = [
     { value: "simulation", label: "Write a preview note" },
     ...availableNotes.map((n) => ({ value: n.id ?? "", label: n.text })),
@@ -401,17 +431,25 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 <AlertTitle>{runError ? "Jev run failed" : "Preview needs attention"}</AlertTitle>
                 <AlertDescription>
                   {runError || error}
-                  {runError && !enabled && <p>Turn on Jev calls to retry.</p>}
+                  {chargeReported && (
+                    <p>Change the billing settings or preview inputs before running again.</p>
+                  )}
+                  {runError && !enabled && !chargeReported && <p>Turn on Jev calls to retry.</p>}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="md"
                       variant="outline"
                       disabled={
                         busy ||
-                        (Boolean(runError) &&
+                        (!chargeReported &&
+                          Boolean(runError) &&
                           (!enabled || Boolean(validationError) || Boolean(reason)))
                       }
                       onClick={() => {
+                        if (chargeReported) {
+                          reviewBilling();
+                          return;
+                        }
                         const target = runError ? controlsRef.current : noteRef.current;
                         target?.focus();
                         if (runError) void run();
@@ -421,7 +459,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                         }
                       }}
                     >
-                      {runError ? "Retry Jev" : "Retry preview"}
+                      {chargeReported
+                        ? "Review Provider & billing"
+                        : runError
+                          ? "Retry Jev"
+                          : "Retry preview"}
                     </Button>
                   </div>
                 </AlertDescription>
@@ -594,65 +636,82 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 <Button size="md" variant="ghost" onClick={() => choosePreviewView("lessons")}>
                   View extracted lessons
                 </Button>
-                <details>
-                  <summary
-                    ref={lessonFilesSummaryRef}
-                    className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2"
-                  >
-                    Lesson files · {includedCount} of {scopedFiles.length} included
-                  </summary>
-                  {scopedFiles.length > 0 && (
-                    <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
-                      Uncheck files to omit them from previews and Jev runs.
+                {loadFailed ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p role="status" className="text-warn-text text-sm">
+                      Could not load lesson files.
                     </p>
-                  )}
-                  {scopedFiles.length === 0 && (
-                    <p className="text-muted-foreground text-sm/relaxed">
-                      Add lessons in Deck or choose another scope.
-                    </p>
-                  )}
-                  <FieldGroup>
-                    {scopedFiles.map((file, i) => (
-                      <Field key={file.key} orientation="horizontal" data-inspector-file>
-                        <Checkbox
-                          id={"inspect-file-" + i}
-                          checked={!excluded.includes(file.key)}
-                          onCheckedChange={(checked) => includeFile(file.key, checked)}
-                        />
-                        <FieldLabel variant="row" htmlFor={"inspect-file-" + i}>
-                          <span className="min-w-0 wrap-anywhere">
-                            {file.path} · {SCOPE_LABEL[file.scope]}
-                          </span>
-                        </FieldLabel>
-                      </Field>
-                    ))}
-                  </FieldGroup>
-                </details>
-                {scopedExcluded.length > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-muted-foreground text-sm tabular-nums">
-                      {scopedExcluded.length} excluded
-                    </span>
-                    <Button
-                      size="md"
-                      variant="outline"
-                      onClick={(event) => {
-                        if (event.detail === 0) lessonFilesSummaryRef.current?.focus();
-                        useInspectorSession.setState({
-                          excluded: excluded.filter(
-                            (key) => !scopedExcluded.some((file) => file.key === key),
-                          ),
-                        });
-                        setView("lessons");
-                        setChange("Files in this scope restored");
-                      }}
-                    >
-                      Include all in scope
+                    <Button size="md" variant="outline" onClick={() => void loadLessons()}>
+                      Retry loading lessons
                     </Button>
                   </div>
+                ) : !loaded ? (
+                  <p role="status" className="text-label text-sm">
+                    Loading lesson files…
+                  </p>
+                ) : (
+                  <>
+                    <details>
+                      <summary
+                        ref={lessonFilesSummaryRef}
+                        className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2"
+                      >
+                        Lesson files · {includedCount} of {scopedFiles.length} included
+                      </summary>
+                      {scopedFiles.length > 0 && (
+                        <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
+                          Uncheck files to omit them from previews and Jev runs.
+                        </p>
+                      )}
+                      {scopedFiles.length === 0 && (
+                        <p className="text-muted-foreground text-sm/relaxed">
+                          Add lessons in Deck or choose another scope.
+                        </p>
+                      )}
+                      <FieldGroup>
+                        {scopedFiles.map((file, i) => (
+                          <Field key={file.key} orientation="horizontal" data-inspector-file>
+                            <Checkbox
+                              id={"inspect-file-" + i}
+                              checked={!excluded.includes(file.key)}
+                              onCheckedChange={(checked) => includeFile(file.key, checked)}
+                            />
+                            <FieldLabel variant="row" htmlFor={"inspect-file-" + i}>
+                              <span className="min-w-0 wrap-anywhere">
+                                {file.path} · {SCOPE_LABEL[file.scope]}
+                              </span>
+                            </FieldLabel>
+                          </Field>
+                        ))}
+                      </FieldGroup>
+                    </details>
+                    {scopedExcluded.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-muted-foreground text-sm tabular-nums">
+                          {scopedExcluded.length} excluded
+                        </span>
+                        <Button
+                          size="md"
+                          variant="outline"
+                          onClick={(event) => {
+                            if (event.detail === 0) lessonFilesSummaryRef.current?.focus();
+                            useInspectorSession.setState({
+                              excluded: excluded.filter(
+                                (key) => !scopedExcluded.some((file) => file.key === key),
+                              ),
+                            });
+                            setView("lessons");
+                            setChange("Files in this scope restored");
+                          }}
+                        >
+                          Include all in scope
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </section>
-              <details className="group/advanced border-border border-t pt-3">
+              <details ref={advancedRef} className="group/advanced border-border border-t pt-3">
                 <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-2 font-medium outline-none focus-visible:ring-2">
                   <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                     <Settings2 size={16} absoluteStrokeWidth aria-hidden />
@@ -665,7 +724,12 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                   Prompts, matching rules and output format. Each edit opens its related preview.
                   Save settings to apply them to the notes CLI.
                 </p>
-                <InspectorSettings config={config} onChange={changeConfig} errors={fieldErrors} />
+                <InspectorSettings
+                  config={config}
+                  onChange={changeConfig}
+                  errors={fieldErrors}
+                  chargeThresholdRef={chargeThresholdRef}
+                />
                 <div className="mt-6 flex flex-wrap gap-2">
                   <ResetSettingsDialog onReset={resetConfig} />
                   <Dialog instantForKeyboard>
@@ -728,7 +792,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         <InspectorPreview
           hasNote={Boolean(note.text.trim())}
           canChooseNote={availableNotes.length > 0}
-          allFilesExcluded={scopedFiles.length > 0 && includedCount === 0}
+          allFilesExcluded={loaded && !loadFailed && scopedFiles.length > 0 && includedCount === 0}
           result={received?.value ?? null}
           previous={received?.previous}
           view={view}

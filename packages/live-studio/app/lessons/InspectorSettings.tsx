@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { type Ref, useId } from "react";
 import type { ZodIssue } from "zod";
 
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -307,8 +307,10 @@ export function InspectorSettings({
   config,
   onChange,
   errors,
+  chargeThresholdRef,
 }: {
   config: LessonJevConfig;
+  chargeThresholdRef: Ref<HTMLInputElement>;
   errors: Partial<Record<keyof LessonJevConfig, string>>;
   onChange: (
     config: LessonJevConfig,
@@ -380,6 +382,7 @@ export function InspectorSettings({
                     </Select>
                   ) : typeof value === "number" ? (
                     <Input
+                      ref={field.key === "spendCap" ? chargeThresholdRef : undefined}
                       size="md"
                       variant="numeric"
                       id={fieldId}
