@@ -32,7 +32,6 @@ import {
   SoundTimeline,
   StudioConfig,
   TextTimeline,
-  OpenFilmTimeline,
   TimingTimeline,
   Trials,
 } from "./contract.ts";
@@ -46,7 +45,6 @@ import { layerDuration, setTiming, timingClock } from "./timing-state.mjs";
 import { voiceFileOf, writeVoiceMap } from "./voice-map.mjs";
 import { openVoice } from "./voice.mjs";
 import { warp } from "./warp.mjs";
-import { OPENFILM_FILE, openOpenFilm } from "./openfilm.mjs";
 
 export const STUDIO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // One copy of three: the film's and the studio's would each otherwise bring their own, and objects from one fail instanceof in the other
