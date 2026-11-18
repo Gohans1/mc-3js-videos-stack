@@ -188,7 +188,7 @@ export function App() {
           <Stage bind={bind} />
           <Transport />
           <TimelinePanel bind={bind} size={bounds.editH} />
-          {showLibrary && <Library />}
+          {showLibrary && <Library lessonsWidthPx={bounds.libW ?? desiredLibPx} />}
           {(showSideOnRight || showDetails) && (
             <Side wide={showLibrary} desktop={desktop} lessonsLockW={sideLatch.lockW} />
           )}

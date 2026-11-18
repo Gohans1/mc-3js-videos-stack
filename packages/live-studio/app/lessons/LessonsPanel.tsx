@@ -73,7 +73,12 @@ const useFresh = () =>
     };
   }, []);
 
-type LessonsPanelProps = { desktop?: boolean; lockWidthPx?: number | null; dock?: "start" | "end" };
+type LessonsPanelProps = {
+  desktop?: boolean;
+  lockWidthPx?: number | null;
+  paneWidthPx?: number;
+  dock?: "start" | "end";
+};
 const READER_WIDTH = 552;
 
 export function LessonsPanel(props: LessonsPanelProps = {}) {
@@ -123,6 +128,7 @@ function LessonDeckPanel({
   active,
   desktop,
   lockWidthPx = null,
+  paneWidthPx,
   dock = "start",
 }: LessonsPanelProps & { active: boolean }) {
   useFresh();
@@ -167,12 +173,14 @@ function LessonDeckPanel({
   const [newScope, setNewScope] = useState<LessonScope>("film");
   const [submitted, setSubmitted] = useState(false);
   const isLockedWidth = isDesktop && typeof lockWidthPx === "number" && lockWidthPx > 0;
+  const hasPaneWidth = typeof paneWidthPx === "number" && paneWidthPx > 0;
 
   useLayoutEffect(() => {
     const el = hostRef.current;
-    if (!el) return;
+    if (!el || !active || hasPaneWidth) return;
     const sync = () => {
       const next = Math.round(el.getBoundingClientRect().width);
+      if (next <= 0) return;
       setContainerWidth((prev) => (prev === next ? prev : next));
     };
     sync();
@@ -180,7 +188,7 @@ function LessonDeckPanel({
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isLockedWidth]);
+  }, [active, hasPaneWidth, isLockedWidth]);
 
   useEffect(() => () => motionRef.current?.cancel(), []);
 
@@ -280,7 +288,11 @@ function LessonDeckPanel({
       : null
     : trail.contentKey;
 
-  const effectiveContainerWidth = isLockedWidth ? lockWidthPx : containerWidth;
+  const effectiveContainerWidth = isLockedWidth
+    ? lockWidthPx
+    : hasPaneWidth
+      ? paneWidthPx
+      : containerWidth;
 
   const layout = useMemo(
     () =>
@@ -312,6 +324,7 @@ function LessonDeckPanel({
       pending &&
       deck?.clientWidth &&
       !isLockedWidth &&
+      !hasPaneWidth &&
       deck.clientWidth !== containerWidth
     ) {
       setContainerWidth(deck.clientWidth);
@@ -346,7 +359,7 @@ function LessonDeckPanel({
       resume:
         nextKey && exitOpacity !== undefined ? { key: nextKey, opacity: exitOpacity } : undefined,
     });
-  }, [active, containerWidth, isLockedWidth, isSearching, layout.mode, trail]);
+  }, [active, containerWidth, hasPaneWidth, isLockedWidth, isSearching, layout.mode, trail]);
 
   // Auto-scroll horizontal Miller deck cleanly when trail changes without an active FLIP/WAAPI transition
   useEffect(() => {
@@ -355,7 +368,7 @@ function LessonDeckPanel({
       return;
     }
     const deck = deckScrollRef.current;
-    if (!deck || !layout.showAncestors || containerWidth <= 0) return;
+    if (!deck || !layout.showAncestors || effectiveContainerWidth <= 0) return;
     const snap = () => {
       const target = Math.max(0, deck.scrollWidth - deck.clientWidth);
       if (Math.abs(deck.scrollLeft - target) < 2) return;
@@ -363,7 +376,7 @@ function LessonDeckPanel({
     };
     const raf = requestAnimationFrame(snap);
     return () => cancelAnimationFrame(raf);
-  }, [activeColumns.length, activeOpen, layout.showAncestors, containerWidth]);
+  }, [activeColumns.length, activeOpen, layout.showAncestors, effectiveContainerWidth]);
 
   const closeForm = () => {
     setNaming(null);
@@ -483,6 +496,7 @@ function LessonDeckPanel({
 
   const setSearchQuery = (next: string) => {
     setQuery(next);
+    setJumpTarget(null);
     if (next.trim() || !isSearching) return;
     requestAnimationFrame(() => {
       const host = hostRef.current;
@@ -585,9 +599,10 @@ function LessonDeckPanel({
             allCount={allCount}
             scopedFilesCount={scopedFiles.length}
             activeFilter={activeFilter}
-            onChangeFilter={(nextScope) =>
-              triggerTrailChange(false, () => setScopeFilter(nextScope))
-            }
+            onChangeFilter={(nextScope) => {
+              setJumpTarget(null);
+              triggerTrailChange(false, () => setScopeFilter(nextScope));
+            }}
             showFormHere={showFormHere}
             onToggleForm={() =>
               showFormHere ? cancelForm() : openForm(undefined, col.depth, col.parts)

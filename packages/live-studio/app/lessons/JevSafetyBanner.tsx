@@ -33,7 +33,7 @@ export function JevSafetyBanner({
         enabled ? "border-warn/30 bg-warn/8" : "border-border bg-card/35",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col items-start gap-2">
         <Field orientation="horizontal" className="w-auto">
           <Switch
             id="jev-live"

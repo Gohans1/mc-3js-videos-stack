@@ -171,6 +171,7 @@ export function LessonColumnView({
   onDeleteFile: (key: string) => void;
 }) {
   const sectionRef = useRef<HTMLElement>(null);
+  const scopeRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const isLeafList = !activeOpen && idx === totalCols - 1;
   const isSideColumn = Boolean(activeOpen) || !isLeafList;
@@ -296,7 +297,7 @@ export function LessonColumnView({
       </header>
 
       {showRootControls && (hasProject || filmCount > 0) && (
-        <div className="flex-none px-2.5 pt-2 pb-1">
+        <div ref={scopeRef} className="flex-none px-2.5 pt-2 pb-1">
           {!compactControls && (
             <Segmented<LessonScopeFilter>
               label="Filter lessons by scope"
@@ -317,7 +318,16 @@ export function LessonColumnView({
               value={activeFilter}
               items={scopeOptions}
               onValueChange={(value) => {
-                if (value) onChangeFilter(value);
+                if (!value || value === activeFilter) return;
+                onChangeFilter(value);
+                requestAnimationFrame(() => {
+                  const controls = scopeRef.current?.querySelectorAll<HTMLElement>(
+                    "[role=radio][aria-checked=true], [role=combobox]",
+                  );
+                  const visible =
+                    controls && [...controls].find((el) => el.getClientRects().length);
+                  visible?.focus({ preventScroll: true });
+                });
               }}
             >
               <SelectTrigger

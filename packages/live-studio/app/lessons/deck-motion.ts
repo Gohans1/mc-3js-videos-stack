@@ -4,12 +4,13 @@ import { classifyLessonTrailTransition, type LessonTrail } from "./tree";
 
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 const ENTER_MS = 125;
-const EXIT_MS = 175;
+const EXIT_MS = 150;
 
 interface PanelSnapshot {
   key: string;
   rect: DOMRect;
   node: HTMLElement;
+  copy?: HTMLElement;
   background: string;
   opacity: string;
   scrollTops: number[];
@@ -75,11 +76,12 @@ const scrollers = (node: HTMLElement) => [
   ...node.querySelectorAll<HTMLElement>("[data-arrow-scroll], .scroll-fade"),
 ];
 
-const capturePanel = (node: HTMLElement, key: string): PanelSnapshot => {
+const capturePanel = (node: HTMLElement, key: string, copy: boolean): PanelSnapshot => {
   const style = getComputedStyle(node);
   return {
     key,
     node,
+    copy: copy ? (node.cloneNode(true) as HTMLElement) : undefined,
     rect: node.getBoundingClientRect(),
     background: style.backgroundColor,
     opacity: style.opacity,
@@ -88,9 +90,11 @@ const capturePanel = (node: HTMLElement, key: string): PanelSnapshot => {
 };
 
 const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLElement => {
-  const { node, rect, background, opacity } = panel;
-  const ghost = node.cloneNode(true) as HTMLElement;
+  const { node, copy, rect, background, opacity } = panel;
+  const ghost = copy ?? (node.cloneNode(true) as HTMLElement);
   for (const drop of ghost.querySelectorAll("textarea, [role='dialog']")) drop.remove();
+  ghost.removeAttribute("id");
+  for (const el of ghost.querySelectorAll("[id]")) el.removeAttribute("id");
   ghost.style.position = "absolute";
   ghost.style.left = `${rect.left - deckRect.left}px`;
   ghost.style.top = `${rect.top - deckRect.top}px`;
@@ -109,10 +113,12 @@ const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLEle
 export function captureDeckSnapshot(deck: HTMLElement | null): DeckSnapshot | null {
   if (!deck) return null;
   const cols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")].map((el, i) =>
-    capturePanel(el, el.dataset.lessonsCol ?? String(i)),
+    capturePanel(el, el.dataset.lessonsCol ?? String(i), true),
   );
   const contentEl = deck.querySelector<HTMLElement>("[data-lesson-content]");
-  const content = contentEl ? capturePanel(contentEl, contentEl.dataset.lessonContent ?? "") : null;
+  const content = contentEl
+    ? capturePanel(contentEl, contentEl.dataset.lessonContent ?? "", false)
+    : null;
   return { deckRect: deck.getBoundingClientRect(), cols, content };
 }
 
@@ -156,21 +162,27 @@ export function animateDeckTransition({
 
   const liveCols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")];
   const liveContent = deck.querySelector<HTMLElement>("[data-lesson-content]");
-
-  // Unmount fold-out ghosts clipped inside the Lessons pane whenever columns or sheets are replaced or closed
-  const hasOutgoingCols = Boolean(snapshot && snapshot.cols.length > transition.keepColumnCount);
-  const hasOutgoingContent = Boolean(snapshot?.content && transition.closingContent);
-  if (
-    !reduced &&
-    snapshot &&
-    (hasOutgoingCols || hasOutgoingContent) &&
-    snapshot.deckRect.width > 0
-  ) {
-    const outgoing: PanelSnapshot[] = [];
-    for (let i = transition.keepColumnCount; i < snapshot.cols.length; i++) {
-      outgoing.push(snapshot.cols[i]!);
+  const previousCols = new Map(snapshot?.cols.map((col) => [col.key, col]));
+  const currentCols = new Map(
+    liveCols.map((col) => [col.dataset.lessonsCol ?? "", col.getBoundingClientRect()]),
+  );
+  const cropped =
+    previousCols.size !== prevTrail.columns.length || currentCols.size !== nextTrail.columns.length;
+  const replaced = new Set<string>();
+  if (!reduced && cropped) {
+    for (const [key, current] of currentCols) {
+      const old = previousCols.get(key)?.rect;
+      if (
+        old &&
+        (Math.abs(old.left - current.left) > 32 || Math.abs(old.width - current.width) > 2)
+      )
+        replaced.add(key);
     }
-    if (hasOutgoingContent && snapshot.content) outgoing.push(snapshot.content);
+  }
+
+  if (!reduced && snapshot?.deckRect.width) {
+    const outgoing = snapshot.cols.filter(({ key }) => !currentCols.has(key) || replaced.has(key));
+    if (transition.closingContent && snapshot.content) outgoing.push(snapshot.content);
 
     const clip = computeDeckClipBounds(snapshot.deckRect, deck.getBoundingClientRect());
     const clipRect = clip as DOMRect;
@@ -199,9 +211,10 @@ export function animateDeckTransition({
         scrollers(ghost).forEach((el, i) => {
           el.scrollTop = item.scrollTops[i] ?? 0;
         });
+        const crossfade = replaced.has(item.key) || (cropped && item !== snapshot.content);
         const anim = ghost.animate([{ opacity: item.opacity }, { opacity: 0 }], {
-          duration: EXIT_MS,
-          delay: Math.min(idx * 22, 60),
+          duration: crossfade ? ENTER_MS : EXIT_MS,
+          delay: crossfade ? 0 : Math.min(idx * 22, 60),
           easing: "ease-out",
           fill: "forwards",
         });
@@ -220,48 +233,36 @@ export function animateDeckTransition({
     }
   }
 
-  // Smooth horizontal FLIP for kept columns that repositioned when opening or folding back
-  if (
-    !reduced &&
-    snapshot &&
-    snapshot.cols.length === prevTrail.columns.length &&
-    liveCols.length === nextTrail.columns.length
-  ) {
-    const oldByKey = new Map(snapshot.cols.map((c) => [c.key, c.rect.left]));
-    const checkCount = Math.min(transition.keepColumnCount, liveCols.length);
-    for (let i = 0; i < checkCount; i++) {
-      const col = liveCols[i]!;
-      const oldLeft = oldByKey.get(col.dataset.lessonsCol ?? "");
-      if (oldLeft === undefined) continue;
-      const dx = oldLeft - col.getBoundingClientRect().left;
-      if (Math.abs(dx) <= 2) continue;
-      cancelAnims(col);
-      if (typeof col.animate === "function") {
-        const anim = col.animate(
-          [{ transform: `translate3d(${dx}px, 0, 0)` }, { transform: "translate3d(0, 0, 0)" }],
-          { duration: ENTER_MS, easing: ENTER_EASE },
+  const entering = liveCols.filter((col) => {
+    const key = col.dataset.lessonsCol ?? "";
+    const before = previousCols.get(key)?.rect;
+    if (!before || replaced.has(key)) return true;
+    if (!reduced) {
+      const dx = before.left - (currentCols.get(key)?.left ?? before.left);
+      if (Math.abs(dx) > 2 && typeof col.animate === "function") {
+        cancelAnims(col);
+        animations.push(
+          col.animate(
+            [{ transform: `translate3d(${dx}px, 0, 0)` }, { transform: "translate3d(0, 0, 0)" }],
+            { duration: ENTER_MS, easing: ENTER_EASE },
+          ),
         );
-        animations.push(anim);
       }
     }
-  }
-
-  // Enter motion for newly revealed columns or newly opened / switched lesson sheet
-  if (transition.kind === "open-right") {
-    const entering: HTMLElement[] = liveCols.slice(transition.keepColumnCount);
-    if (liveContent) entering.push(liveContent);
-    for (const el of entering) {
-      cancelAnims(el);
-      if (typeof el.animate !== "function") continue;
-      const key = el.dataset.lessonContent ?? el.dataset.lessonsCol;
-      const opacity = resume && resume.key === key ? resume.opacity : reduced ? 0.9 : 0.82;
-      animations.push(
-        el.animate([{ opacity }, { opacity: 1 }], {
-          duration: reduced ? 80 : ENTER_MS,
-          easing: ENTER_EASE,
-        }),
-      );
-    }
+    return false;
+  });
+  if (transition.kind === "open-right" && liveContent) entering.push(liveContent);
+  for (const el of entering) {
+    cancelAnims(el);
+    if (typeof el.animate !== "function") continue;
+    const key = el.dataset.lessonContent ?? el.dataset.lessonsCol;
+    const opacity = resume && resume.key === key ? resume.opacity : reduced ? 0.9 : 0.82;
+    animations.push(
+      el.animate([{ opacity }, { opacity: 1 }], {
+        duration: reduced ? 80 : ENTER_MS,
+        easing: ENTER_EASE,
+      }),
+    );
   }
 
   return {

@@ -64,7 +64,7 @@ import { useDeckShrinkLatch } from "@/lessons/deck-latch";
 import { shouldFoldBlankAreaClick } from "@/lessons/LessonColumn";
 import { lessons, loadLessons } from "@/lessons/lessons";
 
-function DeckRunner({ dockMode }) {
+function DeckRunner({ dockMode, fixedWidth }) {
   const [tick, setTick] = useState(0);
   useEffect(() => lessons.subscribe(() => setTick((t) => t + 1)), []);
   void tick;
@@ -79,7 +79,7 @@ function DeckRunner({ dockMode }) {
         : Math.min(isEnd ? 600 : 960, Math.max(540, (folder.length + 1) * 192 + 128));
   const trailKey = \`\${folder.join("/")}\\0\${open ?? ""}\`;
   const latch = useDeckShrinkLatch({
-    desiredW: rawDesiredW,
+    desiredW: fixedWidth ?? rawDesiredW,
     trailKey,
     active: true,
   });
@@ -109,7 +109,7 @@ function DeckRunner({ dockMode }) {
             data-testid="lessons-pane"
             className="bg-background flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg"
           >
-            <LessonsPanel desktop lockWidthPx={latch.lockW} dock={dockMode} />
+            <LessonsPanel desktop lockWidthPx={latch.lockW} dock={dockMode} paneWidthPx={fixedWidth ?? undefined} />
           </aside>
           {!isEnd && (
             <main data-stage-sentinel className="bg-backdrop relative flex-1 rounded-xl border">
@@ -123,13 +123,16 @@ function DeckRunner({ dockMode }) {
 }
 
 let setModeGlobal = null;
+let setWidthGlobal = null;
 function Root() {
   const [dockMode, setDockMode] = useState("start");
+  const [fixedWidth, setFixedWidth] = useState(null);
   setModeGlobal = setDockMode;
-  return <DeckRunner dockMode={dockMode} />;
+  setWidthGlobal = setFixedWidth;
+  return <DeckRunner dockMode={dockMode} fixedWidth={fixedWidth} />;
 }
 
-window.__DECK_TEST__ = { lessons, shouldFoldBlankAreaClick, setDock: (m) => setModeGlobal?.(m) };
+window.__DECK_TEST__ = { lessons, shouldFoldBlankAreaClick, setDock: (m) => setModeGlobal?.(m), setWidth: (w) => setWidthGlobal?.(w) };
 createRoot(document.getElementById("root")).render(<Root />);
 `;
 
@@ -732,6 +735,48 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.ok(Math.abs(result.resumedOpacity - result.exitOpacity) < 0.08);
     assert.ok(result.shift < 1);
     assert.equal(result.oldGhostMounted, false);
+  });
+
+  test("opening a nested lesson at the Library's default width crossfades the rendered trail without sliding text", async () => {
+    const result = await view.evaluate(`(async () => {
+      const { lessons, setDock, setWidth } = window.__DECK_TEST__;
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const col = '[data-lessons-col="dir:craft/ik"]';
+      const reader = '[data-lesson-content="all:craft/ik/foot.md"]';
+      setDock("start");
+      setWidth(800);
+      lessons.setState({ folder: ["craft", "ik"], open: null });
+      await frame();
+      await frame();
+      await new Promise(resolve => setTimeout(resolve, 180));
+      const pane = document.querySelector("[data-testid=lessons-pane]");
+      const oldColumn = pane.querySelector(col);
+      const oldRect = oldColumn.getBoundingClientRect();
+      pane.querySelector('[data-lesson-row="file:all:craft/ik/foot.md"]').dispatchEvent(
+        new MouseEvent("click", { bubbles: true, detail: 1 }),
+      );
+      await frame();
+      const overlay = pane.querySelector("div[style*='z-index: 45']");
+      const oldColumnCopy = overlay?.querySelector(col);
+      const nextColumn = [...pane.querySelectorAll(col)].find(el => !el.closest("[inert]"));
+      const realReader = pane.querySelector(reader);
+      const frames = el => el?.getAnimations().flatMap(anim => anim.effect.getKeyframes()) ?? [];
+      const outcome = {
+        oldWidth: oldRect.width,
+        snapshotWidth: oldColumnCopy?.getBoundingClientRect().width,
+        newWidth: nextColumn?.getBoundingClientRect().width,
+        oldAndNewFade: [oldColumnCopy, nextColumn, realReader].every(el =>
+          frames(el).some(frame => "opacity" in frame) && frames(el).every(frame => !("transform" in frame)),
+        ),
+        clip: overlay?.getBoundingClientRect().right === pane.getBoundingClientRect().right,
+      };
+      setWidth(null);
+      return outcome;
+    })()`);
+    assert.ok(result.oldWidth > result.newWidth);
+    assert.equal(result.snapshotWidth, result.oldWidth);
+    assert.equal(result.oldAndNewFade, true);
+    assert.equal(result.clip, true);
   });
 
   test("a narrowed desktop reader stays visible at 200% text size and ArrowLeft returns to the lesson row", async () => {
