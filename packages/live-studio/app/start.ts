@@ -333,6 +333,7 @@ export const start = async (el: Elements) => {
       has.keys ? loadKeys() : Promise.resolve(set({ keyFiles: [] })),
       has.text ? loadText() : Promise.resolve(set({ text: false })),
       has.adjustment ? loadLayers() : Promise.resolve(set({ layers: false })),
+      readOpenFilm(),
     ]),
   );
   if (has.cam) prefetchFile("/api/cam");

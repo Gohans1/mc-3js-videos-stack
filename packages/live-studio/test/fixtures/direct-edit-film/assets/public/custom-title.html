@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+:root { --accent:#3aa99f; --size:44px; }
+* { box-sizing:border-box; }
+body { margin:0; color:#fffcf0; font-family:Arial,sans-serif; }
+#card { position:absolute; left:52%; top:12%; width:42%; padding:24px; background:#1c1b1a; border:2px solid var(--accent); border-radius:18px; }
+#page-title { margin:14px 0; font-size:var(--size); line-height:1.1; }
+#page-title em { color:var(--accent); }
+#page-icon { width:64px; height:64px; fill:var(--accent); }
+p { font-size:18px; color:#cecdc3; }
+</style>
+<div id="card"><svg id="page-icon" viewBox="0 0 64 64"><path id="star" d="M32 2 40 23 62 24 45 38 51 60 32 47 13 60 19 38 2 24 24 23Z"/></svg><h1 id="page-title">AI made this <em>editable</em></h1><p id="page-note">Pick the words, icon or card. Your edits stay separate from the source.</p></div>
+<script>
+window.film={frame(t){document.querySelector('#page-title').firstChild.data=t<3?'AI made this ':'You can change ';document.querySelector('#page-icon').style.transform=`rotate(${Math.sin(t)*8}deg)`;}};
+</script>

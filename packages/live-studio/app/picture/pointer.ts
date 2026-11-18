@@ -6,8 +6,9 @@ import { get } from "../core/store";
 import { sketch } from "../notes/ink";
 import { openNote, pointOrigin } from "../notes/notes";
 import { gizmoBusy, hover, pickAt, selectTarget } from "../objects/placed";
+import { pickPageAt, startPageDrag } from "../openfilm/onpicture";
 import { setPlaying } from "../playback/transport";
-import { startTextDrag, textAt } from "../text/onpicture";
+import { startTextDrag, textAt, textDoubleClick } from "../text/onpicture";
 import { pickText } from "../text/text";
 import { frameSize } from "./frame";
 import { flight, flyCam, moveCam, setFree, turnAbout } from "./freecam";
@@ -84,7 +85,7 @@ export const attachPicture = () => {
       return;
     }
     if (step.wokeFree && gesture.kind === "cam_drag" && prev.kind === "wake_press") {
-      if (prev.event && startTextDrag(prev.event, e, frac(prev.event))) {
+      if (prev.event && (startPageDrag(prev.event, e, frac(prev.event)) || startTextDrag(prev.event, e, frac(prev.event)))) {
         gesture = IDLE_VIEWPORT_GESTURE;
         hover(null);
         return;
@@ -146,7 +147,7 @@ export const attachPicture = () => {
           : null;
     if (!origin) return;
     const at = tappedAt(origin[0], origin[1], e);
-    if (!at) return;
+    if (!at || (!PHONE && pickPageAt(at))) return;
     const title = get().text ? textAt(...at) : -1;
     if (title >= 0) pickText([title]);
     else selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
@@ -166,6 +167,9 @@ export const attachPicture = () => {
   addEventListener("pointercancel", cancelPointer);
   canvas.addEventListener("lostpointercapture", cancelPointer);
   canvas.addEventListener("pointerleave", () => hover(null));
+  canvas.addEventListener("dblclick", (e) => {
+    if (!PHONE && (e.ctrlKey || e.metaKey) && get().text) textDoubleClick(e, frac(e));
+  });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   // Flying keys, by their place on the keyboard (any layout). Typing a note or a shortcut with Ctrl never flies. Any other key,
   // click or scroll while Shift is held makes a shortcut of it: the height Shift dropped comes back first, which is why these

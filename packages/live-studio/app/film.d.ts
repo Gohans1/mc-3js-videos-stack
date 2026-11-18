@@ -71,7 +71,7 @@ declare module "film/scene" {
       camera?: THREE.Camera,
       tracks?: Record<string, { hidden?: boolean }>,
       timeAt?: (item: unknown) => number,
-    ): { i: number; box: [number, number, number, number]; corners?: [number, number][] }[];
+    ): { i: number; box: [number, number, number, number]; corners?: [number, number][]; anchor?: [number, number] }[];
     fonts: { id: string; title: string; css: string; tip?: string }[];
     categories?: { text: readonly string[]; shape: readonly string[] };
     eases?: readonly string[];
@@ -139,6 +139,7 @@ declare module "film/scene" {
     keyEases?: { edit: string; path: string[]; names: string[] }[];
     anims?: { in: AnimFx[]; out: AnimFx[]; combo: AnimFx[] };
     transitions?: readonly {
+      uniforms?: Record<string, number | boolean | number[]>;
       id: string;
       title: string;
       tip: string;

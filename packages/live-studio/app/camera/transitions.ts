@@ -1,3 +1,4 @@
+import { extendedTransitions } from "film-stage/transition-extension";
 import type { TransitionEase } from "film-stage/transitions";
 import { extendedTransitions } from "film-stage/transition-extension";
 
@@ -99,7 +100,13 @@ export function setTransitionDuration(shot: number, value: number, keep = true) 
 }
 export function setTransitionOption(
   shot: number,
-  patch: { ease?: TransitionEase; feather?: number; flip?: boolean },
+  patch: {
+    ease?: TransitionEase;
+    feather?: number;
+    flip?: boolean;
+    props?: import("film-stage/openfilm-page").PageProps;
+    params?: Transition["params"];
+  },
   keep = true,
 ) {
   const change = (rows: NonNullable<typeof shotsDoc.data>) => {

@@ -7,6 +7,7 @@ import { AWAY } from "../core/device";
 import { S } from "../core/state";
 import { get, invalidatePictures, set } from "../core/store";
 import { drawGizmo } from "../objects/placed";
+import { drawPageSelection } from "../openfilm/onpicture";
 import { setPlaying } from "../playback/transport";
 import { drawTextSel } from "../text/onpicture";
 import { drawFilmView } from "./filmcam";
@@ -27,6 +28,7 @@ const draw = async (x: number) => {
     drawCamPath();
     drawGizmo();
     drawTextSel();
+    drawPageSelection();
   }
 };
 let drawing = Promise.resolve();

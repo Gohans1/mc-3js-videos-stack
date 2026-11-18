@@ -697,7 +697,7 @@ export function makeTitles(renderer, W, H, extra) {
         const xs = corners.map((p) => p[0]),
           ys = corners.map((p) => p[1]);
         return [
-          { i, corners, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] },
+          { i, corners, anchor: [(m.cx + tx) / W, (m.cy + ty) / H], box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] },
         ];
       },
     );

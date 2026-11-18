@@ -1,5 +1,5 @@
-// Text and shapes on the picture, as in CapCut's player: the picked ones are outlined where the film draws them, and dragging
-// a title picks and moves it. The boxes come from the film's own drawer
+// Text and shapes on the picture, as in CapCut's player: the picked ones are outlined where the film draws them, and a press on
+// one drags it there (a mouse press on any one picks it first). The boxes come from the film's own drawer
 // (film-stage/titles.ts through draw.tools.titles), so what is outlined is what the final video shows. A drag snaps the item's
 // anchor to the frame's middle lines (Shift: no snap) and is one undo step
 import { EDIT } from "film/edit";
@@ -9,6 +9,7 @@ import { layerClock } from "../../src/timing-state.mjs";
 import { clipIsLit, hasClipActivity } from "../activity/timeline-activity";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
+import { openTextEditor } from "./inline-editor";
 import {
   edit,
   items,
@@ -20,8 +21,15 @@ import {
   type TextItem,
   type TextTrack,
 } from "./text";
+import { textTransform } from "./text-transform";
 
 const SNAP = 0.012; // how near the middle line, in frame fractions, the anchor sticks to it
+const rotationHandle = (points: number[][], anchor: number[]) => {
+  const x = (points[0][0] + points[1][0]) / 2,
+    y = (points[0][1] + points[1][1]) / 2;
+  const d = Math.max(1, Math.hypot(x - anchor[0], y - anchor[1]));
+  return [x + (24 * (x - anchor[0])) / d, y + (24 * (y - anchor[1])) / d];
+};
 
 const boxesNow = () => {
   const tl = S.tools?.titles;
@@ -72,6 +80,12 @@ export const drawTextSel = () => {
       dot.setAttribute("stroke", "var(--scrim-soft)");
       frame.append(dot);
     }
+    const stem = svg("line"),
+      turn = svg("circle");
+    stem.setAttribute("stroke", "var(--picture)");
+    turn.setAttribute("r", "4.5");
+    turn.setAttribute("fill", "var(--picture)");
+    frame.append(stem, turn);
     el.append(frame);
   }
   [...el.children].forEach((d, k) => {
@@ -100,6 +114,17 @@ export const drawTextSel = () => {
       frame.children[i + 2].setAttribute("cx", String(x));
       frame.children[i + 2].setAttribute("cy", String(y));
     });
+    const anchor = b.anchor
+      ? [b.anchor[0] * w, b.anchor[1] * h]
+      : [((b.box[0] + b.box[2]) * w) / 2, ((b.box[1] + b.box[3]) * h) / 2];
+    const turn = rotationHandle(points, anchor);
+    const stem = frame.children[6];
+    stem.setAttribute("x1", String((points[0][0] + points[1][0]) / 2));
+    stem.setAttribute("y1", String((points[0][1] + points[1][1]) / 2));
+    stem.setAttribute("x2", String(turn[0]));
+    stem.setAttribute("y2", String(turn[1]));
+    frame.children[7].setAttribute("cx", String(turn[0]));
+    frame.children[7].setAttribute("cy", String(turn[1]));
   });
 };
 
@@ -114,12 +139,67 @@ export const textAt = (x: number, y: number) =>
     return hitContext.isPointInPath(path, x, y);
   })?.i ?? -1;
 
-export const startTextDrag = (
-  e: PointerEvent,
-  firstMove: PointerEvent,
-  at: readonly [number, number],
-) => {
+// A press on the picture: true when it took it (any item under the mouse; on a phone, whose tap pins a note, a picked one)
+export const startTextDrag = (e: PointerEvent, firstMove: PointerEvent, at: readonly [number, number]) => {
   if (!get().text) return false;
+  const canvas = S.el.canvas,
+    r = canvas.getBoundingClientRect();
+  const origin: [number, number] = [at[0] * r.width, at[1] * r.height];
+  for (const b of boxesNow().filter((box) => get().textPicks.includes(box.i) && !locked(box.i))) {
+    const points = (
+      b.corners ?? [
+        [b.box[0], b.box[1]],
+        [b.box[2], b.box[1]],
+        [b.box[2], b.box[3]],
+        [b.box[0], b.box[3]],
+      ]
+    ).map(([x, y]) => [x * r.width, y * r.height]);
+    const anchor: [number, number] = b.anchor
+      ? [b.anchor[0] * r.width, b.anchor[1] * r.height]
+      : [((b.box[0] + b.box[2]) * r.width) / 2, ((b.box[1] + b.box[3]) * r.height) / 2];
+    const near = (p: number[]) => Math.hypot(p[0] - origin[0], p[1] - origin[1]) <= 10;
+    const kind = near(rotationHandle(points, anchor))
+      ? "rotate"
+      : points.some(near)
+        ? "scale"
+        : null;
+    if (!kind) continue;
+    const before = { scale: items[b.i].scale, rotate: items[b.i].rotate },
+      snap = snapshot();
+    let moved = false;
+    canvas.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      moved = true;
+      restore(snap);
+      preview((data) =>
+        Object.assign(
+          data.items[b.i],
+          textTransform(kind, before, anchor, origin, [ev.clientX - r.left, ev.clientY - r.top]),
+        ),
+      );
+    };
+    const end = (ev: PointerEvent | KeyboardEvent) => {
+      const cancel =
+        ev.type === "pointercancel" || (ev instanceof KeyboardEvent && ev.key === "Escape");
+      if (ev instanceof KeyboardEvent && !cancel) return;
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", end);
+      canvas.removeEventListener("pointercancel", end);
+      window.removeEventListener("keydown", end, true);
+      const after = snapshot();
+      restore(snap);
+      if (moved && !cancel)
+        edit((data) => {
+          data.items = JSON.parse(after).items;
+        });
+    };
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", end);
+    canvas.addEventListener("pointercancel", end);
+    window.addEventListener("keydown", end, true);
+    move(firstMove);
+    return true;
+  }
   const i = textAt(...at);
   if (i < 0 || !(get().textPicks.includes(i) || e.pointerType === "mouse")) return false;
   if (!get().textPicks.includes(i)) pickText([i]);
@@ -127,9 +207,7 @@ export const startTextDrag = (
     say("This text track is locked. Unlock it in the track header to edit");
     return true;
   }
-  const canvas = S.el.canvas,
-    r = canvas.getBoundingClientRect(),
-    group = get().textPicks.filter((j) => !locked(j)),
+  const group = get().textPicks.filter((j) => !locked(j)),
     snap = snapshot();
   const start = group.map((j) => [items[j].x ?? 0.5, items[j].y ?? 0.5] as const),
     lead = group.indexOf(i);
@@ -158,13 +236,18 @@ export const startTextDrag = (
       1500,
     );
   };
-  const end = () => {
+  const end = (ev: PointerEvent | KeyboardEvent) => {
+    const cancel =
+      ev.type === "pointercancel" || (ev instanceof KeyboardEvent && ev.key === "Escape");
+    if (ev instanceof KeyboardEvent && !cancel) return;
     canvas.removeEventListener("pointermove", move);
     canvas.removeEventListener("pointerup", end);
     canvas.removeEventListener("pointercancel", end);
+    window.removeEventListener("keydown", end, true);
     if (!moved) return;
     const after = snapshot();
     restore(snap);
+    if (cancel) return;
     edit((f) => {
       f.items = JSON.parse(after).items;
     });
@@ -172,6 +255,22 @@ export const startTextDrag = (
   canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("pointercancel", end);
+  window.addEventListener("keydown", end, true);
   move(firstMove);
   return true;
 };
+
+export function textDoubleClick(e: MouseEvent, at: readonly [number, number]) {
+  const i = textAt(...at),
+    item = items[i],
+    box = boxesNow().find((b) => b.i === i)?.box;
+  if (!item || item.kind !== "text" || locked(i) || !box) return;
+  e.preventDefault();
+  pickText([i]);
+  openTextEditor(S.el.stage, item.text ?? "", box, (value) => {
+    if (items[i] !== item) return say("This text changed elsewhere; select it again");
+    edit((data) => {
+      data.items[i].text = value;
+    });
+  });
+}

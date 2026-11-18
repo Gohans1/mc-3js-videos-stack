@@ -15,6 +15,10 @@ import { FieldRow, Footer, Reset, Section, SliderRow } from "../components/inspe
 import { Tip } from "../components/Tip";
 import { DURATION } from "../core/filmMeta";
 import { useStudio } from "../core/store";
+import { PageProperties } from "../openfilm/PageProperties";
+import { useOpenFilm } from "../openfilm/state";
+import { replaceField } from "../own/custom-fields";
+import { CustomFields, JsonValue } from "../own/CustomFields";
 import { playSpan, shownShot, stopSpan } from "./anim";
 import { shotsDoc } from "./shots";
 import {
@@ -36,6 +40,7 @@ import {
 } from "./transitions";
 
 export function TransitionPanel() {
+  const catalog = useOpenFilm((s) => s.catalog);
   useStudio((s) => s.shotsRev);
   useStudio((s) => s.timingRev);
   useStudio((s) => s.shotPick);
@@ -48,6 +53,7 @@ export function TransitionPanel() {
       </p>
     );
   const fx = transitions().find((x) => x.id === current.fx);
+  const recipe = catalog.find((r) => `of:${r.id}` === current.fx);
   const title = fx?.title ?? current.fx;
   const replay = () => {
     const [from, to] = transitionSpan(shot);
@@ -165,6 +171,39 @@ export function TransitionPanel() {
           )}
         </FieldRow>
       </Section>
+      {(recipe?.props?.length || current.props) && (
+        <Section title="Effect properties">
+          <PageProperties
+            definitions={recipe?.props}
+            values={current.props ?? {}}
+            defaults={{ vars: recipe?.vars }}
+            onChange={(props) => setTransitionOption(shot, { props })}
+          />
+        </Section>
+      )}
+      {fx?.uniforms && (
+        <Section title="Effect controls">
+          {Object.entries(fx.uniforms).map(([name, value]) => (
+            <JsonValue
+              key={name}
+              name={name}
+              value={current.params?.[name] ?? value}
+              onChange={(next) =>
+                setTransitionOption(shot, {
+                  params: { ...current.params, [name]: next as number | boolean | number[] },
+                })
+              }
+            />
+          ))}
+        </Section>
+      )}
+      <CustomFields
+        value={current}
+        known={["fx", "len", "ease", "feather", "flip", "props", "params"]}
+        onChange={(path, value) =>
+          shotsDoc.edit((rows) => replaceField(rows[shot].transition as object, path, value))
+        }
+      />
       <Footer>
         <Button variant="quiet" onClick={() => setTransition(shot, null)}>
           Remove

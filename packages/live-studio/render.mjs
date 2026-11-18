@@ -32,6 +32,7 @@ import {
 } from "./src/readable.mjs";
 import { audioInfo } from "./src/sound.mjs";
 import { startJob } from "./src/tell.mjs";
+import { openFilmResource } from "./src/openfilm.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
 import { clockForTimeline, setTiming } from "./src/timing-state.mjs";
 import { writeRenderEvidence } from "./src/video.mjs";

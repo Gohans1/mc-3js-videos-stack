@@ -15,6 +15,7 @@ import { useStudio } from "../core/store";
 import { KeyHeads } from "../keys/KeyHeads";
 import { AudioMeter } from "../sound/AudioMeter";
 import { ClipMenu } from "../sound/ClipMenu";
+import { OpenFilmTrack } from "../openfilm/Track";
 import { TrackHeads } from "../sound/TrackHeads";
 import { TextHeads } from "../text/TextHeads";
 import { ROW_MAX, ROW_MIN, rowLayout, RULER_H, setRowLayout } from "./rows";

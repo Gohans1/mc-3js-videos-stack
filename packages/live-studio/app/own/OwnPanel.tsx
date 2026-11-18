@@ -31,8 +31,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-import { keys as camKeys } from "../camera/cam";
-import { layerItems } from "../camera/layers";
+import { edit as editCam, keys as camKeys } from "../camera/cam";
+import { layerItems, layerLocked, layersDoc } from "../camera/layers";
 import { shotsDoc } from "../camera/shots";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
@@ -41,9 +41,11 @@ import { clockText } from "../core/time";
 import { useFrame } from "../core/useFrame";
 import { seek } from "../playback/transport";
 import { sourceOf } from "../sound/library-view";
-import { lanes, library } from "../sound/sound";
-import { items as textItems } from "../text/text";
+import { edit as editSound, lanes, library, locked as soundLocked } from "../sound/sound";
+import { edit as editText, items as textItems, locked as textLocked } from "../text/text";
 import { BUILTINS } from "./builtins";
+import { type FieldPath, replaceField } from "./custom-fields";
+import { JsonValue } from "./CustomFields";
 import { HistoryPanel } from "./HistoryPanel";
 import { otherKeys, type OwnField, type OwnInput, type OwnItem, ownWork } from "./own-work";
 
@@ -98,13 +100,61 @@ const filmWork = () => {
     variants: r.variants,
     rows: [
       ...shotRows.flatMap((row, i) =>
-        SHOTS_OUT[i] ? [{ kind: "Shot", t: SHOTS_OUT[i].t, row }] : [],
+        SHOTS_OUT[i]
+          ? [
+              {
+                kind: "Shot",
+                t: SHOTS_OUT[i].t,
+                row,
+                change: (path: FieldPath, value: unknown) =>
+                  shotsDoc.edit((data) => replaceField(data[i], path, value)),
+              },
+            ]
+          : [],
       ),
-      ...camKeys.map((k) => ({ kind: "Camera key", t: k.t, row: k as unknown as Rec })),
-      ...textItems.map((it) => ({ kind: "Text", t: it.from, row: it as unknown as Rec })),
-      ...(lanes?.beds ?? []).map((b) => ({ kind: "Sound", t: b.from, row: b as unknown as Rec })),
-      ...(lanes?.sfx ?? []).map((x) => ({ kind: "Sound", t: x.at, row: x as unknown as Rec })),
-      ...layerItems().map((x) => ({ kind: "Adjustment", t: x.from, row: x as unknown as Rec })),
+      ...camKeys.map((k, i) => ({
+        kind: "Camera key",
+        t: k.t,
+        row: k as unknown as Rec,
+        change: (path: FieldPath, value: unknown) =>
+          editCam((data) => replaceField(data[i], path, value)),
+      })),
+      ...textItems.map((it, i) => ({
+        kind: "Text",
+        t: it.from,
+        row: it as unknown as Rec,
+        ...(!textLocked(i) && {
+          change: (path: FieldPath, value: unknown) =>
+            editText((data) => replaceField(data.items[i], path, value)),
+        }),
+      })),
+      ...(lanes?.beds ?? []).map((b, i) => ({
+        kind: "Sound",
+        t: b.from,
+        row: b as unknown as Rec,
+        ...(!soundLocked({ list: "beds", i }) && {
+          change: (path: FieldPath, value: unknown) =>
+            editSound((data) => replaceField(data.beds[i], path, value)),
+        }),
+      })),
+      ...(lanes?.sfx ?? []).map((x, i) => ({
+        kind: "Sound",
+        t: x.at,
+        row: x as unknown as Rec,
+        ...(!soundLocked({ list: "sfx", i }) && {
+          change: (path: FieldPath, value: unknown) =>
+            editSound((data) => replaceField(data.sfx[i], path, value)),
+        }),
+      })),
+      ...layerItems().map((x, i) => ({
+        kind: "Adjustment",
+        t: x.from,
+        row: x as unknown as Rec,
+        ...(!layerLocked(x.id) && {
+          change: (path: FieldPath, value: unknown) =>
+            layersDoc.edit((data) => replaceField(data.items[i], path, value)),
+        }),
+      })),
     ],
     other: Object.fromEntries([
       ...otherKeys(r).map((k) => [k, (r as unknown as Rec)[k]]),
@@ -272,6 +322,21 @@ function Item({ x }: { x: OwnItem }) {
         <p className="text-muted-foreground text-sm leading-relaxed wrap-anywhere">{x.tip}</p>
       )}
       {x.used.length > 0 && <UsageTimes times={x.used} />}
+      {x.edits && (
+        <details>
+          <summary className="text-ui text-primary-text cursor-pointer py-1">Edit values</summary>
+          <div className="mt-2 flex flex-col gap-4">
+            {x.edits.map((entry, i) => (
+              <JsonValue
+                key={i}
+                name={clockText(entry.t)}
+                value={entry.value}
+                onChange={entry.change}
+              />
+            ))}
+          </div>
+        </details>
+      )}
       {x.fields.length > 0 && (
         <dl className="flex min-w-0 flex-col gap-3">
           {x.fields.map((f) => (
@@ -401,7 +466,9 @@ export function OwnPanel() {
             {open.id !== "history" && (
               <p className="text-muted-foreground text-ui flex items-start gap-2 leading-relaxed">
                 <LockKeyhole aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-                View only · Add a note to request changes.
+                {open.id === "fields"
+                  ? "Edit values to update the film. Ctrl+Z undoes a change."
+                  : "Code and scene objects are view only. Ask the AI in a note."}
               </p>
             )}
           </div>

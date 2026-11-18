@@ -1,0 +1,4 @@
+[
+ {"t": 0, "name": "Create freely", "lighting": {"tint": "#3aa99f", "enabled": true}},
+ {"t": 3, "name": "Adjust by hand", "transition": {"fx": "own-tint", "len": 0.8, "params": {"intensity": 0.7}}}
+]

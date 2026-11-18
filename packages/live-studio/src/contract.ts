@@ -642,7 +642,21 @@ const Anim = z.looseObject({
   out: AnimFx.optional(),
   combo: AnimFx.optional(),
 });
+export const PageElementOverride = z.object({
+  selector: z.string().min(1),
+  text: z.string().optional(),
+  style: z.record(z.string(), z.string()).optional(),
+  translate: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  scale: z.number().positive().optional(),
+  rotate: z.number().finite().optional(),
+});
 const Transition = z.looseObject({
+  params: z
+    .record(
+      z.string(),
+      z.union([z.number().finite(), z.boolean(), z.array(z.number().finite()).min(2).max(4)]),
+    )
+    .optional(),
   fx: z.string().min(1),
   len: z.number().positive(),
   ease: Ease.optional(),

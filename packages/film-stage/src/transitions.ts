@@ -144,6 +144,9 @@ export function makeTransitions(
           ${def.glsl}
           void main() { gl_FragColor = transition(uvOut); }`,
       });
+      for (const [name, value] of Object.entries(def.uniforms ?? {})) {
+        if (!Object.hasOwn(mat.uniforms, name)) mat.uniforms[name] = { value };
+      }
       materials.set(def.id, mat);
     }
     return mat;
@@ -193,6 +196,10 @@ export function makeTransitions(
     material.uniforms.uFeather.value = tr.feather;
     material.uniforms.uFlip.value = tr.flip ? 1 : 0;
     material.uniforms.uRatio.value = size.y > 0 ? size.x / size.y : 16 / 9;
+    for (const [name, value] of Object.entries(def.uniforms ?? {})) {
+      if (!["a", "b", "progress", "uRawProgress", "uFeather", "uFlip", "uRatio"].includes(name))
+        material.uniforms[name].value = shots()[tr.shot].transition?.params?.[name] ?? value;
+    }
     quad.material = material;
     const auto = renderer.autoClear;
     renderer.autoClear = false;
