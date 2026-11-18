@@ -1,27 +1,22 @@
-import { Check } from "lucide-react";
-import { useMemo } from "react";
+import { Check, Pencil } from "lucide-react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import { type InlineToken, type LessonBlock, parseInlines, parseLessonBlocks } from "./markdown";
 
-const HEAD_COLOR: Record<number, string> = {
-  1: "text-md-h1 text-2xl/[1.2] font-semibold tracking-[-0.015em] text-balance mt-6 first:mt-0 pb-2 border-b border-border/50",
-  2: "text-md-h2 text-xl/[1.25] font-semibold tracking-[-0.01em] text-balance mt-5 first:mt-0",
-  3: "text-md-h3 text-lg/[1.3] font-semibold text-balance mt-4 first:mt-0",
-  4: "text-md-h4 text-base/[1.35] font-semibold text-balance mt-3.5 first:mt-0",
-  5: "text-md-h5 text-base/[1.4] font-medium text-balance mt-3 first:mt-0",
-  6: "text-md-h6 text-base/[1.4] font-semibold uppercase tracking-[0.05em] text-balance mt-2.5 first:mt-0",
+const HEADING_STYLE: Record<number, string> = {
+  1: "text-2xl/[1.3] font-semibold tracking-[-0.015em] mt-6 first:mt-0 pb-2 border-b border-border/50",
+  2: "text-xl/[1.3] font-semibold tracking-[-0.01em] mt-5 first:mt-0",
+  3: "text-lg/[1.3] font-semibold mt-4 first:mt-0",
+  4: "text-base/[1.3] font-semibold mt-3.5 first:mt-0",
+  5: "text-base/[1.3] font-medium mt-3 first:mt-0",
+  6: "text-label text-base/[1.3] font-medium tracking-[0.05em] mt-2.5 first:mt-0",
 };
 
-function RenderInlines({
-  tokens,
-  allowLinks = true,
-}: {
-  tokens: readonly InlineToken[];
-  allowLinks?: boolean;
-}) {
+function RenderInlines({ tokens }: { tokens: readonly InlineToken[] }) {
   return (
     <>
       {tokens.map((tok, i) => {
@@ -54,15 +49,6 @@ function RenderInlines({
               {tok.text}
             </code>
           );
-        if (!allowLinks)
-          return (
-            <span
-              key={i}
-              className="text-primary-text decoration-primary/50 underline decoration-from-font underline-offset-2"
-            >
-              {tok.text}
-            </span>
-          );
         return (
           <a
             key={i}
@@ -86,26 +72,29 @@ function HeadingBlock({
   block: Extract<LessonBlock, { type: "heading" }>;
   onJumpEdit?: (line: number) => void;
 }) {
-  const cls = HEAD_COLOR[block.depth] ?? HEAD_COLOR[4];
-  const content = (
-    <button
-      type="button"
-      onClick={() => onJumpEdit?.(block.line)}
-      aria-label={`Edit "${block.title}" at line ${block.line}`}
-      title={`Edit at line ${block.line}`}
-      className="focus-visible:ring-ring inline-flex max-w-full cursor-pointer items-baseline gap-1.5 rounded text-start outline-none hover:opacity-85 focus-visible:ring-2"
-    >
-      <span className="text-balance wrap-anywhere">
-        <RenderInlines tokens={block.inlines} allowLinks={false} />
-      </span>
-    </button>
-  );
+  const cls = HEADING_STYLE[block.depth] ?? HEADING_STYLE[4];
   const level = Math.min(6, Math.max(1, block.depth));
   const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   return (
-    <Tag data-line={block.line} className={cls}>
-      {content}
-    </Tag>
+    <div className={cn("text-lesson-heading flex items-start gap-2", cls)}>
+      <Tag
+        data-line={block.line}
+        className="data-[multiline]:leading-lesson-heading-wrapped min-w-0 flex-1 text-balance wrap-anywhere"
+      >
+        <RenderInlines tokens={block.inlines} />
+      </Tag>
+      {onJumpEdit && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Edit “${block.title}” at line ${block.line}`}
+          title={`Edit at line ${block.line}`}
+          onClick={() => onJumpEdit(block.line)}
+        >
+          <Pencil aria-hidden />
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -117,15 +106,38 @@ export function LessonMarkdownView({
   onJumpEdit?: (line: number) => void;
 }) {
   const blocks = useMemo(() => parseLessonBlocks(text), [text]);
+  const articleRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const article = articleRef.current;
+    if (!article) return;
+    const headings = Array.from(
+      article.querySelectorAll<HTMLHeadingElement>("h1, h2, h3, h4, h5, h6"),
+    );
+    if (!headings.length) return;
+    const updateLeading = () => {
+      const wrapped = headings.map((heading) => {
+        const lineHeight = Number.parseFloat(getComputedStyle(heading).lineHeight);
+        return Math.round(heading.offsetHeight / lineHeight) >= 3;
+      });
+      headings.forEach((heading, i) => heading.toggleAttribute("data-multiline", wrapped[i]));
+    };
+    updateLeading();
+    const observer = new ResizeObserver(updateLeading);
+    observer.observe(article);
+    return () => observer.disconnect();
+  }, [blocks]);
   if (!blocks.length) {
     return (
-      <div className="font-md text-muted-foreground mx-auto w-full max-w-[42rem] py-4 text-base/[1.6]">
+      <div className="font-md text-muted-foreground mx-auto w-full max-w-[33rem] py-4 text-base/[1.6]">
         Empty lesson file. Switch to Edit to start writing rules.
       </div>
     );
   }
   return (
-    <article className="font-md text-foreground/95 mx-auto flex w-full max-w-[42rem] flex-col gap-3.5 text-base/[1.6]">
+    <article
+      ref={articleRef}
+      className="font-md text-foreground mx-auto flex w-full max-w-[33rem] flex-col gap-3.5 text-base/[1.6]"
+    >
       {blocks.map((b) => {
         if (b.type === "heading")
           return <HeadingBlock key={b.line} block={b} onJumpEdit={onJumpEdit} />;
@@ -140,7 +152,7 @@ export function LessonMarkdownView({
             <blockquote
               key={b.line}
               data-line={b.line}
-              className="border-primary/50 bg-card/60 text-muted-foreground rounded-r-md border-l-2 py-2 pr-3.5 pl-3.5 text-pretty italic"
+              className="border-hairline-strong bg-card/60 text-label rounded-e-md border-s px-3.5 py-2 text-pretty wrap-anywhere italic"
             >
               <RenderInlines tokens={b.inlines} />
             </blockquote>
@@ -210,7 +222,7 @@ export function LessonMarkdownView({
             data-line={b.line}
             className="border-border bg-card/40 overflow-x-auto rounded-lg border"
           >
-            <table className="w-full caption-bottom border-collapse text-sm/[1.5]">
+            <table className="w-full caption-bottom border-collapse text-sm/[1.5] tabular-nums">
               <thead className="border-border bg-card/60 border-b">
                 <tr>
                   {b.headers.map((h, i) => (
@@ -226,7 +238,7 @@ export function LessonMarkdownView({
               </thead>
               <tbody>
                 {b.rows.map((r, ri) => (
-                  <tr key={ri} className="border-border/50 border-t hover:bg-white/[0.03]">
+                  <tr key={ri} className="border-border/50 hover:bg-surface-subtle border-t">
                     {b.headers.map((_, ci) => {
                       const cell = r[ci] ?? "";
                       return (

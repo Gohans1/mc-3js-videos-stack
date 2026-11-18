@@ -64,7 +64,7 @@ import { useDeckShrinkLatch } from "@/lessons/deck-latch";
 import { shouldFoldBlankAreaClick } from "@/lessons/LessonColumn";
 import { lessons, loadLessons } from "@/lessons/lessons";
 
-function DeckRunner({ dockMode }) {
+function DeckRunner({ dockMode, fixedWidth }) {
   const [tick, setTick] = useState(0);
   useEffect(() => lessons.subscribe(() => setTick((t) => t + 1)), []);
   void tick;
@@ -75,11 +75,11 @@ function DeckRunner({ dockMode }) {
     !open && folder.length === 0
       ? restW
       : open
-        ? Math.min(isEnd ? 600 : 1040, Math.max(isEnd ? 600 : 800, (folder.length + 1) * 192 + 384))
+        ? Math.min(isEnd ? 600 : 1176, Math.max(isEnd ? 600 : 800, (folder.length + 1) * 192 + 552))
         : Math.min(isEnd ? 600 : 960, Math.max(540, (folder.length + 1) * 192 + 128));
   const trailKey = \`\${folder.join("/")}\\0\${open ?? ""}\`;
   const latch = useDeckShrinkLatch({
-    desiredW: rawDesiredW,
+    desiredW: fixedWidth ?? rawDesiredW,
     trailKey,
     active: true,
   });
@@ -109,7 +109,7 @@ function DeckRunner({ dockMode }) {
             data-testid="lessons-pane"
             className="bg-background flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg"
           >
-            <LessonsPanel desktop lockWidthPx={latch.lockW} dock={dockMode} />
+            <LessonsPanel desktop lockWidthPx={latch.lockW} dock={dockMode} paneWidthPx={fixedWidth ?? undefined} />
           </aside>
           {!isEnd && (
             <main data-stage-sentinel className="bg-backdrop relative flex-1 rounded-xl border">
@@ -123,13 +123,16 @@ function DeckRunner({ dockMode }) {
 }
 
 let setModeGlobal = null;
+let setWidthGlobal = null;
 function Root() {
   const [dockMode, setDockMode] = useState("start");
+  const [fixedWidth, setFixedWidth] = useState(null);
   setModeGlobal = setDockMode;
-  return <DeckRunner dockMode={dockMode} />;
+  setWidthGlobal = setFixedWidth;
+  return <DeckRunner dockMode={dockMode} fixedWidth={fixedWidth} />;
 }
 
-window.__DECK_TEST__ = { lessons, shouldFoldBlankAreaClick, setDock: (m) => setModeGlobal?.(m) };
+window.__DECK_TEST__ = { lessons, shouldFoldBlankAreaClick, setDock: (m) => setModeGlobal?.(m), setWidth: (w) => setWidthGlobal?.(w) };
 createRoot(document.getElementById("root")).render(<Root />);
 `;
 
@@ -185,14 +188,14 @@ describe("deck-motion intersection clip bounds and SSR guards", () => {
         prevTrail: trailA,
         nextTrail: trailB,
         animate: true,
-      })();
+      })?.cancel();
       animateDeckTransition({
         deck: null,
         snapshot: null,
         prevTrail: trailA,
         nextTrail: trailB,
         animate: false,
-      })();
+      })?.cancel();
     });
   });
 
@@ -361,6 +364,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       const l1Width = Math.round(pane.getBoundingClientRect().width);
       const l1Cols = document.querySelectorAll("[data-lessons-col]").length;
       const l1Anims = document.getAnimations({ subtree: true }).length;
+      const l1Entry = document.querySelector("[data-lessons-col='dir:craft']").getAnimations()
+        .flatMap(anim => anim.effect.getKeyframes());
       await waitMs(250);
 
       // Fold L1 -> L0 by clicking genuine blank area under L0 list
@@ -386,6 +391,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       await raf();
       const l1To0Overlay = document.querySelector("div[style*='z-index: 45']");
       const l1To0Anims = document.getAnimations({ subtree: true }).length;
+      const l1To0RootFade = document.querySelector("[data-lessons-col='/']").getAnimations()
+        .flatMap(anim => anim.effect.getKeyframes()).some(frame => Number(frame.opacity) < 1);
       const l1To0State = { folder: [...lessons.getState().folder], open: lessons.getState().open };
       const l1To0OverlayRect = l1To0Overlay?.getBoundingClientRect() ?? null;
       const l1To0PaneRect = pane.getBoundingClientRect();
@@ -456,9 +463,11 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
         l1Width,
         l1Cols,
         l1Anims,
+        l1EnteredFromRight: l1Entry.some(frame => frame.transform === "translateX(8px)"),
         afterGutterFolder,
         afterGapFolder,
         l1To0Anims,
+        l1To0RootFade,
         l1To0State,
         l1To0OverlayRect: l1To0OverlayRect ? { left: l1To0OverlayRect.left, right: l1To0OverlayRect.right } : null,
         l1To0PaneRect: { left: l1To0PaneRect.left, right: l1To0PaneRect.right },
@@ -483,11 +492,13 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.equal(result.l1Width, 540);
     assert.equal(result.l1Cols, 2);
     assert.ok(result.l1Anims > 0, "Expected WAAPI animation on L0 -> L1 drill-in");
+    assert.equal(result.l1EnteredFromRight, true);
     assert.deepEqual(result.afterGutterFolder, ["craft"]);
     assert.deepEqual(result.afterGapFolder, ["craft"]);
 
     assert.deepEqual(result.l1To0State, { folder: [], open: null });
     assert.ok(result.l1To0Anims > 0, "Expected real WAAPI fold animation on L1 -> L0");
+    assert.equal(result.l1To0RootFade, true);
     assert.ok(result.l1To0OverlayRect, "Expected exiting L1 overlay on L1 -> L0");
     assert.ok(result.l1To0OverlayRect.right <= result.l1To0PaneRect.right + 0.5);
     assert.ok(result.l1To0OverlayRect.right <= result.l1To0StageRect.left + 0.5);
@@ -541,7 +552,7 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       const timingRowBtn = [...document.querySelectorAll("[data-lessons-col='/'] button[data-lesson-row]")].find((b) =>
         b.textContent?.trim().startsWith("timing"),
       );
-      const timingLabel = timingRowBtn.querySelector("span.truncate");
+      const timingLabel = timingRowBtn.querySelector("span.wrap-anywhere");
       const timingDelWrap = timingRowBtn.nextElementSibling;
       const timingDelBtn = timingDelWrap.querySelector("button");
       const sideIdleDelW = Math.round(timingDelWrap.getBoundingClientRect().width);
@@ -653,9 +664,8 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     })()`);
 
     assert.equal(res.libBeforeW, 800);
-    // Side-column hover-reveal delete control collapses cleanly when idle so filenames stay readable, expanding on focus
-    assert.equal(res.sideIdleDelW, 0);
-    assert.ok(res.sideFocusDelW >= 24);
+    assert.ok(res.sideIdleDelW >= 24);
+    assert.equal(res.sideFocusDelW, res.sideIdleDelW);
     assert.ok(
       res.sideLabelW >= 40 && res.sideLabelW >= res.sideLabelScrollW,
       `Expected readable filename width: ${res.sideLabelW} < ${res.sideLabelScrollW}`,
@@ -697,5 +707,142 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.ok(Math.abs(res.sideSettledL0Left - res.sideSettledPaneLeft) < 1);
     assert.equal(res.sideOverlayGone, true);
     assert.deepEqual(pageErrors, []);
+  });
+
+  test("reopening a closing reader continues from the painted fade without shifting the sheet", async () => {
+    const result = await view.evaluate(`(async () => {
+      const { lessons, setDock } = window.__DECK_TEST__;
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const click = el => el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+      const reader = '[data-lesson-content="all:camera.md"]';
+      setDock("start");
+      lessons.setState({ folder: [], open: "all:camera.md" });
+      await frame();
+      await frame();
+      const sheet = document.querySelector(reader);
+      const startX = sheet.getBoundingClientRect().left;
+      click(sheet.querySelector('[aria-label="Contents"]'));
+      await frame();
+      click([...document.querySelectorAll("button")].find(button => button.textContent.trim() === "Bottom"));
+      await frame();
+      const contentsKeptFocus = document.activeElement === sheet;
+      click(sheet.querySelector("[data-lesson-back]"));
+      await frame();
+      const listItemFocused = document.activeElement.matches("li") &&
+        document.activeElement.querySelector('[data-lesson-row="file:all:camera.md"]') !== null;
+      document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key:"ArrowDown", bubbles:true }));
+      const arrowTarget = document.activeElement.dataset.lessonRow;
+      const overlay = document.querySelector("div[style*='z-index: 45']");
+      const ghost = overlay.querySelector('[data-lesson-motion-key="all:camera.md"]');
+      const fade = ghost.getAnimations()[0];
+      fade.currentTime = 60;
+      const exitOpacity = Number(getComputedStyle(ghost).opacity);
+      const exitX = ghost.getBoundingClientRect().left;
+      const visibleGhostControls = [...ghost.querySelectorAll("button, [role=radio]")]
+        .filter(control => getComputedStyle(control).visibility === "visible").length;
+      click(document.querySelector('[data-lesson-row="file:all:camera.md"]'));
+      await frame();
+      const reopened = document.querySelector(reader);
+      return {
+        exitOpacity,
+        resumedOpacity: Number(reopened.getAnimations()[0]?.effect.getKeyframes()[0].opacity),
+        shift: Math.abs(startX - exitX),
+        visibleGhostControls,
+        contentsKeptFocus,
+        listItemFocused,
+        arrowTarget,
+        readerFocused: document.activeElement === reopened,
+        oldGhostMounted: ghost.isConnected,
+      };
+    })()`);
+    assert.ok(result.exitOpacity > 0 && result.exitOpacity < 1);
+    assert.ok(Math.abs(result.resumedOpacity - result.exitOpacity) < 0.08);
+    assert.ok(result.shift < 1);
+    assert.equal(result.visibleGhostControls, 0);
+    assert.equal(result.contentsKeptFocus, true);
+    assert.equal(result.listItemFocused, true);
+    assert.equal(result.arrowTarget, "file:all:timing.md");
+    assert.equal(result.readerFocused, true);
+    assert.equal(result.oldGhostMounted, false);
+  });
+
+  test("opening a nested lesson at the Library's default width crossfades the rendered trail without sliding text", async () => {
+    const result = await view.evaluate(`(async () => {
+      const { lessons, setDock, setWidth } = window.__DECK_TEST__;
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const col = '[data-lessons-col="dir:craft/ik"]';
+      const reader = '[data-lesson-content="all:craft/ik/foot.md"]';
+      setDock("start");
+      setWidth(800);
+      lessons.setState({ folder: ["craft", "ik"], open: null });
+      await frame();
+      await frame();
+      await new Promise(resolve => setTimeout(resolve, 180));
+      const pane = document.querySelector("[data-testid=lessons-pane]");
+      const oldColumn = pane.querySelector(col);
+      const oldRect = oldColumn.getBoundingClientRect();
+      pane.querySelector('[data-lesson-row="file:all:craft/ik/foot.md"]').dispatchEvent(
+        new MouseEvent("click", { bubbles: true, detail: 1 }),
+      );
+      await frame();
+      const overlay = pane.querySelector("div[style*='z-index: 45']");
+      const oldColumnCopy = overlay?.querySelector('[data-lesson-motion-key="dir:craft/ik"]');
+      const nextColumn = pane.querySelector(col);
+      const realReader = pane.querySelector(reader);
+      const frames = el => el?.getAnimations().flatMap(anim => anim.effect.getKeyframes()) ?? [];
+      const outcome = {
+        oldWidth: oldRect.width,
+        snapshotWidth: oldColumnCopy?.getBoundingClientRect().width,
+        newWidth: nextColumn?.getBoundingClientRect().width,
+        oldAndNewFade: [oldColumnCopy, nextColumn, realReader].every(el =>
+          frames(el).some(frame => "opacity" in frame) && frames(el).every(frame => !("transform" in frame)),
+        ),
+        clip: overlay?.getBoundingClientRect().right === pane.getBoundingClientRect().right,
+      };
+      setWidth(null);
+      return outcome;
+    })()`);
+    assert.ok(result.oldWidth > result.newWidth);
+    assert.equal(result.snapshotWidth, result.oldWidth);
+    assert.equal(result.oldAndNewFade, true);
+    assert.equal(result.clip, true);
+  });
+
+  test("a narrowed desktop reader stays visible at 200% text size and ArrowLeft returns to the lesson row", async () => {
+    const result = await view.evaluate(`(async () => {
+      const { lessons, setDock } = window.__DECK_TEST__;
+      const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      setDock("start");
+      lessons.setState({ folder: [], open: "all:camera.md" });
+      await frame();
+      const pane = document.querySelector("[data-testid=lessons-pane]");
+      pane.style.width = "720px";
+      await frame();
+      const colsAt720 = pane.querySelectorAll("[data-lessons-col]").length;
+      pane.style.width = "719px";
+      await frame();
+      const colsAt719 = pane.querySelectorAll("[data-lessons-col]").length;
+      pane.style.width = "260px";
+      await frame();
+      document.documentElement.style.fontSize = "32px";
+      await frame();
+      const back = pane.querySelector("[data-lesson-back]");
+      const aside = pane.getBoundingClientRect();
+      const rect = back.getBoundingClientRect();
+      const visible = rect.left >= aside.left && rect.right <= aside.right;
+      back.focus();
+      back.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      await frame();
+      const row = document.activeElement;
+      const remove = row.closest("li").querySelector("[title^=Delete]");
+      return { visible, open: lessons.getState().open, focused: row.dataset.lessonRow, removeVisible: getComputedStyle(remove.parentElement).opacity, noExtraColumns: colsAt719 <= colsAt720 };
+    })()`);
+    assert.deepEqual(result, {
+      visible: true,
+      open: null,
+      focused: "file:all:camera.md",
+      removeVisible: "1",
+      noExtraColumns: true,
+    });
   });
 });

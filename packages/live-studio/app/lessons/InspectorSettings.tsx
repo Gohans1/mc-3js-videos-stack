@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { type Ref, useId } from "react";
 import type { ZodIssue } from "zod";
 
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -27,7 +27,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
       {
         key: "extractMode",
         label: "Content to read",
-        help: "Headings keeps input short. Full text also sends the lesson body.",
+        help: "Reads headings and the metadata selected below. Full lesson text also includes the body.",
       },
       {
         key: "wordsLimit",
@@ -144,20 +144,24 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
       {
         key: "route",
         label: "Provider",
-        help: "Auto tries free OpenCode Zen first, then paid OpenRouter when needed.",
+        help: "Auto prefers OpenCode Zen. OpenRouter may charge if Zen is unavailable or out of quota.",
       },
-      { key: "freeModel", label: "Free model ID", help: "Model sent to OpenCode Zen." },
+      {
+        key: "freeModel",
+        label: "OpenCode Zen model ID",
+        help: "The default model is free. Check pricing before choosing another model.",
+      },
       { key: "paidModel", label: "Paid model ID", help: "Model sent to OpenRouter." },
       {
         key: "spendCap",
-        label: "Response-cost stop · USD",
-        help: "Checked after billing per request. This is not a hard budget for the whole run.",
+        label: "Charge threshold per request (USD)",
+        help: "A charge over this amount ends the run without returning matches. Charges already incurred still apply. One run can make several requests.",
       },
     ],
   },
   {
-    title: "AI output wording",
-    hint: "Changes the AI output preview. Matching files must be available to see their labels.",
+    title: "Note formatting",
+    hint: "Formats the note sent to the AI. Lesson labels appear when there’s a match.",
     view: "ai",
     fields: [
       { key: "sectionLabel", label: "Lesson label", help: "Printed before a matched file." },
@@ -233,12 +237,12 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
   },
   {
     title: "Remembering a rule",
-    hint: "Changes the learn-instruction preview.",
+    hint: "Changes the Remember prompt preview.",
     view: "learn",
     fields: [
       {
         key: "learnTemplate",
-        label: "Learn instruction",
+        label: "Remember prompt",
         help: "{default} keeps the standard instruction. Also accepts {globalPath}, {filmTopics}, {globalTopics}.",
         multiline: true,
       },
@@ -259,7 +263,7 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
 ];
 const options: Partial<Record<keyof LessonJevConfig, { value: string; label: string }[]>> = {
   extractMode: [
-    { value: "headers", label: "Headings only" },
+    { value: "headers", label: "Headings and metadata" },
     { value: "full", label: "Full lesson text" },
   ],
   frontmatterMode: [
@@ -268,8 +272,8 @@ const options: Partial<Record<keyof LessonJevConfig, { value: string; label: str
     { value: "none", label: "No metadata" },
   ],
   route: [
-    { value: "auto", label: "Auto · free, then paid" },
-    { value: "free", label: "Free only · OpenCode Zen" },
+    { value: "auto", label: "Auto · OpenCode Zen preferred" },
+    { value: "free", label: "OpenCode Zen only" },
     { value: "paid", label: "Paid only · OpenRouter" },
   ],
 };
@@ -293,12 +297,20 @@ export function inspectorSettingErrors(issues: readonly ZodIssue[]) {
   return errors;
 }
 
+export function revealFocusedFieldError(message: HTMLElement | null) {
+  const describedBy = document.activeElement?.getAttribute("aria-describedby");
+  if (message && describedBy?.split(" ").includes(message.id))
+    message.scrollIntoView({ block: "nearest" });
+}
+
 export function InspectorSettings({
   config,
   onChange,
   errors,
+  chargeThresholdRef,
 }: {
   config: LessonJevConfig;
+  chargeThresholdRef: Ref<HTMLInputElement>;
   errors: Partial<Record<keyof LessonJevConfig, string>>;
   onChange: (
     config: LessonJevConfig,
@@ -358,10 +370,10 @@ export function InspectorSettings({
                       >
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                         <SelectGroup>
                           {choices.map((c) => (
-                            <SelectItem key={c.value} value={c.value}>
+                            <SelectItem key={c.value} value={c.value} size="readable">
                               {c.label}
                             </SelectItem>
                           ))}
@@ -370,7 +382,9 @@ export function InspectorSettings({
                     </Select>
                   ) : typeof value === "number" ? (
                     <Input
+                      ref={field.key === "spendCap" ? chargeThresholdRef : undefined}
                       size="md"
+                      variant="numeric"
                       id={fieldId}
                       type="number"
                       step={field.key.startsWith("fit") || field.key === "spendCap" ? "0.01" : "1"}
@@ -387,7 +401,7 @@ export function InspectorSettings({
                       value={value}
                       aria-describedby={descriptionId}
                       aria-invalid={Boolean(error) || undefined}
-                      className="max-h-48 overflow-y-auto"
+                      className="max-h-48 overflow-y-auto overscroll-contain"
                       onChange={(e) => update(e.target.value)}
                     />
                   ) : (
@@ -402,6 +416,7 @@ export function InspectorSettings({
                   )}
                   <p
                     id={descriptionId}
+                    ref={error ? revealFocusedFieldError : undefined}
                     role={error ? "alert" : undefined}
                     className={
                       error

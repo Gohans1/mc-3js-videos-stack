@@ -14,7 +14,7 @@ const toggleVariants = cva(
         "quiet-primary": "text-muted-foreground aria-pressed:text-primary-text",
         "quiet-warn": "text-muted-foreground aria-pressed:text-warn-text",
         segment:
-          "text-muted-foreground hover:text-foreground aria-pressed:bg-secondary aria-pressed:text-foreground aria-pressed:ring-hairline-strong text-sm tabular-nums aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
+          "text-muted-foreground hover:text-foreground aria-pressed:bg-secondary aria-pressed:text-foreground aria-pressed:ring-hairline-strong focus-visible:outline-ring text-sm tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
         pick: "text-ui aria-pressed:border-primary aria-pressed:bg-tint border border-transparent",
         chip: "bg-secondary aria-pressed:border-primary aria-pressed:bg-tint aria-pressed:text-primary-text border border-transparent font-semibold tabular-nums data-[in-use=true]:shadow-[inset_0_-3px_0_var(--warn)]",
         "status-all":

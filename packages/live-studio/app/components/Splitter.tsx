@@ -43,6 +43,7 @@ interface Props {
   before?: boolean; // the pane sits before the bar (above it): dragging down grows it
   fold?: boolean; // false: the pane stops at min instead of folding away
   step?: number; // px per arrow press, 4x with Shift
+  resizeOnRelease?: boolean;
   className?: string;
   lineClassName?: string;
 }
@@ -58,6 +59,7 @@ export function Splitter({
   before = false,
   fold = true,
   step = 16,
+  resizeOnRelease = false,
   className,
   lineClassName,
 }: Props) {
@@ -110,24 +112,30 @@ export function Splitter({
           start = measure();
         bar.setPointerCapture(e.pointerId);
         bar.dataset.dragging = "";
+        let previewSize: number | null = null;
         // The drag ends however the press does: let go, cancelled, the capture lost, or a move with the button already up (a
         // let-go the bar never heard used to leave it following the pointer on a mere hover)
         const ends = ["pointerup", "pointercancel", "lostpointercapture"] as const;
-        const end = () => {
+        const end = (event: PointerEvent) => {
           bar.removeEventListener("pointermove", move);
           for (const t of ends) bar.removeEventListener(t, end);
           delete bar.dataset.dragging;
+          if (resizeOnRelease) {
+            bar.style.removeProperty("transform");
+            if (previewSize !== null && event.type !== "pointercancel") set(previewSize);
+          }
         };
         const move = (m: PointerEvent) => {
           if (!(m.buttons & 1)) {
-            end();
+            end(m);
             return;
           }
-          const curNow = measure();
-          apply(
-            fit(start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from), start),
-            curNow,
-          );
+          const size = fit(start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from));
+          if (resizeOnRelease) {
+            previewSize = size;
+            const offset = (size - start) * (before ? 1 : -1);
+            bar.style.transform = across ? `translateY(${offset}px)` : `translateX(${offset}px)`;
+          } else set(size);
         };
         bar.addEventListener("pointermove", move);
         for (const t of ends) bar.addEventListener(t, end);
@@ -161,7 +169,7 @@ export function Splitter({
       <span
         aria-hidden
         className={cn(
-          "bg-primary pointer-events-none absolute opacity-0 transition-opacity duration-150 group-hover:opacity-60 group-focus-visible:opacity-100 group-data-dragging:opacity-100",
+          "bg-primary pointer-events-none absolute opacity-0 transition-opacity duration-150 group-hover:opacity-60 group-focus-visible:opacity-100 group-focus-visible:transition-none group-data-dragging:opacity-100 group-data-dragging:transition-none motion-reduce:transition-none",
           across ? "inset-x-0 top-[3px] h-0.5" : "inset-y-0 left-[3px] w-0.5",
           lineClassName,
         )}

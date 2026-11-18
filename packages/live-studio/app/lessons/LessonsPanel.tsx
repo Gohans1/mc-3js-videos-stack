@@ -1,5 +1,5 @@
 // The Lessons tab: project lessons/<path>.md plus global lessons/<path>.md, rendered as an md-phone desktop Miller deck
-// so ancestor folder columns always stay visible beside opened subfolders and notes, with GFM Read view, painted
+// with ancestor folder columns alongside the reader when they fit, a GFM Read view, painted
 // line-synced editor, Contents flyTo, diacritic-insensitive search, and AI-first updates with optional word diffs.
 import {
   type CSSProperties,
@@ -14,22 +14,30 @@ import {
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
+import { LESSON_PATH_MAX, lessonPath } from "../../src/lesson-template";
 import { useActivity } from "../activity/activity";
 import { Segmented } from "../components/inspector";
-import { prefersReduced, TabStage } from "../components/Motion";
+import { TabStage } from "../components/Motion";
 import { isDesktopViewport } from "../components/splitter-layout";
 import { AiInspector } from "./AiInspector";
-import { animateDeckTransition, captureDeckSnapshot, type DeckSnapshot } from "./deck-motion";
-import { removeLessonWithUndo } from "./lesson-ui";
+import {
+  animateDeckTransition,
+  captureDeckSnapshot,
+  type DeckMotion,
+  type DeckSnapshot,
+} from "./deck-motion";
+import { downloadLessonDrafts, removeLessonWithUndo } from "./lesson-ui";
 import { LessonColumnView } from "./LessonColumn";
 import { LessonFileView } from "./LessonFileView";
 import {
   dismissAiNotice,
+  findExistingLesson,
   LESSON_NAME,
   type LessonFile,
   lessons,
   type LessonScope,
   type LessonScopeFilter,
+  lessonTrailKey,
   loadLessons,
   newLesson,
   openLesson,
@@ -44,6 +52,7 @@ import {
   layoutLessonDeck,
   lessonCardOffsets,
   type LessonColumn,
+  LESSONS_LIBRARY_WIDTH,
   type LessonTrail,
 } from "./tree";
 
@@ -64,16 +73,33 @@ const useFresh = () =>
     };
   }, []);
 
-type LessonsPanelProps = { desktop?: boolean; lockWidthPx?: number | null; dock?: "start" | "end" };
+type LessonsPanelProps = {
+  desktop?: boolean;
+  lockWidthPx?: number | null;
+  paneWidthPx?: number;
+  dock?: "start" | "end";
+};
+const READER_WIDTH = 552;
 
 export function LessonsPanel(props: LessonsPanelProps = {}) {
   const tab = useLessons((s) => s.subTab);
   const [visited, setVisited] = useState(tab === "inspector");
+  const viewSelector = useRef<HTMLDivElement>(null);
+  const openDeck = () => {
+    lessons.setState({ subTab: "deck", inspectorLiveEnabled: false });
+    requestAnimationFrame(() =>
+      viewSelector.current
+        ?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')
+        ?.focus(),
+    );
+  };
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-none px-2 py-1.5">
+      <div ref={viewSelector} className="flex flex-none px-2 py-1.5">
         <Segmented
           label="Lessons view"
+          animateIndicator={false}
+          keepClickFocus
           value={tab}
           items={[
             { id: "deck", title: "Deck" },
@@ -85,37 +111,40 @@ export function LessonsPanel(props: LessonsPanelProps = {}) {
           }}
         />
       </div>
-      <TabStage
-        activeKey={tab}
-        order={["deck", "inspector"]}
-        duration={150}
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-      >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className={cn("min-h-0 min-w-0 flex-1 flex-col", tab === "deck" ? "flex" : "hidden")}>
-          <LessonDeckPanel {...props} />
+          <LessonDeckPanel {...props} active={tab === "deck"} />
         </div>
         <div
           className={cn("min-h-0 min-w-0 flex-1 flex-col", tab === "inspector" ? "flex" : "hidden")}
         >
-          {visited && <AiInspector active={tab === "inspector"} />}
+          {visited && <AiInspector active={tab === "inspector"} onOpenDeck={openDeck} />}
         </div>
-      </TabStage>
+      </div>
     </div>
   );
 }
 
 function LessonDeckPanel({
+  active,
   desktop,
   lockWidthPx = null,
+  paneWidthPx,
   dock = "start",
-}: {
-  desktop?: boolean;
-  lockWidthPx?: number | null;
-  dock?: "start" | "end";
-} = {}) {
+}: LessonsPanelProps & { active: boolean }) {
   useFresh();
-  const { files, loaded, folder, open, seen, edits, scopeFilter, projectDir, aiNotice } =
-      useLessons((s) => s),
+  const {
+      files,
+      loaded,
+      loadFailed,
+      folder,
+      open,
+      seen,
+      edits,
+      scopeFilter,
+      projectDir,
+      aiNotice,
+    } = useLessons((s) => s),
     lit = useActivity((s) => s.lit);
 
   const isDesktop =
@@ -126,28 +155,33 @@ function LessonDeckPanel({
 
   const hostRef = useRef<HTMLDivElement>(null);
   const deckScrollRef = useRef<HTMLDivElement>(null);
+  const motionLayerRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const formTriggerRef = useRef<HTMLElement>(null);
   const pendingMotionRef = useRef<{
     snapshot: DeckSnapshot | null;
     prevTrail: LessonTrail;
     animate: boolean;
   } | null>(null);
-  const stopMotionRef = useRef<(() => void) | null>(null);
+  const motionRef = useRef<DeckMotion | null>(null);
   const didAnimatedAlignRef = useRef(false);
 
-  const [containerWidth, setContainerWidth] = useState(720);
+  const [containerWidth, setContainerWidth] = useState(LESSONS_LIBRARY_WIDTH);
   const [jumpTarget, setJumpTarget] = useState<{ path: string; line: number } | null>(null);
   const [query, setQuery] = useState("");
   const [naming, setNaming] = useState<string | null>(null);
   const [namingDepth, setNamingDepth] = useState(0);
   const [newScope, setNewScope] = useState<LessonScope>("film");
   const [submitted, setSubmitted] = useState(false);
+  const isLockedWidth = isDesktop && typeof lockWidthPx === "number" && lockWidthPx > 0;
+  const hasPaneWidth = typeof paneWidthPx === "number" && paneWidthPx > 0;
 
   useLayoutEffect(() => {
     const el = hostRef.current;
-    if (!el) return;
+    if (!el || !active || hasPaneWidth) return;
     const sync = () => {
       const next = Math.round(el.getBoundingClientRect().width);
+      if (next <= 0) return;
       setContainerWidth((prev) => (prev === next ? prev : next));
     };
     sync();
@@ -155,19 +189,31 @@ function LessonDeckPanel({
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [active, hasPaneWidth, isLockedWidth]);
 
-  useEffect(() => () => stopMotionRef.current?.(), []);
+  useEffect(() => () => motionRef.current?.cancel(), []);
 
   useEffect(() => {
     if (!aiNotice) return;
-    toast.add({
-      title: aiNotice.removed ? "Lesson removed by AI" : "Lesson updated by AI",
-      description: aiNotice.removed
-        ? `${aiNotice.path} was removed outside the studio.`
-        : `Adopted the AI's latest version of ${aiNotice.path}.`,
-      type: "info",
-    });
+    const drafts = aiNotice.drafts ?? [];
+    if (drafts.length) {
+      toast.add({
+        title: "Lesson changed outside Studio",
+        description: "The file on disk took precedence. Download your unsaved edits to keep them.",
+        type: "warning",
+        timeout: 0,
+        actionProps: {
+          children: drafts.length === 1 ? "Download draft" : "Download drafts",
+          onClick: () => downloadLessonDrafts(drafts),
+        },
+      });
+    } else {
+      toast.add({
+        title: aiNotice.removed ? "Lesson removed" : "Lesson updated",
+        description: `${aiNotice.path} changed outside Studio.`,
+        type: "info",
+      });
+    }
     dismissAiNotice();
   }, [aiNotice]);
 
@@ -243,8 +289,11 @@ function LessonDeckPanel({
       : null
     : trail.contentKey;
 
-  const isLockedWidth = isDesktop && typeof lockWidthPx === "number" && lockWidthPx > 0;
-  const effectiveContainerWidth = isLockedWidth ? lockWidthPx : containerWidth;
+  const effectiveContainerWidth = isLockedWidth
+    ? lockWidthPx
+    : hasPaneWidth
+      ? paneWidthPx
+      : containerWidth;
 
   const layout = useMemo(
     () =>
@@ -256,30 +305,60 @@ function LessonDeckPanel({
       }),
     [activeColumns.length, activeOpen, effectiveContainerWidth, isDesktop],
   );
-  const renderedColumns = layout.showAncestors ? activeColumns : activeColumns.slice(-1);
+  const tighterDeck = layout.stickyStepPx === 24;
+  const ancestorLimit =
+    dock === "start" && activeOpen
+      ? Math.max(
+          0,
+          Math.floor((effectiveContainerWidth - READER_WIDTH) / (tighterDeck ? 176 : 192)),
+        )
+      : activeColumns.length;
+  const renderedColumns = activeColumns.slice(
+    Math.max(0, activeColumns.length - (layout.showAncestors ? ancestorLimit : 1)),
+  );
 
   useLayoutEffect(() => {
     const pending = pendingMotionRef.current;
-    pendingMotionRef.current = null;
-    if (!pending?.animate || isSearching || layout.mode !== "desktop-stack") return;
-
     const deck = deckScrollRef.current;
-    if (deck) {
-      const target = Math.max(0, deck.scrollWidth - deck.clientWidth);
-      if (Math.abs(deck.scrollLeft - target) >= 2) {
-        deck.scrollLeft = target;
-      }
+    if (
+      active &&
+      pending &&
+      deck?.clientWidth &&
+      !isLockedWidth &&
+      !hasPaneWidth &&
+      deck.clientWidth !== containerWidth
+    ) {
+      setContainerWidth(deck.clientWidth);
+      return;
     }
+    pendingMotionRef.current = null;
+    if (!pending && active) return;
+    const interrupted = motionRef.current?.isRunning();
+    const nextKey = trail.contentKey ?? trail.columns.at(-1)?.key;
+    const exitFrame = nextKey && interrupted ? motionRef.current?.exitFrame(nextKey) : undefined;
+    motionRef.current?.cancel();
+    motionRef.current = null;
+    if (!active || !pending?.animate || isSearching || layout.mode !== "desktop-stack" || !deck)
+      return;
+
+    const hasHiddenColumns = [...deck.querySelectorAll("[data-lessons-col]")].some(
+      (column) => column.getClientRects().length === 0,
+    );
+    if (hasHiddenColumns || pending.snapshot?.cols.some(({ rect }) => rect.width === 0)) return;
+    const target = Math.max(0, deck.scrollWidth - deck.clientWidth);
+    if (Math.abs(deck.scrollLeft - target) >= 2) deck.scrollLeft = target;
     didAnimatedAlignRef.current = true;
-    stopMotionRef.current?.();
-    stopMotionRef.current = animateDeckTransition({
+    motionRef.current = animateDeckTransition({
       deck,
+      overlayHost: motionLayerRef.current,
       snapshot: pending.snapshot,
       prevTrail: pending.prevTrail,
       nextTrail: trail,
       animate: true,
+      interrupted,
+      resume: nextKey && exitFrame ? { key: nextKey, ...exitFrame } : undefined,
     });
-  });
+  }, [active, containerWidth, hasPaneWidth, isLockedWidth, isSearching, layout.mode, trail]);
 
   // Auto-scroll horizontal Miller deck cleanly when trail changes without an active FLIP/WAAPI transition
   useEffect(() => {
@@ -288,19 +367,28 @@ function LessonDeckPanel({
       return;
     }
     const deck = deckScrollRef.current;
-    if (!deck || !layout.showAncestors || containerWidth <= 0) return;
+    if (!deck || !layout.showAncestors || effectiveContainerWidth <= 0) return;
     const snap = () => {
       const target = Math.max(0, deck.scrollWidth - deck.clientWidth);
       if (Math.abs(deck.scrollLeft - target) < 2) return;
-      deck.scrollTo({ left: target, behavior: prefersReduced() ? "instant" : "smooth" });
+      deck.scrollLeft = target;
     };
     const raf = requestAnimationFrame(snap);
     return () => cancelAnimationFrame(raf);
-  }, [activeColumns.length, activeOpen, layout.showAncestors, containerWidth]);
+  }, [activeColumns.length, activeOpen, layout.showAncestors, effectiveContainerWidth]);
 
   const closeForm = () => {
     setNaming(null);
     setSubmitted(false);
+  };
+
+  const cancelForm = () => {
+    closeForm();
+    requestAnimationFrame(() => {
+      const trigger = formTriggerRef.current;
+      if (trigger?.isConnected) trigger.focus();
+      else hostRef.current?.querySelector<HTMLElement>("[data-new-lesson]")?.focus();
+    });
   };
 
   const triggerTrailChange = (animate: boolean, apply: () => void) => {
@@ -311,9 +399,16 @@ function LessonDeckPanel({
       animate,
     };
     apply();
+    const next = lessons.getState();
+    const foldingTrail =
+      animate && !next.open && next.folder.length <= folder.length ? lessonTrailKey(next) : null;
+    if (next.foldingTrail !== foldingTrail) lessons.setState({ foldingTrail });
   };
 
   const openForm = (scope?: LessonScope, depth = 0, prefixParts: readonly string[] = []) => {
+    const focused = document.activeElement;
+    formTriggerRef.current =
+      focused instanceof HTMLElement && focused.matches("[data-new-lesson]") ? focused : null;
     setSubmitted(false);
     setNewScope(scope ?? (!hasProject || scopeFilter === "all" ? "all" : "film"));
     setNamingDepth(depth);
@@ -327,22 +422,28 @@ function LessonDeckPanel({
     });
   };
   const trimmed = naming?.trim() ?? "";
-  const errMsg = !trimmed
-    ? "Enter a topic name first."
-    : !LESSON_NAME.test(trimmed)
-      ? "Letters, digits, - and _ only; / for a folder"
-      : null;
+  const targetScope: LessonScope = hasProject ? newScope : "all";
+  const existingLesson = trimmed ? findExistingLesson(targetScope, trimmed) : undefined;
+  const errMsg =
+    !trimmed || trimmed.endsWith("/")
+      ? trimmed
+        ? "Enter a lesson name after the slash."
+        : "Enter a lesson name."
+      : !LESSON_NAME.test(trimmed)
+        ? "Use letters (A–Z or a–z), numbers, hyphens, or underscores in each part. Separate folders with one slash, as in craft/camera."
+        : !existingLesson && lessonPath(trimmed).length > LESSON_PATH_MAX
+          ? `Shorten the path to ${LESSON_PATH_MAX} characters or fewer, including .md.`
+          : null;
   const createLesson = () => {
     if (errMsg) {
       setSubmitted(true);
       nameInputRef.current?.focus();
       return;
     }
-    const targetScope: LessonScope = hasProject ? newScope : "all";
     closeForm();
     if (scopeFilter !== "both" && scopeFilter !== targetScope) setScopeFilter(targetScope);
     setQuery("");
-    triggerTrailChange(true, () => newLesson(trimmed, targetScope));
+    triggerTrailChange(false, () => newLesson(trimmed, targetScope));
   };
 
   const removeFromDeck = async (targetKey: string) => {
@@ -356,10 +457,57 @@ function LessonDeckPanel({
     });
   };
 
+  const focusLastColumn = (returnKey?: string, fromPointer = false) => {
+    requestAnimationFrame(() => {
+      const columns = hostRef.current?.querySelectorAll<HTMLElement>("[data-lessons-col]");
+      const column = columns?.[columns.length - 1];
+      if (!column) return;
+      const rows = [...column.querySelectorAll<HTMLElement>("[data-lesson-row]")];
+      const target =
+        rows.find((row) => row.dataset.lessonRow === returnKey) ??
+        rows.find((row) => row.getAttribute("aria-current") === "true") ??
+        rows[0] ??
+        column.querySelector<HTMLElement>("header button");
+      const destination = fromPointer ? (target?.closest("li") ?? column) : target;
+      destination?.focus({ preventScroll: fromPointer });
+    });
+  };
+
+  const navigateFolder = (parts: readonly string[], animate: boolean) => {
+    triggerTrailChange(animate, () => openLessonFolder([...parts]));
+    focusLastColumn(undefined, animate);
+  };
+
+  const closeLesson = (animate: boolean) => {
+    triggerTrailChange(animate, () => openLesson(null));
+    if (activeOpen) focusLastColumn(`file:${activeOpen}`, animate);
+  };
+
   const handleOpenFile = (key: string, matchLine: number | null, animate = true) => {
     triggerTrailChange(animate && !isSearching, () => {
       setJumpTarget(matchLine ? { path: key, line: matchLine } : null);
       openLesson(key);
+    });
+    if (!matchLine)
+      requestAnimationFrame(() => {
+        const selector = animate ? "[data-lesson-content]" : "[data-lesson-back]";
+        hostRef.current?.querySelector<HTMLElement>(selector)?.focus({ preventScroll: animate });
+      });
+  };
+
+  const setSearchQuery = (next: string) => {
+    setQuery(next);
+    setJumpTarget(null);
+    if (next.trim() || !isSearching) return;
+    requestAnimationFrame(() => {
+      const host = hostRef.current;
+      const field = host?.querySelector<HTMLInputElement>('input[type="search"]');
+      if (field?.getClientRects().length) field.focus();
+      else {
+        const back = host?.querySelector<HTMLElement>("[data-lesson-back]");
+        if (back) back.focus({ preventScroll: true });
+        else focusLastColumn();
+      }
     });
   };
 
@@ -371,16 +519,9 @@ function LessonDeckPanel({
     if (!deck) return;
     const contentEl = target.closest<HTMLElement>("[data-lesson-content]");
     if (contentEl && e.key === "ArrowLeft") {
-      const cols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")];
-      const lastCol = cols[cols.length - 1];
-      const focusTarget =
-        lastCol?.querySelector<HTMLButtonElement>("button[aria-current='true'][data-lesson-row]") ??
-        lastCol?.querySelector<HTMLButtonElement>("button[data-lesson-row]");
-      if (focusTarget) {
-        e.preventDefault();
-        e.stopPropagation();
-        focusTarget.focus();
-      }
+      e.preventDefault();
+      e.stopPropagation();
+      closeLesson(false);
       return;
     }
 
@@ -389,7 +530,10 @@ function LessonDeckPanel({
 
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       const rows = [...colEl.querySelectorAll<HTMLButtonElement>("button[data-lesson-row]")];
-      const current = target.closest<HTMLButtonElement>("button[data-lesson-row]");
+      const current =
+        target instanceof HTMLLIElement
+          ? target.querySelector<HTMLButtonElement>("button[data-lesson-row]")
+          : target.closest<HTMLButtonElement>("button[data-lesson-row]");
       const idx = current ? rows.indexOf(current) : -1;
       if (idx === -1) return;
       e.preventDefault();
@@ -404,7 +548,9 @@ function LessonDeckPanel({
       if (target.closest("[role='radiogroup']")) return;
       e.preventDefault();
       e.stopPropagation();
-      const cols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")];
+      const cols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")].filter(
+        (column) => column.getClientRects().length > 0,
+      );
       const idx = cols.indexOf(colEl);
       const nextCol = cols[idx + (e.key === "ArrowRight" ? 1 : -1)];
       if (nextCol) {
@@ -426,8 +572,7 @@ function LessonDeckPanel({
   };
 
   const initialLine = jumpTarget && jumpTarget.path === activeOpen ? jumpTarget.line : null;
-  const contentDepth = trail.contentDepth ?? 1;
-  const contentOffsets = lessonCardOffsets(contentDepth, layout);
+  const contentOffsets = lessonCardOffsets(renderedColumns.length, layout);
   const mobileStageOrder = [
     ...Array.from({ length: Math.max(8, activeColumns.length + 1) }, (_, i) => `col:${i}`),
     "file",
@@ -448,45 +593,42 @@ function LessonDeckPanel({
             layout={layout}
             activeOpen={activeOpen}
             loaded={loaded}
+            loadFailed={loadFailed}
             isSearching={isSearching}
             query={query}
-            setQuery={setQuery}
+            setQuery={setSearchQuery}
             hasProject={hasProject}
             filesCount={files.length}
             filmCount={filmCount}
             allCount={allCount}
             scopedFilesCount={scopedFiles.length}
             activeFilter={activeFilter}
-            onChangeFilter={(nextScope) =>
-              triggerTrailChange(true, () => setScopeFilter(nextScope))
-            }
+            onChangeFilter={(nextScope) => {
+              setJumpTarget(null);
+              triggerTrailChange(false, () => setScopeFilter(nextScope));
+            }}
             showFormHere={showFormHere}
             onToggleForm={() =>
-              showFormHere ? closeForm() : openForm(undefined, col.depth, col.parts)
+              showFormHere ? cancelForm() : openForm(undefined, col.depth, col.parts)
             }
             openForm={openForm}
-            closeForm={closeForm}
+            closeForm={cancelForm}
             nameInputRef={nameInputRef}
             newScope={newScope}
             setNewScope={setNewScope}
             naming={naming}
             setNaming={setNaming}
             submitted={submitted}
+            openExisting={Boolean(existingLesson)}
             setSubmitted={setSubmitted}
             errMsg={errMsg}
             onCreateLesson={createLesson}
             matchByKey={matchByKey}
-            onFocusFolder={(parts, animate) =>
-              triggerTrailChange(animate, () => openLessonFolder([...parts]))
-            }
+            onFocusFolder={navigateFolder}
             onFoldTo={(parts, animate) =>
-              triggerTrailChange(animate, () =>
-                isSearching ? openLesson(null) : openLessonFolder([...parts]),
-              )
+              isSearching ? closeLesson(animate) : navigateFolder(parts, animate)
             }
-            onSelectDir={(nextParts, animate) =>
-              triggerTrailChange(animate && !isSearching, () => openLessonFolder([...nextParts]))
-            }
+            onSelectDir={navigateFolder}
             onSelectFile={handleOpenFile}
             onDeleteFile={(fileKey) => void removeFromDeck(fileKey)}
           />
@@ -496,11 +638,13 @@ function LessonDeckPanel({
       {activeOpen && (
         <div
           data-lesson-content={activeOpen}
+          tabIndex={-1}
           style={
             layout.showAncestors
               ? ({
                   "--deck-top": `${contentOffsets.stepTopPx}px`,
                   "--deck-z": String(renderedColumns.length + 1),
+                  "--deck-reader-w": `${READER_WIDTH}px`,
                 } as CSSProperties)
               : undefined
           }
@@ -508,10 +652,10 @@ function LessonDeckPanel({
             "bg-background relative flex min-h-0 flex-1 flex-col self-stretch",
             layout.showAncestors
               ? cn(
-                  "border-primary/45 shadow-sheet z-(--deck-z) mt-(--deck-top) rounded-ss-xl border-s border-t",
-                  layout.stickyStepPx === 24
-                    ? "min-w-[min(17.5rem,100%)]"
-                    : "min-w-[min(20rem,100%)]",
+                  "border-primary/45 shadow-sheet z-(--deck-z) mt-(--deck-top) rounded-ss-xl border-s border-t @max-[19rem]/lesson-deck:mt-0 @max-[19rem]/lesson-deck:rounded-none @max-[19rem]/lesson-deck:border-0 @max-[19rem]/lesson-deck:shadow-none",
+                  tighterDeck || dock === "end"
+                    ? "min-w-[min(17.5rem,100%)] @max-[19rem]/lesson-deck:min-w-0"
+                    : "min-w-[min(var(--deck-reader-w),100%)] @max-[19rem]/lesson-deck:min-w-0",
                 )
               : "min-w-0",
           )}
@@ -519,8 +663,9 @@ function LessonDeckPanel({
           <LessonFileView
             key={activeOpen}
             path={activeOpen}
-            depthPill={layout.showAncestors ? `L${contentDepth}` : undefined}
             initialLine={initialLine}
+            showBack={layout.showAncestors}
+            onBack={closeLesson}
             onDelete={() => void removeFromDeck(activeOpen)}
           />
         </div>
@@ -534,21 +679,34 @@ function LessonDeckPanel({
       onKeyDown={handleDeckKeyDown}
       style={isLockedWidth ? ({ "--deck-lock-w": `${lockWidthPx}px` } as CSSProperties) : undefined}
       className={cn(
-        "flex min-h-0 flex-1 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden",
-        (layout.showAncestors || renderedColumns.length > 1 || isLockedWidth) && "bg-backdrop",
+        "relative z-10 flex min-h-0 flex-1 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden",
         isLockedWidth && (dock === "end" ? "justify-end" : "justify-start"),
       )}
     >
-      {isLockedWidth ? (
-        <div className="flex min-h-0 w-(--deck-lock-w) flex-none">{deckItems}</div>
-      ) : (
-        deckItems
-      )}
+      <div
+        className={cn(
+          "flex min-h-0",
+          isLockedWidth ? "w-(--deck-lock-w) flex-none" : "min-w-0 flex-1",
+        )}
+      >
+        {deckItems}
+      </div>
     </div>
   );
 
   return (
-    <div ref={hostRef} className="flex min-h-0 flex-1 flex-col">
+    <div
+      ref={hostRef}
+      className={cn(
+        "@container/lesson-deck relative isolate flex min-h-0 min-w-0 flex-1 flex-col",
+        (layout.showAncestors || renderedColumns.length > 1 || isLockedWidth) && "bg-backdrop",
+      )}
+    >
+      <div
+        ref={motionLayerRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+      />
       {isDesktop ? (
         deckBody
       ) : (
@@ -560,12 +718,17 @@ function LessonDeckPanel({
           className="flex min-h-0 flex-1 flex-col"
         >
           {layout.mode === "compact-file" && activeOpen ? (
-            <div data-lesson-content={activeOpen} className="flex min-h-0 flex-1 flex-col">
+            <div
+              data-lesson-content={activeOpen}
+              tabIndex={-1}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               <LessonFileView
                 key={activeOpen}
                 path={activeOpen}
                 initialLine={initialLine}
                 showBack
+                onBack={closeLesson}
                 onDelete={() => void removeFromDeck(activeOpen)}
               />
             </div>

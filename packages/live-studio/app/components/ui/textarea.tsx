@@ -13,7 +13,7 @@ const textareaVariants = cva(
         script:
           "border-input bg-backdrop focus-visible:ring-ring/30 px-3 py-2 text-base leading-relaxed focus-visible:ring-2",
         inspector:
-          "border-input-border bg-input focus-visible:ring-ring/30 px-3 py-2 text-sm/relaxed focus-visible:ring-2 pointer-coarse:text-base",
+          "border-input-border bg-backdrop focus-visible:ring-ring/30 px-3 py-2 text-sm/relaxed focus-visible:ring-2 pointer-coarse:text-base",
         default:
           "border-input bg-backdrop text-ui/relaxed focus-visible:ring-ring/30 phone:text-[16px] px-2 py-2 focus-visible:ring-2 pointer-coarse:text-base",
         note: "font-md bg-backdrop/85 text-title/[1.6] border-input focus-visible:border-primary/70 focus-visible:ring-primary/30 sideways:px-2 sideways:py-1.5 phone:text-[16px] px-2.5 py-2 focus-visible:ring-1 pointer-coarse:text-base",

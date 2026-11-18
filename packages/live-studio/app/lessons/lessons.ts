@@ -3,7 +3,7 @@
 // immediately: stale local drafts yield automatically to newer versions on disk, while unsaved edits wait on the device through a reload
 import { createStore, useStore } from "zustand";
 
-import { lessonTemplate } from "../../src/lesson-template";
+import { LESSON_TEXT_MAX, lessonPath, lessonTemplate } from "../../src/lesson-template";
 import { stored } from "../core/storage";
 
 export type LessonViewMode = "read" | "edit" | "changes";
@@ -33,12 +33,18 @@ export interface LessonFile {
   tag: string;
   text: string;
 }
+export interface RecoverableLessonDraft {
+  path: string;
+  text: string;
+}
+
 export interface AiNotice {
   id: number;
   key: string;
   scope: LessonScope;
   path: string;
   removed: boolean;
+  drafts?: RecoverableLessonDraft[];
 }
 interface Edit {
   text: string;
@@ -49,11 +55,13 @@ interface Edit {
 interface LessonsState {
   subTab: "deck" | "inspector";
   inspectorLiveEnabled: boolean;
+  foldingTrail: string | null;
   dir: string;
   projectDir: string;
   scopeFilter: LessonScopeFilter;
   files: LessonFile[];
   loaded: boolean;
+  loadFailed: boolean;
   folder: string[];
   open: string | null;
   preferredView: LessonPreferredView;
@@ -63,6 +71,9 @@ interface LessonsState {
   pick: { key: string; range: readonly [number, number] } | null; // words to select as the editor opens a new file
   aiNotice: AiNotice | null;
 }
+export const lessonTrailKey = ({ folder, open }: Pick<LessonsState, "folder" | "open">) =>
+  `${folder.join("/")}\0${open ?? ""}`;
+
 const SEEN = "lessonsSeen",
   DRAFTS = "lessonDrafts",
   VIEW = "lessonView",
@@ -113,11 +124,13 @@ const upsertFile = (files: LessonFile[], next: LessonFile): LessonFile[] =>
 export const lessons = createStore<LessonsState>(() => ({
   subTab: "deck",
   inspectorLiveEnabled: false,
+  foldingTrail: null,
   dir: "",
   projectDir: "",
   scopeFilter: "both",
   files: [],
   loaded: false,
+  loadFailed: false,
   folder: [],
   open: null,
   preferredView: readPreferredLessonView(),
@@ -152,8 +165,8 @@ const setSeen = (seen: LessonsState["seen"]) => {
   stored.set(SEEN, JSON.stringify(seen));
 };
 const fileOf = (key: string) => get().files.find((f) => f.key === key);
-const findExistingLesson = (scope: LessonScope, path: string) => {
-  const lower = path.toLowerCase();
+export const findExistingLesson = (scope: LessonScope, name: string) => {
+  const lower = lessonPath(name).toLowerCase();
   return get().files.find((f) => f.scope === scope && f.path.toLowerCase() === lower);
 };
 
@@ -165,16 +178,12 @@ const savedAtSeq = new Map<string, number>();
 
 export const dismissAiNotice = () => set({ aiNotice: null });
 
-const adoptExternalVersion = (
-  key: string,
-  tag: string | null,
-  text: string | null,
-  notify = true,
-) => {
+const adoptExternalVersion = (key: string, tag: string | null, text: string | null) => {
   clearTimer(key);
   const { scope, path } = parseLessonKey(key);
   const edits = get().edits;
   const removed = tag === null || text === null;
+  const draft = edits[key];
   const nextEdits = key in edits ? omitKey(edits, key) : edits;
   if (nextEdits !== edits) setEdits(nextEdits);
   if (removed && key in get().seen) setSeen(omitKey(get().seen, key));
@@ -190,7 +199,14 @@ const adoptExternalVersion = (
       folder: nextOpen
         ? folderOfKey(nextOpen)
         : clampFolder(nextFiles, nextEdits, s.scopeFilter, s.folder),
-      ...(notify ? { aiNotice: { id: ++noticeSeq, key, scope, path, removed } } : {}),
+      aiNotice: {
+        id: ++noticeSeq,
+        key,
+        scope,
+        path,
+        removed,
+        drafts: draft ? [{ path, text: draft.text }] : undefined,
+      },
     };
   });
 };
@@ -211,12 +227,16 @@ export const clearLessonTimers = () => {
 export const loadLessons = async () => {
   const myLoad = ++loadSeq;
   const startSaveSeq = saveSeq;
+  set({ loadFailed: false });
   let got: { dir: string; projectDir?: string; files: WireLessonFile[] };
   try {
     const r = await fetch("/api/lessons");
-    if (!r.ok || myLoad !== loadSeq) return;
+    if (!r.ok) throw new Error("Could not load lessons");
+    if (myLoad !== loadSeq) return;
     got = await r.json();
+    if (!Array.isArray(got.files)) throw new Error("Invalid lessons list");
   } catch {
+    if (myLoad === loadSeq) set({ loadFailed: true });
     return;
   }
   if (myLoad !== loadSeq) return;
@@ -257,6 +277,7 @@ export const loadLessons = async () => {
   let open = get().open;
   let aiNotice = get().aiNotice;
   let editsChanged = false;
+  const replacedDrafts: RecoverableLessonDraft[] = [];
   for (const [key, e] of Object.entries(edits)) {
     if ((savedAtSeq.get(key) ?? 0) > startSaveSeq) continue;
     const f = sorted.find((x) => x.key === key);
@@ -267,7 +288,8 @@ export const loadLessons = async () => {
     if (pick?.key === key) pick = null;
     if (!f && open === key) open = null;
     const { scope, path } = parseLessonKey(key);
-    aiNotice = { id: ++noticeSeq, key, scope, path, removed: !f };
+    replacedDrafts.push({ path, text: e.text });
+    aiNotice = { id: ++noticeSeq, key, scope, path, removed: !f, drafts: replacedDrafts };
   }
   if (open && !(open in edits) && !sorted.some((f) => f.key === open)) open = null;
   if (editsChanged) setEdits(edits);
@@ -279,6 +301,7 @@ export const loadLessons = async () => {
     projectDir: got.projectDir ?? "",
     files: sorted,
     loaded: true,
+    loadFailed: false,
     pick,
     open,
     folder: nextFolder,
@@ -295,6 +318,7 @@ export const typeLesson = (key: string, text: string) => {
     f = fileOf(key);
   setEdits({ ...get().edits, [key]: { ...e, text, base: e ? e.base : (f?.tag ?? null) } });
   clearTimer(key);
+  if (text.length > LESSON_TEXT_MAX) return;
   timers.set(
     key,
     setTimeout(() => {
@@ -307,7 +331,7 @@ export const typeLesson = (key: string, text: string) => {
 export const saveLesson = async (key: string): Promise<void> => {
   clearTimer(key);
   const e = get().edits[key];
-  if (!e || e.saving) return;
+  if (!e || e.saving || e.text.length > LESSON_TEXT_MAX) return;
   const { scope, path } = parseLessonKey(key);
   const sent = e.text;
   setEdits({ ...get().edits, [key]: { ...e, saving: true, failed: undefined } });
@@ -433,7 +457,7 @@ export const setLessonView = (key: string, mode: LessonViewMode, remember = true
 
 export type DeleteLessonResult =
   | { removed: true; path: string; restore: () => Promise<boolean> }
-  | { removed: false; conflict?: boolean; error?: string };
+  | { removed: false; conflict?: boolean; missing?: boolean; error?: string };
 
 const deleting = new Set<string>();
 
@@ -464,7 +488,7 @@ export const deleteLesson = async (
     if (r.status === 409) {
       const tag = typeof body.tag === "string" ? body.tag : null;
       const text = typeof body.text === "string" ? body.text : null;
-      adoptExternalVersion(key, tag, text, false);
+      adoptExternalVersion(key, tag, text);
       if (tag !== null && text !== null) openLesson(key);
       return { removed: false, conflict: true };
     }
@@ -477,6 +501,10 @@ export const deleteLesson = async (
     saveSeq += 1;
     savedAtSeq.set(key, saveSeq);
     onBeforeRemove?.();
+    if (body.missing === true) {
+      adoptExternalVersion(key, null, null);
+      return { removed: false, missing: true };
+    }
     const nextEdits = omitKey(get().edits, key);
     set((s) => {
       const nextFiles = s.files.filter((x) => x.key !== key);
@@ -525,8 +553,8 @@ export const deleteLesson = async (
 // A new file: lessons/<name>.md in this film or every film (src/lesson-template.ts), its rule heading picked for the first words
 export const LESSON_NAME = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+(?:\.md)?$/;
 export const newLesson = (name: string, scope: LessonScope = "film") => {
-  const path = `${name.replace(/\.md$/, "")}.md`;
-  const existing = findExistingLesson(scope, path);
+  const path = lessonPath(name);
+  const existing = findExistingLesson(scope, name);
   if (existing) return openLesson(existing.key);
   const key = lessonKey(scope, path);
   const { text, pick } = lessonTemplate(path);

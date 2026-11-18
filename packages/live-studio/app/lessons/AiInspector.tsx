@@ -10,7 +10,16 @@ import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -24,26 +33,39 @@ import { toast } from "@/components/ui/toast";
 
 import {
   DEFAULT_LESSON_JEV_CONFIG,
+  InspectorNoteSchema,
   JEV_ENGINE_FIELDS,
   type LessonJevConfig,
   LessonJevConfigSchema,
 } from "../../src/lesson-config";
+import { LESSON_TEXT_MAX } from "../../src/lesson-template";
 import { useStudio } from "../core/store";
 import { useInspectorSession } from "./inspector-session";
 import type { InspectNote, InspectorInfo, InspectorView, InspectResult } from "./inspector-types";
 import { InspectorCode, InspectorPreview } from "./InspectorPreview";
-import { inspectorSettingErrors, InspectorSettings } from "./InspectorSettings";
+import {
+  inspectorSettingErrors,
+  InspectorSettings,
+  revealFocusedFieldError,
+} from "./InspectorSettings";
 import { JevSafetyBanner } from "./JevSafetyBanner";
-import { lessons, parseLessonKey, useLessons } from "./lessons";
+import { SCOPE_LABEL } from "./lesson-ui";
+import { lessons, loadLessons, parseLessonKey, useLessons } from "./lessons";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  const body = await response.json();
+  const response = await fetch(url, init).catch((cause) => {
+    throw new Error("Could not reach Studio. Check the connection and try again.", { cause });
+  });
+  const body = await response.json().catch(() => null);
+  if (body === null) throw new Error("Studio returned an unreadable response. Try again.");
   if (!response.ok)
     throw new Error(
       typeof body.error === "string"
         ? body.error
-        : "Request refused. Check the fields and try again.",
+        : response.status >= 500
+          ? "Studio could not complete the request. Try again."
+          : "Studio rejected the request. Check your inputs and try again.",
+      { cause: body.outcome === "charge-reported" ? body.outcome : response.status },
     );
   return body as T;
 }
@@ -53,19 +75,23 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 const scopes = [
-  { value: "both", label: "This film + shared" },
-  { value: "film", label: "This film only" },
-  { value: "all", label: "Shared lessons only" },
+  { value: "both", label: "All lessons" },
+  { value: "film", label: SCOPE_LABEL.film },
+  { value: "all", label: SCOPE_LABEL.all },
 ];
-type RequestFailure = { key: string; message: string };
+type RequestFailure = { key: string; message: string; chargeReported?: boolean };
 
-export function AiInspector({ active }: { active: boolean }) {
-  const { files, edits, inspectorLiveEnabled } = useLessons((s) => s);
+export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDeck: () => void }) {
+  const { files, edits, loaded, loadFailed, inspectorLiveEnabled } = useLessons((s) => s);
   const liveNotes = useStudio((s) => s.notes),
     ready = useStudio((s) => s.ready);
   const [info, setInfo] = useState<InspectorInfo | null>(null);
   const availableNotes = ready ? liveNotes : (info?.notes ?? []);
   const { config, saved, note, excluded } = useInspectorSession();
+  const scope = config.scopeFilter;
+  const scopedFiles = scope === "both" ? files : files.filter((file) => file.scope === scope);
+  const scopedExcluded = scopedFiles.filter((file) => excluded.includes(file.key));
+  const includedCount = scopedFiles.length - scopedExcluded.length;
   const [view, setView] = useState<InspectorView>("ai");
   const [change, setChange] = useState("Ready");
   const [busy, setBusy] = useState(false);
@@ -81,25 +107,44 @@ export function AiInspector({ active }: { active: boolean }) {
   const [saving, setSaving] = useState(false);
   const [pinnedActionsHeight, setPinnedActionsHeight] = useState(0);
   const controlsRef = useRef<HTMLDivElement>(null),
-    actionsRef = useRef<HTMLDivElement>(null);
+    errorRef = useRef<HTMLDivElement>(null),
+    noteRef = useRef<HTMLTextAreaElement>(null),
+    actionsRef = useRef<HTMLDivElement>(null),
+    advancedRef = useRef<HTMLDetailsElement>(null),
+    chargeThresholdRef = useRef<HTMLInputElement>(null),
+    lessonFilesSummaryRef = useRef<HTMLElement>(null);
   const running = useRef(false),
     generation = useRef(0);
   const runFailureToast = useRef<string | null>(null),
     saveFailureToast = useRef<string | null>(null);
   const enabled = active && inspectorLiveEnabled;
-  const body = useMemo(
-    () => ({
-      note,
-      config,
-      drafts: [
-        ...Object.entries(edits).map(([key, e]) => ({ ...parseLessonKey(key), text: e.text })),
-        ...excluded.map((key) => ({ ...parseLessonKey(key), text: null })),
-      ],
-    }),
-    [note, config, edits, excluded],
-  );
-  const bodyKey = JSON.stringify(body);
-  const previewKey = JSON.stringify([bodyKey, files.map((f) => [f.key, f.tag]), retry]);
+  const usesFreeModel =
+    config.route === "free" && config.freeModel === DEFAULT_LESSON_JEV_CONFIG.freeModel;
+  const providerHint =
+    config.route === "free"
+      ? usesFreeModel
+        ? "Free model · OpenCode Zen"
+        : "OpenCode Zen may charge"
+      : config.route === "paid"
+        ? "Paid · OpenRouter"
+        : "Auto provider may charge";
+  const drafts = useMemo(() => {
+    const omitted = new Set(excluded);
+    return [
+      ...Object.entries(edits)
+        .filter(([key]) => !omitted.has(key))
+        .map(([key, edit]) => ({ ...parseLessonKey(key), text: edit.text })),
+      ...excluded.map((key) => ({ ...parseLessonKey(key), text: null })),
+    ].filter((draft) => scope === "both" || draft.scope === scope);
+  }, [edits, excluded, scope]);
+  const oversizedDraft = drafts.find(({ text }) => text !== null && text.length > LESSON_TEXT_MAX);
+  const bodyKey = JSON.stringify({ note, config, drafts: oversizedDraft ? [] : drafts });
+  const previewKey = JSON.stringify([
+    bodyKey,
+    oversizedDraft?.path,
+    files.map((f) => [f.key, f.tag]),
+    retry,
+  ]);
   const currentBody = useRef(previewKey);
   useLayoutEffect(() => {
     currentBody.current = previewKey;
@@ -119,14 +164,48 @@ export function AiInspector({ active }: { active: boolean }) {
     return () => observer.disconnect();
   }, []);
   const updating = received?.key !== previewKey;
-  const runError = runFailure?.key === previewKey ? runFailure.message : "";
+  const matchingRunFailure = runFailure?.key === previewKey ? runFailure : null;
+  const runError = matchingRunFailure?.message ?? "";
+  const chargeReported = matchingRunFailure?.chargeReported === true;
   const valid = LessonJevConfigSchema.safeParse(config);
   const configError = valid.success ? "" : "Fix the highlighted settings in Advanced settings.";
+  const validNote = InspectorNoteSchema.safeParse(note);
+  const noteIssues = validNote.success ? [] : validNote.error.issues;
+  const noteError = noteIssues.find((issue) => issue.path[0] !== "asks")?.message;
+  const repliesError = noteIssues.find((issue) => issue.path[0] === "asks")?.message;
+  const validationError =
+    noteError ||
+    repliesError ||
+    configError ||
+    (oversizedDraft ? "Shorten or exclude the lesson draft." : "");
   const fieldErrors = inspectorSettingErrors(valid.success ? [] : valid.error.issues);
   const configKey = JSON.stringify(config);
   const dirty = configKey !== saved;
   const saveError = saveFailure?.key === configKey ? saveFailure.message : "";
-  const saveLabel = saving ? "Saving…" : saveError ? "Retry save" : dirty ? "Save" : "Saved";
+  const saveLabel = saving
+    ? "Saving…"
+    : saveError
+      ? "Retry save"
+      : dirty
+        ? "Save CLI settings"
+        : "Settings up to date";
+  const choosePreviewView = (next: InspectorView) => {
+    setView(next);
+    setReceived((current) => (current?.previous ? { ...current, previous: undefined } : current));
+  };
+  const revealPreviewError = () => {
+    errorRef.current?.scrollIntoView({ block: "start" });
+    errorRef.current?.focus({ preventScroll: true });
+  };
+  const reviewBilling = () => {
+    const threshold = chargeThresholdRef.current;
+    const billing = threshold?.closest("details");
+    if (!threshold || !billing || !advancedRef.current) return;
+    advancedRef.current.open = true;
+    billing.open = true;
+    threshold.focus({ preventScroll: true });
+    threshold.scrollIntoView({ block: "nearest" });
+  };
   const accept = (key: string, value: InspectResult) =>
     setReceived((previous) => ({
       key,
@@ -135,6 +214,7 @@ export function AiInspector({ active }: { active: boolean }) {
     }));
   const changeNote = (value: InspectNote) => {
     useInspectorSession.setState({ note: value });
+    setError("");
     setView("ai");
     setChange("Note edited");
   };
@@ -145,14 +225,17 @@ export function AiInspector({ active }: { active: boolean }) {
     nextView: InspectorView,
   ) => {
     useInspectorSession.setState({ config: value });
+    setError("");
     setView(nextView);
     setChange(label + " changed");
   };
-  const deck = () => lessons.setState({ subTab: "deck", inspectorLiveEnabled: false });
+  const resetConfig = () =>
+    changeConfig(DEFAULT_LESSON_JEV_CONFIG, "enabled", "Default settings", "ai");
   const includeFile = (key: string, included: boolean) => {
     useInspectorSession.setState({
       excluded: included ? excluded.filter((x) => x !== key) : [...excluded, key],
     });
+    setError("");
     setView("lessons");
     setChange(included ? "File restored" : "File excluded");
   };
@@ -177,7 +260,7 @@ export function AiInspector({ active }: { active: boolean }) {
     return () => controller.abort();
   }, [retry]);
   useEffect(() => {
-    if (!info || !active || busy || configError || !updating) return;
+    if (!info || !active || busy || validationError || !updating) return;
     const controller = new AbortController(),
       id = ++generation.current;
     const timer = setTimeout(() => {
@@ -199,9 +282,18 @@ export function AiInspector({ active }: { active: boolean }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [bodyKey, previewKey, info, active, busy, configError, retry, updating]);
+  }, [bodyKey, previewKey, info, active, busy, validationError, retry, updating]);
   const run = async () => {
-    if (!enabled || running.current || configError || updating) return;
+    if (
+      !enabled ||
+      running.current ||
+      validationError ||
+      updating ||
+      chargeReported ||
+      !loaded ||
+      loadFailed
+    )
+      return;
     if (runFailureToast.current) {
       toast.close(runFailureToast.current);
       runFailureToast.current = null;
@@ -227,11 +319,17 @@ export function AiInspector({ active }: { active: boolean }) {
         type: "info",
       });
     } catch (e) {
+      const failure = e as Error;
+      const chargeReported = failure.cause === "charge-reported";
+      const message =
+        usesFreeModel || failure.cause === 424 || chargeReported
+          ? failure.message
+          : `${failure.message} The provider may still charge for this attempt.`;
       if (currentBody.current === snapshot)
-        setRunFailure({ key: snapshot, message: (e as Error).message });
+        setRunFailure({ key: snapshot, message, chargeReported });
       runFailureToast.current = toast.add({
         title: "Jev run failed",
-        description: (e as Error).message,
+        description: message,
         type: "error",
       });
     } finally {
@@ -266,13 +364,33 @@ export function AiInspector({ active }: { active: boolean }) {
       setSaving(false);
     }
   };
-  const reason = !note.text.trim()
-    ? "Write a note."
-    : updating
-      ? "Updating…"
-      : !received?.value.pool.length
-        ? "Add lessons."
-        : "";
+  const missingLessons = loadFailed
+    ? "Retry loading lesson files."
+    : !loaded
+      ? "Loading lesson files…"
+      : !files.length
+        ? "Add a lesson in Deck."
+        : !scopedFiles.length
+          ? "Choose a scope with lessons."
+          : !includedCount
+            ? "Include a lesson file."
+            : "";
+  const reason = oversizedDraft
+    ? "Shorten or exclude the lesson draft."
+    : validationError
+      ? "Check the highlighted fields."
+      : !note.text.trim()
+        ? "Write a note."
+        : chargeReported
+          ? "Review Provider & billing."
+          : missingLessons ||
+            (error
+              ? "Retry the preview to run Jev."
+              : updating
+                ? "Updating preview…"
+                : !received?.value.pool.length
+                  ? "No lesson files available."
+                  : "");
   const noteOptions = [
     { value: "simulation", label: "Write a preview note" },
     ...availableNotes.map((n) => ({ value: n.id ?? "", label: n.text })),
@@ -283,14 +401,14 @@ export function AiInspector({ active }: { active: boolean }) {
       onKeyDown={(e) => e.stopPropagation()}
     >
       <h2 className="sr-only">AI Inspector</h2>
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,4fr)] @min-[700px]/inspector:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] @min-[700px]/inspector:grid-rows-1 @min-[20rem]/inspector:@max-[700px]/inspector:grid-rows-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,4fr)] @min-[700px]/inspector:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] @min-[700px]/inspector:grid-rows-1 @min-[20rem]/inspector:@max-[700px]/inspector:grid-rows-[minmax(0,2fr)_minmax(0,3fr)] @max-[700px]/inspector:[@media(min-width:821px)_and_(min-height:521px)]:grid-rows-[repeat(2,minmax(0,1fr))]">
         <div
           data-inspector-controls
           ref={controlsRef}
           role="region"
           tabIndex={0}
           aria-label="Inspector controls"
-          className="focus-visible:ring-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) overflow-y-auto overscroll-contain outline-none focus-visible:ring-2"
+          className="focus-visible:outline-ring min-h-0 min-w-0 scroll-pt-(--inspector-actions-offset) scroll-pb-5 [scrollbar-width:thin] overflow-y-auto overscroll-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid"
           style={{ "--inspector-actions-offset": `${pinnedActionsHeight}px` } as CSSProperties}
         >
           <div
@@ -302,16 +420,16 @@ export function AiInspector({ active }: { active: boolean }) {
               onChange={(value) => lessons.setState({ inspectorLiveEnabled: value })}
               onRun={() => void run()}
               busy={busy}
-              failed={Boolean(runError)}
-              disabled={!info || Boolean(configError) || Boolean(reason)}
+              disabled={!info || Boolean(validationError) || Boolean(reason)}
               reason={reason}
+              providerHint={providerHint}
             >
               <Button
                 size="md"
                 variant={dirty ? "lit" : "outline"}
+                className="w-36 max-w-full"
                 disabled={!dirty || !info || !valid.success || saving || busy}
                 onClick={() => void save()}
-                aria-label={`${saveLabel} · notes CLI settings`}
                 aria-busy={saving}
               >
                 {saveLabel}
@@ -319,49 +437,66 @@ export function AiInspector({ active }: { active: boolean }) {
             </JevSafetyBanner>
           </div>
           <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-6 p-4">
-            {(error || runError || saveError) && (
-              <Alert variant="destructive">
-                <AlertTitle>
-                  {runError
-                    ? "Jev run failed"
-                    : saveError
-                      ? "Settings were not saved"
-                      : "Preview needs attention"}
-                </AlertTitle>
+            {(runError || (!validationError && error)) && (
+              <Alert variant="destructive" ref={errorRef} tabIndex={-1}>
+                <AlertTitle>{runError ? "Jev run failed" : "Preview needs attention"}</AlertTitle>
                 <AlertDescription>
-                  {runError || saveError || error}
+                  {runError || error}
+                  {chargeReported && (
+                    <p>Change the billing settings or preview inputs before running again.</p>
+                  )}
+                  {runError && !enabled && !chargeReported && <p>Turn on Jev calls to retry.</p>}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="md"
                       variant="outline"
                       disabled={
                         busy ||
-                        (Boolean(runError) &&
-                          (!enabled || Boolean(configError) || Boolean(reason))) ||
-                        (Boolean(saveError) && (saving || !valid.success || !info))
+                        (!chargeReported &&
+                          Boolean(runError) &&
+                          (!enabled || Boolean(validationError) || Boolean(reason)))
                       }
-                      onClick={() =>
-                        runError ? void run() : saveError ? void save() : setRetry((v) => v + 1)
-                      }
-                    >
-                      {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
-                    </Button>
-                    {configError && (
-                      <Button
-                        size="md"
-                        variant="outline"
-                        onClick={() =>
-                          changeConfig(
-                            DEFAULT_LESSON_JEV_CONFIG,
-                            "enabled",
-                            "Default settings",
-                            "ai",
-                          )
+                      onClick={() => {
+                        if (chargeReported) {
+                          reviewBilling();
+                          return;
                         }
-                      >
-                        Reset defaults
-                      </Button>
-                    )}
+                        const target = runError ? controlsRef.current : noteRef.current;
+                        target?.focus();
+                        if (runError) void run();
+                        else {
+                          setError("");
+                          setRetry((v) => v + 1);
+                        }
+                      }}
+                    >
+                      {chargeReported
+                        ? "Review Provider & billing"
+                        : runError
+                          ? "Retry Jev"
+                          : "Retry preview"}
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            {saveError && (
+              <Alert variant="destructive">
+                <AlertTitle>Settings were not saved</AlertTitle>
+                <AlertDescription>
+                  {saveError}
+                  <div className="flex">
+                    <Button
+                      size="md"
+                      variant="outline"
+                      disabled={busy || saving || !valid.success || !info}
+                      onClick={() => {
+                        controlsRef.current?.focus();
+                        void save();
+                      }}
+                    >
+                      Retry save
+                    </Button>
                   </div>
                 </AlertDescription>
               </Alert>
@@ -370,9 +505,9 @@ export function AiInspector({ active }: { active: boolean }) {
               <section className="flex flex-col gap-3" aria-labelledby="inspect-note-heading">
                 <h3
                   id="inspect-note-heading"
-                  className="text-ink flex items-center gap-2 text-base font-semibold"
+                  className="text-ink-text flex items-center gap-2 text-base/[1.3] font-semibold"
                 >
-                  <MessageSquareText className="size-4" aria-hidden />
+                  <MessageSquareText size={16} absoluteStrokeWidth aria-hidden />
                   Creator’s note
                 </h3>
                 <FieldGroup>
@@ -393,10 +528,10 @@ export function AiInspector({ active }: { active: boolean }) {
                         <SelectTrigger id="inspect-note" size="readable" className="w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                           <SelectGroup>
                             {noteOptions.map((n) => (
-                              <SelectItem key={n.value} value={n.value}>
+                              <SelectItem key={n.value} value={n.value} size="readable">
                                 {n.label}
                               </SelectItem>
                             ))}
@@ -412,14 +547,22 @@ export function AiInspector({ active }: { active: boolean }) {
                     <Textarea
                       variant="inspector"
                       id="inspect-note-text"
+                      ref={noteRef}
+                      aria-invalid={Boolean(noteError) || undefined}
+                      aria-describedby={noteError ? "inspect-note-error" : undefined}
                       value={note.text}
-                      className="max-h-48 overflow-y-auto @min-[700px]/inspector:min-h-24"
+                      className="max-h-48 overflow-y-auto overscroll-contain @min-[700px]/inspector:min-h-24"
                       onChange={(e) => changeNote({ ...note, text: e.target.value })}
-                      placeholder="The face is too small. Move the camera closer."
+                      placeholder="Describe what should change"
                     />
+                    {noteError && (
+                      <FieldError id="inspect-note-error" ref={revealFocusedFieldError}>
+                        {noteError}
+                      </FieldError>
+                    )}
                   </Field>
                   <details>
-                    <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium outline-none focus-visible:ring-2">
+                    <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2">
                       Replies{note.asks?.length ? " · " + note.asks.length : " · optional"}
                     </summary>
                     <Field>
@@ -429,7 +572,9 @@ export function AiInspector({ active }: { active: boolean }) {
                       <Textarea
                         variant="inspector"
                         id="inspect-replies"
-                        className="max-h-40 overflow-y-auto"
+                        aria-invalid={Boolean(repliesError) || undefined}
+                        aria-describedby={repliesError ? "inspect-replies-error" : undefined}
+                        className="max-h-40 overflow-y-auto overscroll-contain"
                         value={(note.asks ?? []).map((a) => a.text).join("\n")}
                         onChange={(e) =>
                           changeNote({
@@ -442,6 +587,11 @@ export function AiInspector({ active }: { active: boolean }) {
                           })
                         }
                       />
+                      {repliesError && (
+                        <FieldError id="inspect-replies-error" ref={revealFocusedFieldError}>
+                          {repliesError}
+                        </FieldError>
+                      )}
                     </Field>
                   </details>
                 </FieldGroup>
@@ -453,25 +603,19 @@ export function AiInspector({ active }: { active: boolean }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3
                     id="inspect-lessons-heading"
-                    className="text-primary flex items-center gap-2 text-base font-semibold"
+                    className="text-primary-text flex items-center gap-2 text-base/[1.3] font-semibold"
                   >
-                    <BookOpenText className="size-4" aria-hidden />
+                    <BookOpenText size={16} absoluteStrokeWidth aria-hidden />
                     Lessons from Deck
                   </h3>
-                  <Button size="md" variant="outline" onClick={deck}>
+                  <Button size="md" variant="outline" onClick={onOpenDeck}>
                     Edit in Deck
                     <ArrowUpRight data-icon="inline-end" />
                   </Button>
                 </div>
-                <p className="text-muted-foreground text-sm/relaxed">
-                  <strong className="text-primary font-semibold tabular-nums">
-                    {files.length}
-                  </strong>{" "}
-                  real files. Deck edits apply here live.
-                </p>
                 <Field>
                   <FieldLabel variant="row" htmlFor="inspect-scope">
-                    Search lessons in
+                    Lesson scope
                   </FieldLabel>
                   <Select
                     value={config.scopeFilter}
@@ -489,10 +633,10 @@ export function AiInspector({ active }: { active: boolean }) {
                     <SelectTrigger id="inspect-scope" size="readable" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
                       <SelectGroup>
                         {scopes.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
+                          <SelectItem key={s.value} value={s.value} size="readable">
                             {s.label}
                           </SelectItem>
                         ))}
@@ -500,98 +644,161 @@ export function AiInspector({ active }: { active: boolean }) {
                     </SelectContent>
                   </Select>
                 </Field>
-                <Button size="md" variant="ghost" onClick={() => setView("lessons")}>
+                <Button size="md" variant="ghost" onClick={() => choosePreviewView("lessons")}>
                   View extracted lessons
                 </Button>
-                <details>
-                  <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium outline-none focus-visible:ring-2">
-                    Lesson files · {files.filter((f) => !excluded.includes(f.key)).length}/
-                    {files.length} included
-                  </summary>
-                  <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
-                    Uncheck a file to leave it out of this preview. Check it again to restore it.
-                    Files in Deck stay unchanged.
-                  </p>
-                  <FieldGroup>
-                    {files.map((file, i) => (
-                      <Field key={file.key} orientation="horizontal" data-inspector-file>
-                        <Checkbox
-                          id={"inspect-file-" + i}
-                          checked={!excluded.includes(file.key)}
-                          onCheckedChange={(checked) => includeFile(file.key, checked)}
-                        />
-                        <FieldLabel variant="row" htmlFor={"inspect-file-" + i}>
-                          <span className="min-w-0 break-words">
-                            {file.path} · {file.scope === "film" ? "This film" : "Shared"}
-                          </span>
-                        </FieldLabel>
-                      </Field>
-                    ))}
-                  </FieldGroup>
-                </details>
-                {excluded.length > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-muted-foreground text-sm">
-                      {excluded.length} excluded from preview
-                    </span>
-                    <Button
-                      size="md"
-                      variant="outline"
-                      onClick={() => {
-                        useInspectorSession.setState({ excluded: [] });
-                        setView("lessons");
-                        setChange("All files restored");
-                      }}
-                    >
-                      Restore all
+                {oversizedDraft && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Lesson draft is too long</AlertTitle>
+                    <AlertDescription>
+                      Shorten <span className="wrap-anywhere">{oversizedDraft.path}</span> in Deck
+                      to {LESSON_TEXT_MAX.toLocaleString("en-US")} characters, or exclude it from
+                      this preview.
+                      <div className="flex">
+                        <Button
+                          size="md"
+                          variant="outline"
+                          onClick={() =>
+                            includeFile(`${oversizedDraft.scope}:${oversizedDraft.path}`, false)
+                          }
+                        >
+                          Exclude this lesson
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {loadFailed ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p role="status" className="text-warn-text text-sm">
+                      Could not load lesson files.
+                    </p>
+                    <Button size="md" variant="outline" onClick={() => void loadLessons()}>
+                      Retry loading lessons
                     </Button>
                   </div>
+                ) : !loaded ? (
+                  <p role="status" className="text-label text-sm">
+                    Loading lesson files…
+                  </p>
+                ) : (
+                  <>
+                    <details>
+                      <summary
+                        ref={lessonFilesSummaryRef}
+                        className="focus-visible:ring-ring cursor-pointer rounded-sm py-1 font-medium tabular-nums outline-none focus-visible:ring-2"
+                      >
+                        Lesson files · {includedCount} of {scopedFiles.length} included
+                      </summary>
+                      {scopedFiles.length > 0 && (
+                        <p className="text-muted-foreground mt-2 mb-3 text-sm/relaxed">
+                          Uncheck files to omit them from previews and Jev runs.
+                        </p>
+                      )}
+                      {scopedFiles.length === 0 && (
+                        <p className="text-muted-foreground text-sm/relaxed">
+                          Add lessons in Deck or choose another scope.
+                        </p>
+                      )}
+                      <FieldGroup>
+                        {scopedFiles.map((file, i) => (
+                          <Field key={file.key} orientation="horizontal" data-inspector-file>
+                            <Checkbox
+                              id={"inspect-file-" + i}
+                              checked={!excluded.includes(file.key)}
+                              onCheckedChange={(checked) => includeFile(file.key, checked)}
+                            />
+                            <FieldLabel variant="row" htmlFor={"inspect-file-" + i}>
+                              <span className="min-w-0 wrap-anywhere">
+                                {file.path} · {SCOPE_LABEL[file.scope]}
+                              </span>
+                            </FieldLabel>
+                          </Field>
+                        ))}
+                      </FieldGroup>
+                    </details>
+                    {scopedExcluded.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-muted-foreground text-sm tabular-nums">
+                          {scopedExcluded.length} excluded
+                        </span>
+                        <Button
+                          size="md"
+                          variant="outline"
+                          onClick={(event) => {
+                            if (event.detail === 0) lessonFilesSummaryRef.current?.focus();
+                            useInspectorSession.setState({
+                              excluded: excluded.filter(
+                                (key) => !scopedExcluded.some((file) => file.key === key),
+                              ),
+                            });
+                            setView("lessons");
+                            setChange("Files in this scope restored");
+                          }}
+                        >
+                          Include all in scope
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </section>
-              <details className="group/advanced border-border border-t pt-3">
+              <details ref={advancedRef} className="group/advanced border-border border-t pt-3">
                 <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-2 font-medium outline-none focus-visible:ring-2">
-                  <span className="flex items-center gap-2">
-                    <Settings2 className="size-4" aria-hidden />
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <Settings2 size={16} absoluteStrokeWidth aria-hidden />
                     Advanced settings
+                    {configError && <span className="text-destructive-text">· Check fields</span>}
                   </span>
-                  <ChevronDown
-                    className="size-4 transition-transform duration-150 ease-out group-open/advanced:rotate-180 motion-reduce:transition-none"
-                    aria-hidden
-                  />
+                  <ChevronDown className="size-4 group-open/advanced:rotate-180" aria-hidden />
                 </summary>
                 <p className="text-muted-foreground mt-1 mb-4 text-sm/relaxed">
                   Prompts, matching rules and output format. Each edit opens its related preview.
                   Save settings to apply them to the notes CLI.
                 </p>
-                <InspectorSettings config={config} onChange={changeConfig} errors={fieldErrors} />
+                <InspectorSettings
+                  config={config}
+                  onChange={changeConfig}
+                  errors={fieldErrors}
+                  chargeThresholdRef={chargeThresholdRef}
+                />
                 <div className="mt-6 flex flex-wrap gap-2">
-                  <Button
-                    size="md"
-                    variant="outline"
-                    onClick={() =>
-                      changeConfig(DEFAULT_LESSON_JEV_CONFIG, "enabled", "Default settings", "ai")
-                    }
-                  >
-                    Reset defaults
-                  </Button>
-                  <Button
-                    size="md"
-                    variant="ghost"
-                    onClick={() =>
-                      void request("/api/lessons/inspect-cache", { method: "DELETE" })
-                        .then(() => {
-                          setRetry((v) => v + 1);
-                          setChange("Inspector cache cleared");
-                          toast.add({
-                            title: "Inspector cache cleared",
-                            description: "CLI matches are kept.",
-                          });
-                        })
-                        .catch((e: Error) => setError(e.message))
-                    }
-                  >
-                    Clear Inspector cache
-                  </Button>
+                  <ResetSettingsDialog onReset={resetConfig} />
+                  <Dialog instantForKeyboard>
+                    <DialogTrigger render={<Button size="md" variant="ghost" />}>
+                      Clear Inspector cache
+                    </DialogTrigger>
+                    <DialogContent showCloseButton={false} motion="fade">
+                      <DialogTitle>Clear Inspector cache?</DialogTitle>
+                      <DialogDescription>
+                        This removes saved Inspector matches and run details. Future runs may call
+                        Jev again. Lesson files and CLI matches stay available.
+                      </DialogDescription>
+                      <DialogFooter>
+                        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                        <DialogClose
+                          render={<Button variant="destructive" />}
+                          onClick={() =>
+                            void request("/api/lessons/inspect-cache", { method: "DELETE" })
+                              .then(() => {
+                                setRetry((v) => v + 1);
+                                setChange("Inspector cache cleared");
+                                toast.add({ title: "Inspector cache cleared" });
+                              })
+                              .catch((e: Error) =>
+                                toast.add({
+                                  title: "Could not clear Inspector cache",
+                                  description: e.message,
+                                  type: "error",
+                                }),
+                              )
+                          }
+                        >
+                          Clear cache
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
                 <details className="mt-4">
                   <summary className="focus-visible:ring-ring cursor-pointer rounded-sm py-2 font-medium outline-none focus-visible:ring-2">
@@ -608,18 +815,50 @@ export function AiInspector({ active }: { active: boolean }) {
               </details>
             </fieldset>
           </div>
+          <div
+            aria-hidden
+            data-inspector-scroll-cue
+            className="from-background pointer-events-none invisible sticky bottom-0 -mt-5 h-5 bg-linear-to-t to-transparent"
+          />
         </div>
         <InspectorPreview
+          hasNote={Boolean(note.text.trim())}
+          canChooseNote={availableNotes.length > 0}
+          allFilesExcluded={loaded && !loadFailed && scopedFiles.length > 0 && includedCount === 0}
           result={received?.value ?? null}
           previous={received?.previous}
           view={view}
-          onViewChange={setView}
-          updating={updating || busy}
+          onViewChange={choosePreviewView}
+          updating={updating}
+          runningJev={busy}
           change={change}
-          error={configError || runError || error}
+          error={validationError || runError || error}
+          onReviewError={revealPreviewError}
+          validationError={validationError}
           failedRun={Boolean(runError)}
         />
       </div>
     </div>
+  );
+}
+
+function ResetSettingsDialog({ onReset }: { onReset: () => void }) {
+  return (
+    <Dialog instantForKeyboard>
+      <DialogTrigger render={<Button size="md" variant="outline" />}>Reset defaults</DialogTrigger>
+      <DialogContent showCloseButton={false} motion="fade">
+        <DialogTitle>Reset Inspector settings?</DialogTitle>
+        <DialogDescription>
+          Reset replaces the current settings and discards unsaved edits. Select Save CLI settings
+          to apply the defaults to the notes CLI.
+        </DialogDescription>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+          <DialogClose render={<Button variant="destructive" />} onClick={onReset}>
+            Reset defaults
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

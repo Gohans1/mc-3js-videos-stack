@@ -1,5 +1,19 @@
 import * as z from "zod";
 
+export const InspectorNoteSchema = z.object({
+  id: z.string().max(100, "Choose another note or write a preview note.").optional(),
+  text: z.string().max(50_000, "Shorten the note to 50,000 characters or fewer."),
+  asks: z
+    .array(
+      z.object({
+        text: z.string().max(10_000, "Shorten each reply to 10,000 characters or fewer."),
+        at: z.string().max(100, "Choose a note with valid reply timestamps.").optional(),
+      }),
+    )
+    .max(100, "Keep 100 replies or fewer.")
+    .default([]),
+});
+
 const prompt = z.string().max(20000);
 const label = z.string().max(500);
 export const LessonJevConfigSchema = z
@@ -92,7 +106,7 @@ export const JEV_ENGINE_FIELDS: Record<keyof LessonJevConfig, string> = {
   freeModel: "Model on OpenCode Zen's /zen/v1/systemone endpoint.",
   paidModel: "Model on OpenRouter's /api/v1/systemone endpoint.",
   spendCap:
-    "USD response-cost stop per Python request, checked AFTER billing; not a hard whole-tournament budget.",
+    "USD charge threshold per engine request, checked after billing. One run can bill several requests.",
   systemPreamble: "Prepended to wanted inside state. No HTTP system role exists.",
   wantedTemplate: "{note} = note text followed by every ask/reply text, separated by newlines.",
   choiceInstructions: "Choice pick.instructions, shared by heats and final.",

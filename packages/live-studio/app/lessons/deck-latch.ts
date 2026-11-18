@@ -9,6 +9,7 @@ export interface DeckShrinkLatchState {
   desiredW: number;
   trailKey: string;
   active: boolean;
+  animate?: boolean;
 }
 
 export interface DeckShrinkLatch {
@@ -29,7 +30,7 @@ export function nextDeckShrinkLatch({
   current: DeckShrinkLatch | null;
   reduced: boolean;
 }): DeckShrinkLatch | null {
-  if (!next.active || !prev.active || reduced) return null;
+  if (!next.active || !prev.active || next.animate === false || reduced) return null;
 
   const prevVisibleW = current ? current.paneW : prev.desiredW;
   if (next.trailKey === prev.trailKey) {
@@ -58,20 +59,26 @@ export function useDeckShrinkLatch({
   desiredW,
   trailKey,
   active,
+  animate = true,
   settleMs = DECK_SHRINK_LATCH_MS,
 }: DeckShrinkLatchState & { settleMs?: number }): { paneW: number; lockW: number | null } {
-  const [prev, setPrev] = useState<DeckShrinkLatchState>({ desiredW, trailKey, active });
+  const [prev, setPrev] = useState<DeckShrinkLatchState>({ desiredW, trailKey, active, animate });
   const [latch, setLatch] = useState<DeckShrinkLatch | null>(null);
 
   let effLatch = latch;
-  if (prev.desiredW !== desiredW || prev.trailKey !== trailKey || prev.active !== active) {
+  if (
+    prev.desiredW !== desiredW ||
+    prev.trailKey !== trailKey ||
+    prev.active !== active ||
+    prev.animate !== animate
+  ) {
     effLatch = nextDeckShrinkLatch({
       prev,
-      next: { desiredW, trailKey, active },
+      next: { desiredW, trailKey, active, animate },
       current: latch,
       reduced: prefersReduced(),
     });
-    setPrev({ desiredW, trailKey, active });
+    setPrev({ desiredW, trailKey, active, animate });
     setLatch(effLatch);
   }
 

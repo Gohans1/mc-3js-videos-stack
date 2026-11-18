@@ -1,5 +1,14 @@
-import { ArrowDown, ArrowUp, ChevronLeft, Eye, GitCompare, ListTree, Pencil } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronLeft,
+  Eye,
+  GitCompare,
+  ListTree,
+  Pencil,
+} from "lucide-react";
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,14 +19,14 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+import { LESSON_TEXT_MAX } from "../../src/lesson-template";
 import { useLitAny } from "../activity/activity";
 import { SaveStatus, Segmented } from "../components/inspector";
-import { TabStage } from "../components/Motion";
 import { lessonChanges } from "./changes";
-import { ConfirmDeleteButton, HEAD, SCOPE_LABEL, TEXT } from "./lesson-ui";
+import { ConfirmDeleteButton, downloadLessonDrafts, SCOPE_LABEL, TEXT } from "./lesson-ui";
 import { LessonChanges } from "./LessonChanges";
 import { LessonMarkdownView } from "./LessonMarkdownView";
 import {
@@ -25,6 +34,7 @@ import {
   markRead,
   openLesson,
   parseLessonKey,
+  saveLesson,
   setLessonView,
   takePick,
   typeLesson,
@@ -49,13 +59,8 @@ function findVisibleLine(scroller: HTMLElement | null): number {
   return active;
 }
 
-function scrollScrollerToLine(
-  scroller: HTMLElement | null,
-  line: number,
-  smooth: boolean,
-): () => void {
-  if (!scroller) return () => {};
-  const nodes = [...scroller.querySelectorAll<HTMLElement>("[data-line]")];
+function findLineNode(scroller: HTMLElement, line: number): HTMLElement | null {
+  const nodes = scroller.querySelectorAll<HTMLElement>("[data-line]");
   let target: HTMLElement | null = null;
   for (const el of nodes) {
     const n = Number(el.dataset.line);
@@ -66,7 +71,16 @@ function scrollScrollerToLine(
       break;
     }
   }
-  if (!target) return () => {};
+  return target;
+}
+
+function scrollScrollerToLine(
+  scroller: HTMLElement | null,
+  line: number,
+  smooth: boolean,
+): () => void {
+  const target = scroller && findLineNode(scroller, line);
+  if (!scroller || !target) return () => {};
   const top =
     target.getBoundingClientRect().top -
     scroller.getBoundingClientRect().top +
@@ -77,18 +91,35 @@ function scrollScrollerToLine(
   return () => {};
 }
 
+function focusEditorLine(editor: HTMLTextAreaElement | null, line: number) {
+  if (!editor) return;
+  const start = editor.value
+    .split("\n", line - 1)
+    .reduce((offset, text) => offset + text.length + 1, 0);
+  editor.focus({ preventScroll: true });
+  editor.setSelectionRange(start, start);
+}
+
+function focusReaderLine(scroller: HTMLElement | null, line: number) {
+  const target = scroller && findLineNode(scroller, line);
+  if (!target) return false;
+  target.tabIndex = -1;
+  target.focus({ preventScroll: true });
+  return true;
+}
+
 /** Reader, painted live editor, Contents navigator, and AI word-diff sheet for one lesson file. */
 export function LessonFileView({
   path: key,
-  depthPill,
   initialLine,
   showBack = false,
+  onBack = () => openLesson(null),
   onDelete,
 }: {
   path: string;
-  depthPill?: string;
   initialLine: number | null;
   showBack?: boolean;
+  onBack?: (animate: boolean) => void;
   onDelete: () => void;
 }) {
   const file = useLessons((s) => s.files.find((f) => f.key === key)),
@@ -105,6 +136,7 @@ export function LessonFileView({
   const folder = scope === "film" && projectDir ? projectDir : dir;
   const lit = useLitAny([`lesson:${key}`, ...(scope === "all" ? [`lesson:${displayPath}`] : [])]);
   const text = edit?.text ?? file?.text ?? "";
+  const oversizedDraft = edit && edit.text.length > LESSON_TEXT_MAX ? edit : null;
   const news = useMemo(
     () => (file && seen && seen.tag !== file.tag ? lessonChanges(seen.text, file.text) : null),
     [file, seen],
@@ -112,6 +144,8 @@ export function LessonFileView({
   const view: LessonViewMode = storedView ?? (pickKey === key ? "edit" : preferredView);
   const effectiveView: LessonViewMode = view === "changes" && !news ? preferredView : view;
   const [contentsOpen, setContentsOpen] = useState(false);
+  const searchMatchId = useId();
+  const contentsTriggerRef = useRef<HTMLButtonElement>(null);
   const [activeLine, setActiveLine] = useState(1);
 
   const area = useRef<HTMLTextAreaElement>(null),
@@ -128,7 +162,7 @@ export function LessonFileView({
     const end = lines.findIndex((l, i) => i > 0 && /^(?:---|\.\.\.)\s*$/.test(l));
     return end === -1 ? 0 : end + 1;
   }, [lines]);
-  const depthAt = useMemo(() => new Map(heads.map((h) => [h.line, h.depth])), [heads]);
+  const headingLines = useMemo(() => new Set(heads.map((heading) => heading.line)), [heads]);
   const activeHeadLine = useMemo(() => findActiveHeading(heads, activeLine), [heads, activeLine]);
 
   // Clean up any running flyTo scroll animation on unmount or file switch
@@ -144,15 +178,35 @@ export function LessonFileView({
       setLessonView(key, "edit", false);
       area.current?.focus({ preventScroll: true });
       area.current?.setSelectionRange(picked[0], picked[1]);
-    } else if (initialLine && initialLine > 1) {
-      requestAnimationFrame(() => {
+    } else if (initialLine) {
+      const frame = requestAnimationFrame(() => {
         flyStop.current?.();
-        const target = viewRef.current === "edit" ? editScroller.current : readScroller.current;
+        const editing = viewRef.current === "edit";
+        const target = editing ? editScroller.current : readScroller.current;
         flyStop.current = scrollScrollerToLine(target, initialLine, false);
         setActiveLine(initialLine);
+        if (editing) focusEditorLine(area.current, initialLine);
+        else if (!focusReaderLine(target, initialLine))
+          contentsTriggerRef.current?.focus({ preventScroll: true });
       });
+      return () => cancelAnimationFrame(frame);
     }
   }, [key, initialLine]);
+
+  useLayoutEffect(() => {
+    const scroller = readScroller.current;
+    if (!scroller || initialLine === null) return;
+    const marker = findLineNode(scroller, initialLine);
+    if (!marker) return;
+    marker.dataset.lessonSearchMatch = "";
+    marker.tabIndex = -1;
+    marker.setAttribute("aria-describedby", searchMatchId);
+    return () => {
+      delete marker.dataset.lessonSearchMatch;
+      marker.removeAttribute("tabindex");
+      marker.removeAttribute("aria-describedby");
+    };
+  }, [effectiveView, initialLine, searchMatchId, text]);
 
   const activeScroller = () =>
     effectiveView === "edit" ? editScroller.current : readScroller.current;
@@ -168,33 +222,54 @@ export function LessonFileView({
       const target = next === "edit" ? editScroller.current : readScroller.current;
       scrollScrollerToLine(target, keepLine, false);
       setActiveLine(keepLine);
-      if (next === "edit" && jumpLine !== undefined) {
-        const box = area.current;
-        if (!box) return;
-        const at = lines.slice(0, jumpLine - 1).reduce((n, l) => n + l.length + 1, 0);
-        box.focus({ preventScroll: true });
-        box.setSelectionRange(at, at);
+      if (jumpLine !== undefined) {
+        if (next === "edit") focusEditorLine(area.current, jumpLine);
+        else focusReaderLine(target, jumpLine);
       }
     });
   };
 
-  const flyToHeading = (line: number) => {
+  const closeContents = (keyboard: boolean) => {
     setContentsOpen(false);
+    if (keyboard) contentsTriggerRef.current?.focus({ preventScroll: true });
+    else
+      requestAnimationFrame(() => {
+        contentsTriggerRef.current
+          ?.closest<HTMLElement>("[data-lesson-content]")
+          ?.focus({ preventScroll: true });
+      });
+  };
+
+  const flyToHeading = (line: number, smooth: boolean) => {
+    if (smooth) closeContents(false);
+    else setContentsOpen(false);
     setActiveLine(line);
     if (effectiveView === "changes") {
       switchView(preferredView, line, false);
       return;
     }
     flyStop.current?.();
-    flyStop.current = scrollScrollerToLine(activeScroller(), line, true);
+    flyStop.current = scrollScrollerToLine(activeScroller(), line, smooth);
+    if (!smooth)
+      requestAnimationFrame(() => {
+        if (effectiveView === "edit") focusEditorLine(area.current, line);
+        else if (!focusReaderLine(readScroller.current, line))
+          contentsTriggerRef.current?.focus({ preventScroll: true });
+      });
   };
 
-  const flyEdge = (toBottom: boolean) => {
-    setContentsOpen(false);
+  const flyEdge = (toBottom: boolean, smooth: boolean) => {
+    closeContents(!smooth);
+    if (effectiveView === "changes") {
+      switchView(preferredView, toBottom ? lines.length : 1, false);
+      return;
+    }
     const scroller = activeScroller();
     if (!scroller) return;
     flyStop.current?.();
-    flyStop.current = flyTo(scroller, toBottom ? scroller.scrollHeight : 0);
+    const target = toBottom ? scroller.scrollHeight : 0;
+    if (smooth) flyStop.current = flyTo(scroller, target);
+    else scroller.scrollTop = target;
   };
 
   const goTo = (line: number) => switchView("edit", line, false);
@@ -221,7 +296,12 @@ export function LessonFileView({
       id: "read",
       title: (
         <span className="inline-flex items-center gap-1.5">
-          <Eye aria-hidden className="size-3.5" />
+          <Eye
+            aria-hidden
+            size={14}
+            absoluteStrokeWidth
+            strokeWidth={effectiveView === "read" ? 2 : 1.5}
+          />
           Read
         </span>
       ),
@@ -230,7 +310,12 @@ export function LessonFileView({
       id: "edit",
       title: (
         <span className="inline-flex items-center gap-1.5">
-          <Pencil aria-hidden className="size-3.5" />
+          <Pencil
+            aria-hidden
+            size={14}
+            absoluteStrokeWidth
+            strokeWidth={effectiveView === "edit" ? 2 : 1.5}
+          />
           Edit
         </span>
       ),
@@ -242,9 +327,14 @@ export function LessonFileView({
             ariaLabel: `Changes (+${news.added}, -${news.removed})`,
             title: (
               <span className="inline-flex items-center gap-1.5 tabular-nums">
-                <GitCompare aria-hidden className="size-3.5" />
-                <span className="text-ok">+{news.added}</span>
-                <span className="text-destructive">−{news.removed}</span>
+                <GitCompare
+                  aria-hidden
+                  size={14}
+                  absoluteStrokeWidth
+                  strokeWidth={effectiveView === "changes" ? 2 : 1.5}
+                />
+                <span className="text-ok-text">+{news.added}</span>
+                <span className="text-destructive-text">−{news.removed}</span>
               </span>
             ),
           },
@@ -256,28 +346,33 @@ export function LessonFileView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         data-ai-lit={lit || undefined}
-        className="flex flex-none items-center gap-1 rounded-md px-2 py-1.5"
+        className="flex flex-none flex-wrap items-start gap-1.5 px-2 py-1.5"
       >
         {showBack && (
           <Button
             variant="ghost"
             size="icon-lg"
-            title="Back to lessons"
-            aria-label="Back to the lessons"
-            onClick={() => openLesson(null)}
+            data-lesson-back
+            title="Back to lesson list"
+            aria-label="Back to lesson list"
+            onClick={(e) => onBack(e.detail > 0)}
           >
             <ChevronLeft aria-hidden />
           </Button>
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            {depthPill && (
-              <span className="bg-muted text-muted-foreground flex-none rounded px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums">
-                {depthPill}
-              </span>
-            )}
-            <span className="text-foreground min-w-0 truncate text-base/[1.3] font-semibold">
-              {displayPath}
+        <div className="min-w-24 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+            <span className="text-foreground min-w-0 text-base/[1.4] font-semibold wrap-anywhere">
+              {displayPath.split("/").map((segment, index) => (
+                <Fragment key={index}>
+                  {index > 0 && (
+                    <>
+                      /<wbr />
+                    </>
+                  )}
+                  {segment}
+                </Fragment>
+              ))}
             </span>
             <Badge variant={scope === "film" ? "lessonFilm" : "lessonAll"} className="flex-none">
               {SCOPE_LABEL[scope]}
@@ -287,17 +382,18 @@ export function LessonFileView({
             className="text-muted-foreground text-ui/[1.35] truncate"
             title={folder ? `${folder}/${displayPath}` : displayPath}
           >
-            {edit?.failed ? (
-              <span className="text-warn font-semibold">Not saved: {edit.failed}</span>
-            ) : (
-              <SaveStatus state={edit ? "busy" : null} idleText="Saved" />
-            )}
+            <SaveStatus
+              state={edit ? (oversizedDraft || edit.failed ? "fail" : "busy") : null}
+              idleText="Saved"
+              failText="Draft"
+            />
           </div>
         </div>
         <Popover open={contentsOpen} onOpenChange={setContentsOpen}>
           <PopoverTrigger
             render={
               <Button
+                ref={contentsTriggerRef}
                 variant="ghost"
                 size="icon-lg"
                 title="Contents"
@@ -308,17 +404,21 @@ export function LessonFileView({
           >
             <ListTree aria-hidden />
           </PopoverTrigger>
-          <PopoverContent align="end" className="max-h-[60vh] w-72 overflow-y-auto">
+          <PopoverContent
+            align="end"
+            motion="instant"
+            className="max-h-[60vh] w-72 overflow-y-auto overscroll-contain"
+          >
             <div className="border-border/80 mb-1.5 flex items-center justify-between gap-1 border-b pb-1.5">
-              <span className="text-muted-foreground text-ui px-1 font-medium tabular-nums">
-                Contents ({heads.length})
-              </span>
+              <PopoverTitle className="ms-1">
+                Contents (<span className="tabular-nums">{heads.length}</span>)
+              </PopoverTitle>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="xs" onClick={() => flyEdge(false)}>
+                <Button variant="ghost" size="xs" onClick={(e) => flyEdge(false, e.detail > 0)}>
                   <ArrowUp aria-hidden data-icon="inline-start" />
                   Top
                 </Button>
-                <Button variant="ghost" size="xs" onClick={() => flyEdge(true)}>
+                <Button variant="ghost" size="xs" onClick={(e) => flyEdge(true, e.detail > 0)}>
                   <ArrowDown aria-hidden data-icon="inline-start" />
                   Bottom
                 </Button>
@@ -332,43 +432,85 @@ export function LessonFileView({
                     key={h.line}
                     type="button"
                     aria-current={active ? "true" : undefined}
-                    onClick={() => flyToHeading(h.line)}
+                    onClick={(e) => flyToHeading(h.line, e.detail > 0)}
                     className={cn(
-                      "hover:bg-muted focus-visible:ring-ring studio-press flex w-full items-baseline gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.35] outline-none focus-visible:ring-2",
-                      active && "bg-primary/12 ring-primary/35 ring-1 ring-inset",
+                      "hover:bg-muted focus-visible:ring-ring studio-press relative flex w-full items-start gap-2 rounded-sm py-1.5 ps-(--indent) pe-2 text-start text-sm/[1.4] outline-none focus-visible:ring-2",
+                      active && "bg-primary/12",
                     )}
-                    style={{ "--indent": `${8 + (h.depth - 1) * 10}px` }}
+                    style={{ "--indent": `${26 + (h.depth - 1) * 10}px` }}
                   >
-                    <span className={cn("min-w-0 flex-1 truncate font-medium", HEAD[h.depth])}>
+                    {active && (
+                      <Check
+                        aria-hidden
+                        size={14}
+                        absoluteStrokeWidth
+                        className="text-primary-text absolute start-2 top-2"
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        "text-popover-foreground min-w-0 flex-1 wrap-anywhere",
+                        active ? "font-semibold" : "font-medium",
+                      )}
+                    >
                       {h.title}
                     </span>
                     {h.bullets > 0 && (
-                      <span className="bg-muted text-muted-foreground/80 rounded px-1 text-xs tabular-nums">
+                      <span className="bg-muted text-label rounded px-1 text-xs tabular-nums">
                         {h.bullets}
                       </span>
                     )}
-                    <span className="text-muted-foreground text-xs tabular-nums">{h.line}</span>
+                    <span className="text-label text-xs whitespace-nowrap tabular-nums">
+                      Line {h.line}
+                    </span>
                   </button>
                 );
               })}
             </nav>
           </PopoverContent>
         </Popover>
-        <ConfirmDeleteButton
-          label={`${displayPath} (${SCOPE_LABEL[scope]})`}
-          header
-          onConfirm={onDelete}
-        />
+        <ConfirmDeleteButton path={displayPath} scope={scope} size="icon-lg" onConfirm={onDelete} />
       </div>
+      {(oversizedDraft || edit?.failed) && (
+        <div className="flex flex-none flex-wrap items-center gap-2 px-3 pb-2">
+          <p role="status" className="text-warn-text min-w-0 flex-1 text-sm/relaxed wrap-anywhere">
+            {oversizedDraft
+              ? `Shorten the lesson to ${LESSON_TEXT_MAX.toLocaleString("en-US")} characters or fewer. Your draft is still here.`
+              : "Could not save the lesson. Your draft is still here."}
+          </p>
+          {oversizedDraft ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                downloadLessonDrafts([{ path: displayPath, text: oversizedDraft.text }])
+              }
+            >
+              Download draft
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => void saveLesson(key)}>
+              Retry save
+            </Button>
+          )}
+        </div>
+      )}
       <div className="border-border/60 flex flex-none flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b px-3 pb-1.5">
         <Segmented
           label="Lesson view mode"
+          animateIndicator={false}
+          keepClickFocus
           value={effectiveView}
           className="[&_[role=radio]]:text-sm"
           items={viewItems}
           onChange={(v) => switchView(v)}
         />
-        <span className="text-muted-foreground text-ui shrink-0 whitespace-nowrap tabular-nums">
+        {initialLine !== null && (
+          <span id={searchMatchId} className="text-primary-text text-sm tabular-nums">
+            Search match · line {initialLine}
+          </span>
+        )}
+        <span className="text-muted-foreground text-lesson-meta shrink-0 whitespace-nowrap tabular-nums">
           {effectiveView === "read"
             ? `${heads.length} ${heads.length === 1 ? "section" : "sections"}`
             : effectiveView === "edit"
@@ -377,13 +519,7 @@ export function LessonFileView({
         </span>
       </div>
 
-      <TabStage
-        activeKey={effectiveView}
-        order={["read", "edit", "changes"]}
-        distance={10}
-        duration={165}
-        className="flex min-h-0 flex-1 flex-col"
-      >
+      <div className="flex min-h-0 flex-1 flex-col">
         {effectiveView === "changes" && news ? (
           <LessonChanges
             news={news}
@@ -394,7 +530,7 @@ export function LessonFileView({
           <div
             ref={readScroller}
             onScroll={(e) => setActiveLine(findVisibleLine(e.currentTarget))}
-            className="scroll-fade min-h-0 flex-1 overflow-y-auto px-3 py-3"
+            className="scroll-fade [&_[data-lesson-search-match]]:outline-ring min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [&_[data-lesson-search-match]]:rounded-sm [&_[data-lesson-search-match]]:outline-2 [&_[data-lesson-search-match]]:outline-solid"
           >
             <LessonMarkdownView text={text} onJumpEdit={goTo} />
           </div>
@@ -402,14 +538,14 @@ export function LessonFileView({
           <div
             ref={editScroller}
             onScroll={(e) => setActiveLine(findVisibleLine(e.currentTarget))}
-            className="scroll-fade min-h-0 flex-1 overflow-y-auto px-3 py-1"
+            className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-1"
           >
             {/* the painted copy sets the height and draws the words; the textarea over it takes the typing, its own words see-through */}
             <div className="focus-within:ring-ring relative mx-auto grid w-full max-w-[42rem] grid-cols-[minmax(0,1fr)] rounded-md focus-within:ring-2 focus-within:ring-inset">
               <pre
                 ref={painted}
                 aria-hidden
-                className={cn(TEXT, "text-foreground/90 col-start-1 row-start-1 m-0")}
+                className={cn(TEXT, "text-foreground col-start-1 row-start-1 m-0")}
               >
                 {lines.map((l, i) => (
                   <span
@@ -417,7 +553,8 @@ export function LessonFileView({
                     data-line={i + 1}
                     className={cn(
                       i < frontEnd && "text-muted-foreground",
-                      depthAt.has(i + 1) && HEAD[depthAt.get(i + 1)!],
+                      headingLines.has(i + 1) && "text-lesson-heading",
+                      initialLine === i + 1 && "outline-ring rounded-sm outline-2 outline-solid",
                     )}
                   >
                     {l}
@@ -428,6 +565,7 @@ export function LessonFileView({
               <textarea
                 ref={area}
                 aria-label={`${displayPath} (${SCOPE_LABEL[scope]}), the lesson's words`}
+                aria-describedby={initialLine === null ? undefined : searchMatchId}
                 spellCheck={false}
                 value={text}
                 onChange={(e) => typeLesson(key, e.target.value)}
@@ -440,7 +578,7 @@ export function LessonFileView({
             </div>
           </div>
         )}
-      </TabStage>
+      </div>
     </div>
   );
 }

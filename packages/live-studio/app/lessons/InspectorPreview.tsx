@@ -20,21 +20,21 @@ import type { InspectorView, InspectResult } from "./inspector-types";
 
 export function InspectorCode({ children }: { children: string }) {
   return (
-    <pre className="bg-backdrop text-foreground border-border max-h-96 overflow-auto overscroll-contain rounded-md border p-3 font-mono text-sm/relaxed break-words whitespace-pre-wrap">
+    <pre className="bg-backdrop text-foreground border-border max-h-96 overflow-auto overscroll-contain rounded-md border p-3 font-mono text-sm/relaxed wrap-anywhere whitespace-pre-wrap">
       {children}
     </pre>
   );
 }
 const details = [
   { value: "prompt", label: "Prompts" },
-  { value: "learn", label: "Learn" },
+  { value: "learn", label: "Remember prompt" },
   { value: "requests", label: "Requests" },
   { value: "trace", label: "Run trace" },
   { value: "metadata", label: "Metadata" },
 ];
 const titles: Record<InspectorView, string> = {
   ai: "What the AI receives",
-  lessons: "What Jev reads from Deck",
+  lessons: "Extracted lesson text",
   prompt: "Assembled Jev prompts",
   learn: "Instruction for remembering a rule",
   requests: "Prepared requests",
@@ -58,7 +58,9 @@ export function inspectorPreviewText(result: InspectResult, view: InspectorView)
   if (view === "trace")
     return result.ranked
       ? JSON.stringify({ ranked: result.ranked, trace: result.trace }, null, 2)
-      : "No Jev run for these inputs yet. Enable calls and choose Run Jev to see real scores and responses.";
+      : result.cache.cli
+        ? "Reused CLI matches. No Jev trace is available for these inputs."
+        : "No trace recorded yet. A new Inspector run records its Jev trace here.";
   if (view === "metadata") return JSON.stringify(result.noteInput, null, 2);
   const c = result.config;
   return [
@@ -82,26 +84,44 @@ export function inspectorPreviewText(result: InspectResult, view: InspectorView)
 }
 
 export function InspectorPreview({
+  hasNote,
+  canChooseNote,
+  allFilesExcluded,
   result,
   previous,
   view,
   onViewChange,
   updating,
+  runningJev,
   change,
   error,
+  onReviewError,
+  validationError,
   failedRun,
 }: {
+  hasNote: boolean;
+  canChooseNote: boolean;
+  allFilesExcluded: boolean;
   result: InspectResult | null;
   previous?: InspectResult;
   view: InspectorView;
   onViewChange: (view: InspectorView) => void;
   updating: boolean;
+  runningJev: boolean;
   change: string;
   error: string;
+  onReviewError: () => void;
+  validationError: string;
   failedRun: boolean;
 }) {
-  const text = result ? inspectorPreviewText(result, view) : "";
-  const before = previous ? inspectorPreviewText(previous, view) : "";
+  const awaitingNote = view === "ai" && !hasNote;
+  const requestPending = updating || runningJev;
+  const showPrevious = requestPending || Boolean(error);
+  const text = result && !awaitingNote ? inspectorPreviewText(result, view) : "";
+  const before =
+    previous && !awaitingNote && (view !== "ai" || previous.words.trim())
+      ? inspectorPreviewText(previous, view)
+      : "";
   const lines = useMemo(
     () => (before ? diffLines(before, text) : [{ value: text, added: false, removed: false }]),
     [before, text],
@@ -109,19 +129,17 @@ export function InspectorPreview({
   const changed = lines
     .filter((p) => p.added)
     .reduce((sum, p) => sum + p.value.trimEnd().split("\n").length, 0);
-  const removed = lines
-    .filter((p) => p.removed)
-    .reduce((sum, p) => sum + p.value.trimEnd().split("\n").length, 0);
+  const removed = lines.some((part) => part.removed);
   const scroller = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const parent = scroller.current,
       target = parent?.querySelector<HTMLElement>("[data-changed=true]");
-    if (parent && target && !updating)
+    if (parent && target && !requestPending)
       parent.scrollTop +=
         target.getBoundingClientRect().top -
         parent.getBoundingClientRect().top -
         parent.clientHeight / 3;
-  }, [text, view, updating]);
+  }, [text, view, requestPending]);
   const copy = () =>
     void navigator.clipboard
       .writeText(text)
@@ -138,96 +156,104 @@ export function InspectorPreview({
       aria-label="Live preview"
       data-inspector-output
       className={cn(
-        "bg-backdrop flex min-h-0 min-w-0 flex-col border-t transition-colors duration-150 ease-out motion-reduce:transition-none @min-[700px]/inspector:border-s @min-[700px]/inspector:border-t-0",
+        "bg-backdrop ease-studio-out flex min-h-0 min-w-0 flex-col border-t transition-colors duration-150 motion-reduce:transition-none @min-[700px]/inspector:border-s @min-[700px]/inspector:border-t-0",
         view === "lessons" ? "border-primary/30" : "border-ai/30",
       )}
     >
       <div
         className={cn(
-          "flex flex-none flex-col gap-0.5 border-b px-3 py-1 transition-colors duration-150 ease-out motion-reduce:transition-none @min-[700px]/inspector:px-4",
+          "ease-studio-out flex flex-none flex-col gap-0.5 border-b px-3 py-1 transition-colors duration-150 motion-reduce:transition-none @min-[700px]/inspector:px-4",
           view === "lessons" ? "border-primary/20 bg-primary/5" : "border-ai/20 bg-ai/5",
         )}
       >
         <h3 className="sr-only">Live preview</h3>
-        <div className="scroll-fade-x flex items-center justify-between gap-2 overflow-x-auto overscroll-x-contain">
+        <div className="scroll-fade-x sideways:flex-nowrap sideways:overflow-x-auto upright:flex-nowrap upright:overflow-x-auto flex flex-wrap items-center gap-2 overscroll-x-contain">
           <ToggleGroup
             variant="segment"
             aria-label="Preview content"
+            className="sideways:max-w-none sideways:flex-nowrap upright:max-w-none upright:flex-nowrap max-w-full flex-wrap"
             value={[view]}
             onValueChange={(v) => {
               if (v[0] === "ai" || v[0] === "lessons") onViewChange(v[0]);
             }}
           >
             <ToggleGroupItem value="ai" tone="ai">
-              AI output
+              Note for AI
             </ToggleGroupItem>
             <ToggleGroupItem value="lessons" tone="source">
-              Jev input
+              Extracted lessons
             </ToggleGroupItem>
           </ToggleGroup>
-          <Select
-            value={view === "ai" || view === "lessons" ? null : view}
-            items={details}
-            onValueChange={(v) => {
-              if (details.some((d) => d.value === v)) onViewChange(v as InspectorView);
-            }}
-          >
-            <SelectTrigger
-              size="readable"
-              aria-label="Detailed preview"
-              className="w-20 max-w-28 min-w-20 flex-1"
+          <div className="sideways:min-w-32 upright:min-w-32 flex min-w-[min(100%,13.5rem)] flex-1 items-center justify-end gap-2">
+            <Select
+              value={view === "ai" || view === "lessons" ? null : view}
+              items={details}
+              onValueChange={(v) => {
+                if (details.some((d) => d.value === v)) onViewChange(v as InspectorView);
+              }}
             >
-              <SelectValue placeholder="More" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {details.map((d) => (
-                  <SelectItem key={d.value} value={d.value}>
-                    {d.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Copy preview"
-            disabled={!text || updating || Boolean(error)}
-            onClick={copy}
-          >
-            <Copy />
-          </Button>
+              <SelectTrigger
+                size="readable"
+                aria-label="More views"
+                className="max-w-44 min-w-0 flex-1"
+              >
+                <SelectValue placeholder="More views" />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false} finalFocus motion="instant">
+                <SelectGroup>
+                  {details.map((d) => (
+                    <SelectItem key={d.value} value={d.value} size="readable">
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Copy preview"
+              disabled={!text || requestPending || Boolean(error)}
+              onClick={copy}
+            >
+              <Copy aria-hidden />
+            </Button>
+          </div>
         </div>
         <div className="flex flex-col gap-1">
           <p className="sr-only">{titles[view]}</p>
           <p
             role="status"
-            className="text-muted-foreground text-xs/relaxed @min-[700px]/inspector:text-sm/relaxed"
+            className="text-muted-foreground text-xs/relaxed tabular-nums @min-[700px]/inspector:text-sm/relaxed"
           >
             {error ? (
               failedRun ? (
                 "Jev run failed"
+              ) : validationError ? (
+                `Preview paused · ${validationError}`
               ) : (
                 "Preview paused"
               )
+            ) : runningJev ? (
+              "Running Jev…"
             ) : updating ? (
               result ? (
                 "Updating preview…"
               ) : (
                 "Loading preview…"
               )
+            ) : awaitingNote ? (
+              "Add a note to preview"
             ) : result ? (
               <>
-                {previous && <span className="sr-only">{change + ". "}</span>}
-                {changed || removed ? (
-                  <>
-                    <span className="text-ok-text">{changed} added</span>
-                    {removed > 0 && (
-                      <span className="text-destructive-text">{" · " + removed + " removed"}</span>
-                    )}
-                  </>
-                ) : previous ? (
+                {before && <span className="sr-only">{change + ". "}</span>}
+                {removed ? (
+                  "Preview updated"
+                ) : changed > 0 ? (
+                  <span className="text-ok-text">
+                    {changed} {changed === 1 ? "line" : "lines"} added
+                  </span>
+                ) : before ? (
                   "Output unchanged"
                 ) : (
                   "Preview ready"
@@ -237,57 +263,92 @@ export function InspectorPreview({
               "Choose a note or write one to begin."
             )}
           </p>
+          {view === "lessons" && (
+            <p className="text-label text-xs/relaxed @min-[700px]/inspector:text-sm/relaxed">
+              Text prepared for matching from the included lesson files.
+            </p>
+          )}
+          {error && !validationError && (
+            <div className="flex">
+              <Button size="sm" variant="outline" onClick={onReviewError}>
+                Review error
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       <div
         tabIndex={0}
         role="region"
         aria-label={titles[view]}
-        aria-busy={updating}
+        aria-busy={requestPending && !error}
         data-inspector-result
         ref={scroller}
-        className="focus-visible:ring-ring min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-4 outline-none focus-visible:ring-2"
+        className="focus-visible:outline-ring min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-3 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid"
       >
-        {!result ? (
+        {awaitingNote ? (
+          <p className="text-muted-foreground text-sm/relaxed">
+            {canChooseNote
+              ? "Write or choose a note to see what the AI receives."
+              : "Write a note to see what the AI receives."}
+          </p>
+        ) : !result ? (
           <p className="text-muted-foreground text-sm/relaxed">
             The preview uses the real lessons in Deck. Editing here never calls Jev automatically.
           </p>
         ) : (
-          <pre className="max-w-[75ch] font-mono text-sm/relaxed break-words whitespace-pre-wrap">
+          <pre className="max-w-[72ch] font-mono text-sm/relaxed wrap-anywhere whitespace-pre-wrap">
             {text
               ? lines
                   .filter((part) => !part.removed)
-                  .map((part, i) => (
-                    <span
-                      key={i}
-                      data-changed={part.added || undefined}
-                      className={cn("rounded-sm", part.added && "bg-ok/20 text-foreground")}
-                    >
-                      {part.value}
-                    </span>
-                  ))
-              : "No lesson files in this scope. Add or edit lessons in Deck."}
+                  .map((part, i) =>
+                    part.added ? (
+                      <span key={i} data-changed className="bg-ok/20 text-foreground rounded-sm">
+                        {part.value.split(/(?<=\n)/).map((line, index) => (
+                          <span key={index}>
+                            <span aria-hidden className="text-ok-text select-none">
+                              +{" "}
+                            </span>
+                            {line}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span key={i}>{part.value}</span>
+                    ),
+                  )
+              : allFilesExcluded
+                ? "Every lesson file in this scope is excluded. Select Include all in scope or reselect files."
+                : "No lesson files in this scope. Choose another scope or add lessons in Deck."}
           </pre>
         )}
       </div>
-      <div className="border-border text-muted-foreground flex flex-none flex-wrap gap-x-3 gap-y-1 border-t px-3 py-1 text-xs/relaxed tabular-nums @min-[700px]/inspector:px-4">
-        <span className="hidden @min-[20rem]/inspector:inline">
-          Files: <strong className="text-primary font-semibold">{result?.pool.length ?? 0}</strong>
-        </span>
+      <div className="border-border text-label flex flex-none flex-wrap gap-x-3 gap-y-1 border-t px-3 py-1 text-xs/relaxed tabular-nums @min-[700px]/inspector:px-4">
+        {result && (
+          <span className="hidden @min-[20rem]/inspector:inline">
+            Files: <strong className="text-primary-text font-semibold">{result.pool.length}</strong>
+          </span>
+        )}
         <span
           className={
-            result?.status === "live"
+            !showPrevious && result?.status === "live"
               ? "text-ai-text"
-              : result?.status === "cached"
+              : !showPrevious && result?.status === "cached"
                 ? "text-ok-text"
                 : undefined
           }
         >
-          {result?.status === "live"
-            ? "Live result"
-            : result?.status === "cached"
-              ? "Cached result · no call"
-              : "Preview · no API call"}
+          {!result
+            ? "No result yet"
+            : showPrevious
+              ? result.status === "dry"
+                ? "Previous preview"
+                : "Previous result"
+              : result.status === "live"
+                ? "Live result"
+                : result.status === "cached"
+                  ? "Cached result · no call"
+                  : "Preview · no Jev call"}
         </span>
       </div>
     </section>

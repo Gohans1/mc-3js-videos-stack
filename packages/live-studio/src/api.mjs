@@ -16,6 +16,7 @@ import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 
+import { JevRunError } from "../../clip-catalog/jev.ts";
 import { Activity, createActivity } from "./activity.mjs";
 import { CLI_CATEGORIES, CLI_COMMANDS } from "./cli-catalog.ts";
 import { CliRunHttpError, createCliRunner, scanCliContext } from "./cli-runner.ts";
@@ -35,6 +36,7 @@ import {
   inspectorInfo,
 } from "./lesson-inspector.mjs";
 import { writeLessonJson } from "./lesson-settings.mjs";
+import { LESSON_PATH_MAX, LESSON_TEXT_MAX } from "./lesson-template.ts";
 import { noteNumbers } from "./notes.mjs";
 import { openFilmLut, openFilmResource, openOpenFilm } from "./openfilm.mjs";
 import { createPortsService } from "./ports.mjs";
@@ -100,13 +102,13 @@ const NoteIn = z.object({
 const LessonScope = z.enum(["film", "all"]).default("all");
 const LessonSave = z.object({
   scope: LessonScope,
-  path: z.string().max(200),
-  text: z.string().max(1_000_000),
+  path: z.string().max(LESSON_PATH_MAX),
+  text: z.string().max(LESSON_TEXT_MAX),
   base: z.string().nullable(),
 });
 const LessonDelete = z.object({
   scope: LessonScope,
-  path: z.string().max(200),
+  path: z.string().max(LESSON_PATH_MAX),
   base: z.string().nullable(),
 });
 // note-state.mjs says which of these may happen to a note now; {remove}/{restore} are the file's own
@@ -676,7 +678,8 @@ export const createApi = (
           }),
         );
       } catch (e) {
-        return c.json({ error: e.message }, 400);
+        const outcome = e instanceof JevRunError ? e.outcome : undefined;
+        return c.json({ error: e.message, outcome }, outcome === "not-started" ? 424 : 400);
       }
     },
   );

@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:border-destructive/50 aria-invalid:ring-destructive/40 inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out outline-none select-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:ring-2 motion-safe:enabled:not-aria-disabled:active:not-aria-[haspopup]:scale-[0.96] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button focus-visible:border-ring focus-visible:ring-ring aria-invalid:border-destructive/50 aria-invalid:ring-destructive/40 ease-studio-out inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,scale] duration-150 outline-none select-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:ring-2 motion-safe:enabled:not-aria-disabled:active:not-aria-[haspopup]:scale-[0.96] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -18,8 +18,7 @@ const buttonVariants = cva(
           "text-foreground/90 aria-expanded:text-foreground aria-pressed:text-foreground disabled:text-muted-foreground aria-disabled:text-muted-foreground not-aria-disabled:hover:text-foreground border-hairline-strong bg-hairline-subtle not-aria-disabled:hover:border-hairline-strong not-aria-disabled:hover:bg-hairline disabled:border-hairline aria-disabled:border-hairline aria-expanded:border-hairline-strong aria-expanded:bg-hairline aria-pressed:border-hairline-strong aria-pressed:bg-hairline disabled:border-dashed disabled:bg-transparent disabled:opacity-100 aria-disabled:border-dashed aria-disabled:bg-transparent aria-disabled:opacity-100 disabled:[&_svg]:opacity-50 aria-disabled:[&_svg]:opacity-50",
         ghost:
           "text-label hover:bg-muted/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
-        destructive:
-          "bg-destructive/12 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/30",
+        destructive: "bg-destructive/12 text-destructive hover:bg-destructive/20",
         link: "text-primary-text underline-offset-4 hover:underline",
         // Tool button: lights foreground on hover, Flexoki blue on a tint while it is on (aria-pressed) or its menu is open
         quiet:

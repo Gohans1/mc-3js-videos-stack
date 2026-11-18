@@ -76,8 +76,8 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
     <div
       className={
         phone
-          ? "portrait:phone-picture-h bg-stage relative flex min-h-0 min-w-0 flex-col overflow-hidden portrait:aspect-(--frame) portrait:w-full portrait:flex-initial landscape:flex-1"
-          : "bg-background upright:rounded-none sideways:rounded-none upright:bg-stage sideways:bg-stage upright:aspect-(--frame) upright:max-h-[30dvh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-inspector-active:hidden in-data-review:col-start-2 in-data-wide:col-start-2 in-data-cli-expanded:hidden"
+          ? "portrait:phone-picture-h relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-black portrait:aspect-(--frame) portrait:w-full portrait:flex-initial landscape:flex-1"
+          : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-cli-expanded:hidden in-data-lessons-focused:hidden in-data-wide:col-start-2"
       }
     >
       <div

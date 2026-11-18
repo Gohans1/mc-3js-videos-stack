@@ -26,6 +26,8 @@ def keys(env, file):
 ROUTES = [("OpenCode Zen free", "https://opencode.ai/zen/v1/systemone", "jev-1.13-free", "OPENCODE_API_KEY", "opencode_zen.env"),
           ("OpenRouter (paid)", "https://openrouter.ai/api/v1/systemone", "typesafe/jev-1.14", "OPENROUTER_API_KEY", "openrouter.env")]
 SPEND_CAP = 0.05  # USD per run on a paid route: a run past it stops, as a runaway loop would
+NO_REQUEST_EXIT = 78
+CHARGE_THRESHOLD_EXIT = 79
 
 
 # Each call is its own process (jev.ts spawns one per question), so when a route's quota is back is kept on disk:
@@ -66,11 +68,13 @@ class Jev:
         options = options or {}
         self.options, self.trace = options, []
         now, back = time.time(), read_spent()
-        tries = [(name, url, model, key, i + 1, len(ks)) for name, url, model, env, file in ROUTES
-                 if options.get("route", "auto") == "auto" or (options.get("route") == "free") == ("free" in name)
+        selected = options.get("route", "auto")
+        providers = [route for route in ROUTES if selected == "auto" or (selected == "free") == ("free" in route[0])]
+        tries = [(name, url, model, key, i + 1, len(ks)) for name, url, model, env, file in providers
                  for ks in [keys(env, file)] for i, key in enumerate(ks)]
+        self.key_hint = " or ".join(f"{env} for {name}" for name, _, _, env, _ in providers)
         self.routes = sorted(tries, key=lambda r: back.get(r[0], 0) > now)
-        self.keyed = bool(self.routes)
+        self.unavailable = {}
         self.spent, self.lock = 0.0, threading.Lock()
 
     def ask(self, state, questions):
@@ -78,7 +82,11 @@ class Jev:
             # another heat may drop the last route between a check and a read
             with self.lock:
                 if not self.routes:
-                    break
+                    if self.unavailable:
+                        sys.exit(" ".join(self.unavailable.values()))
+                    print(f"No API key is configured for this Jev run. Set {self.key_hint}, then restart Studio or your terminal.",
+                          file=sys.stderr)
+                    sys.exit(NO_REQUEST_EXIT)
                 route = self.routes[0]
             name, url, model, key, i, n = route
             model = self.options.get("freeModel" if "free" in name else "paidModel") or model
@@ -94,7 +102,10 @@ class Jev:
                         cap = self.options.get("spendCap", SPEND_CAP)
                         self.trace.append({"phase": "response", "route": name, "request": {"model": model, "state": state, "questions": questions}, "answers": res["answers"], "usage": (res.get("usage") or {}), "cost": (res.get("usage") or {}).get("cost")})
                         if self.spent > cap:
-                            sys.exit(f"Jev: stopped at ${self.spent:.4f}, past SPEND_CAP ${cap}")
+                            print(f"Jev stopped after a reported charge of ${self.spent:.4f} exceeded the ${cap:g} threshold. "
+                                  "Review the provider and charge threshold in Provider & billing before running again.",
+                                  file=sys.stderr)
+                            sys.exit(CHARGE_THRESHOLD_EXIT)
                         self.used = name
                     return res["answers"]
                 except urllib.error.HTTPError as e:
@@ -104,9 +115,17 @@ class Jev:
                             if self.routes and self.routes[0] is route:
                                 print(f"Jev: {name}{f' key {i} of {n}' if n > 1 else ''} refused ({e.code}): a wrong or revoked key",
                                       file=sys.stderr)
+                                self.unavailable[name] = (f"{name} rejected its API key. Update the key and restart Studio "
+                                                          "or your terminal.")
                                 self.routes.pop(0)
                         break
                     # a server fault (5xx) passes like a burst: one lost answer would throw away every heat paid before it
+                    if (e.code != 429 and e.code < 500) or not wait:
+                        if e.code == 429:
+                            sys.exit(f"{name} is limiting requests. Wait a few minutes and try again.")
+                        if e.code >= 500:
+                            sys.exit(f"{name} did not complete the request. Try again in a few minutes.")
+                        sys.exit(f"{name} rejected the request (HTTP {e.code}). Check the model ID in your Jev settings.")
                     if e.code == 429 and after > 300:
                         with self.lock:
                             if any(r[0] == name for r in self.routes):
@@ -117,6 +136,7 @@ class Jev:
                                 tmp.write_text(json.dumps(back), encoding="utf-8")
                                 tmp.replace(spent_file())
                                 print(f"Jev: {name} quota spent, back in {after / 3600:.1f} h", file=sys.stderr)
+                                self.unavailable[name] = f"{name} quota is exhausted. Try again in {after / 3600:.1f} hours."
                                 self.routes = [r for r in self.routes if r[0] != name]
                         break
                     if (e.code != 429 and e.code < 500) or not wait:
@@ -125,13 +145,8 @@ class Jev:
                 # a connection dropped mid-answer or malformed 200 payload is retried cleanly
                 except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException, ValueError, KeyError):
                     if not wait:
-                        raise
+                        sys.exit(f"Could not reach {name}. Check your connection and try again.")
                     time.sleep(wait)
-        sys.exit("Jev: every route has spent its quota (the lines above say when each is back). Zen's free quota is per "
-                 "network, so more Zen keys on this machine do not help; OpenRouter credit does: OPENROUTER_API_KEY in "
-                 "~/.secrets/openrouter.env" if self.keyed else
-                 "Jev: no key: OPENCODE_API_KEY in ~/.secrets/opencode_zen.env (free, a daily quota) or OPENROUTER_API_KEY in "
-                 "~/.secrets/openrouter.env (paid)")
 
 
 if __name__ == "__main__":

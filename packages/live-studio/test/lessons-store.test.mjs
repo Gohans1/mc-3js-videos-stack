@@ -2,6 +2,8 @@
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
 
+import { LESSON_TEXT_MAX } from "../src/lesson-template.ts";
+
 const was = { fetch: globalThis.fetch, localStorage: globalThis.localStorage },
   kept = new Map();
 globalThis.localStorage ??= {
@@ -225,6 +227,21 @@ test("saveLesson records API validation errors without retrying and schedules re
   }
 });
 
+test("an oversized draft stays editable and is saved only after it fits the lesson limit", async () => {
+  const key = "all:walk.md";
+  const oversized = "a".repeat(LESSON_TEXT_MAX + 1);
+  typeLesson(key, oversized);
+  await saveLesson(key);
+  assert.equal(posted.length, 0);
+  assert.equal(lessons.getState().edits[key].text, oversized);
+
+  const shortened = "# Walk\n";
+  typeLesson(key, shortened);
+  await saveLesson(key);
+  assert.equal(posted[0].text, shortened);
+  assert.equal(lessons.getState().edits[key], undefined);
+});
+
 test("saveLesson 409 adopts AI version while keeping prior seen snapshot for diffs, markRead, openLesson, setLessonView, and case-insensitive newLesson", async () => {
   lessons.setState((s) => ({
     ...s,
@@ -418,6 +435,21 @@ test("deleteLesson surfaces 409 conflict without losing newer AI changes", async
   assert.equal(lessons.getState().open, "all:walk.md");
 });
 
+test("deleteLesson treats an already-missing file as an external removal and keeps its draft", async () => {
+  lessons.setState((s) => ({
+    ...s,
+    files: [{ key: "all:walk.md", scope: "all", path: "walk.md", tag: "t1", text: "# Walk\n" }],
+    edits: { "all:walk.md": { text: "# Draft\n", base: "t1" } },
+    open: "all:walk.md",
+  }));
+  deleteHandler = async () => Response.json({ removed: false, missing: true });
+
+  assert.deepEqual(await deleteLesson("all:walk.md"), { removed: false, missing: true });
+  assert.equal(lessons.getState().open, null);
+  assert.equal(lessons.getState().files.length, 0);
+  assert.deepEqual(lessons.getState().aiNotice?.drafts, [{ path: "walk.md", text: "# Draft\n" }]);
+});
+
 test("loadLessons skips failed drafts and ignores stale out-of-order GET responses", async () => {
   lessons.setState((s) => ({
     ...s,
@@ -528,9 +560,10 @@ test("deleteLesson 409 does not resurrect an edit committed while DELETE was in 
   assert.equal(res.removed, false);
   assert.equal(res.conflict, true);
   assert.equal(lessons.getState().edits["all:walk.md"], undefined);
+  assert.equal(lessons.getState().aiNotice?.drafts, undefined);
 });
 
-test("deleteLesson 409 adopts AI's version automatically and clears pending stale edit", async () => {
+test("deleteLesson 409 adopts the disk version and saves the rejected draft for download", async () => {
   lessons.setState((s) => ({
     ...s,
     files: [{ key: "all:walk.md", scope: "all", path: "walk.md", tag: "t1", text: "# Walk\n" }],
@@ -547,6 +580,7 @@ test("deleteLesson 409 adopts AI's version automatically and clears pending stal
   assert.equal(lessons.getState().edits["all:walk.md"], undefined);
   assert.equal(lessons.getState().files.find((f) => f.key === "all:walk.md")?.text, "# AI edit\n");
   assert.equal(lessons.getState().seen["all:walk.md"]?.text, "# Walk\n");
+  assert.deepEqual(lessons.getState().aiNotice?.drafts, [{ path: "walk.md", text: "# Old\n" }]);
 });
 
 const seedDualScopeCameraLessons = async () => {
@@ -702,4 +736,25 @@ test("loadLessons prunes stale seen snapshots when files are removed outside the
   getHandler = async () => Response.json({ dir: "lessons", files: [] });
   await loadLessons();
   assert.equal(lessons.getState().seen["all:temp.md"], undefined);
+});
+
+test("a failed first load allows retry and a failed refresh keeps the loaded lessons", async () => {
+  lessons.setState({ loaded: false, files: [], edits: {} });
+  getHandler = async () => new Response(null, { status: 503 });
+  await loadLessons();
+  assert.equal(lessons.getState().loadFailed, true);
+  assert.equal(lessons.getState().loaded, false);
+
+  resetHandlers();
+  await loadLessons();
+  const loaded = lessons.getState();
+  assert.equal(loaded.loadFailed, false);
+  assert.equal(loaded.files.length, 2);
+
+  getHandler = async () => {
+    throw new Error("offline");
+  };
+  await loadLessons();
+  assert.equal(lessons.getState().loadFailed, true);
+  assert.equal(lessons.getState().files, loaded.files);
 });

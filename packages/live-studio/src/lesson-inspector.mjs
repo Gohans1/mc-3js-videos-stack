@@ -8,10 +8,12 @@ import * as z from "zod";
 import { choiceRequest, fitRequest } from "../../clip-catalog/jev.ts";
 import {
   DEFAULT_LESSON_JEV_CONFIG,
+  InspectorNoteSchema,
   JEV_ENGINE_FIELDS,
   LessonJevConfigSchema,
 } from "./lesson-config.ts";
 import { readLessonConfig, writeLessonJson } from "./lesson-settings.mjs";
+import { LESSON_TEXT_MAX } from "./lesson-template.ts";
 import { jevLessons, lessonCacheKey, lessonPool, lessonQuestion, LESSONS } from "./lessons.mjs";
 import { noteDetailFormat } from "./note-detail.mjs";
 import { noteLessonFormat } from "./note-format.mjs";
@@ -19,14 +21,7 @@ import { noteNumbers } from "./notes.mjs";
 
 export const InspectInput = z
   .object({
-    note: z.object({
-      id: z.string().max(100).optional(),
-      text: z.string().max(50000),
-      asks: z
-        .array(z.object({ text: z.string().max(10000), at: z.string().max(100).optional() }))
-        .max(100)
-        .default([]),
-    }),
+    note: InspectorNoteSchema,
     config: LessonJevConfigSchema.optional(),
     drafts: z
       .array(
@@ -36,7 +31,7 @@ export const InspectInput = z
             .string()
             .max(200)
             .regex(/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.md$/),
-          text: z.string().max(1000000).nullable(),
+          text: z.string().max(LESSON_TEXT_MAX).nullable(),
         }),
       )
       .max(500)
@@ -189,7 +184,7 @@ export async function inspectLessons(
   const selection = picks
     ? { picks }
     : pool.length
-      ? { why: "dry simulation; no cached result — enable calls and press Run Jev" }
+      ? { why: "dry simulation; no cached lesson matches" }
       : undefined;
   const existingNote = notes.find((n) => n.id === input.note.id);
   const detailNote = {
@@ -228,6 +223,6 @@ export async function inspectLessons(
     output: format.lessonLines(selection).join("\n"),
     noteOutput: noteDetailFormat(formatOptions)(detailNote, false, selection).join("\n"),
     noteInput: detailNote,
-    learnPrompt: format.learnPrompt(),
+    learnPrompt: format.learnPrompt(input.note.id),
   };
 }

@@ -16,16 +16,16 @@ export function LessonChanges({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-none px-3 pt-2 pb-2">
-        <div className="mx-auto flex w-full max-w-[42rem] items-center gap-2">
+        <div className="mx-auto flex w-full max-w-[42rem] flex-wrap items-center gap-2">
           <span className="text-muted-foreground flex-1 text-sm">
-            Latest AI changes (already applied)
+            Latest file changes (already applied)
           </span>
           <Button variant="ghost" size="sm" onClick={onRead}>
-            Clear diff
+            Mark as read
           </Button>
         </div>
       </div>
-      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+      <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2">
         <div className="mx-auto w-full max-w-[42rem]">
           {news.hunks.map((h) => {
             let lineCursor = h.line;
@@ -58,7 +58,7 @@ export function LessonChanges({
                         aria-hidden
                         className={cn(
                           "w-2.5 flex-none font-mono select-none",
-                          r.kind === "added" ? "text-ok" : "text-destructive",
+                          r.kind === "added" ? "text-ok-text" : "text-destructive-text",
                         )}
                       >
                         {r.kind === "added" ? "+" : r.kind === "removed" ? "−" : ""}

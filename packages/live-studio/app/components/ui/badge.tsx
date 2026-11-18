@@ -39,7 +39,7 @@ const badgeVariants = cva(
         lessonFilm:
           "border-primary/25 bg-primary/10 text-primary-text h-auto px-1.5 py-0.5 text-xs font-medium [&>svg]:size-3!",
         lessonAll:
-          "text-label [button]:hover:text-foreground h-auto shrink rounded-md border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-xs font-medium [button]:cursor-pointer [button]:hover:bg-white/[0.08]",
+          "border-hairline bg-surface-subtle [button]:hover:bg-hairline text-label [button]:hover:text-foreground h-auto shrink rounded-md px-1.5 py-0.5 text-xs font-medium [button]:cursor-pointer",
         check:
           "border-warn/30 bg-warn/10 text-warn-text h-auto px-1.5 py-0.5 text-xs font-medium [&>svg]:size-3!",
         done: "border-ok/25 bg-ok/10 text-ok-text h-auto px-1.5 py-0.5 text-xs font-medium [&>svg]:size-3!",

@@ -36,6 +36,8 @@ test("dry inspection uses draft headings and replies, never judges or changes le
     expect(JSON.stringify(result.requests)).toContain("closer");
     expect(JSON.stringify(result.requests)).not.toContain("draft body");
     expect(result.status).toBe("dry");
+    expect(result.learnPrompt).toContain("in headings mode");
+    expect(result.learnPrompt).toEndWith('bun run note learned <note-id> "the rule, where"');
     expect(readFileSync(join(dir, "camera.md"), "utf8")).toContain("# Old");
     expect(DEFAULT_LESSON_JEV_CONFIG.wordsLimit).toBe(2000);
   } finally {

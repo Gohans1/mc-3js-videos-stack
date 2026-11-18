@@ -68,13 +68,7 @@ const tabs =
   "relative flex flex-none items-center gap-4 overflow-x-auto bg-card px-3 upright:gap-2 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
 
-function TabUnderline({
-  inset = false,
-  animated = true,
-}: {
-  inset?: boolean;
-  animated?: boolean;
-}) {
+function TabUnderline({ inset = false, instant = false }: { inset?: boolean; instant?: boolean }) {
   return (
     <Tabs.Indicator
       aria-hidden
@@ -82,6 +76,7 @@ function TabUnderline({
         "tab-indicator pointer-events-none h-0.5",
         !animated && "transition-none",
         inset ? "px-2.5" : "bg-primary rounded-full",
+        instant && "transition-none",
       )}
     >
       {inset && <span className="bg-primary block size-full rounded-full" />}
@@ -228,8 +223,8 @@ const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
 const tool =
   "relative flex min-w-14 flex-col items-center gap-0.5 rounded-md px-2 pt-1.5 pb-1 text-xs text-muted-foreground outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] [&>svg]:size-5";
 const coreTool =
-  "data-active:bg-tint data-active:text-foreground data-active:[&>svg]:text-primary-text";
-export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null } = {}) {
+  "data-active:bg-tint data-active:text-foreground data-active:[&_svg]:text-primary-text";
+export function Library({ lessonsWidthPx }: { lessonsWidthPx: number }) {
   const { sound, text, cam, placed, open, check, asking } = useParts(),
     lib = useStudio((s) => s.lib),
     aiTab = useAiTabs();
@@ -261,8 +256,12 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
             onKeyDown={stopCliTabHotkeyPropagation}
             className="scroll-fade-x relative flex [scrollbar-width:none] gap-1 overflow-x-auto overscroll-x-contain px-2 pt-1 pb-1"
           >
-            <TabUnderline inset animated={false} />
-            {LIBS.map((l) => (
+            <TabUnderline
+              key={value === "lessons" ? "lessons" : "other"}
+              inset
+              instant={value === "lessons"}
+            />
+            {shown.map((l) => (
               <Fragment key={l.id}>
                 <Tabs.Tab
                   value={l.id}
@@ -295,8 +294,8 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
         >
           <TabStage
             activeKey={value}
-            animated={value !== "notes" && value !== "cli"}
-            order={LIBS.map((l) => l.id)}
+            key={value === "lessons" ? "lessons" : "other"}
+            order={shown.map((l) => l.id)}
             className="relative flex min-h-0 flex-1 flex-col"
           >
             {value === "notes" ? (
@@ -328,7 +327,7 @@ export function Library({ lessonsLockW = null }: { lessonsLockW?: number | null 
             ) : value === "ports" ? (
               <PortsPanel />
             ) : (
-              <LessonsPanel desktop lockWidthPx={lessonsLockW} dock="start" />
+              <LessonsPanel desktop paneWidthPx={lessonsWidthPx} />
             )}
           </TabStage>
         </Tabs.Panel>
@@ -616,7 +615,7 @@ export function Side({
   return (
     <aside
       aria-label="Side panels"
-      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-cli-side:row-span-3 in-data-inspector-active:col-[1/-1] in-data-inspector-active:row-[1/-1] in-data-review:hidden in-data-side-folded:hidden in-data-[cli-expanded=library]:hidden"
+      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-cli-side:row-span-3 in-data-lessons-focused:col-[1/-1] in-data-lessons-focused:row-[1/-1] in-data-review:hidden in-data-side-folded:hidden in-data-[cli-expanded=library]:hidden"
     >
       <Tabs.Root
         value={value}
@@ -636,7 +635,10 @@ export function Side({
               editable && "justify-between gap-2",
             )}
           >
-            <TabUnderline />
+            <TabUnderline
+              key={value === "lessons" ? "lessons" : "other"}
+              instant={value === "lessons"}
+            />
             <Tabs.Tab
               value="notes"
               data-tone={notesTone}
@@ -700,6 +702,7 @@ export function Side({
         >
           <TabStage
             activeKey={value}
+            key={value === "lessons" ? "lessons" : "other"}
             order={sideOrder}
             className="relative flex min-h-0 flex-1 flex-col"
           >

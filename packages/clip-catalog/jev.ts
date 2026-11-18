@@ -4,6 +4,18 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const JEV = fileURLToPath(new URL("./jev.py", import.meta.url));
+const NO_REQUEST_EXIT = 78;
+const CHARGE_THRESHOLD_EXIT = 79;
+
+export class JevRunError extends Error {
+  constructor(
+    message: string,
+    readonly outcome: "not-started" | "charge-reported",
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
 
 // What to ask of a list: the state Jev reads, the question that picks the best item, what makes one item fit or not, and
 // an item as Jev reads it
@@ -61,21 +73,40 @@ const jevAsk = (state: unknown, questions: Record<string, unknown>, options: Jev
     py.stderr.on("data", (d) => (err += d));
     py.on("error", (e) => {
       clearTimeout(timer);
-      fail(e);
+      fail(
+        (e as NodeJS.ErrnoException).code === "ENOENT"
+          ? new JevRunError(
+              "Python was not found. Install Python or add it to PATH, then restart Studio or your terminal.",
+              "not-started",
+            )
+          : new JevRunError(
+              "Studio could not start Python. Check your Python installation and try again.",
+              "not-started",
+              { cause: e },
+            ),
+      );
     });
     py.on("close", (code) => {
       clearTimeout(timer);
       const lines = err.split(/\r?\n/).filter((l) => l.trim());
       const said = lines.filter((l) => !jevNotes.has(l));
       for (const l of said) jevNotes.add(l);
-      if (code) return fail(new Error(lines.at(-1)?.trim() || `jev.py exited ${code}`));
+      if (code) {
+        const message =
+          err.trim().split("\n").at(-1)?.trim() ||
+          "Jev stopped before returning a result. Try again.";
+        if (code === NO_REQUEST_EXIT) return fail(new JevRunError(message, "not-started"));
+        if (code === CHARGE_THRESHOLD_EXIT)
+          return fail(new JevRunError(message, "charge-reported"));
+        return fail(new Error(message));
+      }
       if (said.length) console.error(said.join("\n"));
       try {
         const result = JSON.parse(out) as { answers: Answers; trace: unknown[] };
         for (const event of result.trace) options.onTrace?.(event as Record<string, unknown>);
         done(result.answers);
-      } catch (e) {
-        fail(new Error(`jev.py returned invalid JSON: ${(e as Error).message}`));
+      } catch {
+        fail(new Error("Jev returned an unreadable response. Try again."));
       }
     });
     py.stdin.on("error", fail);

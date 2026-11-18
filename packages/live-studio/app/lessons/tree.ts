@@ -2,6 +2,7 @@
 import type { LessonFile } from "./lessons";
 
 export const LESSON_DESKTOP_DECK_MIN_W = 420;
+export const LESSONS_LIBRARY_WIDTH = 800;
 
 export interface LessonDirEntry {
   kind: "dir";

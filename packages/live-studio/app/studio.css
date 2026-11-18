@@ -480,7 +480,7 @@
       background-color 150ms ease,
       color 150ms ease,
       box-shadow 150ms ease,
-      transform 150ms ease-out;
+      transform 150ms var(--ease-studio-out);
   }
   @media (prefers-reduced-motion: no-preference) {
     .studio-press:not(:disabled):not([aria-disabled="true"]):not([aria-haspopup]):active {
@@ -565,5 +565,15 @@
   .tl-lane {
     --tl-step: 56px;
     --tl-stem-offset: 47px;
+  }
+}
+
+[data-inspector-controls] {
+  container-type: scroll-state;
+}
+
+@container scroll-state(scrollable: bottom) {
+  [data-inspector-scroll-cue] {
+    visibility: visible;
   }
 }

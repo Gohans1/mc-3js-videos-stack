@@ -5,8 +5,9 @@ import { Field, FieldDescription, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+import { LESSON_PATH_MAX } from "../../src/lesson-template";
 import { Segmented } from "../components/inspector";
-import { SCOPE_LABEL, SCOPE_SHORT } from "./lesson-ui";
+import { SCOPE_LABEL } from "./lesson-ui";
 import { type LessonScope } from "./lessons";
 
 /** Inline creation form for a new project-local or global lesson markdown file. */
@@ -18,6 +19,7 @@ export function NewLessonForm({
   naming,
   setNaming,
   showErr,
+  openExisting = false,
   errMsg,
   compact,
   onSubmit,
@@ -30,6 +32,7 @@ export function NewLessonForm({
   naming: string;
   setNaming: (v: string) => void;
   showErr: boolean;
+  openExisting?: boolean;
   errMsg: string | null;
   compact: boolean;
   onSubmit: () => void;
@@ -40,10 +43,7 @@ export function NewLessonForm({
   return (
     <form
       noValidate
-      className={cn(
-        "animate-in fade-in slide-in-from-top-1 flex flex-none flex-col gap-1.5 pb-2 duration-150 ease-out motion-reduce:animate-none",
-        compact ? "px-2 pt-1.5" : "px-3",
-      )}
+      className={cn("flex flex-none flex-col gap-1.5 pb-2", compact ? "px-2 pt-1.5" : "px-3")}
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
@@ -51,34 +51,29 @@ export function NewLessonForm({
     >
       {hasProject && (
         <Segmented<LessonScope>
+          keepClickFocus
           label="New lesson scope"
+          animateIndicator={false}
           value={newScope}
           className={compact ? "[&_[role=radio]]:text-ui" : "[&_[role=radio]]:text-sm"}
-          items={
-            compact
-              ? [
-                  { id: "film", title: SCOPE_SHORT.film },
-                  { id: "all", title: SCOPE_SHORT.all },
-                ]
-              : [
-                  { id: "film", title: SCOPE_LABEL.film },
-                  { id: "all", title: SCOPE_LABEL.all },
-                ]
-          }
+          items={[
+            { id: "film", title: SCOPE_LABEL.film },
+            { id: "all", title: SCOPE_LABEL.all },
+          ]}
           onChange={setNewScope}
         />
       )}
       <Field data-invalid={showErr || undefined}>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           <Input
             ref={nameInputRef}
             size="md"
-            aria-label="New lesson file's name"
+            aria-label="Lesson name"
             aria-invalid={showErr || undefined}
             aria-describedby={showErr ? `${hintId} ${errId}` : hintId}
-            placeholder={compact ? "dir/topic" : "camera or craft/walk"}
+            placeholder="camera/framing"
             value={naming}
-            className="min-w-0 flex-1"
+            className="grow basis-32"
             onChange={(e) => setNaming(e.target.value)}
             onKeyDown={(e) => {
               e.stopPropagation();
@@ -86,13 +81,15 @@ export function NewLessonForm({
             }}
           />
           <Button type="submit" size={compact ? "sm" : "md"}>
-            Create
+            {openExisting ? "Open existing lesson" : "Create"}
+          </Button>
+          <Button type="button" variant="ghost" size={compact ? "sm" : "md"} onClick={onClose}>
+            Cancel
           </Button>
         </div>
         <FieldDescription id={hintId}>
-          {hasProject && newScope === "film"
-            ? "This film only (project lessons/). One file per topic."
-            : "Shared across all films (global lessons/). One file per topic."}
+          Use letters (A–Z or a–z), numbers, hyphens, or underscores. Use one slash between folders.
+          Keep the path within {LESSON_PATH_MAX} characters, including .md.
         </FieldDescription>
         {showErr && <FieldError id={errId}>{errMsg}</FieldError>}
       </Field>

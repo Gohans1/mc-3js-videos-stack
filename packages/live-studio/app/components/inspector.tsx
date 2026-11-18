@@ -40,6 +40,7 @@ export function Segmented<T extends string>({
   tone = "neutral",
   size = "default",
   animateIndicator = true,
+  keepClickFocus = false,
 }: {
   value: T;
   items: { id: T; title: ReactNode; ariaLabel?: string }[];
@@ -51,6 +52,7 @@ export function Segmented<T extends string>({
   tone?: "neutral" | "accent";
   size?: "default" | "comfortable";
   animateIndicator?: boolean;
+  keepClickFocus?: boolean;
 }) {
   const [back, on] = vertical ? ["ArrowUp", "ArrowDown"] : ["ArrowLeft", "ArrowRight"];
   const groupRef = useRef<HTMLDivElement>(null);
@@ -100,6 +102,7 @@ export function Segmented<T extends string>({
     <div
       ref={groupRef}
       role="radiogroup"
+      data-keep-click-focus={keepClickFocus || undefined}
       aria-label={label}
       aria-orientation={vertical ? "vertical" : "horizontal"}
       className={cn(

@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 
 import { createServer } from "vite";
 
+import { JevRunError } from "../../clip-catalog/jev.ts";
 import { inspectLessons, inspectorInfo } from "../src/lesson-inspector.mjs";
 import { filmPlugin } from "../src/vite_film.mjs";
 
@@ -106,7 +107,7 @@ beforeAll(async () => {
                 dir: join(root, "lessons"),
                 judge: async (_words, pool) => {
                   paidCalls++;
-                  if (judgeFailure) throw new Error(judgeFailure);
+                  if (judgeFailure) throw judgeFailure;
                   return [[1, pool[0], 0.9]];
                 },
               };
@@ -121,8 +122,9 @@ beforeAll(async () => {
                   res.end(JSON.stringify(await inspectLessons(JSON.parse(body), options)));
                 }
               } catch (e) {
-                res.statusCode = 400;
-                res.end(JSON.stringify({ error: e.message }));
+                const outcome = e instanceof JevRunError ? e.outcome : undefined;
+                res.statusCode = outcome === "not-started" ? 424 : 400;
+                res.end(JSON.stringify({ error: e.message, outcome }));
               }
               return;
             }
@@ -200,9 +202,9 @@ test("external lesson edits refresh the dry Inspector even when note and drafts 
     view.evaluate(`new Promise((resolve,reject) => {
     const start=Date.now(); const tick=()=>{if(document.body.textContent.includes(${JSON.stringify(text)})) return resolve(true); if(Date.now()-start>12000) return reject(new Error("Missing preview: " + ${JSON.stringify(text)})); setTimeout(tick,20);}; tick();
   })`);
-  await wait("Jev input");
+  await wait("Extracted lessons");
   await view.evaluate(
-    "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Jev input').click()",
+    "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Extracted lessons').click()",
   );
   await wait("lessons/camera.md: # Camera");
   writeFileSync(join(root, "lessons/camera.md"), "# External camera edit");
@@ -226,7 +228,7 @@ test("mounted Inspector keeps previews free, runs only after opt-in, reacts to l
       `[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`,
     );
   await wait("document.getElementById('inspect-note-text')");
-  await click("AI output");
+  await click("Note for AI");
   expect(await view.evaluate("document.getElementById('inspect-new-path')")).toBeNull();
   expect(await view.evaluate("document.body.textContent.includes('Try lesson edits')")).toBe(false);
   await view.evaluate(`(() => {
@@ -251,7 +253,7 @@ test("mounted Inspector keeps previews free, runs only after opt-in, reacts to l
   await view.evaluate(
     "window.inspectTest.lessons.setState({ edits: { 'all:camera.md': { text: '# Handheld', base: '1' } } })",
   );
-  await click("Jev input");
+  await click("Extracted lessons");
   await wait("document.body.textContent.includes('lessons/camera.md: # Handheld')");
   const layout = await view.evaluate(`(() => {
     const controls=document.querySelector('[data-inspector-controls]');
@@ -364,12 +366,14 @@ test("invalid matching settings explain the error at the focused field and recov
     fill('0'); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     const description=input.getAttribute('aria-describedby').split(' ').map(id=>document.getElementById(id)?.textContent).join(' ');
     const invalid=input.getAttribute('aria-invalid');
+    const retryOffered=[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Retry preview');
     const stayed=document.activeElement===input&&Math.abs(input.getBoundingClientRect().top-top)<2;
     fill('5'); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-    return {invalid,description,stayed,recovered:input.getAttribute('aria-invalid')!=='true'};
+    return {invalid,description,retryOffered,stayed,recovered:input.getAttribute('aria-invalid')!=='true'};
   })()`);
   expect(result.invalid).toBe("true");
   expect(result.description).toContain("Enter 1–50 results");
+  expect(result.retryOffered).toBe(false);
   expect(result.stayed).toBe(true);
   expect(result.recovered).toBe(true);
 });
@@ -390,7 +394,7 @@ test("the full 960px Studio shell reserves multiline Inspector output and restor
     [...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Deck').click();
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     return {off:off.height,on:on.height,stable:off.top===on.top&&off.height===on.height,
-      restored:!document.querySelector('[data-inspector-active]')&&!!document.querySelector('[aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom"]')?.getBoundingClientRect().height};
+      restored:!document.querySelector('[data-lessons-focused]')&&!!document.querySelector('[aria-label="Time ruler: click or drag to jump, Ctrl+scroll to zoom"]')?.getBoundingClientRect().height};
   })()`);
   expect(result.off).toBeGreaterThanOrEqual(180);
   expect(result.on).toBeGreaterThanOrEqual(180);
@@ -418,6 +422,112 @@ const navigateFixture = async (query = "") => {
   await waitFor("document.getElementById('inspect-note-text')");
 };
 
+test("Escape cancels an in-flight pointer-opened Inspector dialog", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  await view.cdp("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+  });
+  const point = await view.evaluate(`(async () => {
+    [...document.querySelectorAll('details')].find(d => d.querySelector('summary')?.textContent.includes('Advanced settings')).open = true;
+    const trigger = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Clear Inspector cache');
+    trigger.scrollIntoView({block:'center'});
+    window.slowDialogFade = false;
+    document.addEventListener('transitionrun', event => {
+      if (event.propertyName !== 'opacity' || event.target.dataset.slot !== 'dialog-content') return;
+      const transition = event.target.getAnimations().find(animation => animation.transitionProperty === 'opacity');
+      if (!transition) return;
+      transition.playbackRate = 0.02;
+      window.slowDialogFade = true;
+    });
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const rect = trigger.getBoundingClientRect();
+    return {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2};
+  })()`);
+  await view.cdp("Input.dispatchMouseEvent", {
+    ...point,
+    type: "mousePressed",
+    button: "left",
+    buttons: 1,
+    clickCount: 1,
+  });
+  await view.cdp("Input.dispatchMouseEvent", {
+    ...point,
+    type: "mouseReleased",
+    button: "left",
+    buttons: 0,
+    clickCount: 1,
+  });
+  await waitFor("window.slowDialogFade");
+  await view.press("Escape");
+  expect(
+    await view.evaluate(`(async () => {
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return {
+        popup: Boolean(document.querySelector('[data-slot=dialog-content]')),
+        backdrop: Boolean(document.querySelector('[data-slot=dialog-overlay]')),
+        focus: document.activeElement.textContent.trim(),
+      };
+    })()`),
+  ).toEqual({ popup: false, backdrop: false, focus: "Clear Inspector cache" });
+});
+
+test("an oversized preview note keeps its text and identifies the field to shorten", async () => {
+  await navigateFixture();
+  await fillNote("x".repeat(50_001));
+  await waitFor("document.querySelector('#inspect-note-error')");
+  expect(
+    await view.evaluate(`(()=>{
+      const input=document.getElementById('inspect-note-text');
+      return {
+        length:input.value.length,
+        description:document.getElementById(input.getAttribute('aria-describedby'))?.textContent,
+        retryOffered:[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Retry preview')
+      };
+    })()`),
+  ).toEqual({
+    length: 50_001,
+    description: "Shorten the note to 50,000 characters or fewer.",
+    retryOffered: false,
+  });
+  await fillNote("Shorten the opening shot");
+  await waitFor(
+    "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: Shorten the opening shot')",
+  );
+});
+
+test("resetting Inspector settings confirms before discarding a draft and leaves the CLI save intact", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  const promptField = await view.evaluate(`(()=>{
+    for(const name of ['Advanced settings','Prompts for Jev'])
+      [...document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent.includes(name)).open=true;
+    const label=[...document.querySelectorAll('label')].find(l=>l.textContent==='Extra instructions');
+    const field=document.getElementById(label.htmlFor);
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'Keep this unsaved direction');
+    field.dispatchEvent(new Event('input',{bubbles:true}));
+    return field.id;
+  })()`);
+  const promptValue = `document.getElementById(${JSON.stringify(promptField)}).value`;
+  const savedValue = "window.inspectTest.session.getState().saved";
+  const savedBefore = await view.evaluate(savedValue);
+  await clickButton("Reset defaults");
+  await waitFor(
+    "document.querySelector('[role=dialog]')?.textContent.includes('discards unsaved edits')",
+  );
+  expect(await view.evaluate(promptValue)).toBe("Keep this unsaved direction");
+  await clickButton("Cancel");
+  await waitFor("!document.querySelector('[role=dialog]')");
+  expect(await view.evaluate(promptValue)).toBe("Keep this unsaved direction");
+  await clickButton("Reset defaults");
+  await waitFor("document.querySelector('[role=dialog]')");
+  await view.evaluate(
+    "[...document.querySelectorAll('[role=dialog] button')].find(b=>b.textContent.trim()==='Reset defaults').click()",
+  );
+  await waitFor(`${promptValue} === ''`);
+  expect(await view.evaluate(savedValue)).toBe(savedBefore);
+});
+
 test("a failed manual run stays visible until an explicit retry and a successful run remains live", async () => {
   const callsBefore = paidCalls;
   await navigateFixture();
@@ -428,11 +538,17 @@ test("a failed manual run stays visible until an explicit retry and a successful
   await waitFor(
     "document.querySelector('[data-inspector-result]').textContent.includes('NOTE: Provider retry')",
   );
-  judgeFailure = "Provider unavailable. Try Run Jev again.";
+  judgeFailure = new Error("Provider unavailable. Try Run Jev again.");
   try {
     await view.evaluate("document.querySelector('[role=switch]').click()");
     await clickButton("Run Jev");
     await waitFor("document.body.textContent.includes('Provider unavailable.')");
+    await waitFor(
+      "document.querySelector('[data-inspector-output]').textContent.includes('Previous preview')",
+    );
+    expect(
+      await view.evaluate("document.body.textContent.includes('The provider may still charge')"),
+    ).toBe(true);
     await view.evaluate("new Promise(r=>setTimeout(r,900))");
     expect(await view.evaluate("document.body.textContent.includes('Provider unavailable.')")).toBe(
       true,
@@ -440,15 +556,84 @@ test("a failed manual run stays visible until an explicit retry and a successful
     expect(
       await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
     ).toBe(true);
-    judgeFailure = "";
+    await view.evaluate("document.querySelector('[role=switch]').click()");
+    expect(await view.evaluate("document.body.textContent")).toContain(
+      "Turn on Jev calls to retry.",
+    );
+    await view.evaluate("document.querySelector('[role=switch]').click()");
+    judgeFailure = new JevRunError(
+      "Jev stopped after a reported charge of $0.0600.",
+      "charge-reported",
+    );
     await clickButton("Retry Jev");
+    await waitFor(
+      "document.querySelector('[data-inspector-controls]').textContent.includes('reported charge')",
+    );
+    expect(
+      await view.evaluate("document.querySelector('[data-inspector-controls]').textContent"),
+    ).not.toContain("The provider may still charge");
+    expect(
+      await view.evaluate(
+        "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Run Jev').disabled",
+      ),
+    ).toBe(true);
+    await clickButton("Review Provider & billing");
+    expect(await view.evaluate("document.activeElement.id")).toEndWith("-spendCap");
+    await view.evaluate(`(() => {
+      const input=document.activeElement;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'0.07');
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+    })()`);
+    judgeFailure = "";
+    await waitFor(
+      "[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Run Jev'&&!b.disabled)",
+    );
+    await clickButton("Run Jev");
     await waitFor("document.body.textContent.includes('Live result')");
     await view.evaluate("new Promise(r=>setTimeout(r,900))");
     expect(await view.evaluate("document.body.textContent.includes('Live result')")).toBe(true);
-    expect(paidCalls).toBe(callsBefore + 2);
+    expect(paidCalls).toBe(callsBefore + 3);
   } finally {
     judgeFailure = "";
   }
+});
+
+test("an oversized lesson draft can be excluded without losing its text", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  await fillNote("Camera framing");
+  await waitFor("document.body.textContent.includes('Files: 1')");
+  await view.evaluate(
+    "window.inspectTest.lessons.setState({edits:{'all:camera.md':{text:'x'.repeat(1000001),base:'fixture'}}})",
+  );
+  await waitFor("document.body.textContent.includes('Lesson draft is too long')");
+  expect(
+    await view.evaluate("document.querySelector('[data-inspector-controls]').textContent"),
+  ).toContain("Shorten camera.md in Deck to 1,000,000 characters");
+  await clickButton("Exclude this lesson");
+  await waitFor("document.body.textContent.includes('Files: 0')");
+  expect(
+    await view.evaluate("window.inspectTest.lessons.getState().edits['all:camera.md'].text.length"),
+  ).toBe(1000001);
+});
+
+test("a failed lesson list load offers recovery without claiming there are no lessons", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  await fillNote("Camera framing");
+  await waitFor("document.body.textContent.includes('Files: 1')");
+  await view.evaluate(
+    "window.inspectTest.lessons.setState({files:[],loaded:false,loadFailed:true,inspectorLiveEnabled:true})",
+  );
+  await waitFor("document.body.textContent.includes('Could not load lesson files.')");
+  const controls = await view.evaluate(
+    "document.querySelector('[data-inspector-controls]').textContent",
+  );
+  expect(controls).toContain("Retry loading lesson files.");
+  expect(controls).not.toContain("Add a lesson in Deck.");
+  expect(controls).not.toContain("0 of 0 included");
+  await clickButton("Retry loading lessons");
+  await waitFor("document.body.textContent.includes('Lesson files · 1 of 1 included')");
 });
 
 test("cold settings stay locked until the genuine initial response arrives", async () => {
@@ -533,7 +718,7 @@ test("a stored folded panel cannot hide the focused Inspector workspace", async 
     await view.evaluate("localStorage.setItem('studio.lessonsWidth','0')");
     await navigateFixture("?shell");
     await waitFor(
-      "document.querySelector('[data-inspector-output]')?.textContent.includes('Preview ready')",
+      "document.querySelector('[data-inspector-output]')?.textContent.includes('Add a note to preview')",
     );
     expect(
       await view.evaluate(
@@ -550,7 +735,7 @@ test("a stored folded panel cannot hide the focused Inspector workspace", async 
   }
 });
 
-test("Save failures survive a later dry response and retry Save without blocking a valid preview", async () => {
+test("settings and preview failures can be reviewed and retried independently", async () => {
   const callsBefore = paidCalls;
   await navigateFixture();
   await waitFor("window.inspectTest.session.getState().hydrated");
@@ -562,6 +747,10 @@ test("Save failures survive a later dry response and retry Save without blocking
       if(String(url)==='/api/lessons/inspect'&&options?.method==='PUT'){
         const failed=++window.saveProbe.calls===1;
         return new Response(JSON.stringify(failed?{error:'QA settings unavailable'}:{saved:true}),{status:failed?503:200,headers:{'content-type':'application/json'}});
+      }
+      if(String(url)==='/api/lessons/inspect'&&options?.method==='POST'&&window.saveProbe.rejectDry){
+        window.saveProbe.rejectDry=false;
+        return Response.json({error:'QA preview unavailable'},{status:503});
       }
       const response=await original(url,options);
       if(String(url)==='/api/lessons/inspect'&&options?.method==='POST')await gate;
@@ -576,9 +765,9 @@ test("Save failures survive a later dry response and retry Save without blocking
   })()`);
   try {
     await waitFor(
-      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Save'&&!b.disabled)",
+      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Save CLI settings'&&!b.disabled)",
     );
-    await clickButton("Save");
+    await clickButton("Save CLI settings");
     await waitFor("document.body.textContent.includes('QA settings unavailable')");
     const named = await view.evaluate(
       "document.querySelector('[data-inspector-controls]').textContent.includes('Settings were not saved')",
@@ -610,9 +799,26 @@ test("Save failures survive a later dry response and retry Save without blocking
     expect(
       await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
     ).toBe(false);
+    await view.evaluate(
+      "(()=>{window.inspectTest.lessons.setState({inspectorLiveEnabled:true}); window.saveProbe.rejectDry=true;})()",
+    );
+    await fillNote("Try a second framing note");
+    await waitFor("document.body.textContent.includes('QA preview unavailable')");
+    expect(
+      await view.evaluate("document.getElementById('jev-mode-description').textContent"),
+    ).toContain("Retry the preview to run Jev.");
+    await clickButton("Review error");
+    expect(await view.evaluate("document.activeElement.textContent")).toContain("Retry preview");
+    await clickButton("Retry preview");
+    await waitFor(
+      "document.querySelector('[data-inspector-result]').textContent.includes('Try a second framing note')",
+    );
+    expect(
+      await view.evaluate("document.body.textContent.includes('QA settings unavailable')"),
+    ).toBe(true);
     await clickButton("Retry save");
     await waitFor(
-      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Saved'&&b.disabled)",
+      "[...document.querySelectorAll('button')].some(b=>b.textContent==='Settings up to date'&&b.disabled)",
     );
     expect(await view.evaluate("window.saveProbe.calls")).toBe(2);
     expect(
@@ -666,7 +872,7 @@ test.each([
       expect(state.visible, JSON.stringify(state)).toBe(true);
       await view.press("Tab");
       state = await focused();
-      expect(state.target).toBe("Search lessons in");
+      expect(state.target).toBe("Lesson scope");
       expect(state.visible, JSON.stringify(state)).toBe(true);
       await view.evaluate(`(()=>{
       for(const text of ['Advanced settings','Read lesson files'])
@@ -683,3 +889,98 @@ test.each([
     }
   },
 );
+
+test("the Inspector includes only files from the chosen lesson scope", async () => {
+  await view.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 1920,
+    height: 1080,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await navigateFixture("");
+  await waitFor("document.querySelector('#inspect-scope:enabled')");
+  await fillNote("Camera framing");
+  await view.evaluate("document.querySelector('#inspect-scope').focus()");
+  await view.press("Enter");
+  await view.press("ArrowDown");
+  await view.press("Enter");
+  await view.evaluate(`(() => {
+    [...document.querySelectorAll("summary")].find(s => s.textContent.includes("Lesson files")).parentElement.open = true;
+  })()`);
+  await waitFor("document.body.textContent.includes('Files: 0')");
+  expect(await view.evaluate("document.querySelectorAll('[data-inspector-file]').length")).toBe(0);
+  expect(
+    await view.evaluate(
+      `[...document.querySelectorAll("summary")].find(s => s.textContent.includes("Lesson files")).textContent`,
+    ),
+  ).toContain("0 of 0");
+});
+
+test("the Lessons splitter keeps its width across Deck, Reader and Inspector and leaves Notes independent", async () => {
+  await view.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 1920,
+    height: 1080,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await view.evaluate("localStorage.removeItem('studio.lessonsWidth')");
+  await navigateFixture("?shell");
+  const sizes = await view.evaluate(`(async () => {
+    const { lessons, studio } = window.inspectTest;
+    const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const splitter = () => document.querySelector('[aria-label="Library width"]');
+    const width = () => Number(splitter().getAttribute("aria-valuenow"));
+    lessons.setState({ subTab: "deck", folder: [], open: null });
+    await frame();
+    const deck = width();
+    document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
+    await frame();
+    const reader = width();
+    document.querySelector("[data-lesson-back]").click();
+    await frame();
+    const handle = splitter();
+    handle.focus();
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    await frame();
+    const custom = width();
+    document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
+    await frame();
+    const customReader = width();
+    lessons.setState({ subTab: "inspector" });
+    await frame();
+    const inspector = width();
+    studio.setState({ lib: "notes" });
+    await frame();
+    return { deck, reader, custom, customReader, inspector, notes: width() };
+  })()`);
+  expect(sizes.reader).toBe(sizes.deck);
+  expect(sizes.custom).toBeLessThan(sizes.deck);
+  expect(sizes.customReader).toBe(sizes.custom);
+  expect(sizes.inspector).toBe(sizes.custom);
+  expect(sizes.notes).not.toBe(sizes.custom);
+  await view.evaluate("localStorage.removeItem('studio.lessonsWidth')");
+});
+
+test("a reader remains usable at 200% desktop magnification", async () => {
+  await view.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 960,
+    height: 540,
+    deviceScaleFactor: 2,
+    mobile: false,
+  });
+  await navigateFixture("?shell");
+  await waitFor("window.inspectTest && document.querySelector('[data-inspector-output]')");
+  await view.evaluate(`(() => {
+    const { lessons, studio } = window.inspectTest;
+    studio.setState({ side: "lessons" });
+    lessons.setState({ subTab: "deck", open: "all:camera.md" });
+  })()`);
+  await waitFor("document.querySelector('[data-lessons-focused] [data-lesson-content]')");
+  const visible = await view.evaluate(`(() => {
+    const sheet = document.querySelector("[data-lesson-content]");
+    const edit = [...sheet.querySelectorAll("[role=radio]")].find(button => button.textContent.trim() === "Edit");
+    const { x, y, width, height } = edit.getBoundingClientRect();
+    return edit.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+  })()`);
+  expect(visible).toBe(true);
+});

@@ -70,12 +70,7 @@
   --color-playhead: var(--playhead);
   --color-pick: var(--pick);
   --color-curve-bg: var(--curve-bg);
-  --color-md-h1: var(--md-h1);
-  --color-md-h2: var(--md-h2);
-  --color-md-h3: var(--md-h3);
-  --color-md-h4: var(--md-h4);
-  --color-md-h5: var(--md-h5);
-  --color-md-h6: var(--md-h6);
+  --color-lesson-heading: var(--lesson-heading);
   --color-track: var(--track);
   --color-track-head: var(--track-head);
   --color-main-track: var(--main-track);
@@ -150,9 +145,12 @@
 /* CapCut 9.7's type steps (rem relative to desktop 16px, preserving step order when a phone sets 18px) and floating surfaces. A name added
    here goes in lib/utils.ts too, or cn() takes text-ui for a colour and drops it beside text-primary */
 @theme {
-  --text-tag: 0.6875rem; /* 11px at 16px root: tags, meter numbers, phone chips */
-  --text-ui: 0.8125rem; /* 13px at 16px root: panel text, labels, fields, buttons */
-  --text-title: 0.9375rem; /* 15px at 16px root: panel headings and reading prose */
+  --text-tag: 11px; /* tags, the meter's numbers, a chip on a phone */
+  --text-ui: 13px; /* CapCut's panel text: labels, fields, buttons */
+  --text-lesson-meta: 0.8125rem;
+  --leading-lesson-heading-wrapped: 1.4;
+  --ease-studio-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --text-title: 15px; /* a panel's or dialog's heading */
   --shadow-float: 0 4px 16px oklch(0.1696 0.0017 17.3 / 0.55); /* a bar over the picture */
   --shadow-sheet: 0 8px 20px oklch(0.1696 0.0017 17.3 / 0.65); /* the note sheet over the picture on a phone */
 }
@@ -323,13 +321,7 @@
   --scrubber-track: color-mix(in oklab, var(--fx-base-200) 16%, transparent);
   --scrubber-tick: color-mix(in oklab, var(--fx-base-200) 28%, transparent);
 
-  /* Markdown heading scale (Lessons tab) */
-  --md-h1: var(--fx-yellow-400);
-  --md-h2: var(--fx-cyan-400);
-  --md-h3: var(--fx-green-400);
-  --md-h4: var(--fx-blue-300);
-  --md-h5: var(--fx-purple-300);
-  --md-h6: var(--fx-magenta-300);
+  --lesson-heading: var(--fx-base-100);
 
   /* Timeline, lanes & meters (read by timeline/canvas.ts tone()) */
   --track: var(--fx-base-900);

@@ -151,7 +151,7 @@ export const noteDetailFormat = ({ root: ROOT, dir, projectDir, config, topics }
       lines.push(
         n.learned && n.learned.scope !== n.remember.scope
           ? `the creator changed it to ${SCOPE[n.remember.scope]} after you kept it for ${SCOPE[n.learned.scope]}: move the rule where ${n.remember.scope === "film" ? (hasProjectLessons ? "this film's rules go (its src, beside what it rules, or lessons/<topic>.md)" : "this film's rules go (its src, beside what it rules)") : `every film's go (${LESSONS_HERE}/<topic>.md)`}, then bun run note learned ${n.id} "the rule, where"`
-          : `the creator asked you to remember this (${SCOPE[n.remember.scope]}): ${learnPrompt()} bun run note learned ${n.id} "the rule, where"`,
+          : `the creator asked you to remember this (${SCOPE[n.remember.scope]}): ${learnPrompt(n.id)}`,
       );
     for (const l of lessonLines(lessons)) lines.push(l);
     if (showCam && n.cam && !n.freeCam)
