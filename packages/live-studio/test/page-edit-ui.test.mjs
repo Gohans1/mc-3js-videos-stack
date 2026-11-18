@@ -19,12 +19,10 @@ const until = async (expr) => {
   }
   throw new Error(`Timed out: ${expr}\n${await view.evaluate("document.body.innerText.slice(-1600)")}`);
 };
-const fill = async (name, value) => {
-  await until(input(name));
-  await view.evaluate(
-    `(()=>{const el=${input(name)};el.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));el.blur()})()`,
+const fill = (name, value) =>
+  until(
+    `(()=>{const el=${input(name)};if(!el)return false;el.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));el.blur();return true})()`,
   );
-};
 const click = async (x, y, button = "right") => {
   await view.cdp("Input.dispatchMouseEvent", {
     type: "mousePressed",
