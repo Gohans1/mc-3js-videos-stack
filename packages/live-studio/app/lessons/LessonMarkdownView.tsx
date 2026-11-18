@@ -105,13 +105,13 @@ export function LessonMarkdownView({
   const blocks = useMemo(() => parseLessonBlocks(text), [text]);
   if (!blocks.length) {
     return (
-      <div className="font-md text-muted-foreground mx-auto w-full max-w-xl py-4 text-base/[1.6]">
+      <div className="font-md text-muted-foreground mx-auto w-full max-w-[35rem] py-4 text-base/[1.6]">
         Empty lesson file. Switch to Edit to start writing rules.
       </div>
     );
   }
   return (
-    <article className="font-md text-foreground mx-auto flex w-full max-w-xl flex-col gap-3.5 text-base/[1.6]">
+    <article className="font-md text-foreground mx-auto flex w-full max-w-[35rem] flex-col gap-3.5 text-base/[1.6]">
       {blocks.map((b) => {
         if (b.type === "heading")
           return <HeadingBlock key={b.line} block={b} onJumpEdit={onJumpEdit} />;

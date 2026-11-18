@@ -308,10 +308,11 @@ export function InspectorPreview({
         )}
       </div>
       <div className="border-border text-label flex flex-none flex-wrap gap-x-3 gap-y-1 border-t px-3 py-1 text-xs/relaxed tabular-nums @min-[700px]/inspector:px-4">
-        <span className="hidden @min-[20rem]/inspector:inline">
-          Files:{" "}
-          <strong className="text-primary-text font-semibold">{result?.pool.length ?? 0}</strong>
-        </span>
+        {result && (
+          <span className="hidden @min-[20rem]/inspector:inline">
+            Files: <strong className="text-primary-text font-semibold">{result.pool.length}</strong>
+          </span>
+        )}
         <span
           className={
             !showPrevious && result?.status === "live"

@@ -471,7 +471,7 @@ describe("LessonsPanel rendered component behavior", () => {
     assert.match(html, />All \(3\)</);
   });
 
-  test("ConfirmDeleteButton exposes accessible label and attachArmedDeleteDismiss only disarms on outside interactions or Escape", () => {
+  test("the row delete control names the lesson and opens a confirmation dialog", () => {
     const html = renderToStaticMarkup(
       createElement(lessonUiMod.ConfirmDeleteButton, {
         label: "camera.md (Every film)",
@@ -480,56 +480,7 @@ describe("LessonsPanel rendered component behavior", () => {
     );
     assert.match(html, /aria-label="Delete camera\.md \(Every film\)"/);
 
-    const listeners = new Map();
-    const doc = {
-      addEventListener(type, fn) {
-        listeners.set(type, fn);
-      },
-      removeEventListener(type, fn) {
-        if (listeners.get(type) === fn) listeners.delete(type);
-      },
-    };
-    const innerNode = {};
-    const outerNode = {};
-    const wrap = { contains: (n) => n === innerNode };
-
-    let disarms = 0;
-    const stop = lessonUiMod.attachArmedDeleteDismiss(wrap, () => disarms++, doc, 5000);
-
-    // Focusin or pointerdown inside the delete button wrapper never disarms
-    listeners.get("pointerdown")({ target: innerNode });
-    listeners.get("focusin")({ target: innerNode });
-    assert.equal(disarms, 0);
-
-    // Non-Escape keys never disarm
-    let prevented = false;
-    listeners.get("keydown")({
-      key: "Enter",
-      preventDefault() {
-        prevented = true;
-      },
-      stopPropagation() {},
-    });
-    assert.equal(disarms, 0);
-    assert.equal(prevented, false);
-
-    // Pointerdown outside, focusin outside, and Escape each disarm cleanly
-    listeners.get("pointerdown")({ target: outerNode });
-    assert.equal(disarms, 1);
-    listeners.get("focusin")({ target: outerNode });
-    assert.equal(disarms, 2);
-    listeners.get("keydown")({
-      key: "Escape",
-      preventDefault() {
-        prevented = true;
-      },
-      stopPropagation() {},
-    });
-    assert.equal(disarms, 3);
-    assert.equal(prevented, true);
-
-    stop();
-    assert.equal(listeners.size, 0);
+    assert.match(html, /aria-haspopup="dialog"/);
   });
 
   test("LessonChanges labels blank diff rows explicitly for screen readers and resolveDeckArrowBoundary traps boundary arrows", () => {

@@ -698,6 +698,42 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.deepEqual(pageErrors, []);
   });
 
+  test("reopening a closing reader continues from the painted fade without shifting the sheet", async () => {
+    const result = await view.evaluate(`(async () => {
+      const { lessons, setDock } = window.__DECK_TEST__;
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const click = el => el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+      const reader = '[data-lesson-content="all:camera.md"]';
+      setDock("start");
+      lessons.setState({ folder: [], open: "all:camera.md" });
+      await frame();
+      await frame();
+      const sheet = document.querySelector(reader);
+      const startX = sheet.getBoundingClientRect().left;
+      click(sheet.querySelector("[data-lesson-back]"));
+      await frame();
+      const overlay = document.querySelector("div[style*='z-index: 45']");
+      const ghost = overlay.querySelector(reader);
+      const fade = ghost.getAnimations()[0];
+      fade.currentTime = 60;
+      const exitOpacity = Number(getComputedStyle(ghost).opacity);
+      const exitX = ghost.getBoundingClientRect().left;
+      click(document.querySelector('[data-lesson-row="file:all:camera.md"]'));
+      await frame();
+      const reopened = document.querySelector(reader);
+      return {
+        exitOpacity,
+        resumedOpacity: Number(reopened.getAnimations()[0]?.effect.getKeyframes()[0].opacity),
+        shift: Math.abs(startX - exitX),
+        oldGhostMounted: ghost.isConnected,
+      };
+    })()`);
+    assert.ok(result.exitOpacity > 0 && result.exitOpacity < 1);
+    assert.ok(Math.abs(result.resumedOpacity - result.exitOpacity) < 0.08);
+    assert.ok(result.shift < 1);
+    assert.equal(result.oldGhostMounted, false);
+  });
+
   test("a narrowed desktop reader stays visible at 200% text size and ArrowLeft returns to the lesson row", async () => {
     const result = await view.evaluate(`(async () => {
       const { lessons, setDock } = window.__DECK_TEST__;

@@ -1,7 +1,15 @@
 import { Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { showUndo, toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -28,87 +36,43 @@ export const SCOPE_LABEL: Record<LessonScope, string> = { film: "This film", all
 
 export const TEXT = "font-md text-base/[1.6] whitespace-pre-wrap wrap-anywhere [tab-size:4] p-3";
 
-/** Wires outside-pointer, outside-focus, Escape, and idle timeout dismissal while keeping mouse blur (dropClickFocus) safe. */
-export function attachArmedDeleteDismiss(
-  wrap: Pick<HTMLElement, "contains"> | null,
-  disarm: () => void,
-  doc: Pick<Document, "addEventListener" | "removeEventListener"> = document,
-  timeoutMs = 3500,
-): () => void {
-  const t = setTimeout(disarm, timeoutMs);
-  const outside = (target: EventTarget | null) =>
-    !wrap || !target || !wrap.contains(target as Node);
-  const onPointerDown = (e: Event) => {
-    if (outside(e.target)) disarm();
-  };
-  const onFocusIn = (e: Event) => {
-    if (outside(e.target)) disarm();
-  };
-  const onKeyDown = (e: Event) => {
-    const ke = e as KeyboardEvent;
-    if (ke.key !== "Escape") return;
-    ke.preventDefault();
-    ke.stopPropagation();
-    disarm();
-  };
-  doc.addEventListener("pointerdown", onPointerDown, true);
-  doc.addEventListener("focusin", onFocusIn);
-  doc.addEventListener("keydown", onKeyDown, true);
-  return () => {
-    clearTimeout(t);
-    doc.removeEventListener("pointerdown", onPointerDown, true);
-    doc.removeEventListener("focusin", onFocusIn);
-    doc.removeEventListener("keydown", onKeyDown, true);
-  };
-}
-
-/** Two-click armed delete for rows in the Lessons deck. */
 export function ConfirmDeleteButton({
   label,
+  size = "icon-sm",
   revealOnRowHover = false,
   onConfirm,
 }: {
   label: string;
+  size?: "icon-sm" | "icon-lg";
   revealOnRowHover?: boolean;
   onConfirm: () => void;
 }) {
-  const [armed, setArmed] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!armed) return;
-    return attachArmedDeleteDismiss(wrapRef.current, () => setArmed(false));
-  }, [armed]);
-
+  const action = "Delete " + label;
   return (
     <div
-      ref={wrapRef}
-      onMouseLeave={() => setArmed(false)}
       className={cn(
-        "flex-none transition-opacity duration-150 motion-reduce:transition-none",
+        "flex-none",
         revealOnRowHover &&
-          (armed
-            ? "me-0.5 w-auto opacity-100"
-            : "me-0.5 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100"),
+          "me-0.5 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100",
       )}
     >
-      <Button
-        type="button"
-        variant={armed ? "destructive" : "remove"}
-        size={armed ? "sm" : "icon-sm"}
-        title={armed ? `Confirm delete ${label}` : `Delete ${label}`}
-        aria-label={armed ? `Confirm delete ${label}` : `Delete ${label}`}
-        onClick={() => {
-          if (armed) {
-            setArmed(false);
-            onConfirm();
-          } else {
-            setArmed(true);
-          }
-        }}
-      >
-        {armed ? "Delete?" : <Trash2 aria-hidden />}
-      </Button>
+      <Dialog>
+        <DialogTrigger
+          render={<Button variant="remove" size={size} title={action} aria-label={action} />}
+        >
+          <Trash2 size={16} absoluteStrokeWidth aria-hidden />
+        </DialogTrigger>
+        <DialogContent showCloseButton={false}>
+          <DialogTitle>Delete lesson?</DialogTitle>
+          <DialogDescription>{action}. The deletion notification offers Undo.</DialogDescription>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <DialogClose render={<Button variant="destructive" />} onClick={onConfirm}>
+              Delete lesson
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

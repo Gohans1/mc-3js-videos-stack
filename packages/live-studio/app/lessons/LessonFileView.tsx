@@ -7,21 +7,11 @@ import {
   GitCompare,
   ListTree,
   Pencil,
-  Trash2,
 } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Empty,
   EmptyContent,
@@ -35,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { useLitAny } from "../activity/activity";
 import { SaveStatus, Segmented } from "../components/inspector";
 import { lessonChanges } from "./changes";
-import { SCOPE_LABEL, TEXT } from "./lesson-ui";
+import { ConfirmDeleteButton, SCOPE_LABEL, TEXT } from "./lesson-ui";
 import { LessonChanges } from "./LessonChanges";
 import { LessonMarkdownView } from "./LessonMarkdownView";
 import {
@@ -396,7 +386,9 @@ export function LessonFileView({
                     {active && (
                       <Check
                         aria-hidden
-                        className="text-primary-text absolute start-2 top-2 size-3.5"
+                        size={14}
+                        absoluteStrokeWidth
+                        className="text-primary-text absolute start-2 top-2"
                       />
                     )}
                     <span
@@ -419,32 +411,11 @@ export function LessonFileView({
             </nav>
           </PopoverContent>
         </Popover>
-        <Dialog>
-          <DialogTrigger
-            render={
-              <Button
-                variant="remove"
-                size="icon-lg"
-                title={`Delete ${displayPath} (${SCOPE_LABEL[scope]})`}
-                aria-label={`Delete ${displayPath} (${SCOPE_LABEL[scope]})`}
-              />
-            }
-          >
-            <Trash2 aria-hidden />
-          </DialogTrigger>
-          <DialogContent showCloseButton={false}>
-            <DialogTitle>Delete lesson?</DialogTitle>
-            <DialogDescription>
-              Delete {displayPath} ({SCOPE_LABEL[scope]}). The deletion notification offers Undo.
-            </DialogDescription>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-              <DialogClose render={<Button variant="destructive" />} onClick={onDelete}>
-                Delete lesson
-              </DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ConfirmDeleteButton
+          label={displayPath + " (" + SCOPE_LABEL[scope] + ")"}
+          size="icon-lg"
+          onConfirm={onDelete}
+        />
       </div>
       {edit?.failed && (
         <div className="flex flex-none flex-wrap items-center gap-2 px-3 pb-2">

@@ -3,7 +3,6 @@ import { prefersReduced } from "../components/Motion";
 import { classifyLessonTrailTransition, type LessonTrail } from "./tree";
 
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
-const EXIT_EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const ENTER_MS = 125;
 const EXIT_MS = 175;
 const REDUCED_MS = 125;
@@ -26,6 +25,7 @@ export interface DeckSnapshot {
 export interface DeckMotion {
   cancel: () => void;
   isRunning: () => boolean;
+  exitOpacity: (key: string) => string | undefined;
 }
 
 export interface ClipRectLike {
@@ -126,6 +126,7 @@ export function animateDeckTransition({
   nextTrail,
   animate,
   interrupted = false,
+  resume,
 }: {
   deck: HTMLElement | null;
   overlayHost?: HTMLElement | null;
@@ -134,13 +135,16 @@ export function animateDeckTransition({
   nextTrail: LessonTrail;
   animate: boolean;
   interrupted?: boolean;
+  resume?: { key: string; opacity: string };
 }): DeckMotion | null {
   if (!deck || !animate) return null;
   const transition = classifyLessonTrailTransition(prevTrail, nextTrail);
-  if (transition.kind === "none" || (interrupted && transition.kind === "open-right")) return null;
+  if (transition.kind === "none" || (interrupted && !resume && transition.kind === "open-right"))
+    return null;
 
   const reduced = prefersReduced();
   const animations: Animation[] = [];
+  const exiting = new Map<string, HTMLElement>();
   const cleanup: (() => void)[] = [];
   const cancelAnims = (el: Element | null | undefined) => {
     if (!el || typeof el.getAnimations !== "function") return;
@@ -182,32 +186,17 @@ export function animateDeckTransition({
       const removeOverlay = () => overlay.remove();
       visibleOut.forEach((item, idx) => {
         const ghost = cloneGhost(item, clipRect, idx + 1);
+        exiting.set(item.key, ghost);
         overlay.append(ghost);
         scrollers(ghost).forEach((el, i) => {
           el.scrollTop = item.scrollTops[i] ?? 0;
         });
-        const flyX = Math.min(
-          Math.max(56, item.rect.width * 0.45),
-          Math.max(56, clip.right - item.rect.left + 24),
-        );
-        const anim = reduced
-          ? ghost.animate([{ opacity: item.opacity }, { opacity: 0 }], {
-              duration: REDUCED_MS,
-              easing: "ease-out",
-              fill: "forwards",
-            })
-          : ghost.animate(
-              [
-                { transform: "translate3d(0, 0, 0) scale(1)", opacity: item.opacity },
-                { transform: `translate3d(${flyX}px, 0, 0) scale(0.985)`, opacity: 0 },
-              ],
-              {
-                duration: EXIT_MS,
-                delay: Math.min(idx * 22, 60),
-                easing: EXIT_EASE,
-                fill: "forwards",
-              },
-            );
+        const anim = ghost.animate([{ opacity: item.opacity }, { opacity: 0 }], {
+          duration: reduced ? REDUCED_MS : EXIT_MS,
+          delay: reduced ? 0 : Math.min(idx * 22, 60),
+          easing: "ease-out",
+          fill: "forwards",
+        });
         animations.push(anim);
         const done = () => {
           ghost.remove();
@@ -251,13 +240,19 @@ export function animateDeckTransition({
     for (const el of entering) {
       cancelAnims(el);
       if (typeof el.animate !== "function") continue;
+      const key = el.dataset.lessonContent ?? el.dataset.lessonsCol;
+      const opacity = resume && resume.key === key ? resume.opacity : 0.82;
       animations.push(
-        el.animate([{ opacity: 0.82 }, { opacity: 1 }], { duration: ENTER_MS, easing: ENTER_EASE }),
+        el.animate([{ opacity }, { opacity: 1 }], { duration: ENTER_MS, easing: ENTER_EASE }),
       );
     }
   }
 
   return {
+    exitOpacity: (key) => {
+      const ghost = exiting.get(key);
+      return ghost?.isConnected ? getComputedStyle(ghost).opacity : undefined;
+    },
     isRunning: () =>
       animations.some((animation) => animation.pending || animation.playState === "running"),
     cancel: () => {

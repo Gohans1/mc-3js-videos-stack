@@ -387,9 +387,12 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                           (!enabled || Boolean(validationError) || Boolean(reason))) ||
                         (Boolean(saveError) && (saving || !valid.success || !info))
                       }
-                      onClick={() =>
-                        runError ? void run() : saveError ? void save() : setRetry((v) => v + 1)
-                      }
+                      onClick={(event) => {
+                        if (event.detail === 0) controlsRef.current?.focus({ preventScroll: true });
+                        if (runError) void run();
+                        else if (saveError) void save();
+                        else setRetry((v) => v + 1);
+                      }}
                     >
                       {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
                     </Button>
@@ -403,7 +406,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                   id="inspect-note-heading"
                   className="text-ink-text flex items-center gap-2 text-base/[1.3] font-semibold"
                 >
-                  <MessageSquareText className="size-4" aria-hidden />
+                  <MessageSquareText size={16} absoluteStrokeWidth aria-hidden />
                   Creator’s note
                 </h3>
                 <FieldGroup>
@@ -500,7 +503,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                     id="inspect-lessons-heading"
                     className="text-primary-text flex items-center gap-2 text-base/[1.3] font-semibold"
                   >
-                    <BookOpenText className="size-4" aria-hidden />
+                    <BookOpenText size={16} absoluteStrokeWidth aria-hidden />
                     Lessons from Deck
                   </h3>
                   <Button size="md" variant="outline" onClick={onOpenDeck}>
@@ -603,7 +606,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
               <details className="group/advanced border-border border-t pt-3">
                 <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-2 font-medium outline-none focus-visible:ring-2">
                   <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <Settings2 className="size-4" aria-hidden />
+                    <Settings2 size={16} absoluteStrokeWidth aria-hidden />
                     Advanced settings
                     {configError && <span className="text-destructive-text">· Check fields</span>}
                   </span>

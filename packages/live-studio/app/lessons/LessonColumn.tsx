@@ -350,6 +350,12 @@ export function LessonColumnView({
             placeholder={`Search ${scopedFilesCount} ${scopedFilesCount === 1 ? "lesson" : "lessons"}…`}
             className="pointer-fine:[&_input]:text-sm"
           />
+          <p role="status" className="sr-only">
+            {isSearching &&
+              (col.entries.length
+                ? `${col.entries.length} matching ${col.entries.length === 1 ? "lesson" : "lessons"}`
+                : "No matching lessons")}
+          </p>
         </div>
       )}
 
