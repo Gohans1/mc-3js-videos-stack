@@ -628,7 +628,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                 <InspectorSettings config={config} onChange={changeConfig} errors={fieldErrors} />
                 <div className="mt-6 flex flex-wrap gap-2">
                   <ResetSettingsDialog onReset={resetConfig} />
-                  <Dialog>
+                  <Dialog instantForKeyboard>
                     <DialogTrigger render={<Button size="md" variant="ghost" />}>
                       Clear Inspector cache
                     </DialogTrigger>
@@ -708,7 +708,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
 
 function ResetSettingsDialog({ onReset }: { onReset: () => void }) {
   return (
-    <Dialog>
+    <Dialog instantForKeyboard>
       <DialogTrigger render={<Button size="md" variant="outline" />}>Reset defaults</DialogTrigger>
       <DialogContent showCloseButton={false} motion="fade">
         <DialogTitle>Reset Inspector settings?</DialogTitle>

@@ -6,8 +6,35 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+const InstantDialog = React.createContext(false);
+
+function Dialog({
+  instantForKeyboard = false,
+  onOpenChange,
+  ...props
+}: DialogPrimitive.Root.Props & { instantForKeyboard?: boolean }) {
+  const [instant, setInstant] = React.useState(false);
+  return (
+    <InstantDialog.Provider value={instant}>
+      <DialogPrimitive.Root
+        data-slot="dialog"
+        {...props}
+        onOpenChange={
+          instantForKeyboard
+            ? (open, details) => {
+                const event = details.event;
+                setInstant(
+                  details.reason === "escape-key" ||
+                    event instanceof KeyboardEvent ||
+                    (event instanceof MouseEvent && event.detail === 0),
+                );
+                onOpenChange?.(open, details);
+              }
+            : onOpenChange
+        }
+      />
+    </InstantDialog.Provider>
+  );
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -40,7 +67,8 @@ function DialogOverlay({
   variant,
   motion,
   ...props
-}: DialogPrimitive.Backdrop.Props & VariantProps<typeof overlayVariants> & { motion?: "fade" }) {
+}: DialogPrimitive.Backdrop.Props &
+  VariantProps<typeof overlayVariants> & { motion?: "fade" | "instant" }) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
@@ -48,7 +76,8 @@ function DialogOverlay({
         "bg-scrim-strong fixed inset-0 isolate z-50 supports-backdrop-filter:backdrop-blur-xs",
         motion === "fade"
           ? fadeDialog
-          : "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 duration-100",
+          : motion !== "instant" &&
+              "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 duration-100",
         overlayVariants({ variant }),
         className,
       )}
@@ -82,16 +111,18 @@ function DialogContent({
     showCloseButton?: boolean;
     motion?: "fade";
   }) {
+  const presentation = React.useContext(InstantDialog) && motion === "fade" ? "instant" : motion;
   return (
     <DialogPortal>
-      <DialogOverlay variant={variant} motion={motion} />
+      <DialogOverlay variant={variant} motion={presentation} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
           "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl p-4 ring-1 outline-none sm:max-w-sm",
-          motion === "fade"
+          presentation === "fade"
             ? fadeDialog
-            : "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100",
+            : presentation !== "instant" &&
+                "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100",
           dialogVariants({ variant, font }),
           className,
         )}

@@ -2,6 +2,8 @@
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
 
+import { LESSON_TEXT_MAX } from "../src/lesson-template.ts";
+
 const was = { fetch: globalThis.fetch, localStorage: globalThis.localStorage },
   kept = new Map();
 globalThis.localStorage ??= {
@@ -223,6 +225,21 @@ test("saveLesson records API validation errors without retrying and schedules re
   } finally {
     globalThis.setTimeout = realSetTimeout;
   }
+});
+
+test("an oversized draft stays editable and is saved only after it fits the lesson limit", async () => {
+  const key = "all:walk.md";
+  const oversized = "a".repeat(LESSON_TEXT_MAX + 1);
+  typeLesson(key, oversized);
+  await saveLesson(key);
+  assert.equal(posted.length, 0);
+  assert.equal(lessons.getState().edits[key].text, oversized);
+
+  const shortened = "# Walk\n";
+  typeLesson(key, shortened);
+  await saveLesson(key);
+  assert.equal(posted[0].text, shortened);
+  assert.equal(lessons.getState().edits[key], undefined);
 });
 
 test("saveLesson 409 adopts AI version while keeping prior seen snapshot for diffs, markRead, openLesson, setLessonView, and case-insensitive newLesson", async () => {

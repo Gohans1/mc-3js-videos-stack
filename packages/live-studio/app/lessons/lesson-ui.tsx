@@ -56,7 +56,7 @@ export function ConfirmDeleteButton({
           "me-0.5 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100",
       )}
     >
-      <Dialog>
+      <Dialog instantForKeyboard>
         <DialogTrigger
           render={<Button variant="remove" size={size} title={action} aria-label={action} />}
         >

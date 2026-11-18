@@ -13,6 +13,7 @@ import {
   LessonJevConfigSchema,
 } from "./lesson-config.ts";
 import { readLessonConfig, writeLessonJson } from "./lesson-settings.mjs";
+import { LESSON_TEXT_MAX } from "./lesson-template.ts";
 import { jevLessons, lessonCacheKey, lessonPool, lessonQuestion, LESSONS } from "./lessons.mjs";
 import { noteDetailFormat } from "./note-detail.mjs";
 import { noteLessonFormat } from "./note-format.mjs";
@@ -30,7 +31,7 @@ export const InspectInput = z
             .string()
             .max(200)
             .regex(/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.md$/),
-          text: z.string().max(1000000).nullable(),
+          text: z.string().max(LESSON_TEXT_MAX).nullable(),
         }),
       )
       .max(500)

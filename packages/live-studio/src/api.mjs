@@ -35,7 +35,7 @@ import {
   inspectorInfo,
 } from "./lesson-inspector.mjs";
 import { writeLessonJson } from "./lesson-settings.mjs";
-import { LESSON_PATH_MAX } from "./lesson-template.ts";
+import { LESSON_PATH_MAX, LESSON_TEXT_MAX } from "./lesson-template.ts";
 import { noteNumbers } from "./notes.mjs";
 import { createPortsService } from "./ports.mjs";
 import { openVoiceLibrary } from "./voice-library.mjs";
@@ -86,7 +86,7 @@ const LessonScope = z.enum(["film", "all"]).default("all");
 const LessonSave = z.object({
   scope: LessonScope,
   path: z.string().max(LESSON_PATH_MAX),
-  text: z.string().max(1_000_000),
+  text: z.string().max(LESSON_TEXT_MAX),
   base: z.string().nullable(),
 });
 const LessonDelete = z.object({

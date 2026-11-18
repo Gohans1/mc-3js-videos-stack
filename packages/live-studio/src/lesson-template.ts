@@ -2,6 +2,7 @@
 // frontmatter line and its headings, never the words under them), filled from the file's name. pick: the rule heading's
 // words, picked in the editor so the creator's first words replace them
 export const LESSON_PATH_MAX = 200;
+export const LESSON_TEXT_MAX = 1_000_000;
 export const lessonPath = (name: string) => `${name.replace(/\.md$/, "")}.md`;
 
 const RULE = "A rule, said as one line";

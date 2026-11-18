@@ -247,10 +247,10 @@ export function InspectorPreview({
             ) : result ? (
               <>
                 {before && <span className="sr-only">{change + ". "}</span>}
-                {changed > 0 ? (
-                  <span className="text-ok-text">{changed} added</span>
-                ) : removed ? (
+                {removed ? (
                   "Preview updated"
+                ) : changed > 0 ? (
+                  <span className="text-ok-text">{changed} added</span>
                 ) : before ? (
                   "Output unchanged"
                 ) : (

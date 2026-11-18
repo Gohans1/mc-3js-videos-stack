@@ -211,7 +211,11 @@ export function animateDeckTransition({
   }
 
   // Smooth horizontal FLIP for kept columns that repositioned when opening or folding back
-  if (snapshot) {
+  if (
+    snapshot &&
+    snapshot.cols.length === prevTrail.columns.length &&
+    liveCols.length === nextTrail.columns.length
+  ) {
     const oldByKey = new Map(snapshot.cols.map((c) => [c.key, c.rect.left]));
     const checkCount = Math.min(transition.keepColumnCount, liveCols.length);
     for (let i = 0; i < checkCount; i++) {

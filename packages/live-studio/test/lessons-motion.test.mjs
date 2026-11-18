@@ -742,6 +742,12 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       lessons.setState({ folder: [], open: "all:camera.md" });
       await frame();
       const pane = document.querySelector("[data-testid=lessons-pane]");
+      pane.style.width = "720px";
+      await frame();
+      const colsAt720 = pane.querySelectorAll("[data-lessons-col]").length;
+      pane.style.width = "719px";
+      await frame();
+      const colsAt719 = pane.querySelectorAll("[data-lessons-col]").length;
       pane.style.width = "260px";
       await frame();
       document.documentElement.style.fontSize = "32px";
@@ -753,8 +759,13 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       back.focus();
       back.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
       await frame();
-      return { visible, open: lessons.getState().open, focused: document.activeElement.dataset.lessonRow };
+      return { visible, open: lessons.getState().open, focused: document.activeElement.dataset.lessonRow, noExtraColumns: colsAt719 <= colsAt720 };
     })()`);
-    assert.deepEqual(result, { visible: true, open: null, focused: "file:all:camera.md" });
+    assert.deepEqual(result, {
+      visible: true,
+      open: null,
+      focused: "file:all:camera.md",
+      noExtraColumns: true,
+    });
   });
 });

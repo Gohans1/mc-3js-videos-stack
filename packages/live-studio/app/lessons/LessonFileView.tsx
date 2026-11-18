@@ -22,10 +22,11 @@ import {
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+import { LESSON_TEXT_MAX } from "../../src/lesson-template";
 import { useLitAny } from "../activity/activity";
 import { SaveStatus, Segmented } from "../components/inspector";
 import { lessonChanges } from "./changes";
-import { ConfirmDeleteButton, SCOPE_LABEL, TEXT } from "./lesson-ui";
+import { ConfirmDeleteButton, downloadLessonDrafts, SCOPE_LABEL, TEXT } from "./lesson-ui";
 import { LessonChanges } from "./LessonChanges";
 import { LessonMarkdownView } from "./LessonMarkdownView";
 import {
@@ -127,6 +128,7 @@ export function LessonFileView({
   const folder = scope === "film" && projectDir ? projectDir : dir;
   const lit = useLitAny([`lesson:${key}`, ...(scope === "all" ? [`lesson:${displayPath}`] : [])]);
   const text = edit?.text ?? file?.text ?? "";
+  const oversizedDraft = edit && edit.text.length > LESSON_TEXT_MAX ? edit : null;
   const news = useMemo(
     () => (file && seen && seen.tag !== file.tag ? lessonChanges(seen.text, file.text) : null),
     [file, seen],
@@ -359,7 +361,7 @@ export function LessonFileView({
             title={folder ? `${folder}/${displayPath}` : displayPath}
           >
             <SaveStatus
-              state={edit ? (edit.failed ? "fail" : "busy") : null}
+              state={edit ? (oversizedDraft || edit.failed ? "fail" : "busy") : null}
               idleText="Saved"
               failText="Draft"
             />
@@ -436,7 +438,9 @@ export function LessonFileView({
                         {h.bullets}
                       </span>
                     )}
-                    <span className="text-label text-xs tabular-nums">{h.line}</span>
+                    <span className="text-label text-xs whitespace-nowrap tabular-nums">
+                      Line {h.line}
+                    </span>
                   </button>
                 );
               })}
@@ -449,14 +453,28 @@ export function LessonFileView({
           onConfirm={onDelete}
         />
       </div>
-      {edit?.failed && (
+      {(oversizedDraft || edit?.failed) && (
         <div className="flex flex-none flex-wrap items-center gap-2 px-3 pb-2">
           <p role="status" className="text-warn-text min-w-0 flex-1 text-sm/relaxed wrap-anywhere">
-            Could not save the lesson. Your draft is still here.
+            {oversizedDraft
+              ? `Shorten the lesson to ${LESSON_TEXT_MAX.toLocaleString("en-US")} characters or fewer. Your draft is still here.`
+              : "Could not save the lesson. Your draft is still here."}
           </p>
-          <Button size="sm" variant="outline" onClick={() => void saveLesson(key)}>
-            Retry save
-          </Button>
+          {oversizedDraft ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                downloadLessonDrafts([{ path: displayPath, text: oversizedDraft.text }])
+              }
+            >
+              Download draft
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => void saveLesson(key)}>
+              Retry save
+            </Button>
+          )}
         </div>
       )}
       <div className="border-border/60 flex flex-none flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b px-3 pb-1.5">

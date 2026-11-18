@@ -297,10 +297,7 @@ function LessonDeckPanel({
     dock === "start" && activeOpen
       ? Math.max(
           0,
-          Math.floor(
-            (effectiveContainerWidth - (tighterDeck ? 280 : READER_WIDTH)) /
-              (tighterDeck ? 176 : 192),
-          ),
+          Math.floor((effectiveContainerWidth - READER_WIDTH) / (tighterDeck ? 176 : 192)),
         )
       : activeColumns.length;
   const renderedColumns = activeColumns.slice(

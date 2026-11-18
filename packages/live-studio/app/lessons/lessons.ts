@@ -3,7 +3,7 @@
 // immediately: stale local drafts yield automatically to newer versions on disk, while unsaved edits wait on the device through a reload
 import { createStore, useStore } from "zustand";
 
-import { lessonPath, lessonTemplate } from "../../src/lesson-template";
+import { LESSON_TEXT_MAX, lessonPath, lessonTemplate } from "../../src/lesson-template";
 import { stored } from "../core/storage";
 
 export type LessonViewMode = "read" | "edit" | "changes";
@@ -327,6 +327,7 @@ export const typeLesson = (key: string, text: string) => {
     f = fileOf(key);
   setEdits({ ...get().edits, [key]: { ...e, text, base: e ? e.base : (f?.tag ?? null) } });
   clearTimer(key);
+  if (text.length > LESSON_TEXT_MAX) return;
   timers.set(
     key,
     setTimeout(() => {
@@ -339,7 +340,7 @@ export const typeLesson = (key: string, text: string) => {
 export const saveLesson = async (key: string): Promise<void> => {
   clearTimer(key);
   const e = get().edits[key];
-  if (!e || e.saving) return;
+  if (!e || e.saving || e.text.length > LESSON_TEXT_MAX) return;
   const { scope, path } = parseLessonKey(key);
   const sent = e.text;
   setEdits({ ...get().edits, [key]: { ...e, saving: true, failed: undefined } });
