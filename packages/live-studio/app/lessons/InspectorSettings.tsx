@@ -146,7 +146,11 @@ const groups: { title: string; hint: string; view: InspectorView; fields: Settin
         label: "Provider",
         help: "Auto prefers free OpenCode Zen. Paid OpenRouter can go first if Zen is unavailable or out of quota.",
       },
-      { key: "freeModel", label: "Free model ID", help: "Model sent to OpenCode Zen." },
+      {
+        key: "freeModel",
+        label: "OpenCode Zen model ID",
+        help: "The default model is free. Check pricing before choosing another model.",
+      },
       { key: "paidModel", label: "Paid model ID", help: "Model sent to OpenRouter." },
       {
         key: "spendCap",

@@ -24,7 +24,8 @@ const buttonVariants = cva(
         quiet:
           "text-muted-foreground hover:bg-muted/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint aria-pressed:hover:text-primary-text data-popup-open:bg-tint data-popup-open:text-primary-text",
         tab: "text-muted-foreground hover:text-foreground aria-expanded:text-foreground focus-visible:ring-ring hover:bg-surface-subtle aria-expanded:bg-hairline-subtle aria-pressed:bg-secondary aria-pressed:text-foreground aria-pressed:ring-hairline-strong aria-pressed:hover:bg-secondary-hover aria-pressed:hover:text-foreground focus-visible:border-transparent focus-visible:ring-2 aria-pressed:font-semibold aria-pressed:shadow-xs aria-pressed:ring-1",
-        remove: "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
+        remove:
+          "text-muted-foreground hover:bg-destructive/15 hover:text-destructive focus-visible:transition-none",
         "remove-chip":
           "text-muted-foreground hover:bg-destructive/15 hover:text-destructive border-hairline rounded-none border-s",
         lit: "text-primary-text border-hairline bg-surface-subtle hover:bg-hairline", // a control whose item is active right now

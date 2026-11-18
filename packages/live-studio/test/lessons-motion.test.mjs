@@ -816,12 +816,15 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       back.focus();
       back.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
       await frame();
-      return { visible, open: lessons.getState().open, focused: document.activeElement.dataset.lessonRow, noExtraColumns: colsAt719 <= colsAt720 };
+      const row = document.activeElement;
+      const remove = row.closest("li").querySelector("[title^=Delete]");
+      return { visible, open: lessons.getState().open, focused: row.dataset.lessonRow, removeVisible: getComputedStyle(remove.parentElement).opacity, noExtraColumns: colsAt719 <= colsAt720 };
     })()`);
     assert.deepEqual(result, {
       visible: true,
       open: null,
       focused: "file:all:camera.md",
+      removeVisible: "1",
       noExtraColumns: true,
     });
   });

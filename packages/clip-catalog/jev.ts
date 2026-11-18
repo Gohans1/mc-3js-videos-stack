@@ -4,6 +4,9 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const JEV = fileURLToPath(new URL("./jev.py", import.meta.url));
+const NO_REQUEST_EXIT = 78;
+
+export class JevNotStartedError extends Error {}
 
 // What to ask of a list: the state Jev reads, the question that picks the best item, what makes one item fit or not, and
 // an item as Jev reads it
@@ -63,23 +66,27 @@ const jevAsk = (state: unknown, questions: Record<string, unknown>, options: Jev
       clearTimeout(timer);
       fail(
         (e as NodeJS.ErrnoException).code === "ENOENT"
-          ? new Error(
+          ? new JevNotStartedError(
               "Python was not found. Install Python or add it to PATH, then restart Studio or your terminal.",
             )
-          : e,
+          : new JevNotStartedError(
+              "Studio could not start Python. Check your Python installation and try again.",
+              { cause: e },
+            ),
       );
     });
     py.on("close", (code) => {
       clearTimeout(timer);
       const said = err.split("\n").filter((l) => l.trim() && !jevNotes.has(l));
       for (const l of said) jevNotes.add(l);
-      if (code)
+      if (code) {
+        const message =
+          err.trim().split("\n").at(-1)?.trim() ||
+          "Jev stopped before returning a result. Try again.";
         return fail(
-          new Error(
-            err.trim().split("\n").at(-1)?.trim() ||
-              "Jev stopped before returning a result. Try again.",
-          ),
+          code === NO_REQUEST_EXIT ? new JevNotStartedError(message) : new Error(message),
         );
+      }
       if (said.length) console.error(said.join("\n"));
       try {
         const result = JSON.parse(out) as { answers: Answers; trace: unknown[] };

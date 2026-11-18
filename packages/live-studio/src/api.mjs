@@ -16,6 +16,7 @@ import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import * as z from "zod";
 
+import { JevNotStartedError } from "../../clip-catalog/jev.ts";
 import { Activity, createActivity } from "./activity.mjs";
 import { CLI_CATEGORIES, CLI_COMMANDS } from "./cli-catalog.ts";
 import { CliRunHttpError, createCliRunner, scanCliContext } from "./cli-runner.ts";
@@ -733,7 +734,7 @@ export const createApi = (
           }),
         );
       } catch (e) {
-        return c.json({ error: e.message }, 400);
+        return c.json({ error: e.message }, e instanceof JevNotStartedError ? 424 : 400);
       }
     },
   );

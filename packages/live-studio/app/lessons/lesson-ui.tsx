@@ -53,7 +53,7 @@ export function ConfirmDeleteButton({
       className={cn(
         "flex-none",
         revealOnRowHover &&
-          "me-0.5 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100",
+          "me-0.5 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-focus-within/row:transition-none group-hover/row:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100",
       )}
     >
       <Dialog instantForKeyboard>

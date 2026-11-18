@@ -64,6 +64,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
         : response.status >= 500
           ? "Studio could not complete the request. Try again."
           : "Studio rejected the request. Check your inputs and try again.",
+      { cause: response.status },
     );
   return body as T;
 }
@@ -284,10 +285,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         type: "info",
       });
     } catch (e) {
-      const detail = (e as Error).message;
-      const message = usesFreeModel
-        ? detail
-        : `${detail} The provider may still charge for this attempt.`;
+      const failure = e as Error;
+      const message =
+        usesFreeModel || failure.cause === 424
+          ? failure.message
+          : `${failure.message} The provider may still charge for this attempt.`;
       if (currentBody.current === snapshot) setRunFailure({ key: snapshot, message });
       runFailureToast.current = toast.add({
         title: "Jev run failed",
@@ -389,17 +391,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
             </JevSafetyBanner>
           </div>
           <div className="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-6 p-4">
-            {(runError || saveError || (!validationError && error)) && (
+            {(runError || (!validationError && error)) && (
               <Alert variant="destructive" ref={errorRef} tabIndex={-1}>
-                <AlertTitle>
-                  {runError
-                    ? "Jev run failed"
-                    : saveError
-                      ? "Settings were not saved"
-                      : "Preview needs attention"}
-                </AlertTitle>
+                <AlertTitle>{runError ? "Jev run failed" : "Preview needs attention"}</AlertTitle>
                 <AlertDescription>
-                  {runError || saveError || error}
+                  {runError || error}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="md"
@@ -407,19 +403,37 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                       disabled={
                         busy ||
                         (Boolean(runError) &&
-                          (!enabled || Boolean(validationError) || Boolean(reason))) ||
-                        (Boolean(saveError) && (saving || !valid.success || !info))
+                          (!enabled || Boolean(validationError) || Boolean(reason)))
                       }
                       onClick={() => {
-                        const target =
-                          runError || saveError ? controlsRef.current : noteRef.current;
+                        const target = runError ? controlsRef.current : noteRef.current;
                         target?.focus();
                         if (runError) void run();
-                        else if (saveError) void save();
                         else setRetry((v) => v + 1);
                       }}
                     >
-                      {runError ? "Retry Jev" : saveError ? "Retry save" : "Retry preview"}
+                      {runError ? "Retry Jev" : "Retry preview"}
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            {saveError && (
+              <Alert variant="destructive">
+                <AlertTitle>Settings were not saved</AlertTitle>
+                <AlertDescription>
+                  {saveError}
+                  <div className="flex">
+                    <Button
+                      size="md"
+                      variant="outline"
+                      disabled={busy || saving || !valid.success || !info}
+                      onClick={() => {
+                        controlsRef.current?.focus();
+                        void save();
+                      }}
+                    >
+                      Retry save
                     </Button>
                   </div>
                 </AlertDescription>

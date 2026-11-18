@@ -614,7 +614,7 @@ test("a stored folded panel cannot hide the focused Inspector workspace", async 
   }
 });
 
-test("Save failures survive a later dry response and retry Save without blocking a valid preview", async () => {
+test("settings and preview failures can be reviewed and retried independently", async () => {
   const callsBefore = paidCalls;
   await navigateFixture();
   await waitFor("window.inspectTest.session.getState().hydrated");
@@ -626,6 +626,10 @@ test("Save failures survive a later dry response and retry Save without blocking
       if(String(url)==='/api/lessons/inspect'&&options?.method==='PUT'){
         const failed=++window.saveProbe.calls===1;
         return new Response(JSON.stringify(failed?{error:'QA settings unavailable'}:{saved:true}),{status:failed?503:200,headers:{'content-type':'application/json'}});
+      }
+      if(String(url)==='/api/lessons/inspect'&&options?.method==='POST'&&window.saveProbe.rejectDry){
+        window.saveProbe.rejectDry=false;
+        return Response.json({error:'QA preview unavailable'},{status:503});
       }
       const response=await original(url,options);
       if(String(url)==='/api/lessons/inspect'&&options?.method==='POST')await gate;
@@ -674,6 +678,18 @@ test("Save failures survive a later dry response and retry Save without blocking
     expect(
       await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
     ).toBe(false);
+    await view.evaluate("window.saveProbe.rejectDry=true");
+    await fillNote("Try a second framing note");
+    await waitFor("document.body.textContent.includes('QA preview unavailable')");
+    await clickButton("Review error");
+    expect(await view.evaluate("document.activeElement.textContent")).toContain("Retry preview");
+    await clickButton("Retry preview");
+    await waitFor(
+      "document.querySelector('[data-inspector-result]').textContent.includes('Try a second framing note')",
+    );
+    expect(
+      await view.evaluate("document.body.textContent.includes('QA settings unavailable')"),
+    ).toBe(true);
     await clickButton("Retry save");
     await waitFor(
       "[...document.querySelectorAll('button')].some(b=>b.textContent==='Settings up to date'&&b.disabled)",

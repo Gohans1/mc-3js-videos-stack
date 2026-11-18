@@ -431,7 +431,7 @@ export function LessonColumnView({
               <EmptyDescription>
                 {activeFilter === "film"
                   ? "Create a lesson for this film or select All to see lessons from both scopes."
-                  : "Create a lesson or use Remember on a note to turn it into a lesson."}
+                  : "Create a lesson, or use Remember in Notes to ask AI to keep a rule."}
               </EmptyDescription>
             </EmptyHeader>
             {activeFilter === "film" && hasProject && (
@@ -529,7 +529,7 @@ export function LessonColumnRow({
           aria-current={isActive ? "true" : undefined}
           onClick={(e) => onSelectDir(entry.parts, e.detail > 0)}
           className={cn(
-            "focus-visible:ring-ring studio-press group flex w-full items-center gap-2 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset",
+            "focus-visible:ring-ring studio-press group flex w-full items-center gap-2 text-start outline-none focus-visible:ring-2 focus-visible:transition-none focus-visible:ring-inset",
             "px-2.5 py-2 pointer-coarse:py-3",
             isActive
               ? "bg-primary/14 border-primary/55 text-foreground ms-1 w-[calc(100%-0.25rem)] rounded-s-lg rounded-e-none border border-e-0 font-semibold"
@@ -600,7 +600,7 @@ export function LessonColumnRow({
         data-lesson-row={entry.key}
         aria-current={isActive ? "true" : undefined}
         onClick={(e) => onSelectFile(f.key, matchMeta?.matchLine ?? null, e.detail > 0)}
-        className="focus-visible:ring-ring studio-press flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 ps-2.5 pe-1 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset pointer-coarse:py-3"
+        className="focus-visible:ring-ring studio-press flex min-w-0 flex-1 items-center gap-2 rounded-lg py-2 ps-2.5 pe-1 text-start outline-none focus-visible:ring-2 focus-visible:transition-none focus-visible:ring-inset pointer-coarse:py-3"
       >
         <FileText
           aria-hidden

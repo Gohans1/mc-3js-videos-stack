@@ -26,6 +26,7 @@ def keys(env, file):
 ROUTES = [("OpenCode Zen free", "https://opencode.ai/zen/v1/systemone", "jev-1.13-free", "OPENCODE_API_KEY", "opencode_zen.env"),
           ("OpenRouter (paid)", "https://openrouter.ai/api/v1/systemone", "typesafe/jev-1.14", "OPENROUTER_API_KEY", "openrouter.env")]
 SPEND_CAP = 0.05  # USD per run on a paid route: a run past it stops, as a runaway loop would
+NO_REQUEST_EXIT = 78
 
 
 # Each call is its own process (jev.ts spawns one per question), so when a route's quota is back is kept on disk:
@@ -80,8 +81,9 @@ class Jev:
                 if not self.routes:
                     if self.unavailable:
                         sys.exit(" ".join(self.unavailable.values()))
-                    sys.exit("No API key is configured for the selected Jev provider. Set OPENCODE_API_KEY for OpenCode Zen "
-                             "or OPENROUTER_API_KEY for OpenRouter, then restart Studio or your terminal.")
+                    print("No API key is configured for the selected Jev provider. Set OPENCODE_API_KEY for OpenCode Zen "
+                          "or OPENROUTER_API_KEY for OpenRouter, then restart Studio or your terminal.", file=sys.stderr)
+                    sys.exit(NO_REQUEST_EXIT)
                 route = self.routes[0]
             name, url, model, key, i, n = route
             model = self.options.get("freeModel" if "free" in name else "paidModel") or model
