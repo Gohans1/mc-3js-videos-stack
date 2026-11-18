@@ -420,6 +420,56 @@ const navigateFixture = async (query = "") => {
   await waitFor("document.getElementById('inspect-note-text')");
 };
 
+test("Escape cancels an in-flight pointer-opened Inspector dialog", async () => {
+  await navigateFixture();
+  await waitFor("window.inspectTest.session.getState().hydrated");
+  await view.cdp("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+  });
+  const point = await view.evaluate(`(async () => {
+    [...document.querySelectorAll('details')].find(d => d.querySelector('summary')?.textContent.includes('Advanced settings')).open = true;
+    const trigger = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Clear Inspector cache');
+    trigger.scrollIntoView({block:'center'});
+    window.slowDialogFade = false;
+    document.addEventListener('transitionrun', event => {
+      if (event.propertyName !== 'opacity' || event.target.dataset.slot !== 'dialog-content') return;
+      const transition = event.target.getAnimations().find(animation => animation.transitionProperty === 'opacity');
+      if (!transition) return;
+      transition.playbackRate = 0.02;
+      window.slowDialogFade = true;
+    });
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const rect = trigger.getBoundingClientRect();
+    return {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2};
+  })()`);
+  await view.cdp("Input.dispatchMouseEvent", {
+    ...point,
+    type: "mousePressed",
+    button: "left",
+    buttons: 1,
+    clickCount: 1,
+  });
+  await view.cdp("Input.dispatchMouseEvent", {
+    ...point,
+    type: "mouseReleased",
+    button: "left",
+    buttons: 0,
+    clickCount: 1,
+  });
+  await waitFor("window.slowDialogFade");
+  await view.press("Escape");
+  expect(
+    await view.evaluate(`(async () => {
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return {
+        popup: Boolean(document.querySelector('[data-slot=dialog-content]')),
+        backdrop: Boolean(document.querySelector('[data-slot=dialog-overlay]')),
+        focus: document.activeElement.textContent.trim(),
+      };
+    })()`),
+  ).toEqual({ popup: false, backdrop: false, focus: "Clear Inspector cache" });
+});
+
 test("an oversized preview note keeps its text and identifies the field to shorten", async () => {
   await navigateFixture();
   await fillNote("x".repeat(50_001));
@@ -684,7 +734,7 @@ test("settings and preview failures can be reviewed and retried independently", 
       await view.evaluate("document.querySelector('[aria-label=\"Copy preview\"]').disabled"),
     ).toBe(false);
     await view.evaluate(
-      "window.inspectTest.lessons.setState({inspectorLiveEnabled:true}); window.saveProbe.rejectDry=true",
+      "(()=>{window.inspectTest.lessons.setState({inspectorLiveEnabled:true}); window.saveProbe.rejectDry=true;})()",
     );
     await fillNote("Try a second framing note");
     await waitFor("document.body.textContent.includes('QA preview unavailable')");

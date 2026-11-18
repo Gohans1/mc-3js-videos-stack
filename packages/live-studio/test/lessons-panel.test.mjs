@@ -474,7 +474,8 @@ describe("LessonsPanel rendered component behavior", () => {
   test("the row delete control names the lesson and opens a confirmation dialog", () => {
     const html = renderToStaticMarkup(
       createElement(lessonUiMod.ConfirmDeleteButton, {
-        label: "camera.md (Every film)",
+        path: "camera.md",
+        scope: "all",
         onConfirm: () => {},
       }),
     );

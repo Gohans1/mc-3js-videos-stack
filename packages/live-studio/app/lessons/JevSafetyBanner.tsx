@@ -44,9 +44,7 @@ export function JevSafetyBanner({
               onChange(value);
               toast.add({
                 title: value ? "Jev calls enabled" : "Jev calls off",
-                description: value
-                  ? "Run Jev sends the note, replies and included lesson content to the selected provider."
-                  : "Editing and previewing remain free.",
+                description: value ? undefined : "Editing and previewing remain free.",
                 type: value ? "warning" : "info",
               });
             }}
@@ -66,12 +64,18 @@ export function JevSafetyBanner({
             </p>
           </div>
         </Field>
+        {enabled && (
+          <p id="jev-send-description" className="text-label text-xs/relaxed">
+            Live requests send the note, replies and included lesson content to the provider.
+          </p>
+        )}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {children}
           <Button
             size="md"
             variant={enabled ? "warn" : "secondary"}
             disabled={!enabled || disabled || busy}
+            aria-describedby={enabled ? "jev-mode-description jev-send-description" : undefined}
             onClick={onRun}
           >
             {busy ? "Running Jev…" : "Run Jev"}

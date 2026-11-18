@@ -20,7 +20,7 @@ const popoverContentVariants = cva(
       variant: { default: "gap-4 p-2.5", flush: "gap-0 overflow-hidden p-0" },
       motion: {
         default: "data-open:animate-in data-closed:animate-out motion-reduce:animate-none",
-        instant: "",
+        instant: "transition-none",
       },
     },
     defaultVariants: { variant: "default", motion: "default" },

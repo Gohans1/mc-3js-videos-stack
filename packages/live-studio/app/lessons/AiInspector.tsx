@@ -121,10 +121,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     config.route === "free"
       ? usesFreeModel
         ? "Free model · OpenCode Zen"
-        : "OpenCode Zen only"
+        : "OpenCode Zen may charge"
       : config.route === "paid"
         ? "Paid · OpenRouter"
-        : "May use paid OpenRouter";
+        : "Auto provider may charge";
   const body = useMemo(
     () => ({
       note,

@@ -462,11 +462,7 @@ export function LessonFileView({
             </nav>
           </PopoverContent>
         </Popover>
-        <ConfirmDeleteButton
-          label={displayPath + " (" + SCOPE_LABEL[scope] + ")"}
-          size="icon-lg"
-          onConfirm={onDelete}
-        />
+        <ConfirmDeleteButton path={displayPath} scope={scope} size="icon-lg" onConfirm={onDelete} />
       </div>
       {(oversizedDraft || edit?.failed) && (
         <div className="flex flex-none flex-wrap items-center gap-2 px-3 pb-2">

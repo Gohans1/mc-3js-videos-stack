@@ -646,7 +646,8 @@ export function LessonColumnRow({
         />
       </button>
       <ConfirmDeleteButton
-        label={`${f.path} (${SCOPE_LABEL[f.scope]})`}
+        path={f.path}
+        scope={f.scope}
         revealOnRowHover
         onConfirm={() => onDeleteFile(f.key)}
       />

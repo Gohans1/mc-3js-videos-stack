@@ -184,7 +184,7 @@ export async function inspectLessons(
   const selection = picks
     ? { picks }
     : pool.length
-      ? { why: "dry simulation; no cached result — enable calls and press Run Jev" }
+      ? { why: "dry simulation; no cached lesson matches" }
       : undefined;
   const existingNote = notes.find((n) => n.id === input.note.id);
   const detailNote = {

@@ -35,19 +35,22 @@ export function downloadLessonDrafts(drafts: readonly RecoverableLessonDraft[]) 
 export const SCOPE_LABEL: Record<LessonScope, string> = { film: "This film", all: "Every film" };
 
 export const TEXT = "font-md text-base/[1.6] whitespace-pre-wrap wrap-anywhere [tab-size:4] p-3";
+const LESSON_UNDO_SECONDS = 10;
 
 export function ConfirmDeleteButton({
-  label,
+  path,
+  scope,
   size = "icon-sm",
   revealOnRowHover = false,
   onConfirm,
 }: {
-  label: string;
+  path: string;
+  scope: LessonScope;
   size?: "icon-sm" | "icon-lg";
   revealOnRowHover?: boolean;
   onConfirm: () => void;
 }) {
-  const action = "Delete " + label;
+  const action = `Delete ${path} (${SCOPE_LABEL[scope]})`;
   return (
     <div
       className={cn(
@@ -63,10 +66,13 @@ export function ConfirmDeleteButton({
           <Trash2 size={16} absoluteStrokeWidth aria-hidden />
         </DialogTrigger>
         <DialogContent showCloseButton={false} motion="fade">
-          <DialogTitle>Delete lesson?</DialogTitle>
-          <DialogDescription className="wrap-anywhere">
-            Remove <span className="text-foreground font-medium">{label}</span>. You can undo this
-            from the notification.
+          <DialogTitle variant="multiline">Delete {path}?</DialogTitle>
+          <DialogDescription>
+            {scope === "film"
+              ? "This lesson belongs to this film."
+              : "This lesson is shared across films."}{" "}
+            Undo is available until the notification closes, usually after {LESSON_UNDO_SECONDS}{" "}
+            seconds.
           </DialogDescription>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
@@ -93,16 +99,20 @@ export async function removeLessonWithUndo(key: string, onBeforeRemove?: () => v
     });
     return;
   }
-  showUndo(`Deleted ${path} (${SCOPE_LABEL[scope]})`, () => {
-    void res.restore().then((ok) => {
-      if (!ok) {
-        toast.add({
-          title: "Could not restore lesson",
-          description:
-            "Check the Studio connection and whether a lesson already exists at this path.",
-          type: "error",
-        });
-      }
-    });
-  });
+  showUndo(
+    `Deleted ${path} (${SCOPE_LABEL[scope]})`,
+    () => {
+      void res.restore().then((ok) => {
+        if (!ok) {
+          toast.add({
+            title: "Could not restore lesson",
+            description:
+              "Check the Studio connection and whether a lesson already exists at this path.",
+            type: "error",
+          });
+        }
+      });
+    },
+    LESSON_UNDO_SECONDS * 1000,
+  );
 }

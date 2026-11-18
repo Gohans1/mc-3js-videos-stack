@@ -76,8 +76,9 @@ function DialogOverlay({
         "bg-scrim-strong fixed inset-0 isolate z-50 supports-backdrop-filter:backdrop-blur-xs",
         motion === "fade"
           ? fadeDialog
-          : motion !== "instant" &&
-              "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 duration-100",
+          : motion === "instant"
+            ? "transition-none"
+            : "motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0 duration-100",
         overlayVariants({ variant }),
         className,
       )}
@@ -121,8 +122,9 @@ function DialogContent({
           "bg-popover text-ui/relaxed text-popover-foreground ring-foreground/10 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overscroll-contain rounded-xl border border-transparent p-4 ring-1 outline-none sm:max-w-sm forced-colors:border-[CanvasText]",
           presentation === "fade"
             ? fadeDialog
-            : presentation !== "instant" &&
-                "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100",
+            : presentation === "instant"
+              ? "transition-none"
+              : "motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 duration-100",
           dialogVariants({ variant, font }),
           className,
         )}
@@ -176,6 +178,7 @@ const dialogTitleVariants = cva("", {
     variant: {
       default: "",
       reading: "text-xl outline-none",
+      multiline: "text-title/[1.4] wrap-anywhere",
       compact: "text-xs font-normal",
       workbench: "text-base font-semibold tracking-tight",
     },
