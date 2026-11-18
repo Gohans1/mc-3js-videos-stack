@@ -258,20 +258,27 @@ export async function buildScene(canvas, W, H, draft = false) {
           : null;
     return name ? findTarget({ scene, objects: sceneObjects, bones: steve.bones }, name) : null;
   };
+  const stableAnchorRotation = () => {
+    const forward = V(0, 0, 1).applyQuaternion(steve.g.getWorldQuaternion(new THREE.Quaternion()));
+    return new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), Math.atan2(forward.x, forward.z));
+  };
   const resolveCameraAnchor = (anchor) => {
     const object = anchorObject(anchor);
     if (!object) return null;
     const point = new THREE.Vector3().fromArray(anchor.offset ?? anchor.eye ?? [0, 0, 0]);
-    return anchor.space === "local"
-      ? object.localToWorld(point)
-      : point.add(object.getWorldPosition(new THREE.Vector3()));
+    if (anchor.space === "local") return object.localToWorld(point);
+    if (anchor.space === "view") point.applyQuaternion(stableAnchorRotation());
+    return point.add(object.getWorldPosition(new THREE.Vector3()));
   };
   const moveCameraAnchor = (anchor, point) => {
     const object = anchorObject(anchor);
     if (!object) return null;
     const offset = new THREE.Vector3().fromArray(point);
     if (anchor.space === "local") object.worldToLocal(offset);
-    else offset.sub(object.getWorldPosition(new THREE.Vector3()));
+    else {
+      offset.sub(object.getWorldPosition(new THREE.Vector3()));
+      if (anchor.space === "view") offset.applyQuaternion(stableAnchorRotation().invert());
+    }
     const field = Array.isArray(anchor.eye) && !anchor.target ? "eye" : "offset";
     return { ...anchor, [field]: offset.toArray(), fallback: point };
   };
@@ -473,6 +480,12 @@ export async function buildScene(canvas, W, H, draft = false) {
     cameraSample,
     cameraClock: true,
     moveCameraAnchor,
+    resolveCameraAnchor,
+    cameraAnchors: [
+      { target: "Steve.head", label: "Head" },
+      { target: "Steve.body", label: "Body" },
+      { target: "Steve", label: "Root" },
+    ],
     placed,
     targets: [
       {

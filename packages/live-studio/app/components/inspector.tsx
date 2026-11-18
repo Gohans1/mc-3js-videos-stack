@@ -451,6 +451,7 @@ export function ValueBox({
   min,
   max,
   onSave,
+  onTextSave,
   live,
   onCancel,
   disabled,
@@ -464,6 +465,7 @@ export function ValueBox({
   min?: number;
   max?: number;
   onSave: (v: number) => void;
+  onTextSave?: (s: string) => boolean;
   live?: (v: number) => void;
   onCancel?: () => void;
   disabled?: boolean;
@@ -491,6 +493,7 @@ export function ValueBox({
           disabled={disabled}
           live={live}
           onCancel={onCancel}
+          onTextSave={onTextSave}
           onSave={(v) => v !== undefined && onSave(clamp(v))}
         />
         {unit && (
@@ -549,6 +552,7 @@ export function SliderRow({
   doc,
   preview,
   save,
+  onTextSave,
   nav,
   disabled,
   hint,
@@ -568,6 +572,7 @@ export function SliderRow({
   doc: { snapshot: () => string; restore: (s: string) => void };
   preview: (v: number) => void;
   save: (v: number) => void;
+  onTextSave?: (s: string) => boolean;
   nav?: ReactNode;
   disabled?: boolean;
   hint?: ReactNode;
@@ -633,6 +638,7 @@ export function SliderRow({
           max={max}
           live={previewLive}
           onCancel={cancelLive}
+          onTextSave={onTextSave}
           onSave={commitSave}
           disabled={disabled}
           compact={compact}

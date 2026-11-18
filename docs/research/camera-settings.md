@@ -166,7 +166,7 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | 1 | ID bền vững và hòa giải sửa tay cho keyframe và shot | Qua review và kiểm thử |
 | 2 | Lấy mẫu camera, neo, tách shot, Hold, dán thuộc tính và spline | Qua review và kiểm thử |
 | 3 | Đồng hồ camera khi Freeze và Speed | Qua review và kiểm thử |
-| 4 | CamPanel, lấy nét, chỉnh bố cục và nắn góc | Chờ |
+| 4 | CamPanel, lấy nét, chỉnh bố cục và nắn góc | Qua review và kiểm thử |
 | 5 | Free Cam, đường bay 3D và kiểm tra xuyên tường | Chờ |
 | 6 | Timeline, easing, Graph Editor và thao tác keyframe | Chờ |
 | 7 | Preview, HUD, Guides, so góc và Shotlist | Chờ |
@@ -196,3 +196,13 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Freeze ở shot khác | Key hiện tại các lần phát lại của cùng cảnh và chỉ có một dòng lưu. Kiểm tra thêm, kéo và xóa trực tiếp trong Chrome. |
 | Biên Freeze | Key mới ở cuối Freeze thuộc khung đang chạy tiếp. Dán ở bản chiếu của key mở đầu giữ nguyên mốc gốc. |
 | Hold trong Freeze | Khoảng giữ góc kết thúc trong cùng lần phát camera, kể cả khi không có key ở mép Freeze. |
+
+| Ghi chú đợt 4 | Chi tiết |
+| --- | --- |
+| Quang học | Gõ mm trực tiếp trong FOV, có ống Prime 14–135, khẩu độ, điểm nét, rung, Roll và bob. Giá trị lấy từ shot hiển thị ngay trên key. |
+| Bố cục | Có tọa độ p/l, chọn điểm trên hình, neo, nắn theo trục máy và đổi tiêu cự giữ cỡ chủ thể. |
+| Bảo vệ và chép góc | Khóa key để chặn sửa nhầm. Copy Relative dùng phương của camera đầu và chuyển đường bay sang góc đích. |
+| Chrome | Đã thử gõ 35mm, chọn nét trên mặt vật, giữ neo khi đổi điểm ngắm, đổi 35 sang 85mm, nắn trục, chép góc và chặn xóa key đã khóa. |
+| Neo và chuyển góc | Đọc cảnh tại mốc của key trước khi đổi neo. Chép cả hướng nghiêng tương đối; Chrome xác nhận nguồn 30° → 40° dán từ −20° thành −10°. |
+| Phim cũ | Studio có thể đọc góc đã lấy mẫu tại key khi phim dùng cameraSample và thiếu hàm giải neo. Lưu Free Cam nhớ góc lúc bấm và tính offset ở khung key. |
+| Chép vào neo động | Tính offset tại từng key đích. Chrome tại giây 4,500 render đúng x=7,114 như tọa độ đã lưu. |

@@ -4,6 +4,7 @@
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import { handheld as makeHandheld, type ShakeName, SHAKES } from "film-kit/handheld";
 import { fovOf, mmOf } from "film-kit/lens";
+export { dollyZoom, PRIME_LENSES } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
@@ -95,7 +96,10 @@ type HandheldConfig = {
 };
 
 export type FocusTargetSpec =
-  number | string | { target: string; offset?: readonly [number, number, number] };
+  | number
+  | string
+  | { target: string; offset?: readonly [number, number, number] }
+  | { point: readonly [number, number, number]; label?: string };
 export type FocusValue =
   FocusTargetSpec | { from?: FocusTargetSpec; to?: FocusTargetSpec; u: number };
 
@@ -151,6 +155,8 @@ const normHandheld = (h): HandheldConfig | null => {
 const sameFocus = (a: FocusTargetSpec | undefined, b: FocusTargetSpec | undefined): boolean => {
   if (a === b) return true;
   if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if ("point" in a || "point" in b)
+    return "point" in a && "point" in b && a.point.every((v, i) => v === b.point[i]);
   if (a.target !== b.target) return false;
   const ao = a.offset,
     bo = b.offset;
@@ -158,13 +164,13 @@ const sameFocus = (a: FocusTargetSpec | undefined, b: FocusTargetSpec | undefine
   return !!ao && !!bo && ao[0] === bo[0] && ao[1] === bo[1] && ao[2] === bo[2];
 };
 
-const carryAt = (ks, idx, aspect) => {
+const carryAt = (ks, idx, aspect, start = 0) => {
   let fov = 70,
     fstop = 0,
     focus: FocusTargetSpec | undefined,
     mm: number | undefined,
     hh: HandheldConfig[] = [];
-  for (let m = 0; m <= idx; m++) {
+  for (let m = start; m <= idx; m++) {
     const k = ks[m];
     if (k.mm != null) {
       mm = k.mm;
@@ -181,6 +187,32 @@ const carryAt = (ks, idx, aspect) => {
     }
   }
   return { fov, mm, fstop, focus, hh };
+};
+
+type OpticsKey = Partial<{
+  cut: boolean;
+  t: number;
+  fov: number;
+  mm: number;
+  fstop: number;
+  focus: unknown;
+  handheld: unknown;
+  roll: number;
+  bob: number;
+  wave: number;
+}>;
+
+export const cameraKeyOptics = (keys: readonly OpticsKey[], index: number, aspect = 16 / 9) => {
+  const start = keys.findLastIndex((key, i) => i <= index && key.cut);
+  const { hh, ...lens } = carryAt(keys, index, aspect, Math.max(0, start));
+  const key = keys[index];
+  return {
+    ...lens,
+    handheld: hh.length > 1 ? { mix: hh } : (hh[0] ?? false),
+    roll: key?.roll ?? 0,
+    bob: key?.bob ?? 0,
+    wave: key?.wave ?? 1,
+  };
 };
 
 const sampleHandheld = (cfg: HandheldConfig, scale: number, t: number) => {
@@ -386,6 +418,14 @@ const resolveSingleFocus = (
     const point = basePoint.clone();
     return { distance: Math.max(0.05, camPos.distanceTo(point)), point, label: spec };
   }
+  if ("point" in spec) {
+    const point = new THREE.Vector3(...spec.point);
+    return {
+      distance: Math.max(0.05, camPos.distanceTo(point)),
+      point,
+      label: spec.label ?? "Surface",
+    };
+  }
   const basePoint = resolveTarget(spec.target);
   if (!basePoint) return null;
   const point = basePoint.clone();
@@ -418,7 +458,7 @@ export function resolveFocusDistance(
 }
 
 const isSingleFocus = (f: FocusValue) =>
-  typeof f === "number" || typeof f === "string" || "target" in f;
+  typeof f === "number" || typeof f === "string" || "target" in f || "point" in f;
 
 const pt = new THREE.Vector3();
 // Frustum.intersectsBox is conservative (a box past a frame corner still passes), so a point of a 3x3x3 grid over the

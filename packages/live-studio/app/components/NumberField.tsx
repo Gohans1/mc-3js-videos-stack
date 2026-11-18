@@ -163,6 +163,7 @@ export function NumberField({
   "aria-describedby": describedBy,
   value,
   onSave,
+  onTextSave,
   live,
   onCancel,
   name,
@@ -182,6 +183,7 @@ export function NumberField({
   "aria-describedby"?: string;
   value: number | undefined;
   onSave: (v: number | undefined) => void;
+  onTextSave?: (s: string) => boolean;
   live?: (v: number) => void;
   onCancel?: () => void;
   name: string;
@@ -252,6 +254,7 @@ export function NumberField({
       if (value !== undefined) onSave(undefined);
       return;
     }
+    if (onTextSave?.(s)) return;
     const parsed = evalSum(s);
     if (parsed === null) return;
     const v = clampBound(parsed, min, max);

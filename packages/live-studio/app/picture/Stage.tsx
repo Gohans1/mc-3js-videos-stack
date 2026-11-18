@@ -70,6 +70,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
     loading = useStudio((s) => s.loading),
     error = useStudio((s) => s.error);
   const ink = useStudio((s) => s.ink);
+  const pickingCamera = useStudio((s) => s.cameraPick !== null);
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
     // it alone), then CapCut's Color oscilloscope under it when on
@@ -90,7 +91,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
             ref={bind("canvas")}
             className={cn(
               "absolute inset-0 block size-full touch-none",
-              free ? "cursor-grab" : "cursor-default",
+              pickingCamera ? "cursor-crosshair" : free ? "cursor-grab" : "cursor-default",
             )}
           />
           <canvas

@@ -39,6 +39,8 @@ declare module "film/scene" {
     cameraClock?: true;
     cameraSample?: () => import("./camera/camera-edit").CameraView;
     moveCameraAnchor?: import("./camera/camera-edit").MoveCameraAnchor;
+    resolveCameraAnchor?: import("film-stage/camera").ResolveCameraAnchor;
+    cameraAnchors?: readonly { target: string; label: string }[];
     rig?: THREE.Object3D;
     bones?: Record<string, THREE.Object3D>;
     zoomOf?: (shot: number) => number;

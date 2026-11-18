@@ -61,6 +61,8 @@ export const CAM_KEYS = [
   "l",
   "cut",
   "tailId",
+  "locked",
+  "reason",
   "ease",
   "fov",
   "mm",

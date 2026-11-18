@@ -1,5 +1,7 @@
 // The camera keys' and shots' part of the page state (core/store.ts)
+export type CameraPick = { field: "l" | "focus"; id?: string; t: number };
 export interface CameraSlice {
+  cameraPick: CameraPick | null;
   timing: boolean;
   timingRev: number;
   timingSaved: "busy" | "fail" | null;
@@ -21,6 +23,7 @@ export interface CameraSlice {
   shotsRev: number;
 }
 export const cameraSlice: CameraSlice = {
+  cameraPick: null,
   timing: false,
   timingRev: 0,
   timingSaved: null,

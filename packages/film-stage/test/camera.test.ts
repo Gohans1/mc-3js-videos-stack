@@ -3,7 +3,13 @@ import { expect, test } from "bun:test";
 import { fovOf, mmOf } from "film-kit/lens";
 import * as THREE from "three";
 
-import { cameraAt, onScreenRanges, resolveFocusDistance, SHAKES } from "../src/camera";
+import {
+  cameraAt,
+  cameraKeyOptics,
+  onScreenRanges,
+  resolveFocusDistance,
+  SHAKES,
+} from "../src/camera";
 
 test("camera module re-exports SHAKES from film-kit cleanly", () => {
   expect(SHAKES.length).toBeGreaterThanOrEqual(9);
@@ -387,4 +393,21 @@ test("the authored Anticipate ease backs up along the camera path before moving 
   expect(backward.base.p.x).toBeLessThan(3);
   expect(backward.distance).toBeGreaterThan(cameraAt(1, rows).distance);
   expect(cameraAt(2, rows).base.p.x).toBe(6);
+});
+
+test("camera inspector reads inherited lens, focus and shake from the selected shot", () => {
+  const keys = [
+    { t: 0, mm: 50, fstop: 2.8, focus: 3, handheld: "THE_CLOSEUP" },
+    { t: 1, bob: 0.5 },
+    { t: 2, cut: true },
+  ];
+  expect(cameraKeyOptics(keys, 1)).toMatchObject({ mm: 50, fstop: 2.8, focus: 3, bob: 0.5 });
+  expect(cameraKeyOptics(keys, 2)).toMatchObject({ fov: 70, fstop: 0, handheld: false, bob: 0 });
+});
+
+test("a world focus point stays on the same surface as the camera moves", () => {
+  const focus = { point: [0, 0, -6] as const };
+  const resolve = () => null;
+  expect(resolveFocusDistance(focus, new THREE.Vector3(0, 0, -2), resolve).distance).toBe(4);
+  expect(resolveFocusDistance(focus, new THREE.Vector3(0, 0, -4), resolve).distance).toBe(2);
 });

@@ -2,8 +2,15 @@
 // the camera row or on the playhead, with CapCut's ◁◇▷ (◇ keys the picture as it is) and its lens as slider rows. How the
 // camera gets into a key is Keyframe easing (SpeedPanel.tsx), a shot's In / Out / Combo the Animation tab. Each change is one undo
 // step (Ctrl+Z), shared with the sound
-import { fovOf } from "film-stage/camera";
-import { AudioLines, Hourglass, Scissors, Trash2, Video } from "lucide-react";
+import {
+  AudioLines,
+  Hourglass,
+  LockKeyhole,
+  LockKeyholeOpen,
+  Scissors,
+  Trash2,
+  Video,
+} from "lucide-react";
 import { lazy, Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -17,15 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 
-import {
-  FieldRow,
-  KeyNav,
-  Reset,
-  SaveStatus,
-  Section,
-  Segmented,
-  SliderRow,
-} from "../components/inspector";
+import { FieldRow, KeyNav, Reset, SaveStatus, Section, Segmented } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
 import { Tip } from "../components/Tip";
 import { S } from "../core/state";
@@ -46,23 +45,22 @@ import {
   holdAfter,
   keys,
   movable,
-  preview,
   removeCamKeys,
   removeKey,
   resetLens,
-  restore,
   retime,
   rollable,
   rollCut,
   saveView,
   setKey,
-  setLens,
+  setKeyLocked,
   shotOfCut,
   shownKey,
-  snapshot,
   splitShot,
 } from "./cam";
 import { cameraKeyNavigation } from "./camera-edit";
+import { CameraFraming } from "./CameraFraming";
+import { CameraOptics } from "./CameraOptics";
 import { renameShot, setShotCameraClock, shotsDoc } from "./shots";
 
 const CameraEasePanel = lazy(() =>
@@ -71,7 +69,6 @@ const CameraEasePanel = lazy(() =>
 
 // The shot name field, which the camera row's Rename (CameraTrack.tsx) focuses
 export const SHOT_NAME_ID = "shot-name";
-const camDoc = { snapshot, restore };
 
 function Saved() {
   const saved = useStudio((s) => s.camSaved);
@@ -217,7 +214,6 @@ function TimeField({ i }: { i: number }) {
   );
 }
 
-const DEG = 180 / Math.PI;
 function KeySection() {
   useFrameKey(() => {
     const i = shownKey(S.t);
@@ -240,32 +236,35 @@ function KeySection() {
     seekExact(beforeCut ? key.t - 1e-6 : key.t);
     setKey(index);
   };
-  const canDelete = !!k && (movable(i) || (cut && !!shots && shotOfCut(i) > 0));
-  const lens = (field: "fov" | "roll" | "wave", scale: number) => ({
-    preview: (v: number) =>
-      preview((ks) => {
-        if (field === "fov") delete ks[i].mm;
-        ks[i][field] = v / scale;
-      }),
-    save: (v: number) => setLens(i, field, v / scale),
-  });
+  const canDelete = !!k && !k.locked && (movable(i) || (cut && !!shots && shotOfCut(i) > 0));
   return (
     <Section
       title="Keyframe"
       right={
         <>
           {k && (
+            <Button
+              variant="quiet"
+              size="icon"
+              aria-label={k.locked ? "Unlock camera keyframe" : "Lock camera keyframe"}
+              onClick={() => setKeyLocked(i, !k.locked)}
+            >
+              {k.locked ? <LockKeyhole /> : <LockKeyholeOpen />}
+            </Button>
+          )}
+          {k && (
             <Reset
               label="Reset lens, depth of field, roll and shake"
               disabled={
-                k.fov === undefined &&
-                k.mm === undefined &&
-                k.roll === undefined &&
-                k.wave === undefined &&
-                k.bob === undefined &&
-                k.fstop === undefined &&
-                k.focus === undefined &&
-                k.handheld === undefined
+                !!k.locked ||
+                (k.fov === undefined &&
+                  k.mm === undefined &&
+                  k.roll === undefined &&
+                  k.wave === undefined &&
+                  k.bob === undefined &&
+                  k.fstop === undefined &&
+                  k.focus === undefined &&
+                  k.handheld === undefined)
               }
               onClick={() => resetLens(i)}
             />
@@ -333,47 +332,9 @@ function KeySection() {
             </Tip>
           </div>
           <TimeField i={i} />
-          <SliderRow
-            label="FOV"
-            value={
-              k.fov ??
-              (typeof k.mm === "number"
-                ? Math.round(fovOf(k.mm, S.tools?.camera?.aspect || 16 / 9) * 10) / 10
-                : 70)
-            }
-            min={10}
-            max={120}
-            step={1}
-            digits={0}
-            unit="°"
-            doc={camDoc}
-            {...lens("fov", 1)}
-          />
-          {/* stored in radians, as film-stage turns the picture */}
-          <SliderRow
-            label="Roll"
-            value={Math.round(((k.roll as number | undefined) ?? 0) * DEG * 10) / 10}
-            min={-45}
-            max={45}
-            step={0.5}
-            digits={1}
-            unit="°"
-            origin={0}
-            doc={camDoc}
-            {...lens("roll", DEG)}
-          />
-          <SliderRow
-            label="Sway"
-            value={(k.wave as number | undefined) ?? 1}
-            min={0}
-            max={3}
-            step={0.05}
-            digits={2}
-            unit="×"
-            doc={camDoc}
-            {...lens("wave", 1)}
-            hint="The film's slow drift: 0 holds still, 1 is its own"
-          />
+          {k.reason && <p className="text-muted-foreground text-xs">{k.reason}</p>}
+          <CameraOptics index={i} />
+          <CameraFraming index={i} />
           <div className="flex flex-wrap gap-1.5">
             <Tip
               label={
@@ -386,7 +347,7 @@ function KeySection() {
                 variant="secondary"
                 size="sm"
                 className="h-8"
-                aria-disabled={!free}
+                disabled={!free || !!k.locked}
                 onClick={() => saveView(i)}
               >
                 <Video data-icon="inline-start" />

@@ -17,7 +17,9 @@ export const focusLabel = (f: unknown): string | null =>
       ? f
       : f && typeof f === "object" && "target" in f && typeof f.target === "string"
         ? f.target
-        : null;
+        : f && typeof f === "object" && "point" in f
+          ? ("label" in f && typeof f.label === "string" ? f.label : "Surface")
+          : null;
 
 /** Readable handheld preset summary matching `film-stage/camera`'s normalization rules. */
 export const handheldLabel = (v: unknown): string | null => {

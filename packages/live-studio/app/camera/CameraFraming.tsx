@@ -1,0 +1,232 @@
+import { PRIME_LENSES } from "film-stage/camera";
+import { useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { FieldRow, Section, ValueBox } from "../components/inspector";
+import { NumberField } from "../components/NumberField";
+import { S } from "../core/state";
+import { showError, useStudio } from "../core/store";
+import { seekExact, setPlaying } from "../playback/transport";
+import { cameraKeyFrameTime, keys } from "./cam";
+import {
+  cameraCoordinates,
+  cancelCameraPick,
+  changeCameraCoordinate,
+  copyRelativeCamera,
+  nudgeCamera,
+  pasteRelativeCamera,
+  selectCameraAnchor,
+  startCameraPick,
+  swapCameraLens,
+} from "./camera-framing";
+import type { CameraPick } from "./slice";
+
+const axes = ["X", "Y", "Z"];
+const nudgeAxes = [
+  { id: "right", title: "Truck" },
+  { id: "up", title: "Pedestal" },
+  { id: "forward", title: "Dolly" },
+] as const;
+
+export function CameraFraming({ index: i }: { index: number }) {
+  const key = keys[i];
+  const pick = useStudio((state) => state.cameraPick);
+  const [amount, setAmount] = useState(0.1);
+  const disabled = !!key.locked;
+  const candidates = S.tools?.cameraAnchors ?? [];
+  const anchorItems = [
+    { value: "world", label: "World" },
+    ...candidates.map(({ target, label }) => ({ value: target, label })),
+  ];
+  useEffect(() => () => cancelCameraPick(), [key.id, key.t]);
+  const arm = (field: CameraPick["field"]) => {
+    if (pick?.field === field && pick.id === key.id && pick.t === key.t) {
+      cancelCameraPick();
+      return;
+    }
+    if (S.playing) setPlaying(false);
+    seekExact(cameraKeyFrameTime(i));
+    startCameraPick(i, field);
+  };
+  return (
+    <Section title="Framing">
+      {(["p", "l"] as const).map((field) => {
+        const title = field === "p" ? "Position" : "Aim";
+        const point = key[field];
+        const anchored = !Array.isArray(point);
+        const target = anchored && typeof point.target === "string" ? point.target : null;
+        const targetValue = target ?? (anchored ? "film" : "world");
+        const items = anchorItems.some((item) => item.value === targetValue)
+          ? anchorItems
+          : [...anchorItems, { value: targetValue, label: target ?? "Film anchor" }];
+        const coordinates = cameraCoordinates(point);
+        return (
+          <div key={field} className="flex flex-col gap-1">
+            <FieldRow label={title}>
+              <Select
+                items={items}
+                value={targetValue}
+                disabled={disabled || (!S.tools?.moveCameraAnchor && !anchored)}
+                onValueChange={(value) => {
+                  if (value !== null && value !== "film")
+                    selectCameraAnchor(i, field, value === "world" ? null : value);
+                }}
+              >
+                <SelectTrigger aria-label={title + " anchor"} className="min-w-0 flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {items.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+            {target && (
+              <label className="text-muted-foreground flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={!Array.isArray(point) && point.space === "view"}
+                  disabled={disabled || !S.tools?.moveCameraAnchor}
+                  onChange={(event) =>
+                    selectCameraAnchor(i, field, target, event.target.checked ? "view" : "world")
+                  }
+                />
+                {title} View Offset
+              </label>
+            )}
+            <div className="grid grid-cols-3 gap-1.5">
+              {coordinates.map((value, axis) => (
+                <label
+                  key={axes[axis]}
+                  className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs"
+                >
+                  {axes[axis]}
+                  <NumberField
+                    name={title + (anchored ? " offset " : " ") + axes[axis]}
+                    size="sm"
+                    disabled={disabled}
+                    value={value}
+                    step={0.05}
+                    digits={3}
+                    className="min-w-0"
+                    onSave={(next) => {
+                      if (next !== undefined) changeCameraCoordinate(i, field, axis, next);
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap gap-1.5">
+        <Button
+          variant={pick?.field === "l" ? "default" : "secondary"}
+          size="sm"
+          aria-pressed={pick?.field === "l"}
+          disabled={disabled}
+          onClick={() => arm("l")}
+        >
+          Pick aim point
+        </Button>
+        <Button
+          variant={pick?.field === "focus" ? "default" : "secondary"}
+          size="sm"
+          aria-pressed={pick?.field === "focus"}
+          disabled={disabled}
+          onClick={() => arm("focus")}
+        >
+          Pick focus point
+        </Button>
+      </div>
+      <FieldRow label="Move step">
+        <ValueBox
+          name="Camera move step"
+          min={0.001}
+          max={100}
+          step={0.05}
+          digits={3}
+          unit="m"
+          value={amount}
+          onSave={setAmount}
+          disabled={disabled}
+        />
+      </FieldRow>
+      <div className="grid grid-cols-3 gap-1.5">
+        {nudgeAxes.map(({ id, title }) => (
+          <div key={id} className="text-muted-foreground grid grid-cols-2 gap-1 text-xs">
+            <span className="col-span-2">{title}</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-label={title + " negative"}
+              disabled={disabled}
+              onClick={() => nudgeCamera(i, id, -amount)}
+            >
+              −
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-label={title + " positive"}
+              disabled={disabled}
+              onClick={() => nudgeCamera(i, id, amount)}
+            >
+              +
+            </Button>
+          </div>
+        ))}
+      </div>
+      <FieldRow label="Swap lens">
+        <Select<number>
+          value={null}
+          disabled={disabled}
+          onValueChange={(value) => {
+            if (value !== null) swapCameraLens(i, value);
+          }}
+        >
+          <SelectTrigger aria-label="Swap lens and hold subject size" className="min-w-0 flex-1">
+            <SelectValue placeholder="Keep subject size" />
+          </SelectTrigger>
+          <SelectContent>
+            {PRIME_LENSES.map(({ mm }) => (
+              <SelectItem key={mm} value={mm}>
+                {mm} mm
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FieldRow>
+      <div className="flex flex-wrap gap-1.5">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            void copyRelativeCamera(i).catch(showError);
+          }}
+        >
+          Copy relative
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={disabled}
+          onClick={() => pasteRelativeCamera(i)}
+        >
+          Paste relative
+        </Button>
+      </div>
+    </Section>
+  );
+}

@@ -1,5 +1,6 @@
 // Preview input: a click or tap pins a note, a right-click picks an object or title, and a right drag draws a note.
 // A left drag moves a title or wakes Free Camera from the film view. On a phone the picture is for notes only.
+import { applyCameraPick, cancelCameraPick } from "../camera/camera-framing";
 import { PHONE } from "../core/device";
 import { S } from "../core/state";
 import { get } from "../core/store";
@@ -85,7 +86,11 @@ export const attachPicture = () => {
       return;
     }
     if (step.wokeFree && gesture.kind === "cam_drag" && prev.kind === "wake_press") {
-      if (prev.event && (startPageDrag(prev.event, e, frac(prev.event)) || startTextDrag(prev.event, e, frac(prev.event)))) {
+      if (
+        prev.event &&
+        (startPageDrag(prev.event, e, frac(prev.event)) ||
+          startTextDrag(prev.event, e, frac(prev.event)))
+      ) {
         gesture = IDLE_VIEWPORT_GESTURE;
         hover(null);
         return;
@@ -167,6 +172,16 @@ export const attachPicture = () => {
   addEventListener("pointercancel", cancelPointer);
   canvas.addEventListener("lostpointercapture", cancelPointer);
   canvas.addEventListener("pointerleave", () => hover(null));
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Escape" || !get().cameraPick) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cancelCameraPick();
+    },
+    true,
+  );
   canvas.addEventListener("dblclick", (e) => {
     if (!PHONE && (e.ctrlKey || e.metaKey) && get().text) textDoubleClick(e, frac(e));
   });
@@ -227,6 +242,13 @@ export const attachPicture = () => {
     if (e.button !== 0 || gesture.kind !== "pending_click") return;
     const { x, y } = gesture;
     gesture = IDLE_VIEWPORT_GESTURE;
+    const pick = get().cameraPick;
+    if (pick && Math.hypot(e.clientX - x, e.clientY - y) <= 4) {
+      const [nx, ny] = frac(e);
+      const t = S.t;
+      void render(t, () => applyCameraPick(pick, lookAtClick(nx, ny)));
+      return;
+    }
     const at = tappedAt(x, y, e);
     if (!at) return;
     pinNote(...at, e);

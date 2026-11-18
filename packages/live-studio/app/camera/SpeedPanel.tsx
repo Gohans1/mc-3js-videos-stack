@@ -24,6 +24,12 @@ export function CameraEasePanel() {
       </EmptyCard>
     );
   }
+  if (k.locked)
+    return (
+      <EmptyCard className="mx-3 mt-1" title="Keyframe locked">
+        Unlock it in Camera to change its path or easing.
+      </EmptyCard>
+    );
   const curve = k.motion !== "hold" && Array.isArray(k.ease) ? k.ease : null;
   return (
     <div className="flex flex-col">

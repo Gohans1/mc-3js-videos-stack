@@ -230,6 +230,8 @@ export const Tools = z.looseObject({
   cameraSample: fn.optional(),
   cameraClock: z.literal(true).optional(),
   moveCameraAnchor: fn.optional(),
+  resolveCameraAnchor: fn.optional(),
+  cameraAnchors: z.array(z.object({ target: z.string(), label: z.string() })).optional(),
   // mc-assets/placed.ts makePlaced: what the creator drops into the scene from the Objects library, in one of the film's keyFiles
   placed: z
     .looseObject({
@@ -589,7 +591,8 @@ const FocusTargetObj = z.looseObject({
   target: z.string().min(1),
   offset: z.tuple([z.number(), z.number(), z.number()]).optional(),
 });
-const FocusTarget = z.union([z.number().positive(), z.string().min(1), FocusTargetObj]);
+const FocusPoint = z.object({ point: z.tuple([z.number(), z.number(), z.number()]), label: z.string().optional() });
+const FocusTarget = z.union([z.number().positive(), z.string().min(1), FocusTargetObj, FocusPoint]);
 const HandheldShape = z.looseObject({
   preset: z.string().min(1).optional(),
   kind: z.string().min(1).optional(),
@@ -615,6 +618,8 @@ const CamKey = z.looseObject({
   l: point,
   cut: z.boolean().optional(),
   tailId: z.union([z.literal(false), z.string().min(1)]).optional(),
+  locked: z.boolean().optional(),
+  reason: z.string().optional(),
   ease: Ease.optional(),
   fov: z.number().positive().optional(),
   mm: z.number().positive().optional(),
@@ -626,7 +631,7 @@ const CamKey = z.looseObject({
   bob: z.number().finite().optional(),
   motion: z.enum(["smooth", "linear", "hold", "orbit"]).optional(),
 });
-export const FOCUS_KEYS = Object.keys(FocusTargetObj.shape);
+export const FOCUS_KEYS = [...Object.keys(FocusTargetObj.shape), ...Object.keys(FocusPoint.shape)];
 export const HANDHELD_KEYS = Object.keys(HandheldShape.shape);
 const distinctRowIds = (rows: { id?: string }[]) => unique(rows.flatMap((row) => row.id ?? []));
 export const CamTimeline = z

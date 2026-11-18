@@ -32,15 +32,31 @@ const draw = async (x: number) => {
   }
 };
 let drawing = Promise.resolve();
-export const render = (x: number, readFrame?: () => void) => {
-  // Readback finishes before another queued draw can replace a note's requested picture.
-  const next = drawing.then(async () => {
-    await draw(x);
-    readFrame?.();
-  });
+const queueFrame = (run: () => Promise<void>) => {
+  const next = drawing.then(run);
   drawing = next.catch(() => {});
   return next;
 };
+
+export const render = (x: number, readFrame?: () => void) =>
+  queueFrame(async () => {
+    await draw(x);
+    readFrame?.();
+  });
+
+export const readSceneFrame = (t: number, read: () => void) =>
+  queueFrame(async () => {
+    const free = S.tools?.free;
+    const wasFree = free?.on ?? false;
+    if (free) free.on = false;
+    try {
+      await draw(t);
+      read();
+    } finally {
+      if (free) free.on = wasFree;
+      if (wasFree || t !== S.t) S.dirty = true;
+    }
+  });
 
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
 // The final renderer is built the first time Final quality or Export still frame asks for it, once however often they ask

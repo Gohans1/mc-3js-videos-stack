@@ -1,4 +1,5 @@
 import type { CameraMotion } from "film-stage/camera";
+import { cameraKeyOptics } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
 import { canPlaceCameraCut } from "../../src/camera-clock.mjs";
@@ -15,9 +16,10 @@ import type { Ease } from "../core/ease";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
-import { get, say, set } from "../core/store";
+import { get, say, set, showError } from "../core/store";
 import { r3, SAME, stamp } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
+import { readSceneFrame } from "../picture/render";
 import {
   type CameraFieldGroup,
   cameraTailIndex,
@@ -48,6 +50,8 @@ export interface CamKey {
   motion?: CameraMotion;
   cut?: boolean;
   tailId?: string | false;
+  locked?: boolean;
+  reason?: string;
   ease?: Ease;
   [k: string]: unknown;
 }
@@ -80,7 +84,33 @@ const doc = createTimedDoc<CamKey[]>("cam", {
       setKey(null);
   },
 });
-export const { edit, preview, sourceSnapshot: snapshot, restoreSource: restore } = doc;
+export const { sourceSnapshot: snapshot, restoreSource: restore } = doc;
+const protectLocked = (change: (rows: CamKey[]) => void) => (rows: CamKey[]) => {
+  const locked = rows.filter((key) => key.locked).map((key) => JSON.stringify(key));
+  if (!locked.length) return change(rows);
+  const next = structuredClone(rows);
+  change(next);
+  const after = next.filter((key) => key.locked).map((key) => JSON.stringify(key));
+  if (locked.length === after.length && locked.every((key, i) => key === after[i]))
+    rows.splice(0, rows.length, ...next);
+};
+export const edit: typeof doc.edit = (change, clock) => doc.edit(protectLocked(change), clock);
+export const preview: typeof doc.preview = (change, clock) =>
+  doc.preview(protectLocked(change), clock);
+export const setKeyLocked = (i: number, locked: boolean) =>
+  doc.edit((rows) => {
+    if (locked) rows[i].locked = true;
+    else delete rows[i].locked;
+  });
+export const opticsOfKey = (i: number) => {
+  const rows = doc.source ?? [];
+  const key = keys[i];
+  const at =
+    key?.id === undefined
+      ? rows.findIndex((row) => row.t === (key?.__timing?.source ?? key?.t))
+      : rows.findIndex((row) => row.id === key.id);
+  return cameraKeyOptics(rows, at, S.tools?.camera?.aspect || 16 / 9);
+};
 export const loadCam = async () => {
   set({ cam: !!(await doc.load()) });
 };
@@ -106,7 +136,7 @@ export const room = (i: number): [number, number] => {
   ];
 };
 export const movable = (i: number) =>
-  i > 0 && !!keys[i] && !keys[i].cut && keys[i].__timing?.source !== 0;
+  i > 0 && !!keys[i] && !keys[i].cut && !keys[i].locked && keys[i].__timing?.source !== 0;
 export const setKey = (i: number | null) => {
   set(transitionSelection({ kind: "camKey", index: i }, get().side));
   S.dirty = true;
@@ -169,6 +199,8 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
       delete k.cut;
       delete k.tailId;
       delete k.__timing;
+      delete k.locked;
+      delete k.reason;
       const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
       if (on > 0) {
         const target = ks[on];
@@ -208,11 +240,16 @@ export const retime = (i: number, t: number) => {
   selectPlacement(id, next);
 };
 // fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
-export const setLens = (i: number, field: "fov" | "roll" | "wave", v: number | undefined) =>
+export type LensField = "fov" | "mm" | "fstop" | "roll" | "wave" | "bob";
+export const writeLens = (key: CamKey, field: LensField, value: number | undefined) => {
+  if (field === "fov" && value !== undefined) delete key.mm;
+  if (field === "mm" && value !== undefined) delete key.fov;
+  if (value === undefined) delete key[field];
+  else key[field] = field === "roll" ? Math.round(value * 1e4) / 1e4 : r3(value);
+};
+export const setLens = (i: number, field: LensField, v: number | undefined) =>
   edit((ks) => {
-    if (field === "fov") delete ks[i].mm;
-    if (v === undefined) delete ks[i][field];
-    else ks[i][field] = field === "roll" ? Math.round(v * 1e4) / 1e4 : r3(v);
+    writeLens(ks[i], field, v);
   });
 export const resetLens = (i: number) =>
   edit((ks) => {
@@ -227,11 +264,12 @@ export const setEase = (i: number, ease: Ease | undefined) =>
 export const pasteKeyAttrs = (from: CamKey, to: number[], what: CameraFieldGroup[]) =>
   edit((ks) => {
     for (const i of to) {
-      if (!ks[i]) continue;
+      if (!ks[i] || ks[i].locked) continue;
       copyCameraFields(from, ks[i], movable(i) ? what : what.filter((group) => group !== "speed"));
     }
   });
 export const removeKey = (i: number) => {
+  if (keys[i]?.locked) return say("Unlock this camera keyframe first");
   if (keys[i]?.cut && get().shots) {
     mergeShot(i);
     return;
@@ -262,7 +300,15 @@ export const holdAfter = (i: number, secs = 1) => {
   }
   const id = newRowId();
   edit((ks) => {
-    const { ease: _, cut: __, tailId: _tail, __timing: _timing, ...pose } = structuredClone(ks[i]);
+    const {
+      ease: _,
+      cut: __,
+      tailId: _tail,
+      __timing: _timing,
+      locked: _lock,
+      reason: _reason,
+      ...pose
+    } = structuredClone(ks[i]);
     ks.splice(i + 1, 0, { ...pose, id, t, motion: "hold" });
   });
   selectPlacement(id, t);
@@ -276,7 +322,29 @@ export const shownKey = (t: number) => {
   const k = get().camKey;
   return k !== null && keys[k] ? k : keyAt(t);
 };
-const vectorPoint = (v: { toArray(): number[] }) => v.toArray().map(r3) as [number, number, number];
+export const vectorPoint = (v: { toArray(): number[] }) =>
+  v.toArray().map(r3) as [number, number, number];
+
+export const cameraKeyFrameTime = (i: number) => {
+  const key = keys[i];
+  return !key.cut && keys[i + 1]?.cut && keys[i + 1].t === key.t ? key.t - 1e-6 : key.t;
+};
+export const cameraKeyIsAnchored = (key?: CamKey) =>
+  !!key && (!Array.isArray(key.p) || !Array.isArray(key.l));
+
+export const editCameraKeyInScene = (
+  i: number,
+  needsScene: boolean,
+  change: (index: number, key: CamKey) => void,
+) => {
+  const selected = keys[i];
+  if (!selected || selected.locked) return;
+  if (!needsScene) return change(i, selected);
+  void readSceneFrame(cameraKeyFrameTime(i), () => {
+    const at = keys.findIndex((row) => row.id === selected.id && row.t === selected.t);
+    if (at >= 0 && !keys[at].locked) change(at, keys[at]);
+  }).catch(showError);
+};
 
 const viewFromFree = (): CameraView => {
   const f = S.tools!.free;
@@ -295,6 +363,8 @@ const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: Ca
     ease: _ease,
     motion: _motion,
     __timing: _timing,
+    locked: _locked,
+    reason: _reason,
     ...fields
   } = structuredClone(previous);
   const key: CamKey = { ...fields, ...view, id: newRowId(), t };
@@ -331,13 +401,16 @@ export const saveView = (only?: number) => {
     view = viewFromFree();
   const at = only ?? selectedCameraKeyAt(keys, S.t, get().camKey, SAME);
   if (at >= 0) {
-    const next = structuredClone(keys[at]);
-    if (!withFraming(next, view)) return anchorUnavailable();
-    edit((ks) => {
-      ks[at] = next;
+    if (keys[at].locked) return say("Unlock this camera keyframe first");
+    editCameraKeyInScene(at, cameraKeyIsAnchored(keys[at]), (i, current) => {
+      const next = structuredClone(current);
+      if (!withFraming(next, view)) return anchorUnavailable();
+      edit((ks) => {
+        ks[i] = next;
+      });
+      selectPlacement(next.id, next.t);
+      say("Camera keyframe updated at " + stamp(next.t));
     });
-    setKey(at);
-    say(`Keyframe at ${stamp(keys[at].t)} updated`);
   } else {
     insertKey(t, drawnView(), view);
   }
@@ -352,7 +425,8 @@ export const addKeyHere = () => {
 const tailOf = (i: number) => cameraTailIndex(keys, i, SAME * 2);
 export const shotOfCut = (i: number) =>
   keys[i]?.cut ? SHOTS_OUT.findIndex((s) => Math.abs(s.t - keys[i].t) < SAME) : -1;
-export const rollable = (i: number) => get().shots && shotOfCut(i) > 0;
+export const rollable = (i: number) =>
+  get().shots && shotOfCut(i) > 0 && !keys[i]?.locked && !keys[tailOf(i)]?.locked;
 export const rollRoom = (i: number): [number, number] => {
   const tail = tailOf(i),
     before = keys[(tail >= 0 ? tail : i) - 1];
@@ -385,6 +459,7 @@ const ambiguousCut = (at: number) => {
 };
 
 const rollWith = (i: number, t: number, cam: typeof edit, shots: Apply<ShotRow[]>) => {
+  if (!rollable(i)) return;
   const s = shotOfCut(i),
     tail = tailOf(i),
     [lo, hi] = rollRoom(i),
@@ -472,6 +547,8 @@ export const splitShot = () => {
   const at = i < 0 ? keys.length : i;
   const before = keys[at - 1];
   const reuseKey = !!before && Math.abs(before.t - t) < 1e-6;
+  if (reuseKey && before.locked && clockForTimeline("cam").cameraPicture)
+    return say("Unlock this camera keyframe before splitting at its time");
   const tail = reuseKey
     ? null
     : capturedKey(Math.max(before?.t ?? 0, r3(t - TAIL)), here, before, keys[at]);
@@ -516,6 +593,7 @@ export const splitShot = () => {
 const mergeShot = (i: number) => {
   const s = shotOfCut(i),
     tail = tailOf(i);
+  if (keys[tail]?.locked) return say("Unlock the outgoing keyframe before merging");
   if (s <= 0) {
     say("This cut has no shot of its own in shots.json. Ask the AI in a note");
     return;

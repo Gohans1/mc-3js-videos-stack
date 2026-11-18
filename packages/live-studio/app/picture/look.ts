@@ -53,8 +53,11 @@ export const lookAtClick = (x: number, y: number) => {
   const hit = ray.intersectObjects(tools.scene.children, true).find((h) => {
     if (!(h.object as THREE.Mesh).isMesh || !shown(h.object)) return false;
     const m = firstMaterial(h.object);
-    return !(m.transparent && !m.depthWrite);
+    return !m || !(m.transparent && !m.depthWrite);
   });
   if (!hit) return { what: "empty space" };
-  return { what: whatIs(hit), world: hit.point.toArray().map((v) => +v.toFixed(3)) };
+  return {
+    what: whatIs(hit),
+    world: hit.point.toArray().map((v) => +v.toFixed(3)) as [number, number, number],
+  };
 };
