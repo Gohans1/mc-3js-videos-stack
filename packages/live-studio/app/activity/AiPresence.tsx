@@ -2,7 +2,7 @@
 // the lines before (activity.ts). A line names seconds or a note: clicking it there takes the playhead to them, as any jump
 // the creator asks for; the AI's lines alone never move anything
 import { Bot, Check, CircleX, TriangleAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -132,6 +132,38 @@ function Presence({ className }: { className?: string }) {
     [now, bump] = useNow(hasJobs, last?.seen),
     live = busy(state, now);
   const statusLabel = last ? last.say : live ? "AI working" : "AI idle";
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const idleRef = useRef<HTMLSpanElement>(null);
+  const idleNeedRef = useRef(0);
+  const [compactIdle, setCompactIdle] = useState(false);
+
+  // Collapse the static "AI idle" text before it clips mid-word when Transport's center slot narrows.
+  useLayoutEffect(() => {
+    const btn = triggerRef.current;
+    const slot = btn?.parentElement;
+    if (!btn || !slot) return;
+    const measure = () => {
+      const idle = idleRef.current;
+      if (idle && idle.offsetParent !== null) {
+        const deficit = Math.max(0, Math.ceil(idle.scrollWidth - idle.clientWidth));
+        const needed = Math.ceil(btn.getBoundingClientRect().width) + deficit + 2;
+        if (needed > 0) idleNeedRef.current = needed;
+      }
+      const cs = getComputedStyle(slot);
+      const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const avail = Math.floor(slot.clientWidth - padX);
+      const need = idleNeedRef.current || 100;
+      setCompactIdle((prev) => (prev ? avail < need + 4 : avail < need));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(slot);
+    return () => ro.disconnect();
+  }, [live, last?.id, compactIdle]);
+
+  const showIdleLabel = !live && !last && !compactIdle;
+  const iconOnly = !last && !showIdleLabel;
   return (
     <Popover
       onOpenChange={(open) => {
@@ -148,11 +180,12 @@ function Presence({ className }: { className?: string }) {
           onFocus={bump}
           render={
             <Button
+              ref={triggerRef}
               variant={live ? "ai" : "subtle"}
               size="md"
               aria-label={`${statusLabel} — What the AI is doing`}
               className={cn(
-                "max-w-[min(22rem,36cqw)] min-w-11 shrink overflow-hidden @[900px]:max-w-[min(28rem,44cqw)]",
+                "max-w-[min(22rem,36cqw)] min-w-10 shrink overflow-hidden @[900px]:max-w-[min(28rem,44cqw)]",
                 className,
               )}
             />
@@ -173,18 +206,23 @@ function Presence({ className }: { className?: string }) {
             />
           </span>
           <Bot
-            data-icon="inline-start"
+            data-icon={iconOnly ? undefined : "inline-start"}
             className={cn(live ? "text-ai-text" : "text-muted-foreground")}
           />
-          {!live && !last && (
-            <span className="text-muted-foreground @max-[480px]:hidden">AI idle</span>
+          {showIdleLabel && (
+            <span
+              ref={idleRef}
+              className="text-muted-foreground min-w-0 truncate @max-[680px]:hidden"
+            >
+              AI idle
+            </span>
           )}
           {last && <Outcome key={`o${last.id}`} level={last.level} />}
-          {last && (
+          {last && !compactIdle && (
             <span
               key={last.id}
               className={cn(
-                "motion-safe:animate-in motion-safe:fade-in-0 min-w-0 truncate duration-500 @max-[480px]:hidden",
+                "motion-safe:animate-in motion-safe:fade-in-0 min-w-0 truncate duration-500 @max-[680px]:hidden",
                 live ? "text-foreground" : "text-muted-foreground",
               )}
             >

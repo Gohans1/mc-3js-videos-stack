@@ -1,7 +1,8 @@
 import { Check, RotateCcw } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 
 import { Tip } from "../components/Tip";
 import {
@@ -17,11 +18,44 @@ import { say } from "../core/store";
 export function PendingChangesBar() {
   const pending = useSyncExternalStore(subscribePending, getPendingSnapshot, getPendingSnapshot);
   const [busy, setBusy] = useState(false);
-  if (isAutoSave() || !pending.length) return null;
+  const active = !isAutoSave() && pending.length > 0;
+  const [prevActive, setPrevActive] = useState(active);
+  const [rendered, setRendered] = useState(active);
+  const [open, setOpen] = useState(active);
+  const [shown, setShown] = useState(pending);
 
-  const names = pending.map((p) => p.label).join(", ");
+  if (active && pending !== shown) setShown(pending);
+  if (active !== prevActive) {
+    setPrevActive(active);
+    if (active) setRendered(true);
+    else setOpen(false);
+  }
+
+  useEffect(() => {
+    if (active) {
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => setOpen(true));
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+      };
+    }
+    if (!rendered) return;
+    const delay = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 240;
+    const timer = window.setTimeout(() => setRendered(false), delay);
+    return () => window.clearTimeout(timer);
+  }, [active, rendered]);
+
+  if (!active && !rendered) return null;
+
+  const items = active ? pending : shown;
+  const names = items.map((p) => p.label).join(", ");
+  const draftLabel =
+    items.length === 1 ? `${items[0].label} draft` : `${items.length} unconfirmed · ${names}`;
   const handleConfirm = async () => {
-    if (busy) return;
+    if (busy || !active) return;
     setBusy(true);
     try {
       const ok = await confirmDocs();
@@ -31,7 +65,7 @@ export function PendingChangesBar() {
     }
   };
   const handleRevert = async () => {
-    if (busy) return;
+    if (busy || !active) return;
     setBusy(true);
     try {
       await revertDocs();
@@ -42,41 +76,55 @@ export function PendingChangesBar() {
   };
 
   return (
-    <div
-      role="group"
-      aria-label="Unconfirmed Studio changes"
-      className="bg-warn-card/85 border-warn/45 flex flex-none items-center gap-1 rounded-full border py-0.5 ps-2.5 pe-1"
-    >
-      <Tip
-        label={`Unconfirmed preview changes (not yet written to files so AI can work freely): ${names}`}
+    <Collapsible open={open}>
+      <CollapsibleContent
+        variant="animated"
+        onTransitionEnd={(e) => {
+          if (e.target === e.currentTarget && !active) setRendered(false);
+        }}
       >
-        <span className="text-warn-text text-ui flex items-center gap-1 font-medium whitespace-nowrap">
-          {pending.length === 1 ? `${pending[0].label} draft` : `${pending.length} unconfirmed`}
-        </span>
-      </Tip>
-      <Tip label={`Discard unconfirmed changes (${names}) and revert to files on disk`}>
-        <Button
-          variant="subtle"
-          size="sm"
-          disabled={busy}
-          aria-label="Revert pending changes"
-          onClick={() => void handleRevert()}
+        <div
+          role="group"
+          aria-label="Unconfirmed Studio changes"
+          aria-hidden={!active || undefined}
+          inert={!active || undefined}
+          className="border-hairline-subtle bg-warn-card/55 flex items-center justify-between gap-2 border-b px-3 py-1 @max-[380px]:px-2"
         >
-          <RotateCcw data-icon="inline-start" aria-hidden />
-          Revert
-        </Button>
-      </Tip>
-      <Tip label={`Confirm and write changes to film files (${names})`}>
-        <Button
-          size="sm"
-          disabled={busy}
-          aria-label="Confirm pending changes"
-          onClick={() => void handleConfirm()}
-        >
-          <Check data-icon="inline-start" aria-hidden />
-          Confirm
-        </Button>
-      </Tip>
-    </div>
+          <Tip
+            label={`Unconfirmed preview changes (not yet written to files so AI can work freely): ${names}`}
+          >
+            <span className="text-warn-text text-ui flex min-w-0 items-center gap-1.5 font-medium">
+              <span aria-hidden className="bg-warn size-1.5 shrink-0 rounded-full" />
+              <span className="truncate">{draftLabel}</span>
+            </span>
+          </Tip>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Tip label={`Discard unconfirmed changes (${names}) and revert to files on disk`}>
+              <Button
+                variant="subtle"
+                size="sm"
+                disabled={busy}
+                aria-label="Revert pending changes"
+                onClick={() => void handleRevert()}
+              >
+                <RotateCcw data-icon="inline-start" aria-hidden />
+                Revert
+              </Button>
+            </Tip>
+            <Tip label={`Confirm and write changes to film files (${names})`}>
+              <Button
+                size="sm"
+                disabled={busy}
+                aria-label="Confirm pending changes"
+                onClick={() => void handleConfirm()}
+              >
+                <Check data-icon="inline-start" aria-hidden />
+                Confirm
+              </Button>
+            </Tip>
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
