@@ -110,14 +110,15 @@ export function splitOpticsContext(
 export function redirectOpticsContext(
   shots: ShotRow[],
   from: string,
-  to: string,
+  to: string | (() => string),
   onlyLane?: OpticsLane,
   onlyId?: string,
 ) {
   for (const shot of shots) {
     for (const lane of onlyLane ? [onlyLane] : lanes) {
       for (const [id, key] of Object.entries(shot.optics?.[lane] ?? {})) {
-        if ((!onlyId || id === onlyId) && key.contextOf === from) key.contextOf = to;
+        if ((!onlyId || id === onlyId) && key.contextOf === from)
+          key.contextOf = typeof to === "string" ? to : to();
       }
     }
   }

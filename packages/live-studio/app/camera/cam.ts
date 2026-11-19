@@ -1468,7 +1468,7 @@ const mergeShot = (i: number) => {
               const optics = mergeShotOptics(leftOptics, rightOptics, opticCut, [left.id, removed.id]);
               if (optics) left.optics = optics;
               else delete left.optics;
-              if (removed.id && left.id) redirectOpticsContext(sh, removed.id, left.id);
+              if (removed.id) redirectOpticsContext(sh, removed.id, () => (left.id ??= newRowId()));
               sh.splice(s, 1);
             }),
           edit,

@@ -1299,6 +1299,67 @@ test("Split keeps optics intact when a detached Freeze would split one output ra
   expect(result.status).toContain("separate playback ranges");
 });
 
+test("editing a carried lens key claims it, and Merge redirects its owner through an old shot without an ID", async () => {
+  const ready = await page.evaluate("window.__UX_TEST__.get().ready");
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const optic = { t: 2, value: 80, ease: "linear" };
+    const lane = key => ({ focalLength: { zoom: key } });
+    await u.loadShots([
+      { t: 0, optics: lane({ ...optic, contextOf: "b" }) },
+      { id: "b", t: 3, optics: lane(optic) },
+      { id: "c", t: 6, optics: lane({ ...optic, contextOf: "b" }) },
+    ]);
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 3, p: [2, 2, 6], l: [0, 1, 0], cut: true },
+      { t: 6, p: [4, 2, 6], l: [0, 1, 0], cut: true },
+    ], 0);
+    u.S.tools.cameraOpticsSample = () => ({ mm: 80 });
+    u.set({ side: "cam", ready: true, shotPick: null });
+    u.seekExact(2);
+  })()`);
+  const shot = (i) => `window.__UX_TEST__.shotsData()[${i}]`;
+  const key = (i) => `${shot(i)}?.optics?.focalLength?.zoom`;
+  const panel = `document.querySelector('section[aria-label="Optics tracks"]')`;
+  try {
+    await waitUntil(panel);
+    await page.evaluate(`(() => {
+      const b = (${panel}).querySelector('button[aria-expanded]');
+      if (b.getAttribute('aria-expanded') === 'false') b.click();
+    })()`);
+    const input = `(${panel}).querySelector('input[aria-label="Focal length (mm)"]')`;
+    await waitUntil(input);
+    await page.evaluate(`(() => {
+      const field = ${input};
+      field.focus();
+      const write = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      write.call(field, "50");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.blur();
+    })()`);
+    await waitUntil(`${key(0)}?.value === 50`);
+    expect(await page.evaluate(`${key(0)}.contextOf`)).toBeUndefined();
+    await page.evaluate("window.__UX_TEST__.removeKey(1)");
+    await waitUntil("window.__UX_TEST__.shotsData().length === 2");
+    expect(await page.evaluate(`${key(0)}?.value`)).toBe(50);
+    expect(await page.evaluate(`${key(1)}?.contextOf === ${shot(0)}.id && !!${shot(0)}.id`)).toBe(true);
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.editOpticsLane(u.shotsData()[0], "focalLength", records => { delete records.zoom; });
+      u.removeKey(1);
+    })()`);
+    await waitUntil("window.__UX_TEST__.shotsData().length === 1");
+    expect(await page.evaluate(key(0))).toBeUndefined();
+  } finally {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      delete u.S.tools.cameraOpticsSample;
+      u.set({ ready: ${ready} });
+    })()`);
+  }
+});
+
 test("Camera Graph Equalize samples tracked keys and retains authored positions of muted fixed keys", async () => {
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;

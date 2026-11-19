@@ -208,7 +208,8 @@ function ShotOpticsEditor({ row, shot }: { row: ShotRow; shot: number }) {
     if (!canKeyOpticsHere()) return say("Move to a visible picture frame to edit focal length");
     editOpticsLane(row, "focalLength", (records) => {
       const key = findOpticsKey(opticsKeys(records), time);
-      records[key?.id ?? crypto.randomUUID()] = { ...records[key?.id ?? ""], t: time, value };
+      const { contextOf: _context, ...existing } = records[key?.id ?? ""] ?? {};
+      records[key?.id ?? crypto.randomUUID()] = { ...existing, t: time, value };
     });
   };
   const fallback = opticsOfKey(shownKey(S.t));
