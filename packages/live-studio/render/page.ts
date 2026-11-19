@@ -124,6 +124,11 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     render.tools.free.p.set(px, py, pz);
     render.tools.free.l.set(lx, ly, lz);
   }
+  const hasViewCams = (cfg.stills ?? []).some((s) => s.cam);
+  if (hasViewCams && !render.tools?.free) {
+    log("ERROR VIEWS requires draw.tools.free on the film");
+    return;
+  }
 
   // The film's list of what is going on (draw.describe), over the picture of a draft with LIST=1: one backed box per section,
   // wrapped into a new column when it would run off the bottom. Colours are the studio's
@@ -203,7 +208,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
 
   // Temporal shutter and spatial aperture samples are averaged in linear light.
   let acc = null;
-  const draw = async (frame, samples) => {
+  const draw = async (frame, samples, viewName = null) => {
     const t = frame / FPS;
     ctx.globalAlpha = 1;
     const i = shotAt(t) - 1;
@@ -268,7 +273,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     const x = 14 + ctx.measureText(label).width + F;
     ctx.font = `${Math.round(F * 0.8)}px Consolas, monospace`;
     ctx.fillStyle = "#b8b6ad";
-    let text = `shot ${n - 1}${about ? ` · ${about}` : ""}`;
+    let text = `${viewName ? `view ${viewName} · ` : ""}shot ${n - 1}${about ? ` · ${about}` : ""}`;
     while (text.length > 4 && ctx.measureText(text).width > cfg.W - x - 14)
       text = `${text.slice(0, -2)}…`;
     ctx.fillText(text, x, y);
@@ -277,16 +282,16 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     return out;
   };
 
-  for (const s of cfg.stills ?? []) {
+  const renderStill = async (s) => {
     if (!cfg.crop) {
-      await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
-      continue;
+      await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1, s.view), cfg.quality);
+      return;
     }
     const cam = render.tools?.camera;
     if (!cam?.setViewOffset) {
       log("WARN CROP requires draw.tools.camera on the film; rendering uncropped");
-      await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
-      continue;
+      await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1, s.view), cfg.quality);
+      return;
     }
     const cameras = new Set<OffsettableCamera>([cam]);
     render.tools?.scene?.traverse((object) => {
@@ -295,7 +300,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         cameras.add(candidate as OffsettableCamera);
     });
     const cropped = await withCropViewOffset([...cameras], cfg.W, cfg.H, cfg.crop, async (view) => {
-      const rendered = await draw(s.frame, cfg.stillSamples ?? 1);
+      const rendered = await draw(s.frame, cfg.stillSamples ?? 1, s.view);
       if (view.outWidth === cfg.W && view.outHeight === cfg.H) return rendered;
       const outCrop = document.createElement("canvas");
       outCrop.width = view.outWidth;
@@ -327,6 +332,34 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       return outCrop;
     });
     await still(s.name, cropped, cfg.quality);
+  };
+
+  const free = hasViewCams ? render.tools.free : null;
+  const savedFree = free
+    ? {
+        scalars: Object.fromEntries(Object.entries(free).filter(([k]) => k !== "p" && k !== "l")),
+        p: [free.p.x, free.p.y, free.p.z],
+        l: [free.l.x, free.l.y, free.l.z],
+      }
+    : null;
+  const restoreFree = () => {
+    if (!free || !savedFree) return;
+    Object.assign(free, savedFree.scalars);
+    free.p.set(...savedFree.p);
+    free.l.set(...savedFree.l);
+  };
+  for (const s of cfg.stills ?? []) {
+    if (s.cam && free) {
+      const [px, py, pz, lx, ly, lz, fov] = s.cam;
+      Object.assign(free, { on: true, fov });
+      free.p.set(px, py, pz);
+      free.l.set(lx, ly, lz);
+    }
+    try {
+      await renderStill(s);
+    } finally {
+      if (s.cam) restoreFree();
+    }
   }
 
   // The film in chunks of cfg.clip.chunk seconds, each its own mp4 starting on a keyframe, so render.mjs joins them by stream copy

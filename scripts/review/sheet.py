@@ -1,6 +1,9 @@
 """Contact sheets for self-review, 6 pictures each (3 x 2, 640 wide), in time order.
   bun run sheet                                  every renders/still_*.jpg (make them: AT=1,4 bun run render stills),
                                                  to renders/sheet_<n>.jpg; a draft still carries its time and shot under it
+  bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg]
+                                                 explicit images (.jpg, .jpeg, .png, .webp) into one captioned grid
+                                                 (default renders/sheet_custom.jpg; --out must stay inside the film folder)
   bun run sheet renders/draft_video.mp4 10,20,30  only those seconds of a video, to renders/sheet_<video>_<n>.jpg
   bun run sheet renders/chunks/c02.mp4 62,70     film seconds, as framecheck prints them: a chunk or a span starts at its
                                                  film second by itself (c02: 60 s, span_40-44: 40 s), START=60 for any other
@@ -50,16 +53,153 @@ sys.stdout.reconfigure(encoding="utf8")
 sys.stderr.reconfigure(encoding="utf8")
 
 R = Path.cwd() / "renders"  # run from the film folder
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 args = sys.argv[1:]
 if args[:1] == ["help"] or "-h" in args or "--help" in args:
     print(__doc__)
     raise SystemExit
-flags = [a for a in args if re.match(r"^--?[a-zA-Z]", a)]
 
 
 def usage(why, code=2):
     print(why, file=sys.stderr)
     raise SystemExit(code)
+
+
+def load_caption_font(ImageFont, size=18):
+    for candidate in (
+        "C:/Windows/Fonts/consola.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Menlo.ttc",
+    ):
+        if Path(candidate).is_file():
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:
+                pass
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def build_image_sheet(paths, out_arg):
+    cwd_root = Path.cwd().resolve()
+    raw_out = out_arg if out_arg is not None else "renders/sheet_custom.jpg"
+    if not raw_out.strip():
+        usage("--out path cannot be empty")
+    out_path = Path(raw_out)
+    if not out_path.is_absolute():
+        out_path = cwd_root / out_path
+    resolved_out = out_path.resolve()
+    try:
+        rel_out = resolved_out.relative_to(cwd_root)
+    except ValueError:
+        usage(f"--out must stay inside the current folder ({cwd_root}), got {raw_out!r}")
+    if resolved_out == cwd_root or resolved_out.is_dir():
+        usage(f"--out must name a file inside the current folder, got {raw_out!r}")
+    out_ext = resolved_out.suffix.lower()
+    if out_ext not in IMAGE_EXTS:
+        usage(f"--out must end in .jpg, .jpeg, .png, or .webp, got {raw_out!r}")
+
+    img_paths = []
+    for raw in paths:
+        p = Path(raw)
+        if p.suffix.lower() not in IMAGE_EXTS:
+            usage(f"unsupported image {raw}: expected .jpg, .jpeg, .png, or .webp")
+        if p.is_dir():
+            usage(f"{raw} is a folder, not an image")
+        if not p.is_file():
+            usage(f"no image file {raw}")
+        img_paths.append(p)
+
+    try:
+        from PIL import Image, ImageDraw, ImageFont, ImageOps
+    except ImportError as e:
+        usage(f"Pillow (PIL) is required for image contact sheets: {e}", 1)
+
+    loaded = []
+    for p in img_paths:
+        try:
+            with Image.open(p) as im:
+                im = ImageOps.exif_transpose(im)
+                if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+                    rgba = im.convert("RGBA")
+                    bg = Image.new("RGBA", rgba.size, (20, 20, 24, 255))
+                    im = Image.alpha_composite(bg, rgba).convert("RGB")
+                else:
+                    im = im.convert("RGB")
+                loaded.append((p, im))
+        except (OSError, ValueError) as e:
+            usage(f"could not read image {p}: {e}")
+
+    n = len(loaded)
+    if n <= 3:
+        cols = n
+    elif n == 4:
+        cols = 2
+    elif n <= 9:
+        cols = 3
+    elif n <= 16:
+        cols = 4
+    else:
+        cols = min(6, math.ceil(math.sqrt(n)))
+    rows = math.ceil(n / cols)
+
+    first_w, first_h = loaded[0][1].size
+    tile_w = 640
+    tile_h = max(120, min(960, round(tile_w * first_h / max(1, first_w) / 2) * 2))
+    caption_h = 34
+    gap = 4
+    cell_h = tile_h + caption_h
+    sheet_w = cols * tile_w + (cols + 1) * gap
+    sheet_h = rows * cell_h + (rows + 1) * gap
+
+    canvas = Image.new("RGB", (sheet_w, sheet_h), (10, 10, 12))
+    draw = ImageDraw.Draw(canvas)
+    font = load_caption_font(ImageFont, 18)
+
+    for idx, (p, im) in enumerate(loaded):
+        col, row = idx % cols, idx // cols
+        x0 = gap + col * (tile_w + gap)
+        y0 = gap + row * (cell_h + gap)
+        draw.rectangle([x0, y0, x0 + tile_w - 1, y0 + tile_h - 1], fill=(18, 18, 22))
+        iw, ih = im.size
+        scale = min(tile_w / max(1, iw), tile_h / max(1, ih))
+        nw = max(1, round(iw * scale))
+        nh = max(1, round(ih * scale))
+        resized = im.resize((nw, nh), Image.Resampling.LANCZOS)
+        px = x0 + (tile_w - nw) // 2
+        py = y0 + (tile_h - nh) // 2
+        canvas.paste(resized, (px, py))
+
+        cap_y0 = y0 + tile_h
+        draw.rectangle([x0, cap_y0, x0 + tile_w - 1, cap_y0 + caption_h - 1], fill=(18, 18, 22))
+        label = p.stem
+        max_text_w = tile_w - 16
+        if draw.textlength(label, font=font) > max_text_w:
+            while len(label) > 1 and draw.textlength(label + "...", font=font) > max_text_w:
+                label = label[:-1]
+            label = label + "..."
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_h = bbox[3] - bbox[1]
+        ty = cap_y0 + (caption_h - text_h) // 2 - bbox[1]
+        draw.text((x0 + 8, ty), label, fill=(240, 240, 240), font=font)
+
+    resolved_out.parent.mkdir(parents=True, exist_ok=True)
+    if out_ext in (".jpg", ".jpeg"):
+        canvas.save(resolved_out, format="JPEG", quality=92, optimize=True)
+    elif out_ext == ".png":
+        canvas.save(resolved_out, format="PNG")
+    else:
+        canvas.save(resolved_out, format="WEBP", quality=92)
+    rel_display = rel_out.as_posix()
+    tell(Path.cwd(), f"Laid out {n} image{'s' if n != 1 else ''} to {rel_display}")
+    print(f"{rel_display}  {', '.join(p.stem for p in img_paths)}")
+    print(f"{n} {'picture' if n == 1 else 'pictures'} -> {rel_display}")
+    print("next: open it to look")
 
 
 def cuts_of(context):
@@ -69,9 +209,43 @@ def cuts_of(context):
     return sorted(set(cuts["times"]))
 
 
-USE = "bun run sheet, or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
-if flags:
-    usage(f"unknown option {flags[0]}: {USE}")
+USE = "bun run sheet, bun run sheet <img1> [<img2> ...] [--out <path>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
+pos = []
+out_arg = None
+i = 0
+while i < len(args):
+    a = args[i]
+    if a == "--out":
+        if out_arg is not None:
+            usage("--out may only be passed once")
+        if i + 1 >= len(args) or re.match(r"^--?[a-zA-Z]", args[i + 1]):
+            usage("--out needs a path: bun run sheet img1.jpg img2.jpg --out renders/grid.jpg")
+        out_arg = args[i + 1]
+        i += 2
+        continue
+    if a.startswith("--out="):
+        if out_arg is not None:
+            usage("--out may only be passed once")
+        out_arg = a.split("=", 1)[1]
+        if not out_arg:
+            usage("--out needs a path: bun run sheet img1.jpg img2.jpg --out renders/grid.jpg")
+        i += 1
+        continue
+    if re.match(r"^--?[a-zA-Z]", a):
+        usage(f"unknown option {a}: {USE}")
+    pos.append(a)
+    i += 1
+
+is_image_list = bool(pos) and (
+    Path(pos[0]).suffix.lower() in IMAGE_EXTS
+    or (len(pos) > 1 and any(Path(a).suffix.lower() in IMAGE_EXTS for a in pos))
+)
+if is_image_list:
+    build_image_sheet(pos, out_arg)
+    raise SystemExit
+if out_arg is not None:
+    usage("--out is only for image lists: bun run sheet img1.jpg img2.jpg --out renders/grid.jpg")
+args = pos
 mode = args[1] if len(args) >= 2 and args[1] in ("shots", "cut", "overview", "frames") else ""
 if len(args) == 1 and not Path(args[0]).exists() and not re.fullmatch(r"[\d.,:]+", args[0]):
     usage(f"no {args[0]}: bun run sheet <video> 10,20.5,30, a video from renders/ (bun run render clip makes one)")

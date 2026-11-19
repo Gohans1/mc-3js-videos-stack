@@ -70,6 +70,9 @@ Nothing is written outside the film. Options are environment variables:
   RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
+  VIEWS="a:px,py,pz,lx,ly,lz,fov;b:..."  stills/poster only: batch multiple named cameras in one Chrome boot to
+                             renders/view_<name>_<s>s.jpg (.png for poster), keeping existing still_*.jpg and other
+                             view_*.jpg; also accepts VIEWS=@views.json ({ name: [7 nums] } or [{ name, cam }])
   CROP=x,y,w,h               stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
   COMPARE=1  or  --compare   stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
@@ -106,6 +109,7 @@ const ENV_OPTIONS = [
   "CHUNKS",
   "SPAN",
   "INSPECT",
+  "VIEWS",
   "CHECK",
   "ENTRY",
   "SAMPLES",
@@ -170,13 +174,17 @@ const misplaced =
                     ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
                     : video && process.env.CROP !== undefined
                       ? "CROP is for render stills or poster"
-                      : (video || what === "captions") && compare
-                        ? "COMPARE is for render stills or poster"
-                        : what === "captions"
-                          ? ["AT", "LIST", "CHECK", "INSPECT", "ENTRY", "CROP"]
-                              .filter((k) => process.env[k] !== undefined)
-                              .map((k) => `${k} does nothing for render captions`)[0]
-                          : null;
+                      : video && process.env.VIEWS !== undefined
+                        ? "VIEWS is for render stills or poster"
+                        : process.env.INSPECT && process.env.VIEWS !== undefined
+                          ? "INSPECT and VIEWS cannot be used together: use one or the other"
+                          : (video || what === "captions") && compare
+                            ? "COMPARE is for render stills or poster"
+                            : what === "captions"
+                              ? ["AT", "LIST", "CHECK", "INSPECT", "VIEWS", "ENTRY", "CROP"]
+                                  .filter((k) => process.env[k] !== undefined)
+                                  .map((k) => `${k} does nothing for render captions`)[0]
+                              : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -304,6 +312,85 @@ if (inspect && inspect.length !== 7) {
   console.error(`INSPECT takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${inspect.length}`);
   process.exit(2);
 }
+const VIEW_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$/;
+const parseViews = (raw, projectDir) => {
+  const fail = (why) => {
+    console.error(`VIEWS: ${why}`);
+    process.exit(2);
+  };
+  const validateEntry = (name, cam, seen, label) => {
+    if (typeof name !== "string" || !VIEW_NAME.test(name))
+      fail(
+        `invalid view name ${JSON.stringify(name)} (${label}): use 1-48 chars matching ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$`,
+      );
+    const key = name.toLowerCase();
+    if (seen.has(key)) fail(`duplicate view name ${JSON.stringify(name)}`);
+    seen.add(key);
+    if (!Array.isArray(cam) || cam.length !== 7)
+      fail(
+        `view ${JSON.stringify(name)} takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${Array.isArray(cam) ? cam.length : typeof cam}`,
+      );
+    for (let i = 0; i < 7; i++) {
+      if (typeof cam[i] !== "number" || !Number.isFinite(cam[i]))
+        fail(
+          `view ${JSON.stringify(name)} item ${i + 1} must be a finite number, got ${JSON.stringify(cam[i])}`,
+        );
+    }
+    if (!(cam[6] > 0 && cam[6] < 180))
+      fail(`view ${JSON.stringify(name)} fov must be between 0 and 180 (exclusive), got ${cam[6]}`);
+    return { name, cam };
+  };
+  const text = String(raw ?? "").trim();
+  if (!text)
+    fail('empty spec; use VIEWS="name:px,py,pz,lx,ly,lz,fov;..." or VIEWS=@path/to/views.json');
+  const seen = new Set();
+  if (text.startsWith("@")) {
+    const fileSpec = text.slice(1).trim();
+    if (!fileSpec) fail("@ requires a JSON file path, e.g. VIEWS=@views.json");
+    const filePath = resolve(projectDir, fileSpec);
+    if (!statSync(filePath, { throwIfNoEntry: false })?.isFile())
+      fail(`file not found: ${fileSpec}`);
+    let data;
+    try {
+      data = JSON.parse(readFileSync(filePath, "utf8"));
+    } catch (e) {
+      fail(`${fileSpec} is not valid JSON (${e.message})`);
+    }
+    if (Array.isArray(data)) {
+      if (!data.length) fail(`${fileSpec} has no views`);
+      return data.map((item, idx) => {
+        if (!item || typeof item !== "object" || Array.isArray(item))
+          fail(`${fileSpec} item ${idx + 1} must be { "name": "...", "cam": [7 numbers] }`);
+        return validateEntry(item.name, item.cam, seen, `${fileSpec} item ${idx + 1}`);
+      });
+    }
+    if (data && typeof data === "object") {
+      const entries = Object.entries(data);
+      if (!entries.length) fail(`${fileSpec} has no views`);
+      return entries.map(([name, cam]) => validateEntry(name, cam, seen, fileSpec));
+    }
+    fail(`${fileSpec} must be a JSON object { name: [7 numbers] } or array [{ name, cam }]`);
+  }
+  const trimmed = text.replace(/;\s*$/, "");
+  if (!trimmed)
+    fail('empty spec; use VIEWS="name:px,py,pz,lx,ly,lz,fov;..." or VIEWS=@path/to/views.json');
+  return trimmed.split(";").map((rawPart, idx) => {
+    const part = rawPart.trim();
+    const colon = part.indexOf(":");
+    if (colon < 0)
+      fail(`item ${idx + 1} (${JSON.stringify(part)}) must be <name>:px,py,pz,lx,ly,lz,fov`);
+    const name = part.slice(0, colon).trim();
+    const coords = part
+      .slice(colon + 1)
+      .split(",")
+      .map((x) => {
+        const t = x.trim();
+        return t === "" ? NaN : Number(t);
+      });
+    return validateEntry(name, coords, seen, `item ${idx + 1}`);
+  });
+};
+const views = env.VIEWS !== undefined ? parseViews(env.VIEWS, PROJECT) : null;
 let crop = null;
 if (env.CROP !== undefined) {
   try {
@@ -318,7 +405,7 @@ const at =
   what === "clip" || what === "final"
     ? []
     : env.AT === undefined
-      ? env.CHECK
+      ? env.CHECK && !views
         ? []
         : [1]
       : env.AT.split(",").map((x, i) => secondArg(`AT item ${i + 1}`, x));
@@ -432,7 +519,7 @@ const preservePrev = (fileName) => {
   copyFileSync(src, join(prevDir, fileName));
 };
 // bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
-if (at.length && what !== "poster" && existsSync(RENDERS))
+if (at.length && what !== "poster" && !views && existsSync(RENDERS))
   for (const f of readdirSync(RENDERS))
     if (/^still_.*\.jpg$/.test(f)) {
       preservePrev(f);
@@ -496,10 +583,19 @@ const cfg = {
   ratio,
   draft: !full,
   quality: 0.9,
-  stills: at.map((s) => ({
-    name: what === "poster" ? `poster_${s}s.png` : `still_${s}s.jpg`,
-    frame: Math.round(s * FPS),
-  })),
+  stills: views
+    ? views.flatMap((v) =>
+        at.map((s) => ({
+          name: `view_${v.name}_${s}s.${what === "poster" ? "png" : "jpg"}`,
+          frame: Math.round(s * FPS),
+          view: v.name,
+          cam: v.cam,
+        })),
+      )
+    : at.map((s) => ({
+        name: what === "poster" ? `poster_${s}s.png` : `still_${s}s.jpg`,
+        frame: Math.round(s * FPS),
+      })),
   stillSamples: what === "poster" ? samples : 1,
   clip: video
     ? {
@@ -539,7 +635,7 @@ const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/pag
 const t0 = Date.now();
 // the creator's studio shows the render busy, its build too, until the line at the end, or until this process is gone (src/tell.mjs)
 const ended = await startJob(PROJECT, `render ${what}`, {
-  say: `Rendering ${what}${span ? ` ${span[0]}-${span[1]} s` : at.length ? ` at ${at.join(", ")} s` : ""}`,
+  say: `Rendering ${what}${views ? ` (${views.length} view${views.length > 1 ? "s" : ""})` : ""}${span ? ` ${span[0]}-${span[1]} s` : at.length ? ` at ${at.join(", ")} s` : ""}`,
   ...(span ? { at: span[0], to: span[1] } : at.length ? { at: at[0] } : {}),
 });
 // Of the sound timeline only the narration clips change a frame (the mouths follow them, src/lips.ts) and LIST=1's overlay
@@ -864,9 +960,15 @@ for (const profile of profiles)
 rmSync(OUT, { recursive: true, force: true });
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 const posterView = crop ? computeCropView(W, H, crop) : { outWidth: W, outHeight: H };
+const nextHint =
+  views && stillsWritten.length > 1
+    ? `; contact sheet: bun run sheet ${stillsWritten.join(" ")}`
+    : stillsWritten.filter((f) => f.includes("/still_")).length > 1
+      ? "; many stills at once: bun run sheet (6 to a picture)"
+      : "";
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
+    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
   );
 if (!failed && compare && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
