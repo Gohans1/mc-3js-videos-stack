@@ -456,7 +456,9 @@ export async function buildScene(canvas, W, H, draft = false) {
       {
         head: "EDIT HERE",
         lines: [
-          { text: "src/timeline/steve.json · cam.json · src/edit.json light/look · src/world.ts" },
+          {
+            text: "src/timeline/steve.json · cam.json · lights.json · src/edit.json light/look · src/world.ts",
+          },
         ],
       },
     ];
