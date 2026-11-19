@@ -252,6 +252,7 @@ export function Transport() {
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
     <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 flex-col overflow-hidden rounded-b-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2">
       {review && <ReviewScrubBar />}
+      <PendingChangesBar />
       <div className="flex min-w-0 items-center gap-1.5 px-3 py-1 @max-[380px]:gap-1 @max-[380px]:px-2">
         <Button
           variant="secondary"
@@ -340,9 +341,8 @@ export function Transport() {
             </Button>
           </Tip>
         )}
-        <div className="upright:hidden sideways:hidden flex min-w-0 flex-1 items-center justify-center gap-1.5 px-1 @max-[560px]:justify-end">
-          <PendingChangesBar />
-          <AiPresence className="max-w-full min-w-0" />
+        <div className="upright:hidden sideways:hidden flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden px-1 @max-[560px]:justify-end">
+          <AiPresence className="max-w-full" />
         </div>
         <div className="upright:ml-0 sideways:ml-0 ms-auto flex flex-none items-center gap-0.5">
           <ClipExport className="@max-[420px]:hidden pointer-coarse:hidden" />
