@@ -4,6 +4,8 @@ import { test } from "node:test";
 import { ANIMS } from "film-stage/animate";
 
 import {
+  animationOccurrenceClock,
+  animationTrimDuration,
   animBandOnSegment,
   animSlotMetrics,
   applyAnimDuration,
@@ -18,6 +20,7 @@ import {
   syncPairedOption,
   tidyAnimSet,
 } from "../app/camera/anim-math.ts";
+import { compileCameraClock } from "../src/camera-clock.mjs";
 import { compileTiming, playRanges } from "../src/timing.mjs";
 
 const fxOf = (slot, id) => ANIMS[slot].find((x) => x.id === id);
@@ -214,6 +217,36 @@ test("syncPairedOption propagates curve, flip and optics across paired cuts with
     canLinkSeamPair({ fx: "flashCut" }, fxOf("out", "flashCut"), { fx: "push" }, "flashCut"),
     false,
   );
+});
+
+test("a delayed animation band follows the independent camera through a picture Freeze", () => {
+  const picture = compileTiming({ freezes: [{ at: 0.5, duration: 2 }] }, 6);
+  const camera = compileCameraClock(picture, [{ t: 0, cameraClock: "output" }, { t: 3 }]);
+  const [occurrence] = camera.cameraSpans;
+  const clock = animationOccurrenceClock(picture, occurrence);
+  const shot = [0, 3];
+  const anim = { in: { fx: "zoomIn", len: 1.1, delay: 0.5 } };
+  const m = animSlotMetrics(shot, clock, anim);
+  const band = animBandOnSegment(shot, clock, m, occurrence, "in");
+  assert.ok(Math.abs(band.from - 5 / 6) < 1e-6);
+  assert.ok(Math.abs(band.to - 8 / 3) < 1e-6);
+  assert.ok(band.from < 1.5 && band.to < 3.2);
+  const duration = animationTrimDuration("in", 3, m.inSpan[0], 0.5, clock);
+  assert.equal(applyAnimDuration(shot, clock, anim, "in", duration).in.len, 1.3);
+});
+
+test("a delayed trim handle edits the unshifted length on either side of a speed change", () => {
+  const span = [0, 4];
+  const anim = { in: { fx: "push", len: 1, delay: 0.5 } };
+  assert.equal(animationTrimDuration("in", 1.52, 0, 0.5, null), 1.02);
+  assert.equal(animationTrimDuration("out", 3.48, 4, 0.5, null), 1.02);
+  const clock = compileTiming({ speeds: [{ from: 0, to: 1, rate: 2 }] }, 4);
+  const m = animSlotMetrics(span, clock, anim);
+  const handleAt = animBandOnSegment(span, clock, m, playRanges(clock, 0, 4).at(-1), "in").handleAt;
+  assert.equal(handleAt, 1);
+  assert.equal(animationTrimDuration("in", handleAt, m.inSpan[0], 0.5, clock), m.inLen);
+  const moved = animationTrimDuration("in", handleAt + 0.2, m.inSpan[0], 0.5, clock);
+  assert.equal(applyAnimDuration(span, clock, anim, "in", moved).in.len, 1.2);
 });
 
 test("animSlotMetrics & applyAnimDuration fit overlapping In+Out proportionally and map 2x speed & freezes via timingClock", () => {

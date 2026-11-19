@@ -606,6 +606,8 @@ const HandheldShape = z.looseObject({
   speed: z.number().positive().optional(),
   move: z.number().nonnegative().optional(),
   offset: z.number().optional(),
+  desync: z.number().optional(),
+  octaves: z.number().int().min(1).max(4).optional(),
 });
 const HandheldObj = HandheldShape.refine(
   (h: any) => typeof h.preset === "string" || typeof h.kind === "string",
@@ -626,6 +628,8 @@ const CamKey = z.looseObject({
   tailId: z.union([z.literal(false), z.string().min(1)]).optional(),
   locked: z.boolean().optional(),
   reason: z.string().optional(),
+  muted: z.boolean().optional(),
+  color: z.enum(["amber", "blue", "green", "pink"]).optional(),
   ease: Ease.optional(),
   easeChannels: z.object({ position: Ease.optional(), aim: Ease.optional(), lens: Ease.optional(), dof: Ease.optional(), roll: Ease.optional(), shake: Ease.optional() }).optional(),
   fov: z.number().positive().optional(),
@@ -658,7 +662,8 @@ export const CamTimeline = z
 const AnimFx = z.looseObject({
   fx: z.string().min(1),
   len: z.number().positive().optional(),
-  k: z.number().positive().optional(),
+  k: z.number().optional(),
+  delay: z.number().finite().optional(),
   curve: Ease.optional(),
   flip: z.boolean().optional(),
   optics: unit.optional(),
@@ -811,6 +816,8 @@ export const AdjustmentTimeline = z
 const ShotHit = z.looseObject({
   t: secs,
   amount: z.number().nonnegative(),
+  fovPulse: z.number().optional(),
+  source: z.literal("beat").optional(),
   decay: z.number().positive().optional(),
   freq: z.number().positive().optional(),
   max: z

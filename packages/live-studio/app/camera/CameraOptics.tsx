@@ -199,16 +199,19 @@ export function CameraOptics({ index: i }: { index: number }) {
             { field: "move", title: "Handheld translation", min: 0, unit: "×" },
             { field: "speed", title: "Handheld speed", min: 0.01, unit: "×" },
             { field: "offset", title: "Handheld offset", min: undefined, unit: "s" },
+            { field: "desync", title: "Handheld DeSync", min: undefined, unit: "s" },
+            { field: "octaves", title: "Handheld octaves", min: 1, unit: "" },
           ] as const
         ).map(({ field, title, min, unit }) => (
           <FieldRow key={field} label={title}>
             <ValueBox
               name={title}
-              value={shake[field]}
+              value={shake[field] ?? (field === "octaves" ? 1 : 0)}
               disabled={disabled}
               min={min}
-              step={0.1}
-              digits={2}
+              max={field === "octaves" ? 4 : undefined}
+              step={field === "octaves" ? 1 : 0.1}
+              digits={field === "octaves" ? 0 : 2}
               unit={unit}
               onSave={(value) =>
                 edit((rows) => {

@@ -62,6 +62,8 @@ export const CAM_KEYS = [
   "cut",
   "tailId",
   "locked",
+  "muted",
+  "color",
   "reason",
   "ease",
   "easeChannels",
@@ -80,7 +82,7 @@ export const CAM_KEYS = [
 export const SHOT_KEYS = ["id", "t", "cameraClock", "camera", "shutter", "continuityAxis", "name", "anim", "transition", "adjust", "hits"];
 export const SHOT_SLOT_KEYS = [
   ...["in", "out", "combo"].flatMap((s) =>
-    ["fx", "len", "k", "curve", "flip", "optics", "seam"].map((k) => `anim.${s}.${k}`),
+    ["fx", "len", "k", "delay", "curve", "flip", "optics", "seam"].map((k) => `anim.${s}.${k}`),
   ),
   ...["fx", "len", "ease", "feather", "flip", "props"].map((k) => `transition.${k}`),
 ];

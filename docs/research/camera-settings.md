@@ -168,9 +168,11 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | 3 | Đồng hồ camera khi Freeze và Speed | Qua review và kiểm thử |
 | 4 | CamPanel, lấy nét, chỉnh bố cục và nắn góc | Qua review và kiểm thử |
 | 5 | Free Cam, đường bay 3D và kiểm tra xuyên tường | Qua review và kiểm thử |
-| 6 | Timeline, easing, Graph Editor và thao tác keyframe | Đã kiểm thử, chờ review |
-| 7 | Preview, HUD, Guides, so góc và Shotlist | Chờ |
-| 8 | Quang học khi xuất, hiệu ứng, recipe và Take | Chờ |
+| 6 | Timeline, easing, Graph Editor và thao tác keyframe | Qua review và kiểm thử |
+| 7 | Preview, HUD, Guides, so góc và Shotlist | Qua review và kiểm thử |
+| 8 | Rig theo shot, chỉnh khung, shutter và khẩu độ khi xuất | Qua review và kiểm thử |
+| 9 | Beat, Animation, nhãn key, chỉnh nhiều key và Take | Qua review và kiểm thử |
+| 10 | Tay nắm 3D, đường ray, ngoại suy, chiếu song song và bản đồ | Chờ |
 
 | Ghi chú đợt 1 | Chi tiết |
 | --- | --- |
@@ -246,3 +248,14 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Kiểm chứng sau review | Fit Box chứa đủ chủ thể với Lens Shift 80%. FOV dọc 46° ở khung 9:16 hiện 23,9 mm ở cả HUD và ô nhập. |
 | Đồng hồ và 1-node | Lookahead lấy thời gian thế giới từ đoạn xuất đang chạy. Truck dịch chân máy 1 m ở 1-node và giữ nguyên cam.json. |
 | Xuất kiểm tra | Poster 1920×1080 dùng 4 mốc shutter × 4 mẫu khẩu độ. Cả 16 lượt đã đến hàm draw(t). |
+
+| Ghi chú đợt 9 | Chi tiết |
+| --- | --- |
+| Beat | Bốn beat đã đánh dấu tạo hit trước 45 ms, thêm xung FOV và giữ hit nhập tay. |
+| Animation | Chrome lưu lực −0,65, độ trễ 0,45 giây và đường cong kéo trực tiếp. Có ba recipe dựng nhanh. |
+| Keyframe | Nhãn màu và Mute theo từng key. Simplify bỏ điểm tuyến tính dư thừa khi hình và quang học giữ nguyên. |
+| Chỉnh hàng loạt | Chrome lưu 48,2° và f/2,8 vào đúng hai key đã chọn. |
+| Take | Hai bản cam.json được lưu theo phim trong trình duyệt. Áp dụng có Undo và kiểm tra cut, khóa key. |
+| Rung tay | DeSync đổi pha theo giây. Tối đa bốn lớp chuyển động, kết quả cố định khi tua lại. |
+| Qua review | Dải Animation và tay kéo khớp đồng hồ camera trong Freeze. Beat đi trước 45 ms ngay khi lời thoại và cảnh cùng tua. |
+| Simplify sau review | Xét thời gian nguồn và key còn hoạt động để giữ tiếp tuyến đoạn Smooth. Chọn lại trước khi chỉnh hàng loạt sau khi xóa. |

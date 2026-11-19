@@ -26,7 +26,8 @@ const segments = (keys) => {
   if (curves.has(keys)) return curves.get(keys);
   const out = [];
   let cur = [];
-  keys.forEach((k) => {
+  keys.forEach((k, i) => {
+    if (i && !k.cut && k.muted) return;
     if (k.cut && cur.length) {
       out.push(cur);
       cur = [];
@@ -95,6 +96,8 @@ type HandheldConfig = {
   move: number;
   speed: number;
   offset: number;
+  desync: number;
+  octaves: number;
 };
 
 export type FocusTargetSpec =
@@ -140,7 +143,7 @@ const normHandheld = (h): HandheldConfig | null => {
     const clean = h.trim().toUpperCase();
     if (clean === "OFF" || clean === "NONE") return null;
     const kind = SHAKE_MAP.get(clean);
-    return kind ? { kind, amount: 1, move: 1, speed: 1, offset: 0 } : null;
+    return kind ? { kind, amount: 1, move: 1, speed: 1, offset: 0, desync: 0, octaves: 1 } : null;
   }
   if (typeof h === "object") {
     const raw = String(h.preset ?? h.kind ?? "THE_CLOSEUP")
@@ -155,6 +158,8 @@ const normHandheld = (h): HandheldConfig | null => {
       move: Math.max(0, Number(h.move ?? 1)),
       speed: Number(h.speed ?? 1),
       offset: Number(h.offset ?? 0),
+      desync: Number(h.desync ?? 0),
+      octaves: THREE.MathUtils.clamp(Math.trunc(Number(h.octaves) || 1), 1, 4),
     };
   }
   return null;
@@ -180,6 +185,7 @@ const carryAt = (ks, idx, aspect, start = 0, axis?: FovAxis) => {
     hh: HandheldConfig[] = [];
   for (let m = start; m <= idx; m++) {
     const k = ks[m];
+    if (m > start && m !== idx && k.muted) continue;
     if (k.mm != null) {
       mm = k.mm;
       fov = rigFov(0, mm, aspect, axis);
@@ -199,6 +205,7 @@ const carryAt = (ks, idx, aspect, start = 0, axis?: FovAxis) => {
 
 type OpticsKey = Partial<{
   cut: boolean;
+  muted: boolean;
   t: number;
   fov: number;
   mm: number;
@@ -290,7 +297,9 @@ const blendHandheld = (from: HandheldConfig[], to: HandheldConfig[], u: number) 
       (b) =>
         a.kind === b.kind &&
         Math.abs(a.speed - b.speed) < 1e-6 &&
-        Math.abs(a.offset - b.offset) < 1e-6,
+        Math.abs(a.offset - b.offset) < 1e-6 &&
+        Math.abs(a.desync - b.desync) < 1e-6 &&
+        a.octaves === b.octaves,
     );
     if (index < 0) return { ...a, amount: a.amount * (1 - u) };
     const [b] = pending.splice(index, 1);
@@ -395,8 +404,19 @@ export function cameraAt(
   const shakes = blendHandheld(c0.hh, c1.hh, shakeU);
   let strongest: HandheldConfig | undefined;
   for (const shake of shakes) {
-    const offset = sampleHandheld(shake, 1, t);
-    if (offset) roll = applyShakify(p, l, roll, offset);
+    const weight = 2 - 2 ** (1 - shake.octaves);
+    for (let octave = 0; octave < shake.octaves; octave++) {
+      const offset = sampleHandheld(
+        {
+          ...shake,
+          speed: shake.speed * 2 ** octave,
+          offset: shake.offset + shake.desync + octave * 0.37,
+        },
+        0.5 ** octave / weight,
+        t,
+      );
+      if (offset) roll = applyShakify(p, l, roll, offset);
+    }
     if (!strongest || shake.amount >= strongest.amount) strongest = shake;
   }
   const sampleMm =

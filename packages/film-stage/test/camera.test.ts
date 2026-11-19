@@ -11,6 +11,37 @@ import {
   SHAKES,
 } from "../src/camera";
 
+test("muted keys skip position and inherited optics while leaving cut anchors", () => {
+  const keys = [
+    { t: 0, p: [0, 1, 5], l: [0, 1, 0], wave: 0, fov: 60 },
+    { t: 1, p: [10, 1, 5], l: [0, 1, 0], muted: true, fov: 25 },
+    { t: 2, p: [2, 1, 5], l: [0, 1, 0], motion: "linear", ease: "linear" },
+    { t: 3, p: [6, 1, 5], l: [0, 1, 0], muted: true, cut: true, wave: 0, fov: 45 },
+  ];
+  expect(cameraAt(1, keys).p.x).toBe(1);
+  expect(cameraAt(2, keys).fov).toBe(60);
+  expect(cameraAt(3, keys).p.x).toBe(6);
+  expect(cameraAt(3, keys).fov).toBe(45);
+});
+
+test("handheld desync shifts sampling and octaves stay deterministic across seeks", () => {
+  const sample = (t: number, desync: number, octaves: number) =>
+    cameraAt(t, [
+      {
+        t: 0,
+        p: [0, 1, 5],
+        l: [0, 1, 0],
+        wave: 0,
+        handheld: { kind: "THE_CLOSEUP", desync, octaves },
+      },
+    ]).l.toArray();
+  expect(sample(0.2, 0.3, 1)).toEqual(sample(0.5, 0, 1));
+  const first = sample(0.2, 0.3, 3);
+  expect(first).not.toEqual(sample(0.2, 0.3, 1));
+  sample(0.8, 0.3, 3);
+  expect(sample(0.2, 0.3, 3)).toEqual(first);
+});
+
 test("camera module re-exports SHAKES from film-kit cleanly", () => {
   expect(SHAKES.length).toBeGreaterThanOrEqual(9);
   expect(SHAKES).toContain("THE_CLOSEUP");

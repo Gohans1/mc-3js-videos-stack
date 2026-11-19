@@ -6,7 +6,7 @@
 import type { AnimCurve } from "film-stage/animate";
 import type { AnimFx } from "film/scene";
 
-import { timingClock } from "../../src/timing-state.mjs";
+import { clockForTimeline, timingClock } from "../../src/timing-state.mjs";
 import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { type Side, transitionSelection } from "../core/selection";
@@ -15,11 +15,13 @@ import { get, say, set } from "../core/store";
 import { seek, setPlaying } from "../playback/transport";
 import { originalShot } from "../timeline/timing";
 import {
+  animationOccurrenceClock,
   animSlotMetrics,
   applyAnimDuration,
   canLinkSeamPair,
   freshAnimSet,
   MIN_ANIM,
+  type PlaySegment,
   shouldSyncPair,
   syncPairedOption,
   tidyAnimSet,
@@ -32,6 +34,7 @@ export interface AnimSet {
   fx: string;
   len?: number;
   k?: number;
+  delay?: number;
   curve?: AnimCurve;
   flip?: boolean;
   optics?: number;
@@ -49,14 +52,32 @@ export const shotSpan = (i: number): [number, number] => [
 ];
 export const animOf = (i: number): ShotAnim =>
   (shotsDoc.data?.[i]?.anim as ShotAnim | undefined) ?? {};
-export const clockOf = () => (get().timing && timingClock.sourceDuration > 0 ? timingClock : null);
+const pictureClock = () => (get().timing && timingClock.sourceDuration > 0 ? timingClock : null);
 export const shotSourceOf = (i: number): [number, number] =>
-  clockOf() && SHOTS_OUT[i] ? originalShot(i) : shotSpan(i);
-export const metricsOf = (i: number) => {
+  pictureClock() && SHOTS_OUT[i] ? originalShot(i) : shotSpan(i);
+
+export const outputAnimationSpans = (i: number): PlaySegment[] => {
+  if (!pictureClock() || SHOTS_OUT[i]?.cameraClock !== "output") return [];
+  const [from, to] = shotSourceOf(i);
+  return (clockForTimeline("cam").cameraSpans ?? []).filter(
+    (span: PlaySegment) => span.sourceFrom >= from - 1e-7 && span.sourceTo <= to + 1e-7,
+  );
+};
+const occurrenceAt = (i: number, at: number) => {
+  const spans = outputAnimationSpans(i);
+  return spans.find((span) => at >= span.from && at < span.to) ?? spans[0];
+};
+export const clockOf = (i: number, at = S.t) => {
+  const picture = pictureClock();
+  const occurrence = occurrenceAt(i, at);
+  return picture && occurrence ? animationOccurrenceClock(picture, occurrence) : picture;
+};
+
+export const metricsOf = (i: number, clock = clockOf(i)) => {
   const an = animOf(i);
   return animSlotMetrics(
     shotSourceOf(i),
-    clockOf(),
+    clock,
     an,
     fxOf("in", an.in?.fx)?.len ?? 0.5,
     fxOf("out", an.out?.fx)?.len ?? 0.5,
@@ -78,8 +99,8 @@ export const roomFor = (i: number, slot: "in" | "out") => {
   const m = metricsOf(i);
   return slot === "in" ? m.inRoom : m.outRoom;
 };
-export const lenOf = (i: number, slot: "in" | "out") => {
-  const m = metricsOf(i);
+export const lenOf = (i: number, slot: "in" | "out", clock = clockOf(i)) => {
+  const m = metricsOf(i, clock);
   return slot === "in" ? m.inLen : m.outLen;
 };
 
@@ -146,7 +167,7 @@ export const setAnim = (i: number, slot: Slot, id: string | null) => {
 export const previewAnim = (i: number, slot: Slot, id: string | null) =>
   shotsDoc.preview((d) => writeWithPair(d, i, slot, id));
 // Output duration for an In or Out (converted back to source seconds in shots.json), k (strength) for a Combo
-export const setAmount = (i: number, slot: Slot, v: number, keep = true) => {
+export const setAmount = (i: number, slot: Slot, v: number, keep = true, clock = clockOf(i)) => {
   const an = animOf(i),
     cur = an[slot];
   if (!cur) return;
@@ -158,7 +179,7 @@ export const setAmount = (i: number, slot: Slot, v: number, keep = true) => {
   }
   const nextAnim = applyAnimDuration(
     shotSourceOf(i),
-    clockOf(),
+    clock,
     an,
     slot,
     v,
@@ -178,7 +199,7 @@ export const setAmount = (i: number, slot: Slot, v: number, keep = true) => {
 export const setOption = (
   i: number,
   slot: Slot,
-  patch: Partial<Pick<AnimSet, "curve" | "flip" | "optics" | "seam">>,
+  patch: Partial<Pick<AnimSet, "curve" | "flip" | "optics" | "seam" | "delay">>,
   keep = true,
 ) => {
   const cur = animOf(i)[slot];
@@ -186,7 +207,7 @@ export const setOption = (
   const fx = fxOf(slot, cur.fx);
   const next = tidyAnimSet({ ...cur, ...patch }, fx);
   const p = shouldSyncPair(next, fx) ? pairAt(i, slot, cur.fx) : null;
-  const { seam: _, ...syncPatch } = patch;
+  const { seam: _, delay: _delay, ...syncPatch } = patch;
   const apply = (d: ShotRow[]) => {
     put(d, i, slot, next);
     if (p && d[p.j]) {
@@ -257,8 +278,9 @@ export const clearAnims = (i: number) => {
 // The seconds that show an effect: an In from the shot's start to a little after it lands, an Out from a little before it into
 // the cut, a Combo the whole shot, and across the cut boundary when a paired cross-cut seam animation is active.
 export const spanOf = (i: number, slot: Slot): [number, number] => {
-  const [a, b] = shotSpan(i),
-    last = b - 1 / 30;
+  const occurrence = occurrenceAt(i, S.t);
+  const [a, b] = occurrence ? [occurrence.from, occurrence.to] : shotSpan(i);
+  const last = b - 1 / 30;
   const cur = animOf(i)[slot],
     fx = fxOf(slot, cur?.fx);
   const p = shouldSyncPair(cur, fx) ? pairAt(i, slot, cur?.fx) : null;
@@ -273,9 +295,17 @@ export const spanOf = (i: number, slot: Slot): [number, number] => {
     const [prevA] = shotSpan(p.j);
     return [Math.max(prevA, a - lenOf(p.j, "out") - 0.5), Math.min(last, a + lenOf(i, "in") + 0.5)];
   }
-  if (slot === "in") return [a, Math.min(last, a + lenOf(i, "in") + 0.6)];
-  if (slot === "out") return [Math.max(a, b - lenOf(i, "out") - 0.8), last];
-  return [a, last];
+  if (slot === "combo") return [a, last];
+  const [start, end] = shotSourceOf(i);
+  const clock = clockOf(i);
+  const { srcIn, srcOut } = metricsOf(i);
+  const delay = cur?.delay ?? 0;
+  const at = (t: number) => {
+    const local = Math.max(start, Math.min(end, t));
+    return clock ? clock.outputAt(local, slot === "in" ? "before" : "after") : local;
+  };
+  if (slot === "in") return [a, Math.min(last, at(start + srcIn + delay) + 0.6)];
+  return [Math.max(a, Math.min(last, at(end - srcOut + delay)) - 0.8), last];
 };
 
 // The picture plays a stretch on its own, without sound (an effect tried on), then the playhead goes back where it was. Pressing

@@ -25,6 +25,29 @@ const run = (anim: unknown, t: number) => {
   return { ...c, black };
 };
 
+test("a user curve, signed strength and delay combine on the shot clock", () => {
+  const combo = { fx: "push", k: -1, delay: 1, curve: [0.2, 0.4, 0.8, 0.9] };
+  const undelayed = { ...combo, delay: undefined };
+  expect(run({ combo }, 2.5).p.z).toBe(10);
+  expect(run({ combo }, 4.5).p.z).toBeGreaterThan(10);
+  expect(run({ combo }, 4.5).p.z).toBeCloseTo(run({ combo: undelayed }, 3.5).p.z, 9);
+  expect(run({ combo }, 4.5).p.z).not.toBeCloseTo(
+    run({ combo: { ...combo, curve: undefined } }, 4.5).p.z,
+    3,
+  );
+});
+
+test("a baked FOV pulse begins at its hit and decays in seconds", () => {
+  const pulse = (t: number) => {
+    const c = cam();
+    animate(c, t, [{ t: 0, hits: [{ t: 0.955, amount: 0, fovPulse: -2, decay: 12 }] }], 4);
+    return c.fov;
+  };
+  expect(pulse(0.954)).toBe(50);
+  expect(pulse(0.955)).toBe(48);
+  expect(pulse(1.955)).toBeCloseTo(50, 4);
+});
+
 test("a shot with no animation leaves the camera and the frame alone", () => {
   const c = run(undefined, 3);
   expect(c.p.toArray()).toEqual([0, 1, 10]);

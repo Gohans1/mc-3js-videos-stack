@@ -56,12 +56,14 @@ import {
   clockOf,
   lenOf,
   metricsOf,
+  outputAnimationSpans,
   pickShot,
   setAmount,
   shotSourceOf,
   shotSpan,
 } from "./anim";
 import {
+  animationTrimDuration,
   animBandOnSegment,
   type AnimHandleCandidate,
   clampHandleX,
@@ -88,6 +90,7 @@ import {
   snapshot,
   splitShot,
 } from "./cam";
+import { cameraKeyColors } from "./camera-key-style";
 import { shotsDoc } from "./shots";
 import {
   pickTransition,
@@ -199,20 +202,23 @@ const drawSpeed = (
 const bandTop = (h: number) => h - PAD - FOOT - BAND;
 const animHandles = (w: number): AnimHandleCandidate[] => {
   const { a, v } = view(),
-    X = (s: number) => ((s - a) / v) * w,
-    clock = clockOf();
+    X = (s: number) => ((s - a) / v) * w;
   const out: AnimHandleCandidate[] = [];
   SHOTS_OUT.forEach((_, i) => {
     const an = animOf(i);
     if (!an.in && !an.out) return;
     const src = shotSourceOf(i),
-      m = metricsOf(i),
       [start, end] = shotSpan(i),
       [from, to] = sourceShot(i);
-    const ranges = clock
-      ? playRanges(timingClock, from, to)
-      : [{ sourceFrom: src[0], sourceTo: src[1], from: start, to: end }];
+    const occurrences = outputAnimationSpans(i);
+    const ranges = occurrences.length
+      ? occurrences
+      : get().timing
+        ? playRanges(timingClock, from, to)
+        : [{ sourceFrom: src[0], sourceTo: src[1], from: start, to: end }];
     for (const seg of ranges) {
+      const clock = clockOf(i, (seg.from + seg.to) / 2),
+        m = metricsOf(i, clock);
       for (const slot of ["in", "out"] as const) {
         const band = animBandOnSegment(src, clock, m, seg, slot);
         if (!band || band.handleAt === null) continue;
@@ -250,9 +256,12 @@ const drawMotion = (
   const top = PAD + HEAD + 3,
     floor = h - PAD - FOOT - BAND - 2;
   const sourceKeys = EDIT.cam as CamKey[];
+  let prev = sourceKeys[0];
   for (let k = 1; k < sourceKeys.length; k++) {
-    const k0 = sourceKeys[k - 1],
-      k1 = sourceKeys[k];
+    const k1 = sourceKeys[k];
+    if (!k1.cut && k1.muted) continue;
+    const k0 = prev;
+    prev = k1;
     if (k1.cut || k1.t <= k0.t || k1.t <= rawFrom || k0.t >= rawTo) continue;
     const a = X(project(Math.max(k0.t, rawFrom), "after")),
       b = X(project(Math.min(k1.t, rawTo), "before"));
@@ -271,6 +280,60 @@ const drawMotion = (
   }
 };
 
+const drawAnimationBands = (
+  g: CanvasRenderingContext2D,
+  i: number,
+  span: import("./anim-math").PlaySegment,
+  X: (t: number) => number,
+  w: number,
+  h: number,
+) => {
+  const x0 = Math.max(-4, X(span.from) + 1),
+    x1 = Math.min(w + 4, X(span.to) - 1);
+  if (x1 <= x0) return;
+  const cx0 = x0,
+    cx1 = x1,
+    foot = h - PAD - FOOT - BAND;
+  const selected = get().shotPick === i || get().shotPicks.includes(i) || hover === i;
+  // In, Out, Combo at the foot of the block, mapped across timing speed and freezes
+  const an = animOf(i),
+    clock = clockOf(i, (span.from + span.to) / 2),
+    src = shotSourceOf(i),
+    m = metricsOf(i, clock);
+  const inBand = animBandOnSegment(src, clock, m, span, "in");
+  const outBand = animBandOnSegment(src, clock, m, span, "out");
+  const animLight = tone("anim-light");
+  g.fillStyle = animLight;
+  if (an.combo) {
+    g.setLineDash([3, 3]);
+    g.strokeStyle = animLight;
+    g.lineWidth = BAND;
+    g.beginPath();
+    g.moveTo(cx0, foot + BAND / 2);
+    g.lineTo(cx1, foot + BAND / 2);
+    g.stroke();
+    g.setLineDash([]);
+  }
+  if (inBand) {
+    const bx0 = Math.max(x0, X(inBand.from)),
+      bx1 = Math.min(x1, X(inBand.to));
+    if (bx1 > bx0) g.fillRect(bx0, foot, Math.max(3, bx1 - bx0), BAND);
+  }
+  if (outBand) {
+    const bx0 = Math.max(x0, X(outBand.from)),
+      bx1 = Math.min(x1, X(outBand.to));
+    if (bx1 > bx0) g.fillRect(Math.min(bx0, x1 - 3), foot, Math.max(3, bx1 - bx0), BAND);
+  }
+  // The trim handles on the picked or hovered shot, clamped inside [x0, x1] so 100%-duration handles stay visible
+  if (selected) {
+    g.fillStyle = tone("pick");
+    if (inBand && inBand.handleAt !== null)
+      g.fillRect(clampHandleX(X(inBand.handleAt), x0, x1), foot - 2, 3, BAND + 3);
+    if (outBand && outBand.handleAt !== null)
+      g.fillRect(clampHandleX(X(outBand.handleAt), x0, x1), foot - 2, 3, BAND + 3);
+  }
+};
+
 const drawBlock = (
   g: CanvasRenderingContext2D,
   i: number,
@@ -286,7 +349,6 @@ const drawBlock = (
   if (x1 < 0 || x0 > w || x1 - x0 < 1) return;
   const y0 = PAD,
     y1 = h - PAD,
-    foot = y1 - FOOT - BAND,
     cx0 = Math.max(-4, x0),
     cx1 = Math.min(w + 4, x1),
     bw = cx1 - cx0;
@@ -322,43 +384,7 @@ const drawBlock = (
   }
   if (SHOTS_OUT[i].cameraClock !== "output" || !clockForTimeline("cam").cameraSpans)
     drawMotion(g, span, timingClock.outputAt, X, w, h);
-  // In, Out, Combo at the foot of the block, mapped across timing speed and freezes
-  const an = animOf(i),
-    clock = clockOf(),
-    src = shotSourceOf(i),
-    m = metricsOf(i);
-  const inBand = animBandOnSegment(src, clock, m, span, "in");
-  const outBand = animBandOnSegment(src, clock, m, span, "out");
-  const animLight = tone("anim-light");
-  g.fillStyle = animLight;
-  if (an.combo) {
-    g.setLineDash([3, 3]);
-    g.strokeStyle = animLight;
-    g.lineWidth = BAND;
-    g.beginPath();
-    g.moveTo(cx0, foot + BAND / 2);
-    g.lineTo(cx1, foot + BAND / 2);
-    g.stroke();
-    g.setLineDash([]);
-  }
-  if (inBand) {
-    const bx0 = Math.max(x0, X(inBand.from)),
-      bx1 = Math.min(x1, X(inBand.to));
-    if (bx1 > bx0) g.fillRect(bx0, foot, Math.max(3, bx1 - bx0), BAND);
-  }
-  if (outBand) {
-    const bx0 = Math.max(x0, X(outBand.from)),
-      bx1 = Math.min(x1, X(outBand.to));
-    if (bx1 > bx0) g.fillRect(Math.min(bx0, x1 - 3), foot, Math.max(3, bx1 - bx0), BAND);
-  }
-  // The trim handles on the picked or hovered shot, clamped inside [x0, x1] so 100%-duration handles stay visible
-  if (get().shotPick === i || get().shotPicks.includes(i) || hover === i) {
-    g.fillStyle = tone("pick");
-    if (inBand && inBand.handleAt !== null)
-      g.fillRect(clampHandleX(X(inBand.handleAt), x0, x1), foot - 2, 3, BAND + 3);
-    if (outBand && outBand.handleAt !== null)
-      g.fillRect(clampHandleX(X(outBand.handleAt), x0, x1), foot - 2, 3, BAND + 3);
-  }
+  if (!outputAnimationSpans(i).length) drawAnimationBands(g, i, span, X, w, h);
   g.restore();
   if (on || get().shotPick === i || get().shotPicks.includes(i)) {
     g.strokeStyle = tone("pick");
@@ -396,7 +422,17 @@ const drawDiamonds = (
     g.lineTo(x + r, y);
     g.lineTo(x, y + r);
     g.lineTo(x - r, y);
-    closePathAndFill(g, k.cut || i === 0 ? tone("muted-foreground") : tone("foreground"));
+    const fill = k.color
+      ? cameraKeyColors[k.color]
+      : k.cut || i === 0
+        ? tone("muted-foreground")
+        : tone("foreground");
+    if (k.muted && !k.cut && i > 0) {
+      g.closePath();
+      g.strokeStyle = fill;
+      g.lineWidth = 1.4;
+      g.stroke();
+    } else closePathAndFill(g, fill);
     if (picked.has(i)) {
       g.strokeStyle = tone("pick");
       g.lineWidth = 2;
@@ -513,6 +549,9 @@ export const drawCamRow = () => {
     const scale = (span.to - span.from) / (span.sourceTo - span.sourceFrom);
     drawMotion(g, span, (t) => span.from + (t - span.sourceFrom) * scale, X, w, h);
   }
+  SHOTS_OUT.forEach((_, i) => {
+    for (const occurrence of outputAnimationSpans(i)) drawAnimationBands(g, i, occurrence, X, w, h);
+  });
   drawDiamonds(g, w, h, picked, true);
   if (freezeGhost) {
     const left = X(freezeGhost.from) + 1,
@@ -656,6 +695,7 @@ export const attachCamRow = () => {
   let animDrag: {
     i: number;
     slot: "in" | "out";
+    clock: ReturnType<typeof clockOf>;
     anchor: number;
     inAnchor: number;
     outAnchor: number;
@@ -709,8 +749,9 @@ export const attachCamRow = () => {
     }
     c.setPointerCapture(e.pointerId);
     const t = timeAt(x, w),
-      freeze = freezeAt(t);
-    if (freeze >= 0 && !insideOutputFreeze(i) && !onPlayhead(x, w, touch)) {
+      freeze = freezeAt(t),
+      trim = animEdgeAt(x, y, w, h, touch);
+    if (freeze >= 0 && !trim && !insideOutputFreeze(i) && !onPlayhead(x, w, touch)) {
       set(transitionSelection({ kind: "freeze", index: freeze }, get().side));
       const f = freezesOf(timing)[freeze],
         [t0, t1] = freezeRange(timing, timingClock, freeze),
@@ -743,7 +784,7 @@ export const attachCamRow = () => {
       return;
     }
     const tr = transitionUnder(x, y, w);
-    const edge = animEdgeAt(x, y, w, h, touch);
+    const edge = trim;
     const shotPicked = edge ? get().shotPick === edge.i || get().shotPicks.includes(edge.i) : false;
     // Band handles win when the shot is picked or there is no transition box directly over the cut; on an unpicked shot's cut,
     // clicking the transition box picks the transition instead of getting hijacked by a nearby handle
@@ -755,12 +796,14 @@ export const attachCamRow = () => {
       S.dirty = true;
       holdView(true);
       if (S.playing) setPlaying(false);
-      const wasIn = lenOf(edge.i, "in"),
-        wasOut = lenOf(edge.i, "out"),
+      const clock = clockOf(edge.i, t);
+      const wasIn = lenOf(edge.i, "in", clock),
+        wasOut = lenOf(edge.i, "out", clock),
         was = edge.slot === "in" ? wasIn : wasOut;
       animDrag = {
         i: edge.i,
         slot: edge.slot,
+        clock,
         anchor: edge.anchor,
         inAnchor: edge.inAnchor ?? edge.anchor,
         outAnchor: edge.outAnchor ?? edge.anchor,
@@ -853,13 +896,16 @@ export const attachCamRow = () => {
         d.seam = false;
         set({ animSlot: d.slot });
       }
-      const want =
-        Math.round(
-          Math.max(0.1, d.slot === "in" ? timeAt(x, w) - d.anchor : d.anchor - timeAt(x, w)) * 100,
-        ) / 100;
+      const want = animationTrimDuration(
+        d.slot,
+        timeAt(x, w),
+        d.anchor,
+        animOf(d.i)[d.slot]?.delay ?? 0,
+        d.clock,
+      );
       shotsDoc.restore(d.snap);
-      setAmount(d.i, d.slot, want, false);
-      d.want = lenOf(d.i, d.slot);
+      setAmount(d.i, d.slot, want, false, d.clock);
+      d.want = lenOf(d.i, d.slot, d.clock);
       c.style.cursor = "ew-resize";
       say(`${d.slot === "in" ? "In" : "Out"} animation: ${d.want.toFixed(2)} s`, 1200);
       return;
@@ -1048,7 +1094,7 @@ export const attachCamRow = () => {
       const d = animDrag;
       animDrag = null;
       shotsDoc.restore(d.snap);
-      if (e.type === "pointerup" && d.want !== d.was) setAmount(d.i, d.slot, d.want);
+      if (e.type === "pointerup" && d.want !== d.was) setAmount(d.i, d.slot, d.want, true, d.clock);
       holdView(false);
       c.style.cursor = "";
       drawCamRow();

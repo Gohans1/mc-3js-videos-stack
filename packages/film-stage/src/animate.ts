@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { clampFov } from "film-kit/lens";
 // Shot animations, CapCut's In / Out / Combo for a 3D camera, extended with the full Cinetic camera & optical vocabulary.
 // A shot row's `anim` {in?, out?, combo?}, each {fx, len?, k?, curve?, flip?, optics?}, moves the camera the keys give (or
 // darkens/grades the frame) without touching the keys, so None takes it off again and its length stays a number to change. In
@@ -7,12 +8,10 @@
 // camera's right axis, optics scales only the lens state it writes (0 keeps the picture sharp); absent keeps the tuned effect.
 // Returns how black the frame should be (0..1) and writes optical post-processing state onto `c.optics`.
 import { shake, type ShakeOpts } from "film-kit/shake";
-import { clampFov } from "film-kit/lens";
 import * as THREE from "three";
 
-import { EASES } from "./camera-meta";
-
 import { ANIMS, EMPTY_OPTICS, type ShotHit } from "./animate-meta";
+import { EASES } from "./camera-meta";
 export * from "./animate-meta";
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 const FX = { in: byId(ANIMS.in), out: byId(ANIMS.out), combo: byId(ANIMS.combo) };
@@ -757,7 +756,6 @@ const leftOf = (fx, x) =>
 // and through its Out: a leaving speeds up into the cut
 const grownBy = (fx, x) => (fx.black ? smoothstep(x) : Math.pow(x, fx.move === "whip" ? 4 : 2.2));
 
-
 const hitCache = new Map<string, ReturnType<typeof shake>[]>();
 const hitSamplers = (hits: ShotHit[]) => {
   const key = JSON.stringify(hits);
@@ -807,16 +805,17 @@ export function animate(c, t, shots, end, catalogue) {
       fxCombo = pick("combo", anim.combo?.fx);
     if (fxCombo) {
       const k = anim.combo.k ?? 1,
-        raw = THREE.MathUtils.clamp((t - t0) / span, 0, 1),
+        local = Math.max(t0, Math.min(t1, t - (anim.combo.delay ?? 0))),
+        raw = THREE.MathUtils.clamp((local - t0) / span, 0, 1),
         curved = Boolean(anim.combo.curve),
         u = warp(anim.combo.curve, raw, "combo");
       black = Math.max(
         black,
         effect(c, anim.combo, () => {
           const cin = fxCombo.apply ?? CINETIC[fxCombo.id];
-          if (cin) return cin(c, u, t, k, "combo", curved, raw);
+          if (cin) return cin(c, u, local, k, "combo", curved, raw);
           if (fxCombo.loop) {
-            LOOPS[fxCombo.loop](c, t, k);
+            LOOPS[fxCombo.loop](c, local, k);
             return 0;
           }
           MOVES[fxCombo.move](c, fxCombo.a * k * (curved ? u : smooth(raw)));
@@ -835,16 +834,16 @@ export function animate(c, t, shots, end, catalogue) {
       lenOut *= s;
     }
     // e: how much of the effect is on (0 to 1). An In's camera starts back along its way of travel (way -1), an Out's goes on
-    const at = (fx, opt, u, e, way, k, slot, curved, raw) => {
+    const at = (fx, opt, u, e, way, k, slot, curved, raw, sampleTime) => {
       black = Math.max(
         black,
         effect(c, opt, () => {
           const cin = fx.apply ?? CINETIC[fx.id];
-          if (cin) return cin(c, THREE.MathUtils.clamp(u, 0, 1), t, k, slot, curved, raw);
+          if (cin) return cin(c, THREE.MathUtils.clamp(u, 0, 1), sampleTime, k, slot, curved, raw);
           if (e <= 0) return 0;
           if (fx.black) return Math.min(1, e * k);
           if (fx.jolt) {
-            jolt(c, t, e * k);
+            jolt(c, sampleTime, e * k);
             if (Math.abs(e * k) > 1e-3) c.optics.impulse = "hit";
             return 0;
           }
@@ -854,8 +853,9 @@ export function animate(c, t, shots, end, catalogue) {
         }),
       );
     };
-    if (fxIn && t < t0 + lenIn) {
-      const raw = (t - t0) / lenIn,
+    const inTime = t - (anim.in?.delay ?? 0);
+    if (fxIn && inTime < t0 + lenIn) {
+      const raw = THREE.MathUtils.clamp((inTime - t0) / lenIn, 0, 1),
         pureVeil = Boolean(fxIn.black && !fxIn.move),
         curved = Boolean(anim.in.curve && !pureVeil);
       const u = pureVeil ? raw : warp(anim.in.curve, raw, "in");
@@ -869,10 +869,12 @@ export function animate(c, t, shots, end, catalogue) {
         "in",
         curved,
         raw,
+        Math.max(t0, inTime),
       );
     }
-    if (fxOut && t > t1 - lenOut) {
-      const raw = (t - (t1 - lenOut)) / lenOut,
+    const outTime = t - (anim.out?.delay ?? 0);
+    if (fxOut && outTime > t1 - lenOut) {
+      const raw = THREE.MathUtils.clamp((outTime - (t1 - lenOut)) / lenOut, 0, 1),
         pureVeil = Boolean(fxOut.black && !fxOut.move),
         curved = Boolean(anim.out.curve && !pureVeil);
       const u = pureVeil ? raw : warp(anim.out.curve, raw, "out");
@@ -886,11 +888,17 @@ export function animate(c, t, shots, end, catalogue) {
         "out",
         curved,
         raw,
+        Math.min(t1, outTime),
       );
     }
   }
   const hits: ShotHit[] | undefined = shot?.hits;
   if (hits?.length) {
+    let fovPulse = 0;
+    for (const hit of hits)
+      if (hit.fovPulse && t >= hit.t)
+        fovPulse += hit.fovPulse * Math.exp(-(t - hit.t) * (hit.decay ?? 12));
+    if (fovPulse) c.fov = lens(c.fov + fovPulse);
     let yaw = 0,
       pitch = 0,
       rollDeg = 0,

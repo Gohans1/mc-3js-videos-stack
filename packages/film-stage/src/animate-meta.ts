@@ -13,6 +13,7 @@ export type AnimFx = {
   fx: string;
   len?: number;
   k?: number;
+  delay?: number;
   curve?: AnimCurve;
   flip?: boolean;
   optics?: number;
@@ -53,6 +54,8 @@ export const ANIM_CURVES = [
   },
 ] as const;
 export type ShotHit = {
+  fovPulse?: number;
+  source?: "beat";
   t: number;
   amount: number;
   decay?: number;

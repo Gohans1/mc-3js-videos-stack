@@ -2,6 +2,13 @@ import { type CameraRig } from "film-stage/camera";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { type Shutter } from "../../src/shutter";
 import { FieldRow, Section, Segmented, ValueBox } from "../components/inspector";
@@ -11,6 +18,12 @@ import { S } from "../core/state";
 import { showError, useStudio } from "../core/store";
 import { readSceneFrame } from "../picture/render";
 import { vectorPoint } from "./cam";
+import {
+  applyCameraRecipe,
+  beatsToCameraHits,
+  CAMERA_RECIPES,
+  type CameraRecipe,
+} from "./shot-authoring";
 import { shotsDoc } from "./shots";
 
 const SETUPS = [
@@ -51,7 +64,8 @@ export function CameraShotSettings({ shot }: { shot: number }) {
     void readSceneFrame(t, () => {
       const source = S.tools?.camera;
       const clean = S.tools?.cameraSample?.().p;
-      if (source) camera({ look, position: Array.isArray(clean) ? clean : vectorPoint(source.position) });
+      if (source)
+        camera({ look, position: Array.isArray(clean) ? clean : vectorPoint(source.position) });
     }).catch(showError);
   };
   const setAxis = (mode: "native" | "horizontal" | "vertical") =>
@@ -67,6 +81,31 @@ export function CameraShotSettings({ shot }: { shot: number }) {
     near = rig.near ?? 0.02;
   return (
     <>
+      <Section title="Camera recipes" closed>
+        <FieldRow label="Recipe">
+          <Select<CameraRecipe>
+            value={null}
+            items={CAMERA_RECIPES.map(({ id, label }) => ({ value: id, label }))}
+            onValueChange={(id) => {
+              if (id) applyCameraRecipe(shot, id);
+            }}
+          >
+            <SelectTrigger aria-label="Apply camera recipe">
+              <SelectValue placeholder="Choose a recipe" />
+            </SelectTrigger>
+            <SelectContent>
+              {CAMERA_RECIPES.map(({ id, label }) => (
+                <SelectItem key={id} value={id}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FieldRow>
+        <Button variant="secondary" size="sm" onClick={() => beatsToCameraHits(shot)}>
+          Beats to camera hits
+        </Button>
+      </Section>
       {S.tools?.cameraRig && (
         <Section title="Camera rig" closed>
           <Segmented

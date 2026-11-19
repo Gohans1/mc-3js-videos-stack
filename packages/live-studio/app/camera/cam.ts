@@ -57,6 +57,8 @@ export interface CamKey {
   cut?: boolean;
   tailId?: string | false;
   locked?: boolean;
+  muted?: boolean;
+  color?: "amber" | "blue" | "green" | "pink";
   reason?: string;
   ease?: Ease;
   easeChannels?: Partial<Record<CameraChannel, Ease>>;
@@ -92,6 +94,20 @@ const doc = createTimedDoc<CamKey[]>("cam", {
   },
 });
 export const { sourceSnapshot: snapshot, restoreSource: restore } = doc;
+export const takeCamera = (next: CamKey[]) => {
+  const current = doc.source;
+  if (!current?.length || !next.length) return;
+  const cuts = (rows: CamKey[]) =>
+    rows.filter((key, index) => index === 0 || key.cut).map((key) => key.t);
+  if (JSON.stringify(cuts(current)) !== JSON.stringify(cuts(next)))
+    return say("This take uses different shot cuts. Save a take with the current cuts first");
+  const locked = (rows: CamKey[]) => rows.filter((key) => key.locked);
+  if (JSON.stringify(locked(current)) !== JSON.stringify(locked(next)))
+    return say("Unlock differing keys before applying this take");
+  doc.editSource((rows) => rows.splice(0, rows.length, ...structuredClone(next)));
+  setKey(null);
+  return true;
+};
 const protectLocked = (change: (rows: CamKey[]) => void) => (rows: CamKey[]) => {
   const locked = rows.filter((key) => key.locked).map((key) => JSON.stringify(key));
   if (!locked.length) return change(rows);
@@ -233,6 +249,82 @@ export const removeCamKeys = (is: number[]) => {
   });
   setKey(null);
   say(`${ok.length} keyframes deleted. Ctrl+Z to undo`);
+};
+
+export const simplifyCameraKeys = (picked: number[]) => {
+  const rows = doc.source ?? [];
+  const clock = clockForTimeline("cam");
+  const selected = new Set(
+    picked.filter(movable).map((i) => {
+      const key = keys[i];
+      if (key.id) return key.id;
+      return key.__timing?.source ?? clock.sourceAt(key.t, "before");
+    }),
+  );
+  const removed: number[] = [];
+  const equalData = (key: (typeof keys)[number]) => {
+    const {
+      id: _id,
+      t: _time,
+      __timing: _mapped,
+      p: _p,
+      l: _l,
+      motion: _motion,
+      ease: _ease,
+      cut: _cut,
+      ...rest
+    } = key;
+    return JSON.stringify(rest);
+  };
+  const isSmooth = (key?: (typeof keys)[number]) =>
+    key && !key.cut && (key.motion ?? "smooth") === "smooth";
+  let left = 0;
+  for (let i = 1; i < rows.length - 1; i++) {
+    const a = rows[left],
+      b = rows[i],
+      c = rows[i + 1];
+    const elapsed = c.t - a.t;
+    let next = i + 2;
+    while (rows[next]?.muted && !rows[next].cut) next++;
+    const can =
+      selected.has(b.id ?? b.t) &&
+      !b.cut &&
+      !b.locked &&
+      !b.tailId &&
+      !a.muted &&
+      !b.muted &&
+      !c.muted &&
+      (left === 0 || !isSmooth(a)) &&
+      !isSmooth(rows[next]) &&
+      !c.cut &&
+      elapsed > SAME &&
+      b.motion === "linear" &&
+      c.motion === "linear" &&
+      b.ease === "linear" &&
+      c.ease === "linear" &&
+      !b.easeChannels &&
+      !c.easeChannels &&
+      equalData(a) === equalData(b) &&
+      equalData(b) === equalData(c);
+    const u = (b.t - a.t) / elapsed;
+    const same = (field: "p" | "l") => {
+      const p = a[field],
+        q = b[field],
+        r = c[field];
+      return (
+        Array.isArray(p) &&
+        Array.isArray(q) &&
+        Array.isArray(r) &&
+        q.every((v, j) => Math.abs(p[j] + (r[j] - p[j]) * u - v) < 0.001)
+      );
+    };
+    if (can && same("p") && same("l")) removed.push(i);
+    else left = i;
+  }
+  if (!removed.length) return say("No redundant linear keys in this selection");
+  doc.editSource((rows) => removed.reverse().forEach((i) => rows.splice(i, 1)));
+  setKey(null);
+  say("Simplified " + removed.length + " camera keys");
 };
 
 export const nearestKey = (t: number) =>
@@ -421,6 +513,7 @@ const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: Ca
     motion: _motion,
     __timing: _timing,
     locked: _locked,
+    muted: _muted,
     reason: _reason,
     ...fields
   } = structuredClone(previous);

@@ -1,7 +1,3 @@
-// The Animation tab, laid out as CapCut's: In | Out | Combo, a search box, category chips, a grid of effects (None first) each with
-// its star, and the length (or a Combo's strength) at the bottom. Pointing at an effect plays the shot with it, silently, and
-// puts everything back on leaving; a click keeps it (camera/anim.ts). The shot is the block picked on the camera row, else the
-// one at the playhead.
 import { ANIM_CURVES, type AnimCurve } from "film-stage/animate-meta";
 import type { AnimFx } from "film/scene";
 import { Ban, ChevronLeft, ChevronRight, Link2, Star } from "lucide-react";
@@ -19,6 +15,11 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+// The Animation tab, laid out as CapCut's: In | Out | Combo, a search box, category chips, a grid of effects (None first) each with
+// its star, and the length (or a Combo's strength) at the bottom. Pointing at an effect plays the shot with it, silently, and
+// puts everything back on leaving; a click keeps it (camera/anim.ts). The shot is the block picked on the camera row, else the
+// one at the playhead.
+import { CurveEditor } from "../components/EasePicker";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { ChipGroup, EmptyCard, Segmented, SliderRow } from "../components/inspector";
 import { TabStage } from "../components/Motion";
@@ -205,6 +206,7 @@ function Tile({
 function Amount({ shot, slot }: { shot: number; slot: Slot }) {
   useStudio((s) => s.shotsRev);
   useStudio((s) => s.timingRev);
+  const [editCurve, setEditCurve] = useState(false);
   const a = animOf(shot)[slot];
   if (!a) return null;
   const fx = fxOf(slot, a.fx);
@@ -258,7 +260,7 @@ function Amount({ shot, slot }: { shot: number; slot: Slot }) {
       <SliderRow
         label="Strength"
         value={a.k ?? 1}
-        min={0.25}
+        min={-3}
         max={3}
         step={0.05}
         digits={2}
@@ -270,6 +272,21 @@ function Amount({ shot, slot }: { shot: number; slot: Slot }) {
         }}
         save={(v) => setStrength(shot, slot, v)}
         hint="How far the move goes (1× is the tuned Cinetic default)"
+      />
+      <SliderRow
+        label="Delay"
+        value={a.delay ?? 0}
+        min={-2}
+        max={2}
+        step={0.025}
+        digits={3}
+        unit="s"
+        doc={shotsDoc}
+        preview={(delay) => {
+          stopSpan();
+          setOption(shot, slot, { delay }, false);
+        }}
+        save={(delay) => setOption(shot, slot, { delay })}
       />
       {(curveable || mirrorable || pairable) && (
         <div className="flex flex-wrap items-center gap-2">
@@ -330,6 +347,30 @@ function Amount({ shot, slot }: { shot: number; slot: Slot }) {
             </Tip>
           )}
         </div>
+      )}
+      {curveable && (
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="quiet"
+            aria-expanded={editCurve}
+            onClick={() => setEditCurve(!editCurve)}
+          >
+            Edit motion curve
+          </Button>
+          {editCurve && (
+            <CurveEditor
+              value={typeof a.curve === "object" ? [...a.curve] : [1 / 3, 0, 2 / 3, 1]}
+              doc={shotsDoc}
+              preview={(curve) => {
+                stopSpan();
+                setOption(shot, slot, { curve }, false);
+              }}
+              onSave={(curve) => retime({ curve })}
+            />
+          )}
+        </>
       )}
       {fx?.optics && (
         <SliderRow

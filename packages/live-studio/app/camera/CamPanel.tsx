@@ -1,3 +1,4 @@
+import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 // The Camera tab, laid out as CapCut's Video tab: the shot (its name, where it runs, Split), then the camera keyframe picked on
 // the camera row or on the playhead, with CapCut's ◁◇▷ (◇ keys the picture as it is) and its lens as slider rows. How the
 // camera gets into a key is Keyframe easing (SpeedPanel.tsx), a shot's In / Out / Combo the Animation tab. Each change is one undo
@@ -42,6 +43,7 @@ import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
 import {
   addKeyHere,
+  edit,
   holdAfter,
   keys,
   movable,
@@ -56,10 +58,13 @@ import {
   setKeyLocked,
   shotOfCut,
   shownKey,
+  simplifyCameraKeys,
   splitShot,
+  writeLens,
 } from "./cam";
 import { cameraKeyNavigation } from "./camera-edit";
 import { CameraFraming } from "./CameraFraming";
+import { CameraKeyStyle, CameraTakePicker } from "./CameraKeyAuthoring";
 import { CameraOptics } from "./CameraOptics";
 import { CameraShotSettings } from "./CameraShotSettings";
 import { renameShot, setShotCameraClock, shotsDoc } from "./shots";
@@ -334,6 +339,7 @@ function KeySection() {
           </div>
           <TimeField i={i} />
           {k.reason && <p className="text-muted-foreground text-xs">{k.reason}</p>}
+          <CameraKeyStyle index={i} />
           <CameraOptics index={i} />
           <CameraFraming index={i} />
           <div className="flex flex-wrap gap-1.5">
@@ -393,6 +399,33 @@ function PicksSection({ picks }: { picks: number[] }) {
       <p className="text-ui text-muted-foreground">
         Drag one on the Camera track to move them all. Click one to pick it alone, Esc to let go.
       </p>
+      {(
+        [
+          { key: "fov", label: "FOV", min: MIN_FOV, max: MAX_FOV, unit: "°" },
+          { key: "fstop", label: "Aperture", min: 0, max: 32, unit: "f" },
+        ] as const
+      ).map((field) => (
+        <FieldRow key={field.key} label={field.label + " (" + field.unit + ")"}>
+          <NumberField
+            name={"Set selected " + field.label}
+            size="sm"
+            value={undefined}
+            min={field.min}
+            max={field.max}
+            step={0.1}
+            digits={1}
+            onSave={(value) => {
+              if (value !== undefined)
+                edit((rows) => {
+                  for (const i of picks) if (!rows[i].locked) writeLens(rows[i], field.key, value);
+                });
+            }}
+          />
+        </FieldRow>
+      ))}
+      <Button variant="quiet" size="sm" onClick={() => simplifyCameraKeys(picks)}>
+        Simplify selected keys
+      </Button>
     </Section>
   );
 }
@@ -409,6 +442,7 @@ export function CamPanel() {
       className="scroll-fade flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 *:shrink-0"
     >
       <Saved />
+      <CameraTakePicker />
       <ShotSection shot={shownShot()} />
       <CameraShotSettings shot={shownShot()} />
       {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}

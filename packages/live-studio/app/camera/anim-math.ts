@@ -1,5 +1,10 @@
 // Pure animation state, clock mapping and timeline handle geometry shared by camera/anim.ts, camera/camrow.ts and tests.
-import { ANIM_CATEGORIES, type AnimCurve, ANIMS, fitAnimationLengths } from "film-stage/animate-meta";
+import {
+  ANIM_CATEGORIES,
+  type AnimCurve,
+  ANIMS,
+  fitAnimationLengths,
+} from "film-stage/animate-meta";
 
 import { effectLength, effectSpan } from "../../src/timing-effects.mjs";
 import type { TimingClock } from "../../src/timing.mjs";
@@ -13,6 +18,7 @@ export interface AnimSetData {
   fx: string;
   len?: number;
   k?: number;
+  delay?: number;
   curve?: AnimCurve;
   flip?: boolean;
   optics?: number;
@@ -43,6 +49,15 @@ export interface AnimHandleCandidate {
   inAnchor?: number;
   outAnchor?: number;
 }
+
+export const animationOccurrenceClock = (clock: TimingClock, span: PlaySegment): TimingClock => {
+  const rate = (span.sourceTo - span.sourceFrom) / (span.to - span.from);
+  return {
+    ...clock,
+    outputAt: (t) => span.from + (t - span.sourceFrom) / rate,
+    sourceAt: (t) => span.sourceFrom + (t - span.from) * rate,
+  };
+};
 
 export const MIN_ANIM = 0.1;
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -92,6 +107,7 @@ export const tidyAnimSet = (a: AnimSetData, fx?: AnimFxMeta): AnimSetData => {
     if (k === 1) delete next.k;
     else next.k = k;
   }
+  if (!next.delay) delete next.delay;
   if (!next.curve || next.curve === "auto" || (fx && !fxSupportsCurve(fx))) delete next.curve;
   if (!next.flip || !canFlip) delete next.flip;
   if (next.seam !== false || (fx && !fx.pair)) delete next.seam;
@@ -124,6 +140,7 @@ export const freshAnimSet = ({
   const base: AnimSetData = {
     fx: id,
     ...(cur?.k !== undefined ? { k: cur.k } : {}),
+    ...(cur?.delay ? { delay: cur.delay } : {}),
     ...(from?.curve ? { curve: from.curve } : {}),
     ...(from?.flip ? { flip: true } : {}),
     ...(from?.optics !== undefined ? { optics: from.optics } : {}),
@@ -162,6 +179,8 @@ const spanOfSlot = (
 export interface AnimSlotMetrics {
   srcIn: number;
   srcOut: number;
+  delayIn?: number;
+  delayOut?: number;
   maxSrcIn: number;
   maxSrcOut: number;
   inSpan: [number, number];
@@ -192,6 +211,8 @@ export const animSlotMetrics = (
   return {
     srcIn,
     srcOut,
+    delayIn: an.in?.delay,
+    delayOut: an.out?.delay,
     maxSrcIn,
     maxSrcOut,
     inSpan,
@@ -264,16 +285,34 @@ export const animBandOnSegment = (
 ): { from: number; to: number; handleAt: number | null } | null => {
   const srcLen = slot === "in" ? m.srcIn : m.srcOut;
   if (srcLen <= 0) return null;
-  const bandFromSrc = slot === "in" ? shotSource[0] : shotSource[1] - srcLen;
-  const bandToSrc = slot === "in" ? shotSource[0] + srcLen : shotSource[1];
+  const delay = (slot === "in" ? m.delayIn : m.delayOut) ?? 0;
+  const fromSrc = (slot === "in" ? shotSource[0] : shotSource[1] - srcLen) + delay;
+  const toSrc = (slot === "in" ? shotSource[0] + srcLen : shotSource[1]) + delay;
+  const bandFromSrc = Math.max(shotSource[0], fromSrc);
+  const bandToSrc = Math.min(shotSource[1], toSrc);
   const aSrc = Math.max(bandFromSrc, seg.sourceFrom);
   const bSrc = Math.min(bandToSrc, seg.sourceTo);
   if (bSrc <= aSrc + 1e-7) return null;
   const from = clock ? clock.outputAt(aSrc, "after") : aSrc;
   const to = clock ? clock.outputAt(bSrc, "before") : bSrc;
-  const innerSrc = slot === "in" ? bandToSrc : bandFromSrc;
-  const onThisSeg = innerSrc >= seg.sourceFrom - 1e-6 && innerSrc <= seg.sourceTo + 1e-6;
+  const innerSrc = slot === "in" ? toSrc : fromSrc;
+  const onThisSeg = innerSrc >= aSrc - 1e-6 && innerSrc <= bSrc + 1e-6;
   return { from, to, handleAt: onThisSeg ? (slot === "in" ? to : from) : null };
+};
+
+export const animationTrimDuration = (
+  slot: "in" | "out",
+  at: number,
+  anchor: number,
+  delay: number,
+  clock: TimingClock | null,
+) => {
+  const trimAt = !delay
+    ? at
+    : clock
+      ? clock.outputAt(clock.sourceAt(at, slot === "out" ? "after" : "before") - delay, "before")
+      : at - delay;
+  return r2(Math.max(MIN_ANIM, slot === "in" ? trimAt - anchor : anchor - trimAt));
 };
 
 export const clampHandleX = (hx: number, x0: number, x1: number, barWidth = 3): number =>
