@@ -7,6 +7,13 @@ import { makeDof } from "film-stage/dof";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
 import { activeAdjustments } from "film-stage/grade-layers";
+import {
+  applyLightingRig,
+  createGodraysPass,
+  createLightingRig,
+  DEFAULT_LIGHTS,
+  lightsAt,
+} from "film-stage/lights";
 import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeVelocity } from "film-stage/velocity";
@@ -117,17 +124,40 @@ export async function buildScene(canvas, W, H, draft = false) {
     steve,
   );
 
-  // A soft key from above the room's middle and a sky/ground fill (edit.json light)
-  const C = EDIT.light;
-  const hemi = new THREE.HemisphereLight(0xdfe6f0, 0x3a3026, C.fill);
-  const key = new THREE.SpotLight(0xfff0dc, C.key, 14, THREE.MathUtils.degToRad(70), 0.7, 1.2);
-  key.position.set(ROOM.x1 / 2 + 0.5, ROOM.top + 0.6, ROOM.z1 / 2 + 0.5);
-  key.target.position.set(ROOM.x1 / 2 + 0.5, 0, ROOM.z1 / 2 + 0.5);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.bias = -0.0008;
-  key.shadow.radius = 3;
-  scene.add(hemi, key, key.target);
+  // Keyframed scene lighting + practicals (src/timeline/lights.json, falling back to edit.json light)
+  const roomTarget = [ROOM.x1 / 2 + 0.5, 1.5, ROOM.z1 / 2 + 0.5];
+  const rig = createLightingRig(scene, {
+    target: roomTarget,
+    distance: 18,
+    shadowExtent: 10,
+  });
+  const legacyLightsAt = (t) => {
+    const C = EDIT.light ?? { key: 40, fill: 0.6 };
+    const base = lightsAt(undefined, t);
+    return {
+      ...base,
+      target: roomTarget,
+      key: { ...base.key, intensity: Math.min(3.5, (C.key ?? 40) / 16), castShadow: false },
+      world: { ...base.world, ambientIntensity: C.fill ?? DEFAULT_LIGHTS.world.ambientIntensity },
+      practicals: [
+        {
+          id: "legacy-room-key",
+          name: "Room Key",
+          kind: "spot",
+          at: [ROOM.x1 / 2 + 0.5, ROOM.top + 0.6, ROOM.z1 / 2 + 0.5],
+          target: [ROOM.x1 / 2 + 0.5, 0, ROOM.z1 / 2 + 0.5],
+          color: "#fff0dc",
+          intensity: C.key ?? 40,
+          distance: 14,
+          decay: 1.2,
+          angle: 70,
+          penumbra: 0.7,
+        },
+      ],
+    };
+  };
+  const hasLightsKeys = (raw) =>
+    Array.isArray(raw) ? raw.length > 0 : Array.isArray(raw?.keys) && raw.keys.length > 0;
 
   const composer = new EffectComposer(renderer, {
     frameBufferType: THREE.HalfFloatType,
@@ -149,6 +179,8 @@ export async function buildScene(canvas, W, H, draft = false) {
   composer.addPass(ao);
   composer.addPass(new EffectPass(camera, new SMAAEffect()));
   const dof = makeDof(composer, camera, { draft });
+  const godrays = createGodraysPass(rig.key, camera, { enabled: false });
+  if (godrays.pass) composer.addPass(godrays.pass);
   const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
   composer.addPass(
     new EffectPass(
@@ -292,8 +324,9 @@ export async function buildScene(canvas, W, H, draft = false) {
     steve.face(mood, mouth, blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
     now.mood = mood;
 
-    hemi.intensity = EDIT.light.fill;
-    key.intensity = EDIT.light.key;
+    const lightsSample = hasLightsKeys(EDIT.lights) ? lightsAt(EDIT.lights, t) : legacyLightsAt(t);
+    applyLightingRig(rig, lightsSample, t);
+    godrays.update(lightsSample.godrays, lightsSample.key.color);
     tone.saturation = EDIT.look.saturation;
     const shot = Math.max(0, view ?? shotAt(t));
     const shotEntry = SHOTS_OUT[shot];

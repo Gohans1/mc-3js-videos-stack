@@ -86,6 +86,7 @@
     },
     "soundTimeline": "src/timeline/audio.json",
     "camTimeline": "src/timeline/cam.json",
+    "lightsTimeline": "src/timeline/lights.json",
     "textTimeline": "src/timeline/text.json",
     "adjustmentTimeline": "src/timeline/adjust.json",
     "timingTimeline": "src/timeline/timing.json",

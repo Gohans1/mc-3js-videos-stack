@@ -1,0 +1,74 @@
+{
+  "target": [3.5, 1.5, 3.5],
+  "keys": [
+    {
+      "id": "starter-key",
+      "t": 0,
+      "ease": "smooth",
+      "preset": "studio-three-point",
+      "key": {
+        "enabled": true,
+        "color": "#fff4e4",
+        "intensity": 2.45,
+        "azimuth": 42,
+        "elevation": 38,
+        "shadowRadius": 2.5,
+        "castShadow": false
+      },
+      "fill": {
+        "enabled": true,
+        "color": "#bdd6f2",
+        "intensity": 0.95,
+        "azimuth": -55,
+        "elevation": 24,
+        "negativeFill": false
+      },
+      "rim": {
+        "enabled": true,
+        "color": "#eef4ff",
+        "intensity": 1.65,
+        "azimuth": 155,
+        "elevation": 30
+      },
+      "world": {
+        "skyColor": "#dfe6f0",
+        "groundColor": "#3a3026",
+        "ambientIntensity": 0.65,
+        "background": null
+      },
+      "fog": {
+        "mode": "none",
+        "color": "#c8d4e0",
+        "near": 10,
+        "far": 45,
+        "density": 0.02
+      },
+      "practicals": [
+        {
+          "id": "room-lamp",
+          "name": "Ceiling Lamp",
+          "kind": "spot",
+          "at": [3.5, 3.6, 3.5],
+          "target": [3.5, 0, 3.5],
+          "color": "#fff0dc",
+          "intensity": 28,
+          "distance": 14,
+          "decay": 1.2,
+          "angle": 70,
+          "penumbra": 0.7,
+          "flicker": false
+        }
+      ],
+      "godrays": {
+        "enabled": false,
+        "density": 0.015,
+        "maxDensity": 0.5,
+        "edgeStrength": 2,
+        "edgeRadius": 2,
+        "raymarchSteps": 60,
+        "blur": true,
+        "weight": 1
+      }
+    }
+  ]
+}
