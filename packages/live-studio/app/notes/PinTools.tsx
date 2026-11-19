@@ -1,6 +1,8 @@
+// Inline drawing-tool row inside the stage-anchored composer so strokes start right where the pin landed.
+import { useRef } from "react";
+
 import { Button } from "@/components/ui/button";
 
-// Inline drawing-tool row inside the stage-anchored composer so strokes start right where the pin landed.
 import { useStudio } from "../core/store";
 import { INK_KEYS, setInk } from "./ink";
 import { ToolKey, TOOLS } from "./InkBar";
@@ -10,6 +12,8 @@ export function PinDrawToolbar({ hasPin }: { hasPin?: boolean } = {}) {
   const show = useStudio(
     (s) => (hasPin ?? (s.compose?.kind === "create" && !!s.compose.pin)) && !s.ink && !s.playing,
   );
+  const ink = useStudio((s) => s.ink);
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   if (!show) return null;
   return (
     <div
@@ -21,21 +25,36 @@ export function PinDrawToolbar({ hasPin }: { hasPin?: boolean } = {}) {
           e.preventDefault();
           e.stopPropagation();
           cancelNote();
+          return;
+        }
+        if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+          const idx = btnRefs.current.findIndex((b) => b === document.activeElement);
+          if (idx < 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const step = e.key === "ArrowRight" ? 1 : -1;
+          const next = (idx + step + TOOLS.length) % TOOLS.length;
+          btnRefs.current[next]?.focus();
         }
       }}
-      className="border-hairline-subtle bg-backdrop/75 @container mb-1.5 flex flex-wrap items-center gap-0.5 rounded-lg border p-0.5 outline-none"
+      className="border-hairline bg-backdrop/75 @container flex flex-wrap items-center gap-0.5 rounded-lg border p-0.5 outline-none"
     >
-      {TOOLS.map(([id, name, icon, help]) => (
+      {TOOLS.map(([id, name, icon, help], i) => (
         <Button
           key={id}
-          variant="tool"
-          size="xs"
+          ref={(el) => {
+            btnRefs.current[i] = el;
+          }}
+          variant="quiet"
+          size="default"
+          aria-pressed={ink === id}
           title={`${help} (${INK_KEYS.indexOf(id) + 1})`}
+          className="min-w-0 flex-1"
           onClick={() => setInk(id)}
         >
           {icon}
           <span className="@max-[280px]:sr-only">{name}</span>
-          <ToolKey id={id} />
+          <ToolKey id={id} subtle />
         </Button>
       ))}
     </div>

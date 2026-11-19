@@ -37,11 +37,19 @@ export const TOOLS: [InkKind, string, ReactNode, string][] = [
   ],
 ];
 
-export const ToolKey = ({ id }: { id: InkKind }) => (
-  <Kbd aria-hidden className="ms-0.5 pointer-coarse:hidden">
-    {INK_KEYS.indexOf(id) + 1}
-  </Kbd>
-);
+export const ToolKey = ({ id, subtle = false }: { id: InkKind; subtle?: boolean }) =>
+  subtle ? (
+    <span
+      aria-hidden
+      className="text-muted-foreground text-tag ms-0.5 font-mono leading-none font-medium tabular-nums pointer-coarse:hidden"
+    >
+      {INK_KEYS.indexOf(id) + 1}
+    </span>
+  ) : (
+    <Kbd aria-hidden className="ms-0.5 pointer-coarse:hidden">
+      {INK_KEYS.indexOf(id) + 1}
+    </Kbd>
+  );
 
 export function StageNoteActions({ className }: { className?: string }) {
   const compose = useStudio((s) => s.compose),
