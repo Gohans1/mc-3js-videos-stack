@@ -1,7 +1,7 @@
 // The note being written. Every keystroke is kept on the device (notes/notes.ts setDraft), so a reload never loses it.
 // On an upright phone it sits right under the picture, so the keyboard can't cover it and a tap still lands on the picture;
 // in PhoneApp (inline) it is the top of the notes column, which the keyboard shrinks (device.ts resizes-content) instead of covering
-import { GripHorizontal, ImagePlus, TriangleAlert, X } from "lucide-react";
+import { Crosshair, GripHorizontal, ImagePlus, PenLine, TriangleAlert, X } from "lucide-react";
 import {
   type CSSProperties,
   lazy,
@@ -18,8 +18,10 @@ import {
 import { flushSync } from "react-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Kbd } from "@/components/ui/kbd";
+import { textareaVariants } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { EASE_OUT } from "../components/Motion";
@@ -42,7 +44,7 @@ import {
   shouldAnimateEnter,
 } from "./compose-motion";
 import { INK_KEYS, setInk, toolsOpen } from "./ink";
-import { modKeyLabel, noteShotTitle } from "./note-card-meta";
+import { modKeyLabel, noteShotTitle, pinShortLabel } from "./note-card-meta";
 import { AskCallout } from "./note-parts";
 import { cancelNote, saveNote, setDraft } from "./notes";
 import { PinDrawToolbar } from "./PinTools";
@@ -424,23 +426,72 @@ export function Compose({
     shownRef = shownRefs.find((r) => r.id === openRef) ?? null;
   const st = noteShotTitle(shownCompose.shot, shownCompose.shotName);
   const shotText = st.secondary ? `${st.primary} · ${st.secondary}` : st.primary;
+  const pinLabel = shownCompose.pin ? pinShortLabel(shownCompose.pin.what) : null;
   const where = isEdit
     ? `Editing note · ${shownCompose.time} · ${shotText}`
     : `${stamp(shownCompose.t)} · ${shotText}${shownCompose.pin ? ` · ${shownCompose.pin.what}` : ""}`;
-  const locationHeader = (
+  const locationHeader = stage ? (
+    <div
+      onPointerDown={draggableHeader ? onDragHeaderPointerDown : undefined}
+      onDoubleClick={
+        draggableHeader
+          ? (e) => {
+              if (e.target instanceof Element && e.target.closest("button")) return;
+              onHeaderDoubleClick?.();
+            }
+          : undefined
+      }
+      title={draggableHeader ? "Drag to move · Double-click to reset" : undefined}
+      className={cn(
+        "group/drag flex flex-none items-center justify-between gap-2",
+        draggableHeader && "cursor-grab touch-none select-none active:cursor-grabbing",
+      )}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="bg-backdrop/65 text-primary-text inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-mono text-xs leading-none font-medium tabular-nums">
+          {stamp(shownCompose.t)}
+        </span>
+        <span className="text-ui min-w-0 flex-1 truncate leading-tight" title={shotText}>
+          <span className="text-foreground/90 font-medium">{st.primary}</span>
+          {st.secondary && <span className="text-muted-foreground"> · {st.secondary}</span>}
+        </span>
+        {shownCompose.pin && (
+          <span
+            title={shownCompose.pin.what}
+            className="border-primary/25 bg-primary/10 text-primary-text inline-flex max-w-32 min-w-0 shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs leading-none font-medium"
+          >
+            <Crosshair aria-hidden className="size-3 shrink-0" />
+            <span className="truncate">{pinLabel || shownCompose.pin.what}</span>
+          </span>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {draggableHeader && (
+          <GripHorizontal
+            aria-hidden
+            className="text-muted-foreground/50 group-hover/drag:text-muted-foreground size-3.5 transition-colors motion-reduce:transition-none"
+          />
+        )}
+        <Button
+          type="button"
+          variant="quiet"
+          size="icon-sm"
+          aria-label="Close note"
+          title="Discard note (Esc)"
+          onClick={cancelNote}
+        >
+          <X aria-hidden />
+        </Button>
+      </div>
+    </div>
+  ) : (
     <div
       onPointerDown={draggableHeader ? onDragHeaderPointerDown : undefined}
       onDoubleClick={draggableHeader ? onHeaderDoubleClick : undefined}
       title={draggableHeader ? "Drag to move · Double-click to reset" : undefined}
       className={cn(
         "text-foreground/90 sideways:mb-1 text-ui flex flex-none items-center justify-between gap-2 leading-normal font-medium wrap-anywhere tabular-nums",
-        stage
-          ? "mb-1.5"
-          : dock
-            ? cramped
-              ? "mb-1"
-              : "mb-1.5 [@media(max-height:679px)]:mb-1"
-            : "mb-2",
+        dock ? (cramped ? "mb-1" : "mb-1.5 [@media(max-height:679px)]:mb-1") : "mb-2",
         draggableHeader && "cursor-grab touch-none select-none active:cursor-grabbing",
       )}
     >
@@ -498,7 +549,7 @@ export function Compose({
         className={cn(
           "@container flex min-h-0 flex-1 flex-col overflow-hidden",
           stage
-            ? "bg-popover/95 border-hairline-strong rounded-xl border p-2.5 shadow-2xl ring-1 ring-white/10 backdrop-blur-md"
+            ? "bg-popover/96 border-hairline-strong shadow-sheet gap-2.5 rounded-2xl border p-3 backdrop-blur-md"
             : inline && dock
               ? "bg-card safe-bottom border-hairline-subtle border-t px-3 pt-2"
               : inline
@@ -514,16 +565,34 @@ export function Compose({
       >
         {!scrollLocation && locationHeader}
         {stage && <PinDrawToolbar hasPin={shownCompose.kind === "create" && !!shownCompose.pin} />}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+            stage && "-m-0.5 p-0.5",
+          )}
+        >
           {scrollLocation && locationHeader}
-          {shownDrawn && (
-            <div className="text-ui text-ink-text mb-1.5 tabular-nums">{shownDrawn}</div>
-          )}
-          {!shownDrawn && !isEdit && inOutAt(shownCompose.t) && (
-            <div className="text-ui text-in-out-text mb-1.5 tabular-nums">
-              About {rangeText(inOutAt(shownCompose.t)!)}, the In to Out stretch
-            </div>
-          )}
+          {shownDrawn &&
+            (stage ? (
+              <Badge variant="ink" className="mb-2">
+                <PenLine aria-hidden />
+                <span className="tabular-nums">{shownDrawn}</span>
+              </Badge>
+            ) : (
+              <div className="text-ui text-ink-text mb-1.5 tabular-nums">{shownDrawn}</div>
+            ))}
+          {!shownDrawn &&
+            !isEdit &&
+            inOutAt(shownCompose.t) &&
+            (stage ? (
+              <Badge variant="inOut" className="mb-2">
+                About {rangeText(inOutAt(shownCompose.t)!)}, In to Out
+              </Badge>
+            ) : (
+              <div className="text-ui text-in-out-text mb-1.5 tabular-nums">
+                About {rangeText(inOutAt(shownCompose.t)!)}, the In to Out stretch
+              </div>
+            ))}
           {isEdit && editAsk && (
             <div className="mb-1.5 max-w-[65ch]">
               <AskCallout ask={editAsk} compact={cramped} />
@@ -556,7 +625,8 @@ export function Compose({
               )}
             </>
           )}
-          <Textarea
+          <textarea
+            data-slot="textarea"
             disabled={noteSaving}
             ref={text}
             name="note"
@@ -608,17 +678,19 @@ export function Compose({
                 cancelNote();
               }
             }}
-            variant="note"
-            className={cn(
-              "sideways:h-16 max-w-[65ch] resize-y",
+            className={
               stage
-                ? "h-16 max-h-[24vh] min-h-12"
-                : dock
-                  ? cramped
-                    ? "h-12 max-h-[28vh] min-h-10"
-                    : "upright:h-19 h-12 max-h-[28vh] min-h-10 [@media(min-height:700px)]:h-19 [@media(min-height:700px)]:min-h-16"
-                  : "upright:h-19 h-28",
-            )}
+                ? "border-hairline-strong bg-backdrop/75 text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:ring-primary/15 flex field-sizing-content max-h-[24vh] min-h-18 w-full max-w-[65ch] resize-none [scrollbar-width:thin] overscroll-contain rounded-lg border px-3 py-2 text-sm/relaxed transition-colors outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none pointer-coarse:text-base"
+                : cn(
+                    textareaVariants({ variant: "note" }),
+                    "sideways:h-16 max-w-[65ch] resize-y",
+                    dock
+                      ? cramped
+                        ? "h-12 max-h-[28vh] min-h-10"
+                        : "upright:h-19 h-12 max-h-[28vh] min-h-10 [@media(min-height:700px)]:h-19 [@media(min-height:700px)]:min-h-16"
+                      : "upright:h-19 h-28",
+                  )
+            }
           />
           {!isEdit && (
             <>
@@ -692,49 +764,106 @@ export function Compose({
         </div>
         <div
           className={cn(
-            "sideways:mt-1.5 flex max-w-[65ch] flex-none items-center gap-1.5",
-            (dock || stage) && !inline && "flex-wrap",
-            dock || stage ? "mt-1.5" : "mt-2",
+            "sideways:mt-1.5 flex max-w-[65ch] flex-none items-center",
+            stage
+              ? "flex-wrap justify-between gap-2"
+              : cn("gap-1.5", dock && !inline && "flex-wrap", dock ? "mt-1.5" : "mt-2"),
           )}
         >
-          <Button
-            size={PHONE ? "phone-cta" : stage ? "sm" : "md"}
-            className="upright:flex-1 sm:min-w-24"
-            disabled={
-              noteSaving ||
-              !isComposeDirty(shownCompose, shownDraft, Boolean(shownDrawn) || shownRefs.length > 0)
-            }
-            onClick={saveNote}
-          >
-            {noteSaving ? "Saving…" : isEdit ? "Save" : "Add note"}
-          </Button>
-          {!isEdit && shownRefs.length === 0 && (
-            <Button
-              variant="subtle"
-              size={PHONE ? "phone-cta" : stage ? "sm" : "md"}
-              aria-label="Add a picture"
-              onClick={() => picker.current?.click()}
-            >
-              <ImagePlus data-icon="inline-start" aria-hidden />
-              <span className="hidden @xs:inline">Picture</span>
-            </Button>
+          {stage ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                {!isEdit && shownRefs.length === 0 && (
+                  <Button
+                    variant="subtle"
+                    size="md"
+                    aria-label="Add a picture"
+                    title={`Attach picture (${modKeyLabel()}V or drop)`}
+                    onClick={() => picker.current?.click()}
+                  >
+                    <ImagePlus data-icon="inline-start" aria-hidden />
+                    <span className="hidden @xs:inline">Picture</span>
+                  </Button>
+                )}
+              </div>
+              <div className="ms-auto flex items-center gap-1.5">
+                <Button variant="ghost" size="md" onClick={cancelNote}>
+                  Cancel
+                </Button>
+                <Button
+                  size="md"
+                  className="min-w-24"
+                  disabled={
+                    noteSaving ||
+                    !isComposeDirty(
+                      shownCompose,
+                      shownDraft,
+                      Boolean(shownDrawn) || shownRefs.length > 0,
+                    )
+                  }
+                  onClick={saveNote}
+                >
+                  {noteSaving ? "Saving…" : isEdit ? "Save" : "Add note"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Button
+                size={PHONE ? "phone-cta" : "md"}
+                className="upright:flex-1 sm:min-w-24"
+                disabled={
+                  noteSaving ||
+                  !isComposeDirty(
+                    shownCompose,
+                    shownDraft,
+                    Boolean(shownDrawn) || shownRefs.length > 0,
+                  )
+                }
+                onClick={saveNote}
+              >
+                {noteSaving ? "Saving…" : isEdit ? "Save" : "Add note"}
+              </Button>
+              {!isEdit && shownRefs.length === 0 && (
+                <Button
+                  variant="subtle"
+                  size={PHONE ? "phone-cta" : "md"}
+                  aria-label="Add a picture"
+                  onClick={() => picker.current?.click()}
+                >
+                  <ImagePlus data-icon="inline-start" aria-hidden />
+                  <span className="hidden @xs:inline">Picture</span>
+                </Button>
+              )}
+              <Button variant="quiet" size={PHONE ? "phone-cta" : "md"} onClick={cancelNote}>
+                Cancel
+              </Button>
+            </>
           )}
-          <Button
-            variant="quiet"
-            size={PHONE ? "phone-cta" : stage ? "sm" : "md"}
-            onClick={cancelNote}
-          >
-            Cancel
-          </Button>
         </div>
         <small
           id={hintId}
           className={cn(
             "text-muted-foreground flex max-w-[65ch] flex-none items-baseline justify-between gap-2 text-xs leading-normal pointer-coarse:hidden [@media(max-height:720px)]:hidden",
-            dock || stage ? (cramped ? "hidden" : "mt-1.5") : "mt-2",
+            stage ? "" : dock ? (cramped ? "hidden" : "mt-1.5") : "mt-2",
           )}
         >
-          {dock || stage ? (
+          {stage ? (
+            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <span className="inline-flex items-center gap-1">
+                <Kbd>Enter</Kbd>
+                <span>{isEdit ? "save" : "add"}</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>Shift+Enter</Kbd>
+                <span>new line</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>Esc</Kbd>
+                <span>cancel</span>
+              </span>
+            </span>
+          ) : dock ? (
             <>
               <span className="min-w-0">
                 {isEdit ? "Enter saves" : "Enter adds"} · Shift+Enter new line · Esc cancels
@@ -767,7 +896,7 @@ export function StageNoteComposer() {
   const [dims, setDims] = useState({
     viewSize: { width: 800, height: 500 },
     stageRect: { left: 0, top: 0, width: 800, height: 500 },
-    cardSize: { width: 380, height: 220 },
+    cardSize: { width: 416, height: 220 },
   });
 
   const liveAnchor =
@@ -821,7 +950,7 @@ export function StageNoteComposer() {
             }
           : { left: 0, top: 0, width: viewSize.width, height: viewSize.height };
       const cardSize = {
-        width: box?.offsetWidth || 380,
+        width: box?.offsetWidth || 416,
         height: box?.offsetHeight || 220,
       };
       setDims((prev) => {
@@ -909,7 +1038,7 @@ export function StageNoteComposer() {
           ref={boxRef}
           style={{ "--sx": `${placement.left}px`, "--sy": `${placement.top}px` } as CSSProperties}
           className={cn(
-            "absolute top-(--sy) left-(--sx) flex max-h-[calc(100%-1rem)] w-[min(24rem,calc(100%-1rem))] flex-col transition-opacity duration-150",
+            "absolute top-(--sy) left-(--sx) flex max-h-[calc(100%-1rem)] w-[min(26rem,calc(100%-1rem))] flex-col transition-opacity duration-150",
             inkDrawing ? "pointer-events-none opacity-25" : "pointer-events-auto opacity-100",
           )}
         >
