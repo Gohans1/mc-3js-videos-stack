@@ -105,7 +105,7 @@ function RangeBar({
   return (
     <div
       ref={track}
-      aria-label="Scene export range slider"
+      aria-label="Export time range"
       className="bg-scrubber-track ring-hairline relative h-8 w-full touch-none rounded-md ring-1 select-none"
       onPointerMove={onMove}
       onPointerUp={() => {
@@ -142,8 +142,8 @@ function RangeBar({
         <button
           type="button"
           data-handle="left"
-          aria-label="Adjust export start handle"
-          className="bg-primary hover:bg-primary/90 focus-visible:ring-ring absolute inset-y-0 -left-1.5 w-3 cursor-ew-resize rounded-s outline-none focus-visible:ring-2"
+          aria-label="Adjust export start time"
+          className="bg-primary hover:bg-primary/90 focus-visible:ring-ring absolute inset-y-0 -left-1.5 w-3 cursor-ew-resize rounded-s transition-colors duration-100 outline-none focus-visible:ring-2 motion-reduce:transition-none"
           onPointerDown={(e) => {
             e.stopPropagation();
             track.current?.setPointerCapture(e.pointerId);
@@ -153,8 +153,8 @@ function RangeBar({
         <button
           type="button"
           data-handle="right"
-          aria-label="Adjust export end handle"
-          className="bg-primary hover:bg-primary/90 focus-visible:ring-ring absolute inset-y-0 -right-1.5 w-3 cursor-ew-resize rounded-e outline-none focus-visible:ring-2"
+          aria-label="Adjust export end time"
+          className="bg-primary hover:bg-primary/90 focus-visible:ring-ring absolute inset-y-0 -right-1.5 w-3 cursor-ew-resize rounded-e transition-colors duration-100 outline-none focus-visible:ring-2 motion-reduce:transition-none"
           onPointerDown={(e) => {
             e.stopPropagation();
             track.current?.setPointerCapture(e.pointerId);
@@ -207,21 +207,19 @@ export function ClipExport({ className }: { className?: string }) {
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (nextOpen && !progress) {
-      setRange(defaultSpanForTime(S.t, getInOutSnapshot()));
+      setRange(defaultSpanForTime(S.t, inOut));
       setError("");
     }
   };
 
-  const getInOutSnapshot = () => inOut;
-
   const renderAndDownload = async () => {
     if (progress) return;
     if (typeof VideoEncoder !== "function") {
-      setError("Direct MP4 export needs WebCodecs in Chrome or Edge.");
+      setError("Open Studio in Chrome or Edge to export MP4 clips.");
       return;
     }
     if (!S.render || !S.el?.canvas) {
-      setError("Scene renderer is not ready yet.");
+      setError("Preview is still loading. Wait for the picture to appear, then export again.");
       return;
     }
     revokeReady();
@@ -234,7 +232,7 @@ export function ClipExport({ className }: { className?: string }) {
     canvas.height = outH;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      setError("Couldn’t create 2D export canvas.");
+      setError("Unable to prepare the export canvas. Reload the page and try again.");
       return;
     }
 
@@ -315,7 +313,12 @@ export function ClipExport({ className }: { className?: string }) {
       say(`Exported ${fileName} (${outW}×${outH})`);
     } catch (e) {
       if (!abort.signal.aborted) {
-        setError(e instanceof Error ? e.message : "Couldn’t encode MP4 clip.");
+        const reason = e instanceof Error ? e.message.replace(/\.+$/, "") : "";
+        setError(
+          reason
+            ? `Unable to export MP4 clip (${reason}). Try a shorter range or lower quality.`
+            : "Unable to export MP4 clip. Try a shorter range or lower quality.",
+        );
       }
       await output?.cancel().catch(() => {});
     } finally {
@@ -329,7 +332,7 @@ export function ClipExport({ className }: { className?: string }) {
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <Tip label="Render & download a scene clip as MP4 (360p / 540p)">
+      <Tip label="Export a quick preview MP4 clip (360p or 540p)">
         <PopoverTrigger
           render={
             <Button
@@ -348,58 +351,79 @@ export function ClipExport({ className }: { className?: string }) {
         side="top"
         align="end"
         sideOffset={8}
-        className="w-[min(23rem,calc(100vw-24px))]"
+        className="w-[min(25rem,calc(100vw-24px))]"
       >
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3.5 p-0.5">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-ui font-semibold">Export scene clip</p>
-              <p className="text-muted-foreground text-xs">
-                Mark a stretch to render straight into a light MP4.
+              <h3 className="text-heading-foreground text-sm/snug font-semibold">
+                Export MP4 clip
+              </h3>
+              <p className="text-muted-foreground text-ui/relaxed mt-0.5 text-pretty">
+                Pick a time range below to download a quick preview MP4.
               </p>
             </div>
             <Button
               variant="quiet"
               size="icon-xs"
-              aria-label="Close export clip"
+              aria-label="Close export MP4 clip"
               onClick={() => setOpen(false)}
             >
               <X />
             </Button>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs tabular-nums">
-              <span className="font-medium">
-                {stamp(from)} → {stamp(to)}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-2 tabular-nums">
+              <span className="text-foreground text-sm font-medium">
+                {stamp(from)} – {stamp(to)}
               </span>
-              <span className="text-muted-foreground">
-                {(to - from).toFixed(2)}s · {frameCount} frames
+              <span className="text-muted-foreground text-ui">
+                {(to - from).toFixed(2)}s · {frameCount} {frameCount === 1 ? "frame" : "frames"}
               </span>
             </div>
             <RangeBar from={from} to={to} duration={DURATION} onChange={updateRange} />
-            <div className="flex flex-wrap items-center gap-1 pt-0.5">
-              <Button
-                variant="subtle"
-                size="xs"
-                onClick={() => {
-                  const i = shotIndex(S.t);
-                  updateRange(SHOTS_OUT[i]?.t ?? 0, shotEnd(i));
-                }}
-              >
-                Current shot
-              </Button>
-              {inOut && (
-                <Button variant="subtle" size="xs" onClick={() => updateRange(inOut[0], inOut[1])}>
-                  Use In–Out
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <Tip label="Set export range to the shot at the playhead">
+                <Button
+                  variant="subtle"
+                  size="md"
+                  onClick={() => {
+                    const i = shotIndex(S.t);
+                    updateRange(SHOTS_OUT[i]?.t ?? 0, shotEnd(i));
+                  }}
+                >
+                  This shot
                 </Button>
+              </Tip>
+              {inOut && (
+                <Tip label="Copy the timeline In–Out loop range into export">
+                  <Button
+                    variant="subtle"
+                    size="md"
+                    onClick={() => updateRange(inOut[0], inOut[1])}
+                  >
+                    Match In–Out
+                  </Button>
+                </Tip>
               )}
-              <Button variant="quiet" size="xs" onClick={() => set({ inOut: [from, to] })}>
-                Mark on ruler
-              </Button>
-              <Button variant="quiet" size="xs" onClick={() => updateRange(0, DURATION)}>
-                Full
-              </Button>
+              <Tip label="Apply this export range to the timeline In–Out loop markers">
+                <Button
+                  variant="quiet"
+                  size="md"
+                  onClick={() => {
+                    set({ inOut: [from, to] });
+                    S.dirty = true;
+                  }}
+                >
+                  Set timeline In–Out
+                </Button>
+              </Tip>
+              <Tip label="Select the entire film from 00:00.000 to the end">
+                <Button variant="quiet" size="md" onClick={() => updateRange(0, DURATION)}>
+                  Whole film
+                </Button>
+              </Tip>
             </div>
             {SHOTS_OUT.length > 1 && (
               <div className="flex gap-1 overflow-x-auto pt-0.5 pb-1">
@@ -411,11 +435,12 @@ export function ClipExport({ className }: { className?: string }) {
                     <Button
                       key={`pick-shot-${i}`}
                       variant={active ? "secondary" : "quiet"}
-                      size="xs"
+                      size="sm"
+                      aria-pressed={active}
                       className="flex-none"
                       onClick={() => updateRange(a, b)}
                     >
-                      Shot {i}
+                      <span className="tabular-nums">Shot {i}</span>
                     </Button>
                   );
                 })}
@@ -423,12 +448,15 @@ export function ClipExport({ className }: { className?: string }) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1 text-xs">
-              <span className="text-muted-foreground">From (s)</span>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="clip-export-start" className="text-label text-ui font-medium">
+                Start (s)
+              </label>
               <NumberField
-                size="sm"
-                name="Export from (s)"
+                id="clip-export-start"
+                size="comfortable"
+                name="Export start (s)"
                 value={from}
                 min={0}
                 max={Math.max(0, to - MIN_SPAN)}
@@ -439,11 +467,14 @@ export function ClipExport({ className }: { className?: string }) {
                 }}
               />
             </div>
-            <div className="flex flex-col gap-1 text-xs">
-              <span className="text-muted-foreground">To (s)</span>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="clip-export-end" className="text-label text-ui font-medium">
+                End (s)
+              </label>
               <NumberField
-                size="sm"
-                name="Export to (s)"
+                id="clip-export-end"
+                size="comfortable"
+                name="Export end (s)"
                 value={to}
                 min={Math.min(DURATION, from + MIN_SPAN)}
                 max={DURATION}
@@ -457,76 +488,91 @@ export function ClipExport({ className }: { className?: string }) {
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-col">
-              <span className="text-ui text-xs font-medium">Quality</span>
-              <span className="text-muted-foreground text-xs tabular-nums">
-                {outW}×{outH} ({ratio})
+            <div className="flex flex-col gap-0.5">
+              <span className="text-foreground text-sm font-medium">Quality</span>
+              <span className="text-muted-foreground text-ui tabular-nums">
+                {outW} × {outH} · {ratio}
               </span>
             </div>
             <Segmented
               label="Export quality"
               value={quality}
               items={[
-                { id: "360p", title: "360p" },
-                { id: "540p", title: "540p" },
+                {
+                  id: "360p",
+                  title: <span className="tabular-nums">360p</span>,
+                  ariaLabel: "360p",
+                },
+                {
+                  id: "540p",
+                  title: <span className="tabular-nums">540p</span>,
+                  ariaLabel: "540p",
+                },
               ]}
               onChange={setQuality}
             />
           </div>
 
           {progress && (
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-xs tabular-nums">
+            <div className="flex flex-col gap-1.5">
+              <div className="text-ui flex items-center justify-between tabular-nums">
                 <span className="text-primary-text font-medium">
-                  Rendering frame {progress.frame} / {progress.total}
+                  Exporting frame {progress.frame} of {progress.total}…
                 </span>
-                <span>{Math.round((progress.frame / Math.max(1, progress.total)) * 100)}%</span>
+                <span className="text-foreground">
+                  {Math.round((progress.frame / Math.max(1, progress.total)) * 100)}%
+                </span>
               </div>
               <div className="bg-scrubber-track h-1.5 w-full overflow-hidden rounded-full">
                 <div
                   style={
                     {
-                      "--ce-prog": `${(progress.frame / Math.max(1, progress.total)) * 100}%`,
+                      "--ce-prog": String(progress.frame / Math.max(1, progress.total)),
                     } as CSSProperties
                   }
-                  className="bg-primary h-full w-(--ce-prog) transition-all duration-75"
+                  className="bg-primary ease-studio-out h-full w-full origin-left scale-x-(--ce-prog) transition-transform duration-75 motion-reduce:transition-none"
                 />
               </div>
             </div>
           )}
 
-          {error && <p className="text-destructive text-xs">{error}</p>}
+          {error && (
+            <p role="alert" className="text-destructive text-ui/relaxed">
+              {error}
+            </p>
+          )}
 
           {ready && (
-            <div className="bg-card border-hairline flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
-              <span className="text-ok-text flex min-w-0 items-center gap-1.5 text-xs">
+            <div className="bg-card border-hairline flex items-center justify-between gap-2 rounded-md border px-2.5 py-2">
+              <span className="text-ok-text text-ui flex min-w-0 items-center gap-1.5 tabular-nums">
                 <Check className="size-3.5 flex-none" />
                 <span className="truncate">{ready.name}</span>
               </span>
               <Button
                 variant="secondary"
-                size="xs"
+                size="sm"
+                className="flex-none"
                 onClick={() => triggerDownload(ready.url, ready.name)}
               >
-                <Download data-icon="inline-start" />
-                Save
+                <Download data-icon="inline-start" aria-hidden />
+                Download again
               </Button>
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-1.5">
+          <div className="flex items-center justify-end gap-2 pt-0.5">
             {progress ? (
-              <Button variant="remove" size="sm" onClick={() => abortRef.current?.abort()}>
-                Cancel render
+              <Button variant="remove" size="md" onClick={() => abortRef.current?.abort()}>
+                Cancel export
               </Button>
             ) : (
               <>
-                <Button variant="quiet" size="sm" onClick={() => setOpen(false)}>
+                <Button variant="quiet" size="md" onClick={() => setOpen(false)}>
                   Close
                 </Button>
-                <Button size="sm" onClick={() => void renderAndDownload()}>
+                <Button size="md" onClick={() => void renderAndDownload()}>
                   <Download data-icon="inline-start" aria-hidden />
-                  Render MP4
+                  Export MP4
                 </Button>
               </>
             )}
