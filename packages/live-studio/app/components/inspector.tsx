@@ -278,15 +278,16 @@ export function Segmented<T extends string>({
           onClick={() => onChange(x.id)}
           onKeyDown={(e) => {
             const i = items.findIndex((y) => y.id === value),
+              base = i < 0 ? idx : i,
               d = e.key === on ? 1 : e.key === back ? -1 : 0;
             if (!d) return;
             e.preventDefault();
             e.stopPropagation();
-            const nextIdx = (i + d + items.length) % items.length;
+            const nextIdx = (base + d + items.length) % items.length;
             onChange(items[nextIdx].id);
             btnRefs.current[nextIdx]?.focus();
           }}
-          tabIndex={value === x.id ? 0 : -1}
+          tabIndex={value === x.id || (activeIdx < 0 && idx === 0) ? 0 : -1}
           className={cn(
             "text-ui text-label not-aria-checked:hover:text-heading-foreground focus-visible:ring-ring studio-press relative z-1 flex cursor-pointer items-center gap-1.5 outline-none focus-visible:ring-2",
             vertical

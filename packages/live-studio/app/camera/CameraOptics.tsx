@@ -1,11 +1,14 @@
 import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 import { fovOf, mmOf, SHAKES } from "film-stage/camera";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 
 import { SliderRow } from "../components/inspector";
+import { engine } from "../core/engine";
 import { S } from "../core/state";
-import { say, set, useStudio } from "../core/store";
+import { get, say, set, useStudio } from "../core/store";
+import { SAME } from "../core/time";
 import { seekExact, setPlaying } from "../playback/transport";
 import {
   cameraKeyFrameTime,
@@ -61,7 +64,20 @@ export function CameraOptics({
       return say("Enter a positive focal length that gives a usable field of view");
     setLens(i, "mm", value);
   };
-  const pickingFocus = useStudio((s) => s.pickFocus === i);
+  const pf = useStudio((s) => s.pickFocus);
+  const pickingFocus =
+    pf !== null &&
+    pf !== "free" &&
+    (pf.id ? pf.id === key.id : !key.id) &&
+    Math.abs(pf.t - key.t) < SAME;
+
+  useEffect(() => {
+    if (section !== "basic") return;
+    return () => {
+      const cur = get().pickFocus;
+      if (cur && cur !== "free") set({ pickFocus: null });
+    };
+  }, [section, key.id, key.t, disabled]);
 
   const handleSelectShake = (choice: string) => {
     if (choice === "inherit") setHandheld(i, undefined);
@@ -151,9 +167,10 @@ export function CameraOptics({
             set({ pickFocus: null });
             return;
           }
+          if (S.tools?.free.on) engine.setFree(false);
           if (S.playing) setPlaying(false);
           seekExact(cameraKeyFrameTime(i));
-          set({ pickFocus: i, cameraPick: null });
+          set({ pickFocus: { id: key.id, t: key.t }, cameraPick: null });
         }}
         onCommitFocus={(next) => setFocus(i, next)}
         onPreviewFocus={(next) => setFocus(i, next, preview)}

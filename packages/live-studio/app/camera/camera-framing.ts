@@ -92,11 +92,7 @@ export const startCameraPick = (i: number, field: CameraPick["field"]) => {
   const key = keys[i];
   if (!key || key.locked) return;
   set({ cameraPick: { field, id: key.id, t: key.t }, pickFocus: null });
-  say(
-    field === "l"
-      ? "Click a surface to aim the camera. Esc cancels"
-      : "Click a surface to focus. Esc cancels",
-  );
+  say("Click a surface to aim the camera. Esc cancels");
 };
 export const cancelCameraPick = () => {
   if (!get().cameraPick) return;
@@ -113,21 +109,15 @@ export const applyCameraPick = (
   const key = keys[i];
   if (!key || key.locked) return cancelCameraPick();
   const world = hit.world;
-  editCameraKeyInScene(i, pick.field === "l" && !Array.isArray(key.l), (i, key) => {
+  editCameraKeyInScene(i, !Array.isArray(key.l), (i, key) => {
     if (get().cameraPick !== pick) return;
-    if (pick.field === "l") {
-      const aim = storedPoint(key.l, new Vector3(...world));
-      if (!aim) return say("This film cannot move the camera anchor");
-      edit((rows) => {
-        rows[i].l = aim;
-      });
-    } else {
-      edit((rows) => {
-        rows[i].focus = { point: world, label: hit.what };
-      });
-    }
+    const aim = storedPoint(key.l, new Vector3(...world));
+    if (!aim) return say("This film cannot move the camera anchor");
+    edit((rows) => {
+      rows[i].l = aim;
+    });
     cancelCameraPick();
-    say(pick.field === "l" ? "Aim updated" : "Focus point updated");
+    say("Aim updated");
   });
 };
 

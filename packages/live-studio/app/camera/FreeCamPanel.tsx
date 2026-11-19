@@ -11,6 +11,7 @@ import {
   Save,
   Undo2,
 } from "lucide-react";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -20,7 +21,7 @@ import { Tip } from "../components/Tip";
 import { engine } from "../core/engine";
 import { FLY_SPEED } from "../core/prefs";
 import { S } from "../core/state";
-import { set, setPref, useStudio } from "../core/store";
+import { get, set, setPref, useStudio } from "../core/store";
 import { useFrameKey } from "../core/useFrameKey";
 import {
   applyFreeToKeyframe,
@@ -62,6 +63,54 @@ import {
 
 const AXES = ["X", "Y", "Z"] as const;
 
+function FreeCamPoseFields() {
+  useStudio((s) => s.ready);
+  useStudio((s) => s.freePoseRev);
+  useFrameKey(() => {
+    const cam = S.tools?.free;
+    if (!cam?.on) return "off";
+    return `${cam.p.x.toFixed(3)},${cam.p.y.toFixed(3)},${cam.p.z.toFixed(3)}|${cam.l.x.toFixed(3)},${cam.l.y.toFixed(3)},${cam.l.z.toFixed(3)}`;
+  });
+  const f = S.tools?.free;
+  const pos = f?.p ? [f.p.x, f.p.y, f.p.z] : [0, 0, 0];
+  const aim = f?.l ? [f.l.x, f.l.y, f.l.z] : [0, 0, 0];
+  return (
+    <>
+      {(
+        [
+          { field: "p", title: "Position", values: pos },
+          { field: "l", title: "Aim", values: aim },
+        ] as const
+      ).map(({ field, title, values }) => (
+        <div key={field} className="flex flex-col gap-1">
+          <span className="text-ui text-foreground/90">{title}</span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {AXES.map((axis, idx) => (
+              <label
+                key={axis}
+                className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs"
+              >
+                {axis}
+                <NumberField
+                  name={`Free cam ${title} ${axis}`}
+                  size="sm"
+                  value={values[idx]}
+                  step={0.05}
+                  digits={3}
+                  className="min-w-0"
+                  onSave={(next) => {
+                    if (next !== undefined) setFreePoseCoordinate(field, idx as 0 | 1 | 2, next);
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function FreeCamPanel() {
   useStudio((s) => s.ready);
   useStudio((s) => s.freePoseRev);
@@ -82,20 +131,20 @@ export function FreeCamPanel() {
   const pick = useStudio((s) => s.cameraPick);
   const pickFocus = useStudio((s) => s.pickFocus === "free");
 
-  useFrameKey(() => {
-    const cam = S.tools?.free;
-    if (!cam?.on) return isCustomFreeFov() ? "off" : `off:${defaultFreeFov()}`;
-    return `${cam.p.x.toFixed(3)},${cam.p.y.toFixed(3)},${cam.p.z.toFixed(3)}|${cam.l.x.toFixed(3)},${cam.l.y.toFixed(3)},${cam.l.z.toFixed(3)}`;
-  });
+  useFrameKey(() => (S.tools?.free.on ? "" : defaultFreeFov()));
+  useEffect(
+    () => () => {
+      if (get().pickFocus === "free") set({ pickFocus: null });
+      if (get().cameraPick?.target === "free") cancelCameraPick();
+    },
+    [],
+  );
 
   const defFov = defaultFreeFov();
   const effectiveFov = !free && !isCustomFreeFov() ? defFov : fov;
   const aspect = S.tools?.camera?.aspect || 16 / 9;
   const mm = mmOf(effectiveFov, aspect);
   const history = freeHistoryCounts();
-  const f = S.tools?.free;
-  const pos = f?.p ? [f.p.x, f.p.y, f.p.z] : [0, 0, 0];
-  const aim = f?.l ? [f.l.x, f.l.y, f.l.z] : [0, 0, 0];
 
   const isAllDefault =
     Math.abs(effectiveFov - defFov) < 0.05 &&
@@ -458,37 +507,7 @@ export function FreeCamPanel() {
             Preview film overlays
           </Button>
         </FieldRow>
-        {(
-          [
-            { field: "p", title: "Position", values: pos },
-            { field: "l", title: "Aim", values: aim },
-          ] as const
-        ).map(({ field, title, values }) => (
-          <div key={field} className="flex flex-col gap-1">
-            <span className="text-ui text-foreground/90">{title}</span>
-            <div className="grid grid-cols-3 gap-1.5">
-              {AXES.map((axis, idx) => (
-                <label
-                  key={axis}
-                  className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs"
-                >
-                  {axis}
-                  <NumberField
-                    name={`Free cam ${title} ${axis}`}
-                    size="sm"
-                    value={values[idx]}
-                    step={0.05}
-                    digits={3}
-                    className="min-w-0"
-                    onSave={(next) => {
-                      if (next !== undefined) setFreePoseCoordinate(field, idx as 0 | 1 | 2, next);
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
+        <FreeCamPoseFields />
         <HandheldControls
           authored={handheld}
           effective={handheld}

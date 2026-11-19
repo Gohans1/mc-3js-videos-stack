@@ -491,6 +491,35 @@ test("noteFreeView extracts free-camera pose from cam.world and falls back to ca
     }),
     { p: [11.2, 4.5, 19.8], l: [14.1, 2.0, 12.6], fov: 68, roll: 0.15, wave: 0.8 },
   );
+
+  // Full Free Cam optics & shake (bob, fstop, focus, handheld) round-trip cleanly from cam.world
+  assert.deepEqual(
+    noteFreeView({
+      freeCam: true,
+      cam: {
+        shot: 0,
+        line: "p: [1, 2, 3], l: [4, 5, 6], fov: 40",
+        world: {
+          p: [1, 2, 3],
+          l: [4, 5, 6],
+          fov: 40,
+          bob: 0.75,
+          fstop: 2.8,
+          focus: { target: "Hero", offset: [0, 0.25, 0] },
+          handheld: { preset: "HANDYCAM_RUN", amount: 1.3 },
+        },
+      },
+    }),
+    {
+      p: [1, 2, 3],
+      l: [4, 5, 6],
+      fov: 40,
+      bob: 0.75,
+      fstop: 2.8,
+      focus: { target: "Hero", offset: [0, 0.25, 0] },
+      handheld: { preset: "HANDYCAM_RUN", amount: 1.3 },
+    },
+  );
 });
 
 test("blank fix.what with afterData rejects cleanly without writing an orphaned file", async () => {

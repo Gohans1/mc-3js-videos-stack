@@ -39,7 +39,7 @@ export interface PictureSlice {
   compareGrid: boolean;
   shotList: boolean;
   final: boolean;
-  pickFocus: number | "free" | null; // active keyframe index or "free" waiting for click-on-stage focus pick
+  pickFocus: { id?: string; t: number } | "free" | null; // active keyframe target or "free" waiting for click-on-stage focus pick
   still: PreviewStill | null; // the snapshot to compare against (snapshot.ts)
   comparing: boolean; // the snapshot shows over the picture while \ is held
 }

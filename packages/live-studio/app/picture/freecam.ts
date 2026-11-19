@@ -442,6 +442,8 @@ export const setFree = (on: boolean, here = false) => {
   if (on && !f.on) {
     enteredFreeFov = (home ? tools.home?.fov : undefined) ?? filmFov;
   } else if (!on) {
+    if (get().pickFocus === "free") set({ pickFocus: null });
+    if (get().cameraPick?.target === "free") cancelCameraPick();
     if (!tools.cameraSample && enteredFreeFov !== null && tools.camera)
       tools.camera.fov = enteredFreeFov;
     enteredFreeFov = null;

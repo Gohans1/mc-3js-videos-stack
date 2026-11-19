@@ -1,12 +1,13 @@
 // Preview input: right-click pins a note, right-drag sketches/draws a note; left-click picks an object/title/element,
 // and left-drag moves a text/page title or moves the Free Camera (waking it seamlessly if off). On a phone, tap pins notes.
-import { setFocus } from "../camera/cam";
+import { cameraKeyFrameTime, keys, setFocus } from "../camera/cam";
 import { applyCameraPick, cancelCameraPick } from "../camera/camera-framing";
 import { cameraGizmoBusy, pickCameraPath } from "../camera/campath";
 import { PHONE } from "../core/device";
 import { engine } from "../core/engine";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
+import { SAME } from "../core/time";
 import { sketch } from "../notes/ink";
 import { openNote, pointOrigin } from "../notes/notes";
 import { gizmoBusy, hover, pickAt, selectTarget } from "../objects/placed";
@@ -206,29 +207,58 @@ export const attachPicture = () => {
     if (title >= 0) pickText([title]);
     else selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
   });
+  const measureFocusAt = (at: readonly [number, number]) => {
+    const hit = lookAtClick(at[0], at[1]);
+    const cam = S.tools?.camera;
+    if (!hit.world || !cam) return null;
+    const dist = Math.hypot(
+      hit.world[0] - cam.position.x,
+      hit.world[1] - cam.position.y,
+      hit.world[2] - cam.position.z,
+    );
+    return {
+      dist,
+      focusDist: Math.max(0.05, Math.round(dist * 100) / 100),
+      what: hit.what,
+    };
+  };
+  const resolvePickFocusIdx = (target: { id?: string; t: number }) => {
+    const match = (row: (typeof keys)[number], tol: number) =>
+      (target.id ? row.id === target.id : !row.id) && Math.abs(row.t - target.t) < tol;
+    const exact = keys.findIndex((row) => match(row, 1e-6));
+    return exact >= 0 ? exact : keys.findIndex((row) => match(row, SAME));
+  };
   const handlePickFocus = (at: readonly [number, number]) => {
     const pickFocus = get().pickFocus;
     if (pickFocus === null) return false;
     set({ pickFocus: null });
-    const measure = () => {
-      const hit = lookAtClick(at[0], at[1]);
-      const cam = S.tools?.camera;
-      if (hit.world && cam) {
-        const dist = Math.hypot(
-          hit.world[0] - cam.position.x,
-          hit.world[1] - cam.position.y,
-          hit.world[2] - cam.position.z,
-        );
-        const focusDist = Math.max(0.05, Math.round(dist * 100) / 100);
-        if (pickFocus === "free") setFreeFocus(focusDist);
-        else setFocus(pickFocus, focusDist);
-        say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
+    if (pickFocus === "free") {
+      if (!S.tools?.free.on) return true;
+      const measured = measureFocusAt(at);
+      if (measured) {
+        setFreeFocus(measured.focusDist);
+        say(`Focus set to ${measured.dist.toFixed(2)} m (${measured.what})`);
       } else {
         say("Nothing hit at that point to focus on");
       }
-    };
-    if (pickFocus === "free") measure();
-    else void engine.render(S.t, measure);
+      return true;
+    }
+    const idx = resolvePickFocusIdx(pickFocus);
+    if (idx < 0 || keys[idx]?.locked) return true;
+    if (S.tools?.free.on) engine.setFree(false);
+    const frameTime = cameraKeyFrameTime(idx);
+    void engine.render(frameTime, () => {
+      const currentIdx = resolvePickFocusIdx(pickFocus);
+      if (currentIdx < 0 || keys[currentIdx]?.locked || S.tools?.free.on) return;
+      const measured = measureFocusAt(at);
+      if (measured) {
+        setFocus(currentIdx, measured.focusDist);
+        say(`Focus set to ${measured.dist.toFixed(2)} m (${measured.what})`);
+      } else {
+        say("Nothing hit at that point to focus on");
+      }
+      if (Math.abs(S.t - frameTime) > 1e-6) S.dirty = true;
+    });
     return true;
   };
   const handleCameraPick = (nx: number, ny: number) => {

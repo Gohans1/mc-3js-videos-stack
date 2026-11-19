@@ -79,7 +79,7 @@ export function FreeCamFovSlider({ onAutoEnter }: { onAutoEnter?: () => void } =
   const free = useStudio((s) => s.free);
   useStudio((s) => s.freePoseRev);
   const storeFov = useStudio((s) => s.freeFov);
-  useFrameKey(() => (S.tools?.free.on || isCustomFreeFov() ? "" : defaultFreeFov()));
+  useFrameKey(() => (S.tools?.free.on ? "" : defaultFreeFov()));
   const defFov = defaultFreeFov();
   const fov = !free && !isCustomFreeFov() ? defFov : storeFov;
   return (

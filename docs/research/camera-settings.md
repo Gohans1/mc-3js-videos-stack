@@ -174,6 +174,8 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | 9   | Beat, Animation, nhãn key, chỉnh nhiều key và Take             | Qua review và kiểm thử           |
 | 10  | Tay nắm 3D, đường ray, ngoại suy, chiếu song song và bản đồ    | Qua điều kiện review và kiểm thử |
 | 11  | Nối vận tốc qua keyframe chung                                 | Qua review và kiểm thử           |
+| 12  | Hai tab máy quay, Free Cam ngang hàng và nối tốc độ cả shot    | Qua review và kiểm thử           |
+| 13  | Đồng bộ Reset Free Cam FOV, Reset toàn Studio và phím M        | Qua review và kiểm thử           |
 
 | Ghi chú đợt 1     | Chi tiết                                                                                                                                 |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |

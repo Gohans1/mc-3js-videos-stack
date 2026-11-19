@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { onWake } from "./state";
+import { onWake, S } from "./state";
 
 const MIN_INTERVAL_MS = 120;
 
@@ -39,11 +39,14 @@ export function useFrameKey(readKey: () => string | number): void {
         }, MIN_INTERVAL_MS - elapsed);
       }
     };
+    const onRendered = () => (S.playing ? schedule() : check());
     const u1 = onWake("time", schedule);
     const u2 = onWake("render", check);
+    const u3 = onWake("rendered", onRendered);
     return () => {
       u1();
       u2();
+      u3();
       clearTimeout(timer);
     };
   }, []);

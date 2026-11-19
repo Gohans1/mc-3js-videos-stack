@@ -151,9 +151,9 @@ export function FocusControls({
   const focusState = readFocusUiState(authoredFocus);
   const targets = focusTargetNames();
   const [customTargetKey, setCustomTargetKey] = useState<string | null>(null);
-  const targetKey = `${syncKey}:${focusState.target}`;
+  const targetKey = `${syncKey}:${focusState.mode}:${focusState.target}`;
   const targetModeCustom = customTargetKey === targetKey;
-  const focusModeUi = targetModeCustom && focusState.mode === "auto" ? "target" : focusState.mode;
+  const focusModeUi = targetModeCustom ? "target" : focusState.mode;
   const offsetSnap = useRef<string | null>(null);
   const focusSelectValue = targetModeCustom
     ? "__custom__"
@@ -371,7 +371,10 @@ export function FocusControls({
             size="sm"
             disabled={disabled}
             aria-pressed={pickingFocus}
-            onClick={onTogglePickFocus}
+            onClick={() => {
+              setCustomTargetKey(null);
+              onTogglePickFocus();
+            }}
           >
             <Crosshair data-icon="inline-start" aria-hidden />
             {pickingFocus ? "Click frame to focus (Esc)" : "Pick focus on frame"}

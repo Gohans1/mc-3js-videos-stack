@@ -25,9 +25,30 @@ export const camLine = () => {
   const r = (v: Vec3) => [v.x, v.y, v.z].map((x) => +x.toFixed(3));
   const roll = free.on && free.roll ? +free.roll.toFixed(4) : 0;
   const wave = free.on && free.wave ? +free.wave.toFixed(3) : 0;
+  const bob = free.on && free.bob ? +free.bob.toFixed(3) : 0;
+  const fstop = free.on && free.fstop ? +free.fstop.toFixed(2) : 0;
+  const focus =
+    free.on && free.focus !== undefined && free.focus !== null
+      ? structuredClone(free.focus)
+      : undefined;
+  const handheld = free.on && free.handheld ? structuredClone(free.handheld) : undefined;
   const extras =
-    free.on && (roll || wave)
-      ? `${roll ? `, roll: ${roll}` : ""}${wave ? `, wave: ${wave}` : ""}`
+    free.on && (roll || wave || bob || fstop || focus !== undefined || handheld !== undefined)
+      ? [
+          roll ? `roll: ${roll}` : "",
+          wave ? `wave: ${wave}` : "",
+          bob ? `bob: ${bob}` : "",
+          fstop ? `fstop: ${fstop}` : "",
+          focus !== undefined
+            ? `focus: ${typeof focus === "number" ? +focus.toFixed(2) : JSON.stringify(focus)}`
+            : "",
+          handheld !== undefined
+            ? `handheld: ${typeof handheld === "string" ? handheld : JSON.stringify(handheld)}`
+            : "",
+        ]
+          .filter(Boolean)
+          .map((part) => `, ${part}`)
+          .join("")
       : "";
   const world = {
     p: r(pos),
@@ -37,6 +58,10 @@ export const camLine = () => {
           fov: +fov.toFixed(1),
           ...(roll ? { roll } : {}),
           ...(wave ? { wave } : {}),
+          ...(bob ? { bob } : {}),
+          ...(fstop ? { fstop } : {}),
+          ...(focus !== undefined ? { focus } : {}),
+          ...(handheld !== undefined ? { handheld } : {}),
         }
       : {}),
   };

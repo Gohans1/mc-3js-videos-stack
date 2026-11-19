@@ -20,19 +20,22 @@ import { Toaster } from "/components/ui/toast.tsx";
 import { registerEngine } from "/core/engine.ts";
 import { flushDocs, redo, setAutoSave, undo } from "/core/doc.ts";
 import { setFilmSource } from "/core/filmMeta.ts";
-import { S } from "/core/state.ts";
+import { S, wake } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
-import { keys as camKeys, loadCam, matchAllInShot, setKey } from "/camera/cam.ts";
+import { keys as camKeys, loadCam, matchAllInShot, removeKey, setKey } from "/camera/cam.ts";
+import { camLine } from "/camera/camline.ts";
 import { loadKeys as loadStudioKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
 import { CamPanel } from "/camera/CamPanel.tsx";
 import { readFocusUiState } from "/camera/OpticsWidgets.tsx";
 import { NoteThumb } from "/notes/note-parts.tsx";
+import { noteFreeView } from "/notes/note-card-meta.ts";
 import { freeDoc } from "/picture/FreeCamLens.tsx";
 import { Stage } from "/picture/Stage.tsx";
 import { attachInk } from "/notes/ink.ts";
-import { cancelNote, ensureNote, goToNote, nowPicture, openNote, returnFromNote } from "/notes/notes.ts";
+import { cancelNote, ensureNote, goToNote, nowPicture, openNote, returnFromNote, saveNote, setDraft } from "/notes/notes.ts";
+import { seekExact } from "/playback/transport.ts";
 import {
   applyFreeToKeyframe,
   axisView,
@@ -41,6 +44,7 @@ import {
   fly,
   flyCam,
   flyFree,
+  isCustomFreeFov,
   moveCam,
   orbitFree,
   rememberFreeView,
@@ -310,6 +314,13 @@ window.__UX_TEST__ = {
   S,
   get,
   set,
+  wake,
+  seekExact,
+  camLine,
+  noteFreeView,
+  saveNote,
+  setDraft,
+  removeKey,
   loadStudioKeys,
   savedNotes: () => savedNotes,
   cancelNote,
@@ -379,6 +390,7 @@ window.__UX_TEST__ = {
     defaultFreeFov,
     flyCam,
     flyFree,
+    isCustomFreeFov,
     moveCam,
     orbitFree,
     rememberFreeView,
@@ -1464,7 +1476,9 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
     const btn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Pick focus on frame'));
     btn.click();
   })()`);
-  await waitUntil(`window.__UX_TEST__.get().pickFocus === 1`);
+  await waitUntil(
+    `typeof window.__UX_TEST__.get().pickFocus === 'object' && window.__UX_TEST__.get().pickFocus?.t === 3`,
+  );
   expect(
     await page.evaluate(`window.__UX_TEST__.S.el.canvas.className.includes('cursor-crosshair')`),
   ).toBe(true);
@@ -2490,7 +2504,9 @@ test("Film Cam has single Focus picker, renders point focus chip instead of Auto
     const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'));
     btn?.click();
   })()`);
-  await waitUntil(`window.__UX_TEST__.get().pickFocus === 1`);
+  await waitUntil(
+    `window.__UX_TEST__.get().pickFocus?.id === 'k1' && window.__UX_TEST__.get().pickFocus?.t === 3`,
+  );
   const afterArmFocus = await page.evaluate(`({
     t: window.__UX_TEST__.S.t,
     playing: window.__UX_TEST__.S.playing,
@@ -2616,6 +2632,7 @@ test("Free Cam Advanced Position & Aim live-sync on canvas drag, wheel dolly, an
   await page.evaluate(`window.__UX_TEST__.loadCameraFixture()`);
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
+    u.setStageBox(640, 360);
     u.attachAndDrawTimeline();
     u.freecam.setFree(true);
     const tab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam');
@@ -2632,18 +2649,44 @@ test("Free Cam Advanced Position & Aim live-sync on canvas drag, wheel dolly, an
   await page.evaluate(`window.__UX_TEST__.freecam.rememberFreeView()`);
   await Bun.sleep(50);
 
-  const beforePos = await page.evaluate(`({
+  const before = await page.evaluate(`({
     px: document.querySelector('input[aria-label="Free cam Position X"]')?.value,
+    pz: document.querySelector('input[aria-label="Free cam Position Z"]')?.value,
     lx: document.querySelector('input[aria-label="Free cam Aim X"]')?.value,
   })`);
 
+  // 1. Canvas wheel dolly updates Position Z live
+  await page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    c.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true }));
+  })()`);
+  await waitUntil(
+    `document.querySelector('input[aria-label="Free cam Position Z"]')?.value !== ${JSON.stringify(before.pz)}`,
+  );
+
+  // 2. Canvas left-drag look updates Aim X live
+  await page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, buttons: 1, pointerId: 101, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointermove', { clientX: cx + 30, clientY: cy, button: 0, buttons: 1, pointerId: 101, pointerType: 'mouse', bubbles: true }));
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: cx + 30, clientY: cy, button: 0, buttons: 0, pointerId: 101, pointerType: 'mouse', bubbles: true }));
+  })()`);
+  await waitUntil(
+    `document.querySelector('input[aria-label="Free cam Aim X"]')?.value !== ${JSON.stringify(before.lx)}`,
+  );
+
+  // 3. Flight (flyCam) updates Position X live
+  const beforeFlyX = await page.evaluate(
+    `document.querySelector('input[aria-label="Free cam Position X"]')?.value`,
+  );
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.freecam.flyCam(0.5, 0.3, 0);
   })()`);
-
   await waitUntil(
-    `document.querySelector('input[aria-label="Free cam Position X"]')?.value !== ${JSON.stringify(beforePos.px)} && document.querySelector('input[aria-label="Free cam Aim X"]')?.value !== ${JSON.stringify(beforePos.lx)}`,
+    `document.querySelector('input[aria-label="Free cam Position X"]')?.value !== ${JSON.stringify(beforeFlyX)}`,
   );
   await page.evaluate(`window.__UX_TEST__.freecam.setFree(false)`);
 });
@@ -2694,4 +2737,398 @@ test("ShotHitsSection Impact strength scrub + Escape reverts to pre-scrub value"
     await page.evaluate(`document.querySelector('input[aria-label="Impact 1 strength"]')?.value`),
   ).toBe("0.6");
   await page.evaluate(`document.querySelector('button[aria-label="Delete impact 1"]')?.click()`);
+});
+
+test("camLine serializes Free Cam bob/fstop/focus/handheld into note.cam.world and round-trips through saveNote, noteFreeView, nowPicture, and goToNote", async () => {
+  const res = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    u.resetNotes();
+    const origRender = u.S.render;
+    const canvas = u.S.el.canvas;
+    canvas.width = 160;
+    canvas.height = 90;
+    u.S.t = 1;
+    u.freecam.setFree(true);
+    u.S.tools.free.p.set(3, 2.5, 7);
+    u.S.tools.free.l.set(0, 1, 0);
+    u.freecam.setFreeFov(42);
+    u.freecam.setFreeRoll(0.15);
+    u.freecam.setFreeWave(0.5);
+    u.freecam.setFreeBob(0.75);
+    u.freecam.setFreeFstop(2.8);
+    u.freecam.setFreeFocus(4.5);
+    u.freecam.setFreeHandheld("HANDYCAM_RUN");
+
+    const lineResult = u.camLine();
+
+    u.S.render = Object.assign(async () => {
+      const g = canvas.getContext('2d');
+      const f = u.S.tools.free;
+      const focusN = typeof f.focus === 'number' ? f.focus : 0;
+      const r = f.on ? Math.min(255, Math.round((f.fstop ?? 0) * 30)) : 0;
+      const gr = f.on ? Math.min(255, Math.round((f.bob ?? 0) * 200)) : 200;
+      const b = f.on ? Math.min(255, Math.round(focusN * 20 + (f.handheld ? 80 : 0))) : 20;
+      g.fillStyle = 'rgb(' + r + ',' + gr + ',' + b + ')';
+      g.fillRect(0, 0, 160, 90);
+    }, { eases: origRender.eases });
+
+    await u.openNote(null, false);
+    u.setDraft("Check free cam optics note");
+    await u.saveNote();
+    const saved = u.savedNotes().at(-1);
+    const extracted = u.noteFreeView(saved);
+
+    // Picture rendered from live Free Cam while matching saved note vs after changing live optics
+    u.invalidatePictures();
+    const imgWhileMatching = await u.nowPicture(saved);
+
+    u.freecam.setFreeFstop(8);
+    u.freecam.setFreeFocus(12);
+    u.freecam.setFreeBob(0.1);
+    u.freecam.setFreeHandheld(false);
+    u.invalidatePictures();
+    const imgWhileChanged = await u.nowPicture(saved);
+
+    // Jump to saved note restores saved optics; returnFromNote restores prior live optics
+    u.goToNote(saved);
+    const jumped = {
+      fstop: u.S.tools.free.fstop,
+      focus: u.S.tools.free.focus,
+      bob: u.S.tools.free.bob,
+      handheld: u.S.tools.free.handheld,
+    };
+    u.returnFromNote();
+    const returned = {
+      fstop: u.S.tools.free.fstop,
+      focus: u.S.tools.free.focus,
+      bob: u.S.tools.free.bob,
+      handheld: u.S.tools.free.handheld,
+    };
+
+    u.S.render = origRender;
+    u.freecam.resetFreeLensAll();
+    u.freecam.setFree(false);
+    return {
+      world: lineResult.world,
+      savedWorld: saved?.cam?.world,
+      extracted,
+      sameNowPicture: imgWhileMatching === imgWhileChanged,
+      jumped,
+      returned,
+    };
+  })()`);
+
+  expect(res.world.fstop).toBe(2.8);
+  expect(res.world.bob).toBe(0.75);
+  expect(res.world.focus).toBe(4.5);
+  expect(res.world.handheld).toBe("HANDYCAM_RUN");
+  expect(res.savedWorld).toEqual(res.world);
+  expect(res.extracted).toEqual(res.world);
+  expect(res.sameNowPicture).toBe(true);
+  expect(res.jumped).toEqual({ fstop: 2.8, focus: 4.5, bob: 0.75, handheld: "HANDYCAM_RUN" });
+  expect(res.returned).toEqual({ fstop: 8, focus: 12, bob: 0.1, handheld: false });
+});
+
+test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on the SAME seek via wake('rendered')", async () => {
+  await page.evaluate(`window.__UX_TEST__.setCamData([
+    { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 45 },
+    { id: "k1", t: 3, p: [2, 2, 6], l: [0, 1, 0], fov: 28 },
+  ], 1)`);
+  const origCheck = await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    window.__origRenderForFov = u.S.render;
+    u.S.tools.home = undefined;
+    u.freecam.resetFreeLensAll();
+    u.freecam.setFree(false);
+    u.S.render = Object.assign((t) => {
+      u.S.tools.camera.fov = t < 1.5 ? 45 : 28;
+    }, { eases: window.__origRenderForFov.eases });
+    u.S.render(3);
+    const tab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam');
+    tab?.click();
+    return true;
+  })()`);
+  expect(origCheck).toBe(true);
+  await waitUntil(`document.querySelector('input[aria-label="Free cam FOV"]')?.value === "28"`);
+
+  // Seek to t=0: seekExact runs BEFORE S.render updates camera.fov, then wake("rendered") runs AFTER
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.seekExact(0);
+    u.S.render(0);
+    u.wake("rendered");
+  })()`);
+  await waitUntil(`document.querySelector('input[aria-label="Free cam FOV"]')?.value === "45"`);
+  expect(
+    await page.evaluate(`document.querySelector('input[aria-label="Free cam FOV"]')?.value`),
+  ).toBe("45");
+
+  // Seek back to t=3: single seek updates immediately to 28
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.seekExact(3);
+    u.S.render(3);
+    u.wake("rendered");
+  })()`);
+  await waitUntil(`document.querySelector('input[aria-label="Free cam FOV"]')?.value === "28"`);
+
+  // With customFreeFov=true (45°), Reset is enabled at t=3 (def=28) and immediately disables on seeking to t=0 (def=45)
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.freecam.setFreeFov(45);
+    u.freecam.setFree(false);
+    const tab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam');
+    tab?.click();
+  })()`);
+  await waitUntil(
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]')?.disabled === false`,
+  );
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.seekExact(0);
+    u.S.render(0);
+    u.wake("rendered");
+  })()`);
+  await waitUntil(
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]')?.disabled === true`,
+  );
+
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    if (window.__origRenderForFov) { u.S.render = window.__origRenderForFov; delete window.__origRenderForFov; }
+    u.freecam.resetFreeLensAll();
+    u.freecam.setFree(false);
+    u.S.tools.camera.fov = 50;
+  })()`);
+});
+
+test("Film Cam Pick focus exits Free Cam and measures from Film Cam pose; tab/key/lock/exit clean up pickFocus and free cameraPick", async () => {
+  await page.evaluate(`window.__UX_TEST__.setCamData([
+    { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+    { id: "k1", t: 2, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+    { id: "k2", t: 5, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+  ], 1)`);
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    window.__origRenderPick = u.S.render;
+    u.S.render = Object.assign(() => {
+      const f = u.S.tools.free;
+      if (f.on) {
+        u.S.tools.camera.position.copy(f.p);
+        u.S.tools.camera.lookAt(f.l);
+      } else {
+        u.S.tools.camera.position.set(0, 2, 6);
+        u.S.tools.camera.lookAt(0, 1, 0);
+      }
+      u.S.tools.camera.updateMatrixWorld(true);
+    }, { eases: window.__origRenderPick.eases });
+    u.setStageBox(640, 360);
+    u.freecam.setFree(true);
+    u.S.tools.free.p.set(0, 2, 16);
+    u.S.tools.free.l.set(0, 1, 0);
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.get().free === true && [...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Apply to keyframe'))`,
+  );
+  await page.evaluate(`(() => {
+    const filmTab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Film cam');
+    filmTab?.click();
+  })()`);
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Hold 1 s')) && [...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Pick focus on frame'))`,
+  );
+
+  // 1. Arming Film Cam Pick focus exits Free Cam and measures from Film Cam position (~5.1m), NOT Free Cam (~15m)
+  await page.evaluate(`(() => {
+    [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))?.click();
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.get().free === false && window.__UX_TEST__.get().pickFocus !== null`,
+  );
+  await page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, buttons: 1, pointerId: 98, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, buttons: 0, pointerId: 98, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.get().pickFocus === null && typeof window.__UX_TEST__.camKeys()[1].focus === 'number'`,
+  );
+  const filmFocusDist = await page.evaluate(`window.__UX_TEST__.camKeys()[1].focus`);
+  expect(filmFocusDist).toBeGreaterThan(4);
+  expect(filmFocusDist).toBeLessThan(7);
+
+  // 2. Switching to Free cam tab clears armed Film Cam pickFocus
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))?.click()`,
+  );
+  await waitUntil(
+    `window.__UX_TEST__.get().pickFocus !== null && window.__UX_TEST__.S.el.canvas.className.includes('cursor-crosshair')`,
+  );
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam')?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().pickFocus === null`);
+  expect(
+    await page.evaluate(`window.__UX_TEST__.S.el.canvas.className.includes('cursor-crosshair')`),
+  ).toBe(false);
+
+  // 3. Locking key clears Film Cam pickFocus, and key deletion preserves ID-resolved target
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Film cam')?.click()`,
+  );
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Pick focus on frame'))`,
+  );
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().pickFocus !== null`);
+  await page.evaluate(
+    `document.querySelector('button[aria-label="Lock camera keyframe"]')?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().pickFocus === null`);
+  await page.evaluate(
+    `document.querySelector('button[aria-label="Unlock camera keyframe"]')?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.camKeys()[1].locked !== true`);
+
+  // Arm on k2, delete k1 so k2 shifts index 2 -> 1, then click Cube -> updates k2 cleanly
+  await page.evaluate(`(() => {
+    window.__UX_TEST__.S.t = 5;
+    window.__UX_TEST__.setKey(2);
+  })()`);
+  await waitUntil(`window.__UX_TEST__.get().camKey === 2`);
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().pickFocus?.id === 'k2'`);
+  await page.evaluate(`window.__UX_TEST__.removeKey(1)`);
+  await waitUntil(
+    `window.__UX_TEST__.camKeys().length === 2 && window.__UX_TEST__.get().pickFocus?.id === 'k2'`,
+  );
+  await page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, buttons: 1, pointerId: 99, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, buttons: 0, pointerId: 99, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.get().pickFocus === null && typeof window.__UX_TEST__.camKeys().find((k) => k.id === 'k2')?.focus === 'number'`,
+  );
+
+  // 4. Exiting Free Cam (F) clears pickFocus === 'free' & cameraPick.target === 'free'
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.freecam.resetFreeLensAll();
+    u.freecam.setFree(true);
+  })()`);
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Enter Free camera')) === false && [...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Pick focus on frame'))`,
+  );
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().pickFocus === 'free'`);
+  if (await page.evaluate(`document.activeElement instanceof HTMLElement`)) {
+    await page.evaluate(`document.activeElement.blur()`);
+  }
+  await page.press("f");
+  await waitUntil(
+    `window.__UX_TEST__.get().free === false && window.__UX_TEST__.get().pickFocus === null`,
+  );
+  expect(
+    await page.evaluate(`window.__UX_TEST__.S.el.canvas.className.includes('cursor-crosshair')`),
+  ).toBe(false);
+  await page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, buttons: 1, pointerId: 100, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, buttons: 0, pointerId: 100, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+  })()`);
+  expect(await page.evaluate(`window.__UX_TEST__.get().freeFocus`)).toBeUndefined();
+
+  // Also test cameraPick.target === 'free' clears on F and on tab switch to Film cam
+  await page.evaluate(`window.__UX_TEST__.freecam.setFree(true)`);
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Pick aim point'))`,
+  );
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick aim point'))?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().cameraPick?.target === 'free'`);
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Film cam')?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().cameraPick === null`);
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam')?.click()`,
+  );
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Pick aim point'))`,
+  );
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick aim point'))?.click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().cameraPick?.target === 'free'`);
+  if (await page.evaluate(`document.activeElement instanceof HTMLElement`)) {
+    await page.evaluate(`document.activeElement.blur()`);
+  }
+  await page.press("f");
+  await waitUntil(
+    `window.__UX_TEST__.get().free === false && window.__UX_TEST__.get().cameraPick === null`,
+  );
+
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    if (window.__origRenderPick) { u.S.render = window.__origRenderPick; delete window.__origRenderPick; }
+    u.freecam.resetFreeLensAll();
+    u.freecam.setFree(false);
+  })()`);
+});
+
+test("Segmented Focus mode stays Tab-reachable in point mode and Target mode works from point/meters when no targets exist", async () => {
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    window.__savedObjectsForTargetTest = u.S.tools.objects;
+    u.S.tools.objects = [];
+    u.freecam.setFree(false);
+  })()`);
+  await page.evaluate(`window.__UX_TEST__.setCamData([
+    { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50, focus: { point: [1, 2, 3], label: "Wall" } },
+  ], 0)`);
+  await waitUntil(`document.querySelector('[role="radiogroup"][aria-label="Focus mode"]')`);
+
+  // Tab stop on first button when value === "point"
+  const tabIndices = await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].map((b) => b.tabIndex)`,
+  );
+  expect(tabIndices).toEqual([0, -1, -1]);
+
+  // Click Target from point mode when targets.length === 0
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].find((b) => b.textContent?.trim() === 'Target')?.click()`,
+  );
+  await waitUntil(`document.querySelector('input[aria-label="Focus target name"]')`);
+
+  // Switch to Manual (meters), then click Target again when targets.length === 0
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].find((b) => b.textContent?.trim() === 'Manual')?.click()`,
+  );
+  await waitUntil(`typeof window.__UX_TEST__.camKeys()[0].focus === 'number'`);
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].find((b) => b.textContent?.trim() === 'Target')?.click()`,
+  );
+  await waitUntil(`document.querySelector('input[aria-label="Focus target name"]')`);
+
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    if (window.__savedObjectsForTargetTest) { u.S.tools.objects = window.__savedObjectsForTargetTest; delete window.__savedObjectsForTargetTest; }
+  })()`);
 });
