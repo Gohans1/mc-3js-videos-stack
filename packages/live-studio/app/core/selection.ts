@@ -103,7 +103,10 @@ export const transitionSelection = (action: SelectionAction, currentSide: Side):
             shotPick: action.index,
             side:
               action.side ??
-              (currentSide === "speed" || currentSide === "anim" || currentSide === "adjust"
+              (currentSide === "speed" ||
+              currentSide === "anim" ||
+              currentSide === "adjust" ||
+              currentSide === "light"
                 ? currentSide
                 : "cam"),
           };

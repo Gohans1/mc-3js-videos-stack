@@ -80,6 +80,7 @@ export const staleVideo = (root, video) => {
   for (const rel of [
     "package.json",
     config.camTimeline,
+    config.lightsTimeline,
     config.shotsTimeline,
     config.textTimeline,
     config.adjustTimeline,

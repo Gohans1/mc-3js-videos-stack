@@ -227,6 +227,7 @@ declare module "film/edit" {
     voice: { edits: Record<string, { speed?: number } | undefined>; warp: [number, number][] };
     beats: Record<string, Beat>;
     zoomRate?: number;
+    lights?: unknown;
     [key: string]: unknown;
   }
   export const EDIT: Edit;

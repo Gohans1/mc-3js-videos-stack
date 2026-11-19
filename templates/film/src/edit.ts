@@ -17,5 +17,8 @@ import shots from "./timeline/shots.json";
 import steve from "./timeline/steve.json";
 import text from "./timeline/text.json";
 
-setEdit({ ...data, steve, cam, props, placed, audio, fx, text, adjustments, shots, mouth });
+const lights = import.meta.glob("./timeline/lights.json", { eager: true, import: "default" })[
+  "./timeline/lights.json"
+];
+setEdit({ ...data, steve, cam, lights, props, placed, audio, fx, text, adjustments, shots, mouth });
 export * from "live-studio/edit";

@@ -19,6 +19,13 @@ import { makeDof } from "film-stage/dof";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
 import { activeAdjustments } from "film-stage/grade-layers";
+import {
+  applyLightingRig,
+  createGodraysPass,
+  createLightingRig,
+  DEFAULT_LIGHTS,
+  lightsAt,
+} from "film-stage/lights";
 import { makeTitles } from "film-stage/titles";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeVelocity } from "film-stage/velocity";
@@ -147,17 +154,28 @@ export async function buildScene(canvas, W, H, draft = false) {
     steve,
   );
 
-  // A soft key from above the room's middle and a sky/ground fill (edit.json light)
-  const C = EDIT.light;
-  const hemi = new THREE.HemisphereLight(0xdfe6f0, 0x3a3026, C.fill);
-  const key = new THREE.SpotLight(0xfff0dc, C.key, 14, THREE.MathUtils.degToRad(70), 0.7, 1.2);
-  key.position.set(ROOM.x1 / 2 + 0.5, ROOM.top + 0.6, ROOM.z1 / 2 + 0.5);
-  key.target.position.set(ROOM.x1 / 2 + 0.5, 0, ROOM.z1 / 2 + 0.5);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.bias = -0.0008;
-  key.shadow.radius = 3;
-  scene.add(hemi, key, key.target);
+  const roomTarget = [ROOM.x1 / 2 + 0.5, 1.5, ROOM.z1 / 2 + 0.5];
+  const rig = createLightingRig(scene, { target: roomTarget, distance: 18, shadowExtent: 10 });
+  const inactiveRig = {
+    ...DEFAULT_LIGHTS,
+    key: { ...DEFAULT_LIGHTS.key, enabled: false },
+    fill: { ...DEFAULT_LIGHTS.fill, enabled: false },
+    rim: { ...DEFAULT_LIGHTS.rim, enabled: false },
+    world: { ...DEFAULT_LIGHTS.world, ambientIntensity: 0, background: null },
+    fog: { ...DEFAULT_LIGHTS.fog, mode: "none" },
+    practicals: [],
+    godrays: { ...DEFAULT_LIGHTS.godrays, enabled: false },
+  };
+  const hemi = new THREE.HemisphereLight(0xdfe6f0, 0x3a3026);
+  const roomKey = new THREE.SpotLight(0xfff0dc, 40, 14, THREE.MathUtils.degToRad(70), 0.7, 1.2);
+  roomKey.position.set(roomTarget[0], ROOM.top + 0.6, roomTarget[2]);
+  roomKey.target.position.set(roomTarget[0], 0, roomTarget[2]);
+  roomKey.castShadow = true;
+  roomKey.shadow.mapSize.set(2048, 2048);
+  roomKey.shadow.bias = -0.0008;
+  roomKey.shadow.radius = 3;
+  scene.add(hemi, roomKey, roomKey.target);
+  let timelineLighting = true;
 
   const composer = new EffectComposer(renderer, {
     frameBufferType: THREE.HalfFloatType,
@@ -186,6 +204,8 @@ export async function buildScene(canvas, W, H, draft = false) {
     passCount = -1;
   composer.addPass(new EffectPass(camera, new SMAAEffect()));
   const dof = makeDof(composer, camera, { draft });
+  const godrays = createGodraysPass(rig.key, camera, { enabled: false });
+  if (godrays.pass) composer.addPass(godrays.pass);
   const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
   composer.addPass(
     new EffectPass(
@@ -453,8 +473,23 @@ export async function buildScene(canvas, W, H, draft = false) {
     steve.face(mood, mouth, blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
     now.mood = mood;
 
-    hemi.intensity = EDIT.light.fill;
-    key.intensity = EDIT.light.key;
+    const lightKeys = Array.isArray(EDIT.lights) ? EDIT.lights : EDIT.lights?.keys;
+    if (lightKeys?.length) {
+      hemi.visible = roomKey.visible = false;
+      const lightsSample = lightsAt(EDIT.lights, t);
+      applyLightingRig(rig, lightsSample, t);
+      godrays.update(lightsSample.godrays, lightsSample.key.color);
+      timelineLighting = true;
+    } else {
+      if (timelineLighting) {
+        applyLightingRig(rig, inactiveRig);
+        godrays.update(inactiveRig.godrays);
+        timelineLighting = false;
+      }
+      hemi.visible = roomKey.visible = true;
+      hemi.intensity = EDIT.light?.fill ?? 0.6;
+      roomKey.intensity = EDIT.light?.key ?? 40;
+    }
     tone.saturation = EDIT.look.saturation;
     const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;
     const adjVisible = clocks?.adjustmentsVisible ?? clocks?.layersVisible ?? true;
@@ -612,7 +647,9 @@ export async function buildScene(canvas, W, H, draft = false) {
       {
         head: "EDIT HERE",
         lines: [
-          { text: "src/timeline/steve.json · cam.json · src/edit.json light/look · src/world.ts" },
+          {
+            text: "src/timeline/steve.json · cam.json · lights.json · src/edit.json light/look · src/world.ts",
+          },
         ],
       },
     ];

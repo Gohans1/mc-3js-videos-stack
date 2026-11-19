@@ -11,6 +11,8 @@
     "./transition-extension": "./src/transition-extension.ts",
     "./camera": "./src/camera.ts",
     "./camera-meta": "./src/camera-meta.ts",
+    "./lights": "./src/lights.ts",
+    "./lights-meta": "./src/lights-meta.ts",
     "./flicker": "./src/flicker.ts",
     "./fade": "./src/fade.ts",
     "./animate": "./src/animate.ts",
@@ -55,7 +57,8 @@
     "film-kit": "workspace:*",
     "gl-transitions": "3.1.0",
     "html-to-image": "1.11.13",
-    "postprocessing": "catalog:"
+    "postprocessing": "catalog:",
+    "three-good-godrays": "catalog:"
   },
   "devDependencies": {
     "@types/three": "catalog:"
