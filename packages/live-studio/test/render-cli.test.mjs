@@ -528,6 +528,10 @@ test("render rejects invalid CROP rects and CROP/COMPARE on video targets", (t) 
   const cmpCaptionsEnv = run(["captions"], { COMPARE: "1" });
   assert.equal(cmpCaptionsEnv.status, 2);
   assert.match(cmpCaptionsEnv.stderr, /COMPARE is for render stills or poster/);
+
+  const badCompareEnv = run(["stills"], { COMPARE: "maybe" });
+  assert.equal(badCompareEnv.status, 2);
+  assert.match(badCompareEnv.stderr, /COMPARE is 1 \(true\) or 0 \(false\)/);
 });
 
 const findBrowser = () => {
@@ -567,9 +571,7 @@ const sampleCenterRgb = (imagePath) => {
   return { w, h, rgb: [px.stdout[0], px.stdout[1], px.stdout[2]] };
 };
 
-test("render CROP zooms quadrant RGB pixels, sizes non-square/poster crops, and surfaces COMPARE failures", (t) => {
-  const chrome = findBrowser();
-  if (!chrome) return t.skip("no Chrome binary available for live CROP/COMPARE verification");
+const setupQuadFilm = (t, chrome, tlHex = "0xdd2222") => {
   const dir = mkdtempSync(join(tmpdir(), "render-crop-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -582,7 +584,7 @@ test("render CROP zooms quadrant RGB pixels, sizes non-square/poster crops, and 
     JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
   );
   const sceneFile = join(dir, "src/scene.ts");
-  const makeScene = (tlHex) => `import * as THREE from "three";
+  const makeScene = (hex) => `import * as THREE from "three";
 export const DURATION = 2, SHOTS_OUT = [{ t: 0, what: "quadrants" }];
 export function buildScene(canvas, W, H) {
   const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
@@ -591,19 +593,18 @@ export function buildScene(canvas, W, H) {
   const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
   camera.position.set(0, 0, 5);
   camera.lookAt(0, 0, 0);
-  const quad = (x, y, hex) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshBasicMaterial({ color: hex }));
+  const quad = (x, y, c) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshBasicMaterial({ color: c }));
     m.position.set(x, y, 0);
     scene.add(m);
   };
-  quad(-6, 6, ${tlHex});
+  quad(-6, 6, ${hex});
   quad(6, 6, 0x11dd33);
   quad(-6, -6, 0x1144ee);
   quad(6, -6, 0xeedd11);
   return Object.assign(() => renderer.render(scene, camera), { tools: { camera } });
 }`;
-  writeFileSync(sceneFile, makeScene("0xdd2222"));
-
+  writeFileSync(sceneFile, makeScene(tlHex));
   const render = (args, env = {}) =>
     spawnSync("bun", [RENDER, ...args], {
       cwd: dir,
@@ -611,8 +612,14 @@ export function buildScene(canvas, W, H) {
       timeout: 180000,
       env: { ...process.env, LIVE_PROJECT: dir, ...env },
     });
+  return { dir, sceneFile, makeScene, render };
+};
 
-  // Top-left crop hits red quadrant; bottom-right crop hits yellow quadrant
+test("render CROP zooms quadrant RGB pixels and sizes non-square and poster crops", (t) => {
+  const chrome = findBrowser();
+  if (!chrome) return t.skip("no Chrome binary available for live CROP verification");
+  const { dir, render } = setupQuadFilm(t, chrome);
+
   const tl = render(["stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
   assert.equal(tl.status, 0, tl.stdout + tl.stderr);
   const tlInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
@@ -629,7 +636,6 @@ export function buildScene(canvas, W, H) {
     `expected yellow, got ${brInfo.rgb}`,
   );
 
-  // Non-square crop outputs exact cropped width x height + bar and hits green quadrant
   const tall = render(["stills"], { AT: "1", CROP: "0.5,0,0.25,0.5" });
   assert.equal(tall.status, 0, tall.stdout + tall.stderr);
   const tallInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
@@ -637,14 +643,19 @@ export function buildScene(canvas, W, H) {
   assert.equal(tallInfo.h, 760);
   assert.ok(tallInfo.rgb[1] > 170 && tallInfo.rgb[0] < 60, `expected green, got ${tallInfo.rgb}`);
 
-  // Poster logs actual cropped output size
   const poster = render(["poster"], { AT: "1", RES: "1080", SAMPLES: "1", CROP: "0.5,0,0.25,0.5" });
   assert.equal(poster.status, 0, poster.stdout + poster.stderr);
   assert.match(poster.stdout, /wrote renders\/poster_1s\.png \(960x1080, 1 sub-frames\)/);
+});
 
-  // Change top-left red -> cyan and run --compare
+test("render --compare preserves renders/.prev/, emits diff sheet, and surfaces corrupt .prev error", (t) => {
+  const chrome = findBrowser();
+  if (!chrome) return t.skip("no Chrome binary available for live COMPARE verification");
+  const { dir, sceneFile, makeScene, render } = setupQuadFilm(t, chrome);
+
   const tlBefore = render(["stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
   assert.equal(tlBefore.status, 0, tlBefore.stdout + tlBefore.stderr);
+
   writeFileSync(sceneFile, makeScene("0x11dddd"));
   const tlAfter = render(["--compare", "stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
   assert.equal(tlAfter.status, 0, tlAfter.stdout + tlAfter.stderr);
@@ -652,9 +663,8 @@ export function buildScene(canvas, W, H) {
   assert.ok(existsSync(join(dir, "renders/compare_still_1s.png")));
   assert.match(tlAfter.stdout, /compare renders\/still_1s\.jpg: .* changed/);
 
-  // Corrupt .prev still causes explicit non-zero compare error visibility instead of silent success
   writeFileSync(join(dir, "renders/still_1s.jpg"), "not-an-image");
   const corrupt = render(["--compare", "stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
   assert.equal(corrupt.status, 1, corrupt.stdout + corrupt.stderr);
   assert.match(corrupt.stderr, /compare renders\/still_1s\.jpg failed/);
-}, 90000);
+});

@@ -128,6 +128,13 @@ if (flagged) {
 }
 const rawArgs = cliArgs(HELP, ["--compare"], 1);
 const what = rawArgs.find((a) => !a.startsWith("-"));
+if (
+  process.env.COMPARE !== undefined &&
+  !["0", "1", "true", "false"].includes(process.env.COMPARE)
+) {
+  console.error(`COMPARE is 1 (true) or 0 (false), got ${JSON.stringify(process.env.COMPARE)}`);
+  process.exit(2);
+}
 const compare =
   rawArgs.includes("--compare") || process.env.COMPARE === "1" || process.env.COMPARE === "true";
 envTypos([...ENV_OPTIONS, "COMPARE", "LIVE_PROJECT"]); // any LAB_* goes to the lab page as is

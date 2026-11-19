@@ -82,8 +82,8 @@ function readJson<T = unknown>(file: string): T | null {
   }
 }
 
-function discoverFilm(cwd: string): { dir: string; pkg: Record<string, unknown> } | null {
-  const start = resolve(process.env.LIVE_PROJECT || cwd);
+function discoverFilm(dir: string): { dir: string; pkg: Record<string, unknown> } | null {
+  const start = resolve(dir);
   const pkgPath = join(start, "package.json");
   const pkg = existsSync(pkgPath) ? (readJson<Record<string, unknown>>(pkgPath) ?? {}) : {};
   const isFilm =
@@ -91,6 +91,18 @@ function discoverFilm(cwd: string): { dir: string; pkg: Record<string, unknown> 
     existsSync(join(start, "src/timeline/cam.json")) ||
     Boolean(pkg["live-studio"]);
   return isFilm ? { dir: start, pkg } : null;
+}
+
+function findOwningFilm(filePath: string): { dir: string; pkg: Record<string, unknown> } | null {
+  let cur = dirname(resolve(filePath));
+  for (let depth = 0; depth < 5; depth++) {
+    const found = discoverFilm(cur);
+    if (found) return found;
+    const parent = dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  return null;
 }
 
 function findAutoVideo(filmDir: string | null): string | null {
@@ -361,8 +373,26 @@ function analyzeFilmMotion(opts: {
   if (!existsSync(camPath)) {
     return null;
   }
-  const rawCam = readJson<CamTimelineKey[] | { keys?: CamTimelineKey[] }>(camPath);
-  const camKeys = Array.isArray(rawCam) ? rawCam : (rawCam?.keys ?? []);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(camPath, "utf8"));
+  } catch (err) {
+    return {
+      camFile: camPath,
+      error: `invalid JSON in ${camPath}: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+  const objKeys =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as { keys?: unknown }).keys
+      : undefined;
+  if (!Array.isArray(parsed) && !Array.isArray(objKeys)) {
+    return {
+      camFile: camPath,
+      error: `invalid camera timeline ${camPath}: expected key array or { keys: [] }`,
+    };
+  }
+  const camKeys = (Array.isArray(parsed) ? parsed : objKeys) as CamTimelineKey[];
   const aspect = opts.pkg && ratioOf(opts.pkg) === "9:16" ? 9 / 16 : 16 / 9;
 
   const canEvalThree =
@@ -443,8 +473,8 @@ function runMotionCmd(argv: string[]): number {
   }
 
   const film =
-    discoverFilm(process.cwd()) ??
-    (camOverride ? discoverFilm(resolve(dirname(resolve(camOverride)), "../..")) : null);
+    (camOverride ? findOwningFilm(resolve(camOverride)) : null) ??
+    discoverFilm(process.env.LIVE_PROJECT || process.cwd());
   const report = analyzeFilmMotion({
     filmDir: film?.dir ?? null,
     pkg: film?.pkg ?? null,
@@ -454,6 +484,9 @@ function runMotionCmd(argv: string[]): number {
   });
   if (!report) {
     failUsage("No cam.json found (run inside a film dir or pass --cam <file>)");
+  }
+  if ("error" in report && typeof report.error === "string") {
+    failUsage(report.error);
   }
   if (asJson) {
     console.log(JSON.stringify(report, null, 2));
@@ -575,10 +608,16 @@ function runJsonScriptCheck(
   py: string[],
   args: string[],
   tmpDir: string,
+  cwd: string,
 ): CheckResult {
   const outFile = join(tmpDir, `${id}.json`);
   const fullArgs = [...py.slice(1), join(CINETIC_SCRIPTS, scriptName), ...args, "--json", outFile];
-  const r = spawnSync(py[0], fullArgs, { encoding: "utf8", windowsHide: true, timeout: 120_000 });
+  const r = spawnSync(py[0], fullArgs, {
+    cwd,
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 120_000,
+  });
   const data = readJson<Record<string, unknown>>(outFile);
   if (!data && r.status !== 0) {
     return {
@@ -696,8 +735,8 @@ function runUnifiedQc(argv: string[]): number {
     if (!existsSync(videoPath)) failUsage(`Video not found: ${pos[0]}`);
   }
   const film =
-    discoverFilm(process.cwd()) ??
-    (videoPath ? discoverFilm(resolve(dirname(videoPath), "..")) : null);
+    (videoPath ? findOwningFilm(videoPath) : null) ??
+    discoverFilm(process.env.LIVE_PROJECT || process.cwd());
   if (!videoPath) {
     videoPath = findAutoVideo(film?.dir ?? null);
   }
@@ -705,7 +744,11 @@ function runUnifiedQc(argv: string[]): number {
   const baseDir = film?.dir ?? process.cwd();
   const cuesFile = join(baseDir, "out/cues.json");
   const hasCues = existsSync(cuesFile);
-  const soundtrackWav = join(baseDir, "public/audio/soundtrack.wav");
+  const wavCandidates = [
+    join(baseDir, "public/audio/soundtrack.wav"),
+    join(baseDir, "sound/mix.wav"),
+  ];
+  const soundtrackWav = wavCandidates.find((p) => existsSync(p)) ?? wavCandidates[0];
   const hasWav = existsSync(soundtrackWav);
   const tmpDir = mkdtempSync(join(tmpdir(), "cinetic-qc-"));
 
@@ -747,6 +790,12 @@ function runUnifiedQc(argv: string[]): number {
             id: "cam-motion",
             status: "skip",
             summary: "skipped: no src/timeline/cam.json found",
+          });
+        } else if ("error" in m && typeof m.error === "string") {
+          results.push({
+            id: "cam-motion",
+            status: "fail",
+            summary: m.error,
           });
         } else {
           results.push({
@@ -797,7 +846,7 @@ function runUnifiedQc(argv: string[]): number {
             ...(withAudio ? [] : ["--no-audio"]),
             ...(hasCues ? ["--cues", cuesFile] : []),
           ];
-          results.push(runJsonScriptCheck(id, "forensics.py", py.cmd, args, tmpDir));
+          results.push(runJsonScriptCheck(id, "forensics.py", py.cmd, args, tmpDir, baseDir));
         }
       } else if (id === "sync") {
         if (!hasAudioStream(videoPath)) {
@@ -815,7 +864,8 @@ function runUnifiedQc(argv: string[]): number {
           results.push({
             id,
             status: "skip",
-            summary: "skipped: no out/cues.json or public/audio/soundtrack.wav for sync reference",
+            summary:
+              "skipped: no out/cues.json, public/audio/soundtrack.wav, or sound/mix.wav for sync reference",
           });
         } else {
           const args = hasCues
@@ -823,7 +873,7 @@ function runUnifiedQc(argv: string[]): number {
               ? [videoPath, soundtrackWav, "--cues", cuesFile, "--quiet"]
               : [videoPath, "--cues", cuesFile, "--quiet"]
             : [videoPath, soundtrackWav, "--no-frames", "--quiet"];
-          results.push(runJsonScriptCheck(id, "check-sync.py", py.cmd, args, tmpDir));
+          results.push(runJsonScriptCheck(id, "check-sync.py", py.cmd, args, tmpDir, baseDir));
         }
       } else if (id === "audio") {
         const withAudio = hasAudioStream(videoPath);
@@ -840,6 +890,7 @@ function runUnifiedQc(argv: string[]): number {
               pyAv.cmd,
               [videoPath, "--cues", cuesFile],
               tmpDir,
+              baseDir,
             ),
           );
         } else {
@@ -855,7 +906,7 @@ function runUnifiedQc(argv: string[]): number {
           });
         } else {
           const args = [videoPath, "--look", ...(hasCues ? ["--cues", cuesFile] : [])];
-          results.push(runJsonScriptCheck(id, "look-audit.py", py.cmd, args, tmpDir));
+          results.push(runJsonScriptCheck(id, "look-audit.py", py.cmd, args, tmpDir, baseDir));
         }
       } else if (id === "speed") {
         const py = selectPython(["cv2", "numpy", "scipy"]);
@@ -872,6 +923,7 @@ function runUnifiedQc(argv: string[]): number {
             py.cmd[0],
             [...py.cmd.slice(1), join(CINETIC_SCRIPTS, "measure-speed.py"), ...args],
             {
+              cwd: baseDir,
               encoding: "utf8",
               windowsHide: true,
               timeout: 120_000,
@@ -891,7 +943,7 @@ function runUnifiedQc(argv: string[]): number {
                     .trim()
                     .split("\n")[0]
                 : tooFastCount > 0
-                  ? `${tooFastCount} frame(s) exceeded blur speed threshold`
+                  ? `${tooFastCount} range(s) exceeded blur speed threshold`
                   : ceilingCount > 0 || paceWarnCount > 0
                     ? `passed with ${Math.max(ceilingCount, paceWarnCount)} speed warning(s)`
                     : "ok",

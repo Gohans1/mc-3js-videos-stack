@@ -266,15 +266,18 @@ export function analyzeCameraTimeline(keys, opts = {}) {
       });
       continue;
     }
-    const dt = Math.max(rawDt, 1 / sampleRate);
+    const dt = rawDt > 1e-6 ? rawDt : 1 / sampleRate;
+    const isSpanGap = prev.span[1] < cur.span[0];
+    const span = isSpanGap ? [prev.span[1], cur.span[0]] : cur.span;
+    const keyRow = isSpanGap ? cur.span[0] : cur.keyRow;
     const posStep = dist3(prev.p, cur.p);
     const turnStep = viewVectorAngleDeg(prev.p, prev.l, cur.p, cur.l);
     const fovStep = Math.abs(cur.fov - prev.fov);
     intervals.push({
       dt,
       t: (prev.t + cur.t) / 2,
-      span: cur.span,
-      keyRow: cur.keyRow,
+      span,
+      keyRow,
       fov: (prev.fov + cur.fov) / 2,
       fromFov: prev.fov,
       toFov: cur.fov,
@@ -395,22 +398,24 @@ export function analyzeCameraTimeline(keys, opts = {}) {
 
   const panSpans = dedupeSpan(fastPans, (x) => x.speed);
   const fovSpans = dedupeSpan(fastFovs, (x) => x.rate);
-  const faults = [];
+  const severeFaults = [];
+  const warnFaults = [];
   for (const p of pops) {
-    faults.push(
+    severeFaults.push(
       `${p.kind} pop at ${p.t.toFixed(2)}s (keys [${p.span[0]}->${p.span[1]}], row ${p.keyRow})`,
     );
   }
   for (const pan of panSpans) {
-    faults.push(
-      `fast pan ${pan.speed.toFixed(1)} deg/s (width in ${pan.widthSeconds.toFixed(1)}s < ${WIDTH_RULE_SECONDS}s) at ${pan.t.toFixed(2)}s (keys [${pan.span[0]}->${pan.span[1]}], row ${pan.keyRow})`,
-    );
+    const msg = `fast pan ${pan.speed.toFixed(1)} deg/s (width in ${pan.widthSeconds.toFixed(1)}s < ${WIDTH_RULE_SECONDS}s) at ${pan.t.toFixed(2)}s (keys [${pan.span[0]}->${pan.span[1]}], row ${pan.keyRow})`;
+    if (Number.isFinite(pan.widthSeconds) && pan.widthSeconds < 0.7) severeFaults.push(msg);
+    else warnFaults.push(msg);
   }
   for (const fov of fovSpans) {
-    faults.push(
-      `fast FOV change ${fov.rate.toFixed(1)} deg/s at ${fov.t.toFixed(2)}s (keys [${fov.span[0]}->${fov.span[1]}], row ${fov.keyRow})`,
-    );
+    const msg = `fast FOV change ${fov.rate.toFixed(1)} deg/s at ${fov.t.toFixed(2)}s (keys [${fov.span[0]}->${fov.span[1]}], row ${fov.keyRow})`;
+    if (fov.rate >= 120) severeFaults.push(msg);
+    else warnFaults.push(msg);
   }
+  const faults = [...severeFaults, ...warnFaults];
 
   const fovs = samples.map((s) => s.fov);
   const severe =
@@ -467,13 +472,22 @@ function rotStepDeg(a, b) {
   return maxDelta;
 }
 
+const hasMotionField = (row) =>
+  Boolean(
+    posOf(row) ||
+    typeof row?.yaw === "number" ||
+    typeof row?.pitch === "number" ||
+    typeof row?.roll === "number" ||
+    isVec3(row?.rot),
+  );
+
 export function analyzeKeyFileMotion(data, filePath = "", opts = {}) {
   const tracks = [];
   const visit = (node, path) => {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) {
       const timed = node.every((k) => k && typeof k === "object" && typeof k.t === "number");
-      if (timed && node.length >= 2) {
+      if (timed && node.length >= 2 && node.some(hasMotionField)) {
         let peakPos = { v: 0, t: node[0].t, rowFrom: 0, rowTo: 0 };
         let peakRot = { v: 0, t: node[0].t, rowFrom: 0, rowTo: 0 };
         for (let i = 1; i < node.length; i++) {

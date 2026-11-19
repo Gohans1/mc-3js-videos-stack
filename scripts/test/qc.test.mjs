@@ -377,17 +377,13 @@ test("countWarnings, summarizeFailure, findAutoVideo priority, and picture-only 
   }
 }, 15_000);
 
-test("qc box skips local .venv missing PIL and sync runs against soundtrack.wav", () => {
-  const dir = mkdtempSync(join(tmpdir(), "qc-py-sync-"));
+test("qc box skips local .venv missing PIL", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-venv-"));
   try {
-    // 1. Create a real empty .venv without PIL/numpy and verify qc box falls back to Python with PIL+numpy
     const mkVenv = spawnSync(
       "python",
       ["-c", "import venv, sys; venv.create(sys.argv[1], with_pip=False)", join(dir, ".venv")],
-      {
-        encoding: "utf8",
-        timeout: 20_000,
-      },
+      { encoding: "utf8", timeout: 20_000 },
     );
     expect(mkVenv.status).toBe(0);
     const imgPath = join(dir, "px.png");
@@ -395,12 +391,18 @@ test("qc box skips local .venv missing PIL and sync runs against soundtrack.wav"
     const boxRes = runQc(["box", imgPath, "0,0,10,10", "--json"], { cwd: dir });
     expect(boxRes.status).toBe(0);
     expect(JSON.parse(boxRes.stdout).meanRgb).toEqual([10, 20, 30]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 20_000);
 
-    // 2. Verify check-sync.py runs (does not skip / does not fail importlib.util) when soundtrack.wav exists
-    mkdirSync(join(dir, "public/audio"), { recursive: true });
+test("qc sync runs against sound/mix.wav and public/audio/soundtrack.wav", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-sync-"));
+  try {
+    mkdirSync(join(dir, "sound"), { recursive: true });
     mkdirSync(join(dir, "renders"), { recursive: true });
     writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-    const wav = join(dir, "public/audio/soundtrack.wav");
+    const wav = join(dir, "sound/mix.wav");
     media(wav, [
       "-f",
       "lavfi",
@@ -443,4 +445,85 @@ test("qc box skips local .venv missing PIL and sync runs against soundtrack.wav"
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}, 30_000);
+}, 20_000);
+
+test("qc fails cleanly on malformed cam.json and resolves owning film on cross-film paths", () => {
+  const root = mkdtempSync(join(tmpdir(), "qc-cross-"));
+  try {
+    const filmA = join(root, "film-a");
+    const filmB = join(root, "film-b");
+    mkdirSync(join(filmA, "src/timeline"), { recursive: true });
+    mkdirSync(join(filmB, "src/timeline"), { recursive: true });
+    mkdirSync(join(filmB, "renders"), { recursive: true });
+
+    // filmA has malformed cam.json
+    writeFileSync(join(filmA, "package.json"), JSON.stringify({ "live-studio": {} }));
+    writeFileSync(join(filmA, "src/timeline/cam.json"), "{ not valid json");
+
+    const badCmd = runQc(["motion"], { cwd: filmA, env: { LIVE_PROJECT: filmA } });
+    expect(badCmd.status).toBe(2);
+    expect(badCmd.stderr).toMatch(/invalid JSON/);
+
+    const badUnified = runQc(["--checks", "cam-motion", "--json"], {
+      cwd: filmA,
+      env: { LIVE_PROJECT: filmA },
+    });
+    expect(badUnified.status).toBe(1);
+    const badJson = JSON.parse(badUnified.stdout);
+    expect(badJson.checks[0].status).toBe("fail");
+    expect(badJson.checks[0].summary).toMatch(/invalid JSON/);
+
+    // filmB has valid cam.json and draft.mp4; passing explicit filmB paths overrides LIVE_PROJECT=filmA
+    writeFileSync(join(filmB, "package.json"), JSON.stringify({ "live-studio": {} }));
+    writeFileSync(
+      join(filmB, "src/timeline/cam.json"),
+      JSON.stringify([
+        { t: 0, p: [0, 1, 5], l: [0, 1, 0], fov: 60 },
+        { t: 2, p: [0, 1, 5], l: [0, 1, 0], fov: 60 },
+      ]),
+    );
+    media(join(filmB, "renders/draft.mp4"), [
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=s=320x180:r=30:d=1",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:sample_rate=48000:duration=1",
+      "-vf",
+      "scale=out_color_matrix=bt709:out_range=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "aac",
+      "-ac",
+      "2",
+      "-ar",
+      "48000",
+    ]);
+
+    const crossVideo = runQc(
+      [join(filmB, "renders/draft.mp4"), "--checks", "cam-motion", "--json"],
+      {
+        cwd: filmA,
+        env: { LIVE_PROJECT: filmA },
+      },
+    );
+    expect(crossVideo.status).toBe(0);
+    const crossJson = JSON.parse(crossVideo.stdout);
+    expect(crossJson.film).toBe(filmB);
+    expect(crossJson.checks[0].status).toBe("pass");
+
+    const crossMotion = runQc(["motion", "--cam", join(filmB, "src/timeline/cam.json"), "--json"], {
+      cwd: filmA,
+      env: { LIVE_PROJECT: filmA },
+    });
+    expect(crossMotion.status).toBe(0);
+    expect(JSON.parse(crossMotion.stdout).status).toBe("pass");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20_000);

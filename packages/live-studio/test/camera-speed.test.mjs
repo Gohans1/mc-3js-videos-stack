@@ -194,9 +194,25 @@ test("analyzeCameraTimeline flags non-cut equal-t teleports as pops", () => {
     { t: 2, p: [10, 0, 5], l: [10, 0, 0], fov: 60 },
   ];
   const res = analyzeCameraTimeline(keys);
-  assert.ok(
-    res.pops.some((p) => p.kind === "pos"),
-    "expected pos pop for non-cut equal-t jump",
-  );
+  const pop = res.pops.find((p) => p.kind === "pos");
+  assert.ok(pop, "expected pos pop for non-cut equal-t jump");
+  assert.deepEqual(pop.span, [1, 2]);
   assert.equal(res.status, "fail");
+});
+
+test("analyzeCameraTimeline measures short <1/30s substeps accurately and keyFiles ignore shots/bites", () => {
+  const shortFov = analyzeCameraTimeline([
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0], fov: 60 },
+    { t: 0.04, p: [0, 0, 5], l: [0, 0, 0], fov: 40 },
+  ]);
+  assert.ok(shortFov.fovPeak.v >= 499, `expected ~500 deg/s, got ${shortFov.fovPeak.v}`);
+
+  const nonSpatial = analyzeKeyFileMotion(
+    [
+      { t: 0, what: "intro", size: "WS" },
+      { t: 3, what: "mid", size: "CU" },
+    ],
+    "src/timeline/shots.json",
+  );
+  assert.equal(nonSpatial.tracks.length, 0);
 });
