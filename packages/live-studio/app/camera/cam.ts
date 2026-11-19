@@ -52,6 +52,7 @@ import {
   stripInvalidMatchSpeed,
 } from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
+import { mergeShotOptics } from "./camera-optics-track";
 import { activeCameraRig, cameraShotIndex, visibleCameraShotFrame } from "./camera-rig";
 import { type ShotRow, shotsDoc } from "./shots";
 
@@ -1402,7 +1403,10 @@ const mergeShot = (i: number) => {
           () =>
             shotsDoc.edit((sh) => {
               const removed = sh[s];
-              if (s > 0) setHits(sh[s - 1], mergeShotHits(sh[s - 1].hits, removed?.hits));
+              const left = sh[s - 1];
+              setHits(left, mergeShotHits(left.hits, removed?.hits));
+              const optics = mergeShotOptics(left.optics, removed?.optics);
+              if (optics) left.optics = optics;
               sh.splice(s, 1);
             }),
           edit,

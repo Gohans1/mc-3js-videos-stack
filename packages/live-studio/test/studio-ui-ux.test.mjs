@@ -1144,6 +1144,57 @@ test(`1-node aim samples the selected shot across ${mode} and respects partial r
 });
 }
 
+test("optics keyframes author independent Focus and Focal length at the playhead, undo, and survive Merge", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 3 }]);
+    await u.setCamData([
+      { id: "a0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { id: "b0", t: 3, cut: true, p: [2, 2, 8], l: [0, 1, 0] },
+    ], 1);
+    u.S.tools.cameraOpticsSample = () => ({ mm: 45, focus: 4 });
+    u.seekExact(4);
+    u.set({ side: "cam", shotPick: null });
+  })()`);
+  const before = await page.evaluate("window.__UX_TEST__.sourceCamKeys()");
+  const click = (expression) => page.evaluate(`(${expression}).click()`);
+  const section = `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Optics tracks')`;
+  const focus = `document.querySelector('button[aria-label="Add Focus keyframe"]')`;
+  const focal = `document.querySelector('button[aria-label="Add Focal length keyframe"]')`;
+  const shot = "window.__UX_TEST__.shotsData()[1]";
+  const previous = `document.querySelector('button[aria-label="Previous Focus keyframe"]')`;
+  try {
+    await waitUntil(section);
+    await click(section);
+    await waitUntil(focus);
+    await click(focus);
+    await waitUntil(`Object.values(${shot}.optics?.focus ?? {})[0]?.value === 4`);
+    await page.evaluate("window.__UX_TEST__.seekExact(5)");
+    await waitUntil(focal);
+    await click(focal);
+    await waitUntil(`Object.values(${shot}.optics?.focalLength ?? {})[0]?.value === 45`);
+    await waitUntil(`${previous}?.disabled === false`);
+    await click(previous);
+    await waitUntil("window.__UX_TEST__.S.t === 4");
+    const deleteFocus = `document.querySelector('button[aria-label="Delete Focus keyframe"]')`;
+    await waitUntil(deleteFocus);
+    await click(deleteFocus);
+    await waitUntil(`!${shot}.optics?.focus`);
+    await page.evaluate("window.__UX_TEST__.undo()");
+    await waitUntil(`Object.values(${shot}.optics?.focus ?? {})[0]?.t === 4`);
+    expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
+    await page.evaluate("window.__UX_TEST__.removeKey(1)");
+    await waitUntil("window.__UX_TEST__.shotsData().length === 1");
+    expect(await page.evaluate("Object.values(window.__UX_TEST__.shotsData()[0].optics.focalLength)[0]"))
+      .toMatchObject({ t: 5, value: 45 });
+    await page.evaluate("window.__UX_TEST__.undo()");
+    await waitUntil(`Object.values(${shot}.optics?.focalLength ?? {})[0]?.t === 5`);
+    expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
+  } finally {
+    await page.evaluate("delete window.__UX_TEST__.S.tools.cameraOpticsSample");
+  }
+});
+
 test("Camera Graph Equalize samples tracked keys and retains authored positions of muted fixed keys", async () => {
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;

@@ -244,6 +244,7 @@ export const Tools = z.looseObject({
   materials: z.array(z.tuple([three("isMaterial", "a THREE.Material"), z.string()])).optional(),
   optics: OpticsTelemetry.optional(),
   cameraSample: fn.optional(),
+  cameraOpticsSample: fn.optional(),
   resizePreview: fn.optional(),
   cameraRig: z.literal(true).optional(),
   cameraProjection: z.literal(true).optional(),
@@ -942,11 +943,17 @@ const Shutter = z.object({
   phase: z.number().min(-1).max(1).optional(),
   apertureSamples: z.number().int().min(1).max(32).optional(),
 });
+const OpticsKey = z.object({ t: secs, ease: Ease.optional() });
+const CameraOpticsTracks = z.object({
+  focus: z.record(z.string().min(1), OpticsKey.extend({ value: FocusTarget.nullable() })).optional(),
+  focalLength: z.record(z.string().min(1), OpticsKey.extend({ value: z.number().positive() })).optional(),
+});
 const ShotRow = z.looseObject({
   id: z.string().min(1).optional(),
   t: secs,
   cameraClock: z.enum(["scene", "output"]).optional(),
   camera: CameraRig.optional(),
+  optics: CameraOpticsTracks.optional(),
   shutter: Shutter.optional(),
   continuityAxis: z
     .tuple([

@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { shake } from "../packages/film-kit/src/shake";
 import {
   cameraAt,
+  type CameraOpticsTracks,
   type CameraRig,
   cameraTrackOptions,
 } from "../packages/film-stage/src/camera";
@@ -104,6 +105,7 @@ const filmOf = (dir: string) => {
     row: number;
     cameraClock?: "scene" | "output";
     camera?: CameraRig;
+    optics?: CameraOpticsTracks;
   };
   const shots: (Shot & { transition?: Row; anim?: Row; adjust?: Row; hits?: Row[] })[] = shotRows
     ? shotRows.map((s, i) => ({
@@ -114,6 +116,7 @@ const filmOf = (dir: string) => {
         row: i,
         ...(s.cameraClock && { cameraClock: s.cameraClock }),
         ...(s.camera && { camera: s.camera }),
+        ...(s.optics && { optics: s.optics }),
         transition: s.transition,
         anim: s.anim,
         ...(s.adjust ? { adjust: s.adjust } : {}),
@@ -359,6 +362,7 @@ export const whatsAt = (dir: string, t: number) => {
           {
             aspect: fw / fh,
             ...cameraTrackOptions(shot?.camera),
+            optics: shot?.optics,
             pointKnown: (point) => {
               if (Array.isArray(point)) return true;
               const fallback = (point as Record<string, unknown>).fallback;

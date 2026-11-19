@@ -69,6 +69,7 @@ import {
 import { cameraKeyNavigation } from "./camera-edit";
 import { CameraFraming } from "./CameraFraming";
 import { CameraKeyStyle, CameraTakePicker } from "./CameraKeyAuthoring";
+import { CameraOpticsTracksPanel } from "./CameraOpticsTracks";
 import { CameraOptics } from "./CameraOptics";
 import { CameraShotSettings } from "./CameraShotSettings";
 import { ShotHitsSection } from "./CamKeySections";
@@ -528,6 +529,7 @@ export function CamPanel() {
       ) : (
         <>
           <ShotSection shot={shot} />
+          <CameraOpticsTracksPanel />
           {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}
           <Section title="Keyframe easing">
             <Suspense fallback={null}>

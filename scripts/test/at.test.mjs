@@ -126,6 +126,25 @@ test("at reads camera-clock optics and authored keys while a Freeze holds the pi
   );
 });
 
+test("at samples independent focus and focal length through a Freeze on the output camera clock", (t) => {
+  const dir = film(t);
+  const put = (path, value) => writeFileSync(join(dir, path), JSON.stringify(value));
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  pkg["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  put("package.json", pkg);
+  put("src/edit.json", { end: 8 });
+  put("src/timeline/timing.json", { freezes: [{ at: 2, duration: 3 }] });
+  put("src/timeline/cam.json", [{ t: 0, p: [0, 0, 10], l: [0, 0, 0], fov: 50, focus: 4 }]);
+  const focus = { here: { t: 32 / 11, value: 9 } };
+  const focalLength = { wide: { t: 0, value: 24 }, long: { t: 64 / 11, value: 50, ease: "linear" } };
+  put("src/timeline/shots.json", [{ t: 0, cameraClock: "output", optics: { focus, focalLength } }]);
+  const result = whatsAt(dir, 4);
+  assert.equal(result.scene, 2);
+  assert.ok(Math.abs(result.cam.time - 32 / 11) < 1e-7);
+  assert.equal(result.cam.mm, 37);
+  assert.equal(result.cam.focus, "9m");
+});
+
 test("at estimates the authored rig lens and uses camera anchor fallbacks for dolly zoom", (t) => {
   const dir = film(t);
   const put = (path, value) => writeFileSync(join(dir, path), JSON.stringify(value));

@@ -1,7 +1,7 @@
 // The film's shots as data (package.json "live-studio".shotsTimeline), edited by hand like the camera keys (doc.ts: undo, saving,
 // manual edits are protected): a cut moved on the camera row (cam.ts rollCut), a shot renamed in the Camera tab. Each change puts a fresh
 // copy in EDIT.shots and runs the film's applyEdit, which rebuilds SHOTS and SHOTS_OUT from it in place.
-import type { CameraRig } from "film-stage/camera";
+import type { CameraOpticsTracks, CameraRig } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
 import { equalJson } from "../../src/merge-edits.mjs";
@@ -28,6 +28,7 @@ export interface ShotRow {
   t: number;
   cameraClock?: "scene" | "output";
   camera?: CameraRig;
+  optics?: CameraOpticsTracks;
   shutter?: Shutter;
   continuityAxis?: ContinuityAxis;
   name?: string;

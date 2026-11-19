@@ -6,6 +6,7 @@ declare module "film/scene" {
   export interface Shot {
     t: number;
     camera?: import("film-stage/camera").CameraRig;
+    optics?: import("film-stage/camera").CameraOpticsTracks;
     shutter?: import("../src/shutter").Shutter;
     [key: string]: unknown;
   }
@@ -70,6 +71,7 @@ declare module "film/scene" {
       p: [number, number, number];
       l: [number, number, number];
     })[];
+    cameraOpticsSample?: () => import("film-stage/camera").CameraOpticsSample;
     cameraSample?: () => import("./camera/camera-edit").CameraView;
     moveCameraAnchor?: import("./camera/camera-edit").MoveCameraAnchor;
     resolveCameraAnchor?: import("film-stage/camera").ResolveCameraAnchor;

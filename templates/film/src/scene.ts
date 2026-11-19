@@ -333,11 +333,12 @@ export async function buildScene(canvas, W, H, draft = false) {
     const field = Array.isArray(anchor.eye) && !anchor.target ? "eye" : "offset";
     return { ...anchor, [field]: offset.toArray(), fallback: point };
   };
-  const sampleTrack = (t, rig) =>
+  const sampleTrack = (t, rig, optics) =>
     cameraAt(t, EDIT.cam, {
       aspect: W / H,
       resolveAnchor: resolveCameraAnchor,
       ...cameraTrackOptions(rig),
+      optics,
     });
   let clocks,
     editTime = 0,
@@ -350,6 +351,14 @@ export async function buildScene(canvas, W, H, draft = false) {
         : cam.focus;
     return { ...cam.sample, focus };
   };
+  const cameraOpticsSample = () => {
+    const shot = SHOTS_OUT[Math.max(0, shotAt(worldTime))];
+    const cam = sampleTrack(editTime, shot?.camera, shot?.optics);
+    const focus = cam.focus && typeof cam.focus === "object" && "u" in cam.focus
+      ? resolveFocusDistance(cam.focus, cam.base.p, resolveFocusTarget).distance
+      : cam.focus;
+    return { mm: cam.mm, focus };
+  };
   const poseScene = (t) => {
     perform(t);
     placed.draw(t);
@@ -358,7 +367,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const hasAnchors = () => EDIT.cam.some((key) => !Array.isArray(key.p) || !Array.isArray(key.l));
   const riggedTrack = (world, time, i, worldAtCamera) => {
     const rig = SHOTS_OUT[i]?.camera;
-    const cam = sampleTrack(time, rig);
+    const cam = sampleTrack(time, rig, SHOTS_OUT[i]?.optics);
     const bounds = [SHOTS_OUT[i]?.t ?? 0, SHOTS_OUT[i + 1]?.t ?? DURATION];
     const clock =
       worldAtCamera ?? (SHOTS_OUT[i]?.cameraClock === "output" ? () => world : (next) => next);
@@ -634,6 +643,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     renderer,
     optics: opticsTelemetry,
     cameraSample,
+    cameraOpticsSample,
     resizePreview(scale) {
       renderer.setPixelRatio(scale);
       composer.setSize(W, H, false);

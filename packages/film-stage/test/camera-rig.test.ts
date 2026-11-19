@@ -12,6 +12,7 @@ import {
   orientCamera,
   projectCamera,
   rigFov,
+  resolveFocusDistance,
 } from "../src/camera";
 
 test("horizontal FOV stays fixed across frame shapes and orthogonal lookup is stable", () => {
@@ -174,4 +175,29 @@ test("linear extrapolation extends the source span only until the next cut", () 
   expect(cameraAt(3, keys, { extrapolation: "linear" }).base.p.x).toBe(3);
   expect(cameraAt(3, keys, { extrapolation: "linear" }).base.l.x).toBe(3);
   expect(cameraAt(4, keys, { extrapolation: "linear" }).base.p.x).toBe(10);
+});
+
+test("independent optical tracks preserve pose, blend focus from auto, and leave Dolly Zoom in control", () => {
+  const poses = [0, 4].map((t) => ({
+    t, p: [t, 0, 10], l: [t, 0, 0], fov: 50, focus: 4,
+    fstop: 2.8, motion: "linear", ease: "linear", wave: 0,
+  }));
+  const optics = {
+    focalLength: { wide: { t: 0, value: 24 }, long: { t: 4, value: 50, ease: "linear" } },
+    focus: { auto: { t: 0, value: null }, near: { t: 4, value: 4, ease: "linear" } },
+  };
+  const raw = cameraAt(2, poses);
+  const withOptics = cameraAt(2, poses, { optics });
+  expect(withOptics.p.toArray()).toEqual(raw.p.toArray());
+  expect(withOptics.l.toArray()).toEqual(raw.l.toArray());
+  expect(withOptics.fstop).toBeCloseTo(2.8, 6);
+  expect(withOptics.mm).toBeCloseTo(37, 6);
+  expect(resolveFocusDistance(withOptics.focus, withOptics.p, () => null).distance).toBeCloseTo(7, 6);
+  expect(raw.fov).toBe(50);
+  expect(raw.focus).toBe(4);
+
+  const dollyPoses = [poses[0], { ...poses[1], dollyZoomScale: 2 }];
+  expect(cameraAt(2, dollyPoses, { optics }).fov).toBe(cameraAt(2, dollyPoses).fov);
+  expect(cameraAt(0, poses, { optics }).focus).toBeNull();
+  expect(cameraAt(4, poses, { optics }).focus).toBe(4);
 });

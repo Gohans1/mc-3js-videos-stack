@@ -65,6 +65,7 @@ export interface TimingClock {
 }
 export function compileTiming(timing: Timing, sourceDuration: number): TimingClock;
 export function frameVisible(clock: TimingClock, t: number): boolean;
+export function visibleOutputsAt(clock: TimingClock, source: number): number[];
 export function visibleOutputAt(clock: TimingClock, source: number): number | null;
 export function frameAt(clock: TimingClock, t: number): number;
 export function segmentAt(

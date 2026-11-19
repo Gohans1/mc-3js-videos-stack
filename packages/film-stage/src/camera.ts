@@ -8,6 +8,7 @@ export { dofParams, dollyZoom } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
+import { type CameraOpticsTracks, focalLengthAt, opticalFocusAt } from "./camera-optics";
 import {
   canMatchCameraSpeed,
   type JoinSlopes,
@@ -19,6 +20,7 @@ import { type CameraPoint, compileCameraPath, type ResolveCameraAnchor } from ".
 import { type FovAxis, lensAspect, rigFov } from "./camera-rig";
 
 export * from "./camera-meta";
+export * from "./camera-optics";
 export * from "./camera-rig";
 export { canMatchCameraSpeed } from "./camera-pace";
 export {
@@ -645,6 +647,7 @@ export function cameraAt(
     aspect?: number;
     resolveAnchor?: ResolveCameraAnchor;
     pointKnown?: (point: CameraPoint) => boolean;
+    optics?: CameraOpticsTracks;
     fovAxis?: FovAxis;
     rail?: readonly (readonly [number, number, number])[];
     extrapolation?: "hold" | "linear";
@@ -691,12 +694,15 @@ export function cameraAt(
   const shakeU = channelProgress(ks, t, span, "shake", channels);
   const rollU = channelProgress(ks, t, span, "roll", channels);
   const dollyZoomScale = span.i === span.j ? undefined : ks[span.j].dollyZoomScale;
+  const independentMm = dollyZoomScale === undefined ? focalLengthAt(opts?.optics, t) : undefined;
   const fov = clampFov(
     dollyZoomScale !== undefined
       ? (2 * Math.atan(dollyZoomScale / Math.max(0.01, p.distanceTo(l))) * 180) / Math.PI
-      : c0.fov === c1.fov
-        ? c0.fov
-        : lmix(c0.fov, c1.fov, lensU),
+      : independentMm !== undefined
+        ? rigFov(0, independentMm, aspect, opts?.fovAxis)
+        : c0.fov === c1.fov
+          ? c0.fov
+          : lmix(c0.fov, c1.fov, lensU),
   );
   const mm = mmOf(fov, lensAspect(aspect, opts?.fovAxis));
 
@@ -710,6 +716,9 @@ export function cameraAt(
   if (dofU <= 0 || sameFocus(c0.focus, c1.focus)) focus = c0.focus;
   else if (dofU >= 1) focus = c1.focus;
   else focus = { from: c0.focus, to: c1.focus, u: dofU };
+
+  const independentFocus = opticalFocusAt(opts?.optics, t, Math.max(0.05, p.distanceTo(l)));
+  if (independentFocus !== undefined) focus = independentFocus;
 
   let roll = lerpKey(ks, "roll", 0, span, rollU);
   const wave = lerpKey(ks, "wave", 1, span, shakeU);
@@ -747,7 +756,7 @@ export function cameraAt(
     shakes: blendHandheld(c0.hh, c1.hh, shakeU),
   });
   roll = nextRoll;
-  const sampleMm =
+  const sampleMm = independentMm !== undefined ? mm :
     lensU <= 0 || c0.mm === c1.mm
       ? c0.mm
       : lensU >= 1

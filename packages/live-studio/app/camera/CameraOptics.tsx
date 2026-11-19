@@ -37,6 +37,8 @@ import {
   type HandheldUiValue,
 } from "./OpticsWidgets";
 
+import { shotsDoc } from "./shots";
+
 const doc = { snapshot, restore };
 const DEG = 180 / Math.PI;
 
@@ -52,6 +54,7 @@ export function CameraOptics({
   const optics = opticsOfKey(i);
   const shot = cameraKeyShotIndex(i);
   const aspect = cameraLensAspect(shot);
+  const override = shotsDoc.data?.[shot]?.optics;
   const mm = optics.mm ?? mmOf(optics.fov, aspect);
   const disabled = !!key.locked;
   const field = (name: LensField, scale = 1) => ({
@@ -109,6 +112,12 @@ export function CameraOptics({
 
   return (
     <>
+      {S.tools?.cameraOpticsSample && (Object.keys(override?.focus ?? {}).length > 0 ||
+        Object.keys(override?.focalLength ?? {}).length > 0) && (
+        <p className="text-muted-foreground text-xs">
+          Active Optics tracks override their values on pose keys.
+        </p>
+      )}
       <SliderRow
         label="FOV"
         value={optics.fov}

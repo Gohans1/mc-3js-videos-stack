@@ -2,6 +2,7 @@
 // and left-drag moves a text/page title or moves the Free Camera (waking it seamlessly if off). On a phone, tap pins notes.
 import { cameraKeyFrameTime, keys, setFocus } from "../camera/cam";
 import { applyCameraPick, applyContinuityPick, cancelCameraPick } from "../camera/camera-framing";
+import { applyOpticsFocusPick } from "../camera/camera-optics-track";
 import { cameraGizmoBusy, pickCameraPath } from "../camera/campath";
 import { PHONE } from "../core/device";
 import { engine } from "../core/engine";
@@ -267,6 +268,7 @@ export const attachPicture = () => {
     const hit = lookAtClick(nx, ny);
     if (pick.target === "free") applyFreeCameraPick(pick, hit);
     else if (pick.target === "continuity") applyContinuityPick(pick, hit.world);
+    else if (pick.target === "optics-focus") applyOpticsFocusPick(pick, hit);
     else void engine.render(S.t, () => applyCameraPick(pick, hit));
     return true;
   };

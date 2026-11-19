@@ -219,6 +219,16 @@ export const playRanges = (clock, from, to) => {
   return ranges;
 };
 
+export const visibleOutputsAt = (clock, source) =>
+  clock.segments.flatMap((segment) => {
+    if (segment.blank) return [];
+    if (segment.kind === "freeze")
+      return Math.abs((segment.frame ?? segment.sourceFrom) - source) < 1e-6 ? [segment.from] : [];
+    return source >= segment.sourceFrom && source < segment.sourceTo
+      ? [segment.from + elapsed(segment, source - segment.sourceFrom)]
+      : [];
+  });
+
 export const visibleOutputAt = (clock, source) => {
   for (const s of clock.segments) {
     if (s.blank) continue;

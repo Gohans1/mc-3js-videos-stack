@@ -11,7 +11,14 @@ export type ContinuityPick = {
   t: number;
   first?: ContinuityAxis[0];
 };
-export type CameraPick = CameraAimPick | ContinuityPick;
+export type OpticsFocusPick = {
+  field: "focus";
+  target: "optics-focus";
+  id?: string;
+  t: number;
+  time: number;
+};
+export type CameraPick = CameraAimPick | ContinuityPick | OpticsFocusPick;
 export interface CameraSlice {
   cameraPick: CameraPick | null;
   timing: boolean;
