@@ -5,7 +5,7 @@ const NAMES =
   "find|gap|at|check|render|framecheck|qc|notes|note|sheet|pace|deliver|mix|listen|sfx:get|voice:gen|voice:align|voice:lips|voice:assemble|voice:cues|new-film";
 // the same commands called by their files, as package.json runs them
 const FILES =
-  /\S*(?:live-studio[/\\](?:check|render|framecheck|notes|note)\.mjs|scripts[/\\](?:find|gap|at|new_film)\.ts|scripts[/\\]review[/\\](?:sheet\.py|deliver\.py|pace\.ts|qc\.ts)|scripts[/\\]sound[/\\](?:get_sfx|mix|listen)\.py|scripts[/\\]voice[/\\](?:gen|align|lips|assemble|cues)\.ts)/;
+  /\S*(?:live-studio[/\\](?:check|render|framecheck|qc|notes|note)\.mjs|scripts[/\\](?:find|gap|at|new_film)\.ts|scripts[/\\]review[/\\](?:sheet\.py|deliver\.py|pace\.ts|qc\.ts)|scripts[/\\]sound[/\\](?:get_sfx|mix|listen)\.py|scripts[/\\]voice[/\\](?:gen|align|lips|assemble|cues)\.ts)/;
 // what may come before: a subshell's (, env settings, time, nohup, timeout
 const LEAD = String.raw`^[({]?\s*(?:(?:export\s+)?\w+=\S*\s+|time\s+|nohup\s+|timeout\s+(?:-\S+\s+)*\S+\s+)*`;
 const GUIDED = new RegExp(

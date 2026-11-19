@@ -112,6 +112,12 @@ test("reset and resetProtectedFiles acknowledge pending notices while keeping no
   resetProtectedFiles(project, [rel]);
   assert.deepEqual(captureWarnings(project), []);
   assert.equal(readAuditLog(project).length, 1);
+
+  // A subsequent direct write conflicting with the post-reset guard re-arms the warning
+  writeFileSync(file, JSON.stringify({ fov: 35 }));
+  assert.deepEqual(timeline.read().data, { fov: 60 });
+  assert.equal(captureWarnings(project).length, 1);
+  assert.equal(readAuditLog(project).length, 2);
 });
 
 test("legacy collaboration state JSON without acknowledgedNoticeId warns until resolved and stays per-file", (t) => {
@@ -269,6 +275,15 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
     assert.equal(readJson.data[0].fov, 60);
     assert.equal(readJson.data[1].fov, 65);
     assert.equal(readJson.notices.length, 1);
+
+    // 1b) Stale-base collab write cam - fails (exit 1, HTTP 409) and leaves pending warning armed
+    const staleWrite = await runCollab(["write", "cam", "-"], {
+      cwd: dir,
+      stdin: JSON.stringify({ base: initial.version, data: [k0, k1] }),
+    });
+    assert.equal(staleWrite.status, 1);
+    assert.equal(JSON.parse(staleWrite.stdout).conflict, true);
+    assert.equal(captureWarnings(dir).length, 1);
 
     // 2) collab write cam - via stdin (keeps k1's human fov: 65 protected, updates k0 to fov: 72)
     const stdinPayload = JSON.stringify({
