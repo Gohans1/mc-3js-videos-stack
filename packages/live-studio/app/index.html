@@ -7,10 +7,14 @@
     <title>Studio</title>
     <link rel="icon" href="data:," />
     <style>
-      body {
-        margin: 0;
-        background: #100f0f;
-        color: #cecdc3;
+      @layer base {
+        html,
+        body {
+          margin: 0;
+          background: #100f0f;
+          color: #cecdc3;
+          color-scheme: dark;
+        }
       }
       .studio-start-error {
         margin: 12px;
@@ -56,6 +60,9 @@
         content: "";
       }
       #studio-boot[data-error] .studio-boot-progress {
+        display: none;
+      }
+      body:has(#root + pre) #studio-boot {
         display: none;
       }
       @media (prefers-reduced-motion: no-preference) {
