@@ -45,8 +45,15 @@ try {
     e instanceof TypeError &&
     /dynamically imported module|Importing a module script failed/.test(e.message);
   const tries = Number(stored.get("pageTries", sessionStorage)) || 0;
-  if (notDownloaded && tries < 3 && stored.set("pageTries", String(tries + 1), sessionStorage))
-    location.reload();
+  let recovered = false;
+  if (notDownloaded && tries < 2 && stored.set("pageTries", String(tries + 1), sessionStorage)) {
+    try {
+      recovered = (await fetch("/api/edit.json", { cache: "no-store" })).ok;
+    } catch {
+      recovered = false;
+    }
+  }
+  if (recovered) location.reload();
   else
     showFailure(
       notDownloaded

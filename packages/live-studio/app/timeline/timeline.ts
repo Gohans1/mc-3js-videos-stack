@@ -243,16 +243,6 @@ const fitCanvasText = (g: CanvasRenderingContext2D, text: string, maxW: number):
   return lo > 0 ? `${text.slice(0, lo).trimEnd()}…` : "";
 };
 
-const aiSpansKey = (spans: readonly { a: number; b: number; level?: string }[]) => {
-  if (!spans.length) return "";
-  let key = "";
-  for (let i = 0; i < spans.length; i++) {
-    const s = spans[i]!;
-    key += `${s.a},${s.b},${s.level ?? ""};`;
-  }
-  return key;
-};
-
 const optionRangesKey = (ranges: readonly [number, number][]) => {
   if (!ranges.length) return "";
   let key = "";
@@ -297,8 +287,7 @@ let dcTheme = "",
   dcSelType = "",
   dcSelVal: string | number = "",
   dcOptGroup = "",
-  dcOptKey = "",
-  dcAiKey = "";
+  dcOptKey = "";
 let dcVoiceOut: unknown = null,
   dcEdits: unknown = null,
   dcComments: unknown = null,
@@ -519,7 +508,6 @@ const paintDetail = (
   g.fillStyle = tone("background");
   g.fillRect(0, AY - 1, w, 1);
   g.fillRect(0, h - 1, w, 1);
-  drawAi(g, X, a, b, h, 0.12);
 };
 
 const drawDetail = () => {
@@ -539,7 +527,6 @@ const drawDetail = () => {
     notesRef = marks.notes(),
     optGroup = st.groupName ?? "",
     optKey = optionRangesKey(marks.optionRanges()),
-    aiKey = aiSpansKey(marks.ai()),
     selType = selected?.type ?? "",
     selVal = selected?.type === "beat" ? selected.id : selected?.type === "line" ? selected.i : "";
 
@@ -568,8 +555,7 @@ const drawDetail = () => {
     dcSelVal !== selVal ||
     dcNotes !== notesRef ||
     dcOptGroup !== optGroup ||
-    dcOptKey !== optKey ||
-    dcAiKey !== aiKey
+    dcOptKey !== optKey
   ) {
     if (!detailBgCanvas) detailBgCanvas = document.createElement("canvas");
     if (detailBgCanvas.width !== pw || detailBgCanvas.height !== ph) {
@@ -605,7 +591,6 @@ const drawDetail = () => {
     dcNotes = notesRef;
     dcOptGroup = optGroup;
     dcOptKey = optKey;
-    dcAiKey = aiKey;
     dg.setTransform(d, 0, 0, d, 0, 0);
     paintDetail(dg, w, h, a, v, t, curShot);
   }
@@ -718,7 +703,7 @@ const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: num
   g.fillRect(x1 - 2, 0, 2, h);
 };
 
-// One playhead down every track below the ruler, bridging row gaps and empty bottom space (CapCut style)
+// Shared vertical+horizontal track overlay geometry across all rows (bridging row gaps & empty bottom space)
 let playheadDetail: HTMLElement | null = null;
 let playheadScroller: HTMLElement | null = null;
 let playheadLine: HTMLElement | null = null;
@@ -726,6 +711,13 @@ let playheadTop = "";
 let playheadHeight = "";
 let playheadWidth = "";
 let playheadTranslate = "";
+
+let aiHost: HTMLElement | null = null;
+let aiTop = "";
+let aiHeight = "";
+let aiWidth = "";
+let aiTranslate = "";
+let aiRenderKey = "";
 
 let rectCache = new WeakMap<Element, DOMRect>();
 const rectObserved = new WeakSet<Element>();
@@ -744,6 +736,7 @@ export const invalidateRects = () => {
   scrollerClientH = -1;
   invalidateShown();
   if (rectScroller?.isConnected) observeScrollerRows(rectScroller);
+  if (S.el?.ai && marks.ai().length) syncAi();
 };
 const rectRo = typeof ResizeObserver !== "undefined" ? new ResizeObserver(invalidateRects) : null;
 if (typeof window !== "undefined") {
@@ -772,16 +765,7 @@ const getScrollerHeight = (scroller: HTMLElement): number => {
   return scrollerClientH;
 };
 
-const syncPlayhead = () => {
-  const line = S.el?.playhead;
-  if (!line) return;
-  if (playheadLine !== line) {
-    playheadLine = line;
-    playheadTop = "";
-    playheadHeight = "";
-    playheadWidth = "";
-    playheadTranslate = "";
-  }
+const trackOverlayBounds = () => {
   const { timeline, ruler, detail } = S.el;
   if (detail && (playheadDetail !== detail || !playheadScroller?.isConnected)) {
     playheadDetail = detail;
@@ -795,18 +779,110 @@ const syncPlayhead = () => {
   }
   const scroller = detail ? playheadScroller : null;
   const { a, v } = view();
-  if (!timeline || !ruler || !scroller || v <= 0 || !isElementShown(detail)) {
-    if (!line.hidden) line.hidden = true;
-    return;
-  }
+  if (!timeline || !ruler || !scroller || v <= 0 || !isElementShown(detail)) return null;
   const dr = getCachedRect(detail),
     sr = getCachedRect(scroller),
     top = Math.max(getCachedRect(ruler).bottom, sr.top),
-    height = Math.max(0, sr.top + getScrollerHeight(scroller) - top),
+    height = Math.max(0, sr.top + getScrollerHeight(scroller) - top);
+  if (dr.width <= 0 || height <= 0) return null;
+  return { a, v, timeline, dr, top, height };
+};
+
+const AI_SPAN_TONE = {
+  ok: "border-ai bg-ai/12",
+  warn: "border-warn bg-warn/12",
+  fail: "border-destructive bg-destructive/12",
+} as const;
+
+const syncAi = () => {
+  const overlay = S.el?.ai;
+  if (!overlay) return;
+  if (aiHost !== overlay) {
+    aiHost = overlay;
+    aiTop = "";
+    aiHeight = "";
+    aiWidth = "";
+    aiTranslate = "";
+    aiRenderKey = "";
+  }
+  const spans = marks.ai(),
+    bounds = spans.length ? trackOverlayBounds() : null;
+  if (!bounds) {
+    if (!overlay.hidden) overlay.hidden = true;
+    if (aiRenderKey !== "") {
+      overlay.replaceChildren();
+      aiRenderKey = "";
+    }
+    return;
+  }
+  const { a, v, timeline, dr, top, height } = bounds,
+    b = a + v,
+    X = (s: number) => ((s - a) / v) * dr.width;
+  const box = getCachedRect(timeline),
+    nextTop = `${top - box.top}px`,
+    nextHeight = `${height}px`,
+    nextWidth = `${dr.width}px`,
+    nextTranslate = `${dr.left - box.left}px`;
+  if (aiTop !== nextTop) {
+    overlay.style.top = nextTop;
+    aiTop = nextTop;
+  }
+  if (aiHeight !== nextHeight) {
+    overlay.style.height = nextHeight;
+    aiHeight = nextHeight;
+  }
+  if (aiWidth !== nextWidth) {
+    overlay.style.width = nextWidth;
+    aiWidth = nextWidth;
+  }
+  if (aiTranslate !== nextTranslate) {
+    overlay.style.translate = nextTranslate;
+    aiTranslate = nextTranslate;
+  }
+  const nextKey = `${a},${v},${dr.width}:${spans.map((s) => `${s.a},${s.b},${s.level ?? "ok"}`).join(";")}`;
+  if (aiRenderKey !== nextKey) {
+    const nodes: HTMLElement[] = [];
+    for (const s of spans) {
+      if (s.b < a || s.a > b) continue;
+      const x0 = Math.max(0, X(s.a)),
+        x1 = Math.min(dr.width, Math.max(X(s.a) + 2, X(s.b)));
+      if (x1 <= x0) continue;
+      const div = document.createElement("div");
+      const toneClass =
+        AI_SPAN_TONE[s.level === "fail" ? "fail" : s.level === "warn" ? "warn" : "ok"];
+      div.className = `pointer-events-none absolute inset-y-0 left-0 border-s-2 ${toneClass}`;
+      div.style.translate = `${x0}px 0`;
+      div.style.width = `${x1 - x0}px`;
+      nodes.push(div);
+    }
+    overlay.replaceChildren(...nodes);
+    aiRenderKey = nextKey;
+  }
+  if (overlay.hidden !== (overlay.childElementCount === 0)) {
+    overlay.hidden = overlay.childElementCount === 0;
+  }
+};
+
+const syncPlayhead = () => {
+  const line = S.el?.playhead;
+  if (!line) return;
+  if (playheadLine !== line) {
+    playheadLine = line;
+    playheadTop = "";
+    playheadHeight = "";
+    playheadWidth = "";
+    playheadTranslate = "";
+  }
+  const bounds = trackOverlayBounds();
+  if (!bounds) {
+    if (!line.hidden) line.hidden = true;
+    return;
+  }
+  const { a, v, timeline, dr, top, height } = bounds,
     cx = ((S.t - a) / v) * dr.width,
     x0 = Math.max(0, cx - 0.75),
     x1 = Math.min(dr.width, cx + 0.75);
-  if (dr.width <= 0 || height <= 0 || x1 <= x0) {
+  if (x1 <= x0) {
     if (!line.hidden) line.hidden = true;
     return;
   }
@@ -837,6 +913,7 @@ export const drawTimelineActivity = () => {
   if (!S.el?.detail) return; // no timeline in this layout (a phone's, PhoneApp)
   drawRuler();
   drawDetail();
+  syncAi();
 };
 
 export const drawTimelines = () => {

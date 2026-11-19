@@ -4,13 +4,13 @@
 // stops gliding; a key with cut: true starts a new curve (a hard cut). On top ride a slow wave (the "breathing" float the
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import { handheld as makeHandheld, type ShakeName, SHAKES } from "film-kit/handheld";
-import { fovOf, mmOf } from "film-kit/lens";
+import { fovOf, mmOf, nearestPrime, PRIME_LENSES, PRIMES } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
 
 export * from "./camera-meta";
-export { fovOf, mmOf };
+export { fovOf, mmOf, nearestPrime, PRIME_LENSES, PRIMES };
 export { SHAKES, type ShakeName };
 const curves = new WeakMap();
 const segments = (keys) => {

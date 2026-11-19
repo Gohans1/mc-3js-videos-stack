@@ -6,7 +6,7 @@ import { after, test } from "node:test";
 
 import { mergeShotHits, repartitionAdjacentHits, splitShotHits } from "../app/camera/shot-hits.ts";
 import { formatOpticsAttributes } from "../app/timeline/cam-attributes.ts";
-import { CamTimeline, problems } from "../src/contract.ts";
+import { CamTimeline, problems, ShotsTimeline } from "../src/contract.ts";
 import { compactJson, openTimelineFile } from "../src/timeline_file.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "studio-cam-"));
@@ -151,5 +151,37 @@ test("formatOpticsAttributes renders handheld preset, kind, and off forms accura
   assert.equal(
     formatOpticsAttributes({ handheld: { kind: "HANDYCAM_RUN", amount: 1e-7 } }),
     "the film's lens, handheld off, no roll, the film's sway",
+  );
+  assert.equal(
+    formatOpticsAttributes({ bob: 0.4 }),
+    "the film's lens, no roll, the film's sway, bob 0.4×",
+  );
+});
+
+test("extended engine camera keys and shot impact hits pass timeline contracts cleanly", () => {
+  assert.deepEqual(
+    problems(
+      CamTimeline,
+      [
+        key(0, { mm: 35, fstop: 2, focus: "Steve.head", handheld: "THE_CLOSEUP", bob: 0.5 }),
+        key(2, {
+          mm: 85,
+          fstop: 1.8,
+          focus: { target: "Steve.head", offset: [0, 0.2, 0] },
+          handheld: { preset: "HANDYCAM_RUN", amount: 1.2, move: 0.8, speed: 1.1, offset: 4 },
+          bob: 0,
+        }),
+      ],
+      "cam.json",
+    ),
+    [],
+  );
+  assert.deepEqual(
+    problems(
+      ShotsTimeline,
+      [{ t: 0, name: "Intro", hits: [{ t: 1.25, amount: 0.85, decay: 1.5, freq: 14 }] }],
+      "shots.json",
+    ),
+    [],
   );
 });

@@ -18,13 +18,33 @@ export const camLine = () => {
     cam = tools.camera,
     i = shotIndex(S.t),
     shot = SHOTS[i];
-  const look = tools.free.on ? tools.free.l : tools.look;
+  const free = tools.free;
+  const pos = free.on ? free.p : cam.position;
+  const look = free.on ? free.l : tools.look;
+  const fov = free.on ? (free.fov ?? cam.fov) : cam.fov;
   const r = (v: Vec3) => [v.x, v.y, v.z].map((x) => +x.toFixed(3));
+  const roll = free.on && free.roll ? +free.roll.toFixed(4) : 0;
+  const wave = free.on && free.wave ? +free.wave.toFixed(3) : 0;
+  const extras =
+    free.on && (roll || wave)
+      ? `${roll ? `, roll: ${roll}` : ""}${wave ? `, wave: ${wave}` : ""}`
+      : "";
+  const world = {
+    p: r(pos),
+    l: r(look),
+    ...(free.on
+      ? {
+          fov: +fov.toFixed(1),
+          ...(roll ? { roll } : {}),
+          ...(wave ? { wave } : {}),
+        }
+      : {}),
+  };
   if (!tools.zoomOf || !tools.smoother) {
     return {
       shot: i,
-      line: `p: [${r(cam.position)}], l: [${r(look)}], fov: ${+cam.fov.toFixed(1)}`,
-      world: { p: r(cam.position), l: r(look) },
+      line: `p: [${r(pos)}], l: [${r(look)}], fov: ${+fov.toFixed(1)}${extras}`,
+      world,
     };
   }
   const u = (S.t - shot.t) / (shotEnd(i) - shot.t);
@@ -35,9 +55,9 @@ export const camLine = () => {
   const l: Vec3 = { x: look.x - ox, y: look.y - oy, z: look.z - oz };
   const inv = 1 / (1 - k);
   const p: Vec3 = {
-    x: (cam.position.x - k * look.x) * inv - ox,
-    y: (cam.position.y - k * look.y) * inv - oy,
-    z: (cam.position.z - k * look.z) * inv - oz,
+    x: (pos.x - k * look.x) * inv - ox,
+    y: (pos.y - k * look.y) * inv - oy,
+    z: (pos.z - k * look.z) * inv - oz,
   };
   const V = (v: Vec3) => `V(${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)})`;
   const warn = [
@@ -49,11 +69,8 @@ export const camLine = () => {
     .join(", ");
   return {
     shot: i,
-    line: `p: [${V(p)}, ${V(p)}], l: [${V(l)}, ${V(l)}], fov: ${+cam.fov.toFixed(1)}`,
-    world: {
-      p: cam.position.toArray().map((v) => +v.toFixed(3)),
-      l: look.toArray().map((v) => +v.toFixed(3)),
-    },
+    line: `p: [${V(p)}, ${V(p)}], l: [${V(l)}, ${V(l)}], fov: ${+fov.toFixed(1)}${extras}`,
+    world,
     warn: warn || undefined,
   };
 };

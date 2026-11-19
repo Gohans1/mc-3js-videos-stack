@@ -699,3 +699,56 @@ export const renderFilm = async (
   await ctx.startRendering();
   return l;
 };
+
+// Render stereo [from, to] audio segment for direct in-browser low-res MP4 clip export.
+export const renderAudioSpan = async (from: number, to: number): Promise<AudioBuffer | null> => {
+  const dur = Math.max(0, to - from);
+  if (dur <= 1e-3) return null;
+  const rate = 48000,
+    frames = Math.max(1, Math.round(dur * rate)),
+    voice = await mixBuffer(),
+    l = source?.lanes();
+  if (on && l) {
+    await preloadSources(l);
+    const all = clips(l),
+      loaded = await Promise.all(all.map(loadClip));
+    if (!loaded.some((s) => !s)) {
+      const ctx = new OfflineAudioContext(2, frames, rate),
+        st = stage(ctx, ctx.destination);
+      st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+      await st.ready;
+      if (voice && from < voice.duration) {
+        const v = ctx.createBufferSource();
+        v.buffer = voice;
+        v.connect(st.bus);
+        v.start(0, Math.max(0, from), Math.min(dur, voice.duration - Math.max(0, from)));
+      }
+      const w = {
+        speed: 1,
+        ctxAt: (t: number) => t - from,
+        when: (t: number) => Math.max(0, t - from),
+      };
+      all.forEach((c, i) => {
+        const s = loaded[i];
+        if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w);
+      });
+      return ctx.startRendering();
+    }
+  }
+  if (!voice) return null;
+  const startSample = Math.max(0, Math.floor(from * voice.sampleRate)),
+    sampleCount = Math.max(1, Math.round(dur * voice.sampleRate)),
+    out = new AudioBuffer({
+      numberOfChannels: 2,
+      length: sampleCount,
+      sampleRate: voice.sampleRate,
+    }),
+    chCount = Math.min(2, voice.numberOfChannels);
+  for (let ch = 0; ch < 2; ch++) {
+    const src = voice.getChannelData(Math.min(ch, chCount - 1));
+    const dst = out.getChannelData(ch);
+    const available = Math.min(sampleCount, Math.max(0, src.length - startSample));
+    if (available > 0) dst.set(src.subarray(startSample, startSample + available));
+  }
+  return out;
+};

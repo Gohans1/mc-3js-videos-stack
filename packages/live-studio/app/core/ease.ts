@@ -1,24 +1,96 @@
 // How a span between two keys spends its time, as the film draws it (the later key's ease): a named ease the film shares with
 // draw (draw.eases, film-stage's EASES) or a CSS cubic-bezier [x1, y1, x2, y2], which the studio works out itself with
 // bezier-easing, the library film-stage uses, so the tiles and the camera row show what the film plays
-import BezierEasing from "bezier-easing";
-
+import {
+  type Bezier,
+  bezierEaseFn,
+  DEFAULT_CUSTOM_CURVE,
+  type Ease,
+  easeToBezierWith,
+  endSlope,
+  entryHandleForSlope,
+  exitHandleForSlope,
+  fitBezier,
+  KNOWN_BEZIERS,
+  roundCurve,
+  sameCurve,
+  startSlope,
+} from "./ease-math";
+import { getFile, postJson } from "./net";
 import { S } from "./state";
+import { stored } from "./storage";
+import { get, set } from "./store";
 
-export type Bezier = [number, number, number, number];
-export type Ease = string | Bezier;
+export type { Bezier, Ease };
+export {
+  DEFAULT_CUSTOM_CURVE,
+  endSlope,
+  entryHandleForSlope,
+  exitHandleForSlope,
+  fitBezier,
+  KNOWN_BEZIERS,
+  sameCurve,
+  startSlope,
+};
 
-const beziers = new Map<string, (x: number) => number>();
-// fallback: what a key without an ease gets in the film that plays it (the camera's "smooth", an object's "inout")
+export interface EaseTemplate {
+  id: string;
+  name: string;
+  curve: Bezier;
+  basedOn?: string;
+}
+
 export const easeFn = (e: Ease | undefined, fallback: string): ((x: number) => number) | null => {
-  if (Array.isArray(e)) {
-    const k = e.join();
-    if (!beziers.has(k)) beziers.set(k, BezierEasing(...e));
-    return beziers.get(k)!;
-  }
+  if (Array.isArray(e)) return bezierEaseFn(e);
   return S.render?.eases?.[e ?? fallback] ?? null;
 };
 export const easeNames = () => Object.keys(S.render?.eases ?? {});
+
+export const easeToBezier = (e: Ease | undefined, fallback: string): Bezier =>
+  easeToBezierWith(e, fallback, (name) => S.render?.eases?.[name] ?? null);
+
+export const alignedEntryCurve = ({
+  prevCurve,
+  prevDuration,
+  currCurve,
+  currDuration,
+  fallback = "smooth",
+}: {
+  prevCurve: Ease | undefined;
+  prevDuration: number;
+  currCurve: Ease | undefined;
+  currDuration: number;
+  fallback?: string;
+}): Bezier => {
+  const fPrev = easeFn(prevCurve, fallback);
+  const vIn = fPrev && prevDuration > 1e-5 ? endSlope(fPrev) / prevDuration : 0;
+  const targetSlope = Math.max(0, vIn * Math.max(currDuration, 1e-5));
+  const [, , cx2, cy2] = easeToBezier(currCurve, fallback);
+  const [x1, y1] = entryHandleForSlope(targetSlope);
+  return [x1, y1, cx2, cy2];
+};
+
+export const alignedExitCurve = ({
+  currCurve,
+  currDuration,
+  nextCurve,
+  nextDuration,
+  fallback = "smooth",
+}: {
+  currCurve: Ease | undefined;
+  currDuration: number;
+  nextCurve: Ease | undefined;
+  nextDuration: number;
+  fallback?: string;
+}): Bezier => {
+  const fNext = easeFn(nextCurve, fallback);
+  const vOut = fNext && nextDuration > 1e-5 ? startSlope(fNext) / nextDuration : 0;
+  const targetSlope = Math.max(0, vOut * Math.max(currDuration, 1e-5));
+  const [cx1, cy1] = easeToBezier(currCurve, fallback);
+  const [x2, y2] = exitHandleForSlope(targetSlope);
+  return [cx1, cy1, x2, y2];
+};
+
 // film-stage's eases by the names CapCut's keyframe Preset curves give the same shapes (Ease In: a slow start, Ease Out: a slow
 // stop, Ease: both); a film's own extra ones go by their name
 const TITLES: Record<string, string> = {
@@ -47,3 +119,79 @@ const TITLES: Record<string, string> = {
 };
 export const easeTitle = (e: Ease | undefined, fallback: string) =>
   Array.isArray(e) ? `Custom curve (${e.join(", ")})` : (TITLES[e ?? fallback] ?? e ?? fallback);
+
+const LOCAL_TEMPLATES_KEY = "easeTemplates";
+
+const readLocalTemplates = (): EaseTemplate[] => {
+  try {
+    const raw = JSON.parse(stored.get(LOCAL_TEMPLATES_KEY) ?? "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalTemplates = (list: EaseTemplate[]) => {
+  set({ easeTemplates: list });
+  stored.set(LOCAL_TEMPLATES_KEY, JSON.stringify(list));
+};
+
+export const loadEaseTemplates = async () => {
+  try {
+    const r = await fetch("/api/ease-templates");
+    if (r.ok) {
+      const list = (await r.json()) as EaseTemplate[];
+      writeLocalTemplates(Array.isArray(list) ? list : []);
+      return;
+    }
+  } catch {}
+  set({ easeTemplates: readLocalTemplates() });
+};
+
+export const saveEaseTemplate = async (input: {
+  id?: string;
+  name: string;
+  curve: Bezier;
+  basedOn?: string;
+}): Promise<EaseTemplate | null> => {
+  const name = input.name.trim();
+  if (!name) return null;
+  const payload = {
+    ...(input.id ? { id: input.id } : {}),
+    name,
+    curve: roundCurve(input.curve),
+    ...(input.basedOn ? { basedOn: input.basedOn } : {}),
+  };
+  try {
+    const r = await postJson("/api/ease-templates", payload);
+    if (r.ok) {
+      const saved = (await r.json()) as EaseTemplate;
+      const cur = get().easeTemplates;
+      const idx = cur.findIndex((t) => t.id === saved.id);
+      writeLocalTemplates(idx >= 0 ? cur.map((t, i) => (i === idx ? saved : t)) : [...cur, saved]);
+      return saved;
+    }
+  } catch {}
+  const cur = get().easeTemplates;
+  const saved: EaseTemplate = {
+    id: input.id || `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    name,
+    curve: payload.curve,
+    ...(input.basedOn ? { basedOn: input.basedOn } : {}),
+  };
+  const idx = cur.findIndex((t) => t.id === saved.id);
+  writeLocalTemplates(idx >= 0 ? cur.map((t, i) => (i === idx ? saved : t)) : [...cur, saved]);
+  return saved;
+};
+
+export const deleteEaseTemplate = async (id: string) => {
+  try {
+    await fetch(`/api/ease-templates/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch {}
+  writeLocalTemplates(get().easeTemplates.filter((t) => t.id !== id));
+};
+
+export const getEaseTemplatesSnapshot = async () => {
+  const r = await getFile("/api/ease-templates").catch(() => null);
+  return r?.ok ? ((await r.json()) as EaseTemplate[]) : readLocalTemplates();
+};

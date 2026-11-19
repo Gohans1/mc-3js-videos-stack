@@ -1,18 +1,33 @@
-// How a key is eased into, picked as CapCut's Speed > Curve tiles: the film's named eases (draw.eases), the pro tools' presets
-// when the film shares none, and a custom curve with its editor (bezier-easing-editor, a CSS cubic-bezier). The camera's Speed
-// tab and an object's keyframe both use it (camera/SpeedPanel.tsx, objects/ObjectsPanel.tsx); each keeps its own undo step.
+// How a key is eased into, picked as CapCut's Speed > Curve tiles: the film's named eases (draw.eases), user-saved
+// reusable ease templates (never mutating built-in presets), the pro tools' presets when the film shares none, and a custom
+// curve with its editor (bezier-easing-editor, a CSS cubic-bezier).
 import BezierEditor, { type BezierValue } from "bezier-easing-editor";
-import { SlidersHorizontal } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { Check, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { Input } from "@/components/ui/input";
 
-import { type Bezier, type Ease, easeFn, easeNames, easeTitle } from "../core/ease";
+import {
+  type Bezier,
+  DEFAULT_CUSTOM_CURVE,
+  deleteEaseTemplate,
+  type Ease,
+  easeFn,
+  easeNames,
+  type EaseTemplate,
+  easeTitle,
+  easeToBezier,
+  sameCurve,
+  saveEaseTemplate,
+} from "../core/ease";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { ownEase } from "../own/builtins";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { tone } from "../timeline/canvas";
+import { Reset } from "./inspector";
 import { NumberField } from "./NumberField";
 import { Tip } from "./Tip";
 
@@ -109,6 +124,9 @@ function Tile({
   on,
   own,
   onPick,
+  onCustomize,
+  customizeLabel,
+  customizeMode,
   mono,
 }: {
   title: string;
@@ -117,28 +135,48 @@ function Tile({
   on: boolean;
   own?: boolean;
   onPick: () => void;
+  onCustomize?: () => void;
+  customizeLabel?: string;
+  customizeMode?: "clone" | "edit";
   mono?: boolean;
 }) {
   return (
-    <li className="flex min-w-0 flex-col items-center gap-1">
-      <Tip label={tip}>
-        <button
-          type="button"
-          aria-pressed={on}
-          aria-label={`${title}: ${tip}${own ? `, ${FILM_MADE}` : ""}`}
-          onClick={onPick}
-          className="text-foreground/80 hover:ring-border focus-visible:ring-ring aria-pressed:text-primary-text aria-pressed:ring-primary relative block aspect-square w-full overflow-hidden rounded-md ring-2 ring-transparent outline-none"
-        >
-          {f ? (
-            <Graph f={f} />
-          ) : (
-            <span className="bg-raised-2 text-warn-text absolute inset-0 grid place-items-center">
-              <SlidersHorizontal className="size-6" />
-            </span>
-          )}
-          {own && <FilmMark />}
-        </button>
-      </Tip>
+    <li className="group flex min-w-0 flex-col items-center gap-1">
+      <div className="relative aspect-square w-full">
+        <Tip label={tip}>
+          <button
+            type="button"
+            aria-pressed={on}
+            aria-label={`${title}: ${tip}${own ? `, ${FILM_MADE}` : ""}`}
+            onClick={onPick}
+            className="text-foreground/80 hover:ring-border focus-visible:ring-ring aria-pressed:text-primary-text aria-pressed:ring-primary relative block size-full overflow-hidden rounded-md ring-2 ring-transparent outline-none"
+          >
+            {f ? (
+              <Graph f={f} />
+            ) : (
+              <span className="bg-raised-2 text-warn-text absolute inset-0 grid place-items-center">
+                <SlidersHorizontal className="size-6" />
+              </span>
+            )}
+            {own && <FilmMark />}
+          </button>
+        </Tip>
+        {onCustomize && customizeLabel && (
+          <div className="pointer-events-none absolute top-1 right-1 z-1 opacity-80 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100">
+            <Tip label={customizeLabel}>
+              <Button
+                type="button"
+                variant="favorite-tile"
+                size="icon-xs"
+                aria-label={customizeLabel}
+                onClick={onCustomize}
+              >
+                {customizeMode === "edit" ? <Pencil /> : <SlidersHorizontal />}
+              </Button>
+            </Tip>
+          </div>
+        )}
+      </div>
       <span
         translate={mono ? "no" : undefined}
         className={
@@ -152,6 +190,91 @@ function Tile({
     </li>
   );
 }
+
+const CURVE_AXES = ["x1", "y1", "x2", "y2"] as const;
+
+function BezierCurveFields({
+  value,
+  defaultValue,
+  onHandleDrag,
+  onCommit,
+}: {
+  value: Bezier;
+  defaultValue: Bezier;
+  onHandleDrag: (v: Bezier) => void;
+  onCommit: (v: Bezier) => void;
+}) {
+  return (
+    <>
+      <div className="bg-background self-center rounded-lg">
+        <BezierEditor
+          value={value as BezierValue}
+          onChange={(v) => onHandleDrag(round(v))}
+          width={220}
+          height={220}
+          background="transparent"
+          gridColor={tone("card")}
+          curveColor={tone("foreground")}
+          handleColor={tone("primary")}
+          progressColor={tone("slider")}
+          textStyle={{ fill: tone("muted-foreground"), fontSize: 11, fontFamily: "inherit" }}
+        />
+      </div>
+      {/* The same four numbers by keyboard with individual resets so no one has to memorize defaults. */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {CURVE_AXES.map((n, k) => {
+          const def = Math.round(defaultValue[k] * 1000) / 1000;
+          const withK = (x: number) => {
+            const v = [...value] as Bezier;
+            v[k] = k % 2 ? x : Math.max(0, Math.min(1, x));
+            return round(v);
+          };
+          return (
+            <div key={n} className="flex flex-col gap-0.5">
+              <div className="flex items-center justify-between gap-0.5">
+                <span className="text-muted-foreground text-xs">{n}</span>
+                <Reset
+                  compact
+                  label={`Reset ${n} to ${def}`}
+                  disabled={Math.abs(value[k] - def) < 1e-3}
+                  onClick={() => onCommit(withK(def))}
+                />
+              </div>
+              <NumberField
+                size="tight"
+                name={`Curve ${n}`}
+                value={value[k]}
+                step={0.01}
+                digits={3}
+                onSave={(x) => {
+                  if (x !== undefined) onCommit(withK(x));
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+type TemplateDraft = {
+  mode: "create" | "edit";
+  templateId?: string;
+  sourceTitle?: string;
+  name: string;
+  curve: Bezier;
+  baseCurve: Bezier;
+};
+
+const uniqueTemplateName = (base: string, existing: EaseTemplate[]) => {
+  const taken = new Set(existing.map((t) => t.name.toLowerCase()));
+  const seed = base.trim() || "Custom ease";
+  if (!taken.has(seed.toLowerCase())) return seed;
+  let n = 2;
+  while (taken.has(`${seed} ${n}`.toLowerCase())) n++;
+  return `${seed} ${n}`;
+};
 
 // value: the key's ease as stored, none meaning fallback (what the film gives a key without one); onPick saves, one undo step
 export function EaseTiles({
@@ -168,11 +291,16 @@ export function EaseTiles({
   names?: string[];
 }) {
   useStudio((s) => s.ready);
+  const templates = useStudio((s) => s.easeTemplates);
+  const [draft, setDraft] = useState<TemplateDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+
   const list = names ?? easeNames();
   const curve = Array.isArray(value) ? value : null,
     presets = list.length ? [] : CURVES;
+  const matchedTemplate = curve ? templates.find((t) => sameCurve(t.curve, curve)) : undefined;
   const now = curve
-    ? (presets.find((c) => c.v.join() === curve.join())?.id ?? "custom")
+    ? (matchedTemplate?.id ?? presets.find((c) => c.v.join() === curve.join())?.id ?? "custom")
     : (value ?? fallback);
   const pick = (id: string) => {
     if (id === now) return;
@@ -180,7 +308,7 @@ export function EaseTiles({
       v = c
         ? c.v
         : id === "custom"
-          ? (curve ?? [0.42, 0, 0.58, 1])
+          ? (curve ?? [...DEFAULT_CUSTOM_CURVE])
           : id === fallback
             ? undefined
             : id;
@@ -188,8 +316,79 @@ export function EaseTiles({
   };
   const tipOf = (n: string) =>
     `${n === fallback ? "Default. " : ""}${TIPS[n] ?? `The film's own ease "${n}"`}`;
+
+  const openClone = (sourceTitle: string, sourceEase: Ease | undefined) => {
+    const baseCurve = easeToBezier(sourceEase, fallback);
+    setDraft({
+      mode: "create",
+      sourceTitle,
+      name: uniqueTemplateName(`${sourceTitle} custom`, templates),
+      curve: [...baseCurve] as Bezier,
+      baseCurve: [...baseCurve] as Bezier,
+    });
+  };
+
+  const nameId = useId();
+  const openEditTemplate = (tpl: EaseTemplate) => {
+    setDraft({
+      mode: "edit",
+      templateId: tpl.id,
+      sourceTitle: tpl.basedOn,
+      name: tpl.name,
+      curve: [...tpl.curve] as Bezier,
+      baseCurve: [...tpl.curve] as Bezier,
+    });
+  };
+
+  const applyDraft = async () => {
+    if (!draft || saving || !draft.name.trim()) return;
+    setSaving(true);
+    try {
+      const saved = await saveEaseTemplate({
+        id: draft.templateId,
+        name: draft.name.trim(),
+        curve: draft.curve,
+        basedOn: draft.sourceTitle,
+      });
+      if (saved) {
+        onPick([...saved.curve]);
+        setDraft(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeDraft = async () => {
+    if (!draft?.templateId || saving) return;
+    setSaving(true);
+    try {
+      await deleteEaseTemplate(draft.templateId);
+      setDraft(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground text-xs">
+          {templates.length
+            ? `${templates.length} custom template${templates.length > 1 ? "s" : ""}`
+            : "Presets"}
+        </span>
+        <Tip label="Create a reusable keyframe easing template from the current curve without altering any built-in preset">
+          <Button
+            variant="subtle"
+            size="sm"
+            onClick={() => openClone(easeTitle(value, fallback), value ?? fallback)}
+          >
+            <Plus data-icon="inline-start" aria-hidden />
+            Add template
+          </Button>
+        </Tip>
+      </div>
       <ul
         aria-label="Speed curve"
         className={
@@ -205,6 +404,9 @@ export function EaseTiles({
             on={now === n}
             own={ownEase(n, S.render?.eases)}
             onPick={() => pick(n)}
+            customizeMode="clone"
+            customizeLabel={`Customize ${easeTitle(n, fallback)} as new template`}
+            onCustomize={() => openClone(easeTitle(n, fallback), n)}
             mono={!TIPS[n]}
           />
         ))}
@@ -216,6 +418,22 @@ export function EaseTiles({
             f={easeFn(c.v, fallback)}
             on={now === c.id}
             onPick={() => pick(c.id)}
+            customizeMode="clone"
+            customizeLabel={`Customize ${c.title} as new template`}
+            onCustomize={() => openClone(c.title, c.v)}
+          />
+        ))}
+        {templates.map((tpl) => (
+          <Tile
+            key={tpl.id}
+            title={tpl.name}
+            tip={`Template (${tpl.curve.join(", ")})${tpl.basedOn ? ` · from ${tpl.basedOn}` : ""}`}
+            f={easeFn(tpl.curve, fallback)}
+            on={now === tpl.id}
+            onPick={() => onPick([...tpl.curve])}
+            customizeMode="edit"
+            customizeLabel={`Edit template ${tpl.name}`}
+            onCustomize={() => openEditTemplate(tpl)}
           />
         ))}
         <Tile
@@ -228,6 +446,76 @@ export function EaseTiles({
       </ul>
       {!list.length && (
         <Callout>Only curves here: the film doesn't share its named eases (draw.eases).</Callout>
+      )}
+      {draft && (
+        <div
+          aria-label={draft.mode === "edit" ? "Edit easing template" : "New easing template"}
+          className="bg-card border-hairline mt-1 flex flex-col gap-2.5 rounded-lg border p-2.5"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-ui font-medium">
+                {draft.mode === "edit" ? "Edit template" : `New template from ${draft.sourceTitle}`}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {draft.mode === "edit"
+                  ? "Saves into your reusable templates."
+                  : "Original preset stays unchanged."}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1 text-xs">
+            <label htmlFor={nameId} className="text-muted-foreground">
+              Template name
+            </label>
+            <Input
+              id={nameId}
+              size="sm"
+              aria-label="Template name"
+              value={draft.name}
+              spellCheck={false}
+              onChange={(e) => {
+                const name = e.target.value;
+                setDraft((d) => (d ? { ...d, name } : null));
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") void applyDraft();
+                if (e.key === "Escape") setDraft(null);
+              }}
+            />
+          </div>
+          <BezierCurveFields
+            value={draft.curve}
+            defaultValue={draft.baseCurve}
+            onHandleDrag={(next) => setDraft((d) => (d ? { ...d, curve: next } : null))}
+            onCommit={(next) => setDraft((d) => (d ? { ...d, curve: next } : null))}
+          />
+          <div className="flex items-center gap-1.5 pt-0.5">
+            {draft.mode === "edit" && (
+              <Button
+                variant="remove"
+                size="sm"
+                disabled={saving}
+                onClick={() => void removeDraft()}
+              >
+                <Trash2 data-icon="inline-start" aria-hidden />
+                Delete
+              </Button>
+            )}
+            <Button variant="quiet" size="sm" className="ms-auto" onClick={() => setDraft(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!draft.name.trim() || saving}
+              onClick={() => void applyDraft()}
+            >
+              <Check data-icon="inline-start" aria-hidden />
+              Save &amp; apply
+            </Button>
+          </div>
+        </div>
       )}
     </>
   );
@@ -251,11 +539,13 @@ type CurveDrag =
 // bezier-easing-editor follows a handle on window, so a release off its box is common: the drag ends on window as well
 export function CurveEditor({
   value,
+  defaultValue = DEFAULT_CUSTOM_CURVE,
   preview,
   doc,
   onSave,
 }: {
   value: Bezier;
+  defaultValue?: Bezier;
   preview: (v: Bezier) => void;
   doc: { snapshot: () => string; restore: (s: string) => void };
   onSave: (v: Bezier) => void;
@@ -306,50 +596,14 @@ export function CurveEditor({
     );
   };
   return (
-    <>
-      <div className="bg-background self-center rounded-lg">
-        <BezierEditor
-          value={value as BezierValue}
-          onChange={(v) => {
-            const next = round(v);
-            begin(next);
-            preview(next);
-          }}
-          width={220}
-          height={220}
-          background="transparent"
-          gridColor={tone("card")}
-          curveColor={tone("foreground")}
-          handleColor={tone("primary")}
-          progressColor={tone("slider")}
-          textStyle={{ fill: tone("muted-foreground"), fontSize: 11, fontFamily: "inherit" }}
-        />
-      </div>
-      {/* The same four numbers by keyboard: a drag is never the only way. Saved on Enter or leaving the box, one undo step */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {(["x1", "y1", "x2", "y2"] as const).map((n, k) => {
-          const withK = (x: number) => {
-            const v = [...value] as Bezier;
-            v[k] = k % 2 ? x : Math.max(0, Math.min(1, x));
-            return round(v);
-          };
-          return (
-            <label key={n} className="text-muted-foreground flex flex-col gap-0.5 text-xs">
-              {n}
-              <NumberField
-                size="tight"
-                name={`Curve ${n}`}
-                value={value[k]}
-                step={0.01}
-                digits={3}
-                onSave={(x) => {
-                  if (x !== undefined) onSave(withK(x));
-                }}
-              />
-            </label>
-          );
-        })}
-      </div>
-    </>
+    <BezierCurveFields
+      value={value}
+      defaultValue={defaultValue}
+      onHandleDrag={(next) => {
+        begin(next);
+        preview(next);
+      }}
+      onCommit={onSave}
+    />
   );
 }

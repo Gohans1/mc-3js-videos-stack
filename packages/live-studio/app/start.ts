@@ -11,6 +11,7 @@ import { loadLayers } from "./camera/layers";
 import { loadShots, shotsDoc } from "./camera/shots";
 import { bootData, invalidateTagPrefix, versionUrl } from "./core/boot";
 import { AWAY, PHONE } from "./core/device";
+import { loadEaseTemplates } from "./core/ease";
 import { registerEngine } from "./core/engine";
 import { onEvent, onHello } from "./core/events";
 import { loadFavorites } from "./core/favorites";
@@ -30,8 +31,8 @@ import {
   drawPins,
   ensureNote,
   flushNotes,
-  followNotes,
   followNoteLinks,
+  followNotes,
   loadNotes,
   noteMarks,
   restoreDraft,
@@ -48,16 +49,16 @@ import {
   shownTransform,
   startObjectCarry,
 } from "./objects/placed";
+import { readOpenFilm } from "./openfilm/state";
 import { followChips, loadTrials, optionRanges } from "./options/options";
 import { captionAt } from "./picture/captions";
 import { staleFilmView } from "./picture/filmcam";
 import { filmFeatures, frameSize, loadFilm } from "./picture/frame";
-import { flight, fly, setFov, setFree } from "./picture/freecam";
+import { flight, fly, flyFree, setFov, setFree } from "./picture/freecam";
 import { formatOpticsHud } from "./picture/hud";
 import { lookAtClick } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
 import { drawFinal, finalCanvas, render, setFinal } from "./picture/render";
-import { readOpenFilm } from "./openfilm/state";
 import { measureScopes } from "./picture/scopes";
 import {
   loadMix,
@@ -78,7 +79,14 @@ import { attachTextRow } from "./text/textrow";
 import { attachAcross } from "./timeline/across";
 import { restoreInOut } from "./timeline/inout";
 import { attachPreviewAxis, peekTime } from "./timeline/peek";
-import { attachTimeline, drawTimelineActivity, drawTimelines, loadVoice, marks, refreshTimes } from "./timeline/timeline";
+import {
+  attachTimeline,
+  drawTimelineActivity,
+  drawTimelines,
+  loadVoice,
+  marks,
+  refreshTimes,
+} from "./timeline/timeline";
 import { loadTiming } from "./timeline/timing";
 
 registerEngine({
@@ -86,6 +94,7 @@ registerEngine({
   finalCanvas,
   setFinal,
   setFree,
+  flyFree,
   setFov,
   setGizmo,
   isGizmoDragging,
@@ -188,7 +197,9 @@ const listen = () => {
   onEvent("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
   onEvent("timing", loadTiming);
   onEvent("adjustment", reloadNotice("layersRev", "Color adjustment updated", loadLayers));
-  onEvent("openfilm", () => { void readOpenFilm().catch(showError); });
+  onEvent("openfilm", () => {
+    void readOpenFilm().catch(showError);
+  });
   onEvent("text", reloadNotice("textRev", "Titles updated", loadText)); // an agent edited the titles: the picture takes them now
   onEvent("notes", () => loadNotes({ notify: true }));
   onEvent("voice", () => {
@@ -201,6 +212,7 @@ const listen = () => {
   onEvent("contract", () => loadContract());
   onEvent("film", codeChanged); // the frame's shape changed (Settings, maybe in another page): a reload builds the scene at it
   onEvent("favorites", loadFavorites); // starred here, in another tab or on the phone
+  onEvent("ease-templates", loadEaseTemplates);
   // the AI wrote a lesson file: a Lessons tab already read shows it (lessons.ts keeps what the creator is typing)
   onEvent("lessons", () => {
     if (lessons.getState().loaded) void loadLessons();
@@ -232,6 +244,7 @@ const listen = () => {
       loadLayers();
       void readOpenFilm().catch(showError);
       loadFavorites();
+      void loadEaseTemplates();
       void loadActivity();
       if (lessons.getState().loaded) void loadLessons();
     }
@@ -323,6 +336,7 @@ export const start = async (el: Elements) => {
   const earlyExtras = Promise.all([
     has.shots ? loadShots() : Promise.resolve(set({ shots: false })),
     loadFavorites(),
+    loadEaseTemplates(),
   ]);
   const earlySound = Promise.all([timingReady, timeline]).then(() =>
     loadSound({ usedOnly: true, initial: true }),
@@ -343,30 +357,69 @@ export const start = async (el: Elements) => {
   if (has.sound) prefetchFile("/api/sound?used=1");
   if (has.trials) prefetchFile("/api/trials.json");
   if (has.choices) prefetchFile("/api/choices.json");
-  try {
-    S.render = await buildScene(el.canvas, w, h, true);
-  } catch (e) {
-    // A file lost on a bad line: start again, the browser keeps the ones that arrived. Giving up has to say which file
-    const tries = Number(stored.get("loadTries", sessionStorage)) || 0;
-    if (tries < 3) {
-      stored.set("loadTries", String(tries + 1), sessionStorage);
-      set({ loading: `Connection unstable. Retrying (${tries + 1})…` });
-      // Only once the line is back: reloading into no network would leave the browser's own error page
-      for (;;) {
+  const isTransientSceneError = async (err: unknown, failedFile: string): Promise<boolean> => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+    if (
+      err instanceof TypeError &&
+      /failed to fetch|networkerror|load failed|network request failed/i.test(err.message)
+    ) {
+      return true;
+    }
+    if (
+      err instanceof Error &&
+      /(?:ERR_NETWORK|ERR_INTERNET_DISCONNECTED|ERR_CONNECTION|ECONN|ETIMEDOUT|502|503|504|gateway|service unavailable)/i.test(
+        err.message,
+      )
+    ) {
+      return true;
+    }
+    try {
+      const ping = await fetch("/api/edit.json", { cache: "no-store" });
+      if (!ping.ok) return ping.status >= 500;
+    } catch {
+      return true;
+    }
+    if (failedFile) {
+      try {
+        const asset = await fetch(failedFile, { method: "HEAD", cache: "no-store" });
+        return asset.status >= 500;
+      } catch {
+        return true;
+      }
+    }
+    return false;
+  };
+  stored.remove("loadTries", sessionStorage);
+  const MAX_SCENE_RETRIES = 3;
+  for (let attempt = 0; ; attempt++) {
+    S.failedFile = "";
+    try {
+      S.render = await buildScene(el.canvas, w, h, true);
+      break;
+    } catch (e) {
+      const transient =
+        attempt < MAX_SCENE_RETRIES && (await isTransientSceneError(e, S.failedFile));
+      if (!transient) {
+        set({ loading: "" });
+        const detail = e instanceof Error ? e.message : String(e);
+        throw new Error(
+          S.failedFile
+            ? `Couldn't load ${S.failedFile}. (${detail})`
+            : `Couldn't load the scene. (${detail})`,
+        );
+      }
+      set({
+        loading: `Connection unstable. Retrying scene (${attempt + 1}/${MAX_SCENE_RETRIES})…`,
+      });
+      // Wait for Studio's API before retrying in-place; never reload the whole page on scene errors.
+      for (let probe = 0; probe < 20; probe++) {
         await wait(1500);
         try {
-          if ((await fetch("/api/edit.json")).ok) break;
+          if ((await fetch("/api/edit.json", { cache: "no-store" })).ok) break;
         } catch {}
       }
-      location.reload();
-      return;
     }
-    stored.remove("loadTries", sessionStorage);
-    throw new Error(
-      `Couldn't load ${S.failedFile || "the scene"}. Check your connection, then reload. (${(e as Error).message})`,
-    );
   }
-  stored.remove("loadTries", sessionStorage);
   if (AWAY && has.mix) loadWholeMix();
   S.tools = S.render.tools;
   set({ placed: !!S.tools.placed });

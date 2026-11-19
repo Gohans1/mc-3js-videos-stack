@@ -13,7 +13,10 @@ const buttonVariants = cva(
         outline:
           "border-input bg-backdrop/60 hover:bg-muted/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary-hover aria-expanded:bg-secondary aria-expanded:text-secondary-foreground disabled:text-muted-foreground disabled:border-hairline-subtle disabled:bg-surface-subtle disabled:opacity-100",
+          "border-control-border bg-secondary text-secondary-foreground hover:border-input hover:bg-raised-4 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground disabled:text-muted-foreground disabled:border-hairline-subtle disabled:bg-surface-subtle disabled:opacity-100",
+        // Transport & primary media bar buttons: clear resting surface+border so tools never look invisible, bright accent when active
+        toolbar:
+          "border-control-border bg-secondary text-foreground hover:border-input hover:bg-raised-4 hover:text-heading-foreground aria-expanded:border-input aria-expanded:bg-raised-4 aria-pressed:border-primary-text aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:border-primary-text aria-pressed:hover:bg-primary-text data-popup-open:border-primary-text data-popup-open:bg-primary data-popup-open:text-primary-foreground aria-pressed:font-semibold aria-pressed:shadow-xs data-popup-open:font-semibold",
         subtle:
           "text-foreground/90 aria-expanded:text-foreground aria-pressed:text-foreground disabled:text-muted-foreground aria-disabled:text-muted-foreground not-aria-disabled:hover:text-foreground border-hairline-strong bg-hairline-subtle not-aria-disabled:hover:border-hairline-strong not-aria-disabled:hover:bg-hairline disabled:border-hairline aria-disabled:border-hairline aria-expanded:border-hairline-strong aria-expanded:bg-hairline aria-pressed:border-hairline-strong aria-pressed:bg-hairline disabled:border-dashed disabled:bg-transparent disabled:opacity-100 aria-disabled:border-dashed aria-disabled:bg-transparent aria-disabled:opacity-100 disabled:[&_svg]:opacity-50 aria-disabled:[&_svg]:opacity-50",
         ghost:
@@ -27,8 +30,8 @@ const buttonVariants = cva(
         remove: "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
         "remove-chip":
           "text-muted-foreground hover:bg-destructive/15 hover:text-destructive border-hairline rounded-none border-s",
-        lit: "text-primary-text border-hairline bg-surface-subtle hover:bg-hairline", // a control whose item is active right now
-        tool: "text-foreground/80 hover:bg-muted/50 hover:text-foreground aria-pressed:bg-tint aria-pressed:text-primary-text", // the bars over the picture
+        lit: "border-primary-text bg-primary text-primary-foreground hover:bg-primary-text font-semibold", // a control whose item is active right now
+        tool: "border-control-border bg-secondary/90 text-foreground hover:border-input hover:bg-raised-4 hover:text-heading-foreground aria-pressed:border-primary-text aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary-text aria-pressed:font-semibold", // the bars over the picture
         picture: "text-picture hover:bg-hairline-strong", // an icon on the film itself
         scrim: "text-picture bg-scrim hover:bg-scrim-strong", // a chip on the film itself
         time: "text-label hover:border-primary/40 hover:bg-primary/10 hover:text-primary-text border-hairline bg-surface-subtle font-mono font-medium tabular-nums", // a note's time, which seeks there
@@ -50,7 +53,7 @@ const buttonVariants = cva(
         ai: "border-ai/45 bg-ai/16 text-ai-text not-aria-disabled:hover:border-ai/75 not-aria-disabled:hover:bg-ai/25 not-aria-disabled:hover:text-foreground disabled:text-muted-foreground aria-disabled:text-muted-foreground disabled:border-hairline disabled:bg-surface-subtle aria-disabled:border-hairline aria-disabled:bg-surface-subtle font-semibold disabled:opacity-100 aria-disabled:opacity-100", // refined Linear lavender answer CTA
         warn: "border-warn/45 bg-warn-bg/70 text-warn-text hover:border-warn hover:bg-warn-bg border",
         choice:
-          "bg-secondary text-secondary-foreground hover:bg-raised-4 aria-pressed:border-primary aria-pressed:bg-tint aria-pressed:text-primary-text aria-pressed:hover:bg-tint", // one of a list, picked
+          "border-control-border bg-secondary text-secondary-foreground hover:border-input hover:bg-raised-4 aria-pressed:border-primary-text aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary-text aria-pressed:font-semibold", // one of a list, picked
       },
       size: {
         comfortable:

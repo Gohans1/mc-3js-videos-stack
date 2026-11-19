@@ -30,7 +30,18 @@ if (typeof Bun !== "undefined") {
   });
 }
 globalThis.window = globalThis;
-const { createDoc, onDocMutated, undo, redo, together, flushDocs } = await import("../app/core/doc.ts");
+const {
+  confirmDocs,
+  createDoc,
+  flushDocs,
+  getPendingSnapshot,
+  onDocMutated,
+  redo,
+  revertDocs,
+  setAutoSave,
+  together,
+  undo,
+} = await import("../app/core/doc.ts");
 const { createTimedDoc } = await import("../app/core/timed-doc.ts");
 const { setTiming } = await import("../src/timing-state.mjs");
 const { TextTimeline } = await import("../src/contract.ts");
@@ -478,4 +489,63 @@ test("onDocMutated fires on edit, undo, redo, and changed external load until un
     d.count = 10;
   });
   assert.equal(hits, 4);
+});
+
+test("manual confirm holds edits in preview until confirmDocs or discards them completely via revertDocs", async (t) => {
+  await revertDocs();
+  setAutoSave(false);
+  t.after(async () => {
+    await revertDocs();
+    setAutoSave(true);
+  });
+  let savedState = null;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  agentWrites("confirm-gate", { camera: 50, roll: 0 });
+  const doc = createDoc("confirm-gate", {
+    label: "Camera",
+    changed: () => {},
+    saved: (s) => {
+      savedState = s;
+    },
+  });
+  await doc.load();
+
+  // Edits stay in preview without hitting disk even after the auto-save debounce timer passes
+  doc.edit((d) => {
+    d.camera = 68;
+  });
+  assert.equal(doc.data.camera, 68);
+  assert.equal(savedState, "pending");
+  assert.deepEqual(getPendingSnapshot(), [{ name: "confirm-gate", label: "Camera" }]);
+  await saveNow(t);
+  assert.equal(files.get("confirm-gate").data.camera, 50, "server file untouched before Confirm");
+
+  // Reverting restores the exact on-disk baseline (and pulls any newer agent edits on disk)
+  agentWrites("confirm-gate", { camera: 52, roll: 0.1 });
+  await revertDocs();
+  assert.equal(doc.data.camera, 52);
+  assert.equal(doc.data.roll, 0.1);
+  assert.equal(savedState, null);
+  assert.deepEqual(getPendingSnapshot(), []);
+
+  // Editing and returning back to the baseline value automatically clears pending status
+  doc.edit((d) => {
+    d.camera = 75;
+  });
+  assert.equal(getPendingSnapshot().length, 1);
+  doc.edit((d) => {
+    d.camera = 52;
+  });
+  assert.equal(getPendingSnapshot().length, 0);
+  assert.equal(savedState, null);
+
+  // Confirming explicitly writes the staged changes to disk and clears pending state
+  doc.edit((d) => {
+    d.camera = 84;
+  });
+  const ok = await confirmDocs();
+  assert.equal(ok, true);
+  assert.equal(files.get("confirm-gate").data.camera, 84);
+  assert.equal(savedState, null);
+  assert.deepEqual(getPendingSnapshot(), []);
 });

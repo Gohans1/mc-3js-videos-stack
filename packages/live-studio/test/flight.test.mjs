@@ -29,12 +29,10 @@ test("holding W flies forward at the speed asked, from the first frame", () => {
   assert.equal(up, 0);
 });
 
-test("Space flies up and Shift flies down, like Minecraft; E and Q too", () => {
+test("Space flies up and Shift flies down, like Minecraft; Q and E stay free for playback controls", () => {
   for (const [code, sign] of [
     ["Space", 1],
     ["ShiftLeft", -1],
-    ["KeyE", 1],
-    ["KeyQ", -1],
   ]) {
     const f = createFlight();
     f.press(code, 0);
@@ -42,6 +40,9 @@ test("Space flies up and Shift flies down, like Minecraft; E and Q too", () => {
     assert.ok(sign * up > 4 * 0.85 && sign * up < 4, `${code}: ${up}`);
     assert.equal(forward + right, 0, code);
   }
+  const f = createFlight();
+  assert.equal(f.press("KeyQ", 0), false);
+  assert.equal(f.press("KeyE", 0), false);
 });
 
 test("W pressed twice quickly sprints SPRINT times faster until it is let go; held down it never does", () => {
@@ -86,6 +87,14 @@ test("a Shift that starts a shortcut (Shift+K, Shift+drag) gives back the height
   f.release("ShiftLeft");
   f.press("ShiftLeft", 2);
   assert.ok(hold(f, 0.5, 60)[2] < 0, "pressed again, it flies down again");
+});
+
+test("chord() after sustained downward flight never snaps camera back upward", () => {
+  const f = createFlight();
+  f.press("ShiftLeft", 0);
+  const dropped = hold(f, 0.6, 60)[2];
+  assert.ok(dropped < -1.5, `${dropped}`);
+  assert.equal(f.chord(), 0, "past chord window, Shift dive is kept instead of snapping back up");
 });
 
 test("without Shift down a shortcut moves nothing", () => {

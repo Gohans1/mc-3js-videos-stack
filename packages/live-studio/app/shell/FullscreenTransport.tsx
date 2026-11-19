@@ -55,7 +55,7 @@ function Controls() {
       )}
     >
       <Button
-        variant="quiet"
+        variant="toolbar"
         size="icon"
         aria-label={playing ? "Pause full screen" : "Play full screen"}
         onClick={togglePlay}
@@ -79,7 +79,12 @@ function Controls() {
         onValueChange={(value) => seek(Number(value) / FPS)}
       />
       <span aria-hidden className="border-hairline-strong ml-1 h-3 border-l" />
-      <Button variant="quiet" size="icon" aria-label="Leave full screen" onClick={toggleFullscreen}>
+      <Button
+        variant="toolbar"
+        size="icon"
+        aria-label="Leave full screen"
+        onClick={toggleFullscreen}
+      >
         <Minimize />
       </Button>
     </div>

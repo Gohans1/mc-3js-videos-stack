@@ -202,7 +202,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     Object.assign(now, { B, R, Lh, look, feet });
   };
 
-  const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60 };
+  const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 60, roll: 0, wave: 0 };
   const lookAt = V(0, 0, 0),
     head = V(0, 0, 0);
   const velocityEffect = makeVelocity(renderer);
@@ -241,10 +241,9 @@ export async function buildScene(canvas, W, H, draft = false) {
       focusM: focusM !== undefined ? Math.round(focusM * 100) / 100 : undefined,
       focusTarget: resolvedFocus.label,
       handheld: bypass ? undefined : cam.handheld,
-      look: bypass
-        ? undefined
-        : (activeLayerLook ??
-          (shotEntry?.adjust?.enabled !== false ? shotEntry?.adjust?.look : undefined)),
+      look:
+        activeLayerLook ??
+        (shotEntry?.adjust?.enabled !== false ? shotEntry?.adjust?.look : undefined),
       impulse: bypass ? undefined : cam.optics?.impulse,
     });
     return { effectiveFstop, focusM, fallbackFocus, renderedMm };
@@ -261,10 +260,24 @@ export async function buildScene(canvas, W, H, draft = false) {
       camera.fov = free.fov;
       camera.position.copy(free.p);
       lookAt.copy(free.l);
+      const wAmt = free.wave ?? 0;
+      if (wAmt > 0) {
+        const right = lookAt
+          .clone()
+          .sub(camera.position)
+          .cross(V(0, 1, 0));
+        if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+        else right.normalize();
+        camera.position.y += wAmt * 0.035 * Math.sin(t * 0.9);
+        lookAt.addScaledVector(right, wAmt * 0.12 * Math.sin(t * 0.47));
+        lookAt.y += wAmt * 0.08 * Math.sin(t * 0.71 + 1.3);
+      }
     }
     camera.up.set(0, 1, 0);
     camera.lookAt(lookAt);
-    if (!free.on) camera.rotateZ(cam.roll);
+    camera.rotateZ(
+      free.on ? (free.roll ?? 0) + (free.wave ?? 0) * 0.012 * Math.sin(t * 0.53) : cam.roll,
+    );
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
     head.copy(camera.position);
@@ -286,12 +299,11 @@ export async function buildScene(canvas, W, H, draft = false) {
     const shotEntry = SHOTS_OUT[shot];
     const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;
     const adjVisible = clocks?.adjustmentsVisible ?? clocks?.layersVisible ?? true;
-    const activeLayerLook =
-      !free.on && adjVisible
-        ? [...activeAdjustments(EDIT.adjustments, adjAt, clocks?.adjustmentTime)]
-            .reverse()
-            .find((it) => it.grade?.enabled !== false && it.grade?.look)?.grade?.look
-        : undefined;
+    const activeLayerLook = adjVisible
+      ? [...activeAdjustments(EDIT.adjustments, adjAt, clocks?.adjustmentTime)]
+          .reverse()
+          .find((it) => it.grade?.enabled !== false && it.grade?.look)?.grade?.look
+      : undefined;
     const { effectiveFstop, focusM, fallbackFocus, renderedMm } = syncOptics(
       cam,
       shot,
@@ -308,7 +320,7 @@ export async function buildScene(canvas, W, H, draft = false) {
         mm: renderedMm,
         widthPx: W,
       });
-      adjust(shot, shotEntry?.adjust, t, free.on);
+      adjust(shot, shotEntry?.adjust, t, false);
       composer.render(0);
       if (!free.on) velocityEffect(clocks?.velocity ?? null, cam.optics);
       if (!free.on) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
@@ -329,7 +341,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       layerAdjust(
         visible ? activeAdjustments(EDIT.adjustments, at, clocks?.adjustmentTime) : [],
         at,
-        free.on,
+        false,
       );
     },
     (cut) => clocks?.transitionVisible?.(cut) ?? true,
