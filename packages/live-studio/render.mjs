@@ -19,7 +19,7 @@ import { build } from "vite";
 
 import { cues, srt } from "./src/captions.mjs";
 import { cliArgs, envTypos, jsonFile, needFilm, numberArg, secondArg } from "./src/cli.mjs";
-import { parseCropRect } from "./src/crop.mjs";
+import { computeCropView, parseCropRect } from "./src/crop.mjs";
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
@@ -161,14 +161,14 @@ const misplaced =
                   ? "CHECK goes with render stills"
                   : what === "poster" && !process.env.AT
                     ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
-                    : what === "captions"
-                      ? ["AT", "LIST", "CHECK", "INSPECT", "ENTRY", "CROP"]
-                          .filter((k) => process.env[k] !== undefined)
-                          .map((k) => `${k} does nothing for render captions`)[0]
-                      : video && process.env.CROP !== undefined
-                        ? "CROP is for render stills or poster"
-                        : (video || what === "captions") && compare
-                          ? "COMPARE is for render stills or poster"
+                    : video && process.env.CROP !== undefined
+                      ? "CROP is for render stills or poster"
+                      : (video || what === "captions") && compare
+                        ? "COMPARE is for render stills or poster"
+                        : what === "captions"
+                          ? ["AT", "LIST", "CHECK", "INSPECT", "ENTRY", "CROP"]
+                              .filter((k) => process.env[k] !== undefined)
+                              .map((k) => `${k} does nothing for render captions`)[0]
                           : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
@@ -856,30 +856,39 @@ for (const profile of profiles)
   }
 rmSync(OUT, { recursive: true, force: true });
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+const posterView = crop ? computeCropView(W, H, crop) : { outWidth: W, outHeight: H };
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${W}x${H}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
+    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
   );
 if (!failed && compare && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
-  for (const rel of stillsWritten) {
-    const file = basename(rel);
-    const prev = join(RENDERS, ".prev", file);
-    const curr = join(RENDERS, file);
-    if (!existsSync(prev)) {
-      console.log(
-        `compare ${rel}: no previous frame in renders/.prev/ yet (baseline saved for next run)`,
+  if (!existsSync(qcCli)) {
+    console.error(`compare error: QC CLI not found at ${qcCli}`);
+    failed = true;
+  } else {
+    for (const rel of stillsWritten) {
+      const file = basename(rel);
+      const prev = join(RENDERS, ".prev", file);
+      const curr = join(RENDERS, file);
+      if (!existsSync(prev)) {
+        console.log(
+          `compare ${rel}: no previous frame in renders/.prev/ yet (baseline saved for next run)`,
+        );
+        continue;
+      }
+      const diffName = `compare_${basename(file, extname(file))}.png`;
+      const cmp = spawnSync(
+        process.execPath,
+        [qcCli, "compare", prev, curr, "--out", join(RENDERS, diffName), "--json"],
+        { encoding: "utf8", windowsHide: true, timeout: 30_000 },
       );
-      continue;
-    }
-    if (!existsSync(qcCli)) continue;
-    const diffName = `compare_${basename(file, extname(file))}.png`;
-    const cmp = spawnSync(
-      "bun",
-      [qcCli, "compare", prev, curr, "--out", join(RENDERS, diffName), "--json"],
-      { encoding: "utf8", windowsHide: true, timeout: 30_000 },
-    );
-    if (cmp.status === 0) {
+      if (cmp.status !== 0) {
+        const reason = (cmp.stderr || cmp.stdout || `exit ${cmp.status}`).trim();
+        console.error(`ERROR compare ${rel} failed: ${reason}`);
+        failed = true;
+        continue;
+      }
       try {
         const m = JSON.parse(cmp.stdout);
         console.log(

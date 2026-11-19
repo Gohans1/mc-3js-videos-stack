@@ -151,3 +151,52 @@ test("analyzeCameraTimeline isolates equal-timestamp cut boundaries from evaluat
   assert.equal(res.fovPeak.v, 0);
   assert.equal(res.status, "pass");
 });
+
+test("resolveKeyFov resets across cuts and prioritizes mm over fov with default 70", () => {
+  const keys = [
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0], fov: 40, mm: 50 },
+    { t: 2, p: [0, 0, 5], l: [0, 0, 0], cut: true },
+  ];
+  const expectedMm = (2 * Math.atan(18 / 50 / (16 / 9)) * 180) / Math.PI;
+  assert.ok(Math.abs(resolveKeyFov(keys, 0, 16 / 9) - expectedMm) < 1e-6);
+  assert.equal(resolveKeyFov(keys, 1, 16 / 9), 70);
+});
+
+test("analyzeKeyFileMotion wraps yaw deltas > 360 and descends into placed.json track arrays", () => {
+  const spin = analyzeKeyFileMotion({
+    moves: [
+      { t: 0, at: [0, 0, 0], yaw: 0 },
+      { t: 1, at: [0, 0, 0], yaw: 370 },
+    ],
+  });
+  assert.ok(Math.abs(spin.tracks[0].peakRot.v - 10) < 1e-6);
+
+  const placed = [
+    {
+      what: "mob:cat",
+      keys: [
+        { t: 0, at: [0, 0, 0] },
+        { t: 0.5, at: [4, 0, 0] },
+      ],
+    },
+  ];
+  const out = analyzeKeyFileMotion(placed, "src/timeline/placed.json");
+  assert.equal(out.tracks.length, 1);
+  assert.equal(out.tracks[0].path, "[mob:cat].keys");
+  assert.ok(Math.abs(out.tracks[0].peakPos.v - 8) < 1e-6);
+});
+
+test("analyzeCameraTimeline flags non-cut equal-t teleports as pops", () => {
+  const keys = [
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0], fov: 60 },
+    { t: 1, p: [0, 0, 5], l: [0, 0, 0], fov: 60 },
+    { t: 1, p: [10, 0, 5], l: [10, 0, 0], fov: 60 },
+    { t: 2, p: [10, 0, 5], l: [10, 0, 0], fov: 60 },
+  ];
+  const res = analyzeCameraTimeline(keys);
+  assert.ok(
+    res.pops.some((p) => p.kind === "pos"),
+    "expected pos pop for non-cut equal-t jump",
+  );
+  assert.equal(res.status, "fail");
+});

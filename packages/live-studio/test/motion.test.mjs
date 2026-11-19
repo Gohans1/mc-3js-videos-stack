@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { measure, report, turnReport, turns } from "../checks/motion.mjs";
+import { compileTiming } from "../src/timing.mjs";
 
 const DT = 1 / 60;
 const track = (from, to, x) => {
@@ -193,4 +194,40 @@ test("FOV snaps and p->l vector turns are detected and attributed without printi
   assert.ok(!lines.includes("  no pops, no dead stops"), lines);
   assert.match(lines, /at \[0\.00, 1\.00, 0\.00\]/);
   assert.match(lines, /cam keys \[1->2\] row /);
+
+  // turnReport includes world coordinates alongside timing-mapped cam key spans during Speed/Freeze
+  const clock = compileTiming({ speeds: [{ from: 0, to: 4, rate: 2 }] }, 4);
+  const camTimed = [
+    { t: 0, p: [1, 2, 3], l: [1, 2, -2], fov: 60 },
+    { t: 2, p: [1, 2, 3], l: [1, 2, -2], fov: 60 },
+    { t: 4, p: [1, 2, 3], l: [6, 2, -2], fov: 30 },
+  ];
+  // Heard 1.5s maps to source ~3.0s inside span [1->2]
+  const timedSamples = [];
+  for (let t = 0; t <= 2 + 1e-9; t += DT) {
+    const src = clock.sourceAt(t);
+    const u = Math.max(0, (src - 2) / 2);
+    timedSamples.push({
+      t,
+      p: [1, 2, 3],
+      l: [1 + 5 * u, 2, -2],
+      fov: 60 - 30 * u,
+      aspect: 16 / 9,
+    });
+  }
+  const timedTurns = turns(timedSamples);
+  const timedLines = turnReport(timedTurns, {
+    worldPos: true,
+    samples: timedSamples,
+    camKeys: camTimed,
+    timing: clock,
+  }).join("\n");
+  assert.match(
+    timedLines,
+    /turns \d+°\/s at .* \(at \[1\.00, 2\.00, 3\.00\], cam keys \[1->2\] row \d\)/,
+  );
+  assert.match(
+    timedLines,
+    /field of view 60° to 30°.* \(at \[1\.00, 2\.00, 3\.00\], cam keys \[1->2\] row \d\)/,
+  );
 });

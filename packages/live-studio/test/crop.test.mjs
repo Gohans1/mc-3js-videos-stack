@@ -62,3 +62,38 @@ test("withCropViewOffset projects the target sub-frustum to full NDC and restore
     assert.ok(Math.abs(v - beforeProj[i]) < 1e-10, `projectionMatrix[${i}] not restored`);
   });
 });
+
+test("computeCropView keeps subpixel floats and withCropViewOffset restores on throw/reject/prior view", async () => {
+  const odd = computeCropView(1920, 1080, { x: 0.125, y: 0.1, w: 0.333, h: 0.5 });
+  assert.ok(Math.abs(odd.viewWidth - 960) < 1e-9);
+  assert.ok(Math.abs(odd.offsetY - 108) < 1e-9);
+  assert.equal(odd.outWidth, Math.round((1920 * 0.333) / 0.5));
+  assert.equal(odd.outHeight, 1080);
+
+  const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 100);
+  cam.setViewOffset(1920, 1080, 10, 20, 960, 540);
+  const priorProj = cam.projectionMatrix.elements.slice();
+
+  assert.throws(() => {
+    withCropViewOffset(cam, 1920, 1080, { x: 0, y: 0, w: 0.5, h: 0.5 }, () => {
+      throw new Error("boom sync");
+    });
+  }, /boom sync/);
+  assert.equal(cam.view?.enabled, true);
+  assert.equal(cam.view?.offsetX, 10);
+  assert.equal(cam.view?.offsetY, 20);
+  cam.projectionMatrix.elements.forEach((v, i) => {
+    assert.ok(Math.abs(v - priorProj[i]) < 1e-10);
+  });
+
+  await assert.rejects(
+    () =>
+      withCropViewOffset(cam, 1920, 1080, { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, async () => {
+        await Promise.resolve();
+        throw new Error("boom async");
+      }),
+    /boom async/,
+  );
+  assert.equal(cam.view?.enabled, true);
+  assert.equal(cam.view?.offsetX, 10);
+});

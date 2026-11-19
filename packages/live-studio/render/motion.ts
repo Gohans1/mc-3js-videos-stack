@@ -11,6 +11,7 @@ import { EDIT } from "live-studio/edit";
 import * as THREE from "three";
 
 import { measure, report, turnReport, turns, WIDTH_SECONDS } from "../checks/motion.mjs";
+import { timingClock } from "../src/timing-state.mjs";
 import { canvas } from "./lab";
 import { chart, findTarget, hue, label, mark, targetHelp } from "./target";
 
@@ -85,13 +86,18 @@ export const motionCheck =
       });
     }
     if (openImp) impulses.push(openImp);
-    const camKeys = isCam ? (cfg.camKeys ?? EDIT?.camera ?? null) : null;
+    const camKeys = isCam ? (cfg.camKeys ?? EDIT?.cam ?? null) : null;
     const m = measure(samples, cuts, impulses);
     const tm = isCam ? turns(samples, cuts, impulses) : null;
     const camFaults = tm
       ? tm.pops.length + (tm.fovPops?.length ?? 0) + (tm.fastPan ? 1 : 0) + (tm.fastFov ? 1 : 0)
       : 0;
-    const attrOpts = { worldPos: true, camKeys, timing: cfg.timing ?? null };
+    const attrOpts = {
+      worldPos: true,
+      samples,
+      camKeys,
+      timing: timingClock.duration > 0 ? timingClock : null,
+    };
     const out = report(target, samples, m, camFaults, attrOpts);
     if (tm) out.push(...turnReport(tm, attrOpts));
     const tag = `motion_${target}_${from}-${to}`;

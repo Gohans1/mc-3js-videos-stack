@@ -520,16 +520,70 @@ test("render rejects invalid CROP rects and CROP/COMPARE on video targets", (t) 
   const cmpEnvFinal = run(["final"], { COMPARE: "1" });
   assert.equal(cmpEnvFinal.status, 2);
   assert.match(cmpEnvFinal.stderr, /COMPARE is for render stills or poster/);
+
+  const cmpCaptionsFlag = run(["--compare", "captions"]);
+  assert.equal(cmpCaptionsFlag.status, 2);
+  assert.match(cmpCaptionsFlag.stderr, /COMPARE is for render stills or poster/);
+
+  const cmpCaptionsEnv = run(["captions"], { COMPARE: "1" });
+  assert.equal(cmpCaptionsEnv.status, 2);
+  assert.match(cmpCaptionsEnv.stderr, /COMPARE is for render stills or poster/);
 });
 
-test("render CROP zooms native pixels via camera.setViewOffset and COMPARE preserves renders/.prev/", (t) => {
-  const film = chromeFilm(t, 2);
-  if (!film) return t.skip("no headless Chrome in the vault");
-  const sceneFile = join(film.dir, "src/scene.ts");
+const findBrowser = () => {
+  const candidates = [
+    process.env.CHROME,
+    resolve(STUDIO, "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe"),
+    String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`,
+    String.raw`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
+  ].filter(Boolean);
+  return candidates.find((p) => existsSync(p)) ?? null;
+};
+
+const sampleCenterRgb = (imagePath) => {
+  const probe = spawnSync(
+    "ffprobe",
+    ["-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", imagePath],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  assert.equal(probe.status, 0, probe.stderr);
+  const [w, h] = probe.stdout.trim().split(",").map(Number);
+  const px = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-i",
+      imagePath,
+      "-vf",
+      `format=rgb24,crop=1:1:${Math.floor(w / 2)}:${Math.floor((h - 40) / 2)}`,
+      "-f",
+      "rawvideo",
+      "-",
+    ],
+    { timeout: 10000 },
+  );
+  assert.equal(px.status, 0, px.stderr?.toString());
+  return { w, h, rgb: [px.stdout[0], px.stdout[1], px.stdout[2]] };
+};
+
+test("render CROP zooms quadrant RGB pixels, sizes non-square/poster crops, and surfaces COMPARE failures", (t) => {
+  const chrome = findBrowser();
+  if (!chrome) return t.skip("no Chrome binary available for live CROP/COMPARE verification");
+  const dir = mkdtempSync(join(tmpdir(), "render-crop-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
   writeFileSync(
-    sceneFile,
-    `import * as THREE from "three";
-export const DURATION = 2, SHOTS_OUT = [{ t: 0, what: "test" }];
+    join(dir, "src/edit.json"),
+    JSON.stringify({ ...JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8")), end: 2 }),
+  );
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
+  );
+  const sceneFile = join(dir, "src/scene.ts");
+  const makeScene = (tlHex) => `import * as THREE from "three";
+export const DURATION = 2, SHOTS_OUT = [{ t: 0, what: "quadrants" }];
 export function buildScene(canvas, W, H) {
   const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
   renderer.setSize(W, H, false);
@@ -537,34 +591,70 @@ export function buildScene(canvas, W, H) {
   const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
   camera.position.set(0, 0, 5);
   camera.lookAt(0, 0, 0);
-  const redBox = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshBasicMaterial({ color: 0xcc2222 }));
-  redBox.position.set(0, 0, -2);
-  scene.add(redBox);
-  const tools = { camera };
-  return Object.assign((_t) => {
-    redBox.material.color.setHex(tools.shiftColor ? 0x22cc44 : 0xcc2222);
-    renderer.render(scene, camera);
-  }, { tools });
-}`,
-  );
-  const first = film.render("stills", { AT: "1", CROP: "0.25,0.25,0.5,0.5" });
-  assert.equal(first.status, 0, first.stdout + first.stderr);
-  assert.ok(existsSync(join(film.dir, "renders/still_1s.jpg")));
+  const quad = (x, y, hex) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshBasicMaterial({ color: hex }));
+    m.position.set(x, y, 0);
+    scene.add(m);
+  };
+  quad(-6, 6, ${tlHex});
+  quad(6, 6, 0x11dd33);
+  quad(-6, -6, 0x1144ee);
+  quad(6, -6, 0xeedd11);
+  return Object.assign(() => renderer.render(scene, camera), { tools: { camera } });
+}`;
+  writeFileSync(sceneFile, makeScene("0xdd2222"));
 
-  writeFileSync(
-    sceneFile,
-    readFileSync(sceneFile, "utf8")
-      .replace("0xcc2222 : 0xcc2222", "0x22cc44 : 0x22cc44")
-      .replace("tools.shiftColor ? 0x22cc44 : 0xcc2222", "0x22cc44"),
+  const render = (args, env = {}) =>
+    spawnSync("bun", [RENDER, ...args], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 180000,
+      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+    });
+
+  // Top-left crop hits red quadrant; bottom-right crop hits yellow quadrant
+  const tl = render(["stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  assert.equal(tl.status, 0, tl.stdout + tl.stderr);
+  const tlInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
+  assert.ok(
+    tlInfo.rgb[0] > 180 && tlInfo.rgb[1] < 60 && tlInfo.rgb[2] < 60,
+    `expected red, got ${tlInfo.rgb}`,
   );
-  const second = spawnSync("bun", [RENDER, "--compare", "stills"], {
-    cwd: film.dir,
-    encoding: "utf8",
-    timeout: 180000,
-    env: { ...process.env, LIVE_PROJECT: film.dir, AT: "1", CROP: "0.25,0.25,0.5,0.5" },
-  });
-  assert.equal(second.status, 0, second.stdout + second.stderr);
-  assert.ok(existsSync(join(film.dir, "renders/.prev/still_1s.jpg")));
-  assert.ok(existsSync(join(film.dir, "renders/compare_still_1s.png")));
-  assert.match(second.stdout, /compare renders\/still_1s\.jpg: .* changed/);
-}, 60000);
+
+  const br = render(["stills"], { AT: "1", CROP: "0.5,0.5,0.5,0.5" });
+  assert.equal(br.status, 0, br.stdout + br.stderr);
+  const brInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
+  assert.ok(
+    brInfo.rgb[0] > 180 && brInfo.rgb[1] > 180 && brInfo.rgb[2] < 60,
+    `expected yellow, got ${brInfo.rgb}`,
+  );
+
+  // Non-square crop outputs exact cropped width x height + bar and hits green quadrant
+  const tall = render(["stills"], { AT: "1", CROP: "0.5,0,0.25,0.5" });
+  assert.equal(tall.status, 0, tall.stdout + tall.stderr);
+  const tallInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
+  assert.equal(tallInfo.w, 640);
+  assert.equal(tallInfo.h, 760);
+  assert.ok(tallInfo.rgb[1] > 170 && tallInfo.rgb[0] < 60, `expected green, got ${tallInfo.rgb}`);
+
+  // Poster logs actual cropped output size
+  const poster = render(["poster"], { AT: "1", RES: "1080", SAMPLES: "1", CROP: "0.5,0,0.25,0.5" });
+  assert.equal(poster.status, 0, poster.stdout + poster.stderr);
+  assert.match(poster.stdout, /wrote renders\/poster_1s\.png \(960x1080, 1 sub-frames\)/);
+
+  // Change top-left red -> cyan and run --compare
+  const tlBefore = render(["stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  assert.equal(tlBefore.status, 0, tlBefore.stdout + tlBefore.stderr);
+  writeFileSync(sceneFile, makeScene("0x11dddd"));
+  const tlAfter = render(["--compare", "stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  assert.equal(tlAfter.status, 0, tlAfter.stdout + tlAfter.stderr);
+  assert.ok(existsSync(join(dir, "renders/.prev/still_1s.jpg")));
+  assert.ok(existsSync(join(dir, "renders/compare_still_1s.png")));
+  assert.match(tlAfter.stdout, /compare renders\/still_1s\.jpg: .* changed/);
+
+  // Corrupt .prev still causes explicit non-zero compare error visibility instead of silent success
+  writeFileSync(join(dir, "renders/still_1s.jpg"), "not-an-image");
+  const corrupt = render(["--compare", "stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  assert.equal(corrupt.status, 1, corrupt.stdout + corrupt.stderr);
+  assert.match(corrupt.stderr, /compare renders\/still_1s\.jpg failed/);
+}, 90000);

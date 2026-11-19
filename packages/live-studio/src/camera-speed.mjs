@@ -3,7 +3,7 @@ import { bisector } from "./bisect.mjs";
 const segmentAt = bisector((s) => s.to).right;
 const RAD_TO_DEG = 180 / Math.PI;
 const SENSOR_WIDTH_MM = 36;
-const DEFAULT_FOV = 50;
+const DEFAULT_FOV = 70;
 const WIDTH_RULE_SECONDS = 7;
 const FAST_FOV_DEG_PER_SEC = 15;
 const FOV_POP_DEG = 1.5;
@@ -66,10 +66,11 @@ export function resolveKeyFov(keys, idx, aspect = 16 / 9, defaultFov = DEFAULT_F
   for (let i = 0; i <= end; i++) {
     const k = keys[i];
     if (!k) continue;
-    if (typeof k.fov === "number" && Number.isFinite(k.fov)) {
-      cur = k.fov;
-    } else if (typeof k.mm === "number" && Number.isFinite(k.mm) && k.mm > 0) {
+    if (i > 0 && k.cut) cur = defaultFov;
+    if (typeof k.mm === "number" && Number.isFinite(k.mm) && k.mm > 0) {
       cur = 2 * Math.atan(SENSOR_WIDTH_MM / 2 / k.mm / aspect) * RAD_TO_DEG;
+    } else if (typeof k.fov === "number" && Number.isFinite(k.fov)) {
+      cur = k.fov;
     }
   }
   return cur;
@@ -237,17 +238,22 @@ export function analyzeCameraTimeline(keys, opts = {}) {
   }
 
   const cuts = opts.cuts ?? [];
+  const hasCutBetween = (fromIdx, toIdx) => {
+    for (let k = fromIdx + 1; k <= toIdx; k++) {
+      if (keys[k]?.cut) return true;
+    }
+    return false;
+  };
   const intervals = [];
   for (let i = 1; i < samples.length; i++) {
     const prev = samples[i - 1],
       cur = samples[i];
-    const dt = cur.t - prev.t;
-    const acrossCut =
-      dt <= 1e-6 ||
+    const rawDt = cur.t - prev.t;
+    const cutSep =
       cur.boundaryCut ||
-      prev.span[1] < cur.span[0] ||
+      (prev.span[1] < cur.span[0] && hasCutBetween(prev.span[1], cur.span[0])) ||
       cuts.some((c) => prev.t < c && c <= cur.t);
-    if (acrossCut) {
+    if (cutSep) {
       intervals.push({
         dt: 0,
         posStep: 0,
@@ -260,6 +266,7 @@ export function analyzeCameraTimeline(keys, opts = {}) {
       });
       continue;
     }
+    const dt = Math.max(rawDt, 1 / sampleRate);
     const posStep = dist3(prev.p, cur.p);
     const turnStep = viewVectorAngleDeg(prev.p, prev.l, cur.p, cur.l);
     const fovStep = Math.abs(cur.fov - prev.fov);
@@ -444,8 +451,8 @@ function rotStepDeg(a, b) {
   let maxDelta = 0;
   for (const f of fields) {
     if (typeof a?.[f] === "number" && typeof b?.[f] === "number") {
-      let d = Math.abs(b[f] - a[f]);
-      if (d > 180) d = 360 - (d % 360);
+      let d = Math.abs(b[f] - a[f]) % 360;
+      if (d > 180) d = 360 - d;
       if (d > maxDelta) maxDelta = d;
     }
   }
@@ -485,7 +492,18 @@ export function analyzeKeyFileMotion(data, filePath = "", opts = {}) {
           if (rv > peakRot.v) peakRot = { v: rv, t: b.t, rowFrom: i - 1, rowTo: i };
         }
         tracks.push({ path: path || "(root)", keyCount: node.length, peakPos, peakRot });
+        return;
       }
+      node.forEach((item, idx) => {
+        if (!item || typeof item !== "object") return;
+        const label =
+          typeof item.what === "string"
+            ? item.what
+            : typeof item.id === "string"
+              ? item.id
+              : String(idx);
+        visit(item, path ? `${path}[${label}]` : `[${label}]`);
+      });
       return;
     }
     for (const [k, v] of Object.entries(node)) {
