@@ -1428,7 +1428,7 @@ export const createApi = (
     const data = film.lights?.read();
     return data ? fresh(c, data) : noSound(c);
   });
-  app.post("/api/lights", zValidator("json", SoundSave), (c) => {
+  app.post("/api/lights", zValidator("json", KeySave), (c) => {
     if (!film.lights) return noSound(c);
     const { base, data } = c.req.valid("json"),
       r = film.lights.write(base, data);

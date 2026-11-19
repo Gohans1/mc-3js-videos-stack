@@ -718,7 +718,10 @@ export const LightKey = z.looseObject({
       density: finiteNum.min(0).max(2).optional(),
     })
     .optional(),
-  practicals: z.array(LightPracticalSchema).optional(),
+  practicals: z
+    .array(LightPracticalSchema)
+    .refine((ps) => new Set(ps.map((p) => p.id)).size === ps.length, "practical ids must differ")
+    .optional(),
   godrays: z
     .looseObject({
       enabled: z.boolean().optional(),

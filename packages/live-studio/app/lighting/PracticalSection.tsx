@@ -1,5 +1,6 @@
-import type { PracticalState, Vec3 } from "film-stage/lights-meta";
+import type { PracticalFlickerConfig, PracticalState, Vec3 } from "film-stage/lights-meta";
 import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,42 @@ import { FieldRow, Section, SliderRow } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
 import { ColorKelvinField } from "./ColorKelvinField";
 import { addPractical, lightsDocAdapter, mutateLightAt, removePractical } from "./lights";
+
+function PracticalNameInput({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed && trimmed !== value) onCommit(trimmed);
+    setDraft(null);
+  };
+  return (
+    <Input
+      size="xs"
+      aria-label={`Practical ${value} name`}
+      value={draft ?? value}
+      onFocus={() => setDraft(value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          commit(draft ?? value);
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          setDraft(null);
+          e.currentTarget.blur();
+        }
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => commit(draft ?? value)}
+      className="flex-1"
+    />
+  );
+}
 
 function Vec3Row({
   label,
@@ -46,12 +83,25 @@ function Vec3Row({
   );
 }
 
+function buildFlicker(
+  cfg: PracticalFlickerConfig | null,
+  patch: Partial<PracticalFlickerConfig>,
+): PracticalFlickerConfig {
+  return {
+    rate: patch.rate ?? cfg?.rate ?? cfg?.speed ?? 8,
+    amount: patch.amount ?? cfg?.amount ?? 0.25,
+    ...(cfg?.seed !== undefined ? { seed: cfg.seed } : {}),
+  };
+}
+
 interface PracticalSectionProps {
   practicals: PracticalState[];
   t: number;
 }
 
 export function PracticalSection({ practicals, t }: PracticalSectionProps) {
+  const [openEpoch, setOpenEpoch] = useState(0);
+
   const updatePractical = (id: string, patch: Partial<PracticalState>, keep = true) => {
     mutateLightAt(
       t,
@@ -69,17 +119,23 @@ export function PracticalSection({ practicals, t }: PracticalSectionProps) {
     save: (v: number) => updatePractical(id, patch(v), true),
   });
 
+  const handleAdd = (kind: "point" | "spot") => {
+    addPractical(kind, t);
+    setOpenEpoch((n) => n + 1);
+  };
+
   return (
     <Section
+      key={openEpoch}
       title={`Practicals (${practicals.length})`}
-      closed={practicals.length === 0}
+      closed={openEpoch === 0 && practicals.length === 0}
       right={
         <div className="flex items-center gap-1">
-          <Button type="button" size="xs" variant="ghost" onClick={() => addPractical("point", t)}>
+          <Button type="button" size="xs" variant="ghost" onClick={() => handleAdd("point")}>
             <Plus className="size-3" />
             Point
           </Button>
-          <Button type="button" size="xs" variant="ghost" onClick={() => addPractical("spot", t)}>
+          <Button type="button" size="xs" variant="ghost" onClick={() => handleAdd("spot")}>
             <Plus className="size-3" />
             Spot
           </Button>
@@ -105,13 +161,9 @@ export function PracticalSection({ practicals, t }: PracticalSectionProps) {
                   <span className="border-hairline text-muted-foreground text-tag rounded border px-1.5 py-0.5 uppercase">
                     {p.kind}
                   </span>
-                  <Input
-                    size="xs"
-                    aria-label={`Practical ${p.name} name`}
+                  <PracticalNameInput
                     value={p.name}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    onChange={(e) => updatePractical(p.id, { name: e.target.value })}
-                    className="flex-1"
+                    onCommit={(name) => updatePractical(p.id, { name })}
                   />
                   <Button
                     type="button"
@@ -126,6 +178,7 @@ export function PracticalSection({ practicals, t }: PracticalSectionProps) {
 
                 <ColorKelvinField
                   label="Color"
+                  scope={`Practical ${p.name}`}
                   value={p.color}
                   onChange={(color) => updatePractical(p.id, { color })}
                 />
@@ -135,7 +188,7 @@ export function PracticalSection({ practicals, t }: PracticalSectionProps) {
                   label="Intensity"
                   value={p.intensity}
                   min={0}
-                  max={20}
+                  max={Math.max(100, Math.ceil(p.intensity))}
                   step={0.1}
                   digits={1}
                   {...bind(p.id, (intensity) => ({ intensity }))}
@@ -202,13 +255,7 @@ export function PracticalSection({ practicals, t }: PracticalSectionProps) {
                       checked={flickerOn}
                       onCheckedChange={(checked) =>
                         updatePractical(p.id, {
-                          flicker: checked
-                            ? {
-                                rate: flickerCfg?.rate ?? 8,
-                                amount: flickerCfg?.amount ?? 0.25,
-                                seed: flickerCfg?.seed ?? 1,
-                              }
-                            : false,
+                          flicker: checked ? buildFlicker(flickerCfg, {}) : false,
                         })
                       }
                     />
@@ -226,13 +273,7 @@ export function PracticalSection({ practicals, t }: PracticalSectionProps) {
                       step={0.5}
                       digits={1}
                       unit="Hz"
-                      {...bind(p.id, (rate) => ({
-                        flicker: {
-                          rate,
-                          amount: flickerCfg?.amount ?? 0.25,
-                          seed: flickerCfg?.seed ?? 1,
-                        },
-                      }))}
+                      {...bind(p.id, (rate) => ({ flicker: buildFlicker(flickerCfg, { rate }) }))}
                     />
                     <SliderRow
                       compact
@@ -243,11 +284,7 @@ export function PracticalSection({ practicals, t }: PracticalSectionProps) {
                       step={0.02}
                       digits={2}
                       {...bind(p.id, (amount) => ({
-                        flicker: {
-                          rate: flickerCfg?.rate ?? flickerCfg?.speed ?? 8,
-                          amount,
-                          seed: flickerCfg?.seed ?? 1,
-                        },
+                        flicker: buildFlicker(flickerCfg, { amount }),
                       }))}
                     />
                   </>

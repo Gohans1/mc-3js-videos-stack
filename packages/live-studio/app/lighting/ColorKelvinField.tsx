@@ -7,12 +7,14 @@ import { FieldRow } from "../components/inspector";
 
 interface ColorKelvinFieldProps {
   label: string;
+  scope?: string;
   value: string;
   onChange: (hex: string) => void;
   showKelvin?: boolean;
 }
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const HEX6_RE = /^#[0-9a-f]{6}$/i;
 
 function toFullHex(hex: string): string {
   const m = hex.trim().match(HEX_RE);
@@ -23,6 +25,7 @@ function toFullHex(hex: string): string {
 
 export function ColorKelvinField({
   label,
+  scope,
   value,
   onChange,
   showKelvin = true,
@@ -30,6 +33,12 @@ export function ColorKelvinField({
   const [editing, setEditing] = useState<string | null>(null);
   const displayed = editing ?? value;
   const pickerValue = toFullHex(value);
+  const ariaScope = scope ?? label;
+
+  const commit = (raw: string) => {
+    if (HEX_RE.test(raw)) onChange(toFullHex(raw));
+    setEditing(null);
+  };
 
   return (
     <FieldRow label={label}>
@@ -37,7 +46,7 @@ export function ColorKelvinField({
         <div className="flex items-center gap-1.5">
           <input
             type="color"
-            aria-label={`${label} color picker`}
+            aria-label={`${ariaScope} color picker`}
             value={pickerValue}
             onKeyDown={(e) => e.stopPropagation()}
             onChange={(e) => {
@@ -48,22 +57,20 @@ export function ColorKelvinField({
           />
           <Input
             size="sm"
-            aria-label={`${label} hex color`}
+            aria-label={`${ariaScope} hex color`}
             value={displayed}
             onFocus={() => setEditing(value)}
             onKeyDown={(e) => {
               e.stopPropagation();
-              if (e.key === "Enter" && HEX_RE.test(displayed)) {
-                onChange(toFullHex(displayed));
-                setEditing(null);
-              }
+              if (e.key === "Enter") commit(displayed);
+              else if (e.key === "Escape") setEditing(null);
             }}
             onChange={(e) => {
               const next = e.target.value;
               setEditing(next);
-              if (HEX_RE.test(next)) onChange(toFullHex(next));
+              if (HEX6_RE.test(next.trim())) onChange(next.trim().toLowerCase());
             }}
-            onBlur={() => setEditing(null)}
+            onBlur={() => commit(displayed)}
           />
         </div>
         {showKelvin && (

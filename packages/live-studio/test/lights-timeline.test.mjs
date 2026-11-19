@@ -120,7 +120,7 @@ test("StudioConfig & LightsTimeline schema validate light docs, keys, presets, p
   assert.ok(problems(LightsTimeline, badIntensity).length > 0);
 });
 
-test("checkFiles detects missing lightsTimeline file and openFilm/API serve, persist, and enforce OCC", async () => {
+test("checkFiles ignores missing lightsTimeline, catches malformed lights.json, and openFilm/API serve, persist, and enforce OCC", async () => {
   const dir = makeTemp();
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
   writeFileSync(
@@ -199,17 +199,146 @@ test("checkFiles detects missing lightsTimeline file and openFilm/API serve, per
     });
     assert.equal(bad.status, 400);
 
+    // Duplicate practical ids fail 400
+    const dupPracticals = await app.request("/api/lights", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        base: film.lights.read().version,
+        data: {
+          keys: [
+            {
+              t: 0,
+              practicals: [
+                {
+                  id: "dup",
+                  name: "A",
+                  kind: "point",
+                  at: [0, 1, 0],
+                  color: "#ffffff",
+                  intensity: 1,
+                  distance: 5,
+                  decay: 2,
+                },
+                {
+                  id: "dup",
+                  name: "B",
+                  kind: "point",
+                  at: [1, 1, 0],
+                  color: "#ffffff",
+                  intensity: 1,
+                  distance: 5,
+                  decay: 2,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+    assert.equal(dupPracticals.status, 400);
+
+    // Array-form LightKey[] persists cleanly via KeySave validator
+    const arrayPayload = [
+      { t: 0, preset: "noir-night" },
+      { t: 2, cut: true, preset: "golden-hour" },
+    ];
+    const savedArray = await app.request("/api/lights", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ base: film.lights.read().version, data: arrayPayload }),
+    });
+    assert.equal(savedArray.status, 200);
+    assert.deepEqual(film.lights.read().data, arrayPayload);
+
     // Collaboration endpoint resolves named "lights"
     const collab = await app.request("/api/collaboration/lights");
     assert.equal(collab.status, 200);
     const collabBody = await collab.json();
-    assert.deepEqual(collabBody.data, next);
+    assert.deepEqual(collabBody.data, arrayPayload);
 
     // Light activity surface is valid
     assert.equal(Activity.safeParse({ surface: "light", say: "Updated lights" }).success, true);
   } finally {
     film.stop?.();
   }
+});
+
+test("collab CLI accepts lights document name and reads live Studio collaboration endpoint", async () => {
+  const dir = makeTemp();
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "collab-lights",
+      "live-studio": { lightsTimeline: "src/timeline/lights.json" },
+    }),
+  );
+  writeFileSync(join(dir, "src/scene.ts"), "export {};\n");
+  const doc = { target: [1, 2, 3], keys: [{ t: 0, preset: "golden-hour" }] };
+  writeFileSync(join(dir, "src/timeline/lights.json"), JSON.stringify(doc));
+
+  const activity = createActivity(() => {});
+  const film = openFilm(dir, { send: () => {}, activity });
+  const app = createApi(film, { page: { dir, html: () => "" }, events: {}, activity });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: app.fetch });
+  try {
+    writeFileSync(
+      join(dir, "renders/live/studio.json"),
+      JSON.stringify({ project: dir, port: server.port }),
+    );
+    const proc = Bun.spawn(
+      ["bun", join(import.meta.dirname, "..", "collab.mjs"), "--film", dir, "read", "lights"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const [code, out, err] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    assert.equal(code, 0, err);
+    assert.deepEqual(JSON.parse(out).data, doc);
+  } finally {
+    server.stop(true);
+    film.stop?.();
+  }
+});
+
+test("mapTimeline preserves cut/non-cut lights timestamps across freezes and ripple cuts", () => {
+  const clock = compileTiming(
+    { freezes: [{ at: 4, duration: 3 }], cuts: [{ from: 1, to: 2 }] },
+    10,
+  );
+  const doc = {
+    target: [0, 1, 0],
+    keys: [
+      { id: "k0", t: 0, preset: "studio-three-point" },
+      { id: "k-tail", t: 4, preset: "warm-hearth" },
+      { id: "k-cut", t: 4, cut: true, preset: "noir-night" },
+      { id: "k-end", t: 8, preset: "overcast-doc" },
+    ],
+  };
+
+  const shown = mapTimeline("lights", doc, clock);
+  assert.deepEqual(shown.target, [0, 1, 0]);
+  // Cut-end tail (t=4, !cut) stays BEFORE freeze at 3s, while cut key (t=4, cut) starts freeze hold or post-cut
+  const tailShown = shown.keys.find((k) => k.id === "k-tail");
+  const cutShown = shown.keys.find((k) => k.id === "k-cut");
+  assert.ok(tailShown && cutShown);
+  assert.ok(tailShown.t <= cutShown.t);
+
+  // Roundtrip inverse recovers original source timestamps and tiebreaker order cleanly
+  const saved = mapTimeline("lights", shown, clock, true, doc);
+  assert.deepEqual(
+    saved.keys.map((k) => [k.id, k.t, !!k.cut]),
+    [
+      ["k0", 0, false],
+      ["k-tail", 4, false],
+      ["k-cut", 4, true],
+      ["k-end", 8, false],
+    ],
+  );
 });
 
 test("mapTimeline remaps lights doc and keyframe array timestamps across speed edits", () => {

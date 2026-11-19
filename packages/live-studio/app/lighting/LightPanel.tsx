@@ -145,9 +145,14 @@ export function LightPanel() {
               value={activeEase}
               onValueChange={(ease) => {
                 if (!ease) return;
-                mutateLightAt(t, (_s, key) => {
-                  key.ease = ease;
-                });
+                mutateLightAt(
+                  t,
+                  (_s, key) => {
+                    key.ease = ease;
+                  },
+                  true,
+                  false,
+                );
               }}
             >
               <SelectTrigger size="sm" aria-label="Lighting keyframe ease">
@@ -211,6 +216,7 @@ export function LightPanel() {
       >
         <ColorKelvinField
           label="Color"
+          scope="Key"
           value={sample.key.color}
           onChange={(color) =>
             mutateLightAt(t, (s) => {
@@ -295,6 +301,7 @@ export function LightPanel() {
       >
         <ColorKelvinField
           label="Color"
+          scope="Fill"
           value={sample.fill.color}
           onChange={(color) =>
             mutateLightAt(t, (s) => {
@@ -367,6 +374,7 @@ export function LightPanel() {
       >
         <ColorKelvinField
           label="Color"
+          scope="Rim"
           value={sample.rim.color}
           onChange={(color) =>
             mutateLightAt(t, (s) => {
@@ -420,6 +428,7 @@ export function LightPanel() {
       >
         <ColorKelvinField
           label="Sky"
+          scope="World sky"
           value={sample.world.skyColor}
           onChange={(skyColor) =>
             mutateLightAt(t, (s) => {
@@ -429,6 +438,7 @@ export function LightPanel() {
         />
         <ColorKelvinField
           label="Ground"
+          scope="World ground"
           showKelvin={false}
           value={sample.world.groundColor}
           onChange={(groundColor) =>
@@ -464,6 +474,7 @@ export function LightPanel() {
         {sample.world.background !== null && (
           <ColorKelvinField
             label="Bg color"
+            scope="Background"
             showKelvin={false}
             value={sample.world.background}
             onChange={(background) =>
@@ -498,6 +509,7 @@ export function LightPanel() {
           <>
             <ColorKelvinField
               label="Color"
+              scope="Fog"
               showKelvin={false}
               value={sample.fog.color}
               onChange={(color) =>
@@ -659,6 +671,7 @@ export function LightPanel() {
         {sample.godrays.color && (
           <ColorKelvinField
             label="Tint color"
+            scope="Godrays tint"
             value={sample.godrays.color}
             onChange={(color) =>
               mutateLightAt(t, (s) => {

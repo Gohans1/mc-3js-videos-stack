@@ -397,7 +397,8 @@ function Details() {
   const picked = useStudio(groupOf),
     group = has[picked] ? picked : (Object.keys(has) as Group[]).find((g) => has[g])!;
   const list = GROUPS[group],
-    value = list.some((x) => x.id === side) ? side : list[0].id;
+    defaultTab = group === "cam" && !cam && lights ? "light" : list[0].id,
+    value = list.some((x) => x.id === side) ? side : defaultTab;
   return (
     <aside
       aria-label="Details"
@@ -608,7 +609,7 @@ export function Side({
   const shown =
     isCore(raw) ||
     raw === "objects" ||
-    (raw === "sound" ? sound : raw === "text" ? text : raw === "keys" ? keys : cam);
+    (raw === "sound" ? sound : raw === "text" ? text : raw === "keys" ? keys : cam || lights);
   const value = shown ? raw : "notes";
   const sideOrder: SideTab[] = [
     "notes",
@@ -681,7 +682,7 @@ export function Side({
               <Terminal aria-hidden />
               CLI
             </Tabs.Tab>
-            {(sound || text || placed || keys || cam) && (
+            {(sound || text || placed || keys || cam || lights) && (
               <Separator orientation="vertical" className="mx-0.5 h-5 data-vertical:self-center" />
             )}
             <Tabs.Tab value="film" {...aiTab("film", value)} className={cn(tab, coreTab)}>
@@ -714,7 +715,7 @@ export function Side({
               disabled={!cam && !lights}
               className={tab}
             >
-              {layer ? "Adjustment" : "Camera"}
+              {layer ? "Adjustment" : !cam && lights ? "Light" : "Camera"}
             </Tabs.Tab>
           </Tabs.List>
         </div>
@@ -737,7 +738,7 @@ export function Side({
               <TextTab />
             ) : value === "objects" ? (
               <ObjectsPanel />
-            ) : value === "cam" && cam ? (
+            ) : value === "cam" && (cam || lights) ? (
               <CameraTab />
             ) : value === "transition" && cam ? (
               <>

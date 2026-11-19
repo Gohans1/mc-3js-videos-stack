@@ -6,7 +6,7 @@ import { cliArgs, needFilm } from "./src/cli.mjs";
 const HELP = `Read and update a Studio document without undoing the creator's edits. Studio must be running.
   bun run collab --film films/name read cam          current version, data, protected paths and notices
   bun run collab --film films/name write cam <file>  file contains {"base":"version from read","data":...}
-Names: sound, cam, shots, text, adjustment, timing, openfilm, keys/0 (as /api names them).
+Names: sound, cam, lights, shots, text, adjustment, timing, openfilm, keys/0 (as /api names them).
 Direct filesystem writes cannot acknowledge protected units. Unidentified arrays and structural array edits are whole units.
 The notices preserve rejected input in .studio/collaboration/notices.jsonl. Read the canonical result after writing.`;
 const argv = cliArgs(HELP, ["--film PATH"], 3);
@@ -15,7 +15,7 @@ const projectArg = at < 0 ? (process.env.LIVE_PROJECT ?? process.cwd()) : argv[a
 const [action, name, input] = argv.filter((_, i) => at < 0 || (i !== at && i !== at + 1));
 if (
   !["read", "write"].includes(action) ||
-  !/^(sound|cam|shots|text|adjustment|timing|openfilm|keys\/\d+)$/.test(name ?? "") ||
+  !/^(sound|cam|lights|shots|text|adjustment|timing|openfilm|keys\/\d+)$/.test(name ?? "") ||
   (action === "write") !== !!input
 ) {
   console.error(HELP);

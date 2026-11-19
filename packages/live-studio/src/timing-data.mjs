@@ -45,9 +45,9 @@ export const mapTimeline = (
   }
   const out = structuredClone(data),
     time = inverse ? clock.sourceAt : clock.outputAt;
+  const isKeyTrack = name === "cam" || name === "lights";
   const keyVisible = (k) =>
-    clock.visible(k.t) ||
-    ((name === "cam" || name === "lights") && !k.cut && clock.visible(k.t - 1e-7));
+    clock.visible(k.t) || (isKeyTrack && !k.cut && clock.visible(k.t - 1e-7));
   const keys = (value, before, depth = 0) => {
     if (!value || typeof value !== "object") return value;
     if (Array.isArray(value)) {
@@ -57,7 +57,7 @@ export const mapTimeline = (
         const mapped = value
           .filter((k) => inverse || keyVisible(k))
           .map((k) => {
-            const edge = name === "cam" && !k.cut && k.t > 0 ? "before" : "after";
+            const edge = isKeyTrack && !k.cut && k.t > 0 ? "before" : "after";
             const meta = k.__timing;
             const t =
               inverse && meta && Math.abs(k.t - meta.output) < 1e-9 ? meta.source : time(k.t, edge);
@@ -71,7 +71,7 @@ export const mapTimeline = (
         return mapped.sort(
           (a, b) =>
             a.t - b.t ||
-            (name === "cam"
+            (isKeyTrack
               ? Number(!!a.cut || a.__timing?.source === 0) -
                 Number(!!b.cut || b.__timing?.source === 0)
               : 0),

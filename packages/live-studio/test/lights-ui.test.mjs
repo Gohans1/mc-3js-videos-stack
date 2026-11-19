@@ -14,7 +14,7 @@ import { filmPlugin } from "../src/vite_film.mjs";
 const STUDIO = join(import.meta.dirname, "..");
 
 const ENTRY = `
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "/index.css";
 import { TooltipProvider } from "/components/ui/tooltip.tsx";
@@ -23,30 +23,50 @@ import { undo } from "/core/doc.ts";
 import { S } from "/core/state.ts";
 import { set } from "/core/store.ts";
 import { EDIT } from "film/edit";
-import { loadLights } from "/lighting/lights.ts";
+import { loadLights, lightsSampleAt } from "/lighting/lights.ts";
 import { LightPanel } from "/lighting/LightPanel.tsx";
+import { Side } from "/shell/Side.tsx";
 import { seek } from "/playback/transport.ts";
+import { setTiming } from "../src/timing-state.mjs";
 
 const view = document.getElementById("view");
 S.el = { view, audio: document.createElement("audio") };
 setFilmSource({ DURATION: 10, SHOTS: [{ t: 0 }], SHOTS_OUT: [{ t: 0 }], applyEdit() {} });
 set({ ready: true, lights: true, cam: true, side: "light" });
 
+let setHarnessMode = null;
+
+function Harness() {
+  const [mode, setMode] = useState("panel");
+  setHarnessMode = setMode;
+  return (
+    <TooltipProvider>
+      <div style={{ width: 380, height: "100vh", display: "flex", flexDirection: "column" }}>
+        {mode === "panel" ? (
+          <LightPanel />
+        ) : mode === "side-wide-lights-only" ? (
+          <Side wide={true} desktop />
+        ) : (
+          <Side wide={false} desktop />
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}
+
 window.testLights = {
   async reload() { await loadLights(); },
   seek(t) { seek(t); },
   undo() { undo(); },
   edit() { return EDIT.lights; },
+  sampleAt(t) { return lightsSampleAt(t); },
+  setTiming(t, dur) { setTiming(t, dur); },
+  setState(patch) { set(patch); },
+  setMode(mode) { setHarnessMode?.(mode); },
 };
 
 await loadLights();
-createRoot(view).render(
-  <TooltipProvider>
-    <div style={{ width: 360, height: "100vh", display: "flex", flexDirection: "column" }}>
-      <LightPanel />
-    </div>
-  </TooltipProvider>
-);
+createRoot(view).render(<Harness />);
 `;
 
 let dir, vite, page;
@@ -187,20 +207,37 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.godrays?.enabled`)).toBe(true);
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.fog?.mode`)).toBe("exp2");
 
-  // Click 9000K quick-chip in Key light section
+  // Click 9000K quick-chip in Key light section -> clears stale preset tag while keeping values
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('9000K')).click()`,
   );
   await waitUntil(
     `window.testLights.edit().keys[0]?.key?.color === ${JSON.stringify(kelvinToHex(9000))}`,
   );
+  expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBeUndefined();
 
-  // Add a practical spot light
+  // Add a practical spot light (auto-opens collapsed Practicals section!) & set intensity 28 without clamping
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Spot').click()`,
   );
   await waitUntil(`window.testLights.edit().keys[0]?.practicals?.length === 1`);
   expect(await page.evaluate(`window.testLights.edit().keys[0].practicals[0].kind`)).toBe("spot");
+
+  // Re-applying a preset preserves placed practicals (does not wipe room lamps!)
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Noir Night')).click()`,
+  );
+  await waitUntil(`window.testLights.edit().keys[0]?.preset === 'noir-night'`);
+  expect(await page.evaluate(`window.testLights.edit().keys[0]?.practicals?.length`)).toBe(1);
+
+  // Practical intensity slider inside the practical card allows >= 100 (e.g. templates/film 28)
+  const spotIntensityMax = await page.evaluate(`(() => {
+    const card = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') || '').startsWith('Remove '))?.closest('div.border');
+    if (!card) return 0;
+    const slider = card.querySelector('input[type="range"], [role="slider"]');
+    return Number(slider?.getAttribute('aria-valuemax') || slider?.max || 0);
+  })()`);
+  expect(spotIntensityMax).toBeGreaterThanOrEqual(100);
 
   // Seek to t=4 and add a second keyframe
   await page.evaluate(`window.testLights.seek(4)`);
@@ -210,6 +247,13 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
   );
   await waitUntil(`window.testLights.edit().keys.length === 2`);
   expect(await page.evaluate(`window.testLights.edit().keys[1].t`)).toBeCloseTo(4, 2);
+
+  // Under timing freeze at t=2 (duration 3s), lightsSampleAt reads scene frame time instead of heard time
+  await page.evaluate(`window.testLights.setTiming({ freezes: [{ at: 2, duration: 3 }] }, 10)`);
+  const atFreezeStart = await page.evaluate(`window.testLights.sampleAt(2).key.intensity`);
+  const insideFreeze = await page.evaluate(`window.testLights.sampleAt(4).key.intensity`);
+  expect(insideFreeze).toBeCloseTo(atFreezeStart, 4);
+  await page.evaluate(`window.testLights.setTiming({}, 10)`);
 
   // Open Fog section if collapsed, then switch Fog mode to Linear cleanly
   await page.evaluate(
@@ -223,17 +267,28 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
   );
   await waitUntil(`window.testLights.edit().keys[1]?.fog?.mode === 'linear'`);
 
-  // Verify keyboard events inside inputs do not propagate to document hotkeys
-  const bubbled = await page.evaluate(`(() => {
+  // Verify keyboard events inside inputs do not propagate to document hotkeys & typing #abc stays buffered until #abcdef
+  const hexResult = await page.evaluate(`(() => {
     let hit = false;
     const onKey = () => { hit = true; };
     document.addEventListener('keydown', onKey);
-    const input = document.querySelector('input[aria-label="Color hex color"]');
+    const input = document.querySelector('input[aria-label="Key hex color"]');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     document.removeEventListener('keydown', onKey);
-    return hit;
+    const prevColor = window.testLights.edit().keys[1]?.key?.color;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    input.focus();
+    setter.call(input, '#abc');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const afterPartial = window.testLights.edit().keys[1]?.key?.color;
+    setter.call(input, '#abcdef');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const afterFull = window.testLights.edit().keys[1]?.key?.color;
+    return { hit, prevColor, afterPartial, afterFull };
   })()`);
-  expect(bubbled).toBe(false);
+  expect(hexResult.hit).toBe(false);
+  expect(hexResult.afterPartial).toBe(hexResult.prevColor);
+  expect(hexResult.afterFull).toBe("#abcdef");
 
   // Wait for auto-save to hit /api/lights cleanly with schema validation
   await waitUntil(`window.testLights.edit().keys.length === 2`);
@@ -243,6 +298,21 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
 
   // Undo reverts cleanly without console errors
   await page.evaluate(`window.testLights.undo()`);
-  await waitUntil(`window.testLights.edit().keys[1]?.fog?.mode !== 'linear'`);
+  await waitUntil(`window.testLights.edit().keys[1]?.key?.color !== '#abcdef'`);
+
+  // Side wide & narrow render LightPanel properly when lights: true and cam: false
+  await page.evaluate(
+    `(() => { window.testLights.setState({ cam: false, lights: true, side: 'notes' }); window.testLights.setMode('side-wide-lights-only'); })()`,
+  );
+  await waitUntil(`document.body.textContent.includes('Golden Hour')`);
+  await page.evaluate(`(() => { window.testLights.setMode('side-narrow-lights-only'); })()`);
+  await waitUntil(
+    `[...document.querySelectorAll('[role="tab"]')].some((el) => el.textContent.trim() === 'Light')`,
+  );
+  await page.evaluate(
+    `[...document.querySelectorAll('[role="tab"]')].find((el) => el.textContent.trim() === 'Light').click()`,
+  );
+  await waitUntil(`document.body.textContent.includes('Golden Hour')`);
+
   expect(await page.evaluate(`window.errors`)).toEqual([]);
 });
