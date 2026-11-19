@@ -144,15 +144,25 @@ export const joinRanges = (ranges) => {
   return out;
 };
 
-const speedAt = (effect, source) => {
+const pointLeft = bisector((p) => p[0]).left;
+const speedAt = (effect, source, edge = "after") => {
   if (!effect) return 1;
   if (!effect.curve) return effect.rate ?? 1;
   const u = (source - effect.from) / (effect.to - effect.from),
     points = effect.curve;
-  const i = Math.max(0, pointIndex(points, u) - 1),
-    a = points[i],
-    b = points[i + 1];
-  return b ? lerp(a[1], b[1], (u - a[0]) / (b[0] - a[0])) : a[1];
+  if (edge === "before") {
+    const j = pointLeft(points, u - 1e-12);
+    if (points[j] && Math.abs(points[j][0] - u) < 1e-12) return points[j][1];
+    const i = Math.max(0, j - 1),
+      a = points[i],
+      b = points[i + 1];
+    return b && b[0] > a[0] ? lerp(a[1], b[1], (u - a[0]) / (b[0] - a[0])) : a[1];
+  }
+  const k = Math.min(points.length - 1, Math.max(0, pointIndex(points, u + 1e-12) - 1)),
+    a = points[k],
+    b = points[k + 1];
+  if (Math.abs(a[0] - u) < 1e-12 || !b || b[0] <= a[0]) return a[1];
+  return lerp(a[1], b[1], (u - a[0]) / (b[0] - a[0]));
 };
 
 export const speedRange = (effect, from, to) => {
@@ -284,8 +294,8 @@ export const compileTiming = (timing, sourceDuration) => {
       sourceTo: b,
       from: duration,
       to: duration,
-      rate0: speedAt(effect, a),
-      rate1: speedAt(effect, b),
+      rate0: speedAt(effect, a, "after"),
+      rate1: speedAt(effect, b, "before"),
       ...(blank(a) && { blank: true }),
     };
     s.to += elapsed(s, b - a);
