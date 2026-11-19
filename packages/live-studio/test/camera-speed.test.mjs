@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cameraSpeed } from "../src/camera-speed.mjs";
+import {
+  analyzeCameraTimeline,
+  analyzeKeyFileMotion,
+  attributeCamKeySpan,
+  cameraSpeed,
+  resolveKeyFov,
+  viewVectorAngleDeg,
+} from "../src/camera-speed.mjs";
 import { compileTiming } from "../src/timing.mjs";
 
 test("films without timing support still show their camera motion", () => {
@@ -42,4 +49,105 @@ test("camera easing composes with the speed ramp in source coordinates", () => {
 test("trimming the beginning preserves the remaining eased motion without a cut spike", () => {
   const clock = compileTiming({ cuts: [{ from: 0, to: 5 }] }, 10);
   assert.ok(Math.abs(cameraSpeed(clock, 0, 10, (u) => u * u, 0) - 0.1) < 1e-6);
+});
+
+test("viewVectorAngleDeg measures exact angle between consecutive p->l directions", () => {
+  const angle = viewVectorAngleDeg([0, 1, 0], [0, 1, -5], [0, 1, 0], [5, 1, 0]);
+  assert.ok(Math.abs(angle - 90) < 1e-6, `expected 90 deg, got ${angle}`);
+  assert.equal(viewVectorAngleDeg([1, 2, 3], [1, 2, 3], [0, 0, 0], [0, 0, -1]), 0);
+});
+
+test("resolveKeyFov carries forward fov and converts mm at the given aspect", () => {
+  const keys = [
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0], mm: 50 },
+    { t: 2, p: [0, 0, 5], l: [0, 0, 0] },
+    { t: 4, p: [0, 0, 5], l: [0, 0, 0], fov: 35 },
+  ];
+  const f0 = resolveKeyFov(keys, 0, 16 / 9);
+  const f1 = resolveKeyFov(keys, 1, 16 / 9);
+  const f2 = resolveKeyFov(keys, 2, 16 / 9);
+  const expected = (2 * Math.atan(18 / 50 / (16 / 9)) * 180) / Math.PI;
+  assert.ok(
+    Math.abs(f0 - expected) < 0.01,
+    `expected ~${expected.toFixed(2)} deg for 50mm 16:9, got ${f0}`,
+  );
+  assert.equal(f1, f0);
+  assert.equal(f2, 35);
+});
+
+test("attributeCamKeySpan locates the exact key row span while respecting hard cuts", () => {
+  const keys = [
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0] },
+    { t: 2, p: [0, 0, 5], l: [2, 0, 0] },
+    { t: 2.001, p: [5, 0, 5], l: [5, 0, 0], cut: true },
+    { t: 5, p: [5, 0, 5], l: [5, 2, 0] },
+  ];
+  const a = attributeCamKeySpan(keys, 1.5);
+  assert.deepEqual(a.span, [0, 1]);
+  assert.equal(a.keyRow, 1);
+
+  const b = attributeCamKeySpan(keys, 2.5);
+  assert.deepEqual(b.span, [2, 3]);
+  assert.equal(b.keyRow, 2);
+});
+
+test("analyzeCameraTimeline detects fast 50 deg/s pan and fast FOV snap with offending key rows", () => {
+  // Stationary tripod position [0, 1, 0], 50 deg pan in 1s (row 1->2), and fast 40 deg FOV jump in 0.2s (row 3->4)
+  const keys = [
+    { t: 0, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
+    { t: 10, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
+    { t: 11, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 60 }, // ~55 deg pan in 1s
+    { t: 12, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 60 },
+    { t: 12.1, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 25 }, // 35 deg FOV snap in 0.1s = 350 deg/s
+    { t: 14, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 25 },
+  ];
+  const res = analyzeCameraTimeline(keys);
+  assert.equal(res.posPeak.v, 0);
+  assert.ok(res.turnPeak.v >= 50, `expected >= 50 deg/s pan, got ${res.turnPeak.v}`);
+  assert.deepEqual(res.turnPeak.span, [1, 2]);
+  assert.ok(res.fovPeak.v >= 300, `expected >= 300 deg/s FOV snap, got ${res.fovPeak.v}`);
+  assert.deepEqual(res.fovPeak.span, [3, 4]);
+  assert.ok(res.fastPans.length >= 1);
+  assert.ok(res.fastFovs.length >= 1);
+  assert.notEqual(res.status, "pass");
+});
+
+test("analyzeKeyFileMotion attributes speed peaks in key files to exact path and row indices", () => {
+  const steve = {
+    moves: [
+      { t: 0, at: [0, 0, 0], yaw: 0 },
+      { t: 2, at: [0, 0, 0], yaw: 0 },
+      { t: 2.5, at: [5, 0, 0], yaw: 180 }, // 10 m/s, 360 deg/s
+    ],
+  };
+  const out = analyzeKeyFileMotion(steve, "src/timeline/steve.json");
+  assert.equal(out.tracks.length, 1);
+  assert.equal(out.tracks[0].path, "moves");
+  assert.equal(out.tracks[0].peakPos.rowFrom, 1);
+  assert.equal(out.tracks[0].peakPos.rowTo, 2);
+  assert.ok(Math.abs(out.tracks[0].peakPos.v - 10) < 1e-6);
+  assert.ok(Math.abs(out.tracks[0].peakRot.v - 360) < 1e-6);
+});
+
+test("analyzeCameraTimeline isolates equal-timestamp cut boundaries from evaluator bleed", () => {
+  const keys = [
+    { t: 0, p: [0, 1, 5], l: [0, 1, 0], fov: 50 },
+    { t: 2, p: [0, 1, 5], l: [0, 1, 0], fov: 50 },
+    { t: 2, cut: true, p: [20, 5, 20], l: [0, 1, 0], fov: 20 },
+    { t: 4, p: [20, 5, 20], l: [0, 1, 0], fov: 20 },
+  ];
+  const res = analyzeCameraTimeline(keys, {
+    evaluator: (t, _a, segKeys) => {
+      // Simulate cameraAt's >= t0 segment lookup across equal-t cuts if unisolated
+      const slice = segKeys ?? keys;
+      let active = slice[0];
+      for (const k of slice) if (k.t <= t) active = k;
+      return { p: active.p, l: active.l, fov: active.fov };
+    },
+  });
+  assert.equal(res.pops.length, 0);
+  assert.equal(res.posPeak.v, 0);
+  assert.equal(res.turnPeak.v, 0);
+  assert.equal(res.fovPeak.v, 0);
+  assert.equal(res.status, "pass");
 });

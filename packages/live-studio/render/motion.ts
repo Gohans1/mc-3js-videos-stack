@@ -7,6 +7,7 @@
 //   motion_<target>_<from>-<to>_speed.jpg  speed over time (m/s), each move's peak and how it is eased, the faults marked
 //   motion_cam_<from>-<to>_turn.jpg  for cam: how fast it turns and zooms (°/s) against the 7-second panning rule
 // and prints the numbers (checks/motion.mjs). target: see target.ts; "cam" gives the graphs only.
+import { EDIT } from "live-studio/edit";
 import * as THREE from "three";
 
 import { measure, report, turnReport, turns, WIDTH_SECONDS } from "../checks/motion.mjs";
@@ -69,10 +70,14 @@ export const motionCheck =
         openImp = null;
       }
       obj.updateWorldMatrix(true, false);
+      const wp = obj.getWorldPosition(new THREE.Vector3());
       samples.push({
         t,
-        p: obj.getWorldPosition(new THREE.Vector3()).toArray(),
+        p: wp.toArray(),
         ...(isCam && {
+          l: look
+            ? look.toArray()
+            : camera.getWorldDirection(new THREE.Vector3()).add(wp).toArray(),
           q: obj.getWorldQuaternion(new THREE.Quaternion()).toArray(),
           fov: camera.fov,
           aspect: camera.aspect,
@@ -80,10 +85,15 @@ export const motionCheck =
       });
     }
     if (openImp) impulses.push(openImp);
+    const camKeys = isCam ? (cfg.camKeys ?? EDIT?.camera ?? null) : null;
     const m = measure(samples, cuts, impulses);
     const tm = isCam ? turns(samples, cuts, impulses) : null;
-    const out = report(target, samples, m, tm?.pops.length);
-    if (tm) out.push(...turnReport(tm));
+    const camFaults = tm
+      ? tm.pops.length + (tm.fovPops?.length ?? 0) + (tm.fastPan ? 1 : 0) + (tm.fastFov ? 1 : 0)
+      : 0;
+    const attrOpts = { worldPos: true, camKeys, timing: cfg.timing ?? null };
+    const out = report(target, samples, m, camFaults, attrOpts);
+    if (tm) out.push(...turnReport(tm, attrOpts));
     const tag = `motion_${target}_${from}-${to}`;
     const peak = Math.max(m.peak.v, 1e-6);
     const gl = canvas();
@@ -238,6 +248,7 @@ export const motionCheck =
         }
       }
       for (const p of tm.pops) mark(k, p.t, "#ff2d2d", "POP");
+      for (const p of tm.fovPops ?? []) mark(k, p.t, "#ff9900", "FOV POP");
       out.push({ still: `${tag}_turn.jpg`, canvas: k.canvas });
     }
 

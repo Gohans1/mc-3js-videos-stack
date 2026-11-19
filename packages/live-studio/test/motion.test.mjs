@@ -151,3 +151,46 @@ test("explicit impulse windows exempt deliberate trauma shakes while still catch
   const preIdx = parkedBeforeHit.findIndex((s) => Math.abs(s.t - 0.36) < 0.02);
   assert.equal(mParked.speed[preIdx], 0);
 });
+
+test("FOV snaps and p->l vector turns are detected and attributed without printing 'no pops'", () => {
+  const fovSnap = turns(
+    pan(
+      0,
+      1,
+      () => 0,
+      (t) => (t > 0.5 ? 28 : 60),
+    ),
+  );
+  assert.equal(fovSnap.fovPops.length, 1);
+  assert.equal(fovSnap.fastFov, true);
+  assert.match(turnReport(fovSnap).join("\n"), /field of view jumps 32\.\d° in one sample/);
+
+  const camKeys = [
+    { t: 0, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
+    { t: 0.5, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
+    { t: 1, p: [0, 1, 0], l: [4, 1, -3], fov: 28 },
+  ];
+  const lookSamples = [];
+  for (let t = 0; t <= 1 + 1e-9; t += DT) {
+    const u = Math.max(0, (t - 0.5) / 0.5);
+    lookSamples.push({
+      t,
+      p: [0, 1, 0],
+      l: [4 * u, 1, -5 + 2 * u],
+      fov: 60 - 32 * u,
+      aspect: 16 / 9,
+    });
+  }
+  const tm = turns(lookSamples);
+  assert.equal(tm.fastPan, true);
+  assert.equal(tm.fastFov, true);
+  const m = measure(lookSamples);
+  const faults = tm.pops.length + tm.fovPops.length + (tm.fastPan ? 1 : 0) + (tm.fastFov ? 1 : 0);
+  const lines = [
+    ...report("cam", lookSamples, m, faults, { worldPos: true, camKeys }),
+    ...turnReport(tm, { worldPos: true, camKeys, samples: lookSamples }),
+  ].join("\n");
+  assert.ok(!lines.includes("  no pops, no dead stops"), lines);
+  assert.match(lines, /at \[0\.00, 1\.00, 0\.00\]/);
+  assert.match(lines, /cam keys \[1->2\] row /);
+});

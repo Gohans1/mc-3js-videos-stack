@@ -2,6 +2,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -11,13 +12,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { extname, join, relative, resolve } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
 import { build } from "vite";
 
 import { cues, srt } from "./src/captions.mjs";
 import { cliArgs, envTypos, jsonFile, needFilm, numberArg, secondArg } from "./src/cli.mjs";
+import { parseCropRect } from "./src/crop.mjs";
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
@@ -68,6 +70,8 @@ Nothing is written outside the film. Options are environment variables:
   RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
+  CROP=x,y,w,h               stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
+  COMPARE=1  or  --compare   stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
                              between two HEARD seconds as AT takes them, not the scene seconds of src/timeline rows
@@ -96,7 +100,18 @@ package.json "live-studio": { "chrome": path } names the headless Chrome (defaul
 { "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.
 Why each setting, YouTube's spec, what survives its re-encode, how to render faster: bun run skills get core --ref render.`;
 // its options are environment variables: --at 12 is the flag form an AI tries first
-const ENV_OPTIONS = ["AT", "LIST", "CHUNKS", "SPAN", "INSPECT", "CHECK", "ENTRY", "SAMPLES", "RES"];
+const ENV_OPTIONS = [
+  "AT",
+  "LIST",
+  "CHUNKS",
+  "SPAN",
+  "INSPECT",
+  "CHECK",
+  "ENTRY",
+  "SAMPLES",
+  "RES",
+  "CROP",
+];
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
 const flagged = process.argv
   .slice(2)
@@ -111,8 +126,11 @@ if (flagged) {
   );
   process.exit(2);
 }
-const [what] = cliArgs(HELP, [], 1);
-envTypos([...ENV_OPTIONS, "LIVE_PROJECT"]); // any LAB_* goes to the lab page as is
+const rawArgs = cliArgs(HELP, ["--compare"], 1);
+const what = rawArgs.find((a) => !a.startsWith("-"));
+const compare =
+  rawArgs.includes("--compare") || process.env.COMPARE === "1" || process.env.COMPARE === "true";
+envTypos([...ENV_OPTIONS, "COMPARE", "LIVE_PROJECT"]); // any LAB_* goes to the lab page as is
 // a clip takes minutes and a final far longer: each is only ever made when asked for by name
 if (!TARGETS.includes(what)) {
   const near = what && TARGETS.find((t) => t.startsWith(what.slice(0, 3).toLowerCase()));
@@ -144,10 +162,14 @@ const misplaced =
                   : what === "poster" && !process.env.AT
                     ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
                     : what === "captions"
-                      ? ["AT", "LIST", "CHECK", "INSPECT", "ENTRY"]
+                      ? ["AT", "LIST", "CHECK", "INSPECT", "ENTRY", "CROP"]
                           .filter((k) => process.env[k] !== undefined)
                           .map((k) => `${k} does nothing for render captions`)[0]
-                      : null;
+                      : video && process.env.CROP !== undefined
+                        ? "CROP is for render stills or poster"
+                        : (video || what === "captions") && compare
+                          ? "COMPARE is for render stills or poster"
+                          : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -275,6 +297,15 @@ if (inspect && inspect.length !== 7) {
   console.error(`INSPECT takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${inspect.length}`);
   process.exit(2);
 }
+let crop = null;
+if (env.CROP !== undefined) {
+  try {
+    crop = parseCropRect(env.CROP);
+  } catch (e) {
+    console.error(`CROP: ${e.message}`);
+    process.exit(2);
+  }
+}
 // a CHECK run writes its own charts; a still at 1 s beside them would only crowd bun run sheet
 const at =
   what === "clip" || what === "final"
@@ -380,10 +411,27 @@ if (!existsSync(CHROME)) {
   process.exit(1);
 }
 const stillsWritten = [];
+const preservedThisRun = new Set();
+const preservePrev = (fileName) => {
+  const src = join(RENDERS, fileName);
+  if (!existsSync(src)) return;
+  try {
+    if (statSync(src).size <= 0) return;
+  } catch {
+    return;
+  }
+  const prevDir = join(RENDERS, ".prev");
+  mkdirSync(prevDir, { recursive: true });
+  copyFileSync(src, join(prevDir, fileName));
+};
 // bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
 if (at.length && what !== "poster" && existsSync(RENDERS))
   for (const f of readdirSync(RENDERS))
-    if (/^still_.*\.jpg$/.test(f)) rmSync(join(RENDERS, f), { force: true });
+    if (/^still_.*\.jpg$/.test(f)) {
+      preservePrev(f);
+      preservedThisRun.add(f);
+      rmSync(join(RENDERS, f), { force: true });
+    }
 const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);
@@ -460,6 +508,15 @@ const cfg = {
     : null,
   list: env.LIST === "1",
   inspect,
+  crop,
+  camKeys: CHECKS.some((c) => c.name === "motion")
+    ? readJson(
+        pkg["live-studio"]?.camTimeline
+          ? resolve(PROJECT, pkg["live-studio"].camTimeline)
+          : join(PROJECT, "src/timeline/cam.json"),
+        null,
+      )
+    : null,
   checks: CHECKS.map(({ name, args }) => [name, args]),
   text: textLines,
   choices: choicesFile ? readJson(choicesFile, {}) : {},
@@ -652,9 +709,14 @@ const server = Bun.serve({
           );
         }
       } else if (url.startsWith("/still/")) {
-        writeFileSync(join(RENDERS, url.slice(7)), b);
+        const name = url.slice(7);
+        if (/\.(jpg|png)$/.test(name) && !preservedThisRun.has(name)) {
+          preservePrev(name);
+          preservedThisRun.add(name);
+        }
+        writeFileSync(join(RENDERS, name), b);
         if (url === "/still/order.json") orderPending = false;
-        if (/\.(jpg|png)$/.test(url)) stillsWritten.push(`renders/${url.slice(7)}`);
+        if (/\.(jpg|png)$/.test(url)) stillsWritten.push(`renders/${name}`);
       } else if (url.startsWith("/chunk/")) {
         const i = +url.slice(7);
         writeFileSync(chunkFile(i), b);
@@ -798,6 +860,37 @@ if (stillsWritten.length)
   console.log(
     `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${W}x${H}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${stillsWritten.filter((f) => f.includes("/still_")).length > 1 ? "; many stills at once: bun run sheet (6 to a picture)" : ""}`}`,
   );
+if (!failed && compare && stillsWritten.length) {
+  const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
+  for (const rel of stillsWritten) {
+    const file = basename(rel);
+    const prev = join(RENDERS, ".prev", file);
+    const curr = join(RENDERS, file);
+    if (!existsSync(prev)) {
+      console.log(
+        `compare ${rel}: no previous frame in renders/.prev/ yet (baseline saved for next run)`,
+      );
+      continue;
+    }
+    if (!existsSync(qcCli)) continue;
+    const diffName = `compare_${basename(file, extname(file))}.png`;
+    const cmp = spawnSync(
+      "bun",
+      [qcCli, "compare", prev, curr, "--out", join(RENDERS, diffName), "--json"],
+      { encoding: "utf8", windowsHide: true, timeout: 30_000 },
+    );
+    if (cmp.status === 0) {
+      try {
+        const m = JSON.parse(cmp.stdout);
+        console.log(
+          `compare ${rel}: ${m.changedPct.toFixed(2)}% changed (${m.changedPixels}/${m.totalPixels}, mean delta ${m.meanAbsDelta.toFixed(2)}, max ${m.maxDelta.toFixed(0)}) -> renders/${diffName}`,
+        );
+      } catch {
+        console.log(`compare ${rel} -> renders/${diffName}`);
+      }
+    }
+  }
+}
 
 if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {
   const [a, b] = cfg.clip.span;
