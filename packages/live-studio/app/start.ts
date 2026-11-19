@@ -53,7 +53,9 @@ import { captionAt } from "./picture/captions";
 import { staleFilmView } from "./picture/filmcam";
 import { filmFeatures, frameSize, loadFilm } from "./picture/frame";
 import { flight, fly, setFov, setFree } from "./picture/freecam";
+import { drawCameraMonitor } from "./picture/camera-monitor";
 import { formatOpticsHud } from "./picture/hud";
+import { drawPreviewMonitor } from "./picture/preview-monitor";
 import { lookAtClick } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
 import { drawFinal, finalCanvas, render, setFinal } from "./picture/render";
@@ -524,7 +526,7 @@ const frame = async () => {
       lastHudEl = S.el.hud;
       lastHudText = null;
     }
-    const nextHud = formatOpticsHud(S.tools?.optics);
+    const nextHud = [formatOpticsHud(S.tools?.optics), drawCameraMonitor(showTime)].filter(Boolean).join(" · ");
     if (S.el.hud && lastHudText !== nextHud) {
       S.el.hud.textContent = nextHud;
       lastHudText = nextHud;
@@ -540,7 +542,9 @@ const frame = async () => {
       }
     }
     // The scopes read the frame on screen: the final-quality one when it shows (only when drawn now), else the draft
-    measureScopes(finalNow ? S.el.final : S.el.final.hidden ? S.el.canvas : null);
+    const painted = finalNow ? S.el.final : S.el.final.hidden ? S.el.canvas : null;
+    measureScopes(painted);
+    drawPreviewMonitor(painted);
     followNotes();
     wake("rendered");
     const keptNow = performance.now();

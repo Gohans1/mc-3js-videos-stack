@@ -376,7 +376,7 @@ export async function buildScene(canvas, W, H, draft = false) {
         fstop: effectiveFstop,
         focusDistance: focusM ?? fallbackFocus,
         mm: renderedMm,
-        widthPx: W,
+        widthPx: W * renderer.getPixelRatio(),
       });
       adjust(shot, shotEntry?.adjust, t, scouting);
       composer.render(0);
@@ -503,6 +503,10 @@ export async function buildScene(canvas, W, H, draft = false) {
     renderer,
     optics: opticsTelemetry,
     cameraSample,
+    resizePreview(scale) {
+      renderer.setPixelRatio(scale);
+      composer.setSize(W, H, false);
+    },
     sampleCameraPath,
     sampleCameraTrack,
     cameraClock: true,

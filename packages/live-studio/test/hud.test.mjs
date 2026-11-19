@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatOpticsHud } from "../app/picture/hud.ts";
+import { focusLimits, formatOpticsHud } from "../app/picture/hud.ts";
 
 test("returns empty string when telemetry is missing", () => {
   assert.equal(formatOpticsHud(undefined), "");
@@ -79,4 +79,17 @@ test("deduplicates bare numeric focus labels while keeping rack pull targets", (
     }),
     "Shot 1 · 85mm · f/2 · 3.5m Steve.head->3.5m",
   );
+});
+
+test("one-pixel focus limits match the lens blur at near and far planes", () => {
+  const mm = 50,
+    fstop = 4,
+    focus = 5;
+  const { near, far, hyperfocal } = focusLimits(mm, fstop, focus);
+  const blur = (distance) =>
+    ((((mm ** 2 / fstop) * Math.abs(distance - focus)) / distance / (focus * 1000 - mm)) * 1920) /
+    36;
+  assert.ok(Math.abs(blur(near) - 1) < 1e-10);
+  assert.ok(Math.abs(blur(far) - 1) < 1e-10);
+  assert.equal(focusLimits(mm, fstop, hyperfocal).far, Infinity);
 });

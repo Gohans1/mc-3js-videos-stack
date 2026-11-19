@@ -37,11 +37,12 @@ declare module "film/scene" {
     objects?: [THREE.Object3D, string][];
     targets?: import("./objects/targets").SceneTarget[];
     renderer?: THREE.WebGLRenderer;
+    resizePreview?: (scale: number) => void;
     materials?: [THREE.Material, string][];
     optics?: OpticsTelemetry;
     cameraClock?: true;
     sampleCameraPath?: (times: readonly CameraPathTime[]) => CameraPathPose[];
-    sampleCameraTrack?: (times: readonly CameraPathTime[]) => import("./camera/camera-edit").CameraView[];
+    sampleCameraTrack?: (times: readonly CameraPathTime[]) => (import("./camera/camera-edit").CameraView & { p: [number, number, number]; l: [number, number, number] })[];
     cameraSample?: () => import("./camera/camera-edit").CameraView;
     moveCameraAnchor?: import("./camera/camera-edit").MoveCameraAnchor;
     resolveCameraAnchor?: import("film-stage/camera").ResolveCameraAnchor;

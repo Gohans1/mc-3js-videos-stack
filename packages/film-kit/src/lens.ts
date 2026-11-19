@@ -7,6 +7,7 @@
 // look of a film consistent.
 //   camera.fov = fovOf(50, 16 / 9);  mmOf(camera.fov, 16 / 9);  dollyZoom(3, fovOf(35, a), fovOf(85, a))
 
+export const PAN_SECONDS = 7;
 export const SENSOR = 36; // mm across the image
 /** Curated prime focal lengths and cinema starting apertures for 36mm full-frame horizontal fit. */
 export const PRIME_LENSES = [

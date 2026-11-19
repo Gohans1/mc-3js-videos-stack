@@ -25,26 +25,30 @@ import {
 } from "./freecam";
 import { IDLE_VIEWPORT_GESTURE, stepViewport, type ViewportGesture } from "./gesture";
 import { lookAtClick } from "./look";
+import { changePreview, picturePoint } from "./preview-state";
 import { render } from "./render";
 
 export const fit = () => {
-  const r = S.el.view.getBoundingClientRect(),
+  const r = (S.el.view.querySelector("[data-preview-pane]") ?? S.el.view).getBoundingClientRect(),
     [w, h] = frameSize(16),
     s = Math.min(r.width / w, r.height / h);
   S.el.stage.style.width = `${Math.floor(s * w)}px`;
+  S.el.view.style.setProperty("--split-height", Math.floor(r.height) + "px");
   S.el.stage.style.height = `${Math.floor(s * h)}px`;
+};
+export const stageFit = () => {
+  if (S.el?.stage && S.el.view) fit();
 };
 export const attachPicture = () => {
   const { canvas } = S.el;
-  new ResizeObserver(fit).observe(S.el.view);
+  new ResizeObserver(fit).observe(S.el.view.querySelector("[data-preview-pane]") ?? S.el.view);
   let gesture: ViewportGesture<PointerEvent> = IDLE_VIEWPORT_GESTURE;
-  const frac = (e: MouseEvent) => {
-    const r = canvas.getBoundingClientRect();
-    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height] as const;
-  };
+  const frac = (e: MouseEvent) => picturePoint(e, canvas);
+  let pan: { id: number; x: number; y: number; fromX: number; fromY: number } | null = null;
   const stepCamDrag = (mode: "look" | "orbit" | "slide", dx: number, dy: number) => {
     if (!S.tools || get().freeLocked) return;
     const f = S.tools.free;
+    if (get().preview.mirror) dx = -dx;
     if (mode === "look") turnAbout(f.p, f.l, -dx * 0.0025, dy * 0.0025);
     else if (mode === "orbit") orbitFree(-dx * 0.005, -dy * 0.005);
     else {
@@ -54,6 +58,13 @@ export const attachPicture = () => {
     S.viewMoved = true;
   };
   canvas.addEventListener("pointerdown", (e) => {
+    const p = get().preview;
+    if (!PHONE && e.button === 1 && (p.zoom !== 100 || !S.tools?.free.on)) {
+      e.preventDefault();
+      pan = { id: e.pointerId, x: e.clientX, y: e.clientY, fromX: p.panX, fromY: p.panY };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     if (e.button === 0 && e.altKey && S.tools?.free.on && !get().cameraPick) return;
     const prev = gesture;
     const next = stepViewport(gesture, {
@@ -77,6 +88,10 @@ export const attachPicture = () => {
     if (next.capture) canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (pan?.id === e.pointerId) {
+      changePreview({ panX: pan.fromX + e.clientX - pan.x, panY: pan.fromY + e.clientY - pan.y });
+      return;
+    }
     if ("id" in gesture && e.pointerId !== gesture.id) return;
     const prev = gesture;
     const step = stepViewport(prev, {
@@ -140,6 +155,7 @@ export const attachPicture = () => {
     }, 0);
   };
   const cancelPointer = (e: PointerEvent) => {
+    if (pan?.id === e.pointerId) pan = null;
     const res = stepViewport(gesture, { type: "cancel", id: e.pointerId });
     gesture = res.gesture;
     if (res.dropSketch || sketch.on()) sketch.drop();
@@ -171,6 +187,7 @@ export const attachPicture = () => {
     else selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
   });
   addEventListener("pointerup", (e) => {
+    if (pan?.id === e.pointerId) pan = null;
     const res = stepViewport(gesture, {
       type: "windowUp",
       id: e.pointerId,
@@ -238,6 +255,7 @@ export const attachPicture = () => {
     );
   addEventListener("keyup", (e) => flight.release(e.code));
   addEventListener("blur", () => {
+    pan = null;
     flight.clear(); // a key let go in another window never comes back as a keyup
     const res = stepViewport(gesture, { type: "blur" });
     gesture = res.gesture;
@@ -247,6 +265,15 @@ export const attachPicture = () => {
   canvas.addEventListener(
     "wheel",
     (e) => {
+      if (!PHONE && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        const zoom = Math.max(
+          10,
+          Math.min(1600, Math.round(get().preview.zoom * (e.deltaY > 0 ? 0.8 : 1.25))),
+        );
+        changePreview({ zoom });
+        return;
+      }
       if (!S.tools?.free.on) return;
       e.preventDefault();
       if (get().freeLocked) return;

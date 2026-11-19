@@ -30,6 +30,7 @@
     "d3-array": "3.2.5",
     "d3-shape": "3.2.1",
     "diff": "9.0.0",
+    "film-kit": "workspace:*",
     "film-stage": "workspace:*",
     "hono": "4.13.16",
     "loudness-worklet": "2.1.0",

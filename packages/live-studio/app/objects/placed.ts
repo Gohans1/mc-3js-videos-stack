@@ -6,6 +6,7 @@ import type { Tools } from "film/scene";
 // undo, saving and an agent's edits are keys.ts and doc.ts's, and each object's keys are an ordinary key row.
 import * as THREE from "three";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { picturePoint } from "../picture/preview-state";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
@@ -240,7 +241,7 @@ export const setGizmo = (mode: GizmoMode) => {
   gizmo?.setMode(mode);
   S.dirty = true;
 };
-export const gizmoBusy = () => !!gizmo && (gizmo.dragging || gizmo.axis !== null);
+export const gizmoBusy = () => !!gizmo?.enabled && (gizmo.dragging || gizmo.axis !== null);
 
 studio.subscribe((s, was) => {
   if (s.snap !== was.snap) applySnap();
@@ -342,6 +343,9 @@ export const selectTarget = (target: SceneTarget | null, additive = false) => {
 // own effects and its scene
 export const drawGizmo = (sceneTools = S.tools) => {
   if (!sceneTools) return;
+  const { clean, mirror } = get().preview;
+  if (gizmo) gizmo.enabled = !clean && !mirror;
+  if (clean || mirror) return;
   if (!gizmo?.dragging && get().keyPicks.length) attach(false);
   const all = targets(sceneTools),
     name = get().object;
@@ -405,9 +409,7 @@ export const startObjectCarry = (
   ghost.className = "carry";
   document.body.append(ghost);
   const over = (ev: PointerEvent) => {
-    const r = S.el.canvas.getBoundingClientRect();
-    const x = (ev.clientX - r.left) / r.width,
-      y = (ev.clientY - r.top) / r.height;
+    const [x, y] = picturePoint(ev, S.el.canvas);
     return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
   };
   const move = (ev: PointerEvent) => {

@@ -9,6 +9,7 @@ import { layerClock } from "../../src/timing-state.mjs";
 import { clipIsLit, hasClipActivity } from "../activity/timeline-activity";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
+import { picturePoint } from "../picture/preview-state";
 import { openTextEditor } from "./inline-editor";
 import {
   edit,
@@ -51,13 +52,16 @@ export const drawTextSel = () => {
   const picks = get().textPicks;
   const recent = !S.playing && hasClipActivity("text");
   if (!picks.length && !recent && !el.childElementCount) return;
-  const shown = picks.length || recent ? boxesNow().flatMap((box) => {
-    const id = items[box.i]?.id;
-    const picked = picks.includes(box.i);
-    return picked || (recent && typeof id === "string" && clipIsLit("text", id))
-      ? [{ box, picked }]
+  const shown =
+    picks.length || recent
+      ? boxesNow().flatMap((box) => {
+          const id = items[box.i]?.id;
+          const picked = picks.includes(box.i);
+          return picked || (recent && typeof id === "string" && clipIsLit("text", id))
+            ? [{ box, picked }]
+            : [];
+        })
       : [];
-  }) : [];
   const w = el.clientWidth,
     h = el.clientHeight;
   const svg = (tag: string) => document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -140,7 +144,11 @@ export const textAt = (x: number, y: number) =>
   })?.i ?? -1;
 
 // A press on the picture: true when it took it (any item under the mouse; on a phone, whose tap pins a note, a picked one)
-export const startTextDrag = (e: PointerEvent, firstMove: PointerEvent, at: readonly [number, number]) => {
+export const startTextDrag = (
+  e: PointerEvent,
+  firstMove: PointerEvent,
+  at: readonly [number, number],
+) => {
   if (!get().text) return false;
   const canvas = S.el.canvas,
     r = canvas.getBoundingClientRect();
@@ -170,11 +178,12 @@ export const startTextDrag = (e: PointerEvent, firstMove: PointerEvent, at: read
     canvas.setPointerCapture(e.pointerId);
     const move = (ev: PointerEvent) => {
       moved = true;
+      const [x, y] = picturePoint(ev, canvas);
       restore(snap);
       preview((data) =>
         Object.assign(
           data.items[b.i],
-          textTransform(kind, before, anchor, origin, [ev.clientX - r.left, ev.clientY - r.top]),
+          textTransform(kind, before, anchor, origin, [x * r.width, y * r.height]),
         ),
       );
     };
@@ -214,8 +223,9 @@ export const startTextDrag = (e: PointerEvent, firstMove: PointerEvent, at: read
   let moved = false;
   canvas.setPointerCapture(e.pointerId);
   const move = (ev: PointerEvent) => {
-    let dx = (ev.clientX - e.clientX) / r.width,
-      dy = (ev.clientY - e.clientY) / r.height;
+    const [x, y] = picturePoint(ev, canvas);
+    let dx = x - at[0],
+      dy = y - at[1];
     if (!moved && Math.hypot(dx * r.width, dy * r.height) < 3) return;
     moved = true;
     // The item pressed snaps its anchor to the middle lines; the rest of the pick moves as far

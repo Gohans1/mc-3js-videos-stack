@@ -5,6 +5,8 @@
 //   lines to print. cuts: the film's cut seconds; a step across one is the picture changing, not the thing moving, so it is
 //   left out of the speed and never a pop
 
+import { PAN_SECONDS as WIDTH_SECONDS } from "film-kit/lens";
+
 export const STILL = 0.05; // m/s: slower than this is at rest
 export const POP_STEP = 0.01; // m: a jump counts if one sample step is at least this ...
 export const POP_RATIO = 4; // ... and this many times the steps around it
@@ -101,7 +103,7 @@ export function measure(samples, cuts = [], impulses = []) {
 // How a camera turns and zooms, which its position alone never shows (a pan from a still tripod reads 0 m/s): samples also
 // carry q, its world quaternion [x, y, z, w], fov (vertical, degrees) and aspect. Judged by RED's panning rule of thumb:
 // a frame width in under 7 s judders at 24 fps (reddigitalcinema.com/red-101/camera-panning-speed)
-export const WIDTH_SECONDS = 7;
+export { WIDTH_SECONDS };
 const TURN_POP = 0.5; // degrees in one sample, and POP_RATIO times the steps around it
 
 export function turns(samples, cuts = [], impulses = []) {

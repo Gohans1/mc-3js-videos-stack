@@ -3,6 +3,7 @@
 // one more draw with the free camera off, and only when something other than the free camera changed (start.ts frame): flying
 // alone never redraws it, playing or editing does. campath.ts takes the film camera's pose from the same draw
 import { dofParams } from "film-stage/camera";
+import type { Draw } from "film/scene";
 import * as THREE from "three";
 
 import { keys } from "../camera/cam";
@@ -24,29 +25,32 @@ export const staleFilmView = () => {
 };
 
 // Called before the frame on screen is drawn: the free camera's view drawn next is what stays on the main canvas
-export const drawFilmView = async () => {
+export const drawFilmView = async (full?: Draw) => {
   const tools = S.tools,
-    f = tools?.free,
     corner = S.el.filmview;
-  if (!stale || !tools || !f?.on) return;
+  if (!stale || !tools?.free.on) return;
+  const source = full ?? S.render!;
+  const updatedTools = source.tools;
+  const f = updatedTools.free;
   const shown = corner.clientWidth > 0;
   if (!shown && !keys.length) return; // nobody asks: no corner picture, no camera path to pose
   stale = false;
+  const wasFree = f.on;
   f.on = false;
   try {
-    if (S.render!.renderFrame) await S.render!.renderFrame(S.t);
-    else S.render!(S.t);
+    if (source.renderFrame) await source.renderFrame(S.t);
+    else source(S.t);
   } finally {
-    f.on = true;
+    f.on = wasFree;
   }
-  const cam = tools.camera;
+  const { camera: cam, optics, look } = updatedTools;
   filmCam.position.copy(cam.position);
   filmCam.quaternion.copy(cam.quaternion);
-  filmCam.aim.copy(tools.look);
-  filmCam.focus = tools.optics?.focusM ?? cam.position.distanceTo(tools.look);
+  filmCam.aim.copy(look);
+  filmCam.focus = optics?.focusM ?? cam.position.distanceTo(look);
   filmCam.focusRange =
-    tools.optics?.fstop && tools.optics.fstop > 0
-      ? dofParams({ mm: tools.optics.mm, fstop: tools.optics.fstop, focus: filmCam.focus })
+    optics?.fstop && optics.fstop > 0
+      ? dofParams({ mm: optics.mm, fstop: optics.fstop, focus: filmCam.focus })
           .focusRange
       : 0;
   filmCam.fov = cam.fov;
@@ -54,11 +58,13 @@ export const drawFilmView = async () => {
   filmCam.rev++;
   if (!shown) return;
   // Read in the same task as the draw: the WebGL canvas keeps the frame until the browser shows it
-  const w = Math.round(corner.clientWidth * devicePixelRatio),
-    h = Math.round(corner.clientHeight * devicePixelRatio);
+  const image = full ? S.el.final : S.el.canvas;
+  if (full) S.finalAt = -1;
+  const w = full ? image.width : Math.round(corner.clientWidth * devicePixelRatio),
+    h = full ? image.height : Math.round(corner.clientHeight * devicePixelRatio);
   if (corner.width !== w || corner.height !== h) {
     corner.width = w;
     corner.height = h;
   }
-  corner.getContext("2d")!.drawImage(S.el.canvas, 0, 0, w, h);
+  corner.getContext("2d")!.drawImage(image, 0, 0, w, h);
 };

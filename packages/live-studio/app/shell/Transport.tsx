@@ -45,6 +45,7 @@ import { set, setPref, useStudio } from "../core/store";
 import { FPS, stamp } from "../core/time";
 import { setInk } from "../notes/ink";
 import { noteMarks, openNote, originOf, returnFromNote } from "../notes/notes";
+import { PreviewControls } from "../picture/PreviewControls";
 import { SnapshotButtons } from "../picture/Compare";
 import { seek, setPlaying, setVolume, toggleMute, togglePlay } from "../playback/transport";
 import { skimSound } from "../sound/skim";
@@ -339,6 +340,7 @@ export function Transport() {
         )}
         <div className="upright:ml-0 sideways:ml-0 ml-auto flex flex-none items-center gap-0.5">
           <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
+          <PreviewControls />
           <Tip
             label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}
           >

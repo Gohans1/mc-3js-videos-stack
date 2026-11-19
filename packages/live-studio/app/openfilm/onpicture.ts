@@ -4,6 +4,7 @@ import type { PageOverride } from "film-stage/openfilm-page";
 import { CLEAR_PICKS } from "../core/selection";
 import { S } from "../core/state";
 import { set, studio } from "../core/store";
+import { picturePoint } from "../picture/preview-state";
 import { setPlaying } from "../playback/transport";
 import { openFilmDoc, type OverlayItem, useOpenFilm } from "./state";
 
@@ -82,7 +83,11 @@ export function pickPageAt(at: readonly [number, number]) {
   return true;
 }
 
-export function startPageDrag(e: PointerEvent, firstMove: PointerEvent, at: readonly [number, number]) {
+export function startPageDrag(
+  e: PointerEvent,
+  firstMove: PointerEvent,
+  at: readonly [number, number],
+) {
   const hit = pageTargetAt(at);
   if (!hit) return false;
   const { layer, selector } = hit;
@@ -98,18 +103,13 @@ export function startPageDrag(e: PointerEvent, firstMove: PointerEvent, at: read
   const item = openFilmDoc.data.items.find((it) => it.id === chosen.id)!;
   if (!item) return true;
   const before = item.elements?.find((it) => it.selector === target)?.translate ?? [0, 0];
-  const canvas = S.el.canvas,
-    box = canvas.getBoundingClientRect();
+  const canvas = S.el.canvas;
   let moved = false;
   canvas.setPointerCapture(e.pointerId);
   const move = (ev: PointerEvent) => {
     if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 3) return;
     moved = true;
-    const point = overlayPoint(
-      chosen,
-      (ev.clientX - box.left) / box.width,
-      (ev.clientY - box.top) / box.height,
-    );
+    const point = overlayPoint(chosen, ...picturePoint(ev, canvas));
     const dx = point[0] - start[0],
       dy = point[1] - start[1];
     openFilmDoc.restore(snap);

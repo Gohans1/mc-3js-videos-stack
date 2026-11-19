@@ -5,7 +5,7 @@ import { NOTE_VIEWS } from "../notes/note-views-model";
 // setPref (core/store.ts)
 import { stored } from "./storage";
 
-export const FILM_VIEW_SIZES = ["s", "m", "l", "off"] as const;
+export const FILM_VIEW_SIZES = ["s", "m", "l", "split", "off"] as const;
 export type FilmViewSize = (typeof FILM_VIEW_SIZES)[number];
 export const FLY_SPEED = { min: 0.5, max: 20, start: 4 }; // blocks a second; Minecraft walks at 4.3, flies at 10.9
 

@@ -2,6 +2,7 @@
 // 1:12": the AI reads it as a move between them). Every stroke belongs to the film second it was drawn on; strokes from other
 // seconds of the same note stay faintly visible with their time (onion skin), and a path shows where it says things should be now.
 // A note keeps its strokes; while the film plays, an open note's strokes come up around their seconds as its pin does.
+import { picturePoint } from "../picture/preview-state";
 import { PHONE } from "../core/device";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
@@ -320,11 +321,8 @@ const pointerOrigin = (e: PointerEvent): ComposeOrigin => ({
 });
 
 const at = (e: PointerEvent): [number, number] => {
-  const r = S.el.ink.getBoundingClientRect();
-  return [
-    +Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)).toFixed(4),
-    +Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)).toFixed(4),
-  ];
+  const [x, y] = picturePoint(e, S.el.ink);
+  return [+Math.min(1, Math.max(0, x)).toFixed(4), +Math.min(1, Math.max(0, y)).toFixed(4)];
 };
 const startStroke = (
   kind: "pen" | "arrow" | "box",

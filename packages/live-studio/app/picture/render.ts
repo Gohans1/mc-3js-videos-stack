@@ -3,7 +3,7 @@
 import { buildScene } from "film/scene";
 
 import { drawCamPath } from "../camera/campath";
-import { AWAY } from "../core/device";
+import { AWAY, PHONE } from "../core/device";
 import { S } from "../core/state";
 import { get, invalidatePictures, set } from "../core/store";
 import { drawGizmo } from "../objects/placed";
@@ -13,22 +13,45 @@ import { drawTextSel } from "../text/onpicture";
 import { drawFilmView } from "./filmcam";
 import { frameSize } from "./frame";
 import { nightVision } from "./nightvision";
+import { renderWithMonitor } from "./preview-monitor";
 
 // The gizmo goes on top only of the frame on screen, not of frames drawn for a still or a look-ahead
-const draw = async (x: number) => {
-  if (x === S.t) await drawFilmView();
-  nightVision(true);
-  try {
-    if (S.render?.renderFrame) await S.render.renderFrame(x);
-    else S.render?.(x);
-  } finally {
-    nightVision(false);
+const baseRatios = new WeakMap<NonNullable<NonNullable<typeof S.tools>["renderer"]>, number>();
+const resizePreview = (scale: number) => {
+  const tools = S.tools,
+    renderer = tools?.renderer;
+  if (!renderer) return;
+  const base = baseRatios.get(renderer) ?? renderer.getPixelRatio();
+  if (!baseRatios.has(renderer)) baseRatios.set(renderer, base);
+  if (renderer.getPixelRatio() === base * scale) return;
+  if (tools.resizePreview) tools.resizePreview(base * scale);
+  else renderer.setPixelRatio(base * scale);
+};
+const draw = async (x: number, screen = true) => {
+  if (screen) resizePreview(S.playing && get().preview.reduced && !PHONE ? 0.5 : 1);
+  if (screen && x === S.t) {
+    const split = !PHONE && S.tools?.free.on && get().filmView === "split";
+    if (split) await buildFinal();
+    await drawFilmView(split ? (S.finalRender ?? undefined) : undefined);
   }
-  if (x === S.t) {
+  if (screen) nightVision(true);
+  try {
+    const renderFilm = async () => {
+      if (S.render?.renderFrame) await S.render.renderFrame(x);
+      else S.render?.(x);
+    };
+    if (screen) await renderWithMonitor(S.tools?.scene, renderFilm);
+    else await renderFilm();
+  } finally {
+    if (screen) nightVision(false);
+  }
+  if (screen && x === S.t) {
     drawCamPath();
     drawGizmo();
-    drawTextSel();
-    drawPageSelection();
+    if (!get().preview.clean) {
+      drawTextSel();
+      drawPageSelection();
+    }
   }
 };
 let drawing = Promise.resolve();
@@ -50,12 +73,26 @@ export const readSceneFrame = (t: number, read: () => void) =>
     const wasFree = free?.on ?? false;
     if (free) free.on = false;
     try {
-      await draw(t);
+      await draw(t, false);
       read();
     } finally {
       if (free) free.on = wasFree;
-      if (wasFree || t !== S.t) S.dirty = true;
+      S.dirty = true;
     }
+  });
+
+export const capturePreviewFrame = (t: number, read: (canvas: HTMLCanvasElement) => void) =>
+  queueFrame(async () => {
+    if (S.finalRender && get().final && t === S.t) {
+      await drawFinalFrame();
+      read(S.el.final);
+    } else {
+      resizePreview(1);
+      await draw(t, false);
+      read(S.el.canvas);
+    }
+    S.dirty = true;
+    S.finalAt = -1;
   });
 
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
@@ -91,7 +128,7 @@ export const drawFinalFrame = async () => {
   else fr(S.t);
 };
 export const drawFinal = async () => {
-  await drawFinalFrame();
+  await renderWithMonitor(S.finalRender?.tools.scene, drawFinalFrame);
   drawGizmo(S.finalRender!.tools);
   S.finalAt = S.t;
   S.el.final.hidden = false;

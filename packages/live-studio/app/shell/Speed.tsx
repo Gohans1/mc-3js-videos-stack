@@ -17,7 +17,7 @@ export function Speed() {
       variant="segment"
       size="lg"
     >
-      {["0.5", "1", "1.5", "2"].map((v) => (
+      {["0.25", "0.5", "1", "1.5", "2"].map((v) => (
         <ToggleGroupItem key={v} value={v} className="pointer-coarse:h-10">
           {v}×
         </ToggleGroupItem>

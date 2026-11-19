@@ -11,6 +11,7 @@ export function openTextEditor(
 ) {
   closeActive?.();
   const host = document.createElement("div");
+  host.dataset.pictureTextEditor = "";
   host.style.cssText = `position:absolute;left:${box[0] * 100}%;top:${box[1] * 100}%;width:${Math.max(0.15, box[2] - box[0]) * 100}%;z-index:6`;
   stage.append(host);
   const root = createRoot(host);

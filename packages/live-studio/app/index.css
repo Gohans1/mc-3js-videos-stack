@@ -532,3 +532,14 @@
 [data-slot="dialog-content"][data-variant="confirmation"] {
   --primary: var(--fx-blue-200);
 }
+
+[data-preview-mirror] svg text,
+[data-preview-mirror] [data-picture-text-editor] {
+  transform: scaleX(-1);
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@utility viewport-horizon {
+  transform: translate(-50%, -50%) rotate(var(--horizon-roll, 0deg));
+}

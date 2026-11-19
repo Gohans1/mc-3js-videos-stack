@@ -225,3 +225,12 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Đảo thời gian | Đảo đúng hướng Hold và đường Orbit, giữ quang học kế thừa. Chấm key Hold nằm đúng đầu mút. |
 | Neo động | Transform và Falloff dùng tọa độ thế giới rồi đổi về neo tại khung hình của từng key. Khi neo di chuyển trong Hold, đồ thị Speed vẫn hiện vận tốc. |
 | Hủy kéo | Chrome đưa FOV từ 45,7° lên 101,8° trong lúc kéo rồi Escape trả về 45,7°. Tệp camera giữ nguyên. |
+
+| Ghi chú đợt 7 | Chi tiết |
+| --- | --- |
+| Preview | Zoom 10–1600%, lấy mẫu điểm ảnh khi phóng to, kéo chuột giữa và lật ngang. Khi phát, Chrome giảm 960×540 xuống 480×270 và trả về khi dừng. |
+| Hiển thị | Thêm Peaking, Zebra, False Color theo IRE và Clay, Wireframe, X-Ray. Các lớp chỉ đi vào trình xem. |
+| Đối chiếu góc | Hai vùng rộng bằng nhau, Film Cam có bộ đệm 1920×1080. Có bốn ô ghim, Onion Skin và Shotlist nhảy đến mốc shot. |
+| Kiểm tra bố cục | Khung có thể chồng nhau, viền tối, 35/50/85 mm, tỷ lệ vàng, thước kéo và safe EBU R95. Clean Feed ẩn công cụ trong ảnh. |
+| HUD | Hiện cân bằng, giới hạn nét một điểm ảnh, hyperfocal, tốc độ lia và cảnh báo góc cắt. Có Copy INSPECT và lựa chọn phát 0,25×. |
+| Vòng review | Kéo chữ 40 px khi bật gương lưu đúng −81,79 px theo khung nguồn. Chrome xác nhận đổi 0,25× khi thiếu audio giữ playhead tiến và HUD đo lia 6,4°/s ở neo động. |

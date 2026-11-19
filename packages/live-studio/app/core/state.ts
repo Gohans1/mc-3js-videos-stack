@@ -28,6 +28,8 @@ export interface Elements {
   stage: HTMLElement;
   canvas: HTMLCanvasElement;
   final: HTMLCanvasElement;
+  inspection: HTMLCanvasElement;
+  horizon: HTMLElement;
   audio: HTMLAudioElement;
   clock: HTMLElement;
   hud: HTMLElement;

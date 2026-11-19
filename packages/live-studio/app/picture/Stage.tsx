@@ -1,3 +1,5 @@
+import { useLayoutEffect } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 // The picture and what sits on it. The engine draws the frame, the clock, the caption and the pins straight
@@ -12,11 +14,14 @@ import { PinTools } from "../notes/PinTools";
 import { OptionChips } from "../options/OptionChips";
 import { reloadNow } from "../playback/transport";
 import { FullscreenTransport } from "../shell/FullscreenTransport";
-import { CompareOverlay } from "./Compare";
-import { FreeCameraControls } from "./FreeCameraControls";
+import { AngleGrid, CompareOverlay } from "./Compare";
+import { ExposureLegend } from "./ExposureLegend";
 import { FilmView } from "./FilmView";
+import { FreeCameraControls } from "./FreeCameraControls";
 import { Guides } from "./Guides";
 import { Oscilloscope } from "./Oscilloscope";
+import { stageFit } from "./pointer";
+import { ShotList } from "./ShotList";
 
 function Badges() {
   const free = useStudio((s) => s.free),
@@ -71,6 +76,12 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
     loading = useStudio((s) => s.loading),
     error = useStudio((s) => s.error);
   const ink = useStudio((s) => s.ink);
+  const savedPreview = useStudio((s) => s.preview);
+  const preview = phone ? null : savedPreview;
+  const mode = useStudio((s) => s.filmView);
+  const split = !phone && free && mode === "split";
+  const clean = !!preview?.clean;
+  useLayoutEffect(stageFit, [split]);
   const pickingCamera = useStudio((s) => s.cameraPick !== null);
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
@@ -87,64 +98,125 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         className="relative flex min-h-0 w-full flex-1 items-center justify-center"
       >
         {/* The frame itself and what is pinned or drawn on it */}
-        <div ref={bind("stage")} className="bg-stage @container relative overflow-hidden">
-          <canvas
-            ref={bind("canvas")}
-            className={cn(
-              "absolute inset-0 block size-full touch-none",
-              pickingCamera ? "cursor-crosshair" : free ? "cursor-grab" : "cursor-default",
-            )}
-          />
-          <canvas
-            ref={bind("final")}
-            hidden
-            className="pointer-events-none absolute inset-0 block size-full"
-          />
-          <Guides />
-          <CompareOverlay />
-          {/* Above the chips: a passed note shows for 3 s only, and it lets taps through to them */}
-          {/* The picked text items' outlines, where the film draws them (text/onpicture.ts) */}
+        <div
+          data-preview-pane
+          className={cn(
+            "flex h-full min-h-0 min-w-0 flex-none items-center justify-center overflow-hidden",
+            split ? "mr-auto w-1/2" : "w-full",
+          )}
+        >
           <div
-            ref={bind("textsel")}
-            data-text-selection
-            aria-hidden
-            className="pointer-events-none absolute inset-0 z-3 *:absolute *:inset-0 *:size-full *:overflow-visible"
-          />
-          <div
-            ref={bind("pins")}
-            className="pointer-events-none absolute inset-0 z-4 overflow-hidden"
-          />
-          <svg data-page-selection aria-hidden className="pointer-events-none absolute inset-0 z-3 size-full overflow-visible">
-            <polygon fill="none" stroke="var(--picture)" strokeWidth="1.5" />
-          </svg>
-          {/* Strokes (notes/ink.ts): drawn on while a tool is in hand, and otherwise lets every tap through */}
-          <canvas
-            ref={bind("ink")}
+            ref={bind("stage")}
+            data-clean={clean || undefined}
+            data-preview-mirror={preview?.mirror || undefined}
             className={cn(
-              "absolute inset-0 z-5 block size-full touch-none",
-              ink ? "cursor-crosshair" : "pointer-events-none",
+              "bg-stage @container relative flex-none [transform:var(--preview-transform)] overflow-hidden",
+              clean && "[&_[data-studio-overlay]]:hidden",
             )}
-          />
-          {!phone && <InkBar />}
-          {!phone && <PinTools />}
-          <div className="stage-caption">
-            <span ref={bind("caption")} className="stage-caption-text" />
+            style={
+              preview
+                ? {
+                    "--preview-transform":
+                      "translate(" +
+                      preview.panX +
+                      "px," +
+                      preview.panY +
+                      "px) scale(" +
+                      (preview.zoom * (preview.mirror ? -1 : 1)) / 100 +
+                      "," +
+                      preview.zoom / 100 +
+                      ")",
+                  }
+                : undefined
+            }
+          >
+            <canvas
+              ref={bind("canvas")}
+              className={cn(
+                "absolute inset-0 block size-full touch-none",
+                preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+                pickingCamera ? "cursor-crosshair" : free ? "cursor-grab" : "cursor-default",
+              )}
+            />
+            <canvas
+              ref={bind("final")}
+              hidden
+              className={cn(
+                "pointer-events-none absolute inset-0 block size-full",
+                preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+              )}
+            />
+            <canvas
+              ref={bind("inspection")}
+              hidden={!preview || clean || preview.layers === "off"}
+              className="pointer-events-none absolute inset-0 size-full [image-rendering:pixelated]"
+            />
+            {!clean && <Guides />}
+            {!clean && <CompareOverlay />}
+            <div
+              ref={bind("horizon")}
+              hidden={!preview?.horizon || clean}
+              data-horizon
+              className="viewport-horizon data-level:bg-primary pointer-events-none absolute top-1/2 left-1/2 z-6 h-0.5 w-1/4 bg-white shadow-sm"
+              aria-label="Horizon level"
+            />
+            {/* Above the chips: a passed note shows for 3 s only, and it lets taps through to them */}
+            {/* The picked text items' outlines, where the film draws them (text/onpicture.ts) */}
+            <div
+              ref={bind("textsel")}
+              data-studio-overlay
+              data-text-selection
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-3 *:absolute *:inset-0 *:size-full *:overflow-visible"
+            />
+            <div
+              ref={bind("pins")}
+              data-studio-overlay
+              className="pointer-events-none absolute inset-0 z-4 overflow-hidden"
+            />
+            <svg
+              data-studio-overlay
+              data-page-selection
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-3 size-full overflow-visible"
+            >
+              <polygon fill="none" stroke="var(--picture)" strokeWidth="1.5" />
+            </svg>
+            {/* Strokes (notes/ink.ts): drawn on while a tool is in hand, and otherwise lets every tap through */}
+            <canvas
+              ref={bind("ink")}
+              data-studio-overlay
+              className={cn(
+                "absolute inset-0 z-5 block size-full touch-none",
+                ink ? "cursor-crosshair" : "pointer-events-none",
+              )}
+            />
+            {!phone && !clean && <InkBar />}
+            {!phone && !clean && <PinTools />}
+            <div data-studio-overlay className="stage-caption">
+              <span ref={bind("caption")} className="stage-caption-text" />
+            </div>
           </div>
         </div>
+        {!phone && !clean && <AngleGrid />}
+        {!phone && !clean && <ShotList />}
+        {!phone && !clean && <ExposureLegend />}
         {/* The player's own read-outs, over the whole player, not the frame: a 9:16 frame is too narrow to carry them */}
-        <div ref={bind("clock")} hidden={phone} className="stage-clock">
+        <div ref={bind("clock")} hidden={phone || clean} className="stage-clock">
           00:00.000
         </div>
         <div className="upright:inset-x-1.5 upright:top-1.5 sideways:inset-x-1.5 sideways:top-1.5 pointer-events-none absolute inset-x-2.5 top-2.5 z-2 flex flex-col items-start gap-1">
-          <div ref={bind("hud")} hidden={phone} className="stage-hud" />
-          {!phone && <Badges />}
+          <div ref={bind("hud")} hidden={phone || clean} className="stage-hud" />
+          {!phone && !clean && <Badges />}
         </div>
         {/* the option chips (A/B/C/D) and the free camera's corner: Tailwind's [hidden] wins over contents */}
         <div hidden={phone} className="contents">
-          <OptionChips ref={bind("chips")} />
-          <FilmView bind={bind} />
+          <div hidden={clean} className="contents">
+            <OptionChips ref={bind("chips")} />
+          </div>
+          <FilmView bind={bind} phone={phone} />
         </div>
-        {!phone && <FreeCameraControls />}
+        {!phone && !clean && <FreeCameraControls />}
         {!phone && <FullscreenTransport />}
         {!phone && loading && (
           <div

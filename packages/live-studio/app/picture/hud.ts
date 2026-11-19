@@ -1,3 +1,5 @@
+import { SENSOR } from "film-kit/lens";
+
 export interface OpticsReadout {
   shot: number;
   shotName?: string;
@@ -34,4 +36,17 @@ export function formatOpticsHud(o?: OpticsReadout): string {
   const impulse = o.impulse?.trim();
   if (impulse) parts.push(impulse.toUpperCase());
   return parts.join(" · ");
+}
+
+// Focus limits use a one-pixel circle of confusion at the delivery width.
+export function focusLimits(mm: number, fstop: number, focus: number, width = 1920) {
+  const s = focus * 1000;
+  if (mm <= 0 || fstop <= 0 || width <= 0 || s <= mm) return null;
+  const focal = (mm * mm * width) / (fstop * SENSOR);
+  const ratio = (s - mm) / focal;
+  return {
+    near: focus / (1 + ratio),
+    far: ratio >= 1 - 1e-12 ? Infinity : focus / (1 - ratio),
+    hyperfocal: (focal + mm) / 1000,
+  };
 }

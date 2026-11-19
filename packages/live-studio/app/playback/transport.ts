@@ -124,6 +124,7 @@ export const jumpShot = (d: number) => {
 export const setRate = (r: number) => {
   const a = S.el.audio;
   a.defaultPlaybackRate = a.playbackRate = r;
+  syncClock();
   set({ rate: r });
 };
 

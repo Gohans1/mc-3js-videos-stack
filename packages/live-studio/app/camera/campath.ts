@@ -1,5 +1,6 @@
 import { cameraAt, resolveCameraPoint } from "film-stage/camera";
 import { EDIT } from "film/edit";
+import type { CameraPathPose } from "film/scene";
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 
@@ -77,12 +78,18 @@ const cameraRange = () => {
   );
   return [SHOTS_OUT[i]?.t ?? 0, SHOTS_OUT[i + 1]?.t ?? DURATION] as const;
 };
-const sample = (times: number[]) => {
+export const sampleEditedPath = (times: number[]): CameraPathPose[] => {
   const tools = S.tools!;
   const clockTimes = get().timing
     ? times.map(cameraTimesAt)
     : times.map((t) => ({ world: t, camera: t }));
   if (tools.sampleCameraPath) return tools.sampleCameraPath(clockTimes);
+  if (tools.sampleCameraTrack)
+    return tools.sampleCameraTrack(clockTimes).map(({ p, l, fov }) => ({
+      p: new THREE.Vector3(...p),
+      l: new THREE.Vector3(...l),
+      fov,
+    }));
   const track = EDIT.cam as CamKey[];
   return clockTimes.map(({ camera }) =>
     cameraAt(camera, track, {
@@ -125,7 +132,7 @@ const rebuild = (start: number, end: number, windowStart: number) => {
   const candidates = keys.flatMap((key, index) =>
     key.t >= first && cameraKeyFrameTime(index) <= last ? [index] : [],
   );
-  const posed = sample([...times, ...candidates.map(cameraKeyFrameTime)]);
+  const posed = sampleEditedPath([...times, ...candidates.map(cameraKeyFrameTime)]);
   const surfaces = cameraSurfaces();
   trace = times.map((t, i) => ({ t, p: posed[i].p, contact: gap(posed[i].p, surfaces) }));
   const geometry = points(trace.map((s) => s.p));
@@ -238,7 +245,7 @@ export const avoidCameraWall = () => {
     return say("Go to the camera keyframe before moving it away from the wall");
   const p = resolveCameraPoint(key.p, S.tools!.resolveCameraAnchor);
   const contacts = cameraSurfaces();
-  const actual = sample([cameraKeyFrameTime(i)])[0]?.p ?? p;
+  const actual = sampleEditedPath([cameraKeyFrameTime(i)])[0]?.p ?? p;
   const hit = gap(actual, contacts);
   if (!hit.normal || hit.d >= 0.08) return say("This camera key is clear of the nearest wall");
   const push = hit.normal.clone().multiplyScalar(0.1 - hit.d);
@@ -251,7 +258,15 @@ export const avoidCameraWall = () => {
 export const drawCamPath = () => {
   const tools = S.tools;
   const state = get();
-  if (!tools?.free.on || !tools.renderer || !state.free || !state.cameraPath || !keys.length) {
+  if (
+    !tools?.free.on ||
+    !tools.renderer ||
+    !state.free ||
+    !state.cameraPath ||
+    !keys.length ||
+    state.preview.clean ||
+    state.preview.mirror
+  ) {
     if (gizmo?.object) gizmo.detach();
     return;
   }
