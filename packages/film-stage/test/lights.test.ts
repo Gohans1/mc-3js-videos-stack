@@ -16,6 +16,7 @@ import {
   lightsAt,
   type LightsDoc,
   practicalIntensityAt,
+  resolveLightKeys,
 } from "../src/lights";
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -649,6 +650,86 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     wrapper.update({ ...rayState, weight: 0 }, "#ffffff");
     expect(wrapper.pass?.enabled).toBe(false);
 
+    // Clamp maxDensity <= 0.999 so godrays.frag never executes -log(1.0 - 1.0)
+    captured.length = 0;
+    wrapper.update({ ...rayState, maxDensity: 1.0, weight: 2.0 }, "#ffffff");
+    expect(captured).toHaveLength(1);
+    expect((captured[0] as { maxDensity?: number }).maxDensity).toBeLessThanOrEqual(0.999);
+
     expect(() => wrapper.dispose()).not.toThrow();
+  });
+});
+
+describe("Round 2 regression guards", () => {
+  test("lightsAt and resolveLightKeys do not cache stale in-place mutations or leak internal objects", () => {
+    const doc: LightsDoc = {
+      target: [0, 1, 0],
+      keys: [
+        { t: 0, key: { intensity: 2 } },
+        { t: 2, key: { intensity: 4 } },
+        { t: 4, key: { intensity: 6 } },
+      ],
+    };
+
+    const resolved1 = resolveLightKeys(doc);
+    expect(lightsAt(doc, 0).key.intensity).toBe(2);
+    expect(lightsAt(doc, 2).key.intensity).toBe(4);
+    expect(lightsAt(doc, 0).target).toEqual([0, 1, 0]);
+
+    // In-place mutations (nested key value, middle key swap, doc target mutation) must reflect immediately
+    doc.keys[0].key!.intensity = 9;
+    doc.keys[1] = { t: 2, key: { intensity: 10 } };
+    doc.target![1] = 8;
+
+    expect(lightsAt(doc, 0).key.intensity).toBe(9);
+    expect(lightsAt(doc, 2).key.intensity).toBe(10);
+    expect(lightsAt(doc, 0).target).toEqual([0, 8, 0]);
+
+    // Mutating returned resolveLightKeys output must not pollute subsequent evaluations
+    resolved1[0].state.key.intensity = 999;
+    expect(lightsAt(doc, 0).key.intensity).toBe(9);
+  });
+
+  test("applyLightingRig preserves pre-existing same-type Fog and FogExp2 until dispose", () => {
+    for (const kind of ["linear", "exp2"] as const) {
+      const scene = new THREE.Scene();
+      const origFog =
+        kind === "linear" ? new THREE.Fog("#112233", 3, 25) : new THREE.FogExp2("#223344", 0.04);
+      scene.fog = origFog;
+
+      const rig = createLightingRig(scene);
+      const nextFog =
+        kind === "linear"
+          ? { mode: "linear" as const, color: "#ff0000", near: 8, far: 60, density: 0 }
+          : { mode: "exp2" as const, color: "#00ff00", near: 1, far: 10, density: 0.25 };
+      applyLightingRig(rig, { ...DEFAULT_LIGHTS, fog: nextFog }, 0);
+
+      expect(scene.fog).not.toBe(origFog);
+      if (origFog instanceof THREE.Fog) {
+        expect(origFog.near).toBe(3);
+        expect(origFog.far).toBe(25);
+        expect(origFog.color.getHexString()).toBe("112233");
+      } else {
+        expect(origFog.density).toBeCloseTo(0.04, 6);
+        expect(origFog.color.getHexString()).toBe("223344");
+      }
+
+      rig.dispose();
+      expect(scene.fog).toBe(origFog);
+    }
+  });
+
+  test("lightsAt sorts coincident [cut, !cut] keys deterministically and handles non-finite t", () => {
+    const unsorted: LightKey[] = [
+      { t: 2, cut: true, key: { intensity: 8 } },
+      { t: 2, key: { intensity: 1 } },
+      { t: 0, key: { intensity: 0 } },
+    ];
+    expect(lightsAt(unsorted, 1).key.intensity).toBeCloseTo(0.5, 4);
+    expect(lightsAt(unsorted, 2).key.intensity).toBe(8);
+
+    expect(lightsAt(unsorted, Number.NaN).key.intensity).toBe(0);
+    expect(lightsAt(unsorted, -Infinity).key.intensity).toBe(0);
+    expect(lightsAt(unsorted, Infinity).key.intensity).toBe(8);
   });
 });

@@ -99,9 +99,13 @@ export function createLightingRig(scene: THREE.Scene, opts: LightingRigOptions =
   const initialBg = scene.background;
   const initialFog = scene.fog;
   let ownedBg: THREE.Color | null = null;
+  let ownedFog: THREE.Fog | THREE.FogExp2 | null = null;
   let disposed = false;
 
-  const rig: LightingRig & { _syncBg?: (bg: string | null) => void } = {
+  const rig: LightingRig & {
+    _syncBg?: (bg: string | null) => void;
+    _syncFog?: (fog: LightsState["fog"]) => void;
+  } = {
     scene,
     defaultTarget,
     distance,
@@ -120,6 +124,34 @@ export function createLightingRig(scene: THREE.Scene, opts: LightingRigOptions =
       } else if (ownedBg) {
         if (scene.background === ownedBg) scene.background = initialBg;
         ownedBg = null;
+      }
+    },
+    _syncFog(fog: LightsState["fog"]) {
+      if (fog.mode === "none") {
+        scene.fog = null;
+        ownedFog = null;
+        return;
+      }
+      if (fog.mode === "linear") {
+        const fogNear = Math.max(0, fog.near);
+        const fogFar = Math.max(fogNear + 0.01, fog.far);
+        if (ownedFog instanceof THREE.Fog && scene.fog === ownedFog) {
+          ownedFog.color.set(fog.color);
+          ownedFog.near = fogNear;
+          ownedFog.far = fogFar;
+        } else {
+          ownedFog = new THREE.Fog(fog.color, fogNear, fogFar);
+          scene.fog = ownedFog;
+        }
+        return;
+      }
+      const density = Math.max(0, fog.density);
+      if (ownedFog instanceof THREE.FogExp2 && scene.fog === ownedFog) {
+        ownedFog.color.set(fog.color);
+        ownedFog.density = density;
+      } else {
+        ownedFog = new THREE.FogExp2(fog.color, density);
+        scene.fog = ownedFog;
       }
     },
     dispose() {
@@ -141,6 +173,7 @@ export function createLightingRig(scene: THREE.Scene, opts: LightingRigOptions =
       if (ownedBg && scene.background === ownedBg) scene.background = initialBg;
       scene.fog = initialFog;
       ownedBg = null;
+      ownedFog = null;
     },
   };
   return rig;
@@ -197,25 +230,7 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
     sample.world.background,
   );
 
-  // Fog
-  const fogNear = Math.max(0, sample.fog.near);
-  const fogFar = Math.max(fogNear + 0.01, sample.fog.far);
-  if (sample.fog.mode === "none") {
-    scene.fog = null;
-  } else if (sample.fog.mode === "linear") {
-    if (scene.fog instanceof THREE.Fog) {
-      scene.fog.color.set(sample.fog.color);
-      scene.fog.near = fogNear;
-      scene.fog.far = fogFar;
-    } else {
-      scene.fog = new THREE.Fog(sample.fog.color, fogNear, fogFar);
-    }
-  } else if (scene.fog instanceof THREE.FogExp2) {
-    scene.fog.color.set(sample.fog.color);
-    scene.fog.density = Math.max(0, sample.fog.density);
-  } else {
-    scene.fog = new THREE.FogExp2(sample.fog.color, Math.max(0, sample.fog.density));
-  }
+  (rig as LightingRig & { _syncFog?: (fog: LightsState["fog"]) => void })._syncFog?.(sample.fog);
 
   // Practicals synced by id
   const wanted = new Set(sample.practicals.map((p) => p.id));
@@ -297,7 +312,7 @@ function toGodraysParams(
 ): { params: Partial<GodraysPassParams>; key: string; kernel: KernelSize | false } {
   const weight = Math.max(0, state.weight);
   const density = Math.max(0, state.density * weight);
-  const maxDensity = clamp(state.maxDensity * weight, 0, 1);
+  const maxDensity = clamp(state.maxDensity * weight, 0, 0.999);
   const distanceAttenuation = Math.max(0, state.edgeStrength);
   const raymarchSteps = clamp(Math.round(state.raymarchSteps), 4, 240);
   const colorHex = state.color ?? fallbackColor;

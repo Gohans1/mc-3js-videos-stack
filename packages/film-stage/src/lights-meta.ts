@@ -575,40 +575,13 @@ export interface ResolvedLightKey {
   state: LightsState;
 }
 
-const resolvedCache = new WeakMap<
-  object,
-  {
-    keysRef: LightKey[];
-    target: Vec3 | undefined;
-    len: number;
-    first: LightKey | undefined;
-    last: LightKey | undefined;
-    resolved: ResolvedLightKey[];
-  }
->();
-
 /** Resolve carried-forward state at every sorted keyframe, resetting cleanly on `cut: true` or presets. */
 export function resolveLightKeys(
   input: LightsDoc | LightKey[] | null | undefined,
 ): ResolvedLightKey[] {
   const doc = normalizeLightsDoc(input);
   if (doc.keys.length === 0) return [];
-  if (input && typeof input === "object") {
-    const rawKeys = Array.isArray(input) ? input : input.keys;
-    const rawTarget = Array.isArray(input) ? undefined : input.target;
-    const cached = resolvedCache.get(input);
-    if (
-      cached &&
-      cached.keysRef === rawKeys &&
-      cached.target === rawTarget &&
-      cached.len === rawKeys.length &&
-      cached.first === rawKeys[0] &&
-      cached.last === rawKeys[rawKeys.length - 1]
-    ) {
-      return cached.resolved;
-    }
-  }
-  const sorted = [...doc.keys].sort((a, b) => a.t - b.t);
+  const sorted = [...doc.keys].sort((a, b) => a.t - b.t || Number(!!a.cut) - Number(!!b.cut));
   const out: ResolvedLightKey[] = [];
 
   for (let i = 0; i < sorted.length; i++) {
@@ -629,20 +602,6 @@ export function resolveLightKeys(
       ease: key.ease,
       state: mergeStates(base, key, doc.target),
     });
-  }
-  if (input && typeof input === "object") {
-    const rawKeys = Array.isArray(input) ? input : input.keys;
-    const rawTarget = Array.isArray(input) ? undefined : input.target;
-    if (Array.isArray(rawKeys)) {
-      resolvedCache.set(input, {
-        keysRef: rawKeys,
-        target: rawTarget,
-        len: rawKeys.length,
-        first: rawKeys[0],
-        last: rawKeys[rawKeys.length - 1],
-        resolved: out,
-      });
-    }
   }
   return out;
 }
@@ -786,6 +745,11 @@ function interpolateLights(a: LightsState, b: LightsState, u: number): LightsSta
 export function lightsAt(input: LightsDoc | LightKey[] | null | undefined, t: number): LightsState {
   const resolved = resolveLightKeys(input);
   if (resolved.length === 0) return cloneLightsState(DEFAULT_LIGHTS);
+  if (!Number.isFinite(t)) {
+    return cloneLightsState(
+      t === Infinity ? resolved[resolved.length - 1].state : resolved[0].state,
+    );
+  }
   if (t < resolved[0].t) return cloneLightsState(resolved[0].state);
   const last = resolved[resolved.length - 1];
   if (t >= last.t) return cloneLightsState(last.state);
