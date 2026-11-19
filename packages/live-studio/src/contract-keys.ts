@@ -69,6 +69,7 @@ export const CAM_KEYS = [
   "railU",
   "reason",
   "ease",
+  "matchSpeed",
   "easeChannels",
   "fov",
   "mm",

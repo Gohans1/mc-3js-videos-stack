@@ -1,6 +1,6 @@
 import { hfovOf, vfovOf } from "film-kit/lens";
 import type { CameraChannel, CameraMotion } from "film-stage/camera";
-import { cameraKeyOptics, cameraRailU, lensAspect } from "film-stage/camera";
+import { cameraKeyOptics, cameraRailU, canMatchCameraSpeed, lensAspect } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
 import { canPlaceCameraCut } from "../../src/camera-clock.mjs";
@@ -26,12 +26,16 @@ import { seekExact } from "../playback/transport";
 import {
   type CameraFieldGroup,
   cameraKeyNavigation,
+  cameraSegmentAt,
   cameraTailIndex,
   type CameraView,
   copyCameraFields,
+  createHoldCameraKey,
   keyAtTime,
+  redundantLinearCameraKeys,
   replaceCameraFraming,
   selectedCameraKeyAt,
+  stripInvalidMatchSpeed,
 } from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
 import { type ShotRow, shotsDoc } from "./shots";
@@ -64,6 +68,7 @@ export interface CamKey {
   railU?: number;
   reason?: string;
   ease?: Ease;
+  matchSpeed?: boolean;
   easeChannels?: Partial<Record<CameraChannel, Ease>>;
   [k: string]: unknown;
 }
@@ -229,6 +234,7 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
   if (
     !preserveRailPositions(recipients, () =>
       edit((ks) => {
+        const pastedIds = new Set<string>();
         for (const k of ok) {
           delete k.cut;
           delete k.tailId;
@@ -238,12 +244,20 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
           const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
           if (on > 0) {
             const target = ks[on];
-            ks[on] = { ...k, id: target.id ?? newRowId(), __timing: target.__timing };
+            const id = target.id ?? newRowId();
+            pastedIds.add(id);
+            ks[on] = { ...k, id, __timing: target.__timing };
             continue;
           }
           const i = ks.findIndex((x) => x.t > k.t);
-          ks.splice(i < 0 ? ks.length : i, 0, { ...k, id: newRowId() });
+          const id = newRowId();
+          pastedIds.add(id);
+          ks.splice(i < 0 ? ks.length : i, 0, { ...k, id });
         }
+        stripInvalidMatchSpeed(
+          ks,
+          ks.flatMap((key, index) => (key.id && pastedIds.has(key.id) ? [index] : [])),
+        );
       }),
     )
   )
@@ -282,66 +296,7 @@ export const simplifyCameraKeys = (picked: number[]) => {
         return key.__timing?.source ?? clock.sourceAt(key.t, "before");
       }),
   );
-  const removed: number[] = [];
-  const equalData = (key: (typeof keys)[number]) => {
-    const {
-      id: _id,
-      t: _time,
-      __timing: _mapped,
-      p: _p,
-      l: _l,
-      motion: _motion,
-      ease: _ease,
-      cut: _cut,
-      ...rest
-    } = key;
-    return JSON.stringify(rest);
-  };
-  const isSmooth = (key?: (typeof keys)[number]) =>
-    key && !key.cut && (key.motion ?? "smooth") === "smooth";
-  let left = 0;
-  for (let i = 1; i < rows.length - 1; i++) {
-    const a = rows[left],
-      b = rows[i],
-      c = rows[i + 1];
-    const elapsed = c.t - a.t;
-    let next = i + 2;
-    while (rows[next]?.muted && !rows[next].cut) next++;
-    const can =
-      selected.has(b.id ?? b.t) &&
-      !b.cut &&
-      !b.locked &&
-      !b.tailId &&
-      !a.muted &&
-      !b.muted &&
-      !c.muted &&
-      (left === 0 || !isSmooth(a)) &&
-      !isSmooth(rows[next]) &&
-      !c.cut &&
-      elapsed > SAME &&
-      b.motion === "linear" &&
-      c.motion === "linear" &&
-      b.ease === "linear" &&
-      c.ease === "linear" &&
-      !b.easeChannels &&
-      !c.easeChannels &&
-      equalData(a) === equalData(b) &&
-      equalData(b) === equalData(c);
-    const u = (b.t - a.t) / elapsed;
-    const same = (field: "p" | "l") => {
-      const p = a[field],
-        q = b[field],
-        r = c[field];
-      return (
-        Array.isArray(p) &&
-        Array.isArray(q) &&
-        Array.isArray(r) &&
-        q.every((v, j) => Math.abs(p[j] + (r[j] - p[j]) * u - v) < 0.001)
-      );
-    };
-    if (can && same("p") && same("l")) removed.push(i);
-    else left = i;
-  }
+  const removed = redundantLinearCameraKeys(rows, selected, SAME);
   if (!removed.length) return say("No redundant linear keys in this selection");
   doc.editSource((rows) => removed.reverse().forEach((i) => rows.splice(i, 1)));
   setKey(null);
@@ -434,10 +389,13 @@ export const stepCameraKey = (direction: -1 | 1) => {
 
 export const pasteKeyAttrs = (from: CamKey, to: number[], what: CameraFieldGroup[]) =>
   edit((ks) => {
+    const applied: number[] = [];
     for (const i of to) {
       if (!ks[i] || ks[i].locked) continue;
       copyCameraFields(from, ks[i], movable(i) ? what : what.filter((group) => group !== "speed"));
+      applied.push(i);
     }
+    stripInvalidMatchSpeed(ks, applied);
   });
 export const removeKey = (i: number) => {
   if (keys[i]?.locked) return say("Unlock this camera keyframe first");
@@ -479,16 +437,7 @@ export const holdAfter = (i: number, secs = 1) => {
   if (
     !preserveRailPositions([i], () =>
       edit((ks) => {
-        const {
-          ease: _,
-          cut: __,
-          tailId: _tail,
-          __timing: _timing,
-          locked: _lock,
-          reason: _reason,
-          ...pose
-        } = structuredClone(ks[i]);
-        ks.splice(i + 1, 0, { ...pose, id, t, railU, motion: "hold" });
+        ks.splice(i + 1, 0, createHoldCameraKey(ks[i], id, t, railU));
       }),
     )
   )
@@ -514,23 +463,27 @@ export const cameraKeyFrameTime = (i: number) => {
 export const sourceCameraSegment = (index: number) => {
   const key = keys[index],
     track = doc.source ?? [];
+  if (!key) return null;
   const clock = clockForTimeline("cam");
   const at = track.findIndex((candidate) =>
     key.id
       ? candidate.id === key.id
       : candidate.t === (key.__timing?.source ?? clock.sourceAt(key.t, "before")),
   );
-  if (at < 0) return null;
-  const start = Math.max(
-    0,
-    track.findLastIndex((candidate, i) => i <= at && !!candidate.cut),
-  );
-  const next = track.findIndex((candidate, i) => i > at && !!candidate.cut);
-  const active = track
-    .slice(start, next < 0 ? undefined : next)
-    .filter((candidate, i) => i === 0 || !candidate.muted);
-  return { active, at: active.indexOf(track[at]) };
+  return cameraSegmentAt(track, at);
 };
+
+export const canMatchCameraKey = (index: number) => {
+  const segment = sourceCameraSegment(index);
+  return !!(segment && canMatchCameraSpeed(segment.active, segment.at));
+};
+
+export const setCameraKeyMatchSpeed = (index: number, on: boolean) =>
+  edit((rows) => {
+    if (!rows[index]) return;
+    if (on) rows[index].matchSpeed = true;
+    else delete rows[index].matchSpeed;
+  });
 
 export const railPositionForKey = (i: number) => {
   const segment = sourceCameraSegment(i);
@@ -620,6 +573,7 @@ const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: Ca
     cut: _cut,
     tailId: _tail,
     ease: _ease,
+    matchSpeed: _match,
     easeChannels: _channels,
     motion: _motion,
     __timing: _timing,

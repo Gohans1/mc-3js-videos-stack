@@ -6,7 +6,18 @@ import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { useFrameKey } from "../core/useFrameKey";
-import { DEFAULT_EASE, edit, keys, preview, restore, setEase, shownKey, snapshot } from "./cam";
+import {
+  canMatchCameraKey,
+  DEFAULT_EASE,
+  edit,
+  keys,
+  preview,
+  restore,
+  setCameraKeyMatchSpeed,
+  setEase,
+  shownKey,
+  snapshot,
+} from "./cam";
 import { CameraGraph } from "./CameraGraph";
 
 const camDoc = { snapshot, restore };
@@ -41,6 +52,7 @@ function CameraKeyEase({ index: i }: { index: number }) {
       </EmptyCard>
     );
   const curve = k.motion !== "hold" && Array.isArray(k.ease) ? k.ease : null;
+  const canJoin = canMatchCameraKey(i);
   return (
     <div className="flex flex-col">
       <p className="text-ui px-3 pb-2">
@@ -79,6 +91,20 @@ function CameraKeyEase({ index: i }: { index: number }) {
               onSave={(v) => setEase(i, v)}
             />
           </Section>
+        </div>
+      )}
+      {canJoin && (
+        <div className="flex flex-col gap-2 border-t px-3 py-2">
+          <span className="text-ui">Through keyframe {i + 1}</span>
+          <Segmented
+            label="Speed through keyframe"
+            value={k.matchSpeed ? "match" : "independent"}
+            items={[
+              { id: "independent", title: "Independent" },
+              { id: "match", title: "Match speed" },
+            ]}
+            onChange={(mode) => setCameraKeyMatchSpeed(i, mode === "match")}
+          />
         </div>
       )}
     </div>

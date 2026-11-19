@@ -173,7 +173,7 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | 8 | Rig theo shot, chỉnh khung, shutter và khẩu độ khi xuất | Qua review và kiểm thử |
 | 9 | Beat, Animation, nhãn key, chỉnh nhiều key và Take | Qua review và kiểm thử |
 | 10 | Tay nắm 3D, đường ray, ngoại suy, chiếu song song và bản đồ | Qua điều kiện review và kiểm thử |
-| 11 | Nối vận tốc qua keyframe chung | Đã tái hiện và đối chiếu Premiere |
+| 11 | Nối vận tốc qua keyframe chung | Qua review và kiểm thử |
 
 | Ghi chú đợt 1 | Chi tiết |
 | --- | --- |
@@ -278,3 +278,6 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Ghi chú đợt 11 | Chi tiết |
 | --- | --- |
 | Tái hiện | Đường thẳng qua key chung giữ đúng vị trí nhưng tốc độ đổi từ 10 m/s xuống 4 m/s khi hai đoạn dùng Linear và Smooth. |
+| Nối vận tốc | Bật matchSpeed giữ tốc độ qua keyframe chung theo đường cong PCHIP trên các kênh không gian, hướng ngắm và quang học. Áp dụng cho đường thẳng, Smooth, Orbit, ray và tự hãm về 0 ở góc ngoặt hoặc cực trị. |
+| Tay nắm và đường cong | Chuẩn hóa độ dài cung Gauss-Legendre trên đường Bézier giúp tay nắm ngắn từ 0,2 m hoặc lệch vẫn nối vận tốc đều. Tay nắm bằng 0 giữ đúng tốc độ rời và không bị vọt tốc. |
+| Thanh thời gian và Vertigo | Tách đỉnh tốc độ theo từng kênh quang học và kẹp hai đầu đoạn vẽ để phim zoom thuần 60° → 45° → 20° nối mượt qua chấm tròn trên Chrome 1920×1080. Nút Vertigo tự xóa matchSpeed khi tạo key mới. |

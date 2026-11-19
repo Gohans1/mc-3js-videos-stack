@@ -651,7 +651,8 @@ test("cam keys accept lens mm, focus targets, aperture fstop, and handheld prese
   const key = (extra) => ({ t: 0, p: [0, 1.5, 4], l: [0, 1, 0], ...extra });
   for (const ok of [
     { mm: 35, fstop: 2.0, focus: 3.2, handheld: "THE_CLOSEUP" },
-    { mm: 50, fstop: 0, focus: 3.2 },
+    { mm: 50, fstop: 0, focus: 3.2, matchSpeed: true },
+    { matchSpeed: false },
     {
       mm: 85,
       fstop: 1.4,
@@ -670,6 +671,9 @@ test("cam keys accept lens mm, focus targets, aperture fstop, and handheld prese
     { focus: { target: "" } },
     { handheld: "" },
     { handheld: { preset: "THE_CLOSEUP", amount: -0.2 } },
+    { matchSpeed: "yes" },
+    { matchSpeed: 1 },
+    { matchSpeed: null },
   ]) {
     assert.equal(CamTimeline.safeParse([key(bad)]).success, false, JSON.stringify(bad));
   }

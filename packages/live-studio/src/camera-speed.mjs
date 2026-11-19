@@ -26,3 +26,13 @@ export const cameraSpeed = (clock, from, to, ease, t) => {
       : 1);
   return Math.max(0, ((ease(b) - ease(a)) / ((b - a) * (to - from))) * rate);
 };
+
+export const sampleCameraSpanSpeed = (clock, a, v, w, x0, x1, from, to, ease) => {
+  const n = Math.max(8, Math.min(120, Math.round(x1 - x0))),
+    speed = [];
+  for (let j = 0; j <= n; j++) {
+    const t = a + ((x0 + Math.max(1e-7, Math.min(j / n, 1 - 1e-7)) * (x1 - x0)) / w) * v;
+    speed.push(cameraSpeed(clock, from, to, ease, t));
+  }
+  return speed;
+};

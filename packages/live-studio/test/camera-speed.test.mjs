@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cameraSpeed } from "../src/camera-speed.mjs";
+import { cameraSpeed, sampleCameraSpanSpeed } from "../src/camera-speed.mjs";
 import { compileTiming } from "../src/timing.mjs";
 
 test("films without timing support still show their camera motion", () => {
@@ -42,4 +42,21 @@ test("camera easing composes with the speed ramp in source coordinates", () => {
 test("trimming the beginning preserves the remaining eased motion without a cut spike", () => {
   const clock = compileTiming({ cuts: [{ from: 0, to: 5 }] }, 10);
   assert.ok(Math.abs(cameraSpeed(clock, 0, 10, (u) => u * u, 0) - 0.1) < 1e-6);
+});
+
+test("sampleCameraSpanSpeed clamps both span endpoints symmetrically so x0 round-trip underflow never drops j = 0 to 0", () => {
+  const a = 0.1,
+    v = 6.1,
+    w = 800,
+    from = 2.3,
+    to = 3.3;
+  const x0 = ((from - a) / v) * w;
+  const x1 = ((to - a) / v) * w;
+  assert.ok(a + (x0 / w) * v < from, "fixture should round slightly below span start");
+  const speed = sampleCameraSpanSpeed(null, a, v, w, x0, x1, from, to, (u) => u);
+  assert.ok(speed[0] > 0.9 && Math.abs(speed[0] - 1) < 1e-4, `expected ~1 at j=0, got ${speed[0]}`);
+  assert.ok(
+    speed[speed.length - 1] > 0.9 && Math.abs(speed[speed.length - 1] - 1) < 1e-4,
+    `expected ~1 at j=n, got ${speed[speed.length - 1]}`,
+  );
 });

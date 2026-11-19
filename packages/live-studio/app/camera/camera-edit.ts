@@ -1,5 +1,7 @@
-import { mmOf } from "film-stage/camera";
+import { canMatchCameraSpeed, mmOf } from "film-stage/camera";
 
+import type { Ease } from "../core/ease";
+import { r3 } from "../core/time";
 import type { CamKey, Point } from "./cam";
 
 const keyFields = {
@@ -7,7 +9,7 @@ const keyFields = {
   lens: ["fov", "mm"],
   dof: ["fstop", "focus"],
   shake: ["handheld", "wave", "bob"],
-  speed: ["ease", "easeChannels"],
+  speed: ["ease", "easeChannels", "matchSpeed"],
 } as const;
 export type CameraFieldGroup = keyof typeof keyFields;
 
@@ -92,4 +94,171 @@ export const replaceCameraFraming = (
     key.fov = view.fov;
   }
   return true;
+};
+
+export const cameraSegmentAt = <T extends { cut?: boolean; muted?: boolean }>(
+  keys: readonly T[],
+  index: number,
+) => {
+  if (index < 0 || index >= keys.length) return null;
+  const start = Math.max(
+    0,
+    keys.findLastIndex((candidate, i) => i <= index && !!candidate.cut),
+  );
+  const next = keys.findIndex((candidate, i) => i > index && !!candidate.cut);
+  const active = keys
+    .slice(start, next < 0 ? undefined : next)
+    .filter((candidate, i) => i === 0 || !candidate.muted);
+  return { active, at: active.indexOf(keys[index]) };
+};
+
+export const stripInvalidMatchSpeed = <
+  T extends { t: number; motion?: string; cut?: boolean; muted?: boolean; matchSpeed?: boolean },
+>(
+  keys: T[],
+  indices: readonly number[],
+) => {
+  for (const index of indices) {
+    const key = keys[index];
+    if (!key?.matchSpeed) continue;
+    const segment = cameraSegmentAt(keys, index);
+    if (!segment || !canMatchCameraSpeed(segment.active, segment.at)) delete key.matchSpeed;
+  }
+};
+
+export const reverseCameraEase = (ease: Ease | undefined): Ease | undefined =>
+  Array.isArray(ease)
+    ? [1 - ease[2], 1 - ease[3], 1 - ease[0], 1 - ease[1]]
+    : ease === undefined || ease === "linear" || ease === "smooth"
+      ? ease
+      : ease.startsWith("reverse:")
+        ? ease.slice(8)
+        : "reverse:" + ease;
+
+export const reverseCameraKeyRange = (original: readonly CamKey[]): CamKey[] => {
+  if (original.length < 2) return original.map((key) => structuredClone(key));
+  const start = original[0].t,
+    end = original.at(-1)!.t;
+  return original.map((_, j) => {
+    const key = structuredClone(original[original.length - 1 - j]);
+    const incoming = j === 0 ? original[0] : original[original.length - j];
+    const reversed = j > 0 && (incoming.motion === "hold" || incoming.motion === "orbit");
+    const matchSpeed =
+      j === 0
+        ? original[0].matchSpeed
+        : j === original.length - 1
+          ? original.at(-1)!.matchSpeed
+          : key.matchSpeed;
+    const row: CamKey = {
+      ...key,
+      t: r3(start + end - key.t),
+      motion: incoming.motion,
+      inHandle: key.outHandle,
+      outHandle: key.inHandle,
+      reversePath: reversed ? !incoming.reversePath || undefined : incoming.reversePath,
+      ease: j === 0 ? structuredClone(incoming.ease) : reverseCameraEase(incoming.ease),
+      easeChannels:
+        j === 0
+          ? structuredClone(incoming.easeChannels)
+          : incoming.easeChannels &&
+            Object.fromEntries(
+              Object.entries(incoming.easeChannels).map(([name, ease]) => [
+                name,
+                reverseCameraEase(ease),
+              ]),
+            ),
+    };
+    if (matchSpeed) row.matchSpeed = true;
+    else delete row.matchSpeed;
+    return row;
+  });
+};
+
+export const redundantLinearCameraKeys = (
+  rows: readonly CamKey[],
+  selected: ReadonlySet<string | number>,
+  tolerance: number,
+) => {
+  const removed: number[] = [];
+  const equalData = (key: CamKey) => {
+    const {
+      id: _id,
+      t: _time,
+      __timing: _mapped,
+      p: _p,
+      l: _l,
+      motion: _motion,
+      ease: _ease,
+      cut: _cut,
+      ...rest
+    } = key;
+    return JSON.stringify(rest);
+  };
+  const isSmooth = (key?: CamKey) => key && !key.cut && (key.motion ?? "smooth") === "smooth";
+  let left = 0;
+  for (let i = 1; i < rows.length - 1; i++) {
+    const a = rows[left],
+      b = rows[i],
+      c = rows[i + 1];
+    const elapsed = c.t - a.t;
+    let next = i + 2;
+    while (rows[next]?.muted && !rows[next].cut) next++;
+    const can =
+      selected.has(b.id ?? b.t) &&
+      !b.cut &&
+      !b.locked &&
+      !b.tailId &&
+      !a.matchSpeed &&
+      !b.matchSpeed &&
+      !c.matchSpeed &&
+      !a.muted &&
+      !b.muted &&
+      !c.muted &&
+      (left === 0 || !isSmooth(a)) &&
+      !isSmooth(rows[next]) &&
+      !c.cut &&
+      elapsed > tolerance &&
+      b.motion === "linear" &&
+      c.motion === "linear" &&
+      b.ease === "linear" &&
+      c.ease === "linear" &&
+      !b.easeChannels &&
+      !c.easeChannels &&
+      equalData(a) === equalData(b) &&
+      equalData(b) === equalData(c);
+    const u = (b.t - a.t) / elapsed;
+    const same = (field: "p" | "l") => {
+      const p = a[field],
+        q = b[field],
+        r = c[field];
+      return (
+        Array.isArray(p) &&
+        Array.isArray(q) &&
+        Array.isArray(r) &&
+        q.every((v, j) => Math.abs(p[j] + (r[j] - p[j]) * u - v) < 0.001)
+      );
+    };
+    if (can && same("p") && same("l")) removed.push(i);
+    else left = i;
+  }
+  return removed;
+};
+
+export const createHoldCameraKey = (
+  source: CamKey,
+  id: string,
+  t: number,
+  railU: number | undefined,
+): CamKey => {
+  const {
+    ease: _,
+    matchSpeed: _match,
+    cut: __,
+    tailId: _tail,
+    __timing: _timing,
+    locked: _lock,
+    reason: _reason,
+    ...pose
+  } = structuredClone(source);
+  return { ...pose, id, t, railU, motion: "hold" };
 };

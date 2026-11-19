@@ -293,6 +293,7 @@ export const addVertigo = (i: number) => {
       };
       delete next.fov;
       delete next.easeChannels;
+      delete next.matchSpeed;
       delete next.reversePath;
       pasteCamKeys([next], time);
       say("Vertigo key added at " + time.toFixed(3) + "s");

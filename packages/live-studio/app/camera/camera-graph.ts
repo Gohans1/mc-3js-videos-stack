@@ -10,7 +10,6 @@ import { EDIT } from "film/edit";
 import type { Vector3 } from "three";
 
 import { cameraTimesAt, timingClock } from "../../src/timing-state.mjs";
-import { type Ease } from "../core/ease";
 import { shotIndex } from "../core/film";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
@@ -30,7 +29,7 @@ import {
   room,
   writeLens,
 } from "./cam";
-import { type CameraView } from "./camera-edit";
+import { type CameraView, reverseCameraKeyRange } from "./camera-edit";
 import { cameraCoordinates, resolveKeyPoint, storedPoint } from "./camera-framing";
 
 const graphOpticsValue = (index: number, channel: CameraChannel): number => {
@@ -81,7 +80,7 @@ export const plotCameraGraph = (
     const start = hold && keys[right].reversePath ? a + gap : a;
     const end = hold && !keys[right].reversePath ? b - gap : b;
     if (hold && mode === "value") times.push(start, end);
-    const dt = Math.min(1 / 240, (b - a) / 100);
+    const dt = Math.min(1 / 2400, (b - a) / 1000);
     const clamp = (t: number) => Math.min(end, Math.max(start, t));
     return [...new Set(times)]
       .sort((u, v) => u - v)
@@ -120,6 +119,7 @@ const sampleGraphViews = (times: number[], track: CamKey[]) => {
       const options = {
         aspect: tools?.camera.aspect,
         resolveAnchor: tools?.resolveCameraAnchor,
+        fovAxis: rig?.fovAxis,
         rail: rig?.look === "one-node" ? undefined : rig?.rail,
       };
       return cameraAt(camera, track, options).sample;
@@ -233,14 +233,6 @@ export const scaleGraphValues = (
   transformGraphValues(picked, channel, axis, (value, _, first) => first + (value - first) * scale);
 };
 
-const reverseEase = (ease: Ease | undefined): Ease | undefined =>
-  Array.isArray(ease)
-    ? [1 - ease[2], 1 - ease[3], 1 - ease[0], 1 - ease[1]]
-    : ease === undefined || ease === "linear" || ease === "smooth"
-      ? ease
-      : ease.startsWith("reverse:")
-        ? ease.slice(8)
-        : "reverse:" + ease;
 type InheritedOptics = ReturnType<typeof opticsOfKey>;
 const keepOptics = (key: CamKey, current: InheritedOptics, previous: InheritedOptics) => {
   if (
@@ -284,35 +276,14 @@ export const reverseGraphKeys = (picked: number[]) => {
   }
   edit((rows) => {
     const original = picked.map((i) => structuredClone(rows[i]));
-    const start = original[0].t,
-      end = original.at(-1)!.t;
+    const reversed = reverseCameraKeyRange(original);
     picked.forEach((i, j) => {
       const source = original.length - 1 - j;
-      const key = original[source];
-      const incoming = j === 0 ? original[0] : original[original.length - j];
-      const reversed = j > 0 && (incoming.motion === "hold" || incoming.motion === "orbit");
-      if (key.railU === undefined && railPositions[source] !== undefined)
-        key.railU = railPositions[source];
-      keepOptics(key, optics[optics.length - 1 - j], j === 0 ? prior : optics[optics.length - j]);
-      rows[i] = {
-        ...key,
-        t: r3(start + end - key.t),
-        motion: incoming.motion,
-        inHandle: key.outHandle,
-        outHandle: key.inHandle,
-        reversePath: reversed ? !incoming.reversePath || undefined : incoming.reversePath,
-        ease: j === 0 ? incoming.ease : reverseEase(incoming.ease),
-        easeChannels:
-          j === 0
-            ? incoming.easeChannels
-            : incoming.easeChannels &&
-              Object.fromEntries(
-                Object.entries(incoming.easeChannels).map(([name, ease]) => [
-                  name,
-                  reverseEase(ease),
-                ]),
-              ),
-      };
+      const row = reversed[j];
+      if (row.railU === undefined && railPositions[source] !== undefined)
+        row.railU = railPositions[source];
+      keepOptics(row, optics[source], j === 0 ? prior : optics[optics.length - j]);
+      rows[i] = row;
     });
     if (next) rows[last + 1] = next;
   });

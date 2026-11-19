@@ -18,7 +18,9 @@ export const focusLabel = (f: unknown): string | null =>
       : f && typeof f === "object" && "target" in f && typeof f.target === "string"
         ? f.target
         : f && typeof f === "object" && "point" in f
-          ? ("label" in f && typeof f.label === "string" ? f.label : "Surface")
+          ? "label" in f && typeof f.label === "string"
+            ? f.label
+            : "Surface"
           : null;
 
 /** Readable handheld preset summary matching `film-stage/camera`'s normalization rules. */
@@ -78,3 +80,6 @@ export function formatOpticsAttributes(
           : [lens, fstop, focus, handheld, roll, sway, bob];
   return parts.filter(Boolean).join(", ") || "Inherited";
 }
+
+export const formatSpeedAttributes = (k: { matchSpeed?: boolean }, easeLabel: string): string =>
+  `${easeLabel}${k.matchSpeed ? " · Match speed" : ""}`;

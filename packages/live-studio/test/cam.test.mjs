@@ -10,12 +10,16 @@ import {
   cameraKeyNavigation,
   cameraTailIndex,
   copyCameraFields,
+  createHoldCameraKey,
   keyAtTime,
+  redundantLinearCameraKeys,
   replaceCameraFraming,
+  reverseCameraKeyRange,
   selectedCameraKeyAt,
+  stripInvalidMatchSpeed,
 } from "../app/camera/camera-edit.ts";
 import { mergeShotHits, repartitionAdjacentHits, splitShotHits } from "../app/camera/shot-hits.ts";
-import { formatOpticsAttributes } from "../app/timeline/cam-attributes.ts";
+import { formatOpticsAttributes, formatSpeedAttributes } from "../app/timeline/cam-attributes.ts";
 import { CamTimeline, problems } from "../src/contract.ts";
 import { compactJson, openTimelineFile } from "../src/timeline_file.mjs";
 
@@ -230,4 +234,111 @@ test("merging a cut removes only its generated tail and keeps a key reused by Sp
   assert.equal(cameraTailIndex(keys, 2, 1 / 30), -1);
   keys[2].tailId = "outgoing";
   assert.equal(cameraTailIndex(keys, 2, 1 / 30), 1);
+});
+
+test("copyCameraFields speed group copies and clears matchSpeed alongside ease and easeChannels", () => {
+  const from = key(1, { ease: "out", easeChannels: { aim: "linear" }, matchSpeed: true });
+  const to = key(2, { ease: "smooth" });
+  copyCameraFields(from, to, ["speed"]);
+  assert.equal(to.ease, "out");
+  assert.deepEqual(to.easeChannels, { aim: "linear" });
+  assert.equal(to.matchSpeed, true);
+
+  const plain = key(1, { ease: "inout" });
+  copyCameraFields(plain, to, ["speed"]);
+  assert.equal(to.ease, "inout");
+  assert.equal(to.easeChannels, undefined);
+  assert.equal("matchSpeed" in to, false);
+});
+
+test("reverseCameraKeyRange keeps boundary matchSpeed in place and reverses interior matchSpeed", () => {
+  const twoKeys = [
+    key(1, { p: [2, 1, 2], ease: "linear", matchSpeed: true }),
+    key(3, { p: [6, 1, 2], ease: "out" }),
+  ];
+  const reversedTwo = reverseCameraKeyRange(twoKeys);
+  assert.equal(reversedTwo[0].matchSpeed, true);
+  assert.equal("matchSpeed" in reversedTwo[1], false);
+  assert.deepEqual(reversedTwo[0].p, [6, 1, 2]);
+  assert.deepEqual(reversedTwo[1].p, [2, 1, 2]);
+
+  const fourKeys = [
+    key(1, { p: [1, 0, 0], matchSpeed: true }),
+    key(2, { p: [2, 0, 0], matchSpeed: true }),
+    key(3, { p: [3, 0, 0] }),
+    key(4, { p: [4, 0, 0] }),
+  ];
+  const reversedFour = reverseCameraKeyRange(fourKeys);
+  // Boundaries [0] and [3] stay pinned; interior [1] and [2] mirror positions.
+  assert.equal(reversedFour[0].matchSpeed, true);
+  assert.equal("matchSpeed" in reversedFour[1], false);
+  assert.equal(reversedFour[2].matchSpeed, true);
+  assert.equal("matchSpeed" in reversedFour[3], false);
+});
+
+test("stripInvalidMatchSpeed removes matchSpeed from non-joinable pasted keys while preserving valid interior joins", () => {
+  const rows = [
+    key(0, { matchSpeed: true }),
+    key(1, { matchSpeed: true }),
+    key(2, { matchSpeed: true }),
+    key(3, { cut: true, matchSpeed: true }),
+    key(4, { matchSpeed: true }),
+    key(5, { motion: "hold", matchSpeed: true }),
+    key(6, { matchSpeed: true, muted: true }),
+    key(7, { matchSpeed: true }),
+  ];
+  stripInvalidMatchSpeed(
+    rows,
+    rows.map((_, i) => i),
+  );
+  // 0: first key, 1: valid interior, 2: shot 0 last key, 3: cut key, 4: before hold, 5: hold, 6: muted, 7: shot 1 last key
+  assert.equal("matchSpeed" in rows[0], false);
+  assert.equal(rows[1].matchSpeed, true);
+  assert.equal("matchSpeed" in rows[2], false);
+  assert.equal("matchSpeed" in rows[3], false);
+  assert.equal("matchSpeed" in rows[4], false);
+  assert.equal("matchSpeed" in rows[5], false);
+  assert.equal("matchSpeed" in rows[6], false);
+  assert.equal("matchSpeed" in rows[7], false);
+});
+
+test("redundantLinearCameraKeys skips keys adjacent to or carrying matchSpeed", () => {
+  const linearTrack = [
+    key(0, { id: "a", p: [0, 0, 5], l: [0, 0, 0], motion: "linear", ease: "linear" }),
+    key(1, { id: "b", p: [5, 0, 5], l: [0, 0, 0], motion: "linear", ease: "linear" }),
+    key(2, { id: "c", p: [10, 0, 5], l: [0, 0, 0], motion: "linear", ease: "linear" }),
+  ];
+  const selected = new Set(["b"]);
+  assert.deepEqual(redundantLinearCameraKeys(linearTrack, selected, 1 / 60), [1]);
+  for (const idx of [0, 1, 2]) {
+    const withMatch = structuredClone(linearTrack);
+    withMatch[idx].matchSpeed = true;
+    assert.deepEqual(redundantLinearCameraKeys(withMatch, selected, 1 / 60), []);
+  }
+});
+
+test("createHoldCameraKey strips matchSpeed and marks the new key as hold", () => {
+  const source = key(1, {
+    id: "orig",
+    ease: "out",
+    matchSpeed: true,
+    cut: true,
+    locked: true,
+    reason: "beat",
+  });
+  const held = createHoldCameraKey(source, "held-1", 2, 0.5);
+  assert.equal(held.id, "held-1");
+  assert.equal(held.t, 2);
+  assert.equal(held.motion, "hold");
+  assert.equal(held.railU, 0.5);
+  assert.equal("matchSpeed" in held, false);
+  assert.equal("ease" in held, false);
+  assert.equal("cut" in held, false);
+  assert.equal("locked" in held, false);
+});
+
+test("formatSpeedAttributes appends Match speed only when enabled", () => {
+  assert.equal(formatSpeedAttributes({ matchSpeed: true }, "Smooth"), "Smooth · Match speed");
+  assert.equal(formatSpeedAttributes({}, "Ease Out"), "Ease Out");
+  assert.equal(formatSpeedAttributes({ matchSpeed: false }, "Linear"), "Linear");
 });

@@ -8,11 +8,19 @@ export { dofParams, dollyZoom, PRIME_LENSES } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
+import {
+  canMatchCameraSpeed,
+  type JoinSlopes,
+  matchedSpanEase,
+  pairJoinSlopes,
+  scalarJoinSlopes,
+} from "./camera-pace";
 import { compileCameraPath, type ResolveCameraAnchor } from "./camera-path";
 import { type FovAxis, lensAspect, rigFov } from "./camera-rig";
 
 export * from "./camera-meta";
 export * from "./camera-rig";
+export { canMatchCameraSpeed } from "./camera-pace";
 export {
   CAMERA_MOTIONS,
   cameraRailU,
@@ -44,9 +52,123 @@ const segments = (keys) => {
     dynamic: ks.some((key) => !Array.isArray(key.p) || !Array.isArray(key.l)),
     path: null,
     rail: undefined,
+    channels: null,
+    channelsKey: "",
   }));
   curves.set(keys, built);
   return built;
+};
+
+const segmentFor = (keys, t) => {
+  const segs = segments(keys);
+  let s = segs[0];
+  if (segs.length > 1) {
+    let lo = 0,
+      hi = segs.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (t >= segs[mid].t0) lo = mid;
+      else hi = mid - 1;
+    }
+    s = segs[lo];
+  }
+  return s;
+};
+
+const pathFor = (s, opts) => {
+  if (s.rail !== opts?.rail) {
+    s.rail = opts?.rail;
+    s.path = null;
+  }
+  return s.dynamic
+    ? compileCameraPath(s.ks, opts?.resolveAnchor, opts?.rail)
+    : (s.path ??= compileCameraPath(s.ks, undefined, opts?.rail));
+};
+
+const scalarChannelsFor = (s, aspect: number, fovAxis?: FovAxis) => {
+  const channelsKey = `${aspect}:${fovAxis?.mode ?? ""}:${fovAxis?.aspect ?? ""}`;
+  if (s.channelsKey !== channelsKey) {
+    s.channelsKey = channelsKey;
+    s.channels = compileScalarChannels(s.ks, aspect, fovAxis);
+  }
+  return s.channels;
+};
+
+const handheldSum = (hh: HandheldConfig[], field: "amount" | "move") =>
+  hh.reduce((sum, item) => sum + item[field], 0);
+
+const scalarChannelSpanDelta = (k0, k1, c0, c1) => {
+  const ap0 = c0.fstop > 0 ? 1 / c0.fstop : 0;
+  const ap1 = c1.fstop > 0 ? 1 / c1.fstop : 0;
+  return {
+    lens: Math.log(c1.fov / c0.fov),
+    aperture: ap1 - ap0,
+    focus: typeof c0.focus === "number" && typeof c1.focus === "number" ? c1.focus - c0.focus : 0,
+    focusChanged: !sameFocus(c0.focus, c1.focus),
+    roll: (k1.roll ?? 0) - (k0.roll ?? 0),
+    wave: (k1.wave ?? 1) - (k0.wave ?? 1),
+    bob: (k1.bob ?? 0) - (k0.bob ?? 0),
+    hhAmount: handheldSum(c1.hh, "amount") - handheldSum(c0.hh, "amount"),
+    hhMove: handheldSum(c1.hh, "move") - handheldSum(c0.hh, "move"),
+    hhChanged: JSON.stringify(c0.hh) !== JSON.stringify(c1.hh),
+  };
+};
+
+const activeOpticsChannel = (ks, idx: number, aspect: number, fovAxis?: FovAxis) => {
+  const c0 = carryAt(ks, idx, aspect, 0, fovAxis);
+  const c1 = carryAt(ks, idx + 1, aspect, 0, fovAxis);
+  const d = scalarChannelSpanDelta(ks[idx], ks[idx + 1], c0, c1);
+  if (Math.abs(d.lens) > 1e-6) return { channel: "lens" as const, length: Math.abs(d.lens) };
+  if (Math.abs(d.aperture) > 1e-6) return { channel: "dof" as const, length: Math.abs(d.aperture) };
+  if (typeof c0.focus === "number" && typeof c1.focus === "number") {
+    if (Math.abs(d.focus) > 1e-6) return { channel: "dof" as const, length: Math.abs(d.focus) };
+  } else if (d.focusChanged) {
+    return { channel: "dof" as const, length: 1 };
+  }
+  if (Math.abs(d.roll) > 1e-6) return { channel: "roll" as const, length: Math.abs(d.roll) };
+  const shakeMag = Math.hypot(d.wave, d.bob);
+  if (shakeMag > 1e-6) return { channel: "shake" as const, length: shakeMag };
+  const hhMag = Math.abs(d.hhAmount) > 1e-6 ? Math.abs(d.hhAmount) : Math.abs(d.hhMove);
+  if (hhMag > 1e-6) return { channel: "shake" as const, length: hhMag };
+  if (d.hhChanged) return { channel: "shake" as const, length: 1 };
+  return null;
+};
+
+export const cameraMotionSpans = (
+  keys,
+  from = -Infinity,
+  to = Infinity,
+  opts?: {
+    aspect?: number;
+    fovAxis?: FovAxis;
+    resolveAnchor?: ResolveCameraAnchor;
+    rail?: readonly (readonly [number, number, number])[];
+  },
+) => {
+  if (!keys?.length) return [];
+  const aspect = opts?.aspect ?? 16 / 9;
+  return segments(keys).flatMap((s) => {
+    const last = s.ks[s.ks.length - 1]?.t ?? s.t0;
+    if (last <= from || s.t0 >= to) return [];
+    const spans = pathFor(s, opts).motionSpans;
+    const scalar = scalarChannelsFor(s, aspect, opts?.fovAxis);
+    return spans.map((span, idx) => {
+      if (span.length > 1e-6) {
+        return { ...span, channel: "position" as const };
+      }
+      if (span.aimLength > 1e-6) {
+        return { ...span, channel: "aim" as const, length: span.aimLength, ease: span.aimEase };
+      }
+      const optics = activeOpticsChannel(s.ks, idx, aspect, opts?.fovAxis);
+      if (optics) {
+        const ease = scalar
+          ? scalar[idx][optics.channel]
+          : scalarEaseOf(s.ks[idx + 1], optics.channel);
+        return { ...span, channel: optics.channel, length: optics.length, ease };
+      }
+      return { ...span, channel: "optics" as const, length: 0 };
+    });
+  });
 };
 
 // Key times are not evenly spread along the curve: map film time to the curve parameter piecewise, eased inside each span
@@ -66,14 +188,14 @@ const timeFraction = (ks, t, i) =>
   i < 0 || ks[i + 1].t <= ks[i].t
     ? 1
     : THREE.MathUtils.clamp((t - ks[i].t) / (ks[i + 1].t - ks[i].t), 0, 1);
-const progressAt = (ks, t, i, channel) => {
+const progressAt = (ks, t, i, path, channel) => {
   if (i < 0) return 1;
   if (t <= ks[0].t) return 0;
   const a = ks[i],
     b = ks[i + 1];
   if (b.t <= a.t) return 1;
   if (b.motion === "hold") return Number(b.reversePath ? t > a.t : t >= b.t);
-  return t >= b.t ? 1 : easeOf(b.easeChannels?.[channel] ?? b.ease)((t - a.t) / (b.t - a.t));
+  return t >= b.t ? 1 : path.progress(i, channel, (t - a.t) / (b.t - a.t));
 };
 // Camera shake for impacts only: [{t, d, amp}] (amp in metres, roll in radians x 0.1). Decorrelated x/y/roll noise that
 // starts at full and decays to nothing over d; keep d <= ~0.6 s and match amp to the hit (a door kick 0.02, a blast 0.06)
@@ -131,9 +253,105 @@ const spanAt = (ks, t) => {
   return { i: last, j: last, u: 1 };
 };
 
-const channelProgress = (ks, t, span, channel) => {
+const smoothstep = (x: number) => x * x * (3 - 2 * x);
+const scalarEaseOf = (key, channel: "lens" | "dof" | "roll" | "shake") => {
+  const ease = key.easeChannels?.[channel];
+  if (ease !== undefined) return easeOf(ease);
+  return key.ease !== undefined ? easeOf(key.ease) : smoothstep;
+};
+const compileScalarChannels = (ks, aspect: number, axis?: FovAxis) => {
+  const joined = ks.map((key, i) => key.matchSpeed === true && canMatchCameraSpeed(ks, i));
+  if (!joined.some(Boolean)) return null;
+  const carried = ks.map((_, i) => carryAt(ks, i, aspect, 0, axis));
+  const spans = ks.slice(1).map((key) => ({
+    lens: scalarEaseOf(key, "lens"),
+    dof: scalarEaseOf(key, "dof"),
+    roll: scalarEaseOf(key, "roll"),
+    shake: scalarEaseOf(key, "shake"),
+  }));
+  const startSlopes = {
+    lens: [] as (number | undefined)[],
+    dof: [] as (number | undefined)[],
+    roll: [] as (number | undefined)[],
+    shake: [] as (number | undefined)[],
+  };
+  const endSlopes = {
+    lens: [] as (number | undefined)[],
+    dof: [] as (number | undefined)[],
+    roll: [] as (number | undefined)[],
+    shake: [] as (number | undefined)[],
+  };
+  const setSlopes = (
+    channel: "lens" | "dof" | "roll" | "shake",
+    i: number,
+    [endSlope, startSlope]: JoinSlopes,
+  ) => {
+    endSlopes[channel][i - 1] = endSlope;
+    startSlopes[channel][i] = startSlope;
+  };
+  const setScalarSlopes = (
+    channel: "lens" | "dof" | "roll" | "shake",
+    i: number,
+    lt: number,
+    rt: number,
+    left: number,
+    right: number,
+  ) => {
+    if (Math.abs(left) <= 1e-12 && Math.abs(right) <= 1e-12) return;
+    setSlopes(channel, i, scalarJoinSlopes(lt, rt, left, right));
+  };
+  joined.forEach((match, i) => {
+    if (!match) return;
+    const lt = ks[i].t - ks[i - 1].t,
+      rt = ks[i + 1].t - ks[i].t;
+    const left = scalarChannelSpanDelta(ks[i - 1], ks[i], carried[i - 1], carried[i]);
+    const right = scalarChannelSpanDelta(ks[i], ks[i + 1], carried[i], carried[i + 1]);
+    setScalarSlopes("lens", i, lt, rt, left.lens, right.lens);
+    let dofL = left.aperture,
+      dofR = right.aperture;
+    if (
+      Math.abs(dofL) <= 1e-12 &&
+      Math.abs(dofR) <= 1e-12 &&
+      typeof carried[i - 1].focus === "number" &&
+      typeof carried[i].focus === "number" &&
+      typeof carried[i + 1].focus === "number"
+    ) {
+      dofL = left.focus;
+      dofR = right.focus;
+    }
+    setScalarSlopes("dof", i, lt, rt, dofL, dofR);
+    setScalarSlopes("roll", i, lt, rt, left.roll, right.roll);
+    if (
+      Math.abs(left.wave) > 1e-12 ||
+      Math.abs(left.bob) > 1e-12 ||
+      Math.abs(right.wave) > 1e-12 ||
+      Math.abs(right.bob) > 1e-12
+    ) {
+      setSlopes("shake", i, pairJoinSlopes(lt, rt, left.wave, left.bob, right.wave, right.bob));
+    } else {
+      let hhL = left.hhAmount,
+        hhR = right.hhAmount;
+      if (Math.abs(hhL) <= 1e-12 && Math.abs(hhR) <= 1e-12) {
+        hhL = left.hhMove;
+        hhR = right.hhMove;
+      }
+      setScalarSlopes("shake", i, lt, rt, hhL, hhR);
+    }
+  });
+  spans.forEach((span, k) => {
+    if (!joined[k] && !joined[k + 1]) return;
+    for (const ch of ["lens", "dof", "roll", "shake"] as const) {
+      span[ch] = matchedSpanEase(span[ch], startSlopes[ch][k], endSlopes[ch][k]);
+    }
+  });
+  return spans;
+};
+
+const channelProgress = (ks, t, span, channel, matched?) => {
+  if (span.i === span.j || ks[span.j].motion === "hold") return span.u;
+  if (matched) return matched[span.i][channel](timeFraction(ks, t, span.i));
   const ease = ks[span.j].easeChannels?.[channel];
-  if (span.i === span.j || ease === undefined || ks[span.j].motion === "hold") return span.u;
+  if (ease === undefined) return span.u;
   return easeOf(ease)(timeFraction(ks, t, span.i));
 };
 const lerpKey = (ks, f, d, span, u) => {
@@ -330,29 +548,12 @@ export function cameraAt(
   },
 ) {
   const aspect = opts?.aspect ?? 16 / 9;
-  const segs = segments(keys);
-  let s = segs[0];
-  if (segs.length > 1) {
-    let lo = 0,
-      hi = segs.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (t >= segs[mid].t0) lo = mid;
-      else hi = mid - 1;
-    }
-    s = segs[lo];
-  }
+  const s = segmentFor(keys, t);
   const ks = s.ks;
-  if (s.rail !== opts?.rail) {
-    s.rail = opts?.rail;
-    s.path = null;
-  }
-  const path = s.dynamic
-    ? compileCameraPath(ks, opts?.resolveAnchor, opts?.rail)
-    : (s.path ??= compileCameraPath(ks, undefined, opts?.rail));
+  const path = pathFor(s, opts);
   const idx = spanIndex(ks, t);
-  const u = progressAt(ks, t, idx, "position");
-  const lookU = progressAt(ks, t, idx, "aim");
+  const u = progressAt(ks, t, idx, path, "position");
+  const lookU = progressAt(ks, t, idx, path, "aim");
   const pose = path.pose(idx, u);
   const p = pose.p,
     l = lookU === u ? pose.l : path.pose(idx, lookU).l;
@@ -375,15 +576,17 @@ export function cameraAt(
       l.addScaledVector(end.l.sub(start.l), offset);
     }
   }
-  const distance = path.distanceAt(idx, timeFraction(ks, t, idx));
+  const fraction = timeFraction(ks, t, idx);
+  const distance = path.distanceAt(idx, fraction);
 
   const span = spanAt(ks, t);
+  const channels = scalarChannelsFor(s, aspect, opts?.fovAxis);
   const c0 = carryAt(ks, span.i, aspect, 0, opts?.fovAxis);
   const c1 = span.j === span.i ? c0 : carryAt(ks, span.j, aspect, 0, opts?.fovAxis);
-  const lensU = channelProgress(ks, t, span, "lens");
-  const dofU = channelProgress(ks, t, span, "dof");
-  const shakeU = channelProgress(ks, t, span, "shake");
-  const rollU = channelProgress(ks, t, span, "roll");
+  const lensU = channelProgress(ks, t, span, "lens", channels);
+  const dofU = channelProgress(ks, t, span, "dof", channels);
+  const shakeU = channelProgress(ks, t, span, "shake", channels);
+  const rollU = channelProgress(ks, t, span, "roll", channels);
   const dollyZoomScale = span.i === span.j ? undefined : ks[span.j].dollyZoomScale;
   const fov = clampFov(
     dollyZoomScale !== undefined
@@ -412,12 +615,16 @@ export function cameraAt(
 
   let speed = 0;
   if (idx >= 0 && t >= ks[idx].t && ks[idx + 1].motion !== "hold") {
-    const before = Math.max(t - 0.025, ks[idx].t);
-    const after = Math.min(t + 0.025, ks[idx + 1].t);
-    if (after > before) {
-      const a = path.distanceAt(idx, timeFraction(ks, before, idx));
-      const b = path.distanceAt(idx, timeFraction(ks, after, idx));
-      speed = (b - a) / (after - before);
+    const matchedSpeed = path.matchedSpeedAt(idx, fraction);
+    if (matchedSpeed !== undefined) speed = matchedSpeed;
+    else {
+      const before = Math.max(t - 0.025, ks[idx].t);
+      const after = Math.min(t + 0.025, ks[idx + 1].t);
+      if (after > before) {
+        const a = path.distanceAt(idx, timeFraction(ks, before, idx));
+        const b = path.distanceAt(idx, timeFraction(ks, after, idx));
+        speed = (b - a) / (after - before);
+      }
     }
   }
   const walked = distance * 0.55;

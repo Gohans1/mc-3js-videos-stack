@@ -636,6 +636,7 @@ const CamKey = z.looseObject({
   railU: z.number().min(0).max(1).optional(),
   reason: z.string().optional(),
   ease: Ease.optional(),
+  matchSpeed: z.boolean().optional(),
   easeChannels: z.object({ position: Ease.optional(), aim: Ease.optional(), lens: Ease.optional(), dof: Ease.optional(), roll: Ease.optional(), shake: Ease.optional() }).optional(),
   fov: z.number().positive().optional(),
   mm: z.number().positive().optional(),

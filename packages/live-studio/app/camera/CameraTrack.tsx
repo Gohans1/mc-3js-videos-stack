@@ -33,11 +33,13 @@ import { addFreeze } from "../timeline/timing";
 import { animOf, clearAnims, pickShot, shotSpan, type Slot, SLOT_NAMES } from "./anim";
 import {
   applyEasyEase,
+  canMatchCameraKey,
   holdAfter,
   keys,
   movable,
   removeKey,
   seekCameraKey,
+  setCameraKeyMatchSpeed,
   setKey,
   setKeyLocked,
   splitShot,
@@ -63,6 +65,7 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
   const [keyIndex, setKeyIndex] = useState(-1);
   useStudio((s) => s.camRev);
   const key = keys[keyIndex];
+  const canMatch = canMatchCameraKey(keyIndex);
   const [a, b] = shot >= 0 ? shotSpan(shot) : [0, DURATION];
   const cut = shot > 0 ? keys.findIndex((k) => k.cut && Math.abs(k.t - a) < SAME) : -1;
   const inside = S.t > a + SAME * 3 && S.t < b - SAME * 3,
@@ -85,7 +88,7 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
       >
         <canvas
           ref={bind("camrow")}
-          aria-label="Camera track: one block per shot holding its camera keyframes (diamonds). Click a block to pick the shot, click a diamond to edit it, drag it to retime, drag the handles on a shot's bottom bands to trim its In or Out animation, drag the gap between two shots to move the cut, right-click a shot for more. The yellow shape is the camera's speed"
+          aria-label="Camera track: one block per shot holding its camera keyframes (diamonds, or circles when matching speed). Click a block to pick the shot, click a keyframe to edit it, drag it to retime, drag the handles on a shot's bottom bands to trim its In or Out animation, drag the gap between two shots to move the cut, right-click a shot for more. The yellow shape is the camera's speed"
           className="block h-12 w-full touch-none"
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes(TRANSITION_DRAG) && cutAtPointer(e) > 0) {
@@ -136,6 +139,15 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
             >
               Easy Ease In<ContextMenuShortcut>Shift+F9</ContextMenuShortcut>
             </ContextMenuItem>
+            {canMatch && (
+              <ContextMenuItem
+                disabled={!!key.locked}
+                onClick={() => setCameraKeyMatchSpeed(keyIndex, !key.matchSpeed)}
+              >
+                Match speed
+                {key.matchSpeed && <span className="text-muted-foreground ms-auto">on</span>}
+              </ContextMenuItem>
+            )}
             <ContextMenuItem onClick={() => holdAfter(keyIndex)}>Hold 1 s</ContextMenuItem>
             <ContextMenuItem onClick={() => setKeyLocked(keyIndex, !key.locked)}>
               {key.locked ? "Unlock keyframe" : "Lock keyframe"}

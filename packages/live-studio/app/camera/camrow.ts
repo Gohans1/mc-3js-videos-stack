@@ -1,7 +1,8 @@
+import { cameraMotionSpans } from "film-stage/camera";
 import { EDIT } from "film/edit";
 
 import type { CameraSpan } from "../../src/camera-clock.mjs";
-import { cameraSpeed } from "../../src/camera-speed.mjs";
+import { sampleCameraSpanSpeed } from "../../src/camera-speed.mjs";
 import { clockForTimeline, timing, timingClock } from "../../src/timing-state.mjs";
 import {
   compileTiming,
@@ -15,7 +16,6 @@ import {
 import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { BLADE_CURSOR } from "../components/cursor";
 import { together } from "../core/doc";
-import { easeFn } from "../core/ease";
 import { shotIndex } from "../core/film";
 // The camera row under the timeline, on the same seconds as the stretch above it, laid out as CapCut's main track: each shot is
 // a block (its name and length in the header) holding a diamond per camera key (camera/cam.ts) and, between two keys, the
@@ -43,6 +43,7 @@ import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import {
+  originalShot,
   relocateFreeze,
   setFreezeDuration,
   shotSpeed,
@@ -72,7 +73,7 @@ import {
 } from "./anim-math";
 import {
   type CamKey,
-  DEFAULT_EASE,
+  canMatchCameraKey,
   groupRoom,
   holds,
   keys,
@@ -159,28 +160,41 @@ const shotAtX = (x: number, w: number) => {
     : shotIndex(t);
 };
 
-const drawSpeed = (
-  g: CanvasRenderingContext2D,
+const sampleSpanSpeed = (
   x0: number,
   x1: number,
   from: number,
   to: number,
-  ease: CamKey["ease"],
+  ease: (u: number) => number,
+) => {
+  const { a, v } = view(),
+    w = S.el.camrow.clientWidth;
+  return sampleCameraSpanSpeed(
+    get().timing ? clockForTimeline("cam") : null,
+    a,
+    v,
+    w,
+    x0,
+    x1,
+    from,
+    to,
+    ease,
+  );
+};
+
+const paintSpeed = (
+  g: CanvasRenderingContext2D,
+  x0: number,
+  x1: number,
+  speed: number[],
+  scale: number,
+  peak: number,
   top: number,
   floor: number,
 ) => {
-  const f = easeFn(ease, DEFAULT_EASE);
-  if (!f) return;
-  const n = Math.max(8, Math.min(120, Math.round(x1 - x0))),
-    speed: number[] = [],
-    { a, v } = view(),
-    w = S.el.camrow.clientWidth;
-  for (let j = 0; j <= n; j++) {
-    const t = a + ((x0 + Math.min(j / n, 1 - 1e-7) * (x1 - x0)) / w) * v;
-    speed.push(cameraSpeed(get().timing ? clockForTimeline("cam") : null, from, to, f, t));
-  }
-  const peak = Math.max(1e-6, ...speed),
-    y = (s: number) => floor - (s / peak) * (floor - top);
+  const n = speed.length - 1;
+  if (n < 1) return;
+  const y = (s: number) => floor - ((s * scale) / peak) * (floor - top);
   g.beginPath();
   g.moveTo(x0, floor);
   speed.forEach((s, j) => g.lineTo(x0 + (j / n) * (x1 - x0), y(s)));
@@ -242,6 +256,12 @@ const animEdgeAt = (x: number, y: number, w: number, h: number, touch: boolean) 
   return pickAnimEdge(animHandles(w), x, touch ? 12 : 6, active, shotPick, hover);
 };
 
+const sourceShotIndex = (sourceTime: number) =>
+  Math.max(
+    0,
+    SHOTS_OUT.findLastIndex((_, i) => originalShot(i)[0] <= sourceTime + 1e-6),
+  );
+
 const drawMotion = (
   g: CanvasRenderingContext2D,
   { sourceFrom: rawFrom, sourceTo: rawTo, from, to }: CameraSpan,
@@ -249,6 +269,7 @@ const drawMotion = (
   X: (t: number) => number,
   w: number,
   h: number,
+  shot?: number,
 ) => {
   const cx0 = Math.max(-4, X(from) + 1),
     cx1 = Math.min(w + 4, X(to) - 1);
@@ -256,17 +277,26 @@ const drawMotion = (
   const top = PAD + HEAD + 3,
     floor = h - PAD - FOOT - BAND - 2;
   const sourceKeys = EDIT.cam as CamKey[];
-  let prev = sourceKeys[0];
-  for (let k = 1; k < sourceKeys.length; k++) {
-    const k1 = sourceKeys[k];
-    if (!k1.cut && k1.muted) continue;
-    const k0 = prev;
-    prev = k1;
-    if (k1.cut || k1.t <= k0.t || k1.t <= rawFrom || k0.t >= rawTo) continue;
-    const a = X(project(Math.max(k0.t, rawFrom), "after")),
-      b = X(project(Math.min(k1.t, rawTo), "before"));
+  const rig = SHOTS_OUT[shot ?? sourceShotIndex(rawFrom)]?.camera;
+  const spans = cameraMotionSpans(sourceKeys, rawFrom, rawTo, {
+    aspect: S.tools?.camera?.aspect,
+    fovAxis: rig?.fovAxis,
+    resolveAnchor: S.tools?.resolveCameraAnchor,
+    rail: rig?.look === "one-node" ? undefined : rig?.rail,
+  });
+  const plotted: {
+    a: number;
+    b: number;
+    channel: string;
+    length: number;
+    speed: number[];
+  }[] = [];
+  for (const span of spans) {
+    if (span.to <= span.from || span.to <= rawFrom || span.from >= rawTo) continue;
+    const a = X(project(Math.max(span.from, rawFrom), "after")),
+      b = X(project(Math.min(span.to, rawTo), "before"));
     if (b <= a || b < 0 || a > w) continue;
-    if (holds(k0, k1)) {
+    if (span.hold || (span.length <= 1e-6 && holds(span.key0 as CamKey, span.key1 as CamKey))) {
       g.fillStyle = tone("muted-foreground");
       g.fillRect(Math.max(cx0, a), floor - 1, Math.min(cx1, b) - Math.max(cx0, a), 1);
       if (b - a > 70) {
@@ -276,7 +306,25 @@ const drawMotion = (
       }
       continue;
     }
-    drawSpeed(g, a, b, k0.t, k1.t, k1.easeChannels?.position ?? k1.ease, top, floor);
+    plotted.push({
+      a,
+      b,
+      channel: span.channel,
+      length: span.length,
+      speed: sampleSpanSpeed(a, b, span.from, span.to, span.ease),
+    });
+  }
+  if (!plotted.length) return;
+  const peaks: Record<string, number> = {};
+  for (const item of plotted) {
+    const scale = item.length > 0 ? item.length : 1;
+    let peak = peaks[item.channel] ?? 1e-6;
+    for (const s of item.speed) peak = Math.max(peak, s * scale);
+    peaks[item.channel] = peak;
+  }
+  for (const item of plotted) {
+    const scale = item.length > 0 ? item.length : 1;
+    paintSpeed(g, item.a, item.b, item.speed, scale, peaks[item.channel], top, floor);
   }
 };
 
@@ -383,7 +431,7 @@ const drawBlock = (
     g.fillText(`${label ? `Speed ${label} · ` : ""}${(e - s).toFixed(1)}s`, left + nw + 14, mid);
   }
   if (SHOTS_OUT[i].cameraClock !== "output" || !clockForTimeline("cam").cameraSpans)
-    drawMotion(g, span, timingClock.outputAt, X, w, h);
+    drawMotion(g, span, timingClock.outputAt, X, w, h, i);
   if (!outputAnimationSpans(i).length) drawAnimationBands(g, i, span, X, w, h);
   g.restore();
   if (on || get().shotPick === i || get().shotPicks.includes(i)) {
@@ -404,6 +452,23 @@ const insideOutputFreeze = (i: number) => {
     clockForTimeline("cam").cameraRateAt?.(key.t) !== undefined
   );
 };
+const traceKeyMarker = (
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  matched: boolean,
+) => {
+  g.beginPath();
+  if (matched) {
+    g.arc(x, y, r - 0.5, 0, Math.PI * 2);
+    return;
+  }
+  g.moveTo(x, y - r);
+  g.lineTo(x + r, y);
+  g.lineTo(x, y + r);
+  g.lineTo(x - r, y);
+};
 const drawDiamonds = (
   g: CanvasRenderingContext2D,
   w: number,
@@ -417,11 +482,8 @@ const drawDiamonds = (
     if (insideOutputFreeze(i) !== overFreeze) return;
     const x = xs[i];
     if (x < -REACH || x > w + REACH) return;
-    g.beginPath();
-    g.moveTo(x, y - r);
-    g.lineTo(x + r, y);
-    g.lineTo(x, y + r);
-    g.lineTo(x - r, y);
+    const matched = !!k.matchSpeed && canMatchCameraKey(i);
+    traceKeyMarker(g, x, y, r, matched);
     const fill = k.color
       ? cameraKeyColors[k.color]
       : k.cut || i === 0
@@ -436,11 +498,7 @@ const drawDiamonds = (
     if (picked.has(i)) {
       g.strokeStyle = tone("pick");
       g.lineWidth = 2;
-      g.beginPath();
-      g.moveTo(x, y - r - 3);
-      g.lineTo(x + r + 3, y);
-      g.lineTo(x, y + r + 3);
-      g.lineTo(x - r - 3, y);
+      traceKeyMarker(g, x, y, r + 3, matched);
       g.closePath();
       g.stroke();
     }
@@ -547,7 +605,15 @@ export const drawCamRow = () => {
   }
   for (const span of clockForTimeline("cam").cameraSpans ?? []) {
     const scale = (span.to - span.from) / (span.sourceTo - span.sourceFrom);
-    drawMotion(g, span, (t) => span.from + (t - span.sourceFrom) * scale, X, w, h);
+    drawMotion(
+      g,
+      span,
+      (t) => span.from + (t - span.sourceFrom) * scale,
+      X,
+      w,
+      h,
+      sourceShotIndex(span.sourceFrom),
+    );
   }
   SHOTS_OUT.forEach((_, i) => {
     for (const occurrence of outputAnimationSpans(i)) drawAnimationBands(g, i, occurrence, X, w, h);

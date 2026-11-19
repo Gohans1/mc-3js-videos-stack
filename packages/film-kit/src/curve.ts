@@ -12,9 +12,9 @@ export type Curve = ((t: number) => Value) & { vel: (t: number) => Value; keys: 
 
 const arr = (v: Value) => (Array.isArray(v) ? v : [v]);
 // PCHIP tangent at a key between segments of length h0, h1 and slopes s0, s1
-const pchip = (h0: number, h1: number, s0: number, s1: number) =>
+export const pchip = (h0: number, h1: number, s0: number, s1: number) =>
   s0 * s1 <= 0 ? 0 : (3 * (h0 + h1)) / ((2 * h1 + h0) / s0 + (h1 + 2 * h0) / s1);
-const hermite = (p0: number, p1: number, m0: number, m1: number, u: number) => {
+export const hermite = (p0: number, p1: number, m0: number, m1: number, u: number) => {
   const u2 = u * u,
     u3 = u2 * u;
   return (

@@ -228,8 +228,8 @@ const rebuildHandles = (index: number | null) => {
     const offset = stored
       ? new THREE.Vector3(...stored)
       : field === "inHandle"
-        ? defaultCameraHandles(positions, at - 1).in
-        : defaultCameraHandles(positions, at).out;
+        ? defaultCameraHandles(positions, at - 1, active).in
+        : defaultCameraHandles(positions, at, active).out;
     const pos = p.clone().add(offset);
     tangents.push({ index, field, point: pos });
     vertices.push(p, pos);

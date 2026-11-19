@@ -33,7 +33,7 @@ import {
   type OneShot,
   pasteClipAttrs,
 } from "../sound/sound";
-import { formatOpticsAttributes } from "./cam-attributes";
+import { formatOpticsAttributes, formatSpeedAttributes } from "./cam-attributes";
 
 type Kind = "layer" | "clip" | "shot" | "cam";
 type Copied =
@@ -210,7 +210,7 @@ export const choices = (): Choice[] => {
       list.push({
         id: "speed",
         title: "Speed",
-        value: easeTitle(k.ease, DEFAULT_EASE),
+        value: formatSpeedAttributes(k, easeTitle(k.ease, DEFAULT_EASE)),
         warn: starts
           ? `${starts > 1 ? `${starts} of these start` : "One of these starts"} a shot: nothing eases into it, so its easing is skipped.`
           : undefined,
