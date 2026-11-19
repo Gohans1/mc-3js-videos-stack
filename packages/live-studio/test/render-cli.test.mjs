@@ -429,7 +429,7 @@ export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
   }
 });
 
-test("CHECK=motion:cam attributes a FOV snap during Freeze to the output-clock camera key", (t) => {
+test("CHECK=motion:cam attributes the active camera FOV snap during Freeze to the output-clock key", (t) => {
   const film = chromeFilm(t, 4, {
     camTimeline: "src/cam.json",
     timingTimeline: "src/timing.json",
@@ -450,13 +450,17 @@ export const DURATION = 4, SHOTS_OUT = [{ t: 0, cameraClock: "output" }];
 export function buildScene(canvas, W, H) {
   const renderer = new THREE.WebGLRenderer({ canvas });
   renderer.setSize(W, H, false);
-  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
-  camera.position.set(0, 1, 3);
+  const scene = new THREE.Scene();
+  const start = new THREE.PerspectiveCamera(70, W / H, 0.1, 100);
+  const shot = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
+  let camera = start;
+  shot.position.set(0, 1, 3);
   return Object.assign((world, clocks) => {
-    camera.fov = clocks.camera >= 1.5 ? 30 : 60;
+    camera = clocks.camera >= 1 ? shot : start;
+    if (camera === shot) camera.fov = clocks.camera >= 1.5 ? 30 : 60;
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
-  }, { tools: { scene, camera } });
+  }, { tools: { scene, get camera() { return camera; } } });
 }`,
   );
 

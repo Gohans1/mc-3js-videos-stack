@@ -1087,7 +1087,7 @@ function runUnifiedQc(argv: string[]): number {
 
 export { findAutoVideo, selectPython };
 
-function runQc(args: string[]): number {
+export function runQc(args: string[]): number {
   if (["help", "-h", "--help"].includes(args[0])) {
     console.log(HELP);
     return 0;

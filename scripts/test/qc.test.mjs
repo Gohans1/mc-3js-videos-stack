@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +55,31 @@ test("qc --help exits 0 and bad usage exits 2", () => {
 
   const badBox = runQc(["box", "missing.png", "0,0,10,10"]);
   expect(badBox.status).toBe(2);
+});
+
+test("a linked film outside the monorepo runs the starter QC script", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-linked-film-"));
+  try {
+    const template = new URL("../../templates/film/package.json", import.meta.url);
+    const { scripts } = JSON.parse(readFileSync(template, "utf8"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { qc: scripts.qc } }));
+    mkdirSync(join(dir, "node_modules"));
+    const studio = fileURLToPath(new URL("../../packages/live-studio", import.meta.url));
+    symlinkSync(
+      studio,
+      join(dir, "node_modules/live-studio"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    const result = spawnSync("bun", ["run", "qc", "--help"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("bun run qc motion");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("qc box computes exact RGB, sRGB & linear Rec.709 luma, and contrast on synthetic image", () => {

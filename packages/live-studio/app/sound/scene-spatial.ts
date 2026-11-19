@@ -194,7 +194,7 @@ export async function prepareSceneTargets(
         throw new Error("Spatial target sampling exceeded two minutes. Export a shorter span.");
       const t = Math.min(frame / FPS, DURATION || Infinity);
       if (draw.renderFrame) await draw.renderFrame(t);
-      else await draw(t);
+      else draw(t);
       const positions = new Map<string, Vec3>();
       for (const name of names) {
         const at = sceneSpatialPosition(draw.tools, name);

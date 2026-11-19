@@ -183,8 +183,10 @@ if (argv.includes("--json")) {
         ? Object.hasOwn(scripts, c.target) && !String(scripts[c.target]).includes("wrong-place.mjs")
         : c.cwdModes.includes(scope),
   }));
+  const listed = new Set(commands.map((command) => command.id));
   for (const [id, script] of Object.entries(scripts)) {
     if (
+      listed.has(id) ||
       (id === "postinstall" && !asked) ||
       CLI_COMMANDS.some((c) => c.runner === "bun-script" && c.target === id) ||
       (asked && asked !== id)

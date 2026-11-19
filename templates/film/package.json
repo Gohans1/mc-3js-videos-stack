@@ -19,7 +19,7 @@
     "at": "bun ../../scripts/at.ts",
     "note": "bun node_modules/live-studio/note.mjs",
     "render": "bun node_modules/live-studio/render.mjs",
-    "qc": "bun ../../scripts/review/qc.ts",
+    "qc": "bun node_modules/live-studio/qc.mjs",
     "framecheck": "bun node_modules/live-studio/framecheck.mjs",
     "voice:gen": "bun ../../scripts/voice/gen.ts",
     "voice:playground": "bun ../../scripts/voice/playground.mjs",

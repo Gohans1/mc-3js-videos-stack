@@ -531,6 +531,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
 
     // 4) Bidirectional disk entrypoint coverage across scripts/ and packages/
     const INTERNAL_WORKER_OR_HELPER_FILES = new Map([
+      ["packages/live-studio/qc.mjs", "film-local entrypoint for the registered qc command"],
       ["scripts/review/frame_metrics.py", "image-region and comparison worker spawned by qc"],
       ["scripts/review/sheet_view.py", "overview/frame extraction helper dispatched by sheet.py"],
       [
