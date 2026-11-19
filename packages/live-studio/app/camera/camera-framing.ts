@@ -176,7 +176,7 @@ export const swapCameraLens = (i: number, mm: number) =>
     if (!p || !l) return unavailable();
     const from = p.distanceTo(l);
     if (from < 1e-6) return say("Set an aim point away from the camera before swapping lenses");
-    const fov = rigFov(0, mm, S.tools?.camera.aspect || 16 / 9, cameraAxisAt(key.t));
+    const fov = rigFov(0, mm, S.tools?.camera?.aspect || 16 / 9, cameraAxisAt(key.t));
     const distance = dollyZoom(from, opticsOfKey(i).fov, fov);
     const position = storedPoint(key.p, p.sub(l).setLength(distance).add(l));
     if (!position) return say("This film cannot move the camera anchor");
@@ -220,7 +220,7 @@ export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
         "Fit box needs a fixed aim. Turn off Along path, Lookahead and Auto-banking to fit subjects",
       );
     const fitted = fitBoxFrame(box, cameraBasis(p, aim, key.roll).forward, {
-      aspect: S.tools?.camera.aspect ?? 16 / 9,
+      aspect: S.tools?.camera?.aspect ?? 16 / 9,
       fov: opticsOfKey(i).fov,
       roll: key.roll,
       fill: SHOT_SIZES[size],
@@ -267,7 +267,7 @@ export const addVertigo = (i: number) => {
     const vector = p.sub(aim),
       distance = vector.length();
     if (distance < 0.01) return say("Set an aim point away from the camera before adding Vertigo");
-    const aspect = S.tools?.camera.aspect ?? 16 / 9;
+    const aspect = S.tools?.camera?.aspect ?? 16 / 9;
     const optics = opticsOfKey(at);
     const mm = (optics.mm ?? mmOf(optics.fov, lensAspectAt(active.t))) < 50 ? 50 : 24;
     const toFov = rigFov(0, mm, aspect, cameraAxisAt(time));

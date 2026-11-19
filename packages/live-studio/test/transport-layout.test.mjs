@@ -295,10 +295,16 @@ test("PendingChangesBar sits in its own strip above the control row and collapse
     t.setAutoSave(false);
     t.set({ free: true, noteReturn: 1, still: { url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", t: 0 } });
   })()`);
-  await page.evaluate(`(() => {
-    const btn = [...document.querySelectorAll('[aria-label="Cinema prime lenses"] button')].find((b) => b.textContent.trim() === '85mm');
-    btn.click();
-  })()`);
+  const setFocal = (mm) => `(() => {
+    const el = document.querySelector('input[aria-label="Focal length (mm)"]');
+    el.focus();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(el, ${JSON.stringify(String(mm))});
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    el.blur();
+  })()`;
+  await page.evaluate(setFocal(85));
   await waitUntil(`document.querySelector('button[aria-label="Revert pending changes"]')`);
   await Bun.sleep(220);
 
@@ -315,10 +321,7 @@ test("PendingChangesBar sits in its own strip above the control row and collapse
   await waitUntil(`!document.querySelector('[aria-label="Unconfirmed Studio changes"]')`);
   expect(await page.evaluate(`window.__TL_TEST__.camKeys()[1].mm ?? null`)).toBe(null);
 
-  await page.evaluate(`(() => {
-    const btn = [...document.querySelectorAll('[aria-label="Cinema prime lenses"] button')].find((b) => b.textContent.trim() === '50mm');
-    btn.click();
-  })()`);
+  await page.evaluate(setFocal(50));
   await waitUntil(`document.querySelector('button[aria-label="Confirm pending changes"]')`);
   const postsBefore = await page.evaluate(`window.__TL_TEST__.camPostCount()`);
   await page.evaluate(

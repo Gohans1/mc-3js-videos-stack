@@ -30,7 +30,7 @@ export const panStats = (i: number, t: number) => {
   const poses = sample([from, to]);
   if (!poses) return null;
   const [a, b] = poses;
-  const aspect = S.tools?.camera.aspect ?? 16 / 9;
+  const aspect = S.tools?.camera?.aspect ?? 16 / 9;
   const speed = (forward(a).angleTo(forward(b)) * DEG) / (to - from);
   const fullWidth = speed > 1e-6 ? hfovOf((a.fov + b.fov) / 2, aspect) / speed : Infinity;
   return {

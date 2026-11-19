@@ -72,7 +72,7 @@ export function CameraShotSettings({ shot }: { shot: number }) {
   };
   const setAxis = (mode: "native" | "horizontal" | "vertical") =>
     camera({
-      fovAxis: mode === "native" ? undefined : { mode, aspect: S.tools?.camera.aspect || 16 / 9 },
+      fovAxis: mode === "native" ? undefined : { mode, aspect: S.tools?.camera?.aspect || 16 / 9 },
     });
   const offset = (id: "lensShift" | "frameOffset", axis: number, v: number) => {
     const next = [...(rig[id] ?? [0, 0])] as [number, number];

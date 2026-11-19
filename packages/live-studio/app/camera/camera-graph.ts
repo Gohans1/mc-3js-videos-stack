@@ -117,7 +117,7 @@ const sampleGraphViews = (times: number[], track: CamKey[]) => {
     clockTimes.map(({ camera }, i) => {
       const rig = SHOTS_OUT[shotIndex(times[i])]?.camera;
       const options = {
-        aspect: tools?.camera.aspect,
+        aspect: tools?.camera?.aspect,
         resolveAnchor: tools?.resolveCameraAnchor,
         fovAxis: rig?.fovAxis,
         rail: rig?.look === "one-node" ? undefined : rig?.rail,

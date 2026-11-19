@@ -225,17 +225,23 @@ function FixtureApp() {
         <div
           id="harness"
           data-review={review ? "true" : undefined}
-          style={{ "--edit-h": "320px", "--edit-max": "320px" }}
-          className={
-            review
-              ? "bg-backdrop grid h-[800px] w-[1280px] grid-cols-[520px_minmax(0,1fr)] grid-rows-[420px_auto_320px_auto] gap-1.5 overflow-hidden p-1.5"
-              : "bg-backdrop grid h-[800px] w-[1280px] grid-cols-[minmax(0,1fr)_320px] grid-rows-[420px_auto_320px_auto] gap-1.5 overflow-hidden p-1.5"
-          }
+          style={{
+            "--edit-h": "320px",
+            "--edit-max": "320px",
+            width: 1280,
+            height: 800,
+            gridTemplateColumns: review ? "520px minmax(0, 1fr)" : "minmax(0, 1fr) 320px",
+            gridTemplateRows: "420px auto 320px auto",
+          }}
+          className="bg-backdrop grid gap-1.5 overflow-hidden p-1.5"
         >
           {review && <div data-mock-review className="bg-card col-start-1 row-span-2 row-start-1" />}
           <Stage bind={bind} />
           <Transport />
-          <div className="bg-background col-start-2 row-span-3 row-start-1 flex min-h-0 flex-col overflow-hidden rounded-lg">
+          <div
+            style={{ height: 0, minHeight: "100%" }}
+            className="bg-background col-start-2 row-span-3 row-start-1 flex min-h-0 flex-col overflow-hidden rounded-lg"
+          >
             {uxThumbNote && (
               <div className="border-hairline border-b p-2">
                 <NoteThumb note={uxThumbNote} t={uxThumbNote.t} shotFull="Shot 0 · Intro" />
@@ -487,6 +493,7 @@ beforeEach(async () => {
     });
     u.S.t = 0;
     u.setStageBox(760, 428);
+    window.scrollTo(0, 0);
   })()`);
 });
 
@@ -759,35 +766,37 @@ test("EaseTiles lets user clone any built-in preset into a new named template wi
   await waitUntil(`Math.abs(window.__UX_TEST__.camKeys()[1].ease?.[0] - 0.42) < 0.01`);
 });
 
-test("SpeedPanel auto-connects adjacent keyframes in a shot and exposes Connect/Custom controls", async () => {
+test("SpeedPanel exposes EaseTiles, Custom curve, CameraGraph, and Match speed continuity without mutating neighbor curves", async () => {
   await page.evaluate("window.__UX_TEST__.loadCameraFixture()");
   await waitUntil("document.body.textContent.includes('Into keyframe 2')");
-  // Select keyframe 2 and set its easing to Linear via the UI so exit speed > 0
   await page.evaluate(`(() => {
-    const autoBtn = document.querySelector('button[aria-label="Auto-connect keyframe speed"]');
-    if (autoBtn && autoBtn.getAttribute('aria-pressed') !== 'true') autoBtn.click();
     const linTile = document.querySelector('ul[aria-label="Speed curve"] button[aria-label^="Linear:"]');
     if (!linTile) throw new Error('Linear tile not found');
     linTile.click();
   })()`);
-  await waitUntil(
-    `window.__UX_TEST__.camKeys()[1].ease === 'linear' || Array.isArray(window.__UX_TEST__.camKeys()[1].ease)`,
-  );
+  await waitUntil(`window.__UX_TEST__.camKeys()[1].ease === 'linear'`);
 
-  // Select keyframe 3 and pick Ease Out: auto-connect aligns its incoming slope to match keyframe 2's exit speed
   await page.evaluate(`(() => {
-    window.__UX_TEST__.set({ camKey: 2 });
+    const matchBtn = [...document.querySelectorAll('[role="radiogroup"][aria-label="Speed through keyframe"] button')].find((b) => b.textContent.trim() === 'Match speed');
+    if (!matchBtn) throw new Error('Match speed button not found');
+    matchBtn.click();
   })()`);
+  await waitUntil(`window.__UX_TEST__.camKeys()[1].matchSpeed === true`);
+
+  // Select keyframe 3 and pick Ease Out: authored curve stays Ease Out cleanly
+  await page.evaluate(`window.__UX_TEST__.set({ camKey: 2 })`);
   await waitUntil("document.body.textContent.includes('Into keyframe 3')");
   await page.evaluate(`(() => {
     const outTile = document.querySelector('ul[aria-label="Speed curve"] button[aria-label^="Ease Out:"]');
     if (!outTile) throw new Error('Ease Out tile not found');
     outTile.click();
   })()`);
-  await waitUntil(`Array.isArray(window.__UX_TEST__.camKeys()[2].ease)`);
-  const k2Ease = await page.evaluate("window.__UX_TEST__.camKeys()[2].ease");
-  expect(Array.isArray(k2Ease)).toBe(true);
-  expect(k2Ease[1]).toBeGreaterThan(0.05);
+  await waitUntil(`window.__UX_TEST__.camKeys()[2].ease === 'out'`);
+  expect(
+    await page.evaluate(
+      `Boolean(document.querySelector('svg[aria-label="Position speed graph"]'))`,
+    ),
+  ).toBe(true);
 });
 
 test("CamPanel provides per-field Reset buttons for Time, FOV, Roll, and Sway independently", async () => {
@@ -1289,17 +1298,21 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
     const u = window.__UX_TEST__;
     u.setAutoSave(false);
   })()`);
+  const setFocal = (mm) => `(() => {
+    const el = document.querySelector('input[aria-label="Focal length (mm)"]');
+    el.focus();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(el, ${JSON.stringify(String(mm))});
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    el.blur();
+  })()`;
   try {
     await page.evaluate("window.__UX_TEST__.loadCameraFixture()");
-    await waitUntil(
-      "document.body.textContent.includes('Cinema prime lenses') || document.querySelector('[aria-label=\"Cinema prime lenses\"]')",
-    );
+    await waitUntil(`document.querySelector('input[aria-label="Focal length (mm)"]')`);
     const postsBefore = await page.evaluate("window.__UX_TEST__.camPostCount()");
 
-    await page.evaluate(`(() => {
-      const btn = [...document.querySelectorAll('[aria-label="Cinema prime lenses"] button')].find((b) => b.textContent.trim() === '85mm');
-      btn.click();
-    })()`);
+    await page.evaluate(setFocal(85));
     await waitUntil(`document.querySelector('button[aria-label="Revert pending changes"]')`);
 
     const draftState = await page.evaluate(`(() => ({
@@ -1326,10 +1339,7 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
     expect(afterRevert).toEqual({ mm: null, fov: 50, posts: postsBefore });
 
     // Edit again and Confirm writes to /api/cam and clears PendingChangesBar
-    await page.evaluate(`(() => {
-      const btn = [...document.querySelectorAll('[aria-label="Cinema prime lenses"] button')].find((b) => b.textContent.trim() === '50mm');
-      btn.click();
-    })()`);
+    await page.evaluate(setFocal(50));
     await waitUntil(`document.querySelector('button[aria-label="Confirm pending changes"]')`);
     await page.evaluate(
       `document.querySelector('button[aria-label="Confirm pending changes"]').click()`,
@@ -1349,7 +1359,7 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
   await page.evaluate("window.__UX_TEST__.setStageBox(640, 360)");
   await page.evaluate("window.__UX_TEST__.attachAndDrawTimeline()");
   await waitUntil(
-    `document.querySelector('[aria-label="Cinema prime lenses"]') && document.body.textContent.includes('Depth of field')`,
+    `document.querySelector('[aria-label="Prime lens"]') && document.querySelector('[aria-label="Focus mode"]')`,
   );
 
   const setField = (ariaLabel, value) => `(() => {
@@ -1363,10 +1373,14 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
     el.blur();
   })()`;
 
-  // 1. Prime 35mm switches keyframe to mm: 35 and clears fov
+  // 1. Prime 35mm via Prime lens select switches keyframe to mm: 35 and clears fov
+  await page.evaluate(`document.querySelector('[aria-label="Prime lens"]').click()`);
+  await waitUntil(
+    `[...document.querySelectorAll('[role="option"]')].some((o) => o.textContent.includes('35mm'))`,
+  );
   await page.evaluate(`(() => {
-    const btn = [...document.querySelectorAll('[aria-label="Cinema prime lenses"] button')].find((b) => b.textContent.trim() === '35mm');
-    btn.click();
+    const opt = [...document.querySelectorAll('[role="option"]')].find((o) => o.textContent.includes('35mm'));
+    opt.click();
   })()`);
   await waitUntil(
     `window.__UX_TEST__.camKeys()[1].mm === 35 && window.__UX_TEST__.camKeys()[1].fov === undefined`,
@@ -1410,25 +1424,25 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
   expect(pickedDist).toBeGreaterThan(3);
   expect(pickedDist).toBeLessThan(7);
 
-  // 4. Handheld Select + Sliders & Step bob
-  await page.evaluate(`document.querySelector('[aria-label="Handheld shake preset"]').click()`);
+  // 4. Handheld Select + Sliders & Walking bob
+  await page.evaluate(`document.querySelector('[aria-label="Handheld preset"]').click()`);
   await waitUntil(
-    `[...document.querySelectorAll('[role="option"]')].some((o) => o.textContent.includes('Handycam Run'))`,
+    `[...document.querySelectorAll('[role="option"]')].some((o) => o.textContent.includes('handycam run'))`,
   );
   await page.evaluate(`(() => {
-    const opt = [...document.querySelectorAll('[role="option"]')].find((o) => o.textContent.includes('Handycam Run'));
+    const opt = [...document.querySelectorAll('[role="option"]')].find((o) => o.textContent.includes('handycam run'));
     opt.click();
   })()`);
   await waitUntil(`window.__UX_TEST__.camKeys()[1].handheld === 'HANDYCAM_RUN'`);
-  await page.evaluate(setField("Amount", "1.4"));
-  await page.evaluate(setField("Step bob", "0.35"));
+  await page.evaluate(setField("Handheld amount", "1.4"));
+  await page.evaluate(setField("Walking bob", "0.35"));
   await waitUntil(
     `window.__UX_TEST__.camKeys()[1].handheld?.amount === 1.4 && window.__UX_TEST__.camKeys()[1].bob === 0.35`,
   );
 
-  // 5. Coordinates Position X & Look-At Y
+  // 5. Coordinates Position X & Aim Y
   await page.evaluate(setField("Position X", "7.5"));
-  await page.evaluate(setField("Look-At Y", "2.25"));
+  await page.evaluate(setField("Aim Y", "2.25"));
   await waitUntil(
     `window.__UX_TEST__.camKeys()[1].p?.[0] === 7.5 && window.__UX_TEST__.camKeys()[1].l?.[1] === 2.25`,
   );

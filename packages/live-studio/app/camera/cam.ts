@@ -352,9 +352,9 @@ export const retime = (i: number, t: number) => {
 export type LensField = "fov" | "mm" | "fstop" | "roll" | "wave" | "bob";
 export const cameraAxisAt = (time: number) => SHOTS_OUT[shotIndex(time)]?.camera?.fovAxis;
 export const lensAspectAt = (time: number) =>
-  lensAspect(S.tools?.camera.aspect || 16 / 9, cameraAxisAt(time));
+  lensAspect(S.tools?.camera?.aspect || 16 / 9, cameraAxisAt(time));
 const fovForStorage = (fov: number, t: number) => {
-  const aspect = S.tools?.camera.aspect || 16 / 9;
+  const aspect = S.tools?.camera?.aspect || 16 / 9;
   const axis = cameraAxisAt(t);
   return axis?.mode === "horizontal" ? vfovOf(hfovOf(fov, aspect), axis.aspect) : fov;
 };

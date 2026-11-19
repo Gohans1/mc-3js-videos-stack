@@ -114,7 +114,7 @@ export const sampleEditedPath = (times: number[]): CameraPathPose[] => {
   const track = EDIT.cam as CamKey[];
   return clockTimes.map(({ camera }) =>
     cameraAt(camera, track, {
-      aspect: tools.camera.aspect,
+      aspect: tools.camera?.aspect,
       resolveAnchor: tools.resolveCameraAnchor,
     }),
   );

@@ -310,7 +310,7 @@ export function Transport() {
             onClick={() => engine.setFree(!free)}
           >
             <Move3d data-icon="inline-start" />
-            <span className="@max-[620px]:hidden">Free camera</span>
+            <span className="@max-[820px]:hidden">Free camera</span>
           </Button>
         </Tip>
         {free && (
