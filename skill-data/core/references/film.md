@@ -50,6 +50,7 @@ A Shorts film sets "ratio": "9:16" under "live-studio" in package.json: drafts a
 | `src/edit.json`                         | Narration takes and script, `voice.warp`, beats, the film's own settings                                                                              | Narration       |
 | `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into it, `anim`; shot N is row N                                                                        | Narration       |
 | `src/timeline/cam.json`                 | Camera keys and cuts                                                                                                                                  | Scene           |
+| lights.json | Key ánh sáng, đèn thực tế, sương và tia sáng. Khai báo lightsTimeline trong package.json để sửa qua Light hoặc collab read/write lights. | Giây nguồn |
 | Camera row IDs                          | Preserve `id` when editing existing rows and mint a fresh `id` for new rows; Studio assigns missing IDs on load                                       | Camera and shot |
 | Camera paths                            | `motion` on the incoming key selects `smooth`, `linear`, `hold`, or `orbit`; step bob follows travel distance along the shot path                     | Camera          |
 | Camera anchors                          | `p` and `l` accept `{ target, offset }` with optional `space: "local"` to interpret offsets in the target's local frame                               | Camera          |

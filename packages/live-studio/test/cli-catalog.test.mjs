@@ -36,6 +36,56 @@ test("FFmpeg native argv preserves its explicit option boundary without weakenin
   );
 });
 
+test("QC exposes native inspection commands and render preserves evidence settings", () => {
+  const cases = [
+    [
+      {
+        args: { video: "renders/draft.mp4" },
+        flags: { "--checks": "probe,sync", "--strict": true },
+      },
+      ["renders/draft.mp4", "--checks", "probe,sync", "--strict"],
+    ],
+    [
+      {
+        subcommandPath: ["box"],
+        args: { image: "before.png", rect: "0,0,0.5,0.5" },
+        flags: { "--norm": true, "--json": true },
+      },
+      ["box", "before.png", "0,0,0.5,0.5", "--norm", "--json"],
+    ],
+    [
+      {
+        subcommandPath: ["compare"],
+        args: { before: "before.png", after: "after.png" },
+        flags: { "--out": "renders/diff.png" },
+      },
+      ["compare", "before.png", "after.png", "--out", "renders/diff.png"],
+    ],
+    [
+      { subcommandPath: ["motion"], flags: { "--cam": "src/timeline/cam.json", "--to": 4 } },
+      ["motion", "--cam", "src/timeline/cam.json", "--to", "4"],
+    ],
+  ];
+  for (const [request, argv] of cases) {
+    const result = buildCliInvocation({ commandId: "qc", ...request }, BASE_CONTEXT);
+    expect(result.validationErrors).toEqual([]);
+    expect(result.argvTokens).toEqual(argv);
+  }
+  const render = buildCliInvocation(
+    {
+      commandId: "render",
+      args: { target: "stills" },
+      env: { CROP: "0,0,0.5,0.5", COMPARE: true },
+    },
+    BASE_CONTEXT,
+  );
+  expect(render.validationErrors).toEqual([]);
+  expect(render.envEntries).toEqual([
+    ["CROP", "0,0,0.5,0.5"],
+    ["COMPARE", "1"],
+  ]);
+});
+
 test("media setup preserves custom deadline and evidence parent in catalog argv", () => {
   const result = buildCliInvocation({
     commandId: "media",

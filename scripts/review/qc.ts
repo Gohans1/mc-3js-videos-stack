@@ -40,10 +40,10 @@ const FRAME_METRICS = resolve(HERE, "frame_metrics.py");
 const HELP = `Unified QC and inspection CLI for rendered videos, frames, and camera timelines.
 
 Usage:
-  bun scripts/review/qc.ts [video] [options]
-  bun scripts/review/qc.ts box <image> <x,y,w,h> [--norm] [--json]
-  bun scripts/review/qc.ts compare <before> <after> [--out <path>] [--threshold <n>] [--json]
-  bun scripts/review/qc.ts motion [--cam <file>] [--from <s>] [--to <s>] [--json]
+  bun run qc [video] [options]
+  bun run qc box <image> <x,y,w,h> [--norm] [--json]
+  bun run qc compare <before> <after> [--out <path>] [--threshold <n>] [--json]
+  bun run qc motion [--cam <file>] [--from <s>] [--to <s>] [--json]
 
 Video QC options:
   --checks <list>     Comma-separated check IDs: ${ALL_CHECKS.join(",")}
@@ -1011,14 +1011,15 @@ function runUnifiedQc(argv: string[]): number {
 
 export { findAutoVideo, selectPython };
 
-if (import.meta.main) {
-  const args = process.argv.slice(2);
-  if (args[0] === "help") {
+export function runQc(args: string[]): number {
+  if (["help", "-h", "--help"].includes(args[0])) {
     console.log(HELP);
-    process.exit(0);
+    return 0;
   }
-  if (args[0] === "box") process.exit(runBox(args.slice(1)));
-  if (args[0] === "compare") process.exit(runCompare(args.slice(1)));
-  if (args[0] === "motion") process.exit(runMotionCmd(args.slice(1)));
-  process.exit(runUnifiedQc(args));
+  if (args[0] === "box") return runBox(args.slice(1));
+  if (args[0] === "compare") return runCompare(args.slice(1));
+  if (args[0] === "motion") return runMotionCmd(args.slice(1));
+  return runUnifiedQc(args);
 }
+
+if (import.meta.main) process.exit(runQc(process.argv.slice(2)));

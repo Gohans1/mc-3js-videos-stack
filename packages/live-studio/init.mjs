@@ -116,6 +116,7 @@ const SCRIPTS = {
   notes: "bun node_modules/live-studio/notes.mjs",
   note: "bun node_modules/live-studio/note.mjs",
   render: "bun node_modules/live-studio/render.mjs",
+  qc: "bun node_modules/live-studio/qc.mjs",
   framecheck: "bun node_modules/live-studio/framecheck.mjs",
   check: "bun node_modules/live-studio/check.mjs",
   help: "bun node_modules/live-studio/help.mjs",

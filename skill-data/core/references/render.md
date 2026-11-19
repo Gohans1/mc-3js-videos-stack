@@ -31,6 +31,8 @@ bun run deliver --youtube 9-15               # file seconds; retains renders/you
 
 | Job                    | How                                                                                                                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Soi một vùng | CROP=x,y,w,h dùng tọa độ chuẩn hóa 0–1 với render stills hoặc poster. Render theo vùng của ống kính ở mật độ pixel gốc. |
+| So trước và sau | COMPARE=1 hoặc --compare giữ ảnh cũ ở renders/.prev/ và ghi ảnh so pixel khi đã có ảnh trước. |
 | Trying a move or a fix | `SPAN=40,44 bun run render clip` draws just those seconds to `renders/span_40-44.mp4`, in seconds, chunks untouched; `framecheck` and `sheet` read its seconds from its name                 |
 | One stretch changed    | `CHUNKS=3 bun run render clip` redraws that 30 s chunk. A plain `render clip` keeps chunks whose built code, timelines and render settings are unchanged |
 | An asset replaced in place | Files under `assets/public` and `vault/openfilm/library` are not in the render stamp; force affected chunks with `CHUNKS=N` before inspecting the result |
