@@ -24,12 +24,13 @@ import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { isElementShown, onShownResize } from "../timeline/visible";
 import { GAIN_KEY_EPS, gainAt, gainPoints, toggleGainKey } from "./gain";
+import { shotCutOverlaps } from "./jlcut";
 import { needsProcessing, processed, processSpec } from "./processed";
 import { type ClipRef } from "./slice";
 import {
   addClip,
-  audioItemId,
   allClips,
+  audioItemId,
   beatTimes,
   clipBeats,
   clipOf,
@@ -204,6 +205,46 @@ const drawClip = (
       g.arc(fadeX(x0, x1, hx), y + LABEL_H + 5, 3, 0, Math.PI * 2);
       g.fill();
       g.stroke();
+    }
+  }
+  const cuts = SHOTS.map((s) => s.t).filter((t) => t > 0);
+  const overlap = shotCutOverlaps(from, to, cuts);
+  if (overlap.jLead) {
+    const cutX = Math.max(cx0, Math.min(cx1, x0 + (overlap.jLead.cut - from) * px));
+    if (cutX - cx0 > 2) {
+      g.fillStyle = "rgba(58, 169, 159, 0.22)";
+      g.fillRect(cx0, y, cutX - cx0, CLIP_H);
+      g.strokeStyle = "rgba(58, 169, 159, 0.85)";
+      g.lineWidth = 1;
+      g.beginPath();
+      g.setLineDash([2, 2]);
+      g.moveTo(cutX, y + 1);
+      g.lineTo(cutX, y + CLIP_H - 1);
+      g.stroke();
+      g.setLineDash([]);
+      if (cutX - cx0 >= 22) {
+        g.fillStyle = "rgba(58, 169, 159, 0.95)";
+        g.fillText(`J -${overlap.jLead.amount.toFixed(1)}s`, cx0 + 4, y + CLIP_H - 7);
+      }
+    }
+  }
+  if (overlap.lTrail) {
+    const cutX = Math.max(cx0, Math.min(cx1, x0 + (overlap.lTrail.cut - from) * px));
+    if (cx1 - cutX > 2) {
+      g.fillStyle = "rgba(139, 126, 200, 0.22)";
+      g.fillRect(cutX, y, cx1 - cutX, CLIP_H);
+      g.strokeStyle = "rgba(139, 126, 200, 0.85)";
+      g.lineWidth = 1;
+      g.beginPath();
+      g.setLineDash([2, 2]);
+      g.moveTo(cutX, y + 1);
+      g.lineTo(cutX, y + CLIP_H - 1);
+      g.stroke();
+      g.setLineDash([]);
+      if (cx1 - cutX >= 22) {
+        g.fillStyle = "rgba(139, 126, 200, 0.95)";
+        g.fillText(`L +${overlap.lTrail.amount.toFixed(1)}s`, cutX + 4, y + CLIP_H - 7);
+      }
     }
   }
   if (c.try) {

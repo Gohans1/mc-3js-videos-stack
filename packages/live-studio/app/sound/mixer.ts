@@ -26,6 +26,13 @@ import { duckCorners, duckGain, duckWindows } from "./duck";
 import { envelope, envelopePoints } from "./envelope";
 import { coefficients, widthOf } from "./eq";
 import { type GainKey, scheduleGain } from "./gain";
+import {
+  generateImpulseResponse,
+  isPresetSpace,
+  normalizeStereoIr,
+  resolveClipReverb,
+  type ResolvedReverb,
+} from "./ir";
 import { loopSources } from "./loop";
 import {
   clearProcessed,
@@ -38,12 +45,22 @@ import {
 } from "./processed";
 import { type ClipRef } from "./slice";
 import type { Lanes, LibraryItem } from "./sound";
+import {
+  type CameraPose,
+  computeSpatialParams,
+  isSpatialActive,
+  offsetPosition,
+  type SpatialSpec,
+  type Vec3,
+} from "./spatial";
 
 interface Source {
   lanes: () => Lanes | null;
   library: () => LibraryItem[];
   span: (c: ClipRef) => [number, number];
   voice: () => { s: number; e: number }[];
+  camPose?: (t: number) => CameraPose;
+  targetPos?: (name: string, t: number) => Vec3 | null;
 }
 interface Clip {
   key: string;
@@ -61,6 +78,8 @@ interface Clip {
   pan: number;
   filters: string[];
   process?: ProcessSpec;
+  reverb?: ResolvedReverb | null;
+  spatial?: SpatialSpec;
 }
 interface Sound {
   buf: AudioBuffer;
@@ -146,10 +165,123 @@ const load = (name: string) => {
   }
   return sounds.get(name)!;
 };
+interface RawIrData {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+}
+
+const irRaw = new Map<string, RawIrData | null>();
+const irPromises = new Map<string, Promise<RawIrData | null>>();
+const irCtxBuffers = new WeakMap<BaseAudioContext, Map<string, AudioBuffer>>();
+let convolversByBus = new WeakMap<AudioNode, Map<string, ConvolverNode>>();
+
+const loadCustomIr = (space: string): Promise<RawIrData | null> => {
+  if (!irPromises.has(space)) {
+    irPromises.set(
+      space,
+      getFile(`/api/sound/ir?path=${encodeURIComponent(space)}`)
+        .then(async (r) => {
+          if (!r.ok) {
+            irRaw.set(space, null);
+            return null;
+          }
+          const buf = await getAudioCtx().decodeAudioData(await r.arrayBuffer());
+          const ch0 = buf.getChannelData(0);
+          const ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;
+          const left = new Float32Array(ch0);
+          const right = new Float32Array(ch1);
+          normalizeStereoIr(left, right);
+          const data = { left, right, sampleRate: buf.sampleRate };
+          irRaw.set(space, data);
+          return data;
+        })
+        .catch(() => {
+          irRaw.set(space, null);
+          return null;
+        }),
+    );
+  }
+  return irPromises.get(space)!;
+};
+
+const irAudioBufferFor = (ctx: BaseAudioContext, space: string): AudioBuffer | null => {
+  if (typeof ctx.createBuffer !== "function") return null;
+  const cacheKey = `${space}@${ctx.sampleRate}`;
+  let byKey = irCtxBuffers.get(ctx);
+  if (byKey?.has(cacheKey)) return byKey.get(cacheKey)!;
+
+  let raw: RawIrData | null | undefined;
+  if (isPresetSpace(space)) {
+    if (space === "dry") return null;
+    raw = irRaw.get(cacheKey);
+    if (!raw) {
+      raw = generateImpulseResponse(space, ctx.sampleRate);
+      irRaw.set(cacheKey, raw);
+    }
+  } else {
+    raw = irRaw.get(space);
+    if (raw === undefined) {
+      void loadCustomIr(space);
+      return null;
+    }
+    if (!raw) return null;
+  }
+
+  const audioBuf = ctx.createBuffer(2, raw.left.length, raw.sampleRate);
+  audioBuf.getChannelData(0).set(raw.left);
+  audioBuf.getChannelData(1).set(raw.right);
+  if (!byKey) {
+    byKey = new Map();
+    irCtxBuffers.set(ctx, byKey);
+  }
+  byKey.set(cacheKey, audioBuf);
+  return audioBuf;
+};
+
+const sharedConvolver = (
+  ctx: BaseAudioContext,
+  bus: AudioNode,
+  space: string,
+): ConvolverNode | null => {
+  if (typeof ctx.createConvolver !== "function") return null;
+  const buf = irAudioBufferFor(ctx, space);
+  if (!buf) return null;
+  let bySpace = convolversByBus.get(bus);
+  if (!bySpace) {
+    bySpace = new Map();
+    convolversByBus.set(bus, bySpace);
+  }
+  let conv = bySpace.get(space);
+  if (!conv) {
+    conv = ctx.createConvolver();
+    conv.normalize = false;
+    conv.buffer = buf;
+    conv.connect(bus);
+    bySpace.set(space, conv);
+  }
+  return conv;
+};
+
+const resetBusConvolvers = (bus: AudioNode | undefined | null) => {
+  if (!bus) return;
+  const bySpace = convolversByBus.get(bus);
+  if (!bySpace) return;
+  for (const conv of bySpace.values()) {
+    try {
+      conv.disconnect();
+    } catch {}
+  }
+  convolversByBus.delete(bus);
+};
+
 // A file changed on disk (a new download): its old decode goes
 export const forgetSounds = () => {
   sounds.clear();
   ready.clear();
+  irRaw.clear();
+  irPromises.clear();
+  convolversByBus = new WeakMap();
   clearProcessed();
 };
 // A library sound decoded, as the lanes play it (sweeten.ts reads where its moment is)
@@ -157,7 +289,7 @@ export const decoded = (name: string) => load(name).then((s) => s?.buf ?? null);
 // The mix element's own sound decoded, kept until a remix changes its URL: the meter's render and the skims play it
 let mixDecoded: { url: string; buf: Promise<AudioBuffer | null> } | null = null;
 const mixBuffer = () => {
-  const url = S.el.audio?.currentSrc;
+  const url = S.el?.audio?.currentSrc;
   if (!url) return Promise.resolve(null);
   if (mixDecoded?.url !== url)
     mixDecoded = {
@@ -258,6 +390,8 @@ const clips = (l: Lanes, all = false): Clip[] => {
         duck: narrated ? ((b.duck as number | undefined) ?? 0) : 0,
         pan: b.pan ?? 0,
         filters: [...((b.filters as string[]) ?? []), ...(trackEq.get(b.track ?? "") ?? [])],
+        reverb: resolveClipReverb(b.reverb, 0.5 * (b.from + b.to), l.spaces, l.reverb),
+        spatial: isSpatialActive(b.spatial) ? b.spatial : undefined,
       });
   });
   l.sfx.forEach((s, i) => {
@@ -269,11 +403,12 @@ const clips = (l: Lanes, all = false): Clip[] => {
       return;
     }
     const start = p.own ? (s.start ?? 0) : 0; // an option plays from its own start
+    const t1 = s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1));
     out.push({
       key: `sfx:${i}`,
       name: p.name,
       t0: s.at,
-      t1: s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1)),
+      t1,
       start,
       length: s.length,
       loop: false,
@@ -284,6 +419,8 @@ const clips = (l: Lanes, all = false): Clip[] => {
       duck: 0,
       pan: s.pan ?? 0,
       filters: [...((s.filters as string[]) ?? []), ...(trackEq.get(s.track ?? "") ?? [])],
+      reverb: resolveClipReverb(s.reverb, 0.5 * (s.at + t1), l.spaces, l.reverb),
+      spatial: isSpatialActive(s.spatial) ? s.spatial : undefined,
     });
   });
   const audible = out.filter((c) => c.t1 > c.t0);
@@ -301,9 +438,15 @@ const clips = (l: Lanes, all = false): Clip[] => {
 };
 const soundFor = (c: Clip) => (c.process ? processed(c.process) : ready.get(c.name));
 const loadClip = (c: Clip) => (c.process ? loadProcessed(c.process) : load(c.name));
-const preloadSources = (l: Lanes) =>
-  Promise.all(
-    [
+const preloadSources = (l: Lanes) => {
+  const customSpaces = [
+    ...(l.reverb ? [l.reverb.space] : []),
+    ...(l.spaces ?? []).map((s) => s.space),
+    ...l.beds.flatMap((b) => (b.reverb ? [b.reverb.space] : [])),
+    ...l.sfx.flatMap((s) => (s.reverb ? [s.reverb.space] : [])),
+  ].filter((sp) => sp && !isPresetSpace(sp));
+  return Promise.all([
+    ...[
       ...new Set(
         [...l.beds, ...l.sfx].flatMap((c) => {
           const p = c.try?.length ? lanePick(c.name)?.set : null;
@@ -311,11 +454,14 @@ const preloadSources = (l: Lanes) =>
         }),
       ),
     ].map(load),
-  );
+    ...[...new Set(customSpaces)].map(loadCustomIr),
+  ]);
+};
 
 interface Voice {
   srcs: AudioBufferSourceNode[];
   gain: GainNode;
+  updateSpatial?: (tFilm: number, nowCtx: number) => void;
 }
 let voices: Voice[] = [];
 const started = new Set<string>();
@@ -394,8 +540,75 @@ const play = (
     p.pan.value = c.pan;
     tail = tail.connect(p);
   }
-  tail.connect(bus);
-  return { srcs, gain };
+  let updateSpatial: Voice["updateSpatial"];
+  if (
+    c.spatial &&
+    isSpatialActive(c.spatial) &&
+    source?.camPose &&
+    typeof ctx.createBiquadFilter === "function"
+  ) {
+    const spSpec = c.spatial;
+    const sampleSpatial = (tFilm: number) => {
+      const cam = source!.camPose!(tFilm);
+      const rawSrc = spSpec.target
+        ? (source!.targetPos?.(spSpec.target, tFilm) ?? spSpec.at ?? [0, 0, 0])
+        : (spSpec.at ?? [0, 0, 0]);
+      return computeSpatialParams(cam, offsetPosition(rawSrc, spSpec.offset), spSpec);
+    };
+    const lpf = ctx.createBiquadFilter();
+    lpf.type = "lowpass";
+    lpf.Q.value = Math.SQRT1_2;
+    const spGain = ctx.createGain();
+    const spPan = ctx.createStereoPanner();
+    spPan.channelCountMode = "explicit";
+    spPan.channelCount = 2;
+
+    const init = sampleSpatial(at);
+    lpf.frequency.setValueAtTime(Math.max(250, Math.min(20000, init.cutoffHz)), begin);
+    spGain.gain.setValueAtTime(init.gain, begin);
+    spPan.pan.setValueAtTime(init.pan, begin);
+
+    const isOffline =
+      typeof OfflineAudioContext !== "undefined" && ctx instanceof OfflineAudioContext;
+    if (isOffline) {
+      const step = 1 / 30;
+      for (let t = at + step; t <= c.t1 + 1e-4; t += step) {
+        const tt = Math.min(t, c.t1);
+        const ct = Math.max(begin, w.ctxAt(tt));
+        const sp = sampleSpatial(tt);
+        spGain.gain.linearRampToValueAtTime(sp.gain, ct);
+        spPan.pan.linearRampToValueAtTime(sp.pan, ct);
+        lpf.frequency.exponentialRampToValueAtTime(Math.max(250, Math.min(20000, sp.cutoffHz)), ct);
+      }
+    } else {
+      updateSpatial = (tFilm: number, nowCtx: number) => {
+        const sp = sampleSpatial(tFilm);
+        spGain.gain.setTargetAtTime(sp.gain, nowCtx, 0.015);
+        spPan.pan.setTargetAtTime(sp.pan, nowCtx, 0.015);
+        lpf.frequency.setTargetAtTime(Math.max(250, Math.min(20000, sp.cutoffHz)), nowCtx, 0.015);
+      };
+    }
+    tail = tail.connect(lpf).connect(spGain).connect(spPan);
+  }
+
+  const conv = c.reverb ? sharedConvolver(ctx, bus, c.reverb.space) : null;
+  if (conv && c.reverb) {
+    const dryGain = ctx.createGain();
+    const wetGain = ctx.createGain();
+    dryGain.gain.value = 1 - c.reverb.wet;
+    wetGain.gain.value = c.reverb.wet;
+    tail.connect(dryGain).connect(bus);
+    if (c.reverb.preDelayMs > 0 && typeof ctx.createDelay === "function") {
+      const preDelay = ctx.createDelay(1.0);
+      preDelay.delayTime.value = c.reverb.preDelayMs / 1000;
+      tail.connect(preDelay).connect(wetGain).connect(conv);
+    } else {
+      tail.connect(wetGain).connect(conv);
+    }
+  } else {
+    tail.connect(bus);
+  }
+  return { srcs, gain, updateSpatial };
 };
 const hush = (list: Voice[]) => {
   if (!list.length || !hasAudio()) return;
@@ -414,6 +627,7 @@ addPlayer({
   reset: () => {
     started.clear();
     voices = [];
+    if (hasAudio()) resetBusConvolvers(getLive().bus);
   },
   tick: (w) => {
     if (routed) levelMix(); // the mix plays through the graph whether or not the lanes do
@@ -438,6 +652,7 @@ addPlayer({
         });
       }
     }
+    for (const v of voices) v.updateSpatial?.(w.now, ctx.currentTime);
     window.__lanes = { sounding: voices.length, at: +w.now.toFixed(3), plans };
   },
 });
@@ -613,6 +828,7 @@ export const setLive = (live_: boolean, src: Source) => {
       hush(voices);
       voices = [];
       started.clear();
+      if (hasAudio()) resetBusConvolvers(getLive().bus);
       setLaneGroups({});
     }
   }

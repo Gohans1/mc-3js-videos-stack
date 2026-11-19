@@ -1,18 +1,18 @@
-import { lightEdit } from "../activity/activity";
-import { changedRows, itemKey } from "../activity/timeline-activity";
 import { narrationLines } from "../../src/narration.ts";
 import { mapVoice } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
+import { lightEdit } from "../activity/activity";
+import { changedRows, itemKey } from "../activity/timeline-activity";
 // The film's sound lanes (src/sound.mjs on the server), edited by hand like the camera keys (doc.ts: undo, saving, an agent's
 // edit wins): beds that loop from..to and one-shots at a time, both from the film's sfx folder. The film's own sound watcher
 // remixes on a save, or, with live lanes (mixer.ts), the page plays the change itself and nothing is remixed.
-import { DURATION } from "../core/filmMeta";
+import { DURATION, SHOTS } from "../core/filmMeta";
 import { getFile } from "../core/net";
 import { scheduleIdleBatch } from "../core/search";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
-import { r3, stamp } from "../core/time";
+import { FPS, r3, stamp } from "../core/time";
 import { createTimedDoc } from "../core/timed-doc";
 import { lanePick } from "../options/options";
 import { filmFeatures } from "../picture/frame";
@@ -21,11 +21,15 @@ import { createAuditionController } from "./audition-controller";
 import { type BeatMarkers, beatMarks } from "./beat-marks";
 import { type GainClip } from "./gain";
 import type { Role } from "./hit";
+import type { ReverbSpec, ShotSpace } from "./ir";
+import { computeJCutStart, computeLCutEnd, DEFAULT_JL_CUT_SEC } from "./jlcut";
 import { compareVariants, warmSearchTokens } from "./library-view";
 import { measureFinal } from "./meter";
 import { forgetSounds, replan, setLive } from "./mixer";
 import { type AudioProcessing, retime, retimedLength, sourceRoom, trimSource } from "./retime";
+import { sceneCameraPoseAt, sceneTargetAt } from "./scene-spatial";
 import { type ClipRef } from "./slice";
+import type { SpatialSpec } from "./spatial";
 import {
   addTrack,
   fits,
@@ -51,6 +55,8 @@ export interface Bed extends GainClip, AudioProcessing, BeatMarkers {
   pan?: number;
   track?: string;
   try?: string[];
+  reverb?: ReverbSpec;
+  spatial?: SpatialSpec;
   [k: string]: unknown;
 }
 export interface OneShot extends GainClip, AudioProcessing, BeatMarkers {
@@ -63,6 +69,8 @@ export interface OneShot extends GainClip, AudioProcessing, BeatMarkers {
   pan?: number;
   track?: string;
   try?: string[];
+  reverb?: ReverbSpec;
+  spatial?: SpatialSpec;
   [k: string]: unknown;
 }
 export const audioItemId = (list: ClipRef["list"], item: Bed | OneShot) =>
@@ -73,6 +81,8 @@ export interface Lanes {
   sfx: OneShot[];
   tracks: Track[];
   narration?: string;
+  reverb?: ReverbSpec;
+  spaces?: ShotSpace[];
   [k: string]: unknown;
 }
 export interface LibraryItem {
@@ -182,12 +192,17 @@ const doc = createTimedDoc<Lanes>(
     }, // a film without tracks gets them here, and in the file with its next edit
     received: (before, after) => {
       if (!get().aiActivity) return;
-      const tracks = changedRows(before.tracks, after.tracks, (track) => track.id)
-        .map((i) => `track:sound:${after.tracks[i].id}`);
+      const tracks = changedRows(before.tracks, after.tracks, (track) => track.id).map(
+        (i) => `track:sound:${after.tracks[i].id}`,
+      );
       const ranges: [number, number][] = [];
       for (const list of ["beds", "sfx"] as const) {
-        for (const i of changedRows<Bed | OneShot>(before[list], after[list], (item) =>
-          audioItemId(list, item) ?? JSON.stringify([item.track, item.name, item.from ?? item.at]),
+        for (const i of changedRows<Bed | OneShot>(
+          before[list],
+          after[list],
+          (item) =>
+            audioItemId(list, item) ??
+            JSON.stringify([item.track, item.name, item.from ?? item.at]),
         ).slice(0, 20)) {
           const clip = clipOf({ list, i });
           if (!clip) continue;
@@ -355,6 +370,8 @@ export const loadSound = async (opts?: {
         narrationLines(S.voiceBase, doc.source, seconds(lanes?.narration ?? ""), true),
         clockForTimeline("voice"),
       ),
+    camPose: sceneCameraPoseAt,
+    targetPos: sceneTargetAt,
   });
   doc.refresh();
 };
@@ -721,6 +738,108 @@ export const trimClips = (cs: ClipRef[], side: "left" | "right", t = S.t) => {
     `${side === "left" ? "Start" : "End"} of ${hit.length > 1 ? `${hit.length} clips` : clipOf(hit[0])!.name} trimmed to ${stamp(t)}. Ctrl+Z to undo`,
   );
 };
+
+export const clipCutBounds = (c: ClipRef, deltaSec = DEFAULT_JL_CUT_SEC) => {
+  const x = clipOf(c);
+  if (!x || !lanes) return null;
+  const [from, to] = span(c);
+  const track = x.track ?? "";
+  const neighbours = refs(lanes)
+    .filter((r) => !same(r, c) && (clipOf(r)?.track ?? "") === track)
+    .map(span);
+  const prevEnd = Math.max(0, ...neighbours.filter(([, b]) => b <= from + 0.02).map(([, b]) => b));
+  const nextStart = Math.min(
+    Infinity,
+    ...neighbours.filter(([a]) => a >= to - 0.02).map(([a]) => a),
+  );
+  const len = clipLength(x);
+  const fileDur = seconds(x.name);
+  const minFrom =
+    c.list === "beds" ? 0 : Math.max(0, sourceRoom(x, len, fileDur, from, clockOf(x))[0]);
+  const maxTo = from + maxClipLength(x);
+  const cutTimes = SHOTS.map((s) => s.t).filter((t) => t > 0);
+  const bounds = {
+    from,
+    to,
+    prevEnd,
+    nextStart,
+    minFrom,
+    maxTo,
+    minLength: 1 / FPS,
+    cutTimes,
+    leadSec: deltaSec,
+    trailSec: deltaSec,
+  };
+  return {
+    jCut: computeJCutStart(bounds),
+    lCut: computeLCutEnd(bounds),
+  };
+};
+
+export const applyJCut = (c: ClipRef, leadSec = DEFAULT_JL_CUT_SEC) => {
+  if (locked(c)) return;
+  const res = clipCutBounds(c, leadSec)?.jCut;
+  if (!res?.changed) {
+    say(
+      res?.blockedBy === "source"
+        ? "Cannot lead in further: clip is already at audio start (trimIn = 0)"
+        : "Cannot lead in further: blocked by previous clip on this track",
+    );
+    return;
+  }
+  const [from] = span(c);
+  edit((l) => cutBefore(c.list === "beds" ? l.beds[c.i] : l.sfx[c.i], c.list, res.target));
+  say(`J-Cut lead-in ${r3(from - res.target)}s. Ctrl+Z to undo`);
+};
+
+export const applyLCut = (c: ClipRef, trailSec = DEFAULT_JL_CUT_SEC) => {
+  if (locked(c)) return;
+  const res = clipCutBounds(c, trailSec)?.lCut;
+  if (!res?.changed) {
+    say(
+      res?.blockedBy === "source"
+        ? "Cannot trail out further: clip reached audio end (trimOut = duration)"
+        : "Cannot trail out further: blocked by next clip on this track",
+    );
+    return;
+  }
+  const [, to] = span(c);
+  edit((l) => cutAfter(c.list === "beds" ? l.beds[c.i] : l.sfx[c.i], c.list, res.target));
+  say(`L-Cut trail-out +${r3(res.target - to)}s. Ctrl+Z to undo`);
+};
+
+export const setClipReverb = (c: ClipRef, rev: ReverbSpec | undefined) =>
+  edit((l) => {
+    const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i];
+    if (rev) x.reverb = structuredClone(rev);
+    else delete x.reverb;
+  });
+
+export const setFilmReverb = (rev: ReverbSpec | undefined) =>
+  edit((l) => {
+    if (rev) l.reverb = structuredClone(rev);
+    else delete l.reverb;
+  });
+
+export const setShotSpace = (from: number, to: number, rev: ReverbSpec | undefined) =>
+  edit((l) => {
+    const list = [...(l.spaces ?? [])].filter(
+      (s) => Math.abs(s.from - from) > 0.02 || (s.to !== undefined && Math.abs(s.to - to) > 0.02),
+    );
+    if (rev) {
+      list.push({ from: r3(from), to: r3(to), ...structuredClone(rev) });
+      list.sort((a, b) => a.from - b.from);
+    }
+    if (list.length) l.spaces = list;
+    else delete l.spaces;
+  });
+
+export const setClipSpatial = (c: ClipRef, spatial: SpatialSpec | undefined) =>
+  edit((l) => {
+    const x = c.list === "beds" ? l.beds[c.i] : l.sfx[c.i];
+    if (spatial) x.spatial = structuredClone(spatial);
+    else delete x.spatial;
+  });
 // pan: -1 all left, 1 all right (mixer.ts, mix.py pan_filter); the centre is left out of the file
 export const setField = (
   c: ClipRef,
