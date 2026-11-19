@@ -92,7 +92,12 @@ export interface ModelLoadOptions {
 
 let cachedBmr: Promise<ModelRendererApi> | null = null;
 const loadBmr = (): Promise<ModelRendererApi> =>
-  (cachedBmr ??= import("block-model-renderer") as unknown as Promise<ModelRendererApi>);
+  (cachedBmr ??= (import("block-model-renderer") as unknown as Promise<ModelRendererApi>).catch(
+    (err) => {
+      cachedBmr = null;
+      throw err;
+    },
+  ));
 
 function applyShadows(root: THREE.Object3D, shadows: boolean): void {
   root.traverse((obj) => {
@@ -106,7 +111,14 @@ function applyShadows(root: THREE.Object3D, shadows: boolean): void {
 function normalizeBlockId(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("blockModel requires a non-empty block id");
-  return /^block:[^:]+:.+/.test(trimmed) ? trimmed.slice(6) : trimmed;
+  const stripped = /^block:[^:]+:.+/.test(trimmed) ? trimmed.slice(6) : trimmed;
+  const colon = stripped.indexOf(":");
+  const ns = colon >= 0 ? stripped.slice(0, colon) : "minecraft";
+  const path = colon >= 0 ? stripped.slice(colon + 1) : stripped;
+  if (!ns || !path) {
+    throw new Error(`blockModel requires a valid block id, got ${JSON.stringify(raw)}`);
+  }
+  return stripped;
 }
 
 function parseItemInput(raw: string): { ns: string; path: string; isExplicitPath: boolean } {

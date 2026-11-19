@@ -151,15 +151,16 @@ export const keyRows = (v: any, path: string[] = []): string[][] => {
 
 export const rowAt = (v: any, path: string[]): any => path.reduce((x, k) => x?.[k], v);
 
-const containsNestedTimed = (v: unknown, seen: WeakSet<object>): boolean => {
+const containsNestedTimed = (v: unknown, seen: WeakSet<object>, checkSelf = false): boolean => {
   if (!v || typeof v !== "object") return false;
   if (seen.has(v)) return false;
+  if (checkSelf && isTimedKey(v)) return true;
   seen.add(v);
   try {
     if (Array.isArray(v)) {
-      return v.some((item) => isTimedKey(item) || containsNestedTimed(item, seen));
+      return v.some((item) => containsNestedTimed(item, seen, true));
     }
-    return Object.values(v).some((child) => isTimedKey(child) || containsNestedTimed(child, seen));
+    return Object.values(v).some((child) => containsNestedTimed(child, seen, true));
   } finally {
     seen.delete(v);
   }

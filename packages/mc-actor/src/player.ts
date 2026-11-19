@@ -677,16 +677,18 @@ export async function makePlayer(
       ctx.clearRect?.(0, 0, canvas.width, canvas.height);
       ctx.drawImage(baseCanvas, 0, 0);
       if (f?.colour) paintFacePixels(ctx, baseCtx, f);
+      if (overlayFn) {
+        ctx.save?.();
+        try {
+          if ("globalAlpha" in ctx) ctx.globalAlpha = 1;
+          if ("globalCompositeOperation" in ctx) ctx.globalCompositeOperation = "source-over";
+          overlayFn(ctx, canvas.width, canvas.height);
+        } finally {
+          ctx.restore?.();
+        }
+      }
     } finally {
       ctx.restore?.();
-    }
-    if (overlayFn) {
-      ctx.save?.();
-      try {
-        overlayFn(ctx, canvas.width, canvas.height);
-      } finally {
-        ctx.restore?.();
-      }
     }
     liveMap.needsUpdate = true;
   };

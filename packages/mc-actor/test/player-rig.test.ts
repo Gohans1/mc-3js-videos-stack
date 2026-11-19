@@ -105,12 +105,16 @@ function makePixelCanvas(w = 64, h = 64, fill?: [number, number, number, number]
     fillRect(x, y, rw, rh) {
       const [r, g, b, a] = parseColor(this.fillStyle);
       const alpha = Math.max(0, Math.min(1, this.globalAlpha)) * (a / 255);
+      const mul = this.globalCompositeOperation === "multiply";
       for (let py = Math.max(0, y); py < Math.min(height, y + rh); py++) {
         for (let px = Math.max(0, x); px < Math.min(width, x + rw); px++) {
           const i = (py * width + px) * 4;
-          data[i] = Math.round(data[i]! * (1 - alpha) + r * alpha);
-          data[i + 1] = Math.round(data[i + 1]! * (1 - alpha) + g * alpha);
-          data[i + 2] = Math.round(data[i + 2]! * (1 - alpha) + b * alpha);
+          const sr = mul ? Math.round((data[i]! * r) / 255) : r;
+          const sg = mul ? Math.round((data[i + 1]! * g) / 255) : g;
+          const sb = mul ? Math.round((data[i + 2]! * b) / 255) : b;
+          data[i] = Math.round(data[i]! * (1 - alpha) + sr * alpha);
+          data[i + 1] = Math.round(data[i + 1]! * (1 - alpha) + sg * alpha);
+          data[i + 2] = Math.round(data[i + 2]! * (1 - alpha) + sb * alpha);
           data[i + 3] = Math.min(255, Math.round(data[i + 3]! + (255 - data[i + 3]!) * alpha));
         }
       }
@@ -375,13 +379,15 @@ describe("mc-actor player rig primitives", () => {
     const p = await makePlayer(template, baseSkin, { face: "skin" });
     const { inner, outer } = getSkinMaterials(p);
 
-    // Dirty external canvas state must not corrupt redrawSkin base compositing
+    // Dirty external canvas state must not corrupt redrawSkin base compositing OR overlayFn defaults
     p.skin.globalAlpha = 0.1;
     p.skin.globalCompositeOperation = "multiply";
 
     // Frame A: paint red mark at (10, 10)
     const ver0 = inner.map!.version;
     p.paintSkinOverlay((ctx: PixelContext) => {
+      expect(ctx.globalAlpha).toBe(1);
+      expect(ctx.globalCompositeOperation).toBe("source-over");
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = "#ff0000";
       ctx.fillRect(10, 10, 2, 2);
@@ -390,11 +396,11 @@ describe("mc-actor player rig primitives", () => {
     expect(outer.map).toBe(inner.map);
     expect(readPixel(p.skin, 10, 10)[0]).toBeGreaterThan(220);
 
-    // Frame B (scrub backward): mark at (10, 10) is gone and base skin is restored at full alpha
+    // Frame B (scrub backward): mark at (10, 10) is gone and overlayFn still starts clean despite dirty p.skin
     const ver1 = inner.map!.version;
     p.paintSkinOverlay((ctx: PixelContext) => {
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = "source-over";
+      expect(ctx.globalAlpha).toBe(1);
+      expect(ctx.globalCompositeOperation).toBe("source-over");
       ctx.fillStyle = "#0000ff";
       ctx.fillRect(12, 12, 1, 1);
     });
@@ -424,8 +430,8 @@ describe("mc-actor player rig primitives", () => {
     // Works with setFace("noeyes"): base -> eye patch -> overlay
     p.setFace("noeyes");
     p.paintSkinOverlay((ctx: PixelContext) => {
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = "source-over";
+      expect(ctx.globalAlpha).toBe(1);
+      expect(ctx.globalCompositeOperation).toBe("source-over");
       ctx.fillStyle = "#00ff00";
       ctx.fillRect(20, 20, 1, 1);
     });
@@ -456,8 +462,8 @@ describe("mc-actor player rig primitives", () => {
     p.paintSkinOverlay((ctx: PixelContext, w: number, h: number) => {
       expect(w).toBe(128);
       expect(h).toBe(128);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = "source-over";
+      expect(ctx.globalAlpha).toBe(1);
+      expect(ctx.globalCompositeOperation).toBe("source-over");
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(100, 100, 1, 1);
     });
@@ -467,35 +473,91 @@ describe("mc-actor player rig primitives", () => {
     expect(() => p.setSkin({ width: 0, height: 64 })).toThrow();
   });
 
-  test("setSkin recolors gameFace eyelids/iris/brows/mouth deterministically across scrubs and 128x128 HD skins", async () => {
+  test("setSkin recolors gameFace eyelids, iris, brows, and mouth deterministically across scrubs and 128x128 HD skins", async () => {
     installPixelDocument();
     const template = await loadPlayerTemplate();
 
-    // Skin A (64x64): warm tan face
-    const skinA = makePixelCanvas(64, 64, [200, 140, 100, 255]);
-    // Skin B (128x128 HD): cool blue-gray face only inside the scaled 16x16 face region (16..31, 16..31)
+    // Paint distinct pixel colors for cheek(1,5), iris(2,4), hair/brow(3,0), lip/mouth(3,6)
+    const paintFaceSamples = (
+      canvas: PixelCanvas,
+      scale: number,
+      cols: { skin: string; iris: string; hair: string; lip: string },
+    ) => {
+      const c = canvas.getContext();
+      const setPx = (fx: number, fy: number, hex: string) => {
+        c.fillStyle = hex;
+        c.fillRect((8 + fx) * scale, (8 + fy) * scale, scale, scale);
+      };
+      setPx(1, 5, cols.skin);
+      setPx(2, 4, cols.iris);
+      setPx(3, 0, cols.hair);
+      setPx(3, 6, cols.lip);
+    };
+
+    const skinA = makePixelCanvas(64, 64, [20, 20, 20, 255]);
+    paintFaceSamples(skinA, 1, {
+      skin: "#c88c64",
+      iris: "#2266dd",
+      hair: "#503020",
+      lip: "#b05040",
+    });
+
     const skinB = makePixelCanvas(128, 128, [10, 10, 10, 255]);
-    const bCtx = skinB.getContext();
-    bCtx.fillStyle = "#5080c0";
-    bCtx.fillRect(16, 16, 16, 16);
+    paintFaceSamples(skinB, 2, {
+      skin: "#5080c0",
+      iris: "#22bb44",
+      hair: "#ccaa22",
+      lip: "#8833aa",
+    });
 
     const p = await makePlayer(template, skinA, { face: "game" });
-    const lidMat = getHeadFaceMaterials(p).find((m) => m.polygonOffsetFactor === -4);
+    const mats = getHeadFaceMaterials(p);
+    const lidMat = mats.find((m) => m.polygonOffsetFactor === -4)!;
+    const irisMat = mats.find(
+      (m) =>
+        m.polygonOffsetFactor === -2 &&
+        m.color.getHexString() !== "efeee4" &&
+        m.color.getHexString() !== "b9534f",
+    )!;
+    const browMat = mats.find((m) => !m.polygonOffset)!;
+    const mouthMat = mats.find(
+      (m) => m.polygonOffsetFactor === -1 && m.color.getHexString() !== "f4f4f4",
+    )!;
     expect(lidMat).toBeDefined();
-    const initialLidHex = lidMat!.color.getHexString();
-    const expectedA = new THREE.Color("rgb(200,140,100)").multiplyScalar(0.9).getHexString();
-    const expectedB = new THREE.Color("rgb(80,128,192)").multiplyScalar(0.9).getHexString();
-    expect(initialLidHex).toBe(expectedA);
+    expect(irisMat).toBeDefined();
+    expect(browMat).toBeDefined();
+    expect(mouthMat).toBeDefined();
 
-    // Switching to 128x128 HD skinB recolors gameFace using scaled (8*s, 8*s) face sampling
+    const expA = {
+      lid: new THREE.Color("#c88c64").multiplyScalar(0.9).getHexString(),
+      iris: new THREE.Color("#2266dd").getHexString(),
+      brow: new THREE.Color("#503020").multiplyScalar(0.75).getHexString(),
+      mouth: new THREE.Color("#b05040").multiplyScalar(0.35).getHexString(),
+    };
+    const expB = {
+      lid: new THREE.Color("#5080c0").multiplyScalar(0.9).getHexString(),
+      iris: new THREE.Color("#22bb44").getHexString(),
+      brow: new THREE.Color("#ccaa22").multiplyScalar(0.75).getHexString(),
+      mouth: new THREE.Color("#8833aa").multiplyScalar(0.35).getHexString(),
+    };
+
+    const assertAll = (exp: typeof expA) => {
+      for (const [mat, want] of [
+        [lidMat, exp.lid],
+        [irisMat, exp.iris],
+        [browMat, exp.brow],
+        [mouthMat, exp.mouth],
+      ] as const) {
+        expect(mat.color.getHexString()).toBe(want);
+        expect(mat.emissive.getHexString()).toBe(want);
+      }
+    };
+
+    assertAll(expA);
     p.setSkin(skinB);
-    expect(lidMat!.color.getHexString()).toBe(expectedB);
-    expect(lidMat!.emissive.getHexString()).toBe(expectedB);
-
-    // Scrubbing back to skinA restores exact original eyelid color & emissive
+    assertAll(expB);
     p.setSkin(skinA);
-    expect(lidMat!.color.getHexString()).toBe(expectedA);
-    expect(lidMat!.emissive.getHexString()).toBe(expectedA);
+    assertAll(expA);
   });
 
   test("SKIN_UV maps canonical 64x64 Steve UV rects for all 6 limbs with zero overlap", () => {

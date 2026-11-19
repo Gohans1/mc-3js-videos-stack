@@ -443,6 +443,10 @@ describe("blockModel and itemModel", () => {
 
     await expect(blockModel([], "", {}, { renderer: noShadowRenderer })).rejects.toThrow();
     await expect(blockModel([], "   ", {}, { renderer: noShadowRenderer })).rejects.toThrow();
+    await expect(
+      blockModel([], "minecraft:", {}, { renderer: noShadowRenderer }),
+    ).rejects.toThrow();
+    await expect(blockModel([], ":stone", {}, { renderer: noShadowRenderer })).rejects.toThrow();
   });
 
   test("itemModel uses parseItemDefinition for 1.21.4+ bare/composite items, falls back on missing sentinel, and resolves explicit '/' paths directly", async () => {
@@ -501,103 +505,145 @@ describe("blockModel and itemModel", () => {
     await expect(itemModel([], "apple", 0, { renderer: legacy.renderer })).rejects.toThrow();
   });
 
-  test("real block-model-renderer core loads MC 1.21.11 emissive blocks, 1.21.4+ items, and legacy mod items", async () => {
-    const vaultRoot = process.env.MC_VAULT_ROOT;
-    const jarPath = vaultRoot ? join(vaultRoot, "jar/client_assets.zip") : null;
-    if (!jarPath || !existsSync(jarPath)) return;
+  const vaultJarPath = process.env.MC_VAULT_ROOT
+    ? join(process.env.MC_VAULT_ROOT, "jar/client_assets.zip")
+    : null;
 
-    const { core, encodeStoredPng } = await loadRealBmrCore();
-    const whitePx = encodeStoredPng(new Uint8Array([255, 255, 255, 255]), 1, 1);
-    const enc = new TextEncoder();
-    const legacyModZip = zipSync({
-      "assets/testmod/models/item/legacy_mug.json": enc.encode(
-        JSON.stringify({
-          elements: [
-            {
-              from: [4, 0, 4],
-              to: [12, 10, 12],
-              faces: {
-                up: { texture: "#all" },
-                north: { texture: "#all" },
-                south: { texture: "#all" },
-                east: { texture: "#all" },
-                west: { texture: "#all" },
-                down: { texture: "#all" },
+  test.skipIf(!vaultJarPath || !existsSync(vaultJarPath))(
+    "real block-model-renderer core loads MC 1.21.11 emissive blocks, 1.21.4+ items, and legacy mod items",
+    async () => {
+      const jarPath = vaultJarPath!;
+      const { core, encodeStoredPng } = await loadRealBmrCore();
+      const whitePx = encodeStoredPng(new Uint8Array([255, 255, 255, 255]), 1, 1);
+      const enc = new TextEncoder();
+      const legacyModZip = zipSync({
+        "assets/testmod/models/item/legacy_mug.json": enc.encode(
+          JSON.stringify({
+            elements: [
+              {
+                from: [4, 0, 4],
+                to: [12, 10, 12],
+                faces: {
+                  up: { texture: "#all" },
+                  north: { texture: "#all" },
+                  south: { texture: "#all" },
+                  east: { texture: "#all" },
+                  west: { texture: "#all" },
+                  down: { texture: "#all" },
+                },
               },
-            },
-          ],
-          textures: { all: "testmod:item/mug" },
-        }),
-      ),
-      "assets/testmod/textures/item/mug.png": whitePx,
-    });
-    const sources = await core.prepareAssets([legacyModZip, jarPath], { cache: true });
-
-    const hasEmission = (group: THREE.Object3D) => {
-      let found = false;
-      group.traverse((o) => {
-        if (!(o as THREE.Mesh).isMesh) return;
-        const mats = Array.isArray((o as THREE.Mesh).material)
-          ? ((o as THREE.Mesh).material as THREE.MeshStandardMaterial[])
-          : [(o as THREE.Mesh).material as THREE.MeshStandardMaterial];
-        for (const m of mats) {
-          if (m?.emissiveMap && m.emissive && m.emissive.getHex() !== 0) found = true;
-        }
+            ],
+            textures: { all: "testmod:item/mug" },
+          }),
+        ),
+        "assets/testmod/textures/item/mug.png": whitePx,
       });
-      return found;
-    };
-
-    const hasMissing = (group: THREE.Object3D) => {
-      let missing = false;
-      group.traverse((o) => {
-        if (typeof o.userData?.model === "string" && o.userData.model.includes("missing")) {
-          missing = true;
-        }
+      // Pin version "1.21.11" so parseItemDefinition returns the missing sentinel for legacy_mug and exercises isMissingSentinel end-to-end
+      const sources = await core.prepareAssets([legacyModZip, jarPath], {
+        cache: true,
+        version: "1.21.11",
       });
-      return missing;
-    };
 
-    // Emissive block preservation via block placement context
-    const lantern = await blockModel(sources as never, "minecraft:lantern", {}, { renderer: core });
-    const litLamp = await blockModel(
-      sources as never,
-      "minecraft:redstone_lamp",
-      { lit: true },
-      { renderer: core },
-    );
-    const offLamp = await blockModel(
-      sources as never,
-      "minecraft:redstone_lamp",
-      { lit: false },
-      { renderer: core },
-    );
-    expect(hasEmission(lantern)).toBe(true);
-    expect(hasEmission(litLamp)).toBe(true);
-    expect(hasEmission(offLamp)).toBe(false);
+      const hasEmission = (group: THREE.Object3D) => {
+        let found = false;
+        group.traverse((o) => {
+          if (!(o as THREE.Mesh).isMesh) return;
+          const mats = Array.isArray((o as THREE.Mesh).material)
+            ? ((o as THREE.Mesh).material as THREE.MeshStandardMaterial[])
+            : [(o as THREE.Mesh).material as THREE.MeshStandardMaterial];
+          for (const m of mats) {
+            if (m?.emissiveMap && m.emissive && m.emissive.getHex() !== 0) found = true;
+          }
+        });
+        return found;
+      };
 
-    // 1.21.4+ items resolved via parseItemDefinition (block-item, extruded, special, tinted)
-    for (const id of [
-      "minecraft:oak_planks",
-      "minecraft:apple",
-      "minecraft:chest",
-      "minecraft:compass",
-      "minecraft:potion",
-      "minecraft:shield",
-    ]) {
-      const g = await itemModel(sources as never, id, 0.42, { renderer: core });
-      expect(hasMissing(g), `${id} should not resolve to missing model`).toBe(false);
-      const sz = new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3());
-      expect(sz.x, `${id} width`).toBeGreaterThan(0.1);
-      expect(sz.y, `${id} height`).toBeGreaterThan(0.1);
-      expect(sz.z, `${id} depth`).toBeGreaterThan(0.01);
-    }
+      const hasMissing = (group: THREE.Object3D) => {
+        let missing = false;
+        group.traverse((o) => {
+          const m = o.userData?.model;
+          if (typeof m === "string" && m.includes("missing")) {
+            missing = true;
+            return;
+          }
+          if (m && typeof m === "object") {
+            const modelObj = m as {
+              model?: string;
+              elements?: Array<{ faces?: Record<string, { texture?: string }> }>;
+            };
+            if (typeof modelObj.model === "string" && modelObj.model.includes("missing")) {
+              missing = true;
+              return;
+            }
+            if (
+              Array.isArray(modelObj.elements) &&
+              modelObj.elements.some((el) =>
+                Object.values(el?.faces ?? {}).some((f) => f?.texture === "#missing"),
+              )
+            ) {
+              missing = true;
+            }
+          }
+        });
+        return missing;
+      };
 
-    // Legacy 1.20.1 mod item without items/<id>.json falls back cleanly to models/item/<id>.json
-    const mug = await itemModel(sources as never, "testmod:legacy_mug", 0.5, { renderer: core });
-    expect(hasMissing(mug)).toBe(false);
-    const mugSize = new THREE.Box3().setFromObject(mug).getSize(new THREE.Vector3());
-    expect(mugSize.x).toBeCloseTo(0.25, 4);
-    expect(mugSize.y).toBeCloseTo((10 / 16) * 0.5, 4);
-    expect(mugSize.z).toBeCloseTo(0.25, 4);
-  });
+      // Negative control: prove hasMissing catches missing items on real block-model-renderer
+      expect(
+        hasMissing(
+          await itemModel(sources as never, "minecraft:nonexistent_item_xyz", 0.42, {
+            renderer: core,
+          }),
+        ),
+      ).toBe(true);
+
+      // Emissive block preservation via block placement context
+      const lantern = await blockModel(
+        sources as never,
+        "minecraft:lantern",
+        {},
+        { renderer: core },
+      );
+      const litLamp = await blockModel(
+        sources as never,
+        "minecraft:redstone_lamp",
+        { lit: true },
+        { renderer: core },
+      );
+      const offLamp = await blockModel(
+        sources as never,
+        "minecraft:redstone_lamp",
+        { lit: false },
+        { renderer: core },
+      );
+      expect(hasEmission(lantern)).toBe(true);
+      expect(hasEmission(litLamp)).toBe(true);
+      expect(hasEmission(offLamp)).toBe(false);
+
+      // 1.21.4+ items resolved via parseItemDefinition (block-item, extruded, special, tinted)
+      for (const id of [
+        "minecraft:oak_planks",
+        "minecraft:apple",
+        "minecraft:chest",
+        "minecraft:compass",
+        "minecraft:potion",
+        "minecraft:shield",
+      ]) {
+        const g = await itemModel(sources as never, id, 0.42, { renderer: core });
+        expect(hasMissing(g), `${id} should not resolve to missing model`).toBe(false);
+        const sz = new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3());
+        expect(sz.x, `${id} width`).toBeGreaterThan(0.1);
+        expect(sz.y, `${id} height`).toBeGreaterThan(0.1);
+        expect(sz.z, `${id} depth`).toBeGreaterThan(0.01);
+      }
+
+      // Legacy 1.20.1 mod item without items/<id>.json falls back cleanly to models/item/<id>.json under pinned 1.21.11
+      const mug = await itemModel(sources as never, "testmod:legacy_mug", 0.5, { renderer: core });
+      expect(hasMissing(mug)).toBe(false);
+      const mugSize = new THREE.Box3().setFromObject(mug).getSize(new THREE.Vector3());
+      expect(mugSize.x).toBeCloseTo(0.25, 4);
+      expect(mugSize.y).toBeCloseTo((10 / 16) * 0.5, 4);
+      expect(mugSize.z).toBeCloseTo(0.25, 4);
+    },
+  );
 });

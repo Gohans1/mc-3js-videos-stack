@@ -77,5 +77,10 @@ describe("nestedTimedArrayPaths", () => {
     const root = { items: [] };
     root.items.push({ id: "back", parent: root });
     expect(nestedTimedArrayPaths(root)).toEqual([]);
+
+    // Cycle back to a timed root ancestor must not falsely report the array as holding nested timed data
+    const timedRoot = { t: 0, items: [] };
+    timedRoot.items.push({ id: "back", parent: timedRoot });
+    expect(nestedTimedArrayPaths(timedRoot)).toEqual([]);
   });
 });
