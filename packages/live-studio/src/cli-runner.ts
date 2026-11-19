@@ -816,6 +816,21 @@ export function createCliRunner(
       resolvedCwd = pkgPath;
     }
 
+    const assertViewsEnv = (raw: unknown) => {
+      if (typeof raw !== "string") {
+        throw new CliRunHttpError(400, "INVALID_ARGS", "VIEWS must be a string.");
+      }
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("@")) {
+        assertContainedRelativePath(
+          trimmed.slice(1).trim(),
+          resolvedCwd,
+          resolvedCwd,
+          repoRoot,
+          "VIEWS",
+        );
+      }
+    };
     if (
       req.env &&
       Object.hasOwn(req.env, "ENTRY") &&
@@ -824,9 +839,19 @@ export function createCliRunner(
     ) {
       assertContainedRelativePath(req.env.ENTRY, resolvedCwd, resolvedCwd, repoRoot, "ENTRY");
     }
+    if (
+      req.env &&
+      Object.hasOwn(req.env, "VIEWS") &&
+      req.env.VIEWS !== undefined &&
+      req.env.VIEWS !== false
+    ) {
+      assertViewsEnv(req.env.VIEWS);
+    }
     for (const [k, v] of spec.envEntries) {
       if (k === "ENTRY") {
         assertContainedRelativePath(v, resolvedCwd, resolvedCwd, repoRoot, "ENTRY");
+      } else if (k === "VIEWS") {
+        assertViewsEnv(v);
       }
     }
 

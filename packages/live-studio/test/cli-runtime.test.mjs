@@ -142,6 +142,7 @@ function makeFixtureRepo() {
       '  process.stdout.write("a" + "😀".repeat(600000));',
       "} else {",
       '  console.log("render-entry=" + (process.env.ENTRY ?? ""));',
+      '  console.log("render-views=" + (process.env.VIEWS ?? ""));',
       "}",
     ].join("\n"),
   );
@@ -908,6 +909,52 @@ describe("/api/cli routes, security & process runtime", () => {
       });
       expect(res.status).toBe(400);
       expect((await res.json()).code).toBe("INVALID_ARGS");
+
+      const badViews = await postRun({
+        commandId: "render",
+        args: { target: "stills" },
+        env: { VIEWS: `@${badEntry}` },
+      });
+      expect(badViews.status).toBe(400);
+      expect((await badViews.json()).code).toBe("INVALID_ARGS");
+    }
+
+    for (const extraBadViews of [
+      { target: "stills", views: "  @../other.ts" },
+      { target: "stills", views: "@ ../other.ts" },
+      { target: "stills", views: 123 },
+      { target: "stills", views: true },
+      { target: "clip", views: "@../other.ts" },
+    ]) {
+      const res = await postRun({
+        commandId: "render",
+        args: { target: extraBadViews.target },
+        env: { VIEWS: extraBadViews.views },
+      });
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe("INVALID_ARGS");
+    }
+
+    for (const okViews of ["front:0,2,5,0,1,0,50", "@views.json"]) {
+      const viewsRes = await postRun({
+        commandId: "render",
+        args: { target: "stills" },
+        env: { VIEWS: okViews },
+      });
+      expect(viewsRes.status).toBe(202);
+      const viewsRun = await viewsRes.json();
+      const viewsEvents = parseSseText(
+        await (
+          await api.fetch(new Request(`http://localhost/api/cli/runs/${viewsRun.runId}/stream`))
+        ).text(),
+      );
+      expect(viewsEvents.find((e) => e.event === "done")?.data.exitCode).toBe(0);
+      expect(
+        viewsEvents
+          .filter((e) => e.event === "chunk")
+          .map((e) => e.data.chunk)
+          .join(""),
+      ).toContain(`render-views=${okViews}`);
     }
 
     const okRender = await postRun({

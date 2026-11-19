@@ -2494,4 +2494,59 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     ]);
     assert.deepEqual(commitMultiTokens("sfx, mocap", [], true), ["sfx", "mocap"]);
   });
+
+  test("CliWorkbench collapses empty Options section on sheet when --out is hidden and reveals it in image-list mode", () => {
+    const ctx = makeContext();
+    const sheetCmd = findCliCommand("sheet");
+    assert.ok(sheetCmd);
+    const renderSheet = (args) =>
+      renderToStaticMarkup(
+        wrapTree(
+          createElement(CliWorkbench, {
+            catalog: { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context: ctx },
+            command: sheetCmd,
+            draft: {
+              ...createInitialDraft(sheetCmd, ctx.activeFilm),
+              args,
+            },
+            activeRun: null,
+            lastRun: null,
+            consoleExpanded: false,
+            focusConsoleRunId: null,
+            onBack: () => {},
+            onSetTargetFilm: () => {},
+            onSetSubcommandPath: () => {},
+            onUpdateField: () => {},
+            onResetDraft: () => {},
+            onRun: async () => {},
+            onStopRun: () => {},
+            onToggleConsoleExpanded: () => {},
+            onConsumeFocusRun: () => {},
+            onOpenSaveTemplate: () => {},
+          }),
+        ),
+      );
+
+    // Default still-PNG mode and video mode hide --out -> no empty Options section rendered
+    assert.equal(renderSheet({}).includes('aria-label="Options"'), false);
+    assert.equal(
+      renderSheet({ video: "renders/draft_video.mp4", target: "overview" }).includes(
+        'aria-label="Options"',
+      ),
+      false,
+    );
+    // Image-list mode shows --out inside Options and hides Environment overrides (START)
+    const imagesHtml = renderSheet({ images: ["renders/view_a.png"] });
+    assert.equal(imagesHtml.includes('aria-label="Options"'), true);
+    assert.equal(imagesHtml.includes("Output Sheet Path"), true);
+    assert.equal(imagesHtml.includes('aria-label="Environment overrides"'), false);
+    // Conflict (both video + images) hides --out -> Options collapses closed again
+    assert.equal(
+      renderSheet({
+        video: "renders/draft_video.mp4",
+        images: ["renders/view_a.png"],
+      }).includes('aria-label="Options"'),
+      false,
+    );
+  });
 });

@@ -214,6 +214,10 @@ export function CliWorkbench({
     () => spec.flagsDef.filter((f) => f.tier !== "advanced"),
     [spec.flagsDef],
   );
+  const visibleCommonFlags = useMemo(
+    () => commonFlags.filter((f) => isFieldVisible(f.visibleWhen, combinedValues)),
+    [commonFlags, combinedValues],
+  );
   const advancedFlags = useMemo(
     () => spec.flagsDef.filter((f) => f.tier === "advanced"),
     [spec.flagsDef],
@@ -473,36 +477,41 @@ export function CliWorkbench({
           )}
 
           {commonFlags.length > 0 && (
-            <section aria-label="Options" className="flex min-w-0 flex-col gap-1.5">
-              <h3 className="text-heading-foreground px-1 text-base font-semibold">Options</h3>
-              <div className="bg-card border-hairline grid min-w-0 grid-cols-1 gap-4 rounded-xl border p-3 @min-[480px]/cli-form:grid-cols-2">
-                {commonFlags.map((flag) => (
-                  <CliFieldControl
-                    key={`${command.id}:${subPathKey}:flag:${flag.key}`}
-                    def={flag}
-                    pendingInput={pendingInput("flags", flag.key)}
-                    invalid={
-                      validationAttempted && hasFieldValidationError(flag, spec.validationErrors)
-                    }
-                    errorId={validationErrorId}
-                    visible={isFieldVisible(flag.visibleWhen, combinedValues)}
-                    value={draft.flags[flag.key]}
-                    context={catalog.context}
-                    requiredOverride={isFieldRequired(flag, combinedValues)}
-                    onChange={(v) =>
-                      onUpdateField(
-                        "flags",
-                        flag.key,
-                        v,
-                        spec,
-                        flag.exclusiveGroup,
-                        flag.optionalValue,
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            </section>
+            <Collapsible open={visibleCommonFlags.length > 0}>
+              <CollapsibleContent>
+                <section aria-label="Options" className="flex min-w-0 flex-col gap-1.5">
+                  <h3 className="text-heading-foreground px-1 text-base font-semibold">Options</h3>
+                  <div className="bg-card border-hairline grid min-w-0 grid-cols-1 gap-4 rounded-xl border p-3 @min-[480px]/cli-form:grid-cols-2">
+                    {commonFlags.map((flag) => (
+                      <CliFieldControl
+                        key={`${command.id}:${subPathKey}:flag:${flag.key}`}
+                        def={flag}
+                        pendingInput={pendingInput("flags", flag.key)}
+                        invalid={
+                          validationAttempted &&
+                          hasFieldValidationError(flag, spec.validationErrors)
+                        }
+                        errorId={validationErrorId}
+                        visible={isFieldVisible(flag.visibleWhen, combinedValues)}
+                        value={draft.flags[flag.key]}
+                        context={catalog.context}
+                        requiredOverride={isFieldRequired(flag, combinedValues)}
+                        onChange={(v) =>
+                          onUpdateField(
+                            "flags",
+                            flag.key,
+                            v,
+                            spec,
+                            flag.exclusiveGroup,
+                            flag.optionalValue,
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                </section>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {advancedFlags.length > 0 && (
