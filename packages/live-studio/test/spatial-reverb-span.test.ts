@@ -19,6 +19,7 @@ async function withAudioPage(verify: (browser: Bun.WebView) => Promise<void>) {
 import { EDIT } from "film/edit";
 import { S } from ${JSON.stringify(join(app, "core/state.ts"))};
 import { registerEngine } from ${JSON.stringify(join(app, "core/engine.ts"))};
+import { setFilmSource } from ${JSON.stringify(join(app, "core/filmMeta.ts"))};
 import { availableSpatialTargets, prepareSceneTargets, sceneCameraPoseAt, sceneTargetAt } from ${JSON.stringify(join(app, "sound/scene-spatial.ts"))};
 import { Object3D, PerspectiveCamera, Scene } from ${JSON.stringify(three)};
 import { renderAudioSpan, setLive } from ${JSON.stringify(join(app, "sound/mixer.ts"))};
@@ -89,9 +90,11 @@ window.checkNamed = async (disappears = false, at, to = 1.5) => {
     last: [rms(0, 1.05, 1.4), rms(1, 1.05, 1.4)],
   };
 };
-window.checkSceneListener = async () => {
+window.checkSceneListener = async (outputClock = false) => {
   const target = [8, 1.6, 5];
-  EDIT.cam = [{t: 0, p: [0, 1.6, 5], l: {target: "look"}}];
+  EDIT.cam = [{t: 0, p: [0, 1.6, 5], l: outputClock ? [0, 1.6, 0] : {target: "look"}}];
+  const shots = [{ t: 0, cameraClock: outputClock ? "output" : "scene" }];
+  setFilmSource({ DURATION: 1, SHOTS: shots, SHOTS_OUT: shots, applyEdit() {} });
   EDIT.placed = { marked: { keys: [{ t: 0, at: target }] } };
   registerEngine({ buildAudioScene: async () => {
     const camera = new PerspectiveCamera();
@@ -234,10 +237,15 @@ test("named scene mixes fail on a missing anchor unless there is an XYZ fallback
 
 test("world coordinates and placed anchors both use the scene-targeted listener", async () => {
   await withAudioPage(async (browser) => {
-    const powers = (await browser.evaluate("window.checkSceneListener()")) as [number, number][];
-    for (const [left, right] of powers) {
-      expect(left).toBeGreaterThan(0.1);
-      expect(left / right).toBeCloseTo(1, 2);
+    for (const outputClock of [false, true]) {
+      const powers = (await browser.evaluate(`window.checkSceneListener(${outputClock})`)) as [
+        number,
+        number,
+      ][];
+      for (const [left, right] of powers) {
+        expect(left).toBeGreaterThan(0.1);
+        expect(left / right).toBeCloseTo(1, 2);
+      }
     }
   });
 }, 30000);

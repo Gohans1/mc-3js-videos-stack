@@ -257,7 +257,20 @@ def _scene_spatial_data():
             raw_placed = _read_json(placed_path, placed_rel)
             if isinstance(raw_placed, dict):
                 placed_data = raw_placed
-    return cam_keys, placed_data, camera_requires_scene(cam_keys)
+    camera_in_scene = camera_requires_scene(cam_keys)
+    shots_rel = CONFIG.get("shotsTimeline")
+    if not camera_in_scene and isinstance(shots_rel, str) and shots_rel.strip():
+        try:
+            shots_path = _assert_in_root(ROOT / shots_rel, "shotsTimeline")
+        except ValueError as e:
+            raise SystemExit(str(e))
+        if shots_path.is_file():
+            shots = _read_json(shots_path, shots_rel)
+            camera_in_scene = isinstance(shots, list) and any(
+                isinstance(shot, dict) and (shot.get("cameraClock") == "output" or bool(shot.get("camera")))
+                for shot in shots
+            )
+    return cam_keys, placed_data, camera_in_scene
 
 
 def _cam_source_time(t_film: float) -> float:

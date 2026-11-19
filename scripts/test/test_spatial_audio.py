@@ -475,12 +475,10 @@ export function buildScene() {
             timeline.mkdir(parents=True)
             (root / "package.json").write_text(json.dumps({
                 "name": "scene-camera",
-                "live-studio": {"chrome": chrome, "soundVault": False, "camTimeline": "src/timeline/cam.json"},
+                "live-studio": {"chrome": chrome, "soundVault": False, "camTimeline": "src/timeline/cam.json",
+                                "shotsTimeline": "src/timeline/shots.json"},
             }), encoding="utf8")
             (root / "src/edit.json").write_text('{"end":1}', encoding="utf8")
-            (timeline / "cam.json").write_text(
-                json.dumps([{"t": 0, "p": [0, 1.6, 5], "l": {"target": "look"}}]), encoding="utf8",
-            )
             point = [8, 1.6, 5]
             (timeline / "placed.json").write_text(
                 json.dumps({"prop": {"keys": [{"t": 0, "at": point}]}}), encoding="utf8",
@@ -488,8 +486,9 @@ export function buildScene() {
             (root / "src/scene.ts").write_text("""
 import { Object3D, PerspectiveCamera, Scene } from "three";
 import keys from "./timeline/cam.json";
+import shots from "./timeline/shots.json";
 export const DURATION = 1;
-export const SHOTS = [{ t: 0 }];
+export const SHOTS = shots;
 export const SHOTS_OUT = SHOTS;
 export function buildScene() {
   const scene = new Scene();
@@ -500,7 +499,8 @@ export function buildScene() {
   scene.add(actor);
   const draw = () => {
     camera.position.fromArray(keys[0].p);
-    camera.lookAt(scene.getObjectByName(keys[0].l.target).position);
+    if (shots[0].cameraClock === "output") camera.lookAt(8, 1.6, 5);
+    else camera.lookAt(scene.getObjectByName(keys[0].l.target).position);
   };
   return Object.assign(draw, { tools: { scene, camera } });
 }
@@ -516,18 +516,26 @@ export function buildScene() {
                     for start, anchor in anchors
                 ],
             }), encoding="utf8")
-            run = subprocess.run(
-                [sys.executable, self.MIX_PY, "--raw", "sound/out.wav"],
-                cwd=root, capture_output=True, text=True, timeout=120,
-            )
-            self.assertEqual(run.returncode, 0, msg=run.stderr + "\n" + run.stdout)
-            rate, out = self._read_wav_f32(str(root / "sound/out.wav"))
-            for start, anchor in anchors:
-                with self.subTest(anchor=anchor):
-                    segment = out[round((start + 0.04) * rate):round((start + 0.21) * rate)]
-                    left, right = np.mean(segment ** 2, axis=0)
-                    self.assertGreater(left, 0.001)
-                    self.assertAlmostEqual(float(left), float(right), places=5)
+            for camera_clock in ("scene", "output"):
+                (timeline / "shots.json").write_text(
+                    json.dumps([{"t": 0, "cameraClock": camera_clock}]), encoding="utf8",
+                )
+                look = {"target": "look"} if camera_clock == "scene" else [0, 1.6, 0]
+                (timeline / "cam.json").write_text(
+                    json.dumps([{"t": 0, "p": [0, 1.6, 5], "l": look}]), encoding="utf8",
+                )
+                run = subprocess.run(
+                    [sys.executable, self.MIX_PY, "--raw", "sound/out.wav"],
+                    cwd=root, capture_output=True, text=True, timeout=120,
+                )
+                self.assertEqual(run.returncode, 0, msg=run.stderr + "\n" + run.stdout)
+                rate, out = self._read_wav_f32(str(root / "sound/out.wav"))
+                for start, anchor in anchors:
+                    with self.subTest(camera_clock=camera_clock, anchor=anchor):
+                        segment = out[round((start + 0.04) * rate):round((start + 0.21) * rate)]
+                        left, right = np.mean(segment ** 2, axis=0)
+                        self.assertGreater(left, 0.001)
+                        self.assertAlmostEqual(float(left), float(right), places=5)
 
     def test_mix_resolves_named_anchor_until_the_exclusive_clip_end(self) -> None:
         import tempfile

@@ -8,10 +8,10 @@ import {
   sceneSpatialPosition,
 } from "../../render/spatial-position";
 import { sizeOf } from "../../src/frame";
-import { timingClock } from "../../src/timing-state.mjs";
+import { cameraTimesAt, timingClock } from "../../src/timing-state.mjs";
 import { frameAt } from "../../src/timing.mjs";
 import { engine } from "../core/engine";
-import { DURATION } from "../core/filmMeta";
+import { DURATION, SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get } from "../core/store";
 import { FPS } from "../core/time";
@@ -147,9 +147,11 @@ export async function prepareSceneTargets(
 ): Promise<SceneTargetSampler | undefined> {
   const frames = new Map<number, Set<string>>();
   const required = new Set<string>();
-  const cameraInScene = getCamKeys().some(
-    (key) => needsScenePoint(key.p) || needsScenePoint(key.l),
-  );
+  const cameraInScene =
+    getCamKeys().some((key) => needsScenePoint(key.p) || needsScenePoint(key.l)) ||
+    SHOTS.some(
+      (shot) => shot.cameraClock === "output" || Object.keys(shot.camera ?? {}).length > 0,
+    );
   for (const { name, from, to, fallback } of spans) {
     const runtime = name && !placedKeys(name)?.length ? name : undefined;
     if (!runtime && !cameraInScene) continue;
@@ -257,7 +259,7 @@ export const sceneCameraPoseAt = (filmTime: number, opts?: { offline?: boolean }
       };
     }
   }
-  const t = pictureTimeAt(filmTime);
+  const t = get().timing ? cameraTimesAt(filmTime).camera : filmTime;
   const camKeys = getCamKeys();
   if (camKeys.length > 0) {
     const allArrayPts = camKeys.every((k) => Array.isArray(k.p) && Array.isArray(k.l));
