@@ -233,18 +233,26 @@ def _scene_spatial_data():
     placed_data = {}
     cam_rel = CONFIG.get("camTimeline", "src/timeline/cam.json")
     if isinstance(cam_rel, str) and cam_rel.strip():
-        cam_path = ROOT / cam_rel
+        try:
+            cam_path = _assert_in_root(ROOT / cam_rel, "camTimeline")
+        except ValueError as e:
+            raise SystemExit(str(e))
         if cam_path.is_file():
-            raw_cam = _read_json(_assert_in_root(cam_path, "camTimeline"), cam_rel)
+            raw_cam = _read_json(cam_path, cam_rel)
             if isinstance(raw_cam, list):
                 cam_keys = raw_cam
             elif isinstance(raw_cam, dict) and isinstance(raw_cam.get("keys"), list):
                 cam_keys = raw_cam["keys"]
-    placed_rel = CONFIG.get("placedTimeline") or CONFIG.get("placed") or "src/timeline/placed.json"
+    kf = CONFIG.get("keyFiles")
+    placed_kf = next((rel for rel, ed in kf.items() if isinstance(rel, str) and ed == "placed"), None) if isinstance(kf, dict) else None
+    placed_rel = placed_kf or CONFIG.get("placedTimeline") or CONFIG.get("placed") or "src/timeline/placed.json"
     if isinstance(placed_rel, str) and placed_rel.strip():
-        placed_path = ROOT / placed_rel
+        try:
+            placed_path = _assert_in_root(ROOT / placed_rel, "placedTimeline")
+        except ValueError as e:
+            raise SystemExit(str(e))
         if placed_path.is_file():
-            raw_placed = _read_json(_assert_in_root(placed_path, "placedTimeline"), placed_rel)
+            raw_placed = _read_json(placed_path, placed_rel)
             if isinstance(raw_placed, dict):
                 placed_data = raw_placed
     return cam_keys, placed_data
@@ -252,24 +260,29 @@ def _scene_spatial_data():
 
 def _cam_source_time(t_film: float) -> float:
     segs = CAM_SEGMENTS
-    if not segs:
+    if not segs or t_film < 0.0:
         return t_film
+    last_to = float(segs[-1].get("to", 0.0))
+    if t_film >= last_to:
+        return SOURCE_END + t_film - last_to
+    hit = segs[-1]
     for seg in segs:
-        f = float(seg.get("from", 0.0))
-        to = float(seg.get("to", 0.0))
-        if t_film <= to or seg is segs[-1]:
-            sf = float(seg.get("sourceFrom", 0.0))
-            st = float(seg.get("sourceTo", sf))
-            if seg.get("kind") == "freeze" or abs(st - sf) < 1e-9 or to <= f:
-                return sf
-            u = max(0.0, min(1.0, (t_film - f) / (to - f)))
-            r0 = float(seg.get("rate0", 1.0))
-            r1 = float(seg.get("rate1", r0))
-            if abs(r0 - r1) < 1e-9 or (r0 + r1) <= 1e-9:
-                return sf + (st - sf) * u
-            frac = (r0 * u + 0.5 * (r1 - r0) * u * u) / (0.5 * (r0 + r1))
-            return sf + (st - sf) * frac
-    return t_film
+        if t_film < float(seg.get("to", 0.0)):
+            hit = seg
+            break
+    if hit.get("frame") is not None:
+        return float(hit["frame"])
+    sf = float(hit.get("sourceFrom", 0.0))
+    if hit.get("kind") == "freeze":
+        return sf
+    st = float(hit.get("sourceTo", sf))
+    r0 = float(hit.get("rate0", 1.0))
+    r1 = float(hit.get("rate1", r0))
+    dt = t_film - float(hit.get("from", 0.0))
+    span_src = st - sf
+    k = (r1 - r0) / span_src if abs(span_src) > 1e-12 else 0.0
+    dist = dt * r0 if abs(k) < 1e-10 else (r0 * math.expm1(k * dt)) / k
+    return sf + dist
 
 
 def _is_safe_rel_ir_path(space: str) -> bool:
@@ -300,37 +313,26 @@ def _decode_ir_stereo_f32(path: Path):
 
 @cache
 def _resolve_ir_buffers(space: str):
-    from ir import generate_impulse_response, is_preset_space
+    from ir import generate_impulse_response, is_preset_space, resolve_custom_ir_file
 
     if is_preset_space(space):
         ir_l, ir_r = generate_impulse_response(space, 48000)
         return ir_l, ir_r, None
-    if not _is_safe_rel_ir_path(space):
-        raise SystemExit(f"unsafe reverb space path: {space!r}")
-    local_candidate = ROOT / space
-    if "/" in space or "\\" in space or "." in Path(space).name:
-        try:
-            checked = _assert_in_root(local_candidate, f"Reverb IR '{space}'")
-        except ValueError as e:
-            raise SystemExit(str(e))
-        if checked.is_file():
-            try:
-                ir_l, ir_r = _decode_ir_stereo_f32(checked)
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-                raise SystemExit(f"failed reading reverb IR '{space}': {e}")
-            return ir_l, ir_r, checked
-    elif SAFE_NAME.match(space):
-        try:
-            f = audio_file(space)
-        except ValueError as e:
-            raise SystemExit(str(e))
-        if f.is_file():
-            try:
-                ir_l, ir_r = _decode_ir_stereo_f32(f)
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-                raise SystemExit(f"failed reading reverb IR '{space}': {e}")
-            return ir_l, ir_r, f
-    raise SystemExit(f"missing reverb IR '{space}': must be one of small-room/hall/stairwell/cave/outdoor or an existing audio file inside the film or sound vault")
+    try:
+        resolved = resolve_custom_ir_file(
+            space,
+            str(ROOT),
+            lambda p, l: _assert_in_root(Path(p), l),
+            lambda name: str(audio_file(name)) if SAFE_NAME.match(name) else None,
+        )
+    except ValueError as e:
+        raise SystemExit(str(e))
+    ir_path = Path(resolved)
+    try:
+        ir_l, ir_r = _decode_ir_stereo_f32(ir_path)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        raise SystemExit(f"failed reading reverb IR '{space}': {e}")
+    return ir_l, ir_r, ir_path
 _SFX_CFG = CONFIG.get("sfx", "sound/sfx")
 if not isinstance(_SFX_CFG, str) or not _SFX_CFG.strip():
     raise SystemExit('package.json: "live-studio.sfx" must be a folder path')
@@ -1038,7 +1040,8 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
         if (s.get("length") is not None and float(s["length"]) <= 0) or start_at >= seconds(s["name"]):
             continue
         s_len = float(s["length"]) if s.get("length") is not None else None
-        mid_t = float(s["at"]) + (0.5 * s_len if s_len else 0.0)
+        eff_len = s_len if s_len is not None else max(0.0, (seconds(s["name"]) - start_at) / float(s.get("rate") or 1.0))
+        mid_t = float(s["at"]) + 0.5 * eff_len
         rev = resolve_clip_reverb(s.get("reverb"), mid_t, spaces, film_reverb)
         add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, s_len, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])], reverb_spec=rev, spatial_spec=s.get("spatial"))
     if not chains:  # a film with no sound yet: silence as long as the film

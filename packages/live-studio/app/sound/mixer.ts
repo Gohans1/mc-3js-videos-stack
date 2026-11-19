@@ -59,8 +59,8 @@ interface Source {
   library: () => LibraryItem[];
   span: (c: ClipRef) => [number, number];
   voice: () => { s: number; e: number }[];
-  camPose?: (t: number) => CameraPose;
-  targetPos?: (name: string, t: number) => Vec3 | null;
+  camPose?: (t: number, opts?: { offline?: boolean }) => CameraPose;
+  targetPos?: (name: string, t: number, opts?: { offline?: boolean }) => Vec3 | null;
 }
 interface Clip {
   key: string;
@@ -171,72 +171,143 @@ interface RawIrData {
   sampleRate: number;
 }
 
-const irRaw = new Map<string, RawIrData | null>();
-const irPromises = new Map<string, Promise<RawIrData | null>>();
-const irCtxBuffers = new WeakMap<BaseAudioContext, Map<string, AudioBuffer>>();
+const irRaw = new Map<string, RawIrData>();
+const irBytes = new Map<string, ArrayBuffer | null>();
+const irBytePromises = new Map<string, Promise<ArrayBuffer | null>>();
+let irCtxBuffers = new WeakMap<BaseAudioContext, Map<string, AudioBuffer>>();
+let irDecodePromises = new WeakMap<BaseAudioContext, Map<string, Promise<AudioBuffer | null>>>();
 let convolversByBus = new WeakMap<AudioNode, Map<string, ConvolverNode>>();
 
-const loadCustomIr = (space: string): Promise<RawIrData | null> => {
-  if (!irPromises.has(space)) {
-    irPromises.set(
+const loadIrBytes = (space: string): Promise<ArrayBuffer | null> => {
+  if (!irBytePromises.has(space)) {
+    irBytePromises.set(
       space,
       getFile(`/api/sound/ir?path=${encodeURIComponent(space)}`)
         .then(async (r) => {
-          if (!r.ok) {
-            irRaw.set(space, null);
-            return null;
-          }
-          const buf = await getAudioCtx().decodeAudioData(await r.arrayBuffer());
-          const ch0 = buf.getChannelData(0);
-          const ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;
-          const left = new Float32Array(ch0);
-          const right = new Float32Array(ch1);
-          normalizeStereoIr(left, right);
-          const data = { left, right, sampleRate: buf.sampleRate };
-          irRaw.set(space, data);
-          return data;
+          const buf = r.ok ? await r.arrayBuffer() : null;
+          irBytes.set(space, buf);
+          return buf;
         })
         .catch(() => {
-          irRaw.set(space, null);
+          irBytes.set(space, null);
           return null;
         }),
     );
   }
-  return irPromises.get(space)!;
+  return irBytePromises.get(space)!;
+};
+
+const resampleChannel = (src: Float32Array, fromRate: number, toRate: number): Float32Array => {
+  if (fromRate === toRate || src.length === 0) return new Float32Array(src);
+  const outLen = Math.max(1, Math.round((src.length * toRate) / fromRate));
+  const out = new Float32Array(outLen);
+  const ratio = fromRate / toRate;
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio;
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(src.length - 1, i0 + 1);
+    const frac = pos - i0;
+    out[i] = src[i0] * (1 - frac) + src[i1] * frac;
+  }
+  return out;
+};
+
+const ensureCustomIrForCtx = (
+  ctx: BaseAudioContext,
+  space: string,
+): Promise<AudioBuffer | null> => {
+  if (typeof ctx.createBuffer !== "function") return Promise.resolve(null);
+  const cached = irCtxBuffers.get(ctx)?.get(space);
+  if (cached) return Promise.resolve(cached);
+  let bySpace = irDecodePromises.get(ctx);
+  if (!bySpace) {
+    bySpace = new Map();
+    irDecodePromises.set(ctx, bySpace);
+  }
+  if (!bySpace.has(space)) {
+    bySpace.set(
+      space,
+      (async () => {
+        const bytes = await loadIrBytes(space);
+        if (!bytes) return null;
+        const decoder =
+          typeof ctx.decodeAudioData === "function" ? ctx : hasAudio() ? getAudioCtx() : null;
+        if (!decoder) return null;
+        const decoded = await decoder.decodeAudioData(bytes.slice(0));
+        const ch0 = decoded.getChannelData(0);
+        const ch1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : ch0;
+        const left = resampleChannel(ch0, decoded.sampleRate, ctx.sampleRate);
+        const right = resampleChannel(ch1, decoded.sampleRate, ctx.sampleRate);
+        normalizeStereoIr(left, right);
+        const audioBuf = ctx.createBuffer(2, left.length, ctx.sampleRate);
+        audioBuf.getChannelData(0).set(left);
+        audioBuf.getChannelData(1).set(right);
+        let ctxMap = irCtxBuffers.get(ctx);
+        if (!ctxMap) {
+          ctxMap = new Map();
+          irCtxBuffers.set(ctx, ctxMap);
+        }
+        ctxMap.set(space, audioBuf);
+        return audioBuf;
+      })().catch(() => null),
+    );
+  }
+  return bySpace.get(space)!;
 };
 
 const irAudioBufferFor = (ctx: BaseAudioContext, space: string): AudioBuffer | null => {
   if (typeof ctx.createBuffer !== "function") return null;
-  const cacheKey = `${space}@${ctx.sampleRate}`;
   let byKey = irCtxBuffers.get(ctx);
-  if (byKey?.has(cacheKey)) return byKey.get(cacheKey)!;
+  if (byKey?.has(space)) return byKey.get(space)!;
 
-  let raw: RawIrData | null | undefined;
   if (isPresetSpace(space)) {
     if (space === "dry") return null;
-    raw = irRaw.get(cacheKey);
+    const rawKey = `${space}@${ctx.sampleRate}`;
+    let raw = irRaw.get(rawKey);
     if (!raw) {
       raw = generateImpulseResponse(space, ctx.sampleRate);
-      irRaw.set(cacheKey, raw);
+      irRaw.set(rawKey, raw);
     }
-  } else {
-    raw = irRaw.get(space);
-    if (raw === undefined) {
-      void loadCustomIr(space);
-      return null;
+    const audioBuf = ctx.createBuffer(2, raw.left.length, ctx.sampleRate);
+    audioBuf.getChannelData(0).set(raw.left);
+    audioBuf.getChannelData(1).set(raw.right);
+    if (!byKey) {
+      byKey = new Map();
+      irCtxBuffers.set(ctx, byKey);
     }
-    if (!raw) return null;
+    byKey.set(space, audioBuf);
+    return audioBuf;
   }
 
-  const audioBuf = ctx.createBuffer(2, raw.left.length, raw.sampleRate);
-  audioBuf.getChannelData(0).set(raw.left);
-  audioBuf.getChannelData(1).set(raw.right);
-  if (!byKey) {
-    byKey = new Map();
-    irCtxBuffers.set(ctx, byKey);
+  if (irBytes.get(space) !== null) {
+    void ensureCustomIrForCtx(ctx, space).then((buf) => {
+      if (buf && on && hasAudio() && ctx === getAudioCtx()) replan();
+    });
   }
-  byKey.set(cacheKey, audioBuf);
-  return audioBuf;
+  return null;
+};
+
+const collectCustomSpaces = (l: Lanes): string[] => [
+  ...new Set(
+    [
+      ...(l.reverb ? [l.reverb.space] : []),
+      ...(l.spaces ?? []).map((s) => s.space),
+      ...l.beds.flatMap((b) => (b.reverb ? [b.reverb.space] : [])),
+      ...l.sfx.flatMap((s) => (s.reverb ? [s.reverb.space] : [])),
+    ].filter((sp) => sp && !isPresetSpace(sp)),
+  ),
+];
+
+const preloadReverbIrs = async (l: Lanes, ctx?: BaseAudioContext): Promise<boolean> => {
+  const custom = collectCustomSpaces(l);
+  if (!custom.length) return false;
+  if (!ctx) {
+    await Promise.all(custom.map(loadIrBytes));
+    return false;
+  }
+  const had = custom.map((sp) => Boolean(irCtxBuffers.get(ctx)?.has(sp)));
+  const bufs = await Promise.all(custom.map((sp) => ensureCustomIrForCtx(ctx, sp)));
+  return bufs.some((b, i) => Boolean(b) && !had[i]);
 };
 
 const sharedConvolver = (
@@ -280,7 +351,12 @@ export const forgetSounds = () => {
   sounds.clear();
   ready.clear();
   irRaw.clear();
-  irPromises.clear();
+  irBytes.clear();
+  irBytePromises.clear();
+  irCtxBuffers = new WeakMap();
+  irDecodePromises = new WeakMap();
+  clearSkims();
+  if (liveStage) resetBusConvolvers(liveStage.bus);
   convolversByBus = new WeakMap();
   clearProcessed();
 };
@@ -438,14 +514,8 @@ const clips = (l: Lanes, all = false): Clip[] => {
 };
 const soundFor = (c: Clip) => (c.process ? processed(c.process) : ready.get(c.name));
 const loadClip = (c: Clip) => (c.process ? loadProcessed(c.process) : load(c.name));
-const preloadSources = (l: Lanes) => {
-  const customSpaces = [
-    ...(l.reverb ? [l.reverb.space] : []),
-    ...(l.spaces ?? []).map((s) => s.space),
-    ...l.beds.flatMap((b) => (b.reverb ? [b.reverb.space] : [])),
-    ...l.sfx.flatMap((s) => (s.reverb ? [s.reverb.space] : [])),
-  ].filter((sp) => sp && !isPresetSpace(sp));
-  return Promise.all([
+const preloadSources = (l: Lanes) =>
+  Promise.all([
     ...[
       ...new Set(
         [...l.beds, ...l.sfx].flatMap((c) => {
@@ -454,9 +524,8 @@ const preloadSources = (l: Lanes) => {
         }),
       ),
     ].map(load),
-    ...[...new Set(customSpaces)].map(loadCustomIr),
+    ...collectCustomSpaces(l).map(loadIrBytes),
   ]);
-};
 
 interface Voice {
   srcs: AudioBufferSourceNode[];
@@ -485,6 +554,7 @@ const play = (
   s: Sound,
   at: number,
   w: Pick<Window, "speed" | "when" | "ctxAt">,
+  offline?: boolean,
 ): Voice | null => {
   const u0 = at - c.t0;
   if (!c.loop && c.start + u0 >= s.buf.duration) return null;
@@ -548,16 +618,20 @@ const play = (
     typeof ctx.createBiquadFilter === "function"
   ) {
     const spSpec = c.spatial;
+    const isOffline =
+      offline ?? (typeof OfflineAudioContext !== "undefined" && ctx instanceof OfflineAudioContext);
     const sampleSpatial = (tFilm: number) => {
-      const cam = source!.camPose!(tFilm);
+      const cam = source!.camPose!(tFilm, { offline: isOffline });
       const rawSrc = spSpec.target
-        ? (source!.targetPos?.(spSpec.target, tFilm) ?? spSpec.at ?? [0, 0, 0])
+        ? (source!.targetPos?.(spSpec.target, tFilm, { offline: isOffline }) ??
+          spSpec.at ?? [0, 0, 0])
         : (spSpec.at ?? [0, 0, 0]);
       return computeSpatialParams(cam, offsetPosition(rawSrc, spSpec.offset), spSpec);
     };
     const lpf = ctx.createBiquadFilter();
     lpf.type = "lowpass";
-    lpf.Q.value = Math.SQRT1_2;
+    // Web Audio lowpass Q is specified in dB: 10^(-3.0103/20) = 1/sqrt(2) (Butterworth)
+    lpf.Q.value = -20 * Math.log10(Math.SQRT2);
     const spGain = ctx.createGain();
     const spPan = ctx.createStereoPanner();
     spPan.channelCountMode = "explicit";
@@ -568,8 +642,6 @@ const play = (
     spGain.gain.setValueAtTime(init.gain, begin);
     spPan.pan.setValueAtTime(init.pan, begin);
 
-    const isOffline =
-      typeof OfflineAudioContext !== "undefined" && ctx instanceof OfflineAudioContext;
     if (isOffline) {
       const step = 1 / 30;
       for (let t = at + step; t <= c.t1 + 1e-4; t += step) {
@@ -627,7 +699,7 @@ addPlayer({
   reset: () => {
     started.clear();
     voices = [];
-    if (hasAudio()) resetBusConvolvers(getLive().bus);
+    if (liveStage) resetBusConvolvers(liveStage.bus);
   },
   tick: (w) => {
     if (routed) levelMix(); // the mix plays through the graph whether or not the lanes do
@@ -753,18 +825,48 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
 
 // ---------- A skim (timeline/peek.ts): the next len seconds from film second t, everything as playback sounds there, each
 // one cutting the last off, as audio scrubbing in an editor does
-let skim: { out: GainNode; srcs: AudioScheduledSourceNode[] } | null = null,
+interface SkimEntry {
+  out: GainNode;
+  srcs: AudioScheduledSourceNode[];
+  cancelAuto: () => void;
+}
+let skim: SkimEntry | null = null,
   skims = 0;
+const skimCleanupTimers = new Set<number>();
+const disposeSkim = (entry: SkimEntry) => {
+  entry.cancelAuto();
+  resetBusConvolvers(entry.out);
+  try {
+    entry.out.disconnect();
+  } catch {}
+};
+const clearSkims = () => {
+  for (const id of skimCleanupTimers) clearTimeout(id);
+  skimCleanupTimers.clear();
+  if (skim) {
+    disposeSkim(skim);
+    skim = null;
+  }
+};
 const endSkim = (at: number) => {
   if (!skim) return;
-  skim.out.gain.cancelScheduledValues(at);
-  skim.out.gain.setTargetAtTime(0, at, 0.003);
-  for (const s of skim.srcs) {
+  const old = skim;
+  skim = null;
+  old.cancelAuto();
+  old.out.gain.cancelScheduledValues(at);
+  old.out.gain.setTargetAtTime(0, at, 0.003);
+  for (const s of old.srcs) {
     try {
       s.stop(at + 0.02);
     } catch {}
   }
-  skim = null;
+  const now = old.out.context?.currentTime ?? at;
+  const delayMs = Math.max(30, Math.ceil((at - now + 0.04) * 1000));
+  const timer = window.setTimeout(() => {
+    skimCleanupTimers.delete(timer);
+    disposeSkim(old);
+  }, delayMs);
+  skimCleanupTimers.add(timer);
 };
 export const playSlice = async (t: number, len: number) => {
   const mine = ++skims,
@@ -807,7 +909,27 @@ export const playSlice = async (t: number, len: number) => {
     }
   }
   for (const s of srcs) s.stop(end); // the last stop called is the one kept
-  skim = { out, srcs };
+  const autoDelayMs = Math.max(40, Math.ceil((end - ctx.currentTime + 0.08) * 1000));
+  let doneTimer = 0;
+  const entry: SkimEntry = {
+    out,
+    srcs,
+    cancelAuto: () => {
+      if (doneTimer) {
+        clearTimeout(doneTimer);
+        skimCleanupTimers.delete(doneTimer);
+        doneTimer = 0;
+      }
+    },
+  };
+  doneTimer = window.setTimeout(() => {
+    skimCleanupTimers.delete(doneTimer);
+    doneTimer = 0;
+    if (skim === entry) skim = null;
+    disposeSkim(entry);
+  }, autoDelayMs);
+  skimCleanupTimers.add(doneTimer);
+  skim = entry;
   trackPreview(srcs);
 };
 
@@ -828,7 +950,7 @@ export const setLive = (live_: boolean, src: Source) => {
       hush(voices);
       voices = [];
       started.clear();
-      if (hasAudio()) resetBusConvolvers(getLive().bus);
+      if (liveStage) resetBusConvolvers(liveStage.bus);
       setLaneGroups({});
     }
   }
@@ -836,6 +958,9 @@ export const setLive = (live_: boolean, src: Source) => {
   const l = src.lanes();
   if (on && l) {
     for (const c of clips(l)) loadClip(c);
+    void preloadReverbIrs(l, hasAudio() ? getAudioCtx() : undefined).then((loadedNew) => {
+      if (loadedNew && on) replan();
+    });
     replan();
   }
 };
@@ -852,7 +977,7 @@ window.__lanesRender = async (from: number, to: number) => {
     ctx = new OfflineAudioContext(2, Math.ceil((to - from) * rate), rate),
     st = stage(ctx, ctx.destination);
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-  await st.ready;
+  await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
   const w = {
     speed: 1,
     ctxAt: (t: number) => t - from,
@@ -860,7 +985,7 @@ window.__lanesRender = async (from: number, to: number) => {
   };
   all.forEach((c, i) => {
     const s = loaded[i];
-    if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w);
+    if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w, true);
   });
   const out = await ctx.startRendering(),
     hop = rate / 2,
@@ -900,7 +1025,7 @@ export const renderFilm = async (
     ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate),
     st = stage(ctx, await into(ctx));
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-  await st.ready;
+  await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
   if (voice) {
     const v = ctx.createBufferSource();
     v.buffer = voice;
@@ -910,7 +1035,7 @@ export const renderFilm = async (
   const w = { speed: 1, ctxAt: (t: number) => t, when: (t: number) => Math.max(0, t) };
   all.forEach((c, i) => {
     const s = loaded[i];
-    if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w);
+    if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w, true);
   });
   await ctx.startRendering();
   return l;
@@ -932,7 +1057,7 @@ export const renderAudioSpan = async (from: number, to: number): Promise<AudioBu
       const ctx = new OfflineAudioContext(2, frames, rate),
         st = stage(ctx, ctx.destination);
       st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-      await st.ready;
+      await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
       if (voice && from < voice.duration) {
         const v = ctx.createBufferSource();
         v.buffer = voice;
@@ -946,7 +1071,7 @@ export const renderAudioSpan = async (from: number, to: number): Promise<AudioBu
       };
       all.forEach((c, i) => {
         const s = loaded[i];
-        if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w);
+        if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w, true);
       });
       return ctx.startRendering();
     }

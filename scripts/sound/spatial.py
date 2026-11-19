@@ -184,7 +184,6 @@ _NAMED_EASES: dict[str, Callable[[float], float]] = {
     "out": lambda x: 1.0 - pow(1.0 - x, 2.2),
     "in": lambda x: pow(x, 2.2),
     "inout": lambda x: 0.5 - 0.5 * math.cos(math.pi * x),
-    "inOut": lambda x: 0.5 - 0.5 * math.cos(math.pi * x),
     "expo": lambda x: (pow(2.0, 7.0 * x) - 1.0) / 127.0,
     "snapOut": lambda x: _cubic_bezier(0.137, 0.758, 0.128, 0.926, x),
     "glideOut": lambda x: _cubic_bezier(0.172, 0.687, 0.393, 0.943, x),
@@ -212,6 +211,13 @@ def eval_ease(ease: Any, t: float) -> float:
     if isinstance(ease, str) and ease in _NAMED_EASES:
         return _NAMED_EASES[ease](t)
     return _NAMED_EASES["smooth"](t)
+
+
+def eval_smoothstep_ease(ease: Any, t: float) -> float:
+    t = _clamp(float(t), 0.0, 1.0)
+    if ease is None:
+        return t * t * (3.0 - 2.0 * t)
+    return eval_ease(ease, t)
 
 
 def _catmull_centripetal(
@@ -356,9 +362,10 @@ def camera_at(keys: Sequence[Mapping], t: float, placed_data: Any = None) -> dic
     pos = _catmull_centripetal(p0, p1, p2, p3, u)
     look = _catmull_centripetal(l0, l1, l2, l3, u)
 
+    u_roll = eval_smoothstep_ease(k2.get("ease"), u_raw)
     r1 = float(k1.get("roll", 0.0) or 0.0)
     r2 = float(k2.get("roll", 0.0) or 0.0)
-    return {"p": pos, "l": look, "roll": r1 + (r2 - r1) * u}
+    return {"p": pos, "l": look, "roll": r1 + (r2 - r1) * u_roll}
 
 
 def placed_at(placed_data: Any, target: str, t: float) -> tuple[float, float, float]:
@@ -400,24 +407,24 @@ def placed_at(placed_data: Any, target: str, t: float) -> tuple[float, float, fl
                 return (float(v[0]), float(v[1]), float(v[2]))
         return (0.0, 0.0, 0.0)
 
-    if t <= float(ordered[0].get("t", 0.0)):
-        return key_vec(ordered[0])
-    if t >= float(ordered[-1].get("t", 0.0)):
-        return key_vec(ordered[-1])
-    for idx in range(len(ordered) - 1):
-        k0 = ordered[idx]
-        k1 = ordered[idx + 1]
-        t0 = float(k0.get("t", 0.0))
-        t1 = float(k1.get("t", 0.0))
-        if t < t1 or idx == len(ordered) - 2:
-            if k1.get("cut"):
-                return key_vec(k0)
-            span = t1 - t0
-            u = 0.0 if span <= 1e-9 else eval_ease(k0.get("ease"), (t - t0) / span)
-            v0 = key_vec(k0)
-            v1 = key_vec(k1)
-            return _add(v0, _scale(_sub(v1, v0), u))
-    return key_vec(ordered[-1])
+    idx = 0
+    while idx < len(ordered) - 1 and t >= float(ordered[idx + 1].get("t", 0.0)):
+        idx += 1
+    k0 = ordered[idx]
+    k1 = ordered[min(idx + 1, len(ordered) - 1)]
+    t0 = float(k0.get("t", 0.0))
+    t1 = float(k1.get("t", 0.0))
+    if k1 is k0 or t <= t0:
+        x = 0.0
+    elif t >= t1:
+        x = 1.0
+    else:
+        span = t1 - t0
+        x = 0.0 if span <= 1e-9 else (t - t0) / span
+    u = eval_smoothstep_ease(k1.get("ease"), x)
+    v0 = key_vec(k0)
+    v1 = key_vec(k1)
+    return _add(v0, _scale(_sub(v1, v0), u))
 
 
 def resolve_source_position(
@@ -439,8 +446,10 @@ def resolve_source_position(
 def compute_spatial_params(
     cam: Mapping, source: Sequence[float], spec: Mapping
 ) -> dict[str, float]:
-    ref_dist = max(0.01, float(spec.get("refDistance") or SPATIAL_DEFAULTS["refDistance"]))
-    max_dist = max(ref_dist, float(spec.get("maxDistance") or SPATIAL_DEFAULTS["maxDistance"]))
+    ref_val = spec.get("refDistance")
+    ref_dist = max(0.01, float(SPATIAL_DEFAULTS["refDistance"] if ref_val is None else ref_val))
+    max_val = spec.get("maxDistance")
+    max_dist = max(ref_dist, float(SPATIAL_DEFAULTS["maxDistance"] if max_val is None else max_val))
     rolloff_val = spec.get("rolloff")
     rolloff = max(0.0, float(SPATIAL_DEFAULTS["rolloff"] if rolloff_val is None else rolloff_val))
     occ_val = spec.get("occlusion")
@@ -464,7 +473,7 @@ def compute_spatial_params(
         right_base = _norm(_cross(fwd, (0.0, 1.0, 0.0)), (1.0, 0.0, 0.0))
     cam_up = _norm(_cross(right_base, fwd), (0.0, 1.0, 0.0))
 
-    roll_rad = (float(cam.get("roll", 0.0) or 0.0) * math.pi) / 180.0
+    roll_rad = float(cam.get("roll", 0.0) or 0.0)
     if roll_rad != 0.0:
         eff_right = _norm(
             _add(_scale(right_base, math.cos(roll_rad)), _scale(cam_up, math.sin(roll_rad))),
@@ -536,7 +545,7 @@ def apply_spatial_audio(
     cam_keys: Sequence[Mapping],
     placed_data: Any = None,
     source_time_fn: Callable[[float], float] | None = None,
-    block_size: int = 512,
+    block_size: int = 128,
 ) -> np.ndarray:
     import numpy as np
     from scipy import signal
@@ -548,30 +557,57 @@ def apply_spatial_audio(
     if n == 0 or not is_spatial_active(spec):
         return buf.astype(np.float32)
 
-    out = np.zeros_like(buf)
-    zi_l = np.zeros(2, dtype=np.float64)
-    zi_r = np.zeros(2, dtype=np.float64)
-
     def sample_at(t_film: float) -> dict[str, float]:
         t_pic = source_time_fn(t_film) if source_time_fn is not None else t_film
         pose = camera_at(cam_keys, t_pic, placed_data)
         src = resolve_source_position(spec, t_pic, placed_data)
         return compute_spatial_params(pose, src, spec)
 
-    p_curr = sample_at(start_time)
-    for start_idx in range(0, n, block_size):
+    bounds = list(range(0, n, block_size))
+    params = [sample_at(start_time + idx / sample_rate) for idx in bounds]
+    params.append(sample_at(start_time + n / sample_rate))
+    skip_lpf = all(p["cutoffHz"] >= 19950.0 for p in params)
+
+    out = np.zeros_like(buf)
+    # Track Direct-Form I history (x1, x2, y1, y2) per channel and recompute exact DF-II-T initial
+    # state `zi` on each block's new (b, a) so sweeping or hard-cutting cutoff never injects spikes.
+    hist_l = [0.0, 0.0, 0.0, 0.0]
+    hist_r = [0.0, 0.0, 0.0, 0.0]
+
+    def run_lpf_block(x_blk: np.ndarray, b: np.ndarray, a: np.ndarray, hist: list[float]) -> np.ndarray:
+        x1, x2, y1, y2 = hist
+        zi = np.array(
+            [
+                b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2,
+                b[2] * x1 - a[2] * y1,
+            ],
+            dtype=np.float64,
+        )
+        y_blk, _ = signal.lfilter(b, a, x_blk, zi=zi)
+        if len(x_blk) >= 2:
+            hist[0], hist[1] = float(x_blk[-1]), float(x_blk[-2])
+            hist[2], hist[3] = float(y_blk[-1]), float(y_blk[-2])
+        elif len(x_blk) == 1:
+            hist[0], hist[1] = float(x_blk[0]), x1
+            hist[2], hist[3] = float(y_blk[0]), y1
+        return y_blk
+
+    for blk_i, start_idx in enumerate(bounds):
         end_idx = min(n, start_idx + block_size)
         blk_len = end_idx - start_idx
-        t_end = start_time + end_idx / sample_rate
-        p_next = sample_at(t_end)
+        p_curr = params[blk_i]
+        p_next = params[blk_i + 1]
 
-        cutoff_mid = 0.5 * (p_curr["cutoffHz"] + p_next["cutoffHz"])
-        b, a = _rbj_lowpass(cutoff_mid, sample_rate)
-        flt_l, zi_l = signal.lfilter(b, a, buf[start_idx:end_idx, 0], zi=zi_l)
-        flt_r, zi_r = signal.lfilter(b, a, buf[start_idx:end_idx, 1], zi=zi_r)
-        if p_curr["cutoffHz"] >= 19950.0 and p_next["cutoffHz"] >= 19950.0:
-            flt_l = buf[start_idx:end_idx, 0]
-            flt_r = buf[start_idx:end_idx, 1]
+        x_l = buf[start_idx:end_idx, 0]
+        x_r = buf[start_idx:end_idx, 1]
+        if skip_lpf:
+            flt_l = x_l
+            flt_r = x_r
+        else:
+            cutoff_mid = 0.5 * (p_curr["cutoffHz"] + p_next["cutoffHz"])
+            b, a = _rbj_lowpass(cutoff_mid, sample_rate)
+            flt_l = run_lpf_block(x_l, b, a, hist_l)
+            flt_r = run_lpf_block(x_r, b, a, hist_r)
 
         gains = np.linspace(p_curr["gain"], p_next["gain"], blk_len, dtype=np.float64)
         pans = np.linspace(p_curr["pan"], p_next["pan"], blk_len, dtype=np.float64)
@@ -588,7 +624,5 @@ def apply_spatial_audio(
 
         out[start_idx:end_idx, 0] = np.where(left_mask, flt_l + flt_r * g_l, flt_l * g_l)
         out[start_idx:end_idx, 1] = np.where(left_mask, flt_r * g_r, flt_r + flt_l * g_r)
-
-        p_curr = p_next
 
     return out.astype(np.float32)

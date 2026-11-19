@@ -315,14 +315,18 @@ def resolve_custom_ir_file(
     if not is_safe_relative_ir_path(space):
         raise ValueError(f"unsafe reverb space path: {space}")
     candidate = os.path.join(film_dir, space)
-    if os.path.isfile(candidate):
+    if os.path.lexists(candidate):
         assert_in_root(candidate, f"reverb IR '{space}'")
-        return os.path.realpath(candidate)
-    if audio_file_fn is not None:
+        if os.path.isfile(candidate):
+            return os.path.realpath(candidate)
+        raise ValueError(f"reverb IR '{space}' is not a regular file")
+    if audio_file_fn is not None and "/" not in space and "\\" not in space:
         resolved = audio_file_fn(space)
-        if resolved and os.path.isfile(resolved):
-            assert_in_root(resolved, f"reverb IR '{space}'")
-            return os.path.realpath(resolved)
+        if resolved and os.path.lexists(resolved):
+            if os.path.islink(resolved):
+                raise ValueError(f"reverb IR '{space}' cannot be a symlink")
+            if os.path.isfile(resolved):
+                return os.path.realpath(resolved)
     raise ValueError(f"missing reverb IR '{space}'")
 
 

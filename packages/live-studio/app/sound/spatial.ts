@@ -89,7 +89,7 @@ export function computeSpatialParams(
         : norm(cross(fwd, [0, 1, 0]), [1, 0, 0]);
   const camUp = norm(cross(rightBase, fwd), [0, 1, 0]);
 
-  const rollRad = ((cam.roll ?? 0) * Math.PI) / 180;
+  const rollRad = cam.roll ?? 0;
   const effRight =
     rollRad !== 0
       ? norm(add(scale(rightBase, Math.cos(rollRad)), scale(camUp, Math.sin(rollRad))), rightBase)

@@ -25,17 +25,6 @@ const heardIntervals = voiceClips
     ).map(({ s, e }) => [s, e]);
 const camClock = clockForTimeline("cam");
 const mappedAudio = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
-if (Array.isArray(mappedAudio.spaces)) {
-  mappedAudio.spaces = mappedAudio.spaces
-    .map((s) => {
-      const from = camClock.outputAt(s.from, "after");
-      const to = s.to !== undefined ? camClock.outputAt(s.to, "before") : undefined;
-      return to !== undefined && to <= from
-        ? null
-        : { ...s, from, ...(to !== undefined ? { to } : {}) };
-    })
-    .filter(Boolean);
-}
 process.stdout.write(
   JSON.stringify({
     audio: mappedAudio,

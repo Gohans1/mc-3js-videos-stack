@@ -1515,6 +1515,7 @@ export const createApi = (
     if (
       !raw ||
       raw.includes("\0") ||
+      raw.split(/[\\/]/).includes("..") ||
       raw.startsWith("/") ||
       raw.startsWith("\\") ||
       /^[A-Za-z]:/.test(raw)
@@ -1532,7 +1533,11 @@ export const createApi = (
       } catch {
         return c.json({ error: "IR path escapes film directory" }, 403);
       }
-      if (!allowedExt.has(extname(target).toLowerCase()) || !existsSync(target)) {
+      if (
+        !allowedExt.has(extname(target).toLowerCase()) ||
+        !existsSync(target) ||
+        !statSync(target).isFile()
+      ) {
         return c.body(null, 404);
       }
       return sendFile(c, target, { onSound: true });

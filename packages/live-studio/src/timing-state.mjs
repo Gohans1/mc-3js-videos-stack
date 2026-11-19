@@ -46,6 +46,7 @@ export const setTiming = (data, sourceDuration = timingClock.sourceDuration) => 
     layerClock = layerClocks.text;
     audioClock = {
       ...layerClocks.sfx,
+      spacesClock: () => layerClocks.cam ?? timingClock,
       forClip: (clip, list, data) =>
         layerClocks[
           clip._narration || clip.name === data.narration
@@ -87,7 +88,8 @@ export const timedDraw = (draw) => {
   if (asyncFrame) out.renderFrame = (t) => at(t, asyncFrame);
   if (draw.describe) out.describe = (t) => draw.describe(frameAt(timingClock, t));
   if (draw.prepareFrame) out.prepareFrame = (t) => draw.prepareFrame(frameAt(timingClock, t));
-  if (draw.needsPreparation) out.needsPreparation = (t) => draw.needsPreparation(frameAt(timingClock, t));
+  if (draw.needsPreparation)
+    out.needsPreparation = (t) => draw.needsPreparation(frameAt(timingClock, t));
   if (draw.variants)
     out.variants = draw.variants.map((v) => ({
       ...v,
