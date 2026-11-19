@@ -62,7 +62,6 @@ import { playgroundExtensions, speechRequestOptions } from "./voice-playground-r
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
 
-
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
@@ -1123,7 +1122,9 @@ export const createApi = (
     return c.body(srt);
   });
   const props = film?.PROJECT ? openPropLibrary(film.PROJECT, propVault) : null;
-  app.get("/api/props", async (c) => fresh(c, (await props?.catalog()) ?? { global: [], film: [] }));
+  app.get("/api/props", async (c) =>
+    fresh(c, (await props?.catalog()) ?? { global: [], film: [] }),
+  );
   app.get("/api/props/preview", async (c) => {
     const preview = await props?.preview(c.req.query("scope"), c.req.query("path"));
     if (!preview) return c.notFound();

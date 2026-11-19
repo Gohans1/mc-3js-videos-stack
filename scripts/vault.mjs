@@ -50,9 +50,9 @@ export function vaultPath(path) {
   return resolve(ROOT, path);
 }
 
-export const LOCAL = vaultPath(process.env.MC_VAULT_ROOT ?? config.root);
+export const LOCAL = vaultPath(process.env.MC_VAULT_ROOT?.trim() || config.root);
 export const EXTERNAL = vaultPath(
-  process.env.MC_VAULT_EXTERNAL ?? config.externalRoot ?? config.root,
+  process.env.MC_VAULT_EXTERNAL?.trim() || config.externalRoot || config.root,
 );
 
 export function checkVault() {

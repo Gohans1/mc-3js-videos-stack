@@ -6,6 +6,9 @@ type PropPreview = { path: string; version: string };
 export type PropEntry = { id: string; image?: PropPreview; model?: PropPreview; source?: string };
 export type PropCatalog = Record<PropScope, PropEntry[]>;
 
+export const PROP_MEDIA_EXTS = [".avif", ".jpeg", ".jpg", ".png", ".webp", ".glb"] as const;
+export const PROP_CODE_EXTS = [".ts", ".tsx"] as const;
+
 const mediaTypes = new Map([
   [".avif", "image/avif"],
   [".jpeg", "image/jpeg"],
@@ -63,7 +66,8 @@ export function openPropLibrary(project: string, vault: string) {
         const lower = ext.toLowerCase();
         const mime = mediaTypes.get(lower);
         const source =
-          [".ts", ".tsx"].includes(lower) && !file.name.toLowerCase().endsWith(".d.ts");
+          (PROP_CODE_EXTS as readonly string[]).includes(lower) &&
+          !file.name.toLowerCase().endsWith(".d.ts");
         if (!mime && !source) continue;
         const path = next.join("/");
         const id = path.slice(0, -ext.length);

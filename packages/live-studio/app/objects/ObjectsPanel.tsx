@@ -1,4 +1,3 @@
-import { useActivity } from "../activity/activity";
 import {
   Box,
   ChevronLeft,
@@ -41,6 +40,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import { timingClock } from "../../src/timing-state.mjs";
+import { useActivity } from "../activity/activity";
 import { CurveEditor, EaseTiles } from "../components/EasePicker";
 import { EmptyCard, Segmented } from "../components/inspector";
 import { TabStage } from "../components/Motion";
@@ -579,7 +579,7 @@ function InFilm() {
         {names.map((n) => (
           <button
             key={n}
-            data-ai-lit={(`object:${n}` in lights) || undefined}
+            data-ai-lit={`object:${n}` in lights || undefined}
             type="button"
             aria-pressed={object === n}
             onClick={() => select(n)}

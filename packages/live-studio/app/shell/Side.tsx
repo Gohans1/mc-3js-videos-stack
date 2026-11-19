@@ -201,10 +201,14 @@ const useAiTabs = () => {
   const enabled = useStudio((s) => s.aiActivity);
   const lit = useActivity((s) => s.lit);
   return (id: string, open: string, aliases: readonly string[] = []) => {
-    const on = enabled &&
+    const on =
+      enabled &&
       (id !== open || (id !== "notes" && id !== "lessons")) &&
       [id, ...aliases].some((name) => `tab:${name}` in lit);
-    return { "data-ai-lit": on || undefined, "aria-description": on ? "Recent activity" : undefined };
+    return {
+      "data-ai-lit": on || undefined,
+      "aria-description": on ? "Recent activity" : undefined,
+    };
   };
 };
 
@@ -232,13 +236,7 @@ export function Library({ lessonsWidthPx }: { lessonsWidthPx: number }) {
     aiTab = useAiTabs();
   const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
   const available = (id: Lib) =>
-    isCore(id) ||
-    id === "objects" ||
-    (id === "sound"
-      ? sound
-      : id === "text"
-        ? text
-        : cam);
+    isCore(id) || id === "objects" || (id === "sound" ? sound : id === "text" ? text : cam);
   const value = available(lib) ? lib : "notes";
   const shown = LIBS;
   return (
@@ -598,13 +596,7 @@ export function Side({
   const shown =
     isCore(raw) ||
     raw === "objects" ||
-    (raw === "sound"
-      ? sound
-      : raw === "text"
-        ? text
-        : raw === "keys"
-          ? keys
-          : cam);
+    (raw === "sound" ? sound : raw === "text" ? text : raw === "keys" ? keys : cam);
   const value = shown ? raw : "notes";
   const sideOrder: SideTab[] = [
     "notes",
@@ -657,11 +649,7 @@ export function Side({
               Notes
               <NotesCount open={open} check={check} asking={asking} />
             </Tabs.Tab>
-            <Tabs.Tab
-              value="lessons"
-              {...aiTab("lessons", value)}
-              className={cn(tab, coreTab)}
-            >
+            <Tabs.Tab value="lessons" {...aiTab("lessons", value)} className={cn(tab, coreTab)}>
               <BookOpenText aria-hidden />
               Lessons
             </Tabs.Tab>
@@ -672,7 +660,12 @@ export function Side({
               <Network aria-hidden />
               Ports
             </Tabs.Tab>
-            <Tabs.Tab value="cli" {...aiTab("cli", value)} data-cli-tab className={cn(tab, coreTab)}>
+            <Tabs.Tab
+              value="cli"
+              {...aiTab("cli", value)}
+              data-cli-tab
+              className={cn(tab, coreTab)}
+            >
               <Terminal aria-hidden />
               CLI
             </Tabs.Tab>
@@ -695,10 +688,20 @@ export function Side({
             <Tabs.Tab value="keys" {...aiTab("keys", value)} disabled={!keys} className={tab}>
               Keyframes
             </Tabs.Tab>
-            <Tabs.Tab value="transition" {...aiTab("transition", value)} disabled={!cam} className={tab}>
+            <Tabs.Tab
+              value="transition"
+              {...aiTab("transition", value)}
+              disabled={!cam}
+              className={tab}
+            >
               Transitions
             </Tabs.Tab>
-            <Tabs.Tab value="cam" {...aiTab("cam", value, ["speed", "adjust", "anim"])} disabled={!cam} className={tab}>
+            <Tabs.Tab
+              value="cam"
+              {...aiTab("cam", value, ["speed", "adjust", "anim"])}
+              disabled={!cam}
+              className={tab}
+            >
               {layer ? "Adjustment" : "Camera"}
             </Tabs.Tab>
           </Tabs.List>

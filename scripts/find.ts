@@ -1,7 +1,7 @@
 // One lookup over everything a film can name (vault sounds, every film-stage preset), built so an agent reads ~15 lines
 // instead of grepping SOURCES.json: bun run find --help. Keyword and OpenFilm meaning results keep separate orders.
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import { FIT_NO, FIT_YES, jevJudge as judgeBy } from "../packages/clip-catalog/jev";
@@ -32,16 +32,27 @@ import {
 import { assetId, assetInfo, matchesAssetId } from "../packages/live-studio/src/asset-recipes.mjs";
 import { favoriteLists, LIST_NAME } from "../packages/live-studio/src/favorites.mjs";
 import {
+  openPropLibrary,
+  PROP_CODE_EXTS,
+  PROP_MEDIA_EXTS,
+} from "../packages/live-studio/src/prop-library.ts";
+import {
   findVaults,
   openSound,
   probeAudio,
   walkAudio,
 } from "../packages/live-studio/src/sound.mjs";
+import {
+  foldObjectVariants,
+  loadMcAssetsCatalog,
+  loadWarmMcCache,
+  type McAssetItem,
+} from "../packages/mc-assets/src/catalog.ts";
 import { readAssetCatalog } from "./openfilm/catalog.mjs";
 import { openFilmCategory, type OpenFilmLookup, openFilmSearch } from "./search/openfilm";
 import { displayAbout, dualSearchOutput } from "./search/output";
 import { assetFile, assetKey } from "./semantic/catalog";
-import { EXTERNAL, LOCAL, ROOT } from "./vault.mjs";
+import { EXTERNAL, LOCAL, ROOT, vaultPath } from "./vault.mjs";
 
 export type Entry = {
   kind: string;
@@ -96,14 +107,22 @@ type Detail = {
   min?: number;
   max?: number;
   imports?: string[];
+  variants?: { id: string; name: string }[];
   [k: string]: unknown;
 };
 
 const SOUND = ["sfx", "bgm", "mc"];
+const OBJECT_KINDS = ["block", "item", "mob", "prop"] as const;
+const isObjectKind = (k: string) => (OBJECT_KINDS as readonly string[]).includes(k);
 
 const USE: Record<string, string> = {
   sound:
     'audio.json sfx[] {"at","name","gain"} | beds[] {"name","from","to","gain","fadeIn","fadeOut"}',
+  block:
+    "placed.json objects: bun run asset use block:<ns>:<id> --film films/<name> --from 0 (mod blocks auto-pick into pack/picks.json)",
+  item: 'hand/scene attach: bun run asset pick item:<ns>:<id> --film films/<name>, then loadModel(group, assets, await resolveModelData(assets, {model:"<ns>:item/<id>",type:"item"}), {display:{}}) (assets = await prepareAssets(sources); parseItemDefinition for 1.21.4+) in src/scene.ts (items do not go in placed.json)',
+  mob: "placed.json objects: bun run asset use mob:<id> --film films/<name> --from 0",
+  prop: 'Global: bun run asset use prop:global:<id> --film films/<name> (copies to src/props/); Film: import from "./props/<id>"',
   transition: 'shots.json shot.transition {"fx","len"}',
   "transition-ease": "shots.json shot.transition.ease",
   anim: 'shots.json shot.anim.in|out|combo {"fx"} (+ "len" on in/out; anim-in plays as the shot starts, anim-out as it ends, anim-combo across the whole shot; one id can be all three)',
@@ -200,7 +219,10 @@ const slotsOf = (query: string) => {
 };
 
 const kindMatches = (kind: string, asked: string) =>
-  kind === asked || kind.startsWith(`${asked}-`) || (asked === "sound" && SOUND.includes(kind));
+  kind === asked ||
+  kind.startsWith(`${asked}-`) ||
+  (asked === "sound" && SOUND.includes(kind)) ||
+  (asked === "object" && isObjectKind(kind));
 const entryMatchesKind = (entry: Entry, asked: string) =>
   kindMatches(entry.kind, asked) ||
   (entry.kind === "asset" &&
@@ -209,11 +231,15 @@ const entryMatchesKind = (entry: Entry, asked: string) =>
   (asked === "sticker" && entry.kind === "shape");
 const fromSource = (entry: Entry, source: string) => {
   const src = entry.src?.toLowerCase();
+  const pack = typeof entry.data?.pack === "string" ? entry.data.pack.toLowerCase() : "";
+  const cleanSource = source.replace(/\.(?:jar|zip)$/i, "");
   return Boolean(
-    src &&
-    (src === source ||
-      src.startsWith(`${source}/`) ||
-      (source === "builtin" && src.startsWith("film-stage/"))),
+    (src &&
+      (src === source ||
+        src === cleanSource ||
+        src.startsWith(`${source}/`) ||
+        (source === "builtin" && src.startsWith("film-stage/")))) ||
+    (pack && (pack === source || pack.replace(/\.(?:jar|zip)$/i, "") === cleanSource)),
   );
 };
 const groupOf = (entry: Entry) => String(entry.data?.group ?? entry.cat);
@@ -223,6 +249,10 @@ const KIND_WORDS: Record<string, string> = {
   bgm: "music song track score",
   sfx: "sound effect",
   mc: "minecraft sound",
+  block: "3d object minecraft block prop furniture decor",
+  item: "3d object minecraft item tool weapon held",
+  mob: "3d object minecraft entity creature animal mob",
+  prop: "3d object custom prop ts glb library",
   velocity: "beat sync",
   ease: "camera curve",
   lens: "camera focal fov dof bokeh focus aperture framing",
@@ -328,10 +358,13 @@ export function kindFilter(asked: string[], pool: Entry[]) {
     as.push(c ? `${k}/${c}` : k);
     const ofKind = pool.filter((x) => entryMatchesKind(x, k));
     if (!ofKind.length) {
+      const propExts = [...PROP_CODE_EXTS, ...PROP_MEDIA_EXTS].join("/");
       bad.push(
         k === "mocap"
           ? `mocap has no indexed clips on this machine (vault/motion/catalog has no *.jsonl files). Build or sync the mocap catalogue, or write custom poses in src/timeline/steve.json.`
-          : unknownKind(a, pool),
+          : k === "prop"
+            ? `prop has no custom props yet (no supported ${propExts} files in vault/props/ or active film src/props/). Add custom props there, or search built-in/mod models with bun run find --kind block,item,mob.`
+            : unknownKind(a, pool),
       );
       return () => false;
     }
@@ -431,13 +464,29 @@ const KIND_ALIAS: Record<string, string> = Object.fromEntries(
     clip: "mocap",
     beat: "velocity",
     pulse: "velocity",
+    "3d": "object",
+    objects: "object",
+    model: "object",
+    models: "object",
+    blocks: "block",
+    items: "item",
+    mobs: "mob",
+    entity: "mob",
+    entities: "mob",
+    props: "prop",
+    custom: "prop",
   }).map(([w, k]) => [stem(w), k]),
 );
 const ALIAS_NOTE: Record<string, string> = {
   anim: "camera moves and shot animations; camera curves are --kind ease",
   bgm: "background music",
+  block: "Minecraft vanilla, gohans and mod blocks",
+  item: "Minecraft vanilla and mod items",
   lens: "prime lenses, framing and DOF helpers",
   look: "named film-stage color looks",
+  mob: "Minecraft mobs with entity animations",
+  object: "blocks, items, mobs and props together",
+  prop: "custom Global (vault/props) and Film (src/props) props",
   shake: "handheld presets and procedural impact trauma",
   sound: "sfx, bgm and mc together",
   text: "title and caption animations",
@@ -450,6 +499,7 @@ const kindOf = (said: string, pool: Entry[]) => {
   const kinds = [
     ...new Set(pool.flatMap((x) => (x.kind === "asset" ? [top(x.kind), x.cat] : [top(x.kind)]))),
     "sound",
+    ...(pool.some((x) => isObjectKind(x.kind)) ? ["object"] : []),
   ];
   // another name gives way to a category of that name (effects is adjust/effects, curve is anim/curve)
   const isCat = pool.some((x) => x.cat && catSlug(x.cat) === catSlug(said));
@@ -521,30 +571,35 @@ const originOfEntry = (x: Entry) =>
     source: providerOf(x),
     origin: x.data?.origin as "real" | "synth" | "unknown" | undefined,
   });
-const editionOfEntry = (x: Entry) => editionOf({ source: providerOf(x) });
+const editionOfEntry = (x: Entry) =>
+  isObjectKind(x.kind)
+    ? x.data?.edition === "vanilla" || x.src === "minecraft"
+      ? "vanilla"
+      : "modded"
+    : editionOf({ source: providerOf(x) });
 // What a sound asks of a YouTube upload. Mojang's usage guidelines (minecraft.net/usage-guidelines) allow its game audio in
 // monetised Minecraft videos; mods ship sounds under code licences (MIT, Apache, LGPL, GPL, PolyForm Shield) whose notice
 // terms were written for software, so the safe reading is a credit, and whether copyleft reaches a video is untested
 const LICENSES = {
-  free: "nothing to do: no credit, no Content ID claim (CC0, Mixkit, Pixabay, earshot)",
+  free: "nothing to do: no credit, no Content ID claim (CC0, Mixkit, Pixabay, earshot, repo)",
   credit: "CC BY: name the author and licence in the video description",
   claim: "YouTube Content ID claims the video when uploaded",
   minecraft:
-    "Mojang's own game sounds: fine in a Minecraft video under Mojang's usage guidelines, not in other videos",
-  mod: "a mod's sounds under a code licence (MIT, Apache, LGPL, GPL, PolyForm Shield): name the mod and its licence in the description",
+    "Mojang's own game assets: fine in a Minecraft video under Mojang's usage guidelines, not in other videos",
+  mod: "a mod/pack's assets under a code or custom licence (MIT, Apache, LGPL, GPL, PolyForm Shield, custom): name it and check its licence terms",
 };
-const CODE_LICENSE = /\b(?:MIT|Apache|L?GPL|PolyForm)\b/i;
+const CODE_LICENSE = /\b(?:MIT|Apache|L?GPL|PolyForm|MPL)\b/i;
 const licenseOf = (x: Entry): keyof typeof LICENSES => {
   const l = String(x.data?.license ?? "");
-  return x.data?.contentId
-    ? "claim"
-    : /\bCC[ -]BY\b/i.test(l)
-      ? "credit"
-      : /^Minecraft\b/.test(l)
-        ? "minecraft"
-        : CODE_LICENSE.test(l)
-          ? "mod"
-          : "free";
+  if (x.data?.contentId) return "claim";
+  if (/\bCC[ -]BY\b/i.test(l)) return "credit";
+  if (/^Minecraft\b/i.test(l)) return "minecraft";
+  if (CODE_LICENSE.test(l)) return "mod";
+  if (isObjectKind(x.kind)) {
+    if (l === "repo" || /\b(?:CC0|Unlicense|Public[- ]?Domain)\b/i.test(l)) return "free";
+    return "mod";
+  }
+  return "free";
 };
 // Other words for a filter's values; anything else --license gets is matched against the licences' own names (mit, lgpl)
 const VALUE_ALIAS: Record<string, Record<string, string>> = {
@@ -1192,7 +1247,9 @@ type FavoriteLists = ReturnType<typeof favoriteLists>;
 const starOf = (x: Entry) =>
   SOUND.includes(x.kind)
     ? { kind: "sounds" as const, id: x.id }
-    : { kind: "effects" as const, id: `${STAR_PREFIX[x.kind] ?? `${x.kind}:`}${x.id}` };
+    : isObjectKind(x.kind)
+      ? { kind: "effects" as const, id: x.id }
+      : { kind: "effects" as const, id: `${STAR_PREFIX[x.kind] ?? `${x.kind}:`}${x.id}` };
 // a sound family is starred when any of its takes is (the studio stars the take that was playing)
 export const markStarred = (xs: Entry[], favs: Favorites) => {
   const sounds = new Set(favs.sounds),
@@ -1267,6 +1324,197 @@ export const allEntries = (
   ];
 };
 
+function readPickedSet(filmRoot?: string): Set<string> {
+  const out = new Set<string>();
+  if (!filmRoot) return out;
+  const p = join(filmRoot, "pack/picks.json");
+  if (!existsSync(p)) return out;
+  try {
+    const picks = JSON.parse(readFileSync(p, "utf8"));
+    if (!Array.isArray(picks)) return out;
+    for (const row of picks) {
+      const ns = typeof row?.namespace === "string" ? row.namespace : "";
+      const jar = typeof row?.jar === "string" ? row.jar : "";
+      if (!ns) continue;
+      for (const b of Array.isArray(row?.blocks) ? row.blocks : []) {
+        out.add(`block:${ns}:${b}`);
+        if (jar) out.add(`${jar}|block:${ns}:${b}`);
+      }
+      for (const it of Array.isArray(row?.items) ? row.items : []) {
+        out.add(`item:${ns}:${it}`);
+        if (jar) out.add(`${jar}|item:${ns}:${it}`);
+      }
+    }
+  } catch {}
+  return out;
+}
+
+const mcItemToEntry = (item: McAssetItem, pickedSet?: Set<string>): Entry => {
+  const isPicked =
+    pickedSet && (item.pack ? pickedSet.has(`${item.pack}|${item.id}`) : pickedSet.has(item.id));
+  const gplWarn =
+    item.license && /\bGPL\b/i.test(item.license) && !/LGPL/i.test(item.license)
+      ? `${item.license} copyleft`
+      : "";
+  const propKeys = item.props ? Object.keys(item.props).join(" ") : "";
+  const clipNames = item.clips ? item.clips.map((c) => c.name).join(" ") : "";
+  const note = [
+    isPicked && "picked",
+    !item.renderable && "non-renderable",
+    gplWarn,
+    !gplWarn && item.license && !["minecraft", "repo"].includes(item.license) && item.license,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return {
+    kind: item.kind,
+    id: item.id,
+    cat: item.kind === "mob" ? "minecraft" : item.namespace,
+    title: item.title,
+    about: [
+      item.packTitle,
+      item.namespace,
+      propKeys && `props: ${propKeys}`,
+      clipNames && `clips: ${clipNames}`,
+      !item.renderable && item.brokenReason ? `broken: ${item.brokenReason}` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    src: item.source,
+    ...(note && { note }),
+    data: { ...item, source: item.source },
+  };
+};
+
+export async function objectEntries(options?: {
+  vaultRoot?: string;
+  gohansPackDir?: string;
+  filmRoot?: string;
+  quiet?: boolean;
+}): Promise<Entry[]> {
+  const envVault = process.env.MC_VAULT_ROOT?.trim()
+    ? vaultPath(process.env.MC_VAULT_ROOT.trim())
+    : LOCAL;
+  const vaultRoot = options?.vaultRoot ?? envVault;
+  const filmRoot =
+    options?.filmRoot ??
+    (existsSync(join(process.cwd(), "src/scene.ts")) ? process.cwd() : undefined);
+  const pickedSet = readPickedSet(filmRoot);
+  const cat = loadMcAssetsCatalog({
+    vaultRoot,
+    gohansPackDir: options?.gohansPackDir,
+    quiet: options?.quiet,
+  });
+  const out = cat.items.map((it) => mcItemToEntry(it, pickedSet));
+
+  const propLib = openPropLibrary(filmRoot ?? join(ROOT, "__no_film__"), vaultRoot);
+  const propsCat = await propLib.catalog();
+  for (const scope of ["global", "film"] as const) {
+    if (scope === "film" && !filmRoot) continue;
+    for (const p of propsCat[scope]) {
+      const formats = [p.source && "ts", p.model && "glb", p.image && "image"]
+        .filter(Boolean)
+        .join(", ");
+      const src = scope === "global" ? "global" : "this-film";
+      out.push({
+        kind: "prop",
+        id: `prop:${scope}:${p.id}`,
+        cat: scope,
+        title: p.id.replaceAll("_", " ").replaceAll("/", " "),
+        about: `${formats ? `${formats} ` : ""}${scope} custom prop`,
+        src,
+        data: { ...p, sourceFile: p.source, scope, rawId: p.id, source: src, renderable: true },
+      });
+    }
+  }
+  return out;
+}
+
+function partitionObjectEntries<T extends Entry>(entries: T[]) {
+  const pos = new Map(entries.map((e, i) => [e, i]));
+  const fixed: T[] = [];
+  const mc: {
+    entry: T;
+    kind: "block" | "item" | "mob";
+    id: string;
+    pack?: string;
+    source: string;
+    namespace?: string;
+    name?: string;
+    title: string;
+  }[] = [];
+  for (const x of entries) {
+    if (x.kind === "block" || x.kind === "item") {
+      mc.push({
+        entry: x,
+        kind: x.kind,
+        id: x.id,
+        pack: typeof x.data?.pack === "string" ? x.data.pack : undefined,
+        source: x.src ?? "",
+        namespace: typeof x.data?.namespace === "string" ? x.data.namespace : undefined,
+        name: typeof x.data?.name === "string" ? x.data.name : undefined,
+        title: x.title,
+      });
+    } else {
+      fixed.push(x);
+    }
+  }
+  return { pos, fixed, mc };
+}
+
+function foldObjectEntries<T extends Entry>(entries: T[]): T[] {
+  const { pos, fixed, mc } = partitionObjectEntries(entries);
+  type FoldedRow = T & { _orig?: T };
+  const foldedMc: FoldedRow[] = foldObjectVariants(mc).map((group) => {
+    const head = group.entry;
+    return group.variants && group.variants.length > 1
+      ? ({
+          ...head,
+          _orig: head,
+          data: {
+            ...head.data,
+            variants: group.variants.map((v) => ({
+              id: v.id,
+              name: typeof v.entry.data?.name === "string" ? v.entry.data.name : v.id,
+            })),
+          },
+        } as FoldedRow)
+      : head;
+  });
+  return ([...fixed, ...foldedMc] as FoldedRow[])
+    .sort((a, b) => (pos.get(a._orig ?? a) ?? 0) - (pos.get(b._orig ?? b) ?? 0))
+    .map((x) => {
+      if (!("_orig" in x)) return x;
+      const { _orig: _, ...clean } = x;
+      return clean as T;
+    });
+}
+
+const variantKey = (pack: string | undefined, source: string, id: string) =>
+  `${pack ?? source}|${id}`;
+
+function attachObjectVariants<T extends Entry>(entries: T[], includeBroken = false): T[] {
+  const { mc } = partitionObjectEntries(
+    entries.filter((x) => includeBroken || x.data?.renderable !== false),
+  );
+  const byId = new Map<string, { id: string; name: string }[]>();
+  for (const group of foldObjectVariants(mc)) {
+    if (!group.variants || group.variants.length <= 1) continue;
+    const list = group.variants.map((v) => ({
+      id: v.id,
+      name: typeof v.entry.data?.name === "string" ? v.entry.data.name : v.id,
+    }));
+    for (const v of group.variants) byId.set(variantKey(v.pack, v.source, v.id), list);
+  }
+  if (!byId.size) return entries;
+  return entries.map((x) => {
+    const vs = byId.get(
+      variantKey(typeof x.data?.pack === "string" ? x.data.pack : undefined, x.src ?? "", x.id),
+    );
+    return vs ? ({ ...x, data: { ...x.data, variants: vs } } as T) : x;
+  });
+}
+
 // A description is printed only when it says at least two words the id, title and category don't (Minecraft's own
 // "for" lines just repeat the event id); every vault sound is already licence-checked, so only Content ID is flagged
 const tells = (x: Entry) => {
@@ -1285,11 +1533,12 @@ const line = (x: Entry, lead = "") => {
   const tags = [x.fav && "starred", x.src, synth && "made in code", x.note]
     .filter(Boolean)
     .join(", ");
+  const variantCount = Array.isArray(x.data?.variants) ? x.data.variants.length : 0;
   return [
     `${lead}${x.kind}${x.cat ? `/${x.cat}` : ""}`,
     `${x.id}${(x.takes ?? 1) > 1 ? ` (${x.takes} takes)` : ""}`,
     x.secs ? `${x.secs.toFixed(1)}s` : "",
-    `${x.title}${about && about !== x.title ? ` — ${about}` : ""}`,
+    `${x.title}${variantCount > 1 ? ` (+${variantCount - 1} variants)` : ""}${about && about !== x.title ? ` — ${about}` : ""}`,
     tags ? `[${tags}]` : "",
   ]
     .filter(Boolean)
@@ -1328,7 +1577,8 @@ One line per hit: kind/category  id-to-write  length  title —
 description  [source], then where that id goes in the film's src/timeline and what to try next.
 
 Options:
-  --kind <k[,k]>   sfx, bgm, mc (Minecraft) or sound (all three); mocap; transition anim text shape font adjust look lens shake velocity ease; asset (editable source)
+  --kind <k[,k]>   sfx, bgm, mc (Minecraft) or sound (all three); mocap; transition anim text shape font adjust look lens shake velocity ease; asset (editable source);
+                   3D assets (opt-in): block, item, mob, prop or object (all four; alias 3d); each with /<namespace-or-scope> (block/decor, prop/global)
                    transition, text, look/filter and shape/sticker include native and imported visuals;
                    effect and template select imported visuals (asset/<category> also works)
                    each with /<category>, the studio's groups: --kind sfx/typing, mc/horror, transition/wipe, text/pop
@@ -1336,15 +1586,15 @@ Options:
                    the output says how a loose one was read). --kind <kind> alone: its groups with counts, then
                    every entry when 60 or fewer; --kind <kind>/<category>: that group, and the words its entries are
                    named by when it is long
-  --source <s[,s]> where it comes from: minecraft and each mod pack by name (alexs-caves, quality-sounds ...), earshot,
+  --variants       with object kinds: unfold grouped wood/color/tier variants onto separate lines
+  --broken         with object kinds: include non-renderable models (.geo.json, .obj, custom loaders, missing parent/texture)
+  --source <s[,s]> where it comes from: minecraft and each mod pack by name (alexs-caves, dusty-decorations ...), gohans, global, this-film, earshot,
                    mixkit, mixamo, openfilm, film-stage or film-kit (every preset) or one preset file; builtin aliases film-stage
   --group <name>   one native category or imported visual group (e.g. Basic, fade, ambience); alone lists groups
   --offset <N>     skip N entries in offline lists or word results; start at 0 and combine with -n
   --origin <o>     sfx and bgm: real (recordings), synth (made in code), unknown (unverified origin)
-  --edition <e>    Minecraft sounds: vanilla (the game itself) or modded (mod packs)
-  --license <l>    sounds by what a YouTube upload must do: free (nothing), credit (CC BY: name the author), claim
-                   (Content ID claims the video), minecraft (Mojang's game sounds: Minecraft videos only), mod (a mod's
-                   code licence: credit the mod); or a word of a licence's own name: --license mit, --license lgpl
+  --edition <e>    Minecraft sounds & 3D objects: vanilla (the game itself) or modded (mod packs)
+  --license <l>    sounds & mod packs: free (nothing), credit (CC BY), claim (Content ID), minecraft, mod; or a word of a licence's own name: --license mit, --license lgpl
   --dur <min-max>  length in seconds, sounds and mocap clips: --dur 0-1 a short hit, --dur 120-600 a long track
   --fav [list]     only what the creator starred (the studio's star; rows tagged starred): the default list, or a named
                    one (--fav horror). Lists live in favorites/<list>.json, for every film; an answer names the others.
@@ -1676,6 +1926,11 @@ const OWN: Record<string, string> = {
   sound: MAKE_SOUND,
   bgm: MAKE_MUSIC,
   mocap: MAKE_MOCAP,
+  block:
+    "a block/prop model: add blockstate+model JSON to packages/mc-assets/pack/assets/gohans/ and register in packages/mc-assets/src/pack.ts, or custom TypeScript/GLB in src/props/",
+  item: "a custom item: add blockstate/model JSON or custom Mesh/GLB helper in src/props/ attached to player.handR",
+  mob: "Minecraft entity models are mirrored by mc:mobs; custom animated rigs go in src/props/",
+  prop: "put reusable TypeScript/GLB props in vault/props/ (Global) or film-only props in src/props/",
 };
 const ownOf = (kind: string) =>
   OWN[
@@ -1896,6 +2151,103 @@ function details(x: Entry): string[] {
         `curve: at 25%, 50%, 75% of the time it has gone ${[0.25, 0.5, 0.75].map((t) => f(t).toFixed(2)).join(", ")}`,
       );
     use("cam.json", `a key: "ease": "${x.id}"  (the move into that key; also a key of props.json)`);
+  } else if (x.kind === "block" || x.kind === "item" || x.kind === "mob" || x.kind === "prop") {
+    const packName = typeof d.pack === "string" ? d.pack : "";
+    const packTitle = typeof d.packTitle === "string" ? d.packTitle : "";
+    const ns = typeof d.namespace === "string" ? d.namespace : "";
+    const name = typeof d.name === "string" ? d.name : "";
+    const srcName = typeof d.source === "string" ? d.source : "";
+    const scopeName = typeof d.scope === "string" ? d.scope : "";
+    const sourceFile = typeof d.sourceFile === "string" ? d.sourceFile : "";
+    const rawId = typeof d.rawId === "string" ? d.rawId : x.id;
+    const itemType = typeof d.type === "string" ? d.type : "";
+    const brokenReason =
+      typeof d.brokenReason === "string" ? d.brokenReason : "unknown loader or missing files";
+    if (x.kind === "prop") {
+      const files = [
+        sourceFile && `source: ${sourceFile}`,
+        (scopeName || srcName) && `scope: ${scopeName || srcName}`,
+        d.model && `model: ${(d.model as { path?: string }).path}`,
+        d.image && `image: ${(d.image as { path?: string }).path}`,
+      ].filter(Boolean);
+      if (files.length) out.push(files.join("; "));
+      if (scopeName === "global") {
+        out.push(
+          `use: bun run asset use ${x.id} --film films/<name>  (copies into src/props/; keeps relative imports safe)`,
+        );
+      } else if (sourceFile) {
+        out.push(`use: import from "./props/${rawId}"  (already in this film's src/props/)`);
+      } else if (d.model) {
+        out.push(
+          `use: load "./src/props/${(d.model as { path?: string }).path}" via GLTFLoader  (already in this film's src/props/)`,
+        );
+      } else if (d.image) {
+        out.push(
+          `use: use image/texture "./src/props/${(d.image as { path?: string }).path}"  (already in this film's src/props/)`,
+        );
+      }
+      return out;
+    }
+    if (x.kind === "mob") {
+      out.push(`source: vault/mcasset/1.21.11  (licence: minecraft)`);
+      const clips = Array.isArray(d.clips)
+        ? (d.clips as { name: string; length?: number; loop?: boolean }[])
+        : [];
+      if (clips.length) {
+        out.push(
+          `clips (${clips.length}): ${clips.map((c) => `${c.name}${c.length ? ` (${c.length}s${c.loop ? " loop" : ""})` : ""}`).join(", ")}`,
+        );
+      } else {
+        out.push('clips: still entity (no animations indexed; use clip: "none")');
+      }
+      out.push(`use: bun run asset use ${x.id} --film films/<name> --from 0`);
+      return out;
+    }
+    // block or item
+    if (packName) {
+      out.push(
+        `pack: ${packTitle ? `${packTitle} (${packName})` : packName}${itemType ? ` [${itemType}]` : ""}`,
+      );
+    } else if (x.src) {
+      out.push(`source: ${x.src}`);
+    }
+    if (typeof d.license === "string" && /\bGPL\b/i.test(d.license) && !/LGPL/i.test(d.license)) {
+      out.push(`warning: ${d.license} is copyleft; avoid unless licence terms fit your project`);
+    }
+    if (d.renderable === false) {
+      out.push(`status: non-renderable (${brokenReason})`);
+    }
+    if (d.props && typeof d.props === "object") {
+      const propText = Object.entries(d.props as Record<string, string[]>)
+        .map(([k, vs]) => `${k}: ${vs.join("|")}`)
+        .join("; ");
+      if (propText) out.push(`properties: ${propText}`);
+    }
+    if (Array.isArray(d.variants) && d.variants.length > 1) {
+      const vs = (d.variants as { name: string }[]).map((v) => v.name);
+      out.push(`variants (${vs.length}): ${vs.join(", ")}`);
+    }
+    const srcFlag =
+      srcName && !["minecraft", "gohans"].includes(srcName) ? ` --source ${srcName}` : "";
+    if (x.kind === "item") {
+      out.push(
+        `note: items pick into assets/public/picked.zip and attach in src/scene.ts via block-model-renderer's loadModel(group, assets, await resolveModelData(assets, {model: "${ns}:item/${name}", type: "item"}), {display: {}}) with assets = await prepareAssets(sources) (or parseItemDefinition(assets, "${ns}:${name}") for 1.21.4+ defs); items do not go in placed.json.`,
+      );
+      if (d.source === "minecraft") {
+        out.push(
+          `use: vanilla client_assets.zip already ships ${ns}:item/${name}; load with loadModel(group, assets, await resolveModelData(assets, {model: "${ns}:item/${name}", type: "item"}), {display: {}})`,
+        );
+      } else {
+        out.push(`pick: bun run asset pick ${x.id} --film films/<name>${srcFlag}`);
+      }
+    } else {
+      if ((ns !== "minecraft" && ns !== "gohans") || d.type === "resourcepack") {
+        out.push(`pick: bun run asset pick ${x.id} --film films/<name>${srcFlag}`);
+      }
+      out.push(
+        `use: bun run asset use ${x.id} --film films/<name> --from 0${(ns !== "minecraft" && ns !== "gohans") || d.type === "resourcepack" ? srcFlag : ""}`,
+      );
+    }
   } else if (x.kind === "shape") {
     // arrow and underline are a stroke of a length (size), the rest a frame of w x h; x, y place its middle (0-1)
     const sized =
@@ -1991,15 +2343,18 @@ function show(ids: string[], pool: Entry[]) {
   return ids
     .map((id) => {
       let low = id.toLowerCase();
-      // A mocap clip named without its library (Walking_1 for mixamo/Walking_1), or with the wrong one, when only one
-      // library has it
+      // A mocap clip named without its library (Walking_1 for mixamo/Walking_1), or an object named without its kind (barrel or decor:oak_chair)
       const name = low.split("/").at(-1)!;
-      const bare = pool.filter((x) => x.id.toLowerCase().endsWith(`/${name}`));
+      const bare = pool.filter(
+        (x) =>
+          x.id.toLowerCase().endsWith(`/${name}`) ||
+          (isObjectKind(x.kind) && x.id.toLowerCase().endsWith(`:${low}`)),
+      );
       let readAs = "";
       if (!pool.some((x) => matchesAssetId(x, low)) && bare.length === 1) {
         low = bare[0]!.id.toLowerCase();
-        if (id.includes("/"))
-          readAs = `(${id} read as ${bare[0]!.id}: no clip has that id under ${id.split("/")[0]})\n`;
+        if (id.includes("/") || id.includes(":"))
+          readAs = `(${id} read as ${bare[0]!.id}: no entry has that id under ${id.split(/[/:]/)[0]})\n`;
       }
       // Each take is its own entry here (its own file and loudness); its family's takes come from the family name
       const hits = pool.flatMap((x) => {
@@ -2011,6 +2366,16 @@ function show(ids: string[], pool: Entry[]) {
       if (!hits.length) {
         if (pool.some((x) => kindMatches(x.kind, low)))
           return `${id} is a kind: bun run find --kind ${low} lists it, bun run find <words> --kind ${low} searches it`;
+        if (bare.length > 1) {
+          throw new FindError(
+            `"${id}" matches ${bare.length} entries: ${bare
+              .slice(0, 6)
+              .map((x) => x.id)
+              .join(
+                ", ",
+              )}${bare.length > 6 ? "…" : ""}. Pass the full id or add --kind ${bare[0]!.kind}`,
+          );
+        }
         const near = [
           ...new Set(
             pool
@@ -2024,11 +2389,16 @@ function show(ids: string[], pool: Entry[]) {
           `no entry has the id "${id}"${near.length ? `. Close: ${near.join(", ")}` : ""}. Ids are the second column of bun run find <words> (a film's own sounds show only from its folder).`,
         );
       }
+      const uniqueKinds = new Set(hits.map((x) => x.kind));
       const shared =
         hits.length > 1
-          ? [
-              `${hits.length} kinds share the id ${hits[0]!.id}: each goes where its use line says (one of them: --show ${hits[0]!.id} --kind ${hits[0]!.kind})`,
-            ]
+          ? uniqueKinds.size > 1
+            ? [
+                `${hits.length} kinds share the id ${hits[0]!.id}: each goes where its use line says (one of them: --show ${hits[0]!.id} --kind ${hits[0]!.kind})`,
+              ]
+            : [
+                `${hits.length} sources share the id ${hits[0]!.id}: add --source <name> to pick one (e.g. --show ${hits[0]!.id} --source ${hits[0]!.src})`,
+              ]
           : [];
       return (
         readAs +
@@ -2096,6 +2466,8 @@ const OPTIONS: Record<string, string | null> = {
   "--json": null,
   "--offline": null,
   "--yes": null,
+  "--variants": null,
+  "--broken": null,
   "--db": "--db path.sqlite",
   "--dimensions": "--dimensions 768",
   "--provider": "--provider auto|gemini|openrouter",
@@ -2194,6 +2566,7 @@ const OPTION_ALIAS: Record<string, string> = {
   "--starred": "--fav",
   "--stars": "--fav",
   "--liked": "--fav",
+  "--unrenderable": "--broken",
 };
 const isOption = (a: string) => /^--?[a-z]/i.test(a);
 function parse(argv: string[], lists: string[] = []) {
@@ -2301,6 +2674,8 @@ const sourceList = (pool: Entry[]) => {
     .join("\n  ");
 };
 // The Sound panel's filters and the licence buckets: which entries each sorts, and what it calls each one
+const hasLicense = (x: Entry) =>
+  SOUND.includes(x.kind) || ["block", "item", "mob"].includes(x.kind);
 const FACETS: Record<
   string,
   { keep: (x: Entry) => boolean; of: (x: Entry) => string; t: Record<string, string> }
@@ -2310,8 +2685,12 @@ const FACETS: Record<
     of: originOfEntry,
     t: ORIGINS,
   },
-  "--edition": { keep: (x) => x.kind === "mc", of: editionOfEntry, t: EDITIONS },
-  "--license": { keep: (x) => SOUND.includes(x.kind), of: licenseOf, t: LICENSES },
+  "--edition": {
+    keep: (x) => x.kind === "mc" || ["block", "item", "mob"].includes(x.kind),
+    of: editionOfEntry,
+    t: EDITIONS,
+  },
+  "--license": { keep: hasLicense, of: licenseOf, t: LICENSES },
 };
 // "free 120 (nothing to do ...), credit 9 (...)": all = every value with its meaning (what the filter takes), held = the
 // values these entries have, with their meaning, terse = those values bare
@@ -2328,7 +2707,7 @@ const buckets = (o: string, xs: Entry[], style: "all" | "held" | "terse" = "all"
 };
 const rawLicenses = (xs: Entry[]) =>
   tallyEntries(
-    xs.filter((x) => SOUND.includes(x.kind) && x.data?.license),
+    xs.filter((x) => hasLicense(x) && x.data?.license),
     (x) => String(x.data!.license),
   );
 const durOf = (secs: number) =>
@@ -2362,6 +2741,45 @@ const ENERGY_SAYS =
 const LOOK_SAYS = "the least head turn on the neck in degrees, e.g. --look 45";
 const AIR_SAYS =
   "yes (off the floor a while: a jump, or on furniture) or no (feet down throughout)";
+const objectSourcesSummary = () => {
+  const vRoot = process.env.MC_VAULT_ROOT?.trim()
+    ? vaultPath(process.env.MC_VAULT_ROOT.trim())
+    : LOCAL;
+  const packIndex = readJson(join(vRoot, "packs_index.json"));
+  const slugs = new Set<string>();
+  const warm = loadWarmMcCache(vRoot);
+  if (warm) {
+    for (const p of Object.values(warm.packs)) if (p.meta?.slug) slugs.add(p.meta.slug);
+  }
+  for (const [file, info] of Object.entries(packIndex)) {
+    const slug =
+      (typeof (info as any)?.slug === "string" && (info as any).slug) ||
+      file.replace(/\.(jar|zip)$/i, "");
+    if (slug) slugs.add(slug);
+  }
+  const packsDir = join(vRoot, "packs");
+  if (existsSync(packsDir)) {
+    try {
+      for (const f of readdirSync(packsDir)) {
+        if (!/\.(jar|zip)$/i.test(f)) continue;
+        const info = packIndex[f] as { slug?: unknown } | undefined;
+        const slug =
+          (typeof info?.slug === "string" && info.slug) || f.replace(/\.(jar|zip)$/i, "");
+        if (slug) slugs.add(slug);
+      }
+    } catch {}
+  }
+  const sortedPacks = [...slugs].toSorted();
+  const shownPacks =
+    sortedPacks.length > 20
+      ? [
+          ...sortedPacks.slice(0, 20),
+          `+${sortedPacks.length - 20} more (bun run find --kind object --source)`,
+        ]
+      : sortedPacks;
+  return ["minecraft", "gohans", "global", "this-film", ...shownPacks].join(", ");
+};
+
 // What a filter takes, from the entries here: asked by naming it without a value
 const valuesOf = (o: string, pool: Entry[]) => {
   const clips = pool.filter((x) => x.kind === "mocap");
@@ -2375,9 +2793,17 @@ const valuesOf = (o: string, pool: Entry[]) => {
           ? `${m} (and ${fights} weapon or fight clip${fights > 1 ? "s" : ""}, left out unless --fights)`
           : m,
     );
-    return `Kinds: ${kinds}, or sound for sfx+bgm+mc. Each takes /<category> (bun run find --kind <kind> lists them); plain names work too: music is bgm, titles is text, camera is anim`;
+    const objHint = pool.some((x) => isObjectKind(x.kind))
+      ? ""
+      : "; 3D objects (opt-in): block, item, mob, prop, or object for all four";
+    return `Kinds: ${kinds}, or sound for sfx+bgm+mc. Each takes /<category> (bun run find --kind <kind> lists them); plain names work too: music is bgm, titles is text, camera is anim${objHint}`;
   }
-  if (o === "--source") return `Sources (a comma list for several):\n  ${sourceList(pool)}`;
+  if (o === "--source") {
+    const objHint = pool.some((x) => isObjectKind(x.kind))
+      ? ""
+      : `\n  3D objects (opt-in via --kind object): ${objectSourcesSummary()}`;
+    return `Sources (a comma list for several):\n  ${sourceList(pool)}${objHint}`;
+  }
   if (o === "--group") return `Groups: ${tallyEntries(pool, groupOf)}`;
   if (o in FACETS)
     return `${o}: ${buckets(o, pool)}${o === "--license" && rawLicenses(pool) ? `. Or a licence by name (--license mit): ${rawLicenses(pool)}` : ""}`;
@@ -2472,7 +2898,52 @@ export async function run(
     listName = "default";
   }
   const stars = favorites.open(listName);
+  const resolvedVault = process.env.MC_VAULT_ROOT?.trim()
+    ? vaultPath(process.env.MC_VAULT_ROOT.trim())
+    : LOCAL;
+  let objEntriesCache: Entry[] | undefined;
+  const loadObjects = async () =>
+    (objEntriesCache ??= await objectEntries({
+      vaultRoot: resolvedVault,
+      quiet: set.has("--json"),
+    }));
+  const resolveKindBase = (k: string) => {
+    const b = k.split("/")[0]!;
+    return KIND_ALIAS[stem(b)] ?? b;
+  };
+  const wantsObjects =
+    Boolean(
+      asked?.some((k) => {
+        const r = resolveKindBase(k);
+        return r === "object" || isObjectKind(r);
+      }),
+    ) ||
+    set.has("--variants") ||
+    set.has("--broken");
+  const wantsNonObjects = Boolean(
+    asked?.some((k) => {
+      const r = resolveKindBase(k);
+      return r !== "object" && !isObjectKind(r);
+    }),
+  );
+  if ((set.has("--variants") || set.has("--broken")) && asked && !wantsObjects)
+    throw new FindError(
+      "--variants and --broken apply only to 3D object kinds (block, item, mob, prop, object)",
+    );
   const entriesOf = (fold = false) => markStarred(given ?? allEntries(fold), stars.shown());
+  const poolOf = async (fold = false) => {
+    if (given) return markStarred(given, stars.shown());
+    if (wantsObjects && !wantsNonObjects) return markStarred(await loadObjects(), stars.shown());
+    if (wantsObjects && wantsNonObjects)
+      return markStarred([...allEntries(fold), ...(await loadObjects())], stars.shown());
+    if (
+      set.has("--fav") &&
+      !asked &&
+      stars.shown().effects.some((id) => /^(?:block|item|mob|prop):/i.test(id))
+    )
+      return markStarred([...allEntries(fold), ...(await loadObjects())], stars.shown());
+    return markStarred(allEntries(fold), stars.shown());
+  };
   const fav = set.has("--fav"),
     favArg = listName === "default" ? "--fav" : `--fav ${listName}`;
   // the creator's other lists, offered beside the one in use, never forced
@@ -2489,7 +2960,7 @@ export async function run(
   const asRead = (read: string[] | undefined, text: string) =>
     noted(read?.length ? `(${read.join("; ")})\n${text}` : text);
   if (bare.length) {
-    const all = entriesOf(),
+    const all = await poolOf(),
       kf = asked && !bare.includes("--kind") ? kindFilter(asked, all) : undefined,
       byKind = kf && !kf.bad.length ? all.filter(kf.test) : all,
       pool = sources ? byKind.filter((x) => sources.some((s) => fromSource(x, s))) : byKind;
@@ -2512,18 +2983,29 @@ export async function run(
   if (showIds) {
     const extra = [
       query,
-      ...[...set.keys()].filter((k) => !["--show", "-n", "--kind", "--source"].includes(k)),
+      ...[...set.keys()].filter(
+        (k) => !["--show", "-n", "--kind", "--source", "--broken"].includes(k),
+      ),
     ];
     if (extra.some(Boolean))
       throw new FindError(
         `--show takes ids, --kind and --source only (a comma list for several: --show dissolve,push; --kind text-in for one kind's of a shared id); drop ${extra.filter(Boolean).join(" ")}`,
       );
-    const all = entriesOf(false);
+    let all = !given ? (wantsObjects ? await poolOf(false) : entriesOf(false)) : entriesOf(false);
+    if (!given && !wantsObjects) {
+      const anyMissed =
+        showIds.some((rawId) => {
+          const low = rawId.toLowerCase();
+          return !all.some((x) => matchesAssetId(x, low));
+        }) || Boolean(sources?.some((source) => !all.some((entry) => fromSource(entry, source))));
+      if (anyMissed) all = markStarred([...all, ...(await loadObjects())], stars.shown());
+    }
     if (sources?.some((source) => !all.some((entry) => fromSource(entry, source))))
       throw new FindError(`Unknown --source; ${valuesOf("--source", all)}`);
-    const scoped = sources
-      ? all.filter((entry) => sources.some((source) => fromSource(entry, source)))
-      : all;
+    const scoped = attachObjectVariants(
+      sources ? all.filter((entry) => sources.some((source) => fromSource(entry, source))) : all,
+      set.has("--broken"),
+    );
     const kf = asked ? kindFilter(asked, scoped) : undefined;
     if (kf?.bad.length) throw new FindError(kf.bad.join("\n"));
     return asRead(kf?.read, show(showIds, kf ? scoped.filter(kf.test) : scoped));
@@ -2537,9 +3019,20 @@ export async function run(
       throw new FindError(
         `${starring} takes ids, --kind and --fav <list> only (a comma list for several: ${starring} boom,dissolve); drop ${extra.filter(Boolean).join(" ")}`,
       );
-    return noted(
-      star(set.get(starring)!, starring === "--star", asked, entriesOf(false), listName, stars),
-    );
+    const starIds = commaList(set.get(starring)!);
+    const baseEntries = entriesOf(false);
+    const needsObjects =
+      !given &&
+      (wantsObjects ||
+        starIds.some(
+          (id) =>
+            /^(?:block|item|mob|prop):/i.test(id) ||
+            !baseEntries.some((x) => x.id.toLowerCase() === id.toLowerCase()),
+        ));
+    const starPool = needsObjects
+      ? markStarred([...baseEntries, ...(await loadObjects())], stars.shown())
+      : baseEntries;
+    return noted(star(set.get(starring)!, starring === "--star", asked, starPool, listName, stars));
   }
   const catalogSays = async (args: string[], clipPool: Entry[]) => {
     const ranJev = args.includes("--jev");
@@ -2749,7 +3242,7 @@ export async function run(
   }
 
   // weapons and fights are left out, as the catalogue's own search leaves them (--fights, a body filter, goes there)
-  const pool = entriesOf().filter(defaultSearchEntry);
+  const pool = (await poolOf()).filter(defaultSearchEntry);
   const kf = kinds ? kindFilter(kinds, pool) : undefined;
   // A source by its whole name, or a folder of them (film-stage = every film-stage/*.ts)
   const bySource = sources ? pool.filter((x) => sources.some((s) => fromSource(x, s))) : pool;
@@ -2793,11 +3286,11 @@ export async function run(
     );
   if (edition !== undefined && !(edition in EDITIONS))
     throw new FindError(
-      `--edition is vanilla or modded (Minecraft sounds): ${buckets("--edition", bySource)}`,
+      `--edition is vanilla or modded (Minecraft sounds & 3D objects): ${buckets("--edition", bySource)}`,
     );
   if (origin && edition)
     throw new FindError(
-      `--origin sorts sfx and bgm, --edition sorts mc (Minecraft): together they keep nothing. Give one: --origin ${origin} for sfx/bgm, --edition ${edition} for mc`,
+      `--origin sorts sfx and bgm, --edition sorts mc/objects: together they keep nothing. Give one: --origin ${origin} for sfx/bgm, --edition ${edition} for mc`,
     );
   // --license is a bucket (what an upload must do), else a word of a licence's own name: mit, lgpl, cc0, polyform
   const namedLicense =
@@ -2806,15 +3299,13 @@ export async function run(
       : undefined;
   if (
     namedLicense &&
-    !bySource.some(
-      (x) => SOUND.includes(x.kind) && namedLicense.test(String(x.data?.license ?? "")),
-    )
+    !bySource.some((x) => hasLicense(x) && namedLicense.test(String(x.data?.license ?? "")))
   )
     throw new FindError(
-      `--license is ${Object.keys(LICENSES).join(", ")} (sounds, by what a YouTube upload must do): ${buckets("--license", bySource)}. Or a word of a licence's own name: ${rawLicenses(bySource)}`,
+      `--license is ${Object.keys(LICENSES).join(", ")} (sounds & mod packs): ${buckets("--license", bySource)}. Or a word of a licence's own name: ${rawLicenses(bySource)}`,
     );
   const licensed = (x: Entry) =>
-    SOUND.includes(x.kind) &&
+    hasLicense(x) &&
     (namedLicense ? namedLicense.test(String(x.data?.license ?? "")) : licenseOf(x) === license);
   // every filter but --fav: what a search outside the favourites, or in another list, would meet
   const unstarred = bySource.filter(
@@ -2822,7 +3313,9 @@ export async function run(
       inGroup(x) &&
       (origin === undefined ||
         (SOUND.includes(x.kind) && x.kind !== "mc" && originOfEntry(x) === origin)) &&
-      (edition === undefined || (x.kind === "mc" && editionOfEntry(x) === edition)) &&
+      (edition === undefined ||
+        ((x.kind === "mc" || ["block", "item", "mob"].includes(x.kind)) &&
+          editionOfEntry(x) === edition)) &&
       (license === undefined || licensed(x)) &&
       (!dur || inRange(x.secs, dur)),
   );
@@ -2878,16 +3371,23 @@ export async function run(
     return noted(message);
   }
   kinds = kf?.as;
-  const candidates = kf ? entries.filter(kf.test) : entries;
-  const inKinds = foldSoundEntries(candidates);
+  const rawCandidates = kf ? entries.filter(kf.test) : entries;
+  const brokenCandidates = rawCandidates.filter((x) => x.data?.renderable === false);
+  const candidates =
+    set.has("--broken") || !wantsObjects
+      ? rawCandidates
+      : rawCandidates.filter((x) => x.data?.renderable !== false);
+  const inKinds = foldSoundEntries(
+    !set.has("--variants") && wantsObjects ? foldObjectEntries(candidates) : candidates,
+  );
   const candidateSounds = groupBy(
     candidates.filter((x) => SOUND.includes(x.kind)),
     (x) => soundKey(x),
   );
-  if (kf && !inKinds.length && filter) {
+  if (kf && !inKinds.length && !brokenCandidates.length && filter) {
     // the kind exists in pool but the filter took it all: say which filter, not "unknown kind"
     throw new FindError(
-      `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${bySource.filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc only." : ""}${license ? " --license sorts sounds only." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}${sources?.includes("minecraft") && kinds!.some((k) => k.startsWith("bgm")) ? `\n${MC_MUSIC_NOTE}` : ""}`,
+      `${filter} keeps ${counts(entries) || "nothing"}, none of it --kind ${kinds!.join(",")}.${origin ? ` --origin sorts sfx and bgm (bgm has ${bySource.filter((x) => x.kind === "bgm" && originOfEntry(x) === origin).length} ${origin}).` : ""}${edition ? " --edition sorts mc and 3D objects." : ""}${license ? " --license sorts sounds and mod packs." : ""}${dur ? " --dur keeps only what has a length (sounds, mocap clips)." : ""} Drop it, or see what --kind ${kinds!.join(",")} holds: bun run find --kind ${kinds!.join(",")}${sources?.includes("minecraft") && kinds!.some((k) => k.startsWith("bgm")) ? `\n${MC_MUSIC_NOTE}` : ""}`,
     );
   }
   // how a loose --kind was read (music as bgm, sfx/riser as sfx/transitions), above whatever it found
@@ -2896,7 +3396,7 @@ export async function run(
   const kindNames = kinds?.map((k) => k.split("/")[0]!);
   // the filters besides --kind: Jev offered on these entries keeps them, or it votes over the whole kind
   const narrowing = `${sources ? ` --source ${sources.join(",")}` : ""}${group ? ` --group ${qArg(group)}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}${fav ? ` ${favArg}` : ""}`;
-  const filters = `${kinds ? ` --kind ${qArg(kinds.join(","))}` : ""}${narrowing}`;
+  const filters = `${kinds ? ` --kind ${qArg(kinds.join(","))}` : ""}${narrowing}${set.has("--variants") ? " --variants" : ""}${set.has("--broken") ? " --broken" : ""}`;
   // The filters these entries can still take, each value with how many it keeps (a filter already given is left out).
   // Terse (under a search): only filters that would split the hits, values without their meaning
   const filtersFor = (xs: Entry[], terse = false, familyMembers = candidateSounds) => {
@@ -2915,7 +3415,9 @@ export async function run(
       return [`${o} ${buckets(o, ys, terse ? "terse" : "held")}`];
     });
     const bySrc = tallyEntries(
-      members.filter((x) => (SOUND.includes(x.kind) || x.kind === "mocap") && !!x.src),
+      members.filter(
+        (x) => (SOUND.includes(x.kind) || x.kind === "mocap" || isObjectKind(x.kind)) && !!x.src,
+      ),
       (x) => x.src!,
     )
       .split(", ")
@@ -2936,10 +3438,15 @@ export async function run(
     return uses.length ? ["", `where: ${uses.join("\n       ")}`] : [];
   };
   if (!query) {
-    if (!inKinds.length)
+    if (!inKinds.length) {
+      if (brokenCandidates.length && !set.has("--broken"))
+        return readAs(
+          `0 renderable matches (${brokenCandidates.length} non-renderable models hidden — .geo.json/.obj, custom loaders, or missing parent/texture).\nnext: include them: bun run find${filters} --broken`,
+        );
       throw new FindError(
         `nothing has${filters}: drop one (bun run find --kind sfx lists the sound filters)`,
       );
+    }
     const kindsHere = [...new Set(inKinds.map((x) => top(x.kind)))];
     const narrowed = kinds?.some((k) => k.includes("/"));
     const jevHere = `by meaning (Jev, paid; reads every entry of the kind or category): bun run find --jev --kind ${qArg(kinds?.join(",") ?? kindsHere.join(","))}${narrowing} "<the scene or feeling>"`;
@@ -2985,6 +3492,14 @@ export async function run(
           ...(some.some((x) => x.kind === "bgm") ? [BGM_MOOD, MC_MUSIC_NOTE] : []),
           `next: ${cut ? `next page: bun run find${filters} -n ${some.length} --offset ${offset + some.length}; search inside: bun run find <word>${filters} (a word from "named by")${inKinds.length <= LIST_ALL ? `; all ${inKinds.length}: -n ${inKinds.length}` : ""}` : `bun run find <words>${filters} searches these`}; one in full: bun run find --show <id>`,
           `      ${jevHere}`,
+          ...(wantsObjects && !set.has("--broken") && brokenCandidates.length
+            ? [
+                `      ${brokenCandidates.length} non-renderable models hidden; add --broken to include`,
+              ]
+            : []),
+          ...(wantsObjects && some.some((x) => (x.data?.variants?.length ?? 0) > 1)
+            ? [`      (+N variants): add --variants to expand every variant`]
+            : []),
           ...(some.some((x) => x.kind === "mocap")
             ? [`      ${mocapNext(pool, false, [...set.keys()])}`]
             : []),
@@ -3112,11 +3627,23 @@ export async function run(
       ),
     );
 
-  const { foreign, said, asks, ranked, typed, named, wordMatches, matches, rankIn } = keywordSearch(
-    candidates,
-    query,
-    kinds,
-  );
+  const {
+    foreign,
+    said,
+    asks,
+    ranked,
+    typed,
+    named,
+    wordMatches,
+    matches: rawMatches,
+    rankIn,
+  } = keywordSearch(candidates, query, kinds);
+  const matches =
+    !set.has("--variants") && wantsObjects ? foldObjectEntries(rawMatches) : rawMatches;
+  const hiddenBrokenMatches =
+    wantsObjects && !set.has("--broken") && brokenCandidates.length
+      ? keywordSearch(brokenCandidates, query, kinds).matches.length
+      : 0;
   if (
     !jev &&
     !semantic &&
@@ -3363,11 +3890,11 @@ export async function run(
               sources
                 ? `--source ${x.src ?? "?"}`
                 : license
-                  ? `--license ${SOUND.includes(x.kind) ? licenseOf(x) : `(${top(x.kind)} has none)`}`
+                  ? `--license ${hasLicense(x) ? licenseOf(x) : `(${top(x.kind)} has none)`}`
                   : origin
                     ? `--origin ${SOUND.includes(x.kind) && x.kind !== "mc" ? originOfEntry(x) : `(${top(x.kind)} has none)`}`
                     : edition
-                      ? `--edition ${x.kind === "mc" ? editionOfEntry(x) : `(${top(x.kind)} has none)`}`
+                      ? `--edition ${FACETS["--edition"]!.keep(x) ? editionOfEntry(x) : `(${top(x.kind)} has none)`}`
                       : `--dur ${x.secs === undefined ? `(${top(x.kind)} has no length)` : durOf(x.secs)}`,
             ),
           )
@@ -3503,6 +4030,55 @@ export async function run(
     next.push(
       "(N takes): the id shown plays as is; --show <id> names every take, to vary a sound that repeats.",
     );
+  if (shown.some(([, x]) => Array.isArray(x.data?.variants) && x.data.variants.length > 1))
+    next.push("(+N variants): add --variants to expand every variant; --show <id> lists all.");
+  if (hiddenBrokenMatches > 0)
+    next.push(
+      `${hiddenBrokenMatches} non-renderable match${hiddenBrokenMatches > 1 ? "es" : ""} hidden (.geo.json/.obj, custom loader, or missing parent/texture); add --broken to include.`,
+    );
+  if (
+    !given &&
+    !wantsObjects &&
+    !kinds &&
+    !set.has("--json") &&
+    !semantic &&
+    typed.length &&
+    !foreign
+  ) {
+    const warm = loadWarmMcCache(resolvedVault);
+    if (warm) {
+      const qTokens = typed.map(stem);
+      const warmHits: McAssetItem[] = [];
+      const checkWarm = (items: McAssetItem[]) => {
+        for (const it of items) {
+          if (it.renderable === false) continue;
+          const hay = words(`${it.name} ${it.title}`);
+          if (qTokens.every((t) => hay.includes(t))) {
+            warmHits.push(it);
+            if (warmHits.length >= 12) return;
+          }
+        }
+      };
+      if (warm.vanilla?.entries) checkWarm(warm.vanilla.entries);
+      if (warmHits.length < 12) {
+        for (const p of Object.values(warm.packs)) {
+          checkWarm(p.entries);
+          if (warmHits.length >= 12) break;
+        }
+      }
+      if (warmHits.length) {
+        const folded = foldObjectVariants(warmHits);
+        next.push(
+          `3D vault also matches "${query}" (${folded
+            .slice(0, 3)
+            .map((x) => x.id)
+            .join(
+              ", ",
+            )}${folded.length > 3 ? "…" : ""}): bun run find ${qArg(query)} --kind object`,
+        );
+      }
+    }
+  }
   // the filters that would split these hits, so a pack, a licence or a length is never a guess
   const narrow =
     !jev && matches.length > 1

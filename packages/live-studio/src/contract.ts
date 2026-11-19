@@ -10,6 +10,9 @@ import {
   CAM_KEYS,
   isTimedKey,
   keyRows,
+  PICK_KEYS,
+  PLACED_KEY_KEYS,
+  PLACED_OBJECT_KEYS,
   rowAt,
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
@@ -23,6 +26,9 @@ export {
   ADJUSTMENT_KEYS,
   CAM_KEYS,
   keyRows,
+  PICK_KEYS,
+  PLACED_KEY_KEYS,
+  PLACED_OBJECT_KEYS,
   rowAt,
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
@@ -138,7 +144,10 @@ export const TimingTimeline = TimingPlan.extend({
   velocity: z.array(Velocity).refine(disjoint, "velocity ranges must not overlap").optional(),
   layers: LayerHistory.optional(),
   layerKinds: z
-    .partialRecord(z.enum(["text", "overlays", "adjustment", "audio", "sfx", "voice"]), LayerHistory)
+    .partialRecord(
+      z.enum(["text", "overlays", "adjustment", "audio", "sfx", "voice"]),
+      LayerHistory,
+    )
     .optional(),
 });
 export const TIMING_KEYS = Object.keys(TimingTimeline.shape);
@@ -625,6 +634,47 @@ export const CamTimeline = z
     "camera keys must be in order of time",
   );
 
+const vec3 = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+export const PlacedKeySchema = z.looseObject({
+  t: time.refine((x) => x >= 0, "t must be nonnegative"),
+  at: vec3,
+  rot: vec3.optional(),
+  scale: z.number().finite().positive().optional(),
+  visible: z.boolean().optional(),
+  ease: Ease.optional(),
+  clip: z.string().min(1).optional(),
+  rate: z.number().finite().optional(),
+});
+export const PlacedObjectSchema = z.looseObject({
+  what: z.string().regex(/^(?:block:[^:]+:.+|mob:.+)$/, 'expected "block:<ns>:<id>" or "mob:<id>"'),
+  properties: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  clip: z.string().min(1).optional(),
+  rate: z.number().finite().optional(),
+  keys: z
+    .array(PlacedKeySchema)
+    .min(1)
+    .refine(
+      (ks) => ks.every((k, i) => i === 0 || k.t >= ks[i - 1].t),
+      "placed keys must be in order of time",
+    ),
+});
+export const PlacedTimeline = z.record(z.string().min(1), PlacedObjectSchema);
+export const PickEntrySchema = z
+  .looseObject({
+    jar: z.string().min(1),
+    namespace: z.string().min(1),
+    blocks: z.array(z.string().min(1)).optional(),
+    items: z.array(z.string().min(1)).optional(),
+    licence: z.string().optional(),
+    license: z.string().optional(),
+    page: z.string().optional(),
+  })
+  .refine(
+    (p) => (p.blocks?.length ?? 0) > 0 || (p.items?.length ?? 0) > 0,
+    "each pick entry needs at least one block or item id",
+  );
+export const PicksFile = z.array(PickEntrySchema);
+
 // ---------- The shots (package.json "live-studio".shotsTimeline): SHOTS as data, so the studio can move a cut. Each shot starts at t
 // (the voice's source seconds, like SHOTS) and may carry a name the timeline shows; the film reads them from EDIT.shots in applyEdit
 // anim: the shot's In, Out and Combo ({fx, len?, k?, curve?, flip?, optics?}, fx an id from the film's draw.anims), drawn by film-stage/animate.ts
@@ -662,10 +712,12 @@ const Transition = z.looseObject({
   ease: Ease.optional(),
   feather: unit.optional(),
   flip: z.boolean().optional(),
-  props: z.object({
-    vars: z.record(z.string().startsWith("--"), z.string()).optional(),
-    text: z.record(z.string(), z.string()).optional(),
-  }).optional(),
+  props: z
+    .object({
+      vars: z.record(z.string().startsWith("--"), z.string()).optional(),
+      text: z.record(z.string(), z.string()).optional(),
+    })
+    .optional(),
 });
 const basicControl = (min: number) => z.number().min(min).max(100).optional();
 const Curve = z
@@ -855,17 +907,49 @@ export const TextTimeline = z.looseObject({
 
 export const OpenFilmLayerShape = z.object({
   elements: z.array(PageElementOverride).optional(),
-  id: z.string().min(1), asset: z.string().min(1), from: secs, to: secs,
-  track: z.int().nonnegative().optional(), x: z.number().finite().optional(), y: z.number().finite().optional(),
-  size: z.number().positive().max(4).optional(), rotate: z.number().finite().optional(), opacity: unit.optional(),
-  rate: z.number().positive().optional(), offset: z.number().nonnegative().optional(), loop: z.boolean().optional(),
-  fadeIn: z.number().nonnegative().optional(), fadeOut: z.number().nonnegative().optional(),
+  id: z.string().min(1),
+  asset: z.string().min(1),
+  from: secs,
+  to: secs,
+  track: z.int().nonnegative().optional(),
+  x: z.number().finite().optional(),
+  y: z.number().finite().optional(),
+  size: z.number().positive().max(4).optional(),
+  rotate: z.number().finite().optional(),
+  opacity: unit.optional(),
+  rate: z.number().positive().optional(),
+  offset: z.number().nonnegative().optional(),
+  loop: z.boolean().optional(),
+  fadeIn: z.number().nonnegative().optional(),
+  fadeOut: z.number().nonnegative().optional(),
   timebase: OverlayTimebase.optional(),
-  vars: z.record(z.string().startsWith("--"), z.string()).optional(), text: z.record(z.string(), z.string()).optional(),
-  blend: z.enum(["source-over", "screen", "overlay", "multiply", "lighten", "darken", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"]).optional(),
+  vars: z.record(z.string().startsWith("--"), z.string()).optional(),
+  text: z.record(z.string(), z.string()).optional(),
+  blend: z
+    .enum([
+      "source-over",
+      "screen",
+      "overlay",
+      "multiply",
+      "lighten",
+      "darken",
+      "color-dodge",
+      "color-burn",
+      "hard-light",
+      "soft-light",
+      "difference",
+      "exclusion",
+      "hue",
+      "saturation",
+      "color",
+      "luminosity",
+    ])
+    .optional(),
 });
 export const OpenFilmLayer = OpenFilmLayerShape.refine((v) => v.to > v.from, "to must follow from");
-export const OpenFilmTimeline = z.object({ items: z.array(OpenFilmLayer) }).refine((v) => new Set(v.items.map((x) => x.id)).size === v.items.length, "ids must differ");
+export const OpenFilmTimeline = z
+  .object({ items: z.array(OpenFilmLayer) })
+  .refine((v) => new Set(v.items.map((x) => x.id)).size === v.items.length, "ids must differ");
 
 // ---------- Key files (package.json "live-studio".keyFiles: { file: the EDIT key the film reads it from }): every list of
 // {t, ...} or single timed {t, ...} event object in the file, at any depth through objects, is a row of keys the studio shows

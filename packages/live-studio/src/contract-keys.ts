@@ -94,6 +94,9 @@ export const TEXT_KEYS = [
 export const TEXT_SLOT_KEYS = ["in", "out"].flatMap((s) =>
   ["fx", "len", "ease", "stagger", "tint", "hold"].map((k) => `${s}.${k}`),
 );
+export const PLACED_OBJECT_KEYS = ["what", "properties", "clip", "rate", "keys"];
+export const PLACED_KEY_KEYS = ["t", "at", "rot", "scale", "visible", "ease", "clip", "rate"];
+export const PICK_KEYS = ["jar", "namespace", "blocks", "items", "licence", "license", "page"];
 
 export const isTimedKey = (k: any): k is { t: number } =>
   !!k && typeof k === "object" && !Array.isArray(k) && Number.isFinite(k.t);

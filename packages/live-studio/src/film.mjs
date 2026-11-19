@@ -27,6 +27,7 @@ import {
   Edit,
   keyFileSchema,
   OpenFilmTimeline,
+  PlacedTimeline,
   problems,
   ShotsTimeline,
   SoundTimeline,
@@ -110,10 +111,10 @@ export const contractFiles = (project) => {
       : textOf(OPENFILM_FILE) !== undefined
         ? [[OPENFILM_FILE, [OpenFilmTimeline, textOf(OPENFILM_FILE)]]]
         : []),
-    ...Object.entries(conf.keyFiles ?? {}).map(([rel, edit]) => [
-      rel,
-      [keyFileSchema(rowsOf(edit)), textOf(rel)],
-    ]),
+    ...Object.entries(conf.keyFiles ?? {}).map(([rel, edit]) => {
+      const base = keyFileSchema(rowsOf(edit));
+      return [rel, [edit === "placed" ? base.and(PlacedTimeline) : base, textOf(rel)]];
+    }),
   ];
   const files = new Map();
   for (const [file, [schema, text]] of entries) {
@@ -201,7 +202,8 @@ export const openFilm = (projectDir, { send, activity }) => {
   // "live-studio": { keyFiles: { file: EDIT key } }: Steve's moves, the props' keys... as rows the studio retimes (contract.ts keyRows)
   const keyFiles = Object.entries(pkg["live-studio"]?.keyFiles ?? {}).map(([rel, edit]) => {
     const requiredRows = pkg["live-studio"]?.requiredKeyRows?.[edit] ?? [],
-      schema = keyFileSchema(requiredRows);
+      base = keyFileSchema(requiredRows),
+      schema = edit === "placed" ? base.and(PlacedTimeline) : base;
     return { rel, edit, requiredRows, schema, ...openTimelineFile(PROJECT, rel, schema) };
   });
   // "live-studio": { shotsTimeline: file }: SHOTS as data (the film reads them from EDIT.shots), so a cut can be moved by hand
@@ -542,12 +544,17 @@ export const openFilm = (projectDir, { send, activity }) => {
       return null;
     }
   };
-  const watchDocument = (file, change, { snapshot = timelineContent, acceptMissing = false } = {}) => {
+  const watchDocument = (
+    file,
+    change,
+    { snapshot = timelineContent, acceptMissing = false } = {},
+  ) => {
     if (!file) return;
     const target = file.FILE;
     let folder = dirname(target);
     while (!existsSync(folder) && folder !== PROJECT) folder = dirname(folder);
-    let seen = snapshot(target), accepted = seen;
+    let seen = snapshot(target),
+      accepted = seen;
     const refresh = debounce(() => {
       let now;
       try {
@@ -616,11 +623,15 @@ export const openFilm = (projectDir, { send, activity }) => {
     if (!existsSync(MIX) || !existsSync(TRIALS) || LIVE !== mixIsLive()) remix();
     // The server also saves timelines by atomic rename. Watch the parent so the next edit still arrives.
     if (LIVE) {
-      watchDocument(sound, () => {
-        if (sound.personWrite()) return;
-        send("lanes");
-        activity?.add({ surface: "sound", say: "Edited the sound lanes" });
-      }, { snapshot: lanesOf });
+      watchDocument(
+        sound,
+        () => {
+          if (sound.personWrite()) return;
+          send("lanes");
+          activity?.add({ surface: "sound", say: "Edited the sound lanes" });
+        },
+        { snapshot: lanesOf },
+      );
     } else {
       watchDocument(sound, () => {
         if (soundFiles.includes(sound.FILE)) soundsChanged();
@@ -629,16 +640,27 @@ export const openFilm = (projectDir, { send, activity }) => {
     }
 
     const timeline = (file, event, surface, message, data, after) =>
-      watchDocument(file, () => {
-        send(event, data);
-        announce(file, surface, message);
-        after?.();
-      }, { acceptMissing: event === "openfilm" });
+      watchDocument(
+        file,
+        () => {
+          send(event, data);
+          announce(file, surface, message);
+          after?.();
+        },
+        { acceptMissing: event === "openfilm" },
+      );
     timeline(cam, "cam", "cam", "Edited the camera keys");
     timeline(shots, "shots", "cam", "Edited the shots");
     timeline(text, "text", "text", "Edited the titles and text");
     timeline(adjustment, "adjustment", "adjust", "Edited the adjustment layers");
-    timeline(timing, "timing", "speed", "Edited the timing (speed, freezes, gaps)", undefined, remix);
+    timeline(
+      timing,
+      "timing",
+      "speed",
+      "Edited the timing (speed, freezes, gaps)",
+      undefined,
+      remix,
+    );
     timeline(openfilm, "openfilm", "openfilm", "Edited the overlay layers");
     keyFiles.forEach((file, i) =>
       timeline(file, "keys", "keys", `Edited the keys in ${basename(file.FILE)}`, i),
