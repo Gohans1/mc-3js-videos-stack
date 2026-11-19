@@ -26,7 +26,7 @@ import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts
 import { refreshTimedDocs } from "/core/timed-doc.ts";
 import { keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, splitShot } from "/camera/cam.ts";
 import { camLine } from "/camera/camline.ts";
-import { files as keyFiles, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
+import { files as keyFiles, fold as foldKeyFile, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
 import { CamPanel } from "/camera/CamPanel.tsx";
@@ -73,7 +73,7 @@ import { Transport } from "/shell/Transport.tsx";
 import { useStudioHotkeys } from "/shell/useStudioHotkeys.ts";
 import { TimelinePanel } from "/timeline/TimelinePanel.tsx";
 import { SpeedCurve } from "/timeline/SpeedCurve.tsx";
-import { cut, paste } from "/timeline/clipboard.ts";
+import { copy, cut, paste } from "/timeline/clipboard.ts";
 import { attachTimeline, drawTimelineActivity, drawTimelines, marks } from "/timeline/timeline.ts";
 import { setTiming, timing, timingClock } from "../src/timing-state.mjs";
 import { warp } from "../src/warp.mjs";
@@ -86,6 +86,8 @@ const INITIAL_CAM = () => [
 let camData = INITIAL_CAM();
 let camVer = 1;
 let camPosts = 0;
+let propData = { Lantern: [{ t: 0, visible: true }] };
+let propVersion = 1;
 let shotsData = [{ t: 0, name: "Intro" }];
 let shotsVer = 1;
 let aiSpans = [];
@@ -188,10 +190,11 @@ globalThis.fetch = async (input, init) => {
     );
   }
   if (path === "/api/keys/1") {
-    return Response.json({
-      version: "p1",
-      data: { Lantern: [{ t: 0, visible: true }] },
-    });
+    if (init?.method === "POST") {
+      propData = JSON.parse(String(init.body)).data;
+      propVersion++;
+    }
+    return Response.json({ version: "p" + propVersion, data: propData });
   }
   return origFetch(input, init);
 };
@@ -353,7 +356,7 @@ window.__UX_TEST__ = {
   setDraft,
   removeKey,
   loadStudioKeys,
-  keyFiles: () => keyFiles, keysOf, pickKeys,
+  keyFiles: () => keyFiles, keysOf, pickKeys, foldKeyFile,
   savedNotes: () => savedNotes,
   cancelNote,
   finalToggles: () => finalToggles,
@@ -427,6 +430,7 @@ window.__UX_TEST__ = {
   setKey,
   undo,
   redo,
+  copy,
   cut,
   paste,
   matchAllInShot,
@@ -1498,6 +1502,99 @@ test("keyframe selections retain their source keys when a picture cut shifts vis
     }
   })()`);
   expect(result).toEqual({ focused: 8, camera: [], objects: [8] });
+});
+
+test("camera keyframe paste keeps both nearby keys and retains the exact destination ID", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 1, p: [1, 2, 6], l: [0, 1, 0] },
+      { t: 1.01, p: [2, 2, 6], l: [0, 1, 0] },
+      { id: "destination", t: 5.01, p: [9, 2, 6], l: [0, 1, 0] },
+    ], 1);
+    u.set({ camKey: null, camPicks: [1, 2] });
+    u.copy();
+    u.S.t = 5;
+    u.paste();
+    const rows = u.camKeys();
+    const destination = rows.find(k => k.id === "destination");
+    return {
+      placed: rows.filter(k => k.t >= 5).map(k => [k.t, k.p[0]]),
+      selected: u.get().camPicks.map(i => rows[i].t),
+      existing: destination && [destination.t, destination.p[0]],
+    };
+  })()`);
+  expect(result).toEqual({
+    placed: [
+      [5, 1],
+      [5.01, 2],
+    ],
+    selected: [5, 5.01],
+    existing: [5.01, 2],
+  });
+});
+
+test("prop paste keeps and selects nearby keys when Speed projects them to fractional times", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadStudioKeys();
+    const path = ["Lantern"];
+    const doc = u.keyFiles()[1].doc;
+    const saved = doc.sourceSnapshot();
+    try {
+      doc.editSource(data => { data.Lantern = [{ t: 0, gain: 1 }, { t: 0.017, gain: 2 }]; });
+      u.refreshProjection({ speeds: [{ from: 0, to: 10, rate: 1.7 }] });
+      u.pickKeys([0, 1].map(i => ({ f: 1, path, i })));
+      u.copy();
+      u.S.t = 1.181;
+      u.paste();
+      return {
+        values: u.keysOf(1, path).map(k => [Number(k.t.toFixed(3)), k.gain]),
+        selected: u.get().keyPicks.map(({ i }) => i),
+      };
+    } finally {
+      u.refreshProjection({});
+      doc.restoreSource(saved);
+    }
+  })()`);
+  expect(result).toEqual({
+    values: [[0, 1], [0.01, 2], [1.181, 1], [1.191, 2]],
+    selected: [2, 3],
+  });
+});
+
+test("timeline keyframe navigation includes folded tracks, exact subframes and keeps selection", async () => {
+  const saved = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([0, 2, 4].map(t => ({ t, p: [t, 2, 6], l: [0, 1, 0] })), 2);
+    await u.loadStudioKeys();
+    const doc = u.keyFiles()[1].doc;
+    const before = doc.sourceSnapshot();
+    doc.editSource(data => { data.Lantern = [{ t: 2, visible: true }, { t: 2.01, visible: false }]; });
+    u.foldKeyFile(1, true);
+    u.seekExact(2);
+    return before;
+  })()`);
+  const next = `document.querySelector('button[aria-label="Next timeline keyframe"]')`;
+  const previous = `document.querySelector('button[aria-label="Previous timeline keyframe"]')`;
+  try {
+    expect(await page.evaluate(`Boolean(${next})`)).toBe(true);
+    const times = [];
+    for (const button of [next, next, previous, previous]) {
+      await page.evaluate(`(${button}).click()`);
+      times.push(await page.evaluate("window.__UX_TEST__.S.t"));
+    }
+    expect(times).toEqual([2.01, 4, 2.01, 2]);
+    expect(await page.evaluate("window.__UX_TEST__.get().camKey")).toBe(2);
+  } finally {
+    await page.evaluate(`(() => {
+      window.__UX_TEST__.keyFiles()[1].doc.restoreSource(${JSON.stringify(saved)});
+      window.__UX_TEST__.foldKeyFile(1, false);
+    })()`);
+  }
 });
 
 test("cutting a mixed camera selection preserves the hard cut excluded from the clipboard", async () => {

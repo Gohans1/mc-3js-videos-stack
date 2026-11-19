@@ -51,8 +51,9 @@ const endShuttle = () => {
   S.el.audio.playbackRate = get().rate;
   if (get().status === shown) say("", 0);
 };
+export const seekLimit = () => Math.max(0, DURATION - 0.01);
 export const seekExact = (x: number) => {
-  S.t = Math.max(0, Math.min(DURATION - 0.01, x));
+  S.t = Math.max(0, Math.min(seekLimit(), x));
   const audio = S.el.audio;
   if (audio.readyState > 0) audio.currentTime = S.t;
   if (shuttle < 0) {

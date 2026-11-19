@@ -4,6 +4,8 @@
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
+  ChevronLeft,
+  ChevronRight,
   FoldHorizontal,
   Link2,
   Magnet,
@@ -20,16 +22,21 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { ComponentType } from "react";
+import { type ComponentType, useMemo } from "react";
 
 import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
 
+import { keys as cameraKeys } from "../camera/cam";
 import { Tip } from "../components/Tip";
 import { canRedo, canUndo, redo, undo } from "../core/doc";
 import { DURATION } from "../core/filmMeta";
+import { S } from "../core/state";
 import { get, setPref, useStudio } from "../core/store";
 import { rangeText } from "../core/time";
+import { useFrameKey } from "../core/useFrameKey";
+import { keysOf, rows as keyTracks } from "../keys/keys";
+import { seekExact, seekLimit } from "../playback/transport";
 import { BeatMenu } from "../sound/BeatMenu";
 import { setBlade } from "./blade";
 import { canDelete, canSplit, deleteSelected, splitHere, trimSelected } from "./cut";
@@ -90,6 +97,43 @@ function ZoomSlider() {
         }
       />
     </div>
+  );
+}
+
+function KeyframeNavigation() {
+  const revision = useStudio((s) => `${s.cam}:${s.camRev}:${s.keysRev}:${s.metaRev}`);
+  const times = useMemo(() => {
+    const end = seekLimit();
+    const camera = get().cam ? cameraKeys.map((key) => key.t) : [];
+    const tracks = keyTracks.flatMap(({ f, path }) => keysOf(f, path).map((key) => key.t));
+    return [...new Set([...camera, ...tracks])]
+      .filter((t) => t >= 0 && t <= end)
+      .sort((a, b) => a - b);
+  }, [revision]);
+  const previous = () => times.findLast((t) => t < S.t - 1e-7);
+  const next = () => times.find((t) => t > S.t + 1e-7);
+  useFrameKey(() => `${previous()}:${next()}`);
+  if (!times.length) return null;
+  const go = (direction: -1 | 1) => {
+    const t = direction < 0 ? previous() : next();
+    if (t !== undefined) seekExact(t);
+  };
+  return (
+    <>
+      <span aria-hidden className="bg-border mx-1 h-5 w-px" />
+      <Tool
+        label="Previous timeline keyframe"
+        icon={ChevronLeft}
+        disabled={previous() === undefined}
+        onClick={() => go(-1)}
+      />
+      <Tool
+        label="Next timeline keyframe"
+        icon={ChevronRight}
+        disabled={next() === undefined}
+        onClick={() => go(1)}
+      />
+    </>
   );
 }
 
@@ -155,6 +199,7 @@ export function TimelineBar() {
         onClick={deleteSelected}
         disabled={!canDelete()}
       />
+      <KeyframeNavigation />
       <BeatMenu />
       {timing && (
         <Tool

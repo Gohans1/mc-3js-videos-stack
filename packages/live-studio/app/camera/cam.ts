@@ -29,7 +29,7 @@ import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { cameraSelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set, showError } from "../core/store";
-import { FPS, r3, SAME, stamp } from "../core/time";
+import { FPS, pasteTargets, r3, SAME, stamp } from "../core/time";
 import { createTimedDoc, type TimedProjection } from "../core/timed-doc";
 import { readSceneFrame } from "../picture/render";
 import { seekExact } from "../playback/transport";
@@ -325,30 +325,29 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
     );
     return;
   }
+  const placed: { id: string; t: number }[] = [];
   const recipients = ok.map((key) => keys.findLastIndex((candidate) => candidate.t <= key.t));
   if (
     !preserveRailPositions(recipients, () =>
       edit((ks) => {
         const pastedIds = new Set<string>();
-        for (const k of ok) {
+        const targets = pasteTargets(ks, ok);
+        for (const [j, k] of ok.entries()) {
           delete k.cut;
           delete k.tailId;
           delete k.__timing;
           delete k.locked;
           delete k.reason;
-          const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
-          if (on > 0) {
-            const target = ks[on];
-            const id = target.id ?? newRowId();
-            pastedIds.add(id);
-            ks[on] = { ...k, id, __timing: target.__timing };
-            continue;
-          }
-          const i = ks.findIndex((x) => x.t > k.t);
-          const id = newRowId();
+          const on = targets[j];
+          const target = ks[on];
+          const id = target?.id ?? newRowId();
           pastedIds.add(id);
-          ks.splice(i < 0 ? ks.length : i, 0, { ...k, id });
+          placed.push({ id, t: k.t });
+          const next = { ...k, id, __timing: target?.__timing };
+          if (on >= 0) ks[on] = next;
+          else ks.push(next);
         }
+        ks.sort((a, b) => a.t - b.t);
         stripInvalidMatchSpeed(
           ks,
           ks.flatMap((key, index) => (key.id && pastedIds.has(key.id) ? [index] : [])),
@@ -358,7 +357,7 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
   )
     return;
   pickCamKeys(
-    ok.map((k) => keys.findIndex((x, i) => i > 0 && !x.cut && Math.abs(x.t - k.t) < 1e-6)),
+    placed.map(({ id, t }) => keys.findIndex((key) => key.id === id && Math.abs(key.t - t) < 1e-6)),
   );
   say(
     `${ok.length} keyframe${ok.length > 1 ? "s" : ""} pasted at ${stamp(S.t)}${ok.length < items.length ? `, ${items.length - ok.length} left out (on a cut or off the film)` : ""}`,

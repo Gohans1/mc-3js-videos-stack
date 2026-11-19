@@ -79,6 +79,34 @@ export const snappedTo = (ts: number[], pts: number[]) => {
   return null;
 };
 
+export const pasteTargets = (
+  existing: readonly { t: number }[],
+  incoming: readonly { t: number }[],
+) => {
+  const targets = incoming.map(() => -1);
+  const used = new Set<number>();
+  // A key pasted exactly on an existing time gets that destination before nearby keys can claim it.
+  for (const radius of [1e-7, SAME]) {
+    for (const [j, key] of incoming.entries()) {
+      if (targets[j] >= 0) continue;
+      let closest = -1;
+      let gap = radius;
+      for (const [i, candidate] of existing.entries()) {
+        const distance = Math.abs(candidate.t - key.t);
+        if (!used.has(i) && distance < gap) {
+          closest = i;
+          gap = distance;
+        }
+      }
+      if (closest >= 0) {
+        targets[j] = closest;
+        used.add(closest);
+      }
+    }
+  }
+  return targets;
+};
+
 // Times as people read them: 01:05.250 on the clock, 1:05.3 in a list
 export const pad = (n: number, w = 2) => String(n).padStart(w, "0");
 export const stamp = (x: number) => {

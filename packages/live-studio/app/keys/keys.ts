@@ -15,7 +15,7 @@ import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, invalidatePictures, say, set } from "../core/store";
-import { r3, SAME, stamp } from "../core/time";
+import { pasteTargets, r3, stamp } from "../core/time";
 import { createTimedDoc, type TimedDoc, type TimedProjection } from "../core/timed-doc";
 import { type KeyRef } from "./slice";
 
@@ -348,22 +348,32 @@ export const pasteKeys = (items: CopiedKey[], d: number) => {
   together(() => {
     for (const f of new Set(live.map((x) => x.f)))
       files[f].doc.edit((data) => {
+        const batches = new Map<Key[], Key[]>();
         for (const { path, k } of live.filter((x) => x.f === f)) {
-          const ks = rowAt(data, path) as Key[],
-            on = ks.findIndex((x) => Math.abs(x.t - k.t) < SAME);
-          if (on >= 0) {
-            ks[on] = k;
-            continue;
-          }
-          const i = ks.findIndex((x) => x.t > k.t);
-          ks.splice(i < 0 ? ks.length : i, 0, k);
+          const existing = rowAt(data, path) as Key[];
+          const incoming = batches.get(existing) ?? [];
+          incoming.push(k);
+          batches.set(existing, incoming);
+        }
+        for (const [existing, incoming] of batches) {
+          const targets = pasteTargets(existing, incoming);
+          targets.forEach((i, j) => {
+            if (i >= 0) existing[i] = incoming[j];
+            else existing.push(incoming[j]);
+          });
+          existing.sort((a, b) => a.t - b.t);
         }
       });
   });
+  const selected = new Set<Key>();
   pickKeys(
-    live
-      .map(({ f, path, k }) => ({ f, path, i: keysOf(f, path).findIndex((x) => x.t === k.t) }))
-      .filter((r) => r.i >= 0),
+    live.flatMap(({ f, path, k }) => {
+      const row = keysOf(f, path);
+      const i = row.findIndex((key) => Math.abs(key.t - k.t) < 1e-6 && !selected.has(key));
+      if (i < 0) return [];
+      selected.add(row[i]);
+      return [{ f, path, i }];
+    }),
   );
   say(`${live.length} key${live.length > 1 ? "s" : ""} pasted at ${stamp(S.t)}`);
 };
