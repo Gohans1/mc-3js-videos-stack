@@ -1721,6 +1721,133 @@ test("applying a pin and aim pick target an anchored ID-less cut key instead of 
   }
 });
 
+test("Film Cam Pick focus measures at cameraKeySampleTime across a detached Freeze and targets ID-less cut keys cleanly", async () => {
+  const prior = await page.evaluate(
+    `({ timing: window.__UX_TEST__.get().timing, ready: window.__UX_TEST__.get().ready })`,
+  );
+  const pickBtn = `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))`;
+  const clickCanvas = `(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, buttons: 1, pointerId: 112, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, buttons: 0, pointerId: 112, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+  })()`;
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    window.__origRenderFocusSample = u.S.render;
+    window.__focusRenderTimes = [];
+    u.S.render = Object.assign((time) => {
+      window.__focusRenderTimes.push(time);
+      const world = u.get().timing ? u.cameraTimesAt(time).world : time;
+      const z = world < 4 ? 6 : 12;
+      u.S.tools.camera.position.set(0, 2, z);
+      u.S.tools.camera.lookAt(0, 1, 0);
+      u.S.tools.camera.updateMatrixWorld(true);
+    }, { eases: window.__origRenderFocusSample.eases });
+    u.setStageBox(640, 360);
+    u.attachAndDrawTimeline();
+    u.freecam.setFree(false);
+    u.set({ side: "cam", timing: true, ready: true, shotPick: null, pickFocus: null, cameraPick: null });
+    await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 4 }]);
+    await u.setCamData([
+      { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+      { id: "k1", t: 4, cut: true, p: [0, 2, 12], l: [0, 1, 0], fov: 50 },
+    ], 1);
+    u.refreshProjection({ freezes: [{ at: 4, frame: 2, duration: 2 }] });
+    u.setKey(1);
+  })()`);
+  try {
+    const filmTab = `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find(b => b.textContent.trim() === 'Film cam')`;
+    await waitUntil(filmTab);
+    await page.evaluate(`(${filmTab}).click()`);
+    await waitUntil(pickBtn);
+
+    // (a) Cut key during a detached Freeze: marker sits at t=4 (frozen shot 0, z=6), while cameraKeySampleTime is t=6 (shot 1, z=12)
+    expect(
+      await page.evaluate(
+        `({ marker: window.__UX_TEST__.camKeys()[1].t, sample: window.__UX_TEST__.cameraKeySampleTime(1) })`,
+      ),
+    ).toEqual({ marker: 4, sample: 6 });
+    await page.evaluate(`(${pickBtn}).click()`);
+    await waitUntil(`window.__UX_TEST__.get().pickFocus?.id === 'k1'`);
+    expect(await page.evaluate(`window.__UX_TEST__.S.t`)).toBe(6);
+    await page.evaluate(`window.__focusRenderTimes.length = 0`);
+    await page.evaluate(clickCanvas);
+    await waitUntil(
+      `window.__UX_TEST__.get().pickFocus === null && typeof window.__UX_TEST__.sourceCamKeys()[1]?.focus === 'number'`,
+    );
+    const freezePick = await page.evaluate(`({
+      renderedAt: window.__focusRenderTimes.at(-1),
+      k0Focus: window.__UX_TEST__.sourceCamKeys()[0].focus,
+      k1Focus: window.__UX_TEST__.sourceCamKeys()[1].focus,
+    })`);
+    expect(freezePick.renderedAt).toBe(6);
+    expect(freezePick.k0Focus).toBeUndefined();
+    expect(freezePick.k1Focus).toBeGreaterThan(10);
+
+    // (b) ID-less tail + cut pair sharing t=3: switching cut->tail clears pickFocus, and picking focus writes only to the cut key
+    await page.evaluate(`(async () => {
+      const u = window.__UX_TEST__;
+      u.set({ timing: false });
+      u.refreshProjection({});
+      u.S.render = Object.assign(() => {
+        u.S.tools.camera.position.set(0, 2, 10);
+        u.S.tools.camera.lookAt(0, 1, 0);
+        u.S.tools.camera.updateMatrixWorld(true);
+      }, { eases: window.__origRenderFocusSample.eases });
+      await u.loadShots([{ t: 0, name: "Intro" }, { t: 3, name: "Cut" }]);
+      await u.setCamData([
+        { t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+        { t: 3, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+        { t: 3, cut: true, p: [0, 2, 10], l: [0, 1, 0], fov: 50 },
+      ], 2);
+      u.seekExact(3);
+    })()`);
+    await waitUntil(pickBtn);
+    await page.evaluate(`(${pickBtn}).click()`);
+    const activePickBtn = `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Click frame to focus (Esc)'))`;
+    await waitUntil(
+      `window.__UX_TEST__.get().pickFocus?.cut === true && (${activePickBtn})?.getAttribute('aria-pressed') === 'true'`,
+    );
+    // Switching selection from cut (index 2) to tail (index 1) at the same timestamp must clear pickFocus
+    await page.evaluate(`window.__UX_TEST__.setKey(1)`);
+    await waitUntil(`window.__UX_TEST__.get().pickFocus === null`);
+
+    // Re-select ID-less cut (index 2), arm focus pick, click canvas -> updates index 2 only, never index 1
+    await page.evaluate(`window.__UX_TEST__.setKey(2)`);
+    await waitUntil(pickBtn);
+    await page.evaluate(`(${pickBtn}).click()`);
+    await waitUntil(`window.__UX_TEST__.get().pickFocus?.cut === true`);
+    await page.evaluate(clickCanvas);
+    await waitUntil(
+      `window.__UX_TEST__.get().pickFocus === null && typeof window.__UX_TEST__.sourceCamKeys()[2]?.focus === 'number'`,
+    );
+    const sharedPick = await page.evaluate(`({
+      tailFocus: window.__UX_TEST__.sourceCamKeys()[1].focus,
+      cutFocus: window.__UX_TEST__.sourceCamKeys()[2].focus,
+    })`);
+    expect(sharedPick.tailFocus).toBeUndefined();
+    expect(sharedPick.cutFocus).toBeGreaterThan(8);
+    expect(sharedPick.cutFocus).toBeLessThan(11);
+  } finally {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      if (window.__origRenderFocusSample) {
+        u.S.render = window.__origRenderFocusSample;
+        delete window.__origRenderFocusSample;
+      }
+      delete window.__focusRenderTimes;
+      u.S.tools.camera.position.set(0, 2, 6);
+      u.S.tools.camera.lookAt(0, 1, 0);
+      u.S.tools.camera.updateMatrixWorld(true);
+      u.set({ timing: ${prior.timing}, ready: ${prior.ready}, pickFocus: null, cameraPick: null });
+      u.refreshProjection({});
+    })()`);
+  }
+});
+
 test("editing a carried lens key claims it, and Merge redirects its owner through an old shot without an ID", async () => {
   const ready = await page.evaluate("window.__UX_TEST__.get().ready");
   await page.evaluate(`(async () => {

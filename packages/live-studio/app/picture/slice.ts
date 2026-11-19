@@ -2,6 +2,7 @@
 import type { FocusTargetSpec } from "film-stage/camera";
 
 import type { Ratio } from "../../src/frame.ts";
+import type { CameraKeyIdentity } from "../camera/cam";
 import type { FreeView } from "../core/engine";
 import type { FilmViewSize } from "../core/prefs";
 import type { GuideMode, ValueCheckMode } from "./director-eye";
@@ -49,7 +50,7 @@ export interface PictureSlice {
   compareGrid: boolean;
   shotList: boolean;
   final: boolean;
-  pickFocus: { id?: string; t: number } | "free" | null; // active keyframe target or "free" waiting for click-on-stage focus pick
+  pickFocus: CameraKeyIdentity | "free" | null; // active keyframe target or "free" waiting for click-on-stage focus pick
   still: PreviewStill | null; // the snapshot to compare against (snapshot.ts)
   comparing: boolean; // the snapshot shows over the picture while \ is held
 }

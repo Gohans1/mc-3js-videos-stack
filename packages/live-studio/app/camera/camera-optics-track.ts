@@ -155,7 +155,9 @@ export function mergeShotOptics(
     const keys = new Map(Object.entries(a ?? {}).filter(([, key]) => kept(key)));
     for (const [id, key] of Object.entries(b ?? {})) {
       if (!kept(key)) continue;
-      const conflict = [...keys].find(([other, value]) => other !== id && value.t === key.t)?.[0];
+      const conflict = [...keys].find(
+        ([other, value]) => other !== id && Math.abs(value.t - key.t) < EPS,
+      )?.[0];
       if ((keys.has(id) || conflict !== undefined) && key.t < cut) continue;
       if (conflict !== undefined) keys.delete(conflict);
       keys.set(id, key);

@@ -269,4 +269,26 @@ test("opticalFocusAt returns identical object focus targets directly without cre
     point: [1, 2, 3],
     label: "Wall",
   });
+  const diffOffsetOptics = {
+    focus: {
+      a: { t: 0, value: { target: "Steve.head", offset: [0, 0.2, 0] as const } },
+      b: { t: 2, value: { target: "Steve.head", offset: [0, 0.5, 0] as const }, ease: "linear" },
+    },
+  };
+  const diffPointOptics = {
+    focus: {
+      a: { t: 0, value: { point: [1, 2, 3] as const, label: "Wall" } },
+      b: { t: 2, value: { point: [1, 2, 4] as const, label: "Wall" }, ease: "linear" },
+    },
+  };
+  expect(cameraAt(1, poses, { optics: diffOffsetOptics }).focus).toEqual({
+    from: { target: "Steve.head", offset: [0, 0.2, 0] },
+    to: { target: "Steve.head", offset: [0, 0.5, 0] },
+    u: 0.5,
+  });
+  expect(cameraAt(1, poses, { optics: diffPointOptics }).focus).toEqual({
+    from: { point: [1, 2, 3], label: "Wall" },
+    to: { point: [1, 2, 4], label: "Wall" },
+    u: 0.5,
+  });
 });

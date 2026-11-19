@@ -1,6 +1,6 @@
 // Preview input: right-click pins a note, right-drag sketches/draws a note; left-click picks an object/title/element,
 // and left-drag moves a text/page title or moves the Free Camera (waking it seamlessly if off). On a phone, tap pins notes.
-import { cameraKeyFrameTime, keys, setFocus } from "../camera/cam";
+import { cameraKeySampleTime, findCameraKeyIndex, keys, setFocus } from "../camera/cam";
 import { applyCameraPick, applyContinuityPick, cancelCameraPick } from "../camera/camera-framing";
 import { applyOpticsFocusPick } from "../camera/camera-optics-track";
 import { cameraGizmoBusy, pickCameraPath } from "../camera/campath";
@@ -223,12 +223,6 @@ export const attachPicture = () => {
       what: hit.what,
     };
   };
-  const resolvePickFocusIdx = (target: { id?: string; t: number }) => {
-    const match = (row: (typeof keys)[number], tol: number) =>
-      (target.id ? row.id === target.id : !row.id) && Math.abs(row.t - target.t) < tol;
-    const exact = keys.findIndex((row) => match(row, 1e-6));
-    return exact >= 0 ? exact : keys.findIndex((row) => match(row, SAME));
-  };
   const handlePickFocus = (at: readonly [number, number]) => {
     const pickFocus = get().pickFocus;
     if (pickFocus === null) return false;
@@ -244,12 +238,12 @@ export const attachPicture = () => {
       }
       return true;
     }
-    const idx = resolvePickFocusIdx(pickFocus);
+    const idx = findCameraKeyIndex(pickFocus, SAME);
     if (idx < 0 || keys[idx]?.locked) return true;
     if (S.tools?.free.on) engine.setFree(false);
-    const frameTime = cameraKeyFrameTime(idx);
+    const frameTime = cameraKeySampleTime(idx);
     void engine.render(frameTime, () => {
-      const currentIdx = resolvePickFocusIdx(pickFocus);
+      const currentIdx = findCameraKeyIndex(pickFocus, SAME);
       if (currentIdx < 0 || keys[currentIdx]?.locked || S.tools?.free.on) return;
       const measured = measureFocusAt(at);
       if (measured) {

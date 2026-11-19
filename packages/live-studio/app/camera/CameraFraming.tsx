@@ -76,8 +76,9 @@ export function CameraFraming({
   ];
   const sourceRow = key.__timing?.sourceRow;
   const cut = !!key.cut;
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    if (section !== "basic") return;
+    return () => {
       const current = get().cameraPick;
       if (
         current?.target === undefined &&
@@ -88,9 +89,8 @@ export function CameraFraming({
         !!current.cut === cut
       )
         cancelCameraPick();
-    },
-    [key.id, key.t, sourceRow, cut],
-  );
+    };
+  }, [section, key.id, key.t, sourceRow, cut, disabled]);
   const arm = (field: CameraAimPick["field"]) => {
     if (
       pick?.target === undefined &&
@@ -252,9 +252,9 @@ export function CameraFraming({
     <Section title="Framing">
       <div className="flex flex-wrap gap-1.5">
         <Button
-          variant={pick?.target !== "free" && pick?.field === "l" ? "default" : "secondary"}
+          variant={pick?.target === undefined && pick?.field === "l" ? "default" : "secondary"}
           size="sm"
-          aria-pressed={pick?.target !== "free" && pick?.field === "l"}
+          aria-pressed={pick?.target === undefined && pick?.field === "l"}
           disabled={disabled}
           onClick={() => arm("l")}
         >

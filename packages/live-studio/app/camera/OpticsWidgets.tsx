@@ -175,6 +175,7 @@ export function FocusControls({
     if (preview && onPreviewFocus) onPreviewFocus(spec);
     else onCommitFocus(spec);
   };
+  const focusResetDisabled = fromShotNote ? authoredFocus === undefined : authoredFocus == null;
   return (
     <>
       <FieldRow
@@ -183,7 +184,7 @@ export function FocusControls({
           <Reset
             compact
             label={resetLabel}
-            disabled={disabled || authoredFocus == null}
+            disabled={disabled || focusResetDisabled}
             onClick={() => {
               setCustomTargetKey(null);
               onCommitFocus(undefined);
@@ -239,7 +240,7 @@ export function FocusControls({
             placeholder="Automatic"
             onSave={(v) => onCommitFocus(v)}
           />
-          {authoredFocus != null && (
+          {!focusResetDisabled && (
             <Button
               size="sm"
               variant="quiet"

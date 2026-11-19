@@ -11,6 +11,8 @@ import { get, say, set, useStudio } from "../core/store";
 import { SAME } from "../core/time";
 import { seekExact, setPlaying } from "../playback/transport";
 import {
+  cameraKeyIdentity,
+  cameraKeyMatches,
   cameraKeySampleTime,
   cameraKeyShotIndex,
   cameraLensAspect,
@@ -36,7 +38,6 @@ import {
   HandheldControls,
   type HandheldUiValue,
 } from "./OpticsWidgets";
-
 import { shotsDoc } from "./shots";
 
 const doc = { snapshot, restore };
@@ -71,18 +72,17 @@ export function CameraOptics({
   };
   const pf = useStudio((s) => s.pickFocus);
   const pickingFocus =
-    pf !== null &&
-    pf !== "free" &&
-    (pf.id ? pf.id === key.id : !key.id) &&
-    Math.abs(pf.t - key.t) < SAME;
+    pf !== null && pf !== "free" && cameraKeyMatches(key, pf) && Math.abs(pf.t - key.t) < SAME;
 
+  const sourceRow = key.__timing?.sourceRow;
+  const cut = !!key.cut;
   useEffect(() => {
     if (section !== "basic") return;
     return () => {
       const cur = get().pickFocus;
       if (cur && cur !== "free") set({ pickFocus: null });
     };
-  }, [section, key.id, key.t, disabled]);
+  }, [section, key.id, key.t, sourceRow, cut, disabled]);
 
   const handleSelectShake = (choice: string) => {
     if (choice === "inherit") setHandheld(i, undefined);
@@ -112,12 +112,13 @@ export function CameraOptics({
 
   return (
     <>
-      {S.tools?.cameraOpticsSample && (Object.keys(override?.focus ?? {}).length > 0 ||
-        Object.keys(override?.focalLength ?? {}).length > 0) && (
-        <p className="text-muted-foreground text-xs">
-          Active Optics tracks override their values on pose keys.
-        </p>
-      )}
+      {S.tools?.cameraOpticsSample &&
+        (Object.keys(override?.focus ?? {}).length > 0 ||
+          Object.keys(override?.focalLength ?? {}).length > 0) && (
+          <p className="text-muted-foreground text-xs">
+            Active Optics tracks override their values on pose keys.
+          </p>
+        )}
       <SliderRow
         label="FOV"
         value={optics.fov}
@@ -181,7 +182,7 @@ export function CameraOptics({
           if (S.tools?.free.on) engine.setFree(false);
           if (S.playing) setPlaying(false);
           seekExact(cameraKeySampleTime(i));
-          set({ pickFocus: { id: key.id, t: key.t }, cameraPick: null });
+          set({ pickFocus: cameraKeyIdentity(key), cameraPick: null });
         }}
         onCommitFocus={(next) => setFocus(i, next)}
         onPreviewFocus={(next) => setFocus(i, next, preview)}
