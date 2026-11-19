@@ -2,7 +2,6 @@ import { bootData } from "./boot";
 import { prefetchFile } from "./net";
 
 let warmed = false;
-let startPromise: Promise<typeof import("../start")> | null = null;
 
 /** Starts film data prefetches once per page load without waiting for React mount. */
 export const warmBootRequests = () => {
@@ -25,14 +24,4 @@ export const warmBootRequests = () => {
   if (has.sound) prefetchFile("/api/sound?used=1");
   if (has.trials) prefetchFile("/api/trials.json");
   if (has.choices) prefetchFile("/api/choices.json");
-};
-
-/** Preloads the engine and scene chunk in parallel with the React UI bundle. */
-export const preloadStart = () => {
-  if (!startPromise) {
-    startPromise = import("../start");
-    // Avoid transient unhandledrejection while React mounts before useBoot awaits this promise.
-    startPromise.catch(() => {});
-  }
-  return startPromise;
 };

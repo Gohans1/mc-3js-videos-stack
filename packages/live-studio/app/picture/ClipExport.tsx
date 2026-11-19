@@ -1,5 +1,5 @@
 import { Check, Clapperboard, Download, Loader2, X } from "lucide-react";
-import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output } from "mediabunny";
+import type { AudioBufferSource, BufferTarget, Mp4OutputFormat, Output } from "mediabunny";
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -247,6 +247,9 @@ export function ClipExport({ className }: { className?: string }) {
     let output: Output<Mp4OutputFormat, BufferTarget> | null = null;
     try {
       setProgress({ frame: 0, total: frameCount });
+      const { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output } =
+        await import("mediabunny");
+      if (abort.signal.aborted) return;
       const format = new Mp4OutputFormat({ fastStart: "in-memory" });
       output = new Output({ format, target: new BufferTarget() });
       const videoSource = new CanvasSource(canvas, {

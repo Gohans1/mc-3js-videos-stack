@@ -9,6 +9,7 @@ import { keys as camKeys, loadCam } from "./camera/cam";
 import { attachCamRow } from "./camera/camrow";
 import { loadLayers } from "./camera/layers";
 import { loadShots, shotsDoc } from "./camera/shots";
+import { afterPaint } from "./core/afterPaint";
 import { bootData, invalidateTagPrefix, versionUrl } from "./core/boot";
 import { AWAY, PHONE } from "./core/device";
 import { loadEaseTemplates } from "./core/ease";
@@ -272,9 +273,6 @@ export const start = async (el: Elements) => {
   THREE.DefaultLoadingManager.onError = (url) => {
     S.failedFile = url;
   };
-  THREE.DefaultLoadingManager.onProgress = (_, done, total) => {
-    if (!S.render) set({ loading: `Loading the scene… ${done}/${total}` });
-  };
   marks.notes = noteMarks;
   marks.optionRanges = optionRanges;
   marks.ai = aiSpans;
@@ -394,6 +392,8 @@ export const start = async (el: Elements) => {
   stored.remove("loadTries", sessionStorage);
   const MAX_SCENE_RETRIES = 3;
   for (let attempt = 0; ; attempt++) {
+    set({ loading: "Building scene…" });
+    await afterPaint();
     S.failedFile = "";
     try {
       S.render = await buildScene(el.canvas, w, h, true);
@@ -425,9 +425,9 @@ export const start = async (el: Elements) => {
   if (AWAY && has.mix) loadWholeMix();
   S.tools = S.render.tools;
   set({ placed: !!S.tools.placed });
-  set({ loading: "", ready: true });
-  say(`Loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
   await timingReady;
+  set({ loading: "Rendering first frame…" });
+  await afterPaint();
   const extras = Promise.all([
     comments,
     contractReady,
@@ -444,11 +444,14 @@ export const start = async (el: Elements) => {
   refreshTimes();
   seek(S.t);
   loopStarted = true;
-  loop();
+  await loop();
+  set({ loading: "", ready: true });
+  if (window.__live) say(`Loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
   extras.then(() => {
     restoreDraft();
     followNoteLinks();
-    window.__readyAt = Date.now();
+    panelsLoaded = true;
+    markReady();
     reportWeight();
     const idle = window.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 250));
     idle(runFilmCheck, { timeout: 600 });
@@ -460,6 +463,11 @@ export const start = async (el: Elements) => {
     );
     wake("render");
   });
+};
+
+let panelsLoaded = false;
+const markReady = () => {
+  if (panelsLoaded && window.__live && !window.__readyAt) window.__readyAt = Date.now();
 };
 
 const warm: number[] = []; // shots to draw once while idle, nearest the playhead first (frame)
@@ -616,6 +624,7 @@ const frame = async () => {
       stored.set("t", String(S.t), sessionStorage);
     }
     window.__live = { t: S.t, shot: i, drawMs };
+    markReady();
   } else if (warm.length) {
     // Async preparation can paint between awaits; warm only synchronous film renderers on the visible canvas.
     if (S.render?.renderFrame) warm.length = 0;

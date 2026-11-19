@@ -1,4 +1,4 @@
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,10 +69,34 @@ function Badges() {
   );
 }
 
+function PreviewStartup({ status }: { status: string }) {
+  const [elapsed, setElapsed] = useState(() => Math.floor(performance.now() / 1000));
+  useEffect(() => {
+    const timer = window.setInterval(() => setElapsed(Math.floor(performance.now() / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <div className="pointer-events-none absolute inset-0 z-4 grid place-items-center px-4">
+      <div className="bg-popover text-popover-foreground border-border w-full max-w-66 rounded-lg border px-4 py-3 shadow-lg">
+        <p role="status" className="text-sm font-medium">
+          {status}
+        </p>
+        <div className="mt-2 flex items-center gap-3" aria-hidden="true">
+          <div className="bg-muted h-0.5 flex-1 overflow-hidden rounded-full">
+            <div className="bg-primary h-full w-1/2 motion-safe:animate-pulse" />
+          </div>
+          <span className="text-muted-foreground text-xs tabular-nums">{elapsed}s</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // phone: PhoneApp's picture, sized by its layout, and for notes only: the editing overlays stay bound (the frame loop writes
 // to them) but never show
 export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) {
   const loading = useStudio((s) => s.loading),
+    ready = useStudio((s) => s.ready),
     error = useStudio((s) => s.error);
   const ink = useStudio((s) => s.ink),
     free = useStudio((s) => s.free);
@@ -238,7 +262,8 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           className="bg-scrim-strong border-border pointer-events-none absolute top-24 right-3 z-4 size-28 rounded-lg border"
         />
         {!phone && <FullscreenTransport />}
-        {!phone && loading && (
+        {loading && !ready && <PreviewStartup status={loading} />}
+        {!phone && loading && ready && (
           <div
             role="status"
             className="bg-scrim absolute top-12.5 left-3 z-2 rounded-md px-2 py-0.5"

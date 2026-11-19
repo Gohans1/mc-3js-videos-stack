@@ -1,3 +1,4 @@
+import { bisector } from "./bisect.mjs";
 import { compileTiming, segmentAt } from "./timing.mjs";
 
 const holds = new WeakMap();
@@ -19,6 +20,7 @@ const holdRange = (clock, source) => {
   return holds.get(clock).get(source);
 };
 const mapRange = (t, a, b, c, d) => c + (d - c) * (b > a ? (t - a) / (b - a) : 0);
+const playRangeAfter = bisector((range) => range.to).right;
 
 export const remapOutputTime = (before, after, t, edge = "after") => {
   if (before.placements && after.placements) {
@@ -52,8 +54,9 @@ const compose = (layer, before, after) => {
   const sourceAt = (t, edge = "after") =>
     layer.sourceAt(remapOutputTime(after, before, t, edge), edge);
   const visible = (t) => {
+    if (!layer.visible(t)) return false;
     const primary = before.sourceAt(layer.outputAt(t));
-    return layer.visible(t) && (!before.visible(primary) || after.visible(primary));
+    return !before.visible(primary) || after.visible(primary);
   };
   const sourceDuration = layer.sourceDuration;
   const boundaries = [
@@ -74,6 +77,7 @@ const compose = (layer, before, after) => {
     ),
   ].sort((a, b) => a - b);
   const raw = [];
+  const playable = [];
   const sample = (a, b, from, to, depth = 0) => {
     if (to - from <= 1e-10 || b - a <= 1e-10) return;
     const points = [0.25, 0.5, 0.75].map((u) => ({
@@ -87,6 +91,12 @@ const compose = (layer, before, after) => {
       sample(mid, b, at, to, depth + 1);
     } else {
       const rate = (b - a) / (to - from);
+      const blank = !visible((a + b) / 2);
+      if (!blank) {
+        const last = playable.at(-1);
+        if (last?.to === a) last.to = b;
+        else playable.push({ from: a, to: b });
+      }
       raw.push({
         kind: "play",
         sourceFrom: a,
@@ -95,7 +105,7 @@ const compose = (layer, before, after) => {
         to,
         rate0: rate,
         rate1: rate,
-        ...(!visible((a + b) / 2) && { blank: true }),
+        ...(blank && { blank: true }),
       });
     }
   };
@@ -149,8 +159,7 @@ const compose = (layer, before, after) => {
     sourceAt,
     segments,
     visible: (t) =>
-      (segments.some((s) => s.kind === "play" && !s.blank && t >= s.sourceFrom && t < s.sourceTo) ||
-        t >= sourceDuration) &&
+      (t >= sourceDuration || t >= (playable[playRangeAfter(playable, t)]?.from ?? Infinity)) &&
       visible(t),
   };
 };

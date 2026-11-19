@@ -116,20 +116,19 @@ const desktopPreloadPlugin = () => ({
       if (!entry) return html;
       const base = new Set();
       const walkStatic = (name, into) => {
-        if (into.has(name)) return;
-        into.add(name);
         const c = chunks.get(name);
-        if (!c) return;
+        if (!c || into.has(name)) return;
+        into.add(name);
         for (const dep of c.imports) walkStatic(dep, into);
       };
       walkStatic(entry.fileName, base);
-      const collectBranch = (skipRe) => {
+      const collectBranch = (app) => {
         const seen = new Set(base);
         for (const name of base) {
           const c = chunks.get(name);
           if (!c) continue;
           for (const dyn of c.dynamicImports) {
-            if (!skipRe.test(dyn)) walkStatic(dyn, seen);
+            if (app.test(dyn)) walkStatic(dyn, seen);
           }
         }
         const out = [];
@@ -138,8 +137,8 @@ const desktopPreloadPlugin = () => ({
         }
         return out;
       };
-      const desktop = collectBranch(/(?:^|\/)PhoneApp-/);
-      const phone = collectBranch(/(?:^|\/)App-/);
+      const desktop = collectBranch(/(?:^|\/)App-/);
+      const phone = collectBranch(/(?:^|\/)PhoneApp-/);
       if (!desktop.length && !phone.length) return html;
       const esc = (v) => JSON.stringify(v).replace(/</g, "\\u003c");
       const tag = `<script>{const p=matchMedia("(pointer: coarse) and (max-width: 599px), (pointer: coarse) and (max-height: 599px)").matches?${esc(phone)}:${esc(desktop)};for(const h of p){const l=document.createElement("link");l.rel="modulepreload";l.crossOrigin="";l.href=h;document.head.appendChild(l)}}</script>`;
@@ -249,7 +248,12 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
       configFile: join(STUDIO, "vite.config.ts"),
       logLevel: "warn",
       // Squeezed once per content hash beside each file, so a phone over Tailscale downloads about a quarter and scene saves skip unchanged vendor chunks
-      plugins: [cnTablesPlugin(), filmPlugin(film), desktopPreloadPlugin(), precompress(dir)],
+      plugins: [
+        cnTablesPlugin(),
+        filmPlugin(film, { deferScene: true }),
+        desktopPreloadPlugin(),
+        precompress(dir),
+      ],
       build: {
         outDir: dir,
         emptyOutDir: false, // see clearOld
@@ -277,6 +281,7 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
                 },
                 {
                   name: "vendor-three",
+                  entriesAware: true,
                   test: /[\\/]node_modules[\\/](?:three|three-mesh-bvh|postprocessing|n8ao|three-good-godrays|gl-transitions|block-model-renderer|minerender|fflate|math)[\\/]/,
                   priority: 30,
                 },

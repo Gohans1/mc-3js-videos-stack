@@ -64,6 +64,7 @@ export const seekExact = (x: number) => {
 };
 export const seek = (x: number) => seekExact(Math.round(x * FPS) / FPS);
 export const setPlaying = (p: boolean) => {
+  if (!S.el || (p && !S.render)) return;
   S.playing = p;
   set({ playing: p });
   const audio = S.el.audio;
@@ -81,6 +82,7 @@ export const setPlaying = (p: boolean) => {
   }
 };
 export const shuttleOn = (d: -1 | 1) => {
+  if (!S.el || !S.render) return;
   const audio = S.el.audio,
     faster = S.playing && Math.sign(shuttle || 1) === d; // playing plainly counts as forward at 1x
   const v = faster ? (SHUTTLE.find((x) => x > Math.abs(shuttle || 1)) ?? SHUTTLE.at(-1)!) : 1;
@@ -114,6 +116,7 @@ export const togglePlay = () => {
 };
 export const step = (seconds: number) => seek(S.t + seconds);
 export const jumpShot = (d: number) => {
+  if (!SHOTS.length) return;
   const i = shotIndex(S.t);
   seek(
     d < 0 && S.t - SHOTS[i].t > 0.4

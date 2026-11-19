@@ -12,7 +12,6 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { runInNewContext } from "node:vm";
@@ -23,7 +22,9 @@ import { openFilm, STUDIO } from "../src/film.mjs";
 import { buildPage, syncCnTables } from "../src/page.mjs";
 
 // A copy of the demo film, so saves here never touch the real one
-const dir = mkdtempSync(join(tmpdir(), "studio-page-"));
+const cache = join(STUDIO, ".studio");
+mkdirSync(cache, { recursive: true });
+const dir = mkdtempSync(join(cache, "studio-page-"));
 cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
 const scene = join(dir, "src/scene.ts"),
   original = readFileSync(scene, "utf8");
@@ -59,6 +60,11 @@ const cycle = (trigger, file) =>
 const save = (text, file = scene) => cycle(() => writeFileSync(file, text), file);
 
 before(async () => {
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { timingTimeline: "src/timing.json" } }),
+  );
+  writeFileSync(join(dir, "src/timing.json"), "{}");
   // A library written for Node that a film may pull in (Minecraft's nbt readers do): its require of zlib is never reached
   mkdirSync(join(dir, "node_modules/nodeish"), { recursive: true });
   writeFileSync(
@@ -90,6 +96,112 @@ test("the film builds into the page, even with a Node library that requires a No
   assert.equal(heard.length, 0, heard.join("\n"));
   assert.match(page.html(), /src="\/_studio\/index-[\w-]+\.js"/);
   assert.ok(readdirSync(join(page.dir, "_studio")).some((f) => f.endsWith(".js")));
+});
+
+const serveBuild = (intercept) =>
+  Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    async fetch(req) {
+      const path = new URL(req.url).pathname;
+      if (path === "/")
+        return new Response(page.html(), { headers: { "content-type": "text/html" } });
+      if (!path.startsWith("/_studio/")) return new Response(null, { status: 404 });
+      const name = path.split("/").at(-1);
+      return (await intercept(name)) ?? new Response(Bun.file(join(page.dir, "_studio", name)));
+    },
+  });
+
+test("Studio shows startup and mounts the editor while the film scene script is unavailable", async () => {
+  const html = page.html();
+  assert.match(html, /role="status"[^>]*>Starting Studio/);
+  const assets = join(page.dir, "_studio");
+  const sceneScripts = new Set(
+    readdirSync(assets)
+      .filter((file) => file.endsWith(".js.map"))
+      .filter((file) =>
+        JSON.parse(readFileSync(join(assets, file), "utf8")).sources.some((source) =>
+          source.endsWith("/src/scene.ts"),
+        ),
+      )
+      .map((file) => file.slice(0, -4)),
+  );
+  assert.ok(sceneScripts.size);
+  const gate = Promise.withResolvers();
+  let requestedScene = false;
+  const server = serveBuild(async (name) => {
+    if (sceneScripts.has(name)) {
+      requestedScene = true;
+      await gate.promise;
+    }
+  });
+  let browser;
+  try {
+    browser = new Bun.WebView({ width: 1280, height: 800, backend: { type: "chrome" } });
+    await browser.navigate(server.url.href);
+    const deadline = Date.now() + 10000;
+    let status;
+    while (Date.now() < deadline) {
+      status = await browser.evaluate(`document.querySelector('[data-preview-pane]') &&
+        Array.from(document.querySelectorAll('[role="status"]')).map((el) => el.textContent)`);
+      if (requestedScene && status?.some((s) => s.includes("Loading 3D engine"))) break;
+      await Bun.sleep(50);
+    }
+    assert.ok(requestedScene, "the engine should start loading after the editor mounts");
+    assert.ok(
+      status?.some((s) => s.includes("Loading 3D engine")),
+      JSON.stringify(status),
+    );
+    assert.equal(
+      await browser.evaluate(`document.querySelector('button[aria-label="Play"]').disabled`),
+      true,
+    );
+    await browser.press("Space");
+    assert.equal(
+      await browser.evaluate(
+        `Boolean(document.querySelector('button[aria-label="Pause"], [role="alert"]'))`,
+      ),
+      false,
+    );
+    await browser.evaluate(`document.querySelector('button[aria-label="Add note"]').click()`);
+    await browser.evaluate(`document.querySelector('textarea[aria-label="Note"]').focus()`);
+    await browser.press("x");
+    await browser.press("Enter");
+    const draft = await browser.evaluate(`({
+      text: document.querySelector('textarea[aria-label="Note"]')?.value,
+      kept: document.body.textContent.includes("Save once the preview loads"),
+    })`);
+    assert.deepEqual(draft, { text: "x", kept: true });
+  } finally {
+    gate.resolve();
+    browser?.close();
+    server.stop(true);
+  }
+});
+
+test("a missing stylesheet leaves the startup error readable", async () => {
+  const server = serveBuild((name) =>
+    name.endsWith(".css") ? new Response(null, { status: 503 }) : null,
+  );
+  let browser;
+  try {
+    browser = new Bun.WebView({ width: 1280, height: 800, backend: { type: "chrome" } });
+    await browser.navigate(server.url.href);
+    const deadline = Date.now() + 10000;
+    let error;
+    while (!error && Date.now() < deadline) {
+      error = await browser.evaluate(`(() => {
+        const box = document.querySelector('#root + pre');
+        return box && {text: box.textContent, color: getComputedStyle(box).color};
+      })()`);
+      if (!error) await Bun.sleep(50);
+    }
+    assert.match(error?.text ?? "", /Couldn't load the studio/);
+    assert.equal(error?.color, "rgb(206, 205, 195)");
+  } finally {
+    browser?.close();
+    server.stop(true);
+  }
 });
 
 const VENDOR_BUDGET_TEST = "the initial UI vendor code fits a 240 KiB Brotli budget";

@@ -237,6 +237,7 @@ function ReviewScrubBar() {
 
 export function Transport() {
   const playing = useStudio((s) => s.playing),
+    ready = useStudio((s) => s.ready),
     muted = useStudio((s) => s.muted),
     volume = useStudio((s) => s.volume),
     review = useStudio((s) => s.review);
@@ -260,6 +261,7 @@ export function Transport() {
           size="md"
           className="min-w-19 @max-[440px]:min-w-0"
           aria-label={playing ? "Pause" : "Play"}
+          disabled={!ready}
           onClick={togglePlay}
         >
           {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}

@@ -112,7 +112,7 @@ export const studio = createStore<StudioState>(() => ({
   newBuild: false,
   hasVideo: false,
   downloading: false,
-  loading: "Loading the scene…",
+  loading: "Loading 3D engine…",
   error: null,
   status: "",
   settingsOpen: false,

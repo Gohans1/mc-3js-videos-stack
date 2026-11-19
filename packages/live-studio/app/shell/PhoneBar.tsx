@@ -265,6 +265,7 @@ function DownloadVideoButton() {
 
 export function PhoneBar() {
   const playing = useStudio((s) => s.playing);
+  const ready = useStudio((s) => s.ready);
   return (
     <div className="bg-background flex flex-none items-center gap-1.5 px-2.5 py-0.5">
       <Button
@@ -272,6 +273,7 @@ export function PhoneBar() {
         size="phone-bar"
         className="relative flex-none after:absolute after:-inset-1"
         aria-label={playing ? "Pause" : "Play"}
+        disabled={!ready}
         onClick={togglePlay}
       >
         {playing ? <Pause /> : <Play />}

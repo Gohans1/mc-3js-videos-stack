@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { STUDIO } from "./film.mjs";
 import { OPENFILM_FILE } from "./openfilm.mjs";
 
-export const filmPlugin = (film) => {
+export const filmPlugin = (film, { deferScene = false } = {}) => {
   const project = dirname(film.SRC),
     pkgFile = join(project, "package.json");
   const timingRel = existsSync(pkgFile)
@@ -100,7 +100,7 @@ export const filmPlugin = (film) => {
       }
       if (id === `\0${editId}`)
         return `
-        import ${JSON.stringify(sceneId)};
+        ${deferScene ? "" : `import ${JSON.stringify(sceneId)};`}
         import * as source from ${file(join(film.SRC, "edit.ts"))};
         import { timingClock } from ${file(join(STUDIO, "src/timing-state.mjs"))};
         export * from ${file(join(film.SRC, "edit.ts"))};

@@ -19,7 +19,8 @@ const timecode = (frame: number) =>
 function Controls() {
   useStudio((s) => s.metaRev);
   const frame = useFrame(),
-    playing = useStudio((s) => s.playing);
+    playing = useStudio((s) => s.playing),
+    ready = useStudio((s) => s.ready);
   const bar = useRef<HTMLDivElement>(null);
   const [visibility, setVisibility] = useState<"visible" | "hidden">("visible");
   useEffect(() => {
@@ -58,6 +59,7 @@ function Controls() {
         variant="toolbar"
         size="icon"
         aria-label={playing ? "Pause full screen" : "Play full screen"}
+        disabled={!ready}
         onClick={togglePlay}
       >
         {playing ? <Pause /> : <Play />}

@@ -6,21 +6,101 @@
     <meta name="theme-color" content="#100F0F" />
     <title>Studio</title>
     <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        background: #100f0f;
+        color: #cecdc3;
+      }
+      .studio-start-error {
+        margin: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      #studio-boot {
+        box-sizing: border-box;
+        display: grid;
+        min-height: 100vh;
+        min-height: 100dvh;
+        place-items: center;
+        padding: 24px;
+        color: #cecdc3;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+      }
+      #studio-boot > div {
+        width: min(100%, 280px);
+      }
+      #studio-boot h1 {
+        margin: 0;
+        color: #fffcf0;
+        font-size: 20px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      #studio-boot-message {
+        margin: 6px 0 14px;
+      }
+      .studio-boot-progress {
+        height: 2px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: #343331;
+      }
+      .studio-boot-progress::after {
+        display: block;
+        width: 50%;
+        height: 100%;
+        background: #4385be;
+        content: "";
+      }
+      #studio-boot[data-error] .studio-boot-progress {
+        display: none;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .studio-boot-progress::after {
+          animation: studio-boot-progress 1.5s ease-in-out infinite alternate;
+        }
+        @keyframes studio-boot-progress {
+          to {
+            opacity: 0.35;
+          }
+        }
+      }
+    </style>
     <script>
       // A phone on a bad line can miss the page's own code: say so, instead of a blank page
       addEventListener(
         "error",
         (e) => {
-          if (e.target instanceof HTMLScriptElement && e.target.type === "module")
-            document.getElementById("root").innerHTML =
-              '<p style="margin:12px;color:#CECDC3;font:16px system-ui">Couldn’t load the studio. Check your connection, then reload.</p>';
+          if (!(e.target instanceof HTMLScriptElement) || e.target.type !== "module") return;
+          const status = document.getElementById("studio-boot-message");
+          if (!status) return;
+          document.getElementById("studio-boot").dataset.error = "";
+          status.textContent = "Couldn’t load Studio. Check your connection, then reload.";
         },
         true,
       );
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main id="studio-boot">
+        <div>
+          <h1 id="studio-boot-title">Studio</h1>
+          <p id="studio-boot-message" role="status">Starting Studio…</p>
+          <div class="studio-boot-progress" aria-hidden="true"></div>
+          <noscript>Enable JavaScript to open Studio.</noscript>
+        </div>
+      </main>
+    </div>
+    <script>
+      {
+        const name = window.__STUDIO_BOOT?.film?.name;
+        if (name) document.getElementById("studio-boot-title").textContent = name + " · Studio";
+      }
+    </script>
     <script type="module" src="/main.tsx"></script>
   </body>
 </html>

@@ -1,10 +1,11 @@
 // The page's one start, shared by the desk layout (App.tsx) and the phone's (PhoneApp.tsx): the film is built into the
 // elements the layout bound, and the page-wide listeners go on once
-import { type RefObject, useEffect } from "react";
+import { type RefObject, useLayoutEffect } from "react";
 
-import type { Elements } from "../core/state";
+import { afterPaint } from "../core/afterPaint";
+import { type Elements, S } from "../core/state";
 import { set, showError } from "../core/store";
-import { preloadStart, warmBootRequests } from "../core/warmup";
+import { warmBootRequests } from "../core/warmup";
 
 let started = false;
 
@@ -28,11 +29,13 @@ const dropClickFocus = (e: MouseEvent) => {
 };
 
 export const useBoot = (el: RefObject<Elements>) =>
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (started) return;
     started = true;
+    S.el = el.current;
     warmBootRequests();
-    preloadStart()
+    afterPaint()
+      .then(() => import("../start"))
       .then(({ start }) => start(el.current))
       .catch((e: Error) => {
         showError(e);

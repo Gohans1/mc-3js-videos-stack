@@ -842,7 +842,11 @@ const saveNoteNow = async () => {
     closeNote("cancel");
     return;
   }
-  const tools = S.tools!;
+  const tools = S.tools;
+  if (!tools) {
+    say("Your note draft is kept. Save once the preview loads.");
+    return;
+  }
   const sp = inkSpan(strokes);
   const n: Note = {
     id: Date.now().toString(36),

@@ -1,6 +1,6 @@
 // One frame of the film on the picture, with the studio's overlays on the frame on screen only, and the final-quality copy
 // of it on demand
-import { buildScene, type Draw } from "film/scene";
+import type { Draw } from "film/scene";
 
 import { makeAccumulator } from "../../render/accum";
 import { shutterBounds, shutterTimes } from "../../src/shutter";
@@ -163,6 +163,7 @@ export const buildFinal = () => {
   building ??= (async () => {
     set({ loading: "Building final quality (about 10 s, first time only)…" });
     try {
+      const { buildScene } = await import("film/scene");
       const [w, h] = frameSize(1920);
       S.el.final.width = w;
       S.el.final.height = h;

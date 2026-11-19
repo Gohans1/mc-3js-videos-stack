@@ -1,18 +1,19 @@
 import "./core/boot";
-import "./index.css";
 import { createRoot } from "react-dom/client";
 
+import { afterPaint } from "./core/afterPaint";
 import { PHONE } from "./core/device";
 import { onEvent, onHello } from "./core/events";
 import { stored } from "./core/storage";
-import { preloadStart, warmBootRequests } from "./core/warmup";
+import { warmBootRequests } from "./core/warmup";
 
 const root = document.getElementById("root")!;
 // What stopped the page, with the way back: a fixed save, or the studio coming back with other code, reloads it
 const showFailure = (why: string, error: unknown) => {
+  document.getElementById("studio-boot")?.remove();
   const box = document.createElement("pre");
   box.className =
-    "m-3 overflow-auto rounded-lg bg-alarm-bg p-3 font-mono text-sm whitespace-pre-wrap text-foreground";
+    "studio-start-error overflow-auto rounded-lg bg-alarm-bg p-3 font-mono text-sm text-foreground";
   box.textContent = `${why}\n\n${error instanceof Error ? (error.stack ?? error.message) : String(error)}`;
   root.insertAdjacentElement("afterend", box);
   for (const event of ["code", "edit"]) onEvent(event, () => location.reload());
@@ -22,11 +23,13 @@ const showFailure = (why: string, error: unknown) => {
 };
 
 try {
-  // Start scene chunk and API prefetches immediately alongside the UI bundle instead of waiting for React mount.
   warmBootRequests();
-  void preloadStart();
+  await afterPaint();
   // A phone gets the review-only layout, and never downloads the editor's panels
-  const { App } = PHONE ? await import("./PhoneApp") : await import("./App");
+  const [{ App }] = await Promise.all([
+    PHONE ? import("./PhoneApp") : import("./App"),
+    import("./index.css"),
+  ]);
   stored.remove("pageTries", sessionStorage);
   // A component that throws takes React's whole tree down with it: show why instead of an empty page
   createRoot(root, {
@@ -37,13 +40,11 @@ try {
       ),
   }).render(<App />);
 } catch (e) {
-  // The film's own code loads with the app, so this is either a film that throws while loading or code that never arrived.
-  // Chrome, Firefox and Safari each word the second differently, but all as a TypeError about importing; a phone that lost
-  // the line halfway tries again by itself a few times
-  // What Chrome, Firefox and Safari say when the code file itself did not arrive; anything else is the film's own error
   const notDownloaded =
-    e instanceof TypeError &&
-    /dynamically imported module|Importing a module script failed/.test(e.message);
+    e instanceof Error &&
+    /dynamically imported module|Importing a module script failed|Unable to preload CSS/.test(
+      e.message,
+    );
   const tries = Number(stored.get("pageTries", sessionStorage)) || 0;
   let recovered = false;
   if (notDownloaded && tries < 2 && stored.set("pageTries", String(tries + 1), sessionStorage)) {
