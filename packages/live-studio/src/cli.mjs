@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+
 import { warnProtectedEdits } from "./edit-protection.mjs";
 
 // A film's JSON file read by a command: a broken one is named (Bun's parse error says neither file nor place), and
@@ -127,9 +128,9 @@ export const envTypos = (known, env = process.env) => {
 };
 
 // A command that works on one film stops outside one, saying where to run it
-export const needFilm = (dir = process.cwd()) => {
+export const needFilm = (dir = process.cwd(), { warnProtected = true } = {}) => {
   if (existsSync(join(dir, "src/scene.ts"))) {
-    warnProtectedEdits(dir);
+    if (warnProtected) warnProtectedEdits(dir);
     return dir;
   }
   console.error(
