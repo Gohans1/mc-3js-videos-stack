@@ -456,6 +456,52 @@ test("editing a Freeze at a lighting cut changes the key shown in the frozen fra
   ]);
 });
 
+test("editing a detached Freeze changes its held source key and keeps the next shot intact", async () => {
+  const keys = [
+    { id: "held", t: 5, cut: true, key: { intensity: 9 } },
+    { id: "next", t: 6, key: { intensity: 3 } },
+  ];
+  const timing = {
+    main: [
+      { id: "a", kind: "clip", sourceFrom: 0, sourceTo: 4 },
+      { id: "hold", kind: "freeze", frame: 5, duration: 1 },
+      { id: "b", kind: "clip", sourceFrom: 6, sourceTo: 10 },
+    ],
+  };
+  await page.evaluate(`window.testLights.resetServer(${JSON.stringify({ keys })})`);
+  await page.evaluate(`window.testLights.setTiming(${JSON.stringify(timing)}, 10)`);
+  expect(await page.evaluate(`window.testLights.sampleAt(4.5).key.intensity`)).toBe(9);
+
+  await page.evaluate(`window.testLights.mutateIntensity(4.5, 7)`);
+  expect(await page.evaluate(`window.testLights.sampleAt(4.5).key.intensity`)).toBe(7);
+  expect(
+    await page.evaluate(
+      `window.testLights.edit().keys.map(({ id, t, key }) => [id, t, key.intensity])`,
+    ),
+  ).toEqual([
+    ["held", 5, 7],
+    ["next", 6, 3],
+  ]);
+});
+
+test("editing a Freeze after fractional speed leaves the source cut at its authored time", async () => {
+  const keys = [
+    { id: "before", t: 0, key: { intensity: 3 } },
+    { id: "cut", t: 1, cut: true, key: { intensity: 9 } },
+  ];
+  const timing = {
+    speeds: [{ from: 0, to: 3, rate: 1.5 }],
+    freezes: [{ at: 1, duration: 1 }],
+  };
+  await page.evaluate(`window.testLights.resetServer(${JSON.stringify({ keys })})`);
+  await page.evaluate(`window.testLights.setTiming(${JSON.stringify(timing)}, 10)`);
+  expect(await page.evaluate(`window.testLights.sampleAt(1.1).key.intensity`)).toBe(9);
+
+  await page.evaluate(`window.testLights.mutateIntensity(1.1, 7)`);
+  expect(await page.evaluate(`window.testLights.sampleAt(1.1).key.intensity`)).toBe(7);
+  expect(await page.evaluate(`window.testLights.edit().keys[1].t`)).toBe(1);
+});
+
 test("Side wide and narrow route lights-only cleanly when side is cam or transition", async () => {
   // Wide mode with side: "cam" and cam: false renders only Light tab (no Cam/Speed/Anim/Adjust)
   await page.evaluate(

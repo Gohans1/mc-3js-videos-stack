@@ -1,5 +1,5 @@
 import { isTornByReorder, remapOutputTime, startsOnHold, timebaseClock } from "./layer-timing.mjs";
-import { clipTiming, playRanges } from "./timing.mjs";
+import { clipTiming, playRanges, visibleOutputAt } from "./timing.mjs";
 
 const overlaySpan = (clock, basis, a, b) => {
   const forward = basis ? (t, edge) => remapOutputTime(basis, clock, t, edge) : clock.outputAt;
@@ -46,8 +46,11 @@ export const mapTimeline = (
   const out = structuredClone(data),
     time = inverse ? clock.sourceAt : clock.outputAt;
   const isKeyTrack = name === "cam" || name === "lights";
-  const keyVisible = (k) =>
+  const keyInPlay = (k) =>
     clock.visible(k.t) || (isKeyTrack && !k.cut && clock.visible(k.t - 1e-7));
+  const heldLightTime = (k) =>
+    name === "lights" && !keyInPlay(k) ? visibleOutputAt(clock, k.t) : null;
+  const keyVisible = (k) => keyInPlay(k) || heldLightTime(k) !== null;
   const keys = (value, before, depth = 0) => {
     if (!value || typeof value !== "object") return value;
     if (Array.isArray(value)) {
@@ -60,10 +63,13 @@ export const mapTimeline = (
             const edge = isKeyTrack && !k.cut && k.t > 0 ? "before" : "after";
             const meta = k.__timing;
             const t =
-              inverse && meta && Math.abs(k.t - meta.output) < 1e-9 ? meta.source : time(k.t, edge);
+              inverse && meta && Math.abs(k.t - meta.output) < 1e-9
+                ? meta.source
+                : ((inverse ? null : heldLightTime(k)) ?? time(k.t, edge));
             const next = { ...k, t };
             if (inverse) delete next.__timing;
-            else if (clock.placements) next.__timing = { source: k.t, output: t };
+            else if (name === "lights" || clock.placements)
+              next.__timing = { source: k.t, output: t };
             return next;
           });
         if (inverse && Array.isArray(before))
