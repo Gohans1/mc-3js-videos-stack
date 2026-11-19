@@ -1,5 +1,7 @@
 import { CAMERA_MOTIONS } from "film-stage/camera";
 
+import { Button } from "@/components/ui/button";
+
 import { CurveEditor, EaseTiles } from "../components/EasePicker";
 import { EmptyCard, Section, Segmented } from "../components/inspector";
 import { S } from "../core/state";
@@ -7,11 +9,13 @@ import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { useFrameKey } from "../core/useFrameKey";
 import {
+  canMatchAllInShot,
   canMatchCameraKey,
   DEFAULT_EASE,
   easeKeyIndex,
   edit,
   keys,
+  matchAllInShot,
   preview,
   restore,
   setCameraKeyMatchSpeed,
@@ -19,6 +23,7 @@ import {
   shownKey,
   snapshot,
 } from "./cam";
+import { joinableCameraKeysInShot } from "./camera-edit";
 import { CameraGraph } from "./CameraGraph";
 
 const camDoc = { snapshot, restore };
@@ -63,6 +68,8 @@ function CameraKeyEase({ index: i, rawIndex: rawIdx }: { index: number; rawIndex
   const fromSplitCut = !!rawKey?.cut && i !== rawIdx;
   const curve = k.motion !== "hold" && Array.isArray(k.ease) ? k.ease : null;
   const canJoin = canMatchCameraKey(i);
+  const hasJoinableShotKeys = joinableCameraKeysInShot(keys, i).length > 0;
+  const matchAllPending = canMatchAllInShot(i);
   return (
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-1.5 px-3 pb-2">
@@ -107,18 +114,32 @@ function CameraKeyEase({ index: i, rawIndex: rawIdx }: { index: number; rawIndex
           </Section>
         </div>
       )}
-      {canJoin && (
+      {(canJoin || hasJoinableShotKeys) && (
         <div className="flex flex-col gap-2 border-t px-3 py-2">
-          <span className="text-ui">Through keyframe {i + 1}</span>
-          <Segmented
-            label="Speed through keyframe"
-            value={k.matchSpeed ? "match" : "independent"}
-            items={[
-              { id: "independent", title: "Independent" },
-              { id: "match", title: "Match speed" },
-            ]}
-            onChange={(mode) => setCameraKeyMatchSpeed(i, mode === "match")}
-          />
+          {canJoin && (
+            <>
+              <span className="text-ui">Through keyframe {i + 1}</span>
+              <Segmented
+                label="Speed through keyframe"
+                value={k.matchSpeed ? "match" : "independent"}
+                items={[
+                  { id: "independent", title: "Independent" },
+                  { id: "match", title: "Match speed" },
+                ]}
+                onChange={(mode) => setCameraKeyMatchSpeed(i, mode === "match")}
+              />
+            </>
+          )}
+          {hasJoinableShotKeys && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!matchAllPending}
+              onClick={() => matchAllInShot(i)}
+            >
+              Match all in shot
+            </Button>
+          )}
         </div>
       )}
     </div>

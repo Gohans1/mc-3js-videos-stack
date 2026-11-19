@@ -1,7 +1,7 @@
 // The camera keys' and shots' part of the page state (core/store.ts)
 import type { SaveState } from "../core/doc";
 
-export type CameraPick = { field: "l" | "focus"; id?: string; t: number };
+export type CameraPick = { field: "l" | "focus"; target?: "free"; id?: string; t: number };
 export interface CameraSlice {
   cameraPick: CameraPick | null;
   timing: boolean;

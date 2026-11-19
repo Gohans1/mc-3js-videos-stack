@@ -4,6 +4,7 @@ import { unzipSync } from "fflate";
 import { animate, ANIMS } from "film-stage/animate";
 import {
   apertureOffset,
+  applyCameraFeel,
   applyCameraRig,
   cameraAt,
   EASES,
@@ -246,6 +247,10 @@ export async function buildScene(canvas, W, H, draft = false) {
     fov: 60,
     roll: 0,
     wave: 0,
+    bob: 0,
+    fstop: 0,
+    focus: undefined,
+    handheld: false,
   };
   const lookAt = V(0, 0, 0),
     head = V(0, 0, 0);
@@ -407,44 +412,37 @@ export async function buildScene(canvas, W, H, draft = false) {
     for (const [name, group] of Object.entries(cameraGroups))
       group.visible = !rig?.hideGroups?.includes(name);
     const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION, anims);
-    camera =
-      !(free.on && activeView) && rig?.projection === "orthographic" ? parallel : perspective;
+    const freeActive = free.on && activeView;
+    camera = !freeActive && rig?.projection === "orthographic" ? parallel : perspective;
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
     camera.fov = cam.fov;
-    if (free.on && activeView) {
+    let freeFeel;
+    if (freeActive) {
       camera.fov = free.fov;
       camera.position.copy(free.p);
       lookAt.copy(free.l);
-      const wAmt = free.wave ?? 0;
-      if (wAmt > 0) {
-        const right = lookAt
-          .clone()
-          .sub(camera.position)
-          .cross(V(0, 1, 0));
-        if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
-        else right.normalize();
-        camera.position.y += wAmt * 0.035 * Math.sin(t * 0.9);
-        lookAt.addScaledVector(right, wAmt * 0.12 * Math.sin(t * 0.47));
-        lookAt.y += wAmt * 0.08 * Math.sin(t * 0.71 + 1.3);
-      }
+      freeFeel = applyCameraFeel({
+        p: camera.position,
+        l: lookAt,
+        roll: free.roll ?? 0,
+        t,
+        wave: free.wave ?? 0,
+        bob: free.bob ?? 0,
+        handheld: free.handheld,
+      });
     }
-    const freeRoll = (free.roll ?? 0) + (free.wave ?? 0) * 0.012 * Math.sin(t * 0.53);
     orientCamera(
       camera,
       lookAt,
-      free.on && activeView ? freeRoll : scouting ? 0 : cam.roll,
-      free.on && activeView ? undefined : scouting ? undefined : rig,
+      freeActive ? freeFeel.roll : scouting ? 0 : cam.roll,
+      freeActive ? undefined : scouting ? undefined : rig,
     );
     projectCamera(
       camera,
       W,
       H,
-      free.on && activeView
-        ? undefined
-        : scouting
-          ? { orthographicDepth: rig?.orthographicDepth }
-          : rig,
+      freeActive ? undefined : scouting ? { orthographicDepth: rig?.orthographicDepth } : rig,
     );
     head.copy(camera.position);
     Object.assign(now, { cam });
@@ -465,12 +463,19 @@ export async function buildScene(canvas, W, H, draft = false) {
           .reverse()
           .find((it) => it.grade?.enabled !== false && it.grade?.look)?.grade?.look
       : undefined;
+    const opticsSource = freeActive
+      ? {
+          fstop: free.fstop ?? 0,
+          focus: free.focus,
+          handheld: freeFeel.handheld,
+        }
+      : cam;
     const { effectiveFstop, focusM, fallbackFocus, renderedMm } = syncOptics(
-      cam,
+      opticsSource,
       shot,
       shotEntry,
       activeLayerLook,
-      scouting,
+      freeActive ? false : scouting,
     );
     Object.assign(now, { optics: opticsTelemetry });
     renderer.clear();
@@ -484,7 +489,7 @@ export async function buildScene(canvas, W, H, draft = false) {
           effectiveFstop,
           focusM ?? fallbackFocus,
         );
-        projectCamera(camera, W, H, rig, offset);
+        projectCamera(camera, W, H, freeActive ? undefined : rig, offset);
       }
       dof.update({
         fstop: pupil ? 0 : effectiveFstop,

@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Demo scene. This file is the one to replace with your film: the studio needs these exports, and draw.tools at the end.
 // Everything is a function of t, so any moment can be drawn straight away. All times come from edit.json.
+import { applyCameraFeel, mmOf, orientCamera } from "film-stage/camera";
 import * as THREE from "three";
 
 import { EDIT, fromSource } from "./edit";
@@ -72,9 +73,22 @@ export async function buildScene(canvas, W, H, draft = false) {
   cube.position.set(-1, 0.5, 0);
   const ball = mesh(new THREE.SphereGeometry(0.55, 32, 24), 0x4aa3c8);
   ball.position.set(1.1, 0.55, 0);
-  const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 40 }; // the studio's free camera
+  const free = {
+    on: false,
+    previewEffects: false,
+    p: V(0, 0, 0),
+    l: V(0, 0, 0),
+    fov: 40,
+    roll: 0,
+    wave: 0,
+    bob: 0,
+    fstop: 0,
+    focus: undefined,
+    handheld: false,
+  }; // the studio's free camera
   const look = V(0, 0, 0),
-    head = V(0, 0, 0);
+    head = V(0, 0, 0),
+    optics = { shot: 0, mm: mmOf(45, W / H), fov: 45 };
 
   const draw = (t) => {
     const at = (id) => (t - fromSource(EDIT.beats[id].at)) / EDIT.beats[id].dur;
@@ -90,13 +104,34 @@ export async function buildScene(canvas, W, H, draft = false) {
     look.copy(shot.l[0]);
     camera.position.copy(shot.p[0]).lerp(shot.l[0], k);
     camera.fov = shot.fov;
+    let roll = 0;
+    let hhKind;
     if (free.on) {
       camera.fov = free.fov;
       camera.position.copy(free.p);
       look.copy(free.l);
+      const feel = applyCameraFeel({
+        p: camera.position,
+        l: look,
+        roll: free.roll ?? 0,
+        t,
+        wave: free.wave ?? 0,
+        bob: free.bob ?? 0,
+        handheld: free.handheld,
+      });
+      roll = feel.roll;
+      hhKind = feel.handheld;
     }
+    orientCamera(camera, look, roll);
     camera.updateProjectionMatrix();
-    camera.lookAt(look);
+    Object.assign(optics, {
+      shot: i,
+      fov: Math.round(camera.fov * 10) / 10,
+      mm: Math.round(mmOf(camera.fov, W / H) * 10) / 10,
+      fstop: free.on ? free.fstop : 0,
+      focusM: free.on && typeof free.focus === "number" ? free.focus : undefined,
+      handheld: hhKind,
+    });
     renderer.render(scene, camera);
   };
   // What the studio needs to say where a click landed and to give a free camera back in a shot's own terms
@@ -106,6 +141,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     free,
     head,
     look,
+    optics,
     rig: null,
     bones: {},
     CELL: 0,

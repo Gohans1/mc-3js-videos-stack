@@ -16,11 +16,13 @@ import { startTextDrag, textAt, textDoubleClick } from "../text/onpicture";
 import { pickText } from "../text/text";
 import { frameSize } from "./frame";
 import {
+  applyFreeCameraPick,
   flight,
   flyCam,
   moveCam,
   orbitFree,
   rememberFreeView,
+  setFreeFocus,
   setOrbitPivot,
   turnAbout,
 } from "./freecam";
@@ -197,36 +199,43 @@ export const attachPicture = () => {
     if (g.kind !== "left_press") return;
     const at = tappedAt(g.x, g.y, e);
     if (!at) return;
-    const pick = get().cameraPick;
-    if (pick) {
-      const t = S.t;
-      void render(t, () => applyCameraPick(pick, lookAtClick(...at)));
-      return;
-    }
-    const pickFocus = get().pickFocus;
-    if (pickFocus !== null) {
-      set({ pickFocus: null });
-      const hit = lookAtClick(...at);
-      const cam = S.tools?.camera;
-      if (hit.world && cam) {
-        const dist = Math.hypot(
-          hit.world[0] - cam.position.x,
-          hit.world[1] - cam.position.y,
-          hit.world[2] - cam.position.z,
-        );
-        setFocus(pickFocus, Math.max(0.05, Math.round(dist * 100) / 100));
-        say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
-      } else {
-        say("Nothing hit at that point to focus on");
-      }
-      return;
-    }
+    if (handleCameraPick(...at)) return;
+    if (handlePickFocus(at)) return;
     if (pickCameraPath(...at)) return;
     if (!PHONE && pickPageAt(at)) return;
     const title = get().text ? textAt(...at) : -1;
     if (title >= 0) pickText([title]);
     else selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
   });
+  const handlePickFocus = (at: readonly [number, number]) => {
+    const pickFocus = get().pickFocus;
+    if (pickFocus === null) return false;
+    set({ pickFocus: null });
+    const hit = lookAtClick(at[0], at[1]);
+    const cam = S.tools?.camera;
+    if (hit.world && cam) {
+      const dist = Math.hypot(
+        hit.world[0] - cam.position.x,
+        hit.world[1] - cam.position.y,
+        hit.world[2] - cam.position.z,
+      );
+      const focusDist = Math.max(0.05, Math.round(dist * 100) / 100);
+      if (pickFocus === "free") setFreeFocus(focusDist);
+      else setFocus(pickFocus, focusDist);
+      say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
+    } else {
+      say("Nothing hit at that point to focus on");
+    }
+    return true;
+  };
+  const handleCameraPick = (nx: number, ny: number) => {
+    const pick = get().cameraPick;
+    if (!pick) return false;
+    const hit = lookAtClick(nx, ny);
+    if (pick.target === "free") applyFreeCameraPick(pick, hit);
+    else void render(S.t, () => applyCameraPick(pick, hit));
+    return true;
+  };
   addEventListener("pointerup", (e) => {
     if (pan?.id === e.pointerId) pan = null;
     const res = stepViewport(gesture, {
@@ -349,33 +358,13 @@ export const attachPicture = () => {
     if (e.button !== 0 || gesture.kind !== "pending_click") return;
     const { x, y } = gesture;
     gesture = IDLE_VIEWPORT_GESTURE;
-    const pick = get().cameraPick;
-    if (pick && Math.hypot(e.clientX - x, e.clientY - y) <= 4) {
+    if (get().cameraPick && Math.hypot(e.clientX - x, e.clientY - y) <= 4) {
       const [nx, ny] = frac(e);
-      const t = S.t;
-      void render(t, () => applyCameraPick(pick, lookAtClick(nx, ny)));
-      return;
+      if (handleCameraPick(nx, ny)) return;
     }
     const at = tappedAt(x, y, e);
     if (!at || pickCameraPath(...at)) return;
-    const pickFocus = get().pickFocus;
-    if (pickFocus !== null) {
-      set({ pickFocus: null });
-      const hit = lookAtClick(...at);
-      const cam = S.tools?.camera;
-      if (hit.world && cam) {
-        const dist = Math.hypot(
-          hit.world[0] - cam.position.x,
-          hit.world[1] - cam.position.y,
-          hit.world[2] - cam.position.z,
-        );
-        setFocus(pickFocus, Math.max(0.05, Math.round(dist * 100) / 100));
-        say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
-      } else {
-        say("Nothing hit at that point to focus on");
-      }
-      return;
-    }
+    if (handlePickFocus(at)) return;
     pinNote(...at, e);
   });
 };

@@ -295,6 +295,12 @@ test("PendingChangesBar sits in its own strip above the control row and collapse
     t.setAutoSave(false);
     t.set({ free: true, noteReturn: 1, still: { url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", t: 0 } });
   })()`);
+  await waitUntil(`document.querySelector('[role="radiogroup"][aria-label="Camera workspace"]')`);
+  await page.evaluate(`(() => {
+    const filmTab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Film cam');
+    filmTab?.click();
+  })()`);
+  await waitUntil(`document.querySelector('input[aria-label="Focal length (mm)"]')`);
   const setFocal = (mm) => `(() => {
     const el = document.querySelector('input[aria-label="Focal length (mm)"]');
     el.focus();

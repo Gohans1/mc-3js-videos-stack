@@ -42,7 +42,11 @@ import {
   type CameraView,
   copyCameraFields,
   createHoldCameraKey,
+  type HandheldSpec,
+  joinableCameraKeysInShot,
   keyAtTime,
+  normalizeFocusSpec,
+  normalizeHandheldSpec,
   redundantLinearCameraKeys,
   replaceCameraFraming,
   selectedCameraKeyAt,
@@ -51,18 +55,8 @@ import {
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
 import { type ShotRow, shotsDoc } from "./shots";
 
+export type { HandheldSpec };
 export type Point = [number, number, number] | Record<string, unknown>; // a world point, or the film's anchor ({"eye": [...]})
-export type HandheldSpec =
-  | false
-  | string
-  | {
-      preset?: string;
-      kind?: string;
-      amount?: number;
-      move?: number;
-      speed?: number;
-      offset?: number;
-    };
 export interface CamKey {
   id?: string;
   __timing?: { source: number; output: number; alias?: string | number };
@@ -391,6 +385,16 @@ export const resetLens = (i: number) =>
     delete ks[i].roll;
     delete ks[i].dollyZoomScale;
   });
+export const resetDof = (i: number) =>
+  edit((ks) => {
+    if (!ks[i]) return;
+    copyCameraFields({}, ks[i], ["dof"]);
+  });
+export const resetShake = (i: number) =>
+  edit((ks) => {
+    if (!ks[i]) return;
+    copyCameraFields({}, ks[i], ["shake"]);
+  });
 export const resetLensField = (i: number, field: LensField) =>
   edit((ks) => {
     if (!ks[i]) return;
@@ -423,34 +427,9 @@ export const setFocus = (
 ) =>
   apply((ks) => {
     if (!ks[i]) return;
-    if (focus === undefined || focus === null) {
-      delete ks[i].focus;
-      return;
-    }
-    if (typeof focus === "number") {
-      ks[i].focus = Math.max(0.05, r3(focus));
-      return;
-    }
-    if (typeof focus === "string") {
-      const clean = focus.trim();
-      if (!clean) delete ks[i].focus;
-      else ks[i].focus = clean;
-      return;
-    }
-    if ("point" in focus) {
-      ks[i].focus = {
-        point: focus.point.map(r3) as [number, number, number],
-        ...(focus.label ? { label: focus.label } : {}),
-      };
-      return;
-    }
-    const target = focus.target.trim();
-    if (!target) {
-      delete ks[i].focus;
-      return;
-    }
-    const offset = focus.offset?.map(r3) as [number, number, number] | undefined;
-    ks[i].focus = offset && offset.some((n) => Math.abs(n) > 1e-6) ? { target, offset } : target;
+    const normalized = normalizeFocusSpec(focus);
+    if (normalized === undefined) delete ks[i].focus;
+    else ks[i].focus = normalized;
   });
 
 export const setHandheld = (
@@ -460,36 +439,9 @@ export const setHandheld = (
 ) =>
   apply((ks) => {
     if (!ks[i]) return;
-    if (handheld === undefined) {
-      delete ks[i].handheld;
-      return;
-    }
-    if (handheld === false) {
-      ks[i].handheld = false;
-      return;
-    }
-    if (typeof handheld === "string") {
-      const clean = handheld.trim();
-      if (!clean) delete ks[i].handheld;
-      else ks[i].handheld = clean;
-      return;
-    }
-    const rawPreset = String(handheld.preset ?? handheld.kind ?? "THE_CLOSEUP").trim();
-    if (!rawPreset) {
-      delete ks[i].handheld;
-      return;
-    }
-    const out: Record<string, unknown> =
-      handheld.kind && !handheld.preset ? { kind: rawPreset } : { preset: rawPreset };
-    if (handheld.amount !== undefined && Math.abs(handheld.amount - 1) > 1e-3)
-      out.amount = Math.max(0, r3(handheld.amount));
-    if (handheld.move !== undefined && Math.abs(handheld.move - 1) > 1e-3)
-      out.move = Math.max(0, r3(handheld.move));
-    if (handheld.speed !== undefined && Math.abs(handheld.speed - 1) > 1e-3)
-      out.speed = Math.max(0.05, r3(handheld.speed));
-    if (handheld.offset !== undefined && Math.abs(handheld.offset) > 1e-3)
-      out.offset = r3(handheld.offset);
-    ks[i].handheld = Object.keys(out).length === 1 ? rawPreset : out;
+    const normalized = normalizeHandheldSpec(handheld);
+    if (normalized === undefined) delete ks[i].handheld;
+    else ks[i].handheld = normalized;
   });
 
 export const setKeyPoint = (i: number, which: "p" | "l", next: Point, apply: typeof edit = edit) =>
@@ -794,6 +746,26 @@ export const setCameraKeyMatchSpeed = (index: number, on: boolean) =>
     else delete rows[index].matchSpeed;
   });
 
+export const canMatchAllInShot = (index: number) =>
+  joinableCameraKeysInShot(keys, index).some((key) => !key.matchSpeed);
+
+export const matchAllInShot = (index: number) => {
+  const targets = joinableCameraKeysInShot(keys, index);
+  if (!targets.length) {
+    say("No joinable interior keyframes in this shot to match");
+    return false;
+  }
+  if (!targets.some((key) => !key.matchSpeed)) {
+    say("Every joinable keyframe in this shot already matches speed");
+    return true;
+  }
+  edit((rows) => {
+    for (const key of joinableCameraKeysInShot(rows, index)) key.matchSpeed = true;
+  });
+  say(`Matched speed across ${targets.length} keyframe${targets.length === 1 ? "" : "s"} in shot`);
+  return true;
+};
+
 export const railPositionForKey = (i: number) => {
   const segment = sourceCameraSegment(i);
   return segment && segment.at >= 0
@@ -866,12 +838,25 @@ export const editCameraKeyInScene = (
 
 const viewFromFree = (): CameraView => {
   const f = S.tools!.free;
+  const touched = get().freeTouched;
   return {
     p: vectorPoint(f.p),
     l: vectorPoint(f.l),
     fov: Math.round(f.fov * 10) / 10,
-    ...(f.roll ? { roll: Math.round(f.roll * 1e4) / 1e4 } : {}),
-    ...(f.wave ? { wave: r3(f.wave) } : {}),
+    ...(f.roll ? { roll: Math.round(f.roll * 1e4) / 1e4 } : touched.roll ? { roll: 0 } : {}),
+    ...(f.wave ? { wave: r3(f.wave) } : touched.wave ? { wave: 0 } : {}),
+    ...(f.bob ? { bob: r3(f.bob) } : touched.bob ? { bob: 0 } : {}),
+    ...(f.fstop ? { fstop: r3(f.fstop) } : touched.fstop ? { fstop: 0 } : {}),
+    ...(f.focus !== undefined
+      ? { focus: structuredClone(f.focus) }
+      : touched.focus
+        ? { focus: null }
+        : {}),
+    ...(f.handheld
+      ? { handheld: structuredClone(f.handheld) }
+      : touched.handheld
+        ? { handheld: false }
+        : {}),
   };
 };
 const withFraming = (key: CamKey, view: CameraView) => {
@@ -880,8 +865,28 @@ const withFraming = (key: CamKey, view: CameraView) => {
   const saved = replaceCameraFraming(key, view, aspect, tools.moveCameraAnchor);
   if (saved) {
     if (key.fov !== undefined) key.fov = r3(fovForStorage(view.fov, key.t));
-    if (view.roll !== undefined) key.roll = view.roll;
+    if (view.roll !== undefined) {
+      if (view.roll) key.roll = view.roll;
+      else delete key.roll;
+    }
     if (view.wave !== undefined) key.wave = view.wave;
+    if (view.bob !== undefined) {
+      if (view.bob) key.bob = view.bob;
+      else delete key.bob;
+    }
+    if (view.fstop !== undefined) {
+      if (view.fstop > 0) key.fstop = view.fstop;
+      else delete key.fstop;
+    }
+    if ("focus" in view) {
+      const norm = normalizeFocusSpec(view.focus);
+      if (norm === undefined) delete key.focus;
+      else key.focus = norm;
+    }
+    if ("handheld" in view) {
+      if (view.handheld === false) delete key.handheld;
+      else key.handheld = structuredClone(view.handheld);
+    }
   }
   return saved;
 };
@@ -955,6 +960,7 @@ export const saveView = (only?: number) => {
     insertKey(t, drawnView(), view);
   }
 };
+export const applyFreeToKeyframe = saveView;
 export const addKeyHere = () => {
   if (S.tools?.free.on) saveView();
   else if (S.tools && keyAt(S.t) < 0) insertKey(r3(S.t), drawnView());

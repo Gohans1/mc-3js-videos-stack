@@ -4,6 +4,7 @@ import { fovOf, mmOf } from "film-kit/lens";
 import * as THREE from "three";
 
 import {
+  applyCameraFeel,
   cameraAt,
   cameraKeyOptics,
   cameraMotionSpans,
@@ -1331,4 +1332,69 @@ test("reversed antipodal orbit travels back along the same hemisphere", () => {
     { ...keys[0], t: 2, motion: "orbit", reversePath: true },
   ];
   expect(cameraAt(0.6, reversed).base.p.distanceTo(cameraAt(1.4, keys).base.p)).toBeLessThan(1e-6);
+});
+
+test("applyCameraFeel applies wave, bob, and handheld consistently for film and free cameras", () => {
+  const baseP = new THREE.Vector3(2, 1.8, 5);
+  const baseL = new THREE.Vector3(0, 1.2, 0);
+
+  const zeroP = baseP.clone();
+  const zeroL = baseL.clone();
+  const zeroOut = applyCameraFeel({
+    p: zeroP,
+    l: zeroL,
+    roll: 0.25,
+    t: 1.5,
+    wave: 0,
+    bob: 0,
+    handheld: false,
+  });
+  expect(zeroP.toArray()).toEqual(baseP.toArray());
+  expect(zeroL.toArray()).toEqual(baseL.toArray());
+  expect(zeroOut).toMatchObject({ roll: 0.25, handheld: undefined });
+
+  const bobA = baseP.clone();
+  const bobB = baseP.clone();
+  const resBobA = applyCameraFeel({ p: bobA, l: baseL.clone(), roll: 0, t: 0.5, bob: 1 });
+  const resBobB = applyCameraFeel({ p: bobB, l: baseL.clone(), roll: 0, t: 1.1, bob: 1 });
+  expect(bobA.distanceTo(baseP)).toBeGreaterThan(1e-4);
+  expect(bobA.distanceTo(bobB)).toBeGreaterThan(1e-4);
+  expect(Math.abs(resBobA.roll - resBobB.roll)).toBeGreaterThan(1e-5);
+
+  const freeP = baseP.clone();
+  const freeL = baseL.clone();
+  const hhSpec = { preset: "HANDYCAM_RUN", amount: 1.2, move: 0.8, speed: 1.3, octaves: 2 };
+  const freeOut = applyCameraFeel({
+    p: freeP,
+    l: freeL,
+    roll: 0.1,
+    t: 1.7,
+    wave: 1.5,
+    bob: 0,
+    handheld: hhSpec,
+  });
+  const keyed = cameraAt(1.7, [
+    {
+      t: 0,
+      p: baseP.toArray(),
+      l: baseL.toArray(),
+      roll: 0.1,
+      wave: 1.5,
+      bob: 0,
+      handheld: hhSpec,
+    },
+    {
+      t: 3,
+      p: baseP.toArray(),
+      l: baseL.toArray(),
+      roll: 0.1,
+      wave: 1.5,
+      bob: 0,
+      handheld: hhSpec,
+    },
+  ]);
+  expect(freeOut.handheld).toBe(keyed.handheld);
+  expect(freeOut.roll).toBeCloseTo(keyed.roll, 6);
+  expect(freeP.distanceTo(keyed.p)).toBeLessThan(1e-6);
+  expect(freeL.distanceTo(keyed.l)).toBeLessThan(1e-6);
 });

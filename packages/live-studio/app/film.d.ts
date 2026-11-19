@@ -17,6 +17,10 @@ declare module "film/scene" {
     fov: number;
     roll?: number;
     wave?: number;
+    bob?: number;
+    fstop?: number;
+    focus?: unknown;
+    handheld?: unknown;
   }
   export interface OpticsTelemetry {
     shot: number;
@@ -30,8 +34,17 @@ declare module "film/scene" {
     look?: string;
     impulse?: string;
   }
-  export interface CameraPathTime { world: number; camera: number; worldAtCamera?: (t: number) => number; }
-  export interface CameraPathPose { p: THREE.Vector3; l: THREE.Vector3; fov: number; base?: { p: THREE.Vector3; l: THREE.Vector3 }; }
+  export interface CameraPathTime {
+    world: number;
+    camera: number;
+    worldAtCamera?: (t: number) => number;
+  }
+  export interface CameraPathPose {
+    p: THREE.Vector3;
+    l: THREE.Vector3;
+    fov: number;
+    base?: { p: THREE.Vector3; l: THREE.Vector3 };
+  }
   export interface Tools {
     scene: THREE.Scene;
     camera: import("film-stage/camera").RigCamera;
@@ -51,7 +64,12 @@ declare module "film/scene" {
     cameraGroups?: readonly string[];
     apertureSampling?: true;
     sampleCameraPath?: (times: readonly CameraPathTime[]) => CameraPathPose[];
-    sampleCameraTrack?: (times: readonly CameraPathTime[]) => (import("./camera/camera-edit").CameraView & { p: [number, number, number]; l: [number, number, number] })[];
+    sampleCameraTrack?: (
+      times: readonly CameraPathTime[],
+    ) => (import("./camera/camera-edit").CameraView & {
+      p: [number, number, number];
+      l: [number, number, number];
+    })[];
     cameraSample?: () => import("./camera/camera-edit").CameraView;
     moveCameraAnchor?: import("./camera/camera-edit").MoveCameraAnchor;
     resolveCameraAnchor?: import("film-stage/camera").ResolveCameraAnchor;

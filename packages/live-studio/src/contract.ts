@@ -194,9 +194,16 @@ export const Tools = z.looseObject({
   look: three("isVector3", "a THREE.Vector3: the point the camera looks at"),
   free: z.looseObject({
     on: z.boolean(),
+    previewEffects: z.boolean().optional(),
     p: three("isVector3", "a THREE.Vector3"),
     l: three("isVector3", "a THREE.Vector3"),
     fov: z.number(),
+    roll: z.number().optional(),
+    wave: z.number().optional(),
+    bob: z.number().optional(),
+    fstop: z.number().optional(),
+    focus: z.unknown().optional(),
+    handheld: z.unknown().optional(),
   }),
   home: z
     .object({
@@ -608,7 +615,10 @@ const FocusTargetObj = z.looseObject({
   target: z.string().min(1),
   offset: z.tuple([z.number(), z.number(), z.number()]).optional(),
 });
-const FocusPoint = z.object({ point: z.tuple([z.number(), z.number(), z.number()]), label: z.string().optional() });
+const FocusPoint = z.object({
+  point: z.tuple([z.number(), z.number(), z.number()]),
+  label: z.string().optional(),
+});
 const FocusTarget = z.union([z.number().positive(), z.string().min(1), FocusTargetObj, FocusPoint]);
 const HandheldShape = z.looseObject({
   preset: z.string().min(1).optional(),
@@ -646,7 +656,16 @@ const CamKey = z.looseObject({
   reason: z.string().optional(),
   ease: Ease.optional(),
   matchSpeed: z.boolean().optional(),
-  easeChannels: z.object({ position: Ease.optional(), aim: Ease.optional(), lens: Ease.optional(), dof: Ease.optional(), roll: Ease.optional(), shake: Ease.optional() }).optional(),
+  easeChannels: z
+    .object({
+      position: Ease.optional(),
+      aim: Ease.optional(),
+      lens: Ease.optional(),
+      dof: Ease.optional(),
+      roll: Ease.optional(),
+      shake: Ease.optional(),
+    })
+    .optional(),
   fov: z.number().positive().optional(),
   mm: z.number().positive().optional(),
   dollyZoomScale: z.number().positive().optional(),
@@ -888,23 +907,30 @@ const ShotHit = z.looseObject({
 });
 const Vec3 = z.tuple([z.number(), z.number(), z.number()]);
 const Offset2 = z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1)]);
-const CameraRig = z.object({
-  look: z.enum(["target", "one-node", "tangent"]).optional(),
-  position: Vec3.optional(),
-  lead: z.number().min(-2).max(2).optional(),
-  bank: z.number().min(-5).max(5).optional(),
-  up: Vec3.optional(),
-  frameOffset: Offset2.optional(),
-  lensShift: Offset2.optional(),
-  fovAxis: z.object({ mode: z.enum(["horizontal", "vertical"]), aspect: z.number().positive() }).optional(),
-  near: z.number().positive().optional(),
-  far: z.number().positive().optional(),
-  hideGroups: z.array(z.string().min(1)).optional(),
-  projection: z.enum(["perspective", "orthographic"]).optional(),
-  orthographicDepth: z.number().positive().optional(),
-  rail: z.array(Vec3).min(2).optional(),
-  extrapolation: z.enum(["hold", "linear"]).optional(),
-}).refine((rig) => rig.near === undefined || rig.far === undefined || rig.far > rig.near, "far must exceed near");
+const CameraRig = z
+  .object({
+    look: z.enum(["target", "one-node", "tangent"]).optional(),
+    position: Vec3.optional(),
+    lead: z.number().min(-2).max(2).optional(),
+    bank: z.number().min(-5).max(5).optional(),
+    up: Vec3.optional(),
+    frameOffset: Offset2.optional(),
+    lensShift: Offset2.optional(),
+    fovAxis: z
+      .object({ mode: z.enum(["horizontal", "vertical"]), aspect: z.number().positive() })
+      .optional(),
+    near: z.number().positive().optional(),
+    far: z.number().positive().optional(),
+    hideGroups: z.array(z.string().min(1)).optional(),
+    projection: z.enum(["perspective", "orthographic"]).optional(),
+    orthographicDepth: z.number().positive().optional(),
+    rail: z.array(Vec3).min(2).optional(),
+    extrapolation: z.enum(["hold", "linear"]).optional(),
+  })
+  .refine(
+    (rig) => rig.near === undefined || rig.far === undefined || rig.far > rig.near,
+    "far must exceed near",
+  );
 const Shutter = z.object({
   angle: z.number().min(0).max(360).optional(),
   timing: z.enum(["open", "center", "close"]).optional(),
@@ -917,7 +943,12 @@ const ShotRow = z.looseObject({
   cameraClock: z.enum(["scene", "output"]).optional(),
   camera: CameraRig.optional(),
   shutter: Shutter.optional(),
-  continuityAxis: z.tuple([z.tuple([z.number(), z.number(), z.number()]), z.tuple([z.number(), z.number(), z.number()])]).optional(),
+  continuityAxis: z
+    .tuple([
+      z.tuple([z.number(), z.number(), z.number()]),
+      z.tuple([z.number(), z.number(), z.number()]),
+    ])
+    .optional(),
   name: z.string().optional(),
   anim: Anim.optional(),
   transition: Transition.optional(),

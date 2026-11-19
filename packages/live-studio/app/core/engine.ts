@@ -13,6 +13,10 @@ export interface FreeView {
   fov?: number;
   roll?: number;
   wave?: number;
+  bob?: number;
+  fstop?: number;
+  focus?: unknown;
+  handheld?: unknown;
 }
 
 export interface StudioEngine {

@@ -4,6 +4,72 @@ import type { Ease } from "../core/ease";
 import { r3 } from "../core/time";
 import type { CamKey, Point } from "./cam";
 
+export type HandheldSpec =
+  | false
+  | string
+  | {
+      preset?: string;
+      kind?: string;
+      amount?: number;
+      move?: number;
+      speed?: number;
+      offset?: number;
+      desync?: number;
+      octaves?: number;
+    };
+
+export function normalizeFocusSpec(focus: unknown): unknown {
+  if (focus === undefined || focus === null) return undefined;
+  if (typeof focus === "number") return Math.max(0.05, r3(focus));
+  if (typeof focus === "string") {
+    const clean = focus.trim();
+    return clean || undefined;
+  }
+  if (typeof focus === "object" && "point" in focus) {
+    const fp = focus as { point: readonly number[]; label?: string };
+    return {
+      point: fp.point.map(r3) as [number, number, number],
+      ...(fp.label ? { label: fp.label } : {}),
+    };
+  }
+  if (typeof focus === "object" && "target" in focus) {
+    const ft = focus as { target: string; offset?: readonly number[] };
+    const target = ft.target.trim();
+    if (!target) return undefined;
+    const offset = ft.offset?.map(r3) as [number, number, number] | undefined;
+    return offset && offset.some((n) => Math.abs(n) > 1e-6) ? { target, offset } : target;
+  }
+  return undefined;
+}
+
+export function normalizeHandheldSpec(handheld: HandheldSpec | undefined): unknown {
+  if (handheld === undefined) return undefined;
+  if (handheld === false) return false;
+  if (typeof handheld === "string") {
+    const clean = handheld.trim();
+    return clean || undefined;
+  }
+  const rawPreset = String(handheld.preset ?? handheld.kind ?? "THE_CLOSEUP").trim();
+  if (!rawPreset) return undefined;
+  const out: Record<string, unknown> =
+    handheld.kind && !handheld.preset ? { kind: rawPreset } : { preset: rawPreset };
+  if (handheld.amount !== undefined && Math.abs(handheld.amount - 1) > 1e-3)
+    out.amount = Math.max(0, r3(handheld.amount));
+  if (handheld.move !== undefined && Math.abs(handheld.move - 1) > 1e-3)
+    out.move = Math.max(0, r3(handheld.move));
+  if (handheld.speed !== undefined && Math.abs(handheld.speed - 1) > 1e-3)
+    out.speed = Math.max(0.01, r3(handheld.speed));
+  if (handheld.offset !== undefined && Math.abs(handheld.offset) > 1e-3)
+    out.offset = r3(handheld.offset);
+  if (handheld.desync !== undefined && Math.abs(handheld.desync) > 1e-3)
+    out.desync = r3(handheld.desync);
+  if (handheld.octaves !== undefined) {
+    const oct = Math.max(1, Math.min(4, Math.round(handheld.octaves)));
+    if (oct !== 1) out.octaves = oct;
+  }
+  return Object.keys(out).length === 1 ? rawPreset : out;
+}
+
 const keyFields = {
   framing: ["p", "l", "roll", "motion", "reversePath", "inHandle", "outHandle"],
   lens: ["fov", "mm"],
@@ -87,6 +153,7 @@ export const replaceCameraFraming = (
   const l = nextPoint(key.l, view.l);
   if (!p || !l) return false;
   Object.assign(key, { p, l });
+  delete key.dollyZoomScale;
   if (key.mm !== undefined || view.mm !== undefined) {
     key.mm = view.mm ?? Math.round(mmOf(view.fov, aspect) * 1e4) / 1e4;
     delete key.fov;
@@ -94,6 +161,24 @@ export const replaceCameraFraming = (
     key.fov = view.fov;
   }
   return true;
+};
+
+export const joinableCameraKeysInShot = <
+  T extends {
+    t: number;
+    motion?: string;
+    cut?: boolean;
+    muted?: boolean;
+    locked?: boolean;
+    matchSpeed?: boolean;
+  },
+>(
+  keys: readonly T[],
+  index: number,
+): T[] => {
+  const segment = cameraSegmentAt(keys, index);
+  if (!segment) return [];
+  return segment.active.filter((key, at) => !key.locked && canMatchCameraSpeed(segment.active, at));
 };
 
 export const cameraSegmentAt = <T extends { cut?: boolean; muted?: boolean }>(

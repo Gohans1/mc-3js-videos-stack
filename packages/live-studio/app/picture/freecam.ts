@@ -1,13 +1,31 @@
 // The free camera: looking around the scene without changing the film. Held like a camera: turning stays where you stand,
 // because orbiting a target leaves these small rooms at once. It flies like Minecraft's creative flight (flight.ts)
-import { clampFov } from "film-kit/lens";
+import { clampFov, fovOf, MAX_FOV, MIN_FOV } from "film-kit/lens";
+import type { FocusTargetSpec } from "film-stage/camera";
 import * as THREE from "three";
 
+import { saveView as applyFreeToKeyframe } from "../camera/cam";
+import {
+  type HandheldSpec,
+  normalizeFocusSpec,
+  normalizeHandheldSpec,
+} from "../camera/camera-edit";
+import { cancelCameraPick } from "../camera/camera-framing";
+import type { CameraPick } from "../camera/slice";
 import type { FreeView } from "../core/engine";
 import { S, wake } from "../core/state";
 import { get, say, set, setPref } from "../core/store";
 import { cameraSurfaces, EYE_HEIGHT, floorAt, walkPosition } from "./camera-collision";
 import { createFlight } from "./flight";
+
+export { applyFreeToKeyframe };
+
+const touchFree = (moved = true) => {
+  if (moved) S.viewMoved = true;
+  S.dirty = true;
+  S.finalAt = -1;
+  wake("render");
+};
 
 export const flight = createFlight(() => wake("render"));
 // One frame's flying, by the time that passed since the last
@@ -47,6 +65,8 @@ const sameView = (a: View, b: View) =>
   a.fov === b.fov &&
   a.navigation === b.navigation &&
   (a.pivot ? !!b.pivot && a.pivot.equals(b.pivot) : !b.pivot);
+export const freeHistoryCounts = () => ({ back: past.length, forward: future.length });
+
 export const rememberFreeView = () => {
   if (!S.tools?.free.on || get().freeLocked) return;
   const now = view();
@@ -54,6 +74,7 @@ export const rememberFreeView = () => {
   past.push(now);
   if (past.length > 32) past.shift();
   future.length = 0;
+  set({ freeHistoryRev: get().freeHistoryRev + 1 });
 };
 export const restoreFreeView = (direction: -1 | 1) => {
   const f = S.tools?.free;
@@ -63,7 +84,10 @@ export const restoreFreeView = (direction: -1 | 1) => {
   const now = view();
   let target = from.pop();
   while (target && sameView(target, now)) target = from.pop();
-  if (!target) return;
+  if (!target) {
+    set({ freeHistoryRev: get().freeHistoryRev + 1 });
+    return;
+  }
   to.push(now);
   f.p.copy(target.p);
   f.l.copy(target.l);
@@ -71,9 +95,13 @@ export const restoreFreeView = (direction: -1 | 1) => {
   orbitPivot = target.pivot;
   flight.clear(true);
   walkTime = -Infinity;
-  set({ freeNavigation: target.navigation, freeFov: target.fov });
-  S.viewMoved = true;
-  S.finalAt = -1;
+  set({
+    freeNavigation: target.navigation,
+    freeFov: target.fov,
+    freePoseRev: get().freePoseRev + 1,
+    freeHistoryRev: get().freeHistoryRev + 1,
+  });
+  touchFree(true);
 };
 
 export const setOrbitPivot = (point: [number, number, number]) => {
@@ -95,20 +123,19 @@ export const orbitFree = (dx: number, dy: number) => {
     const q = new THREE.Quaternion().setFromUnitVectors(from.normalize(), to.normalize());
     f.l.sub(pivot).applyQuaternion(q).add(pivot);
   }
-  S.finalAt = -1;
+  touchFree(true);
 };
 export const setFreeLock = (locked: boolean) => {
   flight.clear(true);
   set({ freeLocked: locked });
-  S.dirty = true;
+  touchFree(false);
 };
 export const setFreeLook = (on: boolean) => {
   const f = S.tools?.free;
   if (!f || f.previewEffects === undefined) return;
   f.previewEffects = on;
   setPref("freeLook", on);
-  S.dirty = true;
-  S.finalAt = -1;
+  touchFree(false);
 };
 let walkGeometry: ReturnType<typeof cameraSurfaces> = [];
 let walkTime = -Infinity;
@@ -132,8 +159,8 @@ export const setFreeNavigation = (mode: "fly" | "walk") => {
     S.viewMoved = true;
   } else rememberFreeView();
   flight.clear(true);
-  set({ freeNavigation: mode });
-  S.finalAt = -1;
+  set({ freeNavigation: mode, freePoseRev: get().freePoseRev + 1 });
+  touchFree(false);
 };
 export const axisView = (axis: "top" | "front" | "side") => {
   const f = S.tools?.free;
@@ -150,8 +177,8 @@ export const axisView = (axis: "top" | "front" | "side") => {
         : new THREE.Vector3(1, 0, 0);
   f.p.copy(pivot).addScaledVector(direction.normalize(), distance);
   f.l.copy(pivot);
-  S.viewMoved = true;
-  S.finalAt = -1;
+  set({ freePoseRev: get().freePoseRev + 1 });
+  touchFree(true);
 };
 
 export const turnAbout = (centre: THREE.Vector3, moving: THREE.Vector3, dx: number, dy: number) => {
@@ -198,16 +225,33 @@ export const flyCam = (forward: number, right: number, up: number) => {
 // The first free camera after a page load starts at the film's home spot (tools.home), so a reload never leaves the
 // creator wherever the playhead happened to be; later ones start from the shot's own camera, and so does one a drag on the
 // picture turns on (here), which must turn the view seen
-export const FREE_LENS_DEFAULTS = { fov: 60, roll: 0, wave: 0 } as const;
+export const FREE_LENS_DEFAULTS = {
+  fov: 60,
+  roll: 0,
+  wave: 0,
+  bob: 0,
+  fstop: 0,
+  focus: undefined as FocusTargetSpec | undefined,
+  handheld: false as HandheldSpec,
+} as const;
 
 let customFreeFov = false;
 let enteredFreeFov: number | null = null;
 
-export const defaultFreeFov = () =>
-  S.tools?.home?.fov ??
-  enteredFreeFov ??
-  (S.tools?.free.on ? undefined : S.tools?.camera?.fov) ??
-  FREE_LENS_DEFAULTS.fov;
+export const defaultFreeFov = () => {
+  const raw =
+    S.tools?.home?.fov ??
+    enteredFreeFov ??
+    (S.tools?.free.on
+      ? S.tools?.cameraSample?.()?.fov
+      : (S.tools?.cameraSample?.()?.fov ?? S.tools?.camera?.fov)) ??
+    FREE_LENS_DEFAULTS.fov;
+  return Math.round(clampFov(raw) * 10) / 10;
+};
+
+export const ensureFreeActive = () => {
+  if (!S.tools?.free.on) setFree(true);
+};
 
 export const setFreeFov = (fov: number, resetCustom = false) => {
   const v = Math.round(clampFov(fov) * 10) / 10;
@@ -215,32 +259,165 @@ export const setFreeFov = (fov: number, resetCustom = false) => {
   const f = S.tools?.free;
   if (f) f.fov = v;
   set({ freeFov: v });
-  S.viewMoved = true;
-  S.finalAt = -1;
-  wake("render");
+  touchFree(true);
 };
 
 export const resetFreeFov = () => setFreeFov(defaultFreeFov(), true);
 
+export const setFreeMm = (mm: number) => {
+  const aspect = S.tools?.camera?.aspect || 16 / 9;
+  const fov = fovOf(mm, aspect);
+  if (!(fov >= MIN_FOV && fov <= MAX_FOV))
+    return say("Enter a positive focal length that gives a usable field of view");
+  setFreeFov(fov);
+};
+
 export const setFreeRoll = (rad: number) => {
-  const maxRad = Math.PI / 4;
+  const maxRad = Math.PI;
   const v = Math.round(Math.max(-maxRad, Math.min(maxRad, rad)) * 1e4) / 1e4;
   const f = S.tools?.free;
   if (f) f.roll = v;
-  set({ freeRoll: v });
-  S.viewMoved = true;
-  S.finalAt = -1;
-  wake("render");
+  set({ freeRoll: v, freeTouched: { ...get().freeTouched, roll: true } });
+  touchFree(true);
 };
 
 export const setFreeWave = (wave: number) => {
   const v = Math.round(Math.max(0, Math.min(3, wave)) * 100) / 100;
   const f = S.tools?.free;
   if (f) f.wave = v;
-  set({ freeWave: v });
-  S.viewMoved = true;
-  S.finalAt = -1;
-  wake("render");
+  set({ freeWave: v, freeTouched: { ...get().freeTouched, wave: true } });
+  touchFree(true);
+};
+
+export const setFreeBob = (bob: number) => {
+  const v = Math.round(Math.max(0, Math.min(3, bob)) * 100) / 100;
+  const f = S.tools?.free;
+  if (f) f.bob = v;
+  set({ freeBob: v, freeTouched: { ...get().freeTouched, bob: true } });
+  touchFree(true);
+};
+
+export const setFreeFstop = (fstop: number) => {
+  const v = Math.max(0, Math.round(fstop * 1000) / 1000);
+  const f = S.tools?.free;
+  if (f) f.fstop = v;
+  set({ freeFstop: v, freeTouched: { ...get().freeTouched, fstop: true } });
+  touchFree(true);
+};
+
+export const setFreeFocus = (focus: FocusTargetSpec | undefined) => {
+  const normalized = normalizeFocusSpec(focus) as FocusTargetSpec | undefined;
+  const f = S.tools?.free;
+  if (f) f.focus = normalized;
+  set({ freeFocus: normalized, freeTouched: { ...get().freeTouched, focus: true } });
+  touchFree(true);
+};
+
+export const setFreeHandheld = (handheld: HandheldSpec | undefined) => {
+  const normalized = normalizeHandheldSpec(handheld) ?? false;
+  const f = S.tools?.free;
+  if (f) f.handheld = normalized;
+  set({ freeHandheld: normalized, freeTouched: { ...get().freeTouched, handheld: true } });
+  touchFree(true);
+};
+
+export const setFreePoseCoordinate = (field: "p" | "l", axis: 0 | 1 | 2, value: number) => {
+  const f = S.tools?.free;
+  if (!f) return;
+  if (!f.on) setFree(true);
+  else rememberFreeView();
+  f[field].setComponent(axis, Math.round(value * 1000) / 1000);
+  set({ freePoseRev: get().freePoseRev + 1 });
+  touchFree(true);
+};
+
+export const startFreePick = (field: CameraPick["field"]) => {
+  ensureFreeActive();
+  set({ cameraPick: { field, target: "free", t: S.t } });
+  say(
+    field === "l"
+      ? "Click a surface to aim the free camera. Esc cancels"
+      : "Click a surface to focus the free camera. Esc cancels",
+  );
+};
+
+export const applyFreeCameraPick = (
+  pick: CameraPick,
+  hit: { what: string; world?: [number, number, number] },
+) => {
+  if (get().cameraPick !== pick) return;
+  if (!hit.world) return say("Click a visible surface or press Esc to cancel");
+  const f = S.tools?.free;
+  if (!f) return cancelCameraPick();
+  if (pick.field === "l") {
+    rememberFreeView();
+    f.l.set(...hit.world);
+    set({ freePoseRev: get().freePoseRev + 1 });
+    touchFree(true);
+    say("Aim updated");
+  } else {
+    setFreeFocus({ point: hit.world, label: hit.what });
+    say("Focus point updated");
+  }
+  cancelCameraPick();
+};
+
+export const resetFreeDof = () => {
+  const f = S.tools?.free;
+  if (f) {
+    f.fstop = FREE_LENS_DEFAULTS.fstop;
+    f.focus = FREE_LENS_DEFAULTS.focus;
+  }
+  const { fstop: _fs, focus: _fc, ...rest } = get().freeTouched;
+  set({
+    freeFstop: FREE_LENS_DEFAULTS.fstop,
+    freeFocus: FREE_LENS_DEFAULTS.focus,
+    freeTouched: rest,
+  });
+  touchFree(true);
+};
+
+export const resetFreeFeel = () => {
+  const f = S.tools?.free;
+  if (f) {
+    f.wave = FREE_LENS_DEFAULTS.wave;
+    f.bob = FREE_LENS_DEFAULTS.bob;
+    f.handheld = FREE_LENS_DEFAULTS.handheld;
+  }
+  const { wave: _w, bob: _b, handheld: _h, ...rest } = get().freeTouched;
+  set({
+    freeWave: FREE_LENS_DEFAULTS.wave,
+    freeBob: FREE_LENS_DEFAULTS.bob,
+    freeHandheld: FREE_LENS_DEFAULTS.handheld,
+    freeTouched: rest,
+  });
+  touchFree(true);
+};
+
+export const resetFreeLensAll = () => {
+  customFreeFov = false;
+  const defFov = defaultFreeFov();
+  const f = S.tools?.free;
+  if (f) {
+    f.fov = defFov;
+    f.roll = FREE_LENS_DEFAULTS.roll;
+    f.wave = FREE_LENS_DEFAULTS.wave;
+    f.bob = FREE_LENS_DEFAULTS.bob;
+    f.fstop = FREE_LENS_DEFAULTS.fstop;
+    f.focus = FREE_LENS_DEFAULTS.focus;
+    f.handheld = FREE_LENS_DEFAULTS.handheld;
+  }
+  set({
+    freeFov: defFov,
+    freeRoll: FREE_LENS_DEFAULTS.roll,
+    freeWave: FREE_LENS_DEFAULTS.wave,
+    freeBob: FREE_LENS_DEFAULTS.bob,
+    freeFstop: FREE_LENS_DEFAULTS.fstop,
+    freeFocus: FREE_LENS_DEFAULTS.focus,
+    freeHandheld: FREE_LENS_DEFAULTS.handheld,
+    freeTouched: {},
+  });
+  touchFree(true);
 };
 
 let homed = false;
@@ -253,16 +430,19 @@ export const setFree = (on: boolean, here = false) => {
   if (on && !f.on) {
     enteredFreeFov = tools.home?.fov ?? tools.cameraSample?.()?.fov ?? tools.camera.fov;
   } else if (!on) {
+    if (!tools.cameraSample && enteredFreeFov !== null && tools.camera)
+      tools.camera.fov = enteredFreeFov;
     enteredFreeFov = null;
   }
+  const filmFov = tools.cameraSample?.()?.fov ?? tools.camera.fov;
   if (on && home && !preserve) {
     f.p.set(...home.p);
     f.l.set(...home.l);
-    f.fov = customFreeFov ? get().freeFov : (home.fov ?? tools.camera.fov);
+    f.fov = customFreeFov ? get().freeFov : (home.fov ?? filmFov);
   } else if (on && !preserve) {
     f.p.copy(tools.camera.position);
     f.l.copy(tools.look);
-    f.fov = customFreeFov ? get().freeFov : tools.camera.fov;
+    f.fov = customFreeFov ? get().freeFov : filmFov;
   }
   if (on) {
     homed = true;
@@ -272,10 +452,27 @@ export const setFree = (on: boolean, here = false) => {
   }
   f.roll ??= get().freeRoll;
   f.wave ??= get().freeWave;
+  f.bob ??= get().freeBob;
+  f.fstop ??= get().freeFstop;
+  if (f.focus === undefined && get().freeFocus !== undefined)
+    f.focus = structuredClone(get().freeFocus);
+  if (f.handheld === undefined && get().freeHandheld !== undefined)
+    f.handheld = structuredClone(get().freeHandheld);
   f.on = on;
-  set({ free: on, freeFov: f.fov, freeRoll: f.roll ?? 0, freeWave: f.wave ?? 0 });
-  S.dirty = true;
-  S.finalAt = -1;
+  set({
+    free: on,
+    freeFov: f.fov,
+    freeRoll: f.roll ?? 0,
+    freeWave: f.wave ?? 0,
+    freeBob: f.bob ?? 0,
+    freeFstop: f.fstop ?? 0,
+    freeFocus: (f.focus as FocusTargetSpec | undefined) ?? undefined,
+    freeHandheld: f.handheld ?? false,
+    freePoseRev: get().freePoseRev + 1,
+    freeHistoryRev: get().freeHistoryRev + 1,
+    ...(on && !preserve ? { freeTouched: {} } : {}),
+  });
+  touchFree(false);
 };
 
 export const flyFree = (view: FreeView) => {
@@ -289,7 +486,7 @@ export const flyFree = (view: FreeView) => {
     typeof view.fov === "number" && Number.isFinite(view.fov)
       ? Math.round(clampFov(view.fov) * 10) / 10
       : f.fov || defaultFreeFov();
-  const maxRad = Math.PI / 4;
+  const maxRad = Math.PI;
   const roll =
     typeof view.roll === "number" && Number.isFinite(view.roll)
       ? Math.round(Math.max(-maxRad, Math.min(maxRad, view.roll)) * 1e4) / 1e4
@@ -298,18 +495,41 @@ export const flyFree = (view: FreeView) => {
     typeof view.wave === "number" && Number.isFinite(view.wave)
       ? Math.round(Math.max(0, Math.min(3, view.wave)) * 100) / 100
       : 0;
+  const bob =
+    typeof view.bob === "number" && Number.isFinite(view.bob)
+      ? Math.round(Math.max(0, Math.min(3, view.bob)) * 100) / 100
+      : 0;
+  const fstop =
+    typeof view.fstop === "number" && Number.isFinite(view.fstop)
+      ? Math.max(0, Math.round(view.fstop * 1000) / 1000)
+      : 0;
+  const focus = normalizeFocusSpec(view.focus) as FocusTargetSpec | undefined;
+  const handheld = normalizeHandheldSpec(view.handheld as HandheldSpec | undefined) ?? false;
   f.fov = fov;
   f.roll = roll;
   f.wave = wave;
+  f.bob = bob;
+  f.fstop = fstop;
+  f.focus = focus;
+  f.handheld = handheld;
   orbitPivot = null;
   if (f.previewEffects !== undefined) f.previewEffects = get().freeLook;
   if (get().freeNavigation === "walk") set({ freeNavigation: "fly" });
   homed = true;
   f.on = true;
-  set({ free: true, freeFov: fov, freeRoll: roll, freeWave: wave });
-  S.viewMoved = true;
-  S.dirty = true;
-  S.finalAt = -1;
+  set({
+    free: true,
+    freeFov: fov,
+    freeRoll: roll,
+    freeWave: wave,
+    freeBob: bob,
+    freeFstop: fstop,
+    freeFocus: focus,
+    freeHandheld: handheld,
+    freePoseRev: get().freePoseRev + 1,
+    freeHistoryRev: get().freeHistoryRev + 1,
+  });
+  touchFree(true);
 };
 
 export const setFov = (d: number) => {

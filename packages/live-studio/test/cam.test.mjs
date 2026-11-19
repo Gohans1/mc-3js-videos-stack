@@ -11,6 +11,7 @@ import {
   cameraTailIndex,
   copyCameraFields,
   createHoldCameraKey,
+  joinableCameraKeysInShot,
   keyAtTime,
   redundantLinearCameraKeys,
   replaceCameraFraming,
@@ -373,4 +374,32 @@ test("formatSpeedAttributes appends Match speed only when enabled", () => {
   assert.equal(formatSpeedAttributes({ matchSpeed: true }, "Smooth"), "Smooth · Match speed");
   assert.equal(formatSpeedAttributes({}, "Ease Out"), "Ease Out");
   assert.equal(formatSpeedAttributes({ matchSpeed: false }, "Linear"), "Linear");
+});
+
+test("joinableCameraKeysInShot selects only unlocked non-hold interior keys in the active shot", () => {
+  const rows = [
+    key(0, { id: "s0-0" }),
+    key(1, { id: "s0-1" }),
+    key(2, { id: "s0-2", locked: true }),
+    key(3, { id: "s0-3" }),
+    key(4, { id: "s0-4", motion: "hold" }),
+    key(5, { id: "s0-5" }),
+    key(6, { id: "s1-0", cut: true }),
+    key(7, { id: "s1-1" }),
+    key(8, { id: "s1-2" }),
+  ];
+  assert.deepEqual(
+    joinableCameraKeysInShot(rows, 5).map((k) => k.id),
+    ["s0-1"],
+  );
+  assert.deepEqual(
+    joinableCameraKeysInShot(rows, 7).map((k) => k.id),
+    ["s1-1"],
+  );
+  // First/last keys in shot are never joinable interior keys
+  assert.equal(joinableCameraKeysInShot(rows, 6).length, 1);
+  assert.equal(
+    joinableCameraKeysInShot([key(0, { id: "only0" }), key(1, { id: "only1" })], 1).length,
+    0,
+  );
 });

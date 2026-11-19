@@ -11,7 +11,7 @@ import {
   Scissors,
   Trash2,
 } from "lucide-react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +37,6 @@ function PlayheadStamp() {
   useFrame();
   return <span className="tabular-nums">{stamp(S.t)}</span>;
 }
-import { FreeCamLensFields } from "../picture/FreeCamLens";
 import { seekExact } from "../playback/transport";
 import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
@@ -69,6 +68,7 @@ import { CameraKeyStyle, CameraTakePicker } from "./CameraKeyAuthoring";
 import { CameraOptics } from "./CameraOptics";
 import { CameraShotSettings } from "./CameraShotSettings";
 import { ShotHitsSection } from "./CamKeySections";
+import { FreeCamPanel } from "./FreeCamPanel";
 import { renameShot, setShotCameraClock, shotsDoc } from "./shots";
 
 const CameraEasePanel = lazy(() =>
@@ -87,8 +87,7 @@ function ShotSection({ shot }: { shot: number }) {
   useStudio((s) => s.shotsRev);
   const shots = useStudio((s) => s.shots),
     free = useStudio((s) => s.free),
-    sound = useStudio((s) => s.sound),
-    timing = useStudio((s) => s.timing);
+    sound = useStudio((s) => s.sound);
   const [a, b] = shotSpan(shot),
     name = S.comments[shot] ?? "";
   return (
@@ -148,19 +147,6 @@ function ShotSection({ shot }: { shot: number }) {
         </span>
         <span className="text-muted-foreground text-xs tabular-nums">{(b - a).toFixed(1)} s</span>
       </FieldRow>
-      {shots && timing && S.tools?.cameraClock && shotsDoc.data?.[shot] && (
-        <FieldRow label="Camera clock">
-          <Segmented
-            label="Camera clock"
-            value={shotsDoc.data[shot].cameraClock ?? "scene"}
-            items={[
-              { id: "scene", title: "Scene time" },
-              { id: "output", title: "Output time" },
-            ]}
-            onChange={(mode) => setShotCameraClock(shot, mode)}
-          />
-        </FieldRow>
-      )}
       {sound && shot > 0 && (
         <FieldRow label="Cut sound">
           <DropdownMenu>
@@ -361,9 +347,8 @@ function KeySection() {
           </div>
           <TimeField i={i} />
           {k.reason && <p className="text-muted-foreground text-xs">{k.reason}</p>}
-          <CameraKeyStyle index={i} />
-          <CameraOptics index={i} />
-          <CameraFraming index={i} />
+          <CameraOptics index={i} section="basic" />
+          <CameraFraming index={i} section="basic" />
           <div className="flex flex-wrap gap-1.5">
             <Tip label="Adds a copy of this keyframe 1 s later, so the camera stays still. Drag the copy to hold longer">
               <Button variant="secondary" size="sm" className="h-8" onClick={() => holdAfter(i)}>
@@ -434,33 +419,90 @@ function PicksSection({ picks }: { picks: number[] }) {
   );
 }
 
+function FilmAdvancedSection({ shot, picks }: { shot: number; picks: number[] }) {
+  useStudio((s) => s.camKey);
+  useStudio((s) => s.camRev);
+  useStudio((s) => s.shotsRev);
+  const shots = useStudio((s) => s.shots);
+  const timing = useStudio((s) => s.timing);
+  useFrameKey(() => shownKey(S.t));
+  const i = shownKey(S.t);
+  const k = keys[i];
+  return (
+    <Section title="Advanced" closed>
+      <CameraTakePicker />
+      {shots && timing && S.tools?.cameraClock && shotsDoc.data?.[shot] && (
+        <FieldRow label="Camera clock">
+          <Segmented
+            label="Camera clock"
+            value={shotsDoc.data[shot].cameraClock ?? "scene"}
+            items={[
+              { id: "scene", title: "Scene time" },
+              { id: "output", title: "Output time" },
+            ]}
+            onChange={(mode) => setShotCameraClock(shot, mode)}
+          />
+        </FieldRow>
+      )}
+      {picks.length <= 1 && k && (
+        <>
+          <CameraKeyStyle index={i} />
+          <CameraFraming index={i} section="advanced" />
+          <CameraOptics index={i} section="advanced" />
+        </>
+      )}
+      <CameraShotSettings shot={shot} />
+    </Section>
+  );
+}
+
 export function CamPanel() {
   useStudio((s) => s.camRev);
   useStudio((s) => s.shotPick);
   const picks = useStudio((s) => s.camPicks);
   const free = useStudio((s) => s.free);
+  const [camTab, setCamTab] = useState<"film" | "free">(() => (free ? "free" : "film"));
+  const prevFree = useRef(free);
+  useEffect(() => {
+    if (prevFree.current !== free) {
+      prevFree.current = free;
+      setCamTab(free ? "free" : "film");
+    }
+  }, [free]);
   useFrameKey(() => shownShot());
   if (!keys.length) return null;
+  const shot = shownShot();
   return (
     <div
       data-arrow-scroll
       className="scroll-fade flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 *:shrink-0"
     >
       <Saved />
-      {free && (
-        <Section title="Free camera">
-          <FreeCamLensFields />
-        </Section>
+      <div className="px-3 pb-2">
+        <Segmented
+          label="Camera workspace"
+          value={camTab}
+          items={[
+            { id: "film", title: "Film cam" },
+            { id: "free", title: "Free cam" },
+          ]}
+          onChange={setCamTab}
+        />
+      </div>
+      {camTab === "free" ? (
+        <FreeCamPanel />
+      ) : (
+        <>
+          <ShotSection shot={shot} />
+          {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}
+          <Section title="Keyframe easing">
+            <Suspense fallback={null}>
+              <CameraEasePanel />
+            </Suspense>
+          </Section>
+          <FilmAdvancedSection shot={shot} picks={picks} />
+        </>
       )}
-      <CameraTakePicker />
-      <ShotSection shot={shownShot()} />
-      <CameraShotSettings shot={shownShot()} />
-      {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}
-      <Section title="Keyframe easing">
-        <Suspense fallback={null}>
-          <CameraEasePanel />
-        </Suspense>
-      </Section>
     </div>
   );
 }

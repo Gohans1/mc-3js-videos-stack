@@ -536,6 +536,77 @@ const blendHandheld = (from: HandheldConfig[], to: HandheldConfig[], u: number) 
   );
 };
 
+export interface CameraFeelInput {
+  p: THREE.Vector3;
+  l: THREE.Vector3;
+  roll: number;
+  t: number;
+  wave?: number;
+  bob?: number;
+  walked?: number;
+  speed?: number;
+  shakes?: HandheldConfig[];
+  handheld?: unknown;
+}
+
+/** Applies breathing wave, walking view bob, and Camera Shakify handheld motion in-place for both keyed and free cameras. */
+export function applyCameraFeel({
+  p,
+  l,
+  roll,
+  t,
+  wave = 0,
+  bob = 0,
+  walked = t * 0.77,
+  speed = 4.3,
+  shakes,
+  handheld,
+}: CameraFeelInput): { roll: number; handheld: ShakeName | undefined; shakes: HandheldConfig[] } {
+  const step = Math.sin(walked * Math.PI);
+  const lift = Math.abs(Math.cos(walked * Math.PI));
+  const amt = bob * Math.min(speed / 4.3, 1.4) * 0.05;
+  if (Math.abs(amt) > 1e-12 || Math.abs(wave) > 1e-12) {
+    // sideways and down with each step, like the game's bobView, plus a slow figure-eight float
+    const right = tmp2.copy(l).sub(p).cross(UP);
+    if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+    else right.normalize();
+    p.addScaledVector(right, step * amt * 0.5);
+    p.y += -lift * amt + wave * 0.035 * Math.sin(t * 0.9);
+    l.addScaledVector(right, wave * 0.12 * Math.sin(t * 0.47));
+    l.y += wave * 0.08 * Math.sin(t * 0.71 + 1.3);
+    roll += wave * 0.012 * Math.sin(t * 0.53) + step * amt * 0.06;
+  }
+
+  const resolvedShakes =
+    shakes ??
+    (handheld == null || handheld === false
+      ? []
+      : (Array.isArray((handheld as { mix?: unknown[] })?.mix)
+          ? (handheld as { mix: unknown[] }).mix
+          : [handheld]
+        )
+          .map(normHandheld)
+          .filter((v): v is HandheldConfig => !!v));
+  let strongest: HandheldConfig | undefined;
+  for (const shake of resolvedShakes) {
+    const weight = 2 - 2 ** (1 - shake.octaves);
+    for (let octave = 0; octave < shake.octaves; octave++) {
+      const offset = sampleHandheld(
+        {
+          ...shake,
+          speed: shake.speed * 2 ** octave,
+          offset: shake.offset + shake.desync + octave * 0.37,
+        },
+        0.5 ** octave / weight,
+        t,
+      );
+      if (offset) roll = applyShakify(p, l, roll, offset);
+    }
+    if (!strongest || shake.amount >= strongest.amount) strongest = shake;
+  }
+  return { roll, handheld: strongest?.kind, shakes: resolvedShakes };
+}
+
 export function cameraAt(
   t,
   keys,
@@ -628,37 +699,22 @@ export function cameraAt(
     }
   }
   const walked = distance * 0.55;
-  const step = Math.sin(walked * Math.PI);
-  const lift = Math.abs(Math.cos(walked * Math.PI));
-  const amt = bob * Math.min(speed / 4.3, 1.4) * 0.05;
-  // sideways and down with each step, like the game's bobView, plus a slow figure-eight float
-  const right = tmp2.copy(l).sub(p).cross(UP);
-  if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
-  else right.normalize();
-  p.addScaledVector(right, step * amt * 0.5);
-  p.y += -lift * amt + wave * 0.035 * Math.sin(t * 0.9);
-  l.addScaledVector(right, wave * 0.12 * Math.sin(t * 0.47));
-  l.y += wave * 0.08 * Math.sin(t * 0.71 + 1.3);
-  roll += wave * 0.012 * Math.sin(t * 0.53) + step * amt * 0.06;
-
-  const shakes = blendHandheld(c0.hh, c1.hh, shakeU);
-  let strongest: HandheldConfig | undefined;
-  for (const shake of shakes) {
-    const weight = 2 - 2 ** (1 - shake.octaves);
-    for (let octave = 0; octave < shake.octaves; octave++) {
-      const offset = sampleHandheld(
-        {
-          ...shake,
-          speed: shake.speed * 2 ** octave,
-          offset: shake.offset + shake.desync + octave * 0.37,
-        },
-        0.5 ** octave / weight,
-        t,
-      );
-      if (offset) roll = applyShakify(p, l, roll, offset);
-    }
-    if (!strongest || shake.amount >= strongest.amount) strongest = shake;
-  }
+  const {
+    roll: nextRoll,
+    handheld,
+    shakes,
+  } = applyCameraFeel({
+    p,
+    l,
+    roll,
+    t,
+    wave,
+    bob,
+    walked,
+    speed,
+    shakes: blendHandheld(c0.hh, c1.hh, shakeU),
+  });
+  roll = nextRoll;
   const sampleMm =
     lensU <= 0 || c0.mm === c1.mm
       ? c0.mm
@@ -690,7 +746,7 @@ export function cameraAt(
     mm,
     fstop,
     focus,
-    handheld: strongest?.kind,
+    handheld,
     base,
     sample,
   };

@@ -42,7 +42,13 @@ const nudgeAxes = [
   { id: "forward", title: "Dolly" },
 ] as const;
 
-export function CameraFraming({ index: i }: { index: number }) {
+export function CameraFraming({
+  index: i,
+  section = "basic",
+}: {
+  index: number;
+  section?: "basic" | "advanced";
+}) {
   useStudio((s) => s.ready);
   useStudio((s) => s.shotsRev);
   const key = keys[i];
@@ -71,98 +77,151 @@ export function CameraFraming({ index: i }: { index: number }) {
     seekExact(cameraKeyFrameTime(i));
     startCameraPick(i, field);
   };
+  if (section === "advanced") {
+    return (
+      <div className="flex flex-col gap-2">
+        {onRail && (
+          <FieldRow label="Rail position">
+            <ValueBox
+              name="Rail position"
+              value={railU}
+              disabled={disabled || key.muted}
+              min={0}
+              max={1}
+              step={0.01}
+              digits={3}
+              onSave={(railU) =>
+                edit((rows) => {
+                  rows[i].railU = railU;
+                })
+              }
+            />
+          </FieldRow>
+        )}
+        {(onRail ? (["l"] as const) : (["p", "l"] as const)).map((field) => {
+          const title = field === "p" ? "Position" : "Aim";
+          const point = key[field];
+          const anchored = !Array.isArray(point);
+          const target = anchored && typeof point.target === "string" ? point.target : null;
+          const targetValue = target ?? (anchored ? "film" : "world");
+          const items = anchorItems.some((item) => item.value === targetValue)
+            ? anchorItems
+            : [...anchorItems, { value: targetValue, label: target ?? "Film anchor" }];
+          const coordinates = cameraCoordinates(point);
+          return (
+            <div key={field} className="flex flex-col gap-1">
+              <FieldRow label={title}>
+                <Select
+                  items={items}
+                  value={targetValue}
+                  disabled={disabled || (!S.tools?.moveCameraAnchor && !anchored)}
+                  onValueChange={(value) => {
+                    if (value !== null && value !== "film")
+                      selectCameraAnchor(i, field, value === "world" ? null : value);
+                  }}
+                >
+                  <SelectTrigger aria-label={title + " anchor"} className="min-w-0 flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {items.map(({ value, label }) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              {target && (
+                <label className="text-muted-foreground flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={!Array.isArray(point) && point.space === "view"}
+                    disabled={disabled || !S.tools?.moveCameraAnchor}
+                    onChange={(event) =>
+                      selectCameraAnchor(i, field, target, event.target.checked ? "view" : "world")
+                    }
+                  />
+                  {title} View Offset
+                </label>
+              )}
+              <div className="grid grid-cols-3 gap-1.5">
+                {coordinates.map((value, axis) => (
+                  <label
+                    key={axes[axis]}
+                    className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs"
+                  >
+                    {axes[axis]}
+                    <NumberField
+                      name={title + (anchored ? " offset " : " ") + axes[axis]}
+                      size="sm"
+                      disabled={disabled}
+                      value={value}
+                      step={0.05}
+                      digits={3}
+                      className="min-w-0"
+                      onSave={(next) => {
+                        if (next !== undefined) changeCameraCoordinate(i, field, axis, next);
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        <FieldRow label="Swap lens">
+          <Select<number>
+            value={null}
+            disabled={disabled || onRail || parallel}
+            onValueChange={(value) => {
+              if (value !== null) swapCameraLens(i, value);
+            }}
+          >
+            <SelectTrigger aria-label="Swap lens and hold subject size" className="min-w-0 flex-1">
+              <SelectValue placeholder="Keep subject size" />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIME_LENSES.map(({ mm }) => (
+                <SelectItem key={mm} value={mm}>
+                  {mm} mm
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FieldRow>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={disabled || onRail || parallel}
+            onClick={() => addVertigo(i)}
+          >
+            Add Vertigo
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void copyRelativeCamera(i).catch(showError);
+            }}
+          >
+            Copy relative
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={disabled}
+            onClick={() => pasteRelativeCamera(i)}
+          >
+            Paste relative
+          </Button>
+        </div>
+      </div>
+    );
+  }
   return (
     <Section title="Framing">
-      {onRail && (
-        <FieldRow label="Rail position">
-          <ValueBox
-            name="Rail position"
-            value={railU}
-            disabled={disabled || key.muted}
-            min={0}
-            max={1}
-            step={0.01}
-            digits={3}
-            onSave={(railU) =>
-              edit((rows) => {
-                rows[i].railU = railU;
-              })
-            }
-          />
-        </FieldRow>
-      )}
-      {(onRail ? (["l"] as const) : (["p", "l"] as const)).map((field) => {
-        const title = field === "p" ? "Position" : "Aim";
-        const point = key[field];
-        const anchored = !Array.isArray(point);
-        const target = anchored && typeof point.target === "string" ? point.target : null;
-        const targetValue = target ?? (anchored ? "film" : "world");
-        const items = anchorItems.some((item) => item.value === targetValue)
-          ? anchorItems
-          : [...anchorItems, { value: targetValue, label: target ?? "Film anchor" }];
-        const coordinates = cameraCoordinates(point);
-        return (
-          <div key={field} className="flex flex-col gap-1">
-            <FieldRow label={title}>
-              <Select
-                items={items}
-                value={targetValue}
-                disabled={disabled || (!S.tools?.moveCameraAnchor && !anchored)}
-                onValueChange={(value) => {
-                  if (value !== null && value !== "film")
-                    selectCameraAnchor(i, field, value === "world" ? null : value);
-                }}
-              >
-                <SelectTrigger aria-label={title + " anchor"} className="min-w-0 flex-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {items.map(({ value, label }) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            {target && (
-              <label className="text-muted-foreground flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={!Array.isArray(point) && point.space === "view"}
-                  disabled={disabled || !S.tools?.moveCameraAnchor}
-                  onChange={(event) =>
-                    selectCameraAnchor(i, field, target, event.target.checked ? "view" : "world")
-                  }
-                />
-                {title} View Offset
-              </label>
-            )}
-            <div className="grid grid-cols-3 gap-1.5">
-              {coordinates.map((value, axis) => (
-                <label
-                  key={axes[axis]}
-                  className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs"
-                >
-                  {axes[axis]}
-                  <NumberField
-                    name={title + (anchored ? " offset " : " ") + axes[axis]}
-                    size="sm"
-                    disabled={disabled}
-                    value={value}
-                    step={0.05}
-                    digits={3}
-                    className="min-w-0"
-                    onSave={(next) => {
-                      if (next !== undefined) changeCameraCoordinate(i, field, axis, next);
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-        );
-      })}
       <div className="flex flex-wrap gap-1.5">
         <Button
           variant={pick?.field === "l" ? "default" : "secondary"}
@@ -221,26 +280,6 @@ export function CameraFraming({ index: i }: { index: number }) {
           </div>
         ))}
       </div>
-      <FieldRow label="Swap lens">
-        <Select<number>
-          value={null}
-          disabled={disabled || onRail || parallel}
-          onValueChange={(value) => {
-            if (value !== null) swapCameraLens(i, value);
-          }}
-        >
-          <SelectTrigger aria-label="Swap lens and hold subject size" className="min-w-0 flex-1">
-            <SelectValue placeholder="Keep subject size" />
-          </SelectTrigger>
-          <SelectContent>
-            {PRIME_LENSES.map(({ mm }) => (
-              <SelectItem key={mm} value={mm}>
-                {mm} mm
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FieldRow>
       {fitItems.length > 0 && !onRail && (
         <Section title="Fit box" closed>
           <div className="flex flex-wrap gap-1" role="group" aria-label="Fit subjects">
@@ -276,33 +315,6 @@ export function CameraFraming({ index: i }: { index: number }) {
           </div>
         </Section>
       )}
-      <div className="flex flex-wrap gap-1.5">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={disabled || onRail || parallel}
-          onClick={() => addVertigo(i)}
-        >
-          Add Vertigo
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            void copyRelativeCamera(i).catch(showError);
-          }}
-        >
-          Copy relative
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={disabled}
-          onClick={() => pasteRelativeCamera(i)}
-        >
-          Paste relative
-        </Button>
-      </div>
     </Section>
   );
 }

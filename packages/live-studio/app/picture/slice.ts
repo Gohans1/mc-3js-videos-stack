@@ -1,9 +1,14 @@
 // The picture's part of the page state (core/store.ts). Fields kept between visits come from core/prefs.ts
+import type { FocusTargetSpec } from "film-stage/camera";
+
 import type { Ratio } from "../../src/frame.ts";
 import type { FilmViewSize } from "../core/prefs";
 import { initialPreview, type PreviewOptions } from "./preview-model";
 
 export type PreviewStill = { url: string; t: number };
+export type FreeTouched = Partial<
+  Record<"roll" | "wave" | "bob" | "fstop" | "focus" | "handheld", boolean>
+>;
 
 export interface PictureSlice {
   ratio: Ratio; // the film's frame shape (frame.ts), from its package.json
@@ -17,6 +22,13 @@ export interface PictureSlice {
   freeFov: number;
   freeRoll: number;
   freeWave: number;
+  freeBob: number;
+  freeFstop: number;
+  freeFocus: FocusTargetSpec | undefined;
+  freeHandheld: unknown;
+  freeTouched: FreeTouched;
+  freePoseRev: number;
+  freeHistoryRev: number;
   flySpeed: number; // the free camera's, blocks a second (flight.ts)
   nightVision: boolean; // the free camera's view lit up to find the way (nightvision.ts)
   scopes: boolean; // CapCut's Color oscilloscope under the picture (Oscilloscope.tsx, scopes.ts)
@@ -27,7 +39,7 @@ export interface PictureSlice {
   compareGrid: boolean;
   shotList: boolean;
   final: boolean;
-  pickFocus: number | null; // active keyframe index waiting for a click-on-stage focus pick
+  pickFocus: number | "free" | null; // active keyframe index or "free" waiting for click-on-stage focus pick
   still: PreviewStill | null; // the snapshot to compare against (snapshot.ts)
   comparing: boolean; // the snapshot shows over the picture while \ is held
 }
@@ -50,6 +62,13 @@ export const pictureSlice: Omit<
   freeFov: 60,
   freeRoll: 0,
   freeWave: 0,
+  freeBob: 0,
+  freeFstop: 0,
+  freeFocus: undefined,
+  freeHandheld: false,
+  freeTouched: {},
+  freePoseRev: 0,
+  freeHistoryRev: 0,
   preview: initialPreview,
   pinnedAngles: [null, null, null, null],
   compareGrid: false,

@@ -184,6 +184,10 @@ export const drawFinalFrame = async (t = S.t) => {
     fov: free.fov,
     roll: free.roll ?? 0,
     wave: free.wave ?? 0,
+    bob: free.bob ?? 0,
+    fstop: free.fstop ?? 0,
+    focus: free.focus !== undefined ? structuredClone(free.focus) : undefined,
+    handheld: free.handheld !== undefined ? structuredClone(free.handheld) : false,
   });
   if (fr.tools.free.previewEffects !== undefined)
     fr.tools.free.previewEffects = free.previewEffects ?? false;
