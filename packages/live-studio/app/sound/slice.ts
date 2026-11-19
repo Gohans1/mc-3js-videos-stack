@@ -1,4 +1,5 @@
 // The sound lanes' part of the page state (core/store.ts)
+import type { SaveState } from "../core/doc";
 import type { Loudness } from "./meter";
 // A clip on the sound lanes (sound.ts): which list in the film's timeline file, and its place there
 export interface ClipRef {
@@ -10,7 +11,7 @@ export interface SoundSlice {
   sound: boolean; // the film names its sound lanes (package.json "live-studio".soundTimeline)
   clip: ClipRef | null; // the one clip the panel shows; null when none or several are picked
   clips: ClipRef[]; // every clip picked on the lanes (a click, Shift/Ctrl+click, or a box dragged round them)
-  soundSaved: "busy" | "fail" | null;
+  soundSaved: SaveState;
   soundRev: number; // bumped on every change to the lanes, for the parts of the page that show them
   soundLit: readonly string[] | null; // the library sound (or variation family) under the pointer: its clips stand out on the lanes
   liveLanes: boolean; // the page plays the lanes itself (mixer.ts), so a track can be soloed

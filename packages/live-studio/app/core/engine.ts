@@ -7,11 +7,20 @@ import type {
 
 export type { GizmoMode };
 
+export interface FreeView {
+  p: readonly [number, number, number];
+  l: readonly [number, number, number];
+  fov?: number;
+  roll?: number;
+  wave?: number;
+}
+
 export interface StudioEngine {
   render: (t: number, readFrame?: () => void) => Promise<void>;
   finalCanvas: () => HTMLCanvasElement | null;
   setFinal: (on: boolean) => Promise<void> | void;
   setFree: (on: boolean, here?: boolean) => void;
+  flyFree: (view: FreeView) => void;
   setFov: (d: number) => void;
   setGizmo: (mode: GizmoMode) => void;
   isGizmoDragging: () => boolean;
@@ -32,6 +41,7 @@ export const engine: StudioEngine = {
   finalCanvas: () => null,
   setFinal: () => {},
   setFree: () => {},
+  flyFree: () => {},
   setFov: () => {},
   setGizmo: () => {},
   isGizmoDragging: () => false,

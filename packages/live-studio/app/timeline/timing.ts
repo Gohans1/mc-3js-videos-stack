@@ -1,9 +1,9 @@
-import { lightEdit } from "../activity/activity";
 import { EDIT } from "film/edit";
 
 import { remapOutputTime } from "../../src/layer-timing.mjs";
 import { recordLinkage, timingPlan as plan } from "../../src/linkage.mjs";
 import { insertMainFreeze } from "../../src/main-track.mjs";
+import type { SpeedCurveValue } from "../../src/speed-curve.mjs";
 import { setTiming, timing, timingClock } from "../../src/timing-state.mjs";
 import type { Timing } from "../../src/timing.mjs";
 import {
@@ -21,6 +21,7 @@ import {
 } from "../../src/timing.mjs";
 import { type Velocity, velocityCurve } from "../../src/velocity.mjs";
 import { warp } from "../../src/warp.mjs";
+import { lightEdit } from "../activity/activity";
 import { createDoc } from "../core/doc";
 import { DURATION, SHOTS } from "../core/filmMeta";
 import { pruneFreezeSelection, transitionSelection } from "../core/selection";
@@ -82,7 +83,7 @@ export const shotSpeed = (i: number) => {
 };
 export const setShotSpeed = (
   i: number,
-  speed: { rate: number } | { curve: [number, number][]; handles?: [number, number][] } | null,
+  speed: { rate: number } | SpeedCurveValue | null,
   preview = false,
 ) => {
   const [from, to] = sourceShot(i);

@@ -78,6 +78,7 @@ import { set, setPref, useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { reloadNow } from "../playback/transport";
 import { Compose } from "./Compose";
+import { useExitedNotes, useNoteMotion } from "./note-action-motion";
 import { noteActionTarget, noteShotTitle } from "./note-card-meta";
 import {
   ActiveFilterChips,
@@ -87,6 +88,7 @@ import {
   InlineFeedbackBox,
   NoteCardHeader,
   NoteDoneActions,
+  NoteExitSlot,
   NoteFollowups,
   NoteOpenActions,
   NoteStatusGlyph,
@@ -208,9 +210,11 @@ const NoteCard = memo(function NoteCard({
   const target = noteActionTarget(noteNum(n.id), timeText);
   const lit = useLit(`note:${n.id}`);
   const needsWork = isCreatorNeedsWork(n, "open");
+  const { ref: cardRef, noteAttr } = useNoteMotion<HTMLElement>(n.id, "open");
   return (
     <article
-      data-note={n.id}
+      ref={cardRef}
+      data-note={noteAttr}
       data-tone="open"
       data-ai-lit={lit || undefined}
       className={noteSurfaceClass("open", { near, editing, dense: PHONE })}
@@ -292,9 +296,11 @@ const DoneCard = memo(function DoneCard({ p: { n, t } }: { p: Placed }) {
   const timeText = stamp(t);
   const target = noteActionTarget(noteNum(n.id), timeText);
   const lit = useLit(`note:${n.id}`);
+  const { ref: cardRef, noteAttr } = useNoteMotion<HTMLElement>(n.id, "done");
   return (
     <article
-      data-note={n.id}
+      ref={cardRef}
+      data-note={noteAttr}
       data-tone="done"
       data-ai-lit={lit || undefined}
       className={noteSurfaceClass("done", { dense: PHONE })}
@@ -380,9 +386,11 @@ const CheckCard = memo(function CheckCard({ p: { n, t } }: { p: Placed }) {
   const lit = useLit(`note:${n.id}`);
   const fix = n.fixes?.at(-1);
   const [replying, setReplying] = useState(false);
+  const { ref: cardRef, noteAttr } = useNoteMotion<HTMLElement>(n.id, "check");
   return (
     <article
-      data-note={n.id}
+      ref={cardRef}
+      data-note={noteAttr}
       data-tone={fix?.ask ? "ai" : "check"}
       data-ai-lit={lit || undefined}
       className={noteSurfaceClass("check", { asking: !!fix?.ask, dense: PHONE })}
@@ -1131,7 +1139,16 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     }
     return r;
   }, [status, open, readyCheck, askNotes, done, doneOpen, narrowed, notes.length]);
-  const rowOf = useMemo(() => new Map(rows.map((r, i) => [r.key, i])), [rows]);
+  const displayRows = useExitedNotes(
+    rows,
+    (r) => r.key,
+    `${view}|${status}|${scope}|${shot ?? ""}|${facets.join(",")}|${sort}|${q}|${doneOpen ? 1 : 0}`,
+    true,
+  );
+  const rowOf = useMemo(
+    () => new Map(displayRows.flatMap((r, i) => (r.exiting ? [] : [[r.key, i]]))),
+    [displayRows],
+  );
 
   // The card holding the keyboard's focus stays built when it scrolls out of view, or the focus would drop to the page
   const rangeExtractor = useCallback(
@@ -1145,9 +1162,9 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     [rowOf],
   );
   const v = useVirtualizer({
-    count: rows.length,
+    count: displayRows.length,
     getScrollElement: () => list.current,
-    getItemKey: (i) => rows[i].key,
+    getItemKey: (i) => displayRows[i].key,
     rangeExtractor,
     gap: PHONE ? 5 : 8,
     overscan: 6,
@@ -1157,7 +1174,8 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     scrollToFn: scrollVirtualElement,
     useFlushSync: false,
     estimateSize: (i) =>
-      (PHONE ? PHONE_ROW_HEIGHT : DESKTOP_ROW_HEIGHT)[rows[i].kind] ?? (PHONE ? 64 : 116),
+      (PHONE ? PHONE_ROW_HEIGHT : DESKTOP_ROW_HEIGHT)[displayRows[i].item.kind] ??
+      (PHONE ? 64 : 116),
   });
 
   const didMount = useRef(false);
@@ -1503,24 +1521,33 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
                 className="relative h-(--total) w-full"
                 style={{ "--total": `${v.getTotalSize()}px` }}
               >
-                {v.getVirtualItems().map((it) => (
-                  <div
-                    key={it.key}
-                    data-index={it.index}
-                    ref={v.measureElement}
-                    className="absolute inset-x-0 top-0 translate-y-(--start)"
-                    style={{ "--start": `${it.start}px` }}
-                    onFocus={() => {
-                      focused.current = rows[it.index].key;
-                    }}
-                    onBlur={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node | null))
-                        focused.current = null;
-                    }}
-                  >
-                    {row(rows[it.index])}
-                  </div>
-                ))}
+                {v.getVirtualItems().map((it) => {
+                  const entry = displayRows[it.index];
+                  return (
+                    <div
+                      key={it.key}
+                      data-index={it.index}
+                      ref={v.measureElement}
+                      className="absolute inset-x-0 top-0 translate-y-(--start)"
+                      style={{ "--start": `${it.start}px` }}
+                      onFocus={() => {
+                        focused.current = entry.key;
+                      }}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                          focused.current = null;
+                      }}
+                    >
+                      {entry.exiting ? (
+                        <NoteExitSlot id={entry.id} kind={entry.kind}>
+                          {row(entry.item)}
+                        </NoteExitSlot>
+                      ) : (
+                        row(entry.item)
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : allItems.length === 0 && (view !== "board" || anyFiltered) ? (

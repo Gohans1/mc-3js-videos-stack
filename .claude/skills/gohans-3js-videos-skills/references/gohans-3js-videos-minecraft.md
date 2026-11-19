@@ -12,6 +12,8 @@
 ## Using
 
 - Tìm và cho dev xem mẫu 3-6 variants mà m cho là hợp lý nhất
+- Tra cứu đồ 3D bằng CLI (tự động cache, ẩn model hỏng và gộp variant mặc định): `bun run find <từ_khóa> --kind object` (hoặc `block|item|mob|prop`; thêm `--variants` để bung đủ biến thể, `--broken` để xem model thiếu/custom-loader, `--edition vanilla|modded`, `--license`, `--show <id>`)
+- Nhặt asset mod/RP vào `pack/picks.json` + rebuild `picked.zip`: `bun run asset pick <block/item-id> --film films/<name>` (đặt thẳng block/mob vào `placed.json` bằng `bun run asset use <id> --film films/<name> --from <s_nghe>`, hoặc copy prop chung về `src/props/` bằng `bun run asset use prop:global:<id> --film films/<name>`)
 
 ## Repo
 

@@ -1,7 +1,7 @@
 import type { Tools } from "film/scene";
 // Objects the creator drops into the scene (the film's tools.placed, mc-assets/placed.ts), the way Unreal drops an asset from the
-// Content Browser into the level: the Objects library adds one where the pointer lets go or in front of the camera, a click on
-// the picture selects one with a right-click (picture/pointer.ts), and the gizmo (three's TransformControls) moves, turns and sizes it. As with Unreal's Auto Key, a
+// Content Browser into the level: the Objects library adds one where the pointer lets go or in front of the camera, a left-click on
+// the picture selects one (picture/pointer.ts), and the gizmo (three's TransformControls) moves, turns and sizes it. As with Unreal's Auto Key, a
 // gizmo edit keys the object at the playhead: the key there, or a new one. The objects live in one of the film's key files, so
 // undo, saving and an agent's edits are keys.ts and doc.ts's, and each object's keys are an ordinary key row.
 import * as THREE from "three";

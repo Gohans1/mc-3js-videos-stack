@@ -179,7 +179,12 @@ export const buildFinal = () => {
 export const drawFinalFrame = async (t = S.t) => {
   const fr = S.finalRender!,
     free = S.tools!.free;
-  Object.assign(fr.tools.free, { on: free.on, fov: free.fov });
+  Object.assign(fr.tools.free, {
+    on: free.on,
+    fov: free.fov,
+    roll: free.roll ?? 0,
+    wave: free.wave ?? 0,
+  });
   if (fr.tools.free.previewEffects !== undefined)
     fr.tools.free.previewEffects = free.previewEffects ?? false;
   fr.tools.free.p.copy(free.p);

@@ -6,8 +6,10 @@ import {
   composeExitSnapshot,
   composeOrigin,
   computeOriginVector,
+  computeStageComposerPos,
   createNoteFocusRegistry,
   isDockedSheetCramped,
+  isStageAnchoredCompose,
   pointOrigin,
   recordComposeExit,
   resolveExitHeightRange,
@@ -320,5 +322,63 @@ describe("compose-motion state & origin helpers", () => {
     assert.equal(noOriginFixedDock.pctY, 100);
     assert.equal(noOriginFixedDock.ty, 14);
     assert.equal(noOriginFixedDock.sc, 0.94);
+  });
+
+  test("isStageAnchoredCompose anchors desktop pin/stroke/transport creates and spares sidebar/phone edits", () => {
+    const plain = makeCreate(4);
+    const pinned = { ...makeCreate(4), pin: { x: 0.4, y: 0.5, what: "roof" } };
+    const anchored = { ...makeCreate(4), anchor: { x: 0.5, y: 0.88 } };
+    const edited = { ...makeEdit("n1"), pin: { x: 0.4, y: 0.5, what: "roof" } };
+
+    assert.equal(isStageAnchoredCompose(null, false), false);
+    assert.equal(isStageAnchoredCompose(plain, false), false);
+    assert.equal(isStageAnchoredCompose(pinned, false), true);
+    assert.equal(isStageAnchoredCompose(anchored, false), true);
+    assert.equal(isStageAnchoredCompose(edited, false), false);
+    assert.equal(isStageAnchoredCompose(pinned, true), false);
+    assert.equal(isStageAnchoredCompose(anchored, true), false);
+  });
+
+  test("computeStageComposerPos avoids pins, prefers 9:16 outer gutters on wide viewports, and clamps inside view bounds", () => {
+    // 16:9 stage filling 960x540 view: left-side pin puts card cleanly to the right of pin
+    const leftPin = computeStageComposerPos({
+      anchor: { x: 0.25, y: 0.4 },
+      stageRect: { left: 0, top: 0, width: 960, height: 540 },
+      viewSize: { width: 960, height: 540 },
+      cardSize: { width: 320, height: 220 },
+    });
+    assert.equal(leftPin.left, 240 + 24);
+    assert.ok(leftPin.top >= 8 && leftPin.top + 220 <= 532);
+    assert.equal(leftPin.originX, 0);
+
+    // 16:9 stage right-edge pin flips card cleanly to the left of the pin
+    const rightPin = computeStageComposerPos({
+      anchor: { x: 0.85, y: 0.5 },
+      stageRect: { left: 0, top: 0, width: 960, height: 540 },
+      viewSize: { width: 960, height: 540 },
+      cardSize: { width: 320, height: 220 },
+    });
+    assert.ok(rightPin.left + 320 <= Math.round(960 * 0.85) - 24);
+    assert.equal(rightPin.originX, 100);
+
+    // 9:16 stage centered inside wide desktop viewport puts card into dark side gutter
+    const vertical = computeStageComposerPos({
+      anchor: { x: 0.7, y: 0.35 },
+      stageRect: { left: 380, top: 0, width: 360, height: 640 },
+      viewSize: { width: 1120, height: 640 },
+      cardSize: { width: 320, height: 220 },
+    });
+    assert.equal(vertical.left, 380 + 360 + 12);
+
+    // Narrow stage stacks vertically without escaping bounds, and drag offsets clamp cleanly
+    const cornerClamp = computeStageComposerPos({
+      anchor: { x: 0.95, y: 0.95 },
+      stageRect: { left: 0, top: 0, width: 380, height: 300 },
+      viewSize: { width: 380, height: 300 },
+      cardSize: { width: 320, height: 220 },
+      offset: { dx: 900, dy: 900 },
+    });
+    assert.equal(cornerClamp.left, 380 - 320 - 8);
+    assert.equal(cornerClamp.top, 300 - 220 - 8);
   });
 });

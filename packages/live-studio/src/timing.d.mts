@@ -11,6 +11,7 @@ export interface TimingPlan {
     rate?: number;
     curve?: [number, number][];
     handles?: [number, number][];
+    cuts?: import("./speed-curve.mjs").SpeedCuts;
   }[];
   freezes?: {
     at: number;
@@ -106,6 +107,6 @@ export function replaceSpeed(
   speeds: NonNullable<TimingPlan["speeds"]>,
   from: number,
   to: number,
-  value: { rate: number } | { curve: [number, number][]; handles?: [number, number][] } | null,
+  value: { rate: number } | import("./speed-curve.mjs").SpeedCurveValue | null,
 ): NonNullable<TimingPlan["speeds"]>;
 import type { Velocity } from "./velocity.mjs";

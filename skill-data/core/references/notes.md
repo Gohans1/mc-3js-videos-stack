@@ -15,10 +15,14 @@ bun run notes --deleted                     # recoverable deleted notes; --json 
 bun run note restore mw6hr1fm                # restore by the stable ID from the deleted list
 bun run at '#3'                              # where note 3 is heard now, and every row there
                                              # fix it, then look at the new frames (references/review.md)
-bun run note done 3 "what changed"           # the note waits for the creator's check
+bun run note done 3 "what changed" --after renders/still_12s.jpg   # requires --after <imgPath> or --no-after "<reason>"
+bun run note done 3 "moved lamp" --after img.png --cam 2,3,8,0,1.5,0,50 --t 4.2   # custom camera/time if moved
+bun run note done 3 "boosted footstep foley" --no-after "Audio-only level change"  # required reason when no image
 bun run note ask 3 "your question"           # unsure what they want: the question waits the same way
 bun run note learned 3 "the rule, where kept"   # for a note they asked you to remember, once the rule is kept
 ```
+
+`bun run note done` refuses without proof (`--after <image>`) or an explicit explanation (`--no-after "<reason>"`). Pass only one of the two. If the creator asked to move something or the issue's original spot changed so the note's saved angle no longer frames the fix well, capture the After picture from a suitable custom view (`INSPECT=px,py,pz,lx,ly,lz,fov AT=<s> bun run render stills`) and pass `--cam px,py,pz,lx,ly,lz[,fov] --t <s>`: hovering the note shows Before & After side-by-side and clicking After flies the creator directly to your custom camera pose. If new notes arrive while you worked after reading a note (`bun run notes ID`), `done` and `ask` list them automatically (closest to that moment first).
 
 ## States
 
@@ -41,7 +45,7 @@ Use Jump to frame on a single-note toast and Back to previous frame in the playe
 
 Studio shows a toast when a note is answered or approved elsewhere. With AI activity on, the note or its tab lights up, and desktop notices have their own row at the bottom of Studio.
 
-Timeline edits light their tab and the affected track or clip where Studio can identify it. Open AI activity history for the file or command. Sound is optional in Settings and plays only for actions needing attention while Studio is quiet.
+Timeline edits light their tab and the affected track or clip where Studio can identify it. Open AI activity history for the file or command. Resolution toasts and activity sound chime default to ON and can be toggled in Settings.
 
 ## Lessons: what a note teaches
 

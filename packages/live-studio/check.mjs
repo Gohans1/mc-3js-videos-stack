@@ -1,7 +1,7 @@
 // The film contract checked without a studio; HELP below
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ANIMS } from "film-stage/animate";
@@ -10,6 +10,13 @@ import { LOOK_IDS } from "film-stage/looks";
 import { TEXT_ITEM_KEYS } from "film-stage/titles";
 import { TRANSITIONS } from "film-stage/transitions";
 
+import { LOCAL, vaultPath } from "../../scripts/vault.mjs";
+import {
+  extractBlockstateProps,
+  readZipCatalog,
+  readZipMembers,
+  scanGohansPack,
+} from "../mc-assets/src/catalog.ts";
 import { cliArgs, envTypos, needFilm } from "./src/cli.mjs";
 import {
   ADJUSTMENT_KEYS,
@@ -21,6 +28,11 @@ import {
   GRADE_KEYS,
   HANDHELD_KEYS,
   HIT_KEYS,
+  PICK_KEYS,
+  PicksFile,
+  PLACED_KEY_KEYS,
+  PLACED_OBJECT_KEYS,
+  PlacedTimeline,
   problems as schemaProblems,
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
@@ -32,6 +44,7 @@ import {
 } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
+import { placedRelOf } from "./src/placed-lane.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
 import { tell } from "./src/tell.mjs";
@@ -40,17 +53,18 @@ import { clockForTimeline } from "./src/timing-state.mjs";
 import { assertInsideDir } from "./src/voice-map.mjs";
 
 const HELP = `Checks the film's data the way the studio does, without opening it: run it after editing any file in src/timeline,
-src/edit.json or package.json "live-studio". Run inside the film.
+src/edit.json, pack/picks.json or package.json "live-studio". Run inside the film.
   bun run check           the problems, each under the file it is in, or "ok"
   bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}], "warnings": [text]}
-Checks every timeline file against its schema (src/contract.ts, the studio's own), that every other .json in src/ parses,
+Checks every timeline file against its schema (src/contract.ts, the studio's own), placed objects (placed.json: gohans/minecraft/mob IDs,
+mob clips) and pack/picks.json entries against the local vault when present, that every other .json in src/ parses,
 every "look" and "handheld" preset name and misspelt keys, every sound name in the sound timeline (beds, sfx and their "try"
 options) against the sounds the studio can play (with the nearest names or the other film whose own sound it is), and that
 every take said on screen ("by") has its mouth shapes (bun run voice:lips). Warns (⚠, still exit 0) of camera keys setting
-both "mm" and "fov", shot "hits[].t" outside its shot, and on-screen text too brief to read or too small for a phone; where
-it sits and how it reads over the picture: CHECK=text bun run render stills.
+both "mm" and "fov", shot "hits[].t" outside its shot, unpicked mod blocks, invalid blockstate property values, stale picked.zip,
+and on-screen text too brief to read or too small for a phone; where it sits and how it reads over the picture: CHECK=text bun run render stills.
 Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
-Exit 0 ok, 1 problems found. Find a sound or preset by meaning: bun run find <words>.`;
+Exit 0 ok, 1 problems found. Find a sound, 3D object or preset: bun run find <words>.`;
 
 const json = cliArgs(HELP, ["--json"], 0).includes("--json");
 envTypos(["LIVE_PROJECT"]);
@@ -820,6 +834,363 @@ if (
         where: conf.adjustmentTimeline,
         issue: [...late, "  move each earlier or remove it"].join("\n"),
       });
+  }
+}
+
+// ---------- pack/picks.json & placed objects (MC vault & local gohans pack) ----------
+{
+  const vaultRoot = process.env.MC_VAULT_ROOT?.trim()
+    ? vaultPath(process.env.MC_VAULT_ROOT.trim())
+    : LOCAL;
+  const packsDir = join(vaultRoot, "packs");
+  const hasPacksDir = existsSync(packsDir);
+  const vanillaJarPath = join(vaultRoot, "jar/client_assets.zip");
+  const hasVanillaJar = existsSync(vanillaJarPath);
+  const mcassetModelsDir = join(vaultRoot, "mcasset/1.21.11/entity-models/minecraft");
+  const mcassetAnimsDir = join(vaultRoot, "mcasset/1.21.11/entity-models/animations/minecraft");
+  const hasMobsDir = existsSync(mcassetModelsDir);
+
+  const zipCache = new Map();
+  const zipErrors = new Map();
+  const loadZip = (absPath) => {
+    if (zipCache.has(absPath)) return zipCache.get(absPath);
+    if (!existsSync(absPath)) {
+      zipCache.set(absPath, null);
+      return null;
+    }
+    try {
+      const buf = readFileSync(absPath);
+      const entry = { buf, cd: readZipCatalog(buf) };
+      zipCache.set(absPath, entry);
+      return entry;
+    } catch (error) {
+      zipCache.set(absPath, null);
+      zipErrors.set(absPath, error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  };
+
+  let picksData = null;
+  const picksRel = "pack/picks.json";
+  const picksAbs = join(PROJECT, picksRel);
+  if (existsSync(picksAbs)) {
+    try {
+      const parsed = JSON.parse(readFileSync(picksAbs, "utf8"));
+      const errs = schemaProblems(PicksFile, parsed, picksRel);
+      if (errs.length) {
+        found.push({
+          where: picksRel,
+          issue: errs.map((p) => p.split("\n").slice(1).join("\n")).join("\n"),
+        });
+      } else {
+        picksData = parsed;
+      }
+    } catch (e) {
+      found.push({ where: picksRel, issue: `✖ not valid JSON: ${e.message}` });
+    }
+  }
+
+  const validPicks = [];
+  if (Array.isArray(picksData)) {
+    const vanillaForRp = hasVanillaJar ? loadZip(vanillaJarPath) : null;
+    const vanillaRpModels = new Map();
+    const hasRpVanillaModel = (z, bid) => {
+      if (z.cd.has(`assets/minecraft/models/block/${bid}.json`)) return true;
+      if (!vanillaForRp) return false;
+      const bsPath = `assets/minecraft/blockstates/${bid}.json`;
+      if (!vanillaForRp.cd.has(bsPath)) return false;
+      let refs = vanillaRpModels.get(bsPath);
+      if (!refs) {
+        refs = [];
+        try {
+          const raw = readZipMembers(vanillaForRp.buf, vanillaForRp.cd, [bsPath]).get(bsPath);
+          if (raw) {
+            const parsed = JSON.parse(Buffer.from(raw).toString("utf8"));
+            const pushModels = (node) => {
+              for (const one of Array.isArray(node) ? node : [node]) {
+                if (typeof one?.model === "string") {
+                  const clean = one.model.includes(":") ? one.model.split(":")[1] : one.model;
+                  refs.push(`assets/minecraft/models/${clean}.json`);
+                }
+              }
+            };
+            for (const v of Object.values(parsed?.variants ?? {})) pushModels(v);
+            for (const m of parsed?.multipart ?? []) if (m?.apply) pushModels(m.apply);
+          }
+        } catch {}
+        vanillaRpModels.set(bsPath, refs);
+      }
+      return refs.some((r) => z.cd.has(r));
+    };
+    picksData.forEach((p, i) => {
+      if (!p || typeof p !== "object") return;
+      keyTypos(
+        picksRel,
+        nearKeys(p, PICK_KEYS).map(
+          ([k, near]) => `[${i}] "${k}": no key pick reads; did you mean "${near}"?`,
+        ),
+      );
+      if (
+        !p.jar ||
+        p.jar.includes("..") ||
+        p.jar.includes("/") ||
+        p.jar.includes("\\") ||
+        p.jar.includes(":") ||
+        isAbsolute(p.jar)
+      ) {
+        found.push({
+          where: picksRel,
+          issue: `✖ [${i}] invalid jar filename "${p.jar}"`,
+        });
+        return;
+      }
+      if (hasPacksDir) {
+        const jarAbs = join(packsDir, p.jar);
+        const z = loadZip(jarAbs);
+        if (!z) {
+          const zErr = zipErrors.get(jarAbs);
+          found.push({
+            where: picksRel,
+            issue: zErr
+              ? `✖ [${i}] corrupt archive "${p.jar}" (${zErr})`
+              : `✖ [${i}] jar "${p.jar}" not found in vault/packs`,
+          });
+          return;
+        }
+        validPicks.push(p);
+        for (const bid of p.blocks ?? []) {
+          const bs = `assets/${p.namespace}/blockstates/${bid}.json`;
+          const rpFallback = p.namespace === "minecraft" && hasRpVanillaModel(z, bid);
+          if (!z.cd.has(bs) && !rpFallback) {
+            found.push({
+              where: picksRel,
+              issue: `✖ [${i}] "${p.jar}" has no blockstate ${bs}`,
+            });
+          }
+        }
+        for (const iid of p.items ?? []) {
+          const def = `assets/${p.namespace}/items/${iid}.json`;
+          const mod = `assets/${p.namespace}/models/item/${iid}.json`;
+          if (!z.cd.has(def) && !z.cd.has(mod)) {
+            found.push({
+              where: picksRel,
+              issue: `✖ [${i}] "${p.jar}" has no item definition (${def}) or model (${mod})`,
+            });
+          }
+        }
+      } else {
+        validPicks.push(p);
+      }
+    });
+    if (picksData.length > 0) {
+      const zipPath = join(PROJECT, "assets/public/picked.zip");
+      if (!existsSync(zipPath)) {
+        warnings.push(
+          `⚠ ${picksRel}: assets/public/picked.zip is missing; rebuild with bun run asset pick or bun run link`,
+        );
+      } else if (statSync(zipPath).mtimeMs + 50 < statSync(picksAbs).mtimeMs) {
+        warnings.push(
+          `⚠ ${picksRel}: pack/picks.json is newer than assets/public/picked.zip; rebuild with bun run asset pick or bun run link`,
+        );
+      }
+    }
+  }
+
+  const placedRel = placedRelOf(conf);
+  const placedAbs = join(PROJECT, placedRel);
+  const placedBroken = found.some((p) => p.where === placedRel);
+  const placedParses =
+    !placedBroken ||
+    !/not (valid )?JSON/.test(found.find((p) => p.where === placedRel)?.issue ?? "");
+  if (existsSync(placedAbs) && !Object.values(conf.keyFiles ?? {}).includes("placed")) {
+    warnings.push(
+      `⚠ ${placedRel} exists on disk, but package.json "live-studio".keyFiles does not map "${placedRel}": "placed" (Studio will not load or collaborate on it)`,
+    );
+  }
+  if (existsSync(placedAbs) && placedParses) {
+    const placed = readJson(placedRel);
+    if (placed && typeof placed === "object" && !Array.isArray(placed)) {
+      if (!Object.values(conf.keyFiles ?? {}).includes("placed") && !placedBroken) {
+        const errs = schemaProblems(PlacedTimeline, placed, placedRel);
+        if (errs.length) {
+          found.push({
+            where: placedRel,
+            issue: errs.map((p) => p.split("\n").slice(1).join("\n")).join("\n"),
+          });
+        }
+      }
+      {
+        let gohansMap = null;
+        let vanillaErrReported = false;
+        const getGohans = () =>
+          (gohansMap ??= new Map(scanGohansPack().map((item) => [item.name, item])));
+
+        const readBlockstatePropsFromZip = (zipAbs, bsRel) => {
+          const z = loadZip(zipAbs);
+          if (!z || !z.cd.has(bsRel)) return { exists: false };
+          const raw = readZipMembers(z.buf, z.cd, [bsRel]).get(bsRel);
+          if (!raw) return { exists: true, props: {} };
+          try {
+            return {
+              exists: true,
+              props: extractBlockstateProps(JSON.parse(Buffer.from(raw).toString("utf8"))) ?? {},
+            };
+          } catch {
+            return { exists: true };
+          }
+        };
+
+        const propMismatch = (objName, obj, validProps) => {
+          if (
+            !obj.properties ||
+            typeof obj.properties !== "object" ||
+            Array.isArray(obj.properties) ||
+            validProps === undefined
+          )
+            return;
+          for (const [k, val] of Object.entries(obj.properties)) {
+            const allowed = validProps[k];
+            if (!allowed) {
+              warnings.push(
+                `⚠ ${placedRel} "${objName}": property "${k}" not in blockstate (known: ${Object.keys(validProps).join(", ") || "none"})`,
+              );
+            } else if (!allowed.includes(String(val))) {
+              warnings.push(
+                `⚠ ${placedRel} "${objName}": property ${k}="${val}" not in blockstate (allowed: ${allowed.join("|")})`,
+              );
+            }
+          }
+        };
+
+        for (const [objName, obj] of Object.entries(placed)) {
+          if (!obj || typeof obj !== "object") continue;
+          keyTypos(placedRel, [
+            ...nearKeys(obj, PLACED_OBJECT_KEYS).map(
+              ([k, near]) => `"${objName}" "${k}": no key placed reads; did you mean "${near}"?`,
+            ),
+            ...(Array.isArray(obj.keys)
+              ? obj.keys.flatMap((k, i) =>
+                  k && typeof k === "object"
+                    ? nearKeys(k, PLACED_KEY_KEYS).map(
+                        ([key, near]) =>
+                          `"${objName}".keys[${i}] "${key}": no key placed reads; did you mean "${near}"?`,
+                      )
+                    : [],
+                )
+              : []),
+          ]);
+
+          const what = String(obj.what ?? "");
+          if (what.startsWith("block:")) {
+            const parts = what.split(":");
+            const ns = parts[1] ?? "";
+            const id = parts.slice(2).join(":");
+            if (ns === "gohans") {
+              const hit = getGohans().get(id);
+              if (!hit) {
+                found.push({
+                  where: placedRel,
+                  issue: `✖ "${objName}": unknown gohans block "${what}"`,
+                });
+              } else {
+                propMismatch(objName, obj, hit.props ?? {});
+              }
+            } else if (ns === "minecraft") {
+              const rpPick = validPicks.find(
+                (p) => p.namespace === "minecraft" && (p.blocks ?? []).includes(id),
+              );
+              let checkedRp = false;
+              if (rpPick && hasPacksDir) {
+                const bs = readBlockstatePropsFromZip(
+                  join(packsDir, rpPick.jar),
+                  `assets/minecraft/blockstates/${id}.json`,
+                );
+                if (bs.exists) {
+                  if (bs.props) propMismatch(objName, obj, bs.props);
+                  checkedRp = true;
+                }
+              }
+              if (!checkedRp && hasVanillaJar) {
+                const vz = loadZip(vanillaJarPath);
+                const bsRel = `assets/minecraft/blockstates/${id}.json`;
+                const vErr = zipErrors.get(vanillaJarPath);
+                if (vErr) {
+                  if (!vanillaErrReported) {
+                    vanillaErrReported = true;
+                    found.push({
+                      where: placedRel,
+                      issue: `✖ corrupt vanilla client_assets.zip (${vErr})`,
+                    });
+                  }
+                } else if (!vz?.cd.has(bsRel)) {
+                  found.push({
+                    where: placedRel,
+                    issue: `✖ "${objName}": unknown vanilla block "${what}"`,
+                  });
+                } else if (obj.properties) {
+                  const bs = readBlockstatePropsFromZip(vanillaJarPath, bsRel);
+                  if (bs.props) propMismatch(objName, obj, bs.props);
+                }
+              }
+            } else {
+              const anyRow = (picksData ?? []).find(
+                (p) => p.namespace === ns && (p.blocks ?? []).includes(id),
+              );
+              const pickRow = validPicks.find(
+                (p) => p.namespace === ns && (p.blocks ?? []).includes(id),
+              );
+              if (!anyRow) {
+                warnings.push(
+                  `⚠ ${placedRel} "${objName}": ${what} is not in pack/picks.json (add with bun run asset pick ${what} unless loaded custom in src/scene.ts)`,
+                );
+              } else if (pickRow && hasPacksDir && obj.properties) {
+                const bsRel = `assets/${ns}/blockstates/${id}.json`;
+                const bs = readBlockstatePropsFromZip(join(packsDir, pickRow.jar), bsRel);
+                if (bs.exists && bs.props) propMismatch(objName, obj, bs.props);
+              }
+            }
+          } else if (what.startsWith("mob:") && hasMobsDir) {
+            const mobId = what.slice(4);
+            if (!mobId || mobId.includes("..") || mobId.includes("\\") || isAbsolute(mobId)) {
+              found.push({
+                where: placedRel,
+                issue: `✖ "${objName}": invalid mob id "${what}"`,
+              });
+              continue;
+            }
+            const modelPath = join(mcassetModelsDir, `${mobId}.json`);
+            if (!existsSync(modelPath)) {
+              found.push({
+                where: placedRel,
+                issue: `✖ "${objName}": unknown mob "${what}" (missing ${mobId}.json in vault mcasset)`,
+              });
+              continue;
+            }
+            const animPath = join(mcassetAnimsDir, `${mobId}.json`);
+            let validClips = new Set();
+            if (existsSync(animPath)) {
+              try {
+                const raw = JSON.parse(readFileSync(animPath, "utf8"));
+                validClips = new Set(Object.keys(raw?.animations ?? {}));
+              } catch {}
+            }
+            const checkClip = (clipName, slot) => {
+              if (clipName === undefined || clipName === "none") return;
+              if (!validClips.has(clipName)) {
+                found.push({
+                  where: placedRel,
+                  issue: `✖ "${objName}" ${slot}: mob "${mobId}" has no clip "${clipName}" (available: ${[...validClips].join(", ") || "none"})`,
+                });
+              }
+            };
+            checkClip(obj.clip, "clip");
+            if (Array.isArray(obj.keys)) {
+              obj.keys.forEach((k, i) => checkClip(k?.clip, `keys[${i}].clip`));
+            }
+          }
+        }
+      }
+    }
   }
 }
 

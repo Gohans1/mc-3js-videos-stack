@@ -201,10 +201,14 @@ const useAiTabs = () => {
   const enabled = useStudio((s) => s.aiActivity);
   const lit = useActivity((s) => s.lit);
   return (id: string, open: string, aliases: readonly string[] = []) => {
-    const on = enabled &&
+    const on =
+      enabled &&
       (id !== open || (id !== "notes" && id !== "lessons")) &&
       [id, ...aliases].some((name) => `tab:${name}` in lit);
-    return { "data-ai-lit": on || undefined, "aria-description": on ? "Recent activity" : undefined };
+    return {
+      "data-ai-lit": on || undefined,
+      "aria-description": on ? "Recent activity" : undefined,
+    };
   };
 };
 
@@ -227,19 +231,12 @@ const tool =
 const coreTool =
   "data-active:bg-tint data-active:text-foreground data-active:[&_svg]:text-primary-text";
 export function Library({ lessonsWidthPx }: { lessonsWidthPx: number }) {
-  const { sound, text, cam, placed, open, check, asking } = useParts(),
+  const { sound, text, cam, open, check, asking } = useParts(),
     lib = useStudio((s) => s.lib),
     aiTab = useAiTabs();
   const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
   const available = (id: Lib) =>
-    isCore(id) ||
-    (id === "sound"
-      ? sound
-      : id === "text"
-        ? text
-        : id === "transition" || id === "adjust"
-          ? cam
-          : placed);
+    isCore(id) || id === "objects" || (id === "sound" ? sound : id === "text" ? text : cam);
   const value = available(lib) ? lib : "notes";
   const shown = LIBS;
   return (
@@ -309,7 +306,7 @@ export function Library({ lessonsWidthPx }: { lessonsWidthPx: number }) {
               <div className={panel}>
                 <TextLibrary />
               </div>
-            ) : value === "objects" && placed ? (
+            ) : value === "objects" ? (
               <div className={panel}>
                 <ObjectsPanel part="library" />
               </div>
@@ -598,15 +595,8 @@ export function Side({
           : side;
   const shown =
     isCore(raw) ||
-    (raw === "sound"
-      ? sound
-      : raw === "text"
-        ? text
-        : raw === "objects"
-          ? placed
-          : raw === "keys"
-            ? keys
-            : cam);
+    raw === "objects" ||
+    (raw === "sound" ? sound : raw === "text" ? text : raw === "keys" ? keys : cam);
   const value = shown ? raw : "notes";
   const sideOrder: SideTab[] = [
     "notes",
@@ -659,11 +649,7 @@ export function Side({
               Notes
               <NotesCount open={open} check={check} asking={asking} />
             </Tabs.Tab>
-            <Tabs.Tab
-              value="lessons"
-              {...aiTab("lessons", value)}
-              className={cn(tab, coreTab)}
-            >
+            <Tabs.Tab value="lessons" {...aiTab("lessons", value)} className={cn(tab, coreTab)}>
               <BookOpenText aria-hidden />
               Lessons
             </Tabs.Tab>
@@ -674,7 +660,12 @@ export function Side({
               <Network aria-hidden />
               Ports
             </Tabs.Tab>
-            <Tabs.Tab value="cli" {...aiTab("cli", value)} data-cli-tab className={cn(tab, coreTab)}>
+            <Tabs.Tab
+              value="cli"
+              {...aiTab("cli", value)}
+              data-cli-tab
+              className={cn(tab, coreTab)}
+            >
               <Terminal aria-hidden />
               CLI
             </Tabs.Tab>
@@ -691,16 +682,26 @@ export function Side({
             <Tabs.Tab value="openfilm" {...aiTab("openfilm", value)} className={tab}>
               Effects
             </Tabs.Tab>
-            <Tabs.Tab value="objects" {...aiTab("objects", value)} disabled={!placed} className={tab}>
+            <Tabs.Tab value="objects" {...aiTab("objects", value)} className={tab}>
               Objects
             </Tabs.Tab>
             <Tabs.Tab value="keys" {...aiTab("keys", value)} disabled={!keys} className={tab}>
               Keyframes
             </Tabs.Tab>
-            <Tabs.Tab value="transition" {...aiTab("transition", value)} disabled={!cam} className={tab}>
+            <Tabs.Tab
+              value="transition"
+              {...aiTab("transition", value)}
+              disabled={!cam}
+              className={tab}
+            >
               Transitions
             </Tabs.Tab>
-            <Tabs.Tab value="cam" {...aiTab("cam", value, ["speed", "adjust", "anim"])} disabled={!cam} className={tab}>
+            <Tabs.Tab
+              value="cam"
+              {...aiTab("cam", value, ["speed", "adjust", "anim"])}
+              disabled={!cam}
+              className={tab}
+            >
               {layer ? "Adjustment" : "Camera"}
             </Tabs.Tab>
           </Tabs.List>
@@ -722,7 +723,7 @@ export function Side({
               <AudioTab />
             ) : value === "text" && text ? (
               <TextTab />
-            ) : value === "objects" && placed ? (
+            ) : value === "objects" ? (
               <ObjectsPanel />
             ) : value === "cam" && cam ? (
               <CameraTab />

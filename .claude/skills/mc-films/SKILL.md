@@ -1,6 +1,6 @@
 ---
 name: mc-films
-description: CLI for making Minecraft films in Three.js in the mc-films monorepo (bun run at the repo root and in films/<name>). Use when making, editing, reviewing, rendering or delivering a film; placing shots, camera moves, transitions, narration, sound effects or music; answering the creator's notes; finding what plays at a second; measuring a buried voice, a popping frame or YouTube banding; or adding a command to the repo's CLI. Triggers include "make a film", "fix this shot", "render a draft", "mix the sound", "generate the voice", "answer the notes", "what is at 35s", "is it ready for YouTube", "add a CLI command". Read it before running any of this repo's commands.
+description: CLI for making Minecraft films in Three.js in the mc-films monorepo (bun run at the repo root and in films/<name>). Use when making, editing, reviewing, rendering or delivering a film; finding or placing 3D blocks, items, mobs or custom props, picking mod/resource-pack assets, placing shots, camera moves, transitions, narration, sound effects or music; answering the creator's notes; finding what plays at a second; measuring a buried voice, a popping frame or YouTube banding; or adding a command to the repo's CLI. Triggers include "make a film", "find block/item/mob/prop", "fix this shot", "render a draft", "mix the sound", "generate the voice", "answer the notes", "what is at 35s", "is it ready for YouTube", "add a CLI command". Read it before running any of this repo's commands.
 allowed-tools: Bash(bun run:*)
 ---
 

@@ -17,6 +17,7 @@ import {
   SIDE_MIN,
   wideLayout,
 } from "./components/splitter-layout";
+import { getPendingSnapshot, setAutoSave } from "./core/doc";
 import type { Bind, Elements } from "./core/state";
 import { useStudio } from "./core/store";
 import { useDeckShrinkLatch } from "./lessons/deck-latch";
@@ -40,7 +41,9 @@ const VoicePlaygroundWorkbenchDialog = lazy(() =>
     default: m.VoicePlaygroundWorkbenchDialog,
   })),
 );
-const VoiceRegionEditor = lazy(() => import("./sound/VoiceRegionEditor").then((m) => ({default:m.VoiceRegionEditor})));
+const VoiceRegionEditor = lazy(() =>
+  import("./sound/VoiceRegionEditor").then((m) => ({ default: m.VoiceRegionEditor })),
+);
 
 const subscribeViewport = (onChange: () => void) => {
   window.addEventListener("resize", onChange);
@@ -107,6 +110,17 @@ export function App() {
         : lessonsSideW
       : sideW;
   const review = useStudio((s) => s.review);
+  const manualConfirm = useStudio((s) => s.manualConfirm);
+  useEffect(() => {
+    setAutoSave(!manualConfirm);
+  }, [manualConfirm]);
+  useEffect(() => {
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (getPendingSnapshot().length > 0) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, []);
   const sideTab = useStudio((s) => s.side);
   const libraryTab = useStudio((s) => s.lib);
   const cliPanelMode = useCliStore((s) => s.panelMode);
@@ -293,7 +307,11 @@ export function App() {
             <VoicePlaygroundWorkbenchDialog />
           </Suspense>
         )}
-        {regionOpen && <Suspense fallback={null}><VoiceRegionEditor /></Suspense>}
+        {regionOpen && (
+          <Suspense fallback={null}>
+            <VoiceRegionEditor />
+          </Suspense>
+        )}
       </TooltipProvider>
     </Toaster>
   );

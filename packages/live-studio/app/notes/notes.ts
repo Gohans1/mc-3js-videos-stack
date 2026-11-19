@@ -11,7 +11,7 @@ import { playActivityChime } from "../activity/chime";
 import { camLine } from "../camera/camline";
 import { PHONE } from "../core/device";
 import { onDocMutated } from "../core/doc";
-import { engine } from "../core/engine";
+import { engine, type FreeView } from "../core/engine";
 import { shotEnd, shotIndex } from "../core/film";
 // Notes: what's wrong where, said while watching. Nothing typed is lost: every keystroke is kept on the device, a note waits on
 // the device until the server has it, × only moves a note aside with an undo, and the server writes the file atomically.
@@ -31,6 +31,7 @@ import {
   composeExitSnapshot,
   type ComposeOrigin,
   composeOrigin,
+  isStageAnchoredCompose,
   originOf,
   pointOrigin,
   recordComposeExit,
@@ -45,8 +46,10 @@ import {
   inkTimes,
   inkWords,
   restoreInk,
+  setInk,
 } from "./ink";
-import { noteNumberMap, noteSecond, resolveNoteMedia } from "./note-card-meta";
+import { signalNoteAction } from "./note-action-motion";
+import { noteFreeView, noteNumberMap, noteSecond, resolveNoteMedia } from "./note-card-meta";
 import { matchesNoteFilters, sortPlacedNotes } from "./note-views-model";
 import { momentStrip, pinCrop, snapshot } from "./pictures";
 import { type ActivePinNote, activeStageNotes, type PinLike, resolvePinLayout } from "./pinfade";
@@ -60,6 +63,7 @@ import {
   normalizeStoredCompose,
   type Note,
   type Pin,
+  type StageAnchor,
 } from "./slice";
 
 export const noteAt = (n: Note) =>
@@ -430,9 +434,13 @@ const announceNoteChanges = (previous: Note[], notes: Note[]) => {
     return [{ note, status: reply?.ask ? "has a question" : "ready to check" }];
   });
   if (!updates.length) return;
-  const notices = activityNotice();
+  for (const { note } of updates) {
+    signalNoteAction(note.id, noteState(note) === "done" ? "done" : "reply");
+  }
   lightNotes(updates.map(({ note }) => note.id));
-  if (updates.some(({ note }) => noteState(note) === "check")) playActivityChime();
+  if (!get().noteNotify) return;
+  const notices = activityNotice();
+  playActivityChime();
   if (updates.length > 1) {
     const id = notices.add({
       title: `${updates.length} notes updated`,
@@ -463,7 +471,8 @@ const announceNoteChanges = (previous: Note[], notes: Note[]) => {
         const current = get().notes.find((n) => n.id === note.id);
         if (!current) return;
         const preview = S.el?.view;
-        if (PHONE || get().review || (preview && !preview.getClientRects().length)) reviewNote(current);
+        if (PHONE || get().review || (preview && !preview.getClientRects().length))
+          reviewNote(current);
         else goToNote(current);
       },
     },
@@ -519,6 +528,17 @@ export const changeNote = (id: string, op: NoteChange, said?: string) => {
     say(n);
     return false;
   }
+  const motionKind =
+    "approve" in op
+      ? "approve"
+      : "done" in op
+        ? op.done
+          ? "done"
+          : "reopen"
+        : "again" in op
+          ? "reply"
+          : null;
+  if (motionKind) signalNoteAction(id, motionKind);
   changed(get().notes.map((x) => (x.id === id ? n : x)));
   queueOp(id, op);
   flushNotes();
@@ -532,6 +552,7 @@ const editNote = (id: string, words: string) => {
   if (!was || !words || words === was.text) return;
   const n = applied(was, { text: words });
   if (typeof n === "string") return;
+  if (noteState(was) !== noteState(n) && noteState(n) === "open") signalNoteAction(id, "reopen");
   changed(get().notes.map((x) => (x.id === id ? n : x)));
   queueOp(id, { text: words });
   set({ saved: "busy" });
@@ -608,13 +629,22 @@ const openBox = (compose: Compose, words = "", focus = true, origin?: ComposeOri
           ? (active.closest<HTMLElement>("[data-note]")?.dataset.note ?? null)
           : null;
   }
-  set({ compose, settingsOpen: false, side: "notes", lib: "notes" });
+  if (isStageAnchoredCompose(compose, PHONE)) {
+    set({ compose, settingsOpen: false });
+  } else {
+    set({ compose, settingsOpen: false, side: "notes", lib: "notes" });
+  }
   setDraft(words);
   drawPins();
   if (focus) ui.focusNote();
   else ui.cancelNoteFocus();
 };
-export const openNote = async (pin: Pin | null, focus = true, origin?: ComposeOrigin) => {
+export const openNote = async (
+  pin: Pin | null,
+  focus = true,
+  origin?: ComposeOrigin,
+  anchor?: StageAnchor,
+) => {
   if (savingNote) await savingNote;
   const { compose, draft } = get();
   if (compose?.kind === "edit") {
@@ -630,6 +660,7 @@ export const openNote = async (pin: Pin | null, focus = true, origin?: ComposeOr
   if (S.playing) setPlaying(false);
   void engine.render(S.t);
   const i = shotIndex(S.t);
+  const resolvedAnchor = anchor ?? (pin ? { x: pin.x, y: pin.y } : undefined);
   openBox(
     {
       kind: "create",
@@ -637,6 +668,7 @@ export const openNote = async (pin: Pin | null, focus = true, origin?: ComposeOr
       shot: i,
       shotName: S.comments[i] ?? "",
       pin,
+      ...(resolvedAnchor ? { anchor: resolvedAnchor } : {}),
       resume: !!wasPlaying,
       wasPlaying,
       spoken: captionAt(S.t) ?? undefined,
@@ -645,6 +677,15 @@ export const openNote = async (pin: Pin | null, focus = true, origin?: ComposeOr
     focus,
     origin,
   );
+};
+export const setComposeAnchor = (anchor: StageAnchor) => {
+  const { compose } = get();
+  if (!compose || compose.kind !== "create") return;
+  if (compose.anchor?.x === anchor.x && compose.anchor?.y === anchor.y) return;
+  const next = { ...compose, anchor };
+  const orig = composeOrigin(compose);
+  if (orig) setComposeOrigin(next, orig);
+  set({ compose: next });
 };
 export const mergeVoiceNoteDraft = (draft: string, voiceName: string, voiceId: string): string => {
   const line = `Use voice: ${voiceName} (${voiceId})`;
@@ -664,10 +705,22 @@ export const openVoiceNote = (voiceName: string, voiceId: string, origin?: Compo
   if (next !== get().draft) setDraft(next);
 };
 // A drawing tool's first stroke opens the note it belongs to; later strokes, at any second, join it
-export const ensureNote = (origin?: ComposeOrigin) => {
-  if (!get().compose) openNote(null, false, origin);
+export const ensureNote = (origin?: ComposeOrigin, anchor?: StageAnchor) => {
+  if (!get().compose) openNote(null, false, origin, anchor);
 };
 inkHooks.changed = () => setDraft(get().draft);
+inkHooks.anchor = (anchor) => setComposeAnchor(anchor);
+inkHooks.cancelEmpty = () => {
+  const { compose, draft, refs } = get();
+  if (
+    compose?.kind === "create" &&
+    !compose.pin &&
+    !draft.trim() &&
+    !refs.length &&
+    !inkMarks.length
+  )
+    closeNote("cancel", { keepInk: true });
+};
 refHooks.changed = () => setDraft(get().draft);
 export const restoreDraft = () => {
   restoreInk();
@@ -718,7 +771,10 @@ export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
     origin,
   );
 };
-export const closeNote = (reason: "save" | "cancel" = "cancel") => {
+export const closeNote = (
+  reason: "save" | "cancel" = "cancel",
+  opts: { keepInk?: boolean } = {},
+) => {
   const current = get().compose;
   if (current) {
     recordComposeExit(current, reason, {
@@ -730,6 +786,7 @@ export const closeNote = (reason: "save" | "cancel" = "cancel") => {
   const resume = current?.resume;
   set({ compose: null });
   clearInk();
+  if (!opts.keepInk && get().ink) setInk(null);
   setRefs([]);
   setDraft("");
   ui.blurNote();
@@ -831,6 +888,7 @@ const saveNoteNow = async () => {
   } catch {}
   await engine.render(S.t);
   S.dirty = true;
+  signalNoteAction(n.id, "save");
   changed([...get().notes, n]);
   keepUnsent([
     ...unsent(),
@@ -862,12 +920,14 @@ export const saveNote = () => {
 export const removeNote = (n: Note) => {
   const waiting = unsent().find((x) => x.note.id === n.id);
   if (waiting) keepUnsent(unsent().filter((x) => x.note.id !== n.id));
+  signalNoteAction(n.id, "delete");
   changed(get().notes.filter((x) => x.id !== n.id));
   queueOp(n.id, { remove: true });
   flushNotes();
   const existing = get().compose;
   if (existing?.kind === "edit" && existing.id === n.id) closeNote();
   showUndo(`Note at ${n.time} deleted`, () => {
+    signalNoteAction(n.id, "restore");
     changed([...get().notes, n]);
     queueOp(n.id, { restore: true, text: n.text });
     if (waiting) keepUnsent([...unsent(), waiting]);
@@ -897,16 +957,67 @@ export const rememberNote = (n: Note, scope: "film" | "all" | null) =>
       ? `The AI will keep what this note teaches, for ${scope === "all" ? "every film" : "this film"}`
       : "No longer to remember",
   );
-export const goToNote = (n: Note, newVisit = !get().review) => {
-  const at = noteAt(n);
+const sameFreeView = (a: FreeView | undefined, b: FreeView | undefined) => {
+  if (!a || !b) return false;
+  const near = (x: number, y: number) => Math.abs(x - y) <= 1e-3;
+  return (
+    a.p.every((v, idx) => near(v, b.p[idx] ?? Number.NaN)) &&
+    a.l.every((v, idx) => near(v, b.l[idx] ?? Number.NaN)) &&
+    (b.fov === undefined || near(a.fov ?? b.fov, b.fov)) &&
+    near(a.roll ?? 0, b.roll ?? 0) &&
+    near(a.wave ?? 0, b.wave ?? 0)
+  );
+};
+
+const readLiveFreeView = (): FreeView | undefined => {
+  const f = S.tools?.free;
+  if (!f?.on) return undefined;
+  return {
+    p: [+f.p.x.toFixed(3), +f.p.y.toFixed(3), +f.p.z.toFixed(3)],
+    l: [+f.l.x.toFixed(3), +f.l.y.toFixed(3), +f.l.z.toFixed(3)],
+    fov: f.fov,
+    roll: f.roll ?? 0,
+    wave: f.wave ?? 0,
+  };
+};
+
+export type NoteJumpMode = "auto" | "before" | "after";
+
+export const goToNote = (n: Note, newVisit = !get().review, mode: NoteJumpMode = "auto") => {
+  const media = noteMedia(n);
+  const hasAfterTarget = media.afterCam !== null || media.afterTime !== null;
+  const useAfter =
+    mode === "after" || (mode === "auto" && noteState(n) !== "open" && hasAfterTarget);
+  const at = useAfter && media.afterTime !== null ? media.afterTime : noteAt(n);
   if (!Number.isFinite(at) || at < 0 || at > DURATION) {
     say("This note is outside the current preview");
     return;
   }
-  if (!PHONE && (newVisit || !get().noteReturn) && Math.abs(S.t - at) >= 0.5 / FPS) {
-    set({ noteReturn: { at: S.t, clock: timingClock } });
+  const wasView = readLiveFreeView();
+  const wasFree = wasView !== undefined;
+  const wantsFree = useAfter && media.afterCam !== null ? true : Boolean(n.freeCam);
+  const targetView =
+    useAfter && media.afterCam !== null ? media.afterCam : n.freeCam ? noteFreeView(n) : null;
+  const willChangeTime = Math.abs(S.t - at) >= 0.5 / FPS;
+  const willChangeCam = wantsFree
+    ? !wasFree || (targetView !== null && !sameFreeView(wasView, targetView))
+    : wasFree;
+  if (!PHONE && (newVisit || !get().noteReturn) && (willChangeTime || willChangeCam)) {
+    set({
+      noteReturn: {
+        at: S.t,
+        clock: timingClock,
+        ...(wasFree ? { free: true, view: wasView } : { free: false }),
+      },
+    });
   }
   if (S.playing) setPlaying(false);
+  if (wantsFree) {
+    if (targetView) engine.flyFree(targetView);
+    else if (!wasFree) engine.setFree(true, true);
+  } else if (wasFree) {
+    engine.setFree(false);
+  }
   seek(at);
 };
 
@@ -919,7 +1030,10 @@ const noteReturnTime = ({ clock, at }: NonNullable<ReturnType<typeof get>["noteR
     return visibleOutputAt({ ...timingClock, segments }, clock.sourceAt(at)) ?? moved.from;
   }
   if (placement?.kind === "gap" && moved?.kind === "gap")
-    return moved.from + ((at - placement.from) / (placement.to - placement.from)) * (moved.to - moved.from);
+    return (
+      moved.from +
+      ((at - placement.from) / (placement.to - placement.from)) * (moved.to - moved.from)
+    );
   return remapOutputTime(clock, timingClock, at);
 };
 
@@ -928,6 +1042,12 @@ export const returnFromNote = () => {
   if (!position) return;
   set({ noteReturn: null });
   if (S.playing) setPlaying(false);
+  if (position.free) {
+    if (position.view) engine.flyFree(position.view);
+    else if (!(S.tools?.free.on ?? get().free)) engine.setFree(true, true);
+  } else if (position.free === false && (S.tools?.free.on ?? get().free)) {
+    engine.setFree(false);
+  }
   seek(noteReturnTime(position));
   setReview(false);
 };
@@ -936,33 +1056,85 @@ export const playNote = (n: Note) => {
   seek(Math.max(0, noteAt(n) - 2));
   setPlaying(true);
 };
-// The film as it is now at a note's moment, drawn as the note's own picture was (its pin, its strokes): what the creator compares
-// against that picture. Cleared on doc edits, undo/redo, and entering Review mode; never caches before S.render is ready.
+// The film as it is now at a note's moment and saved camera view, drawn as the note's own picture was (its pin, its strokes):
+// what the creator compares against that picture. Serialized so switching notes never races FreeCam state.
 let nowPicturesRev = -1;
 const nowPictures = new Map<string, { key: string; url: string }>();
+let nowPictureQueue: Promise<unknown> = Promise.resolve();
 onDocMutated(invalidatePictures);
-export const nowPicture = async (n: Note) => {
-  if (!S.render) return null;
-  const rev = get().pictureRev;
-  if (nowPicturesRev !== rev) {
-    nowPictures.clear();
-    nowPicturesRev = rev;
-  }
-  const at = noteAt(n),
-    marks = (n.marks as Mark[] | undefined) ?? [];
-  const key = JSON.stringify([at, n.pin ?? null, marks]);
-  const cached = nowPictures.get(n.id);
-  if (!cached || cached.key !== key) {
-    let url: string | null = null;
-    try {
-      url = await snapshot(n.pin, at, marks);
-      await engine.render(S.t);
-      S.dirty = true;
-    } catch {}
-    if (get().pictureRev !== rev) return null;
-    if (url !== null) nowPictures.set(n.id, { key, url });
-  }
-  return nowPictures.get(n.id)?.url ?? null;
+export const nowPicture = (n: Note): Promise<string | null> => {
+  const run = nowPictureQueue.then(async () => {
+    if (!S.render) return null;
+    const rev = get().pictureRev;
+    if (nowPicturesRev !== rev) {
+      nowPictures.clear();
+      nowPicturesRev = rev;
+    }
+    const at = noteAt(n),
+      marks = (n.marks as Mark[] | undefined) ?? [];
+    const wantFree = Boolean(n.freeCam);
+    const wantView = wantFree ? noteFreeView(n) : null;
+    const liveView = readLiveFreeView();
+    const matchesLiveView = wantFree
+      ? Boolean(liveView && (!wantView || sameFreeView(liveView, wantView)))
+      : !S.tools?.free.on;
+    const finalOn = Boolean(get().final);
+    const key = JSON.stringify([at, n.pin ?? null, marks, wantFree, wantView, finalOn]);
+    const cached = nowPictures.get(n.id);
+    if (!cached || cached.key !== key) {
+      const f = S.tools?.free;
+      const saved =
+        f && !matchesLiveView && (!wantFree || wantView !== null)
+          ? {
+              on: f.on,
+              px: f.p.x,
+              py: f.p.y,
+              pz: f.p.z,
+              lx: f.l.x,
+              ly: f.l.y,
+              lz: f.l.z,
+              fov: f.fov,
+              roll: f.roll ?? 0,
+              wave: f.wave ?? 0,
+            }
+          : null;
+      let url: string | null = null;
+      try {
+        if (f && saved) {
+          if (wantFree && wantView) {
+            f.on = true;
+            f.p.set(wantView.p[0], wantView.p[1], wantView.p[2]);
+            f.l.set(wantView.l[0], wantView.l[1], wantView.l[2]);
+            if (wantView.fov !== undefined) f.fov = wantView.fov;
+            f.roll = wantView.roll ?? 0;
+            f.wave = wantView.wave ?? 0;
+          } else {
+            f.on = false;
+          }
+        }
+        url = await snapshot(n.pin, at, marks, matchesLiveView);
+      } catch {
+      } finally {
+        if (f && saved) {
+          f.on = saved.on;
+          f.p.set(saved.px, saved.py, saved.pz);
+          f.l.set(saved.lx, saved.ly, saved.lz);
+          f.fov = saved.fov;
+          f.roll = saved.roll;
+          f.wave = saved.wave;
+        }
+        try {
+          await engine.render(S.t);
+        } catch {}
+        S.dirty = true;
+      }
+      if (get().pictureRev !== rev) return null;
+      if (url !== null) nowPictures.set(n.id, { key, url });
+    }
+    return nowPictures.get(n.id)?.url ?? null;
+  });
+  nowPictureQueue = run.catch(() => {});
+  return run;
 };
 
 // ---------- The Review room (ReviewRoom.tsx): the notes alone beside the picture

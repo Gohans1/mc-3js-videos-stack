@@ -1,13 +1,29 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { expandTemplate } from "../../film-stage/src/openfilm-recipes.ts";
 import { NATIVE_LANES, nativeLane, placeTransition } from "./asset-timelines.mjs";
+import { PicksFile, PlacedTimeline } from "./contract.ts";
 import { openOpenFilm } from "./openfilm.mjs";
+import {
+  AssetUsageError,
+  editPlacedObject,
+  pickObjects,
+  placedRelOf,
+  placeObject,
+  timelinePicks,
+  timelinePlaced,
+  unpickObjects,
+} from "./placed-lane.mjs";
 
-export const ASSET_LANES = ["effects", ...Object.keys(NATIVE_LANES)];
+export const ASSET_LANES = ["effects", ...Object.keys(NATIVE_LANES), "placed", "picks"];
 
 export function openAssets(project, conf, options = {}) {
   const effects = openOpenFilm(project, conf, options);
   const native = (name) => nativeLane(project, conf, name, options);
   const timeline = (name = "effects") => {
+    if (name === "placed") return timelinePlaced(project, conf, options);
+    if (name === "picks") return timelinePicks(project);
     if (name !== "effects") return native(name).view();
     const current = effects.view();
     return {
@@ -17,6 +33,9 @@ export function openAssets(project, conf, options = {}) {
     };
   };
   const use = (recipe, input = {}) => {
+    if (typeof recipe === "string") {
+      return placeObject(project, conf, { ...input, id: recipe, options });
+    }
     const from = input.from ?? 0,
       to = input.to ?? from + (recipe.durationMs ?? 3000) / 1000;
     if (!Number.isFinite(from) || from < 0 || !Number.isFinite(to) || to <= from)
@@ -85,12 +104,26 @@ export function openAssets(project, conf, options = {}) {
     }
     throw new Error(`No placement for ${recipe.id}; use custom code in src/scene.ts`);
   };
-  const change = (target, props, remove = false) => {
+  const change = (target, props, remove = false, extra = {}) => {
     const split = target.indexOf(":"),
       name = split < 0 ? "effects" : target.slice(0, split),
       id = split < 0 ? target : target.slice(split + 1);
-    if (!ASSET_LANES.includes(name))
-      throw new Error(`Unknown lane ${name}; lanes: ${ASSET_LANES.join(", ")}`);
+    if (name === "placed") {
+      return editPlacedObject(project, conf, id, { ...extra, props, remove, options });
+    }
+    if (extra.from !== undefined) {
+      throw new AssetUsageError(
+        `--from applies to placed objects only; put "from" inside --props for ${name}`,
+        2,
+      );
+    }
+    if (!ASSET_LANES.includes(name) || name === "picks")
+      throw new AssetUsageError(
+        name === "picks"
+          ? "Use bun run asset pick / unpick <id> instead of edit/remove on picks"
+          : `Unknown lane ${name}; lanes: ${ASSET_LANES.join(", ")}`,
+        2,
+      );
     if (name !== "effects") return native(name).change(id, props, remove);
     if (!remove) return effects.edit(id, props);
     const current = effects.read();
@@ -115,6 +148,17 @@ export function openAssets(project, conf, options = {}) {
         spec.schema.parse(lane.read().data);
         files.push(lane.file);
       }
+    const placedRel = placedRelOf(conf);
+    const placedAbs = join(project, placedRel);
+    if (existsSync(placedAbs)) {
+      PlacedTimeline.parse(JSON.parse(readFileSync(placedAbs, "utf8")));
+      files.push(placedAbs);
+    }
+    const picksAbs = join(project, "pack/picks.json");
+    if (existsSync(picksAbs)) {
+      PicksFile.parse(JSON.parse(readFileSync(picksAbs, "utf8")));
+      files.push(picksAbs);
+    }
     return { valid: true, files };
   };
   return {
@@ -122,6 +166,8 @@ export function openAssets(project, conf, options = {}) {
     use,
     change,
     validate,
+    pick: (ids, opts = {}) => pickObjects(project, { ids, ...opts }),
+    unpick: (ids, opts = {}) => unpickObjects(project, conf, { ids, ...opts }),
     plan: (recipe, from, to) => {
       if (recipe.render !== "group")
         throw new Error("plan requires a template; bun run find --kind template");

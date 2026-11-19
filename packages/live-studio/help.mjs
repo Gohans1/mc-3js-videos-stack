@@ -26,12 +26,13 @@ const GROUPS = [
       history:
         "named versions and autosaves for one film; restore with a recovery version kept first (--help)",
       check:
-        "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
+        "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json or pack/picks.json",
       at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",
-      find: "native/imported assets and code helpers; BM25 then independent OpenFilm semantic candidates; --json for AI, --offline for cached-only search",
-      "assets:semantic": "incremental multimodal search: plan, build/resume, query, remove/redo or backup; API only with --yes (--help)",
+      find: "native/imported assets, 3D blocks/items/mobs/props and code helpers; BM25 + OpenFilm semantic; --kind object searches 3D",
+      "assets:semantic":
+        "incremental multimodal search: plan, build/resume, query, remove/redo or backup; API only with --yes (--help)",
       asset:
-        "place and edit assets selected with find; JSON output, editable targets and heard seconds",
+        "pick/unpick pack blocks & items, place/edit 2D lanes & placed objects, or copy Global props to src/props/",
     },
   ],
   [
@@ -82,7 +83,7 @@ const GROUPS = [
     "The creator's notes",
     {
       notes: "the creator's open notes (up to 25; ID for one in full, --shot N, --sort, --limit)",
-      note: "answer one: bun run note done (waits for the creator's check), ask, learned, or restore a deleted note (--help)",
+      note: 'answer one: bun run note done (requires --after <img> or --no-after "<reason>", optional --cam/--t custom view), ask, learned, or restore (--help)',
     },
   ],
   [
@@ -276,7 +277,7 @@ const rest = Object.keys(scripts).filter((k) => !said.has(k));
 if (rest.length) out.push("\nOther", ...rest.map((k) => `  ${k.padEnd(18)}${scripts[k]}`));
 out.push(
   "\nDirect maintenance scripts",
-  "  mocap catalogue, sweep, review/eval; asset pick/vendor; timeline formatting",
+  "  mocap catalogue, sweep, review/eval; asset pick/unpick; timeline formatting",
   "  bun run help direct — paths, working directory and workflow: bun run skills get core --ref film",
   "  bun run help --json — all command IDs; bun run help <id> --json — arguments, flags, cost and effects",
 );
@@ -304,8 +305,10 @@ if (film) {
     ],
     ...Object.entries(conf.keyFiles ?? {}).map(([f, name]) => [
       f,
-      `${name}: keyed rows (moves, poses, values over time)`,
+      `${name}: keyed rows (moves, poses, placed objects, values over time)`,
     ]),
+    ["pack/picks.json", "cherry-picked mod/RP blocks & items for assets/public/picked.zip"],
+    ["src/props/", "custom TypeScript/GLB props for this film"],
     ["renders/", "what render, sheet, framecheck write"],
     ["notes/", "the creator's notes (read them with bun run notes)"],
     [

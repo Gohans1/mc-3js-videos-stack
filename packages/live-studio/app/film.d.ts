@@ -15,6 +15,8 @@ declare module "film/scene" {
     p: THREE.Vector3;
     l: THREE.Vector3;
     fov: number;
+    roll?: number;
+    wave?: number;
   }
   export interface OpticsTelemetry {
     shot: number;
@@ -89,7 +91,12 @@ declare module "film/scene" {
       camera?: THREE.Camera,
       tracks?: Record<string, { hidden?: boolean }>,
       timeAt?: (item: unknown) => number,
-    ): { i: number; box: [number, number, number, number]; corners?: [number, number][]; anchor?: [number, number] }[];
+    ): {
+      i: number;
+      box: [number, number, number, number];
+      corners?: [number, number][];
+      anchor?: [number, number];
+    }[];
     fonts: { id: string; title: string; css: string; tip?: string }[];
     categories?: { text: readonly string[]; shape: readonly string[] };
     eases?: readonly string[];
@@ -150,7 +157,7 @@ declare module "film/scene" {
     (t: number, options?: FrameOptions): void;
     renderFrame?: (t: number, options?: FrameOptions) => Promise<void>;
     prepareFrame?: (t: number) => Promise<void>;
-      needsPreparation?: (t: number) => boolean;
+    needsPreparation?: (t: number) => boolean;
     disposeOpenFilm?: () => void;
     inspectOpenFilm?: () => import("film-stage/openfilm").OverlayInspection[];
     tools: Tools;

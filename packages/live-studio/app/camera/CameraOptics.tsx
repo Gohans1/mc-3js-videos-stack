@@ -1,7 +1,10 @@
 import { MAX_FOV, MIN_FOV } from "film-kit/lens";
-import { fovOf, mmOf, PRIME_LENSES, SHAKES } from "film-stage/camera";
+import { type FocusTargetSpec, fovOf, mmOf, PRIME_LENSES, SHAKES } from "film-stage/camera";
+import { Crosshair } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -10,22 +13,65 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { FieldRow, SliderRow, ValueBox } from "../components/inspector";
+import { FieldRow, Segmented, SliderRow, ValueBox } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
-import { say, useStudio } from "../core/store";
+import { Tip } from "../components/Tip";
+import { S } from "../core/state";
+import { say, set, useStudio } from "../core/store";
 import { focusLabel } from "../timeline/cam-attributes";
 import {
   edit,
+  focusTargetNames,
   keys,
   lensAspectAt,
   type LensField,
   opticsOfKey,
   preview,
+  resetLensField,
   restore,
+  setFocus,
+  setFstop,
   setLens,
   snapshot,
   writeLens,
 } from "./cam";
+
+const AXES = ["X", "Y", "Z"] as const;
+
+interface FocusState {
+  mode: "auto" | "meters" | "target";
+  meters: number;
+  target: string;
+  offset: [number, number, number];
+}
+
+const readFocusState = (raw: unknown): FocusState => {
+  if (raw == null) return { mode: "auto", meters: 3, target: "", offset: [0, 0, 0] };
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return { mode: "meters", meters: Math.max(0.05, raw), target: "", offset: [0, 0, 0] };
+  }
+  if (typeof raw === "string") {
+    return { mode: "target", meters: 3, target: raw, offset: [0, 0, 0] };
+  }
+  if (typeof raw === "object" && "target" in raw) {
+    const obj = raw as { target?: unknown; offset?: unknown };
+    const off =
+      Array.isArray(obj.offset) && obj.offset.length === 3
+        ? ([Number(obj.offset[0]) || 0, Number(obj.offset[1]) || 0, Number(obj.offset[2]) || 0] as [
+            number,
+            number,
+            number,
+          ])
+        : ([0, 0, 0] as [number, number, number]);
+    return {
+      mode: "target",
+      meters: 3,
+      target: typeof obj.target === "string" ? obj.target : "",
+      offset: off,
+    };
+  }
+  return { mode: "auto", meters: 3, target: "", offset: [0, 0, 0] };
+};
 
 const doc = { snapshot, restore };
 const DEG = 180 / Math.PI;
@@ -64,6 +110,33 @@ export function CameraOptics({ index: i }: { index: number }) {
   const selectedShake =
     key.handheld === undefined ? "inherit" : (shake?.kind ?? (handheld ? "mix" : "off"));
   const prime = PRIME_LENSES.find((lens) => Math.abs(lens.mm - mm) < 1e-6);
+  const pickingFocus = useStudio((s) => s.pickFocus === i);
+  const focusState = readFocusState(key.focus);
+  const targets = focusTargetNames();
+  const [customTargetKey, setCustomTargetKey] = useState<string | null>(null);
+  const syncKey = `${i}:${focusState.target}`;
+  const targetModeCustom = customTargetKey === syncKey;
+  const focusModeUi = targetModeCustom && focusState.mode === "auto" ? "target" : focusState.mode;
+  const offsetSnap = useRef<string | null>(null);
+  const focusSelectValue = targetModeCustom
+    ? "__custom__"
+    : targets.includes(focusState.target)
+      ? focusState.target
+      : focusState.target
+        ? "__custom__"
+        : (targets[0] ?? "__custom__");
+  const targetItems = [
+    ...targets.map((name) => ({ value: name, label: name })),
+    { value: "__custom__", label: "Custom target name..." },
+  ];
+  const commitTarget = (target: string, offset = focusState.offset, apply?: typeof preview) => {
+    const clean = target.trim();
+    if (!clean) return;
+    const spec: FocusTargetSpec = offset.some((n) => Math.abs(n) > 1e-6)
+      ? { target: clean, offset }
+      : clean;
+    setFocus(i, spec, apply);
+  };
   return (
     <>
       <SliderRow
@@ -75,6 +148,11 @@ export function CameraOptics({ index: i }: { index: number }) {
         digits={1}
         unit="°"
         hint={key.fov === undefined && key.mm === undefined ? "From shot" : undefined}
+        reset={{
+          label: "Reset FOV to default",
+          disabled: disabled || (key.fov === undefined && key.mm === undefined),
+          onClick: () => resetLensField(i, "fov"),
+        }}
         {...field("fov")}
         onTextSave={(text) => {
           if (!/mm$/i.test(text)) return false;
@@ -123,44 +201,183 @@ export function CameraOptics({ index: i }: { index: number }) {
         digits={1}
         step={0.1}
         unit="f"
+        reset={{
+          label: "Reset aperture to default",
+          disabled: disabled || key.fstop === undefined,
+          onClick: () => setFstop(i, undefined),
+        }}
         {...field("fstop")}
         hint={optics.fstop === 0 ? "Deep focus" : key.fstop === undefined ? "From shot" : undefined}
       />
-      <FieldRow label="Focus distance">
-        <NumberField
-          name="Focus distance (m)"
-          size="sm"
-          className="w-24"
-          value={typeof optics.focus === "number" ? optics.focus : undefined}
-          disabled={disabled}
-          min={0.05}
-          step={0.1}
-          digits={2}
-          empty
-          placeholder="Automatic"
-          onSave={(v) =>
-            edit((rows) => {
-              if (v === undefined) delete rows[i].focus;
-              else rows[i].focus = v;
-            })
-          }
-        />
-        {key.focus !== undefined && (
-          <Button
-            size="sm"
-            variant="quiet"
-            disabled={disabled}
-            onClick={() =>
-              edit((rows) => {
-                delete rows[i].focus;
-              })
+      <FieldRow label="Focus">
+        <Segmented
+          label="Focus mode"
+          value={focusModeUi}
+          fit
+          items={[
+            { id: "auto", title: "Auto" },
+            { id: "meters", title: "Manual" },
+            { id: "target", title: "Target" },
+          ]}
+          onChange={(m) => {
+            if (disabled) return;
+            if (m === "auto") {
+              setCustomTargetKey(null);
+              setFocus(i, undefined);
+            } else if (m === "meters") {
+              setCustomTargetKey(null);
+              const fallback =
+                focusState.mode === "meters"
+                  ? focusState.meters
+                  : Math.max(0.1, Math.round((S.tools?.optics?.focusM ?? 3) * 100) / 100);
+              setFocus(i, fallback);
+            } else {
+              const pick = focusState.target || targets[0] || "";
+              if (pick) {
+                setCustomTargetKey(null);
+                commitTarget(pick);
+              } else {
+                setCustomTargetKey(syncKey);
+              }
             }
-          >
-            Inherit
-          </Button>
-        )}
+          }}
+        />
       </FieldRow>
+      {focusModeUi !== "target" && (
+        <FieldRow label="Focus distance">
+          <NumberField
+            name="Focus distance (m)"
+            size="sm"
+            className="w-24"
+            value={typeof optics.focus === "number" ? optics.focus : undefined}
+            disabled={disabled}
+            min={0.05}
+            step={0.1}
+            digits={2}
+            empty
+            placeholder="Automatic"
+            onSave={(v) => setFocus(i, v)}
+          />
+          {key.focus !== undefined && (
+            <Button
+              size="sm"
+              variant="quiet"
+              disabled={disabled}
+              onClick={() => {
+                setCustomTargetKey(null);
+                setFocus(i, undefined);
+              }}
+            >
+              Inherit
+            </Button>
+          )}
+        </FieldRow>
+      )}
+      {focusModeUi === "target" && (
+        <div className="flex flex-col gap-2">
+          {targets.length > 0 && (
+            <FieldRow label="Subject">
+              <Select
+                value={focusSelectValue}
+                items={targetItems}
+                disabled={disabled}
+                onValueChange={(v) => {
+                  if (!v || v === "__custom__") {
+                    setCustomTargetKey(syncKey);
+                    return;
+                  }
+                  setCustomTargetKey(null);
+                  commitTarget(v);
+                }}
+              >
+                <SelectTrigger aria-label="Focus target" className="h-7 min-w-0 flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {targetItems.map((it) => (
+                    <SelectItem key={it.value} value={it.value}>
+                      {it.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+          )}
+          {(targets.length === 0 || focusSelectValue === "__custom__") && (
+            <FieldRow label={targets.length ? "Name" : "Subject"}>
+              <Input
+                key={syncKey}
+                size="sm"
+                aria-label="Focus target name"
+                placeholder="e.g. Steve.head"
+                disabled={disabled}
+                defaultValue={focusState.target}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+                onBlur={(e) => {
+                  setCustomTargetKey(null);
+                  commitTarget(e.currentTarget.value);
+                }}
+              />
+            </FieldRow>
+          )}
+          <FieldRow label="Offset">
+            {AXES.map((axis, idx) => (
+              <div key={axis} className="flex min-w-0 flex-1 items-center gap-1">
+                <span className="text-muted-foreground text-xs select-none">{axis}</span>
+                <NumberField
+                  name={`Focus offset ${axis}`}
+                  size="xs"
+                  disabled={disabled}
+                  value={focusState.offset[idx]}
+                  step={0.05}
+                  digits={2}
+                  live={(v) => {
+                    const next: [number, number, number] = [...focusState.offset];
+                    next[idx] = v;
+                    offsetSnap.current ??= snapshot();
+                    commitTarget(focusState.target, next, preview);
+                  }}
+                  onCancel={() => {
+                    if (offsetSnap.current !== null) {
+                      restore(offsetSnap.current);
+                      offsetSnap.current = null;
+                    }
+                  }}
+                  onSave={(v) => {
+                    if (offsetSnap.current !== null) {
+                      restore(offsetSnap.current);
+                      offsetSnap.current = null;
+                    }
+                    if (v === undefined) return;
+                    const next: [number, number, number] = [...focusState.offset];
+                    next[idx] = v;
+                    commitTarget(focusState.target, next);
+                  }}
+                />
+              </div>
+            ))}
+          </FieldRow>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        <Tip label="Click any object on the frame to measure and lock focus distance (Esc to cancel)">
+          <Button
+            variant="quiet"
+            size="sm"
+            disabled={disabled}
+            aria-pressed={pickingFocus}
+            onClick={() => set({ pickFocus: pickingFocus ? null : i })}
+          >
+            <Crosshair data-icon="inline-start" aria-hidden />
+            {pickingFocus ? "Click frame to focus (Esc)" : "Pick focus on frame"}
+          </Button>
+        </Tip>
+      </div>
       {optics.focus !== undefined &&
+        focusModeUi !== "target" &&
         (typeof optics.focus !== "number" || key.focus === undefined) && (
           <p className="text-muted-foreground text-xs">
             {focusLabel(optics.focus)}
@@ -176,7 +393,10 @@ export function CameraOptics({ index: i }: { index: number }) {
             edit((rows) => {
               if (choice === "inherit") delete rows[i].handheld;
               else if (choice === "off") rows[i].handheld = false;
-              else if (SHAKES.some((name) => name === choice)) rows[i].handheld = choice;
+              else {
+                const shakeName = SHAKES.find((name) => name === choice);
+                if (shakeName) rows[i].handheld = shakeName;
+              }
             })
           }
         >
@@ -230,6 +450,11 @@ export function CameraOptics({ index: i }: { index: number }) {
         digits={1}
         unit="°"
         origin={0}
+        reset={{
+          label: "Reset Roll to default",
+          disabled: disabled || key.roll === undefined,
+          onClick: () => resetLensField(i, "roll"),
+        }}
         {...field("roll", DEG)}
       />
       <SliderRow
@@ -240,6 +465,11 @@ export function CameraOptics({ index: i }: { index: number }) {
         step={0.05}
         digits={2}
         unit="×"
+        reset={{
+          label: "Reset Sway to default",
+          disabled: disabled || key.wave === undefined,
+          onClick: () => resetLensField(i, "wave"),
+        }}
         {...field("wave")}
       />
       <SliderRow
@@ -250,6 +480,11 @@ export function CameraOptics({ index: i }: { index: number }) {
         step={0.05}
         digits={2}
         unit="×"
+        reset={{
+          label: "Reset step bob to default",
+          disabled: disabled || key.bob === undefined,
+          onClick: () => resetLensField(i, "bob"),
+        }}
         {...field("bob")}
       />
     </>

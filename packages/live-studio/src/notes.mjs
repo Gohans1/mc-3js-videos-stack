@@ -18,7 +18,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
-import { applyChange, wholeNote } from "./note-state.mjs";
+import { applyChange, noteState, wholeNote } from "./note-state.mjs";
 
 const BACKUP_EVERY = 5 * 60e3;
 
@@ -50,11 +50,12 @@ const archiveLines = (file) => {
 };
 const archiveDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const hasThreadText = (entries, key) =>
-  entries == null || (
-    Array.isArray(entries) && entries.every((entry) =>
-      typeof entry?.[key] === "string" && (entry.at == null || typeof entry.at === "string"),
-    )
-  );
+  entries == null ||
+  (Array.isArray(entries) &&
+    entries.every(
+      (entry) =>
+        typeof entry?.[key] === "string" && (entry.at == null || typeof entry.at === "string"),
+    ));
 const isArchivedNote = (n) =>
   typeof n?.id === "string" &&
   /^[a-z0-9]+$/.test(n.id) &&
@@ -78,7 +79,9 @@ const parseArchiveLine = (bytes) => {
 };
 
 export const readDeletedNotes = (project) =>
-  archiveLines(join(project, "notes/deleted.jsonl")).map(parseArchiveLine).filter((note) => note !== undefined);
+  archiveLines(join(project, "notes/deleted.jsonl"))
+    .map(parseArchiveLine)
+    .filter((note) => note !== undefined);
 
 // #N, as every command names a note (notes, note, at): its place among every note written, in the order written, the ones
 // the creator deleted counted too. Keep historical slots even when an archive row fails recovery validation. id -> {n, gone}
@@ -167,6 +170,20 @@ export const createNotes = (project) => {
   };
   const savePicture = (name, dataUrl) =>
     writeFileSync(join(img, `${name}.jpg`), Buffer.from(dataUrl.split(",")[1], "base64"));
+  const SAFE_IMG_FILE = /^[a-z0-9]+(?:_crop|_strip|_f\d+|_r\d+|_fix\d+)?\.(jpg|jpeg|png|webp)$/;
+  const saveAfterDataUrl = (id, idx, dataUrl) => {
+    const m = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(
+      String(dataUrl ?? ""),
+    );
+    if (!m) return { ok: false, why: "afterData must be a PNG, JPEG, or WebP base64 image URL" };
+    const ext = m[1] === "jpeg" ? "jpg" : m[1];
+    const rel = `notes/img/${id}_fix${idx}.${ext}`;
+    const target = join(img, `${id}_fix${idx}.${ext}`);
+    const bytes = Buffer.from(m[2], "base64");
+    if (!bytes.length) return { ok: false, why: "after image data is empty" };
+    writeFileSync(target, bytes, { flush: true });
+    return { ok: true, rel };
+  };
 
   // A new note, with its pictures (data URLs): the film's (img, crop, strip, frames) and the creator's own pasted ones (refs).
   // What has been done to a note is the server's to say
@@ -239,7 +256,21 @@ export const createNotes = (project) => {
       }
       if (archived) replace(deleted, Buffer.concat(kept));
     } else if (n) {
-      const r = applyChange(n, c);
+      let nextChange = c;
+      if (c.fix?.afterData !== undefined) {
+        if (typeof c.fix.what !== "string" || !c.fix.what.trim())
+          return { ok: false, why: "a fix says what changed" };
+        if (noteState(n) === "done")
+          return {
+            ok: false,
+            why: "this note is done, closed by the creator: it is yours again only when they reopen it",
+          };
+        const saved = saveAfterDataUrl(n.id, n.fixes?.length ?? 0, c.fix.afterData);
+        if (!saved.ok) return saved;
+        const { afterData: _drop, ...restFix } = c.fix;
+        nextChange = { ...c, fix: { ...restFix, after: saved.rel } };
+      }
+      const r = applyChange(n, nextChange);
       if (r.ok) write(all);
       return r;
     } else if (!c.remove) return { ok: false, why: `no such note: ${id}` };
@@ -247,7 +278,10 @@ export const createNotes = (project) => {
   };
 
   const picture = (name) => {
-    const p = join(img, `${name}.jpg`);
+    const clean = String(name ?? "");
+    const file = SAFE_IMG_FILE.test(clean) ? clean : `${clean}.jpg`;
+    if (!SAFE_IMG_FILE.test(file)) return null;
+    const p = join(img, file);
     return existsSync(p) ? readFileSync(p) : null;
   };
 

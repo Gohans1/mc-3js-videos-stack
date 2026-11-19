@@ -4,6 +4,12 @@ import { equalJson, mergeEdits } from "../../src/merge-edits.mjs";
 import { getFile, postJson } from "./net";
 import { say, showError } from "./store";
 
+export type SaveState = "busy" | "fail" | "pending" | null;
+export interface PendingDoc {
+  name: string;
+  label: string;
+}
+
 export interface Doc<T> {
   readonly data: T | null;
   load: (query?: string, onJson?: (got: unknown) => void) => Promise<Response | null>; // the server's answer, for what else it sent (the sound library)
@@ -17,7 +23,7 @@ export interface Hooks<T> {
   changed: () => void; // after every change to data
   tidy?: (d: T) => void; // after every kept edit and every load, before drawing
   received?: (before: T, after: T) => void;
-  saved?: (state: "busy" | "fail" | null) => void;
+  saved?: (state: SaveState) => void;
   // After undo, redo or a load put other data in (was: what it held): picks kept as places in a list may now point at other
   // things (an undone paste leaves the next clip at its place), so each file drops its picks when its lists changed length
   replaced?: (was: T | null) => void;
@@ -34,13 +40,54 @@ interface Side {
   partners: Set<Side>; // changed together with this one since the last save
   later: (ms?: number) => void;
   load: () => Promise<unknown>;
-  saved?: (state: "busy" | "fail" | null) => void;
+  saved?: (state: SaveState) => void;
   swap: (snap: string) => string; // undo/redo: put snap in, give back what it held
   accept: (sent: unknown, data: unknown) => void;
+  revert: () => void;
   cancelTimer: () => void;
 }
 const sides = new Set<Side>();
 const pending = new Set<Promise<void>>();
+let autoSave = true;
+let pendingSnapshot: readonly PendingDoc[] = [];
+const pendingListeners = new Set<() => void>();
+const emitPending = () => {
+  const next: PendingDoc[] = [];
+  for (const s of sides) if (s.unsaved) next.push({ name: s.name, label: s.label });
+  if (
+    next.length === pendingSnapshot.length &&
+    next.every(
+      (item, i) =>
+        item.name === pendingSnapshot[i]?.name && item.label === pendingSnapshot[i]?.label,
+    )
+  )
+    return;
+  pendingSnapshot = next;
+  for (const fn of pendingListeners) fn();
+};
+export const subscribePending = (fn: () => void) => {
+  pendingListeners.add(fn);
+  return () => {
+    pendingListeners.delete(fn);
+  };
+};
+export const getPendingSnapshot = () => pendingSnapshot;
+export const isAutoSave = () => autoSave;
+export const setAutoSave = (on: boolean) => {
+  if (autoSave === on) return;
+  autoSave = on;
+  for (const s of sides) {
+    if (!s.unsaved) continue;
+    if (autoSave) {
+      if (!s.saving) s.later(0);
+    } else {
+      s.cancelTimer();
+      if (!s.saving) s.saved?.("pending");
+    }
+  }
+  emitPending();
+  for (const fn of pendingListeners) fn();
+};
 
 type Entry = { side: Side; snap: string; group: number };
 const undos: Entry[] = [],
@@ -139,19 +186,22 @@ const saveTeam = async (me: Side) => {
     } = await r.json();
     for (const s of team) {
       s.version = one ? got.version! : got.versions![s.name];
-      const data = one ? got.data : got.files?.[s.name];
-      if (data !== undefined) s.accept(sent.get(s), data);
-      s.saved?.(null);
+      const resData = one ? got.data : got.files?.[s.name];
+      s.accept(sent.get(s), resData !== undefined ? resData : sent.get(s));
+      s.saving = false;
+      s.saved?.(s.unsaved && !autoSave ? "pending" : null);
     }
+    emitPending();
     if (got.retained?.length)
       say(`Kept your edits while merging ${labels}: ${got.retained.join(", ")}`, 6000);
   } catch {
     failed();
-    me.later(3000); // a dropped line: tried again
+    if (autoSave) me.later(3000); // a dropped line: tried again when auto-saving
+    emitPending();
     return;
   }
   for (const s of team) s.saving = false;
-  for (const s of team) if (s.unsaved) s.later();
+  for (const s of team) if (s.unsaved && autoSave) s.later();
 };
 
 const save = (side: Side) => {
@@ -169,20 +219,42 @@ export const flushDocs = async () => {
   for (const side of sides) side.cancelTimer();
   await Promise.all(pending);
   for (const side of sides) if (side.unsaved) await save(side);
+  emitPending();
   if ([...sides].some((side) => side.unsaved || side.saving))
     throw new Error(
       "Some edits could not be saved. Resolve the save error before saving or restoring a version.",
     );
 };
 
+export const confirmDocs = async (): Promise<boolean> => {
+  try {
+    await flushDocs();
+    return pendingSnapshot.length === 0;
+  } catch {
+    emitPending();
+    return false;
+  }
+};
+
+export const revertDocs = async () => {
+  const dirty = [...sides].filter((s) => s.unsaved);
+  for (const s of sides) s.cancelTimer();
+  if (!dirty.length) return;
+  for (const s of dirty) s.revert();
+  emitMutated();
+  emitPending();
+  await Promise.all(dirty.map((s) => s.load()));
+};
+
 type Got<T> = { version: string; data: T };
 
 export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
-  // data is what is drawn, kept (JSON) the last state worth saving. shown: a preview is on, from its first change to the restore
-  // or edit that ends it, even while a drag is back where it started and data equals kept
+  // data is what is drawn, kept (JSON) the last state worth saving, diskJson the last state confirmed on disk. shown: a preview is on,
+  // from its first change to the restore or edit that ends it, even while a drag is back where it started and data equals kept
   const orderedRows = name === "cam" || name === "shots";
   let data: T | null = null,
     kept = "null",
+    diskJson = "null",
     shown = false,
     held: Got<T> | null = null,
     restoredPreviewBase: string | null = null,
@@ -203,7 +275,14 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     saved: hooks.saved,
     cancelTimer: () => clearTimeout(timer),
     accept: (sent, canonical) => {
-      if (equalJson(sent, canonical)) return;
+      const diskCopy = structuredClone(canonical) as T;
+      hooks.tidy?.(diskCopy);
+      diskJson = JSON.stringify(diskCopy);
+      if (equalJson(sent, canonical)) {
+        side.unsaved = kept !== diskJson;
+        emitPending();
+        return;
+      }
       const old = data;
       const next = mergeEdits(sent, JSON.parse(kept), canonical, orderedRows).data as T;
       kept = JSON.stringify(next);
@@ -222,6 +301,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
         emitMutated();
         hooks.replaced?.(old);
       }
+      emitPending();
     },
     swap: (snap) => {
       const old = data,
@@ -229,14 +309,35 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       data = JSON.parse(snap);
       held = null;
       shown = false;
-      side.unsaved = true;
       hooks.tidy?.(data!);
       kept = JSON.stringify(data);
+      side.unsaved = kept !== diskJson;
       hooks.changed();
       emitMutated();
       hooks.replaced?.(old);
-      side.later();
+      if (!side.unsaved) {
+        side.cancelTimer();
+        side.saved?.(null);
+      } else if (autoSave) side.later();
+      else side.saved?.("pending");
+      emitPending();
       return was;
+    },
+    revert: () => {
+      side.cancelTimer();
+      if (!side.unsaved || diskJson === "null") return;
+      const old = data;
+      data = JSON.parse(diskJson) as T;
+      held = null;
+      shown = false;
+      restoredPreviewBase = null;
+      hooks.tidy?.(data);
+      kept = JSON.stringify(data);
+      side.unsaved = false;
+      forget(side);
+      hooks.changed();
+      hooks.replaced?.(old);
+      hooks.saved?.(null);
     },
   };
   sides.add(side);
@@ -249,11 +350,14 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       before = old !== null && hooks.received ? (JSON.parse(kept) as T) : null;
     data = got.data;
     hooks.tidy?.(data);
-    kept = JSON.stringify(data);
+    diskJson = kept = JSON.stringify(data);
+    side.unsaved = false;
     hooks.changed();
     emitMutated();
     hooks.replaced?.(old);
     if (before !== null && !equalJson(before, data)) hooks.received?.(before, data);
+    hooks.saved?.(null);
+    emitPending();
   };
   const release = () => {
     if (held && !shown) take(held);
@@ -300,10 +404,15 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       if (undos.length > 100) undos.shift();
       redos.length = 0;
       kept = next;
-      side.unsaved = true;
+      side.unsaved = next !== diskJson;
       hooks.changed();
       emitMutated();
-      side.later();
+      if (!side.unsaved) {
+        side.cancelTimer();
+        side.saved?.(null);
+      } else if (autoSave) side.later();
+      else side.saved?.("pending");
+      emitPending();
     },
     preview: (change: (d: T) => void) => {
       if (data) {

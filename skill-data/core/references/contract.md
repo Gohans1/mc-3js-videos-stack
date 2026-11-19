@@ -6,7 +6,7 @@ The studio, `bun run check` and every render read a film through this contract. 
 
 | Part                           | Rule                                                                                                                                                                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/scene.ts` exports         | `SHOTS`, `SHOTS_OUT` (the shots as heard), `DURATION`, and `buildScene(canvas, W, H, draft)` returning `draw(t)`. `applyEdit` is required unless the `timingTimeline` wrapper supplies it |
+| `src/scene.ts` exports         | `SHOTS`, `SHOTS_OUT` (the shots as heard), `DURATION`, and `buildScene(canvas, W, H, draft)` returning `draw(t)`. `applyEdit` is required unless the `timingTimeline` wrapper supplies it                                            |
 | `draw(t)`                      | Draws any `t` on its own, never from the frame before: renders split the film into chunks and jump straight to any second                                                                                                            |
 | `src/edit.ts` and data         | `setEdit` merges `src/edit.json` (narration takes and script, `voice.warp`, beats) with the files in `src/timeline/` (cam, shots, keys, text, adjust, audio, timing)                                                                 |
 | `package.json` `"live-studio"` | Names each timeline file (`soundTimeline`, `camTimeline`, `shotsTimeline`, `textTimeline`, `adjustmentTimeline`, `timingTimeline`, `keyFiles`), the `sound` folders and `ratio`. `bun run help` in a film prints this film's own map |
@@ -72,6 +72,21 @@ The creator sees all of the above in the studio's Film tab, view only, under Cap
 
 `src/scene.ts` is plain JS under `// @ts-nocheck`, and `bun run check` reads only the JSON: a mistake in the code shows as an `ERROR` when a render builds the scene, so look at a still after every code change.
 
+## Objects, placed items, and custom props
+
+| Library               | Location                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| Built-in blocks       | `packages/mc-assets/pack/assets/gohans/` (`block:gohans:<id>`)                     |
+| Vanilla jar           | `vault/jar/client_assets.zip` (`block:minecraft:<id>`, `item:minecraft:<id>`)      |
+| Vetted mod & RP packs | `vault/packs/` (cherry-picked via `pack/picks.json` -> `assets/public/picked.zip`) |
+| Mobs                  | `vault/mcasset/1.21.11/` (`mob:<id>`, with entity animations)                      |
+| Global props          | `vault/props/` across every film (`prop:global:<id>`)                              |
+| Film props            | `src/props/` in the active film (`prop:film:<id>`)                                 |
+
+Studio scans prop subfolders recursively for images, self-contained GLB models and TypeScript files; put a same-stem image or `.glb` beside a `.ts` prop to preview it in Objects without executing source.
+
+`src/timeline/placed.json` (`"live-studio".keyFiles`: `"placed"`) stores 3D blocks and mobs animated in scene seconds (`what`: `"block:<ns>:<id>" | "mob:<id>"`, optional `properties`/`clip`/`rate`, sorted `keys[]` with `t`, `at: [x, y, z]`, `rot: [x, y, z]`, `scale > 0`, `visible`, `ease`, `clip`, `rate`). Items (`item:<ns>:<id>`) do not go in `placed.json`: pick them into `pack/picks.json` (`items[]`) and attach via `loadModel(group, assets, await resolveModelData(assets, { model: "<ns>:item/<id>", type: "item" }), { display: {} })` (`assets = await prepareAssets(sources)`; or `parseItemDefinition(assets, "<ns>:<id>")` for 1.21.4+ defs) in `src/scene.ts`. Custom `.ts`/`.glb` props are copied from `vault/props/` into `src/props/` with `bun run asset use prop:global:<id>`.
+
 ## Sound the studio finds
 
 | Where                                | What                                                                                                                     |
@@ -98,19 +113,19 @@ The creator sees all of the above in the studio's Film tab, view only, under Cap
 
 `bun run find` discovers and inspects the shared catalogue; `bun run asset --help` places and edits assets with JSON output and heard seconds. Audio uses `audio.json`, transitions use `shots.json`, grades use `adjust.json`, native text/shapes use `text.json`, and HTML/CSS/canvas layers use `openfilm.json` with undo, trim/drag and Linkage in the studio.
 
-| Task | Command and result |
-| --- | --- |
-| Discover | `bun run find --kind transition` includes native and imported transitions; use words to search, or filter, text, sticker, effect, template or sound as kinds. Code helpers, camera and mocap remain in the same catalogue |
-| Select source or group | `--source builtin` selects native presets; `--source openfilm` selects that provider, including audio. Bare `--source` or `--group` lists values; `--group fade` narrows one visual group |
-| Read controls | `bun run find --show <id>` includes the placement ID, full recipe, selectors/vars, defaults, units and exampleProps. Use the full ID and `--source` if a short alias is ambiguous |
-| Continue a page | Follow the next-page command with the same filters and `--offset N`; `-n N` sets page size, up to 200. Pagination applies to offline lists and word searches |
-| Place | `bun run asset use <id> --film films/<name> --from 2 --to 5 --props-file controls.json`; cut placement also needs `--shot N`. Native text needs a text string; HTML text uses a selector map, as show/help describe |
-| Read or revise | `asset timeline --lane <lane>` returns heard times and targets; pass the returned target to `asset edit` with a props file, or `asset remove`. Lanes are effects, text, adjustment, transitions and audio; effects is the default |
-| Keep identity | New items have UUID targets; older native rows without IDs use their current row index. Read timeline again after reordering those rows; removing a transition preserves its shot |
-| Duration in code | If a film has no edit.end, pass `--duration <scene seconds>` from its exported DURATION for retiming or cuts. Use the same value for placement, timeline, edit and remove; unknown retiming clocks are rejected before writing |
-| Templates | `asset plan <id>` previews camera slots, overlays and music without writes; `asset use` places overlays/music. Camera slots guide custom 3D staging; they do not replace the scene |
-| Verify | `asset validate` checks configured lane shapes and overlay IDs; use `bun run check` for film checks, then view a still or clip. Data validation does not prove the rendered look or sound |
-| Linked audio holds | A heard interval may have no source-time equivalent inside Freeze or a removed/reordered span; asset rejects an inexact audio edit before writing. Use an independent audio/SFX history in timing.json or a custom output-time mix for that cue |
+| Task                   | Command and result                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Discover               | `bun run find --kind transition` includes native and imported transitions; use `sound`, `mocap`, `filter`, `text`, `sticker`, `effect`, `template`, or 3D opt-in kinds `block`, `item`, `mob`, `prop`, `object` (`--variants` expands groups, `--broken` shows custom-loader/incomplete models)                                                                  |
+| Select source or group | `--source builtin\|openfilm\|gohans\|global\|<pack-slug>`; bare `--source` or `--group` lists values; `--edition vanilla\|modded` and `--license` also filter MC packs                                                                                                                                                                                           |
+| Read controls          | `bun run find --show <id>` shows full recipe, defaults, pack licence, blockstate properties, mob clips and `asset pick`/`use` commands; prefix `block:`, `item:`, `mob:`, `prop:` if ambiguous                                                                                                                                                                   |
+| Continue a page        | Follow the next-page command with the same filters and `--offset N`; `-n N` sets page size, up to 200. Pagination applies to offline lists and word searches                                                                                                                                                                                                     |
+| Pick & place           | `asset pick block:<ns>:<id>,item:<ns>:<id>` updates `pack/picks.json` and rebuilds `picked.zip`; `asset use block:<ns>:<id>` auto-picks unambiguous mod blocks (`--no-pick` skips) and writes `placed.json` at `--from` (no `--to`); `asset use prop:global:<id>` copies into `src/props/`. 2D effects take `--from`/`--to`/`--props-file` (`--shot N` for cuts) |
+| Read or revise         | `asset timeline --lane <lane>` returns heard times and targets across `effects`, `text`, `adjustment`, `transitions`, `audio`, `placed` and `picks`; pass `placed:<name>` with `--from <heard s>` to `asset edit` (multi-key objects require `--from`), or remove with `asset remove` / `asset unpick`                                                           |
+| Keep identity          | New items have UUID targets; older native rows without IDs use their current row index. Read timeline again after reordering those rows; removing a transition preserves its shot                                                                                                                                                                                |
+| Duration in code       | If a film has no edit.end, pass `--duration <scene seconds>` from its exported DURATION for retiming or cuts. Use the same value for placement, timeline, edit and remove; unknown retiming clocks are rejected before writing                                                                                                                                   |
+| Templates              | `asset plan <id>` previews camera slots, overlays and music without writes; `asset use` places overlays/music. Camera slots guide custom 3D staging; they do not replace the scene                                                                                                                                                                               |
+| Verify                 | `asset validate` checks configured lane shapes and overlay IDs; use `bun run check` for film checks, then view a still or clip. Data validation does not prove the rendered look or sound                                                                                                                                                                        |
+| Linked audio holds     | A heard interval may have no source-time equivalent inside Freeze or a removed/reordered span; asset rejects an inexact audio edit before writing. Use an independent audio/SFX history in timing.json or a custom output-time mix for that cue                                                                                                                  |
 
 Creative controls stay editable JSON; native text/shapes retain custom fields, while HTML text uses selectors and CSS vars exposed by the source page. Build custom Three.js code or pages whenever useful; the catalogue and Studio are starting tools, not creative constraints.
 
@@ -118,7 +133,7 @@ Creative controls stay editable JSON; native text/shapes retain custom fields, w
 
 `asset list/info` are compatibility aliases to find's text output; action commands keep JSON output and share find's catalogue. `bun run openfilm` selects the OpenFilm source; `fetch:openfilm` imports it, and runtime file/config names remain compatible with existing films.
 
-The studio groups pickers by use under Audio, Text, Transitions, Adjustment and Effects; OpenFilm is a source filter. Source, fonts, WAVs and licenses stay in the vault; `pack:sound` preserves their structure for another machine.
+The studio groups pickers by use under Audio, Text, Transitions, Adjustment, Effects and Objects; OpenFilm is a source filter. Source, fonts, WAVs and licenses stay in the vault; `pack:sound` preserves their structure for another machine.
 
 `film-stage/openfilm-page` exports `loadOpenFilmPage(url, width, height, props, { timeoutMs })` for same-origin HTML/CSS/canvas/WebGL; `await page.seek(t)` returns a canvas and `page.dispose()` removes the iframe. The page exposes `window.film.frame(t)` and optional `ready` as a promise or function; the host awaits both, serializes seeks, reports the URL/phase/time, and times out each phase after 15 seconds by default.
 

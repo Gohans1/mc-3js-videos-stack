@@ -9,6 +9,7 @@ import { useFrameKey } from "../core/useFrameKey";
 import {
   canMatchCameraKey,
   DEFAULT_EASE,
+  easeKeyIndex,
   edit,
   keys,
   preview,
@@ -24,24 +25,32 @@ const camDoc = { snapshot, restore };
 
 export function CameraEasePanel() {
   useStudio((s) => s.camRev);
+  useStudio((s) => s.camKey);
   useFrameKey(() => shownKey(S.t));
-  const i = shownKey(S.t);
+  const rawIdx = shownKey(S.t),
+    i = easeKeyIndex(rawIdx);
   return (
     <>
-      <CameraKeyEase index={i} />
+      <CameraKeyEase index={i} rawIndex={rawIdx} />
       <CameraGraph index={i} />
     </>
   );
 }
 
-function CameraKeyEase({ index: i }: { index: number }) {
-  const k = keys[i];
-  if (!k || i === 0 || k.cut) {
+function CameraKeyEase({ index: i, rawIndex: rawIdx }: { index: number; rawIndex: number }) {
+  const rawKey = keys[rawIdx],
+    k = keys[i];
+  if (i < 0 || !k) {
     return (
-      <EmptyCard className="mx-3 mt-1" title={!k ? "No keyframe picked" : "A shot starts here"}>
-        {!k
+      <EmptyCard
+        className="mx-3 mt-1"
+        title={!rawKey ? "No keyframe picked" : "A shot starts here"}
+      >
+        {!rawKey
           ? "Click a diamond on the Camera track, or put the playhead on one: this sets how the camera travels into it."
-          : "Nothing eases into the first keyframe of a shot. Pick a later one."}
+          : rawKey.cut
+            ? "No closing keyframe before this cut to ease into. Pick a keyframe inside a shot."
+            : "Nothing eases into the first keyframe of a shot. Pick a later one."}
       </EmptyCard>
     );
   }
@@ -51,16 +60,21 @@ function CameraKeyEase({ index: i }: { index: number }) {
         Unlock it in Camera to change its path or easing.
       </EmptyCard>
     );
+  const fromSplitCut = !!rawKey?.cut && i !== rawIdx;
   const curve = k.motion !== "hold" && Array.isArray(k.ease) ? k.ease : null;
   const canJoin = canMatchCameraKey(i);
   return (
     <div className="flex flex-col">
-      <p className="text-ui px-3 pb-2">
-        <span className="font-medium">Into keyframe {i + 1}</span>{" "}
-        <span className="text-muted-foreground tabular-nums">
-          {stamp(keys[i - 1].t)} → {stamp(k.t)}
-        </span>
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-1.5 px-3 pb-2">
+        <p className="text-ui min-w-0">
+          <span className="font-medium">
+            {fromSplitCut ? `Into split · keyframe ${i + 1}` : `Into keyframe ${i + 1}`}
+          </span>{" "}
+          <span className="text-muted-foreground tabular-nums">
+            {stamp(keys[i - 1].t)} → {stamp(k.t)}
+          </span>
+        </p>
+      </div>
       <div className="flex flex-col gap-2 px-3 pb-3">
         <Segmented
           label="Camera path"

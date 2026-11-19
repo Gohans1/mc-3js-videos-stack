@@ -10,7 +10,6 @@ import {
   LockKeyholeOpen,
   Scissors,
   Trash2,
-  Video,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 
@@ -38,6 +37,7 @@ function PlayheadStamp() {
   useFrame();
   return <span className="tabular-nums">{stamp(S.t)}</span>;
 }
+import { FreeCamLensFields } from "../picture/FreeCamLens";
 import { seekExact } from "../playback/transport";
 import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
@@ -45,6 +45,7 @@ import {
   addKeyHere,
   edit,
   holdAfter,
+  initialKeyTime,
   keys,
   movable,
   removeCamKeys,
@@ -53,7 +54,7 @@ import {
   retime,
   rollable,
   rollCut,
-  saveView,
+  room,
   setKey,
   setKeyLocked,
   shotOfCut,
@@ -67,6 +68,7 @@ import { CameraFraming } from "./CameraFraming";
 import { CameraKeyStyle, CameraTakePicker } from "./CameraKeyAuthoring";
 import { CameraOptics } from "./CameraOptics";
 import { CameraShotSettings } from "./CameraShotSettings";
+import { ShotHitsSection } from "./CamKeySections";
 import { renameShot, setShotCameraClock, shotsDoc } from "./shots";
 
 const CameraEasePanel = lazy(() =>
@@ -185,6 +187,7 @@ function ShotSection({ shot }: { shot: number }) {
           </DropdownMenu>
         </FieldRow>
       )}
+      {shots && <ShotHitsSection shot={shot} />}
     </Section>
   );
 }
@@ -200,8 +203,26 @@ function TimeField({ i }: { i: number }) {
         <span className="text-ui tabular-nums">{stamp(k.t)}</span>
       </FieldRow>
     );
+  const baseT = initialKeyTime(i),
+    [lo, hi] = canRoll ? [0, Infinity] : room(i),
+    canResetTime =
+      baseT !== undefined && Math.abs(baseT - k.t) > 1e-4 && baseT >= lo && baseT <= hi;
   return (
-    <FieldRow label={canRoll ? "Cut at" : "Time"}>
+    <FieldRow
+      label={canRoll ? "Cut at" : "Time"}
+      nav={
+        <Reset
+          compact
+          label={
+            baseT !== undefined ? `Reset Time to ${baseT.toFixed(3)}s` : "Reset Time to default"
+          }
+          disabled={!canResetTime}
+          onClick={() => {
+            if (baseT !== undefined) (canRoll ? rollCut : retime)(i, baseT);
+          }}
+        />
+      }
+    >
       <span className="w-28">
         <NumberField
           size="sm"
@@ -221,6 +242,7 @@ function TimeField({ i }: { i: number }) {
 }
 
 function KeySection() {
+  useStudio((s) => s.camKey);
   useFrameKey(() => {
     const i = shownKey(S.t);
     const k = keys[i];
@@ -343,24 +365,6 @@ function KeySection() {
           <CameraOptics index={i} />
           <CameraFraming index={i} />
           <div className="flex flex-wrap gap-1.5">
-            <Tip
-              label={
-                free
-                  ? "Replace this keyframe's framing with the free camera's"
-                  : "Turn on Free camera (F) first"
-              }
-            >
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8"
-                disabled={!free || !!k.locked}
-                onClick={() => saveView(i)}
-              >
-                <Video data-icon="inline-start" />
-                Use free camera view
-              </Button>
-            </Tip>
             <Tip label="Adds a copy of this keyframe 1 s later, so the camera stays still. Drag the copy to hold longer">
               <Button variant="secondary" size="sm" className="h-8" onClick={() => holdAfter(i)}>
                 <Hourglass data-icon="inline-start" />
@@ -434,6 +438,7 @@ export function CamPanel() {
   useStudio((s) => s.camRev);
   useStudio((s) => s.shotPick);
   const picks = useStudio((s) => s.camPicks);
+  const free = useStudio((s) => s.free);
   useFrameKey(() => shownShot());
   if (!keys.length) return null;
   return (
@@ -442,6 +447,11 @@ export function CamPanel() {
       className="scroll-fade flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 *:shrink-0"
     >
       <Saved />
+      {free && (
+        <Section title="Free camera">
+          <FreeCamLensFields />
+        </Section>
+      )}
       <CameraTakePicker />
       <ShotSection shot={shownShot()} />
       <CameraShotSettings shot={shownShot()} />

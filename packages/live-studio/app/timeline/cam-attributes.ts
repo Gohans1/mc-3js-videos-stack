@@ -4,9 +4,9 @@ export interface OpticsSummaryKey {
   fstop?: number;
   focus?: unknown;
   handheld?: unknown;
+  bob?: number;
   roll?: number;
   wave?: number;
-  bob?: number;
 }
 
 /** Readable focus target summary for copy/paste attributes. */

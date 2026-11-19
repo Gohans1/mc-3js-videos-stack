@@ -1,10 +1,12 @@
+// Preview input: right-click pins a note, right-drag sketches/draws a note; left-click picks an object/title/element,
+// and left-drag moves a text/page title or moves the Free Camera (waking it seamlessly if off). On a phone, tap pins notes.
+import { setFocus } from "../camera/cam";
 import { applyCameraPick, cancelCameraPick } from "../camera/camera-framing";
-// Preview input: a click or tap pins a note, a right-click picks an object or title, and a right drag draws a note.
-// A left drag moves a title or wakes Free Camera from the film view. On a phone the picture is for notes only.
 import { cameraGizmoBusy, pickCameraPath } from "../camera/campath";
 import { PHONE } from "../core/device";
+import { engine } from "../core/engine";
 import { S } from "../core/state";
-import { get } from "../core/store";
+import { get, say, set } from "../core/store";
 import { sketch } from "../notes/ink";
 import { openNote, pointOrigin } from "../notes/notes";
 import { gizmoBusy, hover, pickAt, selectTarget } from "../objects/placed";
@@ -19,7 +21,6 @@ import {
   moveCam,
   orbitFree,
   rememberFreeView,
-  setFree,
   setOrbitPivot,
   turnAbout,
 } from "./freecam";
@@ -85,7 +86,10 @@ export const attachPicture = () => {
     } // the gizmo's handle under the pointer takes this drag
     gesture = next.gesture;
     if (S.tools?.free.on) rememberFreeView();
-    if (next.capture) canvas.setPointerCapture(e.pointerId);
+    if (next.capture)
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {}
   });
   canvas.addEventListener("pointermove", (e) => {
     if (pan?.id === e.pointerId) {
@@ -103,30 +107,40 @@ export const attachPicture = () => {
     });
     gesture = step.gesture;
     if (step.startSketchFrom) {
-      canvas.setPointerCapture(step.startSketchFrom.pointerId);
+      try {
+        canvas.setPointerCapture(step.startSketchFrom.pointerId);
+      } catch {}
       sketch.start(e, step.startSketchFrom);
       hover(null);
       return;
     }
-    if (gesture.kind === "sketching") {
-      sketch.move(e);
-      return;
-    }
-    if (step.wokeFree && gesture.kind === "cam_drag" && prev.kind === "wake_press") {
+    if (step.startCamDragFrom) {
       if (
-        prev.event &&
-        (startPageDrag(prev.event, e, frac(prev.event)) ||
-          startTextDrag(prev.event, e, frac(prev.event)))
+        !S.tools?.free.on &&
+        (startPageDrag(step.startCamDragFrom, e, frac(step.startCamDragFrom)) ||
+          startTextDrag(step.startCamDragFrom, e, frac(step.startCamDragFrom)))
       ) {
         gesture = IDLE_VIEWPORT_GESTURE;
         hover(null);
         return;
       }
-      setFree(true, true);
-      rememberFreeView();
-      canvas.setPointerCapture(gesture.id);
+      if (!S.tools?.free.on && S.tools && !PHONE) engine.setFree(true, true);
+      if (S.tools?.free.on) rememberFreeView();
+      try {
+        canvas.setPointerCapture(step.startCamDragFrom.pointerId);
+      } catch {}
       hover(null);
-      stepCamDrag(gesture.mode, e.clientX - prev.x, e.clientY - prev.y);
+      if (gesture.kind === "cam_drag") {
+        stepCamDrag(
+          gesture.mode,
+          e.clientX - step.startCamDragFrom.clientX,
+          e.clientY - step.startCamDragFrom.clientY,
+        );
+      }
+      return;
+    }
+    if (gesture.kind === "sketching") {
+      sketch.move(e);
       return;
     }
     if (gesture.kind === "cam_drag" && prev.kind === "cam_drag") {
@@ -161,27 +175,54 @@ export const attachPicture = () => {
     if (res.dropSketch || sketch.on()) sketch.drop();
   };
   canvas.addEventListener("pointerup", (e) => {
-    if (
-      e.button !== 2 ||
-      e.pointerType !== "mouse" ||
-      ("id" in gesture && e.pointerId !== gesture.id)
-    )
+    if (e.pointerType !== "mouse" || ("id" in gesture && e.pointerId !== gesture.id)) return;
+    if (e.button === 2) {
+      if (gesture.kind !== "sketching" && gesture.kind !== "right_press") return;
+      const g = gesture;
+      gesture = IDLE_VIEWPORT_GESTURE;
+      if (g.kind === "sketching" || sketch.on()) {
+        sketch.end();
+        return;
+      }
+      const at = tappedAt(g.x, g.y, e);
+      if (!at) return;
+      pinNote(...at, e);
+      return;
+    }
+    if (e.button !== 0) return;
+    if (gesture.kind !== "left_press" && !(gesture.kind === "cam_drag" && gesture.mode !== "slide"))
       return;
     const g = gesture;
     gesture = IDLE_VIEWPORT_GESTURE;
-    if (g.kind === "sketching" || sketch.on()) {
-      sketch.end();
+    if (g.kind !== "left_press") return;
+    const at = tappedAt(g.x, g.y, e);
+    if (!at) return;
+    const pick = get().cameraPick;
+    if (pick) {
+      const t = S.t;
+      void render(t, () => applyCameraPick(pick, lookAtClick(...at)));
       return;
     }
-    const origin =
-      g.kind === "right_press"
-        ? [g.x, g.y]
-        : g.kind === "cam_drag" && !g.woke && !g.moved
-          ? [g.startX, g.startY]
-          : null;
-    if (!origin) return;
-    const at = tappedAt(origin[0], origin[1], e);
-    if (!at || (!PHONE && pickPageAt(at))) return;
+    const pickFocus = get().pickFocus;
+    if (pickFocus !== null) {
+      set({ pickFocus: null });
+      const hit = lookAtClick(...at);
+      const cam = S.tools?.camera;
+      if (hit.world && cam) {
+        const dist = Math.hypot(
+          hit.world[0] - cam.position.x,
+          hit.world[1] - cam.position.y,
+          hit.world[2] - cam.position.z,
+        );
+        setFocus(pickFocus, Math.max(0.05, Math.round(dist * 100) / 100));
+        say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
+      } else {
+        say("Nothing hit at that point to focus on");
+      }
+      return;
+    }
+    if (pickCameraPath(...at)) return;
+    if (!PHONE && pickPageAt(at)) return;
     const title = get().text ? textAt(...at) : -1;
     if (title >= 0) pickText([title]);
     else selectTarget(pickAt(...at), e.ctrlKey || e.metaKey);
@@ -223,6 +264,22 @@ export const attachPicture = () => {
     const back = flight.chord();
     if (back) flyCam(0, 0, back);
   };
+  const nonChordKeys = new Set([
+    "",
+    "Unidentified",
+    "Process",
+    "ShiftLeft",
+    "ShiftRight",
+    "ControlLeft",
+    "ControlRight",
+    "AltLeft",
+    "AltRight",
+    "MetaLeft",
+    "MetaRight",
+    "CapsLock",
+    "NumLock",
+    "ScrollLock",
+  ]);
   addEventListener(
     "keydown",
     (e) => {
@@ -241,18 +298,12 @@ export const attachPicture = () => {
         if (!wasFlying) rememberFreeView();
         e.preventDefault();
         S.viewMoved = true;
-      } else chord();
+      } else if (!nonChordKeys.has(e.code)) {
+        chord();
+      }
     },
     true,
   );
-  for (const type of ["pointerdown", "wheel"])
-    addEventListener(
-      type,
-      (e) => {
-        if ((e as MouseEvent).shiftKey && S.tools?.free.on) chord();
-      },
-      true,
-    );
   addEventListener("keyup", (e) => flight.release(e.code));
   addEventListener("blur", () => {
     pan = null;
@@ -307,6 +358,24 @@ export const attachPicture = () => {
     }
     const at = tappedAt(x, y, e);
     if (!at || pickCameraPath(...at)) return;
+    const pickFocus = get().pickFocus;
+    if (pickFocus !== null) {
+      set({ pickFocus: null });
+      const hit = lookAtClick(...at);
+      const cam = S.tools?.camera;
+      if (hit.world && cam) {
+        const dist = Math.hypot(
+          hit.world[0] - cam.position.x,
+          hit.world[1] - cam.position.y,
+          hit.world[2] - cam.position.z,
+        );
+        setFocus(pickFocus, Math.max(0.05, Math.round(dist * 100) / 100));
+        say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
+      } else {
+        say("Nothing hit at that point to focus on");
+      }
+      return;
+    }
     pinNote(...at, e);
   });
 };

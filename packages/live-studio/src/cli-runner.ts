@@ -32,6 +32,12 @@ const FIND_KINDS = [
   "mc",
   "sound",
   "mocap",
+  "block",
+  "item",
+  "mob",
+  "prop",
+  "object",
+  "3d",
   "transition",
   "anim",
   "text",
@@ -49,6 +55,9 @@ const FIND_KINDS = [
 ];
 const FIND_SOURCES = [
   "minecraft",
+  "gohans",
+  "global",
+  "this-film",
   "earshot",
   "mixkit",
   "mixamo",
@@ -423,6 +432,43 @@ export async function scanCliContext(
     favLists = ["default"];
   }
 
+  let packSources: string[] = [];
+  try {
+    const rawVault = process.env.MC_VAULT_ROOT?.trim();
+    const vaultJson = safeReadJson(join(repoRoot, "vault.json"));
+    const vaultRootRel = typeof vaultJson?.root === "string" ? vaultJson.root : "vault";
+    const vaultRoot = rawVault ? resolve(repoRoot, rawVault) : join(repoRoot, vaultRootRel);
+    const packsDir = join(vaultRoot, "packs");
+    const packIdx = safeReadJson(join(vaultRoot, "packs_index.json"));
+    const warmMc = safeReadJson(join(vaultRoot, "cache/mc-catalog.v1.json"));
+    const warmPacks =
+      warmMc?.packs && typeof warmMc.packs === "object"
+        ? (warmMc.packs as Record<string, { entries?: unknown[]; meta?: { slug?: string } }>)
+        : undefined;
+    if (existsSync(packsDir)) {
+      const slugSet = new Set<string>();
+      for (const f of readdirSync(packsDir)) {
+        if (!/\.(jar|zip)$/i.test(f)) continue;
+        const cached = warmPacks?.[f];
+        if (cached && Array.isArray(cached.entries) && cached.entries.length === 0) continue;
+        const idxEntry =
+          packIdx && typeof packIdx[f] === "object" && packIdx[f] !== null
+            ? (packIdx[f] as { slug?: unknown })
+            : undefined;
+        const slug =
+          typeof cached?.meta?.slug === "string" && cached.meta.slug
+            ? cached.meta.slug
+            : typeof idxEntry?.slug === "string" && idxEntry.slug
+              ? idxEntry.slug
+              : f.replace(/\.(jar|zip)$/i, "");
+        slugSet.add(slug);
+      }
+      packSources = [...slugSet].toSorted();
+    }
+  } catch {
+    packSources = [];
+  }
+
   const choices: Record<CliChoiceSource, string[]> = {
     films,
     filmDirs: isDemo ? [] : films.map((f) => `films/${f}`),
@@ -433,7 +479,7 @@ export async function scanCliContext(
     skillRefs,
     favLists,
     findKinds: FIND_KINDS,
-    findSources: FIND_SOURCES,
+    findSources: [...new Set([...FIND_SOURCES, ...packSources])],
     postures: POSTURES,
     renders: filmChoices.renders,
     labs: filmChoices.labs,

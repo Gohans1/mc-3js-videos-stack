@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 import { Tip } from "../components/Tip";
 import type { Bind } from "../core/state";
 import { set, useStudio } from "../core/store";
+import { StageNoteComposer } from "../notes/Compose";
 import { InkBar } from "../notes/InkBar";
-import { PinTools } from "../notes/PinTools";
 import { OptionChips } from "../options/OptionChips";
 import { reloadNow } from "../playback/transport";
 import { FullscreenTransport } from "../shell/FullscreenTransport";
@@ -72,10 +72,10 @@ function Badges() {
 // phone: PhoneApp's picture, sized by its layout, and for notes only: the editing overlays stay bound (the frame loop writes
 // to them) but never show
 export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) {
-  const free = useStudio((s) => s.free),
-    loading = useStudio((s) => s.loading),
+  const loading = useStudio((s) => s.loading),
     error = useStudio((s) => s.error);
-  const ink = useStudio((s) => s.ink);
+  const ink = useStudio((s) => s.ink),
+    free = useStudio((s) => s.free);
   const savedPreview = useStudio((s) => s.preview);
   const preview = phone ? null : savedPreview;
   const mode = useStudio((s) => s.filmView);
@@ -83,6 +83,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
   const clean = !!preview?.clean;
   useLayoutEffect(stageFit, [split]);
   const pickingCamera = useStudio((s) => s.cameraPick !== null);
+  const pickFocus = useStudio((s) => s.pickFocus !== null);
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
     // it alone), then CapCut's Color oscilloscope under it when on
@@ -90,12 +91,12 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
       className={
         phone
           ? "portrait:phone-picture-h relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-black portrait:aspect-(--frame) portrait:w-full portrait:flex-initial landscape:flex-1"
-          : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-cli-expanded:hidden in-data-lessons-focused:hidden in-data-wide:col-start-2"
+          : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2"
       }
     >
       <div
         ref={bind("view")}
-        className="relative flex min-h-0 w-full flex-1 items-center justify-center"
+        className="@container relative flex min-h-0 w-full flex-1 items-center justify-center"
       >
         {/* The frame itself and what is pinned or drawn on it */}
         <div
@@ -135,7 +136,11 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
               className={cn(
                 "absolute inset-0 block size-full touch-none",
                 preview && preview.zoom > 100 && "[image-rendering:pixelated]",
-                pickingCamera ? "cursor-crosshair" : free ? "cursor-grab" : "cursor-default",
+                pickingCamera || pickFocus
+                  ? "cursor-crosshair"
+                  : free
+                    ? "cursor-grab"
+                    : "cursor-default",
               )}
             />
             <canvas
@@ -199,13 +204,14 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
                 ink ? "cursor-crosshair" : "pointer-events-none",
               )}
             />
-            {!phone && !clean && <InkBar />}
-            {!phone && !clean && <PinTools />}
             <div data-studio-overlay className="stage-caption">
               <span ref={bind("caption")} className="stage-caption-text" />
             </div>
           </div>
         </div>
+        {/* Note composer anchored directly beside the pin/stroke on the player stage */}
+        {!phone && <StageNoteComposer />}
+        {!phone && !clean && <InkBar />}
         {!phone && !clean && <AngleGrid />}
         {!phone && !clean && <ShotList />}
         {!phone && !clean && <ExposureLegend />}
@@ -252,14 +258,14 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           <pre className="min-h-0 flex-1 overflow-auto font-mono text-xs whitespace-pre-wrap">
             {error}
           </pre>
-          <Button
-            variant="outline"
-            size="sm"
-            className="self-end"
-            onClick={() => set({ error: null })}
-          >
-            Close
-          </Button>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => location.reload()}>
+              Reload
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => set({ error: null })}>
+              Close
+            </Button>
+          </div>
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { hfovOf, vfovOf } from "film-kit/lens";
-import type { CameraChannel, CameraMotion } from "film-stage/camera";
+import type { CameraChannel, CameraMotion, FocusTargetSpec } from "film-stage/camera";
 import { cameraKeyOptics, cameraRailU, canMatchCameraSpeed, lensAspect } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
@@ -13,7 +13,18 @@ import { clockForTimeline } from "../../src/timing-state.mjs";
 // or merged with the one before (splitShot, removeKey on a cut), CapCut's Split and its undo.
 import { lightEdit } from "../activity/activity";
 import { together } from "../core/doc";
-import type { Ease } from "../core/ease";
+import {
+  alignedEntryCurve,
+  alignedExitCurve,
+  type Bezier,
+  type Ease,
+  easeFn,
+  easeToBezier,
+  endSlope,
+  entryHandleForSlope,
+  exitHandleForSlope,
+  startSlope,
+} from "../core/ease";
 import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
@@ -41,6 +52,17 @@ import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } f
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type Point = [number, number, number] | Record<string, unknown>; // a world point, or the film's anchor ({"eye": [...]})
+export type HandheldSpec =
+  | false
+  | string
+  | {
+      preset?: string;
+      kind?: string;
+      amount?: number;
+      move?: number;
+      speed?: number;
+      offset?: number;
+    };
 export interface CamKey {
   id?: string;
   __timing?: { source: number; output: number; alias?: string | number };
@@ -53,9 +75,9 @@ export interface CamKey {
   fstop?: number;
   focus?: unknown;
   handheld?: unknown;
+  bob?: number;
   roll?: number;
   wave?: number;
-  bob?: number;
   motion?: CameraMotion;
   reversePath?: boolean;
   cut?: boolean;
@@ -79,6 +101,7 @@ const newRowId = () =>
   ).join("");
 
 export let keys: CamKey[] = [];
+const initialKeyTimes = new Map<string, number>();
 const changed = () => {
   keys = doc.data ?? [];
   (EDIT as Record<string, unknown>).cam = structuredClone(doc.source ?? []);
@@ -148,7 +171,18 @@ export const opticsOfKey = (i: number) => {
   );
 };
 export const loadCam = async () => {
-  set({ cam: !!(await doc.load()) });
+  const ok = !!(await doc.load());
+  initialKeyTimes.clear();
+  if (ok) {
+    for (const k of keys) {
+      if (k.id) initialKeyTimes.set(k.id, k.t);
+    }
+  }
+  set({ cam: ok });
+};
+export const initialKeyTime = (i: number): number | undefined => {
+  const id = keys[i]?.id;
+  return id ? initialKeyTimes.get(id) : undefined;
 };
 
 // What film-stage/camera.ts gives a key without an ease (core/ease.ts works out how each one spends its span)
@@ -340,20 +374,295 @@ export const writeLens = (
         ? Math.round(value * 1e4) / 1e4
         : r3(field === "fov" ? fovForStorage(value, frame) : value);
 };
-export const setLens = (i: number, field: LensField, v: number | undefined) =>
-  edit((ks) => {
+export const setLens = (
+  i: number,
+  field: LensField,
+  v: number | undefined,
+  apply: typeof edit = edit,
+) =>
+  apply((ks) => {
+    if (!ks[i]) return;
     writeLens(ks[i], field, v, cameraKeyFrameTime(i));
   });
 export const resetLens = (i: number) =>
   edit((ks) => {
+    if (!ks[i]) return;
     copyCameraFields({}, ks[i], ["lens", "dof", "shake"]);
     delete ks[i].roll;
     delete ks[i].dollyZoomScale;
   });
+export const resetLensField = (i: number, field: LensField) =>
+  edit((ks) => {
+    if (!ks[i]) return;
+    if (field === "fov" || field === "mm") {
+      delete ks[i].fov;
+      delete ks[i].mm;
+      delete ks[i].dollyZoomScale;
+      return;
+    }
+    delete ks[i][field];
+  });
+
+export const setFocalLength = (i: number, mm: number | undefined, apply: typeof edit = edit) =>
+  apply((ks) => {
+    if (!ks[i]) return;
+    writeLens(ks[i], "mm", mm === undefined ? undefined : Math.max(5, mm), cameraKeyFrameTime(i));
+  });
+
+export const setFstop = (i: number, fstop: number | undefined, apply: typeof edit = edit) =>
+  apply((ks) => {
+    if (!ks[i]) return;
+    if (fstop === undefined) delete ks[i].fstop;
+    else ks[i].fstop = Math.max(0, r3(fstop));
+  });
+
+export const setFocus = (
+  i: number,
+  focus: FocusTargetSpec | undefined,
+  apply: typeof edit = edit,
+) =>
+  apply((ks) => {
+    if (!ks[i]) return;
+    if (focus === undefined || focus === null) {
+      delete ks[i].focus;
+      return;
+    }
+    if (typeof focus === "number") {
+      ks[i].focus = Math.max(0.05, r3(focus));
+      return;
+    }
+    if (typeof focus === "string") {
+      const clean = focus.trim();
+      if (!clean) delete ks[i].focus;
+      else ks[i].focus = clean;
+      return;
+    }
+    if ("point" in focus) {
+      ks[i].focus = {
+        point: focus.point.map(r3) as [number, number, number],
+        ...(focus.label ? { label: focus.label } : {}),
+      };
+      return;
+    }
+    const target = focus.target.trim();
+    if (!target) {
+      delete ks[i].focus;
+      return;
+    }
+    const offset = focus.offset?.map(r3) as [number, number, number] | undefined;
+    ks[i].focus = offset && offset.some((n) => Math.abs(n) > 1e-6) ? { target, offset } : target;
+  });
+
+export const setHandheld = (
+  i: number,
+  handheld: HandheldSpec | undefined,
+  apply: typeof edit = edit,
+) =>
+  apply((ks) => {
+    if (!ks[i]) return;
+    if (handheld === undefined) {
+      delete ks[i].handheld;
+      return;
+    }
+    if (handheld === false) {
+      ks[i].handheld = false;
+      return;
+    }
+    if (typeof handheld === "string") {
+      const clean = handheld.trim();
+      if (!clean) delete ks[i].handheld;
+      else ks[i].handheld = clean;
+      return;
+    }
+    const rawPreset = String(handheld.preset ?? handheld.kind ?? "THE_CLOSEUP").trim();
+    if (!rawPreset) {
+      delete ks[i].handheld;
+      return;
+    }
+    const out: Record<string, unknown> =
+      handheld.kind && !handheld.preset ? { kind: rawPreset } : { preset: rawPreset };
+    if (handheld.amount !== undefined && Math.abs(handheld.amount - 1) > 1e-3)
+      out.amount = Math.max(0, r3(handheld.amount));
+    if (handheld.move !== undefined && Math.abs(handheld.move - 1) > 1e-3)
+      out.move = Math.max(0, r3(handheld.move));
+    if (handheld.speed !== undefined && Math.abs(handheld.speed - 1) > 1e-3)
+      out.speed = Math.max(0.05, r3(handheld.speed));
+    if (handheld.offset !== undefined && Math.abs(handheld.offset) > 1e-3)
+      out.offset = r3(handheld.offset);
+    ks[i].handheld = Object.keys(out).length === 1 ? rawPreset : out;
+  });
+
+export const setKeyPoint = (i: number, which: "p" | "l", next: Point, apply: typeof edit = edit) =>
+  apply((ks) => {
+    if (!ks[i]) return;
+    if (Array.isArray(next)) {
+      ks[i][which] = [r3(next[0]), r3(next[1]), r3(next[2])];
+      return;
+    }
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(next)) {
+      out[k] = Array.isArray(v) ? v.map((n) => (typeof n === "number" ? r3(n) : n)) : v;
+    }
+    ks[i][which] = out;
+  });
+
+export const focusTargetNames = (): string[] => {
+  const names = new Set<string>();
+  const tools = S.tools;
+  if (tools?.objects) {
+    for (const [, label] of tools.objects) {
+      if (label && label !== "cam") names.add(label);
+    }
+  }
+  if (tools?.bones) {
+    for (const boneName of Object.keys(tools.bones)) {
+      if (boneName && boneName !== "cam") names.add(boneName);
+    }
+    if (tools.objects) {
+      for (const [obj, label] of tools.objects) {
+        if (!label) continue;
+        for (const [boneName, boneObj] of Object.entries(tools.bones)) {
+          let cur: { parent?: unknown } | null = boneObj;
+          while (cur) {
+            if (cur === obj) {
+              names.add(`${label}.${boneName}`);
+              break;
+            }
+            cur = (cur.parent as { parent?: unknown } | null | undefined) ?? null;
+          }
+        }
+      }
+    }
+  }
+  for (const k of keys) {
+    if (typeof k.focus === "string" && k.focus.trim()) names.add(k.focus.trim());
+    else if (
+      k.focus &&
+      typeof k.focus === "object" &&
+      "target" in k.focus &&
+      typeof k.focus.target === "string" &&
+      k.focus.target.trim()
+    ) {
+      names.add(k.focus.target.trim());
+    }
+  }
+  return [...names];
+};
+
+export { alignedEntryCurve, alignedExitCurve, endSlope, startSlope };
+
+const canJoinBefore = (ks: CamKey[], i: number) =>
+  i >= 2 &&
+  !!ks[i] &&
+  !!ks[i - 1] &&
+  !!ks[i - 2] &&
+  !ks[i].cut &&
+  !ks[i - 1].cut &&
+  !holds(ks[i - 2], ks[i - 1]) &&
+  !holds(ks[i - 1], ks[i]);
+
+const canJoinAfter = (ks: CamKey[], i: number) =>
+  i >= 1 &&
+  i + 1 < ks.length &&
+  !!ks[i] &&
+  !!ks[i + 1] &&
+  !ks[i].cut &&
+  !ks[i + 1].cut &&
+  !holds(ks[i], ks[i + 1]);
+
+const spanMismatch = (ks: CamKey[], idx: number) => {
+  if (!canJoinBefore(ks, idx)) return 0;
+  const fPrev = easeFn(ks[idx - 1].ease, DEFAULT_EASE);
+  const fCurr = easeFn(ks[idx].ease, DEFAULT_EASE);
+  if (!fPrev || !fCurr) return 0;
+  const dtPrev = Math.max(1e-4, ks[idx - 1].t - ks[idx - 2].t);
+  const dtCurr = Math.max(1e-4, ks[idx].t - ks[idx - 1].t);
+  return Math.abs(endSlope(fPrev) / dtPrev - startSlope(fCurr) / dtCurr);
+};
+
+export const joinMismatch = (i: number) =>
+  Math.max(spanMismatch(keys, i), canJoinAfter(keys, i) ? spanMismatch(keys, i + 1) : 0);
+
+const syncPair = (ks: CamKey[], rightIdx: number) => {
+  if (!canJoinBefore(ks, rightIdx)) return;
+  ks[rightIdx].ease = alignedEntryCurve({
+    prevCurve: ks[rightIdx - 1].ease,
+    prevDuration: ks[rightIdx - 1].t - ks[rightIdx - 2].t,
+    currCurve: ks[rightIdx].ease,
+    currDuration: ks[rightIdx].t - ks[rightIdx - 1].t,
+  });
+};
+
 export const setEase = (i: number, ease: Ease | undefined) =>
   edit((ks) => {
     if (ease === undefined) delete ks[i].ease;
     else ks[i].ease = ease;
+  });
+
+export const applyAlignedCustomEase = (i: number, next: Bezier, prev?: Bezier) =>
+  edit((ks) => {
+    const prevBezier = prev ?? easeToBezier(ks[i].ease, DEFAULT_EASE);
+    ks[i].ease = next;
+    if (!get().autoConnectEase) return;
+    const entryChanged =
+      Math.abs(next[0] - prevBezier[0]) > 1e-4 || Math.abs(next[1] - prevBezier[1]) > 1e-4;
+    const exitChanged =
+      Math.abs(next[2] - prevBezier[2]) > 1e-4 || Math.abs(next[3] - prevBezier[3]) > 1e-4;
+    if (entryChanged && canJoinBefore(ks, i)) {
+      ks[i - 1].ease = alignedExitCurve({
+        currCurve: ks[i - 1].ease,
+        currDuration: ks[i - 1].t - ks[i - 2].t,
+        nextCurve: next,
+        nextDuration: ks[i].t - ks[i - 1].t,
+      });
+    }
+    if ((exitChanged || !entryChanged) && canJoinAfter(ks, i)) {
+      syncPair(ks, i + 1);
+    }
+  });
+
+export const connectSmoothly = (i: number, glide = false) =>
+  edit((ks) => {
+    if (canJoinBefore(ks, i)) {
+      const dtPrev = Math.max(1e-4, ks[i - 1].t - ks[i - 2].t);
+      const dtCurr = Math.max(1e-4, ks[i].t - ks[i - 1].t);
+      const fPrev = easeFn(ks[i - 1].ease, DEFAULT_EASE);
+      const sPrev = fPrev ? endSlope(fPrev) : 0;
+      if (glide || sPrev < 0.05) {
+        // Promote dead-stop start junction into a smooth cruise velocity across both segments.
+        const vPass = Math.max(sPrev / dtPrev, 0.75 / Math.max(dtPrev, dtCurr, 0.25));
+        const [px1, py1] = easeToBezier(ks[i - 1].ease, DEFAULT_EASE);
+        const [px2, py2] = exitHandleForSlope(vPass * dtPrev);
+        const [, , cx2, cy2] = easeToBezier(ks[i].ease, DEFAULT_EASE);
+        const [cx1, cy1] = entryHandleForSlope(vPass * dtCurr);
+        ks[i - 1].ease = [px1, py1, px2, py2];
+        ks[i].ease = [cx1, cy1, cx2, cy2];
+      } else {
+        syncPair(ks, i);
+      }
+    }
+    if (canJoinAfter(ks, i)) {
+      const dtCurr = Math.max(1e-4, ks[i].t - ks[i - 1].t);
+      const dtNext = Math.max(1e-4, ks[i + 1].t - ks[i].t);
+      const fCurr = easeFn(ks[i].ease, DEFAULT_EASE);
+      const sCurr = fCurr ? endSlope(fCurr) : 0;
+      if (glide && sCurr < 0.05) {
+        const vPass = 0.75 / Math.max(dtCurr, dtNext, 0.25);
+        const [cx1, cy1] = easeToBezier(ks[i].ease, DEFAULT_EASE);
+        const [cx2, cy2] = exitHandleForSlope(vPass * dtCurr);
+        ks[i].ease = [cx1, cy1, cx2, cy2];
+      }
+      syncPair(ks, i + 1);
+    }
+  });
+
+export const connectShotSpeeds = (i: number) =>
+  edit((ks) => {
+    let start = i;
+    while (start > 0 && !ks[start].cut) start--;
+    let end = i;
+    while (end + 1 < ks.length && !ks[end + 1].cut) end++;
+    for (let j = start + 2; j <= end; j++) syncPair(ks, j);
   });
 export const applyEasyEase = (indices: number[], incoming = false) => {
   const curve: Ease = [1 / 3, incoming ? 1 / 3 : 0, 2 / 3, 1];
@@ -557,13 +866,23 @@ export const editCameraKeyInScene = (
 
 const viewFromFree = (): CameraView => {
   const f = S.tools!.free;
-  return { p: vectorPoint(f.p), l: vectorPoint(f.l), fov: f.fov };
+  return {
+    p: vectorPoint(f.p),
+    l: vectorPoint(f.l),
+    fov: Math.round(f.fov * 10) / 10,
+    ...(f.roll ? { roll: Math.round(f.roll * 1e4) / 1e4 } : {}),
+    ...(f.wave ? { wave: r3(f.wave) } : {}),
+  };
 };
 const withFraming = (key: CamKey, view: CameraView) => {
   const tools = S.tools!;
   const aspect = lensAspectAt(key.t);
   const saved = replaceCameraFraming(key, view, aspect, tools.moveCameraAnchor);
-  if (saved && key.fov !== undefined) key.fov = r3(fovForStorage(view.fov, key.t));
+  if (saved) {
+    if (key.fov !== undefined) key.fov = r3(fovForStorage(view.fov, key.t));
+    if (view.roll !== undefined) key.roll = view.roll;
+    if (view.wave !== undefined) key.wave = view.wave;
+  }
   return saved;
 };
 const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: CamKey) => {
@@ -643,7 +962,18 @@ export const addKeyHere = () => {
 // ---------- A cut moved (a roll edit): the shot before ends sooner or later and the one after starts with it; nothing in the film
 // moves, only where the picture changes camera. The shot's start in shots.json moves with its cut key (one undo step for both),
 // and so does the last key of the shot before when it sits on the cut (its framing held up to the cut, a frame or less before)
-const tailOf = (i: number) => cameraTailIndex(keys, i, SAME * 2);
+export const tailOf = (i: number) => cameraTailIndex(keys, i, SAME * 2);
+
+// On a split cut, target the paired closing keyframe right before the cut so easing into the split remains editable.
+export const easeKeyIndex = (i: number) => {
+  const k = keys[i];
+  if (!k) return -1;
+  if (k.cut) {
+    const tail = tailOf(i);
+    return tail > 0 && !keys[tail].cut ? tail : -1;
+  }
+  return i > 0 ? i : -1;
+};
 export const shotOfCut = (i: number) =>
   keys[i]?.cut ? SHOTS_OUT.findIndex((s) => Math.abs(s.t - keys[i].t) < SAME) : -1;
 export const rollable = (i: number) =>

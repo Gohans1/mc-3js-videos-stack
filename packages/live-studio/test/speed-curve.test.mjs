@@ -5,11 +5,20 @@ import { curveMonotoneX, line } from "d3-shape";
 
 import { bisector, bisectRight } from "../src/bisect.mjs";
 import {
+  buildSpeedCurve,
   cropSpeedCurve,
+  cutRatesAt,
   flattenSpeedCurve,
+  moveSpeedPoint,
+  pointInRate,
+  pointOutRate,
+  remapSpeedCutsOnInsert,
+  remapSpeedCutsOnRemove,
   sampleSpeedCurve,
   smoothSpeedCurve,
+  toggleSpeedCut,
 } from "../src/speed-curve.mjs";
+import { compileTiming } from "../src/timing.mjs";
 
 const close = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
@@ -139,4 +148,107 @@ test("smoothSpeedCurve matches d3 curveMonotoneX handles and handles duplicates 
   assert.deepEqual(smoothSpeedCurve([[0.4, 2.5]]), { curve: [[0.4, 2.5]], handles: [] });
   assert.equal(sampleSpeedCurve({ curve: [[0.4, 2.5]] }, 0.9), 2.5);
   assert.equal(sampleSpeedCurve({ curve: [] }, 0.5), 1);
+});
+
+test("buildSpeedCurve, toggleSpeedCut, moveSpeedPoint (left/right halves) and compileTiming support discontinuous splits without neighbor pull", () => {
+  const pts = [
+    [0, 1],
+    [0.25, 2.5],
+    [0.5, 1],
+    [0.75, 0.4],
+    [1, 1],
+  ];
+  const smooth = buildSpeedCurve(pts);
+  assert.equal(smooth.cuts, undefined);
+
+  // Cutting interior vertex 2 detaches left half & right half without shifting the existing curve
+  const broken = toggleSpeedCut(smooth, 2);
+  assert.deepEqual(broken.cuts, { 2: [1, 1] });
+  assert.deepEqual(broken.handles, smooth.handles);
+
+  // Moving just the incoming (left) half changes only the left run and disconnects incoming/outgoing rates
+  const leftPulled = moveSpeedPoint(broken, 2, [0.5, 3.5], "left");
+  assert.deepEqual(cutRatesAt(leftPulled, 2), [3.5, 1]);
+  assert.equal(pointInRate(leftPulled, 2), 3.5);
+  assert.equal(pointOutRate(leftPulled, 2), 1);
+  assert.deepEqual(leftPulled.handles.slice(2), broken.handles.slice(2));
+
+  // Moving vertex 3 in run [2..4] must leave left half & run [0..2] handles byte-identical
+  const movedRight = moveSpeedPoint(leftPulled, 3, [0.75, 4.5], "both");
+  assert.deepEqual(cutRatesAt(movedRight, 2), [3.5, 1]);
+  assert.deepEqual(movedRight.handles.slice(0, 2), leftPulled.handles.slice(0, 2));
+  assert.notDeepEqual(movedRight.handles[2], leftPulled.handles[2]);
+
+  // Moving outgoing half on a linked point auto-splits just that side cleanly
+  const autoSplitOut = moveSpeedPoint(smooth, 2, [0.5, 2.4], "right");
+  assert.deepEqual(cutRatesAt(autoSplitOut, 2), [1, 2.4]);
+  assert.deepEqual(autoSplitOut.handles.slice(0, 2), smooth.handles.slice(0, 2));
+
+  // Endpoints cannot be cut
+  assert.deepEqual(toggleSpeedCut(broken, 0), broken);
+  assert.deepEqual(toggleSpeedCut(broken, pts.length - 1), broken);
+
+  // Reconnecting merges back cleanly and removes cuts entry
+  const rejoined = toggleSpeedCut(leftPulled, 2, "left");
+  assert.equal(rejoined.cuts, undefined);
+  close(rejoined.curve[2][1], 3.5);
+
+  // Discontinuous step curve flattens with both boundary rates and compiles exact step playback
+  const stepped = {
+    curve: [
+      [0, 2],
+      [0.5, 2],
+      [1, 1],
+    ],
+    cuts: { 1: [2, 0.5] },
+  };
+  const flatStep = flattenSpeedCurve(stepped);
+  assert.deepEqual(flatStep, [
+    [0, 2],
+    [0.5, 2],
+    [0.5, 0.5],
+    [1, 1],
+  ]);
+  const clock = compileTiming({ speeds: [{ from: 0, to: 10, ...stepped }] }, 10);
+  const segLeft = clock.segments.find((s) => s.sourceFrom === 0 && s.sourceTo === 5);
+  const segRight = clock.segments.find((s) => s.sourceFrom === 5 && s.sourceTo === 10);
+  close(segLeft.rate1, 2);
+  close(segRight.rate0, 0.5);
+
+  // Non-dyadic shot spans (IEEE-754 ULP boundary drift on (b - from)/(to - from)) must keep before/after rates exact
+  const ulpStep = {
+    curve: [
+      [0, 1],
+      [0.25, 1],
+      [1, 1],
+    ],
+    cuts: { 1: [4, 0.25] },
+  };
+  const ulpClock1 = compileTiming({ speeds: [{ from: 0.1, to: 1.4, ...ulpStep }] }, 2);
+  close(ulpClock1.segments.find((s) => Math.abs(s.sourceTo - 0.425) < 1e-9).rate1, 4);
+  close(ulpClock1.segments.find((s) => Math.abs(s.sourceFrom - 0.425) < 1e-9).rate0, 0.25);
+  const ulpStep2 = {
+    curve: [
+      [0, 1],
+      [0.1, 1],
+      [1, 1],
+    ],
+    cuts: { 1: [3.5, 0.4] },
+  };
+  const ulpClock2 = compileTiming({ speeds: [{ from: 0, to: 13.7, ...ulpStep2 }] }, 13.7);
+  close(ulpClock2.segments.find((s) => Math.abs(s.sourceTo - 1.37) < 1e-9).rate1, 3.5);
+  close(ulpClock2.segments.find((s) => Math.abs(s.sourceFrom - 1.37) < 1e-9).rate0, 0.4);
+
+  // Cut entries remap cleanly on insert, remove, and crop
+  assert.deepEqual(remapSpeedCutsOnInsert({ 2: [2, 0.5], 3: [1, 1] }, 2, 6), {
+    3: [2, 0.5],
+    4: [1, 1],
+  });
+  assert.deepEqual(remapSpeedCutsOnRemove({ 1: [1.5, 0.8], 3: [2, 0.5] }, 2, 4), {
+    1: [1.5, 0.8],
+    2: [2, 0.5],
+  });
+  const cropped = cropSpeedCurve(leftPulled, 0.25, 0.75);
+  assert.deepEqual(cropped.cuts, { 1: [3.5, 1] });
+  close(cropped.curve[1][1], 2.25);
 });

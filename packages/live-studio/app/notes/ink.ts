@@ -1,22 +1,33 @@
-// Drawing on the picture for a note: a pen, an arrow, a box, and a path that is one point per moment ("here at 1:10, then here at
-// 1:12": the AI reads it as a move between them). Every stroke belongs to the film second it was drawn on; strokes from other
-// seconds of the same note stay faintly visible with their time (onion skin), and a path shows where it says things should be now.
-// A note keeps its strokes; while the film plays, an open note's strokes come up around their seconds as its pin does.
-import { picturePoint } from "../picture/preview-state";
 import { PHONE } from "../core/device";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, say, set, ui } from "../core/store";
 import { SAME, stamp } from "../core/time";
+// Drawing on the picture for a note: a pen, an arrow, a box, and a path that is one point per moment ("here at 1:10, then here at
+// 1:12": the AI reads it as a move between them). Every stroke belongs to the film second it was drawn on; strokes from other
+// seconds of the same note stay faintly visible with their time (onion skin), and a path shows where it says things should be now.
+// A note keeps its strokes; while the film plays, an open note's strokes come up around their seconds as its pin does.
+import { picturePoint } from "../picture/preview-state";
 import { tone } from "../timeline/canvas";
 import { IDLE_INK_GESTURE, type InkGesture, stepInk } from "./ink-gesture";
 import type { ComposeOrigin } from "./notes";
 import { spanFade } from "./pinfade";
 import { shapeOf } from "./shape";
-import { type Compose, type Hit, type InkKind, type Mark, type Note } from "./slice";
+import {
+  type Compose,
+  type Hit,
+  type InkKind,
+  type Mark,
+  type Note,
+  type StageAnchor,
+} from "./slice";
 
 export let inkMarks: Mark[] = [];
-export const inkHooks = { changed: () => {} }; // notes.ts: the note being written is kept on the device with its strokes
+export const inkHooks = {
+  changed: () => {},
+  anchor: (_a: StageAnchor) => {},
+  cancelEmpty: () => {},
+}; // notes.ts: the note being written is kept on the device with its strokes
 // A path point added at a new second changes what is said without adding a stroke, so the count alone can't drive the note box
 const said = () => {
   if (!inkMarks.length) return "";
@@ -309,7 +320,7 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
 // ---------- Drawing with the pointer. look(x, y) names what is under a point at the current frame, as a pin's tap does
 let hooks = {
   look: (_x: number, _y: number): Hit => ({ what: "" }),
-  begin: (_origin?: ComposeOrigin) => {},
+  begin: (_origin?: ComposeOrigin, _anchor?: StageAnchor) => {},
   pause: () => {},
 };
 let live: { mark: Mark; smart: boolean } | null = null;
@@ -331,7 +342,8 @@ const startStroke = (
   origin?: ComposeOrigin,
 ) => {
   hooks.pause();
-  hooks.begin(origin);
+  set({ inkDrawing: true });
+  hooks.begin(origin, { x: p[0], y: p[1] });
   const mark: Mark = { kind, t: +S.t.toFixed(3), pts: kind === "pen" ? [p] : [p, p] };
   live = { mark, smart };
   inkMarks.push(mark);
@@ -350,6 +362,7 @@ const moveStroke = (e: PointerEvent) => {
 };
 const NAMES = { pen: "Pen stroke", arrow: "Arrow", box: "Box" } as const;
 const endStroke = () => {
+  if (get().inkDrawing) set({ inkDrawing: false });
   const active = live;
   live = null;
   if (!active) return;
@@ -362,12 +375,13 @@ const endStroke = () => {
   if (!big) {
     inkMarks.pop();
     S.dirty = true;
+    inkHooks.cancelEmpty();
     return;
   }
+  const xs = m.pts.map((pt) => pt[0]),
+    ys = m.pts.map((pt) => pt[1]);
   if (smart) {
     const kind = shapeOf(m.pts.map(([x, y]) => [x * r.width, y * r.height]));
-    const xs = m.pts.map((p) => p[0]),
-      ys = m.pts.map((p) => p[1]);
     if (kind === "arrow") m.pts = [a, b];
     if (kind === "box")
       m.pts = [
@@ -383,12 +397,18 @@ const endStroke = () => {
       ? [hooks.look((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)]
       : [hooks.look(...p), hooks.look(...q)];
   keep();
+  inkHooks.anchor({
+    x: +Math.max(...xs).toFixed(4),
+    y: +((Math.min(...ys) + Math.max(...ys)) / 2).toFixed(4),
+  });
 };
 const dropStroke = () => {
+  if (get().inkDrawing) set({ inkDrawing: false });
   if (live) {
     inkMarks.pop();
     live = null;
     S.dirty = true;
+    inkHooks.cancelEmpty();
   }
 };
 // A drag with the right mouse button, a tool in hand or not (picture/pointer.ts on the picture): drawn as a pen stroke, then on
@@ -406,7 +426,13 @@ export const sketch = {
 export const attachInk = (opts: typeof hooks) => {
   const c = S.el.ink;
   hooks = opts;
-  let gesture: InkGesture<PointerEvent> = IDLE_INK_GESTURE;
+  let gesture: InkGesture = IDLE_INK_GESTURE;
+  let passPointerId: number | null = null;
+  const forwardToCanvas = (e: PointerEvent) => {
+    try {
+      S.el.canvas?.dispatchEvent(new PointerEvent(e.type, e));
+    } catch {}
+  };
   resetActiveInk = () => {
     const res = stepInk(gesture, { type: "reset" });
     gesture = res.gesture;
@@ -420,28 +446,46 @@ export const attachInk = (opts: typeof hooks) => {
       type: "down",
       id: e.pointerId,
       button: e.button,
+      pointerType: e.pointerType,
       tool,
       x: e.clientX,
       y: e.clientY,
-      raw: e,
     });
-    if (res.gesture === prev) return;
+    if (res.gesture === prev) {
+      if (prev.kind === "idle" && e.pointerType === "mouse" && e.button !== 2) {
+        passPointerId = e.pointerId;
+        forwardToCanvas(e);
+      }
+      return;
+    }
+    passPointerId = null;
     e.preventDefault();
-    c.setPointerCapture(e.pointerId);
+    try {
+      c.setPointerCapture(e.pointerId);
+    } catch {}
     gesture = res.gesture;
     if (res.effect === "start_path") {
+      const p = at(e);
       hooks.pause();
-      hooks.begin(pointerOrigin(e));
+      hooks.begin(pointerOrigin(e), { x: p[0], y: p[1] });
     } else if (res.effect === "start_stroke" && tool && tool !== "path")
       startStroke(tool, at(e), false, pointerOrigin(e));
   });
   c.addEventListener("pointermove", (e) => {
+    if (e.pointerId === passPointerId) {
+      forwardToCanvas(e);
+      return;
+    }
     const res = stepInk(gesture, { type: "move", id: e.pointerId, x: e.clientX, y: e.clientY });
     gesture = res.gesture;
-    if (res.effect === "start_sketch" && res.from) sketch.start(e, res.from);
-    else if (res.effect === "move_stroke") moveStroke(e);
+    if (res.effect === "move_stroke") moveStroke(e);
   });
   const up = (e: PointerEvent) => {
+    if (e.pointerId === passPointerId) {
+      passPointerId = null;
+      forwardToCanvas(e);
+      return;
+    }
     const res = stepInk(gesture, {
       type: "up",
       id: e.pointerId,
@@ -475,6 +519,7 @@ export const attachInk = (opts: typeof hooks) => {
       }
       m.t = m.ts![0];
       keep();
+      inkHooks.anchor({ x: p[0], y: p[1] });
       say(
         m.pts.length === 1
           ? "Point 1. Now jump to another second and click the next point"
@@ -484,14 +529,30 @@ export const attachInk = (opts: typeof hooks) => {
     }
   };
   const cancel = (e: PointerEvent) => {
+    if (e.pointerId === passPointerId) {
+      passPointerId = null;
+      forwardToCanvas(e);
+      return;
+    }
     const res = stepInk(gesture, { type: "cancel", id: e.pointerId });
     gesture = res.gesture;
     if (res.effect === "drop") dropStroke();
   };
+  const dropCapture = (e: PointerEvent) => {
+    const res = stepInk(gesture, { type: "cancel", id: e.pointerId });
+    gesture = res.gesture;
+    if (res.effect === "drop") dropStroke();
+  };
+  const clearPassOnWindow = (e: PointerEvent) => {
+    if (e.pointerId === passPointerId) passPointerId = null;
+  };
   c.addEventListener("pointerup", up);
   c.addEventListener("pointercancel", cancel);
-  c.addEventListener("lostpointercapture", cancel);
+  c.addEventListener("lostpointercapture", dropCapture);
+  addEventListener("pointerup", clearPassOnWindow);
+  addEventListener("pointercancel", clearPassOnWindow);
   addEventListener("blur", () => {
+    passPointerId = null;
     const res = stepInk(gesture, { type: "blur" });
     gesture = res.gesture;
     if (res.effect === "drop") dropStroke();

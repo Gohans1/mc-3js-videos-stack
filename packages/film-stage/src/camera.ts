@@ -3,8 +3,8 @@
 // point, lens and how much the head sways. A key with cut: true starts a new path. On top ride a slow wave (the "breathing" float the
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import { handheld as makeHandheld, type ShakeName, SHAKES } from "film-kit/handheld";
-import { clampFov, fovOf, mmOf } from "film-kit/lens";
-export { dofParams, dollyZoom, PRIME_LENSES } from "film-kit/lens";
+import { clampFov, fovOf, mmOf, nearestPrime, PRIME_LENSES, PRIMES } from "film-kit/lens";
+export { dofParams, dollyZoom } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
@@ -30,7 +30,7 @@ export {
   type CameraMotion,
   type ResolveCameraAnchor,
 } from "./camera-path";
-export { fovOf, mmOf };
+export { fovOf, mmOf, nearestPrime, PRIME_LENSES, PRIMES };
 export { SHAKES, type ShakeName };
 const curves = new WeakMap();
 const segments = (keys) => {
