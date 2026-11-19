@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { timingClock } from "../../src/timing-state.mjs";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
-import { set, setPref, useStudio } from "../core/store";
+import { get, set, setPref, useStudio } from "../core/store";
 import { FPS, stamp } from "../core/time";
 import { useFrame } from "../core/useFrame";
 import { captureFrameDataUrl } from "./capture";
@@ -58,7 +58,7 @@ function ensureGhostCapture(slotKey: string, cacheKey: string, captureAt: number
       const next = queuedSlot.get(slotKey);
       if (next) {
         queuedSlot.delete(slotKey);
-        if (!ghostCache.has(next.cacheKey)) {
+        if (!ghostCache.has(next.cacheKey) && get().ghost && !S.playing && !S.dragging) {
           ensureGhostCapture(slotKey, next.cacheKey, next.captureAt);
           return;
         }
@@ -128,16 +128,23 @@ function useGhostTarget(autoCapture: boolean): {
           if (active && !S.dragging) setDragEpoch((n) => n + 1);
         });
       };
-      addEventListener("pointerup", onRelease, { once: true });
-      addEventListener("pointercancel", onRelease, { once: true });
+      addEventListener("pointerup", onRelease);
+      addEventListener("pointercancel", onRelease);
+      addEventListener("lostpointercapture", onRelease);
       return () => {
         active = false;
         removeEventListener("pointerup", onRelease);
         removeEventListener("pointercancel", onRelease);
+        removeEventListener("lostpointercapture", onRelease);
       };
     }
     if (slotLatest.has(slotKey)) {
       const timer = setTimeout(() => {
+        if (S.playing || !get().ghost) return;
+        if (S.dragging) {
+          setDragEpoch((n) => n + 1);
+          return;
+        }
         ensureGhostCapture(slotKey, cacheKey, captureAt);
       }, REV_DEBOUNCE_MS);
       return () => clearTimeout(timer);

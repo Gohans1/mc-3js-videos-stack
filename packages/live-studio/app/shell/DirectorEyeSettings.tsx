@@ -58,7 +58,7 @@ export function DirectorEyeSettings({
   blindAudio: boolean;
 }) {
   return (
-    <div className="upright:hidden sideways:hidden contents">
+    <div className="upright:hidden sideways:hidden divide-border divide-y">
       <div className="flex min-h-10 items-center justify-between gap-3">
         <span className="flex items-center gap-1.5 text-sm whitespace-nowrap">
           Value check

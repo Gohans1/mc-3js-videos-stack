@@ -284,6 +284,7 @@ beforeEach(async () => {
     u.S.playing = false;
     u.S.dragging = null;
     u.S.tools.free.on = false;
+    u.SHOT_LIST[1].t = 2;
     u.S.comments = u.SHOT_LIST.map((s) => s.name);
     u.S.render(0);
     u.setPref("guides", false);
@@ -292,6 +293,7 @@ beforeEach(async () => {
     u.setPref("ghostOpacity", 0.35);
     u.setVolume(1);
     u.set({
+      ratio: "16:9",
       free: false,
       ink: null,
       compose: null,
@@ -443,6 +445,21 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   expect(await page.evaluate(`window.__EYE_TEST__.getFilmDraws()`)).toBe(1);
   expect(await page.evaluate(`!!document.querySelector('img[data-ghost-shot="0"]')`)).toBe(true);
 
+  // Debounce refresh skips cleanly if playback starts before the 200ms timer fires
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.resetFilmDraws();
+    window.__EYE_TEST__.set({ camRev: 6 });
+    window.__EYE_TEST__.S.playing = true;
+    window.__EYE_TEST__.set({ playing: true });
+  })()`);
+  await Bun.sleep(240);
+  expect(await page.evaluate(`window.__EYE_TEST__.getFilmDraws()`)).toBe(0);
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.S.playing = false;
+    window.__EYE_TEST__.set({ playing: false });
+  })()`);
+  await waitUntil(`window.__EYE_TEST__.getFilmDraws() === 1`);
+
   // Defer uncached capture while S.dragging is active, then capture on pointerup release
   await page.evaluate(`(() => {
     window.__EYE_TEST__.resetFilmDraws();
@@ -561,12 +578,52 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
   })()`);
   await waitUntil(`window.__EYE_TEST__.watchCounts.playing === ${baseWatchPlaying}`);
 
-  // Reopen paused and verify normal capture + 4-swatch quantization + click-to-seek
-  await page.evaluate(`document.querySelector('button[aria-label="Color script"]').click()`);
+  // Opening while S.dragging is active defers capture until lostpointercapture release
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.S.dragging = { resume: false };
+    document.querySelector('button[aria-label="Color script"]').click();
+  })()`);
   await waitUntil(`document.querySelector('section[aria-label="Color script strip"]')`);
+  await Bun.sleep(50);
+  expect(
+    await page.evaluate(
+      `document.querySelectorAll('section[aria-label="Color script strip"] img').length`,
+    ),
+  ).toBe(0);
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.S.dragging = null;
+    window.dispatchEvent(new PointerEvent("lostpointercapture", { bubbles: true }));
+  })()`);
   await waitUntil(
     `document.querySelectorAll('section[aria-label="Color script strip"] img').length === 4`,
   );
+
+  // Portrait 9:16 thumbnails use object-contain framing without heavy top/bottom crop
+  await page.evaluate(`window.__EYE_TEST__.set({ ratio: "9:16" })`);
+  await waitUntil(
+    `document.querySelectorAll('section[aria-label="Color script strip"] img.object-contain').length === 4`,
+  );
+  await page.evaluate(`window.__EYE_TEST__.set({ ratio: "16:9" })`);
+  await waitUntil(
+    `document.querySelectorAll('section[aria-label="Color script strip"] img.object-cover').length === 4`,
+  );
+
+  // Paused cut edit (shotsRev bump) immediately updates active shot highlight in ColorScript
+  await page.evaluate(`window.__EYE_TEST__.seek(2.5)`);
+  await waitUntil(
+    `document.querySelector('button[aria-label^="Seek to Shot 1"][aria-current="true"]')`,
+  );
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.SHOT_LIST[1].t = 3;
+    window.__EYE_TEST__.set({ shotsRev: 2 });
+  })()`);
+  await waitUntil(
+    `document.querySelector('button[aria-label^="Seek to Shot 0"][aria-current="true"]')`,
+  );
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.SHOT_LIST[1].t = 2;
+    window.__EYE_TEST__.set({ shotsRev: 3 });
+  })()`);
 
   const stripInfo = await page.evaluate(`(() => {
     const sec = document.querySelector('section[aria-label="Color script strip"]');

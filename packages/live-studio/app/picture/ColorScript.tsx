@@ -54,6 +54,7 @@ function waitUntilIdle(signal: AbortSignal): Promise<void> {
       offPlay();
       removeEventListener("pointerup", onPointerEnd);
       removeEventListener("pointercancel", onPointerEnd);
+      removeEventListener("lostpointercapture", onPointerEnd);
       signal.removeEventListener("abort", finish);
       resolve();
     };
@@ -64,6 +65,7 @@ function waitUntilIdle(signal: AbortSignal): Promise<void> {
     const offPlay = S.watch("playing", check);
     addEventListener("pointerup", onPointerEnd);
     addEventListener("pointercancel", onPointerEnd);
+    addEventListener("lostpointercapture", onPointerEnd);
     signal.addEventListener("abort", finish, { once: true });
     check();
   });
@@ -95,6 +97,7 @@ function ColorScriptBody() {
       const next = shotIndex(S.t);
       setCurrentShot((prev) => (prev === next ? prev : next));
     };
+    sync();
     return S.watch("time", sync);
   }, [shots]);
 
