@@ -111,7 +111,7 @@ function applyShadows(root: THREE.Object3D, shadows: boolean): void {
 function normalizeBlockId(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("blockModel requires a non-empty block id");
-  const stripped = /^block:[^:]+:.+/.test(trimmed) ? trimmed.slice(6) : trimmed;
+  const stripped = /^block:[^:]*:/.test(trimmed) ? trimmed.slice(6) : trimmed;
   const colon = stripped.indexOf(":");
   const ns = colon >= 0 ? stripped.slice(0, colon) : "minecraft";
   const path = colon >= 0 ? stripped.slice(colon + 1) : stripped;
@@ -124,7 +124,7 @@ function normalizeBlockId(raw: string): string {
 function parseItemInput(raw: string): { ns: string; path: string; isExplicitPath: boolean } {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("itemModel requires a non-empty item id");
-  const stripped = /^item:[^:]+:.+/.test(trimmed) ? trimmed.slice(5) : trimmed;
+  const stripped = /^item:[^:]*:/.test(trimmed) ? trimmed.slice(5) : trimmed;
   const colon = stripped.indexOf(":");
   const ns = colon >= 0 ? stripped.slice(0, colon) : "minecraft";
   const path = colon >= 0 ? stripped.slice(colon + 1) : stripped;
