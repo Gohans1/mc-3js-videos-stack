@@ -39,10 +39,10 @@ export function useFrameKey(readKey: () => string | number): void {
         }, MIN_INTERVAL_MS - elapsed);
       }
     };
-    const onRendered = () => (S.playing ? schedule() : check());
+    const onFrame = () => (S.playing ? schedule() : check());
     const u1 = onWake("time", schedule);
-    const u2 = onWake("render", check);
-    const u3 = onWake("rendered", onRendered);
+    const u2 = onWake("render", onFrame);
+    const u3 = onWake("rendered", onFrame);
     return () => {
       u1();
       u2();

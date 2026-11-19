@@ -26,7 +26,7 @@ export const camLine = () => {
   const roll = free.on && free.roll ? +free.roll.toFixed(4) : 0;
   const wave = free.on && free.wave ? +free.wave.toFixed(3) : 0;
   const bob = free.on && free.bob ? +free.bob.toFixed(3) : 0;
-  const fstop = free.on && free.fstop ? +free.fstop.toFixed(2) : 0;
+  const fstop = free.on && free.fstop ? +free.fstop.toFixed(3) : 0;
   const focus =
     free.on && free.focus !== undefined && free.focus !== null
       ? structuredClone(free.focus)
@@ -42,9 +42,7 @@ export const camLine = () => {
           focus !== undefined
             ? `focus: ${typeof focus === "number" ? +focus.toFixed(2) : JSON.stringify(focus)}`
             : "",
-          handheld !== undefined
-            ? `handheld: ${typeof handheld === "string" ? handheld : JSON.stringify(handheld)}`
-            : "",
+          handheld !== undefined ? `handheld: ${JSON.stringify(handheld)}` : "",
         ]
           .filter(Boolean)
           .map((part) => `, ${part}`)

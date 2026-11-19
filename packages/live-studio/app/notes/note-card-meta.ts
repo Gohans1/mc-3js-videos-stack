@@ -247,9 +247,20 @@ export const noteFreeView = (note: { freeCam?: boolean; cam?: unknown }): NoteFr
   const p = vec3Tuple(world?.p) ?? lineTriple(line, "p");
   const l = vec3Tuple(world?.l) ?? lineTriple(line, "l");
   if (!p || !l) return null;
-  const fovRaw = typeof world?.fov === "number" ? world.fov : lineNumber(line, "fov");
-  const rollRaw = typeof world?.roll === "number" ? world.roll : lineNumber(line, "roll");
-  const waveRaw = typeof world?.wave === "number" ? world.wave : lineNumber(line, "wave");
+  const hasModernWorld = typeof world?.fov === "number";
+  const fovRaw = hasModernWorld ? (world!.fov as number) : lineNumber(line, "fov");
+  const rollRaw =
+    typeof world?.roll === "number"
+      ? world.roll
+      : hasModernWorld
+        ? undefined
+        : lineNumber(line, "roll");
+  const waveRaw =
+    typeof world?.wave === "number"
+      ? world.wave
+      : hasModernWorld
+        ? undefined
+        : lineNumber(line, "wave");
   const bobRaw = typeof world?.bob === "number" ? world.bob : undefined;
   const fstopRaw = typeof world?.fstop === "number" ? world.fstop : undefined;
   return {

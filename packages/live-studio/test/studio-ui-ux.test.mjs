@@ -2755,7 +2755,7 @@ test("camLine serializes Free Cam bob/fstop/focus/handheld into note.cam.world a
     u.freecam.setFreeRoll(0.15);
     u.freecam.setFreeWave(0.5);
     u.freecam.setFreeBob(0.75);
-    u.freecam.setFreeFstop(2.8);
+    u.freecam.setFreeFstop(2.825);
     u.freecam.setFreeFocus(4.5);
     u.freecam.setFreeHandheld("HANDYCAM_RUN");
 
@@ -2809,27 +2809,31 @@ test("camLine serializes Free Cam bob/fstop/focus/handheld into note.cam.world a
     u.freecam.resetFreeLensAll();
     u.freecam.setFree(false);
     return {
+      line: lineResult.line,
       world: lineResult.world,
       savedWorld: saved?.cam?.world,
       extracted,
+      imgPrefix: typeof imgWhileMatching === "string" ? imgWhileMatching.slice(0, 11) : null,
       sameNowPicture: imgWhileMatching === imgWhileChanged,
       jumped,
       returned,
     };
   })()`);
 
-  expect(res.world.fstop).toBe(2.8);
+  expect(res.line).toContain('handheld: "HANDYCAM_RUN"');
+  expect(res.world.fstop).toBe(2.825);
   expect(res.world.bob).toBe(0.75);
   expect(res.world.focus).toBe(4.5);
   expect(res.world.handheld).toBe("HANDYCAM_RUN");
   expect(res.savedWorld).toEqual(res.world);
   expect(res.extracted).toEqual(res.world);
+  expect(res.imgPrefix).toBe("data:image/");
   expect(res.sameNowPicture).toBe(true);
-  expect(res.jumped).toEqual({ fstop: 2.8, focus: 4.5, bob: 0.75, handheld: "HANDYCAM_RUN" });
+  expect(res.jumped).toEqual({ fstop: 2.825, focus: 4.5, bob: 0.75, handheld: "HANDYCAM_RUN" });
   expect(res.returned).toEqual({ fstop: 8, focus: 12, bob: 0.1, handheld: false });
 });
 
-test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on the SAME seek via wake('rendered')", async () => {
+test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on the SAME seek via wake('rendered') while staying throttled during playback", async () => {
   await page.evaluate(`window.__UX_TEST__.setCamData([
     { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 45 },
     { id: "k1", t: 3, p: [2, 2, 6], l: [0, 1, 0], fov: 28 },
@@ -2850,6 +2854,9 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
   })()`);
   expect(origCheck).toBe(true);
   await waitUntil(`document.querySelector('input[aria-label="Free cam FOV"]')?.value === "28"`);
+  const mmAt28 = await page.evaluate(
+    `document.querySelector('input[aria-label="Focal length (mm)"]')?.value`,
+  );
 
   // Seek to t=0: seekExact runs BEFORE S.render updates camera.fov, then wake("rendered") runs AFTER
   await page.evaluate(`(() => {
@@ -2862,8 +2869,12 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
   expect(
     await page.evaluate(`document.querySelector('input[aria-label="Free cam FOV"]')?.value`),
   ).toBe("45");
+  const mmAt45 = await page.evaluate(
+    `document.querySelector('input[aria-label="Focal length (mm)"]')?.value`,
+  );
+  expect(Number(mmAt45)).toBeLessThan(Number(mmAt28));
 
-  // Seek back to t=3: single seek updates immediately to 28
+  // Seek back to t=3: single seek updates immediately to 28 and restores wider focal length
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.seekExact(3);
@@ -2871,8 +2882,43 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
     u.wake("rendered");
   })()`);
   await waitUntil(`document.querySelector('input[aria-label="Free cam FOV"]')?.value === "28"`);
+  expect(
+    await page.evaluate(`document.querySelector('input[aria-label="Focal length (mm)"]')?.value`),
+  ).toBe(mmAt28);
 
-  // With customFreeFov=true (45°), Reset is enabled at t=3 (def=28) and immediately disables on seeking to t=0 (def=45)
+  // During playback (S.playing = true), rapid wake("render") + wake("rendered") bursts stay throttled (~8Hz cap)
+  const throttleCheck = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    // Wait for any prior seek's throttle window (120ms) to expire before testing the leading edge
+    await new Promise((r) => setTimeout(r, 140));
+    u.S.playing = true;
+    u.S.tools.camera.fov = 31;
+    u.wake("render");
+    u.wake("rendered");
+    await new Promise((r) => setTimeout(r, 15));
+    const afterLeading = document.querySelector('input[aria-label="Free cam FOV"]')?.value;
+    // Burst rapid render/rendered ticks well inside the 120ms window
+    for (const nextFov of [33, 35, 37, 39, 41]) {
+      u.S.tools.camera.fov = nextFov;
+      u.wake("render");
+      u.wake("rendered");
+    }
+    await new Promise((r) => setTimeout(r, 20));
+    const midWindow = document.querySelector('input[aria-label="Free cam FOV"]')?.value;
+    // After the 120ms throttle window expires, the latest FOV flushes cleanly
+    await new Promise((r) => setTimeout(r, 160));
+    const afterWindow = document.querySelector('input[aria-label="Free cam FOV"]')?.value;
+    u.S.playing = false;
+    u.S.tools.camera.fov = 28;
+    u.wake("rendered");
+    return { afterLeading, midWindow, afterWindow };
+  })()`);
+  expect(throttleCheck.afterLeading).toBe("31");
+  expect(throttleCheck.midWindow).toBe("31");
+  expect(throttleCheck.afterWindow).toBe("41");
+  await waitUntil(`document.querySelector('input[aria-label="Free cam FOV"]')?.value === "28"`);
+
+  // With customFreeFov=true (45°), Resets (FOV + Reset all) are enabled at t=3 (def=28) and immediately disable on seeking to t=0 (def=45)
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.freecam.setFreeFov(45);
@@ -2881,7 +2927,7 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
     tab?.click();
   })()`);
   await waitUntil(
-    `document.querySelector('button[aria-label="Reset free camera FOV to default"]')?.disabled === false`,
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]')?.disabled === false && document.querySelector('button[aria-label="Reset free camera lens and feel to default"]')?.disabled === false`,
   );
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
@@ -2890,7 +2936,7 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
     u.wake("rendered");
   })()`);
   await waitUntil(
-    `document.querySelector('button[aria-label="Reset free camera FOV to default"]')?.disabled === true`,
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]')?.disabled === true && document.querySelector('button[aria-label="Reset free camera lens and feel to default"]')?.disabled === true`,
   );
 
   await page.evaluate(`(() => {
@@ -3105,11 +3151,24 @@ test("Segmented Focus mode stays Tab-reachable in point mode and Target mode wor
   ], 0)`);
   await waitUntil(`document.querySelector('[role="radiogroup"][aria-label="Focus mode"]')`);
 
-  // Tab stop on first button when value === "point"
+  // Tab stop on first button when value === "point" + ArrowRight navigates cleanly from idx 0 to Manual (idx 1)
   const tabIndices = await page.evaluate(
     `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].map((b) => b.tabIndex)`,
   );
   expect(tabIndices).toEqual([0, -1, -1]);
+  await page.evaluate(`(() => {
+    const btns = [...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')];
+    btns[0]?.focus();
+    btns[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+  })()`);
+  await waitUntil(`typeof window.__UX_TEST__.camKeys()[0].focus === 'number'`);
+  // Restore point mode before exercising Target click from point mode
+  await page.evaluate(`window.__UX_TEST__.setCamData([
+    { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50, focus: { point: [1, 2, 3], label: "Wall" } },
+  ], 0)`);
+  await waitUntil(
+    `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].map((b) => b.tabIndex).join(',') === '0,-1,-1'`,
+  );
 
   // Click Target from point mode when targets.length === 0
   await page.evaluate(
