@@ -93,6 +93,7 @@ import {
 import { loadTiming } from "./timeline/timing";
 
 registerEngine({
+  buildAudioScene: buildScene,
   render,
   renderFilmFrame,
   finalCanvas,

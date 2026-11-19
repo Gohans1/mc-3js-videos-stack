@@ -258,7 +258,7 @@ export function ClipExport({ className }: { className?: string }) {
 
       const spanStart = firstFrame / FPS,
         spanEnd = (lastFrame + 1) / FPS;
-      const audioBuffer = await renderAudioSpan(spanStart, spanEnd).catch(() => null);
+      const audioBuffer = await renderAudioSpan(spanStart, spanEnd, abort.signal);
       let audioSource: AudioBufferSource | null = null;
       if (audioBuffer && typeof AudioEncoder !== "undefined") {
         let audioCodec: "aac" | "opus" = "aac";

@@ -529,6 +529,51 @@ const beatMarkers = {
   bpm: z.number().nonnegative().optional(),
   beatSource: name.optional(),
 };
+const isSafeRelativeIrPath = (s: string) =>
+  s.length > 0 &&
+  !s.includes("\0") &&
+  !s.startsWith("/") &&
+  !s.startsWith("\\") &&
+  !/^[A-Za-z]:/.test(s) &&
+  !s.split(/[\\/]/).includes("..");
+
+const reverbSpace = z.string().min(1).refine(isSafeRelativeIrPath, "unsafe reverb space path");
+
+export const ReverbSpec = z.looseObject({
+  space: reverbSpace,
+  wet: z.number().min(0).max(1).optional(),
+  preDelayMs: z.number().min(0).max(500).optional(),
+});
+
+export const ShotSpace = z
+  .looseObject({
+    from: secs,
+    to: secs.optional(),
+    space: reverbSpace,
+    wet: z.number().min(0).max(1).optional(),
+    preDelayMs: z.number().min(0).max(500).optional(),
+  })
+  .refine((s: any) => s.to === undefined || s.to > s.from, "to must come after from");
+
+const spatialVec3 = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+
+export const SpatialSpec = z
+  .looseObject({
+    at: spatialVec3.optional(),
+    target: z.string().min(1).optional(),
+    offset: spatialVec3.optional(),
+    refDistance: z.number().positive().optional(),
+    maxDistance: z.number().positive().optional(),
+    rolloff: z.number().min(0).max(10).optional(),
+    occlusion: z.number().min(0).max(1).optional(),
+    airAbsorption: z.boolean().optional(),
+  })
+  .refine(
+    (s: any) =>
+      s.refDistance === undefined || s.maxDistance === undefined || s.maxDistance >= s.refDistance,
+    "maxDistance must be >= refDistance",
+  );
+
 const Bed = z
   .looseObject({
     name,
@@ -546,6 +591,8 @@ const Bed = z
     try: z.array(name).optional(),
     filters: z.array(audioFilter).optional(),
     track,
+    reverb: ReverbSpec.optional(),
+    spatial: SpatialSpec.optional(),
   })
   .refine((b: any) => b.to > b.from, "to must come after from");
 const Shot1 = z.looseObject({
@@ -563,6 +610,8 @@ const Shot1 = z.looseObject({
   try: z.array(name).optional(),
   filters: z.array(audioFilter).optional(),
   track,
+  reverb: ReverbSpec.optional(),
+  spatial: SpatialSpec.optional(),
 });
 // tracks (top to bottom) and each entry's track: app/sound/tracks.ts. Optional, the page adds them; mute leaves a track out of the mix,
 // filters (the clip EQ's ffmpeg entries) and gain (dB) shape every clip on it after its own chain, as real-sound's buses do
@@ -584,6 +633,8 @@ export const SoundTimeline = z
     voiceGain: dB.optional(),
     lufs: dB.optional(),
     drive: dB.optional(),
+    reverb: ReverbSpec.optional(),
+    spaces: z.array(ShotSpace).optional(),
   })
   .refine((l: any) => !l.tracks || unique(l.tracks.map((t: any) => t.id)), "track ids must differ")
   .superRefine((l: any, ctx) => {

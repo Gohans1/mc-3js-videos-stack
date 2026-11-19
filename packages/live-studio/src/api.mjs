@@ -44,6 +44,7 @@ import { openFilmLut, openFilmResource, openOpenFilm } from "./openfilm.mjs";
 import { createPortsService } from "./ports.mjs";
 import { openPropLibrary } from "./prop-library.ts";
 import { openVoiceLibrary } from "./voice-library.mjs";
+import { assertInsideDir } from "./voice-map.mjs";
 import {
   PlaygroundConfig,
   PlaygroundConnectionQuery,
@@ -1520,6 +1521,44 @@ export const createApi = (
     const name = c.req.param("name").slice(0, -5);
     const f = await film.smallSfx(name);
     return f ? sendFile(c, f, { onSound: true, sfxName: name }) : noSound(c);
+  });
+  app.get("/api/sound/ir", (c) => {
+    const raw = (c.req.query("path") || "").trim();
+    if (
+      !raw ||
+      raw.includes("\0") ||
+      raw.split(/[\\/]/).includes("..") ||
+      raw.startsWith("/") ||
+      raw.startsWith("\\") ||
+      /^[A-Za-z]:/.test(raw)
+    ) {
+      return c.json({ error: "Invalid IR path" }, 400);
+    }
+    const allowedExt = new Set([".wav", ".ogg", ".flac", ".mp3", ".webm"]);
+    if (
+      film.PROJECT &&
+      (raw.includes("/") || raw.includes("\\") || allowedExt.has(extname(raw).toLowerCase()))
+    ) {
+      let target;
+      try {
+        target = assertInsideDir(film.PROJECT, raw, "Reverb IR");
+      } catch {
+        return c.json({ error: "IR path escapes film directory" }, 403);
+      }
+      if (
+        !allowedExt.has(extname(target).toLowerCase()) ||
+        !existsSync(target) ||
+        !statSync(target).isFile()
+      ) {
+        return c.body(null, 404);
+      }
+      return sendFile(c, target, { onSound: true });
+    }
+    if (/^\w[\w.-]*$/.test(raw)) {
+      const f = film.sound?.fileOf(raw);
+      return f ? sendFile(c, f, { onSound: true, sfxName: raw }) : noSound(c);
+    }
+    return c.body(null, 404);
   });
 
   app.get("/api/mix.wav", (c) =>

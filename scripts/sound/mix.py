@@ -23,7 +23,7 @@ from functools import cache
 from pathlib import Path
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from process import render as process_audio
+from process import render as process_audio  # noqa: E402
 if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from studio_tell import job  # noqa: E402
@@ -224,7 +224,233 @@ def track_chain(e):
     return [*_safe_filters(t.get("filters")), *([f"volume={db:.4g}dB"] if db else [])]
 
 
-PROJECTED_VOICE = LEGACY_TIMELINE = None
+PROJECTED_VOICE = LEGACY_TIMELINE = CAM_SEGMENTS = None
+
+
+@cache
+def _scene_spatial_data():
+    from spatial import camera_requires_scene
+
+    cam_keys = []
+    placed_data = {}
+    cam_rel = CONFIG.get("camTimeline", "src/timeline/cam.json")
+    if isinstance(cam_rel, str) and cam_rel.strip():
+        try:
+            cam_path = _assert_in_root(ROOT / cam_rel, "camTimeline")
+        except ValueError as e:
+            raise SystemExit(str(e))
+        if cam_path.is_file():
+            raw_cam = _read_json(cam_path, cam_rel)
+            if isinstance(raw_cam, list):
+                cam_keys = raw_cam
+            elif isinstance(raw_cam, dict) and isinstance(raw_cam.get("keys"), list):
+                cam_keys = raw_cam["keys"]
+    kf = CONFIG.get("keyFiles")
+    placed_kf = next((rel for rel, ed in kf.items() if isinstance(rel, str) and ed == "placed"), None) if isinstance(kf, dict) else None
+    placed_rel = placed_kf or CONFIG.get("placedTimeline") or CONFIG.get("placed") or "src/timeline/placed.json"
+    if isinstance(placed_rel, str) and placed_rel.strip():
+        try:
+            placed_path = _assert_in_root(ROOT / placed_rel, "placedTimeline")
+        except ValueError as e:
+            raise SystemExit(str(e))
+        if placed_path.is_file():
+            raw_placed = _read_json(placed_path, placed_rel)
+            if isinstance(raw_placed, dict):
+                placed_data = raw_placed
+    return cam_keys, placed_data, camera_requires_scene(cam_keys)
+
+
+def _cam_source_time(t_film: float) -> float:
+    segs = CAM_SEGMENTS
+    if not segs or t_film < 0.0:
+        return t_film
+    last_to = float(segs[-1].get("to", 0.0))
+    if t_film >= last_to:
+        return SOURCE_END + t_film - last_to
+    hit = segs[-1]
+    for seg in segs:
+        if t_film < float(seg.get("to", 0.0)):
+            hit = seg
+            break
+    if hit.get("frame") is not None:
+        return float(hit["frame"])
+    sf = float(hit.get("sourceFrom", 0.0))
+    if hit.get("kind") == "freeze":
+        return sf
+    st = float(hit.get("sourceTo", sf))
+    r0 = float(hit.get("rate0", 1.0))
+    r1 = float(hit.get("rate1", r0))
+    dt = t_film - float(hit.get("from", 0.0))
+    span_src = st - sf
+    k = (r1 - r0) / span_src if abs(span_src) > 1e-12 else 0.0
+    dist = dt * r0 if abs(k) < 1e-10 else (r0 * math.expm1(k * dt)) / k
+    return sf + dist
+
+
+SCENE_SAMPLE_HZ = 30
+SCENE_SAMPLE_PREFIX = "SPATIAL-SAMPLES "
+
+
+def _render_scene_samples(request: str):
+    renderer = Path(__file__).resolve().parents[2] / "packages/live-studio"
+    bun = shutil.which("bun")
+    if not bun:
+        raise RuntimeError("Bun is required to sample a film's named scene targets")
+    # A soundtrack export uses the film's own stage, independent of any manual frame-render options.
+    ignored = {"AT", "LIST", "CHECK", "CHUNKS", "SPAN", "INSPECT", "CROP", "COMPARE", "RES", "SAMPLES", "LIVE_PROJECT"}
+    env = {name: value for name, value in os.environ.items() if name not in ignored}
+    env["ENTRY"] = str(renderer / "render/spatial-samples.ts")
+    env["CHECK"] = "spatial-samples"
+    env["LAB_SPATIAL"] = request
+    try:
+        run = subprocess.run(
+            [bun, str(renderer / "render.mjs"), "stills"],
+            cwd=ROOT, env=env, capture_output=True, encoding="utf8", errors="replace", timeout=120,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("named scene target render exceeded 120 seconds") from e
+    payload = next((line.removeprefix(SCENE_SAMPLE_PREFIX) for line in run.stdout.split("\n")
+                    if line.startswith(SCENE_SAMPLE_PREFIX)), None)
+    if run.returncode or payload is None:
+        detail = next((line for line in run.stderr.splitlines() if line.strip()), "no scene samples returned")
+        raise RuntimeError(detail)
+    return json.loads(payload)
+
+
+def _merge_scene_frame_ranges(ranges):
+    merged = []
+    for first, last in sorted(ranges):
+        if merged and first <= merged[-1][1] + 1:
+            merged[-1][1] = max(merged[-1][1], last)
+        else:
+            merged.append([first, last])
+    return merged
+
+
+def _runtime_spatial_samples(beds, sfx, end, *, include_options=False):
+    from spatial import is_spatial_active, placed_at
+
+    pending, required = {}, set()
+    camera_ranges = []
+    camera_required = None
+    for row in (*beds, *sfx):
+        spec = row.get("spatial")
+        if not is_spatial_active(spec):
+            continue
+        if camera_required is None:
+            _, placed_data, camera_required = _scene_spatial_data()
+        target = spec.get("target")
+        runtime_target = target and placed_at(placed_data, target, 0.0, None) is None
+        if not runtime_target and not camera_required:
+            continue
+        if "from" in row:
+            start, stop = row["from"], row["to"]
+        else:
+            start = row["at"]
+            length = _sfx_length(row)
+            if include_options and len(options(row)) > 1:
+                length = max(length, _sfx_options_length(row))
+            stop = start + length
+        start, stop = max(0.0, start), min(stop, end)
+        if stop <= start:
+            continue
+        frames = [math.floor(start * SCENE_SAMPLE_HZ), math.ceil(stop * SCENE_SAMPLE_HZ)]
+        if runtime_target:
+            pending.setdefault(target, []).append(frames)
+            if spec.get("at") is None:
+                required.add(target)
+        else:
+            camera_ranges.append(frames)
+    if not pending and not camera_ranges:
+        return {}, {}
+
+    request = {
+        "targets": {name: _merge_scene_frame_ranges(ranges) for name, ranges in pending.items()},
+        "camera": _merge_scene_frame_ranges(camera_ranges),
+    }
+    try:
+        if not (ROOT / "src/scene.ts").is_file():
+            raise RuntimeError("src/scene.ts is missing")
+        samples = _render_scene_samples(json.dumps(request, ensure_ascii=True, separators=(",", ":")))
+    except (OSError, ValueError, RuntimeError) as e:
+        names = ", ".join(sorted(required or pending))
+        subject = "spatial listener camera" if camera_required else f"spatial scene targets ({names})"
+        detail = f"cannot resolve {subject}: {e}"
+        if required or camera_required:
+            raise SystemExit(detail) from e
+        print(f"Warning: {detail}; using authored XYZ fallback.", file=sys.stderr)
+        return {}, {}
+    missing = sorted(name for name in required if not samples["positions"].get(name))
+    if missing:
+        raise SystemExit(
+            f"spatial target not found: {', '.join(missing)} (check the scene name or add spatial.at)"
+        )
+    return samples["positions"], samples["cameras"]
+
+
+def _interpolate_scene_samples(positions, cameras, t, last_frame):
+    at = min(max(t, 0.0) * SCENE_SAMPLE_HZ, last_frame)
+    first = math.floor(at)
+    left, right, amount = str(first), str(math.ceil(at)), at - first
+
+    def blend(a, b):
+        return [x + (y - x) * amount for x, y in zip(a, b)]
+
+    p0, p1 = positions.get(left), positions.get(right)
+    c0, c1 = cameras.get(left), cameras.get(right)
+    position = blend(p0, p1) if p0 is not None and p1 is not None else p0 if p0 is not None else p1
+    pose = {key: blend(c0[key], c1[key]) for key in ("p", "l", "up")} if c0 and c1 else c0 or c1
+    return position, pose
+
+
+def _is_safe_rel_ir_path(space: str) -> bool:
+    if not space or "\0" in space or space.startswith("/") or space.startswith("\\"):
+        return False
+    if len(space) >= 2 and space[1] == ":" and space[0].isalpha():
+        return False
+    return ".." not in space.replace("\\", "/").split("/")
+
+
+def _decode_ir_stereo_f32(path: Path):
+    import numpy as np
+    from ir import normalize_stereo_ir
+
+    r = subprocess.run(
+        ["ffmpeg", "-xerror", "-v", "error", "-i", str(path), "-ar", "48000", "-ac", "2", "-f", "f32le", "-"],
+        capture_output=True,
+        check=True,
+        timeout=30,
+    )
+    pcm = np.frombuffer(r.stdout, dtype=np.float32)
+    frames = (len(pcm) // 2) * 2
+    if frames == 0:
+        return np.array([1.0], dtype=np.float32), np.array([1.0], dtype=np.float32)
+    stereo = pcm[:frames].reshape(-1, 2)
+    return normalize_stereo_ir(stereo[:, 0], stereo[:, 1])
+
+
+@cache
+def _resolve_ir_buffers(space: str):
+    from ir import generate_impulse_response, is_preset_space, resolve_custom_ir_file
+
+    if is_preset_space(space):
+        ir_l, ir_r = generate_impulse_response(space, 48000)
+        return ir_l, ir_r, None
+    try:
+        resolved = resolve_custom_ir_file(
+            space,
+            str(ROOT),
+            lambda p, l: _assert_in_root(Path(p), l),
+            lambda name: str(audio_file(name)) if SAFE_NAME.match(name) else None,
+        )
+    except ValueError as e:
+        raise SystemExit(str(e))
+    ir_path = Path(resolved)
+    try:
+        ir_l, ir_r = _decode_ir_stereo_f32(ir_path)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        raise SystemExit(f"failed reading reverb IR '{space}': {e}")
+    return ir_l, ir_r, ir_path
 _SFX_CFG = CONFIG.get("sfx", "sound/sfx")
 if not isinstance(_SFX_CFG, str) or not _SFX_CFG.strip():
     raise SystemExit('package.json: "live-studio.sfx" must be a folder path')
@@ -444,6 +670,26 @@ def as_option(e, name, gain=1.0):
     return out
 
 
+def _sfx_length(row):
+    available = seconds(row["name"]) - (row.get("start") or 0)
+    if available <= 0:
+        return 0.0
+    length = row.get("length")
+    return length if length is not None else available / (row.get("rate") or 1)
+
+
+def _sfx_options_length(row):
+    length = row.get("length")
+    if length is not None and not row.get("_auto_length"):
+        return length
+    rate = row.get("rate") or 1
+    longest = max(
+        (seconds(name) - ((row.get("start") or 0) if name == row["name"] else 0)) / rate
+        for name in options(row)
+    )
+    return max(length, longest) if length is not None else longest
+
+
 def unfit():
     """The first row missing a field every row of its list must have (the ones the mix reads), said as bun run check would
     place it; None when all rows have them. bun run mix and listen stop on it before any work, check names every fault."""
@@ -468,6 +714,60 @@ def unfit():
         return f"{SOUND_REL}: voiceStrength must be between 0 and 100"
     if A.get("narration") is not None and (not isinstance(A["narration"], str) or not A["narration"]):
         return f"{SOUND_REL}: narration must be a sound name"
+
+    def _bad_reverb(spec, where):
+        if spec is None:
+            return None
+        if not isinstance(spec, dict):
+            return f"{SOUND_REL}: {where}.reverb must be a JSON object"
+        sp = spec.get("space")
+        if not isinstance(sp, str) or not _is_safe_rel_ir_path(sp):
+            return f"{SOUND_REL}: {where}.reverb.space invalid or unsafe path"
+        if spec.get("wet") is not None and (not _is_num(spec["wet"]) or not 0 <= spec["wet"] <= 1):
+            return f"{SOUND_REL}: {where}.reverb.wet must be between 0 and 1"
+        if spec.get("preDelayMs") is not None and (not _is_num(spec["preDelayMs"]) or not 0 <= spec["preDelayMs"] <= 500):
+            return f"{SOUND_REL}: {where}.reverb.preDelayMs must be between 0 and 500"
+        return None
+
+    def _bad_spatial(spec, where):
+        if spec is None:
+            return None
+        if not isinstance(spec, dict):
+            return f"{SOUND_REL}: {where}.spatial must be a JSON object"
+        for vk in ("at", "offset"):
+            v = spec.get(vk)
+            if v is not None and (not isinstance(v, list) or len(v) != 3 or not all(_is_num(x) for x in v)):
+                return f"{SOUND_REL}: {where}.spatial.{vk} must be [x, y, z]"
+        if spec.get("target") is not None and (not isinstance(spec["target"], str) or not spec["target"]):
+            return f"{SOUND_REL}: {where}.spatial.target must be a non-empty string"
+        if spec.get("refDistance") is not None and (not _is_num(spec["refDistance"]) or spec["refDistance"] <= 0):
+            return f"{SOUND_REL}: {where}.spatial.refDistance must be > 0"
+        if spec.get("maxDistance") is not None and (not _is_num(spec["maxDistance"]) or spec["maxDistance"] <= 0):
+            return f"{SOUND_REL}: {where}.spatial.maxDistance must be > 0"
+        if spec.get("refDistance") is not None and spec.get("maxDistance") is not None and spec["maxDistance"] < spec["refDistance"]:
+            return f"{SOUND_REL}: {where}.spatial.maxDistance must be >= refDistance"
+        if spec.get("rolloff") is not None and (not _is_num(spec["rolloff"]) or not 0 <= spec["rolloff"] <= 10):
+            return f"{SOUND_REL}: {where}.spatial.rolloff must be between 0 and 10"
+        if spec.get("occlusion") is not None and (not _is_num(spec["occlusion"]) or not 0 <= spec["occlusion"] <= 1):
+            return f"{SOUND_REL}: {where}.spatial.occlusion must be between 0 and 1"
+        if spec.get("airAbsorption") is not None and not isinstance(spec["airAbsorption"], bool):
+            return f"{SOUND_REL}: {where}.spatial.airAbsorption must be boolean"
+        return None
+
+    err = _bad_reverb(A.get("reverb"), "audio")
+    if err:
+        return err
+    if A.get("spaces") is not None:
+        if not isinstance(A["spaces"], list):
+            return f"{SOUND_REL}: spaces must be a list"
+        for i, s in enumerate(A["spaces"]):
+            if not isinstance(s, dict) or not _is_num(s.get("from")) or s["from"] < 0:
+                return f"{SOUND_REL}: spaces[{i}].from must be >= 0"
+            if s.get("to") is not None and (not _is_num(s["to"]) or s["to"] <= s["from"]):
+                return f"{SOUND_REL}: spaces[{i}].to must come after from"
+            err = _bad_reverb(s, f"spaces[{i}]")
+            if err:
+                return err
     tracks = A.get("tracks")
     if tracks is not None:
         if not isinstance(tracks, list):
@@ -530,6 +830,9 @@ def unfit():
                 _safe_filters(row.get("filters"))
             except ValueError as e:
                 return f"{SOUND_REL}: {kind}[{i}] {e}"
+            err = _bad_reverb(row.get("reverb"), f"{kind}[{i}]") or _bad_spatial(row.get("spatial"), f"{kind}[{i}]")
+            if err:
+                return err
     return None
 
 
@@ -619,8 +922,8 @@ def voice_intervals(clips=None):
 
 
 def prepare_timing(apply_choices=True, drop_off=True):
-    global A, END, PROJECTED_VOICE, LEGACY_TIMELINE
-    END, PROJECTED_VOICE, LEGACY_TIMELINE = SOURCE_END, None, None
+    global A, END, PROJECTED_VOICE, LEGACY_TIMELINE, CAM_SEGMENTS
+    END, PROJECTED_VOICE, LEGACY_TIMELINE, CAM_SEGMENTS = SOURCE_END, None, None, None
     if unfit():
         return
     if apply_choices:
@@ -664,7 +967,11 @@ def prepare_timing(apply_choices=True, drop_off=True):
         for i in no_len:
             if i < len(A["sfx"]) and "length" in A["sfx"][i]:
                 A["sfx"][i]["_auto_length"] = True
-    PROJECTED_VOICE, LEGACY_TIMELINE = result["voiceIntervals"], result["legacyTimeline"]
+    PROJECTED_VOICE, LEGACY_TIMELINE, CAM_SEGMENTS = (
+        result["voiceIntervals"],
+        result["legacyTimeline"],
+        result.get("camSegments"),
+    )
 
 
 def duck_windows():
@@ -759,16 +1066,20 @@ def publish(outputs, scratch):
         raise
 
 
-def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None, source_bindings=None):
+def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None, source_bindings=None, scene_samples=None):
     with tempfile.TemporaryDirectory(prefix="studio-mix-clips-") as folder:
-        _build(out, beds, sfx, voice, span, master, float_output, end, Path(folder), source_bindings)
+        _build(out, beds, sfx, voice, span, master, float_output, end, Path(folder), source_bindings, scene_samples)
 
 
-def _build(out, beds, sfx, voice, span, master, float_output, end, folder, source_bindings):
+def _build(out, beds, sfx, voice, span, master, float_output, end, folder, source_bindings, scene_samples):
+    from ir import resolve_clip_reverb
+    from spatial import is_spatial_active
+
     inputs, chains = [], []
     end = END if end is None else end
+    scene_positions, scene_cameras = scene_samples if scene_samples is not None else _runtime_spatial_samples(beds, sfx, end)
 
-    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None):
+    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None, reverb_spec=None, spatial_spec=None):
         if length is not None and length <= 0:
             return
         if source_bindings is not None:
@@ -796,7 +1107,6 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
                 msg = (e.stderr or e.stdout or str(e)).strip().splitlines()[-1] if isinstance(e, subprocess.CalledProcessError) and (e.stderr or e.stdout) else str(e)
                 raise SystemExit(f"audio processing failed for {processing.get('name', path)}: {msg}")
             path, start = processed, 0
-        inputs.extend(["-i", str(path)])
         f = [f"atrim=start={start}" + (f":duration={length}" if length else ""), "asetpts=PTS-STARTPTS",
              "aformat=sample_rates=48000:channel_layouts=stereo", f"volume={gain}dB", *extra]
         automation = gain_filter(gain_keys, gain)
@@ -807,6 +1117,69 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
         if fade_out and length:
             f.append(f"afade=t=out:st={max(0, length - fade_out)}:d={fade_out}")
         samples = max(0, math.floor(at * 48000 + 0.5))
+        spatial_on = is_spatial_active(spatial_spec)
+        if spatial_on or reverb_spec is not None:
+            pre_wav = folder / f"{i}_pre.wav"
+            pre_graph = f"[0:a]{','.join(f)}[p]"
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-xerror", "-v", "error", "-y", "-i", str(path), "-filter_complex", pre_graph, "-map", "[p]", "-ar", "48000", "-ac", "2", "-c:a", "pcm_f32le", str(pre_wav)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+            except subprocess.CalledProcessError as e:
+                detail = next(iter((e.stderr or "").splitlines()), f"exit {e.returncode}")
+                raise SystemExit(f"ffmpeg spatial pre-render failed for {path}: {detail}")
+            import numpy as np
+            from scipy.io import wavfile
+            from ir import apply_convolution_reverb
+            from spatial import apply_spatial_audio
+
+            _, raw_buf = wavfile.read(str(pre_wav))
+            if raw_buf.ndim == 1:
+                raw_buf = np.column_stack((raw_buf, raw_buf))
+            buf = raw_buf.astype(np.float32)
+            if spatial_on:
+                cam_keys, placed_data, camera_required = _scene_spatial_data()
+                track = scene_positions.get(spatial_spec.get("target"))
+                clip_end = min(at + length, end) if length is not None else end
+                use_scene = (camera_required or track is not None) and at < clip_end
+                end_frame = clip_end * SCENE_SAMPLE_HZ
+                nearest_frame = round(end_frame)
+                # Decimal sums such as 0.2 + 0.1 can land just above the cut frame.
+                if abs(end_frame - nearest_frame) <= 4 * math.ulp(end_frame):
+                    end_frame = nearest_frame
+                last_frame = math.nextafter(end_frame, -math.inf)
+
+                target_samples = track or {}
+
+                def scene_sample(t):
+                    position, camera = _interpolate_scene_samples(target_samples, scene_cameras, t, last_frame)
+                    if camera_required and camera is None:
+                        raise ValueError(f"spatial listener camera is unavailable at {t:.3f}s")
+                    return position, camera
+
+                try:
+                    buf = apply_spatial_audio(
+                        buf, at, 48000, spatial_spec, cam_keys, placed_data, _cam_source_time,
+                        scene_sample_fn=scene_sample if use_scene else None,
+                        require_scene_position=track is not None,
+                    )
+                except ValueError as e:
+                    raise SystemExit(str(e)) from e
+            if reverb_spec is not None:
+                ir_l, ir_r, ir_path = _resolve_ir_buffers(reverb_spec["space"])
+                if source_bindings is not None and ir_path is not None:
+                    source_bindings["files"][stored_path(ir_path)] = media_identity(ir_path)
+                buf = apply_convolution_reverb(buf, ir_l, ir_r, reverb_spec["wet"], reverb_spec["preDelayMs"], 48000)
+            fx_wav = folder / f"{i}_fx.wav"
+            wavfile.write(str(fx_wav), 48000, np.asarray(buf, dtype=np.float32))
+            inputs.extend(["-i", str(fx_wav)])
+            chains.append(f"[{i}:a]adelay={samples}S|{samples}S[a{i}]")
+            return
+        inputs.extend(["-i", str(path)])
         f.append(f"adelay={samples}S|{samples}S")
         chains.append(f"[{i}:a]{','.join(f)}[a{i}]")
 
@@ -816,17 +1189,25 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
     if voice and not A.get("narration") and has_voice:
         add(_assert_in_root(ROOT / "assets/public/agent/full_voice.wav", "Voice audio"), 0, float(A.get("voiceGain") or 0), length=END,
             processing={"dialogue": True, **({"__timing": {"duration": SOURCE_END, "timeline": LEGACY_TIMELINE}} if LEGACY_TIMELINE else {})})
+    spaces = A.get("spaces")
+    film_reverb = A.get("reverb")
     for b in beds:
         if b["to"] <= b["from"]:
             continue
         duck_db = float(b["duck"]) if b.get("duck") is not None else 0.0
         duck = duck_expr(b["from"], b["to"], duck_db) if duck_db and (A.get("narration") or has_voice) else None
-        add(present(b["name"]), float(b["from"]), float(b["gain"]), float(b.get("start") or 0), float(b["to"] - b["from"]), float(b["fadeIn"]), float(b["fadeOut"]), loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*_safe_filters(b.get("filters")), *track_chain(b), *([duck] if duck else []), *([pan_filter(float(b["pan"]))] if b.get("pan") else [])])
+        mid_t = 0.5 * (float(b["from"]) + float(b["to"]))
+        rev = resolve_clip_reverb(b.get("reverb"), _cam_source_time(mid_t), spaces, film_reverb)
+        add(present(b["name"]), float(b["from"]), float(b["gain"]), float(b.get("start") or 0), float(b["to"] - b["from"]), float(b["fadeIn"]), float(b["fadeOut"]), loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*_safe_filters(b.get("filters")), *track_chain(b), *([duck] if duck else []), *([pan_filter(float(b["pan"]))] if b.get("pan") else [])], reverb_spec=rev, spatial_spec=b.get("spatial"))
     for s in sfx:
         start_at = float(s.get("start") or 0)
         if (s.get("length") is not None and float(s["length"]) <= 0) or start_at >= seconds(s["name"]):
             continue
-        add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, float(s["length"]) if s.get("length") is not None else None, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])])
+        s_len = float(s["length"]) if s.get("length") is not None else None
+        eff_len = s_len if s_len is not None else max(0.0, (seconds(s["name"]) - start_at) / float(s.get("rate") or 1.0))
+        mid_t = float(s["at"]) + 0.5 * eff_len
+        rev = resolve_clip_reverb(s.get("reverb"), _cam_source_time(mid_t), spaces, film_reverb)
+        add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, s_len, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])], reverb_spec=rev, spatial_spec=s.get("spatial"))
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
@@ -898,7 +1279,9 @@ def studio(out):
             groups.setdefault(e["name"], []).append((kind, e))
     alternatives = {name: list(dict.fromkeys(o for _, e in group for o in options(e))) for name, group in groups.items()}
     tried = lambda e: len(alternatives[e["name"]]) > 1
-    build(out, [b for b in A["beds"] if not tried(b)], [s for s in A["sfx"] if not tried(s)])
+    scene_samples = _runtime_spatial_samples(A["beds"], A["sfx"], END, include_options=True)
+    build(out, [b for b in A["beds"] if not tried(b)], [s for s in A["sfx"] if not tried(s)],
+          scene_samples=scene_samples)
     vault_sources = {}
     for v in VAULTS:
         if (v / "SOURCES.json").exists():
@@ -918,20 +1301,14 @@ def studio(out):
             if kind == "bed":
                 spans.append((float(e["from"]), float(e["to"])))
             else:  # a one-shot without a length rings as long as its longest option
-                def _opt_end(s):
-                    rate = float(s.get("rate") or 1)
-                    if s.get("length") is not None and not s.get("_auto_length"):
-                        return float(s["at"]) + float(s["length"])
-                    longest = max((seconds(o) - (float(s.get("start") or 0) if o == s["name"] else 0.0)) / rate for o in options(s))
-                    cur = float(s["length"]) if s.get("length") is not None else longest
-                    return float(s["at"]) + max(cur, longest)
-                spans.append((float(e["at"]), _opt_end(e)))
+                spans.append((float(e["at"]), float(e["at"] + _sfx_options_length(e))))
         span = (min(a for a, _ in spans), max(b for _, b in spans))
         (safe_stems / name).mkdir(parents=True, exist_ok=True)
         opts = []
         for o in alternatives[name]:
             one = [(kind, as_option(e, o if o in options(e) else e["name"])) for kind, e in group]
-            build(safe_stems / name / f"{o}.webm", [e for kind, e in one if kind == "bed"], [e for kind, e in one if kind == "sfx"], voice=False, span=span)
+            build(safe_stems / name / f"{o}.webm", [e for kind, e in one if kind == "bed"],
+                  [e for kind, e in one if kind == "sfx"], voice=False, span=span, scene_samples=scene_samples)
             opts.append({"id": o, "title": sources.get(o, {}).get("title", o), "files": [f"/agent/stems/{name}/{o}.webm"], "source": sources.get(o, {}).get("url", "")})
         kinds = "/".join(dict.fromkeys(kind for kind, _ in group))
         trials[name] = {"title": f"{name.replace('_', ' ')} ({kinds})", "kind": "stem", "from": span[0], "to": span[1], "options": opts}

@@ -163,6 +163,7 @@ import {
   useCountOfNames,
 } from "./sound";
 import { SoundSwapPicker } from "./SoundSwapPicker";
+import { ReverbSection, SpatialSection } from "./SpatialInspector";
 import { playedPart, type SyncMode, syncPoint } from "./sync";
 import { cachedVoiceClipLabel, useVoiceTakes } from "./voice-client";
 import { syncVoiceLibraryNow, useVoiceLibrary } from "./voice-library-client";
@@ -649,6 +650,8 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
             write={(l, change) => writeFilters(l, clip, change)}
             filters={c.filters as string[] | undefined}
           />
+          <ReverbSection key={`rev:${clip.list}:${clip.i}`} clip={clip} c={c} from={from} to={to} />
+          <SpatialSection key={`sp:${clip.list}:${clip.i}`} clip={clip} c={c} />
           <NormalizeClip key={`${clip.list}:${clip.i}`} clip={clip} />
           <Section title="Clip">
             <FieldRow label="Sound">
