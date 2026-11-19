@@ -54,6 +54,7 @@ Filters apply to both blocks; similarity is not confidence, so listen/view befor
 | Music and ambience | Music uses beds; bed: true in controls.json places ambience in beds |
 | Không gian âm thanh | audio.json có reverb mặc định, spaces theo khoảng giây nguồn và reverb riêng từng clip. Preset phòng được tạo sẵn, custom IR đọc từ phim hoặc vault. |
 | Neo 3D | spatial.target bám vật thể placed hoặc vật thể có tên trong scene. spatial.at đặt XYZ hoặc làm tọa độ dự phòng, spatial.offset cộng theo tọa độ thế giới. |
+| Tên vật thể | Đặt Object3D.name hoặc nhãn trong draw.tools.objects. Nếu neo mất trong lúc clip còn phát, bản xuất báo lỗi trừ khi đã đặt spatial.at. |
 | Cắt lệch tiếng | J-Cut và L-Cut ở menu clip kéo mép tiếng qua ranh hình khi file nguồn và track còn chỗ. Có Undo. |
 | Source trim | start is source-file seconds; length is cue playback duration in audio.json. At constant rate without other retiming, an earshot start/end region uses length = (end - start) / rate; rate defaults to 1 |
 | Track gain and EQ | tracks[].gain affects the track; clip filters contain the Inspector's FFmpeg EQ chain |

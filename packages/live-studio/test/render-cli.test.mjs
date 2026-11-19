@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,10 +21,20 @@ import { STUDIO } from "../src/film.mjs";
 
 const RENDER = fileURLToPath(new URL("../render.mjs", import.meta.url));
 
+const copyDemo = (dir) => {
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "node_modules"));
+  symlinkSync(
+    resolve(STUDIO, "../film-stage"),
+    join(dir, "node_modules/film-stage"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
+};
+
 test("render refuses AT past the end and a backwards CHECK at once, saying the film's length", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
@@ -83,7 +94,7 @@ test("a film whose code does not build is named by file and line, in plain words
     "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
   );
   if (!existsSync(chrome)) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
@@ -107,7 +118,7 @@ test("a film whose code does not build is named by file and line, in plain words
 test("SPAN is refused before any build when it is misplaced, backwards, or starts past the last frame", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
@@ -141,7 +152,7 @@ test("SPAN is refused before any build when it is misplaced, backwards, or start
 test("captions and final refuse the options they would ignore", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
   const render = (what, env) =>
     spawnSync("bun", [RENDER, what], {
@@ -172,7 +183,7 @@ test("captions and final refuse the options they would ignore", (t) => {
 test("render poster refuses a missing AT, LIST=1 and an unknown RES", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
   const render = (env) =>
     spawnSync("bun", [RENDER, "poster"], {
@@ -203,7 +214,7 @@ test("render poster draws one frame at the upload's size, no strip under it, and
   if (!existsSync(chrome)) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
@@ -245,7 +256,7 @@ const chromeFilm = (t, end, conf = {}) => {
   if (!existsSync(chrome)) return null;
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   const scene = join(dir, "src/scene.ts");
   writeFileSync(
     scene,
@@ -351,7 +362,7 @@ test("ENTRY=folder and running outside a film exit 2 before any build, and a dea
 
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   mkdirSync(join(dir, "lab"));
   writeFileSync(
     join(dir, "package.json"),
@@ -533,7 +544,7 @@ export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=ca
 test("render rejects invalid CROP rects and CROP/COMPARE on video targets", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
   const run = (args, env = {}) =>
     spawnSync("bun", [RENDER, ...args], {
@@ -612,7 +623,7 @@ const sampleCenterRgb = (imagePath) => {
 const setupQuadFilm = (t, chrome, tlHex = "0xdd2222") => {
   const dir = mkdtempSync(join(tmpdir(), "render-crop-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  copyDemo(dir);
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({ ...JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8")), end: 2 }),
