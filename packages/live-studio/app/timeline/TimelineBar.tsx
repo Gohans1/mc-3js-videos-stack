@@ -22,7 +22,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { type ComponentType, useMemo } from "react";
+import type { ComponentType } from "react";
 
 import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
@@ -101,15 +101,14 @@ function ZoomSlider() {
 }
 
 function KeyframeNavigation() {
-  const revision = useStudio((s) => `${s.cam}:${s.camRev}:${s.keysRev}:${s.metaRev}`);
-  const times = useMemo(() => {
-    const end = seekLimit();
-    const camera = get().cam ? cameraKeys.map((key) => key.t) : [];
-    const tracks = keyTracks.flatMap(({ f, path }) => keysOf(f, path).map((key) => key.t));
-    return [...new Set([...camera, ...tracks])]
-      .filter((t) => t >= 0 && t <= end)
-      .sort((a, b) => a - b);
-  }, [revision]);
+  const cam = useStudio((s) => s.cam);
+  useStudio((s) => `${s.camRev}:${s.keysRev}:${s.metaRev}`);
+  const end = seekLimit();
+  const camera = cam ? cameraKeys.map((key) => key.t) : [];
+  const tracks = keyTracks.flatMap(({ f, path }) => keysOf(f, path).map((key) => key.t));
+  const times = [...new Set([...camera, ...tracks])]
+    .filter((t) => t >= 0 && t <= end)
+    .sort((a, b) => a - b);
   const previous = () => times.findLast((t) => t < S.t - 1e-7);
   const next = () => times.find((t) => t > S.t + 1e-7);
   useFrameKey(() => `${previous()}:${next()}`);

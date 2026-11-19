@@ -3,7 +3,13 @@ import type { CameraChannel, CameraMotion, FocusTargetSpec } from "film-stage/ca
 import { cameraKeyOptics, cameraRailU, canMatchCameraSpeed, lensAspect } from "film-stage/camera";
 import { EDIT, fromSource, toSource } from "film/edit";
 
-import { type CameraClock, cameraShotAtBoundary, canPlaceCameraCut, compileCameraClock } from "../../src/camera-clock.mjs";
+import {
+  type CameraClock,
+  cameraShotAtBoundary,
+  type CameraSpan,
+  canPlaceCameraCut,
+  compileCameraClock,
+} from "../../src/camera-clock.mjs";
 import { frameCountOf } from "../../src/frame";
 import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
@@ -52,7 +58,6 @@ import {
   selectedCameraKeyAt,
   stripInvalidMatchSpeed,
 } from "./camera-edit";
-import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
 import {
   cameraTimeInSpan,
   canKeyOpticsHere,
@@ -64,6 +69,7 @@ import {
   splitOpticsContext,
 } from "./camera-optics-track";
 import { activeCameraRig, cameraShotIndex, visibleCameraShotFrame } from "./camera-rig";
+import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type { HandheldSpec };
@@ -106,6 +112,78 @@ const newRowId = () =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
 
+export interface CameraKeyIdentity {
+  id?: string;
+  t: number;
+  source?: number;
+  sourceRow?: number;
+  cut?: boolean;
+}
+
+const cameraSourceTime = (key: CamKey, clock = clockForTimeline("cam")) =>
+  key.__timing?.source ?? clock.sourceAt(key.t, key.cut ? "after" : "before");
+
+export const cameraKeyIdentity = (
+  key: CamKey,
+  clock = clockForTimeline("cam"),
+): CameraKeyIdentity => ({
+  id: key.id,
+  t: key.t,
+  source: cameraSourceTime(key, clock),
+  sourceRow: key.__timing?.sourceRow,
+  cut: !!key.cut,
+});
+
+const matchesIdentity = (
+  candidate: { id?: string; cut?: boolean },
+  source: number,
+  sourceRow: number | undefined,
+  target: CameraKeyIdentity,
+) =>
+  target.id !== undefined
+    ? candidate.id === target.id
+    : candidate.id === undefined &&
+      sourceRow === target.sourceRow &&
+      !!candidate.cut === !!target.cut &&
+      Math.abs(source - (target.source ?? target.t)) < 1e-7;
+
+export const cameraKeyMatches = (
+  candidate: CamKey,
+  target: CameraKeyIdentity,
+  clock = clockForTimeline("cam"),
+) =>
+  matchesIdentity(
+    candidate,
+    cameraSourceTime(candidate, clock),
+    candidate.__timing?.sourceRow,
+    target,
+  );
+
+export const findCameraKeyIndex = (
+  target: CameraKeyIdentity,
+  tolerance = SAME,
+  clock = clockForTimeline("cam"),
+) => {
+  let closest = -1;
+  keys.forEach((row, index) => {
+    if (!cameraKeyMatches(row, target, clock)) return;
+    const distance = Math.abs(row.t - target.t);
+    if (distance >= tolerance) return;
+    if (closest < 0 || distance < Math.abs(keys[closest].t - target.t)) closest = index;
+  });
+  return closest;
+};
+
+const sourceCameraKeyIndex = (rows: readonly CamKey[], key: CamKey | undefined) => {
+  if (!key) return -1;
+  const target = cameraKeyIdentity(key);
+  return rows.findIndex((row, index) => {
+    const sourceRow =
+      rows[index - 1]?.t === row.t || rows[index + 1]?.t === row.t ? index : undefined;
+    return matchesIdentity(row, row.t, sourceRow, target);
+  });
+};
+
 export let keys: CamKey[] = [];
 const initialKeyTimes = new Map<string, number>();
 const changed = (previous?: TimedProjection<CamKey[]>) => {
@@ -117,20 +195,7 @@ const changed = (previous?: TimedProjection<CamKey[]>) => {
   const nextIndex = (i: number) => {
     if (!previous) return keys[i] ? i : -1;
     const old = previous.data[i];
-    if (!old) return -1;
-    const source = cameraSourceTime(old, previous.clock);
-    const sourceRow = old.__timing?.sourceRow;
-    let closest = -1;
-    keys.forEach((key, index) => {
-      const matches = old.id
-        ? key.id === old.id
-        : key.__timing?.sourceRow === sourceRow &&
-          !!key.cut === !!old.cut &&
-          Math.abs(cameraSourceTime(key) - source) < 1e-7;
-      if (matches && (closest < 0 || Math.abs(key.t - old.t) < Math.abs(keys[closest].t - old.t)))
-        closest = index;
-    });
-    return closest;
+    return old ? findCameraKeyIndex(cameraKeyIdentity(old, previous.clock), Infinity) : -1;
   };
   const selected = camKey === null ? camPicks : [camKey];
   const visible = previous
@@ -183,10 +248,7 @@ export const setKeyLocked = (i: number, locked: boolean) =>
 export const opticsOfKey = (i: number) => {
   const rows = doc.source ?? [];
   const key = keys[i];
-  const at =
-    key?.id === undefined
-      ? rows.findIndex((row) => row.t === (key?.__timing?.source ?? key?.t))
-      : rows.findIndex((row) => row.id === key.id);
+  const at = sourceCameraKeyIndex(rows, key);
   return cameraKeyOptics(
     rows,
     at,
@@ -247,8 +309,6 @@ export const isHardCut = (i: number) =>
   i > 0 && !!keys[i]?.cut && keys[i].__timing?.source !== 0 && boundaryOf(i) < 0;
 const deletableKey = (i: number) => movable(i) || (isHardCut(i) && !keys[i].locked);
 export const canDeleteCameraKey = (i: number) => deletableKey(i) || rollable(i);
-const cameraSourceTime = (key: CamKey, clock = clockForTimeline("cam")) =>
-  key.__timing?.source ?? clock.sourceAt(key.t, key.cut ? "after" : "before");
 const sourceShotStarts = () => {
   const starts = clockForTimeline("cam").cameraShotStarts;
   return starts?.length ? starts : SHOTS_OUT.map((shot) => shot.t);
@@ -261,7 +321,9 @@ export const cameraKeyShotIndex = (index: number) => {
   const key = keys[index];
   const source = authoredKeyTime(key);
   const closes = !key.cut && (doc.source ?? []).some((row) => row.cut && row.t === source);
-  const shot = sourceShotStarts().findLastIndex((start) => (closes ? start < source : start <= source));
+  const shot = sourceShotStarts().findLastIndex((start) =>
+    closes ? start < source : start <= source,
+  );
   return Math.max(0, shot);
 };
 export const canConvertHardCut = (i: number) => {
@@ -297,8 +359,8 @@ export const setKey = (i: number | null) => {
   set(transitionSelection({ kind: "camKey", index: i }, get().side));
   S.dirty = true;
 };
-const selectPlacement = (id: string | undefined, t: number) => {
-  const i = keys.findIndex((row) => row.id === id && Math.abs(row.t - t) < SAME);
+const selectPlacement = (target: CameraKeyIdentity) => {
+  const i = findCameraKeyIndex(target, SAME);
   setKey(i >= 0 ? i : null);
 };
 // Selection includes fixed keys; group retiming and deletion still preserve shot boundaries.
@@ -447,9 +509,11 @@ const retimedTime = (i: number, t: number) => {
 };
 export const retime = (i: number, t: number, apply: typeof edit = edit) => {
   if (!retimable(i)) return keys[i]?.t ?? t;
-  const id = keys[i].id;
+  const was = keys[i];
+  const id = was.id;
+  const cut = !!was.cut;
   const next = retimedTime(i, t);
-  if (next === keys[i].t) return next;
+  if (next === was.t) return next;
   apply((ks) => {
     ks[i].t = next;
     if (ks[i].cut) {
@@ -457,7 +521,13 @@ export const retime = (i: number, t: number, apply: typeof edit = edit) => {
       delete ks[i].keepTailOnMerge;
     }
   });
-  if (apply === edit) selectPlacement(id, next);
+  if (apply === edit)
+    selectPlacement({
+      id,
+      t: next,
+      cut,
+      source: clockForTimeline("cam").sourceAt(next, cut ? "after" : "before"),
+    });
   return next;
 };
 // fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
@@ -821,7 +891,7 @@ export const holdAfter = (i: number, secs = 1) => {
     )
   )
     return;
-  selectPlacement(id, t);
+  selectPlacement({ id, t });
   say(`Camera holds ${stamp(k.t)} → ${stamp(t)}. Drag the new keyframe to hold longer`);
 };
 
@@ -849,15 +919,8 @@ export const cameraKeySampleTime = (i: number) => {
 };
 
 export const sourceCameraSegment = (index: number) => {
-  const key = keys[index],
-    track = doc.source ?? [];
-  if (!key) return null;
-  const at = track.findIndex((candidate) =>
-    key.id
-      ? candidate.id === key.id
-      : Math.abs(candidate.t - cameraSourceTime(key)) < 1e-7 && !!candidate.cut === !!key.cut,
-  );
-  return cameraSegmentAt(track, at);
+  const track = doc.source ?? [];
+  return cameraSegmentAt(track, sourceCameraKeyIndex(track, keys[index]));
 };
 
 export const canMatchCameraKey = (index: number) => {
@@ -899,8 +962,7 @@ export const railPositionForKey = (i: number) => {
     : keys[i].railU;
 };
 
-const railAtKey = (i: number) =>
-  keys[i] && activeCameraRig(cameraKeyShotIndex(i))?.rail;
+const railAtKey = (i: number) => keys[i] && activeCameraRig(cameraKeyShotIndex(i))?.rail;
 
 const preserveRailPositions = (indices: number[], change: () => void) => {
   const track = doc.source ?? [];
@@ -957,8 +1019,9 @@ export const editCameraKeyInScene = (
   const selected = keys[i];
   if (!selected || selected.locked) return;
   if (!needsScene) return change(i, selected);
+  const target = cameraKeyIdentity(selected);
   void readSceneFrame(cameraKeySampleTime(i), () => {
-    const at = keys.findIndex((row) => row.id === selected.id && row.t === selected.t);
+    const at = findCameraKeyIndex(target, 1e-9);
     if (at >= 0 && !keys[at].locked) change(at, keys[at]);
   }).catch(showError);
 };
@@ -1108,7 +1171,7 @@ const insertKey = (t: number, view: CameraView, free?: CameraView) => {
     )
   )
     return false;
-  selectPlacement(key.id, t);
+  selectPlacement({ id: key.id, t });
   say(
     `Camera keyframe added at ${stamp(t)}. ${check ? "Check the camera motion on both sides. " : ""}Ctrl+Z to undo`,
   );
@@ -1119,25 +1182,26 @@ const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
   const at = only ?? selectedCameraKeyAt(keys, S.t, get().camKey, SAME);
   const shot = at >= 0 ? cameraKeyShotIndex(at) : cameraShotIndex(t);
   const rig = activeCameraRig(shot);
-  if (rig?.rail)
-    return say("The rail sets camera position. Remove it to apply this framing");
+  if (rig?.rail) return say("The rail sets camera position. Remove it to apply this framing");
   if (pinned && rig?.look === "one-node")
     return say("Switch to 2-node to apply the pinned camera position");
   if (pinned && rig?.look === "tangent")
     return say("Along path sets the camera aim. Switch to 2-node to apply this framing");
-  if (pinned && rig?.lead)
-    return say("Set Lookahead to zero to apply the pinned camera aim");
-  if (pinned && rig?.bank)
-    return say("Set Auto-banking to zero to apply the pinned camera roll");
+  if (pinned && rig?.lead) return say("Set Lookahead to zero to apply the pinned camera aim");
+  if (pinned && rig?.bank) return say("Set Auto-banking to zero to apply the pinned camera roll");
   if (pinned && (!canKeyOpticsHere() || (at < 0 && !cameraTimeMatchesSource(t))))
     return say("Move the playhead to a playing frame to apply this framing");
 
   const source = get().timing ? cameraTimesAt(t).camera : t;
   if (pinned) {
     const track = doc.source ?? [];
-    const segment = at >= 0
-      ? sourceCameraSegment(at)
-      : cameraSegmentAt(track, track.findLastIndex((key) => key.t <= source));
+    const segment =
+      at >= 0
+        ? sourceCameraSegment(at)
+        : cameraSegmentAt(
+            track,
+            track.findLastIndex((key) => key.t <= source),
+          );
     if (at >= 0 && segment?.at === -1)
       return say("Unmute this camera keyframe before applying the pin");
     if (segment) {
@@ -1170,12 +1234,12 @@ const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
         });
         applyLens(source, owner);
       });
-      selectPlacement(next.id, next.t);
+      selectPlacement(cameraKeyIdentity(next));
       say("Camera keyframe updated at " + stamp(next.t));
     });
   } else {
     together(() => {
-      if (insertKey(t, drawnView(), view)) applyLens(source, shot);
+      if (insertKey(t, drawnView(t), view)) applyLens(source, shot);
     });
   }
 };
@@ -1185,7 +1249,11 @@ export const saveView = (only?: number) => {
 };
 export const applyPinnedFraming = (view: FreeView) => {
   if (!S.tools || view.fov === undefined) return;
-  applyCameraView({ p: [...view.p], l: [...view.l], fov: view.fov, roll: view.roll ?? 0 }, undefined, true);
+  applyCameraView(
+    { p: [...view.p], l: [...view.l], fov: view.fov, roll: view.roll ?? 0 },
+    undefined,
+    true,
+  );
 };
 export const applyFreeToKeyframe = saveView;
 export const addKeyHere = () => {
@@ -1250,6 +1318,30 @@ const ambiguousCut = (at: number) => {
   return picture && !canPlaceCameraCut(picture, at);
 };
 
+const hasOptics = (optics?: ShotRow["optics"]) =>
+  !!(
+    (optics?.focus && Object.keys(optics.focus).length) ||
+    (optics?.focalLength && Object.keys(optics.focalLength).length)
+  );
+
+const futureShotClocks = (sourceRows: readonly ShotRow[]) => {
+  const starts = sourceShotStarts();
+  return sourceRows.map((row, index) => ({
+    t: starts[index] ?? timingClock.sourceAt(fromSource(row.t)),
+    cameraClock: row.cameraClock,
+  }));
+};
+
+const opticsSpansOfShot = (shot: number, clock: CameraClock = clockForTimeline("cam")) => {
+  if (!get().timing) return [];
+  const starts = clock.cameraShotStarts ?? sourceShotStarts();
+  const start = starts[shot];
+  const end = starts[shot + 1] ?? timingClock.sourceDuration;
+  return (clock.cameraSpans ?? []).filter(
+    (span) => span.sourceFrom >= start - 1e-8 && span.sourceTo <= end + 1e-8,
+  );
+};
+
 const rollWith = (i: number, t: number, cam: typeof edit, shots: Apply<ShotRow[]>) => {
   if (!rollable(i)) return;
   const s = shotOfCut(i),
@@ -1259,6 +1351,39 @@ const rollWith = (i: number, t: number, cam: typeof edit, shots: Apply<ShotRow[]
     was = keys[i].t,
     cutSource = r3(toSource(at));
   if (ambiguousCut(at)) return say("Move the cut to a playing frame");
+  const sourceRows = shotsDoc.data ?? [];
+  const leftRow = sourceRows[s - 1];
+  const rightRow = sourceRows[s];
+  const remapLeft = get().timing && leftRow?.cameraClock === "output" && hasOptics(leftRow.optics);
+  const remapRight =
+    get().timing && rightRow?.cameraClock === "output" && hasOptics(rightRow.optics);
+  let leftBefore: CameraSpan | undefined;
+  let leftAfter: CameraSpan | undefined;
+  let rightBefore: CameraSpan | undefined;
+  let rightAfter: CameraSpan | undefined;
+  if (remapLeft || remapRight) {
+    const future = futureShotClocks(sourceRows);
+    future[s].t = timingClock.sourceAt(fromSource(cutSource));
+    const nextClock = compileCameraClock(timingClock, future);
+    const validSpan = (spans: CameraSpan[]) =>
+      spans.length === 1 && spans[0].to > spans[0].from && spans[0].sourceTo > spans[0].sourceFrom;
+    if (remapLeft) {
+      const before = opticsSpansOfShot(s - 1);
+      const after = opticsSpansOfShot(s - 1, nextClock);
+      if (!validSpan(before) || !validSpan(after))
+        return say("Use Scene time to roll a cut when optics cross separate playback ranges");
+      leftBefore = before[0];
+      leftAfter = after[0];
+    }
+    if (remapRight) {
+      const before = opticsSpansOfShot(s);
+      const after = opticsSpansOfShot(s, nextClock);
+      if (!validSpan(before) || !validSpan(after))
+        return say("Use Scene time to roll a cut when optics cross separate playback ranges");
+      rightBefore = before[0];
+      rightAfter = after[0];
+    }
+  }
   applyShotAndCamera(
     () =>
       shots((sh) => {
@@ -1268,7 +1393,11 @@ const rollWith = (i: number, t: number, cam: typeof edit, shots: Apply<ShotRow[]
           const { prev, next } = repartitionAdjacentHits(sh[s - 1].hits, sh[s].hits, cutSource);
           setHits(sh[s - 1], prev);
           setHits(sh[s], next);
+          if (leftBefore && leftAfter)
+            sh[s - 1].optics = remapOpticsSpan(sh[s - 1].optics, leftBefore, leftAfter);
         }
+        if (rightBefore && rightAfter)
+          sh[s].optics = remapOpticsSpan(sh[s].optics, rightBefore, rightAfter);
       }),
     cam,
     (ks, usePictureCut) => {
@@ -1323,20 +1452,12 @@ const secondName = (name: string, shots: ShotRow[]) => {
   while (taken.has(`${base} (${n})`)) n++;
   return `${base} (${n})`;
 };
+const shotOutputAt = (source: number) =>
+  timingClock.outputAt(timingClock.sourceAt(fromSource(source)), "before");
 const shotSourceAt = (time: number) => {
   const source = toSource(time);
   // A voice-warp round trip must not delay a shot past its camera cut frame.
-  return fromSource(source) <= time ? source : toSource(time - 1e-8);
-};
-
-const opticsSpansOfShot = (shot: number, clock: CameraClock = clockForTimeline("cam")) => {
-  if (!get().timing) return [];
-  const starts = clock.cameraShotStarts ?? sourceShotStarts();
-  const start = starts[shot];
-  const end = starts[shot + 1] ?? timingClock.sourceDuration;
-  return (clock.cameraSpans ?? []).filter(
-    (span) => span.sourceFrom >= start - 1e-8 && span.sourceTo <= end + 1e-8,
-  );
+  return shotOutputAt(source) <= time ? source : toSource(time - 1e-8);
 };
 
 export const splitShot = () => {
@@ -1367,28 +1488,33 @@ export const splitShot = () => {
   let leftOptics = originalOptics;
   let rightOptics = originalOptics;
   let opticCut = get().timing ? cameraTimesAt(splitTime).camera : splitTime;
-  if (originalOptics && original.cameraClock === "output" && get().timing) {
+  if (hasOptics(originalOptics) && original.cameraClock === "output" && get().timing) {
     const before = opticsSpansOfShot(s);
-    if (before.length) {
-      splitSource = shotSourceAt(splitTime);
-      const starts = sourceShotStarts();
-      const future = sourceRows.map((row, i) => ({
-        t: starts[i] ?? timingClock.sourceAt(fromSource(row.t)),
-        cameraClock: row.cameraClock,
-      }));
-      future.splice(s + 1, 0, { t: timingClock.sourceAt(fromSource(splitSource)), cameraClock: "output" });
-      const clock = compileCameraClock(timingClock, future);
-      const left = opticsSpansOfShot(s, clock);
-      const right = opticsSpansOfShot(s + 1, clock);
-      const near = (a: number, b: number) => Math.abs(a - b) < 1e-8;
-      if (before.length !== 1 || left.length !== 1 || right.length !== 1 ||
-        !near(left[0].from, before[0].from) || !near(left[0].to, splitTime) ||
-        !near(right[0].from, splitTime) || !near(right[0].to, before[0].to))
-        return say("Use Scene time to split a shot when its optics would cross separate playback ranges");
-      opticCut = cameraTimeInSpan(before[0], splitTime);
-      leftOptics = remapOpticsSpan(originalOptics, before[0], left[0]);
-      rightOptics = remapOpticsSpan(originalOptics, before[0], right[0]);
-    }
+    splitSource = shotSourceAt(splitTime);
+    const future = futureShotClocks(sourceRows);
+    future.splice(s + 1, 0, {
+      t: timingClock.sourceAt(fromSource(splitSource)),
+      cameraClock: "output",
+    });
+    const clock = compileCameraClock(timingClock, future);
+    const left = opticsSpansOfShot(s, clock);
+    const right = opticsSpansOfShot(s + 1, clock);
+    const near = (a: number, b: number) => Math.abs(a - b) < 1e-8;
+    if (
+      before.length !== 1 ||
+      left.length !== 1 ||
+      right.length !== 1 ||
+      !near(left[0].from, before[0].from) ||
+      !near(left[0].to, splitTime) ||
+      !near(right[0].from, splitTime) ||
+      !near(right[0].to, before[0].to)
+    )
+      return say(
+        "Use Scene time to split a shot when its optics would cross separate playback ranges",
+      );
+    opticCut = cameraTimeInSpan(before[0], splitTime);
+    leftOptics = remapOpticsSpan(originalOptics, before[0], left[0]);
+    rightOptics = remapOpticsSpan(originalOptics, before[0], right[0]);
   }
   const splitRows = (sh: ShotRow[]) => {
     const { t: _t, name, transition: _transition, hits, optics: _optics, ...rest } = sh[s];
@@ -1400,7 +1526,15 @@ export const splitShot = () => {
     if (originalOptics && outgoingOptics && incomingOptics) {
       const leftId = sh[s].id ?? newRowId();
       sh[s].id = leftId;
-      splitOpticsContext(originalOptics, outgoingOptics, incomingOptics, opticCut, leftId, rightId, sh);
+      splitOpticsContext(
+        originalOptics,
+        outgoingOptics,
+        incomingOptics,
+        opticCut,
+        leftId,
+        rightId,
+        sh,
+      );
       sh[s].optics = outgoingOptics;
     }
     sh.splice(s + 1, 0, {
@@ -1449,7 +1583,8 @@ export const splitShot = () => {
   const rig = activeCameraRig(s);
   const shotBoundMotion = rig?.lead || rig?.bank || rig?.look === "tangent";
   const check =
-    !free && (shotBoundMotion || (!subdivision && !reuseKey && before && keys[at] && !keys[at].cut));
+    !free &&
+    (shotBoundMotion || (!subdivision && !reuseKey && before && keys[at] && !keys[at].cut));
   if (subdivision) splitSource = shotSourceAt(t);
   const tail = reuseKey
     ? null
@@ -1481,7 +1616,7 @@ export const splitShot = () => {
     )
   )
     return;
-  selectPlacement(start.id, start.t);
+  selectPlacement({ id: start.id, t: start.t });
   const word = speechAtCut(start.t);
   if (word)
     return say(
@@ -1507,15 +1642,45 @@ const mergeShot = (i: number) => {
     say("This cut has no shot of its own in shots.json. Ask the AI in a note");
     return;
   }
-  const leftSpans = opticsSpansOfShot(s - 1);
-  const rightSpans = opticsSpansOfShot(s);
-  const leftSpan = leftSpans[0];
-  const rightSpan = rightSpans[0];
-  const joinedSpan = leftSpans.length === 1 && rightSpans.length === 1 &&
-    Math.abs(leftSpan.to - rightSpan.from) < 1e-8
-    ? { ...leftSpan, to: rightSpan.to, sourceTo: rightSpan.sourceTo }
-    : null;
-  const opticCut = joinedSpan ? cameraTimeInSpan(joinedSpan, rightSpan.from) : sourceShotStarts()[s];
+  const sourceRows = shotsDoc.data ?? [];
+  const leftRow = sourceRows[s - 1];
+  const rightRow = sourceRows[s];
+  const needsOutputOptics =
+    get().timing &&
+    (hasOptics(leftRow?.optics) || hasOptics(rightRow?.optics)) &&
+    (leftRow?.cameraClock === "output" || rightRow?.cameraClock === "output");
+  let leftSpan: CameraSpan | undefined;
+  let rightSpan: CameraSpan | undefined;
+  let joinedSpan: CameraSpan | null = null;
+  if (needsOutputOptics) {
+    const leftSpans = opticsSpansOfShot(s - 1);
+    const rightSpans = opticsSpansOfShot(s);
+    const future = futureShotClocks(sourceRows);
+    future.splice(s, 1);
+    const mergedSpans = opticsSpansOfShot(s - 1, compileCameraClock(timingClock, future));
+    const near = (a: number, b: number) => Math.abs(a - b) < 1e-8;
+    const ok =
+      leftRow?.cameraClock === "output" &&
+      rightRow?.cameraClock === "output" &&
+      leftSpans.length === 1 &&
+      rightSpans.length === 1 &&
+      mergedSpans.length === 1 &&
+      near(leftSpans[0].to, rightSpans[0].from) &&
+      near(mergedSpans[0].from, leftSpans[0].from) &&
+      near(mergedSpans[0].to, rightSpans[0].to) &&
+      near(mergedSpans[0].sourceFrom, leftSpans[0].sourceFrom) &&
+      near(mergedSpans[0].sourceTo, rightSpans[0].sourceTo);
+    if (!ok)
+      return say(
+        "Use Scene time to merge shots whose optics cross different clocks or playback ranges",
+      );
+    leftSpan = leftSpans[0];
+    rightSpan = rightSpans[0];
+    joinedSpan = mergedSpans[0];
+  }
+  const opticCut = joinedSpan
+    ? cameraTimeInSpan(joinedSpan, rightSpan!.from)
+    : sourceShotStarts()[s];
   if (
     !preserveRailPositions([i - 1, i], () =>
       together(() =>
@@ -1525,9 +1690,16 @@ const mergeShot = (i: number) => {
               const removed = sh[s];
               const left = sh[s - 1];
               setHits(left, mergeShotHits(left.hits, removed?.hits));
-              const leftOptics = joinedSpan ? remapOpticsSpan(left.optics, leftSpan, joinedSpan) : left.optics;
-              const rightOptics = joinedSpan ? remapOpticsSpan(removed?.optics, rightSpan, joinedSpan) : removed?.optics;
-              const optics = mergeShotOptics(leftOptics, rightOptics, opticCut, [left.id, removed.id]);
+              const leftOptics = joinedSpan
+                ? remapOpticsSpan(left.optics, leftSpan!, joinedSpan)
+                : left.optics;
+              const rightOptics = joinedSpan
+                ? remapOpticsSpan(removed?.optics, rightSpan!, joinedSpan)
+                : removed?.optics;
+              const optics = mergeShotOptics(leftOptics, rightOptics, opticCut, [
+                left.id,
+                removed.id,
+              ]);
               if (optics) left.optics = optics;
               else delete left.optics;
               if (removed.id) redirectOpticsContext(sh, removed.id, () => (left.id ??= newRowId()));

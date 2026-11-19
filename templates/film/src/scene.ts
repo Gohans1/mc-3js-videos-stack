@@ -378,9 +378,12 @@ export async function buildScene(canvas, W, H, draft = false) {
   const cameraOpticsSample = () => {
     const shot = SHOTS_OUT[Math.max(0, shotAt(worldTime))];
     const cam = sampleTrack(editTime, shot?.camera, shot?.optics);
-    const focus = cam.focus && typeof cam.focus === "object" && "u" in cam.focus
-      ? resolveFocusDistance(cam.focus, camera.position, resolveFocusTarget, camera.position.distanceTo(lookAt)).distance
-      : cam.focus;
+    const p = free.on ? (now.cam?.p ?? cam.p) : camera.position;
+    const l = free.on ? (now.cam?.l ?? cam.l) : lookAt;
+    const focus =
+      cam.focus && typeof cam.focus === "object" && "u" in cam.focus
+        ? resolveFocusDistance(cam.focus, p, resolveFocusTarget, p.distanceTo(l)).distance
+        : cam.focus;
     return { mm: cam.mm, focus };
   };
   const poseScene = (t) => {

@@ -93,7 +93,13 @@ export const remapOpticsSpan = <T extends CameraOpticsTracks | undefined>(
         { ...key, t: cameraTimeInSpan(after, outputAt(key.t)) },
       ]),
     );
-  return { ...optics, focus: map(optics.focus), focalLength: map(optics.focalLength) } as T;
+  const focus = map(optics.focus);
+  const focalLength = map(optics.focalLength);
+  return {
+    ...optics,
+    ...(focus !== undefined ? { focus } : {}),
+    ...(focalLength !== undefined ? { focalLength } : {}),
+  } as T;
 };
 
 const lanes = ["focus", "focalLength"] as const;

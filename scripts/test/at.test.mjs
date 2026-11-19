@@ -121,7 +121,14 @@ test("at reads camera-clock optics and authored keys while a Freeze holds the pi
   put("src/timeline/shots.json", [{ t: 0, name: "Camera holds too" }]);
   const scene = whatsAt(dir, 4);
   assert.deepEqual(
-    [scene.cam.clock, scene.scene, scene.cam.time, scene.cam.before, scene.cam.after, scene.cam.fov],
+    [
+      scene.cam.clock,
+      scene.scene,
+      scene.cam.time,
+      scene.cam.before,
+      scene.cam.after,
+      scene.cam.fov,
+    ],
     ["scene", 2, 2, 0, 1, 35.7],
   );
 });
@@ -136,7 +143,10 @@ test("at samples independent focus and focal length through a Freeze on the outp
   put("src/timeline/timing.json", { freezes: [{ at: 2, duration: 3 }] });
   put("src/timeline/cam.json", [{ t: 0, p: [0, 0, 10], l: [0, 0, 0], fov: 50, focus: 4 }]);
   const focus = { here: { t: 32 / 11, value: 9 } };
-  const focalLength = { wide: { t: 0, value: 24 }, long: { t: 64 / 11, value: 50, ease: "linear" } };
+  const focalLength = {
+    wide: { t: 0, value: 24 },
+    long: { t: 64 / 11, value: 50, ease: "linear" },
+  };
   put("src/timeline/shots.json", [{ t: 0, cameraClock: "output", optics: { focus, focalLength } }]);
   const result = whatsAt(dir, 4);
   assert.equal(result.scene, 2);
@@ -154,7 +164,9 @@ test("at estimates the authored rig lens and uses camera anchor fallbacks for do
   put("src/timeline/timing.json", {});
   const cam = [{ t: 0, p: [0, 0, 10], l: [0, 0, 0], fov: 50 }];
   put("src/timeline/cam.json", cam);
-  put("src/timeline/shots.json", [{ t: 0, camera: { fovAxis: { mode: "horizontal", aspect: 1 } } }]);
+  put("src/timeline/shots.json", [
+    { t: 0, camera: { fovAxis: { mode: "horizontal", aspect: 1 } } },
+  ]);
   const rig = whatsAt(dir, 2).cam;
   assert.equal(rig.fov, 29.4);
   assert.equal(rig.evaluation, "authored");
@@ -162,10 +174,16 @@ test("at estimates the authored rig lens and uses camera anchor fallbacks for do
   put("src/timeline/shots.json", [{ t: 0 }]);
   const dolly = { ...cam[0], t: 4, dollyZoomScale: 2, motion: "linear", ease: "linear" };
   const anchor = { target: "Actor", fallback: [0, 0, 10] };
-  put("src/timeline/cam.json", [{ ...cam[0], p: anchor }, { ...dolly, p: anchor }]);
+  put("src/timeline/cam.json", [
+    { ...cam[0], p: anchor },
+    { ...dolly, p: anchor },
+  ]);
   assert.equal(whatsAt(dir, 2).cam.fov, 22.6);
   const unknown = { target: "Actor", offset: [0, 0, 0] };
-  put("src/timeline/cam.json", [{ ...cam[0], p: unknown }, { ...dolly, p: unknown }]);
+  put("src/timeline/cam.json", [
+    { ...cam[0], p: unknown },
+    { ...dolly, p: unknown },
+  ]);
   assert.equal(whatsAt(dir, 2).cam.fov, null);
   put("src/timeline/cam.json", [...cam, dolly, { ...dolly, t: 8, p: { target: "Other actor" } }]);
   assert.equal(whatsAt(dir, 2).cam.fov, 22.6);
@@ -2143,4 +2161,30 @@ test("at applies physical EOF after compiling repeated SFX playback", (t) => {
       if (active) assert.equal(got.sounds[0].to, 3 / rate);
     }
   }
+});
+
+test("at formats point focus specs and Auto rack endpoints cleanly", (t) => {
+  const dir = film(t);
+  const put = (file, value) => writeFileSync(join(dir, file), JSON.stringify(value));
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  pkg["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  put("package.json", pkg);
+  put("src/edit.json", { end: 6 });
+  put("src/timeline/timing.json", {});
+  put("src/timeline/cam.json", [{ t: 0, p: [0, 0, 10], l: [0, 0, 0], fov: 50 }]);
+  put("src/timeline/shots.json", [
+    {
+      t: 0,
+      optics: {
+        focus: {
+          a: { t: 0, value: null },
+          b: { t: 2, value: { point: [1, 2.5, 3], label: "Wall" }, ease: "linear" },
+          c: { t: 4, value: { point: [4, 5, 6] }, ease: "hold" },
+        },
+      },
+    },
+  ]);
+  assert.equal(whatsAt(dir, 1).cam?.focus, "Auto -> Wall (1,2.5,3) (50%)");
+  assert.equal(whatsAt(dir, 2).cam?.focus, "Wall (1,2.5,3)");
+  assert.equal(whatsAt(dir, 4).cam?.focus, "point (4,5,6)");
 });

@@ -183,7 +183,7 @@ export function FocusControls({
           <Reset
             compact
             label={resetLabel}
-            disabled={disabled || authoredFocus === undefined}
+            disabled={disabled || authoredFocus == null}
             onClick={() => {
               setCustomTargetKey(null);
               onCommitFocus(undefined);
@@ -239,7 +239,7 @@ export function FocusControls({
             placeholder="Automatic"
             onSave={(v) => onCommitFocus(v)}
           />
-          {authoredFocus !== undefined && (
+          {authoredFocus != null && (
             <Button
               size="sm"
               variant="quiet"
@@ -381,13 +381,14 @@ export function FocusControls({
           </Button>
         </Tip>
       </div>
-      {effectiveFocus !== undefined &&
+      {effectiveFocus != null &&
+        focusLabel(effectiveFocus) !== null &&
         focusModeUi !== "target" &&
         focusModeUi !== "point" &&
-        (typeof effectiveFocus !== "number" || authoredFocus === undefined) && (
+        (typeof effectiveFocus !== "number" || authoredFocus == null) && (
           <p className="text-muted-foreground text-xs">
             {focusLabel(effectiveFocus)}
-            {fromShotNote && authoredFocus === undefined ? " · From shot" : ""}
+            {fromShotNote && authoredFocus == null ? " · From shot" : ""}
           </p>
         )}
     </>

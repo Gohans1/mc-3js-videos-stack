@@ -1108,10 +1108,18 @@ const Shutter = z.object({
   phase: z.number().min(-1).max(1).optional(),
   apertureSamples: z.number().int().min(1).max(32).optional(),
 });
-const OpticsKey = z.looseObject({ t: z.number(), ease: Ease.optional(), contextOf: z.string().min(1).optional() });
+const OpticsKey = z.looseObject({
+  t: z.number().finite(),
+  ease: Ease.optional(),
+  contextOf: z.string().min(1).optional(),
+});
 const CameraOpticsTracks = z.looseObject({
-  focus: z.record(z.string().min(1), OpticsKey.extend({ value: FocusTarget.nullable() })).optional(),
-  focalLength: z.record(z.string().min(1), OpticsKey.extend({ value: z.number().positive() })).optional(),
+  focus: z
+    .record(z.string().min(1), OpticsKey.extend({ value: FocusTarget.nullable() }))
+    .optional(),
+  focalLength: z
+    .record(z.string().min(1), OpticsKey.extend({ value: z.number().positive() }))
+    .optional(),
 });
 const ShotRow = z.looseObject({
   id: z.string().min(1).optional(),

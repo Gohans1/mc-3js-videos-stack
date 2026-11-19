@@ -25,12 +25,12 @@ import { setFilmSource, SHOTS_OUT } from "/core/filmMeta.ts";
 import { S, wake } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
 import { refreshTimedDocs } from "/core/timed-doc.ts";
-import { addKeyHere, applyPinnedFraming, cameraKeySampleTime, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, setLens, splitShot } from "/camera/cam.ts";
+import { addKeyHere, applyPinnedFraming, cameraKeySampleTime, keys as camKeys, loadCam, matchAllInShot, opticsOfKey, removeKey, retime, rollCut, setKey, setLens, splitShot } from "/camera/cam.ts";
 import { shownShot } from "/camera/anim.ts";
 import { camLine } from "/camera/camline.ts";
 import { plotCameraGraph, scaleGraphValues } from "/camera/camera-graph.ts";
 import { sampleEditedPath } from "/camera/campath.ts";
-import { fitCameraBox } from "/camera/camera-framing.ts";
+import { applyCameraPick, fitCameraBox, startCameraPick } from "/camera/camera-framing.ts";
 import { editOpticsLane, opticsOutputsAt } from "/camera/camera-optics-track.ts";
 import { files as keyFiles, fold as foldKeyFile, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
@@ -80,7 +80,7 @@ import { useStudioHotkeys } from "/shell/useStudioHotkeys.ts";
 import { TimelinePanel } from "/timeline/TimelinePanel.tsx";
 import { SpeedCurve } from "/timeline/SpeedCurve.tsx";
 import { copy, cut, paste } from "/timeline/clipboard.ts";
-import { attachTimeline, drawTimelineActivity, drawTimelines, marks } from "/timeline/timeline.ts";
+import { attachTimeline, drawTimelineActivity, drawTimelines, marks, refreshTimes } from "/timeline/timeline.ts";
 import { cameraTimesAt, setTiming, timing, timingClock } from "../src/timing-state.mjs";
 import { warp } from "../src/warp.mjs";
 
@@ -405,7 +405,7 @@ window.__UX_TEST__ = {
   },
   camKeys: () => camKeys,
   setVoiceWarp: (warp) => { EDIT.voice.warp = warp; },
-  refreshProjection: (value) => { setTiming(value, 10); refreshTimedDocs(); },
+  refreshProjection: (value) => { setTiming(value, 10); refreshTimes(); refreshTimedDocs(); },
   camPostCount: () => camPosts,
   shotsData: () => shotsDoc.data ?? shotsData,
   shotTimes: () => SHOTS_OUT.map(s => s.t),
@@ -442,7 +442,7 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
-  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime, editOpticsLane, opticsOutputsAt, applyPinnedFraming,
+  splitShot, retime, rollCut, opticsOfKey, startCameraPick, applyCameraPick, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime, editOpticsLane, opticsOutputsAt, applyPinnedFraming,
   sourceCamKeys: () => EDIT.cam,
   freeDoc,
   readFocusUiState,
@@ -953,8 +953,11 @@ test("Camera Graph fits the selected range and restores the full shot without ed
   expect(await page.evaluate(`Boolean(${fit})`)).toBe(true);
   await page.evaluate(`(${fit}).click()`);
   await waitUntil(`(${fit}).getAttribute('aria-pressed') === 'true' && ${markers}.length === 3`);
-  expect(await page.evaluate(`[...${markers}].map(mark => mark.getAttribute('aria-label').split(' ')[2])`))
-    .toEqual(["2", "3", "4"]);
+  expect(
+    await page.evaluate(
+      `[...${markers}].map(mark => mark.getAttribute('aria-label').split(' ')[2])`,
+    ),
+  ).toEqual(["2", "3", "4"]);
   await page.evaluate(`(${fit}).click()`);
   await waitUntil(`${markers}.length === 5`);
   await page.evaluate("window.__UX_TEST__.setKey(2)");
@@ -1051,7 +1054,10 @@ test("Fit box edits the visible source shot after picture clips are reordered", 
   })()`);
   try {
     await waitUntil(`window.__UX_TEST__.shotsData().some(s => s.size === "CU")`);
-    expect(await page.evaluate(`window.__UX_TEST__.shotsData().map(s => s.size)`)).toEqual([null, "CU"]);
+    expect(await page.evaluate(`window.__UX_TEST__.shotsData().map(s => s.size)`)).toEqual([
+      null,
+      "CU",
+    ]);
   } finally {
     await page.evaluate(`(() => {
       const u = window.__UX_TEST__;
@@ -1091,8 +1097,8 @@ test("editing a cut key uses its source shot rig while Freeze displays the outgo
 });
 
 for (const mode of ["Freeze", "Speed"]) {
-test(`1-node aim samples the selected shot across ${mode} and respects partial rig support`, async () => {
-  await page.evaluate(`(async () => {
+  test(`1-node aim samples the selected shot across ${mode} and respects partial rig support`, async () => {
+    await page.evaluate(`(async () => {
     const u = window.__UX_TEST__, tools = u.S.tools;
     const original = [tools.cameraRig, tools.cameraRails, tools.cameraSample, u.S.render, u.get().timing, u.get().ready];
     const boundary = ${mode === "Freeze" ? 4 : 0.9};
@@ -1116,35 +1122,43 @@ test(`1-node aim samples the selected shot across ${mode} and respects partial r
       { id: "b0", t: boundary, p: [4, 2, 6], l: [0, 1, 0], cut: true },
     ]);
     u.set({ timing: true, ready: true, shotPick: 1 });
-    u.refreshProjection(${mode === "Freeze"
-      ? '{ freezes: [{ at: 4, frame: 2, duration: 2 }] }'
-      : '{ speeds: [{ from: 0, to: 10, rate: 1.2 }] }'});
+    u.refreshProjection(${
+      mode === "Freeze"
+        ? "{ freezes: [{ at: 4, frame: 2, duration: 2 }] }"
+        : "{ speeds: [{ from: 0, to: 10, rate: 1.2 }] }"
+    });
     u.S.t = ${mode === "Freeze" ? 4 : 0.1};
   })()`);
-  const button = (label) => `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === '${label}')`;
-  try {
-    for (const label of ["Advanced", "Camera rig"]) {
-      await waitUntil(button(label));
-      await page.evaluate(`(() => { const button = ${button(label)}; if (button.getAttribute('aria-expanded') === 'false') button.click(); })()`);
-    }
-    await waitUntil(button("1-node"));
-    await page.evaluate(`(${button("1-node")}).click()`);
-    await waitUntil(`window.__UX_TEST__.shotsData()[1].camera.look === "one-node"`);
-    const rig = await page.evaluate("window.__UX_TEST__.shotsData()[1].camera");
-    const boundary = mode === "Freeze" ? 4 : 0.9;
-    expect(rig.position[0]).toBeCloseTo(boundary, 5);
-    expect(rig.position.slice(1)).toEqual([2, 6]);
-    const sampled = await page.evaluate(`(() => {
+    const button = (label) =>
+      `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === '${label}')`;
+    try {
+      for (const label of ["Advanced", "Camera rig"]) {
+        await waitUntil(button(label));
+        await page.evaluate(
+          `(() => { const button = ${button(label)}; if (button.getAttribute('aria-expanded') === 'false') button.click(); })()`,
+        );
+      }
+      await waitUntil(button("1-node"));
+      await page.evaluate(`(${button("1-node")}).click()`);
+      await waitUntil(`window.__UX_TEST__.shotsData()[1].camera.look === "one-node"`);
+      const rig = await page.evaluate("window.__UX_TEST__.shotsData()[1].camera");
+      const boundary = mode === "Freeze" ? 4 : 0.9;
+      expect(rig.position[0]).toBeCloseTo(boundary, 5);
+      expect(rig.position.slice(1)).toEqual([2, 6]);
+      const sampled = await page.evaluate(`(() => {
       const u = window.__UX_TEST__;
       const i = u.camKeys().findIndex(k => k.id === "b0");
       return u.cameraTimesAt(u.cameraKeySampleTime(i)).world;
     })()`);
-    expect(sampled).toBeGreaterThanOrEqual(boundary);
-    expect(rig.rail).toEqual([[0, 2, 6], [2, 2, 6]]);
-  } finally {
-    await page.evaluate("window.__restoreRigSample()");
-  }
-});
+      expect(sampled).toBeGreaterThanOrEqual(boundary);
+      expect(rig.rail).toEqual([
+        [0, 2, 6],
+        [2, 2, 6],
+      ]);
+    } finally {
+      await page.evaluate("window.__restoreRigSample()");
+    }
+  });
 }
 
 test("optics keyframes author independent Focus and Focal length at the playhead, undo, and survive Merge", async () => {
@@ -1172,7 +1186,9 @@ test("optics keyframes author independent Focus and Focal length at the playhead
     await waitUntil(filmTab);
     await click(filmTab);
     await waitUntil(section);
-    await page.evaluate(`(() => { const button = ${section}; if (button.getAttribute('aria-expanded') === 'false') button.click(); })()`);
+    await page.evaluate(
+      `(() => { const button = ${section}; if (button.getAttribute('aria-expanded') === 'false') button.click(); })()`,
+    );
     await waitUntil(focus);
     await click(focus);
     await waitUntil(`Object.values(${shot}.optics?.focus ?? {})[0]?.value === 4`);
@@ -1197,8 +1213,9 @@ test("optics keyframes author independent Focus and Focal length at the playhead
     expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
     await page.evaluate("window.__UX_TEST__.removeKey(1)");
     await waitUntil("window.__UX_TEST__.shotsData().length === 1");
-    expect(await page.evaluate("Object.values(window.__UX_TEST__.shotsData()[0].optics.focalLength)[0]"))
-      .toMatchObject({ t: 5, value: 45 });
+    expect(
+      await page.evaluate("Object.values(window.__UX_TEST__.shotsData()[0].optics.focalLength)[0]"),
+    ).toMatchObject({ t: 5, value: 45 });
     await page.evaluate("window.__UX_TEST__.undo()");
     await waitUntil(`Object.values(${shot}.optics?.focalLength ?? {})[0]?.t === 5`);
     expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
@@ -1301,6 +1318,409 @@ test("Split keeps optics intact when a detached Freeze would split one output ra
   expect(result.status).toContain("separate playback ranges");
 });
 
+test("ShotOpticsEditor updates on paused seek after render and renders explicit Auto focus keys cleanly", async () => {
+  const ready = await page.evaluate("window.__UX_TEST__.get().ready");
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    window.__origRenderOptics = u.S.render;
+    let renderedAt = 1;
+    await u.loadShots([{
+      id: "one",
+      t: 0,
+      optics: {
+        focalLength: { a: { t: 0, value: 24 }, b: { t: 4, value: 85, ease: "linear" } },
+        focus: {
+          a: { t: 0, value: 2 },
+          b: { t: 4, value: 6, ease: "linear" },
+          c: { t: 6, value: null, ease: "hold" },
+        },
+      },
+    }]);
+    await u.setCamData([
+      { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+      { id: "k1", t: 8, p: [4, 2, 6], l: [0, 1, 0], fov: 50 },
+    ], 0);
+    u.S.render = Object.assign((t) => { renderedAt = t; }, { eases: window.__origRenderOptics.eases });
+    u.S.tools.cameraOpticsSample = () => {
+      const cam = u.cameraAt(renderedAt, u.sourceCamKeys(), { optics: u.shotsData()[0]?.optics });
+      const focus =
+        cam.focus && typeof cam.focus === "object" && "u" in cam.focus
+          ? cam.focus.from + (cam.focus.to - cam.focus.from) * cam.focus.u
+          : cam.focus;
+      return { mm: cam.mm, focus };
+    };
+    u.freecam.setFree(false);
+    u.S.playing = false;
+    u.set({ side: "cam", shotPick: null, ready: true, playing: false });
+    u.seekExact(1);
+    u.S.render(1);
+    u.wake("rendered");
+  })()`);
+  const panel = `document.querySelector('section[aria-label="Optics tracks"]')`;
+  const focalInput = `(${panel})?.querySelector('input[aria-label="Focal length (mm)"]')`;
+  const focusInput = `(${panel})?.querySelector('input[aria-label="Focus distance (m)"]')`;
+  try {
+    const filmTab = `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find(b => b.textContent.trim() === 'Film cam')`;
+    await waitUntil(filmTab);
+    await page.evaluate(`(${filmTab}).click()`);
+    await waitUntil(panel);
+    await page.evaluate(`(() => {
+      const btn = (${panel}).querySelector('button[aria-expanded]');
+      if (btn?.getAttribute('aria-expanded') === 'false') btn.click();
+    })()`);
+    await waitUntil(`${focalInput}?.value === "39.3" && ${focusInput}?.value === "3"`);
+
+    // Paused seek fires wake("render") BEFORE S.render(3) updates renderedAt, then wake("rendered") runs after.
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.seekExact(3);
+      u.S.render(3);
+      u.wake("rendered");
+    })()`);
+    await waitUntil(`${focalInput}?.value === "69.8" && ${focusInput}?.value === "5"`);
+
+    // Explicit null (Auto) focus key disables Reset, hides redundant Auto button, and renders no empty <p>.
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.seekExact(6);
+      u.S.render(6);
+      u.wake("rendered");
+    })()`);
+    await waitUntil(`${focusInput}?.value === ""`);
+    const autoState = await page.evaluate(`(() => {
+      const root = ${panel};
+      const reset = root.querySelector('button[aria-label="Set focus key to Auto"]');
+      const autoBtns = [...root.querySelectorAll('button')].filter(
+        (b) => b.textContent?.trim() === "Auto" && b.getAttribute("role") !== "radio",
+      );
+      const emptyParagraphs = [...root.querySelectorAll("p")].filter((p) => !p.textContent?.trim());
+      return {
+        resetDisabled: reset?.disabled,
+        extraAutoButtons: autoBtns.length,
+        emptyParagraphs: emptyParagraphs.length,
+      };
+    })()`);
+    expect(autoState).toEqual({
+      resetDisabled: true,
+      extraAutoButtons: 0,
+      emptyParagraphs: 0,
+    });
+  } finally {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      if (window.__origRenderOptics) { u.S.render = window.__origRenderOptics; delete window.__origRenderOptics; }
+      delete u.S.tools.cameraOpticsSample;
+      u.set({ ready: ${ready} });
+    })()`);
+  }
+});
+
+test("Merge blocks mixed-clock and multi-span output optics without modifying shots or camera keys", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const priorTiming = u.get().timing;
+    const lens = { a: { t: 0, value: 24 }, b: { t: 4, value: 80, ease: "linear" } };
+    const rightLens = { c: { t: 4, value: 50 }, d: { t: 10, value: 90, ease: "linear" } };
+    try {
+      u.set({ timing: true });
+
+      // 1. Mixed clocks: left is output with optics, right is scene clock
+      await u.loadShots([
+        { id: "a", t: 0, cameraClock: "output", optics: { focalLength: lens } },
+        { id: "b", t: 4 },
+      ]);
+      await u.setCamData([
+        { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+        { id: "k1", t: 4, cut: true, p: [4, 2, 6], l: [0, 1, 0] },
+      ], 1);
+      u.refreshProjection({ freezes: [{ at: 2, duration: 3 }] });
+      u.set({ status: "" });
+      const beforeMixedA = JSON.stringify([u.shotsData(), u.sourceCamKeys()]);
+      u.removeKey(u.camKeys().findIndex((k, i) => i > 0 && k.cut));
+      const mixedA = {
+        same: beforeMixedA === JSON.stringify([u.shotsData(), u.sourceCamKeys()]),
+        status: u.get().status,
+      };
+
+      // 2. Mixed clocks (reverse): left is scene clock, right is output with optics
+      await u.loadShots([
+        { id: "a", t: 0 },
+        { id: "b", t: 4, cameraClock: "output", optics: { focalLength: rightLens } },
+      ]);
+      await u.setCamData([
+        { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+        { id: "k1", t: 4, cut: true, p: [4, 2, 6], l: [0, 1, 0] },
+      ], 1);
+      u.refreshProjection({ freezes: [{ at: 6, duration: 3 }] });
+      u.set({ status: "" });
+      const beforeMixedB = JSON.stringify([u.shotsData(), u.sourceCamKeys()]);
+      u.removeKey(u.camKeys().findIndex((k, i) => i > 0 && k.cut));
+      const mixedB = {
+        same: beforeMixedB === JSON.stringify([u.shotsData(), u.sourceCamKeys()]),
+        status: u.get().status,
+      };
+
+      // 3. Multi-span output shot (detached freeze splits shot 0 into 2 ranges)
+      await u.loadShots([
+        { id: "a", t: 0, cameraClock: "output", optics: { focalLength: lens } },
+        { id: "b", t: 4, cameraClock: "output", optics: { focalLength: rightLens } },
+      ]);
+      await u.setCamData([
+        { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+        { id: "k1", t: 4, cut: true, p: [4, 2, 6], l: [0, 1, 0] },
+      ], 1);
+      u.refreshProjection({ freezes: [{ at: 7, frame: 1, duration: 3 }] });
+      u.set({ status: "" });
+      const beforeMulti = JSON.stringify([u.shotsData(), u.sourceCamKeys()]);
+      u.removeKey(u.camKeys().findIndex((k, i) => i > 0 && k.cut));
+      const multi = {
+        same: beforeMulti === JSON.stringify([u.shotsData(), u.sourceCamKeys()]),
+        status: u.get().status,
+      };
+
+      return { mixedA, mixedB, multi };
+    } finally {
+      u.set({ timing: priorTiming, shotPick: null });
+      u.refreshProjection({});
+    }
+  })()`);
+  for (const item of [result.mixedA, result.mixedB, result.multi]) {
+    expect(item.same).toBe(true);
+    expect(item.status).toContain("different clocks or playback ranges");
+  }
+});
+
+test("rolling an output-clock cut remaps shot optics under Freeze and Speed and blocks multi-span splits", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const priorTiming = u.get().timing;
+    try {
+      await u.loadShots([
+        {
+          id: "a",
+          t: 0,
+          cameraClock: "output",
+          optics: {
+            focalLength: { wide: { t: 0, value: 24 }, long: { t: 4, value: 80, ease: "linear" } },
+            focus: { f0: { t: 0, value: 2 }, f1: { t: 4, value: 10, ease: "linear" } },
+          },
+        },
+        {
+          id: "b",
+          t: 4,
+          cameraClock: "output",
+          optics: {
+            focalLength: { mid: { t: 4, value: 50 }, tele: { t: 10, value: 100, ease: "linear" } },
+            focus: { g0: { t: 4, value: 3 }, g1: { t: 10, value: 9, ease: "linear" } },
+          },
+        },
+      ]);
+      await u.setCamData([
+        { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+        { id: "k1", t: 4, cut: true, p: [4, 2, 6], l: [0, 1, 0] },
+        { id: "k2", t: 10, p: [10, 2, 6], l: [0, 1, 0] },
+      ], 1);
+      u.set({ timing: true });
+      u.refreshProjection({
+        freezes: [{ at: 2, duration: 3 }],
+        speeds: [{ from: 4, to: 10, rate: 2 }],
+      });
+      const sampleAt = (time) => {
+        const { world, camera } = u.cameraTimesAt(time);
+        const shot = u.shotsData().findLast((row) => row.t <= world);
+        const cam = u.cameraAt(camera, u.sourceCamKeys(), { optics: shot.optics });
+        const focus =
+          typeof cam.focus === "number"
+            ? cam.focus
+            : cam.focus.from + (cam.focus.to - cam.focus.from) * cam.focus.u;
+        return [cam.mm, focus];
+      };
+      // Before roll: shot 0 spans output [0..7] (source 0..4 with freeze 2..5); shot 1 spans output [7..10] (source 4..10 at 2x).
+      const leftCheck = [1, 3.5, 6];
+      const rightCheck = [8.5, 9.5];
+      const beforeLeft = leftCheck.map(sampleAt);
+      const beforeRight = rightCheck.map(sampleAt);
+      const beforeJson = JSON.stringify([u.shotsData(), u.sourceCamKeys()]);
+
+      // Roll cut forward from output 7 (source 4) to output 8 (source 6)
+      const cutIdx = u.camKeys().findIndex((k, i) => i > 0 && k.cut);
+      u.rollCut(cutIdx, 8);
+      const forwardShots = u.shotsData().map((row) => row.t);
+      const afterForwardLeft = leftCheck.map(sampleAt);
+      const afterForwardRight = rightCheck.map(sampleAt);
+
+      // Undo restores pre-roll shots and optics in one step
+      u.undo();
+      const undoneMatches = beforeJson === JSON.stringify([u.shotsData(), u.sourceCamKeys()]);
+
+      // Roll cut backward across the Freeze to output 1 (source 1): Freeze moves from shot 0 to shot 1
+      const beforeAtHalf = sampleAt(0.5);
+      const cutIdx2 = u.camKeys().findIndex((k, i) => i > 0 && k.cut);
+      u.rollCut(cutIdx2, 1);
+      const backwardShots = u.shotsData().map((row) => row.t);
+      const afterBackwardHalf = sampleAt(0.5);
+      const afterBackwardRight = rightCheck.map(sampleAt);
+
+      // Detached freeze that would split an optics shot into 2 playback ranges blocks rolling cleanly
+      await u.loadShots([
+        { id: "a", t: 0, cameraClock: "output", optics: { focalLength: { w: { t: 0, value: 35 } } } },
+        { id: "b", t: 3, cameraClock: "output", optics: { focalLength: { t: { t: 3, value: 50 } } } },
+      ]);
+      await u.setCamData([
+        { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+        { id: "k1", t: 3, cut: true, p: [3, 2, 6], l: [0, 1, 0] },
+        { id: "k2", t: 10, p: [10, 2, 6], l: [0, 1, 0] },
+      ], 1);
+      u.refreshProjection({ freezes: [{ at: 7, frame: 3.5, duration: 2 }] });
+      u.set({ status: "" });
+      const beforeBlocked = JSON.stringify([u.shotsData(), u.sourceCamKeys()]);
+      u.rollCut(u.camKeys().findIndex((k, i) => i > 0 && k.cut), 4);
+      const blocked = {
+        same: beforeBlocked === JSON.stringify([u.shotsData(), u.sourceCamKeys()]),
+        status: u.get().status,
+      };
+
+      return {
+        forwardShots,
+        backwardShots,
+        beforeLeft,
+        beforeRight,
+        afterForwardLeft,
+        afterForwardRight,
+        undoneMatches,
+        beforeAtHalf,
+        afterBackwardHalf,
+        afterBackwardRight,
+        blocked,
+      };
+    } finally {
+      u.set({ timing: priorTiming, shotPick: null });
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(result.forwardShots).toEqual([0, 6]);
+  expect(result.backwardShots).toEqual([0, 1]);
+  for (const [i, pair] of result.beforeLeft.entries()) {
+    expect(result.afterForwardLeft[i][0]).toBeCloseTo(pair[0], 6);
+    expect(result.afterForwardLeft[i][1]).toBeCloseTo(pair[1], 6);
+  }
+  for (const [i, pair] of result.beforeRight.entries()) {
+    expect(result.afterForwardRight[i][0]).toBeCloseTo(pair[0], 6);
+    expect(result.afterForwardRight[i][1]).toBeCloseTo(pair[1], 6);
+    expect(result.afterBackwardRight[i][0]).toBeCloseTo(pair[0], 6);
+    expect(result.afterBackwardRight[i][1]).toBeCloseTo(pair[1], 6);
+  }
+  expect(result.afterBackwardHalf[0]).toBeCloseTo(result.beforeAtHalf[0], 6);
+  expect(result.afterBackwardHalf[1]).toBeCloseTo(result.beforeAtHalf[1], 6);
+  expect(result.undoneMatches).toBe(true);
+  expect(result.blocked.same).toBe(true);
+  expect(result.blocked.status).toContain("separate playback ranges");
+});
+
+test("Split at the exact start of a Freeze preserves exact shot time and output-clock optics", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const priorTiming = u.get().timing;
+    const priorSample = u.S.tools.cameraSample;
+    const optics = {
+      focalLength: { a: { t: 0, value: 24 }, b: { t: 10, value: 80, ease: "linear" } },
+      focus: { a: { t: 0, value: 2 }, b: { t: 10, value: 10, ease: "linear" } },
+    };
+    try {
+      await u.loadShots([{ id: "one", t: 0, cameraClock: "output", optics }]);
+      await u.setCamData([
+        { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 40 },
+        { id: "k1", t: 10, p: [10, 2, 6], l: [0, 1, 0], fov: 40, motion: "linear" },
+      ], 0);
+      u.set({ timing: true });
+      u.refreshProjection({ freezes: [{ at: 2, duration: 3 }] });
+      u.S.tools.cameraSample = () => u.cameraAt(u.cameraTimesAt(u.S.t).camera, u.sourceCamKeys()).sample;
+      const probes = [0.5, 1.5, 2, 3.5, 6, 9];
+      const sample = () => probes.map((time) => {
+        const { world, camera } = u.cameraTimesAt(time);
+        const shot = u.shotsData().findLast((row) => row.t <= world);
+        const cam = u.cameraAt(camera, u.sourceCamKeys(), { optics: shot.optics });
+        const focus =
+          typeof cam.focus === "number"
+            ? cam.focus
+            : cam.focus.from + (cam.focus.to - cam.focus.from) * cam.focus.u;
+        return [cam.mm, focus];
+      });
+      const before = sample();
+      u.seekExact(2);
+      u.splitShot();
+      const shots = u.shotsData().map((row) => row.t);
+      const outputStarts = u.shotTimes();
+      const after = sample();
+      return { shots, outputStarts, before, after, status: u.get().status };
+    } finally {
+      u.S.tools.cameraSample = priorSample;
+      u.set({ timing: priorTiming, shotPick: null });
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(result.shots).toEqual([0, 2]);
+  expect(result.outputStarts).toEqual([0, 2]);
+  for (const [i, pair] of result.before.entries()) {
+    expect(result.after[i][0]).toBeCloseTo(pair[0], 6);
+    expect(result.after[i][1]).toBeCloseTo(pair[1], 6);
+  }
+});
+
+test("applying a pin and aim pick target an anchored ID-less cut key instead of its shared-timestamp outgoing tail", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    window.__savedAnchorMove = u.S.tools.moveCameraAnchor;
+    u.S.tools.moveCameraAnchor = (anchor, point) => ({ ...anchor, offset: point });
+    await u.loadShots([{ t: 0, name: "Intro" }, { t: 3, name: "Cut" }]);
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 40 },
+      { t: 3, p: [1, 2, 6], l: [0, 1, 0], fov: 30 },
+      { t: 3, cut: true, p: { target: "HeroCube", offset: [0, 1, 6] }, l: [0, 1, 0], fov: 50 },
+    ], 2);
+    u.seekExact(3);
+  })()`);
+  try {
+    expect(await page.evaluate("window.__UX_TEST__.opticsOfKey(2).fov")).toBe(50);
+    await page.evaluate(
+      `window.__UX_TEST__.applyPinnedFraming({ p: [5, 3, 7], l: [1, 1, 0], fov: 42 })`,
+    );
+    await waitUntil("window.__UX_TEST__.sourceCamKeys()[2]?.p?.offset?.[0] === 5");
+    const afterPin = await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      return { keys: u.sourceCamKeys(), selected: u.get().camKey, fov: u.opticsOfKey(2).fov };
+    })()`);
+    expect(afterPin.keys[1]).toEqual({ t: 3, p: [1, 2, 6], l: [0, 1, 0], fov: 30 });
+    expect(afterPin.keys[2]).toMatchObject({
+      t: 3,
+      cut: true,
+      p: { target: "HeroCube", offset: [5, 3, 7] },
+      l: [1, 1, 0],
+      fov: 42,
+    });
+    expect(afterPin.selected).toBe(2);
+    expect(afterPin.fov).toBe(42);
+
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.startCameraPick(2, "l");
+      u.applyCameraPick(u.get().cameraPick, { what: "HeroCube", world: [2, 2, 2] });
+    })()`);
+    await waitUntil("window.__UX_TEST__.sourceCamKeys()[2]?.l?.[0] === 2");
+    const afterAim = await page.evaluate("window.__UX_TEST__.sourceCamKeys()");
+    expect(afterAim[1].l).toEqual([0, 1, 0]);
+    expect(afterAim[2].l).toEqual([2, 2, 2]);
+  } finally {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      if (window.__savedAnchorMove) u.S.tools.moveCameraAnchor = window.__savedAnchorMove;
+      else delete u.S.tools.moveCameraAnchor;
+      delete window.__savedAnchorMove;
+      u.set({ cameraPick: null });
+    })()`);
+  }
+});
+
 test("editing a carried lens key claims it, and Merge redirects its owner through an old shot without an ID", async () => {
   const ready = await page.evaluate("window.__UX_TEST__.get().ready");
   await page.evaluate(`(async () => {
@@ -1345,7 +1765,9 @@ test("editing a carried lens key claims it, and Merge redirects its owner throug
     await page.evaluate("window.__UX_TEST__.removeKey(1)");
     await waitUntil("window.__UX_TEST__.shotsData().length === 2");
     expect(await page.evaluate(`${key(0)}?.value`)).toBe(50);
-    expect(await page.evaluate(`${key(1)}?.contextOf === ${shot(0)}.id && !!${shot(0)}.id`)).toBe(true);
+    expect(await page.evaluate(`${key(1)}?.contextOf === ${shot(0)}.id && !!${shot(0)}.id`)).toBe(
+      true,
+    );
     await page.evaluate(`(() => {
       const u = window.__UX_TEST__;
       u.editOpticsLane(u.shotsData()[0], "focalLength", records => { delete records.zoom; });
@@ -1386,8 +1808,9 @@ test("Camera Graph Equalize samples tracked keys and retains authored positions 
     await waitUntil(`(${equalize})?.disabled === false`);
     await page.evaluate(`(${equalize}).click()`);
     await waitUntil("window.__UX_TEST__.camKeys()[2].t !== 2");
-    expect(await page.evaluate("window.__UX_TEST__.camKeys().slice(1).map(k => k.t)"))
-      .toEqual([1, 3.39, 4]);
+    expect(await page.evaluate("window.__UX_TEST__.camKeys().slice(1).map(k => k.t)")).toEqual([
+      1, 3.39, 4,
+    ]);
   } finally {
     await page.evaluate(`(() => {
       const tools = window.__UX_TEST__.S.tools;
@@ -2076,7 +2499,12 @@ test("prop paste keeps and selects nearby keys when Speed projects them to fract
     }
   })()`);
   expect(result).toEqual({
-    values: [[0, 1], [0.01, 2], [1.181, 1], [1.191, 2]],
+    values: [
+      [0, 1],
+      [0.01, 2],
+      [1.181, 1],
+      [1.191, 2],
+    ],
     selected: [2, 3],
   });
 });
@@ -2198,10 +2626,13 @@ test("shot continuity picks both ends of the line of action and checks the incom
     `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)})`;
   const open = async (label) => {
     await waitUntil(button(label));
-    await page.evaluate(`(() => { const button = ${button(label)}; if (button.getAttribute('aria-expanded') !== 'true') button.click(); })()`);
+    await page.evaluate(
+      `(() => { const button = ${button(label)}; if (button.getAttribute('aria-expanded') !== 'true') button.click(); })()`,
+    );
   };
   const click = (label) => page.evaluate(`(${button(label)}).click()`);
-  const pick = (x) => page.evaluate(`(() => {
+  const pick = (x) =>
+    page.evaluate(`(() => {
     const c = window.__UX_TEST__.S.el.canvas;
     const r = c.getBoundingClientRect();
     const clientX = r.left + r.width * ${x}, clientY = r.top + r.height / 2;
@@ -2215,12 +2646,18 @@ test("shot continuity picks both ends of the line of action and checks the incom
     await open("Continuity");
     expect(await page.evaluate(warning)).toBe(false);
     await click("Pick 180° axis");
-    expect(await page.evaluate("window.__UX_TEST__.get().cameraPick")).toMatchObject({ target: "continuity" });
+    expect(await page.evaluate("window.__UX_TEST__.get().cameraPick")).toMatchObject({
+      target: "continuity",
+    });
     await pick(0.45);
     expect(await page.evaluate("window.__UX_TEST__.get().cameraPick?.first")).toHaveLength(3);
-    expect(await page.evaluate(`document.querySelector('section[aria-label="Continuity"]').textContent`)).toContain("second point");
+    expect(
+      await page.evaluate(`document.querySelector('section[aria-label="Continuity"]').textContent`),
+    ).toContain("second point");
     expect(await page.evaluate(axis)).toBeUndefined();
-    await page.evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await page.evaluate(
+      "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))",
+    );
     await waitUntil("window.__UX_TEST__.get().cameraPick === null");
     expect(await page.evaluate(axis)).toBeUndefined();
 
@@ -2310,7 +2747,8 @@ test("a pinned angle applies pose and the active lens at the playhead in one Und
   })()`);
   const before = await page.evaluate("window.__UX_TEST__.sourceCamKeys()");
   const beforeOptics = await page.evaluate("window.__UX_TEST__.shotsData()[1].optics");
-  const lensAt = (t) => page.evaluate(`(() => {
+  const lensAt = (t) =>
+    page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     return u.cameraAt(${t}, u.sourceCamKeys(), { optics: u.shotsData()[1].optics }).fov;
   })()`);
@@ -2336,8 +2774,16 @@ test("a pinned angle applies pose and the active lens at the playhead in one Und
     expect(result.free).toBe(false);
     expect(result.keys[0]).toEqual(before[0]);
     expect(result.keys[1]).toMatchObject({
-      id: "b0", t: 3, cut: true, p: [7, 2, 6], l: [1, 1, 0], fov: 42,
-      roll: 0.2, focus: 4, fstop: 2.8, wave: 0.3,
+      id: "b0",
+      t: 3,
+      cut: true,
+      p: [7, 2, 6],
+      l: [1, 1, 0],
+      fov: 42,
+      roll: 0.2,
+      focus: 4,
+      fstop: 2.8,
+      wave: 0.3,
     });
     expect(await lensAt(3)).toBeCloseTo(42, 6);
     const updatedOptics = await page.evaluate("window.__UX_TEST__.shotsData()[1].optics");
@@ -2726,7 +3172,9 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
       `!document.querySelector('${confirmButton}') && window.__UX_TEST__.camPostCount() > ${postsBefore}`,
     );
     expect(await page.evaluate("window.__UX_TEST__.camKeys()[1].mm")).toBe(50);
-    const saved = await page.evaluate(`(async () => (await (await fetch("/api/cam")).json()).data)()`);
+    const saved = await page.evaluate(
+      `(async () => (await (await fetch("/api/cam")).json()).data)()`,
+    );
     expect(saved[1].mm).toBe(50);
   } finally {
     await page.evaluate("window.__UX_TEST__.setAutoSave(true)");

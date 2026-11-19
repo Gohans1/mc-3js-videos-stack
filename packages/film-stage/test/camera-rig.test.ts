@@ -11,8 +11,8 @@ import {
   fitBoxFrame,
   orientCamera,
   projectCamera,
-  rigFov,
   resolveFocusDistance,
+  rigFov,
 } from "../src/camera";
 
 test("horizontal FOV stays fixed across frame shapes and orthogonal lookup is stable", () => {
@@ -179,8 +179,15 @@ test("linear extrapolation extends the source span only until the next cut", () 
 
 test("independent optical tracks preserve pose, blend focus from auto, and leave Dolly Zoom in control", () => {
   const poses = [0, 4].map((t) => ({
-    t, p: [t, 0, 10], l: [t, 0, 0], fov: 50, focus: 4,
-    fstop: 2.8, motion: "linear", ease: "linear", wave: 0,
+    t,
+    p: [t, 0, 10],
+    l: [t, 0, 0],
+    fov: 50,
+    focus: 4,
+    fstop: 2.8,
+    motion: "linear",
+    ease: "linear",
+    wave: 0,
   }));
   const optics = {
     focalLength: { wide: { t: 0, value: 24 }, long: { t: 4, value: 50, ease: "linear" } },
@@ -192,7 +199,10 @@ test("independent optical tracks preserve pose, blend focus from auto, and leave
   expect(withOptics.l.toArray()).toEqual(raw.l.toArray());
   expect(withOptics.fstop).toBeCloseTo(2.8, 6);
   expect(withOptics.mm).toBeCloseTo(37, 6);
-  expect(resolveFocusDistance(withOptics.focus, withOptics.p, () => null).distance).toBeCloseTo(7, 6);
+  expect(resolveFocusDistance(withOptics.focus, withOptics.p, () => null).distance).toBeCloseTo(
+    7,
+    6,
+  );
   expect(raw.fov).toBe(50);
   expect(raw.focus).toBe(4);
 
@@ -204,11 +214,18 @@ test("independent optical tracks preserve pose, blend focus from auto, and leave
 
 test("rack focus blends from the rendered aim and custom lens timing stays physically positive", () => {
   const poses = [0, 2].map((t) => ({
-    t, p: [0, 0, 0], l: [0, 0, 2 + 10 * t],
-    motion: "linear", ease: "linear", wave: 0,
+    t,
+    p: [0, 0, 0],
+    l: [0, 0, 2 + 10 * t],
+    motion: "linear",
+    ease: "linear",
+    wave: 0,
   }));
   const optics = {
-    focalLength: { wide: { t: 0, value: 24 }, long: { t: 2, value: 80, ease: [0.2, -2, 0.8, -2] as const } },
+    focalLength: {
+      wide: { t: 0, value: 24 },
+      long: { t: 2, value: 80, ease: [0.2, -2, 0.8, -2] as const },
+    },
     focus: { auto: { t: 0, value: null }, near: { t: 2, value: 15, ease: "linear" } },
   };
   const t = 1 / 30;
@@ -216,7 +233,40 @@ test("rack focus blends from the rendered aim and custom lens timing stays physi
   applyCameraRig(cam, t, [0, 2], { lead: 1 }, (next) => cameraAt(next, poses));
   const aim = cam.p.distanceTo(cam.l);
   expect(aim).toBeGreaterThan(12);
-  expect(resolveFocusDistance(cam.focus, cam.p, () => null, aim).distance)
-    .toBeCloseTo(aim + (15 - aim) * (t / 2), 6);
+  expect(resolveFocusDistance(cam.focus, cam.p, () => null, aim).distance).toBeCloseTo(
+    aim + (15 - aim) * (t / 2),
+    6,
+  );
   expect(cameraAt(0.5, poses, { optics }).mm).toBeCloseTo(24, 6);
+});
+
+test("opticalFocusAt returns identical object focus targets directly without creating a blend", () => {
+  const poses = [0, 2].map((t) => ({
+    t,
+    p: [0, 0, 6],
+    l: [0, 0, 0],
+    motion: "linear",
+    ease: "linear",
+    wave: 0,
+  }));
+  const targetOptics = {
+    focus: {
+      a: { t: 0, value: { target: "Steve.head", offset: [0, 0.2, 0] as const } },
+      b: { t: 2, value: { target: "Steve.head", offset: [0, 0.2, 0] as const }, ease: "linear" },
+    },
+  };
+  const pointOptics = {
+    focus: {
+      a: { t: 0, value: { point: [1, 2, 3] as const, label: "Wall" } },
+      b: { t: 2, value: { point: [1, 2, 3] as const, label: "Wall" }, ease: "linear" },
+    },
+  };
+  expect(cameraAt(1, poses, { optics: targetOptics }).focus).toEqual({
+    target: "Steve.head",
+    offset: [0, 0.2, 0],
+  });
+  expect(cameraAt(1, poses, { optics: pointOptics }).focus).toEqual({
+    point: [1, 2, 3],
+    label: "Wall",
+  });
 });

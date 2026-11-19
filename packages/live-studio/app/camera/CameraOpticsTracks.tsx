@@ -163,7 +163,10 @@ function OpticsKeyBar<T>({
 }
 
 function ShotOpticsEditor({ row, shot }: { row: ShotRow; shot: number }) {
-  useFrameKey(() => S.t);
+  useFrameKey(() => {
+    const sampled = S.tools?.cameraOpticsSample?.();
+    return `${S.t}:${sampled?.mm ?? ""}:${sampled?.focus === undefined ? "" : JSON.stringify(sampled.focus)}`;
+  });
   useStudio((s) => s.shotsRev);
   useStudio((s) => s.timingRev);
   const pick = useStudio((s) => s.cameraPick);

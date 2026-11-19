@@ -13,12 +13,14 @@ import { setPlaying } from "../playback/transport";
 import {
   cameraAxisAt,
   cameraKeyFrameTime,
+  cameraKeyIdentity,
+  cameraKeyIsAnchored,
   cameraKeyShotIndex,
   cameraLensAspect,
-  cameraKeyIsAnchored,
   type CamKey,
   edit,
   editCameraKeyInScene,
+  findCameraKeyIndex,
   keys,
   opticsOfKey,
   pasteCamKeys,
@@ -93,7 +95,7 @@ export const changeCameraCoordinate = (i: number, field: PointField, axis: numbe
 export const startCameraPick = (i: number, field: CameraAimPick["field"]) => {
   const key = keys[i];
   if (!key || key.locked) return;
-  set({ cameraPick: { field, id: key.id, t: key.t }, pickFocus: null });
+  set({ cameraPick: { field, ...cameraKeyIdentity(key) }, pickFocus: null });
   say("Click a surface to aim the camera. Esc cancels");
 };
 export const cancelCameraPick = () => {
@@ -107,7 +109,7 @@ export const applyCameraPick = (
 ) => {
   if (get().cameraPick !== pick) return;
   if (!hit.world) return say("Click a visible surface or press Esc to cancel");
-  const i = keys.findIndex((row) => row.id === pick.id && Math.abs(row.t - pick.t) < SAME);
+  const i = findCameraKeyIndex(pick, SAME);
   const key = keys[i];
   if (!key || key.locked) return cancelCameraPick();
   const world = hit.world;
@@ -129,7 +131,10 @@ export const continuityShotMatches = (row: ShotRow, selected: Pick<ShotRow, "id"
 export const startContinuityPick = (row: ShotRow) => {
   if (!S.tools) return;
   if (S.playing) setPlaying(false);
-  set({ cameraPick: { field: "axis", target: "continuity", id: row.id, t: row.t }, pickFocus: null });
+  set({
+    cameraPick: { field: "axis", target: "continuity", id: row.id, t: row.t },
+    pickFocus: null,
+  });
   say("Click the first point on the 180° axis. Esc cancels");
 };
 
@@ -289,15 +294,14 @@ export const addVertigo = (i: number) => {
     if (distance < 0.01) return say("Set an aim point away from the camera before adding Vertigo");
     const aspect = S.tools?.camera?.aspect ?? 16 / 9;
     const optics = opticsOfKey(at);
-    const mm = (optics.mm ?? mmOf(optics.fov, cameraLensAspect(cameraKeyShotIndex(at)))) < 50 ? 50 : 24;
+    const mm =
+      (optics.mm ?? mmOf(optics.fov, cameraLensAspect(cameraKeyShotIndex(at)))) < 50 ? 50 : 24;
     const toFov = rigFov(0, mm, aspect, cameraAxisAt(time));
     const offset = vector.setLength(dollyZoom(distance, optics.fov, toFov));
+    const activeIdentity = cameraKeyIdentity(active);
     const save = () => {
-      if (
-        !keys.some((k) => k.id === active.id && k.t === active.t && !k.locked) ||
-        keys.some((k) => Math.abs(k.t - time) < SAME)
-      )
-        return;
+      const live = findCameraKeyIndex(activeIdentity, 1e-9);
+      if (live < 0 || keys[live].locked || keys.some((k) => Math.abs(k.t - time) < SAME)) return;
       const target = resolveKeyPoint(active, "l");
       if (!target) return unavailable();
       const position = storedPoint(active.p, target.add(offset));
@@ -362,6 +366,7 @@ export const copyRelativeCamera = async (i: number) => {
 
 type RelativePose = { row: CamKey; p: Vector3; l: Vector3 };
 const saveRelativeMoves = async (destination: CamKey, poses: readonly RelativePose[]) => {
+  const destinationIdentity = cameraKeyIdentity(destination);
   const moves: CamKey[] = [];
   for (const pose of poses) {
     const convert = () => {
@@ -375,8 +380,8 @@ const saveRelativeMoves = async (destination: CamKey, poses: readonly RelativePo
   }
   if (moves.length !== poses.length)
     return say("This film cannot move the destination camera anchor");
-  if (!keys.some((key) => key.id === destination.id && key.t === destination.t && !key.locked))
-    return;
+  const live = findCameraKeyIndex(destinationIdentity, 1e-9);
+  if (live < 0 || keys[live].locked) return;
   pasteCamKeys(moves, destination.t);
 };
 

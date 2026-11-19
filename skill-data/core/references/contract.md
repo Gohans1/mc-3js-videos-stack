@@ -21,44 +21,44 @@ The studio, `bun run check` and every render read a film through this contract. 
 
 Word and mouth timestamps index native audio samples; narration clips place them on the scene clock, then Speed/Freeze produces heard seconds. voice.warp moves narrative anchors, never stretches sample timings.
 
-Dùng Split để tạo ranh shot, kể cả ngay tại cut nội bộ khi đồng hồ ảnh và camera khớp. Cut nội bộ trong cam.json đổi góc tức thời và có thể chuyển về keyframe thường bằng Convert to regular keyframe.
+Use Split to create a shot boundary, including at an internal cut where picture and camera clocks align. An internal cut in cam.json switches framing instantly and can be turned back into a regular keyframe with Convert to regular keyframe.
 
-Split giữ nhịp bằng cách chia đường easing khi đoạn camera hỗ trợ; keepTailOnMerge giữ key đóng khi gộp shot để đường đã chia vẫn chạy đúng.
+Split preserves pacing by subdividing the easing curve when the camera span supports it; keepTailOnMerge retains the closing key on merge so the subdivided curve stays intact.
 
 To slow, speed or hold a stretch, change `timing.json` (Speed, Freeze); never shift every key by hand. `bun run at <heard second>` converts between the clocks.
 
 ## Timeline row formats
 
-| File        | Key fields                                                                                                                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| cam.json    | Hard cuts place `cut: true` on the incoming key; Studio links the closing hold key before a cut via `tailId` when present                                                             |
-| timing.json | `speeds` use `from`, `to`, and either `rate` or `curve` pairs `[progress, speed]` with optional per-segment `handles`                                                                 |
+| File        | Key fields                                                                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| cam.json    | Hard cuts place `cut: true` on the incoming key; Studio links the closing hold key before a cut via `tailId` when present                                                                  |
+| timing.json | `speeds` use `from`, `to`, and either `rate` or `curve` pairs `[progress, speed]` with optional per-segment `handles`                                                                      |
 | timing.json | `freezes` use `at`, `duration`, and optional `frame` to hold another source second; `layerKinds` stores `base` and `changes` per `text`, `overlays`, `adjustment`, `audio`, `sfx`, `voice` |
-| text.json   | `items` use `kind`, `from`, `to`, and optional `text`, `track`, `align`, `bold`, `size`, `spacing`, `stroke { color, width }`, `background { color, opacity }`, `shadow`, `in`, `out` |
+| text.json   | `items` use `kind`, `from`, `to`, and optional `text`, `track`, `align`, `bold`, `size`, `spacing`, `stroke { color, width }`, `background { color, opacity }`, `shadow`, `in`, `out`      |
 
 ## Optional hooks on draw
 
 Each hook turns on one part of the studio. The template sets all of these:
 
-| Hook                                                             | Turns on                                                                                                                                                                                 |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `draw.describe(t)`                                               | The list over a draft frame (`LIST=1`): what plays at `t` and which file holds it                                                                                                        |
-| `draw.tools.titles`, `textTimeline`                              | On-screen text and its voices                                                                                                                                                            |
-| `draw.tools.camera`, `free`, `objects`, `bones`, `rig`, `optics` | The free camera, targets `CHECK=motion/seen/touch` can name, and live camera/DOF/look telemetry (`OpticsTelemetry`) for the studio HUD                                                   |
-| `draw.tools.placed` with a placed key file                       | The Objects panel: placing props                                                                                                                                                         |
-| `draw.tools.targets[].transform`                                 | Moving a character or prop in the viewport, written back to its keyed rows                                                                                                               |
-| `draw.tools.renderer`, `composer`                                | The final render's motion blur (sub-frames in the film's own GL)                                                                                                                         |
-| Camera saving                                                    | `cameraSample` returns the pose before FX; `moveCameraAnchor` updates an anchor's offset when saving a new view                                                                          |
-| Camera anchors                                                   | `cameraAnchors` lists `target` and `label`; `resolveCameraAnchor` evaluates the world point and `moveCameraAnchor` updates the offset on edit                                            |
-| Studio camera path                                               | `sampleCameraPath` receives scene time and camera, returning post-`AnimPanel` `p`/`l`/`fov` alongside the pre-FX base when available                                                     |
-| Free Cam                                                         | `tools.free` keeps `on, previewEffects, p, l, fov, roll, wave, bob, fstop, focus, handheld`; Adjust and DOF always run in Free Cam while `previewEffects` gates overlays and transitions |
-| Optics tracks | Truyền optics của shot vào cameraAt và khai báo tools.cameraOpticsSample để bật chỉnh trong Studio. Giữ cameraSample lấy mẫu pose gốc để Add và Split không ghi đè pose optics. |
-| Camera clock                                                     | `draw` receives an independent `clocks.camera` for path sampling; set `tools.cameraClock` so Studio shows per-shot clock controls                                                        |
-| `draw.eases`, `draw.keyEases`                                    | Ease names on camera and key rows                                                                                                                                                        |
-| `draw.anims`, film-stage transitions                             | The Animation tab and the shots' `transition` and `anim`                                                                                                                                 |
-| `draw.adjustments.prepare`, `adjustmentTimeline`                 | Colour and look layers                                                                                                                                                                   |
-| `draw.velocity = true`, `draw.velocityEffects`                   | Speed-ramp effects on `timing.json` velocity                                                                                                                                             |
-| `draw.checks`                                                    | The film's own `CHECK=<name>:...` lines (`bun run render --help`)                                                                                                                        |
+| Hook                                                             | Turns on                                                                                                                                                                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `draw.describe(t)`                                               | The list over a draft frame (`LIST=1`): what plays at `t` and which file holds it                                                                                                                 |
+| `draw.tools.titles`, `textTimeline`                              | On-screen text and its voices                                                                                                                                                                     |
+| `draw.tools.camera`, `free`, `objects`, `bones`, `rig`, `optics` | The free camera, targets `CHECK=motion/seen/touch` can name, and live camera/DOF/look telemetry (`OpticsTelemetry`) for the studio HUD                                                            |
+| `draw.tools.placed` with a placed key file                       | The Objects panel: placing props                                                                                                                                                                  |
+| `draw.tools.targets[].transform`                                 | Moving a character or prop in the viewport, written back to its keyed rows                                                                                                                        |
+| `draw.tools.renderer`, `composer`                                | The final render's motion blur (sub-frames in the film's own GL)                                                                                                                                  |
+| Camera saving                                                    | `cameraSample` returns the pose before FX; `moveCameraAnchor` updates an anchor's offset when saving a new view                                                                                   |
+| Camera anchors                                                   | `cameraAnchors` lists `target` and `label`; `resolveCameraAnchor` evaluates the world point and `moveCameraAnchor` updates the offset on edit                                                     |
+| Studio camera path                                               | `sampleCameraPath` receives scene time and camera, returning post-`AnimPanel` `p`/`l`/`fov` alongside the pre-FX base when available                                                              |
+| Free Cam                                                         | `tools.free` keeps `on, previewEffects, p, l, fov, roll, wave, bob, fstop, focus, handheld`; Adjust and DOF always run in Free Cam while `previewEffects` gates overlays and transitions          |
+| Optics tracks                                                    | Pass the active shot's optics to `cameraAt` and expose `tools.cameraOpticsSample` for Studio editing; keep `cameraSample` pose-only so Add and Split do not bake optics overrides into `cam.json` |
+| Camera clock                                                     | `draw` receives an independent `clocks.camera` for path sampling; set `tools.cameraClock` so Studio shows per-shot clock controls                                                                 |
+| `draw.eases`, `draw.keyEases`                                    | Ease names on camera and key rows                                                                                                                                                                 |
+| `draw.anims`, film-stage transitions                             | The Animation tab and the shots' `transition` and `anim`                                                                                                                                          |
+| `draw.adjustments.prepare`, `adjustmentTimeline`                 | Colour and look layers                                                                                                                                                                            |
+| `draw.velocity = true`, `draw.velocityEffects`                   | Speed-ramp effects on `timing.json` velocity                                                                                                                                                      |
+| `draw.checks`                                                    | The film's own `CHECK=<name>:...` lines (`bun run render --help`)                                                                                                                                 |
 
 A film without a hook still plays; the studio says what is missing and which hook adds it.
 
@@ -103,12 +103,12 @@ Studio scans prop subfolders recursively for images, self-contained GLB models a
 
 ## Keyframed lighting and atmosphere
 
-| Part           | Convention                                                                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| lightsTimeline | Points to `src/timeline/lights.json`. Accepts a key array or `{ target, keys }`, with `t` in scene seconds                                             |
+| Part           | Convention                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| lightsTimeline | Points to `src/timeline/lights.json`. Accepts a key array or `{ target, keys }`, with `t` in scene seconds                                                                     |
 | Each key       | Picks a `preset` or sets `key`, `fill` (`negativeFill`), `rim`, `world`, `fog`, `practicals`, and `godrays`; use `cut: true` for instant switches and `ease` for interpolation |
-| Scene wiring   | Create a rig with `film-stage/lights`, then call `lightsAt` and `applyLightingRig` per frame; the template falls back to `edit.json` light when empty |
-| Studio and CLI | Edit live in Camera → Light, or use `bun run collab read lights` and `bun run collab write lights <file>` with the read `base` version                 |
+| Scene wiring   | Create a rig with `film-stage/lights`, then call `lightsAt` and `applyLightingRig` per frame; the template falls back to `edit.json` light when empty                          |
+| Studio and CLI | Edit live in Camera → Light, or use `bun run collab read lights` and `bun run collab write lights <file>` with the read `base` version                                         |
 
 ## Sound the studio finds
 

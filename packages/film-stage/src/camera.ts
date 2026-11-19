@@ -8,7 +8,7 @@ export { dofParams, dollyZoom } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
-import { type CameraOpticsTracks, focalLengthAt, opticalFocusAt } from "./camera-optics";
+import { type CameraOpticsTracks, focalLengthAt, opticalFocusAt, sameFocus } from "./camera-optics";
 import {
   canMatchCameraSpeed,
   type JoinSlopes,
@@ -236,7 +236,8 @@ export type FocusTargetSpec =
   | { target: string; offset?: readonly [number, number, number] }
   | { point: readonly [number, number, number]; label?: string };
 export type FocusValue =
-  FocusTargetSpec | { from?: FocusTargetSpec; to?: FocusTargetSpec; u: number; autoDistance?: number };
+  | FocusTargetSpec
+  | { from?: FocusTargetSpec; to?: FocusTargetSpec; u: number; autoDistance?: number };
 
 const spanAt = (ks, t) => {
   if (ks.length <= 1 || t <= ks[0].t) return { i: 0, j: 0, u: 0 };
@@ -388,18 +389,6 @@ const normHandheld = (h): HandheldConfig | null => {
     };
   }
   return null;
-};
-
-const sameFocus = (a: FocusTargetSpec | undefined, b: FocusTargetSpec | undefined): boolean => {
-  if (a === b) return true;
-  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
-  if ("point" in a || "point" in b)
-    return "point" in a && "point" in b && a.point.every((v, i) => v === b.point[i]);
-  if (a.target !== b.target) return false;
-  const ao = a.offset,
-    bo = b.offset;
-  if (!ao && !bo) return true;
-  return !!ao && !!bo && ao[0] === bo[0] && ao[1] === bo[1] && ao[2] === bo[2];
 };
 
 const carryAt = (ks, idx, aspect, start = 0, axis?: FovAxis) => {
@@ -623,12 +612,12 @@ const dollyPointsKnown = (
   const interior = (u: number) => u !== 0 && u !== 1;
   const pointsAround = (neighbours: number) =>
     ks.slice(Math.max(0, i - neighbours), i + 2 + neighbours);
-  const joined = (ks[i].matchSpeed && canMatchCameraSpeed(ks, i)) ||
+  const joined =
+    (ks[i].matchSpeed && canMatchCameraSpeed(ks, i)) ||
     (ks[i + 1].matchSpeed && canMatchCameraSpeed(ks, i + 1));
   if (interior(position) || interior(aim)) {
     // Match speed uses adjacent spans, whose curves can use another key on each side.
-    if (joined)
-      return pointsAround(2).every((key) => (rail || known(key.p)) && known(key.l));
+    if (joined) return pointsAround(2).every((key) => (rail || known(key.p)) && known(key.l));
     if (!rail && mode === "orbit")
       return pointsAround(0).every((key) => known(key.p) && known(key.l));
   }
@@ -756,14 +745,16 @@ export function cameraAt(
     shakes: blendHandheld(c0.hh, c1.hh, shakeU),
   });
   roll = nextRoll;
-  const sampleMm = independentMm !== undefined ? mm :
-    lensU <= 0 || c0.mm === c1.mm
-      ? c0.mm
-      : lensU >= 1
-        ? c1.mm
-        : c0.mm !== undefined && c1.mm !== undefined
-          ? mm
-          : undefined;
+  const sampleMm =
+    independentMm !== undefined
+      ? mm
+      : lensU <= 0 || c0.mm === c1.mm
+        ? c0.mm
+        : lensU >= 1
+          ? c1.mm
+          : c0.mm !== undefined && c1.mm !== undefined
+            ? mm
+            : undefined;
   const sample = {
     ...(railU !== undefined && { railU }),
     p: base.p.toArray(),
@@ -784,7 +775,9 @@ export function cameraAt(
     roll,
     speed,
     distance,
-    lensKnown: dollyZoomScale === undefined || !opts?.pointKnown ||
+    lensKnown:
+      dollyZoomScale === undefined ||
+      !opts?.pointKnown ||
       dollyPointsKnown(ks, idx, u, lookU, !!opts.rail && opts.rail.length > 1, opts.pointKnown),
     mm,
     fstop,
@@ -836,8 +829,8 @@ export function resolveFocusDistance(
     return res ? { distance: res.distance, label: res.label } : {};
   }
   const blend = focus as Exclude<FocusValue, FocusTargetSpec>;
-  const autoDistance = blend.autoDistance === undefined
-    ? undefined : (renderedAimDistance ?? blend.autoDistance);
+  const autoDistance =
+    blend.autoDistance === undefined ? undefined : (renderedAimDistance ?? blend.autoDistance);
   const resolve = (spec: FocusTargetSpec | undefined) =>
     spec === null && autoDistance !== undefined
       ? { distance: Math.max(0.05, autoDistance), label: "Auto" }

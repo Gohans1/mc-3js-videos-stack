@@ -804,11 +804,13 @@ test("contract-keys matches contract zod schema field lists", () => {
   assert.deepEqual(ADJUSTMENT_KEYS, Object.keys(AdjustmentTimeline.shape.items.element.shape));
   const shotAnim = ShotsTimeline.unwrap().shape.anim.unwrap().shape;
   const shotTrans = ShotsTimeline.unwrap().shape.transition.unwrap().shape;
+  const shotOptics = ShotsTimeline.unwrap().shape.optics.unwrap().shape;
   assert.deepEqual(SHOT_SLOT_KEYS, [
     ...["in", "out", "combo"].flatMap((s) =>
       Object.keys(shotAnim[s].unwrap().shape).map((k) => `anim.${s}.${k}`),
     ),
     ...Object.keys(shotTrans).map((k) => `transition.${k}`),
+    ...Object.keys(shotOptics).map((k) => `optics.${k}`),
   ]);
   const textItem = TextTimeline.shape.items.element.shape;
   assert.deepEqual(
@@ -821,4 +823,12 @@ test("preloads name nonempty fetch URLs as an array", () => {
   assert.equal(StudioConfig.safeParse({ preload: ["/mc/client_assets.zip"] }).success, true);
   assert.equal(StudioConfig.safeParse({ preload: "mc/client_assets.zip" }).success, false);
   assert.equal(StudioConfig.safeParse({ preload: [""] }).success, false);
+});
+
+test("shot optics keys accept finite negative times and reject non-finite times", () => {
+  const withTime = (t) => [{ t: 0, optics: { focalLength: { k: { t, value: 35 } } } }];
+  assert.equal(ShotsTimeline.safeParse(withTime(-1.5)).success, true);
+  assert.equal(ShotsTimeline.safeParse(withTime(Infinity)).success, false);
+  assert.equal(ShotsTimeline.safeParse(withTime(-Infinity)).success, false);
+  assert.equal(ShotsTimeline.safeParse(withTime(Number.NaN)).success, false);
 });

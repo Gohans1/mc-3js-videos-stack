@@ -72,12 +72,20 @@ const formatFocusSpec = (focus: unknown): string | null => {
   if (typeof focus === "string") return focus;
   if (typeof focus === "object") {
     const f = focus as Record<string, any>;
+    if (Array.isArray(f.point)) {
+      const coords = f.point.map((n: number) => +Number(n).toFixed(2)).join(",");
+      return typeof f.label === "string" && f.label.trim()
+        ? `${f.label.trim()} (${coords})`
+        : `point (${coords})`;
+    }
     if (typeof f.target === "string")
       return f.offset
         ? `${f.target} (${f.offset.map((n: number) => +Number(n).toFixed(2)).join(",")})`
         : f.target;
-    if ("from" in f || "to" in f)
-      return `${formatFocusSpec(f.from) ?? "unset"} -> ${formatFocusSpec(f.to) ?? "unset"} (${Math.round((f.u ?? 0) * 100)}%)`;
+    if ("from" in f || "to" in f) {
+      const end = (value: unknown) => formatFocusSpec(value) ?? (value === null ? "Auto" : "unset");
+      return `${end(f.from)} -> ${end(f.to)} (${Math.round((f.u ?? 0) * 100)}%)`;
+    }
   }
   return null;
 };
@@ -366,7 +374,9 @@ export const whatsAt = (dir: string, t: number) => {
             pointKnown: (point) => {
               if (Array.isArray(point)) return true;
               const fallback = (point as Record<string, unknown>).fallback;
-              return Array.isArray(fallback) && fallback.length === 3 && fallback.every(Number.isFinite);
+              return (
+                Array.isArray(fallback) && fallback.length === 3 && fallback.every(Number.isFinite)
+              );
             },
           },
         )

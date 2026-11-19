@@ -16,15 +16,15 @@ Commands help an AI discover capabilities, locate results and verify its work. R
 
 Load details on demand, following agent-browser skills get core. Keep discovery stubs thin and avoid copying complete flag lists into workflow guides.
 
-| Native backend        | How to use it                                                                                                                                                        |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Verify a film         | Run bun run skills get core --ref review to choose a check. framecheck --json returns measurements, and sheet frames reports decoded timestamps.                     |
+| Native backend        | How to use it                                                                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verify a film         | Run bun run skills get core --ref review to choose a check. framecheck --json returns measurements, and sheet frames reports decoded timestamps.                             |
 | Unified QC check      | Run bun run qc FILE --json to inspect video specs, audio loudness/sync, camera motion, and text readability. Run bun run qc --help for box, compare, and motion subcommands. |
-| Discover FFmpeg tools | Use media ffmpeg list --json for the tool list, schema <tool> for its native arguments, and contract -- --static for the full contract.                              |
-| Pass native arguments | The catalog forwards options only through fields marked as passthrough. Other positionals reject hidden flags. Arguments go directly to the process without a shell. |
-| Update the backend    | Keep LICENSE, upstream.json, and the source hash. Update the upstream pin without editing vendor files, then rerun tests and check representative media.             |
+| Discover FFmpeg tools | Use media ffmpeg list --json for the tool list, schema <tool> for its native arguments, and contract -- --static for the full contract.                                      |
+| Pass native arguments | The catalog forwards options only through fields marked as passthrough. Other positionals reject hidden flags. Arguments go directly to the process without a shell.         |
+| Update the backend    | Keep LICENSE, upstream.json, and the source hash. Update the upstream pin without editing vendor files, then rerun tests and check representative media.                     |
 
-Với at --json, scene là giây nguồn của ảnh, cam.time là giây lấy mẫu camera và cam.clock cho biết đồng hồ đang dùng. Cam.evaluation đánh dấu ước tính từ dữ liệu lưu sẵn, với FOV và mm là null nếu Dolly Zoom thiếu tọa độ anchor.
+In at --json, scene is the picture source second, cam.time is the sampled camera second, and cam.clock names the active clock. cam.evaluation marks static estimates from saved data, with fov and mm set to null when Dolly Zoom lacks anchor coordinates.
 
 ## Contract
 

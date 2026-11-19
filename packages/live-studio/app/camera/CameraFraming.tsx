@@ -15,8 +15,16 @@ import { FieldRow, Section, ValueBox } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
 import { S } from "../core/state";
 import { get, showError, useStudio } from "../core/store";
+import { SAME } from "../core/time";
 import { seekExact, setPlaying } from "../playback/transport";
-import { cameraKeySampleTime, cameraKeyShotIndex, edit, keys, railPositionForKey } from "./cam";
+import {
+  cameraKeyMatches,
+  cameraKeySampleTime,
+  cameraKeyShotIndex,
+  edit,
+  keys,
+  railPositionForKey,
+} from "./cam";
 import {
   addVertigo,
   cameraCoordinates,
@@ -66,17 +74,29 @@ export function CameraFraming({
     { value: "world", label: "World" },
     ...candidates.map(({ target, label }) => ({ value: target, label })),
   ];
-  useEffect(() => () => {
-    const current = get().cameraPick;
-    if (current?.target === undefined && current?.id === key.id && current?.t === key.t)
-      cancelCameraPick();
-  }, [key.id, key.t]);
+  const sourceRow = key.__timing?.sourceRow;
+  const cut = !!key.cut;
+  useEffect(
+    () => () => {
+      const current = get().cameraPick;
+      if (
+        current?.target === undefined &&
+        current?.field === "l" &&
+        current.id === key.id &&
+        current.t === key.t &&
+        current.sourceRow === sourceRow &&
+        !!current.cut === cut
+      )
+        cancelCameraPick();
+    },
+    [key.id, key.t, sourceRow, cut],
+  );
   const arm = (field: CameraAimPick["field"]) => {
     if (
-      pick?.target !== "free" &&
+      pick?.target === undefined &&
       pick?.field === field &&
-      pick.id === key.id &&
-      pick.t === key.t
+      cameraKeyMatches(key, pick) &&
+      Math.abs(pick.t - key.t) < SAME
     ) {
       cancelCameraPick();
       return;
