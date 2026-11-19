@@ -12,6 +12,8 @@ import { join } from "node:path";
 
 import { applyEdits, changes, equalJson, overlapping, pointer } from "./merge-edits.mjs";
 
+const noticeKey = (notice) => (notice ? (notice.id ?? notice.at ?? "__legacy__") : null);
+
 export const openEditProtection = (
   project,
   rel,
@@ -20,12 +22,23 @@ export const openEditProtection = (
   const folder = join(project, ".studio/collaboration");
   const key = createHash("sha256").update(rel).digest("hex");
   const file = join(folder, `${key}.json`);
-  let state = { guards: [], notices: [], versions: [], latest: null };
-  if (existsSync(file)) state = JSON.parse(readFileSync(file, "utf8"));
+  const readState = () => ({
+    guards: [],
+    notices: [],
+    versions: [],
+    latest: null,
+    acknowledgedNoticeId: null,
+    ...(existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {}),
+  });
+  let state = readState();
   const save = () => {
     mkdirSync(folder, { recursive: true });
     writeFileSync(`${file}.new`, JSON.stringify(state));
     renameSync(`${file}.new`, file);
+  };
+  const acknowledge = () => {
+    const last = state.notices?.at(-1);
+    if (last) state.acknowledgedNoticeId = noticeKey(last);
   };
   const notify = (incoming, retained, bad = []) => {
     const notice = {
@@ -38,7 +51,7 @@ export const openEditProtection = (
     };
     mkdirSync(folder, { recursive: true });
     appendFileSync(join(folder, "notices.jsonl"), JSON.stringify(notice) + "\n");
-    state.notices = [...state.notices, notice].slice(-20);
+    state.notices = [...(state.notices ?? []), notice].slice(-20);
     save();
   };
   const withRowExistence = (edits) =>
@@ -115,6 +128,7 @@ export const openEditProtection = (
             edited.filter((e) => !state.guards.some((g) => !g.ensure && prefix(g.path, e.path))),
           ),
         );
+      else acknowledge();
       save();
     },
     reconcile(incoming, validate) {
@@ -134,13 +148,14 @@ export const openEditProtection = (
     },
     report: () => ({ protected: state.guards.map((g) => pointer(g.path)), notices: state.notices }),
     reload() {
-      if (existsSync(file)) state = JSON.parse(readFileSync(file, "utf8"));
+      if (existsSync(file)) state = readState();
     },
     reset(version, data) {
       state.guards =
         data === undefined ? [] : [{ path: [], value: structuredClone(data), whole: true }];
       state.versions = data === undefined ? [] : [{ version, data: structuredClone(data) }];
       state.latest = state.versions[0] ?? null;
+      acknowledge();
       save();
     },
   };
@@ -170,10 +185,15 @@ export const warnProtectedEdits = (project) => {
   if (!existsSync(folder)) return;
   for (const file of readdirSync(folder).filter((f) => /^[a-f0-9]{64}\.json$/.test(f))) {
     const state = JSON.parse(readFileSync(join(folder, file), "utf8"));
-    const notice = state.notices.at(-1);
-    if (state.guards.length && notice)
+    const notice = Array.isArray(state.notices) ? state.notices.at(-1) : null;
+    if (
+      Array.isArray(state.guards) &&
+      state.guards.length &&
+      notice &&
+      noticeKey(notice) !== (state.acknowledgedNoticeId ?? null)
+    )
       console.error(
-        `Studio retained human edits in ${notice.file}: ${notice.retained.join(", ")}. Read the file again; use collab read/write to intentionally revise protected fields.`,
+        `Studio retained human edits in ${notice.file}: ${(notice.retained ?? []).join(", ")}. Read the file again; use collab read/write to intentionally revise protected fields.`,
       );
   }
 };

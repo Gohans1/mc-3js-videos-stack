@@ -15,6 +15,6 @@ export declare const secondArg: (
   text: string | undefined,
   limits?: { min?: number; max?: number },
 ) => number;
-export declare const needFilm: (dir?: string) => string;
+export declare const needFilm: (dir?: string, options?: { warnProtected?: boolean }) => string;
 export declare const envTypos: (known: string[], env?: Record<string, string | undefined>) => void;
 export declare const jsonFile: (file: string, root?: string) => any;

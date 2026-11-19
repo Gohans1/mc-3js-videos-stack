@@ -76,4 +76,4 @@ packages/live-studio/test/skills.test.mjs checks reference routing and named com
 ## Preserve Studio edits
 
 Studio protects human-edited fields against unacknowledged direct file writes; arrays without stable IDs are protected as a whole, and withheld input is retained in .studio/collaboration/notices.jsonl.
-Use bun run collab --film films/<name> read cam, then write cam FILE with base and data for intentional changes; Studio must be running and its response identifies the persisted result.
+Use bun run collab read cam (add --film films/<name> outside a film folder, or bun run --silent collab read cam when piping JSON stdout), then bun run collab write cam <file|-> with base and data (pass - to read the JSON payload from stdin) for intentional changes; Studio must be running and its response identifies the persisted result.

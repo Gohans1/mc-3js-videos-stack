@@ -5,11 +5,10 @@ import { verdict } from "../../.claude/hooks/cli-guard";
 test("the guiding commands piped or sent to a file are stopped", () => {
   for (const cmd of [
     "bun run find door | head -20",
+    "bun run find foo | head",
     "bun run find door 2>&1 | tail -5",
     "cd films/x && bun run find --kind sfx | grep impact",
     "bun scripts/find.ts rain |& less",
-    "bun run help | head",
-    "bun run skills get core --ref sound | sed -n 1,40p",
     "AT=3 bun run find door > out.txt",
     "bun run find door >> notes.txt",
     "bun run find door | Select-Object -First 5",
@@ -21,7 +20,13 @@ test("every film command is guarded the same: checks, renders, sound, voice, not
   for (const cmd of [
     // a grep that keeps "Head|move" drops the POP and DEAD STOP lines, head drops wrote/next:
     "export MC_VAULT_EXTERNAL='D:/mc_vault'; CHECK=motion:Head,0,11.6 AT=1 bun run render stills 2>&1 | grep -E \"Head|move \" | head -30",
+    "bun run render stills | tail",
+    "bun run render stills | grep -h foo",
     "bun run check 2>&1 | tail -1",
+    "bun run check | grep err",
+    "bun run check --helpful | head",
+    "bun run qc renders/draft.mp4 | tail",
+    "bun scripts/review/qc.ts renders/draft.mp4 | grep fail",
     "cd films/x && bun run framecheck | grep JUMP",
     "bun run listen > listen.txt",
     "bun run pace | Select-String HOLD",
@@ -31,6 +36,7 @@ test("every film command is guarded the same: checks, renders, sound, voice, not
     "bun run at 12 | head",
     "bun run pace | head",
     "bun run notes | head",
+    "bun run notes | grep shot",
     "bun run note done 3 x | tail -1",
     "bun run gap | head",
     "bun run sfx:get find rain | head",
@@ -42,6 +48,8 @@ test("every film command is guarded the same: checks, renders, sound, voice, not
     "bun run voice:cues | head",
     "bun run new-film x | tail",
     "bun run render stills 2>&1 | tee log.txt | tail -5",
+    'bun run find "--help" | head',
+    "bun run render --help && bun run check | tail",
   ])
     expect(verdict(cmd), cmd).toBeTruthy();
 });
@@ -69,6 +77,25 @@ test("a film command called by its file, its errors thrown away, or its output c
     "bun run check>out.txt",
   ])
     expect(verdict(cmd), cmd).toBeTruthy();
+});
+
+test("static doc commands and --help/-h lookups pass when piped or in compound commands", () => {
+  for (const cmd of [
+    "bun run help | head",
+    "bun packages/live-studio/help.mjs | grep render",
+    "bun run skills list | head",
+    "bun run skills get core --ref sound | grep -i mix",
+    "bun run skills get core --ref sound | sed -n 1,40p",
+    "bun packages/live-studio/skills.mjs get core | head -20",
+    "bun run render --help | head",
+    "bun run check -h | grep json",
+    "cd films/x && bun run render --help | head -20",
+    "(bun run qc --help) | grep motion",
+    "bun ../../scripts/review/qc.ts -h | head",
+    "bun run render --help>help.txt",
+    "out=$(bun run check -h)",
+  ])
+    expect(verdict(cmd), cmd).toBeUndefined();
 });
 
 test("run bare, as JSON for a script, through tee alone, other commands, and words only quoted pass", () => {
